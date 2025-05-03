@@ -8,7 +8,7 @@ import { CiShoppingTag, CiTextAlignCenter } from "react-icons/ci";
 import { HiOutlineUserCircle } from "react-icons/hi2";
 import { PiStack } from "react-icons/pi";
 
-const NonConformanceTable = () => {
+const NonConformanceTable = ({ costData }) => {
   const [selectedRow, setSelectedRow] = useState(null);
   const handleRowClick = (index) => {
     if (selectedRow === index) {

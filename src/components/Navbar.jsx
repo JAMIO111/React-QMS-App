@@ -4,24 +4,22 @@ import {
   TbLayoutSidebarRightExpand,
   TbLayoutSidebarLeftExpand,
 } from "react-icons/tb";
-import { RxDashboard } from "react-icons/rx";
-import { PiWarning } from "react-icons/pi";
-import {
-  BsFolder,
-  BsGear,
-  BsBoxes,
-  BsQuestionCircle,
-  BsPeople,
-} from "react-icons/bs";
-import { LiaFileInvoiceDollarSolid } from "react-icons/lia";
+import { BsGear, BsQuestionCircle } from "react-icons/bs";
 import NavItem from "./NavItem";
 import Logout from "./Logout";
+import { menuStructure } from "../MenuStructure";
+import SubMenuItem from "./SubMenuItem";
 
 const Navbar = () => {
   const [isMenuExpanded, setIsMenuExpanded] = useState(false);
+  const [isSubMenuOpen, setIsSubMenuOpen] = useState(null);
 
   const toggleMenu = () => {
     setIsMenuExpanded((prev) => !prev);
+  };
+
+  const toggleSubMenu = (name) => {
+    setIsSubMenuOpen((prev) => (prev === name ? null : name));
   };
 
   return (
@@ -59,42 +57,36 @@ const Navbar = () => {
         </div>
         <div className="flex flex-col flex-1 justify-between">
           <ul className="gap-1 flex-1 flex flex-col">
-            <NavItem
-              label="Dashboard"
-              icon={RxDashboard}
-              isExpanded={isMenuExpanded}
-              setIsMenuExpanded={setIsMenuExpanded}
-            />
-            <NavItem
-              label="Non-Conformance"
-              icon={PiWarning}
-              isExpanded={isMenuExpanded}
-              setIsMenuExpanded={setIsMenuExpanded}
-            />
-            <NavItem
-              label="Projects"
-              icon={BsFolder}
-              isExpanded={isMenuExpanded}
-              setIsMenuExpanded={setIsMenuExpanded}
-            />
-            <NavItem
-              label="Purchase Orders"
-              icon={LiaFileInvoiceDollarSolid}
-              isExpanded={isMenuExpanded}
-              setIsMenuExpanded={setIsMenuExpanded}
-            />
-            <NavItem
-              label="Inventory"
-              icon={BsBoxes}
-              isExpanded={isMenuExpanded}
-              setIsMenuExpanded={setIsMenuExpanded}
-            />
-            <NavItem
-              label="Human Resources"
-              icon={BsPeople}
-              isExpanded={isMenuExpanded}
-              setIsMenuExpanded={setIsMenuExpanded}
-            />
+            {menuStructure.map((item) => (
+              <li key={item.name}>
+                <NavItem
+                  title={item.name}
+                  label={item.name}
+                  icon={item.icon}
+                  path={item.path}
+                  isExpanded={isMenuExpanded}
+                  hasSubMenu={
+                    Array.isArray(item.subMenu) && item.subMenu.length > 0
+                  }
+                  onToggleSubMenu={() => toggleSubMenu(item.name)}
+                  isSubMenuOpen={isSubMenuOpen}
+                />
+                {item.subMenu && isSubMenuOpen === item.name && (
+                  <ul className="ml-4 flex flex-col">
+                    {item.subMenu?.map((subItem, index) => (
+                      <li key={subItem.name}>
+                        <SubMenuItem
+                          title={subItem.name}
+                          label={subItem.name}
+                          path={subItem.path}
+                          isLast={index === item.subMenu?.length - 1}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
           </ul>
           <div className="border-t-1 border-gray-200"></div>
           <ul className="gap-2 flex my-2 flex-col">
@@ -102,12 +94,14 @@ const Navbar = () => {
               label="Settings"
               icon={BsGear}
               isExpanded={isMenuExpanded}
+              path="/settings"
               onClick={() => setSettingsModal(true)}
             />
             <NavItem
               label="Help Centre"
               icon={BsQuestionCircle}
               isExpanded={isMenuExpanded}
+              path="/help"
             />
             <div className="border-t-1 mx-3 border-gray-200"></div>
             <Logout isExpanded={isMenuExpanded} />

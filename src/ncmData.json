@@ -1,0 +1,222 @@
+[
+  {
+    "id": "RMA-25-001",
+    "claimRef": "EVCB0HW",
+    "date": "2025-04-20",
+    "customer": "ABC Ltd",
+    "qty": 10,
+    "failureMode": "Incorrect dimensions",
+    "partNumber": "PN-0012",
+    "status": "Open",
+    "description": "Length exceeded tolerance by 1.2mm"
+  },
+  {
+    "id": "RMA-25-002",
+    "claimRef": "7J05T1E",
+    "date": "2025-04-22",
+    "customer": "XYZ Corp",
+    "qty": 5,
+    "failureMode": "Surface defect",
+    "partNumber": "PN-0034",
+    "status": "Investigating",
+    "description": "Scratches found on anodized finish"
+  },
+  {
+    "id": "RMA-25-003",
+    "claimRef": "JVQ81DH",
+    "date": "2025-04-23",
+    "customer": "TechCom",
+    "qty": 12,
+    "failureMode": "Incorrect material",
+    "partNumber": "PN-0056",
+    "status": "Open",
+    "description": "Part made from aluminum instead of stainless steel"
+  },
+  {
+    "id": "RMA-25-004",
+    "claimRef": "PBWBGZR",
+    "date": "2025-04-25",
+    "customer": "BuildIt Inc",
+    "qty": 7,
+    "failureMode": "Welding defect",
+    "partNumber": "PN-0078",
+    "status": "Closed",
+    "description": "Porosity in weld joints"
+  },
+  {
+    "id": "RMA-25-005",
+    "claimRef": "TUEIPMX",
+    "date": "2025-04-26",
+    "customer": "AlphaWorks",
+    "qty": 3,
+    "failureMode": "Paint mismatch",
+    "partNumber": "PN-0090",
+    "status": "Closed",
+    "description": "Color did not match spec RAL7016"
+  },
+  {
+    "id": "RMA-25-006",
+    "claimRef": "98AZ2MPA",
+    "date": "2025-04-27",
+    "customer": "MegaSteel",
+    "qty": 15,
+    "failureMode": "Burrs on edge",
+    "partNumber": "PN-0015",
+    "status": "Open",
+    "description": "Sharp burrs found on outer flange"
+  },
+  {
+    "id": "RMA-25-007",
+    "claimRef": "8QFFK8QE",
+    "date": "2025-04-27",
+    "customer": "BuildIt Inc",
+    "qty": 8,
+    "failureMode": "Incorrect thread",
+    "partNumber": "PN-0110",
+    "status": "Cancelled",
+    "description": "Thread cut to M10 instead of M8"
+  },
+  {
+    "id": "RMA-25-008",
+    "claimRef": "E43WTIA",
+    "date": "2025-04-28",
+    "customer": "AlphaWorks",
+    "qty": 20,
+    "failureMode": "Delamination",
+    "partNumber": "PN-0123",
+    "status": "Open",
+    "description": "Layer separation visible in laminate"
+  },
+  {
+    "id": "RMA-25-009",
+    "claimRef": "N3FN6T6",
+    "date": "2025-04-28",
+    "customer": "XYZ Corp",
+    "qty": 6,
+    "failureMode": "Wrong part supplied",
+    "partNumber": "PN-0144",
+    "status": "Closed",
+    "description": "Incorrect part shipped under correct label"
+  },
+  {
+    "id": "RMA-25-010",
+    "claimRef": "HY52NI93",
+    "date": "2025-04-29",
+    "customer": "MegaSteel",
+    "qty": 4,
+    "failureMode": "Missing holes",
+    "partNumber": "PN-0155",
+    "status": "Open",
+    "description": "Bolt holes not drilled per drawing"
+  },
+  {
+    "id": "RMA-25-011",
+    "claimRef": "EDPOIIK",
+    "date": "2025-04-29",
+    "customer": "TechCom",
+    "qty": 10,
+    "failureMode": "Thread damage",
+    "partNumber": "PN-0170",
+    "status": "Closed",
+    "description": "Threads damaged during transport"
+  },
+  {
+    "id": "RMA-25-012",
+    "claimRef": "97OJ3WX",
+    "date": "2025-04-30",
+    "customer": "BuildIt Inc",
+    "qty": 11,
+    "failureMode": "Hole misalignment",
+    "partNumber": "PN-0181",
+    "status": "Investigating",
+    "description": "Bolt pattern offset by 2mm"
+  },
+  {
+    "id": "RMA-25-013",
+    "claimRef": "RA4OWZI",
+    "date": "2025-04-30",
+    "customer": "XYZ Corp",
+    "qty": 9,
+    "failureMode": "Bend angle incorrect",
+    "partNumber": "PN-0192",
+    "status": "Cancelled",
+    "description": "Angle measured at 85\u00b0 instead of 90\u00b0"
+  },
+  {
+    "id": "RMA-25-014",
+    "claimRef": "M3QCVKL8",
+    "date": "2025-05-01",
+    "customer": "AlphaWorks",
+    "qty": 5,
+    "failureMode": "Cracked casting",
+    "partNumber": "PN-0203",
+    "status": "Closed",
+    "description": "Hairline cracks found in housing"
+  },
+  {
+    "id": "RMA-25-015",
+    "claimRef": "TXO2VM5C",
+    "date": "2025-05-01",
+    "customer": "TechCom",
+    "qty": 14,
+    "failureMode": "Excess material",
+    "partNumber": "PN-0214",
+    "status": "Open",
+    "description": "Flashing not trimmed after moulding"
+  },
+  {
+    "id": "RMA-25-016",
+    "claimRef": "ETV7C4ZE",
+    "date": "2025-05-01",
+    "customer": "MegaSteel",
+    "qty": 6,
+    "failureMode": "Undersized bore",
+    "partNumber": "PN-0225",
+    "status": "Rejected",
+    "description": "Hole diameter undersized by 0.5mm"
+  },
+  {
+    "id": "RMA-25-017",
+    "claimRef": "QDISOPY",
+    "date": "2025-05-02",
+    "customer": "ABC Ltd",
+    "qty": 7,
+    "failureMode": "Incorrect label",
+    "partNumber": "PN-0236",
+    "status": "Open",
+    "description": "Part number printed incorrectly on label"
+  },
+  {
+    "id": "RMA-25-018",
+    "claimRef": "DPWLL5X3",
+    "date": "2025-05-02",
+    "customer": "TechCom",
+    "qty": 10,
+    "failureMode": "Coating thickness",
+    "partNumber": "PN-0247",
+    "status": "Closed",
+    "description": "Powder coat exceeded spec by 50\u03bcm"
+  },
+  {
+    "id": "RMA-25-019",
+    "claimRef": "GGOPMG5X",
+    "date": "2025-05-02",
+    "customer": "XYZ Corp",
+    "qty": 3,
+    "failureMode": "Improper fit",
+    "partNumber": "PN-0258",
+    "status": "Open",
+    "description": "Component doesn't fit assembly jig"
+  },
+  {
+    "id": "RMA-25-020",
+    "claimRef": "TADK4A5",
+    "date": "2025-05-02",
+    "customer": "AlphaWorks",
+    "qty": 2,
+    "failureMode": "Deformed profile",
+    "partNumber": "PN-0269",
+    "status": "In-Progress",
+    "description": "Extrusion warped during cooling"
+  }
+]

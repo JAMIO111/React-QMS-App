@@ -6,7 +6,7 @@
     "customer": "ABC Ltd",
     "qty": 10,
     "failureMode": "Incorrect dimensions",
-    "partNumber": "PN-0012",
+    "partNumber": "408756",
     "status": "Open",
     "description": "Length exceeded tolerance by 1.2mm"
   },
@@ -17,7 +17,7 @@
     "customer": "XYZ Corp",
     "qty": 5,
     "failureMode": "Surface defect",
-    "partNumber": "PN-0034",
+    "partNumber": "ST-1789",
     "status": "Investigating",
     "description": "Scratches found on anodized finish"
   },
@@ -39,7 +39,7 @@
     "customer": "BuildIt Inc",
     "qty": 7,
     "failureMode": "Welding defect",
-    "partNumber": "PN-0078",
+    "partNumber": "428184",
     "status": "Closed",
     "description": "Porosity in weld joints"
   },
@@ -50,7 +50,7 @@
     "customer": "AlphaWorks",
     "qty": 3,
     "failureMode": "Paint mismatch",
-    "partNumber": "PN-0090",
+    "partNumber": "TEL15454320",
     "status": "Closed",
     "description": "Color did not match spec RAL7016"
   },

@@ -1,18 +1,22 @@
 import React, { useState, useEffect, useRef } from "react";
 import NonConformanceTable from "./NonConformanceTable";
+import NonConformanceGrid from "./NonConformanceGrid";
 import IconButton from "./IconButton";
-import { BsSliders, BsCurrencyPound } from "react-icons/bs";
+import { BsSliders, BsCurrencyPound, BsViewList, BsGrid } from "react-icons/bs";
 import { HiArrowsUpDown } from "react-icons/hi2";
 import { IoAddOutline } from "react-icons/io5";
 import FilterPane from "./FilterPane";
 import SortPane from "./SortPane";
 import CTAButton from "./CTAButton";
 import Breadcrumb from "./Breadcrumb";
+import ViewToggle from "./ViewToggle";
 
 const NonConformance = () => {
   const [activeModal, setActiveModal] = useState(null);
   const [costData, setCostData] = useState(false);
   const modalRef = useRef(null);
+
+  const [viewGrid, setViewGrid] = useState(false); // Added state for view mode
 
   const closeModal = () => setActiveModal(null);
 
@@ -41,6 +45,7 @@ const NonConformance = () => {
           className="flex w-full flex-row justify-between items-center">
           <Breadcrumb />
           <div className="flex flex-row justify-end items-center gap-2">
+            <ViewToggle viewGrid={viewGrid} setViewGrid={setViewGrid} />
             <CTAButton text="Add Item" icon={IoAddOutline} />
             <IconButton
               title="Cost"
@@ -72,7 +77,11 @@ const NonConformance = () => {
           </div>
         </div>
       </div>
-      <NonConformanceTable costData={costData} />
+      {viewGrid ? (
+        <NonConformanceGrid />
+      ) : (
+        <NonConformanceTable costData={costData} />
+      )}
     </div>
   );
 };

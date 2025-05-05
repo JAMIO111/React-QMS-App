@@ -4,18 +4,9 @@ import ncmData from "/src/ncmData.json";
 
 const NonConformanceGrid = () => {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    <div className="grid pr-2 grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto h-full">
       {ncmData.map((item, index) => {
-        return (
-          <NonConformanceCard
-            key={index}
-            id={item.id}
-            title={item.title}
-            description={item.description}
-            status={item.status}
-            date={item.date}
-          />
-        );
+        return <NonConformanceCard key={index} item={item} />;
       })}
     </div>
   );

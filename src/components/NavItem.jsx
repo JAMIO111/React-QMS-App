@@ -14,21 +14,23 @@ const NavItem = ({
   const match = useMatch(path);
 
   return (
-    <div className="nav-item flex pr-3 items-center text-gray-700">
+    <div className="nav-item flex pr-3 items-center ">
       <div
         className={`${
-          match ? "bg-blue-700" : "bg-transparent"
+          match ? "bg-brand-primary" : "bg-transparent"
         } w-1 h-9 rounded-r-md`}></div>
       <NavLink
         title={label}
         className={({ isActive }) =>
-          `flex gap-3 hover:bg-blue-50 w-full rounded-xl ml-2 p-2 items-center ${
-            isActive ? "text-blue-700 hover:bg-blue-100 bg-blue-100" : ""
+          `flex gap-3 hover:bg-hover-menu-color w-full rounded-lg ml-2 p-2 h-9 items-center ${
+            isActive
+              ? "text-brand-primary hover:bg-hover-menu-color bg-active-menu-color"
+              : "text-primary-text"
           }`
         }
         to={path}>
         {Icon && <Icon className="h-6 w-6" />}
-        {isExpanded && <span className="flex-1">{label}</span>}
+        {isExpanded && <span className="text-sm flex-1">{label}</span>}
         {isExpanded && hasSubMenu && (
           <HiOutlineChevronDown
             onClick={(e) => {

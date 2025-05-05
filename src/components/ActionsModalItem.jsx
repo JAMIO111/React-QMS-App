@@ -1,0 +1,26 @@
+import React from "react";
+import clsx from "clsx";
+
+const ActionsModalItem = ({ label, icon: Icon, color, item, callback }) => {
+  const colorClasses = {
+    red: "hover:bg-error-color text-error-color hover:text-white text-error-text",
+    blue: "hover:bg-indigo-500 hover:text-white text-primary-text",
+  };
+
+  return (
+    <button
+      onClick={() => {
+        callback;
+        console.log(`${label} ${item.id}`);
+      }}
+      className={clsx(
+        "w-full h-full gap-2 pl-2 flex justify-start items-center font-semibold p-1 cursor-pointer transition-all ease-in-out duration-300 rounded-lg",
+        colorClasses[color]
+      )}>
+      <Icon className="w-5 h-5" />
+      <p>{label}</p>
+    </button>
+  );
+};
+
+export default ActionsModalItem;

@@ -22,7 +22,13 @@ const router = createBrowserRouter([
       },
       {
         path: "Non-Conformance",
-        element: <NonConformance />,
+        element: null,
+        children: [
+          {
+            path: "Internal",
+            element: <NonConformance />,
+          },
+        ],
       },
       {
         path: "Projects",

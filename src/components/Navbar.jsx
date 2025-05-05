@@ -1,20 +1,19 @@
 import React, { useState } from "react";
 import Logo from "../assets/Logo-black-on-yellow.png";
-import {
-  TbLayoutSidebarRightExpand,
-  TbLayoutSidebarLeftExpand,
-} from "react-icons/tb";
+import { TbLayoutSidebarRightExpand } from "react-icons/tb";
 import { BsGear, BsQuestionCircle } from "react-icons/bs";
 import NavItem from "./NavItem";
 import Logout from "./Logout";
 import { menuStructure } from "../MenuStructure";
 import SubMenuItem from "./SubMenuItem";
+import ThemeToggle from "./ThemeToggle";
 
 const Navbar = () => {
   const [isMenuExpanded, setIsMenuExpanded] = useState(false);
   const [isSubMenuOpen, setIsSubMenuOpen] = useState(null);
 
   const toggleMenu = () => {
+    setIsSubMenuOpen(null);
     setIsMenuExpanded((prev) => !prev);
   };
 
@@ -23,13 +22,13 @@ const Navbar = () => {
   };
 
   return (
-    <div className="flex">
+    <div className="flex bg-secondary-bg">
       <nav
-        className={`flex flex-col border-r-1 min-w-fit border-gray-200 h-dvh ${
-          isMenuExpanded ? "w-66" : "w-14"
+        className={`flex flex-col border-r min-w-fit border-border-color h-screen ${
+          isMenuExpanded ? "w-68" : "w-14"
         }`}>
         <div
-          className={`flex justify-between items-center py-3 mb-3 border-b-1 border-gray-200 ${
+          className={`flex justify-between items-center py-3 mb-3 border-b-1 border-border-color ${
             isMenuExpanded ? "flex-row mx-3" : "flex-col gap-3"
           }`}>
           <div className="flex items-center justify-start gap-3">
@@ -39,7 +38,7 @@ const Navbar = () => {
               alt="Logo"
             />
             {isMenuExpanded && (
-              <h1 className=" font-semibold text-3xl text-gray-800">
+              <h1 className=" font-semibold text-3xl text-primary-text">
                 JDigital
               </h1>
             )}
@@ -48,14 +47,14 @@ const Navbar = () => {
             title={isMenuExpanded ? "Hide Menu" : "Expand Menu"}
             onClick={toggleMenu}
             className="cursor-pointer">
-            {isMenuExpanded ? (
-              <TbLayoutSidebarRightExpand className="h-6 w-6 stroke-gray-600 ml-3 hover:stroke-black" />
-            ) : (
-              <TbLayoutSidebarLeftExpand className="h-6 w-6  stroke-gray-600 hover:stroke-black" />
-            )}
+            <TbLayoutSidebarRightExpand
+              className={`h-6 w-6 stroke-icon-color ml-3 hover:stroke-primary-text ${
+                !isMenuExpanded && "rotate-180 mr-3"
+              }`}
+            />
           </button>
         </div>
-        <div className="flex flex-col flex-1 justify-between">
+        <div className="flex flex-col flex-1 overflow-y-auto justify-between">
           <ul className="gap-1 flex-1 flex flex-col">
             {menuStructure.map((item) => (
               <li key={item.name}>
@@ -88,14 +87,14 @@ const Navbar = () => {
               </li>
             ))}
           </ul>
-          <div className="border-t-1 border-gray-200"></div>
+          <div className="border-t-1 border-border-color"></div>
           <ul className="gap-2 flex my-2 flex-col">
             <NavItem
               label="Settings"
               icon={BsGear}
               isExpanded={isMenuExpanded}
               path="/settings"
-              onClick={() => setSettingsModal(true)}
+              onClick={() => {}}
             />
             <NavItem
               label="Help Centre"
@@ -103,8 +102,11 @@ const Navbar = () => {
               isExpanded={isMenuExpanded}
               path="/help"
             />
-            <div className="border-t-1 mx-3 border-gray-200"></div>
-            <Logout isExpanded={isMenuExpanded} />
+            <div className="border-t-1 mx-3 border-border-color"></div>
+            <div className="flex flex-col justify-between items-start gap-2 pt-2">
+              <ThemeToggle menuExpanded={isMenuExpanded} />
+              <Logout isExpanded={isMenuExpanded} />
+            </div>
           </ul>
         </div>
       </nav>

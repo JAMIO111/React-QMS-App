@@ -1,10 +1,15 @@
-import React from "react";
 import { CgClose } from "react-icons/cg";
 
-const SortPane = ({ onClose }) => {
+const SortPane = ({
+  sortColumn,
+  setSortColumn,
+  sortOrder,
+  setSortOrder,
+  onClose,
+}) => {
   return (
-    <div className="border absolute bg-primary-bg text-primary-text z-1000 top-30 right-24 rounded-2xl border-border-color shadow-lg shadow-border-color w-80 h-fit">
-      <div className="flex px-4 py-1 bg-secondary-bg border-b border-border-color flex-row justify-between items-center rounded-t-2xl ">
+    <div className="border absolute bg-primary-bg text-primary-text z-1000 top-32 right-24 rounded-2xl border-border-color shadow-lg shadow-shadow-color w-100 h-fit">
+      <div className="flex px-3 py-1 bg-secondary-bg border-b border-border-color flex-row justify-between items-center rounded-t-2xl ">
         <h3 className="text-xl">Sort</h3>
         <button
           className="cursor-pointer hover:text-error-color p-1"
@@ -13,37 +18,75 @@ const SortPane = ({ onClose }) => {
         </button>
       </div>
       <div className="flex flex-col justify-start items-center">
-        <div className="filter-item flex px-4 py-3 border-b border-border-color w-full flex-col justify-start items-center">
-          <div className="w-full flex flex-row justify-between items-center">
-            <h4>Failure Mode</h4>
-            <button className="text-brand-primary hover:text-error-color cursor-pointer pl-2 text-right">
-              Reset
-            </button>
+        <div className="filter-item flex px-3 py-2 border-b border-border-color w-full flex-col justify-start items-center">
+          <div className="w-full gap-4 flex flex-row justify-between items-center">
+            <div className="flex flex-col w-full">
+              <h4 className="text-sm text-secondary-text">Sort By:</h4>
+              <select
+                value={sortColumn}
+                onChange={(e) => setSortColumn(e.target.value)}
+                className="h-8 bg-text-input-color border border-border-color rounded-md px-2">
+                <option value="ncm_id">NCM ID</option>
+                <option value="date">Date</option>
+                <option value="quantity">Quantity</option>
+                <option value="total_cost">Total Cost</option>
+              </select>
+            </div>
+            <div className="flex flex-col w-full">
+              <h4 className="text-sm text-secondary-text">Sort Order:</h4>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+                className="h-8 bg-text-input-color border border-border-color rounded-md px-2">
+                <option value="asc">
+                  {(() => {
+                    switch (sortColumn) {
+                      case "ncm_id":
+                        return "Ascending";
+                      case "date":
+                        return "Oldest - Newest";
+                      case "quantity":
+                        return "Low - High";
+                      case "total_cost":
+                        return "Low - High";
+                      default:
+                        return "Ascending";
+                    }
+                  })()}
+                </option>
+                <option value="desc">
+                  {(() => {
+                    switch (sortColumn) {
+                      case "ncm_id":
+                        return "Descending";
+                      case "date":
+                        return "Newest - Oldest";
+                      case "quantity":
+                        return "High - Low";
+                      case "total_cost":
+                        return "High - Low";
+                      default:
+                        return "Descending";
+                    }
+                  })()}
+                </option>
+              </select>
+            </div>
           </div>
-          <div className="w-full flex flex-col">
-            <div className="sort-radio-div">
-              Date - New to Old
-              <input type="radio" name="sort" value="ascending" />
-            </div>
-            <div className="sort-radio-div">
-              Date - Old to New
-              <input type="radio" name="sort" value="descending" />
-            </div>
-            <div className="sort-radio-div">
-              Quantity - High to Low
-              <input type="radio" name="sort" value="descending" />
-            </div>
-            <div className="sort-radio-div">
-              Quantity - Low to High
-              <input type="radio" name="sort" value="descending" />
-            </div>
-          </div>
+          <div className="w-full flex flex-col"></div>
         </div>
-        <div className="w-full p-4 flex flex-row justify-between items-center">
-          <button className="border border-border-color rounded-lg py-1 px-2 cursor-pointer hover:border-error-color hover:text-error-color">
+        <div className="w-full p-3 flex flex-row justify-between items-center">
+          <button
+            onClick={() => {
+              setSortColumn("ncm_id");
+              setSortOrder("desc");
+            }}
+            className="border border-border-color rounded-lg py-1 px-2 cursor-pointer hover:border-error-color hover:text-error-color">
             Clear Sort
           </button>
-          <button className="rounded-lg py-1 px-2 text-white bg-cta-color cursor-pointer">
+          <button
+            onClick={onClose}
+            className="rounded-lg py-1 px-2 text-white bg-cta-color cursor-pointer">
             Apply Now
           </button>
         </div>

@@ -13,7 +13,7 @@ export const menuStructure = [
   {
     name: "Dashboard",
     icon: RxDashboard,
-    path: "/",
+    path: "/Dashboard",
     subMenu: [],
   },
   {

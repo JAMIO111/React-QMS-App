@@ -1,7 +1,6 @@
-import React from "react";
 import { NavLink } from "react-router-dom";
 
-const SubMenuItem = ({ label, isLast, path }) => {
+const SubMenuItem = ({ closeMenu, label, isLast, path }) => {
   return (
     <div className="flex flex-row items-center justify-start w-full h-8 pr-3 pl-4">
       <div
@@ -17,6 +16,7 @@ const SubMenuItem = ({ label, isLast, path }) => {
               : "text-primary-text"
           } pl-2 h-7 text-sm w-full flex flex-row items-center hover:bg-hover-menu-color rounded-lg`
         }
+        onClick={closeMenu}
         to={path}>
         {label}
       </NavLink>

@@ -10,6 +10,7 @@ const NavItem = ({
   hasSubMenu,
   onToggleSubMenu,
   isSubMenuOpen,
+  closeMenu,
 }) => {
   const match = useMatch(path);
 
@@ -28,6 +29,7 @@ const NavItem = ({
               : "text-primary-text"
           }`
         }
+        onClick={closeMenu}
         to={path}>
         {Icon && <Icon className="h-6 w-6" />}
         {isExpanded && <span className="text-sm flex-1">{label}</span>}

@@ -17,6 +17,11 @@ const Navbar = () => {
     setIsMenuExpanded((prev) => !prev);
   };
 
+  const closeMenu = () => {
+    setIsSubMenuOpen(null);
+    setIsMenuExpanded(false);
+  };
+
   const toggleSubMenu = (name) => {
     setIsSubMenuOpen((prev) => (prev === name ? null : name));
   };
@@ -64,6 +69,7 @@ const Navbar = () => {
                   icon={item.icon}
                   path={item.path}
                   isExpanded={isMenuExpanded}
+                  closeMenu={closeMenu}
                   hasSubMenu={
                     Array.isArray(item.subMenu) && item.subMenu.length > 0
                   }
@@ -79,6 +85,7 @@ const Navbar = () => {
                           label={subItem.name}
                           path={subItem.path}
                           isLast={index === item.subMenu?.length - 1}
+                          closeMenu={closeMenu}
                         />
                       </li>
                     ))}

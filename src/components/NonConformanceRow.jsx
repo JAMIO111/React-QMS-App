@@ -1,48 +1,38 @@
-import React, { useState, useRef } from "react";
+import { useRef } from "react";
 import StatusPill from "./StatusPill";
 import { IoEllipsisVertical } from "react-icons/io5";
 import { format } from "date-fns";
 
 const NonConformanceRow = ({
-  item,
-  selected,
+  item, //Required
+  selectedItem,
+  setSelectedItem, //Required
   handleRowClick,
-  setOpenModalRowId,
-  setModalPos,
-  setModalItem,
+  onOpenModal,
+  costData, //Required
+  handleActiveModalType, //Required
+  checked,
+  onToggle,
 }) => {
-  const ellipsisRef = useRef(null);
-
   const formattedDate = format(new Date(item.date), "dd MMM yy");
 
+  const ellipsisRef = useRef(null);
+
+  const selected = selectedItem?.id == item.id;
+
   const handleEllipsisClick = (e) => {
-    const rect = ellipsisRef.current.getBoundingClientRect();
-    const modalWidth = 160; // match your modal’s width (w-40 = 160px)
-    const modalHeight = 130; // approx height of your modal
-
-    const padding = 20;
-
-    let top = rect.bottom + window.scrollY + 10;
-    let left = rect.left + window.scrollX - 120;
-
-    // Adjust if modal would overflow bottom
-    if (top + modalHeight + padding > window.innerHeight + window.scrollY) {
-      top = rect.top + window.scrollY - modalHeight - 4; // show above
+    e.stopPropagation(); // Prevent row click event
+    if (selectedItem?.id !== item.id) {
+      setSelectedItem(item);
     }
-
-    // Adjust if modal would overflow right
-    if (left + modalWidth + padding > window.innerWidth + window.scrollX) {
-      left = window.innerWidth + window.scrollX - modalWidth - padding;
+    if (ellipsisRef.current) {
+      const rect = ellipsisRef.current.getBoundingClientRect();
+      handleActiveModalType("Actions");
+      onOpenModal({
+        top: rect.bottom + window.scrollY - 25,
+        left: rect.left + window.scrollX - 160,
+      });
     }
-    setModalPos({ top, left });
-    setOpenModalRowId(item.id); // Set the ID of the row that opened the modal
-    setModalItem(item); // Set the item for the modal
-    console.log("Ellipsis clicked for item:", item.id);
-  };
-
-  const handleCloseModal = () => {
-    setOpenModalRowId(null); // Close the modal and reset the row ID
-    setModalPos(null);
   };
 
   return (
@@ -54,25 +44,30 @@ const NonConformanceRow = ({
         }`}>
         <td className="table-row-item">
           <input
-            onClick={(e) => {
-              e.stopPropagation();
-              console.log("Checkbox clicked");
-            }}
             type="checkbox"
+            checked={checked}
+            onChange={() => onToggle(item)}
             className="cursor-pointer"
           />
         </td>
-        <td className="table-row-item">{item.id}</td>
-        <td className="table-row-item">{item.claimRef}</td>
+        <td className="table-row-item">{item.ncm_id}</td>
+        <td className="table-row-item">{item?.claim_ref}</td>
         <td className="table-row-item min-w-28">{formattedDate}</td>
-        <td className="table-row-item">{item.customer}</td>
-        <td className="table-row-item min-w-20 text-center">{item.qty}</td>
-        <td className="table-row-item">{item.failureMode}</td>
-        <td className="table-row-item">{item.partNumber}</td>
+        <td className="table-row-item">{item.customer_name}</td>
+        <td className="table-row-item min-w-20 text-center">{item.quantity}</td>
+        <td className="table-row-item">{item.failure_mode_name}</td>
+        <td className="table-row-item">{item.part_number}</td>
         <td className="table-row-item">
-          <StatusPill status={item.status} />
+          <StatusPill status={item.status_name} />
         </td>
-        <td className="table-row-item">{item.description}</td>
+        <td className={`table-row-item ${costData ? "text-right" : ""}`}>
+          {costData
+            ? new Intl.NumberFormat("en-GB", {
+                style: "currency",
+                currency: "GBP",
+              }).format(item.total_cost)
+            : item.description}
+        </td>
         <td className="table-row-item">
           <IoEllipsisVertical
             ref={ellipsisRef}

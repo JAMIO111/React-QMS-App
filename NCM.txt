@@ -1,0 +1,20 @@
+NCM
+
+NC Id
+Claim Ref.
+Date 
+Customer
+Quantity
+Failure Mode
+Sub-Failure Mode
+Description
+Causal Process
+Operator Responsible
+Status
+8D Ref.
+
+Material Cost
+Labour Cost
+Transport Cost
+Total Cost
+Invoice No.

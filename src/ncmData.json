@@ -8,7 +8,8 @@
     "failureMode": "Incorrect dimensions",
     "partNumber": "408756",
     "status": "Open",
-    "description": "Length exceeded tolerance by 1.2mm"
+    "description": "Length exceeded tolerance by 1.2mm",
+    "responsiblePerson": 1
   },
   {
     "id": "RMA-25-002",
@@ -19,7 +20,8 @@
     "failureMode": "Surface defect",
     "partNumber": "ST-1789",
     "status": "Investigating",
-    "description": "Scratches found on anodized finish"
+    "description": "Scratches found on anodized finish",
+    "responsiblePerson": 2
   },
   {
     "id": "RMA-25-003",
@@ -96,7 +98,7 @@
     "failureMode": "Wrong part supplied",
     "partNumber": "PN-0144",
     "status": "Closed",
-    "description": "Incorrect part shipped under correct label"
+    "description": "Incorrect part shipped under correct label. Part number PN-0144 instead of PN-0145. Part number PN-0145 is a spare part for the assembly. "
   },
   {
     "id": "RMA-25-010",
@@ -217,6 +219,6 @@
     "failureMode": "Deformed profile",
     "partNumber": "PN-0269",
     "status": "In-Progress",
-    "description": "Extrusion warped during cooling"
+    "description": "Extrusion warped during cooling. Flange bent out of shape. Not able to rework"
   }
 ]

@@ -11,10 +11,14 @@
   --color-text-input-color: rgba(var(--text-input));
   --color-success-color: var(--success);
   --color-error-color: var(--error);
+  --color-warning-color: var(--warning);
+  --color-info-color: var(--info);
   --color-icon-color: rgba(var(--icon));
   --color-hover-menu-color: rgba(var(--hover-menu));
   --color-active-menu-color: rgba(var(--active-menu));
   --color-cta-color: var(--cta-color);
+  --color-muted: rgba(var(--muted-text));
+  --color-shadow-color: rgba(var(--shadow-color));
 }
 
 * {
@@ -23,19 +27,23 @@
 }
 .light {
   --brand-primary: var(--color-blue-700);
-  --primary-bg: 255, 255, 255;
-  --secondary-bg: 245, 245, 245;
+  --primary-bg: 240, 240, 240;
+  --secondary-bg: 251, 251, 251;
   --primary-text: 0, 0, 0;
   --secondary-text: 60, 60, 60;
-  --border: 230, 230, 230;
+  --border: 225, 225, 225;
   --border-dark: 200, 200, 200;
   --text-input: 255, 255, 255;
-  --success: var(--color-green-500);
+  --success: var(--color-green-600);
   --error: var(--color-red-500);
+  --warning: var(--color-yellow-500);
+  --info: var(--color-blue-600);
   --icon: 80, 80, 80;
   --hover-menu: 235, 235, 240;
   --active-menu: 225, 225, 245;
   --cta-color: var(--color-indigo-700);
+  --muted-text: 120, 120, 120;
+  --shadow-color: 220, 220, 220;
 }
 .dark {
   --brand-primary: var(--color-blue-400);
@@ -47,12 +55,16 @@
   --border: 68, 68, 68;
   --border-dark: 98, 98, 98;
   --text-input: 40, 40, 40;
-  --success: var(--color-green-400);
+  --success: var(--color-green-500);
   --error: var(--color-red-400);
+  --warning: var(--color-yellow-400);
+  --info: var(--color-blue-400);
   --icon: 175, 175, 175;
   --hover-menu: 45, 45, 45;
   --active-menu: 55, 55, 65;
   --cta-color: var(--color-indigo-500);
+  --muted-text: 150, 150, 150;
+  --shadow-color: 35, 35, 35;
 }
 .table-header {
   white-space: nowrap;
@@ -61,6 +73,18 @@
   display: flex;
   flex-direction: row;
   justify-content: start;
+  align-items: center;
+  padding: 1rem 0.5rem;
+  gap: 0.4rem;
+  color: var(--color-primary-text);
+}
+.table-header-number {
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border-color);
+  font-weight: 600;
+  display: flex;
+  flex-direction: row;
+  justify-content: end;
   align-items: center;
   padding: 1rem 0.5rem;
   gap: 0.4rem;
@@ -101,6 +125,7 @@ th {
 }
 .table-row-item {
   padding: 4px 8px;
+  font-size: 13px;
   border-top: 1px solid var(--color-border-color);
   color: var(--color-primary-text);
 }
@@ -128,4 +153,25 @@ th {
 /* Handle on hover */
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+.shimmer {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    to right,
+    rgba(200, 200, 200, 0.2) 0%,
+    rgba(200, 200, 200, 0.5) 50%,
+    rgba(200, 200, 200, 0.2) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1s infinite linear;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -100% 0;
+  }
+  100% {
+    background-position: 100% 0;
+  }
 }

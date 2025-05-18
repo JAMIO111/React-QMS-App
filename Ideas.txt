@@ -1,0 +1,9 @@
+Bugs & Improvements:
+    url filter params clearing when clearing search.
+    
+
+
+User preferences:
+    Query Stale time
+    Currency
+    Theme Color

@@ -15,7 +15,7 @@ const TextAreaInput = ({
         className="relative flex border border-border-color rounded-lg px-2 py-2 bg-text-input-color
         hover:border-border-dark-color focus-within:border-brand-primary focus-within:hover:border-brand-primary">
         {Icon && (
-          <Icon className="w-5 h-5 text-primary-text mr-2 mt-1 flex-shrink-0 pointer-events-none" />
+          <Icon className="w-5 h-5 text-primary-text mr-2 flex-shrink-0 pointer-events-none" />
         )}
 
         <textarea

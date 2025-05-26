@@ -1,4 +1,4 @@
-import { BrowserRouter as Link, Outlet } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import { useState } from "react";
 import "./App.css";
 import Navbar from "./components/Navbar";

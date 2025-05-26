@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { FiTrash2 } from "react-icons/fi";
-import { LuPencil } from "react-icons/lu";
+import { HiOutlinePencil } from "react-icons/hi2";
 import { IoDuplicateOutline } from "react-icons/io5";
 import { HiOutlineWrenchScrewdriver } from "react-icons/hi2";
 import ActionsModalItem from "./ActionsModalItem";
@@ -50,11 +50,7 @@ const ActionsModal = ({ item, position }) => {
 
   const handleEditNC = () => {
     console.log(`Editing ${item.id}`);
-    navigate("/Non-Conformance/Internal/NC-Form", {
-      state: {
-        itemID: item.id, // could be null for a new one
-      },
-    });
+    navigate(`/QMS/Non-Conformance/Internal/Edit-NC-${item.id}`);
   };
 
   return createPortal(
@@ -66,11 +62,10 @@ const ActionsModal = ({ item, position }) => {
         left: position.left,
         zIndex: 1000,
       }}>
-      <div className="w-full h-1/4 flex gap-2.5 flex-col p-3 justify-center items-center border-b border-border-color">
+      <div className="w-full h-1/4 flex gap-2 flex-col p-2 justify-center items-center border-b border-border-color">
         <ActionsModalItem
-          path="/Non-Conformance/Internal/NC-Form"
           label="Edit NC"
-          icon={LuPencil}
+          icon={HiOutlinePencil}
           color="blue"
           item={item}
           callback={handleEditNC}
@@ -94,7 +89,7 @@ const ActionsModal = ({ item, position }) => {
           }}
         />
       </div>
-      <div className="w-full h-1/4 flex p-3 justify-center items-center">
+      <div className="w-full h-1/4 flex p-2 justify-center items-center">
         <ActionsModalItem
           label="Delete"
           icon={FiTrash2}

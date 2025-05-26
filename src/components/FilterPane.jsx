@@ -8,7 +8,7 @@ import { useSearchParams } from "react-router-dom";
 const FilterPane = ({ onClose }) => {
   const [searchParams] = useSearchParams();
   const statusUrl = searchParams.get("status") || "";
-  const failureModeUrl = searchParams.get("failure_mode") || "";
+  const failureModeUrl = searchParams.get("failureMode") || "";
   const { search, status, failureMode, updateFilters } = useNCMFilters();
   const [localStatus, setLocalStatus] = useState(statusUrl);
   const [localFailureMode, setLocalFailureMode] = useState(failureModeUrl);
@@ -27,14 +27,23 @@ const FilterPane = ({ onClose }) => {
   const resetAll = () => {
     setLocalStatus("");
     setLocalFailureMode("");
+
+    updateFilters({
+      search,
+      status: "",
+      failureMode: "",
+    });
+
+    if (onClose) onClose();
   };
 
   const applyFilters = () => {
     updateFilters({
-      search: search,
+      search,
       status: localStatus,
       failureMode: localFailureMode,
     });
+
     if (onClose) onClose();
   };
 

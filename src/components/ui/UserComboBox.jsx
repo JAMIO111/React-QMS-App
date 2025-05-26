@@ -19,27 +19,16 @@ const UserComboBox = ({
   const dropdownRef = useRef(null);
   const inputRef = useRef(null);
 
-  const tailwindColors = [
-    { bg: "bg-red-500", text: "text-white" },
-    { bg: "bg-blue-500", text: "text-white" },
-    { bg: "bg-green-500", text: "text-white" },
-    { bg: "bg-yellow-500", text: "text-black" },
-    { bg: "bg-purple-500", text: "text-white" },
-    { bg: "bg-pink-500", text: "text-white" },
-    { bg: "bg-orange-500", text: "text-white" },
-    { bg: "bg-teal-500", text: "text-white" },
-    { bg: "bg-gray-500", text: "text-white" },
-    { bg: "bg-indigo-500", text: "text-white" },
-    { bg: "bg-lime-500", text: "text-black" },
-    { bg: "bg-cyan-500", text: "text-white" },
-    { bg: "bg-rose-500", text: "text-white" },
-  ];
-
   const filteredUsers = users
     .sort((a, b) => a.surname.localeCompare(b.surname))
-    .filter((user) =>
-      user.surname.toLowerCase().includes(searchTerm?.toLowerCase() || "")
-    );
+    .filter((user) => {
+      const search = searchTerm?.toLowerCase() || "";
+      return (
+        user.surname.toLowerCase().includes(search) ||
+        user.first_name.toLowerCase().includes(search) ||
+        user.job_title.toLowerCase().includes(search)
+      );
+    });
 
   const fullName = (user) => {
     const firstName = user?.first_name || "";
@@ -125,7 +114,7 @@ const UserComboBox = ({
 
   return (
     <div className="w-full" ref={dropdownRef}>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col">
         {label && <span className="text-primary-text">{label}</span>}
         <div className="relative">
           <div
@@ -134,17 +123,17 @@ const UserComboBox = ({
               isOpen
                 ? "border-brand-primary"
                 : "border-border-color hover:border-border-dark-color"
-            } border rounded-lg px-2 py-2 cursor-pointer bg-text-input-color flex items-center justify-between`}>
+            } border rounded-lg px-2 py-2 h-12 cursor-pointer bg-text-input-color flex items-center justify-between`}>
             {/* Avatar / Initials / Default */}
             {selected ? (
-              selected.avatarUrl ? (
+              selected.avatar ? (
                 <img
-                  src={selected.avatarUrl}
+                  src={selected.avatar}
                   alt={fullName(selected)}
-                  className="w-12 h-12 rounded-full mr-2"
+                  className="w-10 h-10 rounded-full mr-2"
                 />
               ) : (
-                <div className="w-9 h-9 rounded-full flex text-white bg-brand-primary items-center justify-center text-sm font-semibold mr-2">
+                <div className="w-10 h-10 rounded-full flex text-white bg-brand-primary items-center justify-center text-sm font-semibold mr-3">
                   {getInitials(selected.first_name, selected.surname)}
                 </div>
               )
@@ -205,13 +194,6 @@ const UserComboBox = ({
               ${alignRight ? "right-0" : "left-0"}`}>
               {filteredUsers.length > 0 ? (
                 filteredUsers.map((user, index) => {
-                  const color =
-                    tailwindColors[
-                      Math.floor(Math.random() * tailwindColors.length)
-                    ];
-                  const randomBG = color.bg;
-                  const randomText = color.text;
-
                   return (
                     <li
                       key={user.id}
@@ -223,15 +205,14 @@ const UserComboBox = ({
                             ? "bg-brand-primary text-white"
                             : "text-primary-text hover:bg-brand-primary/10"
                         }`}>
-                        {user.avatarUrl ? (
+                        {user.avatar ? (
                           <img
-                            src={user.avatarUrl}
+                            src={user.avatar}
                             alt={fullName(user)}
-                            className="w-8 h-8 rounded-full"
+                            className="w-8 h-8 rounded-full object-cover"
                           />
                         ) : (
-                          <div
-                            className={`${randomBG} ${randomText} w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold`}>
+                          <div className="bg-primary-text text-secondary-bg w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold">
                             {getInitials(user.first_name, user.surname)}
                           </div>
                         )}

@@ -14,6 +14,7 @@ import {
 } from "react-icons/io5";
 import { GoCheckCircleFill } from "react-icons/go";
 import { TiWarning } from "react-icons/ti";
+import CTAButton from "../components/CTAButton";
 
 // -- Context to manage global confirm modal --
 const ConfirmContext = createContext(() => Promise.resolve(false));
@@ -120,17 +121,19 @@ export const ConfirmProvider = ({ children }) => {
               <p className="mb-6 text-primary-text text-center">
                 {options.message}
               </p>
-              <div className="flex justify-center gap-6">
-                <button
-                  onClick={() => handleClose(false)}
-                  className="px-6 py-2 text-lg rounded-xl border-2 border-primary-text hover:bg-primary-text/10 text-primary-text hover:cursor-pointer">
-                  {options.cancelText || "Cancel"}
-                </button>
-                <button
-                  onClick={() => handleClose(true)}
-                  className="px-6 py-2 text-lg rounded-xl bg-error-color text-white hover:bg-error-color/80 hover:cursor-pointer">
-                  {options.confirmText || "Confirm"}
-                </button>
+              <div className="flex flex-row w-full h-10 justify-center gap-5">
+                <CTAButton
+                  type="neutral"
+                  width="w-1/2"
+                  text={options.cancelText || "Cancel"}
+                  callbackFn={() => handleClose(false)}
+                />
+                <CTAButton
+                  type="cancel"
+                  width="w-1/2"
+                  text={options.confirmText || "Confirm"}
+                  callbackFn={() => handleClose(true)}
+                />
               </div>
             </div>
           </div>,

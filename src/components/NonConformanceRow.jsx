@@ -25,13 +25,32 @@ const NonConformanceRow = ({
     if (selectedItem?.id !== item.id) {
       setSelectedItem(item);
     }
+
     if (ellipsisRef.current) {
       const rect = ellipsisRef.current.getBoundingClientRect();
+      const modalWidth = 158; // Set this to your modal's approximate width
+      const modalHeight = 177; // Set this to your modal's approximate height
+
+      let top = rect.bottom + window.scrollY - 25;
+      let left = rect.left + window.scrollX - 160;
+
+      // Adjust to prevent clipping right edge
+      if (left + modalWidth > window.innerWidth) {
+        left = window.innerWidth - modalWidth - 10; // 10px padding from edge
+      }
+
+      // Adjust to prevent clipping bottom edge
+      if (top + modalHeight > window.innerHeight + window.scrollY) {
+        top = window.innerHeight + window.scrollY - modalHeight - 10;
+      }
+
+      // Optional: Adjust to prevent clipping left edge
+      if (left < 0) {
+        left = 10;
+      }
+
       handleActiveModalType("Actions");
-      onOpenModal({
-        top: rect.bottom + window.scrollY - 25,
-        left: rect.left + window.scrollX - 160,
-      });
+      onOpenModal({ top, left });
     }
   };
 
@@ -51,12 +70,12 @@ const NonConformanceRow = ({
           />
         </td>
         <td className="table-row-item">{item.ncm_id}</td>
-        <td className="table-row-item">{item?.claim_ref}</td>
         <td className="table-row-item min-w-28">{formattedDate}</td>
         <td className="table-row-item">{item.customer_name}</td>
+        <td className="table-row-item">{item?.work_order}</td>
+        <td className="table-row-item">{item.part_number}</td>
         <td className="table-row-item min-w-20 text-center">{item.quantity}</td>
         <td className="table-row-item">{item.failure_mode_name}</td>
-        <td className="table-row-item">{item.part_number}</td>
         <td className="table-row-item">
           <StatusPill status={item.status_name} />
         </td>

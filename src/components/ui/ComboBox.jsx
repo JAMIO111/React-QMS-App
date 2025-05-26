@@ -115,11 +115,11 @@ const ComboBox = ({
   const showClear = selected || searchTerm;
 
   return (
-    <div className="w-full" ref={dropdownRef}>
+    <div className="w-full">
       <div className="flex flex-col">
         <span className="text-primary-text">{label}</span>
 
-        <div className="relative">
+        <div ref={dropdownRef} className="relative">
           <div
             onClick={() => setIsOpen((prev) => !prev)}
             className={`${

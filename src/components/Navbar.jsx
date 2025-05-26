@@ -7,10 +7,12 @@ import Logout from "./Logout";
 import { menuStructure } from "../MenuStructure";
 import SubMenuItem from "./SubMenuItem";
 import ThemeToggle from "./ThemeToggle";
+import { useUser } from "../contexts/UserProvider";
 
 const Navbar = () => {
   const [isMenuExpanded, setIsMenuExpanded] = useState(false);
   const [isSubMenuOpen, setIsSubMenuOpen] = useState(null);
+  const { logout } = useUser();
 
   const toggleMenu = () => {
     setIsSubMenuOpen(null);
@@ -33,7 +35,7 @@ const Navbar = () => {
           isMenuExpanded ? "w-68" : "w-14"
         }`}>
         <div
-          className={`flex justify-between items-center py-3 mb-3 border-b-1 border-border-color ${
+          className={`flex justify-between items-center py-3 border-b-1 border-border-color ${
             isMenuExpanded ? "flex-row mx-3" : "flex-col gap-3"
           }`}>
           <div className="flex items-center justify-start gap-3">
@@ -59,8 +61,8 @@ const Navbar = () => {
             />
           </button>
         </div>
-        <div className="flex flex-col flex-1 overflow-y-auto justify-between">
-          <ul className="gap-1 flex-1 flex flex-col">
+        <div className="flex flex-col h-full overflow-y-auto justify-between">
+          <ul className="gap-1 flex-1 flex flex-col pt-3">
             {menuStructure.map((item) => (
               <li key={item.name}>
                 <NavItem
@@ -94,20 +96,20 @@ const Navbar = () => {
               </li>
             ))}
           </ul>
-          <div className="border-t-1 border-border-color"></div>
+          <div className="border-t-1 mt-2 border-border-color"></div>
           <ul className="gap-2 flex my-2 flex-col">
             <NavItem
               label="Settings"
               icon={BsGear}
               isExpanded={isMenuExpanded}
-              path="/settings"
+              path="/QMS/Settings"
               onClick={() => {}}
             />
             <NavItem
               label="Help Centre"
               icon={BsQuestionCircle}
               isExpanded={isMenuExpanded}
-              path="/help"
+              path="/QMS/Help"
             />
             <div className="border-t-1 mx-3 border-border-color"></div>
             <div className="flex flex-col justify-between items-start gap-2 pt-2">

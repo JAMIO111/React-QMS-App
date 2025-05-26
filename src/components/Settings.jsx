@@ -1,23 +1,46 @@
-import React, { useState } from "react";
-import { BsGear } from "react-icons/bs";
+import { useState } from "react";
+import { Link, Outlet } from "react-router-dom";
+import SettingMenuStructure from "../SettingMenuStructure";
 
 const Settings = ({ onClose }) => {
-  const [settingsMenuExpanded, setSettingsMenuExpanded] = useState(false);
+  const [expandedItem, setExpandedItem] = useState(null);
+
+  const toggleExpand = (index) => {
+    setExpandedItem((prev) => (prev === index ? null : index));
+  };
+
   return (
-    <div className="p-5 w-full h-full">
-      <div className="flex flex-row border rounded-2xl border-gray-200 shadow-lg shadow-gray-300 h-full w-full">
-        <div className="flex flex-1/3 flex-col gap-2 border-r border-gray-300 p-3">
-          <h1 className="pl-1 text-2xl font-semibold">Settings</h1>
-          <button className="w-full h-10 p-2 border rounded-lg border-gray-300 flex items-center justify-between">
-            <div className="flex flex-row gap-3 items-center">
-              <BsGear />
-              <h2>General</h2>
+    <div className="flex flex-row p-5 gap-5 w-full h-full bg-primary-bg">
+      <div className="flex flex-col w-80">
+        <h1 className="text-primary-text text-2xl pb-8 border-b border-border-color mt-1 font-semibold">
+          Settings
+        </h1>
+        {SettingMenuStructure.map((item, index) => (
+          <Link to={item.path} key={index}>
+            <div
+              key={index}
+              className="flex flex-col gap-1 mt-4"
+              onClick={() => toggleExpand(index)}>
+              <div className="flex flex-row cursor-pointer justify-between items-center px-4 py-2 gap-2 hover:bg-border-color rounded-xl">
+                <h2 className="text-primary-text">{item.name}</h2>
+                <span className="text-primary-text">
+                  {expandedItem === index ? "-" : "+"}
+                </span>
+              </div>
+              {expandedItem === index && item.subMenu.length > 0 && (
+                <div className="flex flex-col gap-2 pl-4">
+                  {item.subMenu.map((subItem, subIndex) => (
+                    <div key={subIndex} className="text-secondary-text">
+                      {subItem}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </button>
-          <div className="flex flex-col gap-3 p-5"></div>
-        </div>
-        <div className="flex flex-2/3 flex-col"></div>
+          </Link>
+        ))}
       </div>
+      <Outlet />
     </div>
   );
 };

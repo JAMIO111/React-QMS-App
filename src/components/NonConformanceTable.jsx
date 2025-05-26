@@ -22,15 +22,24 @@ const NonConformanceTable = ({
   onToggle, //Required - Checkbox
   onSelectAll, //Required - Checkbox
   onClearAll, //Required - Checkbox
+  page,
+  pageSize,
+  totalCount,
+  setPage,
+  setPageSize,
 }) => {
   const [openModalRowId, setOpenModalRowId] = useState(null);
   const [modalPos, setModalPos] = useState(null);
 
-  const recordCount = ncmData?.length ?? 0;
+  console.log("Selected Rows:", selectedRows.length);
+  console.log("Total Count:", totalCount);
+  console.log("NCM Data.count:", ncmData?.count);
 
   const selectAllCheckbox = useRef(null);
+
+  const pageLimit = totalCount < pageSize ? totalCount : pageSize;
   const allSelected =
-    selectedRows?.length === ncmData?.length && ncmData?.length > 0;
+    selectedRows?.length === pageLimit && pageSize > 0 && totalCount > 0;
   const noneSelected = selectedRows?.length === 0;
   const someSelected = !allSelected && !noneSelected;
 
@@ -44,7 +53,7 @@ const NonConformanceTable = ({
     if (allSelected) {
       onClearAll();
     } else {
-      onSelectAll(ncmData);
+      onSelectAll(ncmData?.data);
     }
   };
   const handleRowClick = (item) => {
@@ -81,7 +90,7 @@ const NonConformanceTable = ({
     };
   }, [openModalRowId]);
 
-  const rows = Array.isArray(ncmData) ? ncmData : [];
+  const rows = Array.isArray(ncmData?.data) ? ncmData.data : [];
 
   return (
     <div className="flex flex-col relative border border-border-color rounded-2xl shadow-md max-h-[100vh] overflow-y-auto min-h-[160px]">
@@ -107,11 +116,6 @@ const NonConformanceTable = ({
                 </div>
               </th>
               <th>
-                <div className="table-header">
-                  <BsBox /> NC Ref.
-                </div>
-              </th>
-              <th>
                 <div className="table-header min-w-28">
                   <IoCalendarOutline /> Date
                 </div>
@@ -119,6 +123,16 @@ const NonConformanceTable = ({
               <th>
                 <div className="table-header">
                   <IoPeopleOutline /> Customer
+                </div>
+              </th>
+              <th>
+                <div className="table-header">
+                  <BsBox /> Work Order
+                </div>
+              </th>
+              <th>
+                <div className="table-header">
+                  <BsQrCode /> Part No.
                 </div>
               </th>
               <th>
@@ -131,11 +145,6 @@ const NonConformanceTable = ({
               <th>
                 <div className="table-header">
                   <AiOutlineTag /> Failure Mode
-                </div>
-              </th>
-              <th>
-                <div className="table-header">
-                  <BsQrCode /> Part No.
                 </div>
               </th>
               <th>
@@ -164,7 +173,7 @@ const NonConformanceTable = ({
             </tr>
           </thead>
           <tbody className="text-sm">
-            {rows.length === 0 ? (
+            {totalCount === 0 ? (
               <tr>
                 <td colSpan="11" className="text-center py-6 text-muted">
                   No Non-Conformances found.
@@ -193,7 +202,14 @@ const NonConformanceTable = ({
           </tbody>
         </table>
       </div>
-      <DataNavBar onRefresh={onRefresh} recordCount={recordCount} />
+      <DataNavBar
+        onRefresh={onRefresh}
+        page={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        setPageSize={setPageSize}
+        onPageChange={setPage}
+      />
     </div>
   );
 };

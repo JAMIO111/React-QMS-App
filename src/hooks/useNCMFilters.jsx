@@ -4,49 +4,48 @@ import { useCallback } from "react";
 export function useNCMFilters() {
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Read current values directly from the current searchParams
   const search = searchParams.get("search") || "";
   const status = searchParams.get("status") || "";
   const failureMode = searchParams.get("failureMode") || "";
 
-  const updateFilters = useCallback((newFilters) => {
-    setSearchParams(
-      (prevParams) => {
-        const params = new URLSearchParams(prevParams);
-
-        const currentFilters = {
-          search: params.get("search") ?? "",
-          failureMode: params.get("failureMode") ?? "",
-          status: params.get("status") ?? "",
-        };
+  // updateFilters uses only prevParams passed in setter callback!
+  const updateFilters = useCallback(
+    (newFilters) => {
+      setSearchParams((prevParams) => {
+        const params = new URLSearchParams();
 
         const filters =
           typeof newFilters === "function"
-            ? newFilters(currentFilters)
-            : { ...currentFilters, ...newFilters };
+            ? newFilters({
+                search: prevParams.get("search") || "",
+                status: prevParams.get("status") || "",
+                failureMode: prevParams.get("failureMode") || "",
+                page: prevParams.get("page") || "1",
+                pageSize: prevParams.get("pageSize") || "25",
+              })
+            : {
+                search: prevParams.get("search") || "",
+                status: prevParams.get("status") || "",
+                failureMode: prevParams.get("failureMode") || "",
+                page: prevParams.get("page") || "1",
+                pageSize: prevParams.get("pageSize") || "25",
+                ...newFilters,
+              };
 
-        if (filters.search) {
-          params.set("search", filters.search);
-        } else {
-          params.delete("search");
-        }
-        if (filters.failureMode) {
-          params.set("failureMode", filters.failureMode);
-        } else {
-          params.delete("failureMode");
-        }
-        if (filters.status) {
-          params.set("status", filters.status);
-        } else {
-          params.delete("status");
-        }
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== "") {
+            params.set(key, value);
+          } else {
+            params.delete(key);
+          }
+        });
 
         return params;
-      },
-      {
-        replace: true,
-      }
-    );
-  }, []);
+      });
+    },
+    [setSearchParams]
+  );
 
   return {
     search,

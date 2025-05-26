@@ -1,26 +1,70 @@
 import React, { useState } from "react";
-import ToastNotification from "./ToastNotification";
-import Skeleton from "./Skeleton";
+import CTAButton from "./CTAButton";
+import DashboardCard from "./DashboardCard";
+import { AiFillPoundCircle } from "react-icons/ai";
+import { BiSolidBarChartAlt2 } from "react-icons/bi";
+import { RxLapTimer } from "react-icons/rx";
+import DashboardTable from "./DashboardTable";
+import BarChart from "./charts/BarChart";
 
 const Dashboard = () => {
-  const [showToast, setShowToast] = useState(false);
+  const [selectedCard, setSelectedCard] = useState(null);
   return (
-    <div className="p-4 bg-secondary-bg">
-      {showToast && (
-        <ToastNotification
-          type="info"
-          title="Deletion Failure"
-          message="We were unable to delete the record"
-          onClose={() => setShowToast(false)}
-        />
-      )}
-      <button onClick={() => setShowToast(true)}>Show toast</button>
-      <div className="flex gap-5 w-100 flex-col justify-center items-center">
-        <Skeleton />
-        <Skeleton />
-        <Skeleton />
-        <Skeleton />
-        <Skeleton />
+    <div className="flex flex-col px-4 pt-2 pb-4 h-full w-full bg-primary-bg">
+      <div className="flex flex-row justify-between items-center px-2">
+        <h1 className="text-primary-text text-xl font-semibold">
+          Precision Hydraulic Cylinders Dashboard
+        </h1>
+        <div className="flex flex-row gap-2">
+          <CTAButton type="neutral" text="Customer" />
+          <CTAButton type="neutral" text="Date Range" />
+        </div>
+      </div>
+      <div className="grid grid-cols-18 grid-rows-15 gap-4 mt-4 flex-grow px-2">
+        <div className="col-span-4 row-span-3 rounded-lg bg-secondary-bg">
+          <DashboardCard
+            title="Cost of Poor Quality"
+            icon={AiFillPoundCircle}
+            value="£4,523.26"
+            trend={26}
+            isSelected={selectedCard === "COPQ"}
+            onClick={() =>
+              setSelectedCard(selectedCard === "COPQ" ? null : "COPQ")
+            }
+          />
+        </div>
+        <div className="col-span-4 row-span-3 rounded-lg bg-secondary-bg">
+          <DashboardCard
+            title="On Time Delivery"
+            icon={RxLapTimer}
+            value="95.4%"
+            trend={5.2}
+            isSelected={selectedCard === "OTD"}
+            onClick={() =>
+              setSelectedCard(selectedCard === "OTD" ? null : "OTD")
+            }
+          />
+        </div>
+        <div className="col-span-4 row-span-3 rounded-lg bg-secondary-bg">
+          <DashboardCard
+            title="Quality Defects"
+            icon={BiSolidBarChartAlt2}
+            value="134"
+            trend={-10}
+            isSelected={selectedCard === "QD"}
+            onClick={() => setSelectedCard(selectedCard === "QD" ? null : "QD")}
+          />
+        </div>
+        <div className="col-span-6 row-span-9 rounded-lg bg-secondary-bg border border-border-color">
+          <DashboardTable />
+        </div>
+        <div className="col-span-12 row-span-6 rounded-lg bg-secondary-bg border border-border-color">
+          <div className="h-full"></div>
+        </div>
+        <div className="col-span-10 row-span-6 rounded-lg bg-secondary-bg"></div>
+        <div className="col-span-8 row-span-6 rounded-lg bg-secondary-bg">
+          Card 3
+        </div>
       </div>
     </div>
   );

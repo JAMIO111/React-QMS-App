@@ -31,7 +31,7 @@ const DatePickerPopout = ({
   return (
     <div className="relative inline-block h-fit w-full">
       {/* Trigger Input */}
-      <span className="text-primary-text font-semibold">{label}</span>
+      <span className="text-primary-text">{label}</span>
       <div
         ref={triggerRef}
         className={`h-10.5 ${

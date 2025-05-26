@@ -15,6 +15,8 @@ import { useNCM } from "../hooks/useNCM";
 import ActionsModal from "./ActionsModal";
 import { useNCMFilters } from "../hooks/useNCMFilters";
 import { useGlobalSearch } from "../contexts/SearchProvider";
+import { useSearchParams } from "react-router-dom";
+import { exportCSV } from "../lib/csvHelper";
 
 const NonConformance = () => {
   const [sortColumn, setSortColumn] = useState("ncm_id");
@@ -26,12 +28,34 @@ const NonConformance = () => {
   const [viewGrid, setViewGrid] = useState(false); // Required
   const [selectedRows, setSelectedRows] = useState([]);
   const modalRef = useRef(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const page = parseInt(searchParams.get("page") || "1", 10);
+  const pageSize = parseInt(searchParams.get("pageSize") || "25", 10);
+
+  const setPage = (newPage) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      params.set("page", newPage);
+      return params;
+    });
+  };
+
+  const setPageSize = (newPageSize) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      params.set("pageSize", newPageSize);
+      return params;
+    });
+  };
+
   const {
     data: ncmData,
     isLoading,
     error,
     refetch,
-  } = useNCM({ sortColumn, sortOrder });
+  } = useNCM({ sortColumn, sortOrder, page, pageSize });
+  const totalCount = ncmData?.count || 0;
   const { debouncedSearchTerm } = useGlobalSearch();
   const { updateFilters } = useNCMFilters();
 
@@ -60,19 +84,18 @@ const NonConformance = () => {
   const totalRows = selectedRows.length;
   const totalQuantity = selectedRows.reduce((acc, r) => acc + r.quantity, 0);
   const totalCost = selectedRows.reduce((acc, r) => acc + r.total_cost, 0);
-
+  console.log("Selected Rows:", selectedRows);
   useEffect(() => {
     updateFilters((prev) => ({ ...prev, search: debouncedSearchTerm }));
+    if (page !== 1) {
+      setPage(1);
+    }
   }, [debouncedSearchTerm]);
 
   const navigate = useNavigate();
 
   const handleNewEntry = () => {
-    navigate("/Non-Conformance/Internal/NC-Form", {
-      state: {
-        itemID: null, // Could be null for a new NC
-      },
-    });
+    navigate("/QMS/Non-Conformance/Internal/New-NC");
   };
 
   const handleActiveModalType = (type) => {
@@ -96,14 +119,21 @@ const NonConformance = () => {
       }
     };
 
+    const handleScroll = () => {
+      setActiveModalType(null);
+      setModalPos(null);
+    };
+
     if (modalPos !== null) {
       document.addEventListener("click", handleClickOutside);
+      window.addEventListener("scroll", handleScroll, true); // true for capturing phase, catches scrolls on all ancestors
     }
 
     return () => {
       document.removeEventListener("click", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll, true);
     };
-  }, [activeModalType]);
+  }, [modalPos]);
 
   return (
     <div className="p-4 flex bg-primary-bg flex-col gap-3 h-screen overflow-hidden">
@@ -123,6 +153,13 @@ const NonConformance = () => {
             </p>
           </div>
           <div className="flex flex-row justify-end items-center gap-2">
+            {selectedRows.length !== 0 && (
+              <CTAButton
+                callbackFn={() => exportCSV(selectedRows)}
+                text="Export CSV"
+                type="success"
+              />
+            )}
             <ViewToggle viewGrid={viewGrid} setViewGrid={handleToggleView} />
             <CTAButton
               callbackFn={() => {
@@ -192,6 +229,11 @@ const NonConformance = () => {
           onToggle={handleToggle}
           onSelectAll={handleSelectAll}
           onClearAll={handleClearAll}
+          page={page}
+          pageSize={pageSize}
+          setPage={setPage}
+          totalCount={totalCount}
+          setPageSize={setPageSize}
         />
       )}
       {activeModalType === "Actions" && (

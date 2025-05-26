@@ -1,7 +1,9 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @theme {
   --color-brand-primary: var(--brand-primary);
+  --color-brand-secondary: var(--brand-secondary);
   --color-primary-bg: rgba(var(--primary-bg));
   --color-secondary-bg: rgba(var(--secondary-bg));
   --color-primary-text: rgba(var(--primary-text));
@@ -11,6 +13,9 @@
   --color-text-input-color: rgba(var(--text-input));
   --color-success-color: var(--success);
   --color-error-color: var(--error);
+  --color-link-color: var(--link);
+  --color-error-dark-color: var(--error-dark);
+  --color-error-light-color: var(--error-light);
   --color-warning-color: var(--warning);
   --color-info-color: var(--info);
   --color-icon-color: rgba(var(--icon));
@@ -19,6 +24,27 @@
   --color-cta-color: var(--cta-color);
   --color-muted: rgba(var(--muted-text));
   --color-shadow-color: rgba(var(--shadow-color));
+  --color-cta-btn-bg: var(--cta-btn-bg);
+  --color-cta-btn-bg-hover: var(--cta-btn-bg-hover);
+  --color-cta-btn-border: var(--cta-btn-border);
+  --color-cta-btn-border-hover: var(--cta-btn-border-hover);
+  --color-neutral-btn-bg: rgba(var(--neutral-btn-bg));
+  --color-neutral-btn-bg-hover: rgba(var(--neutral-btn-bg-hover));
+  --color-neutral-btn-border: rgba(var(--neutral-btn-border));
+  --color-neutral-btn-border-hover: rgba(var(--neutral-btn-border-hover));
+  --color-error-btn-bg: var(--error-btn-bg);
+  --color-error-btn-bg-hover: var(--error-btn-bg-hover);
+  --color-error-btn-border: var(--error-btn-border);
+  --color-error-btn-border-hover: var(--error-btn-border-hover);
+  --color-success-btn-bg: var(--success-btn-bg);
+  --color-success-btn-bg-hover: var(--success-btn-bg-hover);
+  --color-success-btn-border: var(--success-btn-border);
+  --color-success-btn-border-hover: var(--success-btn-border-hover);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
 }
 
 * {
@@ -27,6 +53,7 @@
 }
 .light {
   --brand-primary: var(--color-blue-700);
+  --brand-secondary: var(--color-orange-700);
   --primary-bg: 240, 240, 240;
   --secondary-bg: 251, 251, 251;
   --primary-text: 0, 0, 0;
@@ -35,7 +62,8 @@
   --border-dark: 200, 200, 200;
   --text-input: 255, 255, 255;
   --success: var(--color-green-600);
-  --error: var(--color-red-500);
+  --error: var(--color-red-600);
+  --link: var(--color-blue-800);
   --warning: var(--color-yellow-500);
   --info: var(--color-blue-600);
   --icon: 80, 80, 80;
@@ -44,19 +72,41 @@
   --cta-color: var(--color-indigo-700);
   --muted-text: 120, 120, 120;
   --shadow-color: 220, 220, 220;
+  --cta-btn-bg: var(--color-indigo-200);
+  --cta-btn-bg-hover: var(--color-indigo-300);
+  --cta-btn-border: var(--color-indigo-400);
+  --cta-btn-border-hover: var(--color-indigo-600);
+  --neutral-btn-bg: 240, 240, 240;
+  --neutral-btn-bg-hover: 230, 230, 230;
+  --neutral-btn-border: 200, 200, 200;
+  --neutral-btn-border-hover: 160, 160, 160;
+  --error-btn-bg: var(--color-red-100);
+  --error-btn-bg-hover: var(--color-red-200);
+  --error-btn-border: var(--color-red-300);
+  --error-btn-border-hover: var(--color-red-400);
+  --success-btn-bg: var(--color-green-200);
+  --success-btn-bg-hover: var(--color-green-300);
+  --success-btn-border: var(--color-green-400);
+  --success-btn-border-hover: var(--color-green-500);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
 }
 .dark {
   --brand-primary: var(--color-blue-400);
-  --primary-bg: 0, 0, 0;
-  --primary-bg: 24, 24, 24;
-  --secondary-bg: 31, 31, 31;
+  --brand-secondary: var(--color-orange-400);
+  --primary-bg: 12, 12, 14;
+  --secondary-bg: 24, 24, 26;
   --primary-text: 225, 225, 225;
-  --secondary-text: 205, 205, 205;
-  --border: 68, 68, 68;
+  --secondary-text: 170, 170, 170;
+  --border: 35, 35, 35;
   --border-dark: 98, 98, 98;
   --text-input: 40, 40, 40;
   --success: var(--color-green-500);
   --error: var(--color-red-400);
+  --link: var(--color-blue-400);
   --warning: var(--color-yellow-400);
   --info: var(--color-blue-400);
   --icon: 175, 175, 175;
@@ -64,7 +114,28 @@
   --active-menu: 55, 55, 65;
   --cta-color: var(--color-indigo-500);
   --muted-text: 150, 150, 150;
-  --shadow-color: 35, 35, 35;
+  --shadow-color: 20, 20, 20;
+  --cta-btn-bg: var(--color-indigo-900);
+  --cta-btn-bg-hover: var(--color-indigo-800);
+  --cta-btn-border: var(--color-indigo-700);
+  --cta-btn-border-hover: var(--color-indigo-500);
+  --neutral-btn-bg: 28, 28, 28;
+  --neutral-btn-bg-hover: 31, 31, 31;
+  --neutral-btn-border: 60, 60, 60;
+  --neutral-btn-border-hover: 80, 80, 80;
+  --error-btn-bg: var(--color-red-900);
+  --error-btn-bg-hover: var(--color-red-800);
+  --error-btn-border: var(--color-red-700);
+  --error-btn-border-hover: var(--color-red-600);
+  --success-btn-bg: var(--color-green-900);
+  --success-btn-bg-hover: var(--color-green-800);
+  --success-btn-border: var(--color-green-700);
+  --success-btn-border-hover: var(--color-green-600);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
 }
 .table-header {
   white-space: nowrap;

@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from "react";
 import NonConformanceCard from "./NonConformanceCard";
-//import ncmData from "/src/ncmData.json";
 import ActionsModal from "./ActionsModal";
 
 const NonConformanceGrid = ({
   handleActiveModalType, //Required
-  onOpenModal,
+  onOpenModal, //Required
   onRefresh, //Required
   costData, //Required
-  ncmData,
+  ncmData, //Required
 }) => {
   const [selectedRow, setSelectedRow] = useState(null);
   const [openModalRowId, setOpenModalRowId] = useState(null);
@@ -60,8 +59,8 @@ const NonConformanceGrid = ({
   }, [openModalRowId]);
 
   return (
-    <div className="grid pr-2 grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto h-full">
-      {ncmData.map((item, index) => {
+    <div className="grid pr-2 grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 overflow-y-auto h-full">
+      {ncmData.data.map((item, index) => {
         return (
           <NonConformanceCard
             handleRowClick={() => handleRowClick(index)}

@@ -1,72 +1,34 @@
-export const menuStructure = [
+const SettingMenuStructure = [
   {
     name: "General",
-    icon: RxDashboard,
-    path: "/",
+    path: "General",
     subMenu: [],
   },
   {
-    name: "Non-Conformance",
-    icon: PiWarning,
-    path: "/Non-Conformance",
-    subMenu: [
-      {
-        name: "Internal",
-        path: "/Internal",
-      },
-      {
-        name: "Customer",
-        path: "/External",
-      },
-      {
-        name: "Supplier",
-        path: "/Supplier",
-      },
-      {
-        name: "Warranty",
-        path: "/Warranty",
-      },
-      {
-        name: "Audit",
-        path: "/Audit",
-      },
-    ],
-  },
-  {
-    name: "Projects",
-    icon: BsFolder,
-    path: "/Projects",
+    name: "Account",
+    path: "Account",
     subMenu: [],
   },
   {
-    name: "Purchase Orders",
-    icon: LiaFileInvoiceDollarSolid,
-    path: "/Purchase-Orders",
+    name: "System Preferences",
+    path: "System-Preferences",
     subMenu: [],
   },
   {
-    name: "Inventory",
-    icon: BsBoxes,
-    path: "/Inventory",
-    subMenu: [
-      {
-        name: "Stock",
-        path: "/Stock",
-      },
-      {
-        name: "Stock Adjustment",
-        path: "/Stock-Adjustment",
-      },
-      {
-        name: "Part Maintenance",
-        path: "/Part-Maintenance",
-      },
-    ],
+    name: "Data Management",
+    path: "Data-Management",
+    subMenu: [],
   },
   {
-    name: "Human Resources",
-    icon: BsPeople,
-    path: "/Human-Resources",
+    name: "Notifications",
+    path: "Notifications",
+    subMenu: [],
+  },
+  {
+    name: "Admin",
+    path: "Admin",
     subMenu: [],
   },
 ];
+
+export default SettingMenuStructure;

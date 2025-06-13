@@ -1,19 +1,26 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import NonConformanceCard from "./NonConformanceCard";
-import ActionsModal from "./ActionsModal";
+import DataNavBar from "./DataNavBar";
 
 const NonConformanceGrid = ({
   handleActiveModalType, //Required
+  selectedItem, //Required
+  setSelectedItem, //Required
   onOpenModal, //Required
   onRefresh, //Required
   costData, //Required
   ncmData, //Required
+  page,
+  pageSize,
+  totalCount,
+  setPage,
+  setPageSize,
 }) => {
   const [selectedRow, setSelectedRow] = useState(null);
   const [openModalRowId, setOpenModalRowId] = useState(null);
   const [modalPos, setModalPos] = useState(null);
   const [modalItem, setModalItem] = useState(null);
-  const modalRef = React.useRef(null);
+  const modalRef = useRef(null);
 
   const handleRowClick = (index) => {
     if (selectedRow === index) {
@@ -58,43 +65,39 @@ const NonConformanceGrid = ({
     };
   }, [openModalRowId]);
 
+  const tiles = Array.isArray(ncmData?.data) ? ncmData.data : [];
+
   return (
-    <div className="grid pr-2 grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 overflow-y-auto h-full">
-      {ncmData.data.map((item, index) => {
-        return (
-          <NonConformanceCard
-            handleRowClick={() => handleRowClick(index)}
-            key={item.id}
-            selected={selectedRow === index}
-            item={item}
-            onOpenModal={onOpenModal}
-            handleActiveModalType={handleActiveModalType} //Required
-            openModalRowId={openModalRowId}
-            setOpenModalRowId={setOpenModalRowId}
-            modalPos={modalPos}
-            setModalPos={setModalPos}
-            setModalItem={setModalItem}
-          />
-        );
-      })}
-      {openModalRowId !== null && modalPos && (
-        <div
-          ref={modalRef}
-          className="absolute z-50"
-          style={{
-            top: modalPos.top,
-            left: modalPos.left,
-          }}>
-          <ActionsModal
-            item={modalItem}
-            onClose={() => {
-              setOpenModalRowId(null);
-              setModalPos(null);
-              setModalItem(null);
-            }}
-          />
-        </div>
-      )}
+    <div className="flex flex-col h-full">
+      <div className="grid pr-2 grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 overflow-y-auto h-full">
+        {tiles.map((item, index) => {
+          return (
+            <NonConformanceCard
+              handleRowClick={() => handleRowClick(index)}
+              key={item.id}
+              selectedItem={selectedItem}
+              setSelectedItem={setSelectedItem}
+              selected={selectedRow === index}
+              item={item}
+              onOpenModal={onOpenModal}
+              handleActiveModalType={handleActiveModalType} //Required
+              openModalRowId={openModalRowId}
+              setOpenModalRowId={setOpenModalRowId}
+              modalPos={modalPos}
+              setModalPos={setModalPos}
+              setModalItem={setModalItem}
+            />
+          );
+        })}
+      </div>
+      <DataNavBar
+        onRefresh={onRefresh}
+        page={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        setPageSize={setPageSize}
+        onPageChange={setPage}
+      />
     </div>
   );
 };

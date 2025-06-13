@@ -18,7 +18,9 @@ export const UserProvider = ({ children }) => {
     const fetchProfile = async () => {
       const { data, error } = await supabase
         .from("Employees")
-        .select("first_name, surname, job_title, avatar")
+        .select(
+          "first_name, surname, job_title, avatar, id, auth_id, organisation_id, dashboard_range"
+        )
         .eq("auth_id", authUser.id)
         .maybeSingle();
 
@@ -27,7 +29,6 @@ export const UserProvider = ({ children }) => {
         setProfile(null);
       } else {
         setProfile(data);
-        console.log("Fetched profile:", data);
       }
     };
 

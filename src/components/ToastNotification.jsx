@@ -1,89 +1,113 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import clsx from "clsx";
-import { RxCrossCircled } from "react-icons/rx";
-import { IoCheckmarkCircleOutline } from "react-icons/io5";
-import {
-  HiOutlineExclamationCircle,
-  HiOutlineExclamationTriangle,
-} from "react-icons/hi2";
-import { PiWarningOctagon } from "react-icons/pi";
+import { BsInfoCircleFill } from "react-icons/bs";
+import { HiOutlineExclamationTriangle } from "react-icons/hi2";
+import { MdError } from "react-icons/md";
+import { IoCheckmarkCircle } from "react-icons/io5";
 import { CgClose } from "react-icons/cg";
 
-const ToastNotification = ({ type, title, message, onClose }) => {
+const ToastNotification = ({ type, title, message, onClose, index }) => {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const timeout = requestAnimationFrame(() => setVisible(true));
-
-    const timer = setTimeout(() => {
-      setVisible(false);
-      setTimeout(onClose, 500); // wait for animation
-    }, 4500);
-    return () => {
-      cancelAnimationFrame(timeout);
-      clearTimeout(timer);
-    };
-  }, [onClose]);
+    setVisible(true);
+    return () => setVisible(false);
+  }, []);
 
   const options = {
     error: {
-      icon: <PiWarningOctagon className="text-error-color h-10 w-10" />,
-      color: "bg-error-color/20 border-error-color text-error-color",
-      buttonColor: "hover:border-error-color/80",
+      icon: <MdError className="text-red-500 h-8 w-8" />,
+      color: "text-red-500 bg-red-500/20",
+      buttonColor: "active:border-red-500",
+      iconWrapper: "bg-red-500/20 p-0.5",
     },
     warning: {
       icon: (
-        <HiOutlineExclamationTriangle className="text-warning-color h-10 w-10" />
+        <HiOutlineExclamationTriangle className="text-yellow-500 h-8 w-8" />
       ),
-      color: "bg-warning-color/20 border-warning-color text-warning-color",
-      buttonColor: "hover:border-warning-color/80",
+      color: "text-yellow-500 bg-yellow-500/20",
+      buttonColor: "active:border-yellow-500",
+      iconWrapper: "bg-green-500/20 p-0.5",
     },
     info: {
-      icon: (
-        <HiOutlineExclamationCircle className="text-info-color h-10 w-10" />
-      ),
-      color: "bg-info-color/20 border-info-color text-info-color",
-      buttonColor: "hover:border-info-color/80",
+      icon: <BsInfoCircleFill className="text-blue-500 h-7 w-7" />,
+      color: "text-blue-500 bg-blue-500/20",
+      buttonColor: "active:border-blue-500",
+      iconWrapper: "bg-blue-500/20 p-1",
     },
     success: {
-      icon: (
-        <IoCheckmarkCircleOutline className="text-success-color h-10 w-10" />
-      ),
-      color: "bg-success-color/20 border-success-color text-success-color",
-      buttonColor: "hover:border-success-color/80",
+      icon: <IoCheckmarkCircle className="text-green-500 h-8 w-8" />,
+      color: "text-green-500",
+      buttonColor: "active:border-green-500",
+      iconWrapper: "bg-green-500/20 p-0.5",
     },
   };
+
   const currentOption = options[type] || options.info;
   const baseClass =
-    "flex-row items-center justify-between border-2 rounded-xl px-4 py-2 w-120";
-  let customClass = currentOption.color;
-  let customButtonClass = currentOption.buttonColor;
+    "flex flex-row items-center bg-secondary-bg justify-between border-border-color border-1 rounded-xl px-4 py-2 w-120";
   const baseButtonClass =
-    "cursor-pointer border border-transparent rounded-lg p-1";
+    "cursor-pointer border text-secondary-text hover:text-primary-text border-transparent rounded-lg p-1";
+
   return (
-    <div
-      className={clsx(
-        "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-500",
-        visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-10"
-      )}>
-      <div className={clsx(baseClass, customClass)}>
-        <div className="flex flex-row items-center gap-5">
-          {currentOption.icon}
-          <div className="flex flex-col flex-1">
-            <p className="font-semibold">{title}</p>
-            <p>{message}</p>
+    <motion.div
+      layout
+      initial={{ opacity: 0, x: 200 }}
+      animate={{
+        opacity: 1,
+        x: 0,
+        y: 0,
+        transition: {
+          opacity: { duration: 0.2, ease: "easeIn" }, // Quick fade-in (0.2s)
+          x: { type: "tween", duration: 0.5, ease: "easeOut" }, // Precise 0.5s slide-in
+          y: { type: "spring", stiffness: 500, damping: 30, mass: 1 }, // Slide-up
+        },
+      }}
+      exit={{
+        opacity: 0,
+        x: 0,
+        transition: {
+          opacity: { duration: 1, ease: "easeOut" }, // Slow fade-out (1s)
+          x: { type: "spring", stiffness: 500, damping: 30, mass: 1 }, // No effect
+        },
+      }}
+      transition={{
+        layout: { duration: 0.3 }, // Smooth layout transition
+      }}
+      style={{ position: "relative" }}
+      className={clsx(baseClass, currentOption.color)}>
+      <div className="flex flex-row items-center justify-between gap-4 w-full">
+        {/* Icon */}
+        <div className="relative bg-secondary-bg">
+          <div
+            className={clsx(
+              "flex-shrink-0 p-0.25 rounded-full",
+              currentOption.iconWrapper
+            )}>
+            {currentOption.icon}
           </div>
+        </div>
+
+        {/* Text content */}
+        <div className="flex flex-col flex-grow min-w-0">
+          <p className="font-semibold text-md text-primary-text">{title}</p>
+          <p className="text-secondary-text text-sm break-words whitespace-normal">
+            {message}
+          </p>
+        </div>
+
+        {/* Close button */}
+        <div className="flex-shrink-0">
           <button
-            onClick={() => {
-              setVisible(false);
-              setTimeout(onClose, 300);
-            }}
-            className={clsx(baseButtonClass, customButtonClass)}>
+            onClick={onClose}
+            className={clsx(baseButtonClass, currentOption.buttonColor)}
+            aria-label="Close notification">
             <CgClose className="h-5 w-5" />
           </button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

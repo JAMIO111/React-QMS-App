@@ -7,9 +7,12 @@ import { IoCalendarOutline } from "react-icons/io5";
 import { PiStack } from "react-icons/pi";
 import { BsQrCode } from "react-icons/bs";
 import { format } from "date-fns";
+import { useStatusOptions } from "@/hooks/useCategoryOptions";
 
 const NonConformanceCard = ({
   item,
+  selectedItem,
+  setSelectedItem,
   selected,
   onOpenModal,
   handleActiveModalType, // Required
@@ -23,6 +26,9 @@ const NonConformanceCard = ({
 
   const handleActionBtnClick = (e) => {
     e.stopPropagation(); // Prevent row click event
+    if (selectedItem?.id !== item.id) {
+      setSelectedItem(item);
+    }
 
     if (actionBtnRef.current) {
       const rect = actionBtnRef.current.getBoundingClientRect();
@@ -57,6 +63,9 @@ const NonConformanceCard = ({
     setModalPos(null);
   };
 
+  const { data: statusOptions } = useStatusOptions();
+  const status = statusOptions?.find((status) => status.id === item.status);
+
   return (
     <div
       onClick={handleRowClick}
@@ -70,10 +79,10 @@ const NonConformanceCard = ({
         </div>
         <div className="flex flex-col gap-1">
           <span className="text-primary-text font-semibold text-right">
-            {item.customer_name}
+            {item.customer_display_name}
           </span>
           <div className="flex flex-row justify-end items-center gap-2">
-            <IoCalendarOutline className="stroke-primary-text fill-primary-text h-5 w-5" />
+            <IoCalendarOutline className="stroke-primary-text fill-primary-text h-4 w-4" />
             <span className="text-secondary-text text-right">
               {formattedDate}
             </span>
@@ -95,21 +104,23 @@ const NonConformanceCard = ({
           </span>
         </div>
         <div className="flex w-full flex-wrap flex-row justify-start items-center gap-2">
-          <div className="whitespace-nowrap text-primary-text py-1.5 px-3 rounded-lg border border-border-color bg-secondary-bg">
-            {item.work_order}
-          </div>
+          {item.work_order && (
+            <div className="whitespace-nowrap text-primary-text py-1.5 px-3 rounded-lg border border-border-color bg-secondary-bg">
+              {item.work_order}
+            </div>
+          )}
           <div className="flex flex-row justify-between items-center whitespace-nowrap gap-3 text-primary-text py-1.5 px-3 rounded-lg border border-border-color bg-secondary-bg">
             <BsQrCode className="stroke-primary-text fill-primary-text h-4 w-4" />
             {item.part_number}
           </div>
           <div className="flex flex-row justify-between items-center whitespace-nowrap gap-2 text-primary-text py-1.5 px-3 rounded-lg border border-border-color bg-secondary-bg">
             <PiStack className="stroke-primary-text fill-primary-text h-5 w-5" />
-            x {item.quantity}
+            x {item.quantity_defective}
           </div>
         </div>
       </div>
       <div className="flex flex-row justify-between items-center border-t border-border-color p-3">
-        <StatusPill status={item.status_name} />
+        <StatusPill width="w-fit" status={status} />
         <div ref={actionBtnRef}>
           <CTAButton
             text="Actions"

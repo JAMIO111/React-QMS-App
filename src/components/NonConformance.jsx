@@ -1,22 +1,25 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
-import NonConformanceTable from "./NonConformanceTable";
-import NonConformanceGrid from "./NonConformanceGrid";
-import IconButton from "./IconButton";
+import { useSearchParams } from "react-router-dom";
 import { BsSliders, BsCurrencyPound } from "react-icons/bs";
+import { PiExportLight } from "react-icons/pi";
 import { HiArrowsUpDown } from "react-icons/hi2";
 import { IoAddOutline } from "react-icons/io5";
-import FilterPane from "./FilterPane";
-import SortPane from "./SortPane";
-import CTAButton from "./CTAButton";
-import Breadcrumb from "./Breadcrumb";
-import ViewToggle from "./ViewToggle";
 import { useNCM } from "../hooks/useNCM";
-import ActionsModal from "./ActionsModal";
 import { useNCMFilters } from "../hooks/useNCMFilters";
 import { useGlobalSearch } from "../contexts/SearchProvider";
-import { useSearchParams } from "react-router-dom";
 import { exportCSV } from "../lib/csvHelper";
+import { SkeletonCard2, SkeletonTable } from "./Skeleton";
+
+const NonConformanceTable = lazy(() => import("./NonConformanceTable"));
+const NonConformanceGrid = lazy(() => import("./NonConformanceGrid"));
+const SortPane = lazy(() => import("./SortPane"));
+const FilterPane = lazy(() => import("./FilterPane"));
+const ActionsModal = lazy(() => import("./ActionsModal"));
+const Breadcrumb = lazy(() => import("./Breadcrumb"));
+const CTAButton = lazy(() => import("./CTAButton"));
+const ViewToggle = lazy(() => import("./ViewToggle"));
+const IconButton = lazy(() => import("./IconButton"));
 
 const NonConformance = () => {
   const [sortColumn, setSortColumn] = useState("ncm_id");
@@ -82,9 +85,12 @@ const NonConformance = () => {
   };
 
   const totalRows = selectedRows.length;
-  const totalQuantity = selectedRows.reduce((acc, r) => acc + r.quantity, 0);
+  const totalQuantity = selectedRows.reduce(
+    (acc, r) => acc + r.quantity_defective,
+    0
+  );
   const totalCost = selectedRows.reduce((acc, r) => acc + r.total_cost, 0);
-  console.log("Selected Rows:", selectedRows);
+
   useEffect(() => {
     updateFilters((prev) => ({ ...prev, search: debouncedSearchTerm }));
     if (page !== 1) {
@@ -135,6 +141,11 @@ const NonConformance = () => {
     };
   }, [modalPos]);
 
+  const activeFilters = ["status", "failureMode", "subFailureMode"].filter(
+    (key) => searchParams.get(key)
+  );
+  const filterCount = activeFilters.length;
+
   return (
     <div className="p-4 flex bg-primary-bg flex-col gap-3 h-screen overflow-hidden">
       <div className="flex flex-row justify-between items-center">
@@ -158,6 +169,9 @@ const NonConformance = () => {
                 callbackFn={() => exportCSV(selectedRows)}
                 text="Export CSV"
                 type="success"
+                title="Export to CSV file"
+                icon={PiExportLight}
+                iconSize="h-6 w-6"
               />
             )}
             <ViewToggle viewGrid={viewGrid} setViewGrid={handleToggleView} />
@@ -165,9 +179,11 @@ const NonConformance = () => {
               callbackFn={() => {
                 handleNewEntry(null);
               }}
-              text="Add Item"
+              text="New NCM"
               type="main"
               icon={IoAddOutline}
+              iconSize="h-6 w-6"
+              title="Create a new non-conformance record"
             />
             <IconButton
               title="Cost"
@@ -184,15 +200,18 @@ const NonConformance = () => {
               icon={<HiArrowsUpDown className="h-5 w-5" />}
             />
             {activeModalType === "Sort" && (
-              <SortPane
-                sortColumn={sortColumn}
-                sortOrder={sortOrder}
-                setSortColumn={setSortColumn}
-                setSortOrder={setSortOrder}
-                onClose={handleCloseModal}
-              />
+              <Suspense fallback={null}>
+                <SortPane
+                  sortColumn={sortColumn}
+                  sortOrder={sortOrder}
+                  setSortColumn={setSortColumn}
+                  setSortOrder={setSortOrder}
+                  onClose={handleCloseModal}
+                />
+              </Suspense>
             )}
             <IconButton
+              count={filterCount}
               selected={activeModalType === "Filter"}
               color="blue"
               title="Filter"
@@ -200,48 +219,79 @@ const NonConformance = () => {
               icon={<BsSliders className="h-4.5 w-4.5" />}
             />
             {activeModalType === "Filter" && (
-              <FilterPane onClose={handleCloseModal} />
+              <Suspense fallback={null}>
+                <FilterPane onClose={handleCloseModal} />
+              </Suspense>
             )}
           </div>
         </div>
       </div>
-      {viewGrid ? (
-        <NonConformanceGrid
-          onOpenModal={handleOpenModal}
-          selectedItem={selectedItem}
-          setSelectedItem={setSelectedItem}
-          ncmData={ncmData}
-          costData={costData}
-          handleActiveModalType={handleActiveModalType}
-          onRefresh={refetch}
-        />
-      ) : (
-        <NonConformanceTable
-          onOpenModal={handleOpenModal}
-          selectedItem={selectedItem}
-          setSelectedItem={setSelectedItem}
-          ncmData={ncmData}
-          costData={costData}
-          handleActiveModalType={handleActiveModalType}
-          onRefresh={refetch}
-          selectedRows={selectedRows}
-          isSelected={isSelected}
-          onToggle={handleToggle}
-          onSelectAll={handleSelectAll}
-          onClearAll={handleClearAll}
-          page={page}
-          pageSize={pageSize}
-          setPage={setPage}
-          totalCount={totalCount}
-          setPageSize={setPageSize}
-        />
-      )}
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <Suspense
+          fallback={
+            viewGrid ? (
+              <div className="grid pr-2 grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                <SkeletonCard2 />
+                <SkeletonCard2 />
+                <SkeletonCard2 />
+                <SkeletonCard2 />
+                <SkeletonCard2 />
+                <SkeletonCard2 />
+                <SkeletonCard2 />
+                <SkeletonCard2 />
+                <SkeletonCard2 />
+              </div>
+            ) : (
+              <SkeletonTable />
+            )
+          }>
+          {viewGrid ? (
+            <NonConformanceGrid
+              onOpenModal={handleOpenModal}
+              selectedItem={selectedItem}
+              setSelectedItem={setSelectedItem}
+              ncmData={ncmData}
+              costData={costData}
+              handleActiveModalType={handleActiveModalType}
+              onRefresh={refetch}
+              page={page}
+              pageSize={pageSize}
+              setPage={setPage}
+              totalCount={totalCount}
+              setPageSize={setPageSize}
+            />
+          ) : (
+            <NonConformanceTable
+              onOpenModal={handleOpenModal}
+              selectedItem={selectedItem}
+              setSelectedItem={setSelectedItem}
+              ncmData={ncmData}
+              costData={costData}
+              handleActiveModalType={handleActiveModalType}
+              onRefresh={refetch}
+              selectedRows={selectedRows}
+              isSelected={isSelected}
+              onToggle={handleToggle}
+              onSelectAll={handleSelectAll}
+              onClearAll={handleClearAll}
+              page={page}
+              pageSize={pageSize}
+              setPage={setPage}
+              totalCount={totalCount}
+              setPageSize={setPageSize}
+            />
+          )}
+        </Suspense>
+      </div>
+
       {activeModalType === "Actions" && (
-        <ActionsModal
-          item={selectedItem}
-          position={modalPos}
-          onClose={handleCloseModal}
-        />
+        <Suspense fallback={null}>
+          <ActionsModal
+            item={selectedItem}
+            position={modalPos}
+            onClose={handleCloseModal}
+          />
+        </Suspense>
       )}
     </div>
   );

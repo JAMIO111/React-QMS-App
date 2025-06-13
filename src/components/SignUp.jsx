@@ -3,11 +3,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { signUp } from "../authService";
 import { IoEyeOutline, IoEyeOffOutline } from "react-icons/io5";
 import { useForm } from "react-hook-form";
+import { useToast } from "@/contexts/ToastProvider";
 
 const SignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { showToast } = useToast();
 
   const navigate = useNavigate();
 
@@ -19,18 +22,25 @@ const SignUp = () => {
   } = useForm();
 
   const handleSignUp = async (data) => {
+    setLoading(true);
     const { email, password } = data;
-    const { user, error } = await signUp(email, password);
-    if (error) {
-      alert(error.message);
-    } else {
-      console.log("User signed up:", user);
-      setMessage(
-        "Account created successfully! Please check your email to verify your account."
-      );
-      setTimeout(() => {
-        navigate("/login");
-      }, 5000); // Redirect after 5 seconds
+    try {
+      const { user, error } = await signUp(email, password, showToast);
+      if (error) {
+        alert(error.message);
+      } else {
+        console.log("User signed up:", user);
+        setMessage(
+          "Account created successfully! Please check your email to verify your account."
+        );
+        setTimeout(() => {
+          navigate("/login");
+        }, 5000); // Redirect after 5 seconds
+      }
+    } catch (err) {
+      alert("Unexpected error: " + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -155,15 +165,22 @@ const SignUp = () => {
         </div>
         <button
           type="submit"
-          className="bg-cta-btn-bg border border-cta-btn-border hover:border-cta-btn-border-hover hover:bg-cta-btn-bg-hover text-primary-text p-2 rounded-lg cursor-pointer text-lg">
-          Sign Up
+          disabled={loading}
+          className={`bg-cta-btn-bg border border-cta-btn-border hover:border-cta-btn-border-hover hover:bg-cta-btn-bg-hover text-primary-text p-2 rounded-lg cursor-pointer text-lg ${
+            loading ? "opacity-50 cursor-not-allowed" : ""
+          }`}>
+          {loading ? "Signing up..." : "Sign Up"}
         </button>
         {message && <p className="text-success-color text-md">{message}</p>}
         <div className="flex flex-row gap-2 text-sm">
           <p className="text-primary-text font-semibold">
             Already have an account?
           </p>
-          <Link to="/login" className="text-blue-800 underline">
+          <Link
+            to="/login"
+            className={`text-link-color underline ${
+              loading ? "pointer-events-none opacity-50" : ""
+            }`}>
             Login here.
           </Link>
         </div>

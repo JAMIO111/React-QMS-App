@@ -8,6 +8,7 @@ export function useNCMFilters() {
   const search = searchParams.get("search") || "";
   const status = searchParams.get("status") || "";
   const failureMode = searchParams.get("failureMode") || "";
+  const subFailureMode = searchParams.get("subFailureMode") || "";
 
   // updateFilters uses only prevParams passed in setter callback!
   const updateFilters = useCallback(
@@ -21,6 +22,7 @@ export function useNCMFilters() {
                 search: prevParams.get("search") || "",
                 status: prevParams.get("status") || "",
                 failureMode: prevParams.get("failureMode") || "",
+                subFailureMode: prevParams.get("subFailureMode") || "",
                 page: prevParams.get("page") || "1",
                 pageSize: prevParams.get("pageSize") || "25",
               })
@@ -28,6 +30,7 @@ export function useNCMFilters() {
                 search: prevParams.get("search") || "",
                 status: prevParams.get("status") || "",
                 failureMode: prevParams.get("failureMode") || "",
+                subFailureMode: prevParams.get("subFailureMode") || "",
                 page: prevParams.get("page") || "1",
                 pageSize: prevParams.get("pageSize") || "25",
                 ...newFilters,
@@ -51,6 +54,7 @@ export function useNCMFilters() {
     search,
     status,
     failureMode,
+    subFailureMode,
     updateFilters,
   };
 }

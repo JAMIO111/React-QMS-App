@@ -2,11 +2,13 @@ import clsx from "clsx";
 
 const CTAButton = ({
   type,
+  title,
   text,
   icon: Icon,
   callbackFn,
   width = "w-fit",
   height = "h-fit",
+  iconSize = "h-5 w-5",
 }) => {
   const colorClasses = {
     cancel:
@@ -25,6 +27,7 @@ const CTAButton = ({
 
   return (
     <button
+      title={title}
       onClick={callbackFn}
       className={clsx(
         baseClass,
@@ -32,7 +35,7 @@ const CTAButton = ({
         width || "w-fit",
         height || "h-fit"
       )}>
-      {Icon && <Icon className="h-6 w-6" />}
+      {Icon && <Icon className={iconSize} />}
       {text}
     </button>
   );

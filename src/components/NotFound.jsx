@@ -81,7 +81,7 @@ const NotFound = () => {
             "mx-auto mt-3 px-4 py-2 text-2xl w-fit border-2 border-amber-600 rounded-2xl text-white bg-amber-600 hover:text-amber-600 hover:bg-white transition-all duration-400"
           }
           key="Dashboard"
-          to="/Dashboard">
+          to="/QMS/Dashboard">
           Return to Dashboard
         </NavLink>
       </div>

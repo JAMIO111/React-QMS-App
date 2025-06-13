@@ -1,0 +1,75 @@
+Date : 2025-06-01 23:05:36
+Directory : c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App
+Total : 36 files,  2149 codes, 58 comments, 192 blanks, all 2399 lines
+
+Languages
++----------------+------------+------------+------------+------------+------------+
+| language       | files      | code       | comment    | blank      | total      |
++----------------+------------+------------+------------+------------+------------+
+| JavaScript JSX |         29 |      1,714 |         25 |        144 |      1,883 |
+| JavaScript     |          3 |        276 |         31 |         38 |        345 |
+| PostCSS        |          1 |         75 |          2 |         10 |         87 |
+| JSON           |          2 |         75 |          0 |          0 |         75 |
+| XML            |          1 |          9 |          0 |          0 |          9 |
++----------------+------------+------------+------------+------------+------------+
+
+Directories
++----------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                                           | files      | code       | comment    | blank      | total      |
++----------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                                              |         36 |      2,149 |         58 |        192 |      2,399 |
+| . (Files)                                                                                                      |          2 |         75 |          0 |          0 |         75 |
+| public                                                                                                         |          1 |          9 |          0 |          0 |          9 |
+| public\icons                                                                                                   |          1 |          9 |          0 |          0 |          9 |
+| src                                                                                                            |         33 |      2,065 |         58 |        192 |      2,315 |
+| src (Files)                                                                                                    |          2 |        171 |          2 |         14 |        187 |
+| src\api                                                                                                        |          1 |        115 |         31 |         22 |        168 |
+| src\components                                                                                                 |         27 |      1,704 |         26 |        143 |      1,873 |
+| src\components (Files)                                                                                         |         15 |        345 |          5 |         17 |        367 |
+| src\components\ui                                                                                              |         12 |      1,359 |         21 |        126 |      1,506 |
+| src\contexts                                                                                                   |          2 |         10 |         -1 |          1 |         10 |
+| src\lib                                                                                                        |          1 |         65 |          0 |         12 |         77 |
++----------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++----------------------------------------------------------------------------------------------------------------+----------------+------------+------------+------------+------------+
+| filename                                                                                                       | language       | code       | comment    | blank      | total      |
++----------------------------------------------------------------------------------------------------------------+----------------+------------+------------+------------+------------+
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\package-lock.json                         | JSON           |         72 |          0 |          0 |         72 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\package.json                              | JSON           |          3 |          0 |          0 |          3 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\public\icons\pdf-icon.svg                 | XML            |          9 |          0 |          0 |          9 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\api\supabaseApi.js                    | JavaScript     |        115 |         31 |         22 |        168 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\BadgeGroup.jsx             | JavaScript JSX |         82 |          0 |          5 |         87 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\CTAButton.jsx              | JavaScript JSX |          2 |          0 |          0 |          2 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\FilterPane.jsx             | JavaScript JSX |         -3 |          0 |          0 |         -3 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\Header.jsx                 | JavaScript JSX |         -2 |          0 |          0 |         -2 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\NCEntryForm.jsx            | JavaScript JSX |        158 |          1 |          2 |        161 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\Navbar.jsx                 | JavaScript JSX |          1 |          0 |          0 |          1 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\NonConformance.jsx         | JavaScript JSX |          5 |          0 |          1 |          6 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\NonConformanceCard.jsx     | JavaScript JSX |          7 |          0 |          0 |          7 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\NonConformanceGrid.jsx     | JavaScript JSX |        -14 |          0 |          0 |        -14 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\NonConformanceRow.jsx      | JavaScript JSX |          2 |          0 |          0 |          2 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ShieldBadge.jsx            | JavaScript JSX |         76 |          1 |          5 |         82 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\SideMenuItem.jsx           | JavaScript JSX |          9 |          0 |          0 |          9 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\SortPane.jsx               | JavaScript JSX |         -3 |          0 |          1 |         -2 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\SubMenuItem.jsx            | JavaScript JSX |          7 |          0 |          0 |          7 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ToastNotification.jsx      | JavaScript JSX |         18 |          3 |          3 |         24 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\DatePickerPopout.jsx    | JavaScript JSX |         -1 |          0 |          0 |         -1 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\DownloadLink.jsx        | JavaScript JSX |         43 |          4 |          9 |         56 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\FileDrop.jsx            | JavaScript JSX |        327 |          7 |         26 |        360 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\RHFComboBox.jsx         | JavaScript JSX |        202 |          0 |         19 |        221 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\RHFDatePicker.jsx       | JavaScript JSX |        179 |          2 |         19 |        200 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\RHFDatePickerPopout.jsx | JavaScript JSX |         77 |          3 |          7 |         87 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\RHFStatusComboBox.jsx   | JavaScript JSX |        205 |          0 |         19 |        224 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\RHFTextArea.jsx         | JavaScript JSX |         58 |          0 |          5 |         63 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\RHFUserComboBox.jsx     | JavaScript JSX |        223 |          5 |         21 |        249 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\TextArea.jsx            | JavaScript JSX |          9 |          0 |          0 |          9 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\TextInput.jsx           | JavaScript JSX |         38 |          0 |          0 |         38 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\UserAvatarGroup.jsx     | JavaScript JSX |         -1 |          0 |          1 |          0 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\contexts\ToastProvider.jsx            | JavaScript JSX |         11 |         -1 |          1 |         11 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\contexts\UserProvider.jsx             | JavaScript JSX |         -1 |          0 |          0 |         -1 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\index.css                             | PostCSS        |         75 |          2 |         10 |         87 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\lib\utils.js                          | JavaScript     |         65 |          0 |         12 |         77 |
+| c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\validationSchema.js                   | JavaScript     |         96 |          0 |          4 |        100 |
+| Total                                                                                                          |                |      2,149 |         58 |        192 |      2,399 |
++----------------------------------------------------------------------------------------------------------------+----------------+------------+------------+------------+------------+

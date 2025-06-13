@@ -4,26 +4,59 @@ import supabase from "../supabase-client";
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(undefined); // `undefined` means loading
+  const [user, setUser] = useState(undefined); // `undefined` = loading
+  const [error, setError] = useState(null); // Optional error state
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user || null);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user || null);
+    const initAuth = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error("Error getting session:", error.message);
+          setUser(null);
+          setError(error);
+        } else {
+          setUser(data.session?.user || null);
+        }
+      } catch (err) {
+        console.error("Unexpected error during getSession:", err);
+        setUser(null);
+        setError(err);
       }
-    );
+    };
+
+    initAuth();
+
+    const { data: listener, error: listenerError } =
+      supabase.auth.onAuthStateChange((_event, session) => {
+        try {
+          console.log("Auth event:", _event);
+          console.log("Session:", session);
+          setUser(session?.user || null);
+        } catch (err) {
+          console.error("Error handling auth event:", err);
+          setUser(null);
+          setError(err);
+        }
+      });
+
+    if (listenerError) {
+      console.error("Error setting up auth listener:", listenerError.message);
+    }
 
     return () => {
-      listener.subscription.unsubscribe();
+      try {
+        listener?.subscription?.unsubscribe();
+      } catch (err) {
+        console.warn("Error unsubscribing from auth listener:", err);
+      }
     };
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, error }}>
+      {children}
+    </AuthContext.Provider>
   );
 };
 

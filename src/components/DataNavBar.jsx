@@ -52,6 +52,8 @@ const DataNavBar = ({
         <span>Page</span>
         <form onSubmit={handleSubmit}>
           <input
+            id="page-input"
+            name="page-input"
             type="number"
             min="1"
             max={String(maxPage)}

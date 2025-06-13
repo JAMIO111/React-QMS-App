@@ -1,5 +1,4 @@
 import { Outlet } from "react-router-dom";
-import { useState } from "react";
 import "./App.css";
 import Navbar from "./components/Navbar";
 import Header from "./components/Header";
@@ -8,11 +7,15 @@ import { SearchProvider } from "./contexts/SearchProvider.jsx";
 function App() {
   return (
     <SearchProvider>
-      <div className="flex w-screen overflow-hidden">
-        <Navbar />
-        <main className="flex flex-col grow h-dvh">
+      <div className="flex w-screen h-screen overflow-hidden">
+        <div className="hidden md:block">
+          <Navbar />
+        </div>
+        <main className="flex flex-col grow h-full">
           <Header />
-          <Outlet />
+          <div className="flex flex-col flex-grow overflow-hidden">
+            <Outlet />
+          </div>
         </main>
       </div>
     </SearchProvider>

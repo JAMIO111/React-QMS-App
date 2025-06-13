@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { createPortal } from "react-dom";
 import { FiTrash2 } from "react-icons/fi";
 import { HiOutlinePencil } from "react-icons/hi2";
@@ -19,9 +18,8 @@ const ActionsModal = ({ item, position }) => {
 
   const handleDelete = async (id) => {
     const ok = await confirm({
-      title: "Delete Record",
-      message:
-        "Are you sure you want to delete this record? This action cannot be undone.",
+      title: "Are you sure you want to delete this record?",
+      message: "This action can't be undone.",
       confirmText: "Delete",
       cancelText: "Cancel",
       type: "warning",

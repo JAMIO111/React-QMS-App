@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { createPortal } from "react-dom";
 import DatePicker from "./DatePicker"; // Your existing component
 import { RxCalendar } from "react-icons/rx";
 
 const DatePickerPopout = ({
-  currentDate,
+  value: currentDate,
   onChange,
   label = "Date",
   placeholder = "Select a Date",

@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthProvider";
 const ProtectedRoute = () => {
   const { user } = useAuth();
 
-  if (user === undefined) return <div>Loading...</div>; // Optional: handle loading state
+  if (user === undefined) return <div>Loading Protected Route...</div>; // Optional: handle loading state
 
   return user ? <Outlet /> : <Navigate to="/login" replace />;
 };

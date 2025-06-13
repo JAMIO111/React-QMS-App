@@ -1,0 +1,102 @@
+"filename", "language", "Properties", "JavaScript", "JSON", "PostCSS", "JavaScript JSX", "XML", "HTML", "JSON with Comments", "Markdown", "comment", "blank", "total"
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\.env", "Properties", 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\README.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 6, 13
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\components.json", "JSON", 0, 0, 21, 0, 0, 0, 0, 0, 0, 0, 0, 21
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\eslint.config.js", "JavaScript", 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 2, 34
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\index.html", "HTML", 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 1, 18
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\jsconfig.json", "JSON with Comments", 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 1, 13
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\package-lock.json", "JSON", 0, 0, 4702, 0, 0, 0, 0, 0, 0, 0, 1, 4703
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\package.json", "JSON", 0, 0, 51, 0, 0, 0, 0, 0, 0, 0, 1, 52
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\public\icons\pdf-icon.svg", "XML", 0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 9
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\App.css", "PostCSS", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\App.jsx", "JavaScript JSX", 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 3, 23
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\MenuStructure.js", "JavaScript", 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 2, 84
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\SettingMenuStructure.js", "JavaScript", 0, 33, 0, 0, 0, 0, 0, 0, 0, 0, 2, 35
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\api\supabaseApi.js", "JavaScript", 0, 148, 0, 0, 0, 0, 0, 0, 0, 36, 28, 212
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\authService.js", "JavaScript", 0, 51, 0, 0, 0, 0, 0, 0, 0, 0, 8, 59
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ActionsModal.jsx", "JavaScript JSX", 0, 0, 0, 0, 99, 0, 0, 0, 0, 0, 8, 107
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ActionsModalItem.jsx", "JavaScript JSX", 0, 0, 0, 0, 19, 0, 0, 0, 0, 0, 4, 23
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\AuthPage.jsx", "JavaScript JSX", 0, 0, 0, 0, 19, 0, 0, 0, 0, 0, 3, 22
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\BadgeGroup.jsx", "JavaScript JSX", 0, 0, 0, 0, 82, 0, 0, 0, 0, 0, 5, 87
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\Breadcrumb.jsx", "JavaScript JSX", 0, 0, 0, 0, 49, 0, 0, 0, 0, 1, 6, 56
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\CTAButton.jsx", "JavaScript JSX", 0, 0, 0, 0, 39, 0, 0, 0, 0, 0, 5, 44
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ConfirmationModal.jsx", "JavaScript JSX", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\Dashboard.jsx", "JavaScript JSX", 0, 0, 0, 0, 71, 0, 0, 0, 0, 0, 3, 74
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\DashboardCard.jsx", "JavaScript JSX", 0, 0, 0, 0, 55, 0, 0, 0, 0, 0, 3, 58
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\DashboardTable.jsx", "JavaScript JSX", 0, 0, 0, 0, 46, 0, 0, 0, 0, 0, 3, 49
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\DataNavBar.jsx", "JavaScript JSX", 0, 0, 0, 0, 95, 0, 0, 0, 0, 0, 8, 103
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\EmployeeCard.jsx", "JavaScript JSX", 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 3, 35
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\Employees.jsx", "JavaScript JSX", 0, 0, 0, 0, 68, 0, 0, 0, 0, 0, 7, 75
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\FilterPane.jsx", "JavaScript JSX", 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 13, 141
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\Header.jsx", "JavaScript JSX", 0, 0, 0, 0, 33, 0, 0, 0, 0, 0, 4, 37
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\HeaderIcon.jsx", "JavaScript JSX", 0, 0, 0, 0, 12, 0, 0, 0, 0, 0, 3, 15
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\HomeRedirect.jsx", "JavaScript JSX", 0, 0, 0, 0, 11, 0, 0, 0, 0, 1, 4, 16
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\IconButton.jsx", "JavaScript JSX", 0, 0, 0, 0, 23, 0, 0, 0, 0, 0, 5, 28
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\Login.jsx", "JavaScript JSX", 0, 0, 0, 0, 129, 0, 0, 0, 0, 1, 6, 136
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\Logout.jsx", "JavaScript JSX", 0, 0, 0, 0, 27, 0, 0, 0, 0, 1, 5, 33
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\NCEntryForm.jsx", "JavaScript JSX", 0, 0, 0, 0, 697, 0, 0, 0, 0, 1, 15, 713
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\NavItem.jsx", "JavaScript JSX", 0, 0, 0, 0, 50, 0, 0, 0, 0, 0, 4, 54
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\Navbar.jsx", "JavaScript JSX", 0, 0, 0, 0, 121, 0, 0, 0, 0, 0, 7, 128
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\NonConformance.jsx", "JavaScript JSX", 0, 0, 0, 0, 233, 0, 0, 0, 0, 0, 24, 257
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\NonConformanceCard.jsx", "JavaScript JSX", 0, 0, 0, 0, 118, 0, 0, 0, 0, 3, 13, 134
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\NonConformanceDashboard.jsx", "JavaScript JSX", 0, 0, 0, 0, 23, 0, 0, 0, 0, 0, 5, 28
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\NonConformanceGrid.jsx", "JavaScript JSX", 0, 0, 0, 0, 78, 0, 0, 0, 0, 0, 11, 89
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\NonConformanceRow.jsx", "JavaScript JSX", 0, 0, 0, 0, 90, 0, 0, 0, 0, 3, 13, 106
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\NonConformanceTable.jsx", "JavaScript JSX", 0, 0, 0, 0, 206, 0, 0, 0, 0, 0, 12, 218
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\NotFound.jsx", "JavaScript JSX", 0, 0, 0, 0, 668, 0, 0, 0, 0, 0, 4, 672
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\Projects.jsx", "JavaScript JSX", 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 3, 8
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ProtectedRoute.jsx", "JavaScript JSX", 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 5, 13
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\Settings.jsx", "JavaScript JSX", 0, 0, 0, 0, 44, 0, 0, 0, 0, 0, 5, 49
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\SettingsAccount.jsx", "JavaScript JSX", 0, 0, 0, 0, 53, 0, 0, 0, 0, 4, 5, 62
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ShieldBadge.jsx", "JavaScript JSX", 0, 0, 0, 0, 76, 0, 0, 0, 0, 1, 5, 82
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\SideMenuItem.jsx", "JavaScript JSX", 0, 0, 0, 0, 45, 0, 0, 0, 0, 0, 3, 48
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\SignUp.jsx", "JavaScript JSX", 0, 0, 0, 0, 169, 0, 0, 0, 0, 0, 7, 176
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\Skeleton.jsx", "JavaScript JSX", 0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 3, 16
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\SortPane.jsx", "JavaScript JSX", 0, 0, 0, 0, 93, 0, 0, 0, 0, 0, 4, 97
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\StatusPill.jsx", "JavaScript JSX", 0, 0, 0, 0, 12, 0, 0, 0, 0, 0, 3, 15
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\SubMenuItem.jsx", "JavaScript JSX", 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 3, 35
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ThemeToggle.jsx", "JavaScript JSX", 0, 0, 0, 0, 45, 0, 0, 0, 0, 0, 6, 51
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ToastNotification.jsx", "JavaScript JSX", 0, 0, 0, 0, 103, 0, 0, 0, 0, 3, 9, 115
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ViewToggle.jsx", "JavaScript JSX", 0, 0, 0, 0, 29, 0, 0, 0, 0, 2, 4, 35
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\charts\BarChart.jsx", "JavaScript JSX", 0, 0, 0, 0, 66, 0, 0, 0, 0, 0, 5, 71
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\charts\RadialGauge.jsx", "JavaScript JSX", 0, 0, 0, 0, 48, 0, 0, 0, 0, 0, 4, 52
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\ComboBox.jsx", "JavaScript JSX", 0, 0, 0, 0, 196, 0, 0, 0, 0, 0, 18, 214
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\DatePicker.jsx", "JavaScript JSX", 0, 0, 0, 0, 179, 0, 0, 0, 0, 2, 19, 200
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\DatePickerPopout.jsx", "JavaScript JSX", 0, 0, 0, 0, 64, 0, 0, 0, 0, 3, 6, 73
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\DownloadLink.jsx", "JavaScript JSX", 0, 0, 0, 0, 43, 0, 0, 0, 0, 4, 9, 56
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\FileDrop.jsx", "JavaScript JSX", 0, 0, 0, 0, 327, 0, 0, 0, 0, 7, 26, 360
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\FloatingTextInput.jsx", "JavaScript JSX", 0, 0, 0, 0, 29, 0, 0, 0, 0, 0, 4, 33
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\RHFComboBox.jsx", "JavaScript JSX", 0, 0, 0, 0, 202, 0, 0, 0, 0, 0, 19, 221
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\RHFDatePicker.jsx", "JavaScript JSX", 0, 0, 0, 0, 179, 0, 0, 0, 0, 2, 19, 200
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\RHFDatePickerPopout.jsx", "JavaScript JSX", 0, 0, 0, 0, 77, 0, 0, 0, 0, 3, 7, 87
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\RHFStatusComboBox.jsx", "JavaScript JSX", 0, 0, 0, 0, 205, 0, 0, 0, 0, 0, 19, 224
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\RHFTextArea.jsx", "JavaScript JSX", 0, 0, 0, 0, 58, 0, 0, 0, 0, 0, 5, 63
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\RHFUserComboBox.jsx", "JavaScript JSX", 0, 0, 0, 0, 223, 0, 0, 0, 0, 5, 21, 249
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\SearchBar.jsx", "JavaScript JSX", 0, 0, 0, 0, 28, 0, 0, 0, 0, 0, 4, 32
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\StatusComboBox.jsx", "JavaScript JSX", 0, 0, 0, 0, 189, 0, 0, 0, 0, 0, 19, 208
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\TextArea.jsx", "JavaScript JSX", 0, 0, 0, 0, 48, 0, 0, 0, 0, 0, 5, 53
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\TextInput.jsx", "JavaScript JSX", 0, 0, 0, 0, 76, 0, 0, 0, 0, 0, 5, 81
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\UserAvatarGroup.jsx", "JavaScript JSX", 0, 0, 0, 0, 39, 0, 0, 0, 0, 0, 5, 44
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\UserComboBox.jsx", "JavaScript JSX", 0, 0, 0, 0, 214, 0, 0, 0, 0, 5, 20, 239
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\card.jsx", "JavaScript JSX", 0, 0, 0, 0, 83, 0, 0, 0, 0, 0, 10, 93
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\components\ui\chart.jsx", "JavaScript JSX", 0, 0, 0, 0, 262, 0, 0, 0, 0, 2, 34, 298
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\contexts\AuthProvider.jsx", "JavaScript JSX", 0, 0, 0, 0, 27, 0, 0, 0, 0, 0, 8, 35
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\contexts\ConfirmationModalProvider.jsx", "JavaScript JSX", 0, 0, 0, 0, 129, 0, 0, 0, 0, 3, 13, 145
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\contexts\SearchProvider.jsx", "JavaScript JSX", 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 7, 27
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\contexts\ToastProvider.jsx", "JavaScript JSX", 0, 0, 0, 0, 38, 0, 0, 0, 0, 0, 9, 47
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\contexts\UserProvider.jsx", "JavaScript JSX", 0, 0, 0, 0, 35, 0, 0, 0, 0, 0, 9, 44
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\hooks\useDebounce.jsx", "JavaScript JSX", 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 5, 14
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\hooks\useNCM.jsx", "JavaScript JSX", 0, 0, 0, 0, 45, 0, 0, 0, 0, 0, 9, 54
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\hooks\useNCMFilters.jsx", "JavaScript JSX", 0, 0, 0, 0, 47, 0, 0, 0, 0, 2, 8, 57
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\hooks\useSignedAvatarURL.jsx", "JavaScript JSX", 0, 0, 0, 0, 34, 0, 0, 0, 0, 0, 10, 44
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\hooks\useSupabaseSearch.jsx", "JavaScript JSX", 0, 0, 0, 0, 46, 0, 0, 0, 0, 0, 12, 58
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\hooks\useTheme.jsx", "JavaScript JSX", 0, 0, 0, 0, 54, 0, 0, 0, 0, 0, 10, 64
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\index.css", "PostCSS", 0, 0, 0, 315, 0, 0, 0, 0, 0, 4, 17, 336
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\lib\csvHelper.jsx", "JavaScript JSX", 0, 0, 0, 0, 31, 0, 0, 0, 0, 4, 10, 45
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\lib\utils.js", "JavaScript", 0, 70, 0, 0, 0, 0, 0, 0, 0, 0, 14, 84
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\main.jsx", "JavaScript JSX", 0, 0, 0, 0, 109, 0, 0, 0, 0, 0, 4, 113
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\ncmData.json", "JSON", 0, 0, 224, 0, 0, 0, 0, 0, 0, 0, 1, 225
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\supabase-client.js", "JavaScript", 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 5, 10
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\src\validationSchema.js", "JavaScript", 0, 96, 0, 0, 0, 0, 0, 0, 0, 0, 4, 100
+"c:\Users\dryde\OneDrive\Desktop\Visual Studio Projects\React-QMS-App\vite.config.js", "JavaScript", 0, 25, 0, 0, 0, 0, 0, 0, 0, 1, 2, 28
+"Total", "-", 2, 542, 4998, 315, 7527, 9, 17, 12, 7, 104, 769, 14302

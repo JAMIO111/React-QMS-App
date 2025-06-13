@@ -1,11 +1,14 @@
-import React from "react";
-
-const StatusPill = ({ status }) => {
+const StatusPill = ({ status, width = "w-full" }) => {
   return (
-    <div className="flex justify-center items-center">
+    <div className={width}>
       <div
-        className={`font-semibold text-center rounded-lg px-3 py-1 status-${status?.toLowerCase()}`}>
-        <p className="">{status}</p>
+        style={{
+          color: status?.color,
+          borderColor: status?.color,
+          backgroundColor: `${status?.color}20`,
+        }}
+        className={`font-semibold border text-center rounded-lg px-3 py-1`}>
+        <p>{status?.name ?? "Loading..."}</p>
       </div>
     </div>
   );

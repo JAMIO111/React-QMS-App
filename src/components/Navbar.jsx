@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import Logo from "../assets/Logo-black-on-yellow.png";
 import { TbLayoutSidebarRightExpand } from "react-icons/tb";
 import { BsGear, BsQuestionCircle } from "react-icons/bs";
@@ -8,6 +8,7 @@ import { menuStructure } from "../MenuStructure";
 import SubMenuItem from "./SubMenuItem";
 import ThemeToggle from "./ThemeToggle";
 import { useUser } from "../contexts/UserProvider";
+import { useOrganisation } from "@/contexts/OrganisationProvider";
 
 const Navbar = () => {
   const [isMenuExpanded, setIsMenuExpanded] = useState(false);
@@ -28,6 +29,8 @@ const Navbar = () => {
     setIsSubMenuOpen((prev) => (prev === name ? null : name));
   };
 
+  const { organisation } = useOrganisation();
+
   return (
     <div className="flex bg-secondary-bg">
       <nav
@@ -46,7 +49,7 @@ const Navbar = () => {
             />
             {isMenuExpanded && (
               <h1 className=" font-semibold text-3xl text-primary-text">
-                JDigital
+                {organisation?.name || "QMS"}
               </h1>
             )}
           </div>
@@ -86,6 +89,7 @@ const Navbar = () => {
                           title={subItem.name}
                           label={subItem.name}
                           path={subItem.path}
+                          isFirst={index === 0}
                           isLast={index === item.subMenu?.length - 1}
                           closeMenu={closeMenu}
                         />

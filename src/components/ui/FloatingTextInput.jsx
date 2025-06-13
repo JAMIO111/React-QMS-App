@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 
 const FloatingTextInput = ({ label, type = "text", value, onChange, id }) => {
   const [isFocused, setIsFocused] = useState(false);

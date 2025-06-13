@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { HiMiniXMark } from "react-icons/hi2";
 import { IoChevronDown } from "react-icons/io5";
 

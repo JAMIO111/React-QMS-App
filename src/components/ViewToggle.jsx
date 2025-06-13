@@ -5,7 +5,7 @@ const ViewToggle = ({ viewGrid, setViewGrid }) => {
     <button
       title="Switch View"
       onClick={() => setViewGrid((prev) => !prev)}
-      className="group relative flex flex-row justify-between items-center border border-border-color rounded-lg text-primary-text w-18 py-2 overflow-hidden cursor-pointer">
+      className="group relative flex flex-row justify-between items-center border border-border-color rounded-[7px] text-primary-text w-18 py-2 overflow-hidden cursor-pointer">
       {/* Sliding indicator */}
       <div
         className={`absolute w-1/2 h-full bg-cta-btn-bg border rounded-md border-cta-btn-border transition-transform duration-300 ease-in-out z-0

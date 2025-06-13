@@ -1,11 +1,10 @@
 import React, { useState } from "react";
-import CTAButton from "./CTAButton";
+import CTAButton from "../CTAButton";
 import DashboardCard from "./DashboardCard";
-import { AiFillPoundCircle } from "react-icons/ai";
+import { AiOutlinePound } from "react-icons/ai";
 import { BiSolidBarChartAlt2 } from "react-icons/bi";
 import { RxLapTimer } from "react-icons/rx";
 import DashboardTable from "./DashboardTable";
-import BarChart from "./charts/BarChart";
 
 const Dashboard = () => {
   const [selectedCard, setSelectedCard] = useState(null);
@@ -21,36 +20,39 @@ const Dashboard = () => {
         </div>
       </div>
       <div className="grid grid-cols-18 grid-rows-15 gap-4 mt-4 flex-grow px-2">
-        <div className="col-span-4 row-span-3 rounded-lg bg-secondary-bg">
+        <div className="col-span-4 row-span-3 rounded-lg">
           <DashboardCard
             title="Cost of Poor Quality"
-            icon={AiFillPoundCircle}
+            icon={AiOutlinePound}
             value="£4,523.26"
             trend={26}
+            color="fuchsia"
             isSelected={selectedCard === "COPQ"}
             onClick={() =>
               setSelectedCard(selectedCard === "COPQ" ? null : "COPQ")
             }
           />
         </div>
-        <div className="col-span-4 row-span-3 rounded-lg bg-secondary-bg">
+        <div className="col-span-4 row-span-3 rounded-2xl">
           <DashboardCard
             title="On Time Delivery"
             icon={RxLapTimer}
             value="95.4%"
             trend={5.2}
+            color="orange"
             isSelected={selectedCard === "OTD"}
             onClick={() =>
               setSelectedCard(selectedCard === "OTD" ? null : "OTD")
             }
           />
         </div>
-        <div className="col-span-4 row-span-3 rounded-lg bg-secondary-bg">
+        <div className="col-span-4 row-span-3 rounded-2xl">
           <DashboardCard
             title="Quality Defects"
             icon={BiSolidBarChartAlt2}
             value="134"
             trend={-10}
+            color="cyan"
             isSelected={selectedCard === "QD"}
             onClick={() => setSelectedCard(selectedCard === "QD" ? null : "QD")}
           />

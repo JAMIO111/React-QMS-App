@@ -1,10 +1,8 @@
-import React from "react";
-import { BsSearch, BsBell } from "react-icons/bs";
+import { BsBell } from "react-icons/bs";
 import { GoMail } from "react-icons/go";
 import HeaderIcon from "./HeaderIcon";
 import SearchBar from "./ui/SearchBar";
 import { useUser } from "../contexts/UserProvider";
-import useSignedAvatarUrl from "../hooks/useSignedAvatarURL";
 
 const Header = () => {
   const { profile } = useUser();

@@ -6,7 +6,6 @@ import { LuCircleDashed } from "react-icons/lu";
 import { CiTextAlignCenter } from "react-icons/ci";
 import { AiOutlineTag } from "react-icons/ai";
 import { PiStack } from "react-icons/pi";
-import ActionsModal from "./ActionsModal";
 import DataNavBar from "./DataNavBar";
 
 const NonConformanceTable = ({
@@ -97,11 +96,13 @@ const NonConformanceTable = ({
       <div className="text-[13px] bg-secondary-bg overflow-y-auto  relative">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="text-left">
+            <tr className="text-left th-sticky">
               <th>
                 <div className="table-header">
                   <p className="text-transparent">
                     <input
+                      id="checkbox-select-all"
+                      name="checkbox-select-all"
                       type="checkbox"
                       ref={selectAllCheckbox}
                       checked={allSelected}

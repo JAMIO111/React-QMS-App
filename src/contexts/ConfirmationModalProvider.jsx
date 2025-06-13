@@ -12,8 +12,8 @@ import {
   IoCheckmarkCircleOutline,
   IoInformationCircleOutline,
 } from "react-icons/io5";
-import { GoCheckCircleFill } from "react-icons/go";
 import { TiWarning } from "react-icons/ti";
+import { CgClose } from "react-icons/cg";
 import CTAButton from "../components/CTAButton";
 
 // -- Context to manage global confirm modal --
@@ -105,23 +105,31 @@ export const ConfirmProvider = ({ children }) => {
       {children}
       {options &&
         createPortal(
-          <div className="fixed inset-0 bg-primary-text/30 flex items-center justify-center z-50">
+          <div className="fixed bg-gradient-to-br from-primary-bg/40 to-border-color/40 inset-0 flex items-center justify-center z-50">
             <div
               ref={modalRef}
-              className="bg-secondary-bg rounded-2xl shadow-lg shadow-primary-text/20 max-w-sm w-full p-6 relative"
+              className="bg-secondary-bg/5 backdrop-blur-sm rounded-2xl shadow-lg border border-primary-text/20 max-w-sm w-full p-6 relative"
               onClick={(e) => e.stopPropagation()}>
+              <div className="absolute top-2 right-2">
+                <button
+                  className="cursor-pointer text-secondary-text/70 hover:text-primary-text"
+                  onClick={() => handleClose(false)}
+                  aria-label="Close">
+                  <CgClose className="h-6 w-6" />
+                </button>
+              </div>
               <div className="flex justify-center items-center p-2 mx-auto w-14 h-14 bg-error-color rounded-full mb-4">
                 {getIcon(options.type)}
               </div>
               {options.title && (
-                <h2 className="text-xl text-primary-text font-semibold mb-4 text-center">
+                <h2 className="text-xl text-primary-text font-semibold mb-4 px-2 text-center">
                   {options.title}
                 </h2>
               )}
-              <p className="mb-6 text-primary-text text-center">
+              <p className="mb-6 text-secondary-text text-center">
                 {options.message}
               </p>
-              <div className="flex flex-row w-full h-10 justify-center gap-5">
+              <div className="flex flex-row w-full h-10 justify-center gap-6">
                 <CTAButton
                   type="neutral"
                   width="w-1/2"

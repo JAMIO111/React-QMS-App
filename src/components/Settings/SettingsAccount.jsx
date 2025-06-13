@@ -1,7 +1,11 @@
-import CTAButton from "./CTAButton";
-import TextInput from "./ui/TextInput";
+import CTAButton from "../CTAButton";
+import TextInput from "../ui/TextInput";
+import { useUser } from "@/contexts/UserProvider";
+import { PiPassword } from "react-icons/pi";
 
 const SettingsAccount = () => {
+  const { profile } = useUser();
+  console.log("TextInput is:", TextInput);
   return (
     <div className="flex flex-col xl:flex-row lg:flex-row gap-5 w-full pr-5 overflow-y-scroll">
       <div className="flex flex-col gap-5 w-1/2">
@@ -23,10 +27,26 @@ const SettingsAccount = () => {
         {/* Personal Info Card */}
         <div className="flex flex-col bg-secondary-bg rounded-3xl border border-border-color p-5">
           <p className="text-primary-text text-xl mb-5">Personal Information</p>
-          <TextInput placeholder="First Name..." />
-          <TextInput placeholder="Surname..." />
-          <TextInput placeholder="Job Title..." />
-          <TextInput placeholder="Email..." />
+          <TextInput
+            icon={PiPassword}
+            value={profile?.first_name}
+            placeholder="First Name..."
+          />
+          <TextInput
+            icon={PiPassword}
+            value={profile?.surname}
+            placeholder="Surname..."
+          />
+          <TextInput
+            icon={PiPassword}
+            value={profile?.job_title}
+            placeholder="Job Title..."
+          />
+          <TextInput
+            icon={PiPassword}
+            value={profile?.email}
+            placeholder="Email..."
+          />
         </div>
       </div>
 
@@ -38,11 +58,11 @@ const SettingsAccount = () => {
             You can change your password here. Please enter your current
             password and then your new password.
           </p>
-          <TextInput placeholder="Current Password..." />
-          <TextInput placeholder="New Password..." />
-          <TextInput placeholder="Confirm New Password..." />
+          <TextInput icon={PiPassword} placeholder="Current Password..." />
+          <TextInput icon={PiPassword} placeholder="New Password..." />
+          <TextInput icon={PiPassword} placeholder="Confirm New Password..." />
           <div className="h-10 flex flex-row justify-between items-center">
-            <CTAButton width="w-1/2" type="main" text="Change Password" />
+            <CTAButton type="main" text="Change Password" />
           </div>
         </div>
         {/* Optional small card */}
@@ -51,7 +71,7 @@ const SettingsAccount = () => {
           <p className="text-secondary-text text-sm mb-5">
             Permanently delete your account. This cannot be undone.
           </p>
-          <CTAButton width="w-1/2" type="cancel" text="Delete Account" />
+          <CTAButton type="cancel" text="Delete Account" />
         </div>
       </div>
     </div>

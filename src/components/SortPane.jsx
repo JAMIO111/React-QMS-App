@@ -1,4 +1,5 @@
 import { CgClose } from "react-icons/cg";
+import CTAButton from "./CTAButton";
 
 const SortPane = ({
   sortColumn,
@@ -12,7 +13,7 @@ const SortPane = ({
       <div className="flex px-3 py-1 bg-secondary-bg border-b border-border-color flex-row justify-between items-center rounded-t-2xl ">
         <h3 className="text-xl">Sort</h3>
         <button
-          className="cursor-pointer hover:text-error-color p-1"
+          className="cursor-pointer hover:bg-primary-bg rounded-md hover:text-error-color p-1"
           onClick={onClose}>
           <CgClose />
         </button>
@@ -76,19 +77,16 @@ const SortPane = ({
           <div className="w-full flex flex-col"></div>
         </div>
         <div className="w-full p-3 flex flex-row justify-between items-center">
-          <button
-            onClick={() => {
+          <CTAButton
+            type="cancel"
+            text="Clear Sort"
+            callbackFn={() => {
               setSortColumn("ncm_id");
               setSortOrder("desc");
             }}
-            className="border border-border-color rounded-lg py-1 px-2 cursor-pointer hover:border-error-color hover:text-error-color">
-            Clear Sort
-          </button>
-          <button
-            onClick={onClose}
-            className="rounded-lg py-1 px-2 text-white bg-cta-color cursor-pointer">
-            Apply Now
-          </button>
+          />
+
+          <CTAButton type="main" text="Apply Sort" callbackFn={onClose} />
         </div>
       </div>
     </div>

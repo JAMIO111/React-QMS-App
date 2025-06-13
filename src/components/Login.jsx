@@ -3,11 +3,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { signIn } from "../authService";
 import { IoEyeOutline, IoEyeOffOutline } from "react-icons/io5";
 import { useForm } from "react-hook-form";
+import { useToast } from "@/contexts/ToastProvider";
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
   const navigate = useNavigate(null);
+  const [loading, setLoading] = useState(false);
+  const { showToast } = useToast();
 
   const {
     register,
@@ -17,10 +20,10 @@ const Login = () => {
   } = useForm();
 
   const handleLogin = async (data) => {
+    setLoading(true);
     const { email, password } = data;
     try {
-      const user = await signIn(email, password);
-      //setProfile(user);
+      const user = await signIn(email, password, showToast);
       navigate("/QMS");
       console.log("User logged in:", user);
     } catch (error) {
@@ -30,6 +33,8 @@ const Login = () => {
         alert(error.message);
         console.error("Login failed:", error.message);
       }
+    } finally {
+      setLoading(false); // Always stop loading
     }
   };
 
@@ -38,7 +43,7 @@ const Login = () => {
       <img
         src="\Logo-black-on-yellow.png"
         alt="Logo"
-        className="w-14 absolute top-5 left-5 rounded-lg mb-4 border border-primary-text/50"
+        className="w-14 h-14 absolute top-5 left-5 rounded-lg mb-4 border border-primary-text/50"
       />
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl text-left text-primary-text font-semibold">
@@ -107,7 +112,9 @@ const Login = () => {
               <Link
                 className={`${
                   errors.password?.message ? "w-fit" : "w-full text-right"
-                } text-link-color hover:underline text-sm`}>
+                } text-link-color hover:underline text-sm ${
+                  loading ? "pointer-events-none opacity-50" : ""
+                }`}>
                 Forgot your password?
               </Link>
             </div>
@@ -115,15 +122,20 @@ const Login = () => {
         </div>
         <button
           type="submit"
-          className="bg-cta-btn-bg border border-cta-btn-border hover:border-cta-btn-border-hover hover:bg-cta-btn-bg-hover text-primary-text p-2 rounded-lg cursor-pointer text-lg">
-          Login
+          disabled={loading}
+          className="bg-cta-btn-bg border border-cta-btn-border hover:border-cta-btn-border-hover hover:bg-cta-btn-bg-hover text-primary-text p-2 rounded-lg cursor-pointer text-lg disabled:opacity-50 disabled:cursor-not-allowed">
+          {loading ? "Logging in..." : "Login"}
         </button>
         {message && <p className="text-error-color text-sm">{message}</p>}
         <div className="flex flex-row gap-2 text-sm">
           <p className="font-semibold text-primary-text">
             Don't have an account?
           </p>
-          <Link to="/signup" className="text-link-color underline">
+          <Link
+            to="/signup"
+            className={`text-link-color underline ${
+              loading ? "pointer-events-none opacity-50" : ""
+            }`}>
             Sign Up here.
           </Link>
         </div>

@@ -31,7 +31,7 @@ function ChartContainer({ id, className, children, config, ...props }) {
         data-slot="chart"
         data-chart={chartId}
         className={cn(
-          "[&_.recharts-cartesian-axis-tick_text]:fill-secondary-bg [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border flex h-full justify-center text-xs [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
+          "[&_.recharts-cartesian-axis-tick_text]:fill-secondar-text [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border flex h-full justify-center text-xs [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
           className
         )}
         {...props}>
@@ -156,51 +156,52 @@ function ChartTooltipContent({
                 "[&>svg]:text-secondary-text flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5",
                 indicator === "dot" && "items-center"
               )}>
-              {formatter && item?.value !== undefined && item.name ? (
-                formatter(item.value, item.name, item, index, item.payload)
+              {itemConfig?.icon ? (
+                <itemConfig.icon />
               ) : (
-                <>
-                  {itemConfig?.icon ? (
-                    <itemConfig.icon />
-                  ) : (
-                    !hideIndicator && (
-                      <div
-                        className={cn(
-                          "shrink-0 rounded-[2px] border-(--color-border-color) bg-(--color-primary-bg)",
-                          {
-                            "h-2.5 w-2.5": indicator === "dot",
-                            "w-1": indicator === "line",
-                            "w-0 border-[1.5px] border-dashed bg-transparent":
-                              indicator === "dashed",
-                            "my-0.5": nestLabel && indicator === "dashed",
-                          }
-                        )}
-                        style={{
-                          "--color-bg": indicatorColor,
-                          "--color-border": indicatorColor,
-                        }}
-                      />
-                    )
-                  )}
+                !hideIndicator && (
                   <div
                     className={cn(
-                      "flex flex-1 justify-between leading-none",
-                      nestLabel ? "items-end" : "items-center"
-                    )}>
-                    <div className="grid gap-1.5">
-                      {nestLabel ? tooltipLabel : null}
-                      <span className="text-secondary-text">
-                        {itemConfig?.label || item.name}
-                      </span>
-                    </div>
-                    {item.value && (
-                      <span className="text-primary-text font-mono font-medium tabular-nums">
-                        {item.value.toLocaleString()}
-                      </span>
+                      "shrink-0 rounded-[2px]",
+                      indicator === "dot" && "h-2.5 w-2.5",
+                      indicator === "line" && "w-1",
+                      indicator === "dashed" &&
+                        "w-0 border border-dashed bg-transparent",
+                      nestLabel && indicator === "dashed" && "my-0.5"
                     )}
-                  </div>
-                </>
+                    style={{
+                      backgroundColor:
+                        indicator === "dot" ? indicatorColor : undefined,
+                      borderColor:
+                        indicator === "dashed" ? indicatorColor : undefined,
+                    }}
+                  />
+                )
               )}
+
+              <div
+                className={cn(
+                  "flex flex-1 min-w-0 gap-x-4 leading-none", // gap added, flex children allowed to grow
+                  nestLabel ? "items-end" : "items-center"
+                )}>
+                <div className="min-w-0 flex-1 truncate">
+                  {nestLabel ? tooltipLabel : null}
+                  <span className="block text-secondary-text truncate">
+                    {itemConfig?.label || item.name}
+                  </span>
+                </div>
+                <div className="text-primary-text font-mono font-medium tabular-nums whitespace-nowrap">
+                  {formatter
+                    ? formatter(
+                        item.value,
+                        item.name,
+                        item,
+                        index,
+                        item.payload
+                      )
+                    : item.value?.toLocaleString()}
+                </div>
+              </div>
             </div>
           );
         })}

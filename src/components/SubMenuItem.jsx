@@ -1,24 +1,35 @@
 import { NavLink } from "react-router-dom";
 
-const SubMenuItem = ({ closeMenu, label, isLast, path }) => {
+const SubMenuItem = ({ closeMenu, label, isLast, isFirst, path }) => {
   return (
-    <div className="flex flex-row items-center justify-start w-full h-8 pr-3 pl-4">
-      <div
-        className={`${
-          isLast ? "h-53/100 rounded-bl-4xl self-start" : "h-full"
-        } w-0.5 bg-border-color`}></div>
-      <div className="h-0.5 w-8 mr-2 bg-border-color rounded-r-4xl"></div>
+    <div
+      className={`${
+        isLast ? "mb-2" : isFirst ? "mt-2" : ""
+      } flex flex-row items-center justify-start rounded-lg w-full h-8 pr-3`}>
       <NavLink
-        className={({ isActive }) =>
-          `${
-            isActive
-              ? "bg-active-menu-color hover:bg-hover-menu-color text-brand-primary"
-              : "text-primary-text"
-          } pl-2 h-7 text-sm w-full flex flex-row items-center hover:bg-hover-menu-color rounded-lg`
-        }
+        to={path}
         onClick={closeMenu}
-        to={path}>
-        {label}
+        className={({ isActive }) =>
+          `flex flex-row items-center justify-start w-full h-8 pr-3 pl-4 ${
+            isActive ? "text-cta-color" : "text-primary-text"
+          }`
+        }>
+        {({ isActive }) => (
+          <>
+            <div
+              className={`${
+                isActive ? "bg-cta-color" : "bg-border-color"
+              } self-start h-full w-0.5`}
+            />
+            <div
+              className={`${
+                isActive &&
+                "bg-cta-color/20 hover:bg-cta-color/15 font-semibold"
+              } pl-6 h-8 text-sm w-full flex items-center hover:bg-cta-color/10 rounded-r-lg`}>
+              {label}
+            </div>
+          </>
+        )}
       </NavLink>
     </div>
   );

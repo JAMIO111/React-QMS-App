@@ -1,4 +1,3 @@
-import React from "react";
 import { NavLink, useMatch } from "react-router-dom";
 import { HiOutlineChevronDown } from "react-icons/hi";
 
@@ -18,15 +17,15 @@ const NavItem = ({
     <div className="nav-item flex pr-3 items-center ">
       <div
         className={`${
-          match ? "bg-brand-primary" : "bg-transparent"
+          match ? "bg-cta-color" : "bg-transparent"
         } w-1 h-9 rounded-r-md`}></div>
       <NavLink
         title={label}
         className={({ isActive }) =>
-          `flex gap-3 hover:bg-hover-menu-color w-full rounded-lg ml-2 p-2 h-9 items-center ${
+          `flex gap-3 w-full rounded-lg ml-2 p-2 h-9 items-center ${
             isActive
-              ? "text-brand-primary hover:bg-hover-menu-color bg-active-menu-color"
-              : "text-primary-text"
+              ? "text-white hover:bg-cta-color/80 bg-cta-color"
+              : "text-primary-text hover:bg-cta-color/10"
           }`
         }
         onClick={closeMenu}
@@ -40,7 +39,7 @@ const NavItem = ({
               e.stopPropagation();
               onToggleSubMenu();
             }}
-            className={`h-4 w-4 transition-transform ${
+            className={`hover:bg-cta-color/20 rounded p-1 h-5 w-5 transition-transform ${
               isSubMenuOpen === label ? "rotate-180" : ""
             }`}
           />

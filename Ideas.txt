@@ -4,7 +4,14 @@ User preferences:
     Theme Color
 
 Sankey Diagram for cost breakdown
+Supplier Portal for 8Ds and claim management (invite link token auth)
 
 Issues:
     Retrieving images from private buckets
     ShadCNCharts
+    Number validation < >
+    Failure mode sub failure mode dependency
+
+Onboarding:
+    Require user to create statuses with at least 1 omit terminal and initial
+    Create logic for handling only 1 initial status in status management page

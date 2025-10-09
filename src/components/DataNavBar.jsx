@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { SlRefresh } from "react-icons/sl";
 import { GoArrowLeft } from "react-icons/go";
+import LoadingBar from "./ui/LoadingBar";
 
 const DataNavBar = ({
+  isLoading,
   onRefresh,
   page,
   pageSize,
@@ -88,6 +90,7 @@ const DataNavBar = ({
           <option value="100">100 rows</option>
         </select>
         <span className="ml-2">{totalCount} Results</span>
+        {isLoading && <LoadingBar />}
       </div>
       <button
         onClick={handleClick}

@@ -1,3 +1,7 @@
+import { useState, useEffect, useMemo } from "react";
+import { useNCDateTrend } from "@/hooks/useNCDateTrend";
+import AggregationPeriodDropdown from "../ui/AggregationPeriodDropdown";
+import currencyCodes from "@/currencyCodes";
 import {
   AreaChart,
   Area,
@@ -22,8 +26,6 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 
-import currencyCodes from "@/currencyCodes";
-
 const chartConfig = {
   total_cost: {
     label: "Total Cost",
@@ -39,45 +41,76 @@ const chartConfig = {
   },
 };
 
-export function CustomAreaChart({ chartData, base_currency = "£" }) {
-  function getCurrencyFormatter(currencyCode) {
-    const currency = currencyCodes[currencyCode];
+export function CustomAreaChart({
+  baseCurrency = "£",
+  startDate,
+  endDate,
+  ncType,
+  subtitle = "Defective Units Trend",
+  aggregation = "day",
+  setAggregation,
+}) {
+  const getAvailableAggregations = (startDate, endDate) => {
+    const dayDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+    const options = [];
+    if (dayDiff <= 1) options.push("hour");
+    if (dayDiff <= 30) options.push("day");
+    if (dayDiff > 7) options.push("week");
+    if (dayDiff > 30) options.push("month");
+    if (dayDiff > 90) options.push("quarter");
+    if (dayDiff > 365) options.push("year");
 
-    if (!currency) {
-      console.log(
-        `Unsupported currency code: ${currencyCode}. Falling back to GBP.`
-      );
-      return new Intl.NumberFormat("en-GB", {
-        style: "currency",
-        currency: "GBP",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format;
+    return options;
+  };
+
+  useEffect(() => {
+    const validOptions = getAvailableAggregations(startDate, endDate);
+    if (!validOptions.includes(aggregation)) {
+      setAggregation(validOptions[validOptions.length - 1]);
     }
+  }, [startDate, endDate]);
 
+  const { data: chartData } = useNCDateTrend(
+    startDate,
+    endDate,
+    aggregation,
+    ncType,
+    subtitle
+  );
+
+  const currencyFormatter = useMemo(() => {
+    const currency = currencyCodes[baseCurrency];
     return new Intl.NumberFormat("en", {
       style: "currency",
-      currency: currency.code,
-      minimumFractionDigits: currency.decimal_digits,
-      maximumFractionDigits: currency.decimal_digits,
+      currency: currency?.code || "GBP",
+      minimumFractionDigits: currency?.decimal_digits || 2,
+      maximumFractionDigits: currency?.decimal_digits || 2,
     }).format;
-  }
-
-  const currencyFormatter = getCurrencyFormatter(base_currency);
+  }, [baseCurrency]);
 
   return (
     <Card className="h-full flex flex-col overflow-hidden">
-      {/* Fixed-height header */}
-      <CardHeader className="flex-shrink-0 h-20 px-8">
-        <CardTitle className="text-primary-text text-lg">
-          Defective Units
-        </CardTitle>
-        <CardDescription className="text-muted">
-          Overview of desktop and mobile traffic over the last 6 months.
-        </CardDescription>
+      <CardHeader className="flex w-full justify-between flex-shrink-0 h-20 px-8">
+        <div>
+          <CardTitle className="text-primary-text text-lg">
+            Defective Units
+          </CardTitle>
+          <CardDescription className="text-secondary-text">
+            {subtitle}
+          </CardDescription>
+        </div>
+        <div>
+          <span>Group By</span>
+          <AggregationPeriodDropdown
+            startDate={startDate}
+            endDate={endDate}
+            value={aggregation}
+            onChange={setAggregation}
+            validOptions={getAvailableAggregations(startDate, endDate)}
+          />
+        </div>
       </CardHeader>
 
-      {/* Chart fills remaining space */}
       <ChartContainer
         config={chartConfig}
         className="flex-grow min-h-0 px-6 pb-4">
@@ -85,41 +118,9 @@ export function CustomAreaChart({ chartData, base_currency = "£" }) {
           data={chartData}
           margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
           <CartesianGrid stroke="var(--color-border-color)" vertical={false} />
-          <XAxis
-            dataKey="label"
-            axisLine={{ stroke: "var(--color-border-dark-color)" }}
-            tickLine={{ stroke: "var(--color-border-dark-color)" }}
-            tick={{
-              fill: "var(--color-primary-text)",
-              fontSize: 12,
-              fontWeight: 500,
-            }}
-          />
-          <YAxis
-            yAxisId="left"
-            orientation="left"
-            axisLine={{ stroke: "var(--color-border-dark-color)" }}
-            tickLine={{ stroke: "var(--color-border-dark-color)" }}
-            tick={{
-              fill: "var(--color-secondary-text)",
-              fontSize: 12,
-              fontWeight: 500,
-            }}
-          />
-          <YAxis
-            yAxisId="right"
-            orientation="right"
-            axisLine={{ stroke: "var(--color-border-dark-color)" }}
-            tickLine={{ stroke: "var(--color-border-dark-color)" }}
-            tick={{
-              fill: "var(--color-secondary-text)",
-              fontSize: 12,
-              fontWeight: 500,
-            }}
-            tickFormatter={(value) =>
-              `${currencyCodes[base_currency]?.symbol}${value.toLocaleString()}`
-            }
-          />
+          <XAxis dataKey="label" />
+          <YAxis orientation="left" yAxisId="left" />
+          <YAxis orientation="right" yAxisId="right" />
           <ChartLegend config={chartConfig} content={<ChartLegendContent />} />
           <ChartTooltip
             content={
@@ -131,31 +132,43 @@ export function CustomAreaChart({ chartData, base_currency = "£" }) {
                 }
               />
             }
-            cursor={{ fill: "var(--color-border-color)" }}
-            wrapperStyle={{ backgroundColor: "var(--color-bg)" }}
           />
+          <defs>
+            <linearGradient id="fillCost" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="var(--chart-4)" stopOpacity={0.8} />
+              <stop offset="95%" stopColor="var(--chart-4)" stopOpacity={0.1} />
+            </linearGradient>
+            <linearGradient id="fillQty" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="var(--chart-3)" stopOpacity={0.8} />
+              <stop offset="95%" stopColor="var(--chart-3)" stopOpacity={0.1} />
+            </linearGradient>
+            <linearGradient id="fillCount" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="var(--chart-5)" stopOpacity={0.8} />
+              <stop offset="95%" stopColor="var(--chart-5)" stopOpacity={0.1} />
+            </linearGradient>
+          </defs>
           <Area
             yAxisId="right"
             type="monotone"
+            fill="url(#fillCost)"
             dataKey="total_cost"
             stroke={chartConfig.total_cost.color}
-            fill={chartConfig.total_cost.color}
             name={chartConfig.total_cost.label}
           />
           <Area
             yAxisId="left"
             type="monotone"
+            fill="url(#fillQty)"
             dataKey="total_quantity"
             stroke={chartConfig.total_quantity.color}
-            fill={chartConfig.total_quantity.color}
             name={chartConfig.total_quantity.label}
           />
           <Area
             yAxisId="left"
             type="monotone"
+            fill="url(#fillCount)"
             dataKey="record_count"
             stroke={chartConfig.record_count.color}
-            fill={chartConfig.record_count.color}
             name={chartConfig.record_count.label}
           />
         </AreaChart>

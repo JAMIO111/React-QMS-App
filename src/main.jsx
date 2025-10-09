@@ -14,10 +14,14 @@ import LoadingSpinner from "./components/LoadingSpinner.jsx";
 const App = lazy(() => import("./App.jsx"));
 const Dashboard = lazy(() => import("./components/dashboard/Dashboard.jsx"));
 const NonConformance = lazy(() => import("./components/NonConformance.jsx"));
-const NonConformanceDashboard = lazy(() =>
-  import("./components/dashboard/NonConformanceDashboard.jsx")
+const BookingsDashboard = lazy(() =>
+  import("./components/dashboard/BookingsDashboard.jsx")
 );
 const Projects = lazy(() => import("./components/Projects.jsx"));
+const Properties = lazy(() => import("./components/Properties.jsx"));
+const PropertyForm = lazy(() => import("./components/PropertyForm.jsx"));
+const OwnerForm = lazy(() => import("./components/OwnerForm.jsx"));
+const Owners = lazy(() => import("./components/Owners.jsx"));
 const NotFound = lazy(() => import("./components/NotFound.jsx"));
 const Settings = lazy(() => import("./components/Settings/Settings.jsx"));
 const SettingsSystemPreferences = lazy(() =>
@@ -30,7 +34,9 @@ const SettingsAccount = lazy(() =>
   import("./components/Settings/SettingsAccount.jsx")
 );
 const Employees = lazy(() => import("./components/Employees.jsx"));
-const NCEntryForm = lazy(() => import("./components/NCEntryForm.jsx"));
+const BookingEntryForm = lazy(() =>
+  import("./components/BookingEntryForm.jsx")
+);
 const AuthPage = lazy(() => import("./components/AuthPage.jsx"));
 const Login = lazy(() => import("./components/Login.jsx"));
 const SignUp = lazy(() => import("./components/SignUp.jsx"));
@@ -68,7 +74,7 @@ const router = createBrowserRouter([
     ],
   },
   {
-    path: "/QMS", // base path for protected routes
+    path: "/", // base path for protected routes
     element: <ProtectedRoute />, // MUST render <Outlet /> inside!
     errorElement: <NotFound />,
     children: [
@@ -77,17 +83,44 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <Dashboard /> },
           { path: "Dashboard", element: <Dashboard /> },
-          { path: "Non-Conformance", element: <NonConformanceDashboard /> },
-          { path: "Non-Conformance/Internal", element: <NonConformance /> },
+          { path: "Bookings", element: <BookingsDashboard /> },
+          { path: "Non-Conformance/:type", element: <NonConformance /> },
           {
-            path: "Non-Conformance/Internal/:slug",
-            element: <NCEntryForm />,
+            path: "Bookings/New-Booking",
+            element: <BookingEntryForm />,
           },
           {
-            path: "Non-Conformance/Internal/:slug",
-            element: <NCEntryForm />,
+            path: "Client-Management",
+            element: <Projects />,
           },
-          { path: "Projects", element: <Projects /> },
+          {
+            path: "Client-Management/Properties",
+            element: <Properties />,
+          },
+          {
+            path: "Client-Management/Properties/:id",
+            element: <PropertyForm />,
+          },
+          {
+            path: "Client-Management/Properties/New-Property",
+            element: <PropertyForm />,
+          },
+          {
+            path: "Client-Management/Owners/:id",
+            element: <OwnerForm />,
+          },
+          {
+            path: "Client-Management/Owners/New-Owner",
+            element: <OwnerForm />,
+          },
+          {
+            path: "Client-Management/Owners",
+            element: <Owners />,
+          },
+          {
+            path: "Client-Management/Owners/:id",
+            element: <OwnerForm />,
+          },
           {
             path: "Settings",
             element: <Settings />,
@@ -153,3 +186,4 @@ createRoot(document.getElementById("root")).render(
     </QueryClientProvider>
   </StrictMode>
 );
+console.trace("createRoot called");

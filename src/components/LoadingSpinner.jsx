@@ -6,10 +6,10 @@ const Spinner = () => (
     <div className={styles.loader}>
       <p>Loading</p>
       <div className={styles.words}>
-        <span className={styles.word}>Documents</span>
+        <span className={styles.word}>Bookings</span>
+        <span className={styles.word}>Properties</span>
+        <span className={styles.word}>Owners</span>
         <span className={styles.word}>Dashboard</span>
-        <span className={styles.word}>Projects</span>
-        <span className={styles.word}>Actions</span>
         <span className={styles.word}>Documents</span>
         <span className={styles.word}>Documents</span>
       </div>

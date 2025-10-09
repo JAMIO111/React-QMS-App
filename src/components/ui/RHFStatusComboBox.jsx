@@ -165,8 +165,17 @@ const RHFStatusComboBox = ({
                 title={error.message}
                 className="w-5 h-5 text-error-color mr-2 flex-shrink-0"
               />
+            ) : selectedOption ? (
+              <div
+                style={{
+                  backgroundColor: hexToRgba(selectedOption.color, 0.7), // background with 0.8 alpha
+                  borderColor: selectedOption.color, // fully opaque border
+                  borderWidth: "1px",
+                  borderStyle: "solid",
+                }}
+                className="w-6 h-6 rounded-lg mr-3"></div>
             ) : (
-              <Icon className="w-5 h-5 text-primary-text mr-2 flex-shrink-0 pointer-events-none" />
+              <Icon className="w-5 h-5 text-primary-text mr-3 flex-shrink-0 pointer-events-none" />
             )}
             <div className="flex flex-grow align-text-cen min-w-0 h-6 mr-2">
               <input
@@ -231,14 +240,16 @@ const RHFStatusComboBox = ({
                           ? "bg-border-color/30 hover:bg-border-color/40"
                           : "hover:bg-border-color/25"
                       } flex items-center cursor-pointer rounded-md p-1.5`}>
-                      <div
-                        className={`border font-semibold rounded-md px-4 py-1.5`}
-                        style={{
-                          color: option.color,
-                          borderColor: option.color,
-                          backgroundColor: hexToRgba(option.color, 0.1),
-                        }}>
-                        {option.name.toUpperCase()}
+                      <div className="flex items-center gap-4 text-primary-text">
+                        <div
+                          style={{
+                            backgroundColor: hexToRgba(option.color, 0.7), // background with 0.8 alpha
+                            borderColor: option.color, // fully opaque border
+                            borderWidth: "1px",
+                            borderStyle: "solid",
+                          }}
+                          className="w-6 h-6 rounded-lg"></div>
+                        {option.name}
                       </div>
                     </div>
                   </li>

@@ -12,15 +12,20 @@ export const UserProvider = ({ children }) => {
     console.log("Auth user:", authUser);
     if (!authUser) {
       setProfile(null);
+      localStorage.removeItem("user_profile");
+      return;
+    }
+
+    const cached = localStorage.getItem("user_profile");
+    if (cached) {
+      setProfile(JSON.parse(cached));
       return;
     }
 
     const fetchProfile = async () => {
       const { data, error } = await supabase
         .from("Employees")
-        .select(
-          "first_name, surname, job_title, avatar, id, auth_id, organisation_id, dashboard_range"
-        )
+        .select("first_name, surname, job_title, avatar, id, auth_id")
         .eq("auth_id", authUser.id)
         .maybeSingle();
 
@@ -29,6 +34,7 @@ export const UserProvider = ({ children }) => {
         setProfile(null);
       } else {
         setProfile(data);
+        localStorage.setItem("user_profile", JSON.stringify(data));
       }
     };
 

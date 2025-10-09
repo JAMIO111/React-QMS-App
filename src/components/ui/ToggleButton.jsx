@@ -15,8 +15,12 @@ const ToggleButton = forwardRef(
     ref
   ) => {
     return (
-      <div className="flex flex-col min-w-0 w-fit">
-        {label && <label className="block text-primary-text">{label}</label>}
+      <div className="flex flex-col min-w-0 w-full">
+        {label && (
+          <label className="block text-lg font-semibold text-primary-text">
+            {label}
+          </label>
+        )}
         <div
           className={`flex items-center border rounded-lg px-2 py-2 min-w-0 relative
             ${
@@ -35,22 +39,22 @@ const ToggleButton = forwardRef(
               <Icon className="w-5 h-5 text-primary-text mr-2 flex-shrink-0 pointer-events-none" />
             )
           )}
-
-          <span className="text-sm text-primary-text mr-3 min-w-[60px]">
+          <span className="text-primary-text ml-2 min-w-[60px]">
             {checked ? trueLabel : falseLabel}
           </span>
-
-          <button
-            ref={ref}
-            type="button"
-            onClick={() => onChange(!checked)}
-            className={`relative inline-flex items-center h-6 w-11 transition-colors duration-300 ease-in-out rounded-full
+          <div className="flex flex-1 items-center justify-end">
+            <button
+              ref={ref}
+              type="button"
+              onClick={() => onChange(!checked)}
+              className={`relative inline-flex items-center h-6 w-11 transition-colors duration-300 ease-in-out cursor-pointer rounded-full
               ${checked ? "bg-brand-primary" : "bg-border-color"}`}>
-            <span
-              className={`inline-block w-5 h-5 transform bg-white rounded-full shadow-md transition-transform duration-300 ease-in-out
+              <span
+                className={`inline-block w-5 h-5 transform bg-white rounded-full shadow-md transition-transform duration-300 ease-in-out
                 ${checked ? "translate-x-5" : "translate-x-1"}`}
-            />
-          </button>
+              />
+            </button>
+          </div>
         </div>
       </div>
     );

@@ -1,4 +1,5 @@
-import { GoArrowUpRight } from "react-icons/go";
+import { FiTrendingUp } from "react-icons/fi";
+import { LuTrendingDown } from "react-icons/lu";
 import currencyCodes from "@/currencyCodes";
 import { useOrganisation } from "@/contexts/OrganisationProvider";
 
@@ -13,6 +14,7 @@ const DashboardCard = ({
   color = "cta-color",
   isLoading = false,
   isPositiveGood = true,
+  previousPeriodLabel = "Previous Period",
 }) => {
   const colorMap = {
     lime: {
@@ -126,6 +128,8 @@ const DashboardCard = ({
                 className={`text-md flex items-center gap-1 ${
                   isSelected
                     ? "text-white"
+                    : trend === 0
+                    ? "text-primary-text"
                     : isPositiveGood
                     ? trend > 0
                       ? "text-success-color/70"
@@ -134,15 +138,14 @@ const DashboardCard = ({
                     ? "text-error-color"
                     : "text-success-color/70"
                 }`}>
-                {trend > 0 && <GoArrowUpRight />}
-                {trend < 0 && <GoArrowUpRight className="rotate-90" />}
-                {Math.abs(trend)}%
+                {Math.abs(trend).toFixed(1)}%{trend > 0 && <FiTrendingUp />}
+                {trend < 0 && <LuTrendingDown />}
               </span>
               <span
                 className={`${
                   isSelected ? "text-white" : "text-sm text-muted"
                 }`}>
-                Since last month
+                vs {previousPeriodLabel}
               </span>
             </>
           ) : (

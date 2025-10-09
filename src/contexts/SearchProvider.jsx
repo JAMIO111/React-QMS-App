@@ -13,7 +13,7 @@ export const SearchProvider = ({ children }) => {
     setSearchTerm(urlSearch);
   }, [urlSearch]);
 
-  const debouncedSearchTerm = useDebouncedValue(searchTerm, 500);
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 750);
 
   return (
     <SearchContext.Provider

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useParams } from "react-router-dom";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useWatch } from "react-hook-form";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { NCMFormSchema } from "../validationSchema";
@@ -21,7 +21,8 @@ import {
 } from "react-icons/hi2";
 import { LuCircleDashed } from "react-icons/lu";
 import { CiShoppingTag, CiTextAlignCenter } from "react-icons/ci";
-import { BsBox, BsQrCode, BsCurrencyPound } from "react-icons/bs";
+import { GiFamilyHouse } from "react-icons/gi";
+import { BsBox, BsQrCode, BsCurrencyPound, BsHouse } from "react-icons/bs";
 import { AiOutlineTag, AiOutlineTags } from "react-icons/ai";
 import { PiStack } from "react-icons/pi";
 import { IoIosUndo } from "react-icons/io";
@@ -51,15 +52,17 @@ import {
   useProcessOptions,
   useCustomerOptions,
 } from "@/hooks/useCategoryOptions";
+import { useCreateNotification } from "@/hooks/useCreateNotification";
 
-const NCEntryForm = () => {
+const BookingEntryForm = () => {
   const { slug } = useParams(); // slug = "Edit-NC-123"
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { profile } = useUser();
+  const { createNotification } = useCreateNotification();
 
   const isEditing = slug?.startsWith("Edit-NC-");
-  const isCreating = slug === "New-NC";
+  const isCreating = !slug;
   const id = isEditing ? slug.replace("Edit-NC-", "") : null;
 
   const {
@@ -113,7 +116,7 @@ const NCEntryForm = () => {
         message:
           "The non-conformance record you're trying to access does not exist.",
       });
-      navigate("/QMS/Non-Conformance/Internal");
+      navigate("/Non-Conformance/Internal");
     }
   }, [error, isEditing, navigate, showToast]);
 
@@ -175,6 +178,32 @@ const NCEntryForm = () => {
   const summaryRef = useRef(null);
   const queryClient = useQueryClient();
 
+  const failureMode = useWatch({
+    control,
+    name: "failure_mode",
+  });
+
+  const previousFailureMode = useRef(failureMode);
+  const isResetting = useRef(false);
+
+  useEffect(() => {
+    if (isResetting.current) {
+      // Skip resetting sub_failure_mode while resetting
+      isResetting.current = false;
+      previousFailureMode.current = failureMode;
+      return;
+    }
+
+    if (
+      previousFailureMode.current !== failureMode &&
+      previousFailureMode.current !== undefined
+    ) {
+      setValue("sub_failure_mode", null);
+    }
+
+    previousFailureMode.current = failureMode;
+  }, [failureMode, setValue]);
+
   const handleCreate = useMutation({
     mutationFn: ({ table, row }) => insertRow(table, row),
     onSuccess: (result) => {
@@ -184,7 +213,16 @@ const NCEntryForm = () => {
         message: `New record has been created - ${result.ncm_id}`,
       });
       queryClient.invalidateQueries(["NCM"]);
-      navigate(`/QMS/Non-Conformance/Internal/Edit-NC-${result.id}`);
+      navigate(`/Non-Conformance/Internal/Edit-NC-${result.id}`);
+      createNotification({
+        title: "New NC created",
+        body: "created a new non-conformance record:",
+        metaData: {
+          url: `/Non-Conformance/Internal/Edit-NC-${result.id}`,
+          buttonText: "View",
+        },
+        docRef: result.ncm_id,
+      });
     },
     onError: (error) => {
       showToast({ type: "error", title: "Error", message: error.message });
@@ -288,7 +326,10 @@ const NCEntryForm = () => {
               type="cancel"
               icon={IoIosUndo}
               text="Revert"
-              callbackFn={() => reset()}
+              callbackFn={() => {
+                isResetting.current = true;
+                reset();
+              }}
             />
           )}
           {isDirty && (
@@ -335,7 +376,7 @@ const NCEntryForm = () => {
         <div className="flex flex-row w-full bg-primary-bg h-full overflow-hidden">
           <div className="flex justify-start w-70 border-r border-border-color flex-col px-3 h-full bg-primary-bg">
             <div className="border-b items-center flex-col border-border-dark-color text-primary-text text-lg pt-4 mb-2 pb-3">
-              <StatusPill status={status} />
+              <StatusPill status={status?.id} />
             </div>
             {[
               {
@@ -384,7 +425,7 @@ const NCEntryForm = () => {
               ref={ncDetailsRef}
               className="flex scroll-mt-5 flex-row justify-start items-center gap-3 px-2">
               <h2 className="text-2xl text-primary-text whitespace-nowrap">
-                NC Details
+                Booking Details
               </h2>
               <div className="h-0.5 w-full bg-border-color"></div>
             </div>
@@ -395,7 +436,7 @@ const NCEntryForm = () => {
                   control={control}
                   render={({ field, fieldState }) => (
                     <RHFDatePickerPopout
-                      label="Date of NC"
+                      label="Date of Booking"
                       placeholder="Pick a date"
                       error={fieldState.error}
                       value={field.value ? new Date(field.value) : null}
@@ -411,11 +452,11 @@ const NCEntryForm = () => {
                     <RHFComboBox
                       {...field}
                       error={fieldState.error}
-                      placeholder="Search for a customer"
+                      placeholder="Search for a property"
                       secondaryField={"customer_id"}
                       options={customerOptions || []}
-                      icon={IoPeopleOutline}
-                      label="Customer"
+                      icon={GiFamilyHouse}
+                      label="Property"
                     />
                   )}
                 />
@@ -556,6 +597,8 @@ const NCEntryForm = () => {
                       onSearchTermChange={() => {}}
                       dependentKey={"failure_mode"}
                       dependentValue={watch("failure_mode") || null}
+                      secondaryField={"code"}
+                      secondaryFieldOptions={failureModeOptions || []}
                     />
                   )}
                 />
@@ -698,4 +741,4 @@ const NCEntryForm = () => {
   );
 };
 
-export default NCEntryForm;
+export default BookingEntryForm;

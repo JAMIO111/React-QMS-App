@@ -1,15 +1,26 @@
 import { useEffect, useState } from "react";
 import { HiMiniEllipsisHorizontal } from "react-icons/hi2";
 
-const Top5List = ({ title, data, isLoading }) => {
+const Top5List = ({
+  title,
+  subtitle,
+  data,
+  isLoading,
+  dataKey = "top_entities", // key from the response
+  nameKey = "entity_name", // key for display name
+  idKey = "entity_id", // key for unique ID
+  valueKey = "total_defects", // key for numeric value
+  logoKey = "entity_logo", // optional key for logos
+  fallbackIconPrefix = "fallback-position", // default fallback icons
+}) => {
   const [animate, setAnimate] = useState(false);
-  const topEntities = data?.top_entities || [];
+  const items = data?.[dataKey] || [];
 
   useEffect(() => {
     setAnimate(false);
     const timeout = setTimeout(() => {
       setAnimate(true);
-    }, 300); // brief reset before applying the new animation
+    }, 300);
     return () => clearTimeout(timeout);
   }, [data]);
 
@@ -33,8 +44,11 @@ const Top5List = ({ title, data, isLoading }) => {
 
   return (
     <div className="flex flex-col bg-secondary-bg rounded-3xl h-full p-4 shadow-blur-md">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="font-semibold text-primary-text">{title}</h3>
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex flex-col gap-1">
+          <h3 className="font-semibold text-primary-text">{title}</h3>
+          <h4 className="text-secondary-text text-sm">{subtitle}</h4>
+        </div>
         <button className="flex items-center justify-center w-8 h-8 rounded-md hover:bg-border-color/50 transition-colors cursor-pointer">
           <HiMiniEllipsisHorizontal className="w-6 h-6 text-secondary-text" />
         </button>
@@ -45,40 +59,38 @@ const Top5List = ({ title, data, isLoading }) => {
           Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} index={i} />
           ))
-        ) : topEntities.length === 0 ? (
+        ) : items.length === 0 ? (
           <li className="text-center text-secondary-text py-8 px-4 border border-dashed border-border-color rounded-lg">
             No Non-Conformances found in the selected period.
           </li>
         ) : (
-          topEntities.map((entity, index) => {
-            const maxDefects = Math.max(
-              ...topEntities.map((ent) => ent.total_defects)
-            );
+          items.map((item, index) => {
+            const maxValue = Math.max(...items.map((i) => i[valueKey] || 0));
             const percent =
-              maxDefects > 0 ? (entity.total_defects / maxDefects) * 100 : 0;
+              maxValue > 0 ? (item[valueKey] / maxValue) * 100 : 0;
 
             return (
               <li
-                key={entity.entity_id}
+                key={item[idKey]}
                 className="flex items-center justify-between gap-3">
                 <div className="flex items-center min-w-8 w-8 aspect-square gap-4 border-1 border-border-dark-color rounded-lg overflow-hidden">
                   <img
                     src={
-                      entity.entity_logo
-                        ? entity.entity_logo
-                        : `/icons/fallback-position-${index + 1}.png`
+                      item[logoKey]
+                        ? item[logoKey]
+                        : `/icons/${fallbackIconPrefix}-${index + 1}.png`
                     }
-                    alt={entity.entity_name}
+                    alt={item[nameKey]}
                     className="object-cover w-full h-full"
                   />
                 </div>
                 <div className="flex flex-col flex-grow overflow-hidden justify-center h-full">
                   <div className="flex items-center gap-2 justify-between">
                     <span className="text-primary-text whitespace-nowrap overflow-hidden text-ellipsis">
-                      {entity.entity_name}
+                      {item[nameKey]}
                     </span>
                     <span className="text-secondary-text">
-                      {entity.total_defects}
+                      {item[valueKey]}
                     </span>
                   </div>
                   <div className="w-full bg-primary-bg/90 rounded-full h-1.5">

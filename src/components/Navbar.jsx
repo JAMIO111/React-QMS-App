@@ -1,19 +1,16 @@
 import { useState } from "react";
-import Logo from "../assets/Logo-black-on-yellow.png";
-import { TbLayoutSidebarRightExpand } from "react-icons/tb";
+import Logo from "../assets/dryden-logo-square.png";
+import { GoSidebarExpand } from "react-icons/go";
 import { BsGear, BsQuestionCircle } from "react-icons/bs";
 import NavItem from "./NavItem";
 import Logout from "./Logout";
 import { menuStructure } from "../MenuStructure";
 import SubMenuItem from "./SubMenuItem";
 import ThemeToggle from "./ThemeToggle";
-import { useUser } from "../contexts/UserProvider";
-import { useOrganisation } from "@/contexts/OrganisationProvider";
 
 const Navbar = () => {
   const [isMenuExpanded, setIsMenuExpanded] = useState(false);
   const [isSubMenuOpen, setIsSubMenuOpen] = useState(null);
-  const { logout } = useUser();
 
   const toggleMenu = () => {
     setIsSubMenuOpen(null);
@@ -29,8 +26,6 @@ const Navbar = () => {
     setIsSubMenuOpen((prev) => (prev === name ? null : name));
   };
 
-  const { organisation } = useOrganisation();
-
   return (
     <div className="flex bg-secondary-bg">
       <nav
@@ -38,28 +33,24 @@ const Navbar = () => {
           isMenuExpanded ? "w-68" : "w-14"
         }`}>
         <div
-          className={`flex justify-between items-center py-3 border-b-1 border-border-color ${
+          className={`flex justify-start items-center py-3 border-b-1 border-border-color ${
             isMenuExpanded ? "flex-row mx-3" : "flex-col gap-3"
           }`}>
-          <div className="flex items-center justify-start gap-3">
-            <img
-              className="w-10 h-10 rounded-lg border-1"
-              src={Logo}
-              alt="Logo"
-            />
-            {isMenuExpanded && (
-              <h1 className=" font-semibold text-3xl text-primary-text">
-                {organisation?.name || "QMS"}
-              </h1>
-            )}
+          <div className="flex bg-white rounded border border-border-color p-1 items-center justify-start gap-3">
+            <img className="w-5 h-5 rounded-lg" src={Logo} alt="Logo" />
           </div>
+          {isMenuExpanded && (
+            <h1 className="font-semibold ml-3 flex-1 text-primary-text">
+              Dryden Services Ltd
+            </h1>
+          )}
           <button
             title={isMenuExpanded ? "Hide Menu" : "Expand Menu"}
             onClick={toggleMenu}
             className="cursor-pointer">
-            <TbLayoutSidebarRightExpand
-              className={`h-6 w-6 stroke-icon-color ml-3 hover:stroke-primary-text ${
-                !isMenuExpanded && "rotate-180 mr-3"
+            <GoSidebarExpand
+              className={`h-6 w-6 fill-icon-color hover:fill-primary-text ${
+                !isMenuExpanded && "rotate-180"
               }`}
             />
           </button>
@@ -106,14 +97,14 @@ const Navbar = () => {
               label="Settings"
               icon={BsGear}
               isExpanded={isMenuExpanded}
-              path="/QMS/Settings"
+              path="/Settings"
               onClick={() => {}}
             />
             <NavItem
               label="Help Centre"
               icon={BsQuestionCircle}
               isExpanded={isMenuExpanded}
-              path="/QMS/Help"
+              path="/Help"
             />
             <div className="border-t-1 mx-3 border-border-color"></div>
             <div className="flex flex-col justify-between items-start gap-2 pt-2">

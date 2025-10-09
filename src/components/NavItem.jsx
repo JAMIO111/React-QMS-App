@@ -39,7 +39,7 @@ const NavItem = ({
               e.stopPropagation();
               onToggleSubMenu();
             }}
-            className={`hover:bg-cta-color/20 rounded p-1 h-5 w-5 transition-transform ${
+            className={`hover:bg-cta-color/20 rounded p-1.5 h-6 w-6 transition-transform ${
               isSubMenuOpen === label ? "rotate-180" : ""
             }`}
           />

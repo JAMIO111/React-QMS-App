@@ -31,7 +31,7 @@ function ChartContainer({ id, className, children, config, ...props }) {
         data-slot="chart"
         data-chart={chartId}
         className={cn(
-          "[&_.recharts-cartesian-axis-tick_text]:fill-secondar-text [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border flex h-full justify-center text-xs [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
+          "[&_.recharts-cartesian-axis-tick_text]:fill-secondary-text [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border flex h-full justify-center text-xs [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
           className
         )}
         {...props}>
@@ -119,7 +119,11 @@ function ChartTooltipContent({
       return null;
     }
 
-    return <div className={cn("font-medium", labelClassName)}>{value}</div>;
+    return (
+      <div className={cn("font-medium leading-4 pb-1", labelClassName)}>
+        {value}
+      </div>
+    );
   }, [
     label,
     labelFormatter,
@@ -143,11 +147,12 @@ function ChartTooltipContent({
         className
       )}>
       {!nestLabel ? tooltipLabel : null}
-      <div className="grid gap-1.5">
+      <div className="grid gap-2">
         {payload.map((item, index) => {
           const key = `${nameKey || item.name || item.dataKey || "value"}`;
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
-          const indicatorColor = color || item.payload.fill || item.color;
+          const indicatorColor =
+            item.color || color || item.payload.fill || item.color;
 
           return (
             <div
@@ -186,8 +191,8 @@ function ChartTooltipContent({
                 )}>
                 <div className="min-w-0 flex-1 truncate">
                   {nestLabel ? tooltipLabel : null}
-                  <span className="block text-secondary-text truncate">
-                    {itemConfig?.label || item.name}
+                  <span className="block text-secondary-text truncate leading-3">
+                    {item.subModeName || itemConfig?.label || item.name}
                   </span>
                 </div>
                 <div className="text-primary-text font-mono font-medium tabular-nums whitespace-nowrap">

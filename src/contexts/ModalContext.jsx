@@ -20,6 +20,8 @@ export const useModal = () => {
 };
 
 export const ModalProvider = ({ children }) => {
+  const backdropRef = useRef(null);
+  const mouseDownTarget = useRef(null);
   const [modalContent, setModalContent] = useState(null);
   const modalRef = useRef(null);
   const dragControls = useDragControls();
@@ -81,31 +83,46 @@ export const ModalProvider = ({ children }) => {
       {modalContent &&
         createPortal(
           <div
+            ref={backdropRef}
             className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
-            onClick={closeModal}>
+            onMouseDown={(e) => {
+              if (e.target === backdropRef.current) {
+                mouseDownTarget.current = backdropRef.current;
+              }
+            }}
+            onMouseUp={(e) => {
+              if (
+                e.target === backdropRef.current &&
+                mouseDownTarget.current === backdropRef.current
+              ) {
+                closeModal();
+              }
+              mouseDownTarget.current = null;
+            }}>
             <motion.div
               drag
               dragControls={dragControls}
+              dragConstraints={backdropRef}
               dragListener={false}
               dragMomentum={false}
               ref={modalRef}
               onClick={(e) => e.stopPropagation()}
               className="bg-primary-bg rounded-xl border border-border-color shadow-xl relative w-fit min-w-[300px]">
-              {/* Draggable Header with title + close button */}
+              {/* Draggable Header */}
               <div
-                className="flex justify-between items-center cursor-move border-b border-border-color bg-secondary-bg text-primary-text rounded-t-xl"
+                className="flex justify-between select-none items-center cursor-move border-b border-border-color bg-secondary-bg text-primary-text rounded-t-xl"
                 onPointerDown={(e) => dragControls.start(e)}>
-                <h3 className="pl-4 text-lg text-primary-text font-semibold">
+                <h3 className="pl-4 text-lg select-none text-primary-text font-semibold">
                   {modalContent.title || "Modal Title"}
                 </h3>
                 <button
                   onClick={closeModal}
+                  onPointerDown={(e) => e.stopPropagation()}
                   className="group flex justify-center items-center w-10 h-10 hover:text-white hover:bg-error-color/80 rounded-tr-xl">
                   <CgClose className="h-5 w-5 group-hover:text-white text-primary-text" />
                 </button>
               </div>
 
-              {/* Modal Content goes here */}
               <div>{modalContent.content}</div>
             </motion.div>
           </div>,

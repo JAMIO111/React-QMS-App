@@ -1,12 +1,7 @@
-import React from "react";
-import { SkeletonTable } from "./Skeleton";
+import NonConformance2 from "./NonConformance";
 
 const Projects = () => {
-  return (
-    <div className="p-5">
-      <SkeletonTable />
-    </div>
-  );
+  return <div className="h-full min-w-0 overflow-hidden"></div>;
 };
 
 export default Projects;

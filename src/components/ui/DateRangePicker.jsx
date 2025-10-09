@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import { RxCalendar } from "react-icons/rx";
 import { IoChevronDown } from "react-icons/io5";
 import { createPortal } from "react-dom";
+import CTAButton from "../CTAButton";
 
-const daysOfWeek = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+const daysOfWeek = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
 function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
@@ -11,7 +12,7 @@ function getDaysInMonth(year, month) {
 
 function generateCalendar(year, month) {
   const daysInMonth = getDaysInMonth(year, month);
-  const firstDay = new Date(year, month, 1).getDay();
+  const firstDay = (new Date(year, month, 1).getDay() + 6) % 7;
   const calendar = [];
   let dayCounter = 1 - firstDay;
   while (dayCounter <= daysInMonth) {
@@ -293,7 +294,7 @@ export default function DateRangePicker({
         <input
           type="text"
           readOnly
-          className="border border-border-color text-primary-text pr-4 pl-11 py-2 rounded-lg bg-text-input-color w-80 focus:outline-none focus:ring"
+          className="border border-border-color text-primary-text pr-4 pl-11 py-1.5 rounded-lg bg-text-input-color w-80 focus:outline-none focus:ring"
           value={
             startDate && endDate
               ? `${formatDate(startDate)} - ${formatDate(endDate)}`
@@ -382,32 +383,32 @@ export default function DateRangePicker({
                   )}
                 </div>
                 <div className="flex justify-between mt-2">
-                  <button
-                    className="px-3 py-1 text-sm border rounded hover:bg-gray-100"
-                    onClick={() => {
+                  <CTAButton
+                    type="cancel"
+                    text="Reset"
+                    title="Reset Date Range"
+                    icon={null}
+                    callbackFn={() => {
                       setStartDate(null);
                       setEndDate(null);
                       if (onChange) {
                         onChange({ startDate: null, endDate: null });
                       }
-                    }}>
-                    Clear
-                  </button>
-                  <button
+                    }}
+                  />
+                  <CTAButton
                     disabled={!startDate || !endDate}
-                    className={`px-3 py-1 text-sm text-white rounded ${
-                      startDate && endDate
-                        ? "bg-blue-600 hover:bg-blue-700"
-                        : "bg-gray-300 cursor-not-allowed"
-                    }`}
-                    onClick={() => {
+                    type="main"
+                    text="Apply"
+                    title="Apply Date Range"
+                    icon={null}
+                    callbackFn={() => {
                       if (onChange && startDate && endDate) {
                         onChange({ startDate, endDate });
                       }
                       setIsOpen(false);
-                    }}>
-                    Apply
-                  </button>
+                    }}
+                  />
                 </div>
               </div>
             )}

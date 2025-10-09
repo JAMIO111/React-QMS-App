@@ -12,7 +12,10 @@ const SettingsAccount = () => {
         {/* Photo Card */}
         <div className="flex flex-row justify-between items-center bg-secondary-bg border border-border-color rounded-3xl p-5">
           <div className="flex flex-col w-1/2 justify-between h-full">
-            <p className="text-primary-text text-xl">Your Photo</p>
+            <p className="text-primary-text text-xl">Profile Picture</p>
+            <p className="text-secondary-text text-sm mb-5">
+              Add an image of yourself so your team can easily identify you.
+            </p>
             <CTAButton width="w-full" type="main" text="Add Photo" />
           </div>
           <div className="w-32 h-32 rounded-3xl border border-primary-text overflow-hidden">

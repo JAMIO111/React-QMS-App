@@ -6,6 +6,7 @@ import {
   BsBoxes,
   BsQuestionCircle,
   BsPeople,
+  BsHouse,
 } from "react-icons/bs";
 import { LiaFileInvoiceDollarSolid } from "react-icons/lia";
 
@@ -13,71 +14,85 @@ export const menuStructure = [
   {
     name: "Dashboard",
     icon: RxDashboard,
-    path: "/QMS/Dashboard",
+    path: "/Dashboard",
     subMenu: [],
   },
   {
-    name: "Non-Conformance",
+    name: "Bookings",
     icon: PiWarning,
-    path: "/QMS/Non-Conformance",
+    path: "/Bookings",
     subMenu: [
       {
-        name: "Internal",
-        path: "/QMS/Non-Conformance/Internal",
+        name: "New Booking",
+        path: "/Bookings/New-Booking",
       },
       {
-        name: "Customer",
-        path: "/QMS/Non-Conformance/External",
-      },
-      {
-        name: "Supplier",
-        path: "/QMS/QMS/Non-Conformance/Supplier",
-      },
-      {
-        name: "Warranty",
-        path: "/QMS/Non-Conformance/Warranty",
-      },
-      {
-        name: "Audit",
-        path: "/QMS/Non-Conformance/Audit",
+        name: "Existing Bookings",
+        path: "/Bookings/View-Existing",
       },
     ],
   },
   {
-    name: "Projects",
-    icon: BsFolder,
-    path: "/QMS/Projects",
-    subMenu: [],
+    name: "Client Management",
+    icon: BsHouse,
+    path: "/Client-Management",
+    subMenu: [
+      {
+        name: "Properties",
+        path: "/Client-Management/Properties",
+      },
+      {
+        name: "Owners",
+        path: "/Client-Management/Owners",
+      },
+    ],
   },
   {
-    name: "Purchase Orders",
+    name: "People",
     icon: LiaFileInvoiceDollarSolid,
-    path: "/QMS/Purchase-Orders",
+    path: "/People",
     subMenu: [],
   },
   {
     name: "Inventory",
     icon: BsBoxes,
-    path: "/QMS/Inventory",
+    path: "/Inventory",
     subMenu: [
       {
         name: "Stock",
-        path: "/Stock",
+        path: "/Inventory/Stock",
       },
       {
         name: "Stock Adjustment",
-        path: "/Stock-Adjustment",
+        path: "/Inventory/Stock-Adjustment",
       },
       {
-        name: "Part Maintenance",
-        path: "/Part-Maintenance",
+        name: "Item",
+        path: "/Inventory/Item",
       },
     ],
   },
   {
     name: "Human Resources",
     icon: BsPeople,
-    path: "/QMS/Human-Resources",
-    subMenu: [],
+    path: "/Human-Resources",
+    subMenu: [
+      {
+        name: "Employees",
+        path: "/Human-Resources/Employees",
+      },
+      {
+        name: "Payroll",
+        path: "/Human-Resources/Payroll",
+      },
+      {
+        name: "Holidays",
+        path: "/Human-Resources/Holidays",
+      },
+      {
+        name: "Training",
+        path: "/Human-Resources/Training",
+      },
+    ],
   },
 ];

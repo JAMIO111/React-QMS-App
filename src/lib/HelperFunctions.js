@@ -36,3 +36,35 @@ export const scrollIntoViewIfNeeded = (index) => {
     });
   }
 };
+
+export const normalizeFetchedData = (data) => {
+  const normalized = {};
+
+  for (const key in data) {
+    const value = data[key];
+    if (value === null) {
+      normalized[key] = undefined;
+    } else if (Array.isArray(value)) {
+      // Recursively normalize arrays of objects (e.g., KeyCodes)
+      normalized[key] = value.map((item) =>
+        typeof item === "object" && item !== null
+          ? normalizeFetchedData(item)
+          : item
+      );
+    } else if (typeof value === "object") {
+      normalized[key] = normalizeFetchedData(value);
+    } else {
+      normalized[key] = value;
+    }
+  }
+
+  return normalized;
+};
+
+export const getGreeting = () => {
+  const hour = new Date().getHours();
+
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+};

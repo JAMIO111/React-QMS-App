@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, lazy, Suspense, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useParams } from "react-router-dom";
 import { BsSliders, BsCurrencyPound } from "react-icons/bs";
 import { PiExportLight } from "react-icons/pi";
 import { HiArrowsUpDown } from "react-icons/hi2";
@@ -10,10 +10,11 @@ import { useNCMFilters } from "../hooks/useNCMFilters";
 import { useGlobalSearch } from "../contexts/SearchProvider";
 import { exportCSV } from "../lib/csvHelper";
 import { SkeletonCard2, SkeletonTable } from "./Skeleton";
+import ToggleDropdown from "./ui/ToggleDropdown";
+import { getColumnsForNcType } from "../lib/ColumnDefs";
 
-const NonConformanceTable = lazy(() => import("./NonConformanceTable"));
+const TableWrapper = lazy(() => import("./TableWrapper"));
 const NonConformanceGrid = lazy(() => import("./NonConformanceGrid"));
-const SortPane = lazy(() => import("./SortPane"));
 const FilterPane = lazy(() => import("./FilterPane"));
 const ActionsModal = lazy(() => import("./ActionsModal"));
 const Breadcrumb = lazy(() => import("./Breadcrumb"));
@@ -22,10 +23,13 @@ const ViewToggle = lazy(() => import("./ViewToggle"));
 const IconButton = lazy(() => import("./IconButton"));
 
 const NonConformance = () => {
-  const [sortColumn, setSortColumn] = useState("ncm_id");
-  const [sortOrder, setSortOrder] = useState("desc");
+  const [sorting, setSorting] = useState([
+    { id: "ncm_id", desc: true }, // default sort
+  ]);
+
   const [selectedItem, setSelectedItem] = useState(null); // Required
   const [modalPos, setModalPos] = useState(null); // Required
+  const [rowSelection, setRowSelection] = useState({});
   const [activeModalType, setActiveModalType] = useState(null); // Required
   const [costData, setCostData] = useState(false); // Required
   const [viewGrid, setViewGrid] = useState(false); // Required
@@ -33,8 +37,35 @@ const NonConformance = () => {
   const modalRef = useRef(null);
 
   const [searchParams, setSearchParams] = useSearchParams();
+  const { type } = useParams();
   const page = parseInt(searchParams.get("page") || "1", 10);
   const pageSize = parseInt(searchParams.get("pageSize") || "25", 10);
+  console.log("Type:", type);
+
+  useEffect(() => {
+    setRowSelection({});
+    setSelectedRows([]);
+  }, [page, pageSize]);
+
+  const allColumns = useMemo(() => {
+    return getColumnsForNcType(type);
+  }, [type]);
+
+  const [visibleColumns, setVisibleColumns] = useState(() =>
+    allColumns.map((col) => col.id)
+  );
+
+  const filteredColumns = useMemo(() => {
+    return allColumns.filter((col) => {
+      // your filtering condition — could be checking hidden IDs, user preferences, etc.
+      return visibleColumns.includes(col.id);
+    });
+  }, [allColumns, visibleColumns]);
+
+  useEffect(() => {
+    // Whenever ncType or column definitions change, reset visible columns
+    setVisibleColumns(allColumns.map((col) => col.id));
+  }, [type, allColumns]);
 
   const setPage = (newPage) => {
     setSearchParams((prev) => {
@@ -52,16 +83,30 @@ const NonConformance = () => {
     });
   };
 
-  const {
-    data: ncmData,
-    isLoading,
-    error,
-    refetch,
-  } = useNCM({ sortColumn, sortOrder, page, pageSize });
-  const totalCount = ncmData?.count || 0;
+  useEffect(() => {
+    // Reset any local state that should clear when type changes
+    setSelectedRows([]);
+    setSelectedItem(null);
+    setCostData(false);
+    setViewGrid(false);
+
+    refetch();
+
+    if (page !== 1) {
+      setPage(1);
+    }
+  }, [type]);
+
+  const { data, isLoading, error, refetch } = useNCM({
+    ncType: type,
+    sortColumn: sorting[0]?.id,
+    sortOrder: sorting[0]?.desc ? "desc" : "asc",
+    page,
+    pageSize,
+  });
+  const totalCount = data?.count || 0;
   const { debouncedSearchTerm } = useGlobalSearch();
   const { updateFilters } = useNCMFilters();
-
   const isSelected = (id) => selectedRows.some((row) => row.id === id);
 
   const handleToggle = (row) => {
@@ -83,7 +128,7 @@ const NonConformance = () => {
     setActiveModalType(null);
     setModalPos(null);
   };
-
+  console.log("Selected Rows:", selectedRows);
   const totalRows = selectedRows.length;
   const totalQuantity = selectedRows.reduce(
     (acc, r) => acc + r.quantity_defective,
@@ -101,7 +146,7 @@ const NonConformance = () => {
   const navigate = useNavigate();
 
   const handleNewEntry = () => {
-    navigate("/QMS/Non-Conformance/Internal/New-NC");
+    navigate(`/Non-Conformance/${type}/New-NC`);
   };
 
   const handleActiveModalType = (type) => {
@@ -145,9 +190,9 @@ const NonConformance = () => {
     (key) => searchParams.get(key)
   );
   const filterCount = activeFilters.length;
-
+  console.log(sorting, "Sorting State");
   return (
-    <div className="p-4 flex bg-primary-bg flex-col gap-3 h-screen overflow-hidden">
+    <div className="p-4 bg-primary-bg flex flex-col gap-3 w-full">
       <div className="flex flex-row justify-between items-center">
         <div className="flex flex-row justify-start items-center gap-2"></div>
         <div
@@ -163,7 +208,7 @@ const NonConformance = () => {
                 )})`}
             </p>
           </div>
-          <div className="flex flex-row justify-end items-center gap-2">
+          <div className="flex flex-row justify-end items-center gap-3">
             {selectedRows.length !== 0 && (
               <CTAButton
                 callbackFn={() => exportCSV(selectedRows)}
@@ -174,12 +219,19 @@ const NonConformance = () => {
                 iconSize="h-6 w-6"
               />
             )}
+            {!viewGrid && (
+              <ToggleDropdown
+                allColumns={allColumns}
+                visibleColumns={visibleColumns}
+                setVisibleColumns={setVisibleColumns}
+              />
+            )}
             <ViewToggle viewGrid={viewGrid} setViewGrid={handleToggleView} />
             <CTAButton
               callbackFn={() => {
                 handleNewEntry(null);
               }}
-              text="New NCM"
+              text={"New NC"}
               type="main"
               icon={IoAddOutline}
               iconSize="h-6 w-6"
@@ -199,17 +251,6 @@ const NonConformance = () => {
               callback={handleActiveModalType}
               icon={<HiArrowsUpDown className="h-5 w-5" />}
             />
-            {activeModalType === "Sort" && (
-              <Suspense fallback={null}>
-                <SortPane
-                  sortColumn={sortColumn}
-                  sortOrder={sortOrder}
-                  setSortColumn={setSortColumn}
-                  setSortOrder={setSortOrder}
-                  onClose={handleCloseModal}
-                />
-              </Suspense>
-            )}
             <IconButton
               count={filterCount}
               selected={activeModalType === "Filter"}
@@ -226,7 +267,7 @@ const NonConformance = () => {
           </div>
         </div>
       </div>
-      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-auto">
         <Suspense
           fallback={
             viewGrid ? (
@@ -250,7 +291,8 @@ const NonConformance = () => {
               onOpenModal={handleOpenModal}
               selectedItem={selectedItem}
               setSelectedItem={setSelectedItem}
-              ncmData={ncmData}
+              ncmData={data}
+              ncType={type}
               costData={costData}
               handleActiveModalType={handleActiveModalType}
               onRefresh={refetch}
@@ -261,24 +303,31 @@ const NonConformance = () => {
               setPageSize={setPageSize}
             />
           ) : (
-            <NonConformanceTable
-              onOpenModal={handleOpenModal}
-              selectedItem={selectedItem}
-              setSelectedItem={setSelectedItem}
-              ncmData={ncmData}
-              costData={costData}
-              handleActiveModalType={handleActiveModalType}
-              onRefresh={refetch}
+            <TableWrapper
+              data={data?.data || []}
+              isLoading={isLoading}
+              error={error}
+              totalCount={totalCount}
+              page={page}
+              pageSize={pageSize}
               selectedRows={selectedRows}
+              setSelectedRows={setSelectedRows}
               isSelected={isSelected}
               onToggle={handleToggle}
               onSelectAll={handleSelectAll}
               onClearAll={handleClearAll}
-              page={page}
-              pageSize={pageSize}
-              setPage={setPage}
-              totalCount={totalCount}
-              setPageSize={setPageSize}
+              onOpenModal={handleOpenModal}
+              selectedItem={selectedItem}
+              setSelectedItem={setSelectedItem}
+              costData={costData}
+              handleActiveModalType={handleActiveModalType}
+              onRefresh={refetch}
+              visibleColumns={visibleColumns}
+              sorting={sorting}
+              setSorting={setSorting}
+              filteredColumns={filteredColumns}
+              rowSelection={rowSelection}
+              setRowSelection={setRowSelection}
             />
           )}
         </Suspense>

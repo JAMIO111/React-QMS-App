@@ -75,13 +75,21 @@ const OwnerDetails = ({ owner }) => {
             <div className="flex flex-col gap-3 w-[60%] h-full">
               <div className="flex flex-row border border-brand-primary/60 p-3 rounded-2xl bg-brand-primary/30 items-center">
                 {/* Avatar */}
-                <div className="min-w-28 h-28 rounded-2xl border border-border-color object-cover mr-3 bg-primary-bg flex items-center justify-center">
-                  <span className="text-3xl text-secondary-text">
-                    {owner.first_name.charAt(0)}
-                  </span>
-                  <span className="text-3xl text-secondary-text">
-                    {owner.surname.charAt(0)}
-                  </span>
+                <div className="relative mr-4">
+                  <div className="min-w-28 h-28 rounded-2xl border border-border-color object-cover bg-primary-bg flex items-center justify-center">
+                    <span className="text-3xl text-secondary-text">
+                      {owner.first_name.charAt(0)}
+                    </span>
+                    <span className="text-3xl text-secondary-text">
+                      {owner.surname.charAt(0)}
+                    </span>
+                  </div>
+                  <div className="absolute p-0.5 rounded-full bg-primary-bg -top-1 -right-1">
+                    <div
+                      className={`rounded-full w-4 h-4 ${
+                        owner.is_active ? "bg-green-500" : "bg-red-500"
+                      } `}></div>
+                  </div>
                 </div>
 
                 {/* Info */}
@@ -225,7 +233,7 @@ const OwnerDetails = ({ owner }) => {
                           .join(", ")}
                       </p>
                     </div>
-                    <div className="flex flex-row gap-2 flex-wrap">
+                    <div className="flex flex-row gap-2 mb-2 flex-wrap">
                       <Pill
                         icon={
                           <FaBed className="text-primary-text w-4 h-4 shrink-0" />
@@ -243,6 +251,14 @@ const OwnerDetails = ({ owner }) => {
                           <IoPerson className="text-primary-text w-4 h-4 shrink-0" />
                         }
                         text={`Sleeps ${selectedProperty?.property?.sleeps}`}
+                      />
+                    </div>
+                    <div className="flex flex-row gap-2 mb-2 flex-wrap">
+                      <Pill
+                        icon={
+                          <FaBed className="text-primary-text w-4 h-4 shrink-0" />
+                        }
+                        text={`4534 Gate`}
                       />
                     </div>
                   </div>

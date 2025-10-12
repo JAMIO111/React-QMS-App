@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useForm, Controller, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { IoIosMan } from "react-icons/io";
 import { FaChildren, FaDog, FaBed, FaUser } from "react-icons/fa6";
 import { TbChairDirector } from "react-icons/tb";
@@ -9,10 +11,40 @@ import { LuFence } from "react-icons/lu";
 import NumericInputGroup from "./NumericInputGroup";
 import TextInput from "./ui/TextInput";
 
+const defaultFormData = {
+  property_id: null,
+  arrival_date: "",
+  departure_date: "",
+  nights: 0,
+  lead_guest: "",
+  guest_contact: "",
+  adults: 0,
+  children: 0,
+  infants: 0,
+  pets: 0,
+  highchairs: 0,
+  cots: 0,
+  stairgates: 0,
+};
+
 const BookingForm = () => {
   const { id } = useParams();
-  const [formData, setFormData] = useState(null);
-  const [numericValue, setNumericValue] = useState(0);
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    trigger,
+    watch,
+    formState: { errors, isSubmitting, isValid, isDirty },
+  } = useForm({
+    resolver: zodResolver(BookingFormSchema),
+    mode: "all",
+    defaultValues: defaultFormData,
+    delayError: 250,
+  });
 
   useEffect(() => {
     if (id && id !== "New-Booking") {
@@ -25,14 +57,6 @@ const BookingForm = () => {
 
   return (
     <div className="flex bg-primary-bg flex-1 flex-row p-3 gap-3">
-      <div className="flex flex-1 gap-3 flex-col">
-        <img
-          className="border border-border-color aspect-video rounded-xl"
-          src={"/mansion-1.png"}
-          alt={formData?.name}
-        />
-        <div className="flex flex-1 flex-col bg-secondary-bg border border-border-color rounded-2xl p-3"></div>
-      </div>
       <div className="flex-1">
         <div className="flex h-full gap-3 flex-1 p-5 flex-col bg-secondary-bg border rounded-2xl border-border-color">
           <TextInput
@@ -98,6 +122,14 @@ const BookingForm = () => {
             icon={LuFence}
           />
         </div>
+      </div>
+      <div className="flex flex-1 gap-3 flex-col">
+        <img
+          className="border border-border-color aspect-video rounded-xl"
+          src={"/mansion-1.png"}
+          alt={formData?.name}
+        />
+        <div className="flex flex-1 flex-col bg-secondary-bg border border-border-color rounded-2xl p-3"></div>
       </div>
     </div>
   );

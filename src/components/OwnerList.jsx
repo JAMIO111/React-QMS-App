@@ -16,7 +16,7 @@ const OwnerList = ({ onSelectOwner, selectedOwner, owners }) => {
       </div>
 
       {/* Scrollable List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 p-3 overflow-y-auto">
         <ul>
           {owners.length === 0 ? (
             <div className="p-3 text-center ">
@@ -30,8 +30,10 @@ const OwnerList = ({ onSelectOwner, selectedOwner, owners }) => {
               .map((owner) => (
                 <li
                   key={owner.id}
-                  className={`flex items-center border-b border-border-color p-3 cursor-pointer ${
-                    selectedOwner?.id === owner.id ? "bg-brand-primary/70" : ""
+                  className={`flex items-center p-3 cursor-pointer ${
+                    selectedOwner?.id === owner.id
+                      ? " border rounded-2xl border-border-color bg-primary-bg"
+                      : ""
                   }`}
                   onClick={() => onSelectOwner(owner)}>
                   {/* Owner Image */}
@@ -46,7 +48,7 @@ const OwnerList = ({ onSelectOwner, selectedOwner, owners }) => {
                       <div
                         className={`${
                           selectedOwner?.id === owner.id
-                            ? "bg-primary-bg"
+                            ? "bg-tertiary-bg"
                             : "bg-primary-bg"
                         } w-12 h-12 flex items-center justify-center rounded-lg border border-border-color`}>
                         <span className="text-secondary-text">
@@ -60,17 +62,12 @@ const OwnerList = ({ onSelectOwner, selectedOwner, owners }) => {
                     <div
                       className={`absolute rounded-full w-3 h-3 ${
                         owner.is_active ? "bg-green-500" : "bg-red-500"
-                      } bottom-0 right-0`}></div>
+                      } -bottom-0.5 -right-0.5`}></div>
                   </div>
 
                   {/* Owner Details */}
                   <div>
-                    <p
-                      className={`${
-                        selectedOwner?.id === owner.id
-                          ? "text-primary-bg"
-                          : "text-primary-text"
-                      } font-semibold`}>
+                    <p className={`text-primary-text font-semibold`}>
                       {owner.first_name} {owner.surname}
                     </p>
                     <p

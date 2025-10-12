@@ -11,6 +11,7 @@ import { useBookings } from "@/hooks/useBookings";
 import { useBookingsFilters } from "@/hooks/useBookingsFilters";
 import { useSearchParams } from "react-router-dom";
 import { useGlobalSearch } from "@/contexts/SearchProvider";
+import ActionsModal from "@components/ActionsModal";
 
 const BookingsDashboard = () => {
   const navigate = useNavigate();
@@ -229,6 +230,13 @@ const BookingsDashboard = () => {
           setPageSize={setPageSize}
         />
       </div>
+      {activeModalType === "Actions" && (
+        <ActionsModal
+          item={selectedItem}
+          position={modalPos}
+          onClose={handleCloseModal}
+        />
+      )}
     </div>
   );
 };

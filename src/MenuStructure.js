@@ -9,6 +9,7 @@ import {
   BsHouse,
 } from "react-icons/bs";
 import { LiaFileInvoiceDollarSolid } from "react-icons/lia";
+import { IoReceiptOutline } from "react-icons/io5";
 
 export const menuStructure = [
   {
@@ -19,7 +20,7 @@ export const menuStructure = [
   },
   {
     name: "Bookings",
-    icon: PiWarning,
+    icon: IoReceiptOutline,
     path: "/Bookings",
     subMenu: [
       {

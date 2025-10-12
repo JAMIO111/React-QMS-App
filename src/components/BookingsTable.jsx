@@ -30,6 +30,7 @@ const BookingsTable = ({
 }) => {
   const [openModalRowId, setOpenModalRowId] = useState(null);
   const [modalPos, setModalPos] = useState(null);
+  const [activeModalType, setActiveModalType] = useState(null); // Required
 
   console.log("Selected Rows:", selectedRows.length);
   console.log("Total Count:", totalCount);
@@ -56,6 +57,7 @@ const BookingsTable = ({
       onSelectAll(data?.data);
     }
   };
+
   const handleRowClick = (item) => {
     setSelectedItem((prev) => (prev === item ? null : item));
     console.log("Row selected:", item.id);
@@ -118,6 +120,11 @@ const BookingsTable = ({
                 </div>
               </th>
               <th>
+                <div className="table-header">
+                  <IoPeopleOutline /> Property
+                </div>
+              </th>
+              <th>
                 <div className="table-header min-w-28">
                   <IoCalendarOutline /> Arrival Date
                 </div>
@@ -128,9 +135,7 @@ const BookingsTable = ({
                 </div>
               </th>
               <th>
-                <div className="table-header">
-                  <IoPeopleOutline /> Property
-                </div>
+                <div className="table-header">Nights</div>
               </th>
               <th>
                 <div className="table-header">

@@ -241,7 +241,7 @@ const PropertyForm = () => {
       </div>
       <div className="flex flex-col flex-1 gap-3">
         <div className="flex justify-between p-3 flex-col bg-secondary-bg border rounded-2xl border-border-color">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between pr-2 mb-3">
             <h2 className="text-xl font-semibold text-primary-text">
               Key Codes
             </h2>
@@ -258,7 +258,7 @@ const PropertyForm = () => {
               {fields.map((field, index) => (
                 <li
                   key={field.id}
-                  className="flex border border-border-color bg-primary-bg rounded-xl gap-2 mr-3 p-1.5 items-center justify-between">
+                  className="flex border border-border-color bg-primary-bg rounded-xl gap-2 p-1.5 mr-2 items-center justify-between">
                   <span className="rounded-lg p-1 text-lg px-2 bg-primary-text font-bold text-primary-bg">
                     {field.code}
                   </span>

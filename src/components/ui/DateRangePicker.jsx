@@ -3,7 +3,7 @@ import { RxCalendar } from "react-icons/rx";
 import { IoChevronDown } from "react-icons/io5";
 import { createPortal } from "react-dom";
 import CTAButton from "../CTAButton";
-
+import { datePresets, normalize } from "@/lib/HelperFunctions";
 const daysOfWeek = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
 function getDaysInMonth(year, month) {
@@ -30,37 +30,6 @@ function generateCalendar(year, month) {
   return calendar;
 }
 
-function getStartOfWeek(date, weekStartsOn = 1) {
-  const d = new Date(date);
-  const day = d.getDay(); // 0 (Sun) - 6 (Sat)
-  const diff = (day < weekStartsOn ? 7 : 0) + day - weekStartsOn;
-  d.setDate(d.getDate() - diff);
-  return normalize(d);
-}
-
-function getEndOfWeek(date, weekStartsOn = 1) {
-  const start = getStartOfWeek(date, weekStartsOn);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  return normalize(end);
-}
-
-function getStartOfMonth(date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function getEndOfMonth(date) {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
-}
-
-function getStartOfYear(date) {
-  return new Date(date.getFullYear(), 0, 1);
-}
-
-function getEndOfYear(date) {
-  return new Date(date.getFullYear(), 11, 31);
-}
-
 function formatDate(date) {
   return date
     ? date.toLocaleDateString("en-GB", {
@@ -72,10 +41,6 @@ function formatDate(date) {
     : "";
 }
 
-function normalize(date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
 export default function DateRangePicker({
   onChange,
   defaultStartDate,
@@ -83,6 +48,7 @@ export default function DateRangePicker({
 }) {
   const triggerRef = useRef(null);
   const dropdownRef = useRef(null);
+  const [hoverDate, setHoverDate] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState("quick");
   const [startDate, setStartDate] = useState(
@@ -148,6 +114,11 @@ export default function DateRangePicker({
   }
 
   function isInRange(day) {
+    if (startDate && !endDate && hoverDate) {
+      const min = hoverDate > startDate ? startDate : hoverDate;
+      const max = hoverDate > startDate ? hoverDate : startDate;
+      return day >= min && day <= max;
+    }
     return startDate && endDate && day >= startDate && day <= endDate;
   }
 
@@ -171,106 +142,6 @@ export default function DateRangePicker({
       onChange({ startDate: start, endDate: end });
     }
   }
-
-  const presets = [
-    {
-      label: "Last Week",
-      range: () => {
-        const startOfThisWeek = getStartOfWeek(new Date(), 1);
-        const start = new Date(startOfThisWeek);
-        start.setDate(start.getDate() - 7);
-        const end = new Date(start);
-        end.setDate(start.getDate() + 6);
-        return [normalize(start), normalize(end)];
-      },
-    },
-    {
-      label: "This Week",
-      range: () => [getStartOfWeek(new Date(), 1), getEndOfWeek(new Date(), 1)],
-    },
-    {
-      label: "Last Month",
-      range: () => {
-        const now = new Date();
-        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        return [getStartOfMonth(lastMonth), getEndOfMonth(lastMonth)];
-      },
-    },
-    {
-      label: "This Month",
-      range: () => [getStartOfMonth(new Date()), getEndOfMonth(new Date())],
-    },
-    {
-      label: "Last Quarter",
-      range: () => {
-        const now = new Date();
-        const currentQuarter = Math.floor(now.getMonth() / 3);
-        const startMonth = ((currentQuarter - 1 + 4) % 4) * 3;
-        const year =
-          currentQuarter === 0 ? now.getFullYear() - 1 : now.getFullYear();
-        const start = new Date(year, startMonth, 1);
-        const end = new Date(year, startMonth + 3, 0);
-        return [normalize(start), normalize(end)];
-      },
-    },
-    {
-      label: "This Quarter",
-      range: () => {
-        const now = new Date();
-        const currentQuarter = Math.floor(now.getMonth() / 3);
-        const startMonth = currentQuarter * 3;
-        const start = new Date(now.getFullYear(), startMonth, 1);
-        const end = new Date(now.getFullYear(), startMonth + 3, 0);
-        return [normalize(start), normalize(end)];
-      },
-    },
-    {
-      label: "Last Year",
-      prevoius: () => {
-        const previousYear = new Date().getFullYear() - 2;
-        return [new Date(previousYear, 0, 1), new Date(previousYear, 11, 31)];
-      },
-      range: () => {
-        const lastYear = new Date().getFullYear() - 1;
-        return [new Date(lastYear, 0, 1), new Date(lastYear, 11, 31)];
-      },
-    },
-    {
-      label: "This Year",
-      prevoius: "Last Year",
-      range: () => [getStartOfYear(new Date()), getEndOfYear(new Date())],
-    },
-    {
-      label: "Rolling 7 Days",
-      previous: "Previous 7 Days",
-      range: () => {
-        const end = normalize(new Date());
-        const start = new Date(end);
-        start.setDate(end.getDate() - 6);
-        return [normalize(start), end];
-      },
-    },
-    {
-      label: "Rolling 30 Days",
-      previous: "Previous 30 Days",
-      range: () => {
-        const end = normalize(new Date());
-        const start = new Date(end);
-        start.setDate(end.getDate() - 29);
-        return [normalize(start), end];
-      },
-    },
-    {
-      label: "Rolling 90 Days",
-      previous: "Previous 90 Days",
-      range: () => {
-        const end = normalize(new Date());
-        const start = new Date(end);
-        start.setDate(end.getDate() - 89);
-        return [normalize(start), end];
-      },
-    },
-  ];
 
   function isSameDay(date1, date2) {
     return (
@@ -359,6 +230,8 @@ export default function DateRangePicker({
                         <button
                           key={`${i}-${j}`}
                           onClick={() => handleDayClick(day)}
+                          onMouseEnter={() => setHoverDate(day)}
+                          onMouseLeave={() => setHoverDate(null)}
                           className={`h-9 w-9 text-sm transition-colors text-primary-text
                           ${
                             isEdge(day)
@@ -382,6 +255,7 @@ export default function DateRangePicker({
                     )
                   )}
                 </div>
+
                 <div className="flex justify-between mt-2">
                   <CTAButton
                     type="cancel"
@@ -396,9 +270,19 @@ export default function DateRangePicker({
                       }
                     }}
                   />
+                  {startDate && !endDate && hoverDate && (
+                    <div className="font-semibold bg-cta-btn-bg border rounded-lg border-cta-btn-border flex items-center justify-center text-primary-text px-2 py-0.5">
+                      {Math.abs(
+                        Math.round(
+                          (hoverDate - startDate) / (1000 * 60 * 60 * 24)
+                        )
+                      )}{" "}
+                      nights
+                    </div>
+                  )}
                   <CTAButton
                     disabled={!startDate || !endDate}
-                    type="main"
+                    type="success"
                     text="Apply"
                     title="Apply Date Range"
                     icon={null}
@@ -419,7 +303,7 @@ export default function DateRangePicker({
 
             {/* Sidebar */}
             <div className="w-40 p-3">
-              {presets.map(({ label, range }) => {
+              {datePresets.map(({ label, range }) => {
                 const [presetStart, presetEnd] = range();
                 const isSelected =
                   startDate &&

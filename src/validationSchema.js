@@ -114,3 +114,43 @@ export const OwnerFormSchema = z.object({
   is_active: z.boolean().default(true),
   location: z.any().nullable().optional().nullable(),
 });
+
+export const BookingFormSchema = z.object({
+  property_id: z.string({ required_error: "Property is required" }),
+
+  booking_ref: z
+    .string()
+    .max(50, { message: "Booking reference must not exceed 50 characters" }),
+
+  arrival_date: z
+    .string({ required_error: "Arrival date is required" })
+    .refine((val) => !isNaN(Date.parse(val)), {
+      message: "Invalid date format",
+    }),
+
+  departure_date: z
+    .string({ required_error: "Departure date is required" })
+    .refine((val) => !isNaN(Date.parse(val)), {
+      message: "Invalid date format",
+    })
+    .refine(
+      (val, ctx) => {
+        const arrivalDate = new Date(ctx.parent.arrival_date);
+        const departureDate = new Date(val);
+        return departureDate > arrivalDate;
+      },
+      { message: "Departure date must be after arrival date" }
+    ),
+
+  nights: z.preprocess(
+    (val) => (typeof val === "string" ? parseInt(val, 10) : val),
+    z.number().min(1, { message: "Nights must be at least 1" })
+  ),
+
+  lead_guest: z
+    .string()
+    .min(2, { message: "Lead guest name must be at least 2 characters long" })
+    .max(50, {
+      message: "Lead guest name must not be more than 50 characters long",
+    }),
+});

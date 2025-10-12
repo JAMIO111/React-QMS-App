@@ -8,8 +8,8 @@ import { AuthProvider } from "./contexts/AuthProvider.jsx";
 import { UserProvider } from "./contexts/UserProvider.jsx";
 import { OrganisationProvider } from "./contexts/OrganisationProvider.jsx";
 import { ModalProvider } from "./contexts/ModalContext";
-import "./index.css";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
+import "./index.css";
 
 const App = lazy(() => import("./App.jsx"));
 const Dashboard = lazy(() => import("./components/dashboard/Dashboard.jsx"));
@@ -17,7 +17,9 @@ const NonConformance = lazy(() => import("./components/NonConformance.jsx"));
 const BookingsDashboard = lazy(() =>
   import("./components/dashboard/BookingsDashboard.jsx")
 );
-const Projects = lazy(() => import("./components/Projects.jsx"));
+const ClientManagementDashboard = lazy(() =>
+  import("./components/dashboard/ClientManagementDashboard.jsx")
+);
 const Properties = lazy(() => import("./components/Properties.jsx"));
 const PropertyForm = lazy(() => import("./components/PropertyForm.jsx"));
 const OwnerForm = lazy(() => import("./components/OwnerForm.jsx"));
@@ -34,9 +36,7 @@ const SettingsAccount = lazy(() =>
   import("./components/Settings/SettingsAccount.jsx")
 );
 const Employees = lazy(() => import("./components/Employees.jsx"));
-const BookingEntryForm = lazy(() =>
-  import("./components/BookingEntryForm.jsx")
-);
+const BookingForm = lazy(() => import("./components/BookingForm.jsx"));
 const AuthPage = lazy(() => import("./components/AuthPage.jsx"));
 const Login = lazy(() => import("./components/Login.jsx"));
 const SignUp = lazy(() => import("./components/SignUp.jsx"));
@@ -84,14 +84,17 @@ const router = createBrowserRouter([
           { index: true, element: <Dashboard /> },
           { path: "Dashboard", element: <Dashboard /> },
           { path: "Bookings", element: <BookingsDashboard /> },
-          { path: "Non-Conformance/:type", element: <NonConformance /> },
           {
             path: "Bookings/New-Booking",
-            element: <BookingEntryForm />,
+            element: <BookingForm />,
+          },
+          {
+            path: "Bookings/:id",
+            element: <BookingForm />,
           },
           {
             path: "Client-Management",
-            element: <Projects />,
+            element: <ClientManagementDashboard />,
           },
           {
             path: "Client-Management/Properties",

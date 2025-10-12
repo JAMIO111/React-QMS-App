@@ -11,7 +11,6 @@ const BookingRow = ({
   setSelectedItem,
   handleRowClick,
   onOpenModal,
-  costData,
   handleActiveModalType,
   checked,
   onToggle,
@@ -34,11 +33,11 @@ const BookingRow = ({
     setSelectedItem(item);
 
     const rect = ellipsisRef.current.getBoundingClientRect();
-    const modalWidth = 158;
-    const modalHeight = 177;
+    const modalWidth = 176;
+    const modalHeight = 190;
 
     let top = rect.bottom + window.scrollY - 25;
-    let left = rect.left + window.scrollX - 160;
+    let left = rect.left + window.scrollX - 180;
 
     if (left + modalWidth > window.innerWidth)
       left = window.innerWidth - modalWidth - 10;
@@ -54,7 +53,7 @@ const BookingRow = ({
     <tr
       onClick={handleRowClick}
       onDoubleClick={() => navigate(`/Bookings/${item.id}`)}
-      className={`hover:bg-hover-menu-color ${
+      className={`text-primary-text hover:bg-hover-menu-color ${
         selected ? "bg-active-menu-color" : ""
       }`}>
       <td className="p-2 pl-0 text-center">
@@ -66,9 +65,14 @@ const BookingRow = ({
         />
       </td>
       <td className="p-2">{item.booking_ref}</td>
+      <td className="p-2">{item.property_id}</td>
       <td className="p-2">{formattedArrivalDate}</td>
       <td className="p-2">{formattedDepartureDate}</td>
-      <td className="p-2">{item.property_id}</td>
+      <td className="p-2">
+        <div className="text-center flex justify-center font-semibold items-center w-8 h-8 rounded-lg text-primary-text border bg-brand-primary/20 border-brand-primary">
+          {item.nights}
+        </div>
+      </td>
       <td className="p-2">{item.lead_guest ? item.lead_guest : "N/A"}</td>
       <td className="p-2 text-center">{item.adults || "-"}</td>
       <td className="p-2 text-center">{item.children || "-"}</td>

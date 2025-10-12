@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import CTAButton from "./CTAButton";
 import TextInput from "./ui/TextInput";
-import { GiFamilyHouse } from "react-icons/gi";
+import { PiPassword } from "react-icons/pi";
+import { LuTag } from "react-icons/lu";
 
 const KeyCodeForm = ({ defaultValues, onSave, onCancel }) => {
   const [form, setForm] = useState({
@@ -36,11 +37,11 @@ const KeyCodeForm = ({ defaultValues, onSave, onCancel }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-4">
+    <form onSubmit={handleSubmit} className="p-4 flex flex-col gap-4">
       <TextInput
         label="Key Code"
         placeholder="Enter key code..."
-        icon={GiFamilyHouse}
+        icon={PiPassword}
         value={form.code}
         onChange={(e) => setForm({ ...form, code: e.target.value })}
         error={
@@ -53,7 +54,7 @@ const KeyCodeForm = ({ defaultValues, onSave, onCancel }) => {
       <TextInput
         label="Description"
         placeholder="Enter description..."
-        icon={GiFamilyHouse}
+        icon={LuTag}
         value={form.name}
         onChange={(e) => setForm({ ...form, name: e.target.value })}
         error={
@@ -81,7 +82,7 @@ const KeyCodeForm = ({ defaultValues, onSave, onCancel }) => {
         />
         <CTAButton
           width="w-full"
-          type="main"
+          type="success"
           text={defaultValues ? "Update" : "Add"}
           callbackFn={handleSubmit}
         />

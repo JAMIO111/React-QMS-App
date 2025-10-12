@@ -4,7 +4,7 @@ import { useParams } from "react-router-dom";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { NCMFormSchema } from "../validationSchema";
+import { BookingFormSchema } from "../validationSchema";
 import Breadcrumb from "./Breadcrumb";
 import CTAButton from "./CTAButton";
 import RHFComboBox from "./ui/RHFComboBox";
@@ -152,7 +152,7 @@ const BookingEntryForm = () => {
     watch,
     formState: { errors, isSubmitting, isValid, isDirty, touchedFields },
   } = useForm({
-    resolver: zodResolver(NCMFormSchema),
+    resolver: zodResolver(BookingFormSchema),
     mode: "all",
     defaultValues: defaultValues,
     delayError: 500,

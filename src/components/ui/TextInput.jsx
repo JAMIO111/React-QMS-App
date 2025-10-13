@@ -42,7 +42,7 @@ const TextInput = forwardRef(
     return (
       <div className="flex flex-col h-17 min-w-0">
         {label && (
-          <label className="block text-lg font-semibold text-primary-text">
+          <label className="block text-lg font-medium text-primary-text">
             {label}
           </label>
         )}

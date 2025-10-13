@@ -52,6 +52,7 @@ const Dashboard = () => {
               icon={PiFilePlus}
             />
             <DateRangePicker
+              width="w-80"
               onChange={setSelectedRange}
               defaultStartDate={start}
               defaultEndDate={today}

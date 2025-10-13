@@ -144,7 +144,9 @@ const RHFComboBox = ({
   return (
     <div className="w-full">
       <div className="flex flex-col">
-        {label && <span className="text-primary-text">{label}</span>}
+        {label && (
+          <span className="font-medium text-lg text-primary-text">{label}</span>
+        )}
 
         <div ref={dropdownRef} className="relative">
           <div
@@ -193,7 +195,7 @@ const RHFComboBox = ({
                     ? `Please select a ${dependentKey.replace(/_/g, " ")} first`
                     : selectedOption?.name || placeholder
                 }
-                className={`text-primary-text w-full h-full outline-none bg-transparent truncate placeholder:text-sm placeholder:text-muted ${
+                className={`ml-2 text-primary-text w-full h-full outline-none bg-transparent truncate placeholder:text-sm placeholder:text-muted ${
                   !selectedOption && !searchTerm
                     ? "text-sm text-muted"
                     : "text-base text-primary-text"

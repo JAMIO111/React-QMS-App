@@ -198,7 +198,7 @@ const OwnerForm = () => {
           icon={BsActivity}
         />
       </div>
-      <div className="flex flex-col gap-3 h-full">
+      <div className="flex flex-1 flex-col gap-3 h-full">
         <div className="bg-secondary-bg flex-1 rounded-2xl border p-3 border-border-color flex flex-col gap-3overflow-hidden"></div>
         <div className="flex flex-row gap-3 bg-secondary-bg border border-border-color rounded-2xl p-3">
           <CTAButton

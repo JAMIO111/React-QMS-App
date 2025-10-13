@@ -1,35 +1,35 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import supabase from "../supabase-client";
 
-export const useUpsertOwner = () => {
+export const useUpsertBooking = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (ownerData) => {
-      let ownerId = ownerData.id;
+    mutationFn: async (bookingData) => {
+      let bookingId = bookingData.id;
       let result;
 
-      if (ownerId) {
-        // Update existing owner
+      if (bookingId) {
+        // Update existing booking
         const { data, error } = await supabase
-          .from("Owners")
-          .update(ownerData)
-          .eq("id", ownerId)
+          .from("Bookings")
+          .update(bookingData)
+          .eq("id", bookingId)
           .select()
           .single();
 
         if (error) throw error;
         result = data;
       } else {
-        // Insert new owner
+        // Insert new booking
         const { data, error } = await supabase
-          .from("Owners")
-          .insert(ownerData)
+          .from("Bookings")
+          .insert(bookingData)
           .select()
           .single();
 
         if (error) throw error;
-        ownerId = data.id;
+        bookingId = data.id;
         result = data;
       }
 
@@ -37,8 +37,8 @@ export const useUpsertOwner = () => {
     },
 
     onSuccess: () => {
-      queryClient.invalidateQueries(["Owners"]);
-      queryClient.invalidateQueries(["Owner", ownerId]);
+      queryClient.invalidateQueries(["Bookings"]);
+      queryClient.invalidateQueries(["Booking", bookingId]);
     },
   });
 };

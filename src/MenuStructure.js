@@ -10,6 +10,7 @@ import {
 } from "react-icons/bs";
 import { LiaFileInvoiceDollarSolid } from "react-icons/lia";
 import { IoReceiptOutline } from "react-icons/io5";
+import { BsHouseGear } from "react-icons/bs";
 
 export const menuStructure = [
   {
@@ -35,7 +36,7 @@ export const menuStructure = [
   },
   {
     name: "Client Management",
-    icon: BsHouse,
+    icon: BsHouseGear,
     path: "/Client-Management",
     subMenu: [
       {

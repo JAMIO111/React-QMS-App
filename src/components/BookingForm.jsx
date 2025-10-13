@@ -4,20 +4,30 @@ import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { IoIosMan } from "react-icons/io";
 import { FaChildren, FaDog, FaBed, FaUser } from "react-icons/fa6";
-import { TbChairDirector } from "react-icons/tb";
 import { HiPhone } from "react-icons/hi2";
+import { BsHouse } from "react-icons/bs";
 import { MdChildFriendly } from "react-icons/md";
+import { IoReceiptOutline } from "react-icons/io5";
 import { LuFence } from "react-icons/lu";
 import NumericInputGroup from "./NumericInputGroup";
 import TextInput from "./ui/TextInput";
+import { BookingFormSchema } from "../validationSchema";
+import RHFComboBox from "./ui/RHFComboBox";
+import { useProperties } from "@/hooks/useProperties";
+import { useBookingById } from "@/hooks/useBookingById";
+import DateRangePicker from "./ui/DateRangePicker";
+import CTAButton from "./CTAButton";
+import { IoIosUndo } from "react-icons/io";
+import { FaCheck } from "react-icons/fa";
+import { useUpsertBooking } from "@/hooks/useUpsertBooking";
 
 const defaultFormData = {
   property_id: null,
-  arrival_date: "",
-  departure_date: "",
+  arrival_date: null,
+  departure_date: null,
   nights: 0,
   lead_guest: "",
-  guest_contact: "",
+  lead_guest_contact: "",
   adults: 0,
   children: 0,
   infants: 0,
@@ -29,6 +39,10 @@ const defaultFormData = {
 
 const BookingForm = () => {
   const { id } = useParams();
+  const { data: booking } = useBookingById(id !== "New-Booking" ? id : null);
+  const { data: properties } = useProperties();
+
+  const upsertBooking = useUpsertBooking();
 
   const {
     register,
@@ -47,79 +61,184 @@ const BookingForm = () => {
   });
 
   useEffect(() => {
-    if (id && id !== "New-Booking") {
-      // Fetch property details by ID
-      fetch(`/api/properties/${id}`)
-        .then((res) => res.json())
-        .then((data) => setFormData(data));
+    if (id === "New-Booking") {
+      reset(defaultFormData);
+    } else if (booking) {
+      reset(booking);
     }
-  }, [id]);
+  }, [id, booking, reset]);
+
+  console.log(watch("arrival_date"), watch("departure_date"));
 
   return (
     <div className="flex bg-primary-bg flex-1 flex-row p-3 gap-3">
       <div className="flex-1">
         <div className="flex h-full gap-3 flex-1 p-5 flex-col bg-secondary-bg border rounded-2xl border-border-color">
-          <TextInput
-            label="Lead Guest Name"
-            value={formData?.name}
-            placeholder="Enter lead guest name..."
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            icon={FaUser}
+          <Controller
+            name="booking_ref"
+            control={control}
+            render={({ field, fieldState }) => (
+              <TextInput
+                label="Booking Ref."
+                placeholder="Enter booking reference..."
+                {...field}
+                icon={IoReceiptOutline}
+              />
+            )}
           />
-          <TextInput
-            label="Guest Contact"
-            value={formData?.contact}
-            placeholder="Enter guest contact..."
-            onChange={(e) =>
-              setFormData({ ...formData, contact: e.target.value })
+          <Controller
+            name="property_id"
+            control={control}
+            render={({ field, fieldState }) => (
+              <RHFComboBox
+                error={fieldState.error}
+                {...field}
+                name="property_id"
+                control={control}
+                label="Property"
+                options={properties || []}
+                placeholder="Select a property..."
+                icon={BsHouse}
+              />
+            )}
+          />
+          <DateRangePicker
+            label="Booking Dates"
+            switchMode={false}
+            width="w-full"
+            defaultStartDate={
+              watch("arrival_date") ? new Date(watch("arrival_date")) : null
             }
-            icon={HiPhone}
+            defaultEndDate={
+              watch("departure_date") ? new Date(watch("departure_date")) : null
+            }
+            onChange={(range) => {
+              setValue("arrival_date", range.startDate);
+              setValue("departure_date", range.endDate);
+              trigger(["arrival_date", "departure_date"]);
+            }}
+            error={errors.arrival_date || errors.departure_date}
+          />
+          <Controller
+            name="lead_guest"
+            control={control}
+            render={({ field, fieldState }) => (
+              <TextInput
+                label="Lead Guest Name"
+                placeholder="Enter lead guest name..."
+                {...field}
+                error={fieldState.error}
+                icon={FaUser}
+              />
+            )}
+          />
+          <Controller
+            name="lead_guest_contact"
+            control={control}
+            render={({ field, fieldState }) => (
+              <TextInput
+                label="Guest Contact"
+                placeholder="Enter guest contact..."
+                {...field}
+                error={fieldState.error}
+                icon={HiPhone}
+              />
+            )}
           />
         </div>
       </div>
       <div className="flex-1">
         <div className="flex h-full justify-between flex-1 p-3 flex-col bg-secondary-bg border rounded-2xl border-border-color">
-          <NumericInputGroup
-            label="Adults"
-            value={numericValue}
-            onChange={setNumericValue}
-            icon={IoIosMan}
+          <Controller
+            name="adults"
+            control={control}
+            render={({ field, fieldState }) => (
+              <NumericInputGroup
+                label="Adults"
+                value={field.value}
+                onChange={field.onChange}
+                icon={IoIosMan}
+                error={fieldState.error}
+              />
+            )}
           />
-          <NumericInputGroup
-            label="Children"
-            value={numericValue}
-            onChange={setNumericValue}
-            icon={FaChildren}
+          <Controller
+            name="children"
+            control={control}
+            render={({ field, fieldState }) => (
+              <NumericInputGroup
+                label="Children"
+                value={field.value}
+                onChange={field.onChange}
+                icon={FaChildren}
+                error={fieldState.error}
+              />
+            )}
           />
-          <NumericInputGroup
-            label="Infants"
-            value={numericValue}
-            onChange={setNumericValue}
-            icon={MdChildFriendly}
+          <Controller
+            name="infants"
+            control={control}
+            render={({ field, fieldState }) => (
+              <NumericInputGroup
+                label="Infants"
+                value={field.value}
+                onChange={field.onChange}
+                icon={MdChildFriendly}
+                error={fieldState.error}
+              />
+            )}
           />
-          <NumericInputGroup
-            label="Pets"
-            value={numericValue}
-            onChange={setNumericValue}
-            icon={FaDog}
+          <Controller
+            name="pets"
+            control={control}
+            render={({ field, fieldState }) => (
+              <NumericInputGroup
+                label="Pets"
+                value={field.value}
+                onChange={field.onChange}
+                icon={FaDog}
+                error={fieldState.error}
+              />
+            )}
           />
-          <NumericInputGroup
-            label="Highchairs"
-            value={numericValue}
-            onChange={setNumericValue}
-            icon={TbChairDirector}
+          <Controller
+            name="highchairs"
+            control={control}
+            render={({ field, fieldState }) => (
+              <NumericInputGroup
+                label="Highchairs"
+                value={field.value}
+                onChange={field.onChange}
+                icon={MdChildFriendly}
+                error={fieldState.error}
+              />
+            )}
           />
-          <NumericInputGroup
-            label="Cots"
-            value={numericValue}
-            onChange={setNumericValue}
-            icon={FaBed}
+          <Controller
+            name="cots"
+            control={control}
+            render={({ field, fieldState }) => (
+              <NumericInputGroup
+                label="Cots"
+                value={field.value}
+                onChange={field.onChange}
+                icon={FaBed}
+                error={fieldState.error}
+              />
+            )}
           />
-          <NumericInputGroup
-            label="Stairgates"
-            value={numericValue}
-            onChange={setNumericValue}
-            icon={LuFence}
+          <Controller
+            name="stairgates"
+            control={control}
+            render={({ field, fieldState }) => (
+              <NumericInputGroup
+                label="Stairgates"
+                value={field.value}
+                onChange={field.onChange}
+                icon={LuFence}
+                error={fieldState.error}
+              />
+            )}
           />
         </div>
       </div>
@@ -127,9 +246,43 @@ const BookingForm = () => {
         <img
           className="border border-border-color aspect-video rounded-xl"
           src={"/mansion-1.png"}
-          alt={formData?.name}
+          alt={"Property Image"}
         />
         <div className="flex flex-1 flex-col bg-secondary-bg border border-border-color rounded-2xl p-3"></div>
+        <div className="flex flex-row gap-3 bg-secondary-bg border border-border-color rounded-2xl p-3">
+          <CTAButton
+            disabled={!isDirty}
+            width="flex-1"
+            type="cancel"
+            text="Revert Changes"
+            icon={IoIosUndo}
+            callbackFn={() =>
+              id === "New-Booking" ? reset(defaultFormData) : reset(booking)
+            }
+          />
+          <CTAButton
+            disabled={
+              !isDirty || !isValid || isSubmitting || upsertBooking.isLoading
+            }
+            width="flex-1"
+            type="success"
+            text={upsertBooking.isLoading ? "Saving..." : "Save Changes"}
+            icon={FaCheck}
+            callbackFn={handleSubmit(async (data) => {
+              try {
+                const payload = id !== "New-Booking" ? { id, ...data } : data;
+
+                console.log("Submitting payload:", payload);
+                await upsertBooking.mutateAsync(payload);
+
+                navigate("/Bookings");
+              } catch (error) {
+                console.error("Save failed:", error.message);
+                alert("Failed to save booking: " + error.message);
+              }
+            })}
+          />
+        </div>
       </div>
     </div>
   );

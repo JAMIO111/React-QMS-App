@@ -2,16 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import supabase from "../supabase-client";
 
 const fetchProperties = async () => {
-  const { data, error } = await supabase
-    .from("Properties")
-    .select(
-      `
+  const { data, error } = await supabase.from("Properties").select(
+    `
       *,
       KeyCodes(*),
       Packages(*)
     `
-    )
-    .eq("is_active", true);
+  );
   if (error) throw new Error(error.message);
   return data;
 };

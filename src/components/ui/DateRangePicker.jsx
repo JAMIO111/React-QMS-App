@@ -42,15 +42,18 @@ function formatDate(date) {
 }
 
 export default function DateRangePicker({
+  label,
   onChange,
   defaultStartDate,
   defaultEndDate,
+  switchMode = true,
+  width = "w-fit",
 }) {
   const triggerRef = useRef(null);
   const dropdownRef = useRef(null);
   const [hoverDate, setHoverDate] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [mode, setMode] = useState("quick");
+  const [mode, setMode] = useState(switchMode ? "quick" : "static"); // "quick" or "custom"
   const [startDate, setStartDate] = useState(
     defaultStartDate ? normalize(defaultStartDate) : null
   );
@@ -156,16 +159,19 @@ export default function DateRangePicker({
   }
 
   return (
-    <div className="relative w-fit" ref={containerRef}>
+    <div className={`relative ${width}`} ref={containerRef}>
+      {label && (
+        <p className="text-lg font-medium text-primary-text">{label}</p>
+      )}
       <div
         onClick={() => setIsOpen(!isOpen)}
-        className="relative"
+        className="relative w-full"
         ref={triggerRef}>
-        <RxCalendar className="absolute left-3 top-2.5 text-icon-color w-5 h-5" />
+        <RxCalendar className="absolute left-2.5 top-2 text-primary-text w-5 h-5" />
         <input
           type="text"
           readOnly
-          className="border border-border-color text-primary-text pr-4 pl-11 py-1.5 rounded-lg bg-text-input-color w-80 focus:outline-none focus:ring"
+          className="placeholder:normal-case placeholder:text-sm placeholder:text-muted border w-full border-border-color text-primary-text pr-4 pl-11 py-1.5 rounded-lg bg-text-input-color focus:outline-none focus:ring"
           value={
             startDate && endDate
               ? `${formatDate(startDate)} - ${formatDate(endDate)}`
@@ -195,7 +201,7 @@ export default function DateRangePicker({
             onMouseDown={(e) => e.stopPropagation()}
             className="absolute top-12 z-50 flex items-stretch border border-border-color bg-secondary-bg rounded-md shadow-lg w-fit">
             {/* Calendar */}
-            {mode === "custom" && (
+            {mode !== "static" && (
               <div className="flex-1 w-70 p-4">
                 <div className="flex justify-between items-center mb-2">
                   <button
@@ -302,39 +308,41 @@ export default function DateRangePicker({
             )}
 
             {/* Sidebar */}
-            <div className="w-40 p-3">
-              {datePresets.map(({ label, range }) => {
-                const [presetStart, presetEnd] = range();
-                const isSelected =
-                  startDate &&
-                  endDate &&
-                  isSameRange(presetStart, presetEnd, startDate, endDate);
+            {mode === "quick" && (
+              <div className="w-40 p-3">
+                {datePresets.map(({ label, range }) => {
+                  const [presetStart, presetEnd] = range();
+                  const isSelected =
+                    startDate &&
+                    endDate &&
+                    isSameRange(presetStart, presetEnd, startDate, endDate);
 
-                return (
-                  <button
-                    key={label}
-                    className={`block w-full text-left cursor-pointer text-sm text-primary-text py-1 px-2 rounded
+                  return (
+                    <button
+                      key={label}
+                      className={`block w-full text-left cursor-pointer text-sm text-primary-text py-1 px-2 rounded
                   ${
                     isSelected
                       ? "bg-cta-color text-white"
                       : "hover:bg-cta-color/10"
                   }`}
-                    onClick={() => {
-                      const [start, end] = range();
-                      selectPresetRange(start, end);
-                    }}>
-                    {label}
-                  </button>
-                );
-              })}
-              <button
-                className="mt-2 block w-full text-left cursor-pointer text-sm py-1 px-2 bg-primary-text text-primary-bg rounded"
-                onClick={() => {
-                  setMode("custom");
-                }}>
-                Custom Range
-              </button>
-            </div>
+                      onClick={() => {
+                        const [start, end] = range();
+                        selectPresetRange(start, end);
+                      }}>
+                      {label}
+                    </button>
+                  );
+                })}
+                <button
+                  className="mt-2 block w-full text-left cursor-pointer text-sm py-1 px-2 bg-primary-text text-primary-bg rounded"
+                  onClick={() => {
+                    setMode("custom");
+                  }}>
+                  Custom Range
+                </button>
+              </div>
+            )}
           </div>,
           document.body
         )}

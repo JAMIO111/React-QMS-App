@@ -11,7 +11,7 @@ const NumericInputGroup = forwardRef(
         <div className="flex bg-primary-bg items-center rounded-full p-3">
           <Icon className="text-primary-text text-xl" />
         </div>
-        <p className="text-primary-text text-xl px-5 text-left flex-1 font-semibold">
+        <p className="text-primary-text text-xl px-5 text-left flex-1 font-medium">
           {label}
         </p>
         <NumericInput

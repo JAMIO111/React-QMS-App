@@ -1,18 +1,34 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { ArrowUpRight, ArrowDownRight, Users, Wallet } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-const users = [
-  { name: "Gladyce", img: "https://i.pravatar.cc/100?img=1" },
-  { name: "Elbert", img: "https://i.pravatar.cc/100?img=2" },
-  { name: "Joyce", img: "https://i.pravatar.cc/100?img=3" },
-  { name: "Sarah", img: "https://i.pravatar.cc/100?img=4" },
-  { name: "Leo", img: "https://i.pravatar.cc/100?img=5" },
-];
-
-export default function ClientManagementOverviewCard() {
+export default function ClientManagementOverviewCard({
+  owners = [],
+  properties = [],
+}) {
   const navigate = useNavigate();
   const [active, setActive] = useState("Owners");
+  const containerRef = useRef(null);
+  const [visibleCount, setVisibleCount] = useState(0);
+
+  useEffect(() => {
+    const updateVisibleCount = () => {
+      if (!containerRef.current) return;
+
+      const containerWidth = containerRef.current.getBoundingClientRect().width;
+      const avatarWidth = 56; // w-14 = 56px
+      const gap = 36; // gap-6 = 24px
+      const totalPerAvatar = avatarWidth + gap;
+
+      // Add a small buffer so rounding doesn’t undercount
+      const count = Math.floor((containerWidth + gap / 2) / totalPerAvatar) - 1;
+      setVisibleCount(Math.max(count, 1));
+    };
+
+    updateVisibleCount();
+    window.addEventListener("resize", updateVisibleCount);
+    return () => window.removeEventListener("resize", updateVisibleCount);
+  }, []);
 
   return (
     <div className="bg-secondary-bg text-white p-5 rounded-3xl shadow-lg">
@@ -44,10 +60,12 @@ export default function ClientManagementOverviewCard() {
           style={{ zIndex: 1 }}>
           <div className="flex items-center gap-2 mb-2">
             <Users size={22} />
-            <span className="">Owners</span>
+            <span>Owners</span>
           </div>
           <div className="flex items-end justify-between">
-            <span className="text-5xl font-bold">84</span>
+            <span className="text-5xl font-bold">
+              {owners.filter((o) => o.is_active).length}
+            </span>
             <span className="flex items-center gap-1 text-red-400 bg-red-500/10 px-2 py-1 rounded-lg text-sm">
               <ArrowDownRight size={14} />
               36.8%
@@ -59,15 +77,17 @@ export default function ClientManagementOverviewCard() {
         <div
           onClick={() => setActive("Properties")}
           className={`flex-1 relative cursor-pointer p-6 rounded-2xl flex flex-col justify-center gap-3 transition-all duration-300 ${
-            active === "Properties" ? "text-white" : "text-primary-text "
+            active === "Properties" ? "text-white" : "text-primary-text"
           }`}
           style={{ zIndex: 1 }}>
           <div className="flex items-center gap-2 mb-2">
             <Wallet size={22} />
-            <span className="">Properties</span>
+            <span>Properties</span>
           </div>
           <div className="flex items-end justify-between">
-            <span className="text-5xl font-bold">52</span>
+            <span className="text-5xl font-bold">
+              {properties.filter((p) => p.is_active).length}
+            </span>
             <span className="flex items-center gap-1 text-green-400 bg-green-500/10 px-2 py-1 rounded-lg text-sm">
               <ArrowUpRight size={14} />
               36.8%
@@ -76,7 +96,7 @@ export default function ClientManagementOverviewCard() {
         </div>
       </div>
 
-      {/* New customers */}
+      {/* New Customers */}
       <div className="mt-8">
         <p className="text-lg text-primary-text font-medium">
           857 new customers today!
@@ -85,20 +105,37 @@ export default function ClientManagementOverviewCard() {
           Send a welcome message to all new customers.
         </p>
 
-        <div className="flex items-center justify-between">
-          <div className="flex gap-6">
-            {users.map((user, i) => (
-              <div key={i} className="flex flex-col items-center">
+        <div className="flex gap-5 items-center justify-between">
+          <div
+            ref={containerRef}
+            className="flex gap-6 overflow-hidden flex-nowrap flex-grow">
+            {owners.slice(0, visibleCount).map((owner, i) => (
+              <button
+                onClick={() =>
+                  navigate(`/Client-Management/Owners/${owner.id}`)
+                }
+                key={i}
+                className="flex flex-col items-center flex-shrink-0">
                 <img
-                  src={user.img}
-                  alt={user.name}
+                  src={
+                    owner.img || `https://i.pravatar.cc/100?u=${owner.id || i}`
+                  }
+                  alt={owner.first_name || owner.surname}
                   className="w-14 h-14 rounded-full border border-gray-700"
                 />
-                <span className="text-sm text-secondary-text mt-2">
-                  {user.name}
+                <span className="text-sm text-secondary-text mt-2 truncate max-w-[4rem]">
+                  {owner.first_name || owner.surname}
                 </span>
-              </div>
+              </button>
             ))}
+
+            {owners.length > visibleCount && (
+              <div className="flex flex-col items-center justify-start">
+                <div className="w-14 h-14 flex items-center pr-1 text-lg justify-center rounded-full bg-neutral-700">
+                  +{owners.length - visibleCount}
+                </div>
+              </div>
+            )}
           </div>
 
           <button

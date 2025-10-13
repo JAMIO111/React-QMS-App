@@ -84,7 +84,7 @@ export const useUpsertProperty = () => {
 
     onSuccess: () => {
       queryClient.invalidateQueries(["Properties"]);
-      queryClient.invalidateQueries(["Property"]);
+      queryClient.invalidateQueries(["Property", propertyId]);
     },
   });
 };

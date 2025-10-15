@@ -76,14 +76,22 @@ const OwnerDetails = ({ owner }) => {
               <div className="flex flex-row border border-brand-primary/60 p-3 rounded-2xl bg-brand-primary/30 items-center">
                 {/* Avatar */}
                 <div className="relative mr-4">
-                  <div className="min-w-28 h-28 rounded-2xl border border-border-color object-cover bg-primary-bg flex items-center justify-center">
-                    <span className="text-3xl text-secondary-text">
-                      {owner.first_name.charAt(0)}
-                    </span>
-                    <span className="text-3xl text-secondary-text">
-                      {owner.surname.charAt(0)}
-                    </span>
-                  </div>
+                  {owner.avatar ? (
+                    <img
+                      src={owner.avatar}
+                      alt={owner.first_name}
+                      className="w-28 h-28 rounded-2xl border border-border-color object-cover"
+                    />
+                  ) : (
+                    <div className="min-w-28 h-28 rounded-2xl border border-border-color object-cover bg-primary-bg flex items-center justify-center">
+                      <span className="text-3xl text-secondary-text">
+                        {owner.first_name.charAt(0)}
+                      </span>
+                      <span className="text-3xl text-secondary-text">
+                        {owner.surname.charAt(0)}
+                      </span>
+                    </div>
+                  )}
                   <div className="absolute p-0.5 rounded-full bg-primary-bg -top-1 -right-1">
                     <div
                       className={`rounded-full w-4 h-4 ${

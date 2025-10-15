@@ -66,9 +66,24 @@ const PropertyForm = () => {
     delayError: 250,
   });
 
-  const { fields, append, remove, update } = useFieldArray({
+  const {
+    fields: keyCodeFields,
+    append: appendKeyCode,
+    remove: removeKeyCode,
+    update: updateKeyCode,
+  } = useFieldArray({
     control,
     name: "KeyCodes",
+  });
+
+  const {
+    fields: ownerFields,
+    append: appendOwner,
+    remove: removeOwner,
+    update: updateOwner,
+  } = useFieldArray({
+    control,
+    name: "Owners",
   });
 
   useEffect(() => {
@@ -89,7 +104,7 @@ const PropertyForm = () => {
       content: (
         <KeyCodeForm
           onSave={(keyCode) => {
-            append(keyCode);
+            appendKeyCode(keyCode);
             trigger("KeyCodes");
             closeModal();
           }}
@@ -106,7 +121,7 @@ const PropertyForm = () => {
         <KeyCodeForm
           defaultValues={keyCodeItem}
           onSave={(updatedKeyCode) => {
-            update(index, updatedKeyCode); // <-- use update for edits
+            updateKeyCode(index, updatedKeyCode); // <-- use update for edits
             trigger("KeyCodes");
             closeModal();
           }}
@@ -251,11 +266,11 @@ const PropertyForm = () => {
               callbackFn={openAddKeyCodeModal}
             />
           </div>
-          {fields?.length === 0 ? (
+          {keyCodeFields?.length === 0 ? (
             <p className="text-sm text-primary-text">No key codes added yet.</p>
           ) : (
             <ul className="flex flex-col gap-2 max-h-28 overflow-y-auto">
-              {fields.map((field, index) => (
+              {keyCodeFields.map((field, index) => (
                 <li
                   key={field.id}
                   className="flex border border-border-color bg-primary-bg rounded-xl gap-2 p-1.5 mr-2 items-center justify-between">
@@ -266,7 +281,7 @@ const PropertyForm = () => {
                     {field.name}
                   </span>
                   {field.is_private && (
-                    <span className="rounded-lg p-1 text-primary-text px-2 bg-indigo-500/30 border border-indigo-500 font-medium">
+                    <span className="rounded-lg p-1 text-primary-text px-2 bg-pink-500/50  border-pink-500 font-medium">
                       Private
                     </span>
                   )}
@@ -287,7 +302,7 @@ const PropertyForm = () => {
                     height="h-9"
                     type="cancel"
                     className="text-sm text-red-500"
-                    callbackFn={() => remove(index)}
+                    callbackFn={() => removeKeyCode(index)}
                     icon={IoTrashOutline}
                   />
                 </li>
@@ -322,7 +337,11 @@ const PropertyForm = () => {
                 const payload = id !== "New-Property" ? { id, ...data } : data;
 
                 console.log("Submitting payload:", payload);
-                await upsertProperty.mutateAsync(payload);
+                console.log("KeyCodes to submit:", keyCodeFields);
+                await upsertProperty.mutateAsync({
+                  propertyData: payload,
+                  keyCodesForm: keyCodeFields,
+                });
 
                 navigate("/Client-Management/Properties");
               } catch (error) {

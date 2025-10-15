@@ -28,7 +28,7 @@ const ToggleButton = forwardRef(
                 ? "border-error-color hover:border-error-color/70 focus-within:border-error-color focus-within:ring-3 focus-within:ring-error-color/20"
                 : "border-border-color hover:border-border-dark-color focus-within:border-brand-primary focus-within:hover:border-brand-primary"
             }
-            bg-text-input-color focus-within:outline-none focus-within:ring-1 transition`}>
+            bg-text-input-color focus-within:outline-none focus-within:ring-1`}>
           {error ? (
             <MdErrorOutline
               title={error.message}

@@ -202,7 +202,7 @@ export default function DateRangePicker({
             className="absolute top-12 z-50 flex items-stretch border border-border-color bg-secondary-bg rounded-md shadow-lg w-fit">
             {/* Calendar */}
             {mode !== "static" && (
-              <div className="flex-1 w-70 p-4">
+              <div className="flex flex-col flex-1 w-70 p-4">
                 <div className="flex justify-between items-center mb-2">
                   <button
                     className="hover:bg-border-color/20 rounded p-1 text-primary-text"
@@ -262,7 +262,7 @@ export default function DateRangePicker({
                   )}
                 </div>
 
-                <div className="flex justify-between mt-2">
+                <div className="flex flex-1 items-end justify-between mt-2">
                   <CTAButton
                     type="cancel"
                     text="Reset"

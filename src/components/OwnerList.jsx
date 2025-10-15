@@ -35,12 +35,15 @@ const OwnerList = ({ onSelectOwner, selectedOwner, owners }) => {
                       ? " border rounded-2xl border-border-color bg-primary-bg"
                       : ""
                   }`}
-                  onClick={() => onSelectOwner(owner)}>
+                  onClick={() => onSelectOwner(owner)}
+                  onDoubleClick={() =>
+                    navigate(`/Client-Management/Owners/${owner.id}`)
+                  }>
                   {/* Owner Image */}
                   <div className="relative mr-4">
-                    {owner.image ? (
+                    {owner.avatar ? (
                       <img
-                        src={owner.image}
+                        src={owner.avatar}
                         alt={owner.first_name}
                         className="w-12 h-12 rounded-lg border border-border-color object-cover"
                       />

@@ -15,6 +15,7 @@ import CTAButton from "./CTAButton";
 import { IoIosUndo } from "react-icons/io";
 import { FaCheck } from "react-icons/fa";
 import { useUpsertOwner } from "@/hooks/useUpsertOwner";
+import { useQueryClient } from "@tanstack/react-query";
 
 const defaultFormData = {
   id: null,
@@ -33,6 +34,7 @@ const defaultFormData = {
 };
 
 const OwnerForm = () => {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { id } = useParams();
   const { data: owner, isLoading } = useOwnerById(
@@ -79,10 +81,21 @@ const OwnerForm = () => {
   console.log("Invalid fields:", invalidFields);
   console.log("Form Values:", watch());
   console.log("Owner:", owner);
+
+  if (isLoading) return <p>Loading...</p>;
+
   return (
     <div className="flex bg-primary-bg flex-1 flex-row p-3 gap-3">
       <div className="bg-secondary-bg flex-1 rounded-2xl border p-3 border-border-color flex flex-col gap-3 h-full overflow-hidden">
-        <ProfileImageSection noImageText={initials} />
+        <ProfileImageSection
+          user={owner}
+          noImageText={initials}
+          onImageChange={(url) => {
+            // Optional: update your parent state, e.g. via TanStack Query invalidate
+            queryClient.invalidateQueries(["Owner", owner.id]);
+            console.log("New avatar URL:", url);
+          }}
+        />
         <Controller
           name="first_name"
           control={control}

@@ -5,12 +5,12 @@ export const useUpsertProperty = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (propertyData) => {
-      const { KeyCodes, ...property } = propertyData;
+    mutationFn: async ({ propertyData, keyCodesForm }) => {
+      const { KeyCodes = [], ...property } = propertyData;
       let propertyId = property.id;
-
-      // 1️⃣ Upsert or insert the property first
       let result;
+
+      // 1️⃣ Upsert or insert property
       if (propertyId) {
         const { data, error } = await supabase
           .from("Properties")
@@ -31,58 +31,65 @@ export const useUpsertProperty = () => {
         result = data;
       }
 
-      // 2️⃣ Handle KeyCodes (this is where your code goes)
-      if (Array.isArray(KeyCodes)) {
-        const keyCodesWithPropId = KeyCodes.map((k) => ({
-          ...k,
-          property_id: propertyId,
-        }));
+      // 2️⃣ Split KeyCodes: new vs existing
+      const newKeyCodes = [];
+      const existingKeyCodes = [];
 
-        const newKeyCodes = keyCodesWithPropId.filter((k) => !k.id); // new ones
-        const existingKeyCodes = keyCodesWithPropId.filter((k) => k.id); // edits
-
-        // Upsert existing key codes
-        if (existingKeyCodes.length) {
-          const { error: updateError } = await supabase
-            .from("KeyCodes")
-            .upsert(existingKeyCodes, { onConflict: "id" });
-          if (updateError) throw updateError;
+      (keyCodesForm || []).forEach((k) => {
+        if (!k.created_at) {
+          // Treat client-generated temp IDs as new
+          const { id, ...clean } = k;
+          newKeyCodes.push({ ...k, property_id: propertyId });
+        } else {
+          existingKeyCodes.push({ ...k, property_id: propertyId });
         }
+      });
 
-        // Insert new key codes
-        if (newKeyCodes.length) {
-          const { error: insertError } = await supabase
-            .from("KeyCodes")
-            .insert(newKeyCodes);
-          if (insertError) throw insertError;
-        }
-
-        // Delete removed key codes
-        const { data: existingInDb, error: fetchError } = await supabase
+      // 3️⃣ Insert new KeyCodes (Postgres handles created_at)
+      if (newKeyCodes.length > 0) {
+        console.log("Inserting new KeyCodes:", newKeyCodes);
+        const { error: insertError } = await supabase
           .from("KeyCodes")
-          .select("id")
-          .eq("property_id", propertyId);
-        if (fetchError) throw fetchError;
+          .insert(newKeyCodes)
+          .select("id"); // optional: get DB-generated IDs
+        if (insertError) throw insertError;
+      }
 
-        const currentIds = KeyCodes.map((k) => k.id).filter(Boolean);
-        const toDelete = existingInDb.filter((k) => !currentIds.includes(k.id));
+      // 4️⃣ Upsert existing KeyCodes
+      if (existingKeyCodes.length > 0) {
+        console.log("Upserting existing KeyCodes:", existingKeyCodes);
+        const { error: upsertError } = await supabase
+          .from("KeyCodes")
+          .upsert(existingKeyCodes, { onConflict: "id" });
+        if (upsertError) throw upsertError;
+      }
 
-        if (toDelete.length > 0) {
-          const { error: deleteError } = await supabase
-            .from("KeyCodes")
-            .delete()
-            .in(
-              "id",
-              toDelete.map((k) => k.id)
-            );
-          if (deleteError) throw deleteError;
-        }
+      // 5️⃣ Delete removed KeyCodes
+      const { data: existingInDb, error: fetchError } = await supabase
+        .from("KeyCodes")
+        .select("id")
+        .eq("property_id", propertyId);
+      if (fetchError) throw fetchError;
+
+      const currentIds = (keyCodesForm || []).map((k) => k.id).filter(Boolean);
+      const toDelete = existingInDb.filter((k) => !currentIds.includes(k.id));
+
+      if (toDelete.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("KeyCodes")
+          .delete()
+          .in(
+            "id",
+            toDelete.map((k) => k.id)
+          );
+        if (deleteError) throw deleteError;
       }
 
       return result;
     },
 
-    onSuccess: () => {
+    onSuccess: (_, { propertyData }) => {
+      const propertyId = propertyData.id;
       queryClient.invalidateQueries(["Properties"]);
       queryClient.invalidateQueries(["Property", propertyId]);
     },

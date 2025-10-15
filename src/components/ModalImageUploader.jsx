@@ -8,16 +8,18 @@ const ModalImageUploader = ({
   onClose,
   bucket = "images",
   path = "uploads/",
+  table, // e.g., "Owners"
+  userId, // UUID or PK
   existingUrl = null,
-  onUploadComplete, // callback with new public URL
+  onUploadComplete,
 }) => {
   const [preview, setPreview] = useState(existingUrl || null);
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Reset when modal opens
   useEffect(() => {
     if (isOpen) {
+      // If existingUrl is null (after delete), clear preview
       setPreview(existingUrl || null);
       setFile(null);
       setLoading(false);
@@ -32,55 +34,80 @@ const ModalImageUploader = ({
     }
   };
 
+  const handleClose = () => {
+    setPreview(existingUrl || null);
+    onClose();
+  };
+
   const handleUpload = async () => {
     if (!file) return;
     setLoading(true);
 
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${crypto.randomUUID()}.${fileExt}`;
-    const filePath = `${path}${fileName}`;
+    try {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `${path}${fileName}`;
 
-    // Upload to Supabase
-    const { error: uploadError } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, file, { upsert: true });
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file, { upsert: true });
 
-    if (uploadError) {
-      alert("Upload failed: " + uploadError.message);
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from(bucket).getPublicUrl(filePath);
+
+      // Update DB record if applicable
+      if (table && userId) {
+        const { error: updateError } = await supabase
+          .from(table)
+          .update({ avatar: publicUrl })
+          .eq("id", userId);
+
+        if (updateError) throw updateError;
+      }
+
       setLoading(false);
-      return;
+      onUploadComplete(publicUrl);
+      handleClose();
+    } catch (err) {
+      console.error(err);
+      alert(`Upload failed: ${err.message}`);
+      setLoading(false);
     }
-
-    // Get public URL
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from(bucket).getPublicUrl(filePath);
-
-    // Optionally delete old file
-    if (existingUrl && existingUrl !== publicUrl) {
-      const oldPath = existingUrl.split(`${bucket}/`)[1];
-      await supabase.storage.from(bucket).remove([oldPath]);
-    }
-
-    setLoading(false);
-    onUploadComplete(publicUrl);
-    onClose();
   };
 
   const handleRemove = async () => {
-    if (!existingUrl) {
+    if (!preview) return;
+
+    setLoading(true);
+
+    try {
+      // Delete file from storage
+      const oldPath = preview.split(`${bucket}/`)[1];
+      await supabase.storage.from(bucket).remove([oldPath]);
+
+      // Update table/avatar field
+      if (table && userId) {
+        await supabase.from(table).update({ avatar: null }).eq("id", userId);
+      }
+
+      // Clear local state
       setPreview(null);
       setFile(null);
-      return;
+
+      // Notify parent AFTER closing
+      if (onUploadComplete) onUploadComplete(null);
+    } catch (error) {
+      console.error("Error removing avatar:", error);
+      alert("Failed to remove avatar: " + error.message);
+    } finally {
+      setPreview(existingUrl || null);
+      setLoading(false);
     }
-    setLoading(true);
-    const oldPath = existingUrl.split(`${bucket}/`)[1];
-    await supabase.storage.from(bucket).remove([oldPath]);
-    setLoading(false);
-    setPreview(null);
-    setFile(null);
-    onUploadComplete(null);
-    onClose();
   };
 
   if (!isOpen) return null;
@@ -88,18 +115,17 @@ const ModalImageUploader = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-secondary-bg rounded-2xl w-full max-w-md shadow-lg p-5 relative">
-        {/* Close */}
         <button
-          onClick={onClose}
-          className="absolute top-3 cursor-pointer right-3 text-gray-500 hover:text-gray-700">
+          onClick={handleClose}
+          disabled={loading}
+          className="absolute top-3 right-3 text-gray-500 hover:text-gray-700">
           <IoClose size={22} />
         </button>
 
-        <h2 className="text-lg font-semibold text-primary-text mb-4">
-          Upload Image
+        <h2 className="text-lg font-semibold mb-4 text-primary-text">
+          {preview ? "Update Image" : "Upload Image"}
         </h2>
 
-        {/* Preview */}
         {preview ? (
           <div className="relative">
             <img
@@ -110,12 +136,12 @@ const ModalImageUploader = ({
             <button
               onClick={handleRemove}
               disabled={loading}
-              className="absolute top-2 cursor-pointer right-2 bg-white/80 p-2 rounded-full hover:bg-white">
+              className="absolute top-2 right-2 bg-white/80 p-2 rounded-lg hover:bg-tertiary-bg transition">
               <IoTrash className="text-red-500" size={20} />
             </button>
           </div>
         ) : (
-          <label className="flex flex-col items-center justify-center border-2 border-dashed border-border-color rounded-xl h-64 cursor-pointer hover:bg-gray-50">
+          <label className="flex flex-col items-center justify-center border-2 border-dashed border-border-color rounded-xl h-64 cursor-pointer hover:bg-gray-50 transition">
             <IoCloudUpload size={40} className="text-gray-400 mb-2" />
             <p className="text-gray-500 text-sm">Click to upload</p>
             <input
@@ -127,14 +153,18 @@ const ModalImageUploader = ({
           </label>
         )}
 
-        {/* Buttons */}
         <div className="flex justify-end mt-4 gap-2">
-          <CTAButton type="cancel" callbackFn={onClose} text="Cancel" />
+          <CTAButton
+            type="cancel"
+            callbackFn={handleClose}
+            text="Cancel"
+            disabled={loading}
+          />
           <CTAButton
             type="success"
             callbackFn={handleUpload}
             disabled={!file || loading}
-            text={loading ? "Saving..." : "Save"}
+            text={loading ? "Uploading..." : "Upload"}
           />
         </div>
       </div>

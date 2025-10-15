@@ -53,7 +53,7 @@
   font-family: "Poppins";
 }
 .light {
-  --brand-primary: var(--color-blue-700);
+  --brand-primary: var(--color-violet-700);
   --brand-secondary: var(--color-orange-700);
   --primary-bg: 240, 240, 243;
   --secondary-bg: 248, 248, 248;
@@ -71,25 +71,25 @@
   --icon: 80, 80, 80;
   --hover-menu: 235, 235, 240;
   --active-menu: 225, 225, 245;
-  --cta-color: var(--color-indigo-700);
+  --cta-color: var(--color-violet-700);
   --muted-text: 120, 120, 120;
   --shadow-color: 220, 220, 220;
-  --cta-btn-bg: var(--color-indigo-200);
-  --cta-btn-bg-hover: var(--color-indigo-300);
-  --cta-btn-border: var(--color-indigo-400);
-  --cta-btn-border-hover: var(--color-indigo-600);
+  --cta-btn-bg: var(--color-violet-300);
+  --cta-btn-bg-hover: var(--color-violet-400);
+  --cta-btn-border: var(--color-violet-500);
+  --cta-btn-border-hover: var(--color-violet-600);
   --neutral-btn-bg: 240, 240, 240;
   --neutral-btn-bg-hover: 230, 230, 230;
   --neutral-btn-border: 200, 200, 200;
   --neutral-btn-border-hover: 160, 160, 160;
-  --error-btn-bg: var(--color-red-100);
-  --error-btn-bg-hover: var(--color-red-200);
-  --error-btn-border: var(--color-red-300);
-  --error-btn-border-hover: var(--color-red-400);
-  --success-btn-bg: var(--color-green-200);
-  --success-btn-bg-hover: var(--color-green-300);
-  --success-btn-border: var(--color-green-400);
-  --success-btn-border-hover: var(--color-green-500);
+  --error-btn-bg: var(--color-red-300);
+  --error-btn-bg-hover: var(--color-red-400);
+  --error-btn-border: var(--color-red-500);
+  --error-btn-border-hover: var(--color-red-600);
+  --success-btn-bg: var(--color-green-300);
+  --success-btn-bg-hover: var(--color-green-400);
+  --success-btn-border: var(--color-green-500);
+  --success-btn-border-hover: var(--color-green-600);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -112,7 +112,7 @@
   --chart-10-rgb: 255, 102, 196; /* Magenta */
 }
 .dark {
-  --brand-primary: var(--color-blue-400);
+  --brand-primary: var(--color-violet-400);
   --brand-secondary: var(--color-orange-400);
   --primary-bg: 20, 20, 22;
   --secondary-bg: 24, 24, 24;

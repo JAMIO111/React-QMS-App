@@ -36,13 +36,20 @@ const Navbar = () => {
           className={`flex justify-start items-center py-3 border-b-1 border-border-color ${
             isMenuExpanded ? "flex-row mx-3" : "flex-col gap-3"
           }`}>
-          <div className="flex bg-white rounded border border-border-color p-1 items-center justify-start gap-3">
-            <img className="w-5 h-5 rounded-lg" src={Logo} alt="Logo" />
+          <div className="flex bg-primary-bg border border-primary-text rounded-xl p-0.5 items-center justify-start gap-3">
+            <div className="flex justify-center items-center bg-white rounded-[10px] p-1">
+              <img className="w-6 h-6" src={Logo} alt="Logo" />
+            </div>
           </div>
           {isMenuExpanded && (
-            <h1 className="font-semibold ml-3 flex-1 text-primary-text">
-              Dryden Services Ltd
-            </h1>
+            <div className="flex flex-col justify-between items-start flex-1">
+              <h1 className="ml-3 flex-1 text-sm text-primary-text">
+                Dryden Services Ltd
+              </h1>
+              <p className="ml-3 flex-1 text-xs text-secondary-text">
+                Business Portal
+              </p>
+            </div>
           )}
           <button
             title={isMenuExpanded ? "Hide Menu" : "Expand Menu"}

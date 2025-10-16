@@ -5,38 +5,13 @@ import { useNotification } from "../contexts/NotificationProvider";
 import { CgClose } from "react-icons/cg";
 import SlidingSelectorGeneric from "./ui/SlidingSelectorGeneric";
 import NotificationCard from "./NotificationCard";
-import supabase from "../supabase-client";
-import { useUser } from "../contexts/UserProvider";
-import { useQuery } from "@tanstack/react-query";
+import { useNotifications } from "../hooks/useNotifications";
 
 const NotificationPane = () => {
   const { isOpen, content, closePane } = useNotification();
   const [typeFilter, setTypeFilter] = useState("All");
-  const { profile } = useUser();
 
-  const {
-    data: notifications,
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery({
-    queryKey: ["userNotifications", profile?.auth_id],
-    queryFn: async () => {
-      if (!profile?.auth_id) return [];
-      const { data, error } = await supabase.rpc("get_user_notifications", {
-        user_id: profile.auth_id,
-      });
-      if (error) {
-        console.error("RPC Error:", error);
-        throw new Error(error.message);
-      }
-      if (!data || data.length === 0) {
-        console.warn("RPC returned no data.");
-      }
-      return data;
-    },
-    enabled: !!profile?.auth_id, // don't run until auth ID is available
-  });
+  const { notifications, isLoading, isError } = useNotifications();
 
   if (typeof window === "undefined") return null;
   const root = document.getElementById("notification-root");

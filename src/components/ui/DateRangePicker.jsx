@@ -167,11 +167,11 @@ export default function DateRangePicker({
         onClick={() => setIsOpen(!isOpen)}
         className="relative w-full"
         ref={triggerRef}>
-        <RxCalendar className="absolute left-2.5 top-2 text-primary-text w-5 h-5" />
+        <RxCalendar className="absolute cursor-pointer left-2.5 top-2 text-primary-text w-5 h-5" />
         <input
           type="text"
           readOnly
-          className="placeholder:normal-case placeholder:text-sm placeholder:text-muted border w-full border-border-color text-primary-text pr-4 pl-11 py-1.5 rounded-lg bg-text-input-color focus:outline-none focus:ring"
+          className="placeholder:normal-case placeholder:text-sm placeholder:text-muted w-full cursor-pointer shadow-s hover:shadow-m text-primary-text pr-4 pl-11 py-1.5 rounded-lg bg-text-input-color focus:outline-none focus:border-1 focus:border-cta-color"
           value={
             startDate && endDate
               ? `${formatDate(startDate)} - ${formatDate(endDate)}`

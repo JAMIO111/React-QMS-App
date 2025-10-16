@@ -36,7 +36,7 @@ export const useBookings = ({
       },
     ],
     queryFn: async () => {
-      let query = supabase.from("Bookings").select("*", { count: "exact" });
+      let query = supabase.from("v_bookings").select("*", { count: "exact" });
       query = query
         .order(sortColumn, { ascending: sortOrder === "asc" })
         .range(from, to);

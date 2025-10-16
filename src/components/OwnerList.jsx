@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { MdPeopleOutline } from "react-icons/md";
-import { IoPersonAddOutline } from "react-icons/io5";
+import { AiOutlineUserAdd } from "react-icons/ai";
 import CTAButton from "./CTAButton";
 import { useNavigate } from "react-router-dom";
 
@@ -92,7 +92,7 @@ const OwnerList = ({ onSelectOwner, selectedOwner, owners }) => {
           width="w-full"
           type="main"
           text="Add New Owner"
-          icon={IoPersonAddOutline}
+          icon={AiOutlineUserAdd}
           callbackFn={() => navigate("/Client-Management/Owners/New-Owner")}
         />
       </div>

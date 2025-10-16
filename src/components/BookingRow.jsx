@@ -19,10 +19,13 @@ const BookingRow = ({
   const ellipsisRef = useRef(null);
   const selected = selectedItem?.id === item.id;
 
-  const formattedArrivalDate = format(new Date(item.arrival_date), "dd MMM yy");
+  const formattedArrivalDate = format(
+    new Date(item.arrival_date),
+    "EEE, d MMM yy"
+  );
   const formattedDepartureDate = format(
     new Date(item.departure_date),
-    "dd MMM yy"
+    "EEE, d MMM yy"
   );
 
   const { data: statusOptions } = useStatusOptions();
@@ -62,10 +65,12 @@ const BookingRow = ({
           type="checkbox"
           checked={checked}
           onChange={() => onToggle(item)}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
         />
       </td>
       <td className="p-2">{item.booking_ref}</td>
-      <td className="p-2">{item.property_id}</td>
+      <td className="p-2">{item.property_name}</td>
       <td className="p-2">{formattedArrivalDate}</td>
       <td className="p-2">{formattedDepartureDate}</td>
       <td className="p-2">
@@ -77,10 +82,13 @@ const BookingRow = ({
       <td className="p-2 text-center">{item.adults || "-"}</td>
       <td className="p-2 text-center">{item.children || "-"}</td>
       <td className="p-2 text-center">{item.infants || "-"}</td>
+      <td className="p-2 text-center">{item.pets || "-"}</td>
+
       <td className="p-2 text-center">
         <button
           ref={ellipsisRef}
           onClick={handleEllipsisClick}
+          onDoubleClick={(e) => e.stopPropagation()}
           className="cursor-pointer flex hover:bg-cta-btn-bg border-cta-btn-border w-8 h-8 rounded-lg justify-center items-center">
           <IoEllipsisVertical />
         </button>

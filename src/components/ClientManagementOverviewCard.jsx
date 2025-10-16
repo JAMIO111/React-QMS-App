@@ -31,7 +31,7 @@ export default function ClientManagementOverviewCard({
   }, []);
 
   return (
-    <div className="bg-secondary-bg text-white p-5 rounded-3xl shadow-lg">
+    <div className="bg-secondary-bg shadow-m text-white p-5 rounded-3xl">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl text-primary-text font-semibold">Overview</h2>
@@ -54,7 +54,7 @@ export default function ClientManagementOverviewCard({
         {/* Owners */}
         <div
           onClick={() => setActive("Owners")}
-          className={`flex-1 relative cursor-pointer p-6 rounded-2xl flex flex-col justify-center gap-3 transition-all duration-300 ${
+          className={`flex-1 relative cursor-pointer p-4 rounded-2xl flex flex-col justify-center gap-3 transition-all duration-300 ${
             active === "Owners" ? "text-white" : "text-primary-text"
           }`}
           style={{ zIndex: 1 }}>
@@ -76,7 +76,7 @@ export default function ClientManagementOverviewCard({
         {/* Properties */}
         <div
           onClick={() => setActive("Properties")}
-          className={`flex-1 relative cursor-pointer p-6 rounded-2xl flex flex-col justify-center gap-3 transition-all duration-300 ${
+          className={`flex-1 relative cursor-pointer p-4 rounded-2xl flex flex-col justify-center gap-3 transition-all duration-300 ${
             active === "Properties" ? "text-white" : "text-primary-text"
           }`}
           style={{ zIndex: 1 }}>
@@ -97,7 +97,7 @@ export default function ClientManagementOverviewCard({
       </div>
 
       {/* New Customers */}
-      <div className="mt-8">
+      <div className="mt-4">
         <p className="text-lg text-primary-text font-medium">
           857 new customers today!
         </p>
@@ -144,7 +144,7 @@ export default function ClientManagementOverviewCard({
                 ? navigate("/Client-Management/Owners")
                 : navigate("/Client-Management/Properties")
             }
-            className="bg-neutral-800 flex gap-3 p-4 rounded-full hover:bg-neutral-700 transition">
+            className="bg-neutral-800 shadow-s flex gap-3 p-4 rounded-full hover:bg-neutral-700 transition">
             <ArrowUpRight /> View All {active}
           </button>
         </div>

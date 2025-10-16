@@ -1,6 +1,7 @@
 import ClientManagementOverviewCard from "@components/ClientManagementOverviewCard";
 import { useOwners } from "@/hooks/useOwners";
 import { useProperties } from "@/hooks/useProperties";
+import LeadsList from "../LeadsList";
 
 const ClientManagementDashboard = () => {
   const { data: owners, isLoading, error } = useOwners();
@@ -14,11 +15,13 @@ const ClientManagementDashboard = () => {
   if (error || errorProperties) return <div>Error loading data</div>;
 
   return (
-    <div className="h-full flex flex-1 flex-row bg-primary-bg p-3 min-w-0 overflow-hidden">
+    <div className="h-full items-stretch flex flex-1 gap-4 flex-row bg-primary-bg p-4 min-w-0 overflow-hidden">
       <div className="flex flex-col flex-1">
         <ClientManagementOverviewCard owners={owners} properties={properties} />
       </div>
-      <div className="flex-1"></div>
+      <div className="flex-1">
+        <LeadsList />
+      </div>
     </div>
   );
 };

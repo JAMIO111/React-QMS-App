@@ -95,7 +95,7 @@ const BookingsTable = ({
   const rows = Array.isArray(data?.data) ? data.data : [];
 
   return (
-    <div className="flex flex-col relative border border-border-color rounded-2xl shadow-md max-h-[100vh] overflow-y-auto min-h-[14px]">
+    <div className="flex shadow-md flex-col border relative border-border-color rounded-2xl max-h-[100vh] overflow-y-auto min-h-[14px]">
       <div className="text-[13px] bg-secondary-bg overflow-y-auto  relative">
         <table className="w-full border-collapse">
           <thead>
@@ -157,6 +157,11 @@ const BookingsTable = ({
               <th>
                 <div className="table-header">
                   <AiOutlineTag /> Infants
+                </div>
+              </th>
+              <th>
+                <div className="table-header">
+                  <AiOutlineTag /> Pets
                 </div>
               </th>
               <th>

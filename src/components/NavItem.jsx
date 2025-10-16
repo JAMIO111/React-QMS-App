@@ -24,8 +24,8 @@ const NavItem = ({
         className={({ isActive }) =>
           `flex gap-3 w-full rounded-lg ml-2 p-2 h-9 items-center ${
             isActive
-              ? "text-white hover:bg-cta-color/80 bg-cta-color"
-              : "text-primary-text hover:bg-cta-color/10"
+              ? "text-white border border-cta-color hover:bg-cta-color/80 bg-cta-color/50"
+              : "text-primary-text hover:border border-cta-color/20 hover:bg-cta-color/10"
           }`
         }
         onClick={closeMenu}

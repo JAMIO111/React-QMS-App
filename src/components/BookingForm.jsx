@@ -71,185 +71,178 @@ const BookingForm = () => {
   console.log(watch("arrival_date"), watch("departure_date"));
 
   return (
-    <div className="flex bg-primary-bg flex-1 flex-row p-3 gap-3">
-      <div className="flex-1">
-        <div className="flex h-full gap-3 flex-1 p-5 flex-col bg-secondary-bg border rounded-2xl border-border-color">
-          <Controller
-            name="booking_ref"
-            control={control}
-            render={({ field, fieldState }) => (
-              <TextInput
-                label="Booking Ref."
-                placeholder="Enter booking reference..."
-                {...field}
-                icon={IoReceiptOutline}
-              />
-            )}
-          />
-          <Controller
-            name="property_id"
-            control={control}
-            render={({ field, fieldState }) => (
-              <RHFComboBox
-                error={fieldState.error}
-                {...field}
-                name="property_id"
-                control={control}
-                label="Property"
-                options={properties || []}
-                placeholder="Select a property..."
-                icon={BsHouse}
-              />
-            )}
-          />
-          <DateRangePicker
-            label="Booking Dates"
-            switchMode={false}
-            width="w-full"
-            defaultStartDate={
-              watch("arrival_date") ? new Date(watch("arrival_date")) : null
-            }
-            defaultEndDate={
-              watch("departure_date") ? new Date(watch("departure_date")) : null
-            }
-            onChange={(range) => {
-              setValue("arrival_date", range.startDate);
-              setValue("departure_date", range.endDate);
-              trigger(["arrival_date", "departure_date"]);
-            }}
-            error={errors.arrival_date || errors.departure_date}
-          />
-          <Controller
-            name="lead_guest"
-            control={control}
-            render={({ field, fieldState }) => (
-              <TextInput
-                label="Lead Guest Name"
-                placeholder="Enter lead guest name..."
-                {...field}
-                error={fieldState.error}
-                icon={FaUser}
-              />
-            )}
-          />
-          <Controller
-            name="lead_guest_contact"
-            control={control}
-            render={({ field, fieldState }) => (
-              <TextInput
-                label="Guest Contact"
-                placeholder="Enter guest contact..."
-                {...field}
-                error={fieldState.error}
-                icon={HiPhone}
-              />
-            )}
-          />
-        </div>
-      </div>
-      <div className="flex-1">
-        <div className="flex h-full justify-between flex-1 p-3 flex-col bg-secondary-bg border rounded-2xl border-border-color">
-          <Controller
-            name="adults"
-            control={control}
-            render={({ field, fieldState }) => (
-              <NumericInputGroup
-                label="Adults"
-                value={field.value}
-                onChange={field.onChange}
-                icon={IoIosMan}
-                error={fieldState.error}
-              />
-            )}
-          />
-          <Controller
-            name="children"
-            control={control}
-            render={({ field, fieldState }) => (
-              <NumericInputGroup
-                label="Children"
-                value={field.value}
-                onChange={field.onChange}
-                icon={FaChildren}
-                error={fieldState.error}
-              />
-            )}
-          />
-          <Controller
-            name="infants"
-            control={control}
-            render={({ field, fieldState }) => (
-              <NumericInputGroup
-                label="Infants"
-                value={field.value}
-                onChange={field.onChange}
-                icon={MdChildFriendly}
-                error={fieldState.error}
-              />
-            )}
-          />
-          <Controller
-            name="pets"
-            control={control}
-            render={({ field, fieldState }) => (
-              <NumericInputGroup
-                label="Pets"
-                value={field.value}
-                onChange={field.onChange}
-                icon={FaDog}
-                error={fieldState.error}
-              />
-            )}
-          />
-          <Controller
-            name="highchairs"
-            control={control}
-            render={({ field, fieldState }) => (
-              <NumericInputGroup
-                label="Highchairs"
-                value={field.value}
-                onChange={field.onChange}
-                icon={MdChildFriendly}
-                error={fieldState.error}
-              />
-            )}
-          />
-          <Controller
-            name="cots"
-            control={control}
-            render={({ field, fieldState }) => (
-              <NumericInputGroup
-                label="Cots"
-                value={field.value}
-                onChange={field.onChange}
-                icon={FaBed}
-                error={fieldState.error}
-              />
-            )}
-          />
-          <Controller
-            name="stairgates"
-            control={control}
-            render={({ field, fieldState }) => (
-              <NumericInputGroup
-                label="Stairgates"
-                value={field.value}
-                onChange={field.onChange}
-                icon={LuFence}
-                error={fieldState.error}
-              />
-            )}
-          />
-        </div>
-      </div>
-      <div className="flex flex-1 gap-3 flex-col">
-        <img
-          className="border border-border-color aspect-video rounded-xl"
-          src={"/mansion-1.png"}
-          alt={"Property Image"}
+    <div className="flex bg-primary-bg flex-1 flex-row p-4 gap-4">
+      <div className="shadow-m rounded-2xl flex h-full gap-3 flex-1 p-5 flex-col bg-secondary-bg border border-border-color">
+        <Controller
+          name="booking_ref"
+          control={control}
+          render={({ field, fieldState }) => (
+            <TextInput
+              label="Booking Ref."
+              placeholder="Enter booking reference..."
+              {...field}
+              icon={IoReceiptOutline}
+            />
+          )}
         />
-        <div className="flex flex-1 flex-col bg-secondary-bg border border-border-color rounded-2xl p-3"></div>
-        <div className="flex flex-row gap-3 bg-secondary-bg border border-border-color rounded-2xl p-3">
+        <Controller
+          name="property_id"
+          control={control}
+          render={({ field, fieldState }) => (
+            <RHFComboBox
+              error={fieldState.error}
+              {...field}
+              name="property_id"
+              control={control}
+              label="Property"
+              options={properties || []}
+              placeholder="Select a property..."
+              icon={BsHouse}
+            />
+          )}
+        />
+        <DateRangePicker
+          label="Booking Dates"
+          switchMode={false}
+          width="w-full"
+          defaultStartDate={
+            watch("arrival_date") ? new Date(watch("arrival_date")) : null
+          }
+          defaultEndDate={
+            watch("departure_date") ? new Date(watch("departure_date")) : null
+          }
+          onChange={(range) => {
+            setValue("arrival_date", range.startDate);
+            setValue("departure_date", range.endDate);
+            trigger(["arrival_date", "departure_date"]);
+          }}
+          error={errors.arrival_date || errors.departure_date}
+        />
+        <Controller
+          name="lead_guest"
+          control={control}
+          render={({ field, fieldState }) => (
+            <TextInput
+              label="Lead Guest Name"
+              placeholder="Enter lead guest name..."
+              {...field}
+              error={fieldState.error}
+              icon={FaUser}
+            />
+          )}
+        />
+        <Controller
+          name="lead_guest_contact"
+          control={control}
+          render={({ field, fieldState }) => (
+            <TextInput
+              label="Guest Contact"
+              placeholder="Enter guest contact..."
+              {...field}
+              error={fieldState.error}
+              icon={HiPhone}
+            />
+          )}
+        />
+      </div>
+
+      <div className="flex shadow-m h-full justify-between p-3 flex-col bg-secondary-bg border rounded-2xl border-border-color">
+        <Controller
+          name="adults"
+          control={control}
+          render={({ field, fieldState }) => (
+            <NumericInputGroup
+              label="Adults"
+              value={field.value}
+              onChange={field.onChange}
+              icon={IoIosMan}
+              error={fieldState.error}
+            />
+          )}
+        />
+        <Controller
+          name="children"
+          control={control}
+          render={({ field, fieldState }) => (
+            <NumericInputGroup
+              label="Children"
+              value={field.value}
+              onChange={field.onChange}
+              icon={FaChildren}
+              error={fieldState.error}
+            />
+          )}
+        />
+        <Controller
+          name="infants"
+          control={control}
+          render={({ field, fieldState }) => (
+            <NumericInputGroup
+              label="Infants"
+              value={field.value}
+              onChange={field.onChange}
+              icon={MdChildFriendly}
+              error={fieldState.error}
+            />
+          )}
+        />
+        <Controller
+          name="pets"
+          control={control}
+          render={({ field, fieldState }) => (
+            <NumericInputGroup
+              label="Pets"
+              value={field.value}
+              onChange={field.onChange}
+              icon={FaDog}
+              error={fieldState.error}
+            />
+          )}
+        />
+        <Controller
+          name="highchairs"
+          control={control}
+          render={({ field, fieldState }) => (
+            <NumericInputGroup
+              label="Highchairs"
+              value={field.value}
+              onChange={field.onChange}
+              icon={MdChildFriendly}
+              error={fieldState.error}
+            />
+          )}
+        />
+        <Controller
+          name="cots"
+          control={control}
+          render={({ field, fieldState }) => (
+            <NumericInputGroup
+              label="Cots"
+              value={field.value}
+              onChange={field.onChange}
+              icon={FaBed}
+              error={fieldState.error}
+            />
+          )}
+        />
+        <Controller
+          name="stairgates"
+          control={control}
+          render={({ field, fieldState }) => (
+            <NumericInputGroup
+              label="Stairgates"
+              value={field.value}
+              onChange={field.onChange}
+              icon={LuFence}
+              error={fieldState.error}
+            />
+          )}
+        />
+      </div>
+
+      <div className="flex flex-1 gap-4 flex-col">
+        <div className="flex flex-1 shadow-m flex-col bg-secondary-bg border border-border-color rounded-2xl p-3"></div>
+        <div className="flex flex-row shadow-m gap-3 bg-secondary-bg border border-border-color rounded-2xl p-3">
           <CTAButton
             disabled={!isDirty}
             width="flex-1"

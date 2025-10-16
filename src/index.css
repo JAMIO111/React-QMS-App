@@ -7,6 +7,9 @@
   --color-primary-bg: rgba(var(--primary-bg));
   --color-secondary-bg: rgba(var(--secondary-bg));
   --color-tertiary-bg: rgba(var(--tertiary-bg));
+  --color-bg-dark: oklch(var(--bg-dark));
+  --color-bg: oklch(var(--bg));
+  --color-bg-light: oklch(var(--bg-light));
   --color-primary-text: rgba(var(--primary-text));
   --color-secondary-text: rgba(var(--secondary-text));
   --color-border-color: rgba(var(--border));
@@ -46,6 +49,12 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --shadow-s: inset 0 1px 2px #ffffff30, 0 1px 2px #00000030,
+    0 2px 4px #00000015;
+  --shadow-m: inset 0 1px 2px #ffffff50, 0 2px 4px #00000030,
+    0 4px 8px #00000015;
+  --shadow-l: inset 0 1px 2px #ffffff70, 0 4px 6px #00000030,
+    0 6px 10px #00000015;
 }
 
 * {
@@ -56,8 +65,11 @@
   --brand-primary: var(--color-violet-700);
   --brand-secondary: var(--color-orange-700);
   --primary-bg: 240, 240, 243;
-  --secondary-bg: 248, 248, 248;
+  --secondary-bg: 246, 246, 246;
   --tertiary-bg: 250, 250, 250;
+  --bg-dark: 0.92, 0, 264;
+  --bg: 0.96, 0, 264;
+  --bg-light: 1, 0, 264;
   --primary-text: 40, 51, 60;
   --secondary-text: 80, 80, 80;
   --border: 215, 215, 215;
@@ -117,6 +129,9 @@
   --primary-bg: 20, 20, 22;
   --secondary-bg: 24, 24, 24;
   --tertiary-bg: 30, 30, 30;
+  --bg-dark: 0.1, 0, 264;
+  --bg: 0.2, 0, 264;
+  --bg-light: 0.3, 0, 264;
   --primary-text: 225, 225, 225;
   --secondary-text: 150, 150, 150;
   --border: 35, 35, 35;

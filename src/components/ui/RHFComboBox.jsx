@@ -143,23 +143,23 @@ const RHFComboBox = ({
 
   return (
     <div className="w-full">
-      <div className="flex flex-col">
+      <div className="flex gap-1 flex-col">
         {label && (
-          <span className="font-medium text-lg text-primary-text">{label}</span>
+          <span className="font-medium text-primary-text">{label}</span>
         )}
 
         <div ref={dropdownRef} className="relative">
           <div
             onClick={() => setIsOpen((prev) => !prev)}
             className={`${
-              error && "border-error-color hover:border-error-color/70"
+              error && "border border-error-color hover:border-error-color/70"
             } ${
               isOpen
                 ? error
-                  ? "ring-3 ring-error-color/20"
-                  : "border-brand-primary hover:border-brand-primary"
+                  ? "ring-3 ring-error-color/30"
+                  : "border border-brand-primary hover:border-brand-primary"
                 : "border-border-color hover:border-border-dark-color"
-            } border rounded-lg px-2 py-2 cursor-pointer bg-text-input-color flex items-center justify-between ${
+            } shadow-s hover:shadow-m rounded-lg px-2 py-2 cursor-pointer bg-text-input-color flex items-center justify-between ${
               (dependentValue === undefined || dependentValue === null) &&
               dependentKey
                 ? "pointer-events-none cursor-not-allowed"
@@ -206,13 +206,13 @@ const RHFComboBox = ({
             {showClear && (
               <button
                 onClick={clearSelection}
-                className="flex items-center justify-center w-5 h-5 text-primary-text hover:bg-border-color mx-1 rounded-sm"
+                className="flex items-center justify-center p-0.5 text-primary-text hover:bg-secondary-bg mx-1 rounded-sm"
                 aria-label="Clear">
                 <HiMiniXMark className="w-5 h-5" />
               </button>
             )}
 
-            <div className="hover:bg-border-color rounded-sm ml-1">
+            <div className="hover:bg-secondary-bg p-0.5 rounded-sm ml-1">
               <IoChevronDown
                 className={`stroke-primary-text w-5 h-5 transform transition-transform duration-300 ${
                   isOpen ? "-rotate-180" : ""
@@ -238,7 +238,7 @@ const RHFComboBox = ({
                       className={`rounded-md cursor-pointer px-4 py-2 ${
                         highlightedIndex === index
                           ? "bg-brand-primary text-white"
-                          : "text-primary-text hover:bg-brand-primary/33"
+                          : "text-primary-text hover:bg-brand-primary/10"
                       }`}>
                       {secondaryField && option[secondaryField]
                         ? `${option[secondaryField]} - ${option.name}`

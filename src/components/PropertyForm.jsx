@@ -134,7 +134,7 @@ const PropertyForm = () => {
   return (
     <div className="flex bg-primary-bg flex-1 flex-row p-3 gap-3">
       <div className="flex flex-1 gap-3 flex-col">
-        <div className="flex flex-1 justify-between flex-col bg-secondary-bg border border-border-color rounded-2xl p-3">
+        <div className="flex flex-1 justify-between flex-col bg-secondary-bg shadow-m rounded-2xl p-3">
           <img
             className="border border-border-color aspect-video rounded-xl"
             src={"/mansion-1.png"}
@@ -197,7 +197,7 @@ const PropertyForm = () => {
         </div>
       </div>
       <div className="flex-1">
-        <div className="flex h-full justify-between flex-1 p-5 flex-col bg-secondary-bg border rounded-2xl border-border-color">
+        <div className="flex h-full justify-between flex-1 p-5 flex-col bg-secondary-bg shadow-m rounded-2xl">
           {[
             {
               name: "line_1",
@@ -255,9 +255,9 @@ const PropertyForm = () => {
         </div>
       </div>
       <div className="flex flex-col flex-1 gap-3">
-        <div className="flex justify-between p-3 flex-col bg-secondary-bg border rounded-2xl border-border-color">
+        <div className="flex justify-between p-3 flex-col bg-secondary-bg shadow-m rounded-2xl">
           <div className="flex items-center justify-between pr-2 mb-3">
-            <h2 className="text-xl font-semibold text-primary-text">
+            <h2 className="text-xl ml-1 font-semibold text-primary-text">
               Key Codes
             </h2>
             <CTAButton
@@ -269,19 +269,19 @@ const PropertyForm = () => {
           {keyCodeFields?.length === 0 ? (
             <p className="text-sm text-primary-text">No key codes added yet.</p>
           ) : (
-            <ul className="flex flex-col gap-2 max-h-28 overflow-y-auto">
+            <ul className="flex flex-col gap-1 max-h-28 overflow-y-auto">
               {keyCodeFields.map((field, index) => (
                 <li
                   key={field.id}
-                  className="flex border border-border-color bg-primary-bg rounded-xl gap-2 p-1.5 mr-2 items-center justify-between">
-                  <span className="rounded-lg p-1 text-lg px-2 bg-primary-text font-bold text-primary-bg">
+                  className="flex mb-1 ml-1 shadow-s bg-tertiary-bg rounded-xl gap-2 p-1.5 mr-2 items-center justify-between">
+                  <span className="rounded-lg shadow-s p-1 text-lg px-2 bg-primary-bg font-bold text-primary-text">
                     {field.code}
                   </span>
                   <span className="flex-1 p-1 font-medium text-lg text-primary-text">
                     {field.name}
                   </span>
                   {field.is_private && (
-                    <span className="rounded-lg p-1 text-primary-text px-2 bg-pink-500/50  border-pink-500 font-medium">
+                    <span className="rounded-lg p-1 text-primary-text shadow-s px-2 bg-pink-500/30 font-medium">
                       Private
                     </span>
                   )}
@@ -310,8 +310,8 @@ const PropertyForm = () => {
             </ul>
           )}
         </div>
-        <div className="flex flex-col flex-1 bg-secondary-bg border border-border-color rounded-2xl p-3"></div>
-        <div className="flex flex-row gap-3 bg-secondary-bg border border-border-color rounded-2xl p-3">
+        <div className="flex flex-col flex-1 bg-secondary-bg shadow-m rounded-2xl p-3"></div>
+        <div className="flex flex-row gap-3 bg-secondary-bg shadow-m rounded-2xl p-3">
           <CTAButton
             disabled={!isDirty}
             width="flex-1"

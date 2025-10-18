@@ -48,6 +48,8 @@ export default function DateRangePicker({
   defaultEndDate,
   switchMode = true,
   width = "w-fit",
+  rangeCounter = true,
+  rangeCounterText = "nights",
 }) {
   const triggerRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -160,18 +162,16 @@ export default function DateRangePicker({
 
   return (
     <div className={`relative ${width}`} ref={containerRef}>
-      {label && (
-        <p className="text-lg font-medium text-primary-text">{label}</p>
-      )}
+      {label && <p className="font-medium mb-1 text-primary-text">{label}</p>}
       <div
         onClick={() => setIsOpen(!isOpen)}
-        className="relative w-full"
+        className="relative flex items-center w-full"
         ref={triggerRef}>
-        <RxCalendar className="absolute cursor-pointer left-2.5 top-2 text-primary-text w-5 h-5" />
+        <RxCalendar className="absolute cursor-pointer left-2.5 top-2.5 text-primary-text w-5 h-5" />
         <input
           type="text"
           readOnly
-          className="placeholder:normal-case placeholder:text-sm placeholder:text-muted w-full cursor-pointer shadow-s hover:shadow-m text-primary-text pr-4 pl-11 py-1.5 rounded-lg bg-text-input-color focus:outline-none focus:border-1 focus:border-cta-color"
+          className="placeholder:normal-case placeholder:text-sm placeholder:text-muted w-full cursor-pointer shadow-s hover:shadow-m text-primary-text pr-4 pl-11 py-2 rounded-lg bg-text-input-color focus:outline-none focus:border-1 focus:border-cta-color"
           value={
             startDate && endDate
               ? `${formatDate(startDate)} - ${formatDate(endDate)}`
@@ -276,15 +276,28 @@ export default function DateRangePicker({
                       }
                     }}
                   />
-                  {startDate && !endDate && hoverDate && (
-                    <div className="font-semibold bg-cta-btn-bg border rounded-lg border-cta-btn-border flex items-center justify-center text-primary-text px-2 py-0.5">
+                  {startDate && !endDate && hoverDate && rangeCounter ? (
+                    <div className="font-semibold bg-cta-btn-bg border rounded-lg border-cta-btn-border flex items-center justify-center text-primary-text px-2 py-1">
                       {Math.abs(
                         Math.round(
                           (hoverDate - startDate) / (1000 * 60 * 60 * 24)
                         )
                       )}{" "}
-                      nights
+                      {rangeCounterText}
                     </div>
+                  ) : (
+                    startDate &&
+                    endDate &&
+                    rangeCounter && (
+                      <div className="font-semibold bg-cta-btn-bg border rounded-lg border-cta-btn-border flex items-center justify-center text-primary-text px-2 py-1">
+                        {Math.abs(
+                          Math.round(
+                            (endDate - startDate) / (1000 * 60 * 60 * 24)
+                          )
+                        )}{" "}
+                        {rangeCounterText}
+                      </div>
+                    )
                   )}
                   <CTAButton
                     disabled={!startDate || !endDate}

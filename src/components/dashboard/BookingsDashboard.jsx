@@ -206,7 +206,7 @@ const BookingsDashboard = () => {
           </div>
         </div>
       </div>
-      <div className="p-3">
+      <div className="p-3 flex-1">
         <BookingsTable
           isLoading={isBookingsLoading}
           onOpenModal={handleOpenModal}

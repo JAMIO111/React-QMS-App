@@ -12,7 +12,7 @@ const PropertyList = ({ onSelectProperty, selectedProperty, properties }) => {
   };
 
   return (
-    <div className="bg-secondary-bg w-1/2 rounded-2xl border border-border-color flex flex-col h-full overflow-hidden">
+    <div className="bg-secondary-bg w-1/2 rounded-2xl shadow-m flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="flex flex-row gap-3 items-center px-4 py-4 border-b border-border-color">
         <BsHouses className="w-7 h-7 text-primary-text" />

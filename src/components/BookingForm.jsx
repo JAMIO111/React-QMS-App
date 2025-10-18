@@ -19,7 +19,9 @@ import DateRangePicker from "./ui/DateRangePicker";
 import CTAButton from "./CTAButton";
 import { IoIosUndo } from "react-icons/io";
 import { FaCheck } from "react-icons/fa";
+import { TiArrowLoop } from "react-icons/ti";
 import { useUpsertBooking } from "@/hooks/useUpsertBooking";
+import ToggleButton from "./ui/ToggleButton";
 
 const defaultFormData = {
   property_id: null,
@@ -72,14 +74,14 @@ const BookingForm = () => {
 
   return (
     <div className="flex bg-primary-bg flex-1 flex-row p-4 gap-4">
-      <div className="shadow-m rounded-2xl flex h-full gap-3 flex-1 p-5 flex-col bg-secondary-bg border border-border-color">
+      <div className="shadow-m rounded-2xl flex h-full gap-3 flex-1 p-5 flex-col bg-secondary-bg">
         <Controller
           name="booking_ref"
           control={control}
           render={({ field, fieldState }) => (
             <TextInput
               label="Booking Ref."
-              placeholder="Enter booking reference..."
+              placeholder="e.g. ABC123"
               {...field}
               icon={IoReceiptOutline}
             />
@@ -124,7 +126,7 @@ const BookingForm = () => {
           render={({ field, fieldState }) => (
             <TextInput
               label="Lead Guest Name"
-              placeholder="Enter lead guest name..."
+              placeholder="e.g. John Doe"
               {...field}
               error={fieldState.error}
               icon={FaUser}
@@ -137,16 +139,25 @@ const BookingForm = () => {
           render={({ field, fieldState }) => (
             <TextInput
               label="Guest Contact"
-              placeholder="Enter guest contact..."
+              placeholder="e.g. 07652896541"
               {...field}
               error={fieldState.error}
               icon={HiPhone}
             />
           )}
         />
+
+        <ToggleButton
+          icon={TiArrowLoop}
+          label="Return Guest"
+          checked={watch("is_return_guest")}
+          onChange={(checked) => setValue("is_return_guest", checked)}
+          trueLabel="Yes"
+          falseLabel="No"
+        />
       </div>
 
-      <div className="flex shadow-m h-full justify-between p-3 flex-col bg-secondary-bg border rounded-2xl border-border-color">
+      <div className="flex shadow-m h-full justify-between p-3 flex-col bg-secondary-bg rounded-2xl">
         <Controller
           name="adults"
           control={control}
@@ -241,8 +252,8 @@ const BookingForm = () => {
       </div>
 
       <div className="flex flex-1 gap-4 flex-col">
-        <div className="flex flex-1 shadow-m flex-col bg-secondary-bg border border-border-color rounded-2xl p-3"></div>
-        <div className="flex flex-row shadow-m gap-3 bg-secondary-bg border border-border-color rounded-2xl p-3">
+        <div className="flex flex-1 shadow-m flex-col bg-secondary-bg rounded-2xl p-3"></div>
+        <div className="flex flex-row shadow-m gap-3 bg-secondary-bg rounded-2xl p-3">
           <CTAButton
             disabled={!isDirty}
             width="flex-1"

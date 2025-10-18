@@ -27,7 +27,7 @@ const Owners = () => {
     );
   });
   return (
-    <div className="flex flex-row gap-3 p-3 bg-primary-bg h-full w-full">
+    <div className="flex flex-row gap-4 p-4 bg-primary-bg h-full w-full">
       <OwnerList
         onSelectOwner={setSelectedOwner}
         selectedOwner={selectedOwner}

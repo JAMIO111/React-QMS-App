@@ -3,6 +3,8 @@ import CTAButton from "./CTAButton";
 import TextInput from "./ui/TextInput";
 import { PiPassword } from "react-icons/pi";
 import { LuTag } from "react-icons/lu";
+import ToggleButton from "./ui/ToggleButton";
+import { SlLock, SlLockOpen } from "react-icons/sl";
 
 const KeyCodeForm = ({ defaultValues, onSave, onCancel }) => {
   const [form, setForm] = useState({
@@ -64,14 +66,14 @@ const KeyCodeForm = ({ defaultValues, onSave, onCancel }) => {
         }
       />
 
-      <label className="flex text-primary-text items-center gap-2">
-        <input
-          type="checkbox"
-          checked={form.is_private}
-          onChange={(e) => setForm({ ...form, is_private: e.target.checked })}
-        />
-        Private
-      </label>
+      <ToggleButton
+        icon={form.is_private ? SlLock : SlLockOpen}
+        label="Private"
+        checked={form.is_private}
+        onChange={(checked) => setForm({ ...form, is_private: checked })}
+        trueLabel="Private"
+        falseLabel="Public"
+      />
 
       <div className="flex gap-2 pt-2">
         <CTAButton

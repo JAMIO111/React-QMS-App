@@ -31,7 +31,7 @@ const Dashboard = () => {
   );
 
   return (
-    <div className="flex flex-col pb-4 h-full w-full bg-primary-bg">
+    <div className="flex flex-col h-full w-full bg-primary-bg">
       <div className="flex flex-col gap-2 xl:flex-row items-start  xl:items-center justify-between px-6 py-2 border-b border-border-color shrink-0 bg-primary-bg">
         <div className="flex flex-col">
           <h1 className="text-xl whitespace-nowrap text-primary-text">
@@ -60,47 +60,83 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-18 grid-rows-15 gap-4 px-4 mt-4 flex-grow">
-        <div className="col-span-4 row-span-3 rounded-lg">
-          <DashboardCard
-            title="Cost of Poor Quality"
-            icon={AiOutlinePound}
-            value="£4,523.26"
-            trend={26}
-            color="fuchsia"
-            isSelected={selectedCard === "COPQ"}
-            onClick={() =>
-              setSelectedCard(selectedCard === "COPQ" ? null : "COPQ")
-            }
-          />
-        </div>
-        <div className="col-span-4 row-span-3 rounded-2xl">
-          <DashboardCard
-            title="On Time Delivery"
-            icon={RxLapTimer}
-            value="95.4%"
-            trend={5.2}
-            color="orange"
-            isSelected={selectedCard === "OTD"}
-            onClick={() =>
-              setSelectedCard(selectedCard === "OTD" ? null : "OTD")
-            }
-          />
-        </div>
-        <div className="col-span-4 row-span-3 rounded-2xl">
-          <DashboardCard
-            title="Quality Defects"
-            icon={BiSolidBarChartAlt2}
-            value="134"
-            trend={-10}
-            color="cyan"
-            isSelected={selectedCard === "QD"}
-            onClick={() => setSelectedCard(selectedCard === "QD" ? null : "QD")}
-          />
-        </div>
-        <div className="col-span-6 row-span-12">
+      <div className="flex gap-4 p-4 flex-grow">
+        <div className="flex-6"></div>
+        <div className="flex-4">
           <JobList
             jobs={[
+              {
+                jobNo: 126,
+                property: "Lyndhurst",
+                jobDate: "Wed 23 Oct",
+                moveIn: "Mon 30 Oct",
+              },
+              {
+                jobNo: 845,
+                property: "Oystercatcher",
+                jobDate: "Fri 25 Oct",
+                moveIn: "Tue 31 Oct",
+              },
+              {
+                jobNo: 954,
+                property: "Little Anchor",
+                jobDate: "Mon 28 Oct",
+                moveIn: "Mon 28 Oct",
+              },
+              {
+                jobNo: 126,
+                property: "Lyndhurst",
+                jobDate: "Wed 23 Oct",
+                moveIn: "Mon 30 Oct",
+              },
+              {
+                jobNo: 845,
+                property: "Oystercatcher",
+                jobDate: "Fri 25 Oct",
+                moveIn: "Tue 31 Oct",
+              },
+              {
+                jobNo: 954,
+                property: "Little Anchor",
+                jobDate: "Mon 28 Oct",
+                moveIn: "Mon 28 Oct",
+              },
+              {
+                jobNo: 126,
+                property: "Lyndhurst",
+                jobDate: "Wed 23 Oct",
+                moveIn: "Mon 30 Oct",
+              },
+              {
+                jobNo: 845,
+                property: "Oystercatcher",
+                jobDate: "Fri 25 Oct",
+                moveIn: "Tue 31 Oct",
+              },
+              {
+                jobNo: 954,
+                property: "Little Anchor",
+                jobDate: "Mon 28 Oct",
+                moveIn: "Mon 28 Oct",
+              },
+              {
+                jobNo: 126,
+                property: "Lyndhurst",
+                jobDate: "Wed 23 Oct",
+                moveIn: "Mon 30 Oct",
+              },
+              {
+                jobNo: 845,
+                property: "Oystercatcher",
+                jobDate: "Fri 25 Oct",
+                moveIn: "Tue 31 Oct",
+              },
+              {
+                jobNo: 954,
+                property: "Little Anchor",
+                jobDate: "Mon 28 Oct",
+                moveIn: "Mon 28 Oct",
+              },
               {
                 jobNo: 126,
                 property: "Lyndhurst",

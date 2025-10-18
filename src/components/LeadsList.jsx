@@ -58,25 +58,25 @@ export default function LeadList() {
         />
       </div>
 
-      <div className="flex px-4 flex-col gap-4 overflow-y-scroll [&::-webkit-scrollbar]:hidden">
+      <div className="flex pb-4 px-4 flex-col gap-4 overflow-y-scroll [&::-webkit-scrollbar]:hidden">
         {leads.map((lead) => (
           <div
             key={lead.id}
-            className="bg-tertiary-bg rounded-2xl border border-border-color transition-shadow duration-200">
-            <div className="p-3 px-4 bg-primary-bg rounded-t-2xl w-full flex flex-row justify-between items-center">
+            className="bg-primary-bg p-1.5 rounded-2xl shadow-s transition-shadow duration-200">
+            <div className="pt-2 pb-3 px-2 bg-primary-bg rounded-t-2xl w-full flex flex-row justify-between items-center">
               <h3 className="text-lg font-semibold flex items-center gap-2 text-primary-text">
                 <Building2 className="w-5 h-5 text-secondary-text" />
                 {lead.company}
               </h3>
               <span
-                className={`text-xs font-medium px-3 py-2 rounded-full ${
+                className={`text-xs font-medium px-3 py-2 rounded-xl ${
                   statusColor[lead.status]
                 }`}>
                 {lead.status}
               </span>
             </div>
 
-            <div className="p-4 h-40 text-sm space-y-2">
+            <div className="p-4 bg-tertiary-bg border border-border-color/50 rounded-xl h-40 text-sm space-y-2">
               <p className="font-medium text-primary-text">{lead.contact}</p>
 
               <div className="flex items-center gap-2 text-secondary-text">

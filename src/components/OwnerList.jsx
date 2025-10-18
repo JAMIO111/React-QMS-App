@@ -8,7 +8,7 @@ const OwnerList = ({ onSelectOwner, selectedOwner, owners }) => {
   const navigate = useNavigate();
 
   return (
-    <div className="bg-secondary-bg w-1/4 rounded-2xl border border-border-color flex flex-col h-full overflow-hidden">
+    <div className="bg-secondary-bg w-1/4 rounded-2xl shadow-m flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="flex flex-row gap-3 items-center px-4 py-4 border-b border-border-color">
         <MdPeopleOutline className="w-7 h-7 text-primary-text" />
@@ -32,7 +32,7 @@ const OwnerList = ({ onSelectOwner, selectedOwner, owners }) => {
                   key={owner.id}
                   className={`flex items-center p-3 cursor-pointer ${
                     selectedOwner?.id === owner.id
-                      ? " border rounded-2xl border-border-color bg-primary-bg"
+                      ? "rounded-2xl shadow-s border-border-color bg-primary-bg"
                       : ""
                   }`}
                   onClick={() => onSelectOwner(owner)}

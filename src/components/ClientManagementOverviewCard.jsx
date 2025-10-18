@@ -41,12 +41,12 @@ export default function ClientManagementOverviewCard({
       </div>
 
       {/* Stats Section */}
-      <div className="relative flex flex-col md:flex-row bg-primary-bg p-2 rounded-3xl gap-6 overflow-hidden">
+      <div className="relative flex flex-col md:flex-row bg-primary-bg p-2 shadow-s rounded-3xl gap-6 overflow-hidden">
         {/* Animated background indicator */}
         <div
-          className={`absolute top-2 bottom-2 left-2 w-[calc(50%-0.75rem)] rounded-2xl bg-gradient-to-r from-indigo-600/50 to-purple-600/50 transition-all duration-500 ease-out ${
+          className={`absolute top-2 bottom-2 left-2 w-[calc(50%-0.75rem)] rounded-2xl bg-tertiary-bg transition-all duration-500 ease-out ${
             active === "Properties"
-              ? "translate-x-[calc(100%+0.75rem)]"
+              ? "translate-x-[calc(100%+0.5rem)]"
               : "translate-x-0"
           }`}
           style={{ zIndex: 0 }}></div>
@@ -54,9 +54,8 @@ export default function ClientManagementOverviewCard({
         {/* Owners */}
         <div
           onClick={() => setActive("Owners")}
-          className={`flex-1 relative cursor-pointer p-4 rounded-2xl flex flex-col justify-center gap-3 transition-all duration-300 ${
-            active === "Owners" ? "text-white" : "text-primary-text"
-          }`}
+          className={`flex-1 relative cursor-pointer p-4 rounded-2xl flex flex-col justify-center gap-3 transition-all duration-300 "text-black"
+          `}
           style={{ zIndex: 1 }}>
           <div className="flex items-center gap-2 mb-2">
             <Users size={22} />
@@ -76,9 +75,7 @@ export default function ClientManagementOverviewCard({
         {/* Properties */}
         <div
           onClick={() => setActive("Properties")}
-          className={`flex-1 relative cursor-pointer p-4 rounded-2xl flex flex-col justify-center gap-3 transition-all duration-300 ${
-            active === "Properties" ? "text-white" : "text-primary-text"
-          }`}
+          className={`flex-1 relative cursor-pointer p-4 rounded-2xl flex flex-col justify-center gap-3 transition-all duration-300 text-white`}
           style={{ zIndex: 1 }}>
           <div className="flex items-center gap-2 mb-2">
             <Wallet size={22} />

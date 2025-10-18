@@ -16,8 +16,9 @@ const ClientManagementDashboard = () => {
 
   return (
     <div className="h-full items-stretch flex flex-1 gap-4 flex-row bg-primary-bg p-4 min-w-0 overflow-hidden">
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col gap-4 flex-1">
         <ClientManagementOverviewCard owners={owners} properties={properties} />
+        <div className="shadow-s flex-1 rounded-3xl bg-secondary-bg"></div>
       </div>
       <div className="flex-1">
         <LeadsList />

@@ -16,7 +16,7 @@ const PropertyDetails = ({ property, selectedProperty }) => {
   console.log("Owners:", owners);
 
   return (
-    <div className="bg-secondary-bg flex-1 h-full flex flex-col rounded-2xl border border-border-color overflow-hidden">
+    <div className="bg-secondary-bg flex-1 h-full flex flex-col rounded-2xl shadow-m overflow-hidden">
       {!selectedProperty ? (
         <div className="w-full h-full flex items-center justify-center">
           <div className="gap-5 flex flex-col text-primary-text text-xl text-center border border-border-color bg-primary-bg p-10 rounded-xl">

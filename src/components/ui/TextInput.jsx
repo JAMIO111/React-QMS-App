@@ -40,18 +40,16 @@ const TextInput = forwardRef(
     };
 
     return (
-      <div className="flex flex-col h-17 min-w-0">
+      <div className="flex flex-col gap-1 h-17 min-w-0">
         {label && (
-          <label className="block text-lg font-medium text-primary-text">
-            {label}
-          </label>
+          <label className="block font-medium text-primary-text">{label}</label>
         )}
         <div
-          className={`flex flex-row relative items-center border border-border-color rounded-lg pl-2 pr-10 py-2 bg-text-input-color
+          className={`flex flex-row relative items-center shadow-s hover:shadow-m rounded-lg pl-2 pr-10 py-2 bg-text-input-color
             hover:border-border-dark-color focus-within:border-brand-primary focus-within:hover:border-brand-primary min-w-0
             ${
               error
-                ? "border-error-color hover:border-error-color/70 hover:focus-within:border-error-color focus-within:border-error-color focus-within:ring-3 focus-within:ring-error-color/20"
+                ? "border border-error-color hover:border-error-color/70 hover:focus-within:border-error-color focus-within:border-error-color focus-within:ring-3 focus-within:ring-error-color/20"
                 : ""
             }`}>
           {error ? (
@@ -99,7 +97,7 @@ const TextInput = forwardRef(
             <button
               type="button"
               onClick={() => onChange({ target: { value: undefined } })} // ⬅️ fixed from undefined
-              className="absolute right-2 text-primary-text hover:bg-border-color rounded-sm p-0.5"
+              className="absolute right-2 text-primary-text hover:bg-secondary-bg rounded-sm p-0.5"
               aria-label="Clear">
               <HiMiniXMark className="w-5 h-5" />
             </button>

@@ -29,9 +29,9 @@ export default function SlidingSelector({
   return (
     <div
       ref={containerRef}
-      className="relative bg-secondary-bg border border-border-color flex justify-between items-center gap-2 w-full rounded-xl p-1">
+      className="relative bg-secondary-bg shadow-s flex justify-between items-center gap-2 w-full rounded-xl p-1">
       <div
-        className="absolute border border-border-dark-color bg-border-color top-1 bottom-1 rounded-lg transition-all duration-300 ease-in-out"
+        className="absolute shadow-s bg-border-color top-1 bottom-1 rounded-lg transition-all duration-300 ease-in-out"
         style={{
           left: indicatorStyle.left,
           width: indicatorStyle.width,
@@ -58,13 +58,13 @@ export default function SlidingSelector({
             data-value={optionValue}
             onClick={() => onChange(option)}
             className={clsx(
-              "flex gap-3 justify-center items-center relative z-10 py-1 px-3 text-primary-text transition-colors duration-200 w-1/3",
+              "group flex gap-3 justify-center items-center relative z-10 py-1 px-3 text-primary-text transition-colors duration-200 w-1/3",
               {
                 "text-primary-text": isActive,
                 "cursor-pointer": !isActive,
               }
             )}>
-            <p className={clsx({ "hover:text-cta-color": !isActive })}>
+            <p className={clsx({ "group-hover:text-cta-color": !isActive })}>
               {label}
             </p>
 

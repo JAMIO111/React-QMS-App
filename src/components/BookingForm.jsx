@@ -2,8 +2,14 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { IoIosMan } from "react-icons/io";
-import { FaChildren, FaDog, FaBed, FaUser } from "react-icons/fa6";
+import { IoIosMan, IoIosUndo } from "react-icons/io";
+import {
+  FaChildren,
+  FaDog,
+  FaBed,
+  FaUser,
+  FaRegNoteSticky,
+} from "react-icons/fa6";
 import { HiPhone } from "react-icons/hi2";
 import { BsHouse } from "react-icons/bs";
 import { MdChildFriendly } from "react-icons/md";
@@ -13,20 +19,21 @@ import NumericInputGroup from "./NumericInputGroup";
 import TextInput from "./ui/TextInput";
 import { BookingFormSchema } from "../validationSchema";
 import RHFComboBox from "./ui/RHFComboBox";
+import RHFTextArea from "./ui/RHFTextArea";
 import { useProperties } from "@/hooks/useProperties";
 import { useBookingById } from "@/hooks/useBookingById";
 import DateRangePicker from "./ui/DateRangePicker";
 import CTAButton from "./CTAButton";
-import { IoIosUndo } from "react-icons/io";
 import { FaCheck } from "react-icons/fa";
 import { TiArrowLoop } from "react-icons/ti";
 import { useUpsertBooking } from "@/hooks/useUpsertBooking";
 import ToggleButton from "./ui/ToggleButton";
+import { useNavigate } from "react-router-dom";
 
 const defaultFormData = {
+  booking_ref: "",
   property_id: null,
-  arrival_date: null,
-  departure_date: null,
+  bookingDates: { startDate: null, endDate: null },
   nights: 0,
   lead_guest: "",
   lead_guest_contact: "",
@@ -37,9 +44,12 @@ const defaultFormData = {
   highchairs: 0,
   cots: 0,
   stairgates: 0,
+  notes: "",
+  is_return_guest: false,
 };
 
 const BookingForm = () => {
+  const navigate = useNavigate();
   const { id } = useParams();
   const { data: booking } = useBookingById(id !== "New-Booking" ? id : null);
   const { data: properties } = useProperties();
@@ -66,11 +76,25 @@ const BookingForm = () => {
     if (id === "New-Booking") {
       reset(defaultFormData);
     } else if (booking) {
-      reset(booking);
+      reset({
+        ...booking,
+        bookingDates: {
+          startDate: booking.arrival_date
+            ? new Date(booking.arrival_date)
+            : null,
+          endDate: booking.departure_date
+            ? new Date(booking.departure_date)
+            : null,
+        },
+      });
     }
   }, [id, booking, reset]);
 
-  console.log(watch("arrival_date"), watch("departure_date"));
+  console.log("Form Errors:", errors);
+  console.log("Form Dirty:", isDirty);
+  console.log("Form Valid:", isValid);
+
+  console.log("Form Values:", watch());
 
   return (
     <div className="flex bg-primary-bg flex-1 flex-row p-4 gap-4">
@@ -81,9 +105,26 @@ const BookingForm = () => {
           render={({ field, fieldState }) => (
             <TextInput
               label="Booking Ref."
-              placeholder="e.g. ABC123"
+              placeholder="e.g. EDYA6-13-EN"
               {...field}
+              value={field.value || ""}
+              onChange={(e) => field.onChange(e.target.value)}
               icon={IoReceiptOutline}
+              error={fieldState.error}
+            />
+          )}
+        />
+        <Controller
+          name="bookingDates"
+          control={control}
+          render={({ field, fieldState }) => (
+            <DateRangePicker
+              switchMode={false}
+              error={fieldState.error}
+              value={field.value || { startDate: null, endDate: null }}
+              onChange={field.onChange}
+              label="Booking Dates"
+              width="w-full"
             />
           )}
         />
@@ -102,23 +143,6 @@ const BookingForm = () => {
               icon={BsHouse}
             />
           )}
-        />
-        <DateRangePicker
-          label="Booking Dates"
-          switchMode={false}
-          width="w-full"
-          defaultStartDate={
-            watch("arrival_date") ? new Date(watch("arrival_date")) : null
-          }
-          defaultEndDate={
-            watch("departure_date") ? new Date(watch("departure_date")) : null
-          }
-          onChange={(range) => {
-            setValue("arrival_date", range.startDate);
-            setValue("departure_date", range.endDate);
-            trigger(["arrival_date", "departure_date"]);
-          }}
-          error={errors.arrival_date || errors.departure_date}
         />
         <Controller
           name="lead_guest"
@@ -252,7 +276,22 @@ const BookingForm = () => {
       </div>
 
       <div className="flex flex-1 gap-4 flex-col">
-        <div className="flex flex-1 shadow-m flex-col bg-secondary-bg rounded-2xl p-3"></div>
+        <div className="flex flex-1 shadow-m flex-col bg-secondary-bg rounded-2xl p-3">
+          <Controller
+            name="notes"
+            control={control}
+            render={({ field, fieldState }) => (
+              <RHFTextArea
+                rows={3}
+                icon={FaRegNoteSticky}
+                label="Notes"
+                value={field.value}
+                onChange={field.onChange}
+                error={fieldState.error}
+              />
+            )}
+          />
+        </div>
         <div className="flex flex-row shadow-m gap-3 bg-secondary-bg rounded-2xl p-3">
           <CTAButton
             disabled={!isDirty}
@@ -261,7 +300,19 @@ const BookingForm = () => {
             text="Revert Changes"
             icon={IoIosUndo}
             callbackFn={() =>
-              id === "New-Booking" ? reset(defaultFormData) : reset(booking)
+              id === "New-Booking"
+                ? reset(defaultFormData)
+                : reset({
+                    ...booking,
+                    bookingDates: {
+                      startDate: booking?.arrival_date
+                        ? new Date(booking.arrival_date)
+                        : null,
+                      endDate: booking?.departure_date
+                        ? new Date(booking.departure_date)
+                        : null,
+                    },
+                  })
             }
           />
           <CTAButton
@@ -274,7 +325,31 @@ const BookingForm = () => {
             icon={FaCheck}
             callbackFn={handleSubmit(async (data) => {
               try {
-                const payload = id !== "New-Booking" ? { id, ...data } : data;
+                const { bookingDates, ...rest } = data;
+                const nights =
+                  bookingDates?.startDate && bookingDates?.endDate
+                    ? Math.round(
+                        (new Date(bookingDates.endDate) -
+                          new Date(bookingDates.startDate)) /
+                          (1000 * 60 * 60 * 24)
+                      )
+                    : null;
+
+                const payload =
+                  id !== "New-Booking"
+                    ? {
+                        id,
+                        ...rest,
+                        arrival_date: bookingDates?.startDate || null,
+                        departure_date: bookingDates?.endDate || null,
+                        nights,
+                      }
+                    : {
+                        ...rest,
+                        arrival_date: bookingDates?.startDate || null,
+                        departure_date: bookingDates?.endDate || null,
+                        nights,
+                      };
 
                 console.log("Submitting payload:", payload);
                 await upsertBooking.mutateAsync(payload);

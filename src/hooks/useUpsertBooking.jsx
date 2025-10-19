@@ -6,20 +6,17 @@ export const useUpsertBooking = () => {
 
   return useMutation({
     mutationFn: async (bookingData) => {
-      let bookingId = bookingData.id;
-      let result;
-
-      if (bookingId) {
+      if (bookingData.id) {
         // Update existing booking
         const { data, error } = await supabase
           .from("Bookings")
           .update(bookingData)
-          .eq("id", bookingId)
+          .eq("id", bookingData.id)
           .select()
           .single();
 
         if (error) throw error;
-        result = data;
+        return data;
       } else {
         // Insert new booking
         const { data, error } = await supabase
@@ -29,16 +26,16 @@ export const useUpsertBooking = () => {
           .single();
 
         if (error) throw error;
-        bookingId = data.id;
-        result = data;
+        return data;
       }
-
-      return result;
     },
 
-    onSuccess: () => {
+    onSuccess: (data) => {
+      const bookingId = data?.id;
       queryClient.invalidateQueries(["Bookings"]);
-      queryClient.invalidateQueries(["Booking", bookingId]);
+      if (bookingId) {
+        queryClient.invalidateQueries(["Booking", bookingId]);
+      }
     },
   });
 };

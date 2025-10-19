@@ -13,7 +13,7 @@ const JobList = ({ jobs = [] }) => {
         </h2>
         <CTAButton
           callbackFn={() => {
-            navigate("/jobs/new-job");
+            window.print();
           }}
           type="main"
           text="Print"
@@ -22,33 +22,43 @@ const JobList = ({ jobs = [] }) => {
       </div>
 
       <div className="flex flex-1 bg-tertiary-bg flex-col border border-border-color h-full rounded-2xl overflow-hidden">
-        <div className="grid grid-cols-[0.8fr_2.5fr_2fr_2fr] border-b border-border-color text-sm bg-primary-bg text-secondary-text">
-          <div className="p-2 border-r border-border-color overflow-clip text-ellipsis text-nowrap">
-            No.
-          </div>
+        <div className="grid grid-cols-[2.5fr_2fr_2fr] border-b border-border-color text-sm bg-primary-bg text-secondary-text">
           <div className="p-2 border-r border-border-color">Property</div>
           <div className="p-2 border-r border-border-color">Job Date</div>
           <div className="p-2">Move In</div>
         </div>
 
         {/* Body */}
-        <div className="flex-1">
+        <div className="flex-1 [&::-webkit-scrollbar]:hidden overflow-y-scroll">
           {jobs.length > 0 ? (
             jobs.map((job, index) => (
               <div
-                key={job.id || index}
-                className="grid grid-cols-[0.8fr_2.5fr_2fr_2fr] text-sm text-primary-text hover:bg-brand-primary/30 transition-colors cursor-pointer">
-                <div className="flex items-center border-b px-2 py-1 border-border-color">
-                  {job.jobNo}
+                key={job.jobId || index}
+                className={`${
+                  index % 2 === 0 ? "bg-tertiary-bg" : "bg-secondary-bg"
+                } ${
+                  index !== jobs.length ? "border-b" : ""
+                } border-border-color grid grid-cols-[2.5fr_2fr_2fr] text-sm text-primary-text hover:bg-brand-primary/30 cursor-pointer`}>
+                <div className="flex font-medium items-center px-2 py-1">
+                  {job.propertyName}
                 </div>
-                <div className="flex font-medium items-center border-b px-2 py-1 border-border-color">
-                  {job.property}
+                <div className="flex items-center px-3 py-1">
+                  {job.jobDate
+                    ? new Date(job.jobDate).toLocaleDateString("en-GB", {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                      })
+                    : "N/A"}
                 </div>
-                <div className="flex items-center border-b px-2 py-1 border-border-color">
-                  {job.jobDate}
-                </div>
-                <div className="flex items-center border-b px-2 py-1 border-border-color">
-                  {job.moveIn}
+                <div className="flex items-center px-3 py-1">
+                  {job.moveIn
+                    ? new Date(job.moveIn).toLocaleDateString("en-GB", {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                      })
+                    : "N/A"}
                 </div>
               </div>
             ))

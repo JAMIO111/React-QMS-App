@@ -37,6 +37,7 @@ const SettingsAccount = lazy(() =>
 );
 const Employees = lazy(() => import("./components/Employees.jsx"));
 const BookingForm = lazy(() => import("./components/BookingForm.jsx"));
+const LeadDetails = lazy(() => import("./components/LeadDetails.jsx"));
 const AuthPage = lazy(() => import("./components/AuthPage.jsx"));
 const Login = lazy(() => import("./components/Login.jsx"));
 const SignUp = lazy(() => import("./components/SignUp.jsx"));
@@ -123,6 +124,10 @@ const router = createBrowserRouter([
           {
             path: "Client-Management/Owners/:id",
             element: <OwnerForm />,
+          },
+          {
+            path: "Client-Management/Leads/:id",
+            element: <LeadDetails />,
           },
           {
             path: "Settings",

@@ -1,18 +1,14 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import CTAButton from "../CTAButton";
-import DashboardCard from "./DashboardCard";
-import { AiOutlinePound } from "react-icons/ai";
-import { BiSolidBarChartAlt2 } from "react-icons/bi";
-import { RxLapTimer } from "react-icons/rx";
 import JobList from "@components/JobList";
 import { useUser } from "@/contexts/UserProvider";
 import { PiFilePlus } from "react-icons/pi";
 import DateRangePicker from "@components/ui/DateRangePicker";
 import { getGreeting } from "@/lib/HelperFunctions";
+import { useJobs } from "@/hooks/useJobs";
 
 const Dashboard = () => {
   const { profile } = useUser();
-  const [selectedCard, setSelectedCard] = useState(null);
   const today = useMemo(() => new Date(), []);
   const start = useMemo(() => {
     const s = new Date(today);
@@ -30,12 +26,20 @@ const Dashboard = () => {
     [selectedRange.startDate, selectedRange.endDate]
   );
 
+  const {
+    data: jobs,
+    isLoading,
+    error,
+  } = useJobs(memoisedRange.startDate, memoisedRange.endDate);
+
+  console.log("memoisedRange:", memoisedRange);
+
   return (
     <div className="flex flex-col h-full w-full bg-primary-bg">
-      <div className="flex flex-col gap-2 xl:flex-row items-start  xl:items-center justify-between px-6 py-2 border-b border-border-color shrink-0 bg-primary-bg">
+      <div className="flex flex-col gap-2 xl:flex-row items-start xl:items-center justify-between px-6 py-2 border-b border-border-color shrink-0 bg-primary-bg">
         <div className="flex flex-col">
           <h1 className="text-xl whitespace-nowrap text-primary-text">
-            Bookings Dashboard
+            Business Dashboard
           </h1>
           <p className="text-sm text-secondary-text">
             {getGreeting()}, {profile?.first_name || "User"}!
@@ -45,118 +49,25 @@ const Dashboard = () => {
           <div className="w-full gap-3 md:w-fit flex items-center justify-start xl:justify-center">
             <CTAButton
               callbackFn={() => {
-                navigate("/bookings/new-booking");
+                window.print();
               }}
               type="main"
               text="Add Booking"
               icon={PiFilePlus}
             />
             <DateRangePicker
+              alignment="right"
               width="w-80"
               onChange={setSelectedRange}
-              defaultStartDate={start}
-              defaultEndDate={today}
+              value={memoisedRange}
             />
           </div>
         </div>
       </div>
-      <div className="flex gap-4 p-4 flex-grow">
+      <div className="flex gap-4 p-4 flex-grow overflow-hidden">
         <div className="flex-6"></div>
         <div className="flex-4">
-          <JobList
-            jobs={[
-              {
-                jobNo: 126,
-                property: "Lyndhurst",
-                jobDate: "Wed 23 Oct",
-                moveIn: "Mon 30 Oct",
-              },
-              {
-                jobNo: 845,
-                property: "Oystercatcher",
-                jobDate: "Fri 25 Oct",
-                moveIn: "Tue 31 Oct",
-              },
-              {
-                jobNo: 954,
-                property: "Little Anchor",
-                jobDate: "Mon 28 Oct",
-                moveIn: "Mon 28 Oct",
-              },
-              {
-                jobNo: 126,
-                property: "Lyndhurst",
-                jobDate: "Wed 23 Oct",
-                moveIn: "Mon 30 Oct",
-              },
-              {
-                jobNo: 845,
-                property: "Oystercatcher",
-                jobDate: "Fri 25 Oct",
-                moveIn: "Tue 31 Oct",
-              },
-              {
-                jobNo: 954,
-                property: "Little Anchor",
-                jobDate: "Mon 28 Oct",
-                moveIn: "Mon 28 Oct",
-              },
-              {
-                jobNo: 126,
-                property: "Lyndhurst",
-                jobDate: "Wed 23 Oct",
-                moveIn: "Mon 30 Oct",
-              },
-              {
-                jobNo: 845,
-                property: "Oystercatcher",
-                jobDate: "Fri 25 Oct",
-                moveIn: "Tue 31 Oct",
-              },
-              {
-                jobNo: 954,
-                property: "Little Anchor",
-                jobDate: "Mon 28 Oct",
-                moveIn: "Mon 28 Oct",
-              },
-              {
-                jobNo: 126,
-                property: "Lyndhurst",
-                jobDate: "Wed 23 Oct",
-                moveIn: "Mon 30 Oct",
-              },
-              {
-                jobNo: 845,
-                property: "Oystercatcher",
-                jobDate: "Fri 25 Oct",
-                moveIn: "Tue 31 Oct",
-              },
-              {
-                jobNo: 954,
-                property: "Little Anchor",
-                jobDate: "Mon 28 Oct",
-                moveIn: "Mon 28 Oct",
-              },
-              {
-                jobNo: 126,
-                property: "Lyndhurst",
-                jobDate: "Wed 23 Oct",
-                moveIn: "Mon 30 Oct",
-              },
-              {
-                jobNo: 845,
-                property: "Oystercatcher",
-                jobDate: "Fri 25 Oct",
-                moveIn: "Tue 31 Oct",
-              },
-              {
-                jobNo: 954,
-                property: "Little Anchor",
-                jobDate: "Mon 28 Oct",
-                moveIn: "Mon 28 Oct",
-              },
-            ]}
-          />
+          <JobList jobs={jobs} isLoading={isLoading} error={error} />
         </div>
       </div>
     </div>

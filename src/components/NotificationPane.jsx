@@ -32,7 +32,7 @@ const NotificationPane = () => {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ duration: 0.3 }}
-            className="w-120 max-w-full h-full bg-primary-bg shadow-lg p-4 border border-border-color rounded-2xl"
+            className="w-120 max-w-full h-full bg-primary-bg p-4 shadow-s border border-border-color/50 rounded-2xl"
             onClick={(e) => e.stopPropagation()} // Prevent backdrop close when clicking inside
           >
             <div className="flex justify-between items-center mb-3 text-primary-text">

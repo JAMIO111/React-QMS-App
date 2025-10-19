@@ -2,10 +2,7 @@ import React, { forwardRef } from "react";
 import { FaPlus, FaMinus } from "react-icons/fa6";
 
 const NumericInput = forwardRef(
-  (
-    { value, onChange, min = -Infinity, max = Infinity, error, ...rest },
-    ref
-  ) => {
+  ({ value, onChange, min = -Infinity, max = Infinity, ...rest }, ref) => {
     const handleInputChange = (e) => {
       let val = e.target.value;
 
@@ -43,12 +40,12 @@ const NumericInput = forwardRef(
     return (
       <div
         className={`${
-          error ? "border-error-color" : "border-primary-bg"
+          rest.error ? "border-error-color" : "border-primary-bg"
         } flex shadow-m bg-primary-bg flex-row border w-fit items-center rounded-full p-1 gap-2`}>
         <button
           type="button"
           disabled={value !== "" && value <= min}
-          className="shadow-s group hover:bg-brand-primary/70 p-2 bg-text-input-color cursor-pointer rounded-full disabled:opacity-40 disabled:cursor-not-allowed"
+          className="shadow-s group hover:bg-brand-primary/70 p-2 bg-text-input-color cursor-pointer rounded-full disabled:opacity-40 disabled:cursor-not-allowed active:scale-90 active:transition-transform active:duration-100"
           onClick={decrement}>
           <FaMinus className="group-hover:text-primary-bg w-6 h-6 text-secondary-text" />
         </button>
@@ -67,7 +64,7 @@ const NumericInput = forwardRef(
         <button
           type="button"
           disabled={value !== "" && value >= max}
-          className="shadow-s group hover:bg-brand-primary/70 p-2 bg-text-input-color cursor-pointer rounded-full disabled:opacity-40 disabled:cursor-not-allowed"
+          className="shadow-s group hover:bg-brand-primary/70 p-2 bg-text-input-color cursor-pointer rounded-full disabled:opacity-40 disabled:cursor-not-allowed active:scale-90 active:transition-transform active:duration-100"
           onClick={increment}>
           <FaPlus className="group-hover:text-primary-bg w-6 h-6 text-secondary-text" />
         </button>

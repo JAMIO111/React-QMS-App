@@ -71,7 +71,7 @@
   --bg: 0.96, 0, 264;
   --bg-light: 1, 0, 264;
   --primary-text: 40, 51, 60;
-  --secondary-text: 80, 80, 80;
+  --secondary-text: 95, 95, 95;
   --border: 215, 215, 215;
   --border-dark: 195, 195, 195;
   --text-input: 255, 255, 255;
@@ -185,6 +185,7 @@
   --chart-9-rgb: 255, 115, 135;
   --chart-10-rgb: 255, 142, 215;
 }
+
 .table-header {
   font-weight: 600;
   font-size: 14px;

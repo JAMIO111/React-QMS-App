@@ -11,6 +11,7 @@ import {
 import { LiaFileInvoiceDollarSolid } from "react-icons/lia";
 import { IoReceiptOutline } from "react-icons/io5";
 import { BsHouseGear } from "react-icons/bs";
+import { HiOutlineWrenchScrewdriver } from "react-icons/hi2";
 
 export const menuStructure = [
   {
@@ -50,9 +51,9 @@ export const menuStructure = [
     ],
   },
   {
-    name: "People",
-    icon: LiaFileInvoiceDollarSolid,
-    path: "/People",
+    name: "Maintenance",
+    icon: HiOutlineWrenchScrewdriver,
+    path: "/Maintenance",
     subMenu: [],
   },
   {

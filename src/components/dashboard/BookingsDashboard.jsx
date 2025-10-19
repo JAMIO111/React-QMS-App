@@ -17,7 +17,7 @@ const BookingsDashboard = () => {
   const navigate = useNavigate();
   const { profile } = useUser();
   const [aggregation, setAggregation] = useState("month");
-  const [sortColumn, setSortColumn] = useState("arrival_date");
+  const [sortColumn, setSortColumn] = useState("departure_date");
   const [sortOrder, setSortOrder] = useState("desc");
   const [selectedItem, setSelectedItem] = useState(null); // Required
   const [modalPos, setModalPos] = useState(null); // Required
@@ -29,12 +29,15 @@ const BookingsDashboard = () => {
   const pageSize = parseInt(searchParams.get("pageSize") || "25", 10);
   const modalRef = useRef(null);
   const today = useMemo(() => new Date(), []);
+  const start = useMemo(() => {
+    const s = new Date(today);
+    s.setDate(today.getDate() - (profile?.dashboard_range ?? 7));
+    return s;
+  }, [profile?.dashboard_range, today]);
 
-  const [selectedRange, setSelectedRange] = useState(() => {
-    const start = new Date();
-    const end = new Date();
-    end.setMonth(end.getMonth() + 1); // adds 1 calendar month
-    return { startDate: start, endDate: end };
+  const [selectedRange, setSelectedRange] = useState({
+    startDate: start,
+    endDate: today,
   });
 
   const memoisedRange = useMemo(
@@ -198,10 +201,11 @@ const BookingsDashboard = () => {
               icon={PiFilePlus}
             />
             <DateRangePicker
+              rangeCounterText="Days"
+              alignment="right"
               width="w-80"
               onChange={setSelectedRange}
-              defaultStartDate={today}
-              defaultEndDate={memoisedRange.endDate}
+              value={memoisedRange}
             />
           </div>
         </div>

@@ -112,45 +112,89 @@ export const OwnerFormSchema = z.object({
     .nullable()
     .or(z.literal("")), // ✅ allow blank strings
   is_active: z.boolean().default(true),
-  location: z.any().nullable().optional().nullable(),
+  location: z.any().nullable().optional(),
 });
 
 export const BookingFormSchema = z.object({
-  property_id: z.string({ required_error: "Property is required" }),
+  property_id: z
+    .string({ message: "You must select a valid property" })
+    .uuid("You must select a valid property"),
 
   booking_ref: z
     .string()
     .max(50, { message: "Booking reference must not exceed 50 characters" }),
 
-  arrival_date: z
-    .string({ required_error: "Arrival date is required" })
-    .refine((val) => !isNaN(Date.parse(val)), {
-      message: "Invalid date format",
+  bookingDates: z
+    .object({
+      startDate: z
+        .date({ required_error: "Start date is required" })
+        .nullable(),
+      endDate: z.date({ required_error: "End date is required" }).nullable(),
+    })
+    .refine((val) => val.startDate && val.endDate, {
+      message: "Please select an arrival and departure date",
     }),
 
-  departure_date: z
-    .string({ required_error: "Departure date is required" })
-    .refine((val) => !isNaN(Date.parse(val)), {
-      message: "Invalid date format",
-    })
-    .refine(
-      (val, ctx) => {
-        const arrivalDate = new Date(ctx.parent.arrival_date);
-        const departureDate = new Date(val);
-        return departureDate > arrivalDate;
-      },
-      { message: "Departure date must be after arrival date" }
-    ),
-
-  nights: z.preprocess(
+  adults: z.number({ message: "Please enter a valid number of adults" }),
+  children: z.preprocess(
     (val) => (typeof val === "string" ? parseInt(val, 10) : val),
-    z.number().min(1, { message: "Nights must be at least 1" })
+    z
+      .number({ message: "Please enter a valid number of children" })
+      .min(0, { message: "Children cannot be negative" })
   ),
+  infants: z.preprocess(
+    (val) => (typeof val === "string" ? parseInt(val, 10) : val),
+    z
+      .number({ message: "Please enter a valid number of infants" })
+      .min(0, { message: "Infants cannot be negative" })
+  ),
+  pets: z.preprocess(
+    (val) => (typeof val === "string" ? parseInt(val, 10) : val),
+    z
+      .number({ message: "Please enter a valid number of pets" })
+      .min(0, { message: "Pets cannot be negative" })
+  ),
+  highchairs: z.preprocess(
+    (val) => (typeof val === "string" ? parseInt(val, 10) : val),
+    z
+      .number({ message: "Please enter a valid number of highchairs" })
+      .min(0, { message: "Highchairs cannot be negative" })
+  ),
+  cots: z.preprocess(
+    (val) => (typeof val === "string" ? parseInt(val, 10) : val),
+    z
+      .number({ message: "Please enter a valid number of cots" })
+      .min(0, { message: "Cots cannot be negative" })
+  ),
+  stairgates: z.preprocess(
+    (val) => (typeof val === "string" ? parseInt(val, 10) : val),
+    z
+      .number({ message: "Please enter a valid number of stairgates" })
+      .min(0, { message: "Stairgates cannot be negative" })
+  ),
+  is_return_guest: z.boolean().optional(),
 
   lead_guest: z
     .string()
-    .min(2, { message: "Lead guest name must be at least 2 characters long" })
     .max(50, {
       message: "Lead guest name must not be more than 50 characters long",
-    }),
+    })
+    .optional()
+    .nullable()
+    .or(z.literal("")), // ✅ allow blank strings
+
+  lead_guest_contact: z
+    .string()
+    .max(100, {
+      message: "Lead guest contact must not be more than 100 characters long",
+    })
+    .optional()
+    .nullable()
+    .or(z.literal("")), // ✅ allow blank strings
+  notes: z
+    .string()
+    .max(1000, { message: "Notes must not exceed 1000 characters" })
+    .optional()
+    .nullable()
+    .or(z.literal("")), // ✅ allow blank strings
 });

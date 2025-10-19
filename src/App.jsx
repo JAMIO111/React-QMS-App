@@ -14,9 +14,9 @@ function App() {
           <div className="hidden md:block">
             <Navbar />
           </div>
-          <main className="flex flex-col grow h-full">
+          <main className="flex flex-col flex-1 h-full">
             <Header />
-            <div className="flex flex-col flex-grow overflow-hidden min-w-0">
+            <div className="flex flex-col flex-1 overflow-hidden min-w-0">
               <Outlet />
             </div>
           </main>

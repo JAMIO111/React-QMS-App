@@ -39,7 +39,7 @@ const Header = () => {
           <span className="text-right text-secondary-text">{jobTitle}</span>
         </div>
         <img
-          className="rounded-lg border-1 border-border-color w-12 h-12 object-cover"
+          className="rounded-xl border-1 border-border-color w-12 h-12 object-cover"
           src={profile?.avatar ? profile.avatar : "/Logo-black-on-yellow.png"}
           alt="Profile Pic"
         />

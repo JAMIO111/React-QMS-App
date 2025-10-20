@@ -11,6 +11,7 @@ import {
   FaRegNoteSticky,
 } from "react-icons/fa6";
 import { HiPhone } from "react-icons/hi2";
+import { TbChairDirector } from "react-icons/tb";
 import { BsHouse } from "react-icons/bs";
 import { MdChildFriendly } from "react-icons/md";
 import { IoReceiptOutline } from "react-icons/io5";
@@ -29,6 +30,7 @@ import { TiArrowLoop } from "react-icons/ti";
 import { useUpsertBooking } from "@/hooks/useUpsertBooking";
 import ToggleButton from "./ui/ToggleButton";
 import { useNavigate } from "react-router-dom";
+import { useToast } from "../contexts/ToastProvider";
 
 const defaultFormData = {
   booking_ref: "",
@@ -53,6 +55,7 @@ const BookingForm = () => {
   const { id } = useParams();
   const { data: booking } = useBookingById(id !== "New-Booking" ? id : null);
   const { data: properties } = useProperties();
+  const { showToast } = useToast();
 
   const upsertBooking = useUpsertBooking();
 
@@ -242,7 +245,7 @@ const BookingForm = () => {
               label="Highchairs"
               value={field.value}
               onChange={field.onChange}
-              icon={MdChildFriendly}
+              icon={TbChairDirector}
               error={fieldState.error}
             />
           )}
@@ -355,9 +358,27 @@ const BookingForm = () => {
                 await upsertBooking.mutateAsync(payload);
 
                 navigate("/Bookings");
+
+                showToast({
+                  type: "success",
+                  title:
+                    id !== "New-Booking"
+                      ? "Booking Updated"
+                      : "Booking Created",
+                  message:
+                    id !== "New-Booking"
+                      ? "The booking has been successfully updated."
+                      : "New booking created successfully.",
+                });
               } catch (error) {
                 console.error("Save failed:", error.message);
-                alert("Failed to save booking: " + error.message);
+                if (error.code === "OVERLAP") {
+                  showToast({
+                    type: "error",
+                    title: "Booking Overlap",
+                    message: `Failed to save changes: ${error.message}`,
+                  });
+                }
               }
             })}
           />

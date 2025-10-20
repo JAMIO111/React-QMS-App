@@ -181,7 +181,7 @@ const BookingsDashboard = () => {
 
   return (
     <div className="flex bg-primary-bg flex-col flex-grow overflow-hidden">
-      <div className="flex flex-col gap-2 xl:flex-row items-start  xl:items-center justify-between px-6 py-2 border-b border-border-color shrink-0 bg-primary-bg">
+      <div className="flex flex-col gap-2 xl:flex-row items-start  xl:items-center justify-between px-6 py-1 shadow-sm border-b border-border-color shrink-0 bg-primary-bg">
         <div className="flex flex-col">
           <h1 className="text-xl whitespace-nowrap text-primary-text">
             Bookings Dashboard

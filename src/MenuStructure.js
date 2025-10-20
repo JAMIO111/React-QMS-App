@@ -12,6 +12,7 @@ import { LiaFileInvoiceDollarSolid } from "react-icons/lia";
 import { IoReceiptOutline } from "react-icons/io5";
 import { BsHouseGear } from "react-icons/bs";
 import { HiOutlineWrenchScrewdriver } from "react-icons/hi2";
+import { IoCalendarOutline } from "react-icons/io5";
 
 export const menuStructure = [
   {
@@ -97,5 +98,10 @@ export const menuStructure = [
         path: "/Human-Resources/Training",
       },
     ],
+  },
+  {
+    name: "Calendar",
+    icon: IoCalendarOutline,
+    path: "/Calendar",
   },
 ];

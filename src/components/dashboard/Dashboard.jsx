@@ -6,6 +6,9 @@ import { PiFilePlus } from "react-icons/pi";
 import DateRangePicker from "@components/ui/DateRangePicker";
 import { getGreeting } from "@/lib/HelperFunctions";
 import { useJobs } from "@/hooks/useJobs";
+import StackedBarChart from "@components/charts/StackedBarChart";
+import { useBookingVolume } from "@/hooks/useBookingVolume";
+import { getPeriodLabel } from "@/lib/utils";
 
 const Dashboard = () => {
   const { profile } = useUser();
@@ -34,9 +37,16 @@ const Dashboard = () => {
 
   console.log("memoisedRange:", memoisedRange);
 
+  const { data } = useBookingVolume(
+    memoisedRange.startDate,
+    memoisedRange.endDate
+  );
+
+  console.log("Booking Volume Data:", data);
+
   return (
     <div className="flex flex-col h-full w-full bg-primary-bg">
-      <div className="flex flex-col gap-2 xl:flex-row items-start xl:items-center justify-between px-6 py-2 border-b border-border-color shrink-0 bg-primary-bg">
+      <div className="flex flex-col gap-2 xl:flex-row items-start xl:items-center justify-between px-6 py-1 shadow-sm border-b border-border-color shrink-0 bg-primary-bg">
         <div className="flex flex-col">
           <h1 className="text-xl whitespace-nowrap text-primary-text">
             Business Dashboard
@@ -64,8 +74,53 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
-      <div className="flex gap-4 p-4 flex-grow overflow-hidden">
-        <div className="flex-6"></div>
+      <div className="flex gap-3 p-3 flex-grow overflow-hidden">
+        <div className="flex flex-col gap-3 flex-6">
+          <div className="flex gap-3 flex-1">
+            <div className="flex-3">
+              <StackedBarChart
+                data={data}
+                subtitle={`Changeovers for ${getPeriodLabel(
+                  memoisedRange.startDate,
+                  memoisedRange.endDate,
+                  "current"
+                )}`}
+              />
+            </div>
+            <div className="flex-2">
+              <StackedBarChart
+                data={data}
+                subtitle={`Changeovers for ${getPeriodLabel(
+                  memoisedRange.startDate,
+                  memoisedRange.endDate,
+                  "current"
+                )}`}
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 flex-1">
+            <div className="flex-2">
+              <StackedBarChart
+                data={data}
+                subtitle={`Changeovers for ${getPeriodLabel(
+                  memoisedRange.startDate,
+                  memoisedRange.endDate,
+                  "current"
+                )}`}
+              />
+            </div>
+            <div className="flex-3">
+              <StackedBarChart
+                data={data}
+                subtitle={`Changeovers for ${getPeriodLabel(
+                  memoisedRange.startDate,
+                  memoisedRange.endDate,
+                  "current"
+                )}`}
+              />
+            </div>
+          </div>
+        </div>
         <div className="flex-4">
           <JobList jobs={jobs} isLoading={isLoading} error={error} />
         </div>

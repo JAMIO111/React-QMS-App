@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import BookingRow from "./BookingRow";
 import { IoCalendarOutline, IoPeopleOutline } from "react-icons/io5";
-import { BsBox, BsQrCode, BsCurrencyPound } from "react-icons/bs";
-import { LuCircleDashed } from "react-icons/lu";
+import { FaChildren, FaDog, FaUser } from "react-icons/fa6";
+import { IoIosMan } from "react-icons/io";
+import { MdChildFriendly } from "react-icons/md";
 import { CiTextAlignCenter } from "react-icons/ci";
-import { AiOutlineTag } from "react-icons/ai";
-import { PiStack } from "react-icons/pi";
 import DataNavBar from "./DataNavBar";
 
 const BookingsTable = ({
@@ -139,29 +138,29 @@ const BookingsTable = ({
               </th>
               <th>
                 <div className="table-header">
-                  <BsBox /> Lead Guest
+                  <FaUser /> Lead Guest
                 </div>
               </th>
               <th>
                 <div className="table-header">
-                  <BsQrCode /> Adults
+                  <IoIosMan /> Adults
                 </div>
               </th>
               <th>
                 <div className="table-header px-6 min-w-20">
                   <div className="w-full flex justify-center items-center gap-2">
-                    <PiStack /> Teens
+                    <FaChildren /> Teens
                   </div>
                 </div>
               </th>
               <th>
                 <div className="table-header">
-                  <AiOutlineTag /> Infants
+                  <MdChildFriendly /> Infants
                 </div>
               </th>
               <th>
                 <div className="table-header">
-                  <AiOutlineTag /> Pets
+                  <FaDog /> Pets
                 </div>
               </th>
               <th>

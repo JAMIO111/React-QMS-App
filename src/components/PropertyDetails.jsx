@@ -79,6 +79,7 @@ const PropertyDetails = ({ property, selectedProperty }) => {
                 </a>
               </div>
               <div className="flex mt-5 flex-wrap flex-row gap-4">
+                {/* Base property pills */}
                 <Pill
                   icon={
                     <FaBed className="text-primary-text w-4 h-4 shrink-0" />
@@ -97,20 +98,21 @@ const PropertyDetails = ({ property, selectedProperty }) => {
                   }
                   text={`${property?.bathrooms} Bath`}
                 />
-              </div>
-              {property?.KeyCodes?.length > 0 && (
-                <div className="flex mt-5 flex-wrap flex-row gap-4">
-                  {property?.KeyCodes?.map((keyCode, index) => (
+
+                {/* Key code pills (inline with the rest) */}
+                {property?.KeyCodes?.length > 0 &&
+                  property.KeyCodes.map((keyCode, index) => (
                     <Pill
                       key={index}
                       icon={
                         <IoKeySharp className="text-primary-text w-4 h-4 shrink-0" />
                       }
+                      color="purple"
                       text={`${keyCode.name}: ${keyCode.code}`}
                     />
                   ))}
-                </div>
-              )}
+              </div>
+
               <div className="my-5 border border-border-color rounded-2xl bg-primary-bg h-64"></div>
               <p className="text-xl text-primary-text font-semibold">
                 Property Owners

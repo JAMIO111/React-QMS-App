@@ -8,7 +8,7 @@ export const useBookings = ({
   page = 1,
   pageSize = 50,
 }) => {
-  const { search, leadGuest, bookingRef } = useBookingsFilters();
+  const { search, leadGuest, bookingRef, propertyName } = useBookingsFilters();
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
@@ -27,6 +27,7 @@ export const useBookings = ({
     queryKey: [
       leadGuest,
       bookingRef,
+      propertyName,
       {
         search,
         sortColumn,
@@ -43,7 +44,7 @@ export const useBookings = ({
 
       if (search) {
         query = query.or(
-          `lead_guest.ilike.%${search}%,booking_ref.ilike.%${search}%`
+          `lead_guest.ilike.%${search}%,booking_ref.ilike.%${search}%,property_name.ilike.%${search}%`
         );
       }
 

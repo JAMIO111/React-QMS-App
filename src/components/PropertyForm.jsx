@@ -254,6 +254,7 @@ const PropertyForm = () => {
           ))}
         </div>
       </div>
+      <div className="flex flex-col flex-1 gap-3"></div>
       <div className="flex flex-col flex-1 gap-3">
         <div className="flex justify-between p-3 flex-col bg-secondary-bg shadow-m rounded-2xl">
           <div className="flex items-center justify-between pr-2 mb-3">

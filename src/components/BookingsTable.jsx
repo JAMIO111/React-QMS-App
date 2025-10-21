@@ -164,6 +164,9 @@ const BookingsTable = ({
                 </div>
               </th>
               <th>
+                <div className="table-header">Booking Type</div>
+              </th>
+              <th>
                 <div className="text-transparent h-full table-header">
                   <p className="text-transparent">.</p>
                 </div>

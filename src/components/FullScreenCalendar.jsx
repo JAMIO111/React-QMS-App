@@ -11,7 +11,11 @@ const tasksData = {
     { id: 6, title: "Nightly backup", time: "10:00 PM" },
     { id: 7, title: "System checks", time: "11:00 PM" },
   ],
-  "2025-09-09": [{ id: 8, title: "Write documentation", time: "1:00 PM" }],
+  "2025-09-09": [
+    { id: 8, title: "Write documentation", time: "1:00 PM" },
+    { id: 9, title: "Deploy new version", time: "3:00 PM" },
+    { id: 10, title: "Team retrospective", time: "4:00 PM" },
+  ],
 };
 
 export default function FullScreenCalendar() {
@@ -43,10 +47,10 @@ export default function FullScreenCalendar() {
   const tasks = formattedDate ? tasksData[formattedDate] || [] : [];
 
   return (
-    <div className="h-full bg-primary-bg p-3 flex items-center justify-center">
-      <div className="rounded-3xl shadow-m p-2 h-full w-full flex flex-col overflow-hidden">
+    <div className="h-full bg-primary-bg flex items-center justify-center">
+      <div className=" shadow-m h-full w-full flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="p-3 border border-border-color rounded-t-2xl flex justify-between items-center bg-tertiary-bg text-primary-text">
+        <header className="p-3 border-border-color flex justify-between items-center bg-tertiary-bg text-primary-text">
           <CTAButton
             width="w-24"
             type="main"
@@ -69,7 +73,7 @@ export default function FullScreenCalendar() {
 
         {/* Calendar Grid */}
         <main
-          className="flex-1 rounded-b-[20px] border-border-color border bg-secondary-bg grid grid-cols-7 overflow-hidden"
+          className="flex-1 border-border-color border bg-secondary-bg grid grid-cols-7 overflow-hidden"
           style={{
             gridTemplateRows: `auto repeat(${numRows}, 1fr)`,
           }}>
@@ -98,7 +102,7 @@ export default function FullScreenCalendar() {
                 <span className="font-semibold text-secondary-text absolute top-1 left-2 z-10">
                   {date.getDate()}
                 </span>
-                <span className="font-medium text-xs text-secondary-text absolute top-2 right-2 z-10">
+                <span className="text-xs text-error-color/70 absolute top-1.75 right-2 z-10">
                   {tasksData[date.toISOString().split("T")[0]]
                     ? tasksData[date.toISOString().split("T")[0]].length +
                       " Items"
@@ -108,12 +112,12 @@ export default function FullScreenCalendar() {
                 {/* FIXED HEIGHT SCROLL AREA */}
                 <div className="mt-6 p-2 overflow-y-auto [&::-webkit-scrollbar]:hidden flex-1 min-h-0">
                   {tasksData[date.toISOString().split("T")[0]] && (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-1.5">
                       {tasksData[date.toISOString().split("T")[0]].map(
                         (task) => (
                           <div
                             key={task.id}
-                            className="flex py-1 px-2 bg-secondary-bg rounded-md shadow-s gap-3 items-center justify-start flex-shrink-0">
+                            className="flex py-0.5 px-2 bg-secondary-bg rounded-md shadow-s gap-3 items-center justify-start flex-shrink-0">
                             <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></span>
                             <p className="text-secondary-text text-xs truncate">
                               {task.title}

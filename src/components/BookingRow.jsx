@@ -1,9 +1,8 @@
 import { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import StatusPill from "./StatusPill";
 import { IoEllipsisVertical } from "react-icons/io5";
-import { useStatusOptions } from "@/hooks/useCategoryOptions";
+import Pill from "@components/Pill";
 
 const BookingRow = ({
   item,
@@ -27,9 +26,6 @@ const BookingRow = ({
     new Date(item.departure_date),
     "EEE, d MMM yy"
   );
-
-  const { data: statusOptions } = useStatusOptions();
-  const status = statusOptions?.find((s) => s.id === item.status);
 
   const handleEllipsisClick = (e) => {
     e.stopPropagation();
@@ -78,11 +74,27 @@ const BookingRow = ({
           {item.nights}
         </div>
       </td>
-      <td className="p-2">{item.lead_guest ? item.lead_guest : "N/A"}</td>
+      <td className="p-2 align-middle">
+        <div className="inline-flex items-center gap-2">
+          <span>{item.lead_guest || "N/A"}</span>
+          {item.is_return_guest && (
+            <div className="px-1 py-0.5 text-xs bg-brand-primary/20 text-brand-primary rounded flex-shrink-0">
+              RG
+            </div>
+          )}
+        </div>
+      </td>
       <td className="p-2 text-center">{item.adults || "-"}</td>
       <td className="p-2 text-center">{item.children || "-"}</td>
       <td className="p-2 text-center">{item.infants || "-"}</td>
       <td className="p-2 text-center">{item.pets || "-"}</td>
+      <td className="p-2 text-center">
+        {item.is_owner_booking ? (
+          <Pill color="purple" text="Owner" />
+        ) : (
+          <Pill color="blue" text="Guest" />
+        )}
+      </td>
 
       <td className="p-2 text-center">
         <button

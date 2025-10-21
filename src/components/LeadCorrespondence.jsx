@@ -9,7 +9,7 @@ const LeadCorrespondence = () => {
           <div className="rounded-full w-7 h-7 bg-green-400"></div>
           <p className="text-sm text-secondary-text">
             <span className="text-primary-text">Jamie Dryden</span> logged some
-            new correspondence
+            correspondence
           </p>
           <div className="rounded-full w-1 h-1 bg-muted/50"></div>
           <div className="rounded-md shadow-s flex flex-row items-center justify-between py-1 px-2 bg-tertiary-bg">

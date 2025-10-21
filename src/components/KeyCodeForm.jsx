@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import CTAButton from "./CTAButton";
 import TextInput from "./ui/TextInput";
 import { PiPassword } from "react-icons/pi";
-import { LuTag } from "react-icons/lu";
 import ToggleButton from "./ui/ToggleButton";
 import { SlLock, SlLockOpen } from "react-icons/sl";
+import { GrLocationPin } from "react-icons/gr";
 
 const KeyCodeForm = ({ defaultValues, onSave, onCancel }) => {
   const [form, setForm] = useState({
@@ -54,9 +54,9 @@ const KeyCodeForm = ({ defaultValues, onSave, onCancel }) => {
       />
 
       <TextInput
-        label="Description"
-        placeholder="Enter description..."
-        icon={LuTag}
+        label="Location"
+        placeholder="e.g. Front Door, Safe"
+        icon={GrLocationPin}
         value={form.name}
         onChange={(e) => setForm({ ...form, name: e.target.value })}
         error={

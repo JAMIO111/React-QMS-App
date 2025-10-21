@@ -48,6 +48,7 @@ const defaultFormData = {
   stairgates: 0,
   notes: "",
   is_return_guest: false,
+  is_owner_booking: false,
 };
 
 const BookingForm = () => {
@@ -173,14 +174,20 @@ const BookingForm = () => {
             />
           )}
         />
-
-        <ToggleButton
-          icon={TiArrowLoop}
-          label="Return Guest"
-          checked={watch("is_return_guest")}
-          onChange={(checked) => setValue("is_return_guest", checked)}
-          trueLabel="Yes"
-          falseLabel="No"
+        <Controller
+          name="is_return_guest"
+          control={control}
+          render={({ field, fieldState }) => (
+            <ToggleButton
+              icon={TiArrowLoop}
+              label="Return Guest"
+              checked={field.value}
+              onChange={field.onChange}
+              trueLabel="Yes"
+              falseLabel="No"
+              {...field}
+            />
+          )}
         />
       </div>
 
@@ -279,7 +286,7 @@ const BookingForm = () => {
       </div>
 
       <div className="flex flex-1 gap-4 flex-col">
-        <div className="flex flex-1 shadow-m flex-col bg-secondary-bg rounded-2xl p-3">
+        <div className="flex flex-1 gap-3 shadow-m flex-col bg-secondary-bg justify-start rounded-2xl p-3">
           <Controller
             name="notes"
             control={control}
@@ -291,6 +298,20 @@ const BookingForm = () => {
                 value={field.value}
                 onChange={field.onChange}
                 error={fieldState.error}
+              />
+            )}
+          />
+          <Controller
+            name="is_owner_booking"
+            control={control}
+            render={({ field, fieldState }) => (
+              <ToggleButton
+                icon={TiArrowLoop}
+                label="Owner Booking"
+                checked={field.value}
+                onChange={field.onChange}
+                trueLabel="Yes"
+                falseLabel="No"
               />
             )}
           />

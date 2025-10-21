@@ -197,4 +197,5 @@ export const BookingFormSchema = z.object({
     .optional()
     .nullable()
     .or(z.literal("")), // ✅ allow blank strings
+  is_owner_booking: z.boolean(),
 });

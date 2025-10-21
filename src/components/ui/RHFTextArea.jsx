@@ -17,7 +17,7 @@ const RHFTextAreaInput = forwardRef(
     ref
   ) => {
     return (
-      <div className="w-full h-full">
+      <div className="w-full">
         {label && (
           <label className="block mb-1 text-primary-text">{label}</label>
         )}

@@ -1,7 +1,8 @@
 import React from "react";
+import JobSheet from "../JobSheet";
 
 const SettingsSystemPreferences = () => {
-  return;
+  return <JobSheet job={{}} />;
 };
 
 export default SettingsSystemPreferences;

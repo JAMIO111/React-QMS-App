@@ -57,6 +57,7 @@ export const PropertyFormSchema = z.object({
       })
     )
     .optional(),
+  package: z.number(),
 });
 
 const phoneRegex = /^[+()\-0-9\s]{6,20}$/;

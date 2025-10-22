@@ -3,12 +3,15 @@ import supabase from "../supabase-client";
 import { useBookingsFilters } from "./useBookingsFilters";
 
 export const useBookings = ({
-  sortColumn = "arrival_date",
+  sortColumn = "departure_date",
   sortOrder = "desc",
   page = 1,
   pageSize = 50,
+  startDate,
+  endDate,
 }) => {
-  const { search, leadGuest, bookingRef, propertyName } = useBookingsFilters();
+  const { search, leadGuest, bookingRef, property, managementPackage, type } =
+    useBookingsFilters();
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
@@ -27,20 +30,26 @@ export const useBookings = ({
     queryKey: [
       leadGuest,
       bookingRef,
-      propertyName,
+      property,
+      managementPackage,
+      type,
       {
         search,
         sortColumn,
         sortOrder,
         page,
         pageSize,
+        startDate,
+        endDate,
       },
     ],
     queryFn: async () => {
       let query = supabase.from("v_bookings").select("*", { count: "exact" });
       query = query
         .order(sortColumn, { ascending: sortOrder === "asc" })
-        .range(from, to);
+        .range(from, to)
+        .gte("departure_date", startDate.toISOString())
+        .lte("departure_date", endDate.toISOString());
 
       if (search) {
         query = query.or(
@@ -53,6 +62,15 @@ export const useBookings = ({
       }
       if (bookingRef) {
         query = query.eq("booking_ref", bookingRef);
+      }
+      if (property) {
+        query = query.eq("property_name", property);
+      }
+      if (managementPackage) {
+        query = query.eq("package_id", managementPackage);
+      }
+      if (type) {
+        query = query.eq("type", type);
       }
 
       const { data, count, error } = await query;

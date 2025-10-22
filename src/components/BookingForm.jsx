@@ -340,12 +340,10 @@ const BookingForm = () => {
             }
           />
           <CTAButton
-            disabled={
-              !isDirty || !isValid || isSubmitting || upsertBooking.isLoading
-            }
+            disabled={!isDirty || !isValid || isSubmitting}
             width="flex-1"
             type="success"
-            text={upsertBooking.isLoading ? "Saving..." : "Save Changes"}
+            text={isSubmitting ? "Saving..." : "Save Changes"}
             icon={FaCheck}
             callbackFn={handleSubmit(async (data) => {
               try {

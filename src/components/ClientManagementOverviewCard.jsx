@@ -266,14 +266,14 @@ export default function ClientManagementOverviewCard({
 
             {activeOwners.length > visibleCount ? (
               <div className="flex flex-col items-center justify-start">
-                <div className="w-14 h-14 flex items-center text-white pr-1 text-lg justify-center rounded-full bg-neutral-700">
+                <div className="w-14 h-14 flex items-center text-white pr-1 text-lg justify-center rounded-xl bg-neutral-700">
                   +{activeOwners.length - visibleCount + 1}
                 </div>
               </div>
             ) : (
               activeProperties.length > visibleCount && (
                 <div className="flex flex-col items-center text-white justify-start">
-                  <div className="w-14 h-14 flex items-center pr-1 text-lg justify-center rounded-full bg-neutral-700">
+                  <div className="w-14 h-14 flex items-center pr-1 text-lg justify-center rounded-xl bg-neutral-700">
                     +{activeProperties.length - visibleCount + 1}
                   </div>
                 </div>
@@ -287,7 +287,7 @@ export default function ClientManagementOverviewCard({
                 ? navigate("/Client-Management/Owners")
                 : navigate("/Client-Management/Properties")
             }
-            className="bg-neutral-800 shadow-s text-white flex gap-3 p-4 rounded-full hover:bg-neutral-700 transition">
+            className="bg-neutral-800 shadow-s mb-7 text-white flex gap-3 p-4 rounded-full hover:bg-neutral-700 transition">
             <ArrowUpRight /> View All {active}
           </button>
         </div>

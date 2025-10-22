@@ -1,7 +1,7 @@
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PropertyFormSchema } from "../validationSchema";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { IoIosMan } from "react-icons/io";
 import { FaBed, FaBath, FaCheck, FaTreeCity } from "react-icons/fa6";
@@ -18,6 +18,8 @@ import CTAButton from "./CTAButton";
 import { useModal } from "@/contexts/ModalContext";
 import KeyCodeForm from "./KeyCodeForm";
 import { useUpsertProperty } from "@/hooks/useUpsertProperty";
+import CardSelect from "@components/CardSelect";
+import { usePackages } from "@/hooks/useManagementPackages";
 
 const defaultFormData = {
   name: undefined,
@@ -30,6 +32,7 @@ const defaultFormData = {
   county: undefined,
   postcode: undefined,
   what_3_words: undefined,
+  package: null,
   KeyCodes: [],
   Owners: [],
 };
@@ -41,7 +44,9 @@ const PropertyForm = () => {
   const { data: property, isLoading } = usePropertyById(
     id !== "New-Property" ? id : null
   );
+  const { data: packages } = usePackages();
   console.log("Property Data:", property);
+  console.log("Packages Data:", packages);
   const upsertProperty = useUpsertProperty();
 
   const normalizedProperty = {
@@ -197,7 +202,7 @@ const PropertyForm = () => {
         </div>
       </div>
       <div className="flex-1">
-        <div className="flex h-full justify-between flex-1 p-5 flex-col bg-secondary-bg shadow-m rounded-2xl">
+        <div className="flex h-full justify-between flex-1 p-3 flex-col bg-secondary-bg shadow-m rounded-2xl">
           {[
             {
               name: "line_1",
@@ -254,7 +259,26 @@ const PropertyForm = () => {
           ))}
         </div>
       </div>
-      <div className="flex flex-col flex-1 gap-3"></div>
+      <div className="flex flex-col flex-1 gap-3">
+        <div className="flex justify-between p-3 flex-col bg-secondary-bg shadow-m rounded-2xl">
+          <Controller
+            name="package"
+            control={control}
+            render={({ field, fieldState }) => (
+              <CardSelect
+                options={packages || []}
+                label="Management Package"
+                titleKey="name"
+                descriptionKey="tier"
+                valueKey="id"
+                package={true}
+                value={field.value}
+                onChange={field.onChange}
+              />
+            )}
+          />
+        </div>
+      </div>
       <div className="flex flex-col flex-1 gap-3">
         <div className="flex justify-between p-3 flex-col bg-secondary-bg shadow-m rounded-2xl">
           <div className="flex items-center justify-between pr-2 mb-3">
@@ -326,29 +350,32 @@ const PropertyForm = () => {
             }
           />
           <CTAButton
-            disabled={
-              !isDirty || !isValid || isSubmitting || upsertProperty.isLoading
-            }
+            disabled={!isDirty || !isValid || isSubmitting}
             width="flex-1"
             type="success"
-            text={upsertProperty.isLoading ? "Saving..." : "Save Changes"}
+            text={isSubmitting ? "Saving..." : "Save Changes"}
             icon={FaCheck}
-            callbackFn={handleSubmit(async (data) => {
-              try {
-                const payload = id !== "New-Property" ? { id, ...data } : data;
+            callbackFn={handleSubmit((data) => {
+              const payload = id !== "New-Property" ? { id, ...data } : data;
 
-                console.log("Submitting payload:", payload);
-                console.log("KeyCodes to submit:", keyCodeFields);
-                await upsertProperty.mutateAsync({
+              console.log("Submitting payload:", payload);
+              console.log("KeyCodes to submit:", keyCodeFields);
+
+              upsertProperty.mutate(
+                {
                   propertyData: payload,
                   keyCodesForm: keyCodeFields,
-                });
-
-                navigate("/Client-Management/Properties");
-              } catch (error) {
-                console.error("Save failed:", error.message);
-                alert("Failed to save property: " + error.message);
-              }
+                },
+                {
+                  onSuccess: () => {
+                    navigate("/Client-Management/Properties");
+                  },
+                  onError: (error) => {
+                    console.error("Save failed:", error.message);
+                    alert("Failed to save property: " + error.message);
+                  },
+                }
+              );
             })}
           />
         </div>

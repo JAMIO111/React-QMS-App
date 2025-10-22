@@ -225,12 +225,10 @@ const OwnerForm = () => {
             }
           />
           <CTAButton
-            disabled={
-              !isDirty || !isValid || isSubmitting || upsertOwner.isLoading
-            }
+            disabled={!isDirty || !isValid || isSubmitting}
             width="flex-1"
             type="success"
-            text={upsertOwner.isLoading ? "Saving..." : "Save Changes"}
+            text={isSubmitting ? "Saving..." : "Save Changes"}
             icon={FaCheck}
             callbackFn={handleSubmit(async (data) => {
               try {

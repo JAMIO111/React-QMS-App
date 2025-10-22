@@ -12,6 +12,9 @@ import { useBookingsFilters } from "@/hooks/useBookingsFilters";
 import { useSearchParams } from "react-router-dom";
 import { useGlobalSearch } from "@/contexts/SearchProvider";
 import ActionsModal from "@components/ActionsModal";
+import IconButton from "@components/IconButton";
+import { BsSliders } from "react-icons/bs";
+import FilterPane from "@components/FilterPane";
 
 const BookingsDashboard = () => {
   const navigate = useNavigate();
@@ -81,6 +84,8 @@ const BookingsDashboard = () => {
     sortOrder,
     page,
     pageSize,
+    startDate: memoisedRange.startDate,
+    endDate: memoisedRange.endDate,
   });
 
   console.log("Bookings Dashboard - Bookings Data:", bookingsData);
@@ -171,9 +176,13 @@ const BookingsDashboard = () => {
     };
   }, [modalPos]);
 
-  const activeFilters = ["property", "leadGuest", "bookingRef"].filter((key) =>
-    searchParams.get(key)
-  );
+  const activeFilters = [
+    "property",
+    "leadGuest",
+    "bookingRef",
+    "managementPackage",
+    "type",
+  ].filter((key) => searchParams.get(key));
   const filterCount = activeFilters.length;
 
   console.log("Bookings Dashboard Data:", bookingsData);
@@ -200,6 +209,17 @@ const BookingsDashboard = () => {
               text="Add Booking"
               icon={PiFilePlus}
             />
+            <IconButton
+              count={filterCount}
+              selected={activeModalType === "Filter"}
+              color="blue"
+              title="Filter"
+              callback={handleActiveModalType}
+              icon={<BsSliders className="h-4.5 w-4.5" />}
+            />
+            {activeModalType === "Filter" && (
+              <FilterPane onClose={handleCloseModal} />
+            )}
             <DateRangePicker
               rangeCounterText="Days"
               alignment="right"

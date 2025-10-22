@@ -89,7 +89,7 @@ export default function LeadList() {
         </div>
 
         {/* Scrollable cards */}
-        <div className="flex p-4 flex-col gap-4">
+        <div className="flex p-4 pt-1 flex-col gap-4">
           {leads.map((lead) => (
             <div
               key={lead.id}

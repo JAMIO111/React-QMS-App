@@ -152,14 +152,14 @@ const RHFComboBox = ({
           <div
             onClick={() => setIsOpen((prev) => !prev)}
             className={`${
-              error && "border border-error-color hover:border-error-color/70"
+              error && "border-error-color hover:border-error-color/70"
             } ${
               isOpen
                 ? error
                   ? "ring-3 ring-error-color/30"
-                  : "border border-brand-primary hover:border-brand-primary"
-                : "border-border-color hover:border-border-dark-color"
-            } shadow-s hover:shadow-m rounded-lg px-2 py-2 cursor-pointer bg-text-input-color flex items-center justify-between ${
+                  : "border-brand-primary hover:border-brand-primary"
+                : "border-transparent"
+            } shadow-s border hover:shadow-m rounded-lg px-2 py-2 cursor-pointer bg-text-input-color flex items-center justify-between ${
               (dependentValue === undefined || dependentValue === null) &&
               dependentKey
                 ? "pointer-events-none cursor-not-allowed"
@@ -170,9 +170,9 @@ const RHFComboBox = ({
                 title={error.message}
                 className="w-5 h-5 text-error-color mr-2 flex-shrink-0"
               />
-            ) : (
+            ) : Icon ? (
               <Icon className="w-5 h-5 text-primary-text mr-2 flex-shrink-0 pointer-events-none" />
-            )}
+            ) : null}
 
             <div className="flex flex-grow align-text-cen min-w-0 h-6 mr-2">
               <input

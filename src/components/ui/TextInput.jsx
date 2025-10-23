@@ -45,12 +45,12 @@ const TextInput = forwardRef(
           <label className="block font-medium text-primary-text">{label}</label>
         )}
         <div
-          className={`flex flex-row relative items-center shadow-s hover:shadow-m rounded-lg pl-2 pr-10 py-2 bg-text-input-color
-            hover:border-border-dark-color focus-within:border-brand-primary focus-within:hover:border-brand-primary min-w-0
+          className={`flex border flex-row relative items-center shadow-s hover:shadow-m rounded-lg pl-2 pr-10 py-2 bg-text-input-color
+             focus-within:border-brand-primary focus-within:hover:border-brand-primary min-w-0
             ${
               error
                 ? "border border-error-color hover:border-error-color/70 hover:focus-within:border-error-color focus-within:border-error-color focus-within:ring-3 focus-within:ring-error-color/20"
-                : ""
+                : "border-transparent"
             }`}>
           {error ? (
             <MdErrorOutline

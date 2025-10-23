@@ -30,7 +30,7 @@ const ProfileImageSection = ({
             className="w-32 h-32 rounded-2xl object-cover border"
           />
         ) : (
-          <div className="w-32 h-32 rounded-2xl bg-gray-200 flex items-center justify-center text-gray-400">
+          <div className="w-32 h-32 rounded-2xl bg-tertiary-bg shadow-s flex items-center justify-center text-gray-400">
             <span className="text-2xl text-center">{noImageText}</span>
           </div>
         )}

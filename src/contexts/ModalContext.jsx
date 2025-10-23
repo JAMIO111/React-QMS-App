@@ -118,7 +118,7 @@ export const ModalProvider = ({ children }) => {
                 <button
                   onClick={closeModal}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="group flex justify-center items-center w-10 h-10 hover:text-white hover:bg-error-color/80 rounded-tr-xl">
+                  className="group flex justify-center items-center w-10 h-10 hover:text-white hover:bg-error-color rounded-tr-xl">
                   <CgClose className="h-5 w-5 group-hover:text-white text-primary-text" />
                 </button>
               </div>

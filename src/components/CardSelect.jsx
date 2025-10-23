@@ -33,11 +33,11 @@ const CardSelect = ({
               key={option[valueKey]}
               type="button"
               onClick={() => onChange(option[valueKey])}
-              className={`cursor-pointer flex-1 bg-tertiary-bg shadow-s min-w-[calc(50%-0.5rem)] p-2 rounded-2xl text-left
+              className={`cursor-pointer flex-1 shadow-s min-w-[calc(50%-0.5rem)] p-2 rounded-2xl text-left
               ${
                 selected
                   ? "border-cta-color border bg-cta-color/10 shadow-md"
-                  : "border border-transparent hover:bg-cta-color/5"
+                  : "border border-transparent hover:border-cta-color/50 bg-tertiary-bg hover:bg-cta-color/5"
               }`}>
               {isPackage ? (
                 <div
@@ -46,7 +46,7 @@ const CardSelect = ({
                 option.icon && (
                   <option.icon
                     className={`h-6 w-6 mb-2 ${
-                      selected ? "text-cta-color" : "text-gray-500"
+                      selected ? "text-cta-color" : "text-secondary-text"
                     }`}
                   />
                 )

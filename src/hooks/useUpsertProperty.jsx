@@ -5,8 +5,8 @@ export const useUpsertProperty = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ propertyData, keyCodesForm }) => {
-      const { KeyCodes = [], ...property } = propertyData;
+    mutationFn: async ({ propertyData, keyCodesForm, ownersForm }) => {
+      const { KeyCodes = [], Owners = [], ...property } = propertyData;
       let propertyId = property.id;
       let result;
 
@@ -31,61 +31,74 @@ export const useUpsertProperty = () => {
         result = data;
       }
 
-      // 2️⃣ Split KeyCodes: new vs existing
+      // --- KeyCodes Handling (as before) ---
       const newKeyCodes = [];
       const existingKeyCodes = [];
 
       (keyCodesForm || []).forEach((k) => {
         if (!k.created_at) {
-          // Treat client-generated temp IDs as new
-          const { id, ...clean } = k;
           newKeyCodes.push({ ...k, property_id: propertyId });
         } else {
           existingKeyCodes.push({ ...k, property_id: propertyId });
         }
       });
 
-      // 3️⃣ Insert new KeyCodes (Postgres handles created_at)
       if (newKeyCodes.length > 0) {
-        console.log("Inserting new KeyCodes:", newKeyCodes);
         const { error: insertError } = await supabase
           .from("KeyCodes")
-          .insert(newKeyCodes)
-          .select("id"); // optional: get DB-generated IDs
+          .insert(newKeyCodes);
         if (insertError) throw insertError;
       }
 
-      // 4️⃣ Upsert existing KeyCodes
       if (existingKeyCodes.length > 0) {
-        console.log("Upserting existing KeyCodes:", existingKeyCodes);
         const { error: upsertError } = await supabase
           .from("KeyCodes")
           .upsert(existingKeyCodes, { onConflict: "id" });
         if (upsertError) throw upsertError;
       }
 
-      // 5️⃣ Delete removed KeyCodes
-      const { data: existingInDb, error: fetchError } = await supabase
-        .from("KeyCodes")
-        .select("id")
-        .eq("property_id", propertyId);
-      if (fetchError) throw fetchError;
+      const { data: existingKeyCodesInDb, error: fetchKeyCodesError } =
+        await supabase
+          .from("KeyCodes")
+          .select("id")
+          .eq("property_id", propertyId);
+      if (fetchKeyCodesError) throw fetchKeyCodesError;
 
-      const currentIds = (keyCodesForm || []).map((k) => k.id).filter(Boolean);
-      const toDelete = existingInDb.filter((k) => !currentIds.includes(k.id));
-
-      if (toDelete.length > 0) {
+      const currentKeyIds = (keyCodesForm || [])
+        .map((k) => k.id)
+        .filter(Boolean);
+      const toDeleteKeyCodes = existingKeyCodesInDb.filter(
+        (k) => !currentKeyIds.includes(k.id)
+      );
+      if (toDeleteKeyCodes.length > 0) {
         const { error: deleteError } = await supabase
           .from("KeyCodes")
           .delete()
           .in(
             "id",
-            toDelete.map((k) => k.id)
+            toDeleteKeyCodes.map((k) => k.id)
           );
         if (deleteError) throw deleteError;
       }
 
-      return result;
+      // --- Owners Handling ---
+      // ownersForm = [{ owner_id }]
+      if (ownersForm && ownersForm.length > 0) {
+        // Build payload with property_id
+        const ownersPayload = ownersForm.map((o) => ({
+          property_id: propertyId,
+          owner_id: o.owner_id,
+        }));
+
+        // Upsert owners (on conflict by property_id + owner_id)
+        const { error: ownersError } = await supabase
+          .from("PropertyOwner")
+          .upsert(ownersPayload, {
+            onConflict: ["property_id", "owner_id"], // ensure you have this unique constraint in DB
+          });
+
+        if (ownersError) throw ownersError;
+      }
     },
 
     onSuccess: (_, { propertyData }) => {

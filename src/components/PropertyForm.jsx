@@ -17,9 +17,11 @@ import { usePropertyById } from "@/hooks/usePropertyById";
 import CTAButton from "./CTAButton";
 import { useModal } from "@/contexts/ModalContext";
 import KeyCodeForm from "./KeyCodeForm";
+import PropertyOwnerForm from "./PropertyOwnerForm";
 import { useUpsertProperty } from "@/hooks/useUpsertProperty";
 import CardSelect from "@components/CardSelect";
 import { usePackages } from "@/hooks/useManagementPackages";
+import { HiOutlinePhone } from "react-icons/hi2";
 
 const defaultFormData = {
   name: undefined,
@@ -86,6 +88,7 @@ const PropertyForm = () => {
     append: appendOwner,
     remove: removeOwner,
     update: updateOwner,
+    replace: replaceOwners,
   } = useFieldArray({
     control,
     name: "Owners",
@@ -102,6 +105,24 @@ const PropertyForm = () => {
   console.log("Form Errors:", errors);
   console.log("Is Form Valid:", isValid);
   console.log("Is Form Dirty:", isDirty);
+
+  const openManageOwnersModal = () => {
+    openModal({
+      title: "Manage Property Owners",
+      content: (
+        <PropertyOwnerForm
+          propertyId={id}
+          defaultOwners={ownerFields.map((field) => field)}
+          onSave={(updatedOwners) => {
+            replaceOwners(updatedOwners); // replaces entire array in form state
+            trigger("Owners");
+            closeModal();
+          }}
+          onCancel={closeModal}
+        />
+      ),
+    });
+  };
 
   const openAddKeyCodeModal = () => {
     openModal({
@@ -302,7 +323,7 @@ const PropertyForm = () => {
                   <span className="rounded-lg shadow-s p-1 text-lg px-2 bg-primary-bg font-bold text-primary-text">
                     {field.code}
                   </span>
-                  <span className="flex-1 p-1 font-medium text-lg text-primary-text">
+                  <span className="flex-1 p-1 truncate font-medium text-lg text-primary-text">
                     {field.name}
                   </span>
                   {field.is_private && (
@@ -335,7 +356,57 @@ const PropertyForm = () => {
             </ul>
           )}
         </div>
-        <div className="flex flex-col flex-1 bg-secondary-bg shadow-m rounded-2xl p-3"></div>
+        <div className="flex flex-col flex-1 bg-secondary-bg shadow-m rounded-2xl p-3">
+          <div className="flex items-center justify-between pr-2 mb-3">
+            <h2 className="text-xl ml-1 font-semibold text-primary-text">
+              Owners
+            </h2>
+            <CTAButton
+              type="main"
+              text="Manage Owners"
+              callbackFn={openManageOwnersModal}
+            />
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {ownerFields.length === 0 ? (
+              <p className="text-sm text-primary-text">No owners added yet.</p>
+            ) : (
+              <ul className="flex flex-col p-1 gap-2">
+                {ownerFields.map((owner, index) => (
+                  <li
+                    key={owner.id}
+                    className="flex items-center justify-between p-2 bg-tertiary-bg rounded-xl shadow-s">
+                    {owner.avatar ? (
+                      <img
+                        src={owner.avatar}
+                        alt={`${owner.first_name} ${owner.surname}`}
+                        className="w-12 h-12 rounded-lg object-cover mr-3"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center shadow-s w-12 h-12 rounded-lg bg-primary-bg mr-3">
+                        <p className="text-lg font-semibold text-primary-text">
+                          {owner.first_name.charAt(0).toUpperCase() +
+                            owner.surname.charAt(0).toUpperCase()}
+                        </p>
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-1 flex-1 ml-2">
+                      <span className="font-medium text-primary-text">
+                        {owner.first_name} {owner.surname}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <HiOutlinePhone className="text-secondary-text" />
+                        <span className="text-sm text-secondary-text">
+                          {owner.primary_phone}
+                        </span>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
         <div className="flex flex-row gap-3 bg-secondary-bg shadow-m rounded-2xl p-3">
           <CTAButton
             disabled={!isDirty}
@@ -360,11 +431,13 @@ const PropertyForm = () => {
 
               console.log("Submitting payload:", payload);
               console.log("KeyCodes to submit:", keyCodeFields);
+              console.log("Owners to submit:", ownerFields);
 
               upsertProperty.mutate(
                 {
                   propertyData: payload,
                   keyCodesForm: keyCodeFields,
+                  ownersForm: ownerFields,
                 },
                 {
                   onSuccess: () => {

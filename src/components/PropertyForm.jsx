@@ -3,14 +3,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { PropertyFormSchema } from "../validationSchema";
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { IoIosMan } from "react-icons/io";
+import { IoIosMan, IoIosUndo } from "react-icons/io";
 import { FaBed, FaBath, FaCheck, FaTreeCity } from "react-icons/fa6";
-import { IoTrashOutline } from "react-icons/io5";
-import { IoIosUndo } from "react-icons/io";
+import { IoTrashOutline, IoLocation, IoHome } from "react-icons/io5";
 import { BsMailbox2Flag, BsFillBuildingsFill, BsPencil } from "react-icons/bs";
-import { IoLocation } from "react-icons/io5";
 import { PiNumberThreeFill } from "react-icons/pi";
-import { GiFamilyHouse } from "react-icons/gi";
+import { GiMagicBroom } from "react-icons/gi";
 import NumericInputGroup from "./NumericInputGroup";
 import TextInput from "./ui/TextInput";
 import { usePropertyById } from "@/hooks/usePropertyById";
@@ -22,6 +20,14 @@ import { useUpsertProperty } from "@/hooks/useUpsertProperty";
 import CardSelect from "@components/CardSelect";
 import { usePackages } from "@/hooks/useManagementPackages";
 import { HiOutlinePhone } from "react-icons/hi2";
+import { HiOutlineMail } from "react-icons/hi";
+import {
+  MdHotTub,
+  MdOutlineLocalLaundryService,
+  MdPublishedWithChanges,
+} from "react-icons/md";
+import Spinner from "@components/LoadingSpinner";
+import { useToast } from "../contexts/ToastProvider";
 
 const defaultFormData = {
   name: undefined,
@@ -35,6 +41,7 @@ const defaultFormData = {
   postcode: undefined,
   what_3_words: undefined,
   package: null,
+  service_type: null,
   KeyCodes: [],
   Owners: [],
 };
@@ -43,6 +50,7 @@ const PropertyForm = () => {
   const { openModal, closeModal } = useModal();
   const navigate = useNavigate();
   const { id } = useParams();
+  const { showToast } = useToast();
   const { data: property, isLoading } = usePropertyById(
     id !== "New-Property" ? id : null
   );
@@ -92,6 +100,7 @@ const PropertyForm = () => {
   } = useFieldArray({
     control,
     name: "Owners",
+    keyName: "formId",
   });
 
   useEffect(() => {
@@ -105,6 +114,9 @@ const PropertyForm = () => {
   console.log("Form Errors:", errors);
   console.log("Is Form Valid:", isValid);
   console.log("Is Form Dirty:", isDirty);
+
+  console.log("KeyCode Fields:", keyCodeFields);
+  console.log("Owner Fields:", ownerFields);
 
   const openManageOwnersModal = () => {
     openModal({
@@ -157,8 +169,16 @@ const PropertyForm = () => {
     });
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex bg-primary-bg flex-1 flex-row p-3 gap-3">
+    <div className="flex bg-primary-bg h-full flex-row p-3 gap-3">
       <div className="flex flex-1 gap-3 flex-col">
         <div className="flex flex-1 justify-between flex-col bg-secondary-bg shadow-m rounded-2xl p-3">
           <img
@@ -175,7 +195,7 @@ const PropertyForm = () => {
                   label="Property Name"
                   placeholder="Enter property name..."
                   {...field}
-                  icon={GiFamilyHouse}
+                  icon={IoHome}
                   error={fieldState.error}
                 />
               )}
@@ -299,8 +319,38 @@ const PropertyForm = () => {
             )}
           />
         </div>
+        <div className="flex flex-1 justify-between p-3 flex-col bg-secondary-bg shadow-m rounded-2xl">
+          <Controller
+            name="service_type"
+            control={control}
+            render={({ field, fieldState }) => (
+              <CardSelect
+                options={[
+                  {
+                    id: "changeover",
+                    name: "Changeover",
+                    icon: MdPublishedWithChanges,
+                  },
+                  { id: "hot_tub", name: "Hot Tub", icon: MdHotTub },
+                  {
+                    id: "laundry",
+                    name: "Laundry",
+                    icon: MdOutlineLocalLaundryService,
+                  },
+                  { id: "clean", name: "Clean", icon: GiMagicBroom },
+                ]}
+                label="Service Type"
+                titleKey="name"
+                descriptionKey="tier"
+                valueKey="id"
+                value={field.value}
+                onChange={field.onChange}
+              />
+            )}
+          />
+        </div>
       </div>
-      <div className="flex flex-col flex-1 gap-3">
+      <div className="flex flex-col h-full gap-3">
         <div className="flex justify-between p-3 flex-col bg-secondary-bg shadow-m rounded-2xl">
           <div className="flex items-center justify-between pr-2 mb-3">
             <h2 className="text-xl ml-1 font-semibold text-primary-text">
@@ -331,32 +381,24 @@ const PropertyForm = () => {
                       Private
                     </span>
                   )}
-                  <CTAButton
-                    borderRadius="rounded-lg"
-                    title="Edit Key Code"
-                    width="w-9"
-                    height="h-9"
-                    type="main"
-                    className="text-sm text-red-500"
-                    callbackFn={() => openEditKeyCodeModal(index, field)}
-                    icon={BsPencil}
-                  />
-                  <CTAButton
-                    borderRadius="rounded-lg"
-                    title="Delete Key Code"
-                    width="w-9"
-                    height="h-9"
-                    type="cancel"
-                    className="text-sm text-red-500"
-                    callbackFn={() => removeKeyCode(index)}
-                    icon={IoTrashOutline}
-                  />
+
+                  <button
+                    onClick={() => openEditKeyCodeModal(index, field)}
+                    className="p-2 cursor-pointer text-icon-color hover:shadow-s rounded-lg hover:text-cta-color">
+                    <BsPencil className="h-5 w-5" />
+                  </button>
+
+                  <button
+                    onClick={() => removeKeyCode(index)}
+                    className="p-2 cursor-pointer hover:shadow-s text-icon-color rounded-lg hover:text-error-color">
+                    <IoTrashOutline className="h-5 w-5" />
+                  </button>
                 </li>
               ))}
             </ul>
           )}
         </div>
-        <div className="flex flex-col flex-1 bg-secondary-bg shadow-m rounded-2xl p-3">
+        <div className="flex flex-col flex-1 overflow-y-auto bg-secondary-bg shadow-m rounded-2xl p-3">
           <div className="flex items-center justify-between pr-2 mb-3">
             <h2 className="text-xl ml-1 font-semibold text-primary-text">
               Owners
@@ -394,10 +436,16 @@ const PropertyForm = () => {
                       <span className="font-medium text-primary-text">
                         {owner.first_name} {owner.surname}
                       </span>
-                      <div className="flex items-center gap-3">
-                        <HiOutlinePhone className="text-secondary-text" />
+                      <div className="flex items-center gap-2">
+                        {owner.primary_email ? (
+                          <HiOutlineMail className="text-secondary-text" />
+                        ) : (
+                          <HiOutlinePhone className="text-secondary-text" />
+                        )}
                         <span className="text-sm text-secondary-text">
-                          {owner.primary_phone}
+                          {owner.primary_email
+                            ? owner.primary_email
+                            : owner.primary_phone}
                         </span>
                       </div>
                     </div>
@@ -426,29 +474,37 @@ const PropertyForm = () => {
             type="success"
             text={isSubmitting ? "Saving..." : "Save Changes"}
             icon={FaCheck}
-            callbackFn={handleSubmit((data) => {
-              const payload = id !== "New-Property" ? { id, ...data } : data;
+            callbackFn={handleSubmit(async (data) => {
+              try {
+                const payload =
+                  id && id !== "New-Property" ? { ...data, id } : { ...data };
 
-              console.log("Submitting payload:", payload);
-              console.log("KeyCodes to submit:", keyCodeFields);
-              console.log("Owners to submit:", ownerFields);
-
-              upsertProperty.mutate(
-                {
+                await upsertProperty.mutateAsync({
                   propertyData: payload,
                   keyCodesForm: keyCodeFields,
                   ownersForm: ownerFields,
-                },
-                {
-                  onSuccess: () => {
-                    navigate("/Client-Management/Properties");
-                  },
-                  onError: (error) => {
-                    console.error("Save failed:", error.message);
-                    alert("Failed to save property: " + error.message);
-                  },
-                }
-              );
+                });
+
+                showToast({
+                  type: "success",
+                  title: id ? "Property Updated" : "Property Created",
+                  message: id
+                    ? "The property has been successfully updated."
+                    : "New property successfully entered.",
+                });
+
+                navigate("/Client-Management/Properties");
+              } catch (error) {
+                console.error("Save failed:", error.message);
+
+                showToast({
+                  type: "error",
+                  title: "Save Failed",
+                  message:
+                    error?.message ||
+                    "An unexpected error occurred while saving.",
+                });
+              }
             })}
           />
         </div>

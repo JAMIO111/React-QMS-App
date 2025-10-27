@@ -4,6 +4,7 @@ import OwnerDetails from "./OwnerDetails";
 import { useOwners } from "@/hooks/useOwners";
 import { useGlobalSearch } from "@/contexts/SearchProvider";
 import { useLocation } from "react-router-dom";
+import Spinner from "@components/LoadingSpinner";
 
 const Owners = () => {
   const location = useLocation();
@@ -13,7 +14,7 @@ const Owners = () => {
   const { data: owners, isLoading } = useOwners();
   const { debouncedSearchTerm } = useGlobalSearch();
 
-  if (isLoading) return <p>Loading...</p>;
+  if (isLoading) return <Spinner />;
 
   const filteredOwners = owners?.filter((owner) => {
     const fullName = `${owner.first_name} ${owner.surname}`.toLowerCase();

@@ -82,22 +82,45 @@ export const useUpsertProperty = () => {
       }
 
       // --- Owners Handling ---
-      // ownersForm = [{ owner_id }]
       if (ownersForm && ownersForm.length > 0) {
-        // Build payload with property_id
-        const ownersPayload = ownersForm.map((o) => ({
-          property_id: propertyId,
-          owner_id: o.owner_id,
-        }));
+        // Filter out any invalid owners without an owner_id
+        const validOwners = ownersForm.filter((o) => o.id);
 
-        // Upsert owners (on conflict by property_id + owner_id)
-        const { error: ownersError } = await supabase
+        if (validOwners.length > 0) {
+          const ownersPayload = validOwners.map((o) => ({
+            property_id: propertyId,
+            owner_id: o.id,
+          }));
+
+          // 1. Upsert valid owners
+          const { error: ownersError } = await supabase
+            .from("PropertyOwner")
+            .upsert(ownersPayload, {
+              onConflict: ["property_id", "owner_id"],
+            });
+          if (ownersError) throw ownersError;
+        }
+
+        // 2. Delete removed owners (only consider valid ones)
+        const formOwnerIds = ownersForm.map((o) => o.id).filter(Boolean);
+        const { data: existingOwners, error: fetchError } = await supabase
           .from("PropertyOwner")
-          .upsert(ownersPayload, {
-            onConflict: ["property_id", "owner_id"], // ensure you have this unique constraint in DB
-          });
+          .select("owner_id")
+          .eq("property_id", propertyId);
+        if (fetchError) throw fetchError;
 
-        if (ownersError) throw ownersError;
+        const ownersToDelete = existingOwners
+          .filter((o) => !formOwnerIds.includes(o.owner_id))
+          .map((o) => o.owner_id);
+
+        if (ownersToDelete.length > 0) {
+          const { error: deleteError } = await supabase
+            .from("PropertyOwner")
+            .delete()
+            .eq("property_id", propertyId)
+            .in("owner_id", ownersToDelete);
+          if (deleteError) throw deleteError;
+        }
       }
     },
 

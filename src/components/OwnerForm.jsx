@@ -16,6 +16,7 @@ import { IoIosUndo } from "react-icons/io";
 import { FaCheck } from "react-icons/fa";
 import { useUpsertOwner } from "@/hooks/useUpsertOwner";
 import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "../contexts/ToastProvider";
 
 const defaultFormData = {
   id: null,
@@ -27,7 +28,6 @@ const defaultFormData = {
   secondary_email: "",
   secondary_phone: "",
   is_active: true,
-  id: null,
   created_at: null,
   legacy_id: null,
   location: null,
@@ -37,6 +37,7 @@ const OwnerForm = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { id } = useParams();
+  const { showToast } = useToast();
   const { data: owner, isLoading } = useOwnerById(
     id !== "New-Owner" ? id : null
   );
@@ -81,6 +82,7 @@ const OwnerForm = () => {
   console.log("Invalid fields:", invalidFields);
   console.log("Form Values:", watch());
   console.log("Owner:", owner);
+  console.log("Owner ID:", id);
 
   if (isLoading) return <p>Loading...</p>;
 
@@ -238,9 +240,23 @@ const OwnerForm = () => {
                 await upsertOwner.mutateAsync(payload);
 
                 navigate("/Client-Management/Owners");
+
+                showToast({
+                  type: "success",
+                  title: id ? "Owner Updated" : "Owner Created",
+                  message: id
+                    ? "The owner has been successfully updated."
+                    : "New owner successfully created.",
+                });
               } catch (error) {
                 console.error("Save failed:", error.message);
-                alert("Failed to save owner: " + error.message);
+                showToast({
+                  type: "error",
+                  title: "Save Failed. Unexpected error.",
+                  message:
+                    error?.message ||
+                    "An error occurred while saving the owner.",
+                });
               }
             })}
           />

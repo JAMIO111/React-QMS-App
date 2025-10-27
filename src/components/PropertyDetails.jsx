@@ -119,11 +119,20 @@ const PropertyDetails = ({ property, selectedProperty }) => {
               </p>
               {owners?.map((owner) => (
                 <div className="mt-3 flex rounded-2xl border border-brand-primary/30 bg-brand-primary/20 p-2 flex-row gap-2">
-                  <img
-                    className="rounded-xl w-24 h-24 object-cover"
-                    src="/man2.jpg"
-                    alt={owner?.first_name}
-                  />
+                  {owner.avatar ? (
+                    <img
+                      className="rounded-xl w-24 h-24 object-cover"
+                      src={owner?.avatar}
+                      alt={owner?.first_name}
+                    />
+                  ) : (
+                    <div className="rounded-xl w-24 h-24 bg-secondary-bg flex items-center justify-center">
+                      <p className="text-secondary-text text-2xl">
+                        {owner?.owner?.first_name?.charAt(0)}
+                        {owner?.owner?.surname?.charAt(0)}{" "}
+                      </p>
+                    </div>
+                  )}
                   <div className="ml-2 flex flex-1 flex-col gap-2 h-full justify-around min-w-0">
                     <div className="flex items-center gap-3">
                       <BsFillPersonVcardFill className="text-primary-text w-6 h-6 shrink-0" />

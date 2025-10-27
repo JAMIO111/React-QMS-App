@@ -35,7 +35,7 @@ const PropertyList = ({ onSelectProperty, selectedProperty, properties }) => {
               key={property.id}
               className={`flex border-b pr-5 border-border-color items-center cursor-pointer ${
                 selectedProperty?.id === property.id
-                  ? "bg-brand-primary/70"
+                  ? "bg-brand-primary/20"
                   : ""
               }`}
               onClick={() => onSelectProperty(property)}>
@@ -59,20 +59,10 @@ const PropertyList = ({ onSelectProperty, selectedProperty, properties }) => {
 
               {/* Property Details */}
               <div>
-                <p
-                  className={`${
-                    selectedProperty?.id === property.id
-                      ? "text-primary-bg"
-                      : "text-primary-text"
-                  } font-semibold text-lg`}>
+                <p className={`text-primary-text font-semibold text-lg`}>
                   {property.name}
                 </p>
-                <p
-                  className={` text-sm ${
-                    selectedProperty?.id === property.id
-                      ? "text-secondary-bg"
-                      : "text-secondary-text"
-                  }`}>
+                <p className={`text-sm text-secondary-text`}>
                   {[
                     property?.line_1,
                     property?.line_2,

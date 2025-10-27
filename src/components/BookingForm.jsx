@@ -380,14 +380,10 @@ const BookingForm = () => {
 
                 showToast({
                   type: "success",
-                  title:
-                    id !== "New-Booking"
-                      ? "Booking Updated"
-                      : "Booking Created",
-                  message:
-                    id !== "New-Booking"
-                      ? "The booking has been successfully updated."
-                      : "New booking created successfully.",
+                  title: id ? "Booking Updated" : "Booking Created",
+                  message: id
+                    ? "The booking has been successfully updated."
+                    : "New booking successfully entered.",
                 });
               } catch (error) {
                 console.error("Save failed:", error.message);

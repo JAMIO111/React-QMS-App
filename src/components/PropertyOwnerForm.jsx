@@ -1,38 +1,35 @@
 import { useState, useEffect, useMemo } from "react";
 import CTAButton from "./CTAButton";
 import RHFComboBox from "./ui/RHFComboBox";
-import { IoTrash } from "react-icons/io5";
+import { IoTrashOutline } from "react-icons/io5";
 import { useOwners } from "@/hooks/useOwners";
 import { FaUser } from "react-icons/fa6";
 
 const PropertyOwnerForm = ({ defaultOwners = [], onSave, onCancel }) => {
   const { data: owners, isLoading: ownersLoading } = useOwners();
-  // start with defaults right away so UI renders them immediately
+
   const [currentOwners, setCurrentOwners] = useState(() => [
     ...(defaultOwners || []),
   ]);
   const [selectedOwnerId, setSelectedOwnerId] = useState(null);
+
   console.log("Current Owners:", currentOwners);
   console.log("Selected Owner ID:", selectedOwnerId);
 
-  // If defaultOwners prop changes, update immediately
   useEffect(() => {
     setCurrentOwners([...(defaultOwners || [])]);
   }, [defaultOwners]);
 
-  // When the full owners list becomes available, reconcile the currentOwners
-  // to use canonical objects from `owners` (match by id), preserving any local-only data.
   useEffect(() => {
     if (!owners) return;
     setCurrentOwners((prev) =>
       prev.map((d) => {
         const match = owners.find((o) => String(o.id) === String(d.id));
-        return match || d; // prefer canonical owner from owners[], fallback to existing
+        return match || d;
       })
     );
   }, [owners]);
 
-  // Build options excluding currentOwners (by id). Normalize ids to strings.
   const filteredOwners = useMemo(() => {
     if (!owners) return [];
     const excluded = new Set(currentOwners.map((o) => String(o.id)));
@@ -47,7 +44,6 @@ const PropertyOwnerForm = ({ defaultOwners = [], onSave, onCancel }) => {
       (o) => String(o.id) === String(selectedOwnerId)
     );
     if (!ownerToAdd) return;
-    // avoid duplicates (defensive)
     if (currentOwners.some((o) => String(o.id) === String(ownerToAdd.id))) {
       setSelectedOwnerId(null);
       return;
@@ -61,9 +57,7 @@ const PropertyOwnerForm = ({ defaultOwners = [], onSave, onCancel }) => {
   };
 
   const handleSubmit = () => {
-    // map currentOwners to just owner_id for the mutation
-    const ownersPayload = currentOwners.map((o) => ({ owner_id: o.id, ...o }));
-    onSave(ownersPayload);
+    onSave(currentOwners);
   };
 
   return (
@@ -77,11 +71,7 @@ const PropertyOwnerForm = ({ defaultOwners = [], onSave, onCancel }) => {
         placeholder={
           ownersLoading ? "Loading owners…" : "Select an owner to add..."
         }
-        // optionally disable until owners load to avoid confusing empty list
-        // you can remove this prop if you want it selectable before load
-        // pass dependentKey/dependentValue instead if your combobox supports it
       />
-
       <div className="flex gap-2 items-center">
         <CTAButton
           type="main"
@@ -91,7 +81,6 @@ const PropertyOwnerForm = ({ defaultOwners = [], onSave, onCancel }) => {
           disabled={!selectedOwnerId || ownersLoading}
         />
       </div>
-
       <ul className="flex flex-col p-1 gap-2 max-h-60 overflow-y-auto">
         {currentOwners.length === 0 && (
           <li className="text-sm text-primary-text">No owners added yet.</li>
@@ -114,20 +103,17 @@ const PropertyOwnerForm = ({ defaultOwners = [], onSave, onCancel }) => {
                 </p>
               </div>
             )}
-
             <span className="font-medium flex-1 text-left text-primary-text">
               {owner.first_name} {owner.surname}
             </span>
-
             <button
               onClick={() => handleRemoveOwner(owner.id)}
-              className="p-1.5 cursor-pointer hover:shadow-s rounded-lg hover:text-error-color mr-1.5">
-              <IoTrash className="h-6 w-6" />
+              className="p-2 cursor-pointer hover:shadow-s rounded-lg text-icon-color hover:text-error-color mr-1.5">
+              <IoTrashOutline className="h-5 w-5" />
             </button>
           </li>
         ))}
       </ul>
-
       <div className="flex gap-2 pt-2">
         <CTAButton
           width="w-full"

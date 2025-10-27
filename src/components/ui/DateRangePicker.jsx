@@ -164,8 +164,8 @@ export default function DateRangePicker({
         <input
           type="text"
           readOnly
-          className={`border ${error && "border-error-color"} ${
-            isOpen ? "border-cta-color" : "border-transparent"
+          className={`border ${isOpen ? "border-cta-color" : ""} ${
+            error ? "border-error-color" : "border-transparent"
           } placeholder:normal-case cursor-pointer placeholder:text-sm placeholder:text-muted w-full shadow-s hover:shadow-m text-primary-text pr-4 pl-11 py-2 rounded-lg bg-text-input-color focus:outline-none`}
           value={
             startDate && endDate

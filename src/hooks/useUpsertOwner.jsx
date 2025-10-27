@@ -33,12 +33,13 @@ export const useUpsertOwner = () => {
         result = data;
       }
 
-      return result;
+      return result; // return so onSuccess can access it
     },
 
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // result contains the inserted or updated owner
       queryClient.invalidateQueries(["Owners"]);
-      queryClient.invalidateQueries(["Owner", ownerId]);
+      queryClient.invalidateQueries(["Owner", result.id]);
     },
   });
 };

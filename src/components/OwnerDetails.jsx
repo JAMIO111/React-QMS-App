@@ -19,6 +19,8 @@ const OwnerDetails = ({ owner }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedProperty, setSelectedProperty] = useState(null);
 
+  console.log("selected property:", selectedProperty);
+
   // Set default property when data loads
   useEffect(() => {
     if (properties?.length > 0) {
@@ -262,12 +264,17 @@ const OwnerDetails = ({ owner }) => {
                       />
                     </div>
                     <div className="flex flex-row gap-2 mb-2 flex-wrap">
-                      <Pill
-                        icon={
-                          <FaBed className="text-primary-text w-4 h-4 shrink-0" />
-                        }
-                        text={`4534 Gate`}
-                      />
+                      {selectedProperty?.KeyCodes?.length > 0 &&
+                        selectedProperty.KeyCodes.map((keyCode, index) => (
+                          <Pill
+                            key={index}
+                            icon={
+                              <IoKeySharp className="text-primary-text w-4 h-4 shrink-0" />
+                            }
+                            color="purple"
+                            text={`${keyCode.name}: ${keyCode.code}`}
+                          />
+                        ))}
                     </div>
                   </div>
                 </div>

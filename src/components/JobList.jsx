@@ -1,8 +1,19 @@
 import React from "react";
 import CTAButton from "./CTAButton";
 import { IoPrintOutline } from "react-icons/io5";
+import { HiOutlineDocumentText } from "react-icons/hi2";
+import { useModal } from "@/contexts/ModalContext";
+import JobSheetPreview from "./JobSheetPreview";
 
-const JobList = ({ jobs = [] }) => {
+const JobList = ({ jobs = [], isLoading, error }) => {
+  const { openModal } = useModal();
+  const openJobSheetModal = () => {
+    openModal({
+      title: "Job Sheets Preview",
+      content: <JobSheetPreview jobs={jobs} />,
+    });
+  };
+
   return (
     <div className="flex flex-col bg-secondary-bg p-2 h-full rounded-3xl shadow-m">
       {/* Header */}
@@ -12,12 +23,20 @@ const JobList = ({ jobs = [] }) => {
           Upcoming Jobs
         </h2>
         <CTAButton
-          callbackFn={() => {
-            window.print();
-          }}
+          callbackFn={openJobSheetModal}
           type="main"
-          text="Print"
-          icon={IoPrintOutline}
+          text="Job Sheets"
+          icon={HiOutlineDocumentText}
+          disabled={jobs.length === 0 || isLoading || error}
+          title={
+            jobs.length === 0
+              ? "No jobs available to preview"
+              : isLoading
+              ? "Loading jobs..."
+              : error
+              ? "Error loading jobs"
+              : ""
+          }
         />
       </div>
 
@@ -40,7 +59,7 @@ const JobList = ({ jobs = [] }) => {
                   index !== jobs.length ? "border-b" : ""
                 } border-border-color grid grid-cols-[2.5fr_2fr_2fr] text-sm text-primary-text hover:bg-brand-primary/30 cursor-pointer`}>
                 <div className="flex font-medium items-center px-2 py-1">
-                  {job.propertyName}
+                  {job.propertyDetails.name}
                 </div>
                 <div className="flex items-center px-3 py-1">
                   {job.jobDate
@@ -52,13 +71,13 @@ const JobList = ({ jobs = [] }) => {
                     : "N/A"}
                 </div>
                 <div className="flex items-center px-3 py-1">
-                  {job.moveIn
-                    ? new Date(job.moveIn).toLocaleDateString("en-GB", {
+                  {job.nextArrival
+                    ? new Date(job.nextArrival).toLocaleDateString("en-GB", {
                         weekday: "short",
                         day: "numeric",
                         month: "short",
                       })
-                    : "N/A"}
+                    : "No Booking"}
                 </div>
               </div>
             ))

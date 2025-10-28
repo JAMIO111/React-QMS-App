@@ -9,9 +9,12 @@ import { useJobs } from "@/hooks/useJobs";
 import StackedBarChart from "@components/charts/StackedBarChart";
 import { useBookingVolume } from "@/hooks/useBookingVolume";
 import { getPeriodLabel } from "@/lib/utils";
+import { useModal } from "@/contexts/ModalContext";
+import JobSheetPreview from "@components/JobSheetPreview";
 
 const Dashboard = () => {
   const { profile } = useUser();
+  const { openModal, closeModal } = useModal();
   const today = useMemo(() => new Date(), []);
   const start = useMemo(() => {
     const s = new Date(today);
@@ -42,6 +45,18 @@ const Dashboard = () => {
     memoisedRange.endDate
   );
 
+  const openJobSheetModal = () => {
+    openModal({
+      title: "Job Sheets Preview",
+      content: (
+        <JobSheetPreview
+          startDate={memoisedRange.startDate}
+          endDate={memoisedRange.endDate}
+        />
+      ),
+    });
+  };
+
   console.log("Booking Volume Data:", data);
 
   return (
@@ -58,9 +73,7 @@ const Dashboard = () => {
         <div className="flex flex-col gap-2 md:flex-row items-center justify-between">
           <div className="w-full gap-3 md:w-fit flex items-center justify-start xl:justify-center">
             <CTAButton
-              callbackFn={() => {
-                window.print();
-              }}
+              callbackFn={openJobSheetModal}
               type="main"
               text="Add Booking"
               icon={PiFilePlus}

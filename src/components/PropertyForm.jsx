@@ -28,6 +28,7 @@ import {
 } from "react-icons/md";
 import Spinner from "@components/LoadingSpinner";
 import { useToast } from "../contexts/ToastProvider";
+import ToggleButton from "./ui/ToggleButton";
 
 const defaultFormData = {
   name: undefined,
@@ -319,7 +320,7 @@ const PropertyForm = () => {
             )}
           />
         </div>
-        <div className="flex flex-1 justify-between p-3 flex-col bg-secondary-bg shadow-m rounded-2xl">
+        <div className="flex flex-1 justify-start gap-3 p-3 flex-col bg-secondary-bg shadow-m rounded-2xl">
           <Controller
             name="service_type"
             control={control}
@@ -345,6 +346,20 @@ const PropertyForm = () => {
                 valueKey="id"
                 value={field.value}
                 onChange={field.onChange}
+              />
+            )}
+          />
+          <Controller
+            name="hired_laundry"
+            control={control}
+            render={({ field, fieldState }) => (
+              <ToggleButton
+                label="Hired Laundry"
+                checked={field.value}
+                onChange={field.onChange}
+                trueLabel="Yes"
+                falseLabel="No"
+                icon={MdOutlineLocalLaundryService}
               />
             )}
           />

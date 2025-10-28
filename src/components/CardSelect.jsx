@@ -41,7 +41,7 @@ const CardSelect = ({
               }`}>
               {isPackage ? (
                 <div
-                  className={`h-6 w-6 mb-2 rounded-full ${circleColor}`}></div>
+                  className={`h-6 w-6 mb-2 border border-border-color/50 shadow-s rounded-full ${circleColor}`}></div>
               ) : (
                 option.icon && (
                   <option.icon

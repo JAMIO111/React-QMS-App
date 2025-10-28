@@ -517,3 +517,25 @@ input:-webkit-autofill:active {
   -webkit-appearance: none;
   appearance: none;
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .page-break {
+    page-break-after: always;
+  }
+
+  body {
+    background: white;
+  }
+}
+
+@media print {
+  .modal-container {
+    position: static !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+}

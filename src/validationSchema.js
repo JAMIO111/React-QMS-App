@@ -59,6 +59,7 @@ export const PropertyFormSchema = z.object({
     .optional(),
   package: z.number(),
   service_type: z.string(),
+  hired_laundry: z.boolean(),
 });
 
 const phoneRegex = /^[+()\-0-9\s]{6,20}$/;

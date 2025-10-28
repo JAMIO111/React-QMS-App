@@ -15,7 +15,7 @@ const ToggleButton = forwardRef(
     ref
   ) => {
     return (
-      <div className="flex flex-col min-w-0 w-full">
+      <div className="flex flex-col gap-1 min-w-0 w-full">
         {label && <label className="block text-primary-text">{label}</label>}
         <div
           className={`flex items-center shadow-s rounded-lg px-2 py-2 min-w-0 relative

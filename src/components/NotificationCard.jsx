@@ -1,8 +1,11 @@
+import supabase from "@/supabase-client";
 import CTAButton from "./CTAButton";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
-const NotificationCard = ({ notification, closePane }) => {
-  const Navigate = useNavigate();
+const NotificationCard = ({ notification, closePane, userId }) => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   return (
     <div className="flex bg-secondary-bg shadow-md gap-3 items-start p-3 border border-border-color rounded-xl">
       <div className="flex justify-center items-center border border-border-color rounded-full h-10 aspect-square">
@@ -42,14 +45,34 @@ const NotificationCard = ({ notification, closePane }) => {
             textSize="text-sm"
             callbackFn={() => {
               closePane();
-              Navigate(notification?.meta_data?.url);
+              navigate(notification?.meta_data?.url);
             }}
           />
           <CTAButton
             type="neutral"
-            title="Dismiss"
-            text="Dismiss"
+            title="Mark as Read"
+            text="Mark as Read"
             textSize="text-sm"
+            callbackFn={async () => {
+              console.log(
+                "Updating notification for:",
+                userId,
+                notification.id
+              );
+              const { data, error } = await supabase
+                .from("Notification Recipients")
+                .update({ read: true })
+                .eq("notification_id", notification.id)
+                .eq("recipient_id", userId);
+
+              if (error) {
+                console.error("Failed to mark as read:", error);
+                return;
+              }
+
+              console.log("Updated notification:", data);
+              queryClient.invalidateQueries(["Notifications", userId]);
+            }}
           />
         </div>
       </div>

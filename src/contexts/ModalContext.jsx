@@ -107,7 +107,7 @@ export const ModalProvider = ({ children }) => {
               dragMomentum={false}
               ref={modalRef}
               onClick={(e) => e.stopPropagation()}
-              className="bg-primary-bg rounded-xl border border-border-color shadow-xl relative w-fit min-w-[300px]">
+              className="bg-primary-bg rounded-xl border border-border-color shadow-xl relative w-fit overflow-hidden min-w-[300px]">
               {/* Draggable Header */}
               <div
                 className="flex justify-between select-none items-center cursor-move border-b border-border-color bg-secondary-bg text-primary-text rounded-t-xl"

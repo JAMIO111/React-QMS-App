@@ -47,6 +47,7 @@ function formatDate(date) {
 export default function DateRangePicker({
   alignment = "left",
   label,
+  required = false,
   value = { startDate: null, endDate: null },
   onChange,
   switchMode = true,
@@ -146,7 +147,16 @@ export default function DateRangePicker({
 
   return (
     <div className={`relative ${width}`} ref={containerRef}>
-      {label && <p className="font-medium mb-1 text-primary-text">{label}</p>}
+      {label && (
+        <div className="flex items-center gap-1 mb-1">
+          <label className="font-medium text-primary-text">{label}</label>
+          {required && (
+            <label className="text-error-color text-sm" title="Required">
+              *
+            </label>
+          )}
+        </div>
+      )}
 
       <div
         onMouseDown={(e) => {

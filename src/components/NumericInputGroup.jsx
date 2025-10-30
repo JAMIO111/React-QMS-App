@@ -4,7 +4,16 @@ import { MdErrorOutline } from "react-icons/md";
 
 const NumericInputGroup = forwardRef(
   (
-    { label, value, onChange, icon: Icon, min = 0, max = 100, ...rest },
+    {
+      label,
+      value,
+      required = false,
+      onChange,
+      icon: Icon,
+      min = 0,
+      max = 100,
+      ...rest
+    },
     ref
   ) => {
     return (
@@ -20,9 +29,16 @@ const NumericInputGroup = forwardRef(
             <Icon className="text-primary-text text-xl" />
           )}
         </div>
-        <p className="text-primary-text text-xl px-5 text-left flex-1 font-medium">
-          {label}
-        </p>
+        <div className="flex items-center gap-1 px-5 flex-1 ml-4">
+          <label className="text-primary-text text-xl text-left font-medium">
+            {label}
+          </label>
+          {required && (
+            <label className="text-error-color text-sm" title="Required">
+              *
+            </label>
+          )}
+        </div>
         <NumericInput
           ref={ref}
           value={value ?? rest.value ?? ""}

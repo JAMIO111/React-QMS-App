@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { IoIosMan, IoIosUndo } from "react-icons/io";
@@ -10,6 +10,7 @@ import {
   FaUser,
   FaRegNoteSticky,
 } from "react-icons/fa6";
+import { PiCrown } from "react-icons/pi";
 import { HiPhone } from "react-icons/hi2";
 import { TbChairDirector } from "react-icons/tb";
 import { BsHouse } from "react-icons/bs";
@@ -29,7 +30,6 @@ import { FaCheck } from "react-icons/fa";
 import { TiArrowLoop } from "react-icons/ti";
 import { useUpsertBooking } from "@/hooks/useUpsertBooking";
 import ToggleButton from "./ui/ToggleButton";
-import { useNavigate } from "react-router-dom";
 import { useToast } from "../contexts/ToastProvider";
 
 const defaultFormData = {
@@ -108,6 +108,7 @@ const BookingForm = () => {
           control={control}
           render={({ field, fieldState }) => (
             <TextInput
+              required={true}
               label="Booking Ref."
               placeholder="e.g. EDYA6-13-EN"
               {...field}
@@ -123,6 +124,7 @@ const BookingForm = () => {
           control={control}
           render={({ field, fieldState }) => (
             <DateRangePicker
+              required={true}
               switchMode={false}
               error={fieldState.error}
               value={field.value || { startDate: null, endDate: null }}
@@ -144,6 +146,7 @@ const BookingForm = () => {
               label="Property"
               options={properties || []}
               placeholder="Select a property..."
+              required={true}
               icon={BsHouse}
             />
           )}
@@ -198,6 +201,7 @@ const BookingForm = () => {
           render={({ field, fieldState }) => (
             <NumericInputGroup
               label="Adults"
+              required={true}
               value={field.value}
               onChange={field.onChange}
               icon={IoIosMan}
@@ -306,7 +310,7 @@ const BookingForm = () => {
             control={control}
             render={({ field, fieldState }) => (
               <ToggleButton
-                icon={TiArrowLoop}
+                icon={PiCrown}
                 label="Owner Booking"
                 checked={field.value}
                 onChange={field.onChange}

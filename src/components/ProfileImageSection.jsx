@@ -3,17 +3,20 @@ import ModalImageUploader from "./ModalImageUploader";
 import CTAButton from "./CTAButton";
 
 const ProfileImageSection = ({
-  user,
+  item,
+  bucket = "avatars",
+  path = "owners",
+  table = "Owners",
   noImageText = "No Image",
   onImageChange, // optional callback to parent for DB update or state sync
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState(null);
 
-  // Sync local image state when user changes
+  // Sync local image state when item changes
   useEffect(() => {
-    setImageUrl(user?.avatar || null);
-  }, [user]);
+    setImageUrl(item?.avatar || null);
+  }, [item]);
 
   const handleUploadComplete = (url) => {
     setImageUrl(url);
@@ -26,7 +29,7 @@ const ProfileImageSection = ({
         {imageUrl ? (
           <img
             src={imageUrl}
-            alt={`${user?.first_name || "User"} profile`}
+            alt={`${item?.id || "User"} profile`}
             className="w-32 h-32 rounded-2xl object-cover border"
           />
         ) : (
@@ -46,11 +49,11 @@ const ProfileImageSection = ({
       <ModalImageUploader
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        bucket="owner_avatars"
-        path={`profiles/${user?.id}/`} // store neatly under user folder
-        table="Owners"
-        userId={user?.id}
-        existingUrl={user?.avatar || null}
+        bucket={bucket}
+        path={`${path}/${item?.id}/`} // store neatly under user folder
+        table={table}
+        userId={item?.id}
+        existingUrl={item?.avatar || null}
         onUploadComplete={handleUploadComplete}
       />
     </div>

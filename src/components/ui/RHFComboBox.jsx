@@ -6,6 +6,7 @@ import { MdErrorOutline } from "react-icons/md";
 const RHFComboBox = ({
   value,
   onChange,
+  required = false,
   icon: Icon,
   options = [],
   placeholder = "Select...",
@@ -145,7 +146,14 @@ const RHFComboBox = ({
     <div className="w-full">
       <div className="flex gap-1 flex-col">
         {label && (
-          <span className="font-medium text-primary-text">{label}</span>
+          <div className="flex items-center gap-1">
+            <label className="font-medium text-primary-text">{label}</label>
+            {required && (
+              <label className="text-error-color text-sm" title="Required">
+                *
+              </label>
+            )}
+          </div>
         )}
 
         <div ref={dropdownRef} className="relative">

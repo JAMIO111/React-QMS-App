@@ -29,8 +29,17 @@ export default function FullScreenCalendar() {
 
   const calendarDays = useMemo(() => {
     const days = [];
+
+    // Leading blanks
     for (let i = 0; i < firstDayOfMonth; i++) days.push(null);
+
+    // Actual days
     for (let d = 1; d <= daysInMonth; d++) days.push(new Date(year, month, d));
+
+    // Trailing blanks
+    const totalCells = Math.ceil(days.length / 7) * 7;
+    while (days.length < totalCells) days.push(null);
+
     return days;
   }, [year, month, firstDayOfMonth, daysInMonth]);
 

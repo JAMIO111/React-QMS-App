@@ -30,7 +30,7 @@ const defaultFormData = {
   is_active: true,
   created_at: null,
   legacy_id: null,
-  location: null,
+  location: "",
 };
 
 const OwnerForm = () => {
@@ -90,7 +90,10 @@ const OwnerForm = () => {
     <div className="flex bg-primary-bg flex-1 flex-row p-3 gap-3">
       <div className="bg-secondary-bg flex-1 rounded-2xl border p-3 border-border-color flex flex-col gap-3 h-full overflow-hidden">
         <ProfileImageSection
-          user={owner}
+          item={owner}
+          bucket="avatars"
+          path="owners"
+          table="Owners"
           noImageText={initials}
           onImageChange={(url) => {
             // Optional: update your parent state, e.g. via TanStack Query invalidate
@@ -103,6 +106,7 @@ const OwnerForm = () => {
           control={control}
           render={({ field, fieldState }) => (
             <TextInput
+              required={true}
               label="First Name"
               placeholder="Enter first name..."
               {...field}
@@ -116,6 +120,7 @@ const OwnerForm = () => {
           control={control}
           render={({ field, fieldState }) => (
             <TextInput
+              required={true}
               label="Surname"
               placeholder="Enter surname..."
               {...field}
@@ -140,6 +145,33 @@ const OwnerForm = () => {
       </div>
       <div className="bg-secondary-bg gap-3 flex-1 rounded-2xl border p-3 border-border-color flex flex-col h-full overflow-hidden">
         <Controller
+          name="primary_email"
+          control={control}
+          render={({ field, fieldState }) => (
+            <TextInput
+              required={true}
+              label="Primary Email"
+              placeholder="Enter primary email..."
+              {...field}
+              icon={TfiEmail}
+              error={fieldState.error}
+            />
+          )}
+        />
+        <Controller
+          name="secondary_email"
+          control={control}
+          render={({ field, fieldState }) => (
+            <TextInput
+              label="Secondary Email"
+              placeholder="Enter secondary email..."
+              {...field}
+              icon={TfiEmail}
+              error={fieldState.error}
+            />
+          )}
+        />
+        <Controller
           name="primary_phone"
           control={control}
           render={({ field, fieldState }) => (
@@ -161,32 +193,6 @@ const OwnerForm = () => {
               placeholder="Enter secondary phone..."
               {...field}
               icon={HiOutlinePhone}
-              error={fieldState.error}
-            />
-          )}
-        />
-        <Controller
-          name="primary_email"
-          control={control}
-          render={({ field, fieldState }) => (
-            <TextInput
-              label="Primary Email"
-              placeholder="Enter primary email..."
-              {...field}
-              icon={TfiEmail}
-              error={fieldState.error}
-            />
-          )}
-        />
-        <Controller
-          name="secondary_email"
-          control={control}
-          render={({ field, fieldState }) => (
-            <TextInput
-              label="Secondary Email"
-              placeholder="Enter secondary email..."
-              {...field}
-              icon={TfiEmail}
               error={fieldState.error}
             />
           )}

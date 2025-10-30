@@ -6,6 +6,7 @@ const TextInput = forwardRef(
   (
     {
       dataType = "text",
+      required = false,
       value = "",
       onChange,
       placeholder = "Enter text...",
@@ -42,7 +43,16 @@ const TextInput = forwardRef(
     return (
       <div className="flex flex-col gap-1 h-17 min-w-0">
         {label && (
-          <label className="block font-medium text-primary-text">{label}</label>
+          <div className="flex items-center gap-1">
+            <label className="block font-medium text-primary-text">
+              {label}
+            </label>
+            {required && (
+              <label className="text-error-color text-sm" title="Required">
+                *
+              </label>
+            )}
+          </div>
         )}
         <div
           className={`flex border flex-row relative items-center shadow-s hover:shadow-m rounded-lg pl-2 pr-10 py-2 bg-text-input-color

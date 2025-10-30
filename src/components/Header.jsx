@@ -13,7 +13,7 @@ const Header = () => {
     : "User";
   const jobTitle = profile ? profile.job_title : "Job Title";
   const { openPane } = useNotification();
-  const { notifications } = useNotifications();
+  const { data: notifications } = useNotifications();
 
   const newNotifications = notifications
     ? notifications.filter((n) => !n.read).length

@@ -63,14 +63,21 @@ export const PropertyFormSchema = z.object({
 });
 
 const phoneRegex = /^[+()\-0-9\s]{6,20}$/;
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const OwnerFormSchema = z.object({
-  first_name: z.string({ required_error: "First name is required" }).max(30, {
-    message: "First name must not be more than 30 characters long",
-  }),
+  first_name: z
+    .string({ required_error: "First name is required" })
+    .max(30, {
+      message: "First name must not be more than 30 characters long",
+    })
+    .trim() // removes whitespace
+    .min(1, "First name is required"),
   surname: z
     .string({ required_error: "Surname is required" })
-    .max(30, { message: "Surname must not be more than 30 characters long" }),
+    .max(30, { message: "Surname must not be more than 30 characters long" })
+    .trim()
+    .min(1, "Surname is required"),
   middle_name: z
     .string()
     .max(30, {
@@ -80,12 +87,8 @@ export const OwnerFormSchema = z.object({
     .nullable()
     .or(z.literal("")), // ✅ allow blank strings
   primary_email: z
-    .string()
-    .email({ message: "Invalid email address" })
-    .max(100, { message: "Email must not be more than 100 characters long" })
-    .optional()
-    .nullable()
-    .or(z.literal("")), // ✅ allow blank strings
+    .string({ required_error: "Email is required" })
+    .email({ message: "Invalid email address" }),
   primary_phone: z
     .string()
     .regex(phoneRegex, { message: "Invalid phone number format" })
@@ -102,8 +105,7 @@ export const OwnerFormSchema = z.object({
     .max(100, { message: "Email must not be more than 100 characters long" })
     .optional()
     .nullable()
-    .or(z.literal("")) // ✅ allow blank strings
-    .transform((val) => (val === "" ? null : val)), // ✅ transform blank strings to null
+    .or(z.literal("")), // ✅ allow blank strings
   secondary_phone: z
     .string()
     .regex(phoneRegex, { message: "Invalid phone number format" })
@@ -138,7 +140,9 @@ export const BookingFormSchema = z.object({
       message: "Please select an arrival and departure date",
     }),
 
-  adults: z.number({ message: "Please enter a valid number of adults" }),
+  adults: z
+    .number({ message: "Please enter a valid number of adults" })
+    .min(1, { message: "At least one adult is required" }),
   children: z.preprocess(
     (val) => (typeof val === "string" ? parseInt(val, 10) : val),
     z

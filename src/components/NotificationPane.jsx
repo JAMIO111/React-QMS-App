@@ -6,12 +6,15 @@ import { CgClose } from "react-icons/cg";
 import SlidingSelectorGeneric from "./ui/SlidingSelectorGeneric";
 import NotificationCard from "./NotificationCard";
 import { useNotifications } from "../hooks/useNotifications";
+import { useUser } from "../contexts/UserProvider";
 
 const NotificationPane = () => {
+  const { profile } = useUser();
   const { isOpen, content, closePane } = useNotification();
   const [typeFilter, setTypeFilter] = useState("All");
 
-  const { notifications, isLoading, isError } = useNotifications();
+  const { data: notifications, isLoading, isError } = useNotifications();
+  console.log("Notifications:", notifications);
 
   if (typeof window === "undefined") return null;
   const root = document.getElementById("notification-root");
@@ -73,6 +76,7 @@ const NotificationPane = () => {
                       key={notification.id}
                       notification={notification}
                       closePane={closePane}
+                      userId={profile.auth_id}
                     />
                   ))
               ) : (

@@ -16,7 +16,6 @@ export function useCreateNotification() {
         .from("Notifications")
         .insert([
           {
-            org: orgId,
             created_by: authId,
             title,
             body,
@@ -34,7 +33,7 @@ export function useCreateNotification() {
       const { data: users, error: userError } = await supabase
         .from("Employees")
         .select("auth_id")
-        .eq("organisation_id", orgId);
+        .eq("notifications", true);
 
       if (userError)
         throw new Error(`Failed to get users: ${userError.message}`);

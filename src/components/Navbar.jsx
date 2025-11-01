@@ -29,7 +29,9 @@ const Navbar = () => {
   return (
     <div className="flex bg-secondary-bg">
       <nav
-        className={`flex flex-col border-r min-w-fit border-border-color h-screen ${
+        className={`flex flex-col border-r ${
+          !isMenuExpanded ? "transition-all duration-500" : null
+        } min-w-fit border-border-color h-screen ${
           isMenuExpanded ? "w-68" : "w-14"
         }`}>
         <div

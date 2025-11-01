@@ -11,10 +11,6 @@ const PropertyOwnerForm = ({ defaultOwners = [], onSave, onCancel }) => {
   const [currentOwners, setCurrentOwners] = useState(() => [
     ...(defaultOwners || []),
   ]);
-  const [selectedOwnerId, setSelectedOwnerId] = useState(null);
-
-  console.log("Current Owners:", currentOwners);
-  console.log("Selected Owner ID:", selectedOwnerId);
 
   useEffect(() => {
     setCurrentOwners([...(defaultOwners || [])]);
@@ -38,18 +34,13 @@ const PropertyOwnerForm = ({ defaultOwners = [], onSave, onCancel }) => {
       .map((o) => ({ id: o.id, name: `${o.first_name} ${o.surname}` }));
   }, [owners, currentOwners]);
 
-  const handleAddOwner = () => {
-    if (!selectedOwnerId || !owners) return;
-    const ownerToAdd = owners.find(
-      (o) => String(o.id) === String(selectedOwnerId)
-    );
+  const handleAddOwner = (id) => {
+    if (!id || !owners) return;
+    const ownerToAdd = owners.find((o) => String(o.id) === String(id));
     if (!ownerToAdd) return;
-    if (currentOwners.some((o) => String(o.id) === String(ownerToAdd.id))) {
-      setSelectedOwnerId(null);
+    if (currentOwners.some((o) => String(o.id) === String(ownerToAdd.id)))
       return;
-    }
     setCurrentOwners((prev) => [...prev, ownerToAdd]);
-    setSelectedOwnerId(null);
   };
 
   const handleRemoveOwner = (id) => {
@@ -61,27 +52,19 @@ const PropertyOwnerForm = ({ defaultOwners = [], onSave, onCancel }) => {
   };
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex flex-col min-h-[50vh] min-w-[30vw] gap-4 p-4">
       <RHFComboBox
         label="Select Owner"
         icon={FaUser}
         options={filteredOwners}
-        value={selectedOwnerId}
-        onChange={setSelectedOwnerId}
+        value={null}
+        onChange={(id) => handleAddOwner(id)}
         placeholder={
           ownersLoading ? "Loading owners…" : "Select an owner to add..."
         }
       />
-      <div className="flex gap-2 items-center">
-        <CTAButton
-          type="main"
-          text="Add"
-          width="w-80"
-          callbackFn={handleAddOwner}
-          disabled={!selectedOwnerId || ownersLoading}
-        />
-      </div>
-      <ul className="flex flex-col p-1 gap-2 max-h-60 overflow-y-auto">
+
+      <ul className="flex flex-1 flex-col p-1 gap-2  max-h-60 overflow-y-auto">
         {currentOwners.length === 0 && (
           <li className="text-sm text-primary-text">No owners added yet.</li>
         )}
@@ -114,6 +97,7 @@ const PropertyOwnerForm = ({ defaultOwners = [], onSave, onCancel }) => {
           </li>
         ))}
       </ul>
+
       <div className="flex gap-2 pt-2">
         <CTAButton
           width="w-full"

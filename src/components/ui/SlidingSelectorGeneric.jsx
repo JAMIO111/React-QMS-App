@@ -58,7 +58,7 @@ export default function SlidingSelector({
             data-value={optionValue}
             onClick={() => onChange(option)}
             className={clsx(
-              "group flex gap-3 justify-center items-center relative z-10 py-1 px-3 text-primary-text transition-colors duration-200 w-1/3",
+              "group flex gap-3 justify-center items-center relative z-10 py-1 px-3 text-primary-text transition-colors duration-200 flex-1",
               {
                 "text-primary-text": isActive,
                 "cursor-pointer": !isActive,
@@ -67,10 +67,11 @@ export default function SlidingSelector({
             <p className={clsx({ "group-hover:text-cta-color": !isActive })}>
               {label}
             </p>
-
-            <div className="flex items-center justify-center bg-cta-color text-white hover:text-white rounded-full w-5 h-5">
-              {count ?? 0}
-            </div>
+            {notifications && (
+              <div className="flex items-center justify-center bg-cta-color text-white hover:text-white rounded-full w-5 h-5">
+                {count ?? 0}
+              </div>
+            )}
           </button>
         );
       })}

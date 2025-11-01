@@ -107,19 +107,19 @@ export const ModalProvider = ({ children }) => {
               dragMomentum={false}
               ref={modalRef}
               onClick={(e) => e.stopPropagation()}
-              className="bg-primary-bg rounded-xl border border-border-color shadow-xl relative w-fit overflow-hidden min-w-[300px]">
+              className="bg-primary-bg shadow-l rounded-2xl p-3 border border-border-color relative w-fit overflow-hidden min-w-[300px]">
               {/* Draggable Header */}
               <div
-                className="flex justify-between select-none items-center cursor-move border-b border-border-color bg-secondary-bg text-primary-text rounded-t-xl"
+                className="flex justify-between select-none pb-2 border-b border-border-color items-center cursor-move text-primary-text rounded-t-xl"
                 onPointerDown={(e) => dragControls.start(e)}>
-                <h3 className="pl-4 text-lg select-none text-primary-text font-semibold">
+                <h3 className="text-lg pl-2 select-none text-primary-text font-semibold">
                   {modalContent.title || "Modal Title"}
                 </h3>
                 <button
                   onClick={closeModal}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="group flex justify-center items-center w-10 h-10 hover:text-white hover:bg-error-color rounded-tr-xl">
-                  <CgClose className="h-5 w-5 group-hover:text-white text-primary-text" />
+                  className="group flex justify-center items-center p-1.5 cursor-pointer transition-colors duration-300 hover:text-error-color hover:bg-border-color/50 rounded-lg">
+                  <CgClose className="h-5 w-5 transition-colors duration-300 group-hover:text-error-color text-primary-text" />
                 </button>
               </div>
 

@@ -11,7 +11,7 @@ import { useUser } from "../contexts/UserProvider";
 const NotificationPane = () => {
   const { profile } = useUser();
   const { isOpen, content, closePane } = useNotification();
-  const [typeFilter, setTypeFilter] = useState("All");
+  const [typeFilter, setTypeFilter] = useState("New");
 
   const { data: notifications, isLoading, isError } = useNotifications();
   console.log("Notifications:", notifications);
@@ -41,7 +41,7 @@ const NotificationPane = () => {
             <div className="flex justify-between items-center mb-3 text-primary-text">
               <h2 className="text-lg font-semibold">Notifications</h2>
               <button
-                className="hover:bg-border-color rounded-md cursor-pointer p-1.5"
+                className="hover:bg-border-color transition-colors duration-300 rounded-md cursor-pointer p-1.5"
                 onClick={closePane}>
                 <CgClose />
               </button>

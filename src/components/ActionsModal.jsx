@@ -70,12 +70,12 @@ const ActionsModal = ({ item, position }) => {
           callback={handleEditBooking}
         />
         <ActionsModalItem
-          label="Duplicate"
+          label="Reoccurring"
           icon={IoDuplicateOutline}
           color="blue"
           item={item}
           callback={() => {
-            console.log(`Duplicating ${item.id}`);
+            console.log(`Scheduling recurring bookings ${item.id}`);
           }}
         />
         <ActionsModalItem

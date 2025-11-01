@@ -64,9 +64,9 @@
 .light {
   --brand-primary: var(--color-violet-700);
   --brand-secondary: var(--color-orange-700);
-  --primary-bg: 240, 240, 243;
-  --secondary-bg: 246, 246, 246;
-  --tertiary-bg: 250, 250, 250;
+  --primary-bg: 239, 239, 242;
+  --secondary-bg: 244, 244, 244;
+  --tertiary-bg: 251, 251, 251;
   --bg-dark: 0.92, 0, 264;
   --bg: 0.96, 0, 264;
   --bg-light: 1, 0, 264;

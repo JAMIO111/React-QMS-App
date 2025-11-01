@@ -67,13 +67,10 @@ const PropertyForm = () => {
   };
 
   const {
-    register,
     control,
     handleSubmit,
     reset,
-    setValue,
     trigger,
-    watch,
     formState: { errors, isSubmitting, isValid, isDirty },
   } = useForm({
     resolver: zodResolver(PropertyFormSchema),

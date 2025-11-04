@@ -1,19 +1,8 @@
 import React from "react";
 import CTAButton from "./CTAButton";
-import { IoPrintOutline } from "react-icons/io5";
 import { HiOutlineDocumentText } from "react-icons/hi2";
-import { useModal } from "@/contexts/ModalContext";
-import JobSheetPreview from "./JobSheetPreview";
 
-const JobList = ({ jobs = [], isLoading, error }) => {
-  const { openModal } = useModal();
-  const openJobSheetModal = () => {
-    openModal({
-      title: "Job Sheets Preview",
-      content: <JobSheetPreview jobs={jobs} />,
-    });
-  };
-
+const JobList = ({ jobs = [], isLoading, error, openModal }) => {
   return (
     <div className="flex flex-col bg-secondary-bg p-2 h-full rounded-3xl shadow-m">
       {/* Header */}
@@ -23,7 +12,7 @@ const JobList = ({ jobs = [], isLoading, error }) => {
           Upcoming Jobs
         </h2>
         <CTAButton
-          callbackFn={openJobSheetModal}
+          callbackFn={openModal}
           type="main"
           text="Job Sheets"
           icon={HiOutlineDocumentText}

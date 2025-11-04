@@ -2,6 +2,7 @@ import ClientManagementOverviewCard from "@components/ClientManagementOverviewCa
 import { useOwners } from "@/hooks/useOwners";
 import { useProperties } from "@/hooks/useProperties";
 import LeadsList from "../LeadsList";
+import Spinner from "../LoadingSpinner";
 
 const ClientManagementDashboard = () => {
   const { data: owners, isLoading, error } = useOwners();
@@ -11,7 +12,7 @@ const ClientManagementDashboard = () => {
     error: errorProperties,
   } = useProperties();
 
-  if (isLoading || isLoadingProperties) return <div>Loading...</div>;
+  if (isLoading || isLoadingProperties) return <Spinner />;
   if (error || errorProperties) return <div>Error loading data</div>;
 
   return (

@@ -43,11 +43,17 @@ const PropertyDetails = ({ property, selectedProperty }) => {
           </div>
           <div className="flex overflow-y-auto flex-col">
             <div className="relative w-full">
-              <img
-                className="aspect-video w-full object-cover"
-                src={"/mansion-1.png"}
-                alt={property?.name}
-              />
+              {property?.avatar ? (
+                <img
+                  className="aspect-video w-full object-cover"
+                  src={property?.avatar}
+                  alt={property?.name}
+                />
+              ) : (
+                <div className="h-64 w-full bg-tertiary-bg flex items-center justify-center">
+                  <span className="text-primary-text">No Image</span>
+                </div>
+              )}
               <div className="absolute z-10 rounded-xl justify-end bottom-0 left-5 border border-black bg-black/30 px-3 py-1">
                 <p className="text-xl text-white font-semibold">
                   {property?.name}
@@ -78,7 +84,7 @@ const PropertyDetails = ({ property, selectedProperty }) => {
                     .join(", ")}
                 </a>
               </div>
-              <div className="flex mt-5 flex-wrap flex-row gap-4">
+              <div className="flex my-5 flex-wrap flex-row gap-4">
                 {/* Base property pills */}
                 <Pill
                   icon={
@@ -112,8 +118,6 @@ const PropertyDetails = ({ property, selectedProperty }) => {
                     />
                   ))}
               </div>
-
-              <div className="my-5 border border-border-color rounded-2xl bg-primary-bg h-64"></div>
               <p className="text-xl text-primary-text font-semibold">
                 Property Owners
               </p>

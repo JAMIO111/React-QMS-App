@@ -11,7 +11,14 @@ const DailyCalendarItems = ({ date, tasks }) => {
           </div>
         ))
       ) : (
-        <div className="text-secondary-text">No tasks for this day</div>
+        <div className="flex flex-col justify-center items-center gap-4">
+          <p className="text-xl font-semibold text-primary-text">
+            No tasks for this day
+          </p>
+          <p className="text-secondary-text">
+            Finally some downtime? Kick your feet up and relax!
+          </p>
+        </div>
       )}
     </div>
   );

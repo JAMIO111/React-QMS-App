@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { IoClose, IoCloudUpload, IoTrash } from "react-icons/io5";
 import supabase from "../supabase-client";
 import CTAButton from "./CTAButton";
+import { TbCancel } from "react-icons/tb";
+import { FiUpload } from "react-icons/fi";
 
 const ModalImageUploader = ({
   isOpen,
@@ -114,11 +116,11 @@ const ModalImageUploader = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-secondary-bg rounded-2xl w-full max-w-md shadow-lg p-5 relative">
+      <div className="bg-secondary-bg rounded-2xl w-full max-w-md shadow-lg p-5 pt-3 relative">
         <button
           onClick={handleClose}
           disabled={loading}
-          className="absolute top-3 right-3 text-gray-500 hover:text-gray-700">
+          className="absolute top-3 right-3 text-secondary-text hover:bg-border-color rounded-lg p-1 cursor-pointer transition duration-300">
           <IoClose size={22} />
         </button>
 
@@ -136,12 +138,12 @@ const ModalImageUploader = ({
             <button
               onClick={handleRemove}
               disabled={loading}
-              className="absolute top-2 right-2 bg-white/80 p-2 rounded-lg hover:bg-tertiary-bg transition">
+              className="absolute top-2 right-2 bg-tertiary-bg/80 p-2 rounded-lg cursor-pointer hover:bg-tertiary-bg transition">
               <IoTrash className="text-red-500" size={20} />
             </button>
           </div>
         ) : (
-          <label className="flex flex-col items-center justify-center border-2 border-dashed border-border-color rounded-xl h-64 cursor-pointer hover:bg-gray-50 transition">
+          <label className="flex flex-col items-center justify-center border-2 border-dashed border-border-color rounded-xl h-64 cursor-pointer hover:bg-tertiary-bg transition">
             <IoCloudUpload size={40} className="text-gray-400 mb-2" />
             <p className="text-gray-500 text-sm">Click to upload</p>
             <input
@@ -153,18 +155,20 @@ const ModalImageUploader = ({
           </label>
         )}
 
-        <div className="flex justify-end mt-4 gap-2">
+        <div className="flex justify-end mt-4 gap-4">
           <CTAButton
             type="cancel"
             callbackFn={handleClose}
             text="Cancel"
             disabled={loading}
+            icon={TbCancel}
           />
           <CTAButton
             type="success"
             callbackFn={handleUpload}
             disabled={!file || loading}
             text={loading ? "Uploading..." : "Upload"}
+            icon={FiUpload}
           />
         </div>
       </div>

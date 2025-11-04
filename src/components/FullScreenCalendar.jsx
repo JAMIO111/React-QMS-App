@@ -7,11 +7,6 @@ import { useCalendarItems } from "@/hooks/useCalendarItems";
 import { useJobs } from "@/hooks/useJobs";
 import { useMeetings } from "@/hooks/useMeetings";
 
-const tasksData = {
-  "2025-08-04": [{ id: 1, title: "Team meeting", time: "10:00 AM" }],
-  "2025-09-09": [{ id: 8, title: "Deploy new version", time: "3:00 PM" }],
-};
-
 export default function FullScreenCalendar() {
   const [view, setView] = useState("Weekly");
   const { data: calendarItems, isLoading } = useCalendarItems(
@@ -137,19 +132,67 @@ export default function FullScreenCalendar() {
             ? ` ${date.toLocaleString("default", { month: "short" })}`
             : ""}
         </span>
+        {jobsForDay.length + meetingsForDay.length > 0 && (
+          <span className="absolute top-2 right-2 text-xs text-error-color">
+            {jobsForDay.length + meetingsForDay.length} item
+            {jobsForDay.length + meetingsForDay.length !== 1 ? "s" : ""}
+          </span>
+        )}
 
         {/* Indicators */}
-        <div className="absolute top-6 bottom-1 left-1 right-1 overflow-y-auto flex flex-col-reverse flex-wrap justify-start gap-1">
-          {jobsForDay.length > 0 && (
-            <span className="bg-blue-200 text-blue-800 text-xs px-1 rounded">
-              {jobsForDay.length} Job{jobsForDay.length > 1 ? "s" : ""}
-            </span>
-          )}
-          {meetingsForDay.length > 0 && (
-            <span className="bg-green-200 text-green-800 text-xs px-1 rounded">
+        <div className="absolute top-8 bottom-1 left-1 right-1 overflow-y-auto flex flex-col justify-start gap-1">
+          {jobsForDay.length > 0 && view === "Weekly"
+            ? jobsForDay.map((job) => (
+                <span
+                  key={job.id}
+                  className="bg-blue-400/30 text-primary-text p-1 flex flex-row gap-2 rounded">
+                  <div className="bg-blue-500 rounded-full w-0.75 h-full"></div>
+                  <div className="flex flex-col gap-1">
+                    <p className="font-semibold text-sm">Changeover</p>
+                    <p className="text-xs">{job.propertyDetails.name}</p>
+                  </div>
+                </span>
+              ))
+            : jobsForDay.length > 0 &&
+              view === "Monthly" && (
+                <span className="bg-blue-400/30 text-primary-text text-xs px-1 rounded">
+                  {jobsForDay.length} Changeover
+                  {jobsForDay.length > 1 ? "s" : ""}
+                </span>
+              )}
+          {meetingsForDay.length > 0 && view === "Monthly" ? (
+            <span className="bg-green-400/30 text-primary-text text-xs px-1 rounded">
               {meetingsForDay.length} Meeting
               {meetingsForDay.length > 1 ? "s" : ""}
             </span>
+          ) : (
+            jobsForDay.length > 0 &&
+            view === "Weekly" &&
+            meetingsForDay.map((meeting) => (
+              <span
+                key={meeting.id}
+                className="bg-green-400/30 p-1 rounded flex flex-row gap-2">
+                <div className="bg-green-500 rounded-full w-0.75 h-full"></div>
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-semibold text-primary-text">
+                    Meeting
+                  </p>
+                  <p className="text-xs text-primary-text">{meeting.title}</p>
+                  <p className="text-xs text-secondary-text">
+                    {`${new Date(meeting.start_date).toLocaleString("default", {
+                      hour: "numeric",
+                      minute: "numeric",
+                    })} - ${new Date(meeting.end_date).toLocaleString(
+                      "default",
+                      {
+                        hour: "numeric",
+                        minute: "numeric",
+                      }
+                    )}`}
+                  </p>
+                </div>
+              </span>
+            ))
           )}
         </div>
       </div>

@@ -54,7 +54,7 @@ const LeadDetails = () => {
                 {lead?.title || "Unknown Company"} - Lead Activity
               </h2>
               <span
-                className={`text-xs font-medium px-3 py-2 rounded-xl ${
+                className={`text-sm font-medium px-3 py-2 rounded-xl ${
                   statusColor[lead?.status] || "bg-gray-200 text-gray-600"
                 }`}>
                 {lead?.status || "No Status"}

@@ -29,6 +29,8 @@ import {
 import Spinner from "@components/LoadingSpinner";
 import { useToast } from "../contexts/ToastProvider";
 import ToggleButton from "./ui/ToggleButton";
+import ProfileImageSection from "./ProfileImageSection";
+import { useQueryClient } from "@tanstack/react-query";
 
 const defaultFormData = {
   name: undefined,
@@ -48,6 +50,7 @@ const defaultFormData = {
 };
 
 const PropertyForm = () => {
+  const queryClient = useQueryClient();
   const { openModal, closeModal } = useModal();
   const navigate = useNavigate();
   const { id } = useParams();
@@ -179,10 +182,19 @@ const PropertyForm = () => {
     <div className="flex bg-primary-bg h-full flex-row p-3 gap-3">
       <div className="flex flex-1 gap-3 flex-col">
         <div className="flex flex-1 justify-between flex-col bg-secondary-bg shadow-m rounded-2xl p-3">
-          <img
-            className="border border-border-color aspect-video rounded-xl"
-            src={"/mansion-1.png"}
-            alt={"Property Image"}
+          <ProfileImageSection
+            item={property}
+            bucket="avatars"
+            path="properties"
+            table="Properties"
+            noImageText="No Image"
+            aspectRatio="aspect-video"
+            width="w-full"
+            onImageChange={(url) => {
+              // Optional: update your parent state, e.g. via TanStack Query invalidate
+              queryClient.invalidateQueries(["Property", property.id]);
+              console.log("New avatar URL:", url);
+            }}
           />
           <div className="my-3">
             <Controller

@@ -89,18 +89,22 @@ const OwnerForm = () => {
   return (
     <div className="flex bg-primary-bg flex-1 flex-row p-3 gap-3">
       <div className="bg-secondary-bg flex-1 rounded-2xl border p-3 border-border-color flex flex-col gap-3 h-full overflow-hidden">
-        <ProfileImageSection
-          item={owner}
-          bucket="avatars"
-          path="owners"
-          table="Owners"
-          noImageText={initials}
-          onImageChange={(url) => {
-            // Optional: update your parent state, e.g. via TanStack Query invalidate
-            queryClient.invalidateQueries(["Owner", owner.id]);
-            console.log("New avatar URL:", url);
-          }}
-        />
+        <div className="mb-5">
+          <ProfileImageSection
+            item={owner}
+            bucket="avatars"
+            path="owners"
+            table="Owners"
+            width="w-48"
+            height="h-48"
+            noImageText={initials}
+            onImageChange={(url) => {
+              // Optional: update your parent state, e.g. via TanStack Query invalidate
+              queryClient.invalidateQueries(["Owner", owner.id]);
+              console.log("New avatar URL:", url);
+            }}
+          />
+        </div>
         <Controller
           name="first_name"
           control={control}

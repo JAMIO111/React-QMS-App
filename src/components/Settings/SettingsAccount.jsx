@@ -8,11 +8,11 @@ const SettingsAccount = () => {
   const { profile } = useUser();
   console.log("profile:", profile);
   return (
-    <div className="flex flex-col xl:flex-row lg:flex-row gap-5 w-full pr-5 overflow-y-scroll">
+    <div className="flex flex-col xl:flex-row lg:flex-row gap-5 w-full pr-5 overflow-y-auto">
       <div className="flex flex-col gap-4 w-1/2">
         {/* Photo Card */}
         <div className="flex flex-row justify-between items-center bg-secondary-bg border border-border-color rounded-3xl p-5">
-          <div className="flex flex-col w-1/2 gap-5 justify-start h-full">
+          <div className="flex flex-col w-1/2 gap-2 justify-start h-full">
             <p className="text-primary-text text-xl">Profile Picture</p>
             <p className="text-secondary-text text-sm mb-5">
               Add an image of yourself so your team can easily identify you.
@@ -26,6 +26,9 @@ const SettingsAccount = () => {
             bucket="avatars"
             path="employees"
             table="Employees"
+            width="w-32"
+            height="h-32"
+            aspectRatio="aspect-square"
             onImageChange={(url) => {
               console.log("New avatar URL:", url);
             }}

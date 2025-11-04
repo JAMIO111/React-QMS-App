@@ -1,10 +1,12 @@
 import React from "react";
 import Logo from "@assets/dryden-logo.png";
+import { forwardRef } from "react";
 
-const JobSheet = ({ job }) => {
+const JobSheet = forwardRef(({ job }, ref) => {
   console.log("Job data:", job);
   return (
     <div
+      ref={ref}
       className="job-sheet"
       style={{
         width: "210mm",
@@ -13,7 +15,7 @@ const JobSheet = ({ job }) => {
         background: "#fff",
         color: "#000",
         fontFamily: "Arial, sans-serif",
-        border: "1px solid #000",
+        borderBottom: "1px solid #000",
       }}>
       <header className="flex justify-between mb-6">
         <img src={Logo} width="350" alt="Company Logo" />
@@ -34,7 +36,7 @@ const JobSheet = ({ job }) => {
           }}>
           Job Sheet{" "}
           {(() => {
-            switch (job?.propertyDetails.service_type) {
+            switch (job?.propertyDetails?.service_type) {
               case "changeover":
                 return "- Changeover";
               case "clean":
@@ -50,48 +52,48 @@ const JobSheet = ({ job }) => {
         </h2>
       </section>
       <section className="flex gap-5">
-        <section className="flex-1 border mb-7">
+        <section className="flex-1 border mb-5">
           <h2 className="p-1 border-b font-semibold bg-gray-200">
             Property Details
           </h2>
           <div className="p-2">
             <div className="flex gap-3 flex-row mb-1.5">
               <div className="flex-1 font-semibold">Name</div>
-              <div className="flex-3 ">{job?.propertyDetails.name}</div>
+              <div className="flex-3 ">{job?.propertyDetails?.name}</div>
             </div>
             <div className="flex gap-3 flex-row">
               <div className="flex-1 font-semibold">Address</div>
-              <div className="flex-3 ">{job?.propertyDetails.line_1}</div>
+              <div className="flex-3 ">{job?.propertyDetails?.line_1}</div>
             </div>
 
-            {job?.propertyDetails.line_2 && (
+            {job?.propertyDetails?.line_2 && (
               <div className="flex gap-3 flex-row">
                 <div className="flex-1 font-semibold"></div>
-                <div className="flex-3 ">{job?.propertyDetails.line_2}</div>
+                <div className="flex-3 ">{job?.propertyDetails?.line_2}</div>
               </div>
             )}
-            {job?.propertyDetails.town && (
+            {job?.propertyDetails?.town && (
               <div className="flex gap-3 flex-row">
                 <div className="flex-1 font-semibold"></div>
-                <div className="flex-3 ">{job?.propertyDetails.town}</div>
+                <div className="flex-3 ">{job?.propertyDetails?.town}</div>
               </div>
             )}
-            {job?.propertyDetails.county && (
+            {job?.propertyDetails?.county && (
               <div className="flex gap-3 flex-row">
                 <div className="flex-1 font-semibold"></div>
-                <div className="flex-3 ">{job?.propertyDetails.county}</div>
+                <div className="flex-3 ">{job?.propertyDetails?.county}</div>
               </div>
             )}
-            {job?.propertyDetails.postcode && (
+            {job?.propertyDetails?.postcode && (
               <div className="flex gap-3 flex-row mt-1.5">
                 <div className="flex-1 font-semibold">Postcode</div>
-                <div className="flex-3 ">{job?.propertyDetails.postcode}</div>
+                <div className="flex-3 ">{job?.propertyDetails?.postcode}</div>
               </div>
             )}
           </div>
         </section>
 
-        <section className="flex-1 border mb-7">
+        <section className="flex-1 border mb-5">
           <h2 className="p-1 border-b font-semibold bg-gray-200">
             Job Details
           </h2>
@@ -166,7 +168,7 @@ const JobSheet = ({ job }) => {
         </section>
       </section>
 
-      <section className="flex-1 border mb-7">
+      <section className="flex-1 border mb-5">
         <h2 className="p-1 border-b font-semibold bg-gray-200">
           Booking Details
         </h2>
@@ -233,7 +235,7 @@ const JobSheet = ({ job }) => {
       </section>
       {(job?.propertyDetails.service_type === "changeover" ||
         job?.propertyDetails.service_type === "clean") && (
-        <section className="flex-1 border mb-7">
+        <section className="flex-1 border mb-5">
           <h2 className="p-1 border-b font-semibold bg-gray-200">
             Quality Checks
           </h2>
@@ -259,7 +261,7 @@ const JobSheet = ({ job }) => {
         </section>
       )}
 
-      <section className="border" style={{ marginTop: "30px" }}>
+      <section className="border" style={{ marginTop: "20px" }}>
         <h2 className="p-1 border-b font-semibold bg-gray-200">Sign-Off</h2>
         <div className="p-3 flex flex-col gap-7">
           <p>
@@ -282,6 +284,6 @@ const JobSheet = ({ job }) => {
       </section>
     </div>
   );
-};
+});
 
 export default JobSheet;

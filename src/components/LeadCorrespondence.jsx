@@ -50,9 +50,9 @@ const LeadCorrespondence = ({ correspondence }) => {
       </div>
       <div className="flex flex-row justify-start items-stretch">
         <div className="w-[2px] rounded-full bg-border-color ml-6.5"></div>
-        <div className="bg-tertiary-bg mb-5 flex flex-row gap-4 shadow-s rounded-xl p-4 ml-10">
-          <div className="bg-cta-color w-1 h-full"></div>
-          <p className="text-sm text-primary-text">
+        <div className="bg-tertiary-bg mb-5 gap-2 flex flex-row shadow-s rounded-xl p-3 ml-10">
+          <div className="bg-cta-color rounded-full w-1 h-full"></div>
+          <p className="text-sm p-1 text-primary-text">
             {correspondence.content || "No correspondence content provided."}
           </p>
         </div>

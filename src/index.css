@@ -519,23 +519,17 @@ input:-webkit-autofill:active {
 }
 
 @media print {
+  .job-sheet {
+    page-break-after: always;
+  }
+
+  /* Optional: remove non-print elements */
   .no-print {
     display: none !important;
   }
 
-  .page-break {
-    page-break-after: always;
-  }
-
   body {
     background: white;
-  }
-}
-
-@media print {
-  .modal-container {
-    position: static !important;
-    height: auto !important;
-    overflow: visible !important;
+    margin: 0;
   }
 }

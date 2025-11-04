@@ -130,9 +130,6 @@ export default function ClientManagementOverviewCard({
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl text-primary-text font-semibold">Overview</h2>
-        <button className="bg-neutral-800 px-4 py-2 rounded-full text-sm text-white hover:bg-neutral-700 transition">
-          Last 7 days ▾
-        </button>
       </div>
 
       {/* Stats Section */}
@@ -159,7 +156,7 @@ export default function ClientManagementOverviewCard({
           <div className="flex items-end justify-between">
             <span className="text-5xl font-bold">{activeOwners.length}</span>
             <span
-              className={`flex items-center gap-1 ${ownersChange.color} ${ownersChange.bg} px-2 py-1 rounded-lg text-sm`}>
+              className={`flex items-center gap-1 ${ownersChange.color} ${ownersChange.bg} px-2 py-1 rounded-lg text-xs`}>
               {ownersChange.Icon && <ownersChange.Icon size={14} />}
               {ownersChange.text} vs last month
             </span>
@@ -180,7 +177,7 @@ export default function ClientManagementOverviewCard({
               {activeProperties.length}
             </span>
             <span
-              className={`flex items-center gap-1 ${propertiesChange.color} ${propertiesChange.bg} px-2 py-1 rounded-lg text-sm`}>
+              className={`flex items-center gap-1 ${propertiesChange.color} ${propertiesChange.bg} px-2 py-1 rounded-lg text-xs`}>
               {propertiesChange.Icon && <propertiesChange.Icon size={14} />}
               {propertiesChange.text} vs last month
             </span>
@@ -195,13 +192,13 @@ export default function ClientManagementOverviewCard({
             ? thisMonthsNewOwners.length
             : thisMonthsNewProperties.length}{" "}
           new{" "}
-          {active === "Owners" && thisMonthsNewOwners.length > 1
-            ? "owners"
-            : active === "Properties" && thisMonthsNewProperties.length > 1
-            ? "properties"
-            : active === "Properties"
+          {active === "Owners" && thisMonthsNewOwners.length === 1
+            ? "owner"
+            : active === "Properties" && thisMonthsNewProperties.length === 1
             ? "property"
-            : "owner"}{" "}
+            : active === "Properties"
+            ? "properties"
+            : "owners"}{" "}
           this month.
         </p>
         <p className="text-sm text-secondary-text mb-6">
@@ -224,7 +221,7 @@ export default function ClientManagementOverviewCard({
                         navigate(`/Client-Management/Owners/${owner.id}`)
                       }
                       key={i}
-                      className="flex flex-col items-center flex-shrink-0">
+                      className="flex flex-col cursor-pointer items-center flex-shrink-0">
                       <img
                         src={
                           owner.avatar ||
@@ -287,7 +284,7 @@ export default function ClientManagementOverviewCard({
                 ? navigate("/Client-Management/Owners")
                 : navigate("/Client-Management/Properties")
             }
-            className="bg-neutral-800 shadow-s mb-7 text-white flex gap-3 p-4 rounded-full hover:bg-neutral-700 transition">
+            className="bg-neutral-800 shadow-s mb-7 text-white flex gap-3 p-3.5 rounded-xl hover:bg-neutral-700 transition">
             <ArrowUpRight /> View All {active}
           </button>
         </div>

@@ -40,9 +40,9 @@ const PropertyList = ({ onSelectProperty, selectedProperty, properties }) => {
               }`}
               onClick={() => onSelectProperty(property)}>
               {/* Property Image */}
-              {!property.image ? (
+              {property.avatar ? (
                 <img
-                  src="/mansion-1.jpg"
+                  src={property.avatar}
                   alt={property?.name}
                   className="aspect-video h-28 border-r border-border-color object-cover mr-4"
                 />

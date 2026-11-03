@@ -13,6 +13,13 @@ const SettingMenuStructure = [
     subMenu: [],
   },
   {
+    name: "Users & permissions",
+    path: "Users",
+    icon: MdOutlineAdminPanelSettings,
+    permission: "members.read",
+    subMenu: [],
+  },
+  {
     name: "Account",
     path: "Account",
     icon: MdOutlineManageAccounts,
@@ -28,6 +35,7 @@ const SettingMenuStructure = [
     name: "Data Management",
     path: "Data-Management",
     icon: GoDatabase,
+    permission: "lookups.manage",
     subMenu: [],
   },
   {

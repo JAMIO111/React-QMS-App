@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import SettingMenuStructure from "../../SettingMenuStructure";
+import { useCanSee } from "../../hooks/useQmsApi";
 import { GoDatabase } from "react-icons/go";
 
 const Settings = () => {
   const { pathname } = useLocation();
+  const canSee = useCanSee();
   const [expandedItem, setExpandedItem] = useState(null);
 
   const toggleExpand = (index) => {
@@ -17,7 +19,7 @@ const Settings = () => {
         <h1 className="text-primary-text text-2xl pl-3 pb-2 border-b border-border-color mt-1 font-semibold">
           Settings
         </h1>
-        {SettingMenuStructure.map((item, index) => {
+        {SettingMenuStructure.filter((item) => canSee(item.permission)).map((item, index) => {
           const match = pathname
             .toLowerCase()
             .startsWith(`/settings/${item.path.toLowerCase()}`);

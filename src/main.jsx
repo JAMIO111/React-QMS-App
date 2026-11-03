@@ -25,6 +25,7 @@ const SettingsDataManagement = lazy(() =>
 const SettingsOrganisation = lazy(() =>
   import("./components/Settings/SettingsOrganisation.jsx")
 );
+const SettingsUsers = lazy(() => import("./components/Settings/SettingsUsers.jsx"));
 const SettingsAccount = lazy(() =>
   import("./components/Settings/SettingsAccount.jsx")
 );
@@ -82,6 +83,7 @@ const router = createBrowserRouter([
             children: [
               { index: true, element: <Navigate to="Organisation" replace /> },
               { path: "Organisation", element: <SettingsOrganisation /> },
+              { path: "Users", element: <SettingsUsers /> },
               { path: "General", element: <Navigate to="../Organisation" replace /> },
               { path: "Account", element: <SettingsAccount /> },
               {

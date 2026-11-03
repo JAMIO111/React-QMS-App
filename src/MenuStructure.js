@@ -12,6 +12,7 @@ export const menuStructure = [
   {
     name: "Non-Conformance",
     icon: PiWarning,
+    permission: "ncr.read",
     path: "/Non-Conformance/Internal",
     subMenu: [
       { name: "Internal", path: "/Non-Conformance/Internal" },
@@ -22,6 +23,7 @@ export const menuStructure = [
   {
     name: "Human Resources",
     icon: BsPeople,
+    permission: "master_data.read",
     path: "/Human-Resources",
     subMenu: [],
   },

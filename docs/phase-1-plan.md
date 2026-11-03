@@ -221,7 +221,7 @@ Deactivate instead of delete for sites, departments and memberships.
 
 ## 6. Delivery slices
 
-**Status:** 1.1–1.4 done (see §9–§12). Next: 1.5.
+**Status:** 1.1–1.5 done (see §9–§13). Next: 1.6 (exit check).
 
 Each slice is one reviewable change that leaves `Dev` working, with its own tests and docs.
 
@@ -419,3 +419,39 @@ deferred until records carry `site_id` (Phase 2).
 **Needs the user:** apply the migration (SQL editor). Settings → Organisation and onboarding only
 work where the API runs (`npm run api:dev` locally) until API hosting is chosen; `VITE_API_URL`
 points the frontend at it.
+
+---
+
+## 13. Slice 1.5 — done (2026-11-03)
+
+**Database:** migration `20251103140000_members_invitations` — `app.list_members` (directory with
+login emails, needs `members.read`), `app.my_invitations` and `app.accept_invitation` (matched to the
+signed-in account's email), lower-cased invitation emails, `invited_by` default, revoked invitations
+allowed without a user (fixes a 1.1 check that blocked revoking), last-owner rule raises `QM001`.
+Tests: `supabase/tests/members_invitations.test.sql`.
+
+**API:** `GET /members`, `POST /members/invitations`, `PATCH /members/:id` (invited→removed,
+active→suspended/removed, suspended→active/removed), `POST /members/:id/role-assignments`
+(optionally site/department scoped), `DELETE /role-assignments/:id`, `GET /roles`, `GET /permissions`,
+`GET /invitations`, `POST /invitations/:id/accept`. Escalation (granting roles you don't fully hold,
+managing someone who outranks you, changing your own status) → 403; `already_invited`,
+`already_member`, `invalid_transition`, `last_owner` → 409. Optional invitation email via the Supabase
+admin invite endpoint (`SUPABASE_SERVICE_ROLE_KEY`, `INVITE_REDIRECT_URL`); the invitation is created
+even when no email is sent and the response says why. 36 unit and 62 e2e tests.
+
+**Frontend:** Settings → Users & permissions (invite with role and optional site, status actions with
+confirmation, add/remove roles, roles reference, show removed); pending invitations with Accept on the
+no-organisation screen; menus hide items the user lacks permission for (`useCanSee` — everything stays
+visible while permissions are unknown, the server still enforces). 31 frontend tests.
+
+**Browser check** (UI → local API → throwaway Postgres): owner invites a viewer (UI explains no email
+was sent), invitee accepts on the onboarding screen and becomes an active viewer, the viewer's settings
+menu hides Users & permissions and Data Management and the organisation form is read-only, owner
+suspends the member; all four changes audited with `source = api`; no console errors.
+
+**Not done / limits:** invitation emails need the service-role key and Supabase email settings; with
+the default Supabase mailer they are heavily rate-limited (decision Q3). A person who is already a
+member of another organisation sees new invitations only via `GET /invitations` (no banner yet in the
+main app). Custom role editing is supported by the database but has no UI yet.
+
+**Needs the user:** run `apply_phase_1_4_and_1_5.sql` in the SQL editor (step 1.4 was not yet applied).

@@ -5,11 +5,13 @@ import { BsGear, BsQuestionCircle } from "react-icons/bs";
 import NavItem from "./NavItem";
 import Logout from "./Logout";
 import { menuStructure } from "../MenuStructure";
+import { useCanSee } from "../hooks/useQmsApi";
 import SubMenuItem from "./SubMenuItem";
 import ThemeToggle from "./ThemeToggle";
 
 const Navbar = () => {
   const [isMenuExpanded, setIsMenuExpanded] = useState(false);
+  const canSee = useCanSee();
   const [isSubMenuOpen, setIsSubMenuOpen] = useState(null);
 
   const toggleMenu = () => {
@@ -66,7 +68,7 @@ const Navbar = () => {
         </div>
         <div className="flex flex-col h-full overflow-y-auto justify-between">
           <ul className="gap-1 flex-1 flex flex-col pt-3">
-            {menuStructure.map((item) => (
+            {menuStructure.filter((item) => canSee(item.permission)).map((item) => (
               <li key={item.name}>
                 <NavItem
                   title={item.name}

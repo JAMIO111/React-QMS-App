@@ -2,10 +2,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthProvider";
 import { signOut } from "../authService";
 import CreateOrganisationForm from "./CreateOrganisationForm";
+import PendingInvitations from "./PendingInvitations";
 
 /**
- * Shown to a signed-in user who is not an active member of any organisation: create one (they
- * become its Owner) or ask to be invited. Invitations arrive in Phase 1.5.
+ * Shown to a signed-in user who is not an active member of any organisation: accept a pending
+ * invitation, or create an organisation (they become its Owner).
  */
 const NoOrganisation = ({ error }) => {
   const { user } = useAuth();
@@ -28,6 +29,7 @@ const NoOrganisation = ({ error }) => {
                 administrator of an existing organisation to invite you.
               </p>
             </div>
+            <PendingInvitations />
             <CreateOrganisationForm />
           </>
         )}

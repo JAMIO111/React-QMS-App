@@ -110,3 +110,89 @@ export const useCreateOrganisation = () => {
     },
   });
 };
+
+// ---------------------------------------------------------------------------
+// Members, roles and invitations (Phase 1.5)
+// ---------------------------------------------------------------------------
+
+export const useMembers = () => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: orgKey(organisationId, "members"),
+    queryFn: () => apiFetch("/members", { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+  });
+};
+
+export const useRoles = () => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: orgKey(organisationId, "roles"),
+    queryFn: () => apiFetch("/roles", { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+    staleTime: 1000 * 60 * 5,
+  });
+};
+
+/**
+ * Member administration. `action` is one of: invite, status, assign, unassign.
+ * Every change refreshes the directory (and /me, in case the caller changed their own roles).
+ */
+export const useMemberMutation = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, membershipId, assignmentId, body }) => {
+      switch (action) {
+        case "invite":
+          return apiFetch("/members/invitations", { method: "POST", body, organisationId });
+        case "status":
+          return apiFetch(`/members/${membershipId}`, { method: "PATCH", body, organisationId });
+        case "assign":
+          return apiFetch(`/members/${membershipId}/role-assignments`, { method: "POST", body, organisationId });
+        case "unassign":
+          return apiFetch(`/role-assignments/${assignmentId}`, { method: "DELETE", organisationId });
+        default:
+          throw new Error(`Unknown member action ${action}`);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: orgKey(organisationId, "members") });
+      queryClient.invalidateQueries({ queryKey: ["api", "me"] });
+    },
+  });
+};
+
+export const useMyInvitations = () => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["api", "invitations", user?.id],
+    queryFn: () => apiFetch("/invitations"),
+    enabled: !!user,
+    retry: false,
+  });
+};
+
+export const useAcceptInvitation = () => {
+  const queryClient = useQueryClient();
+  const { selectOrganisation } = useOrganisation();
+  return useMutation({
+    mutationFn: (membershipId) => apiFetch(`/invitations/${membershipId}/accept`, { method: "POST" }),
+    onSuccess: async ({ organisationId }) => {
+      selectOrganisation(organisationId);
+      await queryClient.invalidateQueries({ queryKey: ["memberships"] });
+      await queryClient.invalidateQueries({ queryKey: ["api"] });
+    },
+  });
+};
+
+/**
+ * Whether to show a menu item that needs `permission`. While permissions are unknown (loading, or
+ * the API is not reachable) items stay visible — the server still refuses what is not allowed.
+ */
+export const useCanSee = () => {
+  const { can, isLoading, error } = usePermissions();
+  return (permission) => !permission || isLoading || !!error || can(permission);
+};

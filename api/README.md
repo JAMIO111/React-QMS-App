@@ -36,6 +36,12 @@ Permission checks in the API are a second, explicit layer on top of RLS.
 | `PATCH /api/v1/organisations/current` | `organisation.manage` | Rename, change currency / VAT / NCR prefix |
 | `GET /api/v1/sites`, `POST`, `PATCH /:id` | member / `organisation.manage` | Sites (deactivate with `active: false`) |
 | `GET /api/v1/departments?siteId=`, `POST`, `PATCH /:id` | member / `organisation.manage` | Departments of a site |
+| `GET /api/v1/members` | `members.read` | Members and pending invitations, with roles |
+| `POST /api/v1/members/invitations` | `members.manage` | Invite by email with a role (emails if configured) |
+| `PATCH /api/v1/members/:id` | `members.manage` | Suspend, reactivate, remove, revoke invitation |
+| `POST /api/v1/members/:id/role-assignments`, `DELETE /api/v1/role-assignments/:id` | `members.manage` | Grant / remove roles (no escalation; last Owner kept) |
+| `GET /api/v1/roles`, `GET /api/v1/permissions` | `members.read` | Roles with permissions; permission catalogue |
+| `GET /api/v1/invitations`, `POST /api/v1/invitations/:id/accept` | signed in | The caller's pending invitations; accept one |
 
 Lists return `{ data, nextCursor }`; pass `cursor` (and `limit`, max 200) for the next page.
 Database errors are mapped to stable codes in `src/common/database-errors.ts`.
@@ -50,6 +56,7 @@ Copy `api/.env.example` and set values as environment secrets (never commit them
 | `SUPABASE_URL` | Enables verification with the project's signing keys (JWKS) and sets the issuer |
 | `SUPABASE_JWT_SECRET` | Legacy shared secret — needed while the project has no signing keys |
 | `CORS_ORIGINS` | Comma-separated frontend origins |
+| `SUPABASE_SERVICE_ROLE_KEY`, `INVITE_REDIRECT_URL` | Optional: send invitation emails via Supabase Auth (server-side only) |
 | `PORT`, `RATE_LIMIT_PER_MINUTE`, `LOG_LEVEL`, `DATABASE_POOL_MAX` | Optional |
 
 Start-up fails with a clear message (without secret values) if configuration is invalid. Logs are

@@ -160,7 +160,7 @@ const TableWrapper = ({
   if (error) return <div role="alert" className="text-error-color p-4">Error: {error.message}</div>;
 
   return (
-    <div className="flex flex-col w-[calc(100vw-32px)] md:w-[calc(100vw-97px)] min-w-0 overflow-hidden border border-border-color rounded-2xl h-[calc(100vh-150px)]">
+    <div className="flex flex-col flex-1 w-full h-full min-w-0 min-h-0 overflow-hidden border border-border-color rounded-2xl">
       <div className="flex-1 min-h-0">
         <Table
           table={table}

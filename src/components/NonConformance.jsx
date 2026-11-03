@@ -192,7 +192,7 @@ const NonConformance = () => {
   );
   const filterCount = activeFilters.length;
   return (
-    <div className="p-4 bg-primary-bg flex flex-col gap-3 w-full">
+    <div className="p-4 bg-primary-bg flex flex-col gap-3 w-full min-w-0 flex-1 min-h-0">
       <div className="flex flex-row justify-between items-center">
         <div className="flex flex-row justify-start items-center gap-2"></div>
         <div

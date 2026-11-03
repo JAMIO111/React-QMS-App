@@ -31,9 +31,9 @@ function App() {
           <div className="hidden md:block">
             <Navbar />
           </div>
-          <main className="flex flex-col flex-1 h-full">
+          <main className="flex flex-col flex-1 h-full min-w-0">
             <Header />
-            <div className="flex flex-col flex-1 overflow-hidden min-w-0">
+            <div className="flex flex-col flex-1 overflow-hidden min-w-0 min-h-0">
               <Outlet />
             </div>
           </main>

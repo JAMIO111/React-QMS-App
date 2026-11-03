@@ -4,6 +4,8 @@ import { signIn } from "../authService";
 import { IoEyeOutline, IoEyeOffOutline } from "react-icons/io5";
 import { useForm } from "react-hook-form";
 import { useToast } from "@/contexts/ToastProvider";
+import { CiAt } from "react-icons/ci";
+import { CiLock } from "react-icons/ci";
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -24,7 +26,7 @@ const Login = () => {
     const { email, password } = data;
     try {
       const user = await signIn(email, password, showToast);
-      navigate("/QMS");
+      navigate("/Dashboard"); // Redirect to Dashboard on successful login
       console.log("User logged in:", user);
     } catch (error) {
       if (error.message.includes("Invalid login credentials")) {
@@ -60,18 +62,21 @@ const Login = () => {
           <label className="text-left text-primary-text">
             Email <span className="text-error-color">*</span>
           </label>
-          <input
-            {...register("email", {
-              required: "Email is required",
-              pattern: {
-                value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
-                message: "Invalid email address",
-              },
-            })}
-            type="text"
-            placeholder="Enter your email address"
-            className="border text-primary-text placeholder:text-secondary-text border-border-color hover:border-border-dark-color p-2 bg-text-input-color rounded-lg focus-within:border-brand-primary focus-within:hover:border-brand-primary"
-          />
+          <div className="w-full relative">
+            <CiAt className="absolute left-2 top-2 text-secondary-text w-6 h-6" />
+            <input
+              {...register("email", {
+                required: "Email is required",
+                pattern: {
+                  value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+                  message: "Invalid email address",
+                },
+              })}
+              type="text"
+              placeholder="Enter your email address"
+              className="border pl-10 w-full text-primary-text placeholder:text-secondary-text border-border-color hover:border-border-dark-color p-2 bg-text-input-color rounded-lg focus-within:border-brand-primary focus-within:hover:border-brand-primary"
+            />
+          </div>
           {errors.email && (
             <p className="text-error-color text-sm">{errors.email.message}</p>
           )}
@@ -81,13 +86,14 @@ const Login = () => {
             Password <span className="text-error-color">*</span>
           </label>
           <div className="w-full relative">
+            <CiLock className="absolute left-2 top-2 text-secondary-text w-6 h-6" />
             <input
               {...register("password", {
                 required: "Password is required",
               })}
               type={showPassword ? "text" : "password"}
               placeholder="Enter password"
-              className=" w-full border border-border-color text-primary-text placeholder:text-secondary-text hover:border-border-dark-color p-2 bg-text-input-color rounded-lg focus-within:border-brand-primary focus-within:hover:border-brand-primary"
+              className="pl-10 w-full border border-border-color text-primary-text placeholder:text-secondary-text hover:border-border-dark-color p-2 bg-text-input-color rounded-lg focus-within:border-brand-primary focus-within:hover:border-brand-primary"
             />
             <button
               type="button"

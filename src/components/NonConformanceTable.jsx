@@ -16,6 +16,7 @@ const NonConformanceTable = ({
   onRefresh, //Required
   costData, //Required
   ncmData, //Required
+  ncType,
   selectedRows, //Required - Checkbox
   isSelected, //Required - Checkbox
   onToggle, //Required - Checkbox
@@ -123,12 +124,14 @@ const NonConformanceTable = ({
               </th>
               <th>
                 <div className="table-header">
-                  <IoPeopleOutline /> Customer
+                  <IoPeopleOutline />{" "}
+                  {ncType === "Supplier" ? "Supplier" : "Customer"}
                 </div>
               </th>
               <th>
                 <div className="table-header">
-                  <BsBox /> Work Order
+                  <BsBox />{" "}
+                  {ncType === "Supplier" ? "Purchase Order" : "Work Order"}
                 </div>
               </th>
               <th>
@@ -186,6 +189,7 @@ const NonConformanceTable = ({
                   handleRowClick={() => handleRowClick(item)}
                   key={item.id || index} //Required
                   selectedItem={selectedItem}
+                  ncType={ncType} //Required
                   setSelectedItem={setSelectedItem}
                   item={item} //Required
                   openModalRowId={openModalRowId}

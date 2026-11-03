@@ -1,5 +1,3 @@
-import React from "react";
-
 const HeaderIcon = ({ icon: Icon, top, right }) => {
   return (
     <div className="relative flex items-center justify-center w-10 h-10 rounded-full cursor-pointer transition duration-200 ease-in-out">

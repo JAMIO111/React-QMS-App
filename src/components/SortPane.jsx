@@ -29,7 +29,7 @@ const SortPane = ({
                 className="h-8 bg-text-input-color border border-border-color rounded-md px-2">
                 <option value="ncm_id">NCM ID</option>
                 <option value="date">Date</option>
-                <option value="quantity">Quantity</option>
+                <option value="quantity_defective">Quantity</option>
                 <option value="total_cost">Total Cost</option>
               </select>
             </div>
@@ -46,7 +46,7 @@ const SortPane = ({
                         return "Ascending";
                       case "date":
                         return "Oldest - Newest";
-                      case "quantity":
+                      case "quantity_defective":
                         return "Low - High";
                       case "total_cost":
                         return "Low - High";
@@ -62,7 +62,7 @@ const SortPane = ({
                         return "Descending";
                       case "date":
                         return "Newest - Oldest";
-                      case "quantity":
+                      case "quantity_defective":
                         return "High - Low";
                       case "total_cost":
                         return "High - Low";

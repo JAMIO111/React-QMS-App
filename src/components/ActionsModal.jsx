@@ -27,7 +27,8 @@ const ActionsModal = ({ item, position }) => {
     if (ok) {
       try {
         await deleteRow("NCM", id);
-        await queryClient.invalidateQueries(["Internal-NC"]);
+        console.log("Type invalidated:", item.type);
+        await queryClient.invalidateQueries({ queryKey: [item.type] });
         showToast({
           type: "success",
           title: "Deleted",
@@ -48,7 +49,7 @@ const ActionsModal = ({ item, position }) => {
 
   const handleEditNC = () => {
     console.log(`Editing ${item.id}`);
-    navigate(`/QMS/Non-Conformance/Internal/Edit-NC-${item.id}`);
+    navigate(`Edit-NC-${item.id}`);
   };
 
   return createPortal(

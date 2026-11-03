@@ -12,6 +12,13 @@ export const UserProvider = ({ children }) => {
     console.log("Auth user:", authUser);
     if (!authUser) {
       setProfile(null);
+      localStorage.removeItem("user_profile");
+      return;
+    }
+
+    const cached = localStorage.getItem("user_profile");
+    if (cached) {
+      setProfile(JSON.parse(cached));
       return;
     }
 
@@ -29,6 +36,7 @@ export const UserProvider = ({ children }) => {
         setProfile(null);
       } else {
         setProfile(data);
+        localStorage.setItem("user_profile", JSON.stringify(data));
       }
     };
 

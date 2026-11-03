@@ -68,7 +68,7 @@ const router = createBrowserRouter([
     ],
   },
   {
-    path: "/QMS", // base path for protected routes
+    path: "/", // base path for protected routes
     element: <ProtectedRoute />, // MUST render <Outlet /> inside!
     errorElement: <NotFound />,
     children: [
@@ -78,13 +78,9 @@ const router = createBrowserRouter([
           { index: true, element: <Dashboard /> },
           { path: "Dashboard", element: <Dashboard /> },
           { path: "Non-Conformance", element: <NonConformanceDashboard /> },
-          { path: "Non-Conformance/Internal", element: <NonConformance /> },
+          { path: "Non-Conformance/:type", element: <NonConformance /> },
           {
-            path: "Non-Conformance/Internal/:slug",
-            element: <NCEntryForm />,
-          },
-          {
-            path: "Non-Conformance/Internal/:slug",
+            path: "Non-Conformance/:type/:slug",
             element: <NCEntryForm />,
           },
           { path: "Projects", element: <Projects /> },
@@ -153,3 +149,4 @@ createRoot(document.getElementById("root")).render(
     </QueryClientProvider>
   </StrictMode>
 );
+console.trace("createRoot called");

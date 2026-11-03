@@ -4,6 +4,8 @@ import { signUp } from "../authService";
 import { IoEyeOutline, IoEyeOffOutline } from "react-icons/io5";
 import { useForm } from "react-hook-form";
 import { useToast } from "@/contexts/ToastProvider";
+import { CiAt } from "react-icons/ci";
+import { CiLock } from "react-icons/ci";
 
 const SignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -66,18 +68,21 @@ const SignUp = () => {
           <label className="text-left text-primary-text">
             Email <span className="text-error-color">*</span>
           </label>
-          <input
-            {...register("email", {
-              required: "Email is required",
-              pattern: {
-                value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
-                message: "Invalid email address",
-              },
-            })}
-            type="text"
-            placeholder="Enter your email address"
-            className="border text-primary-text border-border-color h-10 hover:border-border-dark-color p-2 bg-text-input-color rounded-lg focus-within:border-brand-primary focus-within:hover:border-brand-primary"
-          />
+          <div className="w-full relative">
+            <CiAt className="absolute left-2 top-2 text-secondary-text w-6 h-6" />
+            <input
+              {...register("email", {
+                required: "Email is required",
+                pattern: {
+                  value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+                  message: "Invalid email address",
+                },
+              })}
+              type="text"
+              placeholder="Enter your email address"
+              className="w-full pl-10 border text-primary-text border-border-color h-10 hover:border-border-dark-color p-2 bg-text-input-color rounded-lg focus-within:border-brand-primary focus-within:hover:border-brand-primary"
+            />
+          </div>
           {errors.email ? (
             <p className="text-error-color text-xs">{errors.email.message}</p>
           ) : (
@@ -88,27 +93,30 @@ const SignUp = () => {
           <label className="text-left text-primary-text">
             Password <span className="text-error-color">*</span>
           </label>
-          <input
-            {...register("password", {
-              required: "Password is required",
-              minLength: {
-                value: 8,
-                message: "Password must be at least 8 characters",
-              },
-              maxLength: {
-                value: 64,
-                message: "Password must be less than 64 characters",
-              },
-              pattern: {
-                value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/,
-                message:
-                  "Password must include uppercase, lowercase, a number, and a special character",
-              },
-            })}
-            type={showPassword ? "text" : "password"}
-            placeholder="Enter password"
-            className="border text-primary-text border-border-color h-10 hover:border-border-dark-color p-2 bg-text-input-color rounded-lg focus-within:border-brand-primary focus-within:hover:border-brand-primary"
-          />
+          <div className="w-full relative">
+            <CiLock className="absolute left-2 top-2 text-secondary-text w-6 h-6" />
+            <input
+              {...register("password", {
+                required: "Password is required",
+                minLength: {
+                  value: 8,
+                  message: "Password must be at least 8 characters",
+                },
+                maxLength: {
+                  value: 64,
+                  message: "Password must be less than 64 characters",
+                },
+                pattern: {
+                  value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/,
+                  message:
+                    "Password must include uppercase, lowercase, a number, and a special character",
+                },
+              })}
+              type={showPassword ? "text" : "password"}
+              placeholder="Enter password"
+              className="border w-full pl-10 text-primary-text border-border-color h-10 hover:border-border-dark-color p-2 bg-text-input-color rounded-lg focus-within:border-brand-primary focus-within:hover:border-brand-primary"
+            />
+          </div>
           {errors.password ? (
             <p className="text-error-color text-xs">
               {errors.password.message}
@@ -133,16 +141,19 @@ const SignUp = () => {
           <label className="text-left text-primary-text">
             Confirm Password <span className="text-error-color">*</span>
           </label>
-          <input
-            {...register("confirmPassword", {
-              required: "Confirm your password",
-              validate: (value) =>
-                value === watch("password") || "Passwords do not match",
-            })}
-            type={showConfirmPassword ? "text" : "password"}
-            placeholder="Confirm password"
-            className="border text-primary-text border-border-color h-10 hover:border-border-dark-color p-2 bg-text-input-color rounded-lg focus-within:border-brand-primary focus-within:hover:border-brand-primary"
-          />
+          <div className="w-full relative">
+            <CiLock className="absolute left-2 top-2 text-secondary-text w-6 h-6" />
+            <input
+              {...register("confirmPassword", {
+                required: "Confirm your password",
+                validate: (value) =>
+                  value === watch("password") || "Passwords do not match",
+              })}
+              type={showConfirmPassword ? "text" : "password"}
+              placeholder="Confirm password"
+              className="w-full pl-10 border text-primary-text border-border-color h-10 hover:border-border-dark-color p-2 bg-text-input-color rounded-lg focus-within:border-brand-primary focus-within:hover:border-brand-primary"
+            />
+          </div>
           {errors.confirmPassword ? (
             <p className="text-error-color text-xs">
               {errors.confirmPassword.message}

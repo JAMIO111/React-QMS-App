@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import Top5List from "../Top5List";
 import CustomAreaChart from "../charts/AreaChart";
-import currencyCodes from "@/currencyCodes";
 import DateRangePicker from "../ui/DateRangePicker";
 import { useUser } from "@/contexts/UserProvider";
 import DashboardCard from "./DashboardCard";
@@ -12,7 +11,9 @@ import SlidingSelector from "../ui/SlidingSelector";
 import { useNCKPI } from "@/hooks/useNCKPI";
 import { useNCDateTrend } from "@/hooks/useNCDateTrend";
 import { useOrganisation } from "@/contexts/OrganisationProvider";
-import AggregationPeriodDropdown from "../ui/AggregationPeriodDropdown";
+import StackedBarChart from "../charts/StackedBarChart";
+import PieChart from "../charts/PieChart";
+import { getPeriodLabel } from "@/lib/utils";
 
 const MosaicTile = ({ children, className }) => (
   <div
@@ -51,19 +52,6 @@ const NonConformanceDashboard = () => {
 
   const [aggregation, setAggregation] = useState("month");
 
-  const getAvailableAggregations = (startDate, endDate) => {
-    const dayDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
-    const options = [];
-    if (dayDiff <= 1) options.push("hour");
-    if (dayDiff <= 30) options.push("day");
-    if (dayDiff > 7) options.push("week");
-    if (dayDiff > 30) options.push("month");
-    if (dayDiff > 90) options.push("quarter");
-    if (dayDiff > 365) options.push("year");
-
-    return options;
-  };
-
   const {
     data: dateTrendData,
     error: dateTrendError,
@@ -75,20 +63,9 @@ const NonConformanceDashboard = () => {
     ncType
   );
 
-  useEffect(() => {
-    const validOptions = getAvailableAggregations(
-      memoisedRange.startDate,
-      memoisedRange.endDate
-    );
-
-    if (!validOptions.includes(aggregation)) {
-      // fallback to highest valid option (e.g., month or week)
-      setAggregation(validOptions[validOptions.length - 1]);
-    }
-  }, [memoisedRange.startDate, memoisedRange.endDate]);
-
   console.log("NC Dashboard Data:", data);
   console.log("Date Trend Data:", dateTrendData);
+  console.log("Failure Mode Breakdown:", data?.failure_mode_breakdown);
 
   return (
     <div className="flex flex-col flex-grow overflow-hidden">
@@ -104,16 +81,6 @@ const NonConformanceDashboard = () => {
         <div className="flex flex-col gap-2 md:flex-row w-full items-center justify-between">
           <div className="w-full flex items-center justify-start xl:justify-center">
             <SlidingSelector typeFilter={ncType} setTypeFilter={setNcType} />
-            <AggregationPeriodDropdown
-              startDate={memoisedRange.startDate}
-              endDate={memoisedRange.endDate}
-              value={aggregation}
-              onChange={setAggregation}
-              validOptions={getAvailableAggregations(
-                memoisedRange.startDate,
-                memoisedRange.endDate
-              )}
-            />
           </div>
           <div className="w-full md:w-fit flex items-center justify-start xl:justify-center">
             <DateRangePicker
@@ -133,6 +100,11 @@ const NonConformanceDashboard = () => {
             isPositiveGood={false}
             icon={LuFileX2}
             isLoading={isLoading}
+            previousPeriodLabel={getPeriodLabel(
+              memoisedRange.startDate,
+              memoisedRange.endDate,
+              "previous"
+            )}
             color="lime"
           />
         </MosaicTile>
@@ -144,6 +116,11 @@ const NonConformanceDashboard = () => {
             isPositiveGood={false}
             icon={LuPackageX}
             isLoading={isLoading}
+            previousPeriodLabel={getPeriodLabel(
+              memoisedRange.startDate,
+              memoisedRange.endDate,
+              "previous"
+            )}
             color="orange"
           />
         </MosaicTile>
@@ -156,6 +133,11 @@ const NonConformanceDashboard = () => {
             currencyItem={true}
             icon={AiOutlinePound}
             isLoading={isLoading}
+            previousPeriodLabel={getPeriodLabel(
+              memoisedRange.startDate,
+              memoisedRange.endDate,
+              "previous"
+            )}
             color="fuchsia"
           />
         </MosaicTile>
@@ -167,23 +149,70 @@ const NonConformanceDashboard = () => {
             isPositiveGood={false}
             icon={AiOutlinePound}
             isLoading={isLoading}
+            previousPeriodLabel={getPeriodLabel(
+              memoisedRange.startDate,
+              memoisedRange.endDate,
+              "previous"
+            )}
             color="cyan"
           />
         </MosaicTile>
         <MosaicTile className="col-span-1 sm:col-span-2 md:col-span-4 xl:col-span-3 row-span-4">
           <CustomAreaChart
             chartData={dateTrendData}
-            base_currency={organisation?.base_currency}
+            subtitle={`Quantity and Cost Trend for ${getPeriodLabel(
+              memoisedRange.startDate,
+              memoisedRange.endDate,
+              "current"
+            )}`}
+            baseCurrency={organisation?.base_currency}
+            startDate={memoisedRange.startDate}
+            endDate={memoisedRange.endDate}
+            aggregation={aggregation}
+            setAggregation={setAggregation}
+            ncType={ncType}
           />
         </MosaicTile>
         <MosaicTile className="row-span-4 lg:col-span-1 md:col-span-2 sm:col-span-1">
-          <Top5List title="Total Defects" data={data} isLoading={isLoading} />
+          <Top5List
+            title="Total Defects"
+            subtitle={`By ${ncType === "Supplier" ? "Supplier" : "Customer"}`}
+            data={data}
+            isLoading={isLoading}
+            dataKey="top_entities"
+            idKey="entity_id"
+            nameKey="entity_name"
+            valueKey="total_defects"
+            logoKey="entity_logo"
+            fallbackIconPrefix="fallback-position"
+          />
         </MosaicTile>
         <MosaicTile className="row-span-4 col-span-1 md:col-span-2 lg:col-span-1 sm:col-span-1">
-          <Top5List title="Total Defects" data={data} isLoading={isLoading} />
+          <Top5List
+            title="Total Defects"
+            subtitle="By Causal Process"
+            data={data}
+            isLoading={isLoading}
+            dataKey="top_causal_processes"
+            idKey="process_id"
+            nameKey="process_name"
+            valueKey="total_defects"
+            logoKey={null} // or omit
+            fallbackIconPrefix="fallback-position"
+          />
         </MosaicTile>
         <MosaicTile className="col-span-1 sm:col-span-2 md:col-span-4 xl:col-span-3 row-span-4">
-          {/*<CustomAreaChart />*/}
+          <StackedBarChart
+            data={data?.failure_mode_breakdown}
+            subtitle={`Failure mode breakdown for ${getPeriodLabel(
+              memoisedRange.startDate,
+              memoisedRange.endDate,
+              "current"
+            )}`}
+          />
+        </MosaicTile>
+        <MosaicTile className="lg:max-xl:row-start-7 lg:max-xl:col-start-2 col-span-1 row-span-4 md:col-span-2 sm:col-span-1">
+          <PieChart chartData={data?.top_parts} />
         </MosaicTile>
       </div>
     </div>

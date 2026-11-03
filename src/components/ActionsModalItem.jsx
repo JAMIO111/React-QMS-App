@@ -2,8 +2,8 @@ import clsx from "clsx";
 
 const ActionsModalItem = ({ label, icon: Icon, color, item, callback }) => {
   const colorClasses = {
-    red: "hover:bg-error-color text-error-color hover:text-white text-error-text",
-    blue: "hover:bg-indigo-500 hover:text-white text-primary-text",
+    red: "hover:bg-error-color/80 text-error-color/80 hover:text-white text-error-text",
+    blue: "hover:bg-cta-color/70 hover:text-white text-primary-text",
   };
 
   return (

@@ -13,52 +13,52 @@ export const menuStructure = [
   {
     name: "Dashboard",
     icon: RxDashboard,
-    path: "/QMS/Dashboard",
+    path: "/Dashboard",
     subMenu: [],
   },
   {
     name: "Non-Conformance",
     icon: PiWarning,
-    path: "/QMS/Non-Conformance",
+    path: "/Non-Conformance",
     subMenu: [
       {
         name: "Internal",
-        path: "/QMS/Non-Conformance/Internal",
+        path: "/Non-Conformance/Internal",
       },
       {
         name: "Customer",
-        path: "/QMS/Non-Conformance/External",
+        path: "/Non-Conformance/Customer",
       },
       {
         name: "Supplier",
-        path: "/QMS/QMS/Non-Conformance/Supplier",
+        path: "/Non-Conformance/Supplier",
       },
       {
         name: "Warranty",
-        path: "/QMS/Non-Conformance/Warranty",
+        path: "/Non-Conformance/Warranty",
       },
       {
         name: "Audit",
-        path: "/QMS/Non-Conformance/Audit",
+        path: "/Non-Conformance/Audit",
       },
     ],
   },
   {
     name: "Projects",
     icon: BsFolder,
-    path: "/QMS/Projects",
+    path: "/Projects",
     subMenu: [],
   },
   {
     name: "Purchase Orders",
     icon: LiaFileInvoiceDollarSolid,
-    path: "/QMS/Purchase-Orders",
+    path: "/Purchase-Orders",
     subMenu: [],
   },
   {
     name: "Inventory",
     icon: BsBoxes,
-    path: "/QMS/Inventory",
+    path: "/Inventory",
     subMenu: [
       {
         name: "Stock",
@@ -77,7 +77,7 @@ export const menuStructure = [
   {
     name: "Human Resources",
     icon: BsPeople,
-    path: "/QMS/Human-Resources",
+    path: "/Human-Resources",
     subMenu: [],
   },
 ];

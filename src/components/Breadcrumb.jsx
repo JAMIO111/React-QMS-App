@@ -33,7 +33,7 @@ const Breadcrumb = () => {
   return (
     <nav className="flex items-center gap-1 text-sm text-secondary-text font-semibold">
       <BiHome />
-      <Link to="/" className="hover:underline">
+      <Link to="/Dashboard" className="hover:underline">
         Home
       </Link>
       {segments.map((segment, index) => {

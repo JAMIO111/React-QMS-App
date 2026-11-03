@@ -13,6 +13,7 @@ const RHFComboBox = ({
   dependentValue,
   dependentKey,
   secondaryField,
+  secondaryFieldOptions,
   error,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -237,8 +238,21 @@ const RHFComboBox = ({
                           ? "bg-brand-primary text-white"
                           : "text-primary-text hover:bg-brand-primary/33"
                       }`}>
-                      {dependentKey && dependentValue
+                      {secondaryField && option[secondaryField]
                         ? `${option[secondaryField]} - ${option.name}`
+                        : dependentValue !== undefined &&
+                          dependentValue !== null &&
+                          dependentKey &&
+                          secondaryFieldOptions &&
+                          secondaryField
+                        ? (() => {
+                            const failureModeObj = secondaryFieldOptions.find(
+                              (item) => item.id === dependentValue
+                            );
+                            return failureModeObj
+                              ? `${failureModeObj[secondaryField]} - ${option.name}`
+                              : option.name;
+                          })()
                         : option.name}
                     </div>
                   </li>

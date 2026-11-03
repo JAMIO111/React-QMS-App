@@ -106,14 +106,14 @@ const Navbar = () => {
               label="Settings"
               icon={BsGear}
               isExpanded={isMenuExpanded}
-              path="/QMS/Settings"
+              path="/Settings"
               onClick={() => {}}
             />
             <NavItem
               label="Help Centre"
               icon={BsQuestionCircle}
               isExpanded={isMenuExpanded}
-              path="/QMS/Help"
+              path="/Help"
             />
             <div className="border-t-1 mx-3 border-border-color"></div>
             <div className="flex flex-col justify-between items-start gap-2 pt-2">

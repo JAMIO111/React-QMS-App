@@ -8,7 +8,7 @@ export default function HomeRedirect() {
 
   // Redirect based on user state
   if (user) {
-    return <Navigate to="/QMS" replace />;
+    return <Navigate to="/Dashboard" replace />;
   } else {
     return <Navigate to="/login" replace />;
   }

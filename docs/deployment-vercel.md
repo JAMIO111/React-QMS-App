@@ -9,6 +9,12 @@ Phase 5 workers will need a long-running host.
 | `qms-web` | `/` (repo root) | Vite | The React frontend (static). `vercel.json` rewrites every path to `index.html` so React Router routes survive a refresh. |
 | `qms-api` | `api/` | NestJS | The API as one Vercel Function (entry file `api/src/main.ts`, recognised by Vercel). |
 
+Both projects build only from `Dev` (Ignored Build Step: any other branch is skipped), because
+`main` does not have the API yet. The frontend's `vercel.json` uses an explicit static `builds`
+entry so Vercel does not turn the repo-root `api/` folder into serverless functions (the Hobby plan
+allows 12 per deployment). The API entry file `api/src/main.ts` imports `@nestjs/core` directly,
+which Vercel's NestJS detection requires.
+
 Both use the Supabase project `xvpgrmujayytbbmhnoan`, whose data is test data.
 
 ## Addresses

@@ -115,7 +115,8 @@ through the Data API):
 - `app.has_permission(org uuid, perm text, site uuid default null) → bool`.
 - `app.member_org_ids() → setof uuid`.
 
-Policies (every table, `ENABLE` + `FORCE ROW LEVEL SECURITY`):
+Policies (every table, `ENABLE ROW LEVEL SECURITY`; not `FORCE`, so the `SECURITY DEFINER` helpers owned by
+`postgres` can read the membership tables without recursing through their policies):
 
 | Operation | Rule |
 |---|---|
@@ -220,6 +221,8 @@ Deactivate instead of delete for sites, departments and memberships.
 
 ## 6. Delivery slices
 
+**Status:** 1.1 done (applied 2026-11-03, see §9). Next: 1.2.
+
 Each slice is one reviewable change that leaves `Dev` working, with its own tests and docs.
 
 | # | Slice | Main contents | Verified by |
@@ -274,3 +277,39 @@ Order is fixed by risk: 1.1 closes the open-database problem first and touches t
 | Q4 | **Delete** the 17 existing storage objects when storage moves to the organisation-scoped layout (slice 1.1). |
 
 Q5 (secrets) is needed from slice 1.3 onwards.
+
+---
+
+## 9. Slice 1.1 — done (2026-11-03)
+
+Migrations `20251103100000_tenancy_core`, `20251103100100_tenant_columns`,
+`20251103100200_rls_lockdown` applied to `xvpgrmujayytbbmhnoan` in one transaction via the
+SQL editor, with the migration history recorded for all four files.
+
+**Verified on the live project**
+- Schema identical to the tested local build in every fingerprint category (columns,
+  constraints, indexes, functions, views, policies, triggers, table/column/function grants, RLS
+  flags, seeds, buckets). Function bodies differ only by CRLF line endings from the paste.
+- Backfill: JDigital (slug `jdigital`), settings GBP / 0.20, default site, the existing user is an
+  active Owner with a profile; 20 NCRs, 11 employees and all lookups kept.
+- As that user through RLS: 1 organisation, 20 NCRs, all lookups, notification, KPIs.
+- Supabase security advisor: RLS-disabled, security-definer-view and mutable-search-path findings
+  cleared. Remaining warnings: signed-in users can see table *names* in the GraphQL schema (rows are
+  still protected by RLS); leaked-password protection off; Postgres 15.8 patch available.
+- Old storage objects, `NC Files` rows and employee avatar URLs removed as agreed.
+
+**Verified locally (`npm run db:check`)**: backfill test, cross-tenant/permission suite (anon,
+outsider, owner, dual member, inspector, suspended member, notifications, privilege escalation,
+last owner, storage, TRUNCATE), plus mutation checks showing the suite fails when a policy is weakened.
+
+**Lessons**
+- The first live apply failed (and rolled back): the live `NCM -> 8D` foreign key depended on
+  `8D_id_key`, not the primary key. The baseline now reproduces that; all 21 foreign-key index
+  bindings were compared with the live project.
+- Supabase grants `authenticated` ALL on new tables by default (including TRUNCATE); the lockdown
+  migration revokes what policies don't need.
+- The Supabase connector's SQL tool times out waiting for approval on large/destructive scripts;
+  applying through the SQL editor worked.
+
+**Not verified yet:** the running app in a browser against the live project (sign-in, registers,
+avatar upload, attachments). Please check these when you next run `npm run dev`.

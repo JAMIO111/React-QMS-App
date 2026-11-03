@@ -23,13 +23,13 @@ column, constraint, function signature and view (287 items) matched exactly.
 
 ## Applying to the remote project
 
-New migrations are applied with the Supabase CLI (`supabase db push`) or reviewed and applied by
-hand. Before the first push, record the baseline as already applied so it is skipped:
+The remote migration history (`supabase_migrations.schema_migrations`) records every applied file,
+so `supabase db push` only applies new ones. Migrations so far were applied by pasting a single
+`BEGIN; … COMMIT;` script into the Supabase SQL editor and inserting the history rows in the same
+transaction.
 
-```sh
-supabase link --project-ref xvpgrmujayytbbmhnoan
-supabase migration repair --status applied 20251103000000
-```
+Before applying, always run `npm run db:check` and, for data-changing migrations, rehearse on a copy
+of the live data (`DB_CHECK_FIXTURES=<dir>`, see `scripts/db-check.sh`).
 
 ## Conventions (from docs/design-brief.md)
 

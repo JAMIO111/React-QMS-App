@@ -17,7 +17,7 @@ Summary of the brief:
   incremental reversible migrations, never claim unverified results, keep secrets out of source
   control and client bundles. See brief §2 and §14 (definition of done) and §15 (non-goals).
 
-## Current state of the repo (after Step 0, Nov 2026)
+## Current state of the repo (after Phase 1.1, Nov 2026)
 
 - Vite + React 19 (JavaScript, not TypeScript), Tailwind v4, TanStack Query/Table,
   react-hook-form + zod, Recharts. Supabase (auth, DB, storage) called directly from the client
@@ -26,8 +26,14 @@ Summary of the brief:
   (simple overview), Non-Conformance registers (`/Non-Conformance/:type` — Internal, Customer,
   Supplier), Human Resources (employee list), Settings.
 - Holiday-let code was removed; it is preserved on branch `archive/holiday-let`.
-- Database schema is versioned in `supabase/migrations/` (baseline matches the live project);
-  see `supabase/README.md`. RLS is still OFF on every table until the first Phase 1 migration.
+- Database schema is versioned in `supabase/migrations/`; the live project matches it (see
+  `supabase/README.md`). Multi-tenancy is in place: organisations, sites, departments, profiles,
+  memberships, roles/permissions; `organisation_id` on every business table; RLS on every table
+  with `app.is_member` / `app.has_permission` helpers. Legacy table names ("NCM", "Failure Mode"…)
+  stay until Phase 2.
+- Frontend reads the current user from `profiles` and memberships via `OrganisationProvider`;
+  every query filters by the current `organisationId`. Storage paths: `nc-files/<org_id>/...`,
+  `avatars/users/<user_id>/...` (both private).
 - `.env` is untracked; copy `.env.example`. Build passes; lint has 0 errors (warnings remain).
 
 ## Agreed plan
@@ -36,10 +42,10 @@ Summary of the brief:
 NestJS API added in Phase 1 alongside the Vite frontend; holiday-let code archived on
 branch `archive/holiday-let` then removed; Supabase project `xvpgrmujayytbbmhnoan` ("React QMS") is
 canonical and its data is test data; RLS enabled in the first Phase 1 migration with policies.
-Step 0 (Stabilise) is done. Next: **Phase 1** (platform foundation) — plan and agreed decisions
+Step 0 (Stabilise) and Phase 1 slice 1.1 (tenancy + RLS) are done. Plan and agreed decisions
 in `docs/phase-1-plan.md` (API hosting decided later; migrations checked locally with
-`npm run db:check` then applied directly; Supabase built-in email for now; old storage objects
-deleted). Start with slice 1.1 (tenancy schema + RLS lockdown).
+`npm run db:check`, rehearsed on a live-data copy, then applied via the SQL editor; Supabase
+built-in email for now). Next: **slice 1.2 (audit events)**.
 
 ## Commands
 

@@ -27,5 +27,10 @@ export const Membership = z.object({
   permissions: z.array(z.string()),
 });
 
-export const MeResponse = z.object({ profile: Profile, memberships: z.array(Membership) });
+/** Two-factor state of this session and the organisations it cannot use until MFA is passed. */
+export const MfaStatus = z.object({
+  level: z.enum(['aal1', 'aal2']),
+  requiredBy: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+});
+export const MeResponse = z.object({ profile: Profile, memberships: z.array(Membership), mfa: MfaStatus });
 export type MeResponse = z.infer<typeof MeResponse>;

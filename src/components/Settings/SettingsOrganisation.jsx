@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Field from "../ui/Field";
 import SitesManager from "./SitesManager";
 import ThemeColourPicker from "./ThemeColourPicker";
+import RequireMfaSetting from "./RequireMfaSetting";
 import { describeApiError, API_URL } from "../../lib/api-client";
 import { useOrganisationDetails, usePermissions, useUpdateOrganisation } from "../../hooks/useQmsApi";
 import { useToast } from "../../contexts/ToastProvider";
@@ -133,6 +134,8 @@ const SettingsOrganisation = () => {
       </form>
 
       <ThemeColourPicker value={org.settings.themeColour ?? "purple"} canManage={canManage} />
+
+      <RequireMfaSetting value={!!org.settings.requireMfa} canManage={canManage} />
 
       <SitesManager canManage={canManage} />
     </div>

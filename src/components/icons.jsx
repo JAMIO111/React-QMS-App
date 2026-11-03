@@ -67,6 +67,7 @@ import {
   Search as LucideSearch,
   Settings as LucideSettings,
   Share as LucideShare,
+  ShieldCheck as LucideShieldCheck,
   ShieldUser as LucideShieldUser,
   SlidersHorizontal as LucideSlidersHorizontal,
   Sun as LucideSun,
@@ -156,6 +157,7 @@ export const SaveIcon = withDefaults(LucideSave);
 export const SearchIcon = withDefaults(LucideSearch);
 export const SettingsIcon = withDefaults(LucideSettings);
 export const ShareIcon = withDefaults(LucideShare);
+export const ShieldCheckIcon = withDefaults(LucideShieldCheck);
 export const ShieldUserIcon = withDefaults(LucideShieldUser);
 export const SlidersHorizontalIcon = withDefaults(LucideSlidersHorizontal);
 export const SunIcon = withDefaults(LucideSun);

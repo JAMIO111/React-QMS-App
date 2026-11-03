@@ -45,15 +45,20 @@ export class OrganisationGuard implements CanActivate {
       throw ApiError.badRequest('invalid_organisation_id', 'X-Organisation-Id must be a UUID');
     }
 
-    const { member, allowed } = await this.db.asUser(contextFrom(req), async (db) => {
-      const result = await db.execute<{ member: boolean; allowed: boolean }>(
+    const { member, allowed, mfa_blocked } = await this.db.asUser(contextFrom(req), async (db) => {
+      const result = await db.execute<{ member: boolean; allowed: boolean; mfa_blocked: boolean }>(
         sql`select app.is_member(${organisationId}::uuid) as member,
                    (${scope.permission ?? null}::text is null
-                    or app.has_permission(${organisationId}::uuid, ${scope.permission ?? null}::text)) as allowed`,
+                    or app.has_permission(${organisationId}::uuid, ${scope.permission ?? null}::text)) as allowed,
+                   exists (select 1 from app.mfa_blocked_organisations() b
+                           where b.organisation_id = ${organisationId}::uuid) as mfa_blocked`,
       );
       return result.rows[0];
     });
 
+    // A member whose session has not passed MFA, in an organisation that requires it. Only the
+    // caller's own memberships are reported, so this does not reveal other tenants.
+    if (mfa_blocked) throw new ApiError(403, 'mfa_required', 'This organisation requires two-factor authentication');
     if (!member) throw ApiError.notFound('organisation_not_found', 'Organisation not found');
     if (!allowed) throw ApiError.forbidden(undefined, { permission: scope.permission });
     req.organisationId = organisationId.toLowerCase();

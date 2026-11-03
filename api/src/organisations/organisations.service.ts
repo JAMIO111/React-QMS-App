@@ -39,6 +39,7 @@ export class OrganisationsService {
             ...(s.vatRate !== undefined ? { vatRate: String(s.vatRate) } : {}),
             ...(s.ncrReferencePrefix !== undefined ? { ncrReferencePrefix: s.ncrReferencePrefix } : {}),
             ...(s.themeColour !== undefined ? { themeColour: s.themeColour } : {}),
+            ...(s.requireMfa !== undefined ? { requireMfa: s.requireMfa } : {}),
           })
           .where(eq(organisationSettings.organisationId, organisationId))
           .returning({ id: organisationSettings.organisationId });
@@ -65,6 +66,7 @@ export class OrganisationsService {
         vatRate: Number(row.settings.vatRate),
         ncrReferencePrefix: row.settings.ncrReferencePrefix,
         themeColour: row.settings.themeColour as OrganisationResponse['settings']['themeColour'],
+        requireMfa: row.settings.requireMfa,
       },
     };
   }

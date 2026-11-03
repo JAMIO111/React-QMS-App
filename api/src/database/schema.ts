@@ -28,6 +28,7 @@ export const organisationSettings = pgTable('organisation_settings', {
   vatRate: numeric('vat_rate').notNull(),
   ncrReferencePrefix: text('ncr_reference_prefix').notNull(),
   themeColour: text('theme_colour').notNull(),
+  requireMfa: boolean('require_mfa').notNull(),
 });
 
 export const organisationUsers = pgTable('organisation_users', {

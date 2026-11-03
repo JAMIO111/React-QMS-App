@@ -50,6 +50,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(429, 'limit_reached', 'A usage limit was reached, please try again later');
     case 'QM001': // app.assert_organisation_has_owner
       return new ApiError(409, 'last_owner', 'An organisation must keep at least one active Owner');
+    case 'QM002': // app.guard_require_mfa
+      return new ApiError(409, 'mfa_setup_required', 'Set up two-factor authentication for your own account before requiring it');
     case 'P0002': // no_data_found raised by app functions
       return ApiError.notFound();
     case '57014': // query_canceled (statement_timeout)

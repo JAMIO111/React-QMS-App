@@ -22,9 +22,8 @@ const Login = () => {
     setLoading(true);
     const { email, password } = data;
     try {
-      const user = await signIn(email, password, showToast);
+      await signIn(email, password, showToast);
       navigate("/Dashboard"); // Redirect to Dashboard on successful login
-      console.log("User logged in:", user);
     } catch (error) {
       if (error.message.includes("Invalid login credentials")) {
         setMessage("Invalid email or password. Please try again.");
@@ -113,6 +112,7 @@ const Login = () => {
                 </p>
               )}
               <Link
+                to="/forgot-password"
                 className={`${
                   errors.password?.message ? "w-fit" : "w-full text-right"
                 } text-link-color hover:underline text-sm ${

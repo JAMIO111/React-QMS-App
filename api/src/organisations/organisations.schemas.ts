@@ -15,7 +15,7 @@ export const OrganisationResponse = z.object({
   name: z.string(),
   slug: z.string(),
   status: z.enum(['active', 'suspended']),
-  settings: z.object({ baseCurrency: z.string(), vatRate: z.number(), ncrReferencePrefix: z.string(), themeColour: ThemeColour }),
+  settings: z.object({ baseCurrency: z.string(), vatRate: z.number(), ncrReferencePrefix: z.string(), themeColour: ThemeColour, requireMfa: z.boolean() }),
 });
 export type OrganisationResponse = z.infer<typeof OrganisationResponse>;
 
@@ -39,6 +39,7 @@ export const UpdateOrganisationBody = z
         vatRate: z.number().min(0).lt(1).multipleOf(0.0001).optional(),
         ncrReferencePrefix: z.string().trim().regex(/^[A-Za-z0-9]{1,10}$/, 'Use 1–10 letters or digits').transform((v) => v.toUpperCase()).optional(),
         themeColour: ThemeColour.optional(),
+        requireMfa: z.boolean().optional(),
       })
       .strict()
       .refine((s) => Object.keys(s).length > 0, { message: 'Provide at least one setting' })

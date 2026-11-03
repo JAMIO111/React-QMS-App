@@ -203,3 +203,47 @@ applied to the live project before the next starts.
    transaction now (no processor until a worker host exists), or defer to Phase 5?
 4. **Q4 Order** — start with slice 2.0 (auth gate) as recommended, or go straight to the QMS
    workflow (2.1) and do auth before real users?
+
+## 9. Slice 2.0 — auth gate — done (2026-11-03)
+
+**Password flows**
+- `/forgot-password` sends Supabase's reset email (`redirectTo …/set-password?mode=reset`) and
+  answers the same way whether or not the address has an account; rate limits are explained.
+- `/set-password` is the landing page for invitation (`?mode=invite`) and reset links: explains
+  expired/used links (captured from the URL before Supabase clears it,
+  `initialAuthLinkError`), enforces app password rules (≥ 10 characters, letters and numbers, not
+  the email name), sends two-factor users through `/mfa` first if Supabase asks for AAL2.
+- Sign-in "Forgot your password?" now links there. `INVITE_REDIRECT_URL` should be
+  `<frontend>/set-password?mode=invite`.
+- Also fixed: the session (including the access token) was logged to the browser console on every
+  auth event; the sign-in hero image path was wrong (`/public/hero.jpg` → `/Hero.jpg`).
+
+**Two-factor authentication (TOTP)**
+- Settings → Account: set up (QR code or manual key, confirm a code) and turn off.
+- Sign-in: users with an authenticator app are asked for the code (`/mfa`) before any page;
+  `?next=` only accepts same-site paths.
+- Settings → Organisation: "Require two-factor authentication" (owners/admins). It cannot be
+  switched on from a session that has not passed two-factor (UI + database, SQLSTATE `QM002` →
+  API 409 `mfa_setup_required`), so an owner cannot lock themselves out.
+- Enforcement is in the database (`20251104110000_mfa_requirement.sql`): `app.is_member`,
+  `app.has_permission`, `app.member_organisation_ids`, `app.my_permissions` and
+  `app.shares_organisation` add `app.mfa_satisfied(org)` (organisation does not require MFA, or the
+  JWT `aal` claim is `aal2`). This covers the API, the legacy screens that still read tables
+  directly, and storage. `app.mfa_blocked_organisations()` lists the caller's organisations that
+  need MFA; `/me` returns `mfa: { level, requiredBy }` and the API answers `403 mfa_required`
+  (not 404) for those, so the app sends the user to set it up.
+
+**Tests:** SQL `mfa_requirement.test.sql` (aal1/aal2 access, lock-out guard, other organisations
+unaffected, own membership visible, audited); API e2e `mfa.e2e-spec.ts` (8); frontend: password
+flows (10), MFA gate/page (9), account card (3), organisation switch (4). Totals: 12 SQL files,
+API 37 unit / 76 e2e, frontend 90. Browser: forgot-password, expired invitation, `/mfa` redirect
+when signed out, hero image — no console errors.
+
+**Live:** migration applied and recorded; checked on the real organisation inside a rolled-back
+transaction (aal1 unchanged today; enabling from aal1 refused; once required, aal1 sees nothing
+and is told why); guardrails 0 violations; no organisation requires MFA yet.
+
+**Not verifiable here:** the actual emails (invite/reset) and a real authenticator app — please
+try them on the Dev deployment. Supabase settings to check: Authentication → URL Configuration →
+Redirect URLs include the frontend (`…/**`, and `http://localhost:5173/**` for local work);
+Authentication → Multi-Factor → TOTP enabled (Supabase's default).

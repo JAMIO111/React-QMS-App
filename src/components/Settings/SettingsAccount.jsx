@@ -4,6 +4,7 @@ import TextInput from "../ui/TextInput";
 import { useUser } from "@/contexts/UserProvider";
 import { RectangleEllipsisIcon, AtSignIcon } from "@/components/icons";
 import MenuCard from "../ui/MenuCard";
+import TwoFactorCard from "./TwoFactorCard";
 
 const SettingsAccount = () => {
   const { profile, refreshProfile } = useUser();
@@ -64,6 +65,7 @@ const SettingsAccount = () => {
       </div>
 
       <div className="flex flex-col w-1/2 gap-5">
+        <TwoFactorCard />
         {/* Password Card */}
         <div className="flex flex-col bg-secondary-bg rounded-3xl border border-border-color p-5">
           <p className="text-primary-text text-xl mb-1">Password</p>

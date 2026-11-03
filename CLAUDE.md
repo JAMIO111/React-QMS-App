@@ -58,6 +58,10 @@ Summary of the brief:
   double-click resets), show/hide via `ColumnVisibilityMenu`. Persist with
   `useTablePreferences(key)`; when `columnSizing` is controlled also use `useColumnSizingInfo()`
   or resizing lags one mouse move. Column meta: `align`, `sortKey` (server sort field).
+- Auth: `/forgot-password`, `/set-password` (invite/reset landing), `/mfa` (code or set-up).
+  `AuthProvider` exposes `assurance` (`aal1`/`aal2`); `ProtectedRoute` sends users to `/mfa` when
+  needed. `organisation_settings.require_mfa` is enforced in the DB membership helpers
+  (`app.mfa_satisfied`); API answers `403 mfa_required`.
 - Icons: **Lucide only**, imported from `@/components/icons` (`<Name>Icon`, default size 1em so
   icons follow text size). Add new icons there; ESLint rejects `react-icons` and direct
   `lucide-react` imports elsewhere.
@@ -76,7 +80,7 @@ in `docs/phase-1-plan.md` (API hosting decided later — a Vercel dev environmen
 `npm run db:check`, rehearsed on a live-data copy, then applied via the SQL editor; Supabase
 built-in email for now). **Phase 2** (first complete QMS workflow) is planned and agreed in `docs/phase-2-plan.md`
 (slices 2.0 auth gate → 2.1 parts → 2.2 inspection plans → 2.3 results → 2.4 NCR core → 2.5
-containment/investigation/disposition → 2.6 CAPA → 2.7 exit check); in progress: slice 2.0.
+containment/investigation/disposition → 2.6 CAPA → 2.7 exit check); slice 2.0 (password flows, MFA + per-organisation requirement) is done — see plan §9; next: 2.1.
 The project still signs tokens with the legacy HS256 secret (JWKS endpoint is empty), so the API
 needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.
 

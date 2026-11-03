@@ -9,7 +9,7 @@ const AuthPage = () => {
       <div className="w-fit h-full flex flex-row justify-end overflow-hidden rounded-2xl">
         <img
           className="max-lg:hidden h-full"
-          src="/public/hero.jpg"
+          src="/Hero.jpg"
           alt="Brand Logo"
         />
       </div>

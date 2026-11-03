@@ -36,6 +36,9 @@ const Employees = lazy(() => import("./components/Employees.jsx"));
 const AuthPage = lazy(() => import("./components/AuthPage.jsx"));
 const Login = lazy(() => import("./components/Login.jsx"));
 const SignUp = lazy(() => import("./components/SignUp.jsx"));
+const ForgotPassword = lazy(() => import("./components/auth/ForgotPassword.jsx"));
+const SetPassword = lazy(() => import("./components/auth/SetPassword.jsx"));
+const MfaPage = lazy(() => import("./components/mfa/MfaPage.jsx"));
 const HomeRedirect = lazy(() => import("./components/HomeRedirect.jsx"));
 const ProtectedRoute = lazy(() => import("./components/ProtectedRoute.jsx"));
 
@@ -67,6 +70,9 @@ const router = createBrowserRouter([
         path: "login",
         element: <Login />,
       },
+      { path: "forgot-password", element: <ForgotPassword /> },
+      { path: "set-password", element: <SetPassword /> },
+      { path: "mfa", element: <MfaPage /> },
     ],
   },
   {

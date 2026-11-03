@@ -42,6 +42,12 @@ export class MeService {
       join public.organisations o on o.id = m.organisation_id and o.status = 'active'
       where m.user_id = auth.uid() and m.status = 'active'
       order by o.name`);
+    // Organisations requiring MFA are left out of `memberships` (RLS hides them from an aal1
+    // session); list them so the app can ask the user to set up or confirm two-factor.
+    const blocked = await db.execute<{ organisation_id: string; name: string }>(
+      sql`select organisation_id, name from app.mfa_blocked_organisations()`,
+    );
+    const blockedIds = new Set(blocked.rows.map((b) => b.organisation_id));
 
     return {
       profile: {
@@ -52,7 +58,11 @@ export class MeService {
         jobTitle: profile?.jobTitle ?? null,
         avatarPath: profile?.avatarPath ?? null,
       },
-      memberships: memberships.rows.map((m) => ({
+      mfa: {
+        level: ctx.user.claims.aal === 'aal2' ? 'aal2' : 'aal1',
+        requiredBy: blocked.rows.map((b) => ({ id: b.organisation_id, name: b.name })),
+      },
+      memberships: memberships.rows.filter((m) => !blockedIds.has(m.organisation_id)).map((m) => ({
         membershipId: m.membership_id,
         organisation: { id: m.organisation_id, name: m.name, slug: m.slug },
         permissions: m.permissions ?? [],

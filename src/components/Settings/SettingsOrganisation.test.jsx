@@ -19,13 +19,16 @@ vi.mock("../../hooks/useQmsApi", () => ({
   useUpdateOrganisation: () => ({ mutate, isPending: false, error: null }),
 }));
 vi.mock("./SitesManager", () => ({ default: ({ canManage }) => <div>sites manager {String(canManage)}</div> }));
+vi.mock("./RequireMfaSetting", () => ({ default: () => <div>require mfa</div> }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 
 import SettingsOrganisation from "./SettingsOrganisation";
 import { ApiClientError } from "../../lib/api-client";
 
 describe("SettingsOrganisation", () => {
-  beforeEach(() => mutate.mockReset());
+  beforeEach(() => {
+    mutate.mockReset();
+  });
 
   it("lets an administrator save details with an audit reason", async () => {
     details = { data: org, isLoading: false, error: null };

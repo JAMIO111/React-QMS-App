@@ -94,3 +94,33 @@ export const resendVerification = async (email, showToast) => {
 
   return true;
 };
+
+/** Minimum password rules applied in the app (Supabase enforces its own project minimum too). */
+export const PASSWORD_MIN_LENGTH = 10;
+export const passwordProblems = (password, email) => {
+  const problems = [];
+  if (!password || password.length < PASSWORD_MIN_LENGTH) problems.push(`At least ${PASSWORD_MIN_LENGTH} characters`);
+  if (password && !/[A-Za-z]/.test(password)) problems.push("At least one letter");
+  if (password && !/[0-9]/.test(password)) problems.push("At least one number");
+  if (password && email && password.toLowerCase().includes(email.split("@")[0].toLowerCase())) {
+    problems.push("Must not contain your email name");
+  }
+  return problems;
+};
+
+/**
+ * Sends the "reset your password" email. Supabase answers the same whether or not the address has
+ * an account, so the UI must not reveal which (avoids account enumeration).
+ */
+export const requestPasswordReset = async (email) => {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/set-password?mode=reset`,
+  });
+  if (error) throw error;
+};
+
+/** Sets a new password for the signed-in user (after an invite or reset link signs them in). */
+export const updatePassword = async (password) => {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+};

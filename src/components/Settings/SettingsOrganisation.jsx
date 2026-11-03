@@ -34,7 +34,10 @@ const SettingsOrganisation = () => {
   const [form, setForm] = useState(toForm(org));
   const canManage = can("organisation.manage");
 
-  useEffect(() => setForm(toForm(org)), [org]);
+  // Reset the form only when the fields it edits change, so saving the theme colour does not
+  // discard unsaved edits here.
+  const formSource = JSON.stringify(toForm(org));
+  useEffect(() => setForm(JSON.parse(formSource)), [formSource]);
 
   if (isLoading) return <p className="text-secondary-text p-4">Loading organisation…</p>;
   if (error) return <ApiUnavailable error={error} />;

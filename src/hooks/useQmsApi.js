@@ -47,6 +47,8 @@ export const useUpdateOrganisation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
   return useMutation({
+    // Updates to one organisation run one after another, so responses cannot arrive out of order.
+    scope: { id: `organisation-update-${organisationId}` },
     mutationFn: ({ body, reason }) =>
       apiFetch("/organisations/current", { method: "PATCH", body, organisationId, reason }),
     onSuccess: (data) => {

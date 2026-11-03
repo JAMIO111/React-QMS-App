@@ -29,6 +29,17 @@ export function applyThemeColour(colour) {
   return value;
 }
 
+/**
+ * A colour the user has just picked but the server has not confirmed yet. While set, the
+ * organisation's saved colour does not override it (see ThemeColourSync), so the page never
+ * flicks back to an older colour during a save.
+ */
+let pendingChoice = null;
+export const setPendingThemeColour = (colour) => {
+  pendingChoice = colour;
+};
+export const getPendingThemeColour = () => pendingChoice;
+
 /** The colour last used in this browser, applied before the organisation's settings arrive. */
 export function applyStoredThemeColour() {
   let stored = null;

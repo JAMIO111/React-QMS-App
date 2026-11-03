@@ -66,3 +66,17 @@ describe("SettingsOrganisation", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("npm run api:dev");
   });
 });
+
+describe("SettingsOrganisation with the theme picker", () => {
+  it("keeps unsaved edits when only the theme colour changes", async () => {
+    details = { data: org, isLoading: false, error: null };
+    permissions = ["organisation.manage"];
+    const { rerender } = render(<SettingsOrganisation />);
+    await userEvent.clear(screen.getByLabelText("Name"));
+    await userEvent.type(screen.getByLabelText("Name"), "Draft name");
+
+    details = { data: { ...org, settings: { ...org.settings, themeColour: "green" } }, isLoading: false, error: null };
+    rerender(<SettingsOrganisation />);
+    expect(screen.getByLabelText("Name")).toHaveValue("Draft name");
+  });
+});

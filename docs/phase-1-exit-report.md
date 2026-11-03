@@ -10,7 +10,8 @@ tenant's data" — is met at the database and API layers, verified by automated 
 project**, with the limitations listed below. The remaining gaps are mostly in operations (hosting,
 monitoring, MFA, backups) rather than in tenant isolation.
 
-Phase 1 is complete once `apply_phase_1_6.sql` (hardening) is applied to the live project.
+Phase 1 is complete: all nine migrations, including the 1.6 hardening, are applied to the live
+project (confirmed 2026-11-03).
 
 ---
 
@@ -31,10 +32,12 @@ Phase 1 is complete once `apply_phase_1_6.sql` (hardening) is applied to the liv
 Every guard was **mutation-checked**: removing it (policy, guard trigger, `SET LOCAL ROLE`,
 membership check, `@OrganisationScoped`, a helper's membership condition) makes a test fail.
 
-**Live project** (`xvpgrmujayytbbmhnoan`): migrations through 1.5 applied and verified by schema
-fingerprint/catalogue checks. The guardrail query run on the live project currently reports one
-violation (PUBLIC execute on a trigger function), fixed by `20251103150000_phase1_hardening`;
-after that migration the rehearsal on a copy of the live data reports **zero** violations.
+**Live project** (`xvpgrmujayytbbmhnoan`): all nine migrations applied and recorded in the
+migration history. The guardrail query run on the live project reports **zero violations** (before
+the hardening migration it reported one: PUBLIC execute on a trigger function). The membership-probe
+fix and the ten `(select auth.uid())` policies are in place; the performance advisor's
+`auth_rls_initplan` warnings are gone (remaining findings are INFO: unindexed audit-column foreign
+keys and not-yet-used indexes).
 
 ## 2. Test inventory (all passing on `Dev`)
 
@@ -82,7 +85,7 @@ Lint: 0 errors (20 pre-existing warnings). Build passes.
 ## 5. Known gaps and carried-forward items
 
 **Needs the user**
-1. Apply `apply_phase_1_6.sql` (hardening) in the SQL editor.
+1. ~~Apply `apply_phase_1_6.sql`~~ — done, verified live.
 2. Choose API hosting (decision Q1); until then onboarding, settings and member screens work only where the API runs.
 3. Rotate the UniRate API key (in git history).
 4. Supabase dashboard: enable leaked-password protection; schedule the Postgres 15.8 security upgrade; consider disabling the unused `pg_graphql` extension (clears the "table names visible in GraphQL" warnings).
@@ -104,7 +107,6 @@ outbox/domain events, SSO, exports.
 ## 6. Recommendation
 
 Proceed to **Phase 2** (first complete QMS workflow: part + revision → inspection plan → result →
-NCR → containment → investigation → disposition → CAPA → verification → closure), after applying
-the hardening migration. Tackle items 1–3 of the engineering list early in Phase 2 because they
+NCR → containment → investigation → disposition → CAPA → verification → closure). Tackle items 1–3 of the engineering list early in Phase 2 because they
 gate real users (password flow), the brief's MFA minimum, and the move of quality records onto the
 API with full audit and validation.

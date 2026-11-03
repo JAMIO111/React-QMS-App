@@ -74,8 +74,9 @@ skeleton), 1.4 (organisations, sites, departments, onboarding) and 1.5 (members,
 roles) and 1.6 (exit check) are done — Phase 1 is complete; see `docs/phase-1-exit-report.md`. Plan and agreed decisions
 in `docs/phase-1-plan.md` (API hosting decided later — a Vercel dev environment for `Dev` is described in `docs/deployment-vercel.md`; migrations checked locally with
 `npm run db:check`, rehearsed on a live-data copy, then applied via the SQL editor; Supabase
-built-in email for now). Next: **Phase 2** (first complete QMS workflow), starting with the
-exit report's recommended items (invited-user password flow, MFA, NC registers via the API).
+built-in email for now). **Phase 2** (first complete QMS workflow) is planned and agreed in `docs/phase-2-plan.md`
+(slices 2.0 auth gate → 2.1 parts → 2.2 inspection plans → 2.3 results → 2.4 NCR core → 2.5
+containment/investigation/disposition → 2.6 CAPA → 2.7 exit check); in progress: slice 2.0.
 The project still signs tokens with the legacy HS256 secret (JWKS endpoint is empty), so the API
 needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.
 

@@ -1,51 +1,38 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import { eq } from 'drizzle-orm';
-import { z } from 'zod';
-import { ApiError } from '../common/api-error';
+import { Body, Controller, Get, Headers, HttpCode, Patch, Post } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
-import { openApiSchema } from '../common/validation';
-import { DatabaseService } from '../database/database.service';
-import { organisations, organisationSettings } from '../database/schema';
+import { openApiSchema, parse } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
+import { CreateOrganisationBody, IdempotencyKey, OrganisationResponse, UpdateOrganisationBody } from './organisations.schemas';
+import { OrganisationsService } from './organisations.service';
 
-const OrganisationResponse = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  slug: z.string(),
-  status: z.enum(['active', 'suspended']),
-  settings: z.object({ baseCurrency: z.string(), vatRate: z.number(), ncrReferencePrefix: z.string() }),
-});
-
-/** Phase 1.3 exposes the read used to exercise organisation scoping; editing arrives in 1.4. */
 @ApiTags('organisations')
 @ApiBearerAuth()
 @Controller('organisations')
 export class OrganisationsController {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(private readonly organisations: OrganisationsService) {}
+
+  @Post()
+  @HttpCode(201)
+  @ApiHeader({ name: 'Idempotency-Key', required: false, description: 'Repeat-safe creation: the same key returns the same organisation' })
+  @ApiBody({ schema: openApiSchema(CreateOrganisationBody) })
+  @ApiCreatedResponse({ description: 'Organisation created; the caller is its Owner', schema: openApiSchema(OrganisationResponse) })
+  create(@Ctx() ctx: RequestContext, @Body() body: unknown, @Headers('idempotency-key') key?: string) {
+    return this.organisations.create(ctx, parse(CreateOrganisationBody, body), key === undefined ? undefined : parse(IdempotencyKey, key));
+  }
 
   @Get('current')
   @OrganisationScoped()
   @ApiOkResponse({ description: 'The organisation named by X-Organisation-Id', schema: openApiSchema(OrganisationResponse) })
   current(@Ctx() ctx: RequestContext) {
-    return this.database.asUser(ctx, async (db) => {
-      const [row] = await db
-        .select({ org: organisations, settings: organisationSettings })
-        .from(organisations)
-        .innerJoin(organisationSettings, eq(organisationSettings.organisationId, organisations.id))
-        .where(eq(organisations.id, ctx.organisationId!));
-      if (!row) throw ApiError.notFound('organisation_not_found', 'Organisation not found');
-      return {
-        id: row.org.id,
-        name: row.org.name,
-        slug: row.org.slug,
-        status: row.org.status,
-        settings: {
-          baseCurrency: row.settings.baseCurrency,
-          vatRate: Number(row.settings.vatRate),
-          ncrReferencePrefix: row.settings.ncrReferencePrefix,
-        },
-      };
-    });
+    return this.organisations.get(ctx, ctx.organisationId!);
+  }
+
+  @Patch('current')
+  @OrganisationScoped('organisation.manage')
+  @ApiBody({ schema: openApiSchema(UpdateOrganisationBody) })
+  @ApiOkResponse({ description: 'Updated organisation', schema: openApiSchema(OrganisationResponse) })
+  update(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.organisations.update(ctx, ctx.organisationId!, parse(UpdateOrganisationBody, body));
   }
 }

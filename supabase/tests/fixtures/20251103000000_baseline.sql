@@ -24,3 +24,8 @@ INSERT INTO public."NC Files" (name, path, id_ref, owner) VALUES ('photo.jpg', '
 
 INSERT INTO public."Notifications" (id, org, created_by, title) VALUES ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-0000000000a1', 'Hello');
 INSERT INTO public."Notification Recipients" (notification_id, recipient_id) VALUES ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a1');
+
+-- Explicit ids above don't advance identity sequences; keep them in step as the live project's are.
+SELECT setval(pg_get_serial_sequence('public."Status"', 'id'), (SELECT max(id) FROM public."Status"));
+SELECT setval(pg_get_serial_sequence('public."Failure Mode"', 'id'), (SELECT max(id) FROM public."Failure Mode"));
+SELECT setval(pg_get_serial_sequence('public."Process"', 'id'), (SELECT max(id) FROM public."Process"));

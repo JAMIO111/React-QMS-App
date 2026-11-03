@@ -7,19 +7,31 @@ import { Env, loadEnv } from '../src/config/env';
 export const JWT_SECRET = 'e2e-secret-that-is-at-least-32-characters-long';
 export const ISSUER = 'e2e-issuer';
 
-/** Ids used by the e2e seed (distinct from the SQL tests' fixtures). */
-export const ids = {
-  orgA: '10000000-0000-0000-0000-00000000000a',
-  orgB: '10000000-0000-0000-0000-00000000000b',
-  ownerA: '10000000-0000-0000-0000-0000000000a1',
-  inspectorA: '10000000-0000-0000-0000-0000000000a2',
-  suspendedA: '10000000-0000-0000-0000-0000000000a3',
-  ownerB: '10000000-0000-0000-0000-0000000000b1',
-  dual: '10000000-0000-0000-0000-0000000000d1',
-  outsider: '10000000-0000-0000-0000-0000000000ff',
-  ncrA: '10000000-0000-0000-0000-0000000000c1',
-  ncrB: '10000000-0000-0000-0000-0000000000c2',
-};
+/**
+ * Ids for one e2e suite's seed. Each suite uses its own digit so suites never share (and never
+ * mutate each other's) users or organisations.
+ */
+export function makeIds(suite: number) {
+  const id = (tail: string) => `${suite}0000000-0000-0000-0000-${tail.padStart(12, '0')}`;
+  return {
+    orgA: id('a'),
+    orgB: id('b'),
+    ownerA: id('a1'),
+    inspectorA: id('a2'),
+    suspendedA: id('a3'),
+    ownerB: id('b1'),
+    dual: id('d1'),
+    outsider: id('ff'),
+    siteA: id('5a1'),
+    siteB: id('5b1'),
+    ncrA: id('c1'),
+    ncrB: id('c2'),
+  };
+}
+export type Ids = ReturnType<typeof makeIds>;
+
+/** Default ids (suite 1). */
+export const ids = makeIds(1);
 
 export function requireDb(): { url: string; adminUrl: string } {
   const url = process.env.DATABASE_URL;
@@ -58,27 +70,34 @@ export function token(userId: string, claims: Record<string, unknown> = {}): Pro
     .sign(new TextEncoder().encode(JWT_SECRET));
 }
 
-/** Two organisations with members in different roles, seeded as the superuser (idempotent). */
-export async function seed(admin: Pool): Promise<void> {
+/**
+ * Two organisations with members in different roles, seeded as the superuser (idempotent).
+ * `slugSuffix` keeps slugs (globally unique) distinct between suites.
+ */
+export async function seed(admin: Pool, ids: Ids = makeIds(1), slugSuffix = ''): Promise<void> {
   const exists = await admin.query('select 1 from public.organisations where id = $1', [ids.orgA]);
   if (exists.rowCount) return;
 
   await admin.query('begin');
   await admin.query(
-    `insert into auth.users (id, email) values ($1,'owner.a@example.test'),($2,'inspector.a@example.test'),
-       ($3,'suspended.a@example.test'),($4,'owner.b@example.test'),($5,'dual@example.test'),($6,'outsider@example.test')`,
+    `insert into auth.users (id, email)
+     select u::uuid, u || '@example.test' from unnest(array[$1, $2, $3, $4, $5, $6]::text[]) as u`,
     [ids.ownerA, ids.inspectorA, ids.suspendedA, ids.ownerB, ids.dual, ids.outsider],
   );
   await admin.query(`update public.profiles set first_name = 'Ada', surname = 'Owner' where id = $1`, [ids.ownerA]);
   await admin.query(
-    `insert into public.organisations (id, name, slug) values ($1, 'Alpha Precision', 'alpha-precision'), ($2, 'Beta Castings', 'beta-castings')`,
-    [ids.orgA, ids.orgB],
+    `insert into public.organisations (id, name, slug) values ($1, 'Alpha Precision', $3), ($2, 'Beta Castings', $4)`,
+    [ids.orgA, ids.orgB, `alpha-precision${slugSuffix}`, `beta-castings${slugSuffix}`],
   );
   await admin.query(
     `insert into public.organisation_settings (organisation_id, base_currency, vat_rate) values ($1, 'GBP', 0.2), ($2, 'EUR', 0.21)`,
     [ids.orgA, ids.orgB],
   );
   await admin.query('select app.create_default_roles($1), app.create_default_roles($2)', [ids.orgA, ids.orgB]);
+  await admin.query(
+    `insert into public.sites (id, organisation_id, code, name) values ($1, $2, 'MAIN', 'Alpha main'), ($3, $4, 'MAIN', 'Beta main')`,
+    [ids.siteA, ids.orgA, ids.siteB, ids.orgB],
+  );
 
   const members: [string, string, string, string][] = [
     [ids.orgA, ids.ownerA, 'owner', 'active'],

@@ -13,6 +13,9 @@ import { HealthController } from './health/health.controller';
 import { MeController } from './me/me.controller';
 import { MeService } from './me/me.service';
 import { OrganisationsController } from './organisations/organisations.controller';
+import { OrganisationsService } from './organisations/organisations.service';
+import { DepartmentsController, SitesController } from './structure/structure.controller';
+import { StructureService } from './structure/structure.service';
 import { OrganisationGuard } from './tenancy/organisation.guard';
 
 @Module({})
@@ -31,12 +34,14 @@ export class AppModule implements NestModule {
         }),
         ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: env.RATE_LIMIT_PER_MINUTE }] }),
       ],
-      controllers: [HealthController, MeController, OrganisationsController],
+      controllers: [HealthController, MeController, OrganisationsController, SitesController, DepartmentsController],
       providers: [
         { provide: ENV, useValue: env },
         DatabaseService,
         JwtVerifier,
         MeService,
+        OrganisationsService,
+        StructureService,
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
         // Order matters: rate limit, then authenticate, then organisation scope/permission.
         { provide: APP_GUARD, useClass: ThrottlerGuard },

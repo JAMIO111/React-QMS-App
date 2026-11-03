@@ -1,6 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiError } from './api-error';
+import { apiErrorFromDatabase } from './database-errors';
 import { ApiRequest, resolveCorrelationId } from './request-context';
 
 const CODES: Record<number, string> = {
@@ -31,6 +32,9 @@ export class ApiExceptionFilter implements ExceptionFilter {
     let code = 'internal_error';
     let message = 'An unexpected error occurred';
     let details: unknown;
+
+    const mapped = exception instanceof HttpException ? undefined : apiErrorFromDatabase(exception);
+    if (mapped) exception = mapped;
 
     if (exception instanceof ApiError) {
       status = exception.getStatus();

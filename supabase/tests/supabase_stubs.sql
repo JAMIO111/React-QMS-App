@@ -7,7 +7,7 @@ DO $$ BEGIN
 END $$;
 
 CREATE SCHEMA IF NOT EXISTS auth;
-CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), email text);
+CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), email text, raw_user_meta_data jsonb DEFAULT '{}'::jsonb);
 
 -- Mirrors Supabase: reads claims set via `set local request.jwt.claims = '{"sub": "...", "role": "..."}'`
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
@@ -21,3 +21,11 @@ CREATE TABLE IF NOT EXISTS storage.objects (id uuid PRIMARY KEY DEFAULT gen_rand
 ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
 
 GRANT USAGE ON SCHEMA public, auth, storage TO anon, authenticated, service_role;
+
+-- Mirror Supabase's defaults: API roles get full table privileges (RLS decides row access), so
+-- the migrations' own REVOKEs are what's being tested.
+GRANT ALL ON storage.objects, storage.buckets TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION auth.uid(), auth.role() TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;

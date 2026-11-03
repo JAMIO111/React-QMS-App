@@ -28,6 +28,10 @@ PSQL=(psql -X -q -v ON_ERROR_STOP=1 -h "$TMP" -p "$PORT" -U postgres -d postgres
 for f in supabase/migrations/*.sql; do
   echo "migrate  $f"
   "${PSQL[@]}" -1 -f "$f"
+  # Optional fixture loaded right after a migration, so later migrations run against existing data
+  # (exercises backfills). Named after the migration file.
+  fixture="supabase/tests/fixtures/$(basename "$f")"
+  if [ -f "$fixture" ]; then echo "fixture  $fixture"; "${PSQL[@]}" -1 -f "$fixture"; fi
 done
 
 # Optional: run an extra SQL file against the migrated database (e.g. a schema fingerprint).

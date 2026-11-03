@@ -225,6 +225,9 @@ CREATE TABLE public."Notification Recipients" (
 -- ---------------------------------------------------------------------------
 -- Primary keys and unique constraints
 -- ---------------------------------------------------------------------------
+-- Remote quirk reproduced: "8D_id_key" predates the primary key, so the NCM -> 8D foreign key
+-- depends on it (not on "8D_pkey").
+ALTER TABLE public."8D" ADD CONSTRAINT "8D_id_key" UNIQUE (id);
 ALTER TABLE public."8D" ADD CONSTRAINT "8D_pkey" PRIMARY KEY (id);
 ALTER TABLE public."Addresses" ADD CONSTRAINT "Addresses_pkey" PRIMARY KEY (id);
 ALTER TABLE public."Costs" ADD CONSTRAINT "Costs_pkey" PRIMARY KEY (id);
@@ -242,7 +245,6 @@ ALTER TABLE public."Status" ADD CONSTRAINT "Status_pkey" PRIMARY KEY (id);
 ALTER TABLE public."Sub-Failure Mode" ADD CONSTRAINT "Sub-Failure Mode_pkey" PRIMARY KEY (id);
 ALTER TABLE public."Suppliers" ADD CONSTRAINT "Suppliers_pkey" PRIMARY KEY (id);
 
-ALTER TABLE public."8D" ADD CONSTRAINT "8D_id_key" UNIQUE (id);
 ALTER TABLE public."Employees" ADD CONSTRAINT "Employees_auth_id_key" UNIQUE (auth_id);
 ALTER TABLE public."NCM" ADD CONSTRAINT "NCM_ncm_id_key" UNIQUE (ncm_id);
 ALTER TABLE public."Status" ADD CONSTRAINT "Status_name_key" UNIQUE (name);

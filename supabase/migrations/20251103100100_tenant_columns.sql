@@ -108,7 +108,6 @@ ALTER TABLE public."NCM" DROP CONSTRAINT "NCM_ncm_id_key";
 ALTER TABLE public."NCM" ADD CONSTRAINT "NCM_org_ncm_id_key" UNIQUE (organisation_id, ncm_id);
 ALTER TABLE public."Status" DROP CONSTRAINT "Status_name_key";
 ALTER TABLE public."Status" ADD CONSTRAINT "Status_org_name_key" UNIQUE (organisation_id, name);
-ALTER TABLE public."8D" DROP CONSTRAINT "8D_id_key";  -- duplicate of the primary key
 
 -- ---------------------------------------------------------------------------
 -- Same-organisation references: (id, organisation_id) keys + composite foreign keys
@@ -148,6 +147,9 @@ ALTER TABLE public."NCM"
   ADD CONSTRAINT "NCM_responsible_operator_fkey" FOREIGN KEY (responsible_operator, organisation_id) REFERENCES public."Employees" (id, organisation_id) ON DELETE RESTRICT,
   ADD CONSTRAINT "NCM_sub_failure_mode_fkey" FOREIGN KEY (sub_failure_mode, organisation_id) REFERENCES public."Sub-Failure Mode" (id, organisation_id),
   ADD CONSTRAINT "NCM_supplier_fkey" FOREIGN KEY (supplier, organisation_id) REFERENCES public."Suppliers" (id, organisation_id);
+
+-- Duplicate of the primary key; the old NCM -> 8D foreign key depended on it, so drop it only now.
+ALTER TABLE public."8D" DROP CONSTRAINT "8D_id_key";
 
 ALTER TABLE public."Sub-Failure Mode" DROP CONSTRAINT "Sub-Failure Mode_failure_mode_fkey";
 ALTER TABLE public."Sub-Failure Mode"

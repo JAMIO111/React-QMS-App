@@ -1,63 +1,60 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+const STORAGE_KEY = "theme";
+const darkQuery = () => window.matchMedia?.("(prefers-color-scheme: dark)");
+
+const readPreference = () => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored === "light" || stored === "dark" ? stored : "system";
+  } catch {
+    return "system";
+  }
+};
+
+const resolve = (preference) =>
+  preference === "system" ? (darkQuery()?.matches ? "dark" : "light") : preference;
+
+/**
+ * Light/dark mode. Returns [mode, setMode, preference]:
+ * - mode is always "light" or "dark" (what the page shows now);
+ * - preference is "light", "dark" or "system" (follow the operating system until the user picks).
+ */
 const useTheme = () => {
-  const [theme, setTheme] = useState(
-    localStorage.getItem("theme") ? localStorage.getItem("theme") : "system"
-  );
+  const [preference, setPreference] = useState(readPreference);
+  const [mode, setMode] = useState(() => resolve(readPreference()));
 
-  const element = document.documentElement;
-  const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
-
-  const onWindowMatch = () => {
-    if (
-      localStorage.theme === "dark" ||
-      (!("theme" in localStorage) && darkQuery.matches)
-    ) {
-      element.classList.add("dark");
-    } else {
-      element.classList.remove("dark");
-    }
-  };
-
+  // Apply the mode to the page and remember an explicit choice.
   useEffect(() => {
-    onWindowMatch();
+    const next = resolve(preference);
+    setMode(next);
+    document.documentElement.classList.toggle("dark", next === "dark");
+    try {
+      if (preference === "system") localStorage.removeItem(STORAGE_KEY);
+      else localStorage.setItem(STORAGE_KEY, preference);
+    } catch {
+      // Storage unavailable: the choice applies for this page only.
+    }
+  }, [preference]);
+
+  // While following the system, react when the operating system switches.
+  useEffect(() => {
+    const query = darkQuery();
+    if (!query || preference !== "system") return undefined;
+    const onChange = () => {
+      const next = resolve("system");
+      setMode(next);
+      document.documentElement.classList.toggle("dark", next === "dark");
+    };
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, [preference]);
+
+  const setTheme = useCallback((value) => {
+    setPreference(value === "light" || value === "dark" ? value : "system");
   }, []);
 
-  useEffect(() => {
-    switch (theme) {
-      case "dark":
-        element.classList.add("dark");
-        localStorage.setItem("theme", "dark");
-        break;
-      case "light":
-        element.classList.remove("dark");
-        localStorage.setItem("theme", "light");
-        break;
-      default:
-        localStorage.removeItem("theme");
-        onWindowMatch();
-        break;
-    }
-  }, [theme]);
-
-  useEffect(() => {
-    const changeHandler = (e) => {
-      if (!("theme" in localStorage)) {
-        if (e.matches) {
-          element.classList.add("dark");
-        } else {
-          element.classList.remove("dark");
-        }
-      }
-    };
-
-    darkQuery.addEventListener("change", changeHandler);
-    return () => {
-      darkQuery.removeEventListener("change", changeHandler);
-    };
-  }, []);
-
-  return [theme, setTheme];
+  return [mode, setTheme, preference];
 };
 
 export default useTheme;

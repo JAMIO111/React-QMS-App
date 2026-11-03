@@ -227,9 +227,25 @@ Once D1–D5 are agreed, the first piece of work is **Step 0 (Stabilise)**, then
 | # | Decision |
 |---|---|
 | D1 | **Option A.** Keep Vite + React frontend; add a NestJS + TypeScript API (`/api/v1`, OpenAPI) in Phase 1. Supabase Auth JWTs; Postgres RLS kept as defence in depth. |
-| D2 | **Tag, then remove.** Tag current state as `holiday-let-archive`, then remove holiday-let routes, components and hooks from `Dev`. |
+| D2 | **Archive, then remove.** Current state preserved on branch `archive/holiday-let` (tag push was blocked by the git proxy), then holiday-let routes, components and hooks removed from `Dev`. |
 | D3 | **React QMS project (`xvpgrmujayytbbmhnoan`) is canonical.** Existing rows are test data and may be migrated or reset. |
 | D4 | Keep Supabase Auth, wrapped behind an auth module (not explicitly asked; recommended default stands). |
 | D5 | **Enable RLS in the first Phase 1 migration**, together with membership-based policies. |
 
-**Phase 0 status:** plan agreed. Next: Step 0 (Stabilise).
+**Phase 0 status:** plan agreed.
+
+## 9. Step 0 (Stabilise) — done 2026-11-03
+
+- Holiday-let features removed (archived on `archive/holiday-let`); NC registers routed at
+  `/Non-Conformance/:type` and added to the menu; Dashboard replaced with a simple overview.
+- Build fixed (`useStatusOptions` restored); lint errors 168 → 0 (21 warnings remain). Real bugs
+  fixed along the way: hooks called inside a loop (`Settings`), a hook after an early return
+  (`DashboardCard`), helper functions referencing undefined variables (`HelperFunctions`).
+- `.env` untracked, `.env.example` added, local config points at `xvpgrmujayytbbmhnoan`.
+  Sign-up email redirect no longer hard-coded to localhost.
+- Schema under version control: `supabase/migrations/20251103000000_baseline.sql`, verified
+  identical to the live project by catalog fingerprint. `npm run db:check` runs migrations + SQL tests locally.
+- Test runner: Vitest + Testing Library (`npm test`).
+
+Still open: UniRate API key rotation (owner action); remote migration history not yet initialised
+(`supabase migration repair`, see `supabase/README.md`).

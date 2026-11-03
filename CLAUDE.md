@@ -36,7 +36,10 @@ Summary of the brief:
 NestJS API added in Phase 1 alongside the Vite frontend; holiday-let code archived on
 branch `archive/holiday-let` then removed; Supabase project `xvpgrmujayytbbmhnoan` ("React QMS") is
 canonical and its data is test data; RLS enabled in the first Phase 1 migration with policies.
-Step 0 (Stabilise) is done. Next: **Phase 1** (platform foundation) — plan in `docs/phase-1-plan.md`.
+Step 0 (Stabilise) is done. Next: **Phase 1** (platform foundation) — plan and agreed decisions
+in `docs/phase-1-plan.md` (API hosting decided later; migrations checked locally with
+`npm run db:check` then applied directly; Supabase built-in email for now; old storage objects
+deleted). Start with slice 1.1 (tenancy schema + RLS lockdown).
 
 ## Commands
 

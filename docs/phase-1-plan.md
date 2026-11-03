@@ -263,3 +263,14 @@ Order is fixed by risk: 1.1 closes the open-database problem first and touches t
 5. **Secrets needed from you** (never committed): database connection string for a dedicated API
    role (I can create the role via migration; you set its password), Supabase service-role key and
    JWT settings, stored as environment secrets for the API.
+
+### Agreed (2026-11-03)
+
+| # | Decision |
+|---|---|
+| Q1 | API hosting **decided later**; build and test locally through 1.1–1.6, choose before the frontend depends on the API in production. |
+| Q2 | **Local check only**: `npm run db:check` + review, then apply directly to `xvpgrmujayytbbmhnoan` (its data is test data). Rehearsal environment can be added later if real data arrives. |
+| Q3 | **Supabase built-in email** for invitations during development; custom SMTP before real users. |
+| Q4 | **Delete** the 17 existing storage objects when storage moves to the organisation-scoped layout (slice 1.1). |
+
+Q5 (secrets) is needed from slice 1.3 onwards.

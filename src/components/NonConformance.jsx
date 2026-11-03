@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSearchParams, useParams } from "react-router-dom";
-import { ArrowUpDownIcon, PlusIcon, PoundSterlingIcon, ShareIcon, SlidersHorizontalIcon } from "@/components/icons";
+import { PlusIcon, PoundSterlingIcon, ShareIcon, SlidersHorizontalIcon } from "@/components/icons";
 import { useNCM } from "../hooks/useNCM";
 import { useNCMFilters } from "../hooks/useNCMFilters";
 import { useGlobalSearch } from "../contexts/SearchProvider";
@@ -244,13 +244,6 @@ const NonConformance = () => {
               icon={<PoundSterlingIcon className="h-5 w-5" />}
               selected={costData}
               color="green"
-            />
-            <IconButton
-              selected={activeModalType === "Sort"}
-              color="blue"
-              title="Sort"
-              callback={handleActiveModalType}
-              icon={<ArrowUpDownIcon className="h-5 w-5" />}
             />
             <IconButton
               count={filterCount}

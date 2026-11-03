@@ -368,6 +368,15 @@ API in 1.3/1.4.
 not needed until invitations (1.5). Idempotency keys are accepted by CORS but first used by create
 endpoints in 1.4/1.5.
 
-**Not done / needs the user:** the API is not deployed (hosting decision pending). To run it against
-the live project: apply the role migration, set the `qms_api` password, and provide `DATABASE_URL`
+**Live project:** `20251103120000_api_role` applied (first attempt failed and rolled back: Supabase's
+`postgres` is not a superuser and cannot restate NOSUPERUSER/NOREPLICATION/NOBYPASSRLS; fixed). Verified:
+migration history has all six versions; `qms_api` can log in, NOINHERIT, no elevated attributes,
+member of `authenticated` only, timeouts set. The password was set by the user (not verifiable from SQL).
+
+**Known gap:** `db:check` runs migrations as a real superuser, so superuser-only statements are not
+caught locally; take extra care with role/attribute statements until the check emulates Supabase's
+restricted `postgres` role.
+
+**Not done / needs the user:** the API is not deployed (hosting decision pending) and has not yet
+connected to the live project. To run it: provide `DATABASE_URL` (pooler user `qms_api.<project-ref>`)
 and `SUPABASE_JWT_SECRET` (the project's JWKS endpoint is empty, i.e. it still uses the legacy secret).

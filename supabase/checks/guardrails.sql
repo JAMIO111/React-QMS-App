@@ -33,12 +33,14 @@ global_tables(relname, why) AS (VALUES
   ('profiles',         'one per login; visible only to self and co-members'),
   ('permissions',      'global catalogue, read-only'),
   ('roles',            'system templates have no organisation; org roles carry organisation_id'),
-  ('role_permissions', 'scoped through roles')
+  ('role_permissions', 'scoped through roles'),
+  ('units',            'global catalogue of measurement units, read-only')
 ),
 audited(relname) AS (VALUES
   ('organisations'), ('organisation_settings'), ('sites'), ('departments'), ('organisation_users'),
   ('roles'), ('role_permissions'), ('user_role_assignments'),
-  ('NCM'), ('8D'), ('Costs'), ('NC Files'), ('Part'), ('Status'), ('Failure Mode'), ('Sub-Failure Mode'), ('Process')
+  ('NCM'), ('8D'), ('Costs'), ('NC Files'), ('Part'), ('Status'), ('Failure Mode'), ('Sub-Failure Mode'), ('Process'),
+  ('customers'), ('suppliers'), ('parts'), ('part_revisions')
 )
 SELECT rule, object FROM (
   SELECT '1 rls disabled' AS rule, format('%I.%I', nspname, relname) AS object

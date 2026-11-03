@@ -10,6 +10,8 @@ import { ApiRequest, resolveCorrelationId } from './common/request-context';
 import { ENV, Env } from './config/env';
 import { DatabaseService } from './database/database.service';
 import { HealthController } from './health/health.controller';
+import { CustomersController, PartRevisionsController, PartsController, SuppliersController, UnitsController } from './master-data/master-data.controller';
+import { MasterDataService } from './master-data/master-data.service';
 import { MeController } from './me/me.controller';
 import { MeService } from './me/me.service';
 import { InvitationMailer } from './members/invitation-mailer.service';
@@ -47,12 +49,25 @@ export class AppModule implements NestModule {
         }),
         ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: env.RATE_LIMIT_PER_MINUTE }] }),
       ],
-      controllers: [HealthController, MeController, OrganisationsController, SitesController, DepartmentsController, MembersController],
+      controllers: [
+        HealthController,
+        MeController,
+        OrganisationsController,
+        SitesController,
+        DepartmentsController,
+        MembersController,
+        UnitsController,
+        CustomersController,
+        SuppliersController,
+        PartsController,
+        PartRevisionsController,
+      ],
       providers: [
         { provide: ENV, useValue: env },
         DatabaseService,
         JwtVerifier,
         MeService,
+        MasterDataService,
         OrganisationsService,
         StructureService,
         MembersService,

@@ -52,6 +52,13 @@ BEGIN
   INSERT INTO public."Notifications" (id, organisation_id, created_by, title) VALUES (notif, a, '50000000-0000-0000-0000-0000000000a1', 'Sweep');
   INSERT INTO public."Notification Recipients" (organisation_id, notification_id, recipient_id) VALUES (a, notif, '50000000-0000-0000-0000-0000000000a1');
   INSERT INTO storage.objects (bucket_id, name) VALUES ('nc-files', a || '/ncr/SW-001/x.pdf');
+  -- Phase 2 master data (releasing the revision also writes an outbox event).
+  INSERT INTO public.customers (organisation_id, code, name) VALUES (a, 'SWC', 'Sweep customer');
+  INSERT INTO public.suppliers (organisation_id, code, name) VALUES (a, 'SWS', 'Sweep supplier');
+  INSERT INTO public.parts (id, organisation_id, part_number, name) VALUES (gen_random_uuid(), a, 'SW-P1', 'Sweep part');
+  INSERT INTO public.part_revisions (organisation_id, part_id, revision)
+    SELECT a, id, 'A' FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1';
+  UPDATE public.part_revisions SET status = 'released' WHERE organisation_id = a;
 
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));

@@ -4,6 +4,7 @@ import { ApiError } from './api-error';
 interface PgError {
   code?: string;
   constraint?: string;
+  message?: string;
 }
 
 function pgErrorOf(error: unknown): PgError | undefined {
@@ -24,6 +25,10 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   organisation_users_pending_invite_key: 'This email address already has a pending invitation',
   organisation_users_org_user_key: 'This person is already a member of the organisation',
   ura_unique: 'This member already has that role',
+  customers_org_code_key: 'A customer with this code already exists',
+  suppliers_org_code_key: 'A supplier with this code already exists',
+  parts_org_part_number_key: 'A part with this number already exists',
+  part_revisions_part_revision_key: 'This part already has that revision',
 };
 
 /**
@@ -52,6 +57,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'last_owner', 'An organisation must keep at least one active Owner');
     case 'QM002': // app.guard_require_mfa
       return new ApiError(409, 'mfa_setup_required', 'Set up two-factor authentication for your own account before requiring it');
+    case 'QM003': // app.part_revision_lifecycle (message is written for users)
+      return new ApiError(409, 'invalid_revision_state', pg.message ?? 'That change is not allowed for this revision');
     case 'P0002': // no_data_found raised by app functions
       return ApiError.notFound();
     case '57014': // query_canceled (statement_timeout)

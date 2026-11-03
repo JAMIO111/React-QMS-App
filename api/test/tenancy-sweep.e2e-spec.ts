@@ -25,6 +25,7 @@ const UNSCOPED = new Set([
   'POST /api/v1/organisations',
   'GET /api/v1/invitations',
   'POST /api/v1/invitations/{id}/accept',
+  'GET /api/v1/units', // global catalogue of measurement units
 ]);
 
 interface Op {
@@ -45,12 +46,32 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/members/{id}': { status: 'suspended' },
     'POST /api/v1/members/{id}/role-assignments': { roleId: b.viewerRole },
     'DELETE /api/v1/role-assignments/{id}': undefined,
+    'PATCH /api/v1/customers/{id}': { name: 'Hijacked' },
+    'PATCH /api/v1/suppliers/{id}': { name: 'Hijacked' },
+    'GET /api/v1/parts/{id}': undefined,
+    'PATCH /api/v1/parts/{id}': { name: 'Hijacked' },
+    'POST /api/v1/parts/{id}/revisions': { revision: 'Z' },
+    'PATCH /api/v1/part-revisions/{id}': { drawingRef: 'Hijacked' },
+    'POST /api/v1/part-revisions/{id}/release': undefined,
+    'POST /api/v1/part-revisions/{id}/obsolete': undefined,
   })[`${op.method} ${op.path}`];
 
 const hasSample = (op: Op) =>
-  ['PATCH /api/v1/sites/{id}', 'PATCH /api/v1/departments/{id}', 'PATCH /api/v1/members/{id}', 'POST /api/v1/members/{id}/role-assignments', 'DELETE /api/v1/role-assignments/{id}'].includes(
-    `${op.method} ${op.path}`,
-  );
+  [
+    'PATCH /api/v1/sites/{id}',
+    'PATCH /api/v1/departments/{id}',
+    'PATCH /api/v1/members/{id}',
+    'POST /api/v1/members/{id}/role-assignments',
+    'DELETE /api/v1/role-assignments/{id}',
+    'PATCH /api/v1/customers/{id}',
+    'PATCH /api/v1/suppliers/{id}',
+    'GET /api/v1/parts/{id}',
+    'PATCH /api/v1/parts/{id}',
+    'POST /api/v1/parts/{id}/revisions',
+    'PATCH /api/v1/part-revisions/{id}',
+    'POST /api/v1/part-revisions/{id}/release',
+    'POST /api/v1/part-revisions/{id}/obsolete',
+  ].includes(`${op.method} ${op.path}`);
 
 /** Organisation A's record id for the resource a path refers to. */
 const foreignIdFor = (path: string) => {
@@ -58,6 +79,10 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/departments/')) return a.department;
   if (path.startsWith('/api/v1/members/')) return a.ownerMembership;
   if (path.startsWith('/api/v1/role-assignments/')) return a.ownerAssignment;
+  if (path.startsWith('/api/v1/customers/')) return a.customer;
+  if (path.startsWith('/api/v1/suppliers/')) return a.supplier;
+  if (path.startsWith('/api/v1/parts/')) return a.part;
+  if (path.startsWith('/api/v1/part-revisions/')) return a.draftRevision;
   return undefined;
 };
 
@@ -89,6 +114,10 @@ beforeAll(async () => {
   a.ownerAssignment = (await one('select id from public.user_role_assignments where membership_id = $1', [a.ownerMembership])).id;
   a.ownerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'owner'`, [ids.orgA])).id;
   a.ownerUser = ids.ownerA;
+  a.customer = (await one(`insert into public.customers (organisation_id, code, name) values ($1, 'ACUST', 'Alpha customer') returning id`, [ids.orgA])).id;
+  a.supplier = (await one(`insert into public.suppliers (organisation_id, code, name) values ($1, 'ASUPP', 'Alpha supplier') returning id`, [ids.orgA])).id;
+  a.part = (await one(`insert into public.parts (organisation_id, part_number, name) values ($1, 'A-PART', 'Alpha part') returning id`, [ids.orgA])).id;
+  a.draftRevision = (await one(`insert into public.part_revisions (organisation_id, part_id, revision) values ($1, $2, 'A') returning id`, [ids.orgA, a.part])).id;
   b.viewerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'viewer'`, [ids.orgB])).id;
   await admin.query(`insert into public.departments (organisation_id, site_id, code, name) values ($1, $2, 'QA', 'Quality B')`, [ids.orgB, ids.siteB]);
 });
@@ -134,10 +163,16 @@ describe('tenancy sweep over every API route', () => {
     // Nothing of A changed.
     const { rows } = await admin.query(
       `select (select name from public.sites where id = $1) site, (select name from public.departments where id = $2) dept,
-              (select status from public.organisation_users where id = $3) member, (select count(*)::int from public.user_role_assignments where id = $4) assignment`,
-      [a.site, a.department, a.ownerMembership, a.ownerAssignment],
+              (select status from public.organisation_users where id = $3) member, (select count(*)::int from public.user_role_assignments where id = $4) assignment,
+              (select name from public.customers where id = $5) customer, (select name from public.suppliers where id = $6) supplier,
+              (select name from public.parts where id = $7) part,
+              (select status || '/' || coalesce(drawing_ref, '') || '/' || (select count(*) from public.part_revisions where part_id = $7) from public.part_revisions where id = $8) revision`,
+      [a.site, a.department, a.ownerMembership, a.ownerAssignment, a.customer, a.supplier, a.part, a.draftRevision],
     );
-    expect(rows[0]).toEqual({ site: 'Alpha main', dept: 'Quality A', member: 'active', assignment: 1 });
+    expect(rows[0]).toEqual({
+      site: 'Alpha main', dept: 'Quality A', member: 'active', assignment: 1,
+      customer: 'Alpha customer', supplier: 'Alpha supplier', part: 'Alpha part', revision: 'draft//1',
+    });
   });
 
   it('never includes another organisation’s identifiers in list responses', async () => {

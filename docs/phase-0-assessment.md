@@ -219,3 +219,17 @@ data is sensitive, do it immediately.
 
 Once D1–D5 are agreed, the first piece of work is **Step 0 (Stabilise)**, then **Phase 1 item 1
 (tenancy schema)**.
+
+---
+
+## 8. Agreed decisions (2026-11-03)
+
+| # | Decision |
+|---|---|
+| D1 | **Option A.** Keep Vite + React frontend; add a NestJS + TypeScript API (`/api/v1`, OpenAPI) in Phase 1. Supabase Auth JWTs; Postgres RLS kept as defence in depth. |
+| D2 | **Tag, then remove.** Tag current state as `holiday-let-archive`, then remove holiday-let routes, components and hooks from `Dev`. |
+| D3 | **React QMS project (`xvpgrmujayytbbmhnoan`) is canonical.** Existing rows are test data and may be migrated or reset. |
+| D4 | Keep Supabase Auth, wrapped behind an auth module (not explicitly asked; recommended default stands). |
+| D5 | **Enable RLS in the first Phase 1 migration**, together with membership-based policies. |
+
+**Phase 0 status:** plan agreed. Next: Step 0 (Stabilise).

@@ -31,6 +31,14 @@ Summary of the brief:
 - Known issues: `npm run build` fails (`useStatusOptions` missing from
   `src/hooks/useCategoryOptions.jsx`); `npm run lint` reports many errors; `.env` is committed.
 
+## Agreed plan
+
+`docs/phase-0-assessment.md` holds the Phase 0 assessment and the agreed decisions (§8):
+NestJS API added in Phase 1 alongside the Vite frontend; holiday-let code tagged
+`holiday-let-archive` then removed; Supabase project `xvpgrmujayytbbmhnoan` ("React QMS") is
+canonical and its data is test data; RLS enabled in the first Phase 1 migration with policies.
+Current step: **Step 0 (Stabilise)**, then Phase 1.
+
 ## Commands
 
 - `npm run dev` — dev server

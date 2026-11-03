@@ -33,6 +33,9 @@ const SettingsAccount = lazy(() =>
   import("./components/Settings/SettingsAccount.jsx")
 );
 const Employees = lazy(() => import("./components/Employees.jsx"));
+const PartsPage = lazy(() => import("./components/master-data/PartsPage.jsx"));
+const PartDetailPage = lazy(() => import("./components/master-data/PartDetailPage.jsx"));
+const PartiesPage = lazy(() => import("./components/master-data/PartiesPage.jsx"));
 const AuthPage = lazy(() => import("./components/AuthPage.jsx"));
 const Login = lazy(() => import("./components/Login.jsx"));
 const SignUp = lazy(() => import("./components/SignUp.jsx"));
@@ -119,6 +122,10 @@ const router = createBrowserRouter([
             ],
           },
           { path: "Human-Resources", element: <Employees /> },
+          { path: "Parts", element: <PartsPage /> },
+          { path: "Parts/:id", element: <PartDetailPage /> },
+          { path: "Customers", element: <PartiesPage key="customers" kind="customers" /> },
+          { path: "Suppliers", element: <PartiesPage key="suppliers" kind="suppliers" /> },
         ],
       },
     ],

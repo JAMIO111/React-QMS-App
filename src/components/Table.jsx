@@ -140,7 +140,7 @@ const Table = ({
                   onRowDoubleClick?.(row, e);
                 }}
                 className={`${highlighted ? "bg-brand-primary/10 hover:bg-brand-primary/15" : "hover:bg-hover-menu-color"} ${
-                  onRowDoubleClick ? "cursor-pointer" : ""
+                  onRowClick || onRowDoubleClick ? "cursor-pointer" : ""
                 }`}>
                 {row.getVisibleCells().map((cell) => (
                   <td

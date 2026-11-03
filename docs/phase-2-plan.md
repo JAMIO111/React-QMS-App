@@ -131,10 +131,10 @@ organisation-editable labels and colours, replacing the free-form legacy `Status
 ## 4. Security and permissions
 
 New permission codes (seeded, assigned to the system role templates and copied to existing
-organisations): `parts.read`, `parts.manage`, `inspection.read`, `inspection.record`,
+organisations): `inspection.read`, `inspection.record`,
 `inspection_plans.manage`, `ncr.disposition.approve`, `ncr.close`, `capa.read`, `capa.manage`,
-`capa.verify`, `attachments.read`, `attachments.manage`. Existing `ncr.*`, `master_data.*` and
-`lookups.manage` are reused.
+`capa.verify`, `attachments.read`, `attachments.manage`. Existing `ncr.*`, `master_data.*` (parts, customers, suppliers — decided in 2.1, the existing
+codes already cover parts) and `lookups.manage` are reused.
 
 Every route `@OrganisationScoped`; record-level site scoping uses the site-scoped role assignments
 from Phase 1.5 (a user scoped to one site sees and acts on that site's records only). Cross-tenant
@@ -247,3 +247,47 @@ and is told why); guardrails 0 violations; no organisation requires MFA yet.
 try them on the Dev deployment. Supabase settings to check: Authentication → URL Configuration →
 Redirect URLs include the frontend (`…/**`, and `http://localhost:5173/**` for local work);
 Authentication → Multi-Factor → TOTP enabled (Supabase's default).
+
+## 10. Slice 2.1 — master data — done (2026-11-04)
+
+**Database** (`20251104120000_master_data.sql`)
+- `units`: global read-only catalogue (25 units: length, angle, mass, force, torque, pressure,
+  temperature, time, ratio, count, hardness, electrical). No conversions.
+- `customers`, `suppliers`, `parts`, `part_revisions`: tenant-owned, RLS (read: members; write:
+  `master_data.manage` — reused instead of the planned `parts.*` codes), audited, no deletes
+  (deactivate), column-level UPDATE grants; `app.stamp_created()` sets created/updated stamps so
+  they cannot be forged. Part numbers and revision codes are unique regardless of letter case;
+  references use composite keys, so another organisation's customer cannot be linked.
+- Revision lifecycle enforced by `app.part_revision_lifecycle()`: new revisions are drafts; only
+  drafts are editable; draft → released (stamps who/when, supersedes the current released
+  revision; at most one released per part) → superseded → obsolete; draft → obsolete. Violations
+  raise QM003 → API 409 `invalid_revision_state` with a readable message.
+- `outbox_events` (decision Q3) written only by SECURITY DEFINER triggers via `app.emit_event`
+  (not callable by users), payload versioned (`v: 1`), actor and correlation id recorded; readable
+  with `audit.read`. First event: `part.revision.released`.
+- Legacy copy (decision Q1): `"Customers"` → `customers` (codes `C0001…`), `"Suppliers"` →
+  `suppliers` (existing supplier ids as codes when valid and unique), `"Part"` → `parts`; ids kept
+  for slice 2.4; each migrated part gets released revision A.
+
+**API:** `GET /units` (signed-in, global — on the sweep allowlist); `/customers`, `/suppliers`
+(list/search, create, update); `/parts` (list/search/paging, create with optional first draft
+revision, detail with revisions, update); `POST /parts/{id}/revisions`; `PATCH
+/part-revisions/{id}` (drafts); `POST /part-revisions/{id}/release|obsolete`.
+
+**Frontend:** menu *Master Data* → Parts (register with search, inactive filter, resizable/hideable
+columns; part detail with editable fields and revisions: add, edit draft, release with a
+confirmation naming the revision that will be superseded, make obsolete), Customers, Suppliers
+(register + add/edit dialog). New shared `Dialog` (labelled, Escape closes, focus in and back).
+
+**Tests:** SQL `master_data.test.sql` (+ guardrails, sweep and RLS updated); API e2e master-data
+suite and sweep over every new route (90 e2e); frontend +12 (102). Browser check of the parts
+register, add dialog, part detail and release confirmation — no console errors.
+
+**Live:** data checked for the new constraints first, migration applied and recorded, copy
+verified (10/10 customers, 2/2 suppliers, 6/6 parts with ids kept, 6 released revision A);
+exercised as the real owner in a rolled-back transaction (create, release A then B → A
+superseded, 2 events); guardrails 0 violations.
+
+**Known gaps:** the legacy NC screens still read the old `"Part"`/`"Customers"` tables, so parts
+added here appear in NCRs from slice 2.4 (when the NC register moves to the new model). The
+customer picker lists the first 50 active customers (search-as-you-type picker later).

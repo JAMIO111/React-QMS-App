@@ -16,7 +16,10 @@ BEGIN
   END IF;
 END $$;
 
-ALTER ROLE qms_api NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+-- CREATE ROLE already defaults to NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS.
+-- (Supabase's postgres role is not a superuser and may not restate those attributes;
+-- supabase/tests/api_role.test.sql checks them instead.)
+ALTER ROLE qms_api NOINHERIT;
 ALTER ROLE qms_api SET statement_timeout = '15s';
 ALTER ROLE qms_api SET idle_in_transaction_session_timeout = '30s';
 

@@ -17,14 +17,16 @@ const RHFTextAreaInput = forwardRef(
     ref
   ) => {
     return (
-      <div className="w-full h-full">
-        {label && <label className="block text-primary-text">{label}</label>}
+      <div className="w-full">
+        {label && (
+          <label className="block mb-1 text-primary-text">{label}</label>
+        )}
         <div
-          className={`${
+          className={`shadow-s hover:shadow-m border ${
             error &&
             "border-error-color hover:border-error-color/70 focus-within:border-error-color focus-within:hover:border-error-color focus-within:ring-3 focus-within:ring-error-color/20"
-          } relative flex border border-border-color rounded-lg px-2 py-2 bg-text-input-color
-        hover:border-border-dark-color focus-within:border-brand-primary focus-within:hover:border-brand-primary`}>
+          } relative flex rounded-lg px-2 py-2 bg-text-input-color border-transparent
+         focus-within:border-brand-primary focus-within:hover:border-brand-primary`}>
           {error ? (
             <MdErrorOutline
               title={error.message}

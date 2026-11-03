@@ -98,6 +98,10 @@ const NotificationPane = () => {
                       key={notification.id}
                       notification={notification}
                       closePane={closePane}
+<<<<<<< HEAD
+=======
+                      userId={profile.auth_id}
+>>>>>>> 7b80b5bf8372b8edcc437a356edeaf6ae4746153
                     />
                   ))
               ) : (

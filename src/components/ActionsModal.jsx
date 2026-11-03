@@ -47,14 +47,14 @@ const ActionsModal = ({ item, position }) => {
 
   const navigate = useNavigate();
 
-  const handleEditNC = () => {
+  const handleEditBooking = () => {
     console.log(`Editing ${item.id}`);
-    navigate(`Edit-NC-${item.id}`);
+    navigate(`/Bookings/${item.id}`);
   };
 
   return createPortal(
     <div
-      className="w-40 h-fit bg-primary-bg rounded-xl border border-border-color shadow-lg flex flex-col justify-center items-center"
+      className="w-44 h-fit bg-secondary-bg rounded-xl border border-border-color shadow-lg flex flex-col justify-center items-center"
       style={{
         position: "absolute",
         top: position.top,
@@ -63,19 +63,19 @@ const ActionsModal = ({ item, position }) => {
       }}>
       <div className="w-full h-1/4 flex gap-2 flex-col p-2 justify-center items-center border-b border-border-color">
         <ActionsModalItem
-          label="Edit NC"
+          label="Edit Booking"
           icon={HiOutlinePencil}
           color="blue"
           item={item}
-          callback={handleEditNC}
+          callback={handleEditBooking}
         />
         <ActionsModalItem
-          label="Duplicate"
+          label="Reoccurring"
           icon={IoDuplicateOutline}
           color="blue"
           item={item}
           callback={() => {
-            console.log(`Duplicating ${item.id}`);
+            console.log(`Scheduling recurring bookings ${item.id}`);
           }}
         />
         <ActionsModalItem
@@ -98,7 +98,7 @@ const ActionsModal = ({ item, position }) => {
         />
       </div>
     </div>,
-    document.getElementById("modal-root")
+    document.getElementById("modal-root"),
   );
 };
 

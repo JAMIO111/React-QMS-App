@@ -49,7 +49,7 @@ export default function StackedBarChart({ data, subtitle }) {
     const map = {};
     sortedData.forEach(({ failure_mode, sub_failure_modes }) => {
       map[failure_mode] = sub_failure_modes.map(
-        ({ sub_failure_mode }) => sub_failure_mode
+        ({ sub_failure_mode }) => sub_failure_mode,
       );
     });
     return map;

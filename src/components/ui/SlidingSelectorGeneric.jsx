@@ -17,7 +17,7 @@ export default function SlidingSelector({
     if (!container) return;
 
     const activeButton = container.querySelector(
-      `[data-value="${getValue(value)}"]`
+      `[data-value="${getValue(value)}"]`,
     );
     if (activeButton) {
       const { offsetLeft, offsetWidth } = activeButton;
@@ -47,10 +47,10 @@ export default function SlidingSelector({
           option === "All"
             ? notifications.length
             : option === "New"
-            ? notifications.filter((n) => !n.read).length
-            : option === "Read"
-            ? notifications.filter((n) => n.read).length
-            : 0;
+              ? notifications.filter((n) => !n.read).length
+              : option === "Read"
+                ? notifications.filter((n) => n.read).length
+                : 0;
 
         return (
           <button
@@ -62,7 +62,7 @@ export default function SlidingSelector({
               {
                 "text-primary-text": isActive,
                 "cursor-pointer": !isActive,
-              }
+              },
             )}>
             <p className={clsx({ "hover:text-cta-color": !isActive })}>
               {label}

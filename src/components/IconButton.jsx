@@ -7,7 +7,7 @@ const IconButton = ({ selected, icon, callback, title, color, count }) => {
     red: "bg-red-100 ring-red-600",
   };
   const baseClass =
-    "border hover:border-border-dark-color active:scale-97 border-border-color w-fit box-border h-8 px-2 gap-2 flex justify-center rounded-lg items-center cursor-pointer";
+    "border hover:border-border-dark-color active:scale-97 border-border-color w-fit box-border h-9 px-2 gap-2 flex justify-center rounded-lg items-center cursor-pointer";
 
   const selectedClass = selected
     ? clsx(colorClasses[color], "ring-2 border-transparent")

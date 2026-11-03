@@ -1,31 +1,42 @@
 import CTAButton from "../CTAButton";
+import ProfileImageSection from "../ProfileImageSection";
 import TextInput from "../ui/TextInput";
 import { useUser } from "@/contexts/UserProvider";
 import { PiPassword } from "react-icons/pi";
 
 const SettingsAccount = () => {
   const { profile } = useUser();
-  console.log("TextInput is:", TextInput);
+  console.log("profile:", profile);
   return (
-    <div className="flex flex-col xl:flex-row lg:flex-row gap-5 w-full pr-5 overflow-y-scroll">
-      <div className="flex flex-col gap-5 w-1/2">
+    <div className="flex flex-col xl:flex-row lg:flex-row gap-5 w-full pr-5 overflow-y-auto">
+      <div className="flex flex-col gap-4 w-1/2">
         {/* Photo Card */}
         <div className="flex flex-row justify-between items-center bg-secondary-bg border border-border-color rounded-3xl p-5">
-          <div className="flex flex-col w-1/2 justify-between h-full">
-            <p className="text-primary-text text-xl">Your Photo</p>
-            <CTAButton width="w-full" type="main" text="Add Photo" />
+          <div className="flex flex-col w-1/2 gap-2 justify-start h-full">
+            <p className="text-primary-text text-xl">Profile Picture</p>
+            <p className="text-secondary-text text-sm mb-5">
+              Add an image of yourself so your team can easily identify you.
+            </p>
           </div>
-          <div className="w-32 h-32 rounded-3xl border border-primary-text overflow-hidden">
-            <img
-              className="w-full h-full object-cover"
-              src="/Profile-img-cropped.jpg"
-              alt="JD"
-            />
-          </div>
+          <ProfileImageSection
+            noImageText={`${profile?.first_name.charAt(
+              0
+            )} ${profile?.surname.charAt(0)}`}
+            item={profile}
+            bucket="avatars"
+            path="employees"
+            table="Employees"
+            width="w-32"
+            height="h-32"
+            aspectRatio="aspect-square"
+            onImageChange={(url) => {
+              console.log("New avatar URL:", url);
+            }}
+          />
         </div>
 
         {/* Personal Info Card */}
-        <div className="flex flex-col bg-secondary-bg rounded-3xl border border-border-color p-5">
+        <div className="flex flex-col bg-secondary-bg rounded-3xl border border-border-color p-4">
           <p className="text-primary-text text-xl mb-5">Personal Information</p>
           <TextInput
             icon={PiPassword}

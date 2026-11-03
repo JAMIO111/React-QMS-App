@@ -4,7 +4,7 @@ import { useParams } from "react-router-dom";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { NCMFormSchema } from "../validationSchema";
+import { BookingFormSchema } from "../validationSchema";
 import Breadcrumb from "./Breadcrumb";
 import CTAButton from "./CTAButton";
 import RHFComboBox from "./ui/RHFComboBox";
@@ -21,7 +21,8 @@ import {
 } from "react-icons/hi2";
 import { LuCircleDashed } from "react-icons/lu";
 import { CiShoppingTag, CiTextAlignCenter } from "react-icons/ci";
-import { BsBox, BsQrCode, BsCurrencyPound } from "react-icons/bs";
+import { GiFamilyHouse } from "react-icons/gi";
+import { BsBox, BsQrCode, BsCurrencyPound, BsHouse } from "react-icons/bs";
 import { AiOutlineTag, AiOutlineTags } from "react-icons/ai";
 import { PiStack } from "react-icons/pi";
 import { IoIosUndo } from "react-icons/io";
@@ -53,7 +54,7 @@ import {
 } from "@/hooks/useCategoryOptions";
 import { useCreateNotification } from "@/hooks/useCreateNotification";
 
-const NCEntryForm = () => {
+const BookingEntryForm = () => {
   const { slug } = useParams(); // slug = "Edit-NC-123"
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -61,7 +62,7 @@ const NCEntryForm = () => {
   const { createNotification } = useCreateNotification();
 
   const isEditing = slug?.startsWith("Edit-NC-");
-  const isCreating = slug === "New-NC";
+  const isCreating = !slug;
   const id = isEditing ? slug.replace("Edit-NC-", "") : null;
 
   const {
@@ -151,7 +152,7 @@ const NCEntryForm = () => {
     watch,
     formState: { errors, isSubmitting, isValid, isDirty, touchedFields },
   } = useForm({
-    resolver: zodResolver(NCMFormSchema),
+    resolver: zodResolver(BookingFormSchema),
     mode: "all",
     defaultValues: defaultValues,
     delayError: 500,
@@ -424,7 +425,7 @@ const NCEntryForm = () => {
               ref={ncDetailsRef}
               className="flex scroll-mt-5 flex-row justify-start items-center gap-3 px-2">
               <h2 className="text-2xl text-primary-text whitespace-nowrap">
-                NC Details
+                Booking Details
               </h2>
               <div className="h-0.5 w-full bg-border-color"></div>
             </div>
@@ -435,7 +436,7 @@ const NCEntryForm = () => {
                   control={control}
                   render={({ field, fieldState }) => (
                     <RHFDatePickerPopout
-                      label="Date of NC"
+                      label="Date of Booking"
                       placeholder="Pick a date"
                       error={fieldState.error}
                       value={field.value ? new Date(field.value) : null}
@@ -451,11 +452,11 @@ const NCEntryForm = () => {
                     <RHFComboBox
                       {...field}
                       error={fieldState.error}
-                      placeholder="Search for a customer"
+                      placeholder="Search for a property"
                       secondaryField={"customer_id"}
                       options={customerOptions || []}
-                      icon={IoPeopleOutline}
-                      label="Customer"
+                      icon={GiFamilyHouse}
+                      label="Property"
                     />
                   )}
                 />
@@ -740,4 +741,4 @@ const NCEntryForm = () => {
   );
 };
 
-export default NCEntryForm;
+export default BookingEntryForm;

@@ -6,8 +6,13 @@ import {
   BsBoxes,
   BsQuestionCircle,
   BsPeople,
+  BsHouse,
 } from "react-icons/bs";
 import { LiaFileInvoiceDollarSolid } from "react-icons/lia";
+import { IoReceiptOutline } from "react-icons/io5";
+import { BsHouseGear } from "react-icons/bs";
+import { HiOutlineWrenchScrewdriver } from "react-icons/hi2";
+import { IoCalendarOutline } from "react-icons/io5";
 
 export const menuStructure = [
   {
@@ -44,6 +49,21 @@ export const menuStructure = [
     ],
   },
   {
+    name: "Bookings",
+    icon: IoReceiptOutline,
+    path: "/Bookings",
+    subMenu: [
+      {
+        name: "New Booking",
+        path: "/Bookings/New-Booking",
+      },
+      {
+        name: "Existing Bookings",
+        path: "/Bookings/View-Existing",
+      },
+    ],
+  },
+  {
     name: "Projects",
     icon: BsFolder,
     path: "/Projects",
@@ -62,15 +82,15 @@ export const menuStructure = [
     subMenu: [
       {
         name: "Stock",
-        path: "/Stock",
+        path: "/Inventory/Stock",
       },
       {
         name: "Stock Adjustment",
-        path: "/Stock-Adjustment",
+        path: "/Inventory/Stock-Adjustment",
       },
       {
-        name: "Part Maintenance",
-        path: "/Part-Maintenance",
+        name: "Item",
+        path: "/Inventory/Item",
       },
     ],
   },

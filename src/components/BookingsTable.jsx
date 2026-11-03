@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from "react";
-import NonConformanceRow from "./NonConformanceRow";
+import BookingRow from "./BookingRow";
 import { IoCalendarOutline, IoPeopleOutline } from "react-icons/io5";
-import { BsBox, BsQrCode, BsCurrencyPound } from "react-icons/bs";
-import { LuCircleDashed } from "react-icons/lu";
+import { FaChildren, FaDog, FaUser } from "react-icons/fa6";
+import { IoIosMan } from "react-icons/io";
+import { MdChildFriendly } from "react-icons/md";
 import { CiTextAlignCenter } from "react-icons/ci";
-import { AiOutlineTag } from "react-icons/ai";
-import { PiStack } from "react-icons/pi";
 import DataNavBar from "./DataNavBar";
 
-const NonConformanceTable = ({
+const BookingsTable = ({
+  isLoading, //Required
   handleActiveModalType, //Required
   selectedItem, //Required
   setSelectedItem, //Required
@@ -17,6 +17,7 @@ const NonConformanceTable = ({
   costData, //Required
   ncmData, //Required
   ncType,
+  data, //Required
   selectedRows, //Required - Checkbox
   isSelected, //Required - Checkbox
   onToggle, //Required - Checkbox
@@ -30,10 +31,11 @@ const NonConformanceTable = ({
 }) => {
   const [openModalRowId, setOpenModalRowId] = useState(null);
   const [modalPos, setModalPos] = useState(null);
+  const [activeModalType, setActiveModalType] = useState(null); // Required
 
   console.log("Selected Rows:", selectedRows.length);
   console.log("Total Count:", totalCount);
-  console.log("NCM Data.count:", ncmData?.count);
+  console.log("Bookings Data.count:", data?.count);
 
   const selectAllCheckbox = useRef(null);
 
@@ -53,9 +55,10 @@ const NonConformanceTable = ({
     if (allSelected) {
       onClearAll();
     } else {
-      onSelectAll(ncmData?.data);
+      onSelectAll(data?.data);
     }
   };
+
   const handleRowClick = (item) => {
     setSelectedItem((prev) => (prev === item ? null : item));
     console.log("Row selected:", item.id);
@@ -90,15 +93,15 @@ const NonConformanceTable = ({
     };
   }, [openModalRowId]);
 
-  const rows = Array.isArray(ncmData?.data) ? ncmData.data : [];
+  const rows = Array.isArray(data?.data) ? data.data : [];
 
   return (
-    <div className="flex flex-col relative border border-border-color rounded-2xl shadow-md max-h-[100vh] overflow-y-auto min-h-[160px]">
-      <div className="text-[13px] bg-secondary-bg overflow-y-auto  relative">
+    <div className="flex h-full shadow-md flex-col border relative border-border-color rounded-2xl max-h-[100vh] overflow-y-auto min-h-[14px]">
+      <div className="flex-1 text-[13px] bg-secondary-bg overflow-y-auto relative">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="text-left th-sticky">
-              <th>
+            <tr className="text-left border-b border-border-color th-sticky">
+              <th className="pl-2 pr-2">
                 <div className="table-header">
                   <p className="text-transparent">
                     <input
@@ -114,60 +117,56 @@ const NonConformanceTable = ({
               </th>
               <th>
                 <div className="table-header">
-                  <span className="font-light">#</span>ID
+                  <CiTextAlignCenter /> Booking Ref
+                </div>
+              </th>
+              <th>
+                <div className="table-header">
+                  <IoPeopleOutline /> Property
                 </div>
               </th>
               <th>
                 <div className="table-header min-w-28">
-                  <IoCalendarOutline /> Date
+                  <IoCalendarOutline /> Arrival Date
                 </div>
               </th>
               <th>
                 <div className="table-header">
-                  <IoPeopleOutline />{" "}
-                  {ncType === "Supplier" ? "Supplier" : "Customer"}
+                  <IoPeopleOutline /> Customer
+                </div>
+              </th>
+              <th>
+                <div className="table-header">Nights</div>
+              </th>
+              <th>
+                <div className="table-header">
+                  <BsBox /> Work Order
                 </div>
               </th>
               <th>
                 <div className="table-header">
-                  <BsBox />{" "}
-                  {ncType === "Supplier" ? "Purchase Order" : "Work Order"}
-                </div>
-              </th>
-              <th>
-                <div className="table-header">
-                  <BsQrCode /> Part No.
+                  <IoIosMan /> Adults
                 </div>
               </th>
               <th>
                 <div className="table-header px-6 min-w-20">
                   <div className="w-full flex justify-center items-center gap-2">
-                    <PiStack /> Qty
+                    <FaChildren /> Teens
                   </div>
                 </div>
               </th>
               <th>
                 <div className="table-header">
-                  <AiOutlineTag /> Failure Mode
+                  <MdChildFriendly /> Infants
                 </div>
               </th>
               <th>
                 <div className="table-header">
-                  <div className="w-full flex justify-center items-center gap-2">
-                    <LuCircleDashed /> Status
-                  </div>
+                  <FaDog /> Pets
                 </div>
               </th>
               <th>
-                {costData ? (
-                  <div className="table-header-number">
-                    <BsCurrencyPound /> Total Cost
-                  </div>
-                ) : (
-                  <div className="table-header">
-                    <CiTextAlignCenter /> Description
-                  </div>
-                )}
+                <div className="table-header">Booking Type</div>
               </th>
               <th>
                 <div className="text-transparent h-full table-header">
@@ -180,12 +179,12 @@ const NonConformanceTable = ({
             {totalCount === 0 ? (
               <tr>
                 <td colSpan="11" className="text-center py-6 text-muted">
-                  No Non-Conformances found.
+                  No Bookings found.
                 </td>
               </tr>
             ) : (
               rows.map((item, index) => (
-                <NonConformanceRow
+                <BookingRow
                   handleRowClick={() => handleRowClick(item)}
                   key={item.id || index} //Required
                   selectedItem={selectedItem}
@@ -208,6 +207,7 @@ const NonConformanceTable = ({
         </table>
       </div>
       <DataNavBar
+        isLoading={isLoading}
         onRefresh={onRefresh}
         page={page}
         pageSize={pageSize}
@@ -219,4 +219,4 @@ const NonConformanceTable = ({
   );
 };
 
-export default NonConformanceTable;
+export default BookingsTable;

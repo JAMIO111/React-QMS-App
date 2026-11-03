@@ -4,6 +4,7 @@ import { GoArrowLeft } from "react-icons/go";
 import LoadingBar from "./ui/LoadingBar";
 
 const DataNavBar = ({
+  isLoading,
   onRefresh,
   page,
   pageSize,

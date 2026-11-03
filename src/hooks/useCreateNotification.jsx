@@ -16,7 +16,6 @@ export function useCreateNotification() {
         .from("Notifications")
         .insert([
           {
-            org: orgId,
             created_by: authId,
             title,
             body,
@@ -52,12 +51,12 @@ export function useCreateNotification() {
 
       if (recipientError)
         throw new Error(
-          `Failed to assign recipients: ${recipientError.message}`
+          `Failed to assign recipients: ${recipientError.message}`,
         );
 
       return notif;
     },
-    []
+    [],
   );
 
   return { createNotification };

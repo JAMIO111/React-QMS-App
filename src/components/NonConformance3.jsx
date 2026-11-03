@@ -85,7 +85,7 @@ const NonConformance = () => {
 
   const handleToggle = (row) => {
     setSelectedRows((prev) =>
-      isSelected(row.id) ? prev.filter((r) => r.id !== row.id) : [...prev, row]
+      isSelected(row.id) ? prev.filter((r) => r.id !== row.id) : [...prev, row],
     );
   };
 
@@ -106,7 +106,7 @@ const NonConformance = () => {
   const totalRows = selectedRows.length;
   const totalQuantity = selectedRows.reduce(
     (acc, r) => acc + r.quantity_defective,
-    0
+    0,
   );
   const totalCost = selectedRows.reduce((acc, r) => acc + r.total_cost, 0);
 
@@ -161,7 +161,7 @@ const NonConformance = () => {
   }, [modalPos]);
 
   const activeFilters = ["status", "failureMode", "subFailureMode"].filter(
-    (key) => searchParams.get(key)
+    (key) => searchParams.get(key),
   );
   const filterCount = activeFilters.length;
 
@@ -178,7 +178,7 @@ const NonConformance = () => {
               {totalRows > 0 &&
                 `${totalRows} Items selected - Qty: ${totalQuantity.toLocaleString()} (£${totalCost.toLocaleString(
                   undefined,
-                  { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                  { minimumFractionDigits: 2, maximumFractionDigits: 2 },
                 )})`}
             </p>
           </div>

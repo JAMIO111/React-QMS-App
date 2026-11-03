@@ -6,7 +6,7 @@ const SearchBar = () => {
 
   return (
     <div className="flex w-1/3 p-2 relative items-center ">
-      <SearchIcon className="hover:fill-primary-text absolute fill-icon-color h-4 w-4 inset-x-5" />
+      <SearchIcon className="text-icon-color h-4 w-4 inset-x-5" />
       <input
         id="Global Search Bar"
         name="search-bar"

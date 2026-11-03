@@ -28,7 +28,7 @@ const TableWrapper = ({
   rowSelection,
   setRowSelection,
 }) => {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [, setSearchParams] = useSearchParams();
   const [columnSizing, setColumnSizing] = useState({});
   const [resizedColumns, setResizedColumns] = useState(new Set());
 

@@ -154,7 +154,7 @@ export const uploadFileToSupabase = async (file, bucket, id_ref) => {
   const fileName = actualFile.name || "unnamed_file";
   const filePath = `${id_ref}_${fileName}`;
 
-  const { data, error } = await supabase.storage
+  const { error } = await supabase.storage
     .from(bucket)
     .upload(filePath, actualFile);
 

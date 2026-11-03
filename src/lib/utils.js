@@ -1,6 +1,5 @@
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import supabase from "../supabase-client";
 
 export function cn(...inputs) {
   return twMerge(clsx(inputs));

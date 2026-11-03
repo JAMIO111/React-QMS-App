@@ -1,19 +1,4 @@
-import React, { useMemo } from "react";
-
-const getAvailablePeriods = (startDate, endDate) => {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-
-  if (isNaN(diffDays) || diffDays <= 0) return [];
-
-  if (diffDays <= 2) return ["hour", "day"];
-  if (diffDays <= 14) return ["day"];
-  if (diffDays <= 60) return ["day", "week"];
-  if (diffDays <= 180) return ["week", "month"];
-  if (diffDays <= 365) return ["week", "month", "quarter"];
-  return ["month", "quarter", "year"];
-};
+import React from "react";
 
 const AggregationPeriodDropdown = ({ value, onChange, validOptions }) => {
   const allOptions = ["hour", "day", "week", "month", "quarter", "year"];

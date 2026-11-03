@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Link, Outlet, useResolvedPath, useMatch } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import SettingMenuStructure from "../../SettingMenuStructure";
 import { GoDatabase } from "react-icons/go";
 
-const Settings = ({ onClose }) => {
+const Settings = () => {
+  const { pathname } = useLocation();
   const [expandedItem, setExpandedItem] = useState(null);
 
   const toggleExpand = (index) => {
@@ -17,9 +18,9 @@ const Settings = ({ onClose }) => {
           Settings
         </h1>
         {SettingMenuStructure.map((item, index) => {
-          const resolvedPath = useResolvedPath(item.path);
-          const match = useMatch({ path: resolvedPath.pathname, end: false });
-          console.log(item.path);
+          const match = pathname
+            .toLowerCase()
+            .startsWith(`/settings/${item.path.toLowerCase()}`);
           return (
             <Link to={item.path} key={index}>
               <div

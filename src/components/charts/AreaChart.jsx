@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useNCDateTrend } from "@/hooks/useNCDateTrend";
 import AggregationPeriodDropdown from "../ui/AggregationPeriodDropdown";
 import currencyCodes from "@/currencyCodes";

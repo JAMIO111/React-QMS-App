@@ -8,7 +8,6 @@ const NonConformanceGrid = ({
   setSelectedItem, //Required
   onOpenModal, //Required
   onRefresh, //Required
-  costData, //Required
   ncmData, //Required
   page,
   pageSize,
@@ -19,7 +18,7 @@ const NonConformanceGrid = ({
   const [selectedRow, setSelectedRow] = useState(null);
   const [openModalRowId, setOpenModalRowId] = useState(null);
   const [modalPos, setModalPos] = useState(null);
-  const [modalItem, setModalItem] = useState(null);
+  const [, setModalItem] = useState(null);
   const modalRef = useRef(null);
 
   const handleRowClick = (index) => {

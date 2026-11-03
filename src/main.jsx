@@ -12,18 +12,8 @@ import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import "./index.css";
 
 const App = lazy(() => import("./App.jsx"));
-const Dashboard = lazy(() => import("./components/dashboard/Dashboard.jsx"));
 const NonConformance = lazy(() => import("./components/NonConformance.jsx"));
-const BookingsDashboard = lazy(() =>
-  import("./components/dashboard/BookingsDashboard.jsx")
-);
-const ClientManagementDashboard = lazy(() =>
-  import("./components/dashboard/ClientManagementDashboard.jsx")
-);
-const Properties = lazy(() => import("./components/Properties.jsx"));
-const PropertyForm = lazy(() => import("./components/PropertyForm.jsx"));
-const OwnerForm = lazy(() => import("./components/OwnerForm.jsx"));
-const Owners = lazy(() => import("./components/Owners.jsx"));
+const Dashboard = lazy(() => import("./components/dashboard/Dashboard.jsx"));
 const NotFound = lazy(() => import("./components/NotFound.jsx"));
 const Settings = lazy(() => import("./components/Settings/Settings.jsx"));
 const SettingsSystemPreferences = lazy(() =>
@@ -36,11 +26,6 @@ const SettingsAccount = lazy(() =>
   import("./components/Settings/SettingsAccount.jsx")
 );
 const Employees = lazy(() => import("./components/Employees.jsx"));
-const BookingForm = lazy(() => import("./components/BookingForm.jsx"));
-const FullScreenCalendar = lazy(() =>
-  import("./components/FullScreenCalendar.jsx")
-);
-const LeadDetails = lazy(() => import("./components/LeadDetails.jsx"));
 const AuthPage = lazy(() => import("./components/AuthPage.jsx"));
 const Login = lazy(() => import("./components/Login.jsx"));
 const SignUp = lazy(() => import("./components/SignUp.jsx"));
@@ -87,51 +72,7 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <Dashboard /> },
           { path: "Dashboard", element: <Dashboard /> },
-          { path: "Bookings", element: <BookingsDashboard /> },
-          {
-            path: "Bookings/New-Booking",
-            element: <BookingForm />,
-          },
-          {
-            path: "Bookings/:id",
-            element: <BookingForm />,
-          },
-          {
-            path: "Client-Management",
-            element: <ClientManagementDashboard />,
-          },
-          {
-            path: "Client-Management/Properties",
-            element: <Properties />,
-          },
-          {
-            path: "Client-Management/Properties/:id",
-            element: <PropertyForm />,
-          },
-          {
-            path: "Client-Management/Properties/New-Property",
-            element: <PropertyForm />,
-          },
-          {
-            path: "Client-Management/Owners/:id",
-            element: <OwnerForm />,
-          },
-          {
-            path: "Client-Management/Owners/New-Owner",
-            element: <OwnerForm />,
-          },
-          {
-            path: "Client-Management/Owners",
-            element: <Owners />,
-          },
-          {
-            path: "Client-Management/Owners/:id",
-            element: <OwnerForm />,
-          },
-          {
-            path: "Client-Management/Leads/:id",
-            element: <LeadDetails />,
-          },
+          { path: "Non-Conformance/:type", element: <NonConformance /> },
           {
             path: "Settings",
             element: <Settings />,
@@ -165,7 +106,6 @@ const router = createBrowserRouter([
             ],
           },
           { path: "Human-Resources", element: <Employees /> },
-          { path: "Calendar", element: <FullScreenCalendar /> },
         ],
       },
     ],
@@ -198,4 +138,3 @@ createRoot(document.getElementById("root")).render(
     </QueryClientProvider>
   </StrictMode>
 );
-console.trace("createRoot called");

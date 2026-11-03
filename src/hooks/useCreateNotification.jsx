@@ -10,7 +10,6 @@ export function useCreateNotification() {
       if (!profile) {
         throw new Error("User profile is not available");
       }
-      const orgId = profile.organisation_id;
       const authId = profile.auth_id;
       const { data: notif, error: notifError } = await supabase
         .from("Notifications")

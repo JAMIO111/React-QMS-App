@@ -1,18 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchAll } from "../api/supabaseApi";
 
-export const usePropertyOptions = () => {
+export const useStatusOptions = () => {
   return useQuery({
-    queryKey: ["Properties"],
-    queryFn: () => fetchAll("Properties"),
-    staleTime: 1000 * 60 * 30, // 30 minutes
-  });
-};
-
-export const usePackageOptions = () => {
-  return useQuery({
-    queryKey: ["Packages"],
-    queryFn: () => fetchAll("Packages"),
+    queryKey: ["Status"],
+    queryFn: () => fetchAll("Status"),
     staleTime: 1000 * 60 * 30, // 30 minutes
   });
 };

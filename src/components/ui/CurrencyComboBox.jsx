@@ -12,7 +12,6 @@ const CurrencyComboBox = ({
   label,
   dependentValue,
   dependentKey,
-  secondaryField,
   error,
   commonCodes = [
     "GBP",

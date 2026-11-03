@@ -16,6 +16,7 @@ const DashboardCard = ({
   isPositiveGood = true,
   previousPeriodLabel = "Previous Period",
 }) => {
+  const { organisation } = useOrganisation();
   const colorMap = {
     lime: {
       text: "text-lime-500",
@@ -61,7 +62,6 @@ const DashboardCard = ({
     );
   }
 
-  const { organisation } = useOrganisation();
   const base_currency = organisation?.base_currency || "GBP";
 
   function getCurrencyFormatter(currencyCode) {

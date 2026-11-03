@@ -5,48 +5,48 @@ import { useSearchParams } from "react-router-dom";
 import CTAButton from "./CTAButton";
 import {
   useFailureModeOptions,
-  usePackageOptions,
-  usePropertyOptions,
+  useStatusOptions,
   useSubFailureModeOptions,
 } from "@/hooks/useCategoryOptions";
 
 const FilterPane = ({ onClose }) => {
   const [searchParams] = useSearchParams();
-  const propertyUrl = searchParams.get("property") || "";
-  const managementPackageUrl = searchParams.get("managementPackage") || "";
+  const statusUrl = searchParams.get("status") || "";
+  const failureModeUrl = searchParams.get("failureMode") || "";
   const subFailureModeUrl = searchParams.get("subFailureMode") || "";
-  const { search, property, managementPackage, subFailureMode, updateFilters } =
+  const { search, status, failureMode, subFailureMode, updateFilters } =
     useNCMFilters();
-  const [localProperty, setLocalProperty] = useState(propertyUrl);
-  const [localPackage, setLocalPackage] = useState(managementPackageUrl);
+  const [localStatus, setLocalStatus] = useState(statusUrl);
+  const [localFailureMode, setLocalFailureMode] = useState(failureModeUrl);
   const [localSubFailureMode, setLocalSubFailureMode] =
     useState(subFailureModeUrl);
 
   useEffect(() => {
-    setLocalProperty(property);
-  }, [property]);
+    setLocalStatus(status);
+  }, [status]);
 
   useEffect(() => {
-    setLocalPackage(managementPackage);
-  }, [managementPackage]);
+    setLocalFailureMode(failureMode);
+  }, [failureMode]);
 
   useEffect(() => {
     setLocalSubFailureMode(subFailureMode);
   }, [subFailureMode]);
 
-  const onPropertyChange = (e) => setLocalProperty(e.target.value);
-  const onPackageChange = (e) => setLocalPackage(e.target.value);
+  const onStatusChange = (e) => setLocalStatus(e.target.value);
+  const onFailureModeChange = (e) => setLocalFailureMode(e.target.value);
   const onSubFailureModeChange = (e) => setLocalSubFailureMode(e.target.value);
 
   const resetAll = () => {
-    setLocalProperty("");
-    setLocalPackage("");
+    setLocalStatus("");
+    setLocalFailureMode("");
     setLocalSubFailureMode("");
 
     updateFilters({
       search,
-      property: localProperty,
-      managementPackage: localPackage,
+      status: "",
+      failureMode: "",
+      subFailureMode: "",
     });
 
     if (onClose) onClose();
@@ -55,36 +55,18 @@ const FilterPane = ({ onClose }) => {
   const applyFilters = () => {
     updateFilters({
       search,
-      property: localProperty,
-      package: localPackage,
+      status: localStatus,
+      failureMode: localFailureMode,
+      subFailureMode: localSubFailureMode,
     });
 
     if (onClose) onClose();
   };
 
-  const {
-    data: packageOptions,
-    error: packageError,
-    isLoading: isPackageLoading,
-  } = usePackageOptions();
+  const { data: statusOptions } = useStatusOptions();
+  const { data: failureModeOptions } = useFailureModeOptions();
 
-  const {
-    data: propertyOptions,
-    error: propertyError,
-    isLoading: isPropertyLoading,
-  } = usePropertyOptions();
-
-  const {
-    data: failureModeOptions,
-    error: failureModeError,
-    isLoading: isFailureModeLoading,
-  } = useFailureModeOptions();
-
-  const {
-    data: subFailureModeOptions,
-    error: subFailureModeError,
-    isLoading: isSubFailureModeLoading,
-  } = useSubFailureModeOptions();
+  const { data: subFailureModeOptions } = useSubFailureModeOptions();
 
   return (
     <div className="border absolute bg-primary-bg text-primary-text z-1000 top-32 rounded-2xl border-border-color shadow-lg shadow-shadow-color w-80 h-fit">
@@ -99,22 +81,22 @@ const FilterPane = ({ onClose }) => {
       <div className="flex flex-col justify-start items-center">
         <div className="filter-item flex px-4 py-3 border-b border-border-color w-full flex-col justify-start items-center">
           <div className="w-full flex flex-row justify-between items-center">
-            <h4>Property</h4>
+            <h4>Status</h4>
             <button
-              onClick={() => setLocalProperty("")}
+              onClick={() => setLocalStatus("")}
               className="text-brand-primary hover:text-error-color text-sm cursor-pointer pl-2 text-right">
               Reset
             </button>
           </div>
           <div className="w-full">
             <select
-              value={localProperty}
-              onChange={onPropertyChange}
+              value={localStatus}
+              onChange={onStatusChange}
               className="w-full h-8 bg-text-input-color border border-border-color rounded-md px-2 mt-2">
               <option defaultValue value="">
                 All
               </option>
-              {propertyOptions?.map((option) => (
+              {statusOptions?.map((option) => (
                 <option key={option.id} value={option.name}>
                   {option.name}
                 </option>
@@ -124,24 +106,24 @@ const FilterPane = ({ onClose }) => {
         </div>
         <div className="filter-item flex px-4 py-3 border-b border-border-color w-full flex-col justify-start items-center">
           <div className="w-full flex flex-row justify-between items-center">
-            <h4>Management Package</h4>
+            <h4>Failure Mode</h4>
             <button
-              onClick={() => setLocalPackage("")}
+              onClick={() => setLocalFailureMode("")}
               className="text-brand-primary hover:text-error-color text-sm cursor-pointer pl-2 text-right">
               Reset
             </button>
           </div>
           <div className="w-full">
             <select
-              value={localPackage}
-              onChange={onPackageChange}
+              value={localFailureMode}
+              onChange={onFailureModeChange}
               className="w-full h-8 border bg-text-input-color border-border-color rounded-md px-2 mt-2">
               <option defaultValue value="">
                 All
               </option>
-              {packageOptions?.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.tier} - {option.name}
+              {failureModeOptions?.map((option) => (
+                <option key={option.id} value={option.name}>
+                  {option.code} - {option.name}
                 </option>
               ))}
             </select>

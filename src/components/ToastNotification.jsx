@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import { BsInfoCircleFill } from "react-icons/bs";
@@ -7,14 +6,7 @@ import { MdError } from "react-icons/md";
 import { IoCheckmarkCircle } from "react-icons/io5";
 import { CgClose } from "react-icons/cg";
 
-const ToastNotification = ({ type, title, message, onClose, index }) => {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    setVisible(true);
-    return () => setVisible(false);
-  }, []);
-
+const ToastNotification = ({ type, title, message, onClose }) => {
   const options = {
     error: {
       icon: <MdError className="text-red-500 h-8 w-8" />,

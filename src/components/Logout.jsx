@@ -1,7 +1,6 @@
 import React from "react";
 import { IoLogOutOutline } from "react-icons/io5";
 import { signOut } from "../authService";
-import { useUser } from "../contexts/UserProvider";
 import { useNavigate } from "react-router-dom";
 
 const Logout = ({ isExpanded }) => {

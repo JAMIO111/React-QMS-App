@@ -13,7 +13,7 @@ import { formatDate } from "../../lib/utils";
 import { useUser } from "../../contexts/UserProvider";
 
 const FileDrop = ({ ncm_id }) => {
-  const [dragActive, setDragActive] = useState(false);
+  const [, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
   const [visibleFiles, setVisibleFiles] = useState([]); // already saved in DB
   const [newFiles, setNewFiles] = useState([]); // local File objects
@@ -224,7 +224,7 @@ const FileDrop = ({ ncm_id }) => {
 
   const getFileIcon = (file) => {
     const extension = file.name.split(".").pop()?.toLowerCase();
-    const [mainType, subType] = (file.type || "").split("/");
+    const [mainType] = (file.type || "").split("/");
     if (!file.type)
       return (
         <img src="/icons/file-icon.png" alt="file" className="w-10 h-10" />
@@ -443,7 +443,7 @@ const FileDrop = ({ ncm_id }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...newFiles, ...visibleFiles].map((f, idx) => {
+                  {[...newFiles, ...visibleFiles].map((f) => {
                     const file = f.file ?? f;
                     const isImage = file.type?.startsWith("image/");
                     const previewUrl = f.previewUrl ?? file.url ?? null;

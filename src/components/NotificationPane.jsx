@@ -10,7 +10,7 @@ import { useUser } from "../contexts/UserProvider";
 
 const NotificationPane = () => {
   const { profile } = useUser();
-  const { isOpen, content, closePane } = useNotification();
+  const { isOpen, closePane } = useNotification();
   const [typeFilter, setTypeFilter] = useState("New");
 
   const { data: notifications, isLoading, isError } = useNotifications();

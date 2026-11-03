@@ -17,8 +17,6 @@ const NonConformanceCard = ({
   onOpenModal,
   handleActiveModalType, // Required
   handleRowClick,
-  setOpenModalRowId,
-  setModalPos,
 }) => {
   const actionBtnRef = useRef(null);
 
@@ -56,11 +54,6 @@ const NonConformanceCard = ({
       handleActiveModalType("Actions");
       onOpenModal({ top, left }, item);
     }
-  };
-
-  const handleCloseModal = () => {
-    setOpenModalRowId(null); // Close the modal and reset the row ID
-    setModalPos(null);
   };
 
   const { data: statusOptions } = useStatusOptions();

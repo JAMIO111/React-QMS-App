@@ -7,13 +7,7 @@ import {
   useEffect,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  IoWarningOutline,
-  IoCheckmarkCircleOutline,
-  IoInformationCircleOutline,
-} from "react-icons/io5";
-import { TiWarning } from "react-icons/ti";
-import { CgClose } from "react-icons/cg";
+import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, XIcon } from "@/components/icons";
 import CTAButton from "../components/CTAButton";
 
 // -- Context to manage global confirm modal --
@@ -87,15 +81,15 @@ export const ConfirmProvider = ({ children }) => {
   const getIcon = (type) => {
     switch (type) {
       case "warning":
-        return <TiWarning className="h-10 w-10 text-white mx-auto" />;
+        return <TriangleAlertIcon className="h-10 w-10 text-white mx-auto" />;
       case "success":
         return (
-          <IoCheckmarkCircleOutline className="h-10 w-10 text-green-500 mx-auto" />
+          <CircleCheckIcon className="h-10 w-10 text-green-500 mx-auto" />
         );
       case "info":
       default:
         return (
-          <IoInformationCircleOutline className="h-10 w-10 text-blue-500 mx-auto" />
+          <InfoIcon className="h-10 w-10 text-blue-500 mx-auto" />
         );
     }
   };
@@ -115,7 +109,7 @@ export const ConfirmProvider = ({ children }) => {
                   className="cursor-pointer text-secondary-text/70 hover:text-primary-text"
                   onClick={() => handleClose(false)}
                   aria-label="Close">
-                  <CgClose className="h-6 w-6" />
+                  <XIcon className="h-6 w-6" />
                 </button>
               </div>
               <div className="flex justify-center items-center p-2 mx-auto w-14 h-14 bg-error-color rounded-full mb-4">

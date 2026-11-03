@@ -1,5 +1,5 @@
 import { forwardRef } from "react";
-import { HiMiniXMark } from "react-icons/hi2";
+import { XIcon } from "@/components/icons";
 
 const TextAreaInput = forwardRef(
   (
@@ -40,7 +40,7 @@ const TextAreaInput = forwardRef(
               onClick={() => onChange({ target: { value: "" } })}
               className="absolute top-2 right-2 text-primary-text hover:bg-border-color rounded-sm p-0.5"
               aria-label="Clear">
-              <HiMiniXMark className="w-5 h-5" />
+              <XIcon className="w-5 h-5" />
             </button>
           )}
         </div>

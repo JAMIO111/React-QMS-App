@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import DatePicker from "./DatePicker"; // Your existing component
-import { RxCalendar } from "react-icons/rx";
+import { CalendarIcon } from "@/components/icons";
 
 const DatePickerPopout = ({
   value: currentDate,
@@ -37,7 +37,7 @@ const DatePickerPopout = ({
           open && "border-brand-primary hover:border-brand-primary"
         } flex items-center border border-border-color bg-text-input-color rounded-lg px-2 py-2 cursor-pointer hover:border-border-dark-color`}
         onClick={() => setOpen((prev) => !prev)}>
-        <RxCalendar className="w-5 h-5 text-primary-text mr-2" />
+        <CalendarIcon className="w-5 h-5 text-primary-text mr-2" />
         <span
           className={`${
             currentDate ? "text-primary-text" : "text-sm text-muted"

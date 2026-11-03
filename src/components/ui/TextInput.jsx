@@ -1,6 +1,5 @@
-import { HiMiniXMark } from "react-icons/hi2";
+import { CircleAlertIcon, XIcon } from "@/components/icons";
 import { forwardRef } from "react";
-import { MdErrorOutline } from "react-icons/md";
 
 const TextInput = forwardRef(
   (
@@ -63,7 +62,7 @@ const TextInput = forwardRef(
                 : "border-transparent"
             }`}>
           {error ? (
-            <MdErrorOutline
+            <CircleAlertIcon
               title={error.message}
               className="w-5 h-5 text-error-color mr-3 flex-shrink-0"
             />
@@ -109,7 +108,7 @@ const TextInput = forwardRef(
               onClick={() => onChange({ target: { value: undefined } })} // ⬅️ fixed from undefined
               className="absolute right-2 text-primary-text hover:bg-secondary-bg rounded-sm p-0.5"
               aria-label="Clear">
-              <HiMiniXMark className="w-5 h-5" />
+              <XIcon className="w-5 h-5" />
             </button>
           )}
         </div>

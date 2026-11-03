@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { signUp } from "../authService";
-import { IoEyeOutline, IoEyeOffOutline } from "react-icons/io5";
+import { AtSignIcon, EyeIcon, EyeOffIcon, LockIcon } from "@/components/icons";
 import { useForm } from "react-hook-form";
 import { useToast } from "@/contexts/ToastProvider";
-import { CiAt } from "react-icons/ci";
-import { CiLock } from "react-icons/ci";
 
 const SignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -69,7 +67,7 @@ const SignUp = () => {
             Email <span className="text-error-color">*</span>
           </label>
           <div className="w-full relative">
-            <CiAt className="absolute left-2 top-2 text-secondary-text w-6 h-6" />
+            <AtSignIcon className="absolute left-2 top-2 text-secondary-text w-6 h-6" />
             <input
               {...register("email", {
                 required: "Email is required",
@@ -94,7 +92,7 @@ const SignUp = () => {
             Password <span className="text-error-color">*</span>
           </label>
           <div className="w-full relative">
-            <CiLock className="absolute left-2 top-2 text-secondary-text w-6 h-6" />
+            <LockIcon className="absolute left-2 top-2 text-secondary-text w-6 h-6" />
             <input
               {...register("password", {
                 required: "Password is required",
@@ -131,9 +129,9 @@ const SignUp = () => {
             onMouseUp={() => setShowPassword(false)}
             onMouseLeave={() => setShowPassword(false)}>
             {showPassword ? (
-              <IoEyeOutline className="text-secondary-text w-5 h-5 absolute right-5 top-9.5" />
+              <EyeIcon className="text-secondary-text w-5 h-5 absolute right-5 top-9.5" />
             ) : (
-              <IoEyeOffOutline className="text-secondary-text w-5 h-5 absolute right-5 top-9.5" />
+              <EyeOffIcon className="text-secondary-text w-5 h-5 absolute right-5 top-9.5" />
             )}
           </button>
         </div>
@@ -142,7 +140,7 @@ const SignUp = () => {
             Confirm Password <span className="text-error-color">*</span>
           </label>
           <div className="w-full relative">
-            <CiLock className="absolute left-2 top-2 text-secondary-text w-6 h-6" />
+            <LockIcon className="absolute left-2 top-2 text-secondary-text w-6 h-6" />
             <input
               {...register("confirmPassword", {
                 required: "Confirm your password",
@@ -168,9 +166,9 @@ const SignUp = () => {
             onMouseUp={() => setShowConfirmPassword(false)}
             onMouseLeave={() => setShowConfirmPassword(false)}>
             {showConfirmPassword ? (
-              <IoEyeOutline className="text-secondary-text w-5 h-5 absolute right-5 top-9.5" />
+              <EyeIcon className="text-secondary-text w-5 h-5 absolute right-5 top-9.5" />
             ) : (
-              <IoEyeOffOutline className="text-secondary-text w-5 h-5 absolute right-5 top-9.5" />
+              <EyeOffIcon className="text-secondary-text w-5 h-5 absolute right-5 top-9.5" />
             )}
           </button>
         </div>

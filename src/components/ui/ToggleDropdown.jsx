@@ -1,8 +1,7 @@
 import { useRef, useState, useEffect } from "react";
-import { IoCheckmarkOutline } from "react-icons/io5";
+import { CheckIcon, Columns3Icon } from "@/components/icons";
 import { createPortal } from "react-dom";
 import CTAButton from "../CTAButton";
-import { RxColumns } from "react-icons/rx";
 
 const ToggleDropdown = ({ allColumns, visibleColumns, setVisibleColumns }) => {
   const [open, setOpen] = useState(false);
@@ -44,7 +43,7 @@ const ToggleDropdown = ({ allColumns, visibleColumns, setVisibleColumns }) => {
     <>
       <div ref={buttonRef}>
         <CTAButton
-          icon={RxColumns}
+          icon={Columns3Icon}
           type="neutral"
           title="Toggle Columns"
           callbackFn={handleToggle}
@@ -74,7 +73,7 @@ const ToggleDropdown = ({ allColumns, visibleColumns, setVisibleColumns }) => {
                   />
                   {col?.headerString || col.id}
 
-                  <IoCheckmarkOutline
+                  <CheckIcon
                     className={`${
                       visibleColumns.includes(col.id)
                         ? "opacity-100"

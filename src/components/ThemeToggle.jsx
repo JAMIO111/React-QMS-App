@@ -1,6 +1,6 @@
 import React from "react";
 import useTheme from "../hooks/useTheme";
-import { BsSun, BsMoonStars } from "react-icons/bs";
+import { MoonStarIcon, SunIcon } from "@/components/icons";
 
 const ThemeToggle = ({ menuExpanded }) => {
   const [theme, setTheme] = useTheme();
@@ -27,7 +27,7 @@ const ThemeToggle = ({ menuExpanded }) => {
       {theme === "light" && (
         <div
           className={`bg-white rounded-full ${menuExpanded ? "p-2" : "p-1.5"}`}>
-          <BsSun />
+          <SunIcon />
         </div>
       )}
       {menuExpanded && (
@@ -40,7 +40,7 @@ const ThemeToggle = ({ menuExpanded }) => {
           className={`bg-black rounded-full mt-auto ${
             menuExpanded ? "p-2" : "p-1.5"
           }`}>
-          <BsMoonStars className="fill-white" />
+          <MoonStarIcon className="fill-white" />
         </div>
       )}
     </button>

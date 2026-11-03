@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import RHFDatePicker from "./RHFDatePicker"; // Your existing component
-import { RxCalendar } from "react-icons/rx";
-import { MdErrorOutline } from "react-icons/md";
+import { CalendarIcon, CircleAlertIcon } from "@/components/icons";
 
 const RHFDatePickerPopout = ({
   value,
@@ -45,9 +44,9 @@ const RHFDatePickerPopout = ({
         } flex items-center border border-border-color bg-text-input-color rounded-lg px-2 py-2 cursor-pointer hover:border-border-dark-color`}
         onClick={() => setOpen((prev) => !prev)}>
         {!error ? (
-          <RxCalendar className="w-5 h-5 text-primary-text mr-2" />
+          <CalendarIcon className="w-5 h-5 text-primary-text mr-2" />
         ) : (
-          <MdErrorOutline
+          <CircleAlertIcon
             title={error.message}
             className="w-5 h-5 text-error-color mr-2"
           />

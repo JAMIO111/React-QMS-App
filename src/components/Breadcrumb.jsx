@@ -1,16 +1,13 @@
 import React from "react";
 import { useLocation, Link } from "react-router-dom";
-import { BiHome } from "react-icons/bi";
-import { IoFolderOpenOutline } from "react-icons/io5";
-import { PiWarning } from "react-icons/pi";
-import { BsBoxes, BsGear, BsPeople } from "react-icons/bs";
+import { BoxesIcon, FolderOpenIcon, HouseIcon, SettingsIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
 
 const iconMap = {
-  Dashboard: <BiHome />,
-  "Non-Conformance": <PiWarning />,
-  Inventory: <BsBoxes />,
-  "Human-Resources": <BsPeople />,
-  Settings: <BsGear />,
+  Dashboard: <HouseIcon />,
+  "Non-Conformance": <TriangleAlertIcon />,
+  Inventory: <BoxesIcon />,
+  "Human-Resources": <UsersIcon />,
+  Settings: <SettingsIcon />,
 };
 
 // Utility: convert "non-conformance" → "Non Conformance"
@@ -32,7 +29,7 @@ const Breadcrumb = () => {
 
   return (
     <nav className="flex items-center gap-1 text-sm text-secondary-text font-semibold">
-      <BiHome />
+      <HouseIcon />
       <Link to="/Dashboard" className="hover:underline">
         Home
       </Link>
@@ -41,7 +38,7 @@ const Breadcrumb = () => {
         return (
           <React.Fragment key={segment}>
             <span className="mx-1">/</span>
-            {iconMap[segment] || <IoFolderOpenOutline />}
+            {iconMap[segment] || <FolderOpenIcon />}
             <Link to={path} className="hover:underline capitalize">
               {formatSegment(decodeURIComponent(segment))}
             </Link>

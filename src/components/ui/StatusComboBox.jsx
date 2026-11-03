@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { HiMiniXMark } from "react-icons/hi2";
-import { IoChevronDown } from "react-icons/io5";
+import { ChevronDownIcon, XIcon } from "@/components/icons";
 
 const StatusComboBox = ({
   options = [],
@@ -151,12 +150,12 @@ const StatusComboBox = ({
                 onClick={clearSelection}
                 className="flex items-center justify-center w-5 h-5 text-primary-text hover:bg-border-color mx-1 rounded-sm"
                 aria-label="Clear">
-                <HiMiniXMark className="w-5 h-5" />
+                <XIcon className="w-5 h-5" />
               </button>
             )}
 
             <div className="hover:bg-border-color rounded-sm ml-1">
-              <IoChevronDown
+              <ChevronDownIcon
                 className={`stroke-primary-text w-5 h-5 transform transition-transform duration-300 ${
                   isOpen ? "-rotate-180" : ""
                 }`}

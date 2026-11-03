@@ -1,17 +1,15 @@
-import { RxDashboard } from "react-icons/rx";
-import { PiWarning } from "react-icons/pi";
-import { BsPeople } from "react-icons/bs";
+import { LayoutDashboardIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
     name: "Dashboard",
-    icon: RxDashboard,
+    icon: LayoutDashboardIcon,
     path: "/Dashboard",
     subMenu: [],
   },
   {
     name: "Non-Conformance",
-    icon: PiWarning,
+    icon: TriangleAlertIcon,
     permission: "ncr.read",
     path: "/Non-Conformance/Internal",
     subMenu: [
@@ -22,7 +20,7 @@ export const menuStructure = [
   },
   {
     name: "Human Resources",
-    icon: BsPeople,
+    icon: UsersIcon,
     permission: "master_data.read",
     path: "/Human-Resources",
     subMenu: [],

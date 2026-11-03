@@ -2,7 +2,7 @@ import { createPortal } from "react-dom";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNotification } from "../contexts/NotificationProvider";
-import { CgClose } from "react-icons/cg";
+import { XIcon } from "@/components/icons";
 import SlidingSelectorGeneric from "./ui/SlidingSelectorGeneric";
 import NotificationCard from "./NotificationCard";
 import { useNotifications } from "../hooks/useNotifications";
@@ -43,7 +43,7 @@ const NotificationPane = () => {
               <button
                 className="hover:bg-border-color transition-colors duration-300 rounded-md cursor-pointer p-1.5"
                 onClick={closePane}>
-                <CgClose />
+                <XIcon />
               </button>
             </div>
             <SlidingSelectorGeneric

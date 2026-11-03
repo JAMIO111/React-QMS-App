@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { IoChevronDown } from "react-icons/io5";
+import { ChevronDownIcon } from "@/components/icons";
 import {
   startOfMonth,
   endOfMonth,
@@ -90,12 +90,12 @@ const DatePicker = ({ currentDate, onChange }) => {
             <button
               onClick={() => handleMonthChange(-1)}
               className="hover:bg-border-color px-2 py-1 rounded active:scale-95">
-              <IoChevronDown className="w-5 h-5 rotate-180 active:scale-95" />
+              <ChevronDownIcon className="w-5 h-5 rotate-180 active:scale-95" />
             </button>
             <button
               onClick={() => handleMonthChange(1)}
               className="hover:bg-border-color px-2 py-1 rounded active:scale-95">
-              <IoChevronDown className="w-5 h-5" />
+              <ChevronDownIcon className="w-5 h-5" />
             </button>
           </div>
         </div>
@@ -141,12 +141,12 @@ const DatePicker = ({ currentDate, onChange }) => {
               <button
                 onClick={() => handleYearChange(-1)}
                 className="hover:bg-border-color px-2 py-1 rounded active:scale-95">
-                <IoChevronDown className="w-5 h-5 rotate-180" />
+                <ChevronDownIcon className="w-5 h-5 rotate-180" />
               </button>
               <button
                 onClick={() => handleYearChange(1)}
                 className="hover:bg-border-color px-2 py-1 rounded active:scale-95">
-                <IoChevronDown className="w-5 h-5" />
+                <ChevronDownIcon className="w-5 h-5" />
               </button>
             </div>
           </div>

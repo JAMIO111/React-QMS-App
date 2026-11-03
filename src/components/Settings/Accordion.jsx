@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { TbChevronDown } from "react-icons/tb";
+import { ChevronDownIcon } from "@/components/icons";
 
 const Accordion = ({ title, subtitle, children }) => {
   const [expanded, setExpanded] = useState(false);
@@ -14,7 +14,7 @@ const Accordion = ({ title, subtitle, children }) => {
         <button
           onClick={() => setExpanded((prev) => !prev)}
           className={`flex items-center justify-center w-8 h-8 rounded-md text-secondary-text hover:bg-border-color/50 transition-colors cursor-pointer`}>
-          <TbChevronDown
+          <ChevronDownIcon
             className={`w-7 h-7 transition-transform ${iconClass}`}
           />
         </button>

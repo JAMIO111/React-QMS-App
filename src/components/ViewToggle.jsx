@@ -1,4 +1,4 @@
-import { BsViewList, BsGrid } from "react-icons/bs";
+import { LayoutGridIcon, ListIcon } from "@/components/icons";
 
 const ViewToggle = ({ viewGrid, setViewGrid }) => {
   return (
@@ -16,12 +16,12 @@ const ViewToggle = ({ viewGrid, setViewGrid }) => {
 
       {/* Icon wrapper */}
       <div className="flex w-full justify-between items-center relative z-10 px-2">
-        <BsViewList
+        <ListIcon
           className={`h-4 w-4 ${
             viewGrid ? "fill-primary-text" : "opacity-100 fill-primary-text"
           }`}
         />
-        <BsGrid
+        <LayoutGridIcon
           className={`h-4 w-4 ${
             viewGrid ? "opacity-100 fill-primary-text" : "fill-primary-text"
           }`}

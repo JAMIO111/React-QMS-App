@@ -1,10 +1,8 @@
 // ./ui/DateRangePicker.jsx
 import { useState, useRef, useEffect } from "react";
-import { RxCalendar } from "react-icons/rx";
-import { IoChevronDown } from "react-icons/io5";
+import { CalendarIcon, ChevronDownIcon, CircleAlertIcon } from "@/components/icons";
 import CTAButton from "../CTAButton";
 import { datePresets, normalize } from "@/lib/HelperFunctions";
-import { MdErrorOutline } from "react-icons/md";
 
 const daysOfWeek = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
@@ -167,9 +165,9 @@ export default function DateRangePicker({
         className="relative flex items-center w-full cursor-pointer"
         ref={triggerRef}>
         {error ? (
-          <MdErrorOutline className="absolute left-2.5 top-2.5 text-error-color w-5 h-5" />
+          <CircleAlertIcon className="absolute left-2.5 top-2.5 text-error-color w-5 h-5" />
         ) : (
-          <RxCalendar className="absolute left-2.5 top-2.5 text-primary-text w-5 h-5" />
+          <CalendarIcon className="absolute left-2.5 top-2.5 text-primary-text w-5 h-5" />
         )}
         <input
           type="text"
@@ -200,7 +198,7 @@ export default function DateRangePicker({
               <button
                 className="hover:bg-border-color/20 rounded p-1 text-primary-text"
                 onClick={goToPreviousMonth}>
-                <IoChevronDown className="rotate-90" />
+                <ChevronDownIcon className="rotate-90" />
               </button>
               <span className="font-medium text-primary-text">
                 {new Date(year, month).toLocaleDateString("en-GB", {
@@ -211,7 +209,7 @@ export default function DateRangePicker({
               <button
                 className="hover:bg-border-color/20 rounded p-1 text-primary-text"
                 onClick={goToNextMonth}>
-                <IoChevronDown className="rotate-270" />
+                <ChevronDownIcon className="rotate-270" />
               </button>
             </div>
 

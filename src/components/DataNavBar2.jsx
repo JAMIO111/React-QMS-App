@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { SlRefresh } from "react-icons/sl";
-import { GoArrowLeft } from "react-icons/go";
+import { ArrowLeftIcon, RefreshCwIcon } from "@/components/icons";
 import LoadingBar from "./ui/LoadingBar";
 
 const DataNavBar = ({ table, totalCount, onRefresh, isLoading }) => {
@@ -42,7 +41,7 @@ const DataNavBar = ({ table, totalCount, onRefresh, isLoading }) => {
               ? "text-border-color"
               : "text-primary-text cursor-pointer active:scale-97 hover:border-border-dark-color"
           } rounded-lg border border-border-color p-1.5`}>
-          <GoArrowLeft className="h-4 w-4" />
+          <ArrowLeftIcon className="h-4 w-4" />
         </button>
 
         <span>Page</span>
@@ -70,7 +69,7 @@ const DataNavBar = ({ table, totalCount, onRefresh, isLoading }) => {
               ? "text-border-color"
               : "text-primary-text cursor-pointer active:scale-97 hover:border-border-dark-color"
           } rounded-lg border border-border-color p-1.5`}>
-          <GoArrowLeft className="rotate-180 h-4 w-4" />
+          <ArrowLeftIcon className="rotate-180 h-4 w-4" />
         </button>
 
         <select
@@ -92,7 +91,7 @@ const DataNavBar = ({ table, totalCount, onRefresh, isLoading }) => {
       <button
         onClick={handleRefresh}
         className="flex flex-row items-center gap-2 rounded-lg border border-border-color cursor-pointer py-1 px-2 hover:border-border-dark-color active:scale-97">
-        <SlRefresh
+        <RefreshCwIcon
           className={isSpinning ? "rotate-90 animate-spin" : "rotate-90"}
         />
         Refresh

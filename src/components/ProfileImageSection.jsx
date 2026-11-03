@@ -1,7 +1,6 @@
 import { useState } from "react";
 import ModalImageUploader from "./ModalImageUploader";
-import { IoAdd } from "react-icons/io5";
-import { MdOutlineEdit } from "react-icons/md";
+import { PencilIcon, PlusIcon } from "@/components/icons";
 import supabase from "../supabase-client";
 import useSignedAvatarUrl from "../hooks/useSignedAvatarURL";
 
@@ -39,9 +38,9 @@ const ProfileImageSection = ({
           aria-label={signedUrl ? "Change profile picture" : "Add profile picture"}
           className="absolute opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer transition-opacity duration-300 bottom-2 right-2 rounded-full bg-primary-bg/80">
           {signedUrl ? (
-            <MdOutlineEdit className="h-6 w-6 text-primary-text m-2" />
+            <PencilIcon className="h-6 w-6 text-primary-text m-2" />
           ) : (
-            <IoAdd className="h-7 w-7 text-primary-text m-1" />
+            <PlusIcon className="h-7 w-7 text-primary-text m-1" />
           )}
         </button>
         {signedUrl ? (

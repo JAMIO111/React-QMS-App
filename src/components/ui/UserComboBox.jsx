@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { HiMiniXMark } from "react-icons/hi2";
-import { IoChevronDown } from "react-icons/io5";
-import { HiOutlineUserCircle } from "react-icons/hi2";
+import { ChevronDownIcon, CircleUserIcon, XIcon } from "@/components/icons";
 
 const UserComboBox = ({
   users = [],
@@ -138,7 +136,7 @@ const UserComboBox = ({
                 </div>
               )
             ) : (
-              <HiOutlineUserCircle className="w-6 h-6 text-primary-text mr-2" />
+              <CircleUserIcon className="w-6 h-6 text-primary-text mr-2" />
             )}
 
             {/* Input */}
@@ -172,13 +170,13 @@ const UserComboBox = ({
                 onClick={clearSelection}
                 className="flex items-center justify-center text-primary-text hover:bg-border-color mx-1 rounded-sm p-0.5"
                 aria-label="Clear">
-                <HiMiniXMark className="w-5 h-5" />
+                <XIcon className="w-5 h-5" />
               </button>
             )}
 
             {/* Dropdown Arrow */}
             <div className="hover:bg-border-color rounded-sm ml-1">
-              <IoChevronDown
+              <ChevronDownIcon
                 className={`stroke-primary-text w-5 h-5 transform transition-transform duration-300 ${
                   isOpen ? "-rotate-180" : ""
                 }`}

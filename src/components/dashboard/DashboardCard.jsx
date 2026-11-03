@@ -1,5 +1,4 @@
-import { FiTrendingUp } from "react-icons/fi";
-import { LuTrendingDown } from "react-icons/lu";
+import { TrendingDownIcon, TrendingUpIcon } from "@/components/icons";
 import currencyCodes from "@/currencyCodes";
 import { useOrganisation } from "@/contexts/OrganisationProvider";
 
@@ -138,8 +137,8 @@ const DashboardCard = ({
                     ? "text-error-color"
                     : "text-success-color/70"
                 }`}>
-                {Math.abs(trend).toFixed(1)}%{trend > 0 && <FiTrendingUp />}
-                {trend < 0 && <LuTrendingDown />}
+                {Math.abs(trend).toFixed(1)}%{trend > 0 && <TrendingUpIcon />}
+                {trend < 0 && <TrendingDownIcon />}
               </span>
               <span
                 className={`${

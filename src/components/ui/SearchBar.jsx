@@ -1,5 +1,4 @@
-import { CgClose } from "react-icons/cg";
-import { BsSearch } from "react-icons/bs";
+import { SearchIcon, XIcon } from "@/components/icons";
 import { useGlobalSearch } from "../../contexts/SearchProvider";
 
 const SearchBar = () => {
@@ -7,7 +6,7 @@ const SearchBar = () => {
 
   return (
     <div className="flex w-1/3 p-2 relative items-center ">
-      <BsSearch className="hover:fill-primary-text absolute fill-icon-color h-4 w-4 inset-x-5" />
+      <SearchIcon className="hover:fill-primary-text absolute fill-icon-color h-4 w-4 inset-x-5" />
       <input
         id="Global Search Bar"
         name="search-bar"
@@ -23,7 +22,7 @@ const SearchBar = () => {
             setSearchTerm("");
           }}
           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-secondary-text rounded-lg p-2 hover:text-error-color cursor-pointer">
-          <CgClose />
+          <XIcon />
         </button>
       )}
     </div>

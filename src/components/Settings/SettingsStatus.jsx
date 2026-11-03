@@ -3,10 +3,7 @@ import { useStatusOptions } from "../../hooks/useCategoryOptions";
 import StatusPreviewCard from "./StatusPreviewCard";
 import TextInput from "../ui/TextInput";
 import TextArea from "../ui/TextArea";
-import { LuCircleDashed } from "react-icons/lu";
-import { CiTextAlignCenter } from "react-icons/ci";
-import { HiOutlinePencil } from "react-icons/hi2";
-import { RiSave3Fill } from "react-icons/ri";
+import { AlignCenterIcon, CircleDashedIcon, PencilIcon, SaveIcon } from "@/components/icons";
 import StatusPill from "../StatusPill";
 import ToggleButton from "../ui/ToggleButton";
 import CTAButton from "../CTAButton";
@@ -48,7 +45,7 @@ const SettingsStatus = () => {
                       onChange={(e) => console.log(e.target.value)}
                       placeholder="Enter status name"
                       label="Status Name"
-                      icon={LuCircleDashed}
+                      icon={CircleDashedIcon}
                     />
                     <div className="flex items-center gap-5">
                       <ToggleButton
@@ -64,7 +61,7 @@ const SettingsStatus = () => {
                     label="Description"
                     rows={5}
                     value={status.description}
-                    icon={CiTextAlignCenter}
+                    icon={AlignCenterIcon}
                   />
                   <div className="flex flex-col pt-6 justify-between h-full">
                     <div
@@ -86,7 +83,7 @@ const SettingsStatus = () => {
                       />
                     </div>
                     <CTAButton
-                      icon={RiSave3Fill}
+                      icon={SaveIcon}
                       iconSize="h-7 w-7"
                       type="success"
                       height="h-10"
@@ -135,7 +132,7 @@ const SettingsStatus = () => {
                     {status.active ? "Active" : "Disabled"}
                   </div>
                   <CTAButton
-                    icon={HiOutlinePencil}
+                    icon={PencilIcon}
                     iconSize="h-12 w-12"
                     height="h-10"
                     width="w-10"

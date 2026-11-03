@@ -8,7 +8,7 @@ import {
   useEffect,
 } from "react";
 import { createPortal } from "react-dom";
-import { CgClose } from "react-icons/cg";
+import { XIcon } from "@/components/icons";
 import { motion, useDragControls } from "framer-motion";
 
 const ModalContext = createContext();
@@ -119,7 +119,7 @@ export const ModalProvider = ({ children }) => {
                   onClick={closeModal}
                   onPointerDown={(e) => e.stopPropagation()}
                   className="group flex justify-center items-center p-1.5 cursor-pointer transition-colors duration-300 hover:text-error-color hover:bg-border-color/50 rounded-lg">
-                  <CgClose className="h-5 w-5 transition-colors duration-300 group-hover:text-error-color text-primary-text" />
+                  <XIcon className="h-5 w-5 transition-colors duration-300 group-hover:text-error-color text-primary-text" />
                 </button>
               </div>
 

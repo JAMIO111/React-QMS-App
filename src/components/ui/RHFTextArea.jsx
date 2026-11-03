@@ -1,6 +1,5 @@
 import { forwardRef } from "react";
-import { HiMiniXMark } from "react-icons/hi2";
-import { MdErrorOutline } from "react-icons/md";
+import { CircleAlertIcon, XIcon } from "@/components/icons";
 
 const RHFTextAreaInput = forwardRef(
   (
@@ -28,7 +27,7 @@ const RHFTextAreaInput = forwardRef(
           } relative flex rounded-lg px-2 py-2 bg-text-input-color border-transparent
          focus-within:border-brand-primary focus-within:hover:border-brand-primary`}>
           {error ? (
-            <MdErrorOutline
+            <CircleAlertIcon
               title={error.message}
               className="w-5 h-5 text-error-color mr-2 flex-shrink-0"
             />
@@ -52,7 +51,7 @@ const RHFTextAreaInput = forwardRef(
               onClick={() => onChange({ target: { value: "" } })}
               className="absolute top-2 right-2 text-primary-text hover:bg-border-color rounded-sm p-0.5"
               aria-label="Clear">
-              <HiMiniXMark className="w-5 h-5" />
+              <XIcon className="w-5 h-5" />
             </button>
           )}
         </div>

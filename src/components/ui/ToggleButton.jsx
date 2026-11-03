@@ -1,5 +1,5 @@
 import { forwardRef } from "react";
-import { MdErrorOutline } from "react-icons/md";
+import { CircleAlertIcon } from "@/components/icons";
 
 const ToggleButton = forwardRef(
   (
@@ -26,7 +26,7 @@ const ToggleButton = forwardRef(
             }
             bg-text-input-color hover:shadow-m`}>
           {error ? (
-            <MdErrorOutline
+            <CircleAlertIcon
               title={error.message}
               className="w-5 h-5 text-error-color mr-2 flex-shrink-0"
             />

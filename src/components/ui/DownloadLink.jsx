@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { generateSignedUrl } from "../../api/supabaseApi";
-import { LuDownload } from "react-icons/lu";
+import { DownloadIcon } from "@/components/icons";
 
 function DownloadLink({ bucket, file }) {
   const [signedUrl, setSignedUrl] = useState(null);
@@ -47,7 +47,7 @@ function DownloadLink({ bucket, file }) {
       rel="noopener noreferrer"
       className="hover:bg-secondary-text/5 p-1.5 rounded-lg cursor-pointer"
       title="Download">
-      <LuDownload className="w-5 h-5 text-primary-text" />
+      <DownloadIcon className="w-5 h-5 text-primary-text" />
     </a>
   );
 }

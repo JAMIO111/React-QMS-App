@@ -1,5 +1,4 @@
-import { BsBell } from "react-icons/bs";
-import { GoMail } from "react-icons/go";
+import { BellIcon, MailIcon } from "@/components/icons";
 import HeaderIcon from "./HeaderIcon";
 import SearchBar from "./ui/SearchBar";
 import { useUser } from "../contexts/UserProvider";
@@ -28,11 +27,11 @@ const Header = () => {
       <SearchBar />
       <div className="flex justify-between items-center py-2 gap-3">
         <OrganisationSwitcher />
-        <HeaderIcon icon={GoMail} top={7} right={3} />
+        <HeaderIcon icon={MailIcon} top={7} right={3} />
         <button onClick={() => openPane()}>
           <HeaderIcon
             showBadge={newNotifications > 0}
-            icon={BsBell}
+            icon={BellIcon}
             top={8}
             right={8}
           />

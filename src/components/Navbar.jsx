@@ -1,7 +1,6 @@
 import { useState } from "react";
 import Logo from "../assets/dryden-logo-square.png";
-import { GoSidebarExpand } from "react-icons/go";
-import { BsGear, BsQuestionCircle } from "react-icons/bs";
+import { CircleHelpIcon, PanelLeftOpenIcon, SettingsIcon } from "@/components/icons";
 import NavItem from "./NavItem";
 import Logout from "./Logout";
 import { menuStructure } from "../MenuStructure";
@@ -59,7 +58,7 @@ const Navbar = () => {
             title={isMenuExpanded ? "Hide Menu" : "Expand Menu"}
             onClick={toggleMenu}
             className="cursor-pointer">
-            <GoSidebarExpand
+            <PanelLeftOpenIcon
               className={`h-6 w-6 fill-icon-color hover:fill-primary-text ${
                 !isMenuExpanded && "rotate-180"
               }`}
@@ -106,14 +105,14 @@ const Navbar = () => {
           <ul className="gap-2 flex my-2 flex-col">
             <NavItem
               label="Settings"
-              icon={BsGear}
+              icon={SettingsIcon}
               isExpanded={isMenuExpanded}
               path="/Settings"
               onClick={() => {}}
             />
             <NavItem
               label="Help Centre"
-              icon={BsQuestionCircle}
+              icon={CircleHelpIcon}
               isExpanded={isMenuExpanded}
               path="/Help"
             />

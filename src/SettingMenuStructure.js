@@ -1,53 +1,48 @@
-import { GoDatabase } from "react-icons/go";
-import { MdOutlineAdminPanelSettings } from "react-icons/md";
-import { BsBell } from "react-icons/bs";
-import { MdOutlineManageAccounts } from "react-icons/md";
-import { TbDeviceDesktopCog } from "react-icons/tb";
-import { BsGear } from "react-icons/bs";
+import { BellIcon, DatabaseIcon, MonitorCogIcon, SettingsIcon, ShieldUserIcon, UserCogIcon } from "@/components/icons";
 
 const SettingMenuStructure = [
   {
     name: "Organisation",
     path: "Organisation",
-    icon: BsGear,
+    icon: SettingsIcon,
     subMenu: [],
   },
   {
     name: "Users & permissions",
     path: "Users",
-    icon: MdOutlineAdminPanelSettings,
+    icon: ShieldUserIcon,
     permission: "members.read",
     subMenu: [],
   },
   {
     name: "Account",
     path: "Account",
-    icon: MdOutlineManageAccounts,
+    icon: UserCogIcon,
     subMenu: [],
   },
   {
     name: "System Preferences",
     path: "System-Preferences",
-    icon: TbDeviceDesktopCog,
+    icon: MonitorCogIcon,
     subMenu: [],
   },
   {
     name: "Data Management",
     path: "Data-Management",
-    icon: GoDatabase,
+    icon: DatabaseIcon,
     permission: "lookups.manage",
     subMenu: [],
   },
   {
     name: "Notifications",
     path: "Notifications",
-    icon: BsBell,
+    icon: BellIcon,
     subMenu: [],
   },
   {
     name: "Admin",
     path: "Admin",
-    icon: MdOutlineAdminPanelSettings,
+    icon: ShieldUserIcon,
     subMenu: [],
   },
 ];

@@ -2,7 +2,7 @@ import CTAButton from "../CTAButton";
 import ProfileImageSection from "../ProfileImageSection";
 import TextInput from "../ui/TextInput";
 import { useUser } from "@/contexts/UserProvider";
-import { PiPassword } from "react-icons/pi";
+import { RectangleEllipsisIcon } from "@/components/icons";
 
 const SettingsAccount = () => {
   const { profile, refreshProfile } = useUser();
@@ -36,22 +36,22 @@ const SettingsAccount = () => {
         <div className="flex flex-col bg-secondary-bg rounded-3xl border border-border-color p-4">
           <p className="text-primary-text text-xl mb-5">Personal Information</p>
           <TextInput
-            icon={PiPassword}
+            icon={RectangleEllipsisIcon}
             value={profile?.first_name}
             placeholder="First Name..."
           />
           <TextInput
-            icon={PiPassword}
+            icon={RectangleEllipsisIcon}
             value={profile?.surname}
             placeholder="Surname..."
           />
           <TextInput
-            icon={PiPassword}
+            icon={RectangleEllipsisIcon}
             value={profile?.job_title}
             placeholder="Job Title..."
           />
           <TextInput
-            icon={PiPassword}
+            icon={RectangleEllipsisIcon}
             value={profile?.email}
             placeholder="Email..."
           />
@@ -66,9 +66,9 @@ const SettingsAccount = () => {
             You can change your password here. Please enter your current
             password and then your new password.
           </p>
-          <TextInput icon={PiPassword} placeholder="Current Password..." />
-          <TextInput icon={PiPassword} placeholder="New Password..." />
-          <TextInput icon={PiPassword} placeholder="Confirm New Password..." />
+          <TextInput icon={RectangleEllipsisIcon} placeholder="Current Password..." />
+          <TextInput icon={RectangleEllipsisIcon} placeholder="New Password..." />
+          <TextInput icon={RectangleEllipsisIcon} placeholder="Confirm New Password..." />
           <div className="h-10 flex flex-row justify-between items-center">
             <CTAButton type="main" text="Change Password" />
           </div>

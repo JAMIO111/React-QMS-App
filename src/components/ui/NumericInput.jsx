@@ -1,5 +1,5 @@
 import React, { forwardRef } from "react";
-import { FaPlus, FaMinus } from "react-icons/fa6";
+import { MinusIcon, PlusIcon } from "@/components/icons";
 
 const NumericInput = forwardRef(
   ({ value, onChange, min = -Infinity, max = Infinity, ...rest }, ref) => {
@@ -47,7 +47,7 @@ const NumericInput = forwardRef(
           disabled={value !== "" && value <= min}
           className="shadow-s group hover:bg-brand-primary/70 p-2 bg-text-input-color cursor-pointer rounded-full disabled:opacity-40 disabled:cursor-not-allowed active:scale-90 active:transition-transform active:duration-100"
           onClick={decrement}>
-          <FaMinus className="group-hover:text-primary-bg w-6 h-6 text-secondary-text" />
+          <MinusIcon className="group-hover:text-primary-bg w-6 h-6 text-secondary-text" />
         </button>
 
         <input
@@ -66,7 +66,7 @@ const NumericInput = forwardRef(
           disabled={value !== "" && value >= max}
           className="shadow-s group hover:bg-brand-primary/70 p-2 bg-text-input-color cursor-pointer rounded-full disabled:opacity-40 disabled:cursor-not-allowed active:scale-90 active:transition-transform active:duration-100"
           onClick={increment}>
-          <FaPlus className="group-hover:text-primary-bg w-6 h-6 text-secondary-text" />
+          <PlusIcon className="group-hover:text-primary-bg w-6 h-6 text-secondary-text" />
         </button>
       </div>
     );

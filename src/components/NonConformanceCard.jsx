@@ -1,11 +1,7 @@
 import React, { useRef } from "react";
 import StatusPill from "./StatusPill";
 import CTAButton from "./CTAButton";
-import { BsBox2 } from "react-icons/bs";
-import { HiOutlineEllipsisVertical } from "react-icons/hi2";
-import { IoCalendarOutline } from "react-icons/io5";
-import { PiStack } from "react-icons/pi";
-import { BsQrCode } from "react-icons/bs";
+import { CalendarIcon, EllipsisVerticalIcon, LayersIcon, PackageIcon, QrCodeIcon } from "@/components/icons";
 import { format } from "date-fns";
 import { useStatusOptions } from "@/hooks/useCategoryOptions";
 
@@ -75,7 +71,7 @@ const NonConformanceCard = ({
             {item.customer_display_name}
           </span>
           <div className="flex flex-row justify-end items-center gap-2">
-            <IoCalendarOutline className="stroke-primary-text fill-primary-text h-4 w-4" />
+            <CalendarIcon className="stroke-primary-text fill-primary-text h-4 w-4" />
             <span className="text-secondary-text text-right">
               {formattedDate}
             </span>
@@ -103,11 +99,11 @@ const NonConformanceCard = ({
             </div>
           )}
           <div className="flex flex-row justify-between items-center whitespace-nowrap gap-3 text-primary-text py-1.5 px-3 rounded-lg border border-border-color bg-secondary-bg">
-            <BsQrCode className="stroke-primary-text fill-primary-text h-4 w-4" />
+            <QrCodeIcon className="stroke-primary-text fill-primary-text h-4 w-4" />
             {item.part_number}
           </div>
           <div className="flex flex-row justify-between items-center whitespace-nowrap gap-2 text-primary-text py-1.5 px-3 rounded-lg border border-border-color bg-secondary-bg">
-            <PiStack className="stroke-primary-text fill-primary-text h-5 w-5" />
+            <LayersIcon className="stroke-primary-text fill-primary-text h-5 w-5" />
             x {item.quantity_defective}
           </div>
         </div>
@@ -118,7 +114,7 @@ const NonConformanceCard = ({
           <CTAButton
             text="Actions"
             type="main"
-            icon={HiOutlineEllipsisVertical}
+            icon={EllipsisVerticalIcon}
             callbackFn={handleActionBtnClick}
           />
         </div>

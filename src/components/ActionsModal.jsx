@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { FiTrash2 } from "react-icons/fi";
+import { Trash2Icon } from "@/components/icons";
 import ActionsModalItem from "./ActionsModalItem";
 import { useQueryClient } from "@tanstack/react-query";
 import { deleteRow } from "../api/supabaseApi";
@@ -52,7 +52,7 @@ const ActionsModal = ({ item, position }) => {
       <div className="w-full h-1/4 flex p-2 justify-center items-center">
         <ActionsModalItem
           label="Delete"
-          icon={FiTrash2}
+          icon={Trash2Icon}
           color="red"
           item={item}
           callback={handleDelete}

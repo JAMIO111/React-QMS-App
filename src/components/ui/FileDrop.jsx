@@ -1,11 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import { IoCloudUploadOutline } from "react-icons/io5";
-import { CgClose } from "react-icons/cg";
+import { CloudUploadIcon, SaveIcon, Undo2Icon, XIcon } from "@/components/icons";
 import { uploadFileToSupabase, saveFileMetadata } from "@/api/supabaseApi";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import CTAButton from "../CTAButton";
-import { TfiSave } from "react-icons/tfi";
-import { IoIosUndo } from "react-icons/io";
 import { useToast } from "@/contexts/ToastProvider";
 import supabase from "../../supabase-client";
 import DownloadLink from "./DownloadLink";
@@ -377,7 +374,7 @@ const FileDrop = ({ ncm_id }) => {
         onDrop={handleDrop}
         onClick={() => fileInputRef.current.click()}
         className="flex flex-col gap-5 py-10 items-center justify-center h-full w-full bg-secondary-bg border-2 border-dashed border-border-dark-color rounded-xl p-4 cursor-pointer hover:bg-primary-text/5 transition-colors">
-        <IoCloudUploadOutline className="w-18 h-18 text-primary-text" />
+        <CloudUploadIcon className="w-18 h-18 text-primary-text" />
         <div className="flex flex-col items-center gap-2">
           <span className="text-primary-text text-lg">
             Drag and drop files here or click to select
@@ -401,13 +398,13 @@ const FileDrop = ({ ncm_id }) => {
                 width="w-36"
                 text="Undo Delete"
                 type="neutral"
-                icon={IoIosUndo}
+                icon={Undo2Icon}
                 callbackFn={undoAllDeletions}
               />
             )}
             {(newFiles.length > 0 || deletedFiles.length > 0) && (
               <CTAButton
-                icon={TfiSave}
+                icon={SaveIcon}
                 iconSize="h-4 w-4"
                 width="w-40"
                 text={getSaveButtonText()}
@@ -527,7 +524,7 @@ const FileDrop = ({ ncm_id }) => {
                                   );
                                 }
                               }}>
-                              <CgClose className="w-5 h-5" />
+                              <XIcon className="w-5 h-5" />
                             </button>
                           </div>
                         </td>

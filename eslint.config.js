@@ -35,6 +35,18 @@ export default [
         'warn',
         { allowConstantExport: true },
       ],
+      // Icons: Lucide only, through src/components/icons.jsx (shared defaults).
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [{ name: 'lucide-react', message: 'Import icons from "@/components/icons" (add new ones there).' }],
+          patterns: [{ group: ['react-icons', 'react-icons/*'], message: 'Lucide only: import icons from "@/components/icons".' }],
+        },
+      ],
     },
+  },
+  {
+    files: ['src/components/icons.jsx'],
+    rules: { 'no-restricted-imports': 'off', 'react-refresh/only-export-components': 'off' },
   },
 ]

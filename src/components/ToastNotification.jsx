@@ -1,35 +1,31 @@
 import { motion } from "framer-motion";
 import clsx from "clsx";
-import { BsInfoCircleFill } from "react-icons/bs";
-import { HiOutlineExclamationTriangle } from "react-icons/hi2";
-import { MdError } from "react-icons/md";
-import { IoCheckmarkCircle } from "react-icons/io5";
-import { CgClose } from "react-icons/cg";
+import { CircleAlertIcon, CircleCheckIcon, InfoIcon, TriangleAlertIcon, XIcon } from "@/components/icons";
 
 const ToastNotification = ({ type, title, message, onClose }) => {
   const options = {
     error: {
-      icon: <MdError className="text-red-500 h-8 w-8" />,
+      icon: <CircleAlertIcon className="text-red-500 h-8 w-8" />,
       color: "text-red-500 bg-red-500/20",
       buttonColor: "active:border-red-500",
       iconWrapper: "bg-red-500/20 p-0.5",
     },
     warning: {
       icon: (
-        <HiOutlineExclamationTriangle className="text-yellow-500 h-8 w-8" />
+        <TriangleAlertIcon className="text-yellow-500 h-8 w-8" />
       ),
       color: "text-yellow-500 bg-yellow-500/20",
       buttonColor: "active:border-yellow-500",
       iconWrapper: "bg-green-500/20 p-0.5",
     },
     info: {
-      icon: <BsInfoCircleFill className="text-blue-500 h-7 w-7" />,
+      icon: <InfoIcon className="text-blue-500 h-7 w-7" />,
       color: "text-blue-500 bg-blue-500/20",
       buttonColor: "active:border-blue-500",
       iconWrapper: "bg-blue-500/20 p-1",
     },
     success: {
-      icon: <IoCheckmarkCircle className="text-green-500 h-8 w-8" />,
+      icon: <CircleCheckIcon className="text-green-500 h-8 w-8" />,
       color: "text-green-500",
       buttonColor: "active:border-green-500",
       iconWrapper: "bg-green-500/20 p-0.5",
@@ -95,7 +91,7 @@ const ToastNotification = ({ type, title, message, onClose }) => {
             onClick={onClose}
             className={clsx(baseButtonClass, currentOption.buttonColor)}
             aria-label="Close notification">
-            <CgClose className="h-5 w-5" />
+            <XIcon className="h-5 w-5" />
           </button>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CgClose } from "react-icons/cg";
+import { XIcon } from "@/components/icons";
 import { useNCMFilters } from "../hooks/useNCMFilters";
 import { useSearchParams } from "react-router-dom";
 import CTAButton from "./CTAButton";
@@ -75,7 +75,7 @@ const FilterPane = ({ onClose }) => {
         <button
           className="hover:bg-primary-bg rounded-md cursor-pointer hover:text-error-color p-1"
           onClick={onClose}>
-          <CgClose />
+          <XIcon />
         </button>
       </div>
       <div className="flex flex-col justify-start items-center">

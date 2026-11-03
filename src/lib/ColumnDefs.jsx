@@ -1,22 +1,6 @@
-import { BsSortNumericUp } from "react-icons/bs";
-import { BsSortUp } from "react-icons/bs";
-import { BsSortDownAlt } from "react-icons/bs";
+import { AlignCenterIcon, ArrowDown10Icon, ArrowDownAZIcon, ArrowDownWideNarrowIcon, ArrowUp01Icon, ArrowUp10Icon, ArrowUpNarrowWideIcon, ArrowUpZAIcon, BoxIcon, CalendarIcon, CircleDashedIcon, LayersIcon, PoundSterlingIcon, QrCodeIcon, TagIcon, UsersIcon } from "@/components/icons";
 import StatusPill from "../components/StatusPill";
 import { format } from "date-fns";
-import {
-  BsSortNumericUpAlt,
-  BsSortNumericDownAlt,
-  BsSortAlphaDown,
-  BsSortAlphaUpAlt,
-  BsBox,
-  BsQrCode,
-  BsCurrencyPound,
-} from "react-icons/bs";
-import { IoCalendarOutline, IoPeopleOutline } from "react-icons/io5";
-import { PiStack } from "react-icons/pi";
-import { AiOutlineTag } from "react-icons/ai";
-import { CiTextAlignCenter } from "react-icons/ci";
-import { LuCircleDashed } from "react-icons/lu";
 
 export const getColumnsForNcType = (ncType = "Internal") => {
   const baseColumns = [
@@ -36,7 +20,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
       headerString: "Date",
       header: (
         <div className="table-header">
-          <IoCalendarOutline className="shrink-0" /> Date
+          <CalendarIcon className="shrink-0" /> Date
         </div>
       ),
       cell: (info) => (
@@ -54,7 +38,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
       headerString: "Part No.",
       header: (
         <div className="table-header">
-          <BsQrCode className="shrink-0" /> Part No.
+          <QrCodeIcon className="shrink-0" /> Part No.
         </div>
       ),
       cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
@@ -68,7 +52,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
       headerString: "Quantity",
       header: (
         <div className="table-header-number">
-          <PiStack className="shrink-0" /> Qty
+          <LayersIcon className="shrink-0" /> Qty
         </div>
       ),
       cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
@@ -85,7 +69,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
       headerString: "Failure Mode",
       header: (
         <div className="table-header">
-          <AiOutlineTag className="shrink-0" /> Failure Mode
+          <TagIcon className="shrink-0" /> Failure Mode
         </div>
       ),
       cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
@@ -99,7 +83,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
       headerString: "Sub Failure Mode",
       header: (
         <div className="table-header">
-          <AiOutlineTag className="shrink-0" /> Sub Failure Mode
+          <TagIcon className="shrink-0" /> Sub Failure Mode
         </div>
       ),
       cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
@@ -113,7 +97,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
       headerString: "Status",
       header: (
         <div className="table-header-number">
-          <LuCircleDashed className="shrink-0" /> Status
+          <CircleDashedIcon className="shrink-0" /> Status
         </div>
       ),
       cell: (info) => (
@@ -134,7 +118,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
       headerString: "Description",
       header: (
         <div className="table-header">
-          <CiTextAlignCenter className="shrink-0" /> Description
+          <AlignCenterIcon className="shrink-0" /> Description
         </div>
       ),
       cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
@@ -152,7 +136,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
       headerString: "Total Cost",
       header: (
         <div className="table-header-number">
-          <BsCurrencyPound className="shrink-0" /> Total Cost
+          <PoundSterlingIcon className="shrink-0" /> Total Cost
         </div>
       ),
       cell: (info) => {
@@ -183,7 +167,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
         headerString: "Customer",
         header: (
           <div className="table-header">
-            <IoPeopleOutline className="shrink-0" /> Customer
+            <UsersIcon className="shrink-0" /> Customer
           </div>
         ),
         cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
@@ -197,7 +181,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
         headerString: "Work Order",
         header: (
           <div className="table-header">
-            <BsBox className="shrink-0" /> Work Order
+            <BoxIcon className="shrink-0" /> Work Order
           </div>
         ),
         cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
@@ -213,7 +197,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
         headerString: "Claim Ref.",
         header: (
           <div className="table-header">
-            <IoPeopleOutline className="shrink-0" /> Claim Ref.
+            <UsersIcon className="shrink-0" /> Claim Ref.
           </div>
         ),
         cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
@@ -227,7 +211,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
         headerString: "Customer",
         header: (
           <div className="table-header">
-            <IoPeopleOutline className="shrink-0" /> Customer
+            <UsersIcon className="shrink-0" /> Customer
           </div>
         ),
         cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
@@ -241,7 +225,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
         headerString: "Work Order",
         header: (
           <div className="table-header">
-            <BsBox className="shrink-0" /> Work Order
+            <BoxIcon className="shrink-0" /> Work Order
           </div>
         ),
         cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
@@ -257,7 +241,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
         headerString: "Supplier",
         header: (
           <div className="table-header">
-            <IoPeopleOutline className="shrink-0" /> Supplier
+            <UsersIcon className="shrink-0" /> Supplier
           </div>
         ),
         cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
@@ -271,7 +255,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
         headerString: "Purchase Order",
         header: (
           <div className="table-header">
-            <BsBox className="shrink-0" /> Purchase Order
+            <BoxIcon className="shrink-0" /> Purchase Order
           </div>
         ),
         cell: (info) => <div className="table-row-item">{info.getValue()}</div>,

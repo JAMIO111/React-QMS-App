@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
-import { IoClose, IoCloudUpload, IoTrash } from "react-icons/io5";
+import { BanIcon, CloudUploadIcon, Trash2Icon, UploadIcon, XIcon } from "@/components/icons";
 import supabase from "../supabase-client";
 import CTAButton from "./CTAButton";
-import { TbCancel } from "react-icons/tb";
-import { FiUpload } from "react-icons/fi";
 
 /**
  * Uploads or removes a single image in a (private) storage bucket.
@@ -105,7 +103,7 @@ const ModalImageUploader = ({
           onClick={handleClose}
           disabled={loading}
           className="absolute top-3 right-3 text-secondary-text hover:bg-border-color rounded-lg p-1 cursor-pointer transition duration-300">
-          <IoClose size={22} />
+          <XIcon size={22} />
         </button>
 
         <h2 className="text-lg font-semibold mb-4 text-primary-text">
@@ -123,12 +121,12 @@ const ModalImageUploader = ({
               onClick={handleRemove}
               disabled={loading}
               className="absolute top-2 right-2 bg-tertiary-bg/80 p-2 rounded-lg cursor-pointer hover:bg-tertiary-bg transition">
-              <IoTrash className="text-red-500" size={20} />
+              <Trash2Icon className="text-red-500" size={20} />
             </button>
           </div>
         ) : (
           <label className="flex flex-col items-center justify-center border-2 border-dashed border-border-color rounded-xl h-64 cursor-pointer hover:bg-tertiary-bg transition">
-            <IoCloudUpload size={40} className="text-gray-400 mb-2" />
+            <CloudUploadIcon size={40} className="text-gray-400 mb-2" />
             <p className="text-gray-500 text-sm">Click to upload</p>
             <input
               type="file"
@@ -145,14 +143,14 @@ const ModalImageUploader = ({
             callbackFn={handleClose}
             text="Cancel"
             disabled={loading}
-            icon={TbCancel}
+            icon={BanIcon}
           />
           <CTAButton
             type="success"
             callbackFn={handleUpload}
             disabled={!file || loading}
             text={loading ? "Uploading..." : "Upload"}
-            icon={FiUpload}
+            icon={UploadIcon}
           />
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { CgClose } from "react-icons/cg";
+import { XIcon } from "@/components/icons";
 import CTAButton from "./CTAButton";
 
 const SortPane = ({
@@ -15,7 +15,7 @@ const SortPane = ({
         <button
           className="cursor-pointer hover:bg-primary-bg rounded-md hover:text-error-color p-1"
           onClick={onClose}>
-          <CgClose />
+          <XIcon />
         </button>
       </div>
       <div className="flex flex-col justify-start items-center">

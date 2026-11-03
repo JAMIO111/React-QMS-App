@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-table";
 import Table from "./Table";
 import DataNavBar2 from "./DataNavBar2";
-import { IoEllipsisHorizontal } from "react-icons/io5";
+import { EllipsisIcon } from "@/components/icons";
 import { useSearchParams } from "react-router-dom";
 
 const TableWrapper = ({
@@ -134,7 +134,7 @@ const TableWrapper = ({
           <button
             onClick={(e) => handleEllipsisClick(row.original)(e)}
             className="p-1 text-secondary-text hover:text-brand-primary hover:cursor-pointer">
-            <IoEllipsisHorizontal size={18} />
+            <EllipsisIcon size={18} />
           </button>
         ),
         size: 50,

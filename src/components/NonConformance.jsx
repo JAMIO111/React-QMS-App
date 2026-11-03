@@ -1,10 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSearchParams, useParams } from "react-router-dom";
-import { BsSliders, BsCurrencyPound } from "react-icons/bs";
-import { PiExportLight } from "react-icons/pi";
-import { HiArrowsUpDown } from "react-icons/hi2";
-import { IoAddOutline } from "react-icons/io5";
+import { ArrowUpDownIcon, PlusIcon, PoundSterlingIcon, ShareIcon, SlidersHorizontalIcon } from "@/components/icons";
 import { useNCM } from "../hooks/useNCM";
 import { useNCMFilters } from "../hooks/useNCMFilters";
 import { useGlobalSearch } from "../contexts/SearchProvider";
@@ -215,7 +212,7 @@ const NonConformance = () => {
                 text="Export CSV"
                 type="success"
                 title="Export to CSV file"
-                icon={PiExportLight}
+                icon={ShareIcon}
                 iconSize="h-6 w-6"
               />
             )}
@@ -233,14 +230,14 @@ const NonConformance = () => {
               }}
               text={"New NC"}
               type="main"
-              icon={IoAddOutline}
+              icon={PlusIcon}
               iconSize="h-6 w-6"
               title="Create a new non-conformance record"
             />
             <IconButton
               title="Cost"
               callback={() => setCostData((prev) => !prev)}
-              icon={<BsCurrencyPound className="h-5 w-5" />}
+              icon={<PoundSterlingIcon className="h-5 w-5" />}
               selected={costData}
               color="green"
             />
@@ -249,7 +246,7 @@ const NonConformance = () => {
               color="blue"
               title="Sort"
               callback={handleActiveModalType}
-              icon={<HiArrowsUpDown className="h-5 w-5" />}
+              icon={<ArrowUpDownIcon className="h-5 w-5" />}
             />
             <IconButton
               count={filterCount}
@@ -257,7 +254,7 @@ const NonConformance = () => {
               color="blue"
               title="Filter"
               callback={handleActiveModalType}
-              icon={<BsSliders className="h-4.5 w-4.5" />}
+              icon={<SlidersHorizontalIcon className="h-4.5 w-4.5" />}
             />
             {activeModalType === "Filter" && (
               <Suspense fallback={null}>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import SettingMenuStructure from "../../SettingMenuStructure";
 import { useCanSee } from "../../hooks/useQmsApi";
-import { GoDatabase } from "react-icons/go";
+import { DatabaseIcon } from "@/components/icons";
 
 const Settings = () => {
   const { pathname } = useLocation();
@@ -40,7 +40,7 @@ const Settings = () => {
                         } h-6 w-6 `}
                       />
                     ) : (
-                      <GoDatabase
+                      <DatabaseIcon
                         className={`${
                           match ? "text-white" : "text-primary-text"
                         } h-6 w-6 `}

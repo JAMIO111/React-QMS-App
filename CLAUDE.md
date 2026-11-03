@@ -52,6 +52,9 @@ Summary of the brief:
   `ThemeColourSync`). `src/index.css` gives each mode three shades (`theme-light`, `theme`,
   `theme-dark` utilities) and derives `brand-*`/`cta-*` from them — use those tokens, not fixed
   purple/violet classes, for accent colour.
+- Icons: **Lucide only**, imported from `@/components/icons` (`<Name>Icon`, default size 1em so
+  icons follow text size). Add new icons there; ESLint rejects `react-icons` and direct
+  `lucide-react` imports elsewhere.
 - `.env` is untracked; copy `.env.example`. Build passes; lint has 0 errors (warnings remain).
 
 ## Agreed plan

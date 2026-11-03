@@ -1,5 +1,5 @@
 import { NavLink, useMatch } from "react-router-dom";
-import { HiOutlineChevronDown } from "react-icons/hi";
+import { ChevronDownIcon } from "@/components/icons";
 
 const NavItem = ({
   label,
@@ -34,7 +34,7 @@ const NavItem = ({
         {Icon && <Icon className="h-6 w-6" />}
         {isExpanded && <span className="text-sm flex-1">{label}</span>}
         {isExpanded && hasSubMenu && (
-          <HiOutlineChevronDown
+          <ChevronDownIcon
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();

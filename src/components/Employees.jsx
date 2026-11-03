@@ -5,8 +5,7 @@ import { useOrganisation } from "../contexts/OrganisationProvider";
 import { useQuery } from "@tanstack/react-query";
 import { useGlobalSearch } from "../contexts/SearchProvider";
 import CTAButton from "./CTAButton";
-import { IoAddOutline } from "react-icons/io5";
-import { HiOutlinePencil } from "react-icons/hi2";
+import { PencilIcon, PlusIcon } from "@/components/icons";
 
 const Employees = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -45,11 +44,11 @@ const Employees = () => {
           {selectedEmployee && (
             <CTAButton
               text={"Edit Details"}
-              icon={HiOutlinePencil}
+              icon={PencilIcon}
               type={"neutral"}
             />
           )}
-          <CTAButton text={"Add Employee"} icon={IoAddOutline} type={"main"} />
+          <CTAButton text={"Add Employee"} icon={PlusIcon} type={"main"} />
         </div>
       </div>
       <div

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { flexRender } from "@tanstack/react-table";
 import { useNavigate } from "react-router-dom";
-import { PiArrowsDownUpLight } from "react-icons/pi";
+import { ArrowDownUpIcon } from "@/components/icons";
 import { useParams } from "react-router-dom";
 
 const Table = ({
@@ -123,7 +123,7 @@ const Table = ({
                                 column.columnDef.sortIconDesc}
                               {!column.getIsSorted() && (
                                 <span className="opacity-0 group-hover:opacity-100">
-                                  <PiArrowsDownUpLight className="h-5 w-5" />
+                                  <ArrowDownUpIcon className="h-5 w-5" />
                                 </span>
                               )}
                             </span>

@@ -71,7 +71,7 @@ const TextInput = forwardRef(
       <div className="flex flex-col gap-1 h-17 min-w-0">
         {label && (
           <div className="flex items-center gap-1">
-            <label className="block font-medium text-primary-text">
+            <label className="block text-sm font-medium text-secondary-text">
               {label}
             </label>
             {required && (
@@ -83,12 +83,17 @@ const TextInput = forwardRef(
         )}
         <div
           className={`group flex border flex-row relative items-center rounded-lg pl-2 pr-10 py-2 bg-text-input-color
-             focus-within:border-brand-primary focus-within:hover:border-brand-primary min-w-0
-            ${
-              error
-                ? "border border-error-color hover:border-error-color/70 hover:focus-within:border-error-color focus-within:border-error-color focus-within:ring-3 focus-within:ring-error-color/20"
-                : "border-transparent"
-            }`}>
+  border-border-color
+  hover:border-border-dark-color
+  focus-within:border-brand-primary
+  focus-within:ring-3 focus-within:ring-brand-primary/20
+  transition-all duration-150
+  min-w-0
+  ${
+    error
+      ? "border-error-color hover:border-error-color focus-within:border-error-color focus-within:ring-error-color/20"
+      : ""
+  }`}>
           {error ? (
             <CircleAlertIcon
               title={error.message}

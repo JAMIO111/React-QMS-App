@@ -83,7 +83,13 @@ import {
 } from "lucide-react";
 
 const withDefaults = (Icon) => {
-  const Wrapped = (props) => <Icon size="1em" aria-hidden={props["aria-label"] ? undefined : true} {...props} />;
+  const Wrapped = (props) => (
+    <Icon
+      size="1em"
+      aria-hidden={props["aria-label"] ? undefined : true}
+      {...props}
+    />
+  );
   Wrapped.displayName = Icon.displayName;
   return Wrapped;
 };

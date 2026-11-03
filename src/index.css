@@ -15,6 +15,8 @@
   --color-bg-light: oklch(var(--bg-light));
   --color-primary-text: rgba(var(--primary-text));
   --color-secondary-text: rgba(var(--secondary-text));
+  --color-tertiary-text: rgba(var(--tertiary-text));
+  --color-muted-text: rgba(var(--muted-text));
   --color-border-color: rgba(var(--border));
   --color-border-dark-color: rgba(var(--border-dark));
   --color-text-input-color: rgba(var(--text-input));
@@ -52,12 +54,12 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --shadow-s: inset 0 1px 2px #ffffff30, 0 1px 2px #00000030,
-    0 2px 4px #00000015;
-  --shadow-m: inset 0 1px 2px #ffffff50, 0 2px 4px #00000030,
-    0 4px 8px #00000015;
-  --shadow-l: inset 0 1px 2px #ffffff70, 0 4px 6px #00000030,
-    0 6px 10px #00000015;
+  --shadow-s:
+    inset 0 1px 2px #ffffff30, 0 1px 2px #00000030, 0 2px 4px #00000015;
+  --shadow-m:
+    inset 0 1px 2px #ffffff50, 0 2px 4px #00000030, 0 4px 8px #00000015;
+  --shadow-l:
+    inset 0 1px 2px #ffffff70, 0 4px 6px #00000030, 0 6px 10px #00000015;
 }
 
 /*
@@ -178,6 +180,8 @@
   --bg-light: 1, 0, 264;
   --primary-text: 40, 51, 60;
   --secondary-text: 95, 95, 95;
+  --tertiary-text: 115, 115, 115;
+  --muted-text: 130, 130, 130;
   --border: 215, 215, 215;
   --border-dark: 195, 195, 195;
   --text-input: 255, 255, 255;
@@ -242,10 +246,12 @@
   --bg-dark: 0.1, 0, 264;
   --bg: 0.2, 0, 264;
   --bg-light: 0.3, 0, 264;
-  --primary-text: 225, 225, 225;
-  --secondary-text: 150, 150, 150;
-  --border: 40, 40, 40;
-  --border-dark: 98, 98, 98;
+  --primary-text: 250, 250, 250;
+  --secondary-text: 200, 200, 200;
+  --tertiary-text: 170, 170, 170;
+  --muted-text: 140, 140, 140;
+  --border: 60, 60, 60;
+  --border-dark: 140, 140, 140;
   --text-input: 40, 40, 40;
   --success: var(--color-green-500);
   --error: var(--color-red-400);

@@ -33,7 +33,7 @@ Permission checks in the API are a second, explicit layer on top of RLS.
 | `PATCH /api/v1/me` | signed in | Update own first name, surname, job title |
 | `POST /api/v1/organisations` | signed in | Create an organisation (caller becomes Owner); `Idempotency-Key` supported |
 | `GET /api/v1/organisations/current` | member (`X-Organisation-Id`) | Organisation and settings |
-| `PATCH /api/v1/organisations/current` | `organisation.manage` | Rename, change currency / VAT / NCR prefix |
+| `PATCH /api/v1/organisations/current` | `organisation.manage` | Rename, change currency / VAT / NCR prefix / theme colour |
 | `GET /api/v1/sites`, `POST`, `PATCH /:id` | member / `organisation.manage` | Sites (deactivate with `active: false`) |
 | `GET /api/v1/departments?siteId=`, `POST`, `PATCH /:id` | member / `organisation.manage` | Departments of a site |
 | `GET /api/v1/members` | `members.read` | Members and pending invitations, with roles |

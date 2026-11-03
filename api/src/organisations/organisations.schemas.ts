@@ -6,12 +6,16 @@ export const SiteCode = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,19}$/, 'Use 1–20 letters, digits, "-" or "_"')
   .transform((v) => v.toUpperCase());
 
+/** Accent colours an organisation can choose; the frontend maps each to light/normal/dark shades. */
+export const THEME_COLOURS = ['blue', 'red', 'yellow', 'green', 'orange', 'purple', 'pink'] as const;
+export const ThemeColour = z.enum(THEME_COLOURS);
+
 export const OrganisationResponse = z.object({
   id: z.string().uuid(),
   name: z.string(),
   slug: z.string(),
   status: z.enum(['active', 'suspended']),
-  settings: z.object({ baseCurrency: z.string(), vatRate: z.number(), ncrReferencePrefix: z.string() }),
+  settings: z.object({ baseCurrency: z.string(), vatRate: z.number(), ncrReferencePrefix: z.string(), themeColour: ThemeColour }),
 });
 export type OrganisationResponse = z.infer<typeof OrganisationResponse>;
 
@@ -34,6 +38,7 @@ export const UpdateOrganisationBody = z
         baseCurrency: z.string().trim().regex(/^[A-Za-z]{3}$/, 'Use a 3-letter ISO currency code').transform((v) => v.toUpperCase()).optional(),
         vatRate: z.number().min(0).lt(1).multipleOf(0.0001).optional(),
         ncrReferencePrefix: z.string().trim().regex(/^[A-Za-z0-9]{1,10}$/, 'Use 1–10 letters or digits').transform((v) => v.toUpperCase()).optional(),
+        themeColour: ThemeColour.optional(),
       })
       .strict()
       .refine((s) => Object.keys(s).length > 0, { message: 'Provide at least one setting' })

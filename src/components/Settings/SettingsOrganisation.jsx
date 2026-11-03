@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Field from "../ui/Field";
 import SitesManager from "./SitesManager";
+import ThemeColourPicker from "./ThemeColourPicker";
 import { describeApiError, API_URL } from "../../lib/api-client";
 import { useOrganisationDetails, usePermissions, useUpdateOrganisation } from "../../hooks/useQmsApi";
 import { useToast } from "../../contexts/ToastProvider";
@@ -127,6 +128,8 @@ const SettingsOrganisation = () => {
           </button>
         )}
       </form>
+
+      <ThemeColourPicker value={org.settings.themeColour ?? "purple"} canManage={canManage} />
 
       <SitesManager canManage={canManage} />
     </div>

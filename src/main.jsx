@@ -10,6 +10,9 @@ import { OrganisationProvider } from "./contexts/OrganisationProvider.jsx";
 import { ModalProvider } from "./contexts/ModalContext";
 import LoadingSpinner from "./components/LoadingSpinner.jsx";
 import "./index.css";
+import { applyStoredThemeColour } from "./lib/theme-colours";
+
+applyStoredThemeColour();
 
 const App = lazy(() => import("./App.jsx"));
 const NonConformance = lazy(() => import("./components/NonConformance.jsx"));

@@ -83,7 +83,16 @@ describe('PATCH /organisations/current', () => {
     ]);
   });
 
+  it('lets an owner change the theme colour', async () => {
+    const h = await as(ids.ownerA, ids.orgA);
+    const res = await api().patch('/api/v1/organisations/current').set(h).send({ settings: { themeColour: 'green' } }).expect(200);
+    expect(res.body.settings.themeColour).toBe('green');
+    const again = await api().get('/api/v1/organisations/current').set(h).expect(200);
+    expect(again.body.settings.themeColour).toBe('green');
+  });
+
   it('forbids members without organisation.manage', async () => {
+    await api().patch('/api/v1/organisations/current').set(await as(ids.inspectorA, ids.orgA)).send({ settings: { themeColour: 'red' } }).expect(403);
     const res = await api().patch('/api/v1/organisations/current').set(await as(ids.inspectorA, ids.orgA)).send({ name: 'Hijack' }).expect(403);
     expect(res.body.error).toMatchObject({ code: 'forbidden', details: { permission: 'organisation.manage' } });
   });
@@ -96,6 +105,7 @@ describe('PATCH /organisations/current', () => {
     await api().patch('/api/v1/organisations/current').set(h).send({}).expect(400);
     await api().patch('/api/v1/organisations/current').set(h).send({ settings: { baseCurrency: 'EURO' } }).expect(400);
     await api().patch('/api/v1/organisations/current').set(h).send({ settings: { vatRate: 1.5 } }).expect(400);
+    await api().patch('/api/v1/organisations/current').set(h).send({ settings: { themeColour: 'teal' } }).expect(400);
     await api().patch('/api/v1/organisations/current').set(h).send({ slug: 'new-slug' }).expect(400);
   });
 });

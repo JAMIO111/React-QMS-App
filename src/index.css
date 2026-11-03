@@ -2,6 +2,9 @@
 @import "tw-animate-css";
 
 @theme {
+  --color-theme-light: var(--theme-light);
+  --color-theme: var(--theme);
+  --color-theme-dark: var(--theme-dark);
   --color-brand-primary: var(--brand-primary);
   --color-brand-secondary: var(--brand-secondary);
   --color-primary-bg: rgba(var(--primary-bg));
@@ -57,12 +60,115 @@
     0 6px 10px #00000015;
 }
 
+/*
+ * Organisation theme colour (Settings → Organisation). <html data-theme-colour="…"> selects a
+ * palette (--tc-50 … --tc-950); the .light and .dark blocks below turn it into three shades per
+ * mode — --theme-light, --theme, --theme-dark (Tailwind: bg-theme-light, text-theme, …) — and
+ * derive the brand / call-to-action colours from it. Purple is the default.
+ */
+:root,
+[data-theme-colour="purple"] {
+  --tc-50: var(--color-violet-50);
+  --tc-100: var(--color-violet-100);
+  --tc-200: var(--color-violet-200);
+  --tc-300: var(--color-violet-300);
+  --tc-400: var(--color-violet-400);
+  --tc-500: var(--color-violet-500);
+  --tc-600: var(--color-violet-600);
+  --tc-700: var(--color-violet-700);
+  --tc-800: var(--color-violet-800);
+  --tc-900: var(--color-violet-900);
+  --tc-950: var(--color-violet-950);
+}
+[data-theme-colour="blue"] {
+  --tc-50: var(--color-blue-50);
+  --tc-100: var(--color-blue-100);
+  --tc-200: var(--color-blue-200);
+  --tc-300: var(--color-blue-300);
+  --tc-400: var(--color-blue-400);
+  --tc-500: var(--color-blue-500);
+  --tc-600: var(--color-blue-600);
+  --tc-700: var(--color-blue-700);
+  --tc-800: var(--color-blue-800);
+  --tc-900: var(--color-blue-900);
+  --tc-950: var(--color-blue-950);
+}
+[data-theme-colour="red"] {
+  --tc-50: var(--color-red-50);
+  --tc-100: var(--color-red-100);
+  --tc-200: var(--color-red-200);
+  --tc-300: var(--color-red-300);
+  --tc-400: var(--color-red-400);
+  --tc-500: var(--color-red-500);
+  --tc-600: var(--color-red-600);
+  --tc-700: var(--color-red-700);
+  --tc-800: var(--color-red-800);
+  --tc-900: var(--color-red-900);
+  --tc-950: var(--color-red-950);
+}
+[data-theme-colour="yellow"] {
+  --tc-50: var(--color-yellow-50);
+  --tc-100: var(--color-yellow-100);
+  --tc-200: var(--color-yellow-200);
+  --tc-300: var(--color-yellow-300);
+  --tc-400: var(--color-yellow-400);
+  --tc-500: var(--color-yellow-500);
+  --tc-600: var(--color-yellow-600);
+  --tc-700: var(--color-yellow-700);
+  --tc-800: var(--color-yellow-800);
+  --tc-900: var(--color-yellow-900);
+  --tc-950: var(--color-yellow-950);
+}
+[data-theme-colour="green"] {
+  --tc-50: var(--color-green-50);
+  --tc-100: var(--color-green-100);
+  --tc-200: var(--color-green-200);
+  --tc-300: var(--color-green-300);
+  --tc-400: var(--color-green-400);
+  --tc-500: var(--color-green-500);
+  --tc-600: var(--color-green-600);
+  --tc-700: var(--color-green-700);
+  --tc-800: var(--color-green-800);
+  --tc-900: var(--color-green-900);
+  --tc-950: var(--color-green-950);
+}
+[data-theme-colour="orange"] {
+  --tc-50: var(--color-orange-50);
+  --tc-100: var(--color-orange-100);
+  --tc-200: var(--color-orange-200);
+  --tc-300: var(--color-orange-300);
+  --tc-400: var(--color-orange-400);
+  --tc-500: var(--color-orange-500);
+  --tc-600: var(--color-orange-600);
+  --tc-700: var(--color-orange-700);
+  --tc-800: var(--color-orange-800);
+  --tc-900: var(--color-orange-900);
+  --tc-950: var(--color-orange-950);
+}
+[data-theme-colour="pink"] {
+  --tc-50: var(--color-pink-50);
+  --tc-100: var(--color-pink-100);
+  --tc-200: var(--color-pink-200);
+  --tc-300: var(--color-pink-300);
+  --tc-400: var(--color-pink-400);
+  --tc-500: var(--color-pink-500);
+  --tc-600: var(--color-pink-600);
+  --tc-700: var(--color-pink-700);
+  --tc-800: var(--color-pink-800);
+  --tc-900: var(--color-pink-900);
+  --tc-950: var(--color-pink-950);
+}
+
 * {
   box-sizing: border-box;
   font-family: "Poppins";
 }
 .light {
-  --brand-primary: var(--color-violet-700);
+  /* Theme colour shades for light mode */
+  --theme-light: var(--tc-300);
+  --theme: var(--tc-600);
+  --theme-dark: var(--tc-800);
+  --brand-primary: var(--tc-700);
   --brand-secondary: var(--color-orange-700);
   --primary-bg: 239, 239, 242;
   --secondary-bg: 244, 244, 244;
@@ -82,14 +188,14 @@
   --info: var(--color-blue-600);
   --icon: 80, 80, 80;
   --hover-menu: 235, 235, 240;
-  --active-menu: 225, 225, 245;
-  --cta-color: var(--color-violet-700);
+  --active-menu: 225, 225, 235;
+  --cta-color: var(--tc-700);
   --muted-text: 120, 120, 120;
   --shadow-color: 220, 220, 220;
-  --cta-btn-bg: var(--color-violet-300);
-  --cta-btn-bg-hover: var(--color-violet-400);
-  --cta-btn-border: var(--color-violet-500);
-  --cta-btn-border-hover: var(--color-violet-600);
+  --cta-btn-bg: var(--theme-light);
+  --cta-btn-bg-hover: var(--tc-400);
+  --cta-btn-border: var(--tc-500);
+  --cta-btn-border-hover: var(--theme);
   --neutral-btn-bg: 240, 240, 240;
   --neutral-btn-bg-hover: 230, 230, 230;
   --neutral-btn-border: 200, 200, 200;
@@ -124,7 +230,11 @@
   --chart-10-rgb: 255, 102, 196; /* Magenta */
 }
 .dark {
-  --brand-primary: var(--color-violet-400);
+  /* Theme colour shades for dark mode */
+  --theme-light: var(--tc-400);
+  --theme: var(--tc-500);
+  --theme-dark: var(--tc-900);
+  --brand-primary: var(--tc-400);
   --brand-secondary: var(--color-orange-400);
   --primary-bg: 20, 20, 22;
   --secondary-bg: 24, 24, 24;
@@ -144,14 +254,14 @@
   --info: var(--color-blue-400);
   --icon: 175, 175, 175;
   --hover-menu: 35, 35, 35;
-  --active-menu: 55, 55, 65;
-  --cta-color: var(--color-indigo-500);
+  --active-menu: 55, 55, 60;
+  --cta-color: var(--theme);
   --muted-text: 150, 150, 150;
   --shadow-color: 20, 20, 20;
-  --cta-btn-bg: var(--color-indigo-900);
-  --cta-btn-bg-hover: var(--color-indigo-800);
-  --cta-btn-border: var(--color-indigo-700);
-  --cta-btn-border-hover: var(--color-indigo-500);
+  --cta-btn-bg: var(--theme-dark);
+  --cta-btn-bg-hover: var(--tc-800);
+  --cta-btn-border: var(--tc-700);
+  --cta-btn-border-hover: var(--theme);
   --neutral-btn-bg: 28, 28, 28;
   --neutral-btn-bg-hover: 31, 31, 31;
   --neutral-btn-border: 60, 60, 60;

@@ -8,6 +8,7 @@ import NotificationPane from "./components/NotificationPane";
 import NoOrganisation from "./components/NoOrganisation";
 import LoadingSpinner from "./components/LoadingSpinner";
 import { useOrganisation } from "./contexts/OrganisationProvider";
+import ThemeColourSync from "./components/ThemeColourSync";
 
 function App() {
   const { organisation, error } = useOrganisation();
@@ -24,6 +25,7 @@ function App() {
   return (
     <SearchProvider>
       <NotificationProvider>
+        <ThemeColourSync />
         <NotificationPane />
         <div className="flex w-screen h-screen overflow-hidden">
           <div className="hidden md:block">

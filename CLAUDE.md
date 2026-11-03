@@ -47,6 +47,11 @@ Summary of the brief:
 - Frontend reads the current user from `profiles` and memberships via `OrganisationProvider`;
   every query filters by the current `organisationId`. Storage paths: `nc-files/<org_id>/...`,
   `avatars/users/<user_id>/...` (both private).
+- Theme colour: `organisation_settings.theme_colour` (blue/red/yellow/green/orange/purple/pink, set in
+  Settings → Organisation) → `<html data-theme-colour>` (`src/lib/theme-colours.js`,
+  `ThemeColourSync`). `src/index.css` gives each mode three shades (`theme-light`, `theme`,
+  `theme-dark` utilities) and derives `brand-*`/`cta-*` from them — use those tokens, not fixed
+  purple/violet classes, for accent colour.
 - `.env` is untracked; copy `.env.example`. Build passes; lint has 0 errors (warnings remain).
 
 ## Agreed plan

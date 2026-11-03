@@ -7,7 +7,7 @@ const org = {
   name: "Alpha Precision",
   slug: "alpha-precision",
   status: "active",
-  settings: { baseCurrency: "GBP", vatRate: 0.2, ncrReferencePrefix: "NCM" },
+  settings: { baseCurrency: "GBP", vatRate: 0.2, ncrReferencePrefix: "NCM", themeColour: "purple" },
 };
 let details;
 let permissions;

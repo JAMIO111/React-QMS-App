@@ -110,6 +110,7 @@ export const getColumnsForNcType = (ncType = "Internal") => {
       maxSize: 180,
       meta: {
         flexPos: "center",
+        sortKey: "status_name", // the row holds the status id; sort by its name
       },
     },
     {

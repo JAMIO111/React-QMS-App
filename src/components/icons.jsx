@@ -6,11 +6,13 @@
  */
 import {
   AlignCenter as LucideAlignCenter,
+  ArrowDown as LucideArrowDown,
   ArrowDown10 as LucideArrowDown10,
   ArrowDownAZ as LucideArrowDownAZ,
   ArrowDownUp as LucideArrowDownUp,
   ArrowDownWideNarrow as LucideArrowDownWideNarrow,
   ArrowLeft as LucideArrowLeft,
+  ArrowUp as LucideArrowUp,
   ArrowUp01 as LucideArrowUp01,
   ArrowUp10 as LucideArrowUp10,
   ArrowUpDown as LucideArrowUpDown,
@@ -24,6 +26,7 @@ import {
   Calendar as LucideCalendar,
   Check as LucideCheck,
   ChevronDown as LucideChevronDown,
+  ChevronsUpDown as LucideChevronsUpDown,
   CircleAlert as LucideCircleAlert,
   CircleCheck as LucideCircleCheck,
   CircleDashed as LucideCircleDashed,
@@ -58,6 +61,7 @@ import {
   QrCode as LucideQrCode,
   RectangleEllipsis as LucideRectangleEllipsis,
   RefreshCw as LucideRefreshCw,
+  RotateCcw as LucideRotateCcw,
   Save as LucideSave,
   Search as LucideSearch,
   Settings as LucideSettings,
@@ -84,11 +88,13 @@ const withDefaults = (Icon) => {
 };
 
 export const AlignCenterIcon = withDefaults(LucideAlignCenter);
+export const ArrowDownIcon = withDefaults(LucideArrowDown);
 export const ArrowDown10Icon = withDefaults(LucideArrowDown10);
 export const ArrowDownAZIcon = withDefaults(LucideArrowDownAZ);
 export const ArrowDownUpIcon = withDefaults(LucideArrowDownUp);
 export const ArrowDownWideNarrowIcon = withDefaults(LucideArrowDownWideNarrow);
 export const ArrowLeftIcon = withDefaults(LucideArrowLeft);
+export const ArrowUpIcon = withDefaults(LucideArrowUp);
 export const ArrowUp01Icon = withDefaults(LucideArrowUp01);
 export const ArrowUp10Icon = withDefaults(LucideArrowUp10);
 export const ArrowUpDownIcon = withDefaults(LucideArrowUpDown);
@@ -102,6 +108,7 @@ export const BoxesIcon = withDefaults(LucideBoxes);
 export const CalendarIcon = withDefaults(LucideCalendar);
 export const CheckIcon = withDefaults(LucideCheck);
 export const ChevronDownIcon = withDefaults(LucideChevronDown);
+export const ChevronsUpDownIcon = withDefaults(LucideChevronsUpDown);
 export const CircleAlertIcon = withDefaults(LucideCircleAlert);
 export const CircleCheckIcon = withDefaults(LucideCircleCheck);
 export const CircleDashedIcon = withDefaults(LucideCircleDashed);
@@ -136,6 +143,7 @@ export const PoundSterlingIcon = withDefaults(LucidePoundSterling);
 export const QrCodeIcon = withDefaults(LucideQrCode);
 export const RectangleEllipsisIcon = withDefaults(LucideRectangleEllipsis);
 export const RefreshCwIcon = withDefaults(LucideRefreshCw);
+export const RotateCcwIcon = withDefaults(LucideRotateCcw);
 export const SaveIcon = withDefaults(LucideSave);
 export const SearchIcon = withDefaults(LucideSearch);
 export const SettingsIcon = withDefaults(LucideSettings);

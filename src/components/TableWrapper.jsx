@@ -1,14 +1,19 @@
-import { useMemo, useState } from "react";
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-} from "@tanstack/react-table";
+import { useMemo, useRef } from "react";
+import { useReactTable, getCoreRowModel } from "@tanstack/react-table";
+import { useSearchParams } from "react-router-dom";
 import Table from "./Table";
 import DataNavBar2 from "./DataNavBar2";
 import { EllipsisIcon } from "@/components/icons";
-import { useSearchParams } from "react-router-dom";
+import { useColumnSizingInfo } from "../hooks/useColumnSizingInfo";
 
+/** Fixed utility columns: never sorted, resized or hidden. */
+const utilityColumn = { enableSorting: false, enableResizing: false, enableHiding: false, meta: { align: "center" } };
+
+/**
+ * Non-conformance register table: selection, row actions and server-side paging/sorting around the
+ * generic <Table>. Column visibility and sizing are owned by the page (see useTablePreferences) so
+ * the column menu can live in the page header.
+ */
 const TableWrapper = ({
   data,
   isLoading,
@@ -24,203 +29,147 @@ const TableWrapper = ({
   onOpenModal,
   sorting,
   setSorting,
-  filteredColumns = [],
+  columns = [],
+  columnVisibility,
+  onColumnVisibilityChange,
+  columnSizing,
+  onColumnSizingChange,
   rowSelection,
   setRowSelection,
+  onRowDoubleClick,
 }) => {
   const [, setSearchParams] = useSearchParams();
-  const [columnSizing, setColumnSizing] = useState({});
-  const [resizedColumns, setResizedColumns] = useState(new Set());
-
-  const handleColumnSizingChange = (updater) => {
-    setColumnSizing((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-
-      const clamped = {};
-      const resized = new Set(resizedColumns);
-
-      for (const key in next) {
-        const col = table.getColumn?.(key);
-        const min = col?.columnDef?.minSize ?? 50;
-        const max = col?.columnDef?.maxSize ?? 1000;
-        const size = Math.max(min, Math.min(next[key], max));
-        clamped[key] = size;
-        resized.add(key); // mark as resized
-      }
-
-      setResizedColumns(resized);
-      return clamped;
-    });
-  };
-
-  console.log("Resized Columns:", resizedColumns);
+  const sizingInfo = useColumnSizingInfo();
 
   const handleEllipsisClick = (item) => (e) => {
-    e.stopPropagation(); // Prevent row click event
-    if (selectedItem?.id !== item.id) {
-      setSelectedItem(item);
-    }
+    e.stopPropagation();
+    if (selectedItem?.id !== item.id) setSelectedItem(item);
 
-    if (e.currentTarget) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const modalWidth = 158; // Set this to your modal's approximate width
-      const modalHeight = 177; // Set this to your modal's approximate height
+    const rect = e.currentTarget.getBoundingClientRect();
+    const modalWidth = 158;
+    const modalHeight = 177;
+    let top = rect.bottom + window.scrollY - 25;
+    let left = rect.left + window.scrollX - 160;
+    if (left + modalWidth > window.innerWidth) left = window.innerWidth - modalWidth - 10;
+    if (top + modalHeight > window.innerHeight + window.scrollY) top = window.innerHeight + window.scrollY - modalHeight - 10;
+    if (left < 0) left = 10;
 
-      let top = rect.bottom + window.scrollY - 25;
-      let left = rect.left + window.scrollX - 160;
-
-      // Adjust to prevent clipping right edge
-      if (left + modalWidth > window.innerWidth) {
-        left = window.innerWidth - modalWidth - 10; // 10px padding from edge
-      }
-
-      // Adjust to prevent clipping bottom edge
-      if (top + modalHeight > window.innerHeight + window.scrollY) {
-        top = window.innerHeight + window.scrollY - modalHeight - 10;
-      }
-
-      // Optional: Adjust to prevent clipping left edge
-      if (left < 0) {
-        left = 10;
-      }
-
-      handleActiveModalType("Actions");
-      onOpenModal({ top, left });
-    }
+    handleActiveModalType("Actions");
+    onOpenModal({ top, left });
   };
+  // The columns are memoised; the actions button calls the latest handler through this ref.
+  const ellipsisClick = useRef(handleEllipsisClick);
+  ellipsisClick.current = handleEllipsisClick;
 
-  const columns = useMemo(() => {
-    return [
+  const tableColumns = useMemo(
+    () => [
       {
+        ...utilityColumn,
         id: "__select",
+        headerString: "Select",
         header: ({ table }) => (
-          <div>
-            <input
-              id="checkbox-select-all"
-              name="checkbox-select-all"
-              type="checkbox"
-              checked={table.getIsAllPageRowsSelected()}
-              onChange={table.getToggleAllPageRowsSelectedHandler()}
-              className="cursor-pointer"
-            />
-          </div>
+          <input
+            type="checkbox"
+            aria-label="Select all rows on this page"
+            checked={table.getIsAllPageRowsSelected()}
+            ref={(el) => {
+              if (el) el.indeterminate = table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected();
+            }}
+            onChange={table.getToggleAllPageRowsSelectedHandler()}
+            className="cursor-pointer"
+          />
         ),
         cell: ({ row }) => (
-          <div className="flex items-center justify-center">
-            <input
-              id={`checkbox-select-${row.id}`}
-              name={`checkbox-select-${row.id}`}
-              type="checkbox"
-              checked={row.getIsSelected()}
-              disabled={!row.getCanSelect()}
-              onChange={row.getToggleSelectedHandler()}
-              className="cursor-pointer"
-            />
-          </div>
+          <input
+            type="checkbox"
+            aria-label={`Select row ${row.original.ncm_id ?? row.id}`}
+            checked={row.getIsSelected()}
+            disabled={!row.getCanSelect()}
+            onChange={row.getToggleSelectedHandler()}
+            className="cursor-pointer"
+          />
         ),
         size: 40,
         minSize: 40,
         maxSize: 40,
-        enableResizing: false,
-        meta: {
-          flexPos: "center",
-        },
       },
-      ...filteredColumns,
+      ...columns,
       {
+        ...utilityColumn,
         id: "__actions",
-        header: () => null,
+        headerString: "Actions",
+        header: () => <span className="sr-only">Actions</span>,
         cell: ({ row }) => (
           <button
-            onClick={(e) => handleEllipsisClick(row.original)(e)}
-            className="p-1 text-secondary-text hover:text-brand-primary hover:cursor-pointer">
+            type="button"
+            aria-label="Actions"
+            onClick={(e) => ellipsisClick.current(row.original)(e)}
+            className="p-1 text-secondary-text hover:text-brand-primary cursor-pointer">
             <EllipsisIcon size={18} />
           </button>
         ),
         size: 50,
         minSize: 50,
         maxSize: 50,
-        enableResizing: false,
-        meta: {
-          flexPos: "center",
-        },
       },
-    ];
-  }, [filteredColumns]);
+    ],
+    [columns]
+  );
 
   const table = useReactTable({
     data,
-    columns,
-    pageCount: Math.ceil(totalCount / pageSize),
+    columns: tableColumns,
+    getRowId: (row, index) => String(row.id ?? index),
+    defaultColumn: { minSize: 60, maxSize: 800 },
     state: {
       rowSelection,
-      columnSizing,
       sorting,
-      pagination: {
-        pageIndex: page - 1,
-        pageSize: pageSize,
-      },
+      columnVisibility,
+      columnSizing,
+      columnSizingInfo: sizingInfo.columnSizingInfo,
+      pagination: { pageIndex: page - 1, pageSize },
     },
-    onColumnSizingChange: handleColumnSizingChange,
-    columnResizeMode: "onChange",
+    pageCount: Math.max(1, Math.ceil(totalCount / pageSize)),
     manualPagination: true,
     manualSorting: true,
-    onRowSelectionChange: (updater) => {
-      const newSelection =
-        typeof updater === "function" ? updater(rowSelection) : updater;
-      setRowSelection(newSelection);
-
-      // Now update selectedRows based on visible rows
-      const selected = Object.keys(newSelection)
-        .map((rowId) => table.getRow(rowId)?.original)
-        .filter(Boolean);
-
-      setSelectedRows(selected);
-    },
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    enableSortingRemoval: false,
+    sortDescFirst: false, // first click sorts ascending, for every column type
+    columnResizeMode: "onChange",
     enableRowSelection: true,
+    getCoreRowModel: getCoreRowModel(),
+    onSortingChange: setSorting,
+    onColumnVisibilityChange,
+    onColumnSizingChange,
+    onColumnSizingInfoChange: sizingInfo.onColumnSizingInfoChange,
+    onRowSelectionChange: (updater) => {
+      const next = typeof updater === "function" ? updater(rowSelection) : updater;
+      setRowSelection(next);
+      setSelectedRows(data.filter((row, index) => next[String(row.id ?? index)]));
+    },
     onPaginationChange: (updater) => {
-      const next =
-        typeof updater === "function"
-          ? updater({ pageIndex: page - 1, pageSize })
-          : updater;
-
-      const nextPage = next.pageIndex + 1; // Convert back to 1-based
-      const nextPageSize = next.pageSize;
-
+      const next = typeof updater === "function" ? updater({ pageIndex: page - 1, pageSize }) : updater;
       setSearchParams((prev) => {
         const params = new URLSearchParams(prev);
-        params.set("page", nextPage.toString());
-        params.set("pageSize", nextPageSize.toString());
+        params.set("page", String(next.pageIndex + 1));
+        params.set("pageSize", String(next.pageSize));
         return params;
       });
     },
   });
 
-  if (error) return <div>Error: {error.message}</div>;
+  if (error) return <div role="alert" className="text-error-color p-4">Error: {error.message}</div>;
 
   return (
     <div className="flex flex-col w-[calc(100vw-32px)] md:w-[calc(100vw-97px)] min-w-0 overflow-hidden border border-border-color rounded-2xl h-[calc(100vh-150px)]">
-      <div className="flex-1 overflow-x-auto">
-        <div className="min-w-max overflow-hidden flex flex-col h-full">
-          <Table
-            table={table}
-            rowSelection={rowSelection}
-            onSelectedRowsChange={setSelectedRows}
-            isLoading={isLoading}
-            data={data}
-            resizedColumns={resizedColumns}
-          />
-        </div>
+      <div className="flex-1 min-h-0">
+        <Table
+          table={table}
+          isLoading={isLoading}
+          ariaLabel="Non-conformance records"
+          onRowDoubleClick={onRowDoubleClick ? (row) => onRowDoubleClick(row.original) : undefined}
+        />
       </div>
-      <DataNavBar2
-        table={table}
-        totalCount={totalCount}
-        onRefresh={onRefresh}
-        isLoading={isLoading}
-      />
+      <DataNavBar2 table={table} totalCount={totalCount} onRefresh={onRefresh} isLoading={isLoading} />
     </div>
   );
 };

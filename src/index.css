@@ -337,11 +337,13 @@
   top: 0;
   background-color: var(--color-primary-bg);
 }
+/* Cell content: one line, truncated with an ellipsis when the column is narrower than the text. */
 .table-row-item {
-  display: flex;
-  flex-direction: row;
-  justify-content: start;
-  align-items: center;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 0rem 0.25rem;
   font-size: 13px;
   color: var(--color-primary-text);
@@ -497,36 +499,32 @@ input:-webkit-autofill:active {
   caret-color: var(--color-primary-text) !important;
   transition: background-color 5000s ease-in-out 0s !important;
 }
-.resizer-hit-area {
+/* Column resize handle (src/components/Table.jsx): an 8px grab area on the header's right edge,
+   showing a 2px line in the theme colour on hover and while dragging. */
+.table-resizer {
   position: absolute;
   top: 0;
-  right: -15px; /* slightly outside to not overlap content */
-  width: 30px;
+  right: -4px;
+  z-index: 20;
+  width: 8px;
   height: 100%;
-  z-index: 10;
-  display: flex;
-  cursor: auto;
-  justify-content: center;
-}
-
-.resizer {
-  width: 4px;
-  height: 100%;
-  background-color: transparent;
   cursor: col-resize;
   user-select: none;
   touch-action: none;
+}
+.table-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background-color: var(--color-cta-color);
   opacity: 0;
-  transition: background-color 0.2s ease, opacity 0.2s ease;
+  transition: opacity 0.15s ease;
 }
-
-.resizer-hit-area:hover .resizer {
-  background-color: var(--color-cta-color);
-  opacity: 1;
-}
-
-.resizer.isResizing {
-  background-color: var(--color-cta-color);
+.table-resizer:hover::after,
+.table-resizer.is-resizing::after {
   opacity: 1;
 }
 /* From Uiverse.io by ClawHack1 */

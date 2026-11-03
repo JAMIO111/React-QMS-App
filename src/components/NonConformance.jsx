@@ -7,7 +7,8 @@ import { useNCMFilters } from "../hooks/useNCMFilters";
 import { useGlobalSearch } from "../contexts/SearchProvider";
 import { exportCSV } from "../lib/csvHelper";
 import { SkeletonCard2, SkeletonTable } from "./Skeleton";
-import ToggleDropdown from "./ui/ToggleDropdown";
+import ColumnVisibilityMenu from "./ui/ColumnVisibilityMenu";
+import { useTablePreferences } from "../hooks/useTablePreferences";
 import { getColumnsForNcType } from "../lib/ColumnDefs";
 
 const TableWrapper = lazy(() => import("./TableWrapper"));
@@ -20,7 +21,7 @@ const ViewToggle = lazy(() => import("./ViewToggle"));
 const IconButton = lazy(() => import("./IconButton"));
 
 const NonConformance = () => {
-  const [sorting, setSorting] = useState([
+  const [sorting, setSortingState] = useState([
     { id: "ncm_id", desc: true }, // default sort
   ]);
 
@@ -37,7 +38,6 @@ const NonConformance = () => {
   const { type } = useParams();
   const page = parseInt(searchParams.get("page") || "1", 10);
   const pageSize = parseInt(searchParams.get("pageSize") || "25", 10);
-  console.log("Type:", type);
 
   useEffect(() => {
     setRowSelection({});
@@ -48,21 +48,20 @@ const NonConformance = () => {
     return getColumnsForNcType(type);
   }, [type]);
 
-  const [visibleColumns, setVisibleColumns] = useState(() =>
-    allColumns.map((col) => col.id)
-  );
+  // Shown/hidden columns and widths, remembered per register in this browser.
+  const {
+    columnVisibility,
+    setColumnVisibility,
+    columnSizing,
+    setColumnSizing,
+    resetColumns,
+  } = useTablePreferences(`nc-register:${type}`);
 
-  const filteredColumns = useMemo(() => {
-    return allColumns.filter((col) => {
-      // your filtering condition — could be checking hidden IDs, user preferences, etc.
-      return visibleColumns.includes(col.id);
-    });
-  }, [allColumns, visibleColumns]);
-
-  useEffect(() => {
-    // Whenever ncType or column definitions change, reset visible columns
-    setVisibleColumns(allColumns.map((col) => col.id));
-  }, [type, allColumns]);
+  // Server-side sort key: a column may sort by a different field (e.g. status by its name).
+  const sortColumn = useMemo(() => {
+    const id = sorting[0]?.id;
+    return allColumns.find((col) => col.id === id)?.meta?.sortKey ?? id;
+  }, [sorting, allColumns]);
 
   const setPage = (newPage) => {
     setSearchParams((prev) => {
@@ -70,6 +69,12 @@ const NonConformance = () => {
       params.set("page", newPage);
       return params;
     });
+  };
+
+  // A new sort order starts from the first page.
+  const setSorting = (updater) => {
+    setSortingState(updater);
+    if (page !== 1) setPage(1);
   };
 
   const setPageSize = (newPageSize) => {
@@ -96,7 +101,7 @@ const NonConformance = () => {
 
   const { data, isLoading, error, refetch } = useNCM({
     ncType: type,
-    sortColumn: sorting[0]?.id,
+    sortColumn,
     sortOrder: sorting[0]?.desc ? "desc" : "asc",
     page,
     pageSize,
@@ -125,7 +130,6 @@ const NonConformance = () => {
     setActiveModalType(null);
     setModalPos(null);
   };
-  console.log("Selected Rows:", selectedRows);
   const totalRows = selectedRows.length;
   const totalQuantity = selectedRows.reduce(
     (acc, r) => acc + r.quantity_defective,
@@ -187,7 +191,6 @@ const NonConformance = () => {
     (key) => searchParams.get(key)
   );
   const filterCount = activeFilters.length;
-  console.log(sorting, "Sorting State");
   return (
     <div className="p-4 bg-primary-bg flex flex-col gap-3 w-full">
       <div className="flex flex-row justify-between items-center">
@@ -217,10 +220,11 @@ const NonConformance = () => {
               />
             )}
             {!viewGrid && (
-              <ToggleDropdown
-                allColumns={allColumns}
-                visibleColumns={visibleColumns}
-                setVisibleColumns={setVisibleColumns}
+              <ColumnVisibilityMenu
+                columns={allColumns}
+                columnVisibility={columnVisibility}
+                onColumnVisibilityChange={setColumnVisibility}
+                onReset={resetColumns}
               />
             )}
             <ViewToggle viewGrid={viewGrid} setViewGrid={handleToggleView} />
@@ -319,10 +323,14 @@ const NonConformance = () => {
               costData={costData}
               handleActiveModalType={handleActiveModalType}
               onRefresh={refetch}
-              visibleColumns={visibleColumns}
               sorting={sorting}
               setSorting={setSorting}
-              filteredColumns={filteredColumns}
+              columns={allColumns}
+              columnVisibility={columnVisibility}
+              onColumnVisibilityChange={setColumnVisibility}
+              columnSizing={columnSizing}
+              onColumnSizingChange={setColumnSizing}
+              onRowDoubleClick={(record) => navigate(`/Non-Conformance/${type}/Edit-NC-${record.id}`)}
               rowSelection={rowSelection}
               setRowSelection={setRowSelection}
             />

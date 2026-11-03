@@ -52,6 +52,12 @@ Summary of the brief:
   `ThemeColourSync`). `src/index.css` gives each mode three shades (`theme-light`, `theme`,
   `theme-dark` utilities) and derives `brand-*`/`cta-*` from them — use those tokens, not fixed
   purple/violet classes, for accent colour.
+- Tables: reuse `src/components/Table.jsx` with a TanStack table instance (see its header comment and
+  `TableWrapper.jsx`): one `<table>` + `<colgroup>`, so header and rows always line up. Sorting
+  (header click, `sortDescFirst: false`), resizing (`columnResizeMode: "onChange"`, min/maxSize,
+  double-click resets), show/hide via `ColumnVisibilityMenu`. Persist with
+  `useTablePreferences(key)`; when `columnSizing` is controlled also use `useColumnSizingInfo()`
+  or resizing lags one mouse move. Column meta: `align`, `sortKey` (server sort field).
 - Icons: **Lucide only**, imported from `@/components/icons` (`<Name>Icon`, default size 1em so
   icons follow text size). Add new icons there; ESLint rejects `react-icons` and direct
   `lucide-react` imports elsewhere.

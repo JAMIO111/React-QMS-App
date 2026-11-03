@@ -1,0 +1,150 @@
+import { describe, expect, it, vi } from "vitest";
+import { useState } from "react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { getCoreRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
+import Table from "./Table";
+import { useColumnSizingInfo } from "../hooks/useColumnSizingInfo";
+
+const data = [
+  { id: 1, name: "Bracket", qty: 5 },
+  { id: 2, name: "Axle", qty: 12 },
+  { id: 3, name: "Clamp", qty: 1 },
+];
+const columns = [
+  { id: "name", accessorKey: "name", header: "Name", size: 200, minSize: 80, maxSize: 400 },
+  { id: "qty", accessorKey: "qty", header: "Qty", size: 100, meta: { align: "right" } },
+  { id: "note", header: "Note", cell: () => <button type="button">Open</button>, enableSorting: false, enableResizing: false, size: 90 },
+];
+
+/** A real TanStack table, as a page would build it. */
+const Harness = ({ initialVisibility = {}, onRowDoubleClick, rows = data, isLoading }) => {
+  const [sorting, setSorting] = useState([]);
+  const [columnSizing, setColumnSizing] = useState({});
+  const [columnVisibility, setColumnVisibility] = useState(initialVisibility);
+  const sizingInfo = useColumnSizingInfo();
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: { sorting, columnSizing, columnVisibility, columnSizingInfo: sizingInfo.columnSizingInfo },
+    onColumnSizingInfoChange: sizingInfo.onColumnSizingInfoChange,
+    onSortingChange: setSorting,
+    onColumnSizingChange: setColumnSizing,
+    onColumnVisibilityChange: setColumnVisibility,
+    columnResizeMode: "onChange",
+    enableSortingRemoval: false,
+    sortDescFirst: false,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+  return <Table table={table} onRowDoubleClick={onRowDoubleClick} isLoading={isLoading} ariaLabel="Parts" />;
+};
+
+const colWidth = (id) => document.querySelector(`col[data-column-id="${id}"]`).style.width;
+const firstColumnValues = () => screen.getAllByRole("row").slice(1).map((r) => within(r).getAllByRole("cell")[0].textContent);
+
+describe("Table", () => {
+  it("renders header and rows in one table sized by a single colgroup", () => {
+    render(<Harness />);
+    expect(screen.getAllByRole("table")).toHaveLength(1);
+    // The trailing spare-width column is hidden from assistive technology.
+    expect(screen.getAllByRole("columnheader").map((th) => th.textContent)).toEqual(["Name", "Qty", "Note"]);
+    expect(colWidth("name")).toBe("200px");
+    expect(colWidth("qty")).toBe("100px");
+    expect(screen.getByRole("table").style.minWidth).toBe("390px"); // sum of column sizes
+  });
+
+  it("sorts when a header is clicked, toggling direction, and reports it with aria-sort", async () => {
+    render(<Harness />);
+    const nameHeader = screen.getByRole("columnheader", { name: /Name/ });
+    expect(nameHeader).toHaveAttribute("aria-sort", "none");
+
+    await userEvent.click(within(nameHeader).getByRole("button"));
+    expect(nameHeader).toHaveAttribute("aria-sort", "ascending");
+    expect(firstColumnValues()).toEqual(["Axle", "Bracket", "Clamp"]);
+
+    await userEvent.click(within(nameHeader).getByRole("button"));
+    expect(nameHeader).toHaveAttribute("aria-sort", "descending");
+    expect(firstColumnValues()).toEqual(["Clamp", "Bracket", "Axle"]);
+  });
+
+  it("does not offer sorting on columns that opt out", () => {
+    render(<Harness />);
+    const note = screen.getByRole("columnheader", { name: "Note" });
+    expect(within(note).queryByRole("button")).toBeNull();
+    expect(note).not.toHaveAttribute("aria-sort");
+  });
+
+  it("resizes a column by dragging, within its min and max, and resets on double-click", () => {
+    render(<Harness />);
+    const handle = screen.getByRole("separator", { name: "Resize Name" });
+
+    fireEvent.mouseDown(handle, { clientX: 200 });
+    fireEvent.mouseMove(document, { clientX: 260 });
+    expect(colWidth("name")).toBe("260px"); // header and rows share this width
+    fireEvent.mouseUp(document, { clientX: 260 });
+    expect(screen.getByRole("table").style.minWidth).toBe("450px");
+
+    fireEvent.mouseDown(handle, { clientX: 260 });
+    fireEvent.mouseMove(document, { clientX: 900 });
+    fireEvent.mouseUp(document, { clientX: 900 });
+    expect(colWidth("name")).toBe("400px"); // maxSize
+
+    fireEvent.mouseDown(handle, { clientX: 400 });
+    fireEvent.mouseMove(document, { clientX: 0 });
+    fireEvent.mouseUp(document, { clientX: 0 });
+    expect(colWidth("name")).toBe("80px"); // minSize
+
+    fireEvent.doubleClick(handle);
+    expect(colWidth("name")).toBe("200px");
+  });
+
+  it("does not sort when the resize handle is used", () => {
+    render(<Harness />);
+    const nameHeader = screen.getByRole("columnheader", { name: /Name/ });
+    const handle = screen.getByRole("separator", { name: "Resize Name" });
+    fireEvent.mouseDown(handle, { clientX: 200 });
+    fireEvent.mouseUp(document, { clientX: 220 });
+    fireEvent.click(handle);
+    expect(nameHeader).toHaveAttribute("aria-sort", "none");
+  });
+
+  it("has no resize handle on fixed columns", () => {
+    render(<Harness />);
+    expect(screen.queryByRole("separator", { name: "Resize Note" })).toBeNull();
+  });
+
+  it("hides columns from the header and every row", () => {
+    render(<Harness initialVisibility={{ qty: false }} />);
+    expect(screen.queryByRole("columnheader", { name: /Qty/ })).toBeNull();
+    expect(document.querySelector('col[data-column-id="qty"]')).toBeNull();
+    for (const row of screen.getAllByRole("row").slice(1)) {
+      expect(row.querySelector('[data-column-id="qty"]')).toBeNull();
+    }
+  });
+
+  it("aligns cells from column meta", () => {
+    render(<Harness />);
+    const qtyCell = document.querySelector('td[data-column-id="qty"] > div');
+    expect(qtyCell.className).toContain("justify-end");
+  });
+
+  it("opens a row on double-click, but not when a control inside it is used", async () => {
+    const open = vi.fn();
+    render(<Harness onRowDoubleClick={open} />);
+    const firstRow = screen.getAllByRole("row")[1];
+    await userEvent.dblClick(within(firstRow).getAllByRole("cell")[0]);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls[0][0].original.name).toBe("Bracket");
+
+    await userEvent.dblClick(within(firstRow).getByRole("button", { name: "Open" }));
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows loading and empty states across the full width", () => {
+    const { rerender } = render(<Harness rows={[]} isLoading />);
+    expect(screen.getByRole("cell", { name: "Loading…" })).toHaveAttribute("colspan", "4");
+    rerender(<Harness rows={[]} />);
+    expect(screen.getByRole("cell", { name: "No records found." })).toBeInTheDocument();
+  });
+});

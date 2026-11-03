@@ -15,8 +15,8 @@ Both use the Supabase project `xvpgrmujayytbbmhnoan`, whose data is test data.
 
 Pushes to `Dev` produce Preview deployments. Each project also gets a stable branch address:
 
-- `https://qms-web-git-dev-<account>.vercel.app`
-- `https://qms-api-git-dev-<account>.vercel.app`
+- `https://qms-web-git-dev-jamie-drydens-projects.vercel.app`
+- `https://qms-api-git-dev-jamie-drydens-projects.vercel.app`
 
 Use the branch addresses in the settings below; the per-deployment addresses change on every push.
 
@@ -33,7 +33,7 @@ them or paste them into chat.
 | `DATABASE_POOL_MAX` | `2` (each function instance holds its own small pool) |
 | `SUPABASE_URL` | `https://xvpgrmujayytbbmhnoan.supabase.co` |
 | `SUPABASE_JWT_SECRET` | Legacy JWT secret (Supabase → Project Settings → JWT). Sensitive. |
-| `CORS_ORIGINS` | The frontend's addresses, e.g. `https://qms-web-git-dev-<account>.vercel.app,https://qms-web-*.vercel.app` (`*` matches one label fragment, never `.` or `/`) |
+| `CORS_ORIGINS` | The frontend's addresses, e.g. `https://qms-web-git-dev-jamie-drydens-projects.vercel.app,https://qms-web-*-jamie-drydens-projects.vercel.app` (`*` matches one label fragment, never `.` or `/`) |
 | `NODE_ENV` | `production` |
 | `SUPABASE_SERVICE_ROLE_KEY`, `INVITE_REDIRECT_URL` | Optional — only once the invited-user password flow exists (exit report §5). |
 
@@ -43,15 +43,15 @@ them or paste them into chat.
 |---|---|
 | `VITE_SUPABASE_URL` | `https://xvpgrmujayytbbmhnoan.supabase.co` |
 | `VITE_SUPABASE_KEY` | Publishable / anon key (public by design) |
-| `VITE_API_URL` | `https://qms-api-git-dev-<account>.vercel.app` (no `/api/v1`; the client adds it) |
+| `VITE_API_URL` | `https://qms-api-git-dev-jamie-drydens-projects.vercel.app` (no `/api/v1`; the client adds it) |
 | `VITE_UNIRATE_API_KEY` | Optional |
 
 `VITE_*` values are compiled into the bundle, so change them and then redeploy.
 
 ## Other settings
 
-- **Supabase → Authentication → URL Configuration:** add `https://qms-web-git-dev-<account>.vercel.app/**`
-  (and `https://qms-web-*-<account>.vercel.app/**` for per-deployment addresses) to Redirect URLs.
+- **Supabase → Authentication → URL Configuration:** add `https://qms-web-git-dev-jamie-drydens-projects.vercel.app/**`
+  (and `https://qms-web-*-jamie-drydens-projects.vercel.app/**` for per-deployment addresses) to Redirect URLs.
 - **Deployment protection:** keep Vercel Authentication on for `qms-web`. Turn it off for `qms-api`
   (the browser cannot send Vercel's login cookie cross-origin, and CORS preflights would fail). The
   API still rejects anything without a valid Supabase token; only `/api/v1/health` and the OpenAPI
@@ -65,5 +65,5 @@ them or paste them into chat.
 
 ## Check it works
 
-1. `https://qms-api-git-dev-<account>.vercel.app/api/v1/health` returns `{"status":"ok","checks":{"database":"ok"}}`.
+1. `https://qms-api-git-dev-jamie-drydens-projects.vercel.app/api/v1/health` returns `{"status":"ok","checks":{"database":"ok"}}`.
 2. Sign in on the frontend address; Settings → Organisation loads (this calls the API).

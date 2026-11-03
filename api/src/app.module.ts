@@ -31,7 +31,17 @@ export class AppModule implements NestModule {
           pinoHttp: {
             level: env.LOG_LEVEL,
             genReqId: (req, res) => resolveCorrelationId(req as ApiRequest, res as Response),
-            redact: ['req.headers.authorization', 'req.headers.cookie'],
+            // Log an allowlist of request fields only: hosting platforms add their own credential
+            // headers (e.g. Vercel's OIDC token), and Authorization/cookies must never be logged.
+            serializers: {
+              req: (req: { id: unknown; method: string; url: string; headers?: Record<string, unknown> }) => ({
+                id: req.id,
+                method: req.method,
+                url: req.url,
+                origin: req.headers?.origin,
+                userAgent: req.headers?.['user-agent'],
+              }),
+            },
             customProps: (req) => ({ userId: (req as ApiRequest).user?.id, organisationId: (req as ApiRequest).organisationId }),
           },
         }),

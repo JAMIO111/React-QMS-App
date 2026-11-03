@@ -39,7 +39,7 @@ them or paste them into chat.
 | `DATABASE_POOL_MAX` | `2` (each function instance holds its own small pool) |
 | `SUPABASE_URL` | `https://xvpgrmujayytbbmhnoan.supabase.co` |
 | `SUPABASE_JWT_SECRET` | Legacy JWT secret (Supabase → Project Settings → JWT). Sensitive. |
-| `CORS_ORIGINS` | The frontend's addresses, e.g. `https://qms-web-git-dev-jamie-drydens-projects.vercel.app,https://qms-web-*-jamie-drydens-projects.vercel.app` (`*` matches one label fragment, never `.` or `/`) |
+| `CORS_ORIGINS` | `https://qms-*-jamie-drydens-projects.vercel.app` — every address of this Vercel team: the branch alias, the production alias and per-deployment URLs (`qms-<hash>-…`, which is what the dashboard's *Visit* button opens). Only this team can own names ending in `-jamie-drydens-projects.vercel.app`; `*` never matches `.` or `/`. |
 | `NODE_ENV` | `production` |
 | `SUPABASE_SERVICE_ROLE_KEY`, `INVITE_REDIRECT_URL` | Optional — only once the invited-user password flow exists (exit report §5). |
 

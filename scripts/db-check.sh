@@ -2,6 +2,8 @@
 # Applies every migration in supabase/migrations to a throwaway local Postgres cluster, then runs
 # the SQL tests in supabase/tests/*.test.sql. Needs Postgres server binaries (initdb, pg_ctl).
 # Usage: npm run db:check
+# Env: DB_CHECK_FIXTURES=<dir> (fixtures loaded after the migration of the same name),
+#      DB_CHECK_EXTRA=<file.sql> (run after all migrations), DB_CHECK_SKIP_TESTS=1
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -30,12 +32,15 @@ for f in supabase/migrations/*.sql; do
   "${PSQL[@]}" -1 -f "$f"
   # Optional fixture loaded right after a migration, so later migrations run against existing data
   # (exercises backfills). Named after the migration file.
-  fixture="supabase/tests/fixtures/$(basename "$f")"
+  fixture="${DB_CHECK_FIXTURES:-supabase/tests/fixtures}/$(basename "$f")"
   if [ -f "$fixture" ]; then echo "fixture  $fixture"; "${PSQL[@]}" -1 -f "$fixture"; fi
 done
 
 # Optional: run an extra SQL file against the migrated database (e.g. a schema fingerprint).
 if [ -n "${DB_CHECK_EXTRA:-}" ]; then "${PSQL[@]}" -At -f "$DB_CHECK_EXTRA"; fi
+
+# DB_CHECK_SKIP_TESTS=1 skips the SQL tests (e.g. when rehearsing with other fixtures).
+[ -n "${DB_CHECK_SKIP_TESTS:-}" ] && exit 0
 
 shopt -s nullglob
 fail=0

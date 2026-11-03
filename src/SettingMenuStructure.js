@@ -7,8 +7,8 @@ import { BsGear } from "react-icons/bs";
 
 const SettingMenuStructure = [
   {
-    name: "General",
-    path: "General",
+    name: "Organisation",
+    path: "Organisation",
     icon: BsGear,
     subMenu: [],
   },

@@ -1,30 +1,34 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthProvider";
 import { signOut } from "../authService";
+import CreateOrganisationForm from "./CreateOrganisationForm";
 
 /**
- * Shown to a signed-in user who is not an active member of any organisation.
- * (Creating an organisation and accepting invitations arrive in Phase 1.4/1.5.)
+ * Shown to a signed-in user who is not an active member of any organisation: create one (they
+ * become its Owner) or ask to be invited. Invitations arrive in Phase 1.5.
  */
 const NoOrganisation = ({ error }) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-primary-bg p-4">
-      <div className="max-w-md w-full rounded-2xl border border-border-color bg-secondary-bg p-6 text-primary-text">
+    <main className="flex min-h-screen w-full items-center justify-center bg-primary-bg p-4">
+      <div className="max-w-lg w-full rounded-2xl border border-border-color bg-secondary-bg p-6 text-primary-text flex flex-col gap-5">
         {error ? (
-          <>
+          <div>
             <h1 className="text-xl font-semibold mb-2">Couldn't load your organisations</h1>
-            <p className="text-secondary-text mb-4">{error.message}</p>
-          </>
+            <p className="text-secondary-text">{error.message}</p>
+          </div>
         ) : (
           <>
-            <h1 className="text-xl font-semibold mb-2">No organisation yet</h1>
-            <p className="text-secondary-text mb-4">
-              {user?.email ? `${user.email} is` : "Your account is"} not a member
-              of any organisation. Ask an administrator of your organisation to
-              invite you, then sign in again.
-            </p>
+            <div>
+              <h1 className="text-xl font-semibold mb-1">Set up your organisation</h1>
+              <p className="text-secondary-text text-sm">
+                {user?.email ? `${user.email} is` : "Your account is"} not a member of any
+                organisation yet. Create one to get started — you'll be its Owner — or ask an
+                administrator of an existing organisation to invite you.
+              </p>
+            </div>
+            <CreateOrganisationForm />
           </>
         )}
         <button
@@ -33,11 +37,11 @@ const NoOrganisation = ({ error }) => {
             await signOut();
             queryClient.clear();
           }}
-          className="rounded-lg border border-border-color px-4 py-2 hover:bg-tertiary-bg cursor-pointer">
+          className="self-start text-sm text-secondary-text underline hover:text-primary-text cursor-pointer">
           Sign out
         </button>
       </div>
-    </div>
+    </main>
   );
 };
 

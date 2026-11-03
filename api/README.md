@@ -24,14 +24,21 @@ The database login `qms_api` has no privileges of its own (see
 the signed-in user, and the audit trail records `source = 'api'`, the correlation id and the reason.
 Permission checks in the API are a second, explicit layer on top of RLS.
 
-## Endpoints (Phase 1.3)
+## Endpoints
 
 | Method & path | Auth | Purpose |
 |---|---|---|
 | `GET /api/v1/health` | public | API and database reachable |
 | `GET /api/v1/me` | signed in | Profile, active organisations, effective permissions per organisation |
 | `PATCH /api/v1/me` | signed in | Update own first name, surname, job title |
+| `POST /api/v1/organisations` | signed in | Create an organisation (caller becomes Owner); `Idempotency-Key` supported |
 | `GET /api/v1/organisations/current` | member (`X-Organisation-Id`) | Organisation and settings |
+| `PATCH /api/v1/organisations/current` | `organisation.manage` | Rename, change currency / VAT / NCR prefix |
+| `GET /api/v1/sites`, `POST`, `PATCH /:id` | member / `organisation.manage` | Sites (deactivate with `active: false`) |
+| `GET /api/v1/departments?siteId=`, `POST`, `PATCH /:id` | member / `organisation.manage` | Departments of a site |
+
+Lists return `{ data, nextCursor }`; pass `cursor` (and `limit`, max 200) for the next page.
+Database errors are mapped to stable codes in `src/common/database-errors.ts`.
 
 ## Configuration
 

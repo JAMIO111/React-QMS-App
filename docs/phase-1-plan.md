@@ -221,7 +221,7 @@ Deactivate instead of delete for sites, departments and memberships.
 
 ## 6. Delivery slices
 
-**Status:** 1.1, 1.2 and 1.3 done (see §9–§11). Next: 1.4.
+**Status:** 1.1–1.4 done (see §9–§12). Next: 1.5.
 
 Each slice is one reviewable change that leaves `Dev` working, with its own tests and docs.
 
@@ -380,3 +380,42 @@ restricted `postgres` role.
 **Not done / needs the user:** the API is not deployed (hosting decision pending) and has not yet
 connected to the live project. To run it: provide `DATABASE_URL` (pooler user `qms_api.<project-ref>`)
 and `SUPABASE_JWT_SECRET` (the project's JWKS endpoint is empty, i.e. it still uses the legacy secret).
+
+---
+
+## 12. Slice 1.4 — done (2026-11-03)
+
+**Database:** migration `20251103130000_create_organisation` — `app.create_organisation(name, site
+name, site code, idempotency key)` (SECURITY DEFINER, reachable only via the API) creates the
+organisation, settings, default site, standard roles, four starter NCR statuses and the caller's
+Owner membership in one transaction; per-user idempotency keys (`app.idempotency_keys`, private);
+abuse limit of 10 new organisations per user per day. Tests: `supabase/tests/create_organisation.test.sql`.
+
+**API:** `POST /organisations` (Idempotency-Key), `GET`/`PATCH /organisations/current`
+(`organisation.manage`), `GET`/`POST /sites`, `PATCH /sites/:id`, `GET`/`POST /departments`,
+`PATCH /departments/:id`. Keyset pagination (`limit`, opaque `cursor`, `{ data, nextCursor }`).
+No deletes: sites/departments are deactivated. Database errors map to stable codes (409 `conflict`,
+400 `invalid_reference`/`invalid_value`, 403, 429 `limit_reached`, 503 `timeout`). 33 unit and
+45 e2e tests (e2e suites isolated with per-suite ids), incl. every write attempted across tenants
+and without permission.
+
+**Frontend:** `src/lib/api-client.js` (token, X-Organisation-Id, correlation id, X-Change-Reason,
+Idempotency-Key, error mapping, "API unreachable"), `src/hooks/useQmsApi.js` (`useMe`,
+`usePermissions`, organisation/site/department queries and mutations), onboarding on the
+no-organisation screen (`CreateOrganisationForm`), header `OrganisationSwitcher` (hidden with one
+organisation), Settings → Organisation (details, defaults, optional audit reason, sites and
+departments; read-only without `organisation.manage`). 22 frontend tests.
+
+**Browser check** (UI → local API → throwaway Postgres; Supabase session/profile/membership calls
+stubbed): settings saved, site and department created, duplicate site code shows the API's message,
+all four changes audited with `source = api` (reason on the settings change), onboarding created an
+organisation with the new user as Owner, no console errors.
+
+**Deviations:** new frontend files are JavaScript (the frontend has no TypeScript tooling yet; adding
+it is deferred rather than mixed in). The rest of the app still reads Supabase directly (memberships
+for the switcher, NC registers); only settings and onboarding need the API. A site switcher is
+deferred until records carry `site_id` (Phase 2).
+
+**Needs the user:** apply the migration (SQL editor). Settings → Organisation and onboarding only
+work where the API runs (`npm run api:dev` locally) until API hosting is chosen; `VITE_API_URL`
+points the frontend at it.

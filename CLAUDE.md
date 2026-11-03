@@ -37,6 +37,10 @@ Summary of the brief:
 - Append-only quality audit trail in `audit.events` (trigger `audit.record_change` on tenancy and
   quality tables), readable via `public.audit_events` with `audit.read`. New quality-critical tables
   must get the `audit_changes` trigger.
+- Frontend → API: `src/lib/api-client.js` (`apiFetch`, `VITE_API_URL`) and hooks in
+  `src/hooks/useQmsApi.js` (`useMe`, `usePermissions`, organisation/site/department hooks). Used by
+  onboarding (`CreateOrganisationForm`), the header `OrganisationSwitcher` and Settings → Organisation.
+  New features should call the API, not Supabase tables.
 - Frontend reads the current user from `profiles` and memberships via `OrganisationProvider`;
   every query filters by the current `organisationId`. Storage paths: `nc-files/<org_id>/...`,
   `avatars/users/<user_id>/...` (both private).
@@ -49,10 +53,10 @@ NestJS API added in Phase 1 alongside the Vite frontend; holiday-let code archiv
 branch `archive/holiday-let` then removed; Supabase project `xvpgrmujayytbbmhnoan` ("React QMS") is
 canonical and its data is test data; RLS enabled in the first Phase 1 migration with policies.
 Step 0 (Stabilise) and Phase 1 slices 1.1 (tenancy + RLS), 1.2 (audit trail) and 1.3 (API
-skeleton) are done. Plan and agreed decisions
+skeleton), 1.4 (organisations, sites, departments, onboarding) are done. Plan and agreed decisions
 in `docs/phase-1-plan.md` (API hosting decided later; migrations checked locally with
 `npm run db:check`, rehearsed on a live-data copy, then applied via the SQL editor; Supabase
-built-in email for now). Next: **slice 1.4 (organisations, sites, departments + onboarding UI)**.
+built-in email for now). Next: **slice 1.5 (members, invitations, roles + Users & permissions UI)**.
 The project still signs tokens with the legacy HS256 secret (JWKS endpoint is empty), so the API
 needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.
 

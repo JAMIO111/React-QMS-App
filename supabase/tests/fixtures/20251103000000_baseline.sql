@@ -26,6 +26,9 @@ INSERT INTO public."Notifications" (id, org, created_by, title) VALUES ('0000000
 INSERT INTO public."Notification Recipients" (notification_id, recipient_id) VALUES ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a1');
 
 -- Explicit ids above don't advance identity sequences; keep them in step as the live project's are.
-SELECT setval(pg_get_serial_sequence('public."Status"', 'id'), (SELECT max(id) FROM public."Status"));
-SELECT setval(pg_get_serial_sequence('public."Failure Mode"', 'id'), (SELECT max(id) FROM public."Failure Mode"));
-SELECT setval(pg_get_serial_sequence('public."Process"', 'id'), (SELECT max(id) FROM public."Process"));
+DO $$
+BEGIN
+  PERFORM setval(pg_get_serial_sequence('public."Status"', 'id'), (SELECT max(id) FROM public."Status"));
+  PERFORM setval(pg_get_serial_sequence('public."Failure Mode"', 'id'), (SELECT max(id) FROM public."Failure Mode"));
+  PERFORM setval(pg_get_serial_sequence('public."Process"', 'id'), (SELECT max(id) FROM public."Process"));
+END $$;

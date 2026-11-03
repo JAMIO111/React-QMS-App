@@ -6,6 +6,7 @@ import { useUser } from "../contexts/UserProvider";
 import { useNotification } from "../contexts/NotificationProvider";
 import { useNotifications } from "../hooks/useNotifications";
 import useSignedAvatarUrl from "../hooks/useSignedAvatarURL";
+import OrganisationSwitcher from "./OrganisationSwitcher";
 
 const Header = () => {
   const { profile } = useUser();
@@ -26,6 +27,7 @@ const Header = () => {
     <header className="flex justify-between items-center border-b-1 border-border-color bg-secondary-bg px-4">
       <SearchBar />
       <div className="flex justify-between items-center py-2 gap-3">
+        <OrganisationSwitcher />
         <HeaderIcon icon={GoMail} top={7} right={3} />
         <button onClick={() => openPane()}>
           <HeaderIcon

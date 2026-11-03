@@ -2,11 +2,11 @@
   "name": "@qms/api",
   "version": "0.1.0",
   "private": true,
-  "description": "QMS platform API (NestJS). See docs/phase-1-plan.md §4.",
+  "description": "QMS platform API (NestJS). See docs/phase-1-plan.md \u00a74.",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/main.js",
-    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput & node --watch dist/main.js",
+    "start": "node --env-file-if-exists=.env dist/main.js",
+    "dev": "npm run build && npm run start",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest --config jest.config.json",
     "test:e2e": "jest --config jest.e2e.config.json --runInBand"
@@ -38,5 +38,8 @@
     "supertest": "7.3.1",
     "ts-jest": "29.4.15",
     "typescript": "5.8.3"
+  },
+  "engines": {
+    "node": ">=22.9"
   }
 }

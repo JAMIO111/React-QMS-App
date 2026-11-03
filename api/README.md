@@ -66,7 +66,7 @@ structured JSON; `Authorization` and cookies are redacted.
 
 ```sh
 npm run api:build        # compile to api/dist
-npm run api:dev          # watch mode (needs api env vars)
+npm run api:dev          # build, then start with api/.env loaded (Node >= 22.9; works on Windows, macOS, Linux)
 npm run api:test         # unit tests
 npm run api:test:e2e     # migrate a throwaway Postgres, then run the e2e suite against it as qms_api
 ```

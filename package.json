@@ -10,7 +10,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:check": "bash scripts/db-check.sh"
+    "db:check": "bash scripts/db-check.sh",
+    "api:build": "npm --workspace api run build",
+    "api:test": "npm --workspace api run test",
+    "api:test:e2e": "DB_CHECK_SKIP_TESTS=1 DB_CHECK_COMMAND=\"npm --workspace api run test:e2e\" bash scripts/db-check.sh",
+    "api:dev": "npm --workspace api run dev"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -60,5 +64,8 @@
     "tw-animate-css": "^1.3.0",
     "vite": "^6.3.1",
     "vitest": "^3.2.4"
-  }
+  },
+  "workspaces": [
+    "api"
+  ]
 }

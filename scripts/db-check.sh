@@ -3,7 +3,9 @@
 # the SQL tests in supabase/tests/*.test.sql. Needs Postgres server binaries (initdb, pg_ctl).
 # Usage: npm run db:check
 # Env: DB_CHECK_FIXTURES=<dir> (fixtures loaded after the migration of the same name),
-#      DB_CHECK_EXTRA=<file.sql> (run after all migrations), DB_CHECK_SKIP_TESTS=1
+#      DB_CHECK_EXTRA=<file.sql> (run after all migrations), DB_CHECK_SKIP_TESTS=1,
+#      DB_CHECK_COMMAND="<cmd>" (run after migrations/tests with DATABASE_URL (qms_api login) and
+#      DATABASE_ADMIN_URL (superuser, for seeding) pointing at the throwaway cluster)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -39,12 +41,19 @@ done
 # Optional: run an extra SQL file against the migrated database (e.g. a schema fingerprint).
 if [ -n "${DB_CHECK_EXTRA:-}" ]; then "${PSQL[@]}" -At -f "$DB_CHECK_EXTRA"; fi
 
-# DB_CHECK_SKIP_TESTS=1 skips the SQL tests (e.g. when rehearsing with other fixtures).
-[ -n "${DB_CHECK_SKIP_TESTS:-}" ] && exit 0
-
-shopt -s nullglob
 fail=0
-for t in supabase/tests/*.test.sql; do
-  if "${PSQL[@]}" -f "$t" >"$TMP/out" 2>&1; then echo "pass     $t"; else echo "FAIL     $t"; cat "$TMP/out"; fail=1; fi
-done
+if [ -z "${DB_CHECK_SKIP_TESTS:-}" ]; then
+  shopt -s nullglob
+  for t in supabase/tests/*.test.sql; do
+    if "${PSQL[@]}" -f "$t" >"$TMP/out" 2>&1; then echo "pass     $t"; else echo "FAIL     $t"; cat "$TMP/out"; fail=1; fi
+  done
+fi
+
+if [ -n "${DB_CHECK_COMMAND:-}" ] && [ $fail -eq 0 ]; then
+  export DATABASE_URL="postgresql://qms_api@localhost:$PORT/postgres?host=$TMP"
+  export DATABASE_ADMIN_URL="postgresql://postgres@localhost:$PORT/postgres?host=$TMP"
+  echo "command  $DB_CHECK_COMMAND"
+  bash -c "$DB_CHECK_COMMAND" || fail=1
+fi
 exit $fail
+

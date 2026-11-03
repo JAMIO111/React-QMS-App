@@ -6,6 +6,7 @@ Migrations for the Supabase project **"React QMS"** (`xvpgrmujayytbbmhnoan`).
 |---|---|
 | `migrations/20251103000000_baseline.sql` | The schema as it existed when it was brought under version control (built in the dashboard). Already present remotely — **do not apply it there**. |
 | `tests/supabase_stubs.sql` | Minimal `auth` / `storage` stand-ins so migrations run on plain Postgres. Local only. |
+| `tests/fixtures/<migration>.sql` | Data loaded right after the migration of the same name, so later migrations' backfills are exercised. |
 | `tests/*.test.sql` | SQL tests; each file must exit cleanly (raise an exception to fail). |
 
 ## Checking migrations locally
@@ -15,7 +16,7 @@ npm run db:check
 ```
 
 Creates a throwaway Postgres cluster, applies the stubs and every migration in order, then runs
-`tests/*.test.sql`. Needs Postgres server binaries (`initdb`, `pg_ctl`); set `PGBIN` if they are
+`tests/*.test.sql`. `npm run api:test:e2e` reuses it to run the API's end-to-end tests as `qms_api`. Needs Postgres server binaries (`initdb`, `pg_ctl`); set `PGBIN` if they are
 not under `/usr/lib/postgresql/<version>/bin`.
 
 The baseline was verified against the remote project on 2026-11-03: a fingerprint of every public

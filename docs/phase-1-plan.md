@@ -221,7 +221,7 @@ Deactivate instead of delete for sites, departments and memberships.
 
 ## 6. Delivery slices
 
-**Status:** 1.1 and 1.2 done (applied 2026-11-03, see §9 and §10). Next: 1.3.
+**Status:** 1.1, 1.2 and 1.3 done (see §9–§11). Next: 1.4.
 
 Each slice is one reviewable change that leaves `Dev` working, with its own tests and docs.
 
@@ -344,3 +344,30 @@ warning for the two new objects (rows remain protected by RLS).
 **Known limits:** the database owner can still disable the guard triggers; stronger tamper-evidence
 (hash chaining, external retention) is deferred per brief §11. No UI yet — events are surfaced by the
 API in 1.3/1.4.
+
+---
+
+## 11. Slice 1.3 — done (2026-11-03)
+
+- `api/` npm workspace: NestJS 11, TypeScript strict, Drizzle (node-postgres), zod validation,
+  jose token verification (JWKS or legacy HS256), nestjs-pino logs with redaction, throttler,
+  OpenAPI. Details and conventions in `api/README.md`.
+- Migration `20251103120000_api_role`: `qms_api` login, NOINHERIT, member of `authenticated` only.
+  `supabase/tests/api_role.test.sql` proves it has no privileges of its own and cannot become
+  `service_role`, `postgres` or `anon`.
+- Endpoints: `GET /health`, `GET /me`, `PATCH /me`, `GET /organisations/current` (the last one pulled
+  forward from 1.4 as the minimal read that exercises organisation scoping).
+- Tests: 24 unit tests (env, token verification incl. wrong secret/issuer/audience/expiry/role,
+  correlation ids, organisation guard) and 27 e2e tests against a migrated throwaway Postgres as
+  `qms_api` (auth, error format, OpenAPI, /me, organisation scope 400/404, RLS inside the API, audit
+  `source=api` + correlation id + reason, rollback, no role/claims leakage between requests,
+  rate limiting). Mutation checks: removing `SET LOCAL ROLE` fails 6 e2e tests; removing the
+  membership check fails the guard unit test (RLS still returned 404 end to end).
+
+**Deviations:** jose 5 instead of 6 (v6 is ESM-only; Jest runs CommonJS). The service-role key is
+not needed until invitations (1.5). Idempotency keys are accepted by CORS but first used by create
+endpoints in 1.4/1.5.
+
+**Not done / needs the user:** the API is not deployed (hosting decision pending). To run it against
+the live project: apply the role migration, set the `qms_api` password, and provide `DATABASE_URL`
+and `SUPABASE_JWT_SECRET` (the project's JWKS endpoint is empty, i.e. it still uses the legacy secret).

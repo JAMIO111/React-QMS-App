@@ -21,7 +21,10 @@ Summary of the brief:
 
 - Vite + React 19 (JavaScript, not TypeScript), Tailwind v4, TanStack Query/Table,
   react-hook-form + zod, Recharts. Supabase (auth, DB, storage) called directly from the client
-  via `src/api/supabaseApi.js` and `src/supabase-client.js`. No backend service yet.
+  via `src/api/supabaseApi.js` and `src/supabase-client.js`.
+- `api/` (npm workspace): NestJS 11 + TypeScript API at `/api/v1` — see `api/README.md`. Connects as
+  the `qms_api` login and runs every query via `DatabaseService.asUser()` as `authenticated` with the
+  caller's JWT claims (RLS + audit apply). New data access must go through it. Not deployed yet.
 - Routes in `src/main.jsx`; side menu in `src/MenuStructure.js`. Routed areas: Dashboard
   (simple overview), Non-Conformance registers (`/Non-Conformance/:type` — Internal, Customer,
   Supplier), Human Resources (employee list), Settings.
@@ -45,11 +48,13 @@ Summary of the brief:
 NestJS API added in Phase 1 alongside the Vite frontend; holiday-let code archived on
 branch `archive/holiday-let` then removed; Supabase project `xvpgrmujayytbbmhnoan` ("React QMS") is
 canonical and its data is test data; RLS enabled in the first Phase 1 migration with policies.
-Step 0 (Stabilise) and Phase 1 slices 1.1 (tenancy + RLS) and 1.2 (audit trail) are done. Plan and agreed decisions
+Step 0 (Stabilise) and Phase 1 slices 1.1 (tenancy + RLS), 1.2 (audit trail) and 1.3 (API
+skeleton) are done. Plan and agreed decisions
 in `docs/phase-1-plan.md` (API hosting decided later; migrations checked locally with
 `npm run db:check`, rehearsed on a live-data copy, then applied via the SQL editor; Supabase
-built-in email for now). Next: **slice 1.3 (NestJS API skeleton)** — needs a DB connection string
-and Supabase service-role key from the user as environment secrets.
+built-in email for now). Next: **slice 1.4 (organisations, sites, departments + onboarding UI)**.
+The project still signs tokens with the legacy HS256 secret (JWKS endpoint is empty), so the API
+needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.
 
 ## Commands
 
@@ -59,7 +64,10 @@ and Supabase service-role key from the user as environment secrets.
 - `npm test` — Vitest unit/component tests (`src/**/*.test.{js,jsx}`)
 - `npm run db:check` — apply all migrations to a throwaway local Postgres and run `supabase/tests/*.test.sql`
 
-Before committing: `npm run lint && npm test && npm run build`, plus `npm run db:check` for any migration change.
+- `npm run api:build` / `npm run api:test` / `npm run api:test:e2e` — API build, unit tests, e2e tests against a migrated throwaway Postgres
+
+Before committing: `npm run lint && npm test && npm run build`, plus `npm run db:check` for any
+migration change and `npm run api:test && npm run api:test:e2e` for API changes.
 
 ## Git
 

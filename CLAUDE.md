@@ -24,7 +24,8 @@ Summary of the brief:
   via `src/api/supabaseApi.js` and `src/supabase-client.js`.
 - `api/` (npm workspace): NestJS 11 + TypeScript API at `/api/v1` — see `api/README.md`. Connects as
   the `qms_api` login and runs every query via `DatabaseService.asUser()` as `authenticated` with the
-  caller's JWT claims (RLS + audit apply). New data access must go through it. Not deployed yet.
+  caller's JWT claims (RLS + audit apply). New data access must go through it. Deployed with the
+  frontend to a Vercel dev environment from `Dev` (`docs/deployment-vercel.md`).
 - Routes in `src/main.jsx`; side menu in `src/MenuStructure.js`. Routed areas: Dashboard
   (simple overview), Non-Conformance registers (`/Non-Conformance/:type` — Internal, Customer,
   Supplier), Human Resources (employee list), Settings.

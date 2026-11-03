@@ -17,7 +17,7 @@ Summary of the brief:
   incremental reversible migrations, never claim unverified results, keep secrets out of source
   control and client bundles. See brief §2 and §14 (definition of done) and §15 (non-goals).
 
-## Current state of the repo (after Phase 1.1, Nov 2026)
+## Current state of the repo (after Phase 1, Nov 2026)
 
 - Vite + React 19 (JavaScript, not TypeScript), Tailwind v4, TanStack Query/Table,
   react-hook-form + zod, Recharts. Supabase (auth, DB, storage) called directly from the client
@@ -56,10 +56,11 @@ branch `archive/holiday-let` then removed; Supabase project `xvpgrmujayytbbmhnoa
 canonical and its data is test data; RLS enabled in the first Phase 1 migration with policies.
 Step 0 (Stabilise) and Phase 1 slices 1.1 (tenancy + RLS), 1.2 (audit trail) and 1.3 (API
 skeleton), 1.4 (organisations, sites, departments, onboarding) and 1.5 (members, invitations,
-roles) are done. Plan and agreed decisions
+roles) and 1.6 (exit check) are done — Phase 1 is complete; see `docs/phase-1-exit-report.md`. Plan and agreed decisions
 in `docs/phase-1-plan.md` (API hosting decided later; migrations checked locally with
 `npm run db:check`, rehearsed on a live-data copy, then applied via the SQL editor; Supabase
-built-in email for now). Next: **slice 1.6 (Phase 1 exit check)**.
+built-in email for now). Next: **Phase 2** (first complete QMS workflow), starting with the
+exit report's recommended items (invited-user password flow, MFA, NC registers via the API).
 The project still signs tokens with the legacy HS256 secret (JWKS endpoint is empty), so the API
 needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.
 
@@ -75,6 +76,14 @@ needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.
 
 Before committing: `npm run lint && npm test && npm run build`, plus `npm run db:check` for any
 migration change and `npm run api:test && npm run api:test:e2e` for API changes.
+
+Guardrails that will fail on purpose when something new is added without tenancy:
+- `supabase/tests/guardrails.test.sql` (new table without RLS/policy/organisation_id, view without
+  security_invoker, function without search_path, anon privileges, missing audit trigger);
+- `supabase/tests/tenancy_sweep.test.sql` (new tenant table must be seeded for the sweep);
+- `api/test/tenancy-sweep.e2e-spec.ts` (new route must be `@OrganisationScoped` or allowlisted;
+  new `{id}` route needs a sample body).
+`supabase/checks/guardrails.sql` can be run read-only against the live project.
 
 ## Git
 

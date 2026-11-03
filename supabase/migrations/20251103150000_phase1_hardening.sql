@@ -46,3 +46,53 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
        SELECT app.my_permissions((SELECT organisation_id FROM public.organisation_users WHERE id = p_membership_id))
      )
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Performance advisor (auth_rls_initplan): evaluate auth.uid() once per query, not once per row.
+-- Same rules as before; only `auth.uid()` becomes `(select auth.uid())`.
+-- ---------------------------------------------------------------------------
+DROP POLICY notifications_select ON public."Notifications";
+CREATE POLICY notifications_select ON public."Notifications" FOR SELECT TO authenticated
+  USING (app.is_member(organisation_id) AND (
+    created_by = (select auth.uid())
+    OR EXISTS (SELECT 1 FROM public."Notification Recipients" r
+               WHERE r.notification_id = "Notifications".id AND r.recipient_id = (select auth.uid()))));
+DROP POLICY notifications_insert ON public."Notifications";
+CREATE POLICY notifications_insert ON public."Notifications" FOR INSERT TO authenticated
+  WITH CHECK (app.is_member(organisation_id) AND created_by = (select auth.uid()));
+
+DROP POLICY recipients_select ON public."Notification Recipients";
+CREATE POLICY recipients_select ON public."Notification Recipients" FOR SELECT TO authenticated
+  USING (recipient_id = (select auth.uid()) AND app.is_member(organisation_id));
+DROP POLICY recipients_insert ON public."Notification Recipients";
+CREATE POLICY recipients_insert ON public."Notification Recipients" FOR INSERT TO authenticated
+  WITH CHECK (
+    app.is_member(organisation_id)
+    AND app.is_active_member_user(organisation_id, recipient_id)
+    AND EXISTS (SELECT 1 FROM public."Notifications" n
+                WHERE n.id = notification_id AND n.created_by = (select auth.uid())));
+DROP POLICY recipients_update ON public."Notification Recipients";
+CREATE POLICY recipients_update ON public."Notification Recipients" FOR UPDATE TO authenticated
+  USING (recipient_id = (select auth.uid()) AND app.is_member(organisation_id))
+  WITH CHECK (recipient_id = (select auth.uid()));
+
+DROP POLICY profiles_select ON public.profiles;
+CREATE POLICY profiles_select ON public.profiles FOR SELECT TO authenticated
+  USING (id = (select auth.uid()) OR app.shares_organisation(id));
+DROP POLICY profiles_update ON public.profiles;
+CREATE POLICY profiles_update ON public.profiles FOR UPDATE TO authenticated
+  USING (id = (select auth.uid())) WITH CHECK (id = (select auth.uid()));
+
+DROP POLICY members_select ON public.organisation_users;
+CREATE POLICY members_select ON public.organisation_users FOR SELECT TO authenticated
+  USING (user_id = (select auth.uid()) OR app.has_permission(organisation_id, 'members.read'));
+DROP POLICY members_update ON public.organisation_users;
+CREATE POLICY members_update ON public.organisation_users FOR UPDATE TO authenticated
+  USING (app.has_permission(organisation_id, 'members.manage') AND app.can_manage_membership(id)
+         AND user_id IS DISTINCT FROM (select auth.uid()))
+  WITH CHECK (app.has_permission(organisation_id, 'members.manage'));
+
+DROP POLICY assignments_select ON public.user_role_assignments;
+CREATE POLICY assignments_select ON public.user_role_assignments FOR SELECT TO authenticated
+  USING (app.has_permission(organisation_id, 'members.read')
+         OR EXISTS (SELECT 1 FROM public.organisation_users m WHERE m.id = membership_id AND m.user_id = (select auth.uid())));

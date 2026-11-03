@@ -221,7 +221,7 @@ Deactivate instead of delete for sites, departments and memberships.
 
 ## 6. Delivery slices
 
-**Status:** 1.1–1.5 done (see §9–§13). Next: 1.6 (exit check).
+**Status:** 1.1–1.6 done (see §9–§14 and `docs/phase-1-exit-report.md`). Next: Phase 2.
 
 Each slice is one reviewable change that leaves `Dev` working, with its own tests and docs.
 
@@ -455,3 +455,21 @@ member of another organisation sees new invitations only via `GET /invitations` 
 main app). Custom role editing is supported by the database but has no UI yet.
 
 **Needs the user:** run `apply_phase_1_4_and_1_5.sql` in the SQL editor (step 1.4 was not yet applied).
+
+---
+
+## 14. Slice 1.6 — exit check (2026-11-03)
+
+See `docs/phase-1-exit-report.md` for the verdict, evidence, definition-of-done review and gaps.
+
+- `supabase/checks/guardrails.sql` + `guardrails.test.sql`: catalogue-driven security rules; also
+  run against the live project (one violation, fixed by the hardening migration).
+- `supabase/tests/tenancy_sweep.test.sql`: every table, view and function swept for cross-tenant
+  access; setup must seed every tenant table.
+- `api/test/tenancy-sweep.e2e-spec.ts`: every API route from OpenAPI swept (scoping allowlist,
+  foreign organisation, foreign record ids, list leakage).
+- Migration `20251103150000_phase1_hardening`: PUBLIC execute revoked from a trigger function and by
+  default in `app`/`audit`; membership/role helpers answer only for the caller's organisations
+  (closed a membership probe found by the sweep); 10 policies use `(select auth.uid())` per the
+  performance advisor.
+- All guards mutation-checked. `api/.env.example` invitation redirect now points at `/`.

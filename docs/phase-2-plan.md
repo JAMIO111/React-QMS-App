@@ -291,3 +291,57 @@ superseded, 2 events); guardrails 0 violations.
 **Known gaps:** the legacy NC screens still read the old `"Part"`/`"Customers"` tables, so parts
 added here appear in NCRs from slice 2.4 (when the NC register moves to the new model). The
 customer picker lists the first 50 active customers (search-as-you-type picker later).
+
+## 11. Slice 2.4 — NCR core — done (2026-11-03, brought forward)
+
+Brought forward ahead of 2.2/2.3 at the user's request ("make the NC module work for internal,
+supplier and customer NCs: register, form, save, update, soft delete"). Inspection-sourced NCRs
+(`source = 'inspection'`) wait for slice 2.3.
+
+**Database** (`20251104130000_ncr_core.sql`)
+- `ncr_classifications` (failure modes, sub-failure modes under a failure mode, processes) replaces
+  the legacy `"Failure Mode"`, `"Sub-Failure Mode"`, `"Process"` lists; names unique per kind/parent
+  regardless of case; managed with `lookups.manage`; deactivate instead of delete.
+- `nonconformances`: one record for internal, customer and supplier NCs (source fixed after
+  creation), composite keys to parts/revisions/customers/suppliers/classifications/employees,
+  references `PREFIX-YY-NNN` from `organisation_settings.ncr_reference_prefix` and a per-year
+  counter (`app.ncr_counters`).
+- Stage machine in `app.nonconformance_rules()` (QM005 → API 409): draft → open (needs severity,
+  quantity, part or description, and the customer/supplier for those sources) → contained →
+  investigating → dispositioned → awaiting closure → closed, forward only; cancel from any open
+  stage with a reason; closed/cancelled reopen with a reason; closed, cancelled and deleted records
+  are locked. Soft delete (reason required) and restore need `ncr.delete`; edits need `ncr.update`.
+- RLS is site-aware (`ncr.read/create/update/delete` per site); audited; outbox events
+  `ncr.created`, `ncr.stage_changed`, `ncr.closed`, `ncr.deleted`, `ncr.restored`.
+- Legacy copy: classifications (legacy ids kept in `legacy_id`) and every `"NCM"` row (id and
+  reference kept). Status → stage: terminal → closed, omit → cancelled (reason notes the old
+  status), in-progress other than "Open" → investigating, otherwise open. Counters continue after
+  the highest migrated reference. The legacy tables are left in place (read-only use) until the
+  Phase 2 exit.
+
+**API:** `/ncrs` list (source, stage, search, failure mode, deleted exclude/include/only, sort,
+paging with total), get, create (`open: true` to raise straight to open), PATCH,
+`POST /ncrs/{id}/transitions`, `/delete` (reason), `/restore`, `/history`; `/ncr-classifications`
+(GET for members, POST/PATCH with `lookups.manage`); `GET /employees`. Routes with site-scoped
+permissions use the guard's `anyScope` option and rely on RLS for the rows.
+
+**Frontend:** `/Non-Conformance/:type` (Internal, Customer, Supplier) registers on the API with
+server paging/sorting, search, stage/failure-mode/deleted filters, CSV export and type-specific
+columns; `/Non-Conformance/:type/new` and `/:id` open the NC form (type-specific fields, part and
+revision pickers, stage bar with reasons for cancel/reopen, delete with reason, restore, history
+tab; read-only when locked or without `ncr.update`). Settings → Data Management manages failure
+modes, sub-failure modes and processes. Legacy `useNCM` hooks and the status settings were removed.
+
+**Tests:** SQL `ncr_core.test.sql` (+ guardrails audited list and sweep); API e2e NCR suite and
+sweep over the new `{id}` routes (101 e2e); frontend `Ncr.test.jsx` (+19, 121 total). The
+register's child components are imported directly rather than with `lazy()`: under the test
+runner the lazy imports kept React's synchronous `act()` retrying forever.
+
+**Live:** legacy data checked for duplicate names/references first; migration applied and
+recorded; copy verified (20/20 NCs — 19 internal, 1 supplier — references NCM-25-001…020 and
+SNC-25-002 kept; 9/35/14 classifications; all 20 failure modes linked; counter 2025 → 20);
+exercised as the real owner in a rolled-back transaction (create → NCM-26-001, forward move,
+backward move refused, delete/restore, 4 history entries, 4 outbox events); guardrails 0 violations.
+
+**Known gaps:** NC files, costs and 8D from the legacy screens are not yet on the new model
+(slices 2.5/2.6); the deployed frontend reads the new tables only after the next push.

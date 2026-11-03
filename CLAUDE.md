@@ -28,7 +28,7 @@ Summary of the brief:
   frontend to a Vercel dev environment from `Dev` (`docs/deployment-vercel.md`).
 - Routes in `src/main.jsx`; side menu in `src/MenuStructure.js`. Routed areas: Dashboard
   (simple overview), Non-Conformance registers (`/Non-Conformance/:type` — Internal, Customer,
-  Supplier), Human Resources (employee list), Settings.
+  Supplier; NC form at `/Non-Conformance/:type/:id`, `new` creates; hooks in `src/hooks/useNcr.js`), Human Resources (employee list), Settings.
 - Holiday-let code was removed; it is preserved on branch `archive/holiday-let`.
 - Database schema is versioned in `supabase/migrations/`; the live project matches it (see
   `supabase/README.md`). Multi-tenancy is in place: organisations, sites, departments, profiles,
@@ -85,8 +85,10 @@ in `docs/phase-1-plan.md` (API hosting decided later — a Vercel dev environmen
 `npm run db:check`, rehearsed on a live-data copy, then applied via the SQL editor; Supabase
 built-in email for now). **Phase 2** (first complete QMS workflow) is planned and agreed in `docs/phase-2-plan.md`
 (slices 2.0 auth gate → 2.1 parts → 2.2 inspection plans → 2.3 results → 2.4 NCR core → 2.5
-containment/investigation/disposition → 2.6 CAPA → 2.7 exit check); slices 2.0 (password flows, MFA) and 2.1 (master data: units, customers, suppliers, parts,
-revisions, outbox) are done — see plan §9–§10; next: 2.2 inspection plans.
+containment/investigation/disposition → 2.6 CAPA → 2.7 exit check); slices 2.0 (password flows, MFA), 2.1 (master data: units, customers, suppliers, parts,
+revisions, outbox) and 2.4 (NCR core, brought forward: `nonconformances`, `ncr_classifications`,
+stages, soft delete, legacy NCM copy; NC registers and form on the API) are done — see plan §9–§11;
+next: 2.2 inspection plans.
 The project still signs tokens with the legacy HS256 secret (JWKS endpoint is empty), so the API
 needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.
 

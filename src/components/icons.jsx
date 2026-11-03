@@ -54,6 +54,7 @@ import {
   MonitorCog as LucideMonitorCog,
   MoonStar as LucideMoonStar,
   Package as LucidePackage,
+  PanelLeftClose as LucidePanelLeftClose,
   PanelLeftOpen as LucidePanelLeftOpen,
   Pencil as LucidePencil,
   Plus as LucidePlus,
@@ -136,6 +137,7 @@ export const MinusIcon = withDefaults(LucideMinus);
 export const MonitorCogIcon = withDefaults(LucideMonitorCog);
 export const MoonStarIcon = withDefaults(LucideMoonStar);
 export const PackageIcon = withDefaults(LucidePackage);
+export const PanelLeftCloseIcon = withDefaults(LucidePanelLeftClose);
 export const PanelLeftOpenIcon = withDefaults(LucidePanelLeftOpen);
 export const PencilIcon = withDefaults(LucidePencil);
 export const PlusIcon = withDefaults(LucidePlus);

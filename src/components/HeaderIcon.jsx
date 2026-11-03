@@ -1,7 +1,7 @@
 const HeaderIcon = ({ icon: Icon, top, right, showBadge }) => {
   return (
-    <div className="relative p-2 bg-tertiary-bg shadow-s hover:shadow-m flex items-center justify-center w-10 h-10 rounded-xl cursor-pointer">
-      <Icon className="h-7 w-7 fill-icon-color hover:fill-primary-text" />
+    <div className="group relative p-2 bg-tertiary-bg shadow-s hover:shadow-m flex items-center justify-center w-10 h-10 rounded-xl cursor-pointer">
+      <Icon className="h-5.5 w-5.5 text-icon-color group-hover:text-primary-text" />
       {showBadge && (
         <span
           style={{ top: `${top}px`, right: `${right}px` }}

@@ -6,7 +6,7 @@ const SearchBar = () => {
 
   return (
     <div className="flex w-1/3 p-2 relative items-center ">
-      <SearchIcon className="text-icon-color h-4 w-4 inset-x-5" />
+      <SearchIcon className="pointer-events-none absolute left-5 h-4.5 w-4.5 text-icon-color" />
       <input
         id="Global Search Bar"
         name="search-bar"
@@ -18,11 +18,13 @@ const SearchBar = () => {
       />
       {searchTerm.length !== 0 && (
         <button
+          type="button"
+          aria-label="Clear search"
           onClick={() => {
             setSearchTerm("");
           }}
           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-secondary-text rounded-lg p-2 hover:text-error-color cursor-pointer">
-          <XIcon />
+          <XIcon className="h-4.5 w-4.5" />
         </button>
       )}
     </div>

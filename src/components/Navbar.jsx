@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Logo from "../assets/dryden-logo-square.png";
-import { CircleHelpIcon, PanelLeftOpenIcon, SettingsIcon } from "@/components/icons";
+import { CircleHelpIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, SettingsIcon } from "@/components/icons";
 import NavItem from "./NavItem";
 import Logout from "./Logout";
 import { menuStructure } from "../MenuStructure";
@@ -58,11 +58,11 @@ const Navbar = () => {
             title={isMenuExpanded ? "Hide Menu" : "Expand Menu"}
             onClick={toggleMenu}
             className="cursor-pointer">
-            <PanelLeftOpenIcon
-              className={`h-6 w-6 fill-icon-color hover:fill-primary-text ${
-                !isMenuExpanded && "rotate-180"
-              }`}
-            />
+            {isMenuExpanded ? (
+              <PanelLeftCloseIcon className="h-6 w-6 text-icon-color hover:text-primary-text" />
+            ) : (
+              <PanelLeftOpenIcon className="h-6 w-6 text-icon-color hover:text-primary-text" />
+            )}
           </button>
         </div>
         <div className="flex flex-col h-full overflow-y-auto justify-between">

@@ -18,12 +18,12 @@ const ViewToggle = ({ viewGrid, setViewGrid }) => {
       <div className="flex w-full justify-between items-center relative z-10 px-2">
         <ListIcon
           className={`h-4 w-4 ${
-            viewGrid ? "fill-primary-text" : "opacity-100 fill-primary-text"
+            "text-primary-text"
           }`}
         />
         <LayoutGridIcon
           className={`h-4 w-4 ${
-            viewGrid ? "opacity-100 fill-primary-text" : "fill-primary-text"
+            "text-primary-text"
           }`}
         />
       </div>

@@ -27,7 +27,7 @@ const ThemeToggle = ({ menuExpanded }) => {
       {theme === "light" && (
         <div
           className={`bg-white rounded-full ${menuExpanded ? "p-2" : "p-1.5"}`}>
-          <SunIcon />
+          <SunIcon className="text-neutral-900" />
         </div>
       )}
       {menuExpanded && (
@@ -40,7 +40,7 @@ const ThemeToggle = ({ menuExpanded }) => {
           className={`bg-black rounded-full mt-auto ${
             menuExpanded ? "p-2" : "p-1.5"
           }`}>
-          <MoonStarIcon className="fill-white" />
+          <MoonStarIcon className="text-white" />
         </div>
       )}
     </button>

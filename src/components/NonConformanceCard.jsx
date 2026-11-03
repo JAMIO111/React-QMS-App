@@ -71,7 +71,7 @@ const NonConformanceCard = ({
             {item.customer_display_name}
           </span>
           <div className="flex flex-row justify-end items-center gap-2">
-            <CalendarIcon className="stroke-primary-text fill-primary-text h-4 w-4" />
+            <CalendarIcon className="text-primary-text h-4 w-4" />
             <span className="text-secondary-text text-right">
               {formattedDate}
             </span>
@@ -99,11 +99,11 @@ const NonConformanceCard = ({
             </div>
           )}
           <div className="flex flex-row justify-between items-center whitespace-nowrap gap-3 text-primary-text py-1.5 px-3 rounded-lg border border-border-color bg-secondary-bg">
-            <QrCodeIcon className="stroke-primary-text fill-primary-text h-4 w-4" />
+            <QrCodeIcon className="text-primary-text h-4 w-4" />
             {item.part_number}
           </div>
           <div className="flex flex-row justify-between items-center whitespace-nowrap gap-2 text-primary-text py-1.5 px-3 rounded-lg border border-border-color bg-secondary-bg">
-            <LayersIcon className="stroke-primary-text fill-primary-text h-5 w-5" />
+            <LayersIcon className="text-primary-text h-5 w-5" />
             x {item.quantity_defective}
           </div>
         </div>

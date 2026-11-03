@@ -59,6 +59,10 @@ BEGIN
   INSERT INTO public.part_revisions (organisation_id, part_id, revision)
     SELECT a, id, 'A' FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1';
   UPDATE public.part_revisions SET status = 'released' WHERE organisation_id = a;
+  -- Phase 2 NCR core.
+  INSERT INTO public.ncr_classifications (organisation_id, kind, name) VALUES (a, 'failure_mode', 'Sweep failure');
+  INSERT INTO public.nonconformances (organisation_id, reference, source, title, severity, quantity_affected)
+    VALUES (a, 'SW-NCR-1', 'internal', 'Sweep NCR', 'minor', 1);
 
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));

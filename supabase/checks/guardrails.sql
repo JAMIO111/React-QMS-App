@@ -40,7 +40,7 @@ audited(relname) AS (VALUES
   ('organisations'), ('organisation_settings'), ('sites'), ('departments'), ('organisation_users'),
   ('roles'), ('role_permissions'), ('user_role_assignments'),
   ('NCM'), ('8D'), ('Costs'), ('NC Files'), ('Part'), ('Status'), ('Failure Mode'), ('Sub-Failure Mode'), ('Process'),
-  ('customers'), ('suppliers'), ('parts'), ('part_revisions')
+  ('customers'), ('suppliers'), ('parts'), ('part_revisions'), ('ncr_classifications'), ('nonconformances')
 )
 SELECT rule, object FROM (
   SELECT '1 rls disabled' AS rule, format('%I.%I', nspname, relname) AS object

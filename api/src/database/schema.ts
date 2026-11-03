@@ -111,4 +111,57 @@ export const partRevisions = pgTable('part_revisions', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const schema = { profiles, organisations, organisationSettings, organisationUsers, sites, departments, units, customers, suppliers, parts, partRevisions };
+// Phase 2 NCR core (supabase/migrations/20251104130000_ncr_core.sql)
+export const ncrClassifications = pgTable('ncr_classifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organisationId: uuid('organisation_id').notNull(),
+  kind: text('kind').notNull(),
+  parentId: uuid('parent_id'),
+  code: text('code'),
+  name: text('name').notNull(),
+  description: text('description'),
+  active: boolean('active').notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const nonconformances = pgTable('nonconformances', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organisationId: uuid('organisation_id').notNull(),
+  reference: text('reference').notNull().default(''),
+  source: text('source').notNull(),
+  stage: text('stage').notNull().default('draft'),
+  stageReason: text('stage_reason'),
+  severity: text('severity'),
+  title: text('title').notNull(),
+  description: text('description'),
+  requirement: text('requirement'),
+  actualResult: text('actual_result'),
+  siteId: uuid('site_id'),
+  partId: uuid('part_id'),
+  partRevisionId: uuid('part_revision_id'),
+  customerId: uuid('customer_id'),
+  supplierId: uuid('supplier_id'),
+  workOrder: text('work_order'),
+  purchaseOrder: text('purchase_order'),
+  customerReference: text('customer_reference'),
+  lotNumber: text('lot_number'),
+  serialNumber: text('serial_number'),
+  quantityAffected: numeric('quantity_affected'),
+  quantityInspected: numeric('quantity_inspected'),
+  detectedAt: text('detected_at'),
+  detectedBy: uuid('detected_by'),
+  detectionProcessId: uuid('detection_process_id'),
+  causalProcessId: uuid('causal_process_id'),
+  failureModeId: uuid('failure_mode_id'),
+  subFailureModeId: uuid('sub_failure_mode_id'),
+  responsibleEmployeeId: uuid('responsible_employee_id'),
+  ownerId: uuid('owner_id'),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  deleteReason: text('delete_reason'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const schema = { profiles, organisations, organisationSettings, organisationUsers, sites, departments, units, customers, suppliers, parts, partRevisions, ncrClassifications, nonconformances };

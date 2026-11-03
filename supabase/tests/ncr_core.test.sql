@@ -133,8 +133,18 @@ BEGIN
   PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.nonconformances (organisation_id, source, title, site_id) VALUES (%L, 'internal', 'At plant A', %L)$q$,
     (SELECT v FROM ids WHERE k = 'org'), (SELECT v FROM ids WHERE k = 'site_a')), 'cannot raise at another site');
 
+  -- API helpers: permission at any scope, and history for readers of the record.
+  PERFORM pg_temp.assert_eq(app.has_permission_somewhere((SELECT v FROM ids WHERE k = 'org'), 'ncr.read'), true, 'site-scoped user holds ncr.read somewhere');
+  PERFORM pg_temp.assert_eq(app.has_permission((SELECT v FROM ids WHERE k = 'org'), 'ncr.read'), false, 'but not organisation-wide');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.ncr_history((SELECT v FROM ids WHERE k = 'ncr'))), 0::bigint, 'no history for an NCR of another site');
+  PERFORM pg_temp.login('20000000-0000-0000-0000-000000000102');
+  PERFORM pg_temp.assert_eq((SELECT count(*) > 3 FROM app.ncr_history((SELECT v FROM ids WHERE k = 'ncr'))), true, 'engineer (no audit.read) sees the NCR history');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.audit_events WHERE entity_id = (SELECT v FROM ids WHERE k = 'ncr')::text), 0::bigint, 'but not the full audit trail');
+
   -- Another organisation sees nothing.
   PERFORM pg_temp.login('20000000-0000-0000-0000-000000000104');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.ncr_history((SELECT v FROM ids WHERE k = 'ncr'))), 0::bigint, 'other organisation gets no history');
+  PERFORM pg_temp.assert_eq(app.has_permission_somewhere((SELECT v FROM ids WHERE k = 'org'), 'ncr.read'), false, 'outsider holds nothing');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.nonconformances WHERE organisation_id = (SELECT v FROM ids WHERE k = 'org')), 0::bigint, 'other organisation sees nothing');
   PERFORM pg_temp.logout();
   PERFORM pg_temp.assert_eq((SELECT title FROM public.nonconformances WHERE id = (SELECT v FROM ids WHERE k = 'site_ncr')), 'At plant B', 'inspector update had no effect');

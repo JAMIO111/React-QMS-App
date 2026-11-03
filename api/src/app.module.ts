@@ -12,6 +12,8 @@ import { DatabaseService } from './database/database.service';
 import { HealthController } from './health/health.controller';
 import { CustomersController, PartRevisionsController, PartsController, SuppliersController, UnitsController } from './master-data/master-data.controller';
 import { MasterDataService } from './master-data/master-data.service';
+import { EmployeesController, NcrClassificationsController, NcrController } from './ncr/ncr.controller';
+import { NcrService } from './ncr/ncr.service';
 import { MeController } from './me/me.controller';
 import { MeService } from './me/me.service';
 import { InvitationMailer } from './members/invitation-mailer.service';
@@ -61,6 +63,9 @@ export class AppModule implements NestModule {
         SuppliersController,
         PartsController,
         PartRevisionsController,
+        NcrController,
+        NcrClassificationsController,
+        EmployeesController,
       ],
       providers: [
         { provide: ENV, useValue: env },
@@ -68,6 +73,7 @@ export class AppModule implements NestModule {
         JwtVerifier,
         MeService,
         MasterDataService,
+        NcrService,
         OrganisationsService,
         StructureService,
         MembersService,

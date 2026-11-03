@@ -54,6 +54,13 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/part-revisions/{id}': { drawingRef: 'Hijacked' },
     'POST /api/v1/part-revisions/{id}/release': undefined,
     'POST /api/v1/part-revisions/{id}/obsolete': undefined,
+    'GET /api/v1/ncrs/{id}': undefined,
+    'PATCH /api/v1/ncrs/{id}': { title: 'Hijacked' },
+    'POST /api/v1/ncrs/{id}/transitions': { to: 'cancelled', reason: 'Hijacked' },
+    'POST /api/v1/ncrs/{id}/delete': { reason: 'Hijacked' },
+    'POST /api/v1/ncrs/{id}/restore': undefined,
+    'GET /api/v1/ncrs/{id}/history': undefined,
+    'PATCH /api/v1/ncr-classifications/{id}': { name: 'Hijacked' },
   })[`${op.method} ${op.path}`];
 
 const hasSample = (op: Op) =>
@@ -71,6 +78,13 @@ const hasSample = (op: Op) =>
     'PATCH /api/v1/part-revisions/{id}',
     'POST /api/v1/part-revisions/{id}/release',
     'POST /api/v1/part-revisions/{id}/obsolete',
+    'GET /api/v1/ncrs/{id}',
+    'PATCH /api/v1/ncrs/{id}',
+    'POST /api/v1/ncrs/{id}/transitions',
+    'POST /api/v1/ncrs/{id}/delete',
+    'POST /api/v1/ncrs/{id}/restore',
+    'GET /api/v1/ncrs/{id}/history',
+    'PATCH /api/v1/ncr-classifications/{id}',
   ].includes(`${op.method} ${op.path}`);
 
 /** Organisation A's record id for the resource a path refers to. */
@@ -83,6 +97,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/suppliers/')) return a.supplier;
   if (path.startsWith('/api/v1/parts/')) return a.part;
   if (path.startsWith('/api/v1/part-revisions/')) return a.draftRevision;
+  if (path.startsWith('/api/v1/ncrs/')) return a.ncr;
+  if (path.startsWith('/api/v1/ncr-classifications/')) return a.classification;
   return undefined;
 };
 
@@ -118,6 +134,8 @@ beforeAll(async () => {
   a.supplier = (await one(`insert into public.suppliers (organisation_id, code, name) values ($1, 'ASUPP', 'Alpha supplier') returning id`, [ids.orgA])).id;
   a.part = (await one(`insert into public.parts (organisation_id, part_number, name) values ($1, 'A-PART', 'Alpha part') returning id`, [ids.orgA])).id;
   a.draftRevision = (await one(`insert into public.part_revisions (organisation_id, part_id, revision) values ($1, $2, 'A') returning id`, [ids.orgA, a.part])).id;
+  a.classification = (await one(`insert into public.ncr_classifications (organisation_id, kind, name) values ($1, 'failure_mode', 'Alpha failure') returning id`, [ids.orgA])).id;
+  a.ncr = (await one(`insert into public.nonconformances (organisation_id, reference, source, title) values ($1, 'A-NCR-1', 'internal', 'Alpha NCR') returning id`, [ids.orgA])).id;
   b.viewerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'viewer'`, [ids.orgB])).id;
   await admin.query(`insert into public.departments (organisation_id, site_id, code, name) values ($1, $2, 'QA', 'Quality B')`, [ids.orgB, ids.siteB]);
 });
@@ -166,12 +184,15 @@ describe('tenancy sweep over every API route', () => {
               (select status from public.organisation_users where id = $3) member, (select count(*)::int from public.user_role_assignments where id = $4) assignment,
               (select name from public.customers where id = $5) customer, (select name from public.suppliers where id = $6) supplier,
               (select name from public.parts where id = $7) part,
-              (select status || '/' || coalesce(drawing_ref, '') || '/' || (select count(*) from public.part_revisions where part_id = $7) from public.part_revisions where id = $8) revision`,
-      [a.site, a.department, a.ownerMembership, a.ownerAssignment, a.customer, a.supplier, a.part, a.draftRevision],
+              (select status || '/' || coalesce(drawing_ref, '') || '/' || (select count(*) from public.part_revisions where part_id = $7) from public.part_revisions where id = $8) revision,
+              (select title || '/' || stage || '/' || (deleted_at is null) from public.nonconformances where id = $9) ncr,
+              (select name from public.ncr_classifications where id = $10) classification`,
+      [a.site, a.department, a.ownerMembership, a.ownerAssignment, a.customer, a.supplier, a.part, a.draftRevision, a.ncr, a.classification],
     );
     expect(rows[0]).toEqual({
       site: 'Alpha main', dept: 'Quality A', member: 'active', assignment: 1,
       customer: 'Alpha customer', supplier: 'Alpha supplier', part: 'Alpha part', revision: 'draft//1',
+      ncr: 'Alpha NCR/draft/true', classification: 'Alpha failure',
     });
   });
 

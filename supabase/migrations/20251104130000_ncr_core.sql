@@ -384,6 +384,41 @@ REVOKE ALL ON FUNCTION app.check_classification_parent(), app.next_ncr_reference
   app.nonconformance_rules(), app.assert_ncr_openable(public.nonconformances), app.nonconformance_events() FROM PUBLIC;
 
 -- ---------------------------------------------------------------------------
+-- Helpers for the API
+-- ---------------------------------------------------------------------------
+-- The caller holds the permission in this organisation at any scope (organisation-wide or for some
+-- site/department). Used to admit site-scoped users to routes whose rows RLS then filters by site.
+CREATE FUNCTION app.has_permission_somewhere(p_organisation_id uuid, p_permission text) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.organisation_users m
+    JOIN public.organisations o ON o.id = m.organisation_id AND o.status = 'active'
+    JOIN public.user_role_assignments a ON a.membership_id = m.id
+    JOIN public.role_permissions rp ON rp.role_id = a.role_id
+    WHERE m.organisation_id = p_organisation_id AND m.user_id = auth.uid() AND m.status = 'active'
+      AND rp.permission_code = p_permission
+  ) AND app.mfa_satisfied(p_organisation_id)
+$$;
+
+-- History of one NCR for anyone who may read it (the full audit trail needs audit.read).
+CREATE FUNCTION app.ncr_history(p_ncr_id uuid)
+RETURNS TABLE (id uuid, created_at timestamptz, actor_user_id uuid, action text, changed_fields text[],
+               previous_values jsonb, new_values jsonb, reason text, source text)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+  SELECT e.id, e.created_at, e.actor_user_id, e.action, e.changed_fields, e.previous_values, e.new_values, e.reason, e.source
+  FROM audit.events e
+  JOIN public.nonconformances n ON n.id = p_ncr_id
+  WHERE e.entity_type = 'nonconformances' AND e.entity_id = p_ncr_id::text
+    AND e.organisation_id = n.organisation_id
+    AND app.has_permission(n.organisation_id, 'ncr.read', n.site_id)
+  ORDER BY e.seq
+$$;
+
+REVOKE ALL ON FUNCTION app.has_permission_somewhere(uuid, text), app.ncr_history(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.has_permission_somewhere(uuid, text), app.ncr_history(uuid) TO authenticated;
+
+-- ---------------------------------------------------------------------------
 -- Legacy copy (decision Q1). Ids and references are kept; statuses map to stages.
 -- ---------------------------------------------------------------------------
 INSERT INTO public.ncr_classifications (organisation_id, kind, code, name, description, active, legacy_id, created_at, created_by)

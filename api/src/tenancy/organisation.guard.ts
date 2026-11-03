@@ -11,6 +11,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface Scope {
   permission?: string;
+  /** Admit users who hold the permission for any site or department; RLS filters the rows by site. */
+  anyScope?: boolean;
 }
 
 /**
@@ -18,9 +20,9 @@ interface Scope {
  * an active member (otherwise 404, so other tenants' ids are not confirmed) and, if given, hold the
  * permission organisation-wide (otherwise 403). RLS enforces the same rules again in the database.
  */
-export const OrganisationScoped = (permission?: string) =>
+export const OrganisationScoped = (permission?: string, options: { anyScope?: boolean } = {}) =>
   applyDecorators(
-    SetMetadata(SCOPE, { permission } satisfies Scope),
+    SetMetadata(SCOPE, { permission, anyScope: options.anyScope } satisfies Scope),
     ApiHeader({ name: 'X-Organisation-Id', required: true, description: 'Organisation to act in (UUID)' }),
     ApiResponse({ status: 404, description: 'Not a member of that organisation' }),
     ...(permission ? [ApiResponse({ status: 403, description: `Requires permission ${permission}` })] : []),
@@ -49,7 +51,9 @@ export class OrganisationGuard implements CanActivate {
       const result = await db.execute<{ member: boolean; allowed: boolean; mfa_blocked: boolean }>(
         sql`select app.is_member(${organisationId}::uuid) as member,
                    (${scope.permission ?? null}::text is null
-                    or app.has_permission(${organisationId}::uuid, ${scope.permission ?? null}::text)) as allowed,
+                    or case when ${scope.anyScope ?? false}::boolean
+                            then app.has_permission_somewhere(${organisationId}::uuid, ${scope.permission ?? null}::text)
+                            else app.has_permission(${organisationId}::uuid, ${scope.permission ?? null}::text) end) as allowed,
                    exists (select 1 from app.mfa_blocked_organisations() b
                            where b.organisation_id = ${organisationId}::uuid) as mfa_blocked`,
       );

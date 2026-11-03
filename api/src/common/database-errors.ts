@@ -29,6 +29,7 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   suppliers_org_code_key: 'A supplier with this code already exists',
   parts_org_part_number_key: 'A part with this number already exists',
   part_revisions_part_revision_key: 'This part already has that revision',
+  ncr_classifications_name_key: 'An entry with this name already exists',
 };
 
 /**
@@ -59,6 +60,10 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'mfa_setup_required', 'Set up two-factor authentication for your own account before requiring it');
     case 'QM003': // app.part_revision_lifecycle (message is written for users)
       return new ApiError(409, 'invalid_revision_state', pg.message ?? 'That change is not allowed for this revision');
+    case 'QM004': // app.check_classification_parent
+      return new ApiError(409, 'invalid_classification', pg.message ?? 'That classification change is not allowed');
+    case 'QM005': // app.nonconformance_rules (messages are written for users)
+      return new ApiError(409, 'ncr_rule', pg.message ?? 'That change is not allowed for this non-conformance');
     case 'P0002': // no_data_found raised by app functions
       return ApiError.notFound();
     case '57014': // query_canceled (statement_timeout)

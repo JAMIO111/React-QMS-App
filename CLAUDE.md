@@ -31,6 +31,9 @@ Summary of the brief:
   memberships, roles/permissions; `organisation_id` on every business table; RLS on every table
   with `app.is_member` / `app.has_permission` helpers. Legacy table names ("NCM", "Failure Mode"…)
   stay until Phase 2.
+- Append-only quality audit trail in `audit.events` (trigger `audit.record_change` on tenancy and
+  quality tables), readable via `public.audit_events` with `audit.read`. New quality-critical tables
+  must get the `audit_changes` trigger.
 - Frontend reads the current user from `profiles` and memberships via `OrganisationProvider`;
   every query filters by the current `organisationId`. Storage paths: `nc-files/<org_id>/...`,
   `avatars/users/<user_id>/...` (both private).
@@ -42,10 +45,11 @@ Summary of the brief:
 NestJS API added in Phase 1 alongside the Vite frontend; holiday-let code archived on
 branch `archive/holiday-let` then removed; Supabase project `xvpgrmujayytbbmhnoan` ("React QMS") is
 canonical and its data is test data; RLS enabled in the first Phase 1 migration with policies.
-Step 0 (Stabilise) and Phase 1 slice 1.1 (tenancy + RLS) are done. Plan and agreed decisions
+Step 0 (Stabilise) and Phase 1 slices 1.1 (tenancy + RLS) and 1.2 (audit trail) are done. Plan and agreed decisions
 in `docs/phase-1-plan.md` (API hosting decided later; migrations checked locally with
 `npm run db:check`, rehearsed on a live-data copy, then applied via the SQL editor; Supabase
-built-in email for now). Next: **slice 1.2 (audit events)**.
+built-in email for now). Next: **slice 1.3 (NestJS API skeleton)** — needs a DB connection string
+and Supabase service-role key from the user as environment secrets.
 
 ## Commands
 

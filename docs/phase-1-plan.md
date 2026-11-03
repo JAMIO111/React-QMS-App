@@ -221,7 +221,7 @@ Deactivate instead of delete for sites, departments and memberships.
 
 ## 6. Delivery slices
 
-**Status:** 1.1 done (applied 2026-11-03, see §9). Next: 1.2.
+**Status:** 1.1 and 1.2 done (applied 2026-11-03, see §9 and §10). Next: 1.3.
 
 Each slice is one reviewable change that leaves `Dev` working, with its own tests and docs.
 
@@ -313,3 +313,34 @@ last owner, storage, TRUNCATE), plus mutation checks showing the suite fails whe
 
 **Not verified yet:** the running app in a browser against the live project (sign-in, registers,
 avatar upload, attachments). Please check these when you next run `npm run dev`.
+
+---
+
+## 10. Slice 1.2 — done (2026-11-03)
+
+Migration `20251103110000_audit_events` applied to `xvpgrmujayytbbmhnoan` via the SQL editor and
+recorded in the migration history.
+
+- `audit.events` (append-only) with actor, entity, action, previous/new values, changed fields,
+  reason, source, correlation id, transaction id and `seq` ordering. Read through
+  `public.audit_events` (security_invoker) by members holding `audit.read`, own organisation only.
+- One generic trigger (`audit.record_change`) on 17 tables: organisations, settings, sites,
+  departments, memberships, roles, role permissions, role assignments, NCM, 8D, Costs, NC Files,
+  Part, Status, Failure Mode, Sub-Failure Mode, Process. Updates store only changed fields and skip
+  bookkeeping-only changes; system role templates are not audited.
+- `source` is `client` for direct Supabase writes and `system` without a user; the API (1.3) will
+  set `app.source = 'api'`, `app.reason` and `app.correlation_id` per request.
+
+**Verified locally:** `supabase/tests/audit_events.test.sql` (recording, context, append-only for
+every role including the owner, read isolation); mutation checks (removing the update guard,
+widening the read policy, dropping a trigger) each make it fail. Rehearsed on the live-data copy.
+
+**Verified on the live project:** trigger count, guard triggers, grants, RLS and the trigger
+function match the tested build; an update made as the existing owner inside a rolled-back
+transaction produced exactly one event (NCM, update, description, source client, actor set) and
+left no event behind. Security advisor: no new findings beyond the GraphQL schema-visibility
+warning for the two new objects (rows remain protected by RLS).
+
+**Known limits:** the database owner can still disable the guard triggers; stronger tamper-evidence
+(hash chaining, external retention) is deferred per brief §11. No UI yet — events are surfaced by the
+API in 1.3/1.4.

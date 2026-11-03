@@ -1,0 +1,160 @@
+/**
+ * Phase 1 exit check, API layer. Driven by the OpenAPI document, so new routes are covered
+ * automatically:
+ *  - every route is organisation-scoped (X-Organisation-Id) unless it is on the reviewed allowlist;
+ *  - every scoped route answers 404 when the caller names an organisation they don't belong to;
+ *  - every scoped route with an {id} answers 404 for another organisation's record ids, even when
+ *    the caller is Owner of their own organisation (new {id} routes must add a sample body below);
+ *  - no list response contains any identifier of the other organisation.
+ */
+import { INestApplication } from '@nestjs/common';
+import { Pool } from 'pg';
+import request from 'supertest';
+import { makeIds, requireDb, seed, startApp, token } from './helpers';
+
+const ids = makeIds(4);
+let app: INestApplication;
+let admin: Pool;
+const api = () => request(app.getHttpServer());
+
+/** Routes that are deliberately not organisation-scoped (reviewed). */
+const UNSCOPED = new Set([
+  'GET /api/v1/health',
+  'GET /api/v1/me',
+  'PATCH /api/v1/me',
+  'POST /api/v1/organisations',
+  'GET /api/v1/invitations',
+  'POST /api/v1/invitations/{id}/accept',
+]);
+
+interface Op {
+  method: string;
+  path: string;
+  scoped: boolean;
+}
+
+let ops: Op[];
+const a: Record<string, string> = {};
+const b: Record<string, string> = {};
+
+/** Valid bodies for routes that take an {id}, so validation passes and the tenant check is what answers. */
+const sampleBody = (op: Op): object | undefined =>
+  (<Record<string, object | undefined>>{
+    'PATCH /api/v1/sites/{id}': { name: 'Hijacked' },
+    'PATCH /api/v1/departments/{id}': { name: 'Hijacked' },
+    'PATCH /api/v1/members/{id}': { status: 'suspended' },
+    'POST /api/v1/members/{id}/role-assignments': { roleId: b.viewerRole },
+    'DELETE /api/v1/role-assignments/{id}': undefined,
+  })[`${op.method} ${op.path}`];
+
+const hasSample = (op: Op) =>
+  ['PATCH /api/v1/sites/{id}', 'PATCH /api/v1/departments/{id}', 'PATCH /api/v1/members/{id}', 'POST /api/v1/members/{id}/role-assignments', 'DELETE /api/v1/role-assignments/{id}'].includes(
+    `${op.method} ${op.path}`,
+  );
+
+/** Organisation A's record id for the resource a path refers to. */
+const foreignIdFor = (path: string) => {
+  if (path.startsWith('/api/v1/sites/')) return a.site;
+  if (path.startsWith('/api/v1/departments/')) return a.department;
+  if (path.startsWith('/api/v1/members/')) return a.ownerMembership;
+  if (path.startsWith('/api/v1/role-assignments/')) return a.ownerAssignment;
+  return undefined;
+};
+
+const call = (op: Op, path: string, headers: Record<string, string>, body?: object) => {
+  const m = op.method.toLowerCase() as 'get' | 'post' | 'patch' | 'delete';
+  const req = api()[m](path).set(headers);
+  return body === undefined ? req : req.send(body);
+};
+
+beforeAll(async () => {
+  admin = new Pool({ connectionString: requireDb().adminUrl });
+  await seed(admin, ids, '-sweep');
+  app = await startApp({ RATE_LIMIT_PER_MINUTE: '10000' });
+
+  const doc = (await api().get('/api/v1/openapi.json').expect(200)).body;
+  ops = Object.entries(doc.paths as Record<string, Record<string, { parameters?: { in: string; name: string }[] }>>).flatMap(([path, methods]) =>
+    Object.entries(methods).map(([method, spec]) => ({
+      method: method.toUpperCase(),
+      path,
+      scoped: (spec.parameters ?? []).some((p) => p.in === 'header' && p.name === 'X-Organisation-Id'),
+    })),
+  );
+
+  const one = async (q: string, params: unknown[]) => (await admin.query(q, params)).rows[0];
+  a.org = ids.orgA;
+  a.site = ids.siteA;
+  a.department = (await one(`insert into public.departments (organisation_id, site_id, code, name) values ($1, $2, 'QA', 'Quality A') returning id`, [ids.orgA, ids.siteA])).id;
+  a.ownerMembership = (await one('select id from public.organisation_users where organisation_id = $1 and user_id = $2', [ids.orgA, ids.ownerA])).id;
+  a.ownerAssignment = (await one('select id from public.user_role_assignments where membership_id = $1', [a.ownerMembership])).id;
+  a.ownerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'owner'`, [ids.orgA])).id;
+  a.ownerUser = ids.ownerA;
+  b.viewerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'viewer'`, [ids.orgB])).id;
+  await admin.query(`insert into public.departments (organisation_id, site_id, code, name) values ($1, $2, 'QA', 'Quality B')`, [ids.orgB, ids.siteB]);
+});
+
+afterAll(async () => {
+  await app?.close();
+  await admin?.end();
+});
+
+describe('tenancy sweep over every API route', () => {
+  it('discovers the documented routes', () => {
+    expect(ops.length).toBeGreaterThanOrEqual(15);
+  });
+
+  it('scopes every route to an organisation unless it is on the reviewed allowlist', () => {
+    const unscoped = ops.filter((o) => !o.scoped).map((o) => `${o.method} ${o.path}`).sort();
+    expect(unscoped).toEqual([...UNSCOPED].sort());
+  });
+
+  it('answers 404 on every scoped route for an organisation the caller does not belong to', async () => {
+    const auth = { Authorization: `Bearer ${await token(ids.ownerB)}`, 'X-Organisation-Id': ids.orgA };
+    const results: string[] = [];
+    for (const op of ops.filter((o) => o.scoped)) {
+      const path = op.path.replace('{id}', foreignIdFor(op.path) ?? '00000000-0000-0000-0000-000000000000');
+      const res = await call(op, path, auth, op.method === 'GET' || op.method === 'DELETE' ? undefined : {});
+      if (res.status !== 404 || res.body?.error?.code !== 'organisation_not_found') results.push(`${op.method} ${op.path} -> ${res.status}`);
+    }
+    expect(results).toEqual([]);
+  });
+
+  it('answers 404 for another organisation’s record ids, even to an Owner of their own organisation', async () => {
+    const auth = { Authorization: `Bearer ${await token(ids.ownerB)}`, 'X-Organisation-Id': ids.orgB };
+    const idOps = ops.filter((o) => o.scoped && o.path.includes('{id}'));
+    expect(idOps.filter((o) => !hasSample(o)).map((o) => `${o.method} ${o.path} needs a sample body in this test`)).toEqual([]);
+
+    const results: string[] = [];
+    for (const op of idOps) {
+      const res = await call(op, op.path.replace('{id}', foreignIdFor(op.path)!), auth, sampleBody(op));
+      if (res.status !== 404) results.push(`${op.method} ${op.path} -> ${res.status} ${JSON.stringify(res.body)}`);
+    }
+    expect(results).toEqual([]);
+
+    // Nothing of A changed.
+    const { rows } = await admin.query(
+      `select (select name from public.sites where id = $1) site, (select name from public.departments where id = $2) dept,
+              (select status from public.organisation_users where id = $3) member, (select count(*)::int from public.user_role_assignments where id = $4) assignment`,
+      [a.site, a.department, a.ownerMembership, a.ownerAssignment],
+    );
+    expect(rows[0]).toEqual({ site: 'Alpha main', dept: 'Quality A', member: 'active', assignment: 1 });
+  });
+
+  it('never includes another organisation’s identifiers in list responses', async () => {
+    const auth = { Authorization: `Bearer ${await token(ids.ownerB)}`, 'X-Organisation-Id': ids.orgB };
+    const lists = ops.filter((o) => o.scoped && o.method === 'GET' && !o.path.includes('{id}'));
+    const leaks: string[] = [];
+    for (const op of lists) {
+      const res = await call(op, op.path, auth);
+      expect(res.status).toBe(200);
+      const text = JSON.stringify(res.body);
+      for (const [name, id] of Object.entries(a)) if (text.includes(id)) leaks.push(`${op.path} contains A ${name}`);
+    }
+    // Also the unscoped reads.
+    for (const path of ['/api/v1/me', '/api/v1/invitations']) {
+      const text = JSON.stringify((await api().get(path).set({ Authorization: auth.Authorization }).expect(200)).body);
+      for (const [name, id] of Object.entries(a)) if (text.includes(id)) leaks.push(`${path} contains A ${name}`);
+    }
+    expect(leaks).toEqual([]);
+  });
+});

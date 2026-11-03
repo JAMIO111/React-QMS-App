@@ -36,6 +36,13 @@ const SORT_SQL: Record<NcrListQuery['sort'], string> = {
 };
 
 const likePattern = (term: string) => `%${term.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+/** NCR columns that hold ids of other records (named in the history). */
+const HISTORY_ID_FIELDS = [
+  'site_id', 'part_id', 'part_revision_id', 'customer_id', 'supplier_id', 'detection_process_id', 'causal_process_id',
+  'failure_mode_id', 'sub_failure_mode_id', 'responsible_employee_id', 'owner_id', 'detected_by', 'closed_by', 'deleted_by',
+] as const;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const personName = (alias: string) => `nullif(trim(concat_ws(' ', ${alias}.first_name, ${alias}.surname)), '')`;
 
 /** Columns shared by list and detail. */
@@ -182,7 +189,7 @@ export class NcrService {
                h.actor_user_id, ${sql.raw(personName('pr'))} as actor_name
         from app.ncr_history(${id}::uuid) h
         left join public.profiles pr on pr.id = h.actor_user_id`);
-      return result.rows.map((r) => ({
+      const entries = result.rows.map((r) => ({
         id: r.id as string,
         at: iso(r.created_at)!,
         actor: r.actor_user_id ? { id: r.actor_user_id as string, name: (r.actor_name as string) ?? 'Unknown user' } : null,
@@ -192,7 +199,40 @@ export class NcrService {
         current: (r.new_values as Record<string, unknown>) ?? null,
         reason: (r.reason as string) || null,
         source: r.source as string,
+        names: {} as Record<string, string>,
       }));
+      // Linked records are stored as ids in the audit trail; give the history their names.
+      const ids = new Set<string>();
+      for (const e of entries) {
+        for (const values of [e.previous, e.current]) {
+          for (const f of HISTORY_ID_FIELDS) {
+            const v = values?.[f];
+            if (typeof v === 'string' && UUID.test(v)) ids.add(v);
+          }
+        }
+      }
+      if (ids.size === 0) return entries;
+      const list = [...ids].join(',');
+      const named = await db.execute<Row>(sql`
+        with ids as (select unnest(string_to_array(${list}, ',')::uuid[]) as id)
+        select p.id, concat_ws(' · ', p.part_number, p.name) as name from public.parts p join ids using (id)
+        union all select r.id, concat(p.part_number, ' rev ', r.revision) from public.part_revisions r join ids using (id) join public.parts p on p.id = r.part_id
+        union all select c.id, coalesce(c.display_name, c.name) from public.customers c join ids using (id)
+        union all select s.id, coalesce(s.display_name, s.name) from public.suppliers s join ids using (id)
+        union all select k.id, k.name from public.ncr_classifications k join ids using (id)
+        union all select t.id, t.name from public.sites t join ids using (id)
+        union all select e.id, ${sql.raw(personName('e'))} from public."Employees" e join ids using (id)
+        union all select u.id, ${sql.raw(personName('u'))} from public.profiles u join ids using (id)`);
+      const names = new Map(named.rows.filter((r) => r.name).map((r) => [r.id as string, r.name as string]));
+      for (const e of entries) {
+        for (const values of [e.previous, e.current]) {
+          for (const f of HISTORY_ID_FIELDS) {
+            const v = values?.[f];
+            if (typeof v === 'string' && names.has(v)) e.names[v] = names.get(v)!;
+          }
+        }
+      }
+      return entries;
     });
   }
 

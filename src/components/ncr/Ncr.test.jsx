@@ -235,14 +235,21 @@ describe("NC form", () => {
       "GET /ncrs/n1/history": {
         data: [
           { id: "h1", at: "2026-11-01T09:00:00Z", actor: { id: "u1", name: "Ada Owner" }, action: "insert", changedFields: [], previous: null, current: {}, reason: null, source: "api" },
-          { id: "h2", at: "2026-11-02T09:00:00Z", actor: { id: "u1", name: "Ada Owner" }, action: "update", changedFields: ["stage", "updated_at"], previous: { stage: "draft" }, current: { stage: "open" }, reason: "Raised", source: "api" },
+          { id: "h2", at: "2026-11-02T09:00:00Z", actor: { id: "u1", name: "Ada Owner" }, action: "update", changedFields: ["stage", "severity", "quantity_affected", "updated_at"], previous: { stage: "draft", severity: null, quantity_affected: 2 }, current: { stage: "open", severity: "major", quantity_affected: 4 }, reason: "Raised", source: "api", names: {} },
+          { id: "h3", at: "2026-11-02T10:00:00Z", actor: { id: "u1", name: "Ada Owner" }, action: "update", changedFields: ["failure_mode_id", "description"], previous: { failure_mode_id: "11111111-1111-4111-8111-111111111111", description: "First words" }, current: { failure_mode_id: "22222222-2222-4222-8222-222222222222", description: "Better words" }, reason: null, source: "api", names: { "11111111-1111-4111-8111-111111111111": "Cosmetic", "22222222-2222-4222-8222-222222222222": "Dimensional" } },
         ],
       },
     });
     renderAt("/Non-Conformance/Internal/n1");
     await userEvent.click(await screen.findByRole("tab", { name: "History" }));
-    expect(await screen.findByText("Stage: draft → open")).toBeInTheDocument();
-    expect(screen.getAllByText("Ada Owner")).toHaveLength(2);
+    const items = await screen.findAllByRole("listitem");
+    const text = items.map((li) => li.textContent);
+    expect(text).toContain("Stage: Draft → Open");
+    expect(text).toContain("Severity: — → Major");
+    expect(text).toContain("Quantity affected: 2 → 4");
+    expect(text).toContain("Failure mode: Cosmetic → Dimensional");
+    expect(text).toContain("Description:BeforeFirst wordsAfterBetter words");
+    expect(screen.getAllByText("Ada Owner")).toHaveLength(3);
   });
 
   it("explains a server rule", async () => {

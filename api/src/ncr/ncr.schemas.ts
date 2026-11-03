@@ -145,6 +145,8 @@ export const HistoryEntry = z.object({
   current: z.record(z.unknown()).nullable(),
   reason: z.string().nullable(),
   source: z.string(),
+  /** Display names for the ids of linked records in previous/current (part, customer, failure mode…). */
+  names: z.record(z.string()),
 });
 
 export const Classification = z.object({

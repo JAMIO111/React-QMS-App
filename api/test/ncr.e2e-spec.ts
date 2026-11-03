@@ -19,6 +19,7 @@ let customerId: string;
 let supplierId: string;
 let partId: string;
 let revisionId: string;
+let failureMode: string;
 
 beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });
@@ -46,7 +47,6 @@ afterAll(async () => {
 });
 
 describe('classifications', () => {
-  let failureMode: string;
 
   it('are managed with lookups.manage and readable by members', async () => {
     const h = await as(ids.ownerA);
@@ -168,7 +168,13 @@ describe('non-conformances', () => {
   });
 
   it('shows the history to anyone who can read the record', async () => {
+    await api().patch(`/api/v1/ncrs/${internal}`).set(await as(ids.ownerA)).send({ failureModeId: failureMode }).expect(200);
     const res = await api().get(`/api/v1/ncrs/${internal}/history`).set(await as(ENGINEER)).expect(200);
+    const fmChange = res.body.data.find((e: { changedFields: string[] }) => e.changedFields.includes('failure_mode_id'));
+    expect(fmChange.current.failure_mode_id).toBe(failureMode);
+    expect(fmChange.names).toEqual({ [failureMode]: 'Dimensional' });
+    expect(res.body.data[0].names[partId]).toMatch(/·/);
+    expect(res.body.data[0].names[ids.siteA]).toBeTruthy();
     expect(res.body.data[0]).toMatchObject({ action: 'insert', actor: { id: ids.ownerA, name: 'Ada Owner' }, source: 'api' });
     expect(res.body.data.some((e: { changedFields: string[] }) => e.changedFields.includes('stage'))).toBe(true);
   });

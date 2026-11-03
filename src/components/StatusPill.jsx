@@ -15,8 +15,10 @@ const StatusPill = ({ status, width = "w-full" }) => {
             ? `${statusObj.color}20`
             : undefined,
         }}
-        className="font-semibold border text-center truncate overflow-ellipsis rounded-lg px-3 py-1">
-        <p>{isLoading ? "Loading..." : statusObj?.name ?? "Unknown"}</p>
+        className="font-medium text-center truncate overflow-ellipsis rounded-lg px-3 py-1">
+        <p className="truncate">
+          {isLoading ? "Loading..." : (statusObj?.name ?? "Unknown")}
+        </p>
       </div>
     </div>
   );

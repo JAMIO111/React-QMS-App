@@ -18,7 +18,7 @@ const TextInput = forwardRef(
       textTransform = "none", // ⬅️ new prop
       ...rest
     },
-    ref
+    ref,
   ) => {
     // Controlled when the page handles changes; otherwise the box keeps its own value (starting
     // from value/defaultValue), so it can always be typed in and cleared.
@@ -82,7 +82,7 @@ const TextInput = forwardRef(
           </div>
         )}
         <div
-          className={`flex border flex-row relative items-center shadow-s hover:shadow-m rounded-lg pl-2 pr-10 py-2 bg-text-input-color
+          className={`group flex border flex-row relative items-center rounded-lg pl-2 pr-10 py-2 bg-text-input-color
              focus-within:border-brand-primary focus-within:hover:border-brand-primary min-w-0
             ${
               error
@@ -134,7 +134,7 @@ const TextInput = forwardRef(
             <button
               type="button"
               onClick={clear}
-              className="absolute right-2 text-secondary-text hover:text-primary-text hover:bg-secondary-bg rounded-sm p-0.5 cursor-pointer"
+              className="absolute right-2 text-secondary-text hover:text-primary-text hover:bg-secondary-bg rounded-sm p-0.5 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity duration-150"
               aria-label="Clear">
               <XIcon className="w-5 h-5" />
             </button>
@@ -142,7 +142,7 @@ const TextInput = forwardRef(
         </div>
       </div>
     );
-  }
+  },
 );
 
 export default TextInput;

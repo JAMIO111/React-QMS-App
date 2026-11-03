@@ -13,6 +13,10 @@ const EnvSchema = z
     /** Legacy shared HS256 secret; only for projects that have not moved to signing keys. */
     SUPABASE_JWT_SECRET: z.string().min(32).optional(),
     JWT_ISSUER: z.string().optional(),
+    /** Optional: lets the API send invitation emails through Supabase Auth. Server-side only. */
+    SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
+    /** Where invitation emails send people (the frontend's sign-in page). */
+    INVITE_REDIRECT_URL: z.string().url().optional(),
     JWT_AUDIENCE: z.string().default('authenticated'),
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),

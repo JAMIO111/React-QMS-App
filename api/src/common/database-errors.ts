@@ -21,6 +21,9 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   sites_org_code_key: 'A site with this code already exists',
   departments_site_code_key: 'A department with this code already exists at this site',
   organisations_slug_key: 'An organisation with this slug already exists',
+  organisation_users_pending_invite_key: 'This email address already has a pending invitation',
+  organisation_users_org_user_key: 'This person is already a member of the organisation',
+  ura_unique: 'This member already has that role',
 };
 
 /**
@@ -32,7 +35,7 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
   if (!pg) return undefined;
   switch (pg.code) {
     case '23505': // unique_violation
-      return new ApiError(409, 'conflict', UNIQUE_MESSAGES[pg.constraint ?? ''] ?? 'This conflicts with an existing record', {
+      return new ApiError(409, pg.constraint === 'organisation_users_pending_invite_key' ? 'already_invited' : 'conflict', UNIQUE_MESSAGES[pg.constraint ?? ''] ?? 'This conflicts with an existing record', {
         constraint: pg.constraint,
       });
     case '23503': // foreign_key_violation (e.g. a site from another organisation)
@@ -45,6 +48,10 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return ApiError.forbidden();
     case '54000': // program_limit_exceeded (abuse limits)
       return new ApiError(429, 'limit_reached', 'A usage limit was reached, please try again later');
+    case 'QM001': // app.assert_organisation_has_owner
+      return new ApiError(409, 'last_owner', 'An organisation must keep at least one active Owner');
+    case 'P0002': // no_data_found raised by app functions
+      return ApiError.notFound();
     case '57014': // query_canceled (statement_timeout)
       return new ApiError(503, 'timeout', 'The request took too long, please try again');
     default:

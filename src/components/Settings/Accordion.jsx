@@ -12,6 +12,9 @@ const Accordion = ({ title, subtitle, children }) => {
           <h3 className="text-secondary-text text-sm">{subtitle}</h3>
         </div>
         <button
+          type="button"
+          aria-expanded={expanded}
+          aria-label={`${expanded ? "Collapse" : "Expand"} ${title}`}
           onClick={() => setExpanded((prev) => !prev)}
           className={`flex items-center justify-center w-8 h-8 rounded-md text-secondary-text hover:bg-border-color/50 transition-colors cursor-pointer`}>
           <ChevronDownIcon

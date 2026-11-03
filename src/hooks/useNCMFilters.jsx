@@ -1,60 +1,33 @@
 import { useSearchParams } from "react-router-dom";
 import { useCallback } from "react";
 
+/** Register filters kept in the URL, so a filtered register can be bookmarked or shared. */
+const KEYS = ["search", "stage", "failureMode", "subFailureMode", "deleted"];
+
 export function useNCMFilters() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const values = Object.fromEntries(KEYS.map((k) => [k, searchParams.get(k) || ""]));
 
-  // Read current values directly from the current searchParams
-  const search = searchParams.get("search") || "";
-  const status = searchParams.get("status") || "";
-  const failureMode = searchParams.get("failureMode") || "";
-  const subFailureMode = searchParams.get("subFailureMode") || "";
-
-  // updateFilters uses only prevParams passed in setter callback!
+  /** Merge new filter values (object or updater); any filter change returns to page 1. */
   const updateFilters = useCallback(
-    (newFilters) => {
-      setSearchParams((prevParams) => {
-        const params = new URLSearchParams();
-
-        const filters =
-          typeof newFilters === "function"
-            ? newFilters({
-                search: prevParams.get("search") || "",
-                status: prevParams.get("status") || "",
-                failureMode: prevParams.get("failureMode") || "",
-                subFailureMode: prevParams.get("subFailureMode") || "",
-                page: prevParams.get("page") || "1",
-                pageSize: prevParams.get("pageSize") || "25",
-              })
-            : {
-                search: prevParams.get("search") || "",
-                status: prevParams.get("status") || "",
-                failureMode: prevParams.get("failureMode") || "",
-                subFailureMode: prevParams.get("subFailureMode") || "",
-                page: prevParams.get("page") || "1",
-                pageSize: prevParams.get("pageSize") || "25",
-                ...newFilters,
-              };
-
-        Object.entries(filters).forEach(([key, value]) => {
-          if (value !== undefined && value !== null && value !== "") {
-            params.set(key, value);
-          } else {
-            params.delete(key);
-          }
+    (next) => {
+      setSearchParams((prev) => {
+        const current = Object.fromEntries(KEYS.map((k) => [k, prev.get(k) || ""]));
+        const merged = typeof next === "function" ? next(current) : { ...current, ...next };
+        const params = new URLSearchParams(prev);
+        let changed = false;
+        KEYS.forEach((k) => {
+          const v = merged[k] ?? "";
+          if (v !== current[k]) changed = true;
+          if (v) params.set(k, v);
+          else params.delete(k);
         });
-
+        if (changed) params.delete("page");
         return params;
       });
     },
     [setSearchParams]
   );
 
-  return {
-    search,
-    status,
-    failureMode,
-    subFailureMode,
-    updateFilters,
-  };
+  return { ...values, updateFilters };
 }

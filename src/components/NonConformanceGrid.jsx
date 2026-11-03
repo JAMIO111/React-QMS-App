@@ -1,102 +1,29 @@
-import { useState, useEffect, useRef } from "react";
 import NonConformanceCard from "./NonConformanceCard";
-import DataNavBar from "./DataNavBar";
+import { describeApiError } from "../lib/api-client";
 
-const NonConformanceGrid = ({
-  handleActiveModalType, //Required
-  selectedItem, //Required
-  setSelectedItem, //Required
-  onOpenModal, //Required
-  onRefresh, //Required
-  ncmData, //Required
-  page,
-  pageSize,
-  totalCount,
-  setPage,
-  setPageSize,
-}) => {
-  const [selectedRow, setSelectedRow] = useState(null);
-  const [openModalRowId, setOpenModalRowId] = useState(null);
-  const [modalPos, setModalPos] = useState(null);
-  const [, setModalItem] = useState(null);
-  const modalRef = useRef(null);
-
-  const handleRowClick = (index) => {
-    if (selectedRow === index) {
-      setSelectedRow(null); // Deselect if the same row is clicked again
-      console.log("Row deselected:", index);
-    } else {
-      setSelectedRow(index); // Select the clicked row
-      console.log("Row selected:", index);
-    }
-  };
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setOpenModalRowId(null);
-      setModalPos(null);
-    };
-
-    if (openModalRowId !== null) {
-      window.addEventListener("scroll", handleScroll, true); // true to capture scroll on nested containers
-    }
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll, true);
-    };
-  }, [openModalRowId]);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (modalRef.current && !modalRef.current.contains(event.target)) {
-        setOpenModalRowId(null);
-        setModalPos(null);
-        setModalItem(null);
-      }
-    };
-
-    if (openModalRowId !== null) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [openModalRowId]);
-
-  const tiles = Array.isArray(ncmData?.data) ? ncmData.data : [];
-
+/** Card view of the current register page. */
+const NonConformanceGrid = ({ items, isLoading, error, selectedItem, setSelectedItem, onOpenModal, handleActiveModalType, onOpen }) => {
+  if (error) {
+    return (
+      <p role="alert" className="text-error-color p-4">
+        {describeApiError(error)}
+      </p>
+    );
+  }
+  if (!isLoading && items.length === 0) return <p className="p-6 text-center italic text-secondary-text">No records found.</p>;
   return (
-    <div className="flex flex-col h-full">
-      <div className="grid pr-2 grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 overflow-y-auto h-full">
-        {tiles.map((item, index) => {
-          return (
-            <NonConformanceCard
-              handleRowClick={() => handleRowClick(index)}
-              key={item.id}
-              selectedItem={selectedItem}
-              setSelectedItem={setSelectedItem}
-              selected={selectedRow === index}
-              item={item}
-              onOpenModal={onOpenModal}
-              handleActiveModalType={handleActiveModalType} //Required
-              openModalRowId={openModalRowId}
-              setOpenModalRowId={setOpenModalRowId}
-              modalPos={modalPos}
-              setModalPos={setModalPos}
-              setModalItem={setModalItem}
-            />
-          );
-        })}
-      </div>
-      <DataNavBar
-        onRefresh={onRefresh}
-        page={page}
-        pageSize={pageSize}
-        totalCount={totalCount}
-        setPageSize={setPageSize}
-        onPageChange={setPage}
-      />
+    <div className="grid pr-2 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 overflow-y-auto h-full content-start">
+      {items.map((item) => (
+        <NonConformanceCard
+          key={item.id}
+          item={item}
+          selected={selectedItem?.id === item.id}
+          setSelectedItem={setSelectedItem}
+          onOpenModal={onOpenModal}
+          handleActiveModalType={handleActiveModalType}
+          onOpen={onOpen}
+        />
+      ))}
     </div>
   );
 };

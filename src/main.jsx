@@ -34,6 +34,7 @@ const SettingsAccount = lazy(() =>
 );
 const Employees = lazy(() => import("./components/Employees.jsx"));
 const PartsPage = lazy(() => import("./components/master-data/PartsPage.jsx"));
+const NcrPage = lazy(() => import("./components/ncr/NcrPage.jsx"));
 const PartDetailPage = lazy(() => import("./components/master-data/PartDetailPage.jsx"));
 const PartiesPage = lazy(() => import("./components/master-data/PartiesPage.jsx"));
 const AuthPage = lazy(() => import("./components/AuthPage.jsx"));
@@ -89,6 +90,7 @@ const router = createBrowserRouter([
           { index: true, element: <Dashboard /> },
           { path: "Dashboard", element: <Dashboard /> },
           { path: "Non-Conformance/:type", element: <NonConformance /> },
+          { path: "Non-Conformance/:type/:id", element: <NcrPage /> },
           {
             path: "Settings",
             element: <Settings />,

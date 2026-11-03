@@ -82,7 +82,7 @@ const TableWrapper = ({
         cell: ({ row }) => (
           <input
             type="checkbox"
-            aria-label={`Select row ${row.original.ncm_id ?? row.id}`}
+            aria-label={`Select ${row.original.reference ?? row.id}`}
             checked={row.getIsSelected()}
             disabled={!row.getCanSelect()}
             onChange={row.getToggleSelectedHandler()}

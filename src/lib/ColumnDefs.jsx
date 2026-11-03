@@ -1,280 +1,75 @@
-import { AlignCenterIcon, ArrowDown10Icon, ArrowDownAZIcon, ArrowDownWideNarrowIcon, ArrowUp01Icon, ArrowUp10Icon, ArrowUpNarrowWideIcon, ArrowUpZAIcon, BoxIcon, CalendarIcon, CircleDashedIcon, LayersIcon, PoundSterlingIcon, QrCodeIcon, TagIcon, UsersIcon } from "@/components/icons";
-import StatusPill from "../components/StatusPill";
-import { format } from "date-fns";
+import { AlignCenterIcon, BoxIcon, CalendarIcon, CircleDashedIcon, LayersIcon, QrCodeIcon, TagIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { SeverityPill, StagePill } from "../components/ncr/Pills";
+import { formatDate } from "./ncr";
+
+/**
+ * Register columns for each NC type. `meta.sortKey` is the API sort field; columns without one
+ * cannot be sorted (the register is sorted and paged on the server).
+ */
+const head = (Icon, label, cls = "table-header") => (
+  <div className={cls}>
+    {Icon && <Icon className="shrink-0" />} {label}
+  </div>
+);
+const text = (info) => <div className="table-row-item">{info.getValue() ?? "—"}</div>;
+const nameOf = (info) => <div className="table-row-item">{info.getValue()?.name ?? "—"}</div>;
+
+const col = (id, headerString, header, cell, { size = 140, minSize = 70, maxSize = 400, sortKey, align, accessor } = {}) => ({
+  id,
+  headerString,
+  header,
+  cell,
+  ...(accessor ? { accessorFn: accessor } : { accessorKey: id }),
+  size,
+  minSize,
+  maxSize,
+  enableSorting: !!sortKey,
+  meta: { sortKey, ...(align ? { align } : {}) },
+});
+
+const reference = col("reference", "Reference", head(null, "Reference"), (i) => <div className="table-row-item font-medium">{i.getValue()}</div>, { size: 130, sortKey: "reference" });
+const detectedAt = col("detectedAt", "Detected", head(CalendarIcon, "Detected"), (i) => <div className="table-row-item">{formatDate(i.getValue())}</div>, { size: 120, sortKey: "detectedAt" });
+const title = col("title", "Title", head(AlignCenterIcon, "Title"), text, { size: 260, minSize: 120, maxSize: 600, sortKey: "title" });
+const part = col(
+  "part",
+  "Part",
+  head(QrCodeIcon, "Part"),
+  (i) => {
+    const p = i.getValue();
+    return <div className="table-row-item">{p ? `${p.partNumber}${p.revision ? ` · ${p.revision}` : ""}` : "—"}</div>;
+  },
+  { size: 150, sortKey: "partNumber" }
+);
+const quantity = col("quantityAffected", "Quantity", head(LayersIcon, "Qty", "table-header-number"), (i) => <div className="table-row-item">{i.getValue() ?? "—"}</div>, {
+  size: 90,
+  minSize: 60,
+  sortKey: "quantityAffected",
+  align: "center",
+});
+const failureMode = col("failureMode", "Failure mode", head(TagIcon, "Failure mode"), nameOf, { size: 170, sortKey: "failureMode" });
+const subFailureMode = col("subFailureMode", "Sub-failure mode", head(TagIcon, "Sub-failure mode"), nameOf, { size: 170 });
+const causalProcess = col("causalProcess", "Causal process", head(BoxIcon, "Causal process"), nameOf, { size: 160 });
+const severity = col("severity", "Severity", head(TriangleAlertIcon, "Severity", "table-header-number"), (i) => <SeverityPill severity={i.getValue()} />, {
+  size: 110,
+  sortKey: "severity",
+  align: "center",
+});
+const stage = col("stage", "Stage", head(CircleDashedIcon, "Stage", "table-header-number"), (i) => <StagePill stage={i.getValue()} />, {
+  size: 140,
+  sortKey: "stage",
+  align: "center",
+});
+const workOrder = col("workOrder", "Work order", head(BoxIcon, "Work order"), text, { size: 130 });
+const customer = col("customer", "Customer", head(UsersIcon, "Customer"), nameOf, { size: 180, sortKey: "customer" });
+const customerReference = col("customerReference", "Customer ref.", head(UsersIcon, "Customer ref."), text, { size: 150 });
+const supplier = col("supplier", "Supplier", head(UsersIcon, "Supplier"), nameOf, { size: 180, sortKey: "supplier" });
+const purchaseOrder = col("purchaseOrder", "Purchase order", head(BoxIcon, "Purchase order"), text, { size: 150 });
 
 export const getColumnsForNcType = (ncType = "Internal") => {
-  const baseColumns = [
-    {
-      id: "ncm_id",
-      accessorKey: "ncm_id",
-      headerString: "ID",
-      header: <div className="table-header">ID #</div>,
-      cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
-      size: 80,
-      minSize: 50, // Reduced min size for more flexibility
-      maxSize: 150, // Increased max size for wider view
-    },
-    {
-      id: "created_at",
-      accessorKey: "created_at",
-      headerString: "Date",
-      header: (
-        <div className="table-header">
-          <CalendarIcon className="shrink-0" /> Date
-        </div>
-      ),
-      cell: (info) => (
-        <div className="table-row-item">
-          {format(new Date(info.getValue()), "dd MMM yy")}
-        </div>
-      ),
-      size: 110,
-      minSize: 70, // Slightly smaller min size
-      maxSize: 180, // Larger max for longer dates if needed
-    },
-    {
-      id: "part_number",
-      accessorKey: "part_number",
-      headerString: "Part No.",
-      header: (
-        <div className="table-header">
-          <QrCodeIcon className="shrink-0" /> Part No.
-        </div>
-      ),
-      cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
-      size: 120,
-      minSize: 80,
-      maxSize: 300, // Allow wider to see full part numbers
-    },
-    {
-      id: "quantity_defective",
-      accessorKey: "quantity_defective",
-      headerString: "Quantity",
-      header: (
-        <div className="table-header-number">
-          <LayersIcon className="shrink-0" /> Qty
-        </div>
-      ),
-      cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
-      size: 90,
-      minSize: 50,
-      maxSize: 140,
-      meta: {
-        flexPos: "center",
-      },
-    },
-    {
-      id: "failure_mode_name",
-      accessorKey: "failure_mode_name",
-      headerString: "Failure Mode",
-      header: (
-        <div className="table-header">
-          <TagIcon className="shrink-0" /> Failure Mode
-        </div>
-      ),
-      cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
-      size: 180,
-      minSize: 120,
-      maxSize: 350,
-    },
-    {
-      id: "sub_failure_mode_name",
-      accessorKey: "sub_failure_mode_name",
-      headerString: "Sub Failure Mode",
-      header: (
-        <div className="table-header">
-          <TagIcon className="shrink-0" /> Sub Failure Mode
-        </div>
-      ),
-      cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
-      size: 180,
-      minSize: 120,
-      maxSize: 350,
-    },
-    {
-      id: "status",
-      accessorKey: "status",
-      headerString: "Status",
-      header: (
-        <div className="table-header-number">
-          <CircleDashedIcon className="shrink-0" /> Status
-        </div>
-      ),
-      cell: (info) => (
-        <div className="table-row-item">
-          <StatusPill status={info.getValue()} />
-        </div>
-      ),
-      size: 120,
-      minSize: 90,
-      maxSize: 180,
-      meta: {
-        flexPos: "center",
-        sortKey: "status_name", // the row holds the status id; sort by its name
-      },
-    },
-    {
-      id: "description",
-      accessorKey: "description",
-      headerString: "Description",
-      header: (
-        <div className="table-header">
-          <AlignCenterIcon className="shrink-0" /> Description
-        </div>
-      ),
-      cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
-      enableSorting: false,
-      size: 300,
-      minSize: 150,
-      maxSize: 600, // Allow very wide for verbose descriptions
-      meta: {
-        flex: 2,
-      },
-    },
-    {
-      id: "total_cost",
-      accessorKey: "total_cost",
-      headerString: "Total Cost",
-      header: (
-        <div className="table-header-number">
-          <PoundSterlingIcon className="shrink-0" /> Total Cost
-        </div>
-      ),
-      cell: (info) => {
-        return (
-          <div className="table-row-item text-right">
-            {new Intl.NumberFormat("en-GB", {
-              style: "currency",
-              currency: "GBP",
-            }).format(info.getValue())}
-          </div>
-        );
-      },
-      size: 120,
-      minSize: 90,
-      maxSize: 250,
-      meta: {
-        flexPos: "right",
-      },
-    },
-  ];
-
-  // Type specific columns with adjusted min/max sizes
-  const typeSpecific = {
-    Internal: [
-      {
-        id: "customer_display_name",
-        accessorKey: "customer_display_name",
-        headerString: "Customer",
-        header: (
-          <div className="table-header">
-            <UsersIcon className="shrink-0" /> Customer
-          </div>
-        ),
-        cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
-        size: 180,
-        minSize: 120,
-        maxSize: 350,
-      },
-      {
-        id: "work_order",
-        accessorKey: "work_order",
-        headerString: "Work Order",
-        header: (
-          <div className="table-header">
-            <BoxIcon className="shrink-0" /> Work Order
-          </div>
-        ),
-        cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
-        size: 150,
-        minSize: 100,
-        maxSize: 300,
-      },
-    ],
-    Customer: [
-      {
-        id: "claim_ref",
-        accessorKey: "claim_ref",
-        headerString: "Claim Ref.",
-        header: (
-          <div className="table-header">
-            <UsersIcon className="shrink-0" /> Claim Ref.
-          </div>
-        ),
-        cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
-        size: 180,
-        minSize: 120,
-        maxSize: 350,
-      },
-      {
-        id: "customer_display_name",
-        accessorKey: "customer_display_name",
-        headerString: "Customer",
-        header: (
-          <div className="table-header">
-            <UsersIcon className="shrink-0" /> Customer
-          </div>
-        ),
-        cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
-        size: 180,
-        minSize: 120,
-        maxSize: 350,
-      },
-      {
-        id: "work_order",
-        accessorKey: "work_order",
-        headerString: "Work Order",
-        header: (
-          <div className="table-header">
-            <BoxIcon className="shrink-0" /> Work Order
-          </div>
-        ),
-        cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
-        size: 150,
-        minSize: 100,
-        maxSize: 300,
-      },
-    ],
-    Supplier: [
-      {
-        id: "supplier_name",
-        accessorKey: "supplier_name",
-        headerString: "Supplier",
-        header: (
-          <div className="table-header">
-            <UsersIcon className="shrink-0" /> Supplier
-          </div>
-        ),
-        cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
-        size: 180,
-        minSize: 120,
-        maxSize: 350,
-      },
-      {
-        id: "purchase_order",
-        accessorKey: "purchase_order",
-        headerString: "Purchase Order",
-        header: (
-          <div className="table-header">
-            <BoxIcon className="shrink-0" /> Purchase Order
-          </div>
-        ),
-        cell: (info) => <div className="table-row-item">{info.getValue()}</div>,
-        size: 180,
-        minSize: 120,
-        maxSize: 350,
-      },
-    ],
-  };
-
-  // Insert the specific columns after "created_at"
-  const insertAfter = "created_at";
-  const baseIndex = baseColumns.findIndex((col) => col.id === insertAfter);
-
-  const injectedColumns = [...baseColumns];
-  if (typeSpecific[ncType]?.length && baseIndex !== -1) {
-    injectedColumns.splice(baseIndex + 1, 0, ...typeSpecific[ncType]);
-  }
-
-  return injectedColumns;
+  const specific = {
+    Internal: [customer, workOrder],
+    Customer: [customer, customerReference, workOrder],
+    Supplier: [supplier, purchaseOrder],
+  }[ncType] ?? [];
+  return [reference, detectedAt, ...specific, part, title, quantity, failureMode, subFailureMode, causalProcess, severity, stage];
 };

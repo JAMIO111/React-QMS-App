@@ -1,12 +1,14 @@
 import { fetchNCDateTrend } from "@/api/supabaseApi";
 import { useQuery } from "@tanstack/react-query";
+import { useOrganisation } from "@/contexts/OrganisationProvider";
 
 export const useNCDateTrend = (startDate, endDate, overridePeriod, ncType) => {
+  const { organisationId } = useOrganisation();
   return useQuery({
-    queryKey: ["NCDateTrend", startDate, endDate, overridePeriod, ncType],
+    queryKey: ["NCDateTrend", organisationId, startDate, endDate, overridePeriod, ncType],
     queryFn: () =>
-      fetchNCDateTrend({ startDate, endDate, overridePeriod, ncType }),
-    staleTime: 1000 * 60 * 5, // optional: 5 min cache
-    enabled: !!startDate && !!endDate, // only run if both are provided
+      fetchNCDateTrend({ organisationId, startDate, endDate, overridePeriod, ncType }),
+    staleTime: 1000 * 60 * 5,
+    enabled: !!organisationId && !!startDate && !!endDate,
   });
 };

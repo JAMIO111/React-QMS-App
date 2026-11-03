@@ -2,14 +2,16 @@ import React from "react";
 import { IoLogOutOutline } from "react-icons/io5";
 import { signOut } from "../authService";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 const Logout = ({ isExpanded }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const handleLogout = async () => {
     try {
       await signOut(); // wait for Supabase to complete logout
-      console.log("User logged out");
+      queryClient.clear(); // drop the previous user's cached data
       navigate("/login");
     } catch (error) {
       console.error("Logout failed:", error.message);

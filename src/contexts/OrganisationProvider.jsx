@@ -1,39 +1,93 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import supabase from "../supabase-client";
-import { useUser } from "./UserProvider";
+import { useAuth } from "./AuthProvider";
 
 const OrganisationContext = createContext();
 
+const STORAGE_KEY = "qms.currentOrganisationId";
+
+const readStoredOrgId = () => {
+  try {
+    return localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+};
+
+const storeOrgId = (id) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, id);
+  } catch {
+    // Browser storage unavailable: the choice just isn't remembered.
+  }
+};
+
+const fetchMemberships = async (userId) => {
+  const { data, error } = await supabase
+    .from("organisation_users")
+    .select(
+      "id, status, organisation:organisations(id, name, slug, settings:organisation_settings(base_currency, vat_rate, ncr_reference_prefix))"
+    )
+    .eq("user_id", userId)
+    .eq("status", "active");
+  if (error) throw new Error(error.message);
+  return (data ?? [])
+    .filter((m) => m.organisation)
+    .map((m) => {
+      // One-to-one embed: PostgREST returns an object (or an array on older detection rules).
+      const settings = Array.isArray(m.organisation.settings)
+        ? m.organisation.settings[0]
+        : m.organisation.settings;
+      return {
+        membershipId: m.id,
+        id: m.organisation.id,
+        name: m.organisation.name,
+        slug: m.organisation.slug,
+        base_currency: settings?.base_currency ?? "GBP",
+        vat_rate: Number(settings?.vat_rate ?? 0.2),
+        ncr_reference_prefix: settings?.ncr_reference_prefix ?? "NCM",
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+};
+
+/**
+ * Organisations the signed-in user is an active member of, and the one currently selected.
+ * `organisation` is undefined while loading and null when the user has no membership.
+ * Access is enforced by the database (RLS); the selection only decides which data is shown.
+ */
 export const OrganisationProvider = ({ children }) => {
-  const { profile } = useUser();
-  const [organisation, setOrganisation] = useState(undefined); // undefined = loading
+  const { user } = useAuth();
+  const [selectedId, setSelectedId] = useState(readStoredOrgId);
 
-  useEffect(() => {
-    if (!profile || !profile.organisation_id) {
-      setOrganisation(null);
-      return;
-    }
+  const { data: organisations, isLoading, error } = useQuery({
+    queryKey: ["memberships", user?.id],
+    queryFn: () => fetchMemberships(user.id),
+    enabled: !!user,
+    staleTime: 1000 * 60 * 5,
+  });
 
-    const fetchOrganisation = async () => {
-      const { data, error } = await supabase
-        .from("Organisations")
-        .select("name, base_currency, vat_rate")
-        .eq("id", profile.organisation_id)
-        .maybeSingle();
+  const organisation = useMemo(() => {
+    if (!user) return null;
+    if (isLoading || !organisations) return error ? null : undefined;
+    return organisations.find((o) => o.id === selectedId) ?? organisations[0] ?? null;
+  }, [user, isLoading, organisations, error, selectedId]);
 
-      if (error) {
-        console.error("Error fetching organisation", error);
-        setOrganisation(null);
-      } else {
-        setOrganisation(data || null); // explicitly set null if no data
-      }
-    };
-
-    fetchOrganisation();
-  }, [profile]);
+  const selectOrganisation = (id) => {
+    setSelectedId(id);
+    storeOrgId(id);
+  };
 
   return (
-    <OrganisationContext.Provider value={{ organisation }}>
+    <OrganisationContext.Provider
+      value={{
+        organisation,
+        organisationId: organisation?.id ?? null,
+        organisations: organisations ?? [],
+        selectOrganisation,
+        error,
+      }}>
       {children}
     </OrganisationContext.Provider>
   );

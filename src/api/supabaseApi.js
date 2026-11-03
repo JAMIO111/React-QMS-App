@@ -1,7 +1,8 @@
 import supabase from "../supabase-client";
 
-export const fetchNCKPI = async ({ startDate, endDate, ncType }) => {
+export const fetchNCKPI = async ({ organisationId, startDate, endDate, ncType }) => {
   const { data, error } = await supabase.rpc("get_nc_kpi_json", {
+    p_organisation_id: organisationId,
     start_date: startDate,
     end_date: endDate,
     nc_type: ncType,
@@ -12,12 +13,14 @@ export const fetchNCKPI = async ({ startDate, endDate, ncType }) => {
 };
 
 export const fetchNCDateTrend = async ({
+  organisationId,
   startDate,
   endDate,
   overridePeriod,
   ncType,
 }) => {
   const { data, error } = await supabase.rpc("get_nc_date_trend", {
+    p_organisation_id: organisationId,
     start_date: startDate,
     end_date: endDate,
     override_period: overridePeriod,
@@ -28,9 +31,12 @@ export const fetchNCDateTrend = async ({
   return data;
 };
 
-// Get all rows from a table
-export const fetchAll = async (table) => {
-  const { data, error } = await supabase.from(table).select("*");
+// Get all rows of an organisation from a tenant-owned table
+export const fetchAllForOrganisation = async (table, organisationId) => {
+  const { data, error } = await supabase
+    .from(table)
+    .select("*")
+    .eq("organisation_id", organisationId);
   if (error) throw new Error(error.message);
   return data;
 };
@@ -69,90 +75,29 @@ export const updateRow = async (table, id, updates) => {
   return data;
 };
 
-// Delete a row
+// Delete a row. Row Level Security silently skips rows the user may not delete, so a
+// delete that affected nothing is reported as an error.
 export const deleteRow = async (table, id) => {
-  const { error } = await supabase.from(table).delete().eq("id", id);
+  const { data, error } = await supabase
+    .from(table)
+    .delete()
+    .eq("id", id)
+    .select("id");
   if (error) throw new Error(error.message);
-};
-
-export const getNextNCId = async (table, field) => {
-  try {
-    const year = new Date().getFullYear().toString().slice(-2); // e.g., '25'
-    const prefix = `${table}-${year}-`;
-
-    // Fetch the latest ID matching the prefix
-    const { data, error } = await supabase
-      .from(table)
-      .select(field)
-      .ilike(field, `${prefix}%`)
-      .order(field, { ascending: false })
-      .limit(1);
-
-    if (error) {
-      throw new Error(
-        `Failed to fetch latest ${field} from ${table}: ${error.message}`
-      );
-    }
-
-    let nextNumber = 1; // Start at 1
-    if (data && data.length > 0) {
-      const lastId = data[0][field];
-      // Validate ID format (e.g., TABLE-YEAR-NNN)
-      const match = lastId.match(new RegExp(`^${table}-${year}-(\\d{3})$`));
-      if (!match) {
-        throw new Error(
-          `Invalid ${field} format: ${lastId}. Expected ${prefix}NNN`
-        );
-      }
-      nextNumber = parseInt(match[1], 10) + 1;
-    }
-
-    // Generate and verify uniqueness
-    let attempts = 0;
-    const maxAttempts = 5; // Prevent infinite loops
-    while (attempts < maxAttempts) {
-      const nextId = `${prefix}${String(nextNumber).padStart(3, "0")}`; // e.g., NCM-25-002
-
-      // Check if ID already exists
-      const { data: existing, error: checkError } = await supabase
-        .from(table)
-        .select(field)
-        .eq(field, nextId)
-        .maybeSingle(); // Use maybeSingle to handle no rows
-
-      if (checkError) {
-        throw new Error(
-          `Failed to verify ${field} uniqueness: ${checkError.message}`
-        );
-      }
-      if (!existing) {
-        return nextId; // ID is unique
-      }
-
-      // ID exists, try next number
-      nextNumber++;
-      attempts++;
-    }
-
-    throw new Error(
-      `Unable to generate unique ${field} after ${maxAttempts} attempts`
-    );
-  } catch (error) {
-    console.error(`Error in getNextNCId for ${table}.${field}:`, error);
-    throw new Error(`Failed to generate next ${field}: ${error.message}`);
+  if (!data || data.length === 0) {
+    throw new Error("You don't have permission to delete this record.");
   }
 };
 
 /**
- * Uploads a file to Supabase Storage.
- * @param {File} file - The file to upload.
- * @param {string} bucket - The name of the storage bucket.
- * @returns {Promise<{ path: string, publicUrl: string }>}
+ * Uploads an NC attachment to the private nc-files bucket under the organisation's folder
+ * (storage policies only allow paths that start with an organisation the user belongs to).
+ * @returns {Promise<{ path: string }>}
  */
-export const uploadFileToSupabase = async (file, bucket, id_ref) => {
+export const uploadFileToSupabase = async (file, bucket, organisationId, id_ref) => {
   const actualFile = file.file ?? file; // unwrap if needed
-  const fileName = actualFile.name || "unnamed_file";
-  const filePath = `${id_ref}_${fileName}`;
+  const fileName = (actualFile.name || "unnamed_file").replace(/[/\\]/g, "_");
+  const filePath = `${organisationId}/ncr/${id_ref}/${crypto.randomUUID()}-${fileName}`;
 
   const { error } = await supabase.storage
     .from(bucket)
@@ -173,19 +118,18 @@ export const uploadFileToSupabase = async (file, bucket, id_ref) => {
  * @param {string} tableName - The name of the table to insert metadata into.
  */
 export const saveFileMetadata = async (
-  { file, path, id_ref, owner },
+  { file, path, id_ref, organisationId },
   tableName
 ) => {
   const { error } = await supabase.from(tableName).insert([
     {
-      created_at: new Date().toISOString(),
+      organisation_id: organisationId,
       name: file.name,
       size: file.size,
       last_modified: new Date(file.lastModified).toISOString(),
       type: file.type,
       path,
-      id_ref, // Optional reference to another table (e.g., NonConformance ID)
-      owner,
+      id_ref, // NCR reference (e.g. NCM-25-001)
     },
   ]);
 
@@ -218,13 +162,13 @@ export const deleteFileFromSupabase = async (path, bucket, tableName) => {
  * Generates a signed URL for a file in Supabase Storage.
  * @param {string} bucket - The storage bucket name.
  * @param {string} filePath - The path/key of the file in the bucket.
- * @param {number} expiresIn - Expiration time in seconds (default 8 hours).
+ * @param {number} expiresIn - Expiration time in seconds (default 10 minutes).
  * @returns {string|null} - Returns the signed URL or null if error.
  */
 export const generateSignedUrl = async (
   bucket,
   filePath,
-  expiresIn = 60 * 60 * 8
+  expiresIn = 60 * 10
 ) => {
   const { data, error } = await supabase.storage
     .from(bucket)

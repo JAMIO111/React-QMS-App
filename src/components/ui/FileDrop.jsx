@@ -11,6 +11,7 @@ import supabase from "../../supabase-client";
 import DownloadLink from "./DownloadLink";
 import { formatDate } from "../../lib/utils";
 import { useUser } from "../../contexts/UserProvider";
+import { useOrganisation } from "../../contexts/OrganisationProvider";
 
 const FileDrop = ({ ncm_id }) => {
   const [, setDragActive] = useState(false);
@@ -21,12 +22,14 @@ const FileDrop = ({ ncm_id }) => {
   const [isSaving, setIsSaving] = useState(false);
   const { showToast } = useToast();
   const { profile } = useUser();
+  const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
 
   const fetchExistingFiles = async (ncm_id) => {
     const { data, error } = await supabase
       .from("v_nc_files")
       .select("*")
+      .eq("organisation_id", organisationId)
       .eq("id_ref", ncm_id);
 
     if (error) throw new Error(error.message);
@@ -39,9 +42,9 @@ const FileDrop = ({ ncm_id }) => {
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["NC Files", ncm_id],
+    queryKey: ["NC Files", organisationId, ncm_id],
     queryFn: () => fetchExistingFiles(ncm_id),
-    enabled: !!ncm_id, // only run if ncm_id is provided
+    enabled: !!ncm_id && !!organisationId,
     staleTime: 5 * 60 * 1000, // optional: keeps cache "fresh" for 5 mins
     cacheTime: 15 * 60 * 1000, // optional: cache kept in memory for 10 mins
   });
@@ -125,6 +128,7 @@ const FileDrop = ({ ncm_id }) => {
             const { path } = await uploadFileToSupabase(
               file,
               "nc-files",
+              organisationId,
               ncm_id
             );
 
@@ -133,7 +137,7 @@ const FileDrop = ({ ncm_id }) => {
                 file: file.file ?? file,
                 path,
                 id_ref: ncm_id,
-                owner: profile.auth_id,
+                organisationId,
               },
               "NC Files"
             );
@@ -165,7 +169,7 @@ const FileDrop = ({ ncm_id }) => {
       setNewFiles([]);
       setDeletedFiles([]);
       await queryClient.invalidateQueries({
-        queryKey: ["NC Files", ncm_id],
+        queryKey: ["NC Files", organisationId, ncm_id],
       });
 
       // SHOW TOASTS BASED ON SUCCESSFUL ACTIONS

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import supabase from "../supabase-client";
 import { useNCMFilters } from "./useNCMFilters";
+import { useOrganisation } from "../contexts/OrganisationProvider";
 
 export const useNCM = ({
   ncType = "Internal",
@@ -10,6 +11,7 @@ export const useNCM = ({
   pageSize = 50,
 }) => {
   const { search, status, failureMode, subFailureMode, poNo } = useNCMFilters();
+  const { organisationId } = useOrganisation();
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
@@ -25,6 +27,7 @@ export const useNCM = ({
   return useQuery({
     queryKey: [
       ncType,
+      organisationId,
       {
         search,
         status,
@@ -38,7 +41,10 @@ export const useNCM = ({
       },
     ],
     queryFn: async () => {
-      let query = supabase.from(tableName).select("*", { count: "exact" });
+      let query = supabase
+        .from(tableName)
+        .select("*", { count: "exact" })
+        .eq("organisation_id", organisationId);
       query = query
         .order(sortColumn, { ascending: sortOrder === "asc" })
         .range(from, to);
@@ -79,9 +85,9 @@ export const useNCM = ({
       if (error) {
         throw new Error(error.message);
       }
-      console.log(`Fetched ${ncType} data:`, data);
       return { data, count };
     },
+    enabled: !!organisationId,
     staleTime: 1000 * 60 * 5,
   });
 };

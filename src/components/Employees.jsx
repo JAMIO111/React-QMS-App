@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import EmployeeCard from "./EmployeeCard";
-import { fetchAll } from "../api/supabaseApi";
+import { fetchAllForOrganisation } from "../api/supabaseApi";
+import { useOrganisation } from "../contexts/OrganisationProvider";
 import { useQuery } from "@tanstack/react-query";
 import { useGlobalSearch } from "../contexts/SearchProvider";
 import CTAButton from "./CTAButton";
@@ -9,10 +10,11 @@ import { HiOutlinePencil } from "react-icons/hi2";
 
 const Employees = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
-  console.log("Selected Employee:", selectedEmployee);
+  const { organisationId } = useOrganisation();
   const { data, error, isLoading } = useQuery({
-    queryKey: ["Employees"],
-    queryFn: () => fetchAll("Employees"),
+    queryKey: ["Employees", organisationId],
+    queryFn: () => fetchAllForOrganisation("Employees", organisationId),
+    enabled: !!organisationId,
     staleTime: 1000 * 60 * 60, // 1 hour
   });
 

@@ -5,13 +5,16 @@ import SearchBar from "./ui/SearchBar";
 import { useUser } from "../contexts/UserProvider";
 import { useNotification } from "../contexts/NotificationProvider";
 import { useNotifications } from "../hooks/useNotifications";
+import useSignedAvatarUrl from "../hooks/useSignedAvatarURL";
 
 const Header = () => {
   const { profile } = useUser();
-  const userName = profile
-    ? `${profile.first_name} ${profile.surname}`
-    : "User";
-  const jobTitle = profile ? profile.job_title : "Job Title";
+  const userName =
+    [profile?.first_name, profile?.surname].filter(Boolean).join(" ") ||
+    profile?.email ||
+    "User";
+  const jobTitle = profile?.job_title ?? "";
+  const { signedUrl: avatarUrl } = useSignedAvatarUrl(profile?.avatar_path);
   const { openPane } = useNotification();
   const { data: notifications } = useNotifications();
 
@@ -40,7 +43,7 @@ const Header = () => {
         </div>
         <img
           className="rounded-xl border-1 border-border-color w-12 h-12 object-cover"
-          src={profile?.avatar ? profile.avatar : "/Logo-black-on-yellow.png"}
+          src={avatarUrl || "/Logo-black-on-yellow.png"}
           alt="Profile Pic"
         />
       </div>

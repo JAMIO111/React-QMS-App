@@ -5,8 +5,12 @@ import { useUser } from "@/contexts/UserProvider";
 import { PiPassword } from "react-icons/pi";
 
 const SettingsAccount = () => {
-  const { profile } = useUser();
-  console.log("profile:", profile);
+  const { profile, refreshProfile } = useUser();
+  const initials =
+    [profile?.first_name, profile?.surname]
+      .filter(Boolean)
+      .map((n) => n.charAt(0).toUpperCase())
+      .join(" ") || "?";
   return (
     <div className="flex flex-col xl:flex-row lg:flex-row gap-5 w-full pr-5 overflow-y-auto">
       <div className="flex flex-col gap-4 w-1/2">
@@ -19,19 +23,12 @@ const SettingsAccount = () => {
             </p>
           </div>
           <ProfileImageSection
-            noImageText={`${profile?.first_name.charAt(
-              0
-            )} ${profile?.surname.charAt(0)}`}
-            item={profile}
-            bucket="avatars"
-            path="employees"
-            table="Employees"
+            noImageText={initials}
+            profile={profile}
             width="w-32"
             height="h-32"
             aspectRatio="aspect-square"
-            onImageChange={(url) => {
-              console.log("New avatar URL:", url);
-            }}
+            onChange={refreshProfile}
           />
         </div>
 

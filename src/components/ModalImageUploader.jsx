@@ -5,15 +5,21 @@ import CTAButton from "./CTAButton";
 import { TbCancel } from "react-icons/tb";
 import { FiUpload } from "react-icons/fi";
 
+/**
+ * Uploads or removes a single image in a (private) storage bucket.
+ * The parent decides what to store: it receives the new object path via onUploaded(path),
+ * and is told to clear its reference via onRemoved(). Storage policies decide which paths
+ * the user may write.
+ */
 const ModalImageUploader = ({
   isOpen,
   onClose,
-  bucket = "images",
-  path = "uploads/",
-  table, // e.g., "Owners"
-  userId, // UUID or PK
-  existingUrl = null,
-  onUploadComplete,
+  bucket,
+  pathPrefix, // e.g. "users/<user_id>/"
+  existingPath = null,
+  existingUrl = null, // signed URL of the existing image, for preview
+  onUploaded,
+  onRemoved,
 }) => {
   const [preview, setPreview] = useState(existingUrl || null);
   const [file, setFile] = useState(null);
@@ -21,7 +27,6 @@ const ModalImageUploader = ({
 
   useEffect(() => {
     if (isOpen) {
-      // If existingUrl is null (after delete), clear preview
       setPreview(existingUrl || null);
       setFile(null);
       setLoading(false);
@@ -46,34 +51,22 @@ const ModalImageUploader = ({
     setLoading(true);
 
     try {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `${path}${fileName}`;
+      const fileExt = (file.name.split(".").pop() || "img").toLowerCase();
+      const filePath = `${pathPrefix}${crypto.randomUUID()}.${fileExt}`;
 
-      // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from(bucket)
-        .upload(filePath, file, { upsert: true });
-
+        .upload(filePath, file);
       if (uploadError) throw uploadError;
 
-      // Get public URL
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from(bucket).getPublicUrl(filePath);
+      await onUploaded?.(filePath);
 
-      // Update DB record if applicable
-      if (table && userId) {
-        const { error: updateError } = await supabase
-          .from(table)
-          .update({ avatar: publicUrl })
-          .eq("id", userId);
-
-        if (updateError) throw updateError;
+      // Replace, don't accumulate: remove the previous image once the new one is saved.
+      if (existingPath && existingPath !== filePath) {
+        await supabase.storage.from(bucket).remove([existingPath]);
       }
 
       setLoading(false);
-      onUploadComplete(publicUrl);
       handleClose();
     } catch (err) {
       console.error(err);
@@ -83,31 +76,22 @@ const ModalImageUploader = ({
   };
 
   const handleRemove = async () => {
-    if (!preview) return;
-
-    setLoading(true);
-
-    try {
-      // Delete file from storage
-      const oldPath = preview.split(`${bucket}/`)[1];
-      await supabase.storage.from(bucket).remove([oldPath]);
-
-      // Update table/avatar field
-      if (table && userId) {
-        await supabase.from(table).update({ avatar: null }).eq("id", userId);
-      }
-
-      // Clear local state
+    if (!existingPath) {
       setPreview(null);
       setFile(null);
+      return;
+    }
 
-      // Notify parent AFTER closing
-      if (onUploadComplete) onUploadComplete(null);
+    setLoading(true);
+    try {
+      await onRemoved?.();
+      await supabase.storage.from(bucket).remove([existingPath]);
+      setPreview(null);
+      setFile(null);
     } catch (error) {
-      console.error("Error removing avatar:", error);
-      alert("Failed to remove avatar: " + error.message);
+      console.error("Error removing image:", error);
+      alert("Failed to remove image: " + error.message);
     } finally {
-      setPreview(existingUrl || null);
       setLoading(false);
     }
   };

@@ -5,7 +5,22 @@ import Header from "./components/Header";
 import { SearchProvider } from "./contexts/SearchProvider.jsx";
 import { NotificationProvider } from "./contexts/NotificationProvider";
 import NotificationPane from "./components/NotificationPane";
+import NoOrganisation from "./components/NoOrganisation";
+import LoadingSpinner from "./components/LoadingSpinner";
+import { useOrganisation } from "./contexts/OrganisationProvider";
+
 function App() {
+  const { organisation, error } = useOrganisation();
+
+  if (organisation === undefined) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-primary-bg">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+  if (organisation === null) return <NoOrganisation error={error} />;
+
   return (
     <SearchProvider>
       <NotificationProvider>

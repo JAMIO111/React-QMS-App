@@ -1,26 +1,22 @@
 import supabase from "../supabase-client";
 import { useQuery } from "@tanstack/react-query";
 import { useUser } from "../contexts/UserProvider";
+import { useOrganisation } from "../contexts/OrganisationProvider";
 
+// The signed-in user's notifications for the current organisation.
 export const useNotifications = () => {
   const { profile } = useUser();
-
-  const fetchNotifications = async () => {
-    if (!profile?.auth_id) return [];
-    const { data, error } = await supabase.rpc("get_user_notifications", {
-      user_id: profile.auth_id,
-    });
-    if (error) {
-      console.error("RPC Error:", error);
-      throw new Error(error.message);
-    }
-    return data || [];
-  };
+  const { organisationId } = useOrganisation();
 
   return useQuery({
-    queryKey: ["Notifications", profile?.auth_id],
-    queryFn: fetchNotifications,
-    enabled: !!profile?.auth_id,
+    queryKey: ["Notifications", profile?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_user_notifications");
+      if (error) throw new Error(error.message);
+      return data || [];
+    },
+    select: (rows) => rows.filter((n) => n.organisation_id === organisationId),
+    enabled: !!profile?.id && !!organisationId,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 };

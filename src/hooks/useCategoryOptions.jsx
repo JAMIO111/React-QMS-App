@@ -1,42 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchAll } from "../api/supabaseApi";
+import { fetchAllForOrganisation } from "../api/supabaseApi";
+import { useOrganisation } from "../contexts/OrganisationProvider";
 
-export const useStatusOptions = () => {
+// Lookup lists for the current organisation.
+const useOrganisationTable = (table) => {
+  const { organisationId } = useOrganisation();
   return useQuery({
-    queryKey: ["Status"],
-    queryFn: () => fetchAll("Status"),
+    queryKey: [table, organisationId],
+    queryFn: () => fetchAllForOrganisation(table, organisationId),
+    enabled: !!organisationId,
     staleTime: 1000 * 60 * 30, // 30 minutes
   });
 };
 
-export const useFailureModeOptions = () => {
-  return useQuery({
-    queryKey: ["Failure Mode"],
-    queryFn: () => fetchAll("Failure Mode"),
-    staleTime: 1000 * 60 * 30, // 30 minutes
-  });
-};
-
-export const useSubFailureModeOptions = () => {
-  return useQuery({
-    queryKey: ["Sub-Failure Mode"],
-    queryFn: () => fetchAll("Sub-Failure Mode"),
-    staleTime: 1000 * 60 * 30, // 30 minutes
-  });
-};
-
-export const useProcessOptions = () => {
-  return useQuery({
-    queryKey: ["Process"],
-    queryFn: () => fetchAll("Process"),
-    staleTime: 1000 * 60 * 30, // 30 minutes
-  });
-};
-
-export const useEmployeesOptions = () => {
-  return useQuery({
-    queryKey: ["Employees"],
-    queryFn: () => fetchAll("Employees"),
-    staleTime: 1000 * 60 * 30, // 30 minutes
-  });
-};
+export const useStatusOptions = () => useOrganisationTable("Status");
+export const useFailureModeOptions = () => useOrganisationTable("Failure Mode");
+export const useSubFailureModeOptions = () => useOrganisationTable("Sub-Failure Mode");
+export const useProcessOptions = () => useOrganisationTable("Process");
+export const useEmployeesOptions = () => useOrganisationTable("Employees");

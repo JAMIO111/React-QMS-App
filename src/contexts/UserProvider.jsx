@@ -1,48 +1,45 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import supabase from "../supabase-client";
 import { useAuth } from "./AuthProvider";
 
 const UserContext = createContext(null);
 
+const fetchProfile = async (userId) => {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, first_name, surname, job_title, avatar_path")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+};
+
+/**
+ * The signed-in user's profile (public.profiles). `profile` is undefined while loading and
+ * null when signed out. Always fetched from the server — never cached in browser storage.
+ */
 export const UserProvider = ({ children }) => {
   const { user: authUser } = useAuth();
-  const [profile, setProfile] = useState(undefined); // undefined = loading
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    console.log("Auth user:", authUser);
-    if (!authUser) {
-      setProfile(null);
-      localStorage.removeItem("user_profile");
-      return;
-    }
+  const { data, isLoading } = useQuery({
+    queryKey: ["profile", authUser?.id],
+    queryFn: () => fetchProfile(authUser.id),
+    enabled: !!authUser,
+    staleTime: 1000 * 60 * 5,
+  });
 
-    const cached = localStorage.getItem("user_profile");
-    if (cached) {
-      setProfile(JSON.parse(cached));
-      return;
-    }
+  let profile;
+  if (authUser === null) profile = null;
+  else if (authUser === undefined || isLoading) profile = undefined;
+  else profile = { ...(data ?? { id: authUser.id }), email: authUser.email };
 
-    const fetchProfile = async () => {
-      const { data, error } = await supabase
-        .from("Employees")
-        .select("first_name, surname, job_title, avatar, id, auth_id")
-        .eq("auth_id", authUser.id)
-        .maybeSingle();
-
-      if (error) {
-        console.error("Error fetching profile", error);
-        setProfile(null);
-      } else {
-        setProfile(data);
-        localStorage.setItem("user_profile", JSON.stringify(data));
-      }
-    };
-
-    fetchProfile();
-  }, [authUser]);
+  const refreshProfile = () =>
+    queryClient.invalidateQueries({ queryKey: ["profile", authUser?.id] });
 
   return (
-    <UserContext.Provider value={{ profile, setProfile }}>
+    <UserContext.Provider value={{ profile, refreshProfile }}>
       {children}
     </UserContext.Provider>
   );

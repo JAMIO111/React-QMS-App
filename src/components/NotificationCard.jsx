@@ -2,15 +2,17 @@ import supabase from "@/supabase-client";
 import CTAButton from "./CTAButton";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import useSignedAvatarUrl from "@/hooks/useSignedAvatarURL";
 
 const NotificationCard = ({ notification, closePane, userId }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { signedUrl: avatarUrl } = useSignedAvatarUrl(notification.avatar_path);
   return (
     <div className="flex bg-secondary-bg shadow-md gap-3 items-start p-3 border border-border-color rounded-xl">
       <div className="flex justify-center items-center border border-border-color rounded-full h-10 aspect-square">
         <img
-          src={notification.avatar}
+          src={avatarUrl || "/Logo-black-on-yellow.png"}
           alt={notification?.title}
           className="w-10 h-10 rounded-lg object-cover"
         />
@@ -57,12 +59,7 @@ const NotificationCard = ({ notification, closePane, userId }) => {
               text="Mark as Read"
               textSize="text-sm"
               callbackFn={async () => {
-                console.log(
-                  "Updating notification for:",
-                  userId,
-                  notification.id
-                );
-                const { data, error } = await supabase
+                const { error } = await supabase
                   .from("Notification Recipients")
                   .update({ read: true })
                   .eq("id", notification.id)
@@ -73,8 +70,9 @@ const NotificationCard = ({ notification, closePane, userId }) => {
                   return;
                 }
 
-                console.log("Updated notification:", data);
-                queryClient.invalidateQueries(["Notifications", userId]);
+                queryClient.invalidateQueries({
+                  queryKey: ["Notifications", userId],
+                });
               }}
             />
           )}

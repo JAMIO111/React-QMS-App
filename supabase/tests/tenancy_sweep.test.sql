@@ -1,0 +1,151 @@
+-- Phase 1 exit check, database layer: organisation B's Owner (holding every permission in B) can
+-- neither read nor change anything of organisation A — in any table, view or function.
+-- Tables and views are discovered from the catalogue; the setup must seed organisation A in every
+-- tenant table, so a new table without test data fails here until it is added.
+\set ON_ERROR_STOP 1
+BEGIN;
+\ir helpers.sql
+
+INSERT INTO auth.users (id, email) VALUES
+  ('50000000-0000-0000-0000-0000000000a1', 'owner.a@sweep.test'),
+  ('50000000-0000-0000-0000-0000000000b1', 'owner.b@sweep.test');
+
+CREATE TEMP TABLE sweep (key text PRIMARY KEY, value text);
+GRANT SELECT ON sweep TO authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Organisation A with data everywhere; organisation B owned by B
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+  a uuid; b uuid; site uuid; owner_role uuid; invite uuid; fm bigint; status bigint; proc bigint;
+  part uuid := gen_random_uuid(); cust uuid := gen_random_uuid(); supp uuid := gen_random_uuid();
+  emp uuid := gen_random_uuid(); d8 uuid := gen_random_uuid(); ncr uuid := gen_random_uuid(); notif uuid := gen_random_uuid();
+BEGIN
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
+  a := app.create_organisation('Sweep Alpha');
+  PERFORM pg_temp.logout();
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000b1');
+  b := app.create_organisation('Sweep Beta');
+  PERFORM pg_temp.logout();
+
+  SELECT id INTO site FROM public.sites WHERE organisation_id = a;
+  SELECT id INTO owner_role FROM public.roles WHERE organisation_id = a AND key = 'owner';
+  SELECT id INTO status FROM public."Status" WHERE organisation_id = a AND type = 'initial';
+
+  INSERT INTO public.departments (organisation_id, site_id, code, name) VALUES (a, site, 'QA', 'Quality');
+  INSERT INTO public.organisation_users (organisation_id, invited_email, status, invited_at) VALUES (a, 'pending@sweep.test', 'invited', now()) RETURNING id INTO invite;
+  INSERT INTO public."Part" (id, organisation_id, part_number) VALUES (part, a, 'SW-1');
+  INSERT INTO public."Customers" (id, organisation_id, name) VALUES (cust, a, 'Sweep customer');
+  INSERT INTO public."Suppliers" (id, organisation_id, name) VALUES (supp, a, 'Sweep supplier');
+  INSERT INTO public."Addresses" (organisation_id, party_id, line_1) VALUES (a, cust, '1 Sweep Street');
+  INSERT INTO public."Process" (organisation_id, code, name) VALUES (a, 'SWP', 'Sweeping') RETURNING id INTO proc;
+  INSERT INTO public."Failure Mode" (organisation_id, code, name) VALUES (a, 'SW', 'Sweep fault') RETURNING id INTO fm;
+  INSERT INTO public."Sub-Failure Mode" (id, organisation_id, failure_mode, name) VALUES (900001, a, fm, 'Sub sweep');
+  INSERT INTO public."Employees" (id, organisation_id, first_name, surname) VALUES (emp, a, 'Sam', 'Sweeper');
+  INSERT INTO public."8D" (id, organisation_id, title) VALUES (d8, a, 'Sweep 8D');
+  INSERT INTO public."NCM" (id, organisation_id, ncm_id, date, type, status, part_number, customer, supplier, failure_mode,
+                            sub_failure_mode, causal_process, responsible_operator, ref_8d, quantity_defective)
+    VALUES (ncr, a, 'SW-001', now(), 'Internal', status, part, cust, supp, fm, 900001, proc, emp, d8, 2);
+  INSERT INTO public."Costs" (id, organisation_id, nc_ref, cost_net) VALUES (gen_random_uuid(), a, 'SW-001', 10);
+  INSERT INTO public."NC Files" (organisation_id, name, path, id_ref, owner) VALUES (a, 'x.pdf', a || '/ncr/SW-001/x.pdf', 'SW-001', '50000000-0000-0000-0000-0000000000a1');
+  INSERT INTO public."Notifications" (id, organisation_id, created_by, title) VALUES (notif, a, '50000000-0000-0000-0000-0000000000a1', 'Sweep');
+  INSERT INTO public."Notification Recipients" (organisation_id, notification_id, recipient_id) VALUES (a, notif, '50000000-0000-0000-0000-0000000000a1');
+  INSERT INTO storage.objects (bucket_id, name) VALUES ('nc-files', a || '/ncr/SW-001/x.pdf');
+
+  INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
+    ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));
+END $$;
+
+-- Coverage: organisation A must have rows in every tenant table and view (catalogue-driven).
+DO $$
+DECLARE r record; n bigint; missing text := '';
+  a uuid := (SELECT value FROM sweep WHERE key = 'a');
+BEGIN
+  FOR r IN SELECT c.relnamespace::regnamespace::text AS nsp, c.relname
+           FROM pg_class c JOIN pg_attribute att ON att.attrelid = c.oid AND att.attname = 'organisation_id' AND NOT att.attisdropped
+           WHERE c.relnamespace IN ('public'::regnamespace, 'audit'::regnamespace) AND c.relkind IN ('r', 'v')
+             AND c.relname NOT IN ('v_ncm_customer', 'v_ncm_supplier')  -- same rows as v_ncm_internal, by type
+  LOOP
+    EXECUTE format('SELECT count(*) FROM %I.%I WHERE organisation_id = $1', r.nsp, r.relname) INTO n USING a;
+    IF n = 0 THEN missing := missing || ' ' || r.nsp || '.' || r.relname; END IF;
+  END LOOP;
+  IF missing <> '' THEN
+    RAISE EXCEPTION 'sweep setup has no organisation A rows in:% (add seed data for new tables)', missing;
+  END IF;
+END $$;
+
+-- ---------------------------------------------------------------------------
+-- As B's Owner: nothing of A is readable or writable anywhere
+-- ---------------------------------------------------------------------------
+SET CONSTRAINTS ALL IMMEDIATE;
+DO $$
+DECLARE r record; n bigint; failures text := '';
+  a uuid := (SELECT value FROM sweep WHERE key = 'a');
+BEGIN
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000b1');
+  FOR r IN SELECT c.relnamespace::regnamespace::text AS nsp, c.relname, c.relkind
+           FROM pg_class c JOIN pg_attribute att ON att.attrelid = c.oid AND att.attname = 'organisation_id' AND NOT att.attisdropped
+           WHERE c.relnamespace IN ('public'::regnamespace, 'audit'::regnamespace) AND c.relkind IN ('r', 'v')
+  LOOP
+    -- read
+    BEGIN
+      EXECUTE format('SELECT count(*) FROM %I.%I WHERE organisation_id = $1', r.nsp, r.relname) INTO n USING a;
+      IF n > 0 THEN failures := failures || format(E'\n  read %s.%s: %s rows', r.nsp, r.relname, n); END IF;
+    EXCEPTION WHEN insufficient_privilege THEN NULL;  -- no access at all is fine
+    END;
+    -- update and delete (only tables)
+    IF r.relkind = 'r' THEN
+      BEGIN
+        n := pg_temp.affected(format('UPDATE %I.%I SET organisation_id = organisation_id WHERE organisation_id = %L', r.nsp, r.relname, a));
+        IF n > 0 THEN failures := failures || format(E'\n  update %s.%s: %s rows', r.nsp, r.relname, n); END IF;
+      EXCEPTION WHEN OTHERS THEN NULL;  -- refused
+      END;
+      BEGIN
+        n := pg_temp.affected(format('DELETE FROM %I.%I WHERE organisation_id = %L', r.nsp, r.relname, a));
+        IF n > 0 THEN failures := failures || format(E'\n  delete %s.%s: %s rows', r.nsp, r.relname, n); END IF;
+      EXCEPTION WHEN OTHERS THEN NULL;  -- refused
+      END;
+    END IF;
+  END LOOP;
+
+  -- Tables keyed differently.
+  IF (SELECT count(*) FROM public.organisations WHERE id = a) > 0 THEN failures := failures || E'\n  read organisations'; END IF;
+  IF pg_temp.affected(format($q$UPDATE public.organisations SET name = 'x' WHERE id = %L$q$, a)) > 0 THEN failures := failures || E'\n  update organisations'; END IF;
+  IF (SELECT count(*) FROM public.profiles WHERE id = '50000000-0000-0000-0000-0000000000a1') > 0 THEN failures := failures || E'\n  read A owner profile'; END IF;
+  IF (SELECT count(*) FROM public.role_permissions WHERE role_id = (SELECT value::uuid FROM sweep WHERE key = 'owner_role')) > 0 THEN failures := failures || E'\n  read A role permissions'; END IF;
+  IF (SELECT count(*) FROM storage.objects WHERE name LIKE a || '/%') > 0 THEN failures := failures || E'\n  read A storage objects'; END IF;
+
+  PERFORM pg_temp.logout();
+  IF failures <> '' THEN RAISE EXCEPTION 'Cross-tenant access from B to A:%', failures; END IF;
+END $$;
+
+-- Functions: every callable function answers nothing about A.
+DO $$
+DECLARE
+  a uuid := (SELECT value FROM sweep WHERE key = 'a');
+  owner_role uuid := (SELECT value FROM sweep WHERE key = 'owner_role');
+  owner_membership uuid := (SELECT value FROM sweep WHERE key = 'owner_membership');
+  invite uuid := (SELECT value FROM sweep WHERE key = 'invite');
+BEGIN
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000b1');
+  PERFORM pg_temp.assert_eq((public.get_nc_kpi_json(a, now() - interval '1 day', now() + interval '1 day', 'Internal')::jsonb -> 'totals' ->> 'record_count')::int, 0, 'kpi of A');
+  PERFORM pg_temp.assert_eq((SELECT sum((p ->> 'record_count')::int) FROM jsonb_array_elements(public.get_nc_date_trend(a, now() - interval '1 day', now() + interval '1 day')) p)::int, 0, 'trend of A');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.get_user_notifications() WHERE organisation_id = a), 0::bigint, 'notifications of A');
+  PERFORM pg_temp.assert_eq(app.is_member(a), false, 'is_member(A)');
+  PERFORM pg_temp.assert_eq(app.has_permission(a, 'ncr.read'), false, 'has_permission(A)');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.my_permissions(a)), 0::bigint, 'my_permissions(A)');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.member_organisation_ids() WHERE member_organisation_ids = a), 0::bigint, 'member_organisation_ids');
+  PERFORM pg_temp.assert_eq(app.shares_organisation('50000000-0000-0000-0000-0000000000a1'), false, 'shares_organisation(A owner)');
+  PERFORM pg_temp.assert_eq(app.is_active_member_user(a, '50000000-0000-0000-0000-0000000000a1'), false, 'is_active_member_user probe');
+  PERFORM pg_temp.assert_eq(app.can_assign_role(a, owner_role), false, 'can_assign_role probe');
+  PERFORM pg_temp.assert_eq(app.can_manage_membership(owner_membership), false, 'can_manage_membership probe');
+  PERFORM pg_temp.assert_fails(format('SELECT * FROM app.list_members(%L)', a), 'list_members(A)');
+  PERFORM pg_temp.assert_fails(format('SELECT app.accept_invitation(%L)', invite), 'accept A invitation addressed to someone else');
+  PERFORM pg_temp.assert_fails(format('SELECT app.create_default_roles(%L)', a), 'create_default_roles is not callable');
+  PERFORM pg_temp.assert_fails($q$SELECT app.touch_updated()$q$, 'trigger functions are not callable');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.my_invitations() WHERE organisation_id = a), 0::bigint, 'my_invitations');
+  PERFORM pg_temp.logout();
+END $$;
+
+ROLLBACK;

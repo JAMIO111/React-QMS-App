@@ -1,0 +1,95 @@
+-- Security guardrails for the whole schema (Phase 1 exit check). Creates the session-local view
+-- pg_temp.guardrail_violations and selects from it: one row per violation, empty when every rule
+-- holds. Changes nothing persistent, so it is safe to run against the live project too.
+-- Used by supabase/tests/guardrails.test.sql.
+--
+-- Rules
+--  1. Every table in public/audit has RLS enabled and at least one SELECT policy.
+--  2. Every public table is tenant-owned (organisation_id NOT NULL) unless reviewed as global/shared.
+--  3. If signed-in users may UPDATE a tenant row's organisation_id, a trigger must forbid the change.
+--  4. anon has no privilege on any table, view, sequence or function in public/app/audit.
+--  5. Signed-in users cannot TRUNCATE (bypasses RLS) or write to app/audit tables.
+--  6. Every view in public runs with the caller's permissions (security_invoker).
+--  7. Every function in public/app/audit has a fixed search_path.
+--  8. Quality-critical and access-control tables are covered by the audit trigger.
+CREATE OR REPLACE TEMP VIEW guardrail_violations AS
+WITH
+tables AS (
+  SELECT c.oid, n.nspname, c.relname, c.relkind, c.relrowsecurity, c.reloptions
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname IN ('public', 'app', 'audit') AND c.relkind IN ('r', 'v', 'S')
+),
+tenant_columns AS MATERIALIZED (
+  SELECT t.oid, t.relname FROM tables t
+  JOIN pg_attribute a ON a.attrelid = t.oid AND a.attname = 'organisation_id' AND NOT a.attisdropped
+  WHERE t.nspname = 'public' AND t.relkind = 'r'
+),
+updatable_org AS MATERIALIZED (
+  SELECT oid, relname FROM tenant_columns
+  WHERE has_column_privilege('authenticated', oid, 'organisation_id', 'UPDATE')
+),
+global_tables(relname, why) AS (VALUES
+  ('organisations',    'the tenant itself (id is the organisation)'),
+  ('profiles',         'one per login; visible only to self and co-members'),
+  ('permissions',      'global catalogue, read-only'),
+  ('roles',            'system templates have no organisation; org roles carry organisation_id'),
+  ('role_permissions', 'scoped through roles')
+),
+audited(relname) AS (VALUES
+  ('organisations'), ('organisation_settings'), ('sites'), ('departments'), ('organisation_users'),
+  ('roles'), ('role_permissions'), ('user_role_assignments'),
+  ('NCM'), ('8D'), ('Costs'), ('NC Files'), ('Part'), ('Status'), ('Failure Mode'), ('Sub-Failure Mode'), ('Process')
+)
+SELECT rule, object FROM (
+  SELECT '1 rls disabled' AS rule, format('%I.%I', nspname, relname) AS object
+  FROM tables WHERE relkind = 'r' AND nspname IN ('public', 'audit') AND NOT relrowsecurity
+  UNION ALL
+  SELECT '1 no select policy', format('%I.%I', t.nspname, t.relname)
+  FROM tables t WHERE t.relkind = 'r' AND t.nspname IN ('public', 'audit')
+    AND NOT EXISTS (SELECT 1 FROM pg_policies p WHERE p.schemaname = t.nspname AND p.tablename = t.relname AND p.cmd IN ('SELECT', 'ALL'))
+  UNION ALL
+  SELECT '2 not tenant-owned', format('public.%I', t.relname)
+  FROM tables t WHERE t.nspname = 'public' AND t.relkind = 'r'
+    AND t.relname NOT IN (SELECT relname FROM global_tables)
+    AND NOT EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = t.oid AND a.attname = 'organisation_id' AND a.attnotnull AND NOT a.attisdropped)
+  UNION ALL
+  SELECT '3 organisation_id changeable', format('public.%I', u.relname)
+  FROM updatable_org u
+  WHERE NOT EXISTS (SELECT 1 FROM pg_trigger g WHERE g.tgrelid = u.oid AND g.tgfoid = 'app.prevent_organisation_change()'::regprocedure)
+  UNION ALL
+  SELECT '4 anon table privilege', format('%I.%I', nspname, relname)
+  FROM tables WHERE CASE WHEN relkind IN ('r', 'v')
+    THEN has_table_privilege('anon', oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER') ELSE false END
+  UNION ALL
+  SELECT '4 anon sequence privilege', format('%I.%I', nspname, relname)
+  FROM tables WHERE CASE WHEN relkind = 'S' THEN has_sequence_privilege('anon', oid, 'USAGE, SELECT, UPDATE') ELSE false END
+  UNION ALL
+  SELECT '4 anon function execute', p.oid::regprocedure::text
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname IN ('public', 'app', 'audit') AND has_function_privilege('anon', p.oid, 'EXECUTE')
+  UNION ALL
+  SELECT '5 authenticated can truncate', format('%I.%I', nspname, relname)
+  FROM tables WHERE CASE WHEN relkind = 'r' THEN has_table_privilege('authenticated', oid, 'TRUNCATE') ELSE false END
+  UNION ALL
+  SELECT '5 authenticated writes app/audit', format('%I.%I', nspname, relname)
+  FROM tables WHERE CASE WHEN relkind = 'r' AND nspname IN ('app', 'audit')
+    THEN has_table_privilege('authenticated', oid, 'INSERT, UPDATE, DELETE') ELSE false END
+  UNION ALL
+  SELECT '6 view without security_invoker', format('public.%I', relname)
+  FROM tables WHERE nspname = 'public' AND relkind = 'v'
+    AND NOT coalesce(reloptions @> ARRAY['security_invoker=true'] OR reloptions @> ARRAY['security_invoker=on'], false)
+  UNION ALL
+  SELECT '7 mutable search_path', p.oid::regprocedure::text
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname IN ('public', 'app', 'audit')
+    AND NOT EXISTS (SELECT 1 FROM unnest(coalesce(p.proconfig, '{}')) c WHERE c LIKE 'search_path=%')
+  UNION ALL
+  SELECT '8 not audited', format('public.%I', a.relname)
+  FROM audited a
+  WHERE NOT EXISTS (
+    SELECT 1 FROM pg_trigger g JOIN pg_class c ON c.oid = g.tgrelid
+    WHERE c.relnamespace = 'public'::regnamespace AND c.relname = a.relname AND g.tgname = 'audit_changes')
+) v
+ORDER BY rule, object;
+
+SELECT * FROM guardrail_violations;

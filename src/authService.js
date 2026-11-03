@@ -6,7 +6,7 @@ export const signUp = async (email, password, showToast) => {
     email,
     password,
     options: {
-      emailRedirectTo: "http://localhost:5173/Onboarding",
+      emailRedirectTo: `${window.location.origin}/login`,
     },
   });
 
@@ -77,7 +77,7 @@ export const resendVerification = async (email, showToast) => {
     type: "signup",
     email,
     options: {
-      emailRedirectTo: "http://localhost:5173/Onboarding",
+      emailRedirectTo: `${window.location.origin}/login`,
     },
   });
 

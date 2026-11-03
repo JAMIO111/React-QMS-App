@@ -26,4 +26,14 @@ describe('loadEnv', () => {
     const env = loadEnv({ DATABASE_URL: 'x', SUPABASE_URL: 'https://p.supabase.co', CORS_ORIGINS: 'http://a, https://b ,' });
     expect(corsOrigins(env)).toEqual(['http://a', 'https://b']);
   });
+
+  it('turns * in a CORS origin into a single-label wildcard', () => {
+    const env = loadEnv({ DATABASE_URL: 'x', SUPABASE_URL: 'https://p.supabase.co', CORS_ORIGINS: 'https://qms-web-*.vercel.app' });
+    const [pattern] = corsOrigins(env) as RegExp[];
+    expect(pattern.test('https://qms-web-git-dev-jamie.vercel.app')).toBe(true);
+    expect(pattern.test('https://qms-web-abc123.vercel.app')).toBe(true);
+    expect(pattern.test('https://qms-web-x.evil.com/.vercel.app')).toBe(false);
+    expect(pattern.test('https://qms-web-a.b.vercel.app')).toBe(false);
+    expect(pattern.test('https://qms-web-xvercel.app')).toBe(false);
+  });
 });

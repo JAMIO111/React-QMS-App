@@ -57,7 +57,7 @@ canonical and its data is test data; RLS enabled in the first Phase 1 migration 
 Step 0 (Stabilise) and Phase 1 slices 1.1 (tenancy + RLS), 1.2 (audit trail) and 1.3 (API
 skeleton), 1.4 (organisations, sites, departments, onboarding) and 1.5 (members, invitations,
 roles) and 1.6 (exit check) are done — Phase 1 is complete; see `docs/phase-1-exit-report.md`. Plan and agreed decisions
-in `docs/phase-1-plan.md` (API hosting decided later; migrations checked locally with
+in `docs/phase-1-plan.md` (API hosting decided later — a Vercel dev environment for `Dev` is described in `docs/deployment-vercel.md`; migrations checked locally with
 `npm run db:check`, rehearsed on a live-data copy, then applied via the SQL editor; Supabase
 built-in email for now). Next: **Phase 2** (first complete QMS workflow), starting with the
 exit report's recommended items (invited-user password flow, MFA, NC registers via the API).

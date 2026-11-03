@@ -40,6 +40,17 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   return parsed.data;
 }
 
-export function corsOrigins(env: Env): string[] {
-  return env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);
+/**
+ * Allowed browser origins. An entry may contain `*` to match one DNS label fragment, e.g.
+ * `https://qms-web-*.vercel.app` for Vercel preview addresses; `*` never matches `.` or `/`.
+ */
+export function corsOrigins(env: Env): (string | RegExp)[] {
+  return env.CORS_ORIGINS.split(',')
+    .map((o) => o.trim())
+    .filter(Boolean)
+    .map((o) =>
+      o.includes('*')
+        ? new RegExp(`^${o.split('*').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[a-z0-9-]*')}$`)
+        : o,
+    );
 }

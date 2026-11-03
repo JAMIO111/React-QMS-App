@@ -36,7 +36,7 @@ Summary of the brief:
 NestJS API added in Phase 1 alongside the Vite frontend; holiday-let code archived on
 branch `archive/holiday-let` then removed; Supabase project `xvpgrmujayytbbmhnoan` ("React QMS") is
 canonical and its data is test data; RLS enabled in the first Phase 1 migration with policies.
-Step 0 (Stabilise) is done. Next: **Phase 1** (platform foundation).
+Step 0 (Stabilise) is done. Next: **Phase 1** (platform foundation) — plan in `docs/phase-1-plan.md`.
 
 ## Commands
 

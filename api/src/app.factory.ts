@@ -9,9 +9,14 @@ import { corsOrigins, Env } from './config/env';
 
 export const API_PREFIX = 'api/v1';
 
-/** Builds the configured application (used by main.ts and the e2e tests). */
+/** Builds the configured application (used by the e2e tests; main.ts does the same steps). */
 export async function createApp(env: Env): Promise<INestApplication> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule.forRoot(env), { bufferLogs: true });
+  return configureApp(app, env);
+}
+
+/** Applies logging, prefix, CORS and OpenAPI to a created application. */
+export function configureApp(app: NestExpressApplication, env: Env): INestApplication {
   app.useLogger(app.get(Logger));
   app.disable('x-powered-by');
   app.useBodyParser('json', { limit: '1mb' });

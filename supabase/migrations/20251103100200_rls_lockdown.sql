@@ -30,6 +30,16 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM anon, PUBLIC;
 
+-- Supabase's default privileges give authenticated ALL on every new table. Remove what no policy
+-- needs: TRUNCATE (bypasses RLS), REFERENCES, TRIGGER everywhere, and the write privileges each
+-- platform table does not support.
+REVOKE TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE TRUNCATE, REFERENCES, TRIGGER ON TABLES FROM authenticated;
+REVOKE INSERT, DELETE ON public.organisations, public.organisation_settings, public.profiles FROM authenticated;
+REVOKE DELETE ON public.sites, public.departments, public.organisation_users FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.permissions FROM authenticated;
+REVOKE UPDATE ON public.user_role_assignments FROM authenticated;
+
 -- Column-level updates where only some columns are user-editable.
 REVOKE UPDATE ON public.organisations, public.organisation_settings, public.profiles,
   public.organisation_users FROM authenticated;

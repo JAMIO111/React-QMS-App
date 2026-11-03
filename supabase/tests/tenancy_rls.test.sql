@@ -125,6 +125,9 @@ BEGIN
   PERFORM pg_temp.assert_fails($q$INSERT INTO public."NCM" (organisation_id, ncm_id) VALUES ('00000000-0000-0000-0000-00000000000b', 'X-1')$q$, 'insert into B');
   PERFORM pg_temp.assert_eq(pg_temp.affected($q$UPDATE public."NCM" SET description = 'x' WHERE id = '00000000-0000-0000-0000-0000000000bb'$q$), 0::bigint, 'update B row');
   PERFORM pg_temp.assert_eq(pg_temp.affected($q$DELETE FROM public."NCM" WHERE id = '00000000-0000-0000-0000-0000000000bb'$q$), 0::bigint, 'delete B row');
+  PERFORM pg_temp.assert_fails($q$TRUNCATE public."NCM" CASCADE$q$, 'truncate bypassing RLS');
+  PERFORM pg_temp.assert_fails($q$DELETE FROM public.organisations WHERE id = '00000000-0000-0000-0000-00000000000a'$q$, 'delete own organisation');
+  PERFORM pg_temp.assert_fails($q$DELETE FROM public.permissions$q$, 'delete permission catalogue');
   PERFORM pg_temp.assert_fails($q$INSERT INTO public."NCM" (organisation_id, ncm_id, status) VALUES ('00000000-0000-0000-0000-00000000000a', 'X-2', 10)$q$, 'A NCM referencing B status');
   PERFORM pg_temp.assert_fails($q$UPDATE public."NCM" SET organisation_id = '00000000-0000-0000-0000-00000000000b'$q$, 'move row to B');
   PERFORM pg_temp.assert_eq(pg_temp.affected($q$UPDATE public.organisations SET name = 'hijack' WHERE id = '00000000-0000-0000-0000-00000000000b'$q$), 0::bigint, 'rename B');

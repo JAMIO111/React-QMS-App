@@ -3,6 +3,7 @@ import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { format } from "date-fns";
 
 let permissions;
 const apiFetch = vi.fn();
@@ -74,6 +75,11 @@ const renderAt = (url) =>
     </QueryClientProvider>
   );
 const lastCall = (k) => calls.filter((c) => c.k === k).at(-1);
+/** Choose an option in one of the form's combo boxes. */
+const pick = async (label, option) => {
+  await userEvent.click(screen.getByRole("combobox", { name: label }));
+  await userEvent.click(await screen.findByRole("option", { name: option }));
+};
 
 beforeEach(() => {
   apiFetch.mockReset();
@@ -141,14 +147,20 @@ describe("NC form", () => {
     expect(await screen.findByRole("heading", { name: "New internal non-conformance" })).toBeInTheDocument();
     expect(screen.queryByLabelText(/Customer$/)).toBeNull();
     await userEvent.type(screen.getByLabelText("Title *"), "Bore oversize");
-    await userEvent.selectOptions(screen.getByLabelText("Severity"), "major");
+    await pick(/^Severity/, "Major");
     await userEvent.type(screen.getByLabelText("Quantity affected"), "4");
     await userEvent.type(screen.getByLabelText("Work order"), "WO-7");
-    await userEvent.selectOptions(screen.getByLabelText("Failure mode"), "fm1");
-    await userEvent.selectOptions(screen.getByLabelText("Sub-failure mode"), "sf1");
+    expect(screen.getByRole("combobox", { name: "Sub-failure mode" })).toBeDisabled();
+    await pick("Failure mode", "DIM – Dimensional");
+    await pick("Sub-failure mode", "Oversize");
+    const today = new Date();
+    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    await userEvent.click(screen.getByRole("button", { name: /^Detected on/ }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Choose detected on" })).getByRole("button", { name: format(first, "EEEE d MMMM yyyy") }));
     await userEvent.click(screen.getByRole("button", { name: "Raise NC" }));
     const body = lastCall("POST /ncrs").body;
-    expect(body).toMatchObject({ source: "internal", open: true, title: "Bore oversize", severity: "major", quantityAffected: 4, workOrder: "WO-7", failureModeId: "fm1", subFailureModeId: "sf1" });
+    const iso = format(first, "yyyy-MM-dd");
+    expect(body).toMatchObject({ source: "internal", open: true, title: "Bore oversize", severity: "major", quantityAffected: 4, workOrder: "WO-7", failureModeId: "fm1", subFailureModeId: "sf1", detectedAt: iso });
     expect(body).not.toHaveProperty("customerId");
     expect(body).not.toHaveProperty("supplierId");
     await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Internal/n9"));
@@ -158,7 +170,7 @@ describe("NC form", () => {
     routeApi({ "POST /ncrs": (_p, o) => ncr({ ...o.body, id: "n8" }), "GET /ncrs/n8": ncr({ id: "n8", source: "customer" }) });
     renderAt("/Non-Conformance/Customer/new");
     await userEvent.type(await screen.findByLabelText("Title *"), "Complaint");
-    await userEvent.selectOptions(screen.getByLabelText(/Customer \*/), await screen.findByRole("option", { name: "ACME · Acme" }));
+    await pick(/^Customer/, /^Acme/);
     await userEvent.type(screen.getByLabelText("Customer reference"), "CLM-9");
     await userEvent.click(screen.getByRole("button", { name: "Save as draft" }));
     expect(lastCall("POST /ncrs").body).toMatchObject({ source: "customer", customerId: "c1", customerReference: "CLM-9" });

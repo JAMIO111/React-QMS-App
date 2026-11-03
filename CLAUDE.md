@@ -67,6 +67,12 @@ Summary of the brief:
   outbox events are enforced by DB triggers; emit new events with `app.emit_event` from SECURITY
   DEFINER triggers only. New tenant tables: table-level INSERT + `app.stamp_created()`,
   column-level UPDATE, no DELETE, `audit_changes`, add to guardrails + both sweeps.
+- Form pickers: dropdowns use `src/components/ui/RHFComboBox.jsx` and dates use
+  `RHFDatePickerPopout.jsx` (value/onChange, so wrap in react-hook-form `Controller`; both take
+  `label`, `required`, `disabled`, `hint`, `error`). Options are `{ id, name, hint?, disabled? }`;
+  `sort={false}` keeps your order; server search via `filterLocally={false}` + `onSearchChange`
+  (see `RemoteComboBox`, `PartPicker`, `PartyPicker` in `src/components/ncr/Pickers.jsx`). Dates:
+  `valueFormat="iso"` for date-only API fields, `minDate`/`maxDate`, `clearable`.
 - Icons: **Lucide only**, imported from `@/components/icons` (`<Name>Icon`, default size 1em so
   icons follow text size). Add new icons there; ESLint rejects `react-icons` and direct
   `lucide-react` imports elsewhere.

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDownIcon } from "@/components/icons";
 import {
   startOfMonth,
@@ -14,6 +14,7 @@ import {
   isSameYear,
   setMonth,
   setYear,
+  startOfDay,
 } from "date-fns";
 
 const daysOfWeek = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -32,13 +33,30 @@ const monthsOfYear = [
   "Dec",
 ];
 
-const RHFDatePicker = ({ value, onChange }) => {
+/**
+ * Inline calendar (month grid + year/month chooser). `value` is a Date (or null); `onChange(Date)`.
+ * `minDate` / `maxDate` (Dates) disable days outside the range. Usually shown through
+ * RHFDatePickerPopout.
+ */
+const RHFDatePicker = ({ value, onChange, minDate, maxDate }) => {
   const today = new Date();
   const [currentMonth, setCurrentMonth] = useState(value || new Date());
   const [currentYear, setCurrentYear] = useState(value || new Date());
 
+  // Show the month of a value set from outside (e.g. a form reset).
+  const valueTime = value ? value.getTime() : null;
+  useEffect(() => {
+    if (valueTime !== null) {
+      setCurrentMonth(new Date(valueTime));
+      setCurrentYear(new Date(valueTime));
+    }
+  }, [valueTime]);
+
+  const outOfRange = (day) =>
+    (minDate && startOfDay(day) < startOfDay(minDate)) || (maxDate && startOfDay(day) > startOfDay(maxDate));
+
   const handleSelectDate = (date) => {
-    console.log("Selected date:", date);
+    if (outOfRange(date)) return;
     onChange(date);
     setCurrentMonth(date);
     setCurrentYear(date);
@@ -89,11 +107,15 @@ const RHFDatePicker = ({ value, onChange }) => {
           </span>
           <div className="flex gap-1">
             <button
+              type="button"
+              aria-label="Previous month"
               onClick={() => handleMonthChange(-1)}
               className="hover:bg-border-color px-2 py-1 rounded active:scale-95">
               <ChevronDownIcon className="w-5 h-5 rotate-180 active:scale-95" />
             </button>
             <button
+              type="button"
+              aria-label="Next month"
               onClick={() => handleMonthChange(1)}
               className="hover:bg-border-color px-2 py-1 rounded active:scale-95">
               <ChevronDownIcon className="w-5 h-5" />
@@ -112,8 +134,10 @@ const RHFDatePicker = ({ value, onChange }) => {
             if (!day) return <div key={i} />;
             const isSelected = value && isSameDay(day, value);
             const isCurrentDay = isToday(day);
+            const disabled = outOfRange(day);
             const classes = [
               "h-7 w-7 rounded flex items-center justify-center",
+              disabled ? "opacity-30 cursor-not-allowed" : "cursor-pointer",
               isSelected ? "bg-brand-primary text-white" : "",
               isCurrentDay && !isSelected
                 ? "border border-brand-primary hover:bg-border-color/50"
@@ -123,7 +147,11 @@ const RHFDatePicker = ({ value, onChange }) => {
 
             return (
               <button
+                type="button"
                 key={i}
+                disabled={disabled}
+                aria-label={format(day, "EEEE d MMMM yyyy")}
+                aria-pressed={!!isSelected}
                 onClick={() => handleSelectDate(day)}
                 className={classes}>
                 {day.getDate()}
@@ -140,11 +168,15 @@ const RHFDatePicker = ({ value, onChange }) => {
             <span className="font-semibold">{format(currentYear, "yyyy")}</span>
             <div className="flex gap-1">
               <button
+                type="button"
+                aria-label="Previous year"
                 onClick={() => handleYearChange(-1)}
                 className="hover:bg-border-color px-2 py-1 rounded active:scale-95">
                 <ChevronDownIcon className="w-5 h-5 rotate-180" />
               </button>
               <button
+                type="button"
+                aria-label="Next year"
                 onClick={() => handleYearChange(1)}
                 className="hover:bg-border-color px-2 py-1 rounded active:scale-95">
                 <ChevronDownIcon className="w-5 h-5" />
@@ -177,6 +209,7 @@ const RHFDatePicker = ({ value, onChange }) => {
 
               return (
                 <button
+                  type="button"
                   key={month}
                   onClick={() => handleMonthClick(i)}
                   className={classes}>
@@ -188,6 +221,7 @@ const RHFDatePicker = ({ value, onChange }) => {
         </div>
 
         <button
+          type="button"
           onClick={handleGoToToday}
           className="mt-4 ml-auto text-brand-primary hover:underline text-sm self-center cursor-pointer">
           Go to today

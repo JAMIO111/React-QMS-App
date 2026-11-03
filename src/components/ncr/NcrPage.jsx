@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { Controller, useForm } from "react-hook-form";
 import { ArrowLeftIcon, RotateCcwIcon, Trash2Icon } from "@/components/icons";
 import Field from "../ui/Field";
 import Dialog from "../ui/Dialog";
+import RHFComboBox from "../ui/RHFComboBox";
+import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions, useSites } from "../../hooks/useQmsApi";
 import { useClassifications, useEmployees, useNcr, useNcrHistory, useNcrMutation } from "../../hooks/useNcr";
@@ -10,7 +13,7 @@ import { describeApiError } from "../../lib/api-client";
 import { FIELD_LABELS, NC_TYPES, SEVERITIES, STAGES, formatDate, nextStages, stageOf } from "../../lib/ncr";
 import { SeverityPill, StagePill } from "./Pills";
 import DeleteNcrDialog from "./DeleteNcrDialog";
-import { PartPicker, PartyPicker, RevisionPicker, SelectField, TextAreaField } from "./Pickers";
+import { PartPicker, PartyPicker, RevisionPicker, TextAreaField } from "./Pickers";
 
 const EMPTY = {
   title: "", severity: null, description: "", requirement: "", actualResult: "", siteId: null, detectedAt: new Date().toISOString().slice(0, 10),
@@ -228,12 +231,13 @@ const NcrPage = () => {
   const { data: employees } = useEmployees();
   const { data: sites } = useSites();
   const mutation = useNcrMutation();
-  const [form, setForm] = useState(EMPTY);
+  const { control, reset, watch, setValue } = useForm({ defaultValues: EMPTY });
+  const form = watch();
   const [tab, setTab] = useState("details");
   const [dialog, setDialog] = useState(null); // "cancel" | "reopen" | "delete"
 
   const original = useMemo(() => (ncr ? toForm(ncr) : EMPTY), [ncr]);
-  useEffect(() => setForm(original), [original]);
+  useEffect(() => reset(original), [original, reset]);
 
   if (!ncType) return <Navigate to="/Non-Conformance/Internal" replace />;
   if (!isNew && ncr && ncr.source !== source) return <Navigate to={`/Non-Conformance/${Object.keys(NC_TYPES).find((k) => NC_TYPES[k].source === ncr.source)}/${ncr.id}`} replace />;
@@ -243,7 +247,7 @@ const NcrPage = () => {
   const body = toBody(form, source);
   const changes = isNew ? body : changedFields(body, toBody(original, source));
   const dirty = !isNew && Object.keys(changes).length > 0;
-  const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v?.target ? v.target.value : v }));
+  const set = (k) => (v) => setValue(k, v?.target ? v.target.value : v, { shouldDirty: true });
 
   const save = (open) => {
     if (isNew) {
@@ -292,7 +296,25 @@ const NcrPage = () => {
   }
 
   const subs = (lists?.subFailureModes ?? []).filter((s) => s.parentId === form.failureModeId);
-  const opt = (items) => (items ?? []).map((c) => ({ value: c.id, label: c.code ? `${c.code} – ${c.name}` : c.name }));
+  const opt = (items) => (items ?? []).map((c) => ({ id: c.id, name: c.code ? `${c.code} – ${c.name}` : c.name }));
+  /** A react-hook-form controlled field; `then` runs after the value changes (e.g. to clear a dependent field). */
+  const controlled = (name, render, then) => (
+    <Controller
+      name={name}
+      control={control}
+      render={({ field, fieldState }) =>
+        render({
+          ...field,
+          onChange: (v) => {
+            field.onChange(v);
+            then?.(v);
+          },
+          error: fieldState.error,
+          disabled: !canEdit,
+        })
+      }
+    />
+  );
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-4 overflow-y-auto p-4">
@@ -368,10 +390,18 @@ const NcrPage = () => {
           )}
           <Section title="What happened">
             <Field label="Title *" value={form.title} onChange={set("title")} disabled={!canEdit} required maxLength={200} className="md:col-span-2 xl:col-span-3" />
-            <SelectField label="Severity" value={form.severity} onChange={set("severity")} disabled={!canEdit} options={SEVERITIES.map((s) => ({ value: s.key, label: s.label }))} hint="Needed to open" />
-            <Field label="Detected on" type="date" value={form.detectedAt} onChange={set("detectedAt")} disabled={!canEdit} required />
-            <SelectField label="Where detected" value={form.detectionProcessId} onChange={set("detectionProcessId")} disabled={!canEdit} options={opt(lists?.processes)} />
-            <SelectField label="Site" value={form.siteId} onChange={set("siteId")} disabled={!canEdit} options={(sites?.data ?? []).map((s) => ({ value: s.id, label: `${s.code} · ${s.name}` }))} />
+            {controlled("severity", (f) => (
+              <RHFComboBox {...f} label="Severity" placeholder="Select severity…" sort={false} hint="Needed to open" options={SEVERITIES.map((s) => ({ id: s.key, name: s.label }))} />
+            ))}
+            {controlled("detectedAt", (f) => (
+              <RHFDatePickerPopout {...f} label="Detected on" required valueFormat="iso" maxDate={new Date()} />
+            ))}
+            {controlled("detectionProcessId", (f) => (
+              <RHFComboBox {...f} label="Where detected" placeholder="Select a process…" options={opt(lists?.processes)} />
+            ))}
+            {controlled("siteId", (f) => (
+              <RHFComboBox {...f} label="Site" placeholder="Select a site…" options={(sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))} />
+            ))}
             <TextAreaField label="Description" value={form.description} onChange={set("description")} disabled={!canEdit} maxLength={5000} className="md:col-span-2 xl:col-span-3" />
             <TextAreaField label="Requirement / specification" value={form.requirement} onChange={set("requirement")} disabled={!canEdit} rows={2} maxLength={2000} />
             <TextAreaField label="Actual result" value={form.actualResult} onChange={set("actualResult")} disabled={!canEdit} rows={2} maxLength={2000} />
@@ -380,19 +410,19 @@ const NcrPage = () => {
           <Section title={source === "customer" ? "Customer and product" : source === "supplier" ? "Supplier and product" : "Product"}>
             {source === "customer" && (
               <>
-                <PartyPicker kind="customers" label="Customer" value={form.customerId} current={ncr?.customer} onChange={set("customerId")} disabled={!canEdit} required />
+                {controlled("customerId", (f) => <PartyPicker {...f} kind="customers" label="Customer" current={ncr?.customer} required />)}
                 <Field label="Customer reference" value={form.customerReference} onChange={set("customerReference")} disabled={!canEdit} maxLength={60} hint="Their complaint or claim number" />
               </>
             )}
             {source === "supplier" && (
               <>
-                <PartyPicker kind="suppliers" label="Supplier" value={form.supplierId} current={ncr?.supplier} onChange={set("supplierId")} disabled={!canEdit} required />
+                {controlled("supplierId", (f) => <PartyPicker {...f} kind="suppliers" label="Supplier" current={ncr?.supplier} required />)}
                 <Field label="Purchase order" value={form.purchaseOrder} onChange={set("purchaseOrder")} disabled={!canEdit} maxLength={60} />
               </>
             )}
             {source !== "supplier" && <Field label="Work order" value={form.workOrder} onChange={set("workOrder")} disabled={!canEdit} maxLength={60} />}
-            <PartPicker value={form.partId} current={ncr?.part} disabled={!canEdit} onChange={(v) => setForm((f) => ({ ...f, partId: v, partRevisionId: null }))} />
-            <RevisionPicker partId={form.partId} value={form.partRevisionId} onChange={set("partRevisionId")} disabled={!canEdit} />
+            {controlled("partId", (f) => <PartPicker {...f} current={ncr?.part} />, () => setValue("partRevisionId", null, { shouldDirty: true }))}
+            {controlled("partRevisionId", (f) => <RevisionPicker {...f} partId={form.partId} />)}
             <Field label="Lot / batch" value={form.lotNumber} onChange={set("lotNumber")} disabled={!canEdit} maxLength={60} />
             <Field label="Serial number" value={form.serialNumber} onChange={set("serialNumber")} disabled={!canEdit} maxLength={60} />
             <Field label="Quantity affected" type="number" min="0" step="any" value={form.quantityAffected} onChange={set("quantityAffected")} disabled={!canEdit} hint="Needed to open" />
@@ -400,14 +430,23 @@ const NcrPage = () => {
           </Section>
 
           <Section title="Classification">
-            <SelectField label="Failure mode" value={form.failureModeId} disabled={!canEdit} options={opt(lists?.failureModes)}
-              onChange={(v) => setForm((f) => ({ ...f, failureModeId: v, subFailureModeId: null }))} />
-            <SelectField label="Sub-failure mode" value={form.subFailureModeId} onChange={set("subFailureModeId")} disabled={!canEdit || !form.failureModeId} options={opt(subs)}
-              placeholder={form.failureModeId ? "— None —" : "Choose a failure mode first"} />
-            <SelectField label="Causal process" value={form.causalProcessId} onChange={set("causalProcessId")} disabled={!canEdit} options={opt(lists?.processes)} />
+            {controlled(
+              "failureModeId",
+              (f) => <RHFComboBox {...f} label="Failure mode" placeholder="Select a failure mode…" options={opt(lists?.failureModes)} />,
+              () => setValue("subFailureModeId", null, { shouldDirty: true })
+            )}
+            {controlled("subFailureModeId", (f) => (
+              <RHFComboBox {...f} label="Sub-failure mode" options={opt(subs)}
+                disabled={f.disabled || !form.failureModeId} placeholder={form.failureModeId ? "Select a sub-failure mode…" : "Choose a failure mode first"} />
+            ))}
+            {controlled("causalProcessId", (f) => (
+              <RHFComboBox {...f} label="Causal process" placeholder="Select a process…" options={opt(lists?.processes)} />
+            ))}
             {source !== "supplier" && (
-              <SelectField label="Responsible operator" value={form.responsibleEmployeeId} onChange={set("responsibleEmployeeId")} disabled={!canEdit}
-                options={(employees ?? []).filter((e) => e.active || e.id === form.responsibleEmployeeId).map((e) => ({ value: e.id, label: e.name }))} />
+              controlled("responsibleEmployeeId", (f) => (
+                <RHFComboBox {...f} label="Responsible operator" placeholder="Select a person…"
+                  options={(employees ?? []).filter((e) => e.active || e.id === form.responsibleEmployeeId).map((e) => ({ id: e.id, name: e.name, hint: e.jobTitle ?? undefined }))} />
+              ))
             )}
           </Section>
 
@@ -433,7 +472,7 @@ const NcrPage = () => {
                     {mutation.isPending ? "Saving…" : "Save changes"}
                   </button>
                   {dirty && (
-                    <button type="button" onClick={() => setForm(original)} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-4 py-2 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
+                    <button type="button" onClick={() => reset(original)} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-4 py-2 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
                       Discard changes
                     </button>
                   )}

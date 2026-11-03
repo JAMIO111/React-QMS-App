@@ -103,3 +103,5 @@ Guardrails that will fail on purpose when something new is added without tenancy
 ## Git
 
 - Working branch: `Dev` (capital D). `main` is the other long-lived branch.
+- **Do not push to `Dev` (or any branch) until the user says so** — every push triggers Vercel
+  builds. Commit locally and tell the user what is waiting to be pushed.

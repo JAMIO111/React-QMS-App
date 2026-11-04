@@ -32,6 +32,7 @@ const SORT_SQL: Record<NcrListQuery['sort'], string> = {
   customer: 'lower(coalesce(c.display_name, c.name))',
   supplier: 'lower(coalesce(s.display_name, s.name))',
   failureMode: 'lower(fm.name)',
+  totalCost: 'coalesce(tc.total, 0)',
   createdAt: 'n.created_at',
 };
 
@@ -52,7 +53,8 @@ const SELECT_SUMMARY = `
   p.id as part_id, p.part_number, p.name as part_name, r.revision,
   c.id as customer_id, coalesce(c.display_name, c.name) as customer_name,
   s.id as supplier_id, coalesce(s.display_name, s.name) as supplier_name,
-  fm.id as fm_id, fm.name as fm_name, sfm.id as sfm_id, sfm.name as sfm_name, cp.id as cp_id, cp.name as cp_name`;
+  fm.id as fm_id, fm.name as fm_name, sfm.id as sfm_id, sfm.name as sfm_name, cp.id as cp_id, cp.name as cp_name,
+  coalesce(tc.total, 0) as total_cost, os.base_currency`;
 const FROM = `
   from public.nonconformances n
   left join public.parts p on p.id = n.part_id
@@ -61,7 +63,12 @@ const FROM = `
   left join public.suppliers s on s.id = n.supplier_id
   left join public.ncr_classifications fm on fm.id = n.failure_mode_id
   left join public.ncr_classifications sfm on sfm.id = n.sub_failure_mode_id
-  left join public.ncr_classifications cp on cp.id = n.causal_process_id`;
+  left join public.ncr_classifications cp on cp.id = n.causal_process_id
+  left join public.organisation_settings os on os.organisation_id = n.organisation_id
+  -- Total of the NCR's costs that are not deleted, in the organisation's base currency.
+  left join lateral (
+    select sum(k.gross_base) as total from public.ncr_costs k where k.nonconformance_id = n.id and k.deleted_at is null
+  ) tc on true`;
 
 type Row = Record<string, unknown>;
 const ref = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? '' } : null);
@@ -86,6 +93,8 @@ const toSummary = (r: Row): NcrSummary => ({
   failureMode: ref(r.fm_id, r.fm_name),
   subFailureMode: ref(r.sfm_id, r.sfm_name),
   causalProcess: ref(r.cp_id, r.cp_name),
+  totalCost: Number(r.total_cost ?? 0),
+  costCurrency: (r.base_currency as string) ?? 'GBP',
   deletedAt: iso(r.deleted_at),
   createdAt: iso(r.created_at)!,
 });

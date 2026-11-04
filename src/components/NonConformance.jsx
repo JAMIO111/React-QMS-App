@@ -7,6 +7,8 @@ import { usePermissions } from "../hooks/useQmsApi";
 import { useGlobalSearch } from "../contexts/SearchProvider";
 import { exportCSV } from "../lib/csvHelper";
 import { NC_TYPES, formatDate, stageOf } from "../lib/ncr";
+import { useClassifications } from "../hooks/useNcr";
+import { XIcon } from "@/components/icons";
 import { SkeletonCard2, SkeletonTable } from "./Skeleton";
 import ColumnVisibilityMenu from "./ui/ColumnVisibilityMenu";
 import { useTablePreferences } from "../hooks/useTablePreferences";
@@ -32,6 +34,8 @@ const toCsvRow = (n) => ({
   part: n.part?.partNumber ?? "",
   revision: n.part?.revision ?? "",
   quantity: n.quantityAffected ?? "",
+  total_cost: n.totalCost ?? 0,
+  cost_currency: n.costCurrency ?? "",
   customer: n.customer?.name ?? "",
   customer_reference: n.customerReference ?? "",
   supplier: n.supplier?.name ?? "",
@@ -63,7 +67,8 @@ const NonConformance = () => {
   const page = parseInt(searchParams.get("page") || "1", 10);
   const pageSize = parseInt(searchParams.get("pageSize") || "25", 10);
   const filters = useNCMFilters();
-  const { debouncedSearchTerm } = useGlobalSearch();
+  const { debouncedSearchTerm, setSearchTerm } = useGlobalSearch();
+  const { data: lists } = useClassifications();
   const { updateFilters } = filters;
 
   const allColumns = useMemo(() => getColumnsForNcType(type), [type]);
@@ -153,6 +158,19 @@ const NonConformance = () => {
 
   const totalQuantity = selectedRows.reduce((acc, r) => acc + (Number(r.quantityAffected) || 0), 0);
   const filterCount = ["stage", "failureMode", "subFailureMode", "deleted"].filter((k) => filters[k]).length;
+  const nameOf = (id) => (lists?.all ?? []).find((c) => c.id === id)?.name ?? "…";
+  // What the register is currently filtered by, each removable on its own.
+  const activeFilters = [
+    ...(filters.search ? [{ key: "search", label: `Search: “${filters.search}”`, clear: { search: "" } }] : []),
+    ...(filters.stage ? [{ key: "stage", label: `Stage: ${filters.stage.split(",").map((k) => stageOf(k).label).join(", ")}`, clear: { stage: "" } }] : []),
+    ...(filters.failureMode ? [{ key: "failureMode", label: `Failure mode: ${nameOf(filters.failureMode)}`, clear: { failureMode: "", subFailureMode: "" } }] : []),
+    ...(filters.subFailureMode ? [{ key: "subFailureMode", label: `Sub-failure mode: ${nameOf(filters.subFailureMode)}`, clear: { subFailureMode: "" } }] : []),
+    ...(filters.deleted ? [{ key: "deleted", label: filters.deleted === "only" ? "Deleted only" : "Including deleted", clear: { deleted: "" } }] : []),
+  ];
+  const clearFilters = (values) => {
+    updateFilters(values);
+    if ("search" in values) setSearchTerm?.("");
+  };
 
   return (
     <div className="p-4 bg-primary-bg flex flex-col gap-3 w-full min-w-0 flex-1 min-h-0">
@@ -206,6 +224,21 @@ const NonConformance = () => {
           </Suspense>
         </div>
       </div>
+      {activeFilters.length > 0 && (
+        <div aria-label="Active filters" className="flex flex-wrap items-center gap-2 px-1 text-sm">
+          {activeFilters.map((f) => (
+            <span key={f.key} className="flex items-center gap-1 rounded-full border border-brand-primary/50 bg-brand-primary/10 py-0.5 pl-3 pr-1 text-primary-text">
+              {f.label}
+              <button type="button" aria-label={`Remove filter ${f.label}`} onClick={() => clearFilters(f.clear)} className="rounded-full p-0.5 hover:bg-brand-primary/20 cursor-pointer">
+                <XIcon className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          ))}
+          <button type="button" onClick={() => clearFilters({ search: "", stage: "", failureMode: "", subFailureMode: "", deleted: "" })} className="text-link-color hover:underline cursor-pointer">
+            Clear all
+          </button>
+        </div>
+      )}
       <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-auto">
         <Suspense
           fallback={

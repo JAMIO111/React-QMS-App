@@ -58,6 +58,13 @@ describe('costs', () => {
 
     const list = await api().get(`/api/v1/ncrs/${ncr}/costs`).set(h).expect(200);
     expect(list.body.totals).toEqual({ baseCurrency: 'GBP', net: 142.5, gross: 162.5, count: 2 });
+
+    // The register shows each NCR's total cost and can sort by it.
+    const register = await api().get('/api/v1/ncrs?source=internal&sort=totalCost&order=desc').set(h).expect(200);
+    const row = register.body.data.find((n: { id: string }) => n.id === ncr);
+    expect(row).toMatchObject({ totalCost: 162.5, costCurrency: 'GBP' });
+    expect(register.body.data[0].id).toBe(ncr);
+    expect(register.body.data.find((n: { id: string }) => n.id === ncrAtB)).toMatchObject({ totalCost: 0 });
     expect(list.body.data.map((c: { costType: string }) => c.costType)).toEqual(['scrap', 'transport']);
   });
 
@@ -77,6 +84,7 @@ describe('costs', () => {
     const deleted = await api().post(`/api/v1/ncr-costs/${costId}/delete`).set(h).send({ reason: 'Duplicate' }).expect(200);
     expect(deleted.body).toMatchObject({ deleteReason: 'Duplicate' });
     expect((await api().get(`/api/v1/ncrs/${ncr}/costs`).set(h).expect(200)).body.totals.count).toBe(1);
+    expect((await api().get(`/api/v1/ncrs/${ncr}`).set(h).expect(200)).body.totalCost).toBe(42.5);
     expect((await api().get(`/api/v1/ncrs/${ncr}/costs?deleted=only`).set(h).expect(200)).body.data.map((c: { id: string }) => c.id)).toEqual([costId]);
     const locked = await api().patch(`/api/v1/ncr-costs/${costId}`).set(h).send({ amount: 1 }).expect(409);
     expect(locked.body.error.message).toBe('This cost is deleted');

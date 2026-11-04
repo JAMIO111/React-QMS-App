@@ -2,9 +2,9 @@ import clsx from "clsx";
 
 const IconButton = ({ selected, icon, callback, title, color, count }) => {
   const colorClasses = {
-    green: "bg-green-100 ring-green-600",
-    blue: "bg-indigo-300/80 ring-blue-600",
-    red: "bg-red-100 ring-red-600",
+    green: "bg-success-color/15 ring-success-color text-primary-text",
+    blue: "bg-brand-primary/20 ring-brand-primary text-primary-text",
+    red: "bg-error-color/15 ring-error-color text-primary-text",
   };
   const baseClass =
     "border hover:border-border-dark-color active:scale-97 border-border-color w-fit box-border h-9 px-2 gap-2 flex justify-center rounded-lg items-center cursor-pointer";
@@ -15,7 +15,9 @@ const IconButton = ({ selected, icon, callback, title, color, count }) => {
 
   return (
     <button
+      type="button"
       title={title}
+      aria-pressed={!!selected}
       onClick={() => callback(title)}
       className={clsx(baseClass, selectedClass)}>
       {count > 0 ? (

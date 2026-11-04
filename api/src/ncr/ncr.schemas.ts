@@ -27,6 +27,9 @@ export const NcrSummary = z.object({
   failureMode: Ref,
   subFailureMode: Ref,
   causalProcess: Ref,
+  /** Gross total of the NCR's costs (deleted lines excluded) in the organisation's base currency. */
+  totalCost: z.number(),
+  costCurrency: z.string(),
   deletedAt: dateTime.nullable(),
   createdAt: dateTime,
 });
@@ -57,7 +60,7 @@ export type NcrDetail = z.infer<typeof NcrDetail>;
 
 export const NcrPage = z.object({ data: z.array(NcrSummary), page: z.number(), pageSize: z.number(), total: z.number() });
 
-export const SORTABLE = ['reference', 'detectedAt', 'title', 'stage', 'severity', 'quantityAffected', 'partNumber', 'customer', 'supplier', 'failureMode', 'createdAt'] as const;
+export const SORTABLE = ['reference', 'detectedAt', 'title', 'stage', 'severity', 'quantityAffected', 'partNumber', 'customer', 'supplier', 'failureMode', 'createdAt', 'totalCost'] as const;
 
 export const NcrListQuery = z.object({
   source: NcrSource.optional(),

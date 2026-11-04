@@ -27,13 +27,13 @@ function App() {
       <NotificationProvider>
         <ThemeColourSync />
         <NotificationPane />
-        <div className="flex w-screen h-screen overflow-hidden">
+        <div className="relative flex w-screen h-dvh overflow-clip bg-primary-bg">
           <div className="hidden md:block">
             <Navbar />
           </div>
-          <main className="flex flex-col flex-1 h-full min-w-0">
+          <main className="flex flex-col flex-1 h-full min-w-0 min-h-0">
             <Header />
-            <div className="flex flex-col flex-1 overflow-hidden min-w-0 min-h-0">
+            <div className="relative flex flex-col flex-1 overflow-clip min-w-0 min-h-0">
               <Outlet />
             </div>
           </main>

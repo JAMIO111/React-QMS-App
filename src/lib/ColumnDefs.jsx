@@ -1,4 +1,5 @@
-import { AlignCenterIcon, BoxIcon, CalendarIcon, CircleDashedIcon, LayersIcon, QrCodeIcon, TagIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { AlignCenterIcon, BoxIcon, CalendarIcon, CircleDashedIcon, LayersIcon, PoundSterlingIcon, QrCodeIcon, TagIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { formatMoney } from "./costs";
 import { SeverityPill, StagePill } from "../components/ncr/Pills";
 import { formatDate } from "./ncr";
 
@@ -46,6 +47,13 @@ const quantity = col("quantityAffected", "Quantity", head(LayersIcon, "Qty", "ta
   sortKey: "quantityAffected",
   align: "center",
 });
+const totalCost = col(
+  "totalCost",
+  "Total cost",
+  head(PoundSterlingIcon, "Total cost", "table-header-number"),
+  (i) => <div className="table-row-item">{i.getValue() ? formatMoney(i.getValue(), i.row.original.costCurrency) : "—"}</div>,
+  { size: 120, minSize: 80, sortKey: "totalCost", align: "right" }
+);
 const failureMode = col("failureMode", "Failure mode", head(TagIcon, "Failure mode"), nameOf, { size: 170, sortKey: "failureMode" });
 const subFailureMode = col("subFailureMode", "Sub-failure mode", head(TagIcon, "Sub-failure mode"), nameOf, { size: 170 });
 const causalProcess = col("causalProcess", "Causal process", head(BoxIcon, "Causal process"), nameOf, { size: 160 });
@@ -71,5 +79,5 @@ export const getColumnsForNcType = (ncType = "Internal") => {
     Customer: [customer, customerReference, workOrder],
     Supplier: [supplier, purchaseOrder],
   }[ncType] ?? [];
-  return [reference, detectedAt, ...specific, part, title, quantity, failureMode, subFailureMode, causalProcess, severity, stage];
+  return [reference, detectedAt, ...specific, part, title, quantity, totalCost, failureMode, subFailureMode, causalProcess, severity, stage];
 };

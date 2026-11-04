@@ -32,7 +32,7 @@ const classifications = [
 ];
 const ncr = (over = {}) => ({
   id: "n1", reference: "NCM-26-001", source: "internal", stage: "open", severity: "major", title: "Bore oversize", detectedAt: "2026-11-01",
-  quantityAffected: 4, part: { id: "p1", partNumber: "BRK-100", name: "Bracket", revision: "A" }, customer: null, supplier: null,
+  quantityAffected: 4, totalCost: 292.4, costCurrency: "GBP", part: { id: "p1", partNumber: "BRK-100", name: "Bracket", revision: "A" }, customer: null, supplier: null,
   workOrder: "WO-1", purchaseOrder: null, customerReference: null, failureMode: { id: "fm1", name: "Dimensional" },
   subFailureMode: { id: "sf1", name: "Oversize" }, causalProcess: null, deletedAt: null, createdAt: "2026-11-01T09:00:00Z",
   stageReason: null, description: "0.05 over", requirement: null, actualResult: null, site: null, partRevisionId: "r1", lotNumber: null,
@@ -117,6 +117,16 @@ describe("NC registers", () => {
     expect(lastCall("GET /ncrs").path).toContain("order=asc");
   });
 
+  it("shows each NC's total cost and sorts by it", async () => {
+    routeApi({ "GET /ncrs": { data: [ncr(), ncr({ id: "n2", reference: "NCM-26-002", title: "No costs", totalCost: 0 })], page: 1, pageSize: 25, total: 2 } });
+    renderAt("/Non-Conformance/Internal");
+    await screen.findByText("NCM-26-001");
+    const header = screen.getByRole("columnheader", { name: /Total cost/ });
+    expect(screen.getByText("£292.40")).toBeInTheDocument();
+    await userEvent.click(within(header).getByRole("button"));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("sort=totalCost"));
+  });
+
   it("opens a record on double-click and offers New NC with ncr.create", async () => {
     routeApi({ "GET /ncrs": { data: [ncr()], page: 1, pageSize: 25, total: 1 }, "GET /ncrs/n1": ncr() });
     renderAt("/Non-Conformance/Internal");
@@ -139,10 +149,52 @@ describe("NC registers", () => {
     await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
     const pane = screen.getByRole("dialog", { name: "Filter non-conformances" });
     await userEvent.click(within(pane).getByText("Investigating"));
-    await userEvent.selectOptions(within(pane).getByLabelText("Deleted records"), "only");
+    await userEvent.click(within(pane).getByRole("combobox", { name: "Deleted records" }));
+    await userEvent.click(within(pane).getByRole("option", { name: "Only deleted" }));
     await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
     await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("stage=investigating"));
     expect(lastCall("GET /ncrs").path).toContain("deleted=only");
+  });
+
+  it("filters by failure mode and sub-failure mode, shows what is applied and removes filters one by one", async () => {
+    routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 } });
+    renderAt("/Non-Conformance/Internal?page=3");
+    await screen.findByText("No records found.");
+    await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
+    const pane = screen.getByRole("dialog", { name: "Filter non-conformances" });
+    // Before a failure mode is chosen, each sub-failure mode shows its failure mode.
+    await userEvent.click(within(pane).getByRole("combobox", { name: "Sub-failure mode" }));
+    expect(within(pane).getByRole("option", { name: /Oversize/ })).toHaveTextContent("Dimensional");
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(within(pane).getByRole("combobox", { name: "Failure mode" }));
+    await userEvent.click(within(pane).getByRole("option", { name: "DIM – Dimensional" }));
+    await userEvent.click(within(pane).getByRole("combobox", { name: "Sub-failure mode" }));
+    await userEvent.click(within(pane).getByRole("option", { name: "Oversize" }));
+    await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("failureModeId=fm1&subFailureModeId=sf1"));
+    expect(lastCall("GET /ncrs").path).toContain("page=1");
+    expect(screen.queryByRole("dialog", { name: "Filter non-conformances" })).toBeNull();
+
+    const active = screen.getByLabelText("Active filters");
+    expect(active).toHaveTextContent("Failure mode: Dimensional");
+    expect(active).toHaveTextContent("Sub-failure mode: Oversize");
+    await userEvent.click(within(active).getByRole("button", { name: "Remove filter Sub-failure mode: Oversize" }));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).not.toContain("subFailureModeId"));
+    expect(lastCall("GET /ncrs").path).toContain("failureModeId=fm1");
+    await userEvent.click(within(screen.getByLabelText("Active filters")).getByRole("button", { name: "Clear all" }));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).not.toContain("failureModeId"));
+    expect(screen.queryByLabelText("Active filters")).toBeNull();
+  });
+
+  it("closes the filter pane on Escape without applying", async () => {
+    routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 } });
+    renderAt("/Non-Conformance/Internal");
+    await screen.findByText("No records found.");
+    await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Filter non-conformances" })).getByText("Closed"));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Filter non-conformances" })).toBeNull();
+    expect(lastCall("GET /ncrs").path).not.toContain("stage=");
   });
 });
 

@@ -178,10 +178,17 @@ const NcrPage = () => {
     { key: "info", title: "Additional Info", subtitle: "Files and attachments", icon: InboxIcon, needsRecord: true },
     { key: "history", title: "History", subtitle: "Who changed what", icon: HistoryIcon, needsRecord: true },
   ];
-  const goTo = (key) => refs[key].current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  // Scroll only the content pane (scrollIntoView would also scroll the page around it).
+  const goTo = (key) => {
+    const pane = scrollRef.current;
+    const el = refs[key].current;
+    if (!pane || !el) return;
+    const top = el.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop - 20;
+    pane.scrollTo?.({ top: Math.max(0, top), behavior: "smooth" });
+  };
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 grow flex-col overflow-hidden bg-primary-bg">
+    <div className="flex h-full min-h-0 w-full min-w-0 grow flex-col overflow-clip bg-primary-bg">
       {/* Header: back to the register, title, and the save / revert actions. */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-color bg-primary-bg px-5 py-2">
         <div className="flex min-w-0 flex-wrap items-center gap-3 py-2">
@@ -222,7 +229,7 @@ const NcrPage = () => {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-clip">
         {/* Side menu of sections, as in the original form. */}
         <nav aria-label="Sections" className="hidden h-full w-70 shrink-0 flex-col overflow-y-auto border-r border-border-color bg-primary-bg px-3 md:flex">
           <div className="mb-2 flex flex-col gap-2 border-b border-border-dark-color pb-3 pt-4">
@@ -238,7 +245,7 @@ const NcrPage = () => {
           })}
         </nav>
 
-        <div ref={scrollRef} className="flex h-full min-w-0 grow flex-col gap-5 overflow-y-auto bg-primary-bg p-5">
+        <div ref={scrollRef} className="relative flex h-full min-w-0 grow flex-col gap-5 overflow-y-auto bg-primary-bg p-5">
           {!isNew && ncr.deletedAt && (
             <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
               Deleted {formatDate(ncr.deletedAt)} by {ncr.deletedBy?.name ?? "—"}: “{ncr.deleteReason}”.

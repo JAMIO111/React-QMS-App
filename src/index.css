@@ -632,6 +632,22 @@ input:-webkit-autofill:active {
   appearance: none;
 }
 
+/* The page behind the app (overscroll, loading screens, gaps) follows the theme, and native controls
+   (select menus, scrollbars, date inputs) use the matching light/dark rendering. */
+html,
+body,
+#root {
+  background-color: rgb(var(--primary-bg));
+  color: rgb(var(--primary-text));
+}
+html {
+  color-scheme: light;
+  overscroll-behavior: none;
+}
+html.dark {
+  color-scheme: dark;
+}
+
 @media print {
   .job-sheet {
     page-break-after: always;

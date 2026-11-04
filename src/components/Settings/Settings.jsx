@@ -92,7 +92,7 @@ const Settings = () => {
           },
         )}
       </div>
-      <div className="flex-grow flex flex-col overflow-y-scroll">
+      <div className="flex-grow p-5 flex flex-col overflow-y-scroll">
         <Outlet />
       </div>
     </div>

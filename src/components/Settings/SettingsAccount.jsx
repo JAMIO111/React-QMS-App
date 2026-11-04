@@ -14,7 +14,7 @@ const SettingsAccount = () => {
       .map((n) => n.charAt(0).toUpperCase())
       .join(" ") || "?";
   return (
-    <div className="flex flex-col xl:flex-row lg:flex-row p-5 gap-5 w-full">
+    <div className="flex flex-col xl:flex-row lg:flex-row gap-5 w-full">
       <div className="flex flex-col gap-4 w-1/2">
         <MenuCard
           title="Profile Picture"

@@ -5,13 +5,21 @@ import ThemeColourPicker from "./ThemeColourPicker";
 import OrganisationLogo from "./OrganisationLogo";
 import RequireMfaSetting from "./RequireMfaSetting";
 import { describeApiError, API_URL } from "../../lib/api-client";
-import { useOrganisationDetails, usePermissions, useUpdateOrganisation } from "../../hooks/useQmsApi";
+import {
+  useOrganisationDetails,
+  usePermissions,
+  useUpdateOrganisation,
+} from "../../hooks/useQmsApi";
 import { useToast } from "../../contexts/ToastProvider";
 
 /** Shown instead of a section when the API cannot be reached. */
 export const ApiUnavailable = ({ error }) => (
-  <div role="alert" className="rounded-2xl border border-border-color bg-secondary-bg p-5 text-primary-text">
-    <h3 className="font-semibold mb-1">Organisation settings need the QMS API</h3>
+  <div
+    role="alert"
+    className="rounded-2xl border border-border-color bg-secondary-bg p-5 text-primary-text">
+    <h3 className="font-semibold mb-1">
+      Organisation settings need the QMS API
+    </h3>
     <p className="text-sm text-secondary-text">
       {error?.code === "api_unreachable"
         ? `The API could not be reached at ${API_URL}. Start it with "npm run api:dev" (see api/README.md) or set VITE_API_URL.`
@@ -41,7 +49,8 @@ const SettingsOrganisation = () => {
   const formSource = JSON.stringify(toForm(org));
   useEffect(() => setForm(JSON.parse(formSource)), [formSource]);
 
-  if (isLoading) return <p className="text-secondary-text p-4">Loading organisation…</p>;
+  if (isLoading)
+    return <p className="text-secondary-text p-4">Loading organisation…</p>;
   if (error) return <ApiUnavailable error={error} />;
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -61,27 +70,59 @@ const SettingsOrganisation = () => {
         },
         reason: form.reason.trim() || undefined,
       },
-      { onSuccess: () => showToast({ type: "success", title: "Saved", message: "Organisation settings updated." }) }
+      {
+        onSuccess: () =>
+          showToast({
+            type: "success",
+            title: "Saved",
+            message: "Organisation settings updated.",
+          }),
+      },
     );
   };
 
   return (
-    <div className="flex flex-col gap-5 w-full pr-2 pb-6 overflow-y-auto">
+    <div className="flex flex-col p-5 gap-5 w-full overflow-y-auto">
       <div>
-        <h2 className="text-primary-text text-2xl font-semibold">Organisation</h2>
+        <h2 className="text-primary-text text-2xl font-semibold">
+          Organisation
+        </h2>
         <p className="text-secondary-text text-sm">
-          {canManage ? "Details, defaults, sites and departments." : "You can view these settings; an administrator can change them."}
+          {canManage
+            ? "Details, defaults, sites and departments."
+            : "You can view these settings; an administrator can change them."}
         </p>
       </div>
 
-      <form onSubmit={submit} className="rounded-2xl border border-border-color bg-secondary-bg p-5 flex flex-col gap-4" aria-label="Organisation details">
+      <form
+        onSubmit={submit}
+        className="rounded-2xl border border-border-color bg-secondary-bg p-5 flex flex-col gap-4"
+        aria-label="Organisation details">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Name" value={form.name} onChange={set("name")} disabled={!canManage} required minLength={2} maxLength={100} />
-          <Field label="Identifier" value={org.slug} disabled hint="Used in links; set when the organisation was created" />
+          <Field
+            label="Name"
+            value={form.name}
+            onChange={set("name")}
+            disabled={!canManage}
+            required
+            minLength={2}
+            maxLength={100}
+          />
+          <Field
+            label="Identifier"
+            value={org.slug}
+            disabled
+            hint="Used in links; set when the organisation was created"
+          />
           <Field
             label="Base currency"
             value={form.baseCurrency}
-            onChange={(e) => setForm((f) => ({ ...f, baseCurrency: e.target.value.toUpperCase() }))}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                baseCurrency: e.target.value.toUpperCase(),
+              }))
+            }
             disabled={!canManage}
             required
             pattern="[A-Za-z]{3}"
@@ -102,7 +143,12 @@ const SettingsOrganisation = () => {
           <Field
             label="NCR reference prefix"
             value={form.ncrReferencePrefix}
-            onChange={(e) => setForm((f) => ({ ...f, ncrReferencePrefix: e.target.value.toUpperCase() }))}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                ncrReferencePrefix: e.target.value.toUpperCase(),
+              }))
+            }
             disabled={!canManage}
             required
             pattern="[A-Za-z0-9]{1,10}"
@@ -134,11 +180,20 @@ const SettingsOrganisation = () => {
         )}
       </form>
 
-      <OrganisationLogo logoPath={org.settings.logoPath ?? null} canManage={canManage} />
+      <OrganisationLogo
+        logoPath={org.settings.logoPath ?? null}
+        canManage={canManage}
+      />
 
-      <ThemeColourPicker value={org.settings.themeColour ?? "purple"} canManage={canManage} />
+      <ThemeColourPicker
+        value={org.settings.themeColour ?? "purple"}
+        canManage={canManage}
+      />
 
-      <RequireMfaSetting value={!!org.settings.requireMfa} canManage={canManage} />
+      <RequireMfaSetting
+        value={!!org.settings.requireMfa}
+        canManage={canManage}
+      />
 
       <SitesManager canManage={canManage} />
     </div>

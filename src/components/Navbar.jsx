@@ -1,6 +1,11 @@
 import { useState } from "react";
 import FortressMark from "../assets/fortress-qms.png";
-import { CircleHelpIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, SettingsIcon } from "@/components/icons";
+import {
+  CircleHelpIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
+  SettingsIcon,
+} from "@/components/icons";
 import NavItem from "./NavItem";
 import Logout from "./Logout";
 import { menuStructure } from "../MenuStructure";
@@ -44,12 +49,18 @@ const Navbar = () => {
             isMenuExpanded ? "flex-row mx-3" : "flex-col gap-3"
           }`}>
           {/* The organisation's own logo; Fortress QMS's mark until one is uploaded. */}
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border-color bg-white p-0.5">
-            <img className="h-full w-full object-contain" src={logoUrl || FortressMark} alt={logoUrl ? `${orgName} logo` : "Fortress QMS"} />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[10px] border border-border-color bg-white p-0.25">
+            <img
+              className="h-full w-full object-fill"
+              src={logoUrl || FortressMark}
+              alt={logoUrl ? `${orgName} logo` : "Fortress QMS"}
+            />
           </div>
           {isMenuExpanded && (
             <div className="ml-3 flex min-w-0 flex-1 flex-col justify-between items-start">
-              <h1 className="w-full truncate text-sm font-semibold text-primary-text" title={orgName}>
+              <h1
+                className="w-full truncate text-sm font-semibold text-primary-text"
+                title={orgName}>
                 {orgName || "Fortress QMS"}
               </h1>
               <p className="text-xs text-secondary-text">Fortress QMS</p>
@@ -68,40 +79,42 @@ const Navbar = () => {
         </div>
         <div className="flex flex-col h-full overflow-y-auto justify-between">
           <ul className="gap-1 flex-1 flex flex-col pt-3">
-            {menuStructure.filter((item) => canSee(item.permission)).map((item) => (
-              <li key={item.name}>
-                <NavItem
-                  title={item.name}
-                  label={item.name}
-                  icon={item.icon}
-                  path={item.path}
-                  isExpanded={isMenuExpanded}
-                  closeMenu={closeMenu}
-                  hasSubMenu={
-                    Array.isArray(item.subMenu) && item.subMenu.length > 0
-                  }
-                  onToggleSubMenu={() => toggleSubMenu(item.name)}
-                  isSubMenuOpen={isSubMenuOpen}
-                />
-                {item.subMenu && isSubMenuOpen === item.name && (
-                  <ul className="ml-4 flex flex-col">
-                    {item.subMenu?.map((subItem, index) => (
-                      <li key={subItem.name}>
-                        <SubMenuItem
-                          title={subItem.name}
-                          label={subItem.name}
-                          path={subItem.path}
-                          end={!!subItem.end}
-                          isFirst={index === 0}
-                          isLast={index === item.subMenu?.length - 1}
-                          closeMenu={closeMenu}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))}
+            {menuStructure
+              .filter((item) => canSee(item.permission))
+              .map((item) => (
+                <li key={item.name}>
+                  <NavItem
+                    title={item.name}
+                    label={item.name}
+                    icon={item.icon}
+                    path={item.path}
+                    isExpanded={isMenuExpanded}
+                    closeMenu={closeMenu}
+                    hasSubMenu={
+                      Array.isArray(item.subMenu) && item.subMenu.length > 0
+                    }
+                    onToggleSubMenu={() => toggleSubMenu(item.name)}
+                    isSubMenuOpen={isSubMenuOpen}
+                  />
+                  {item.subMenu && isSubMenuOpen === item.name && (
+                    <ul className="ml-4 flex flex-col">
+                      {item.subMenu?.map((subItem, index) => (
+                        <li key={subItem.name}>
+                          <SubMenuItem
+                            title={subItem.name}
+                            label={subItem.name}
+                            path={subItem.path}
+                            end={!!subItem.end}
+                            isFirst={index === 0}
+                            isLast={index === item.subMenu?.length - 1}
+                            closeMenu={closeMenu}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
           </ul>
           <div className="border-t-1 mt-2 border-border-color"></div>
           <ul className="gap-2 flex my-2 flex-col">

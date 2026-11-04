@@ -44,7 +44,7 @@ const Header = () => {
         </div>
         <img
           className="rounded-xl border-1 border-border-color w-12 h-12 object-cover"
-          src={avatarUrl || "/Logo-black-on-yellow.png"}
+          src={avatarUrl || "/fortress-qms.png"}
           alt="Profile Pic"
         />
       </div>

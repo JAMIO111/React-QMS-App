@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { CloudUploadIcon, Trash2Icon } from "@/components/icons";
-import FortressMark from "../../assets/fortress-qms.svg";
+import FortressMark from "../../assets/fortress-qms.png";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";

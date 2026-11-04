@@ -637,12 +637,14 @@ input:-webkit-autofill:active {
    Status colours are for severity only and always appear with a label. */
 :root,
 .light {
+  --fortress-accent: #2563eb;
   --chart-series-1: #2a78d6;
   --chart-series-2: #eb6834;
   --chart-series-3: #1baf7a;
   --chart-grid: rgba(0, 0, 0, 0.08);
 }
 .dark {
+  --fortress-accent: #60a5fa;
   --chart-series-1: #3987e5;
   --chart-series-2: #d95926;
   --chart-series-3: #199e70;

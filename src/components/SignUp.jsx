@@ -45,18 +45,13 @@ const SignUp = () => {
   };
 
   return (
-    <div className="flex flex-col items-start justify-center h-full w-120 p-10 gap-6">
-      <img
-        src="/Logo-black-on-yellow.png"
-        alt="Logo"
-        className="w-14 absolute top-5 left-5 rounded-lg mb-4 border border-primary-text/50"
-      />
+    <div className="flex w-full flex-col items-start justify-center gap-6">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl text-left text-primary-text font-semibold">
-          Getting Started!
+          Create your account
         </h1>
         <h2 className="text-left text-md font-light text-secondary-text">
-          Enter an email and password to create an account.
+          Start using Fortress QMS with your work email.
         </h2>
       </div>
       <form

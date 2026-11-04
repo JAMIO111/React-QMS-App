@@ -1,20 +1,32 @@
 import { Outlet } from "react-router-dom";
+import Logo from "../assets/fortress-qms.png";
+import BrandPanel from "./auth/BrandPanel";
 
-const AuthPage = () => {
-  return (
-    <div className="flex flex-row items-center justify-between h-screen w-screen bg-primary-bg p-3 gap-3">
-      <div className="flex flex-col items-center justify-center grow-1 h-full bg-secondary-bg shadow-md rounded-2xl">
-        <Outlet />
-      </div>
-      <div className="w-fit h-full flex flex-row justify-end overflow-hidden rounded-2xl">
-        <img
-          className="max-lg:hidden h-full"
-          src="/Hero.jpg"
-          alt="Brand Logo"
-        />
-      </div>
-    </div>
-  );
-};
+/**
+ * Sign-in family of pages (login, sign-up, password reset, set password, two-factor): the form on
+ * the left with the Fortress QMS name, and the brand panel on the right on larger screens.
+ */
+const AuthPage = () => (
+  <div className="grid min-h-dvh w-full bg-primary-bg lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+    <section className="flex min-h-dvh flex-col px-6 py-6 sm:px-12">
+      <header className="flex items-center gap-3">
+        <img src={Logo} alt="" className="h-10 w-10 rounded-xl" />
+        <span className="text-xl font-semibold tracking-tight text-primary-text">
+          Fortress <span className="text-[var(--fortress-accent)]">QMS</span>
+        </span>
+      </header>
+      <main className="flex flex-1 items-center justify-center py-10">
+        <div className="w-full max-w-md">
+          <Outlet />
+        </div>
+      </main>
+      <footer className="flex flex-wrap justify-between gap-2 text-xs text-secondary-text">
+        <span>© {new Date().getFullYear()} Fortress QMS</span>
+        <span>Quality management for manufacturing</span>
+      </footer>
+    </section>
+    <BrandPanel />
+  </div>
+);
 
 export default AuthPage;

@@ -12,7 +12,7 @@ const NotificationCard = ({ notification, closePane, userId }) => {
     <div className="flex bg-secondary-bg shadow-md gap-3 items-start p-3 border border-border-color rounded-xl">
       <div className="flex justify-center items-center border border-border-color rounded-full h-10 aspect-square">
         <img
-          src={avatarUrl || "/Logo-black-on-yellow.png"}
+          src={avatarUrl || "/fortress-qms.png"}
           alt={notification?.title}
           className="w-10 h-10 rounded-lg object-cover"
         />

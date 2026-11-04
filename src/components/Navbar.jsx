@@ -1,5 +1,5 @@
 import { useState } from "react";
-import FortressMark from "../assets/fortress-qms.svg";
+import FortressMark from "../assets/fortress-qms.png";
 import { CircleHelpIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, SettingsIcon } from "@/components/icons";
 import NavItem from "./NavItem";
 import Logout from "./Logout";

@@ -4,6 +4,7 @@ import FortressMark from "../../assets/fortress-qms.png";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
+import MenuCard from "../ui/MenuCard";
 import {
   LOGO_MAX_BYTES,
   LOGO_TYPES,
@@ -58,13 +59,7 @@ const OrganisationLogo = ({ logoPath, canManage }) => {
   };
 
   return (
-    <section aria-labelledby="org-logo-title" className="rounded-2xl border border-border-color bg-secondary-bg p-5 flex flex-col gap-3">
-      <div>
-        <h3 id="org-logo-title" className="text-primary-text font-semibold">
-          Logo
-        </h3>
-        <p className="text-sm text-secondary-text">Shown at the top of the side menu for everyone in {organisation?.name ?? "the organisation"}.</p>
-      </div>
+    <MenuCard title="Logo" titleId="org-logo-title" subtitle={`Shown at the top of the side menu for everyone in ${organisation?.name ?? "the organisation"}.`} bodyClassName="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-border-color bg-white p-1">
           {isLoading && logoPath ? (
@@ -116,7 +111,7 @@ const OrganisationLogo = ({ logoPath, canManage }) => {
           {problem}
         </p>
       )}
-    </section>
+    </MenuCard>
   );
 };
 

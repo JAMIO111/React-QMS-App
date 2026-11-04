@@ -1,13 +1,23 @@
-import { useState, useEffect } from "react";
-import { BanIcon, CloudUploadIcon, Trash2Icon, UploadIcon, XIcon } from "@/components/icons";
+import { useEffect, useRef, useState } from "react";
+import { CloudUploadIcon, ImageIcon, SaveIcon, Trash2Icon } from "@/components/icons";
 import supabase from "../supabase-client";
-import CTAButton from "./CTAButton";
+import Dialog from "./ui/Dialog";
+import ImageCropper from "./ui/ImageCropper";
+import { cropToBlob } from "../lib/cropImage";
+
+/** Pictures bigger than this are refused before cropping (they are shrunk to 512 px anyway). */
+const MAX_SOURCE_MB = 25;
+const btn = {
+  neutral: "flex items-center gap-2 rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover disabled:opacity-50 cursor-pointer",
+  save: "flex items-center gap-2 rounded-lg border border-success-btn-border bg-success-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-success-btn-bg-hover disabled:opacity-50 cursor-pointer",
+  danger: "flex items-center gap-2 rounded-lg border border-error-btn-border bg-error-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-error-btn-bg-hover disabled:opacity-50 cursor-pointer",
+};
 
 /**
- * Uploads or removes a single image in a (private) storage bucket.
- * The parent decides what to store: it receives the new object path via onUploaded(path),
- * and is told to clear its reference via onRemoved(). Storage policies decide which paths
- * the user may write.
+ * Uploads, replaces or removes a single square image in a (private) storage bucket. A chosen
+ * picture is cropped to a square in the browser and saved as a 512 × 512 WebP, so large photos
+ * from a phone or camera fit the bucket's size limit. The parent gets the new object path via
+ * onUploaded(path) and is told to clear its reference via onRemoved().
  */
 const ModalImageUploader = ({
   isOpen,
@@ -18,143 +28,146 @@ const ModalImageUploader = ({
   existingUrl = null, // signed URL of the existing image, for preview
   onUploaded,
   onRemoved,
+  title = "Profile picture",
+  round = false,
 }) => {
-  const [preview, setPreview] = useState(existingUrl || null);
-  const [file, setFile] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [source, setSource] = useState(null); // object URL of the chosen picture
+  const [crop, setCrop] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState(null);
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef(null);
 
   useEffect(() => {
-    if (isOpen) {
-      setPreview(existingUrl || null);
-      setFile(null);
-      setLoading(false);
-    }
-  }, [isOpen, existingUrl]);
+    if (!isOpen) return undefined;
+    setSource(null);
+    setCrop(null);
+    setBusy(false);
+    setProblem(null);
+    return undefined;
+  }, [isOpen]);
+  useEffect(() => () => source && URL.revokeObjectURL(source), [source]);
 
-  const handleFileChange = (e) => {
-    const selected = e.target.files?.[0];
-    if (selected) {
-      setFile(selected);
-      setPreview(URL.createObjectURL(selected));
-    }
-  };
-
-  const handleClose = () => {
-    setPreview(existingUrl || null);
-    onClose();
-  };
-
-  const handleUpload = async () => {
+  const choose = (file) => {
+    setProblem(null);
     if (!file) return;
-    setLoading(true);
+    if (!file.type.startsWith("image/")) return setProblem("Choose an image file (JPG, PNG, WebP, HEIC…).");
+    if (file.size > MAX_SOURCE_MB * 1024 * 1024) return setProblem(`That picture is over ${MAX_SOURCE_MB} MB. Choose a smaller one.`);
+    setSource(URL.createObjectURL(file));
+  };
 
+  const save = async () => {
+    if (!source || !crop) return;
+    setBusy(true);
+    setProblem(null);
     try {
-      const fileExt = (file.name.split(".").pop() || "img").toLowerCase();
-      const filePath = `${pathPrefix}${crypto.randomUUID()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(filePath, file);
-      if (uploadError) throw uploadError;
-
+      const blob = await cropToBlob(source, crop);
+      const ext = blob.type === "image/webp" ? "webp" : "jpg";
+      const filePath = `${pathPrefix}${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from(bucket).upload(filePath, blob, { contentType: blob.type });
+      if (error) throw error;
       await onUploaded?.(filePath);
-
       // Replace, don't accumulate: remove the previous image once the new one is saved.
-      if (existingPath && existingPath !== filePath) {
-        await supabase.storage.from(bucket).remove([existingPath]);
-      }
-
-      setLoading(false);
-      handleClose();
+      if (existingPath && existingPath !== filePath) await supabase.storage.from(bucket).remove([existingPath]);
+      onClose();
     } catch (err) {
-      console.error(err);
-      alert(`Upload failed: ${err.message}`);
-      setLoading(false);
+      setProblem(`Not saved: ${err.message}`);
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleRemove = async () => {
-    if (!existingPath) {
-      setPreview(null);
-      setFile(null);
-      return;
-    }
-
-    setLoading(true);
+  const remove = async () => {
+    setBusy(true);
+    setProblem(null);
     try {
       await onRemoved?.();
-      await supabase.storage.from(bucket).remove([existingPath]);
-      setPreview(null);
-      setFile(null);
-    } catch (error) {
-      console.error("Error removing image:", error);
-      alert("Failed to remove image: " + error.message);
+      if (existingPath) await supabase.storage.from(bucket).remove([existingPath]);
+      onClose();
+    } catch (err) {
+      setProblem(`Not removed: ${err.message}`);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
   if (!isOpen) return null;
 
+  const fileInput = (
+    <input
+      ref={inputRef}
+      type="file"
+      accept="image/*"
+      hidden
+      data-testid="image-input"
+      onChange={(e) => {
+        choose(e.target.files?.[0]);
+        e.target.value = "";
+      }}
+    />
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-secondary-bg rounded-2xl w-full max-w-md shadow-lg p-5 pt-3 relative">
-        <button
-          onClick={handleClose}
-          disabled={loading}
-          className="absolute top-3 right-3 text-secondary-text hover:bg-border-color rounded-lg p-1 cursor-pointer transition duration-300">
-          <XIcon size={22} />
-        </button>
-
-        <h2 className="text-lg font-semibold mb-4 text-primary-text">
-          {preview ? "Update Image" : "Upload Image"}
-        </h2>
-
-        {preview ? (
-          <div className="relative">
-            <img
-              src={preview}
-              alt="Preview"
-              className="rounded-xl w-full h-64 object-cover border"
-            />
-            <button
-              onClick={handleRemove}
-              disabled={loading}
-              className="absolute top-2 right-2 bg-tertiary-bg/80 p-2 rounded-lg cursor-pointer hover:bg-tertiary-bg transition">
-              <Trash2Icon className="text-red-500" size={20} />
-            </button>
-          </div>
+    <Dialog title={title} onClose={() => !busy && onClose()} width="max-w-sm">
+      <div className="flex flex-col items-center gap-4">
+        {source ? (
+          <>
+            <ImageCropper src={source} onCropChange={setCrop} round={round} />
+            <p className="text-center text-xs text-secondary-text">Drag to position, zoom to fit. Saved as a 512 × 512 square.</p>
+          </>
+        ) : existingUrl ? (
+          <img src={existingUrl} alt="Current picture" className={`aspect-square w-72 border border-border-color object-cover ${round ? "rounded-full" : "rounded-xl"}`} />
         ) : (
-          <label className="flex flex-col items-center justify-center border-2 border-dashed border-border-color rounded-xl h-64 cursor-pointer hover:bg-tertiary-bg transition">
-            <CloudUploadIcon size={40} className="text-gray-400 mb-2" />
-            <p className="text-gray-500 text-sm">Click to upload</p>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-          </label>
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              choose(e.dataTransfer.files?.[0]);
+            }}
+            className={`flex aspect-square w-72 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-secondary-text transition-colors cursor-pointer ${
+              dragging ? "border-brand-primary bg-brand-primary/10" : "border-border-dark-color hover:bg-primary-text/5"
+            }`}>
+            <CloudUploadIcon className="h-10 w-10" />
+            <span className="text-sm text-primary-text">Drop a picture here or click to choose</span>
+            <span className="text-xs">You can crop it next</span>
+          </button>
+        )}
+        {fileInput}
+
+        {problem && (
+          <p role="alert" className="w-full text-sm text-error-color">
+            {problem}
+          </p>
         )}
 
-        <div className="flex justify-end mt-4 gap-4">
-          <CTAButton
-            type="cancel"
-            callbackFn={handleClose}
-            text="Cancel"
-            disabled={loading}
-            icon={BanIcon}
-          />
-          <CTAButton
-            type="success"
-            callbackFn={handleUpload}
-            disabled={!file || loading}
-            text={loading ? "Uploading..." : "Upload"}
-            icon={UploadIcon}
-          />
+        <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          <div className="flex gap-2">
+            {(source || existingUrl) && (
+              <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} className={btn.neutral}>
+                <ImageIcon className="h-4 w-4" /> {source ? "Choose another" : "Replace"}
+              </button>
+            )}
+            {!source && existingPath && (
+              <button type="button" onClick={remove} disabled={busy} className={btn.danger}>
+                <Trash2Icon className="h-4 w-4" /> Remove
+              </button>
+            )}
+          </div>
+          {source && (
+            <button type="button" onClick={save} disabled={busy || !crop} className={btn.save}>
+              <SaveIcon className="h-4 w-4" /> {busy ? "Saving…" : "Save"}
+            </button>
+          )}
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 };
 

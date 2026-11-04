@@ -5,6 +5,7 @@ import { useCalibrationMutation, useGaugeTypeCharacteristics, useGaugeTypes } fr
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { INTERVAL_UNITS, formatInterval } from "../../lib/calibration";
+import MenuCard from "../ui/MenuCard";
 import CharacteristicsEditor from "../calibration/CharacteristicsEditor";
 
 const input = "rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-sm text-primary-text focus:outline-none focus:border-brand-primary";
@@ -138,19 +139,20 @@ const SettingsCalibration = () => {
         {canManage ? "" : " You can view them; a calibration manager can change them."}
       </p>
       {error && <p role="alert" className="text-error-color">{describeApiError(error)}</p>}
-      {isLoading ? (
-        <p className="text-secondary-text">Loading gauge types…</p>
-      ) : (
-        <ul className="flex flex-col gap-3" aria-label="Gauge types">
-          {(types ?? []).map((t) => (
-            <TypeCard key={t.id} type={t} canManage={canManage} />
-          ))}
-          {!types?.length && <li className="rounded-lg border-2 border-dashed border-border-dark-color p-4 text-center text-sm text-secondary-text">No gauge types yet.</li>}
-        </ul>
-      )}
-      {canManage &&
-        (adding ? (
-          <div className="rounded-xl border border-border-color bg-secondary-bg p-4">
+      <MenuCard
+        title="Gauge types"
+        subtitle="Default interval and template characteristics for each kind of gauge"
+        bodyClassName="flex flex-col gap-3"
+        action={
+          canManage &&
+          !adding && (
+            <button type="button" onClick={() => setAdding(true)} className="flex items-center gap-1 rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
+              <PlusIcon /> Add gauge type
+            </button>
+          )
+        }>
+        {canManage && adding && (
+          <div className="rounded-xl border border-border-color bg-primary-bg p-4">
             <TypeForm
               pending={mutation.isPending}
               submitText="Add type"
@@ -169,11 +171,18 @@ const SettingsCalibration = () => {
               }
             />
           </div>
+        )}
+        {isLoading ? (
+          <p className="text-secondary-text">Loading gauge types…</p>
         ) : (
-          <button type="button" onClick={() => setAdding(true)} className="flex items-center gap-1 self-start rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
-            <PlusIcon /> Add gauge type
-          </button>
-        ))}
+          <ul className="flex flex-col gap-3" aria-label="Gauge types">
+            {(types ?? []).map((t) => (
+              <TypeCard key={t.id} type={t} canManage={canManage} />
+            ))}
+            {!types?.length && <li className="rounded-lg border-2 border-dashed border-border-dark-color p-4 text-center text-sm text-secondary-text">No gauge types yet.</li>}
+          </ul>
+        )}
+      </MenuCard>
     </div>
   );
 };

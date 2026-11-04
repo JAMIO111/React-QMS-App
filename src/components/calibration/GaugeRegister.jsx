@@ -222,7 +222,8 @@ const GaugeRegister = () => {
             <CTAButton callbackFn={() => navigate("/Calibration/Gauges/new")} text="New gauge" type="main" icon={PlusIcon} iconSize="h-6 w-6" title="Add a gauge or piece of measuring equipment" />
           )}
           <IconButton count={filterCount} selected={activeModalType === "Filter"} color="blue" title="Filter" callback={toggleModal} icon={<SlidersHorizontalIcon className="h-4.5 w-4.5" />} />
-          {activeModalType === "Filter" && <GaugeFilterPane onClose={closeModal} />}
+          {/* The drawer calls onClose after sliding out; by then another menu may be open, so only clear the filter. */}
+          {activeModalType === "Filter" && <GaugeFilterPane onClose={() => setActiveModalType((t) => (t === "Filter" ? null : t))} />}
         </div>
       </div>
       {activeFilters.length > 0 && (

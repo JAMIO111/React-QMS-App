@@ -3,6 +3,7 @@ import { useAuth } from "../../contexts/AuthProvider";
 import { useConfirm } from "../../contexts/ConfirmationModalProvider";
 import { useToast } from "../../contexts/ToastProvider";
 import { useUpdateOrganisation } from "../../hooks/useQmsApi";
+import MenuCard from "../ui/MenuCard";
 import { describeApiError } from "../../lib/api-client";
 
 /** Settings → Organisation: require every member to use two-factor authentication. */
@@ -40,14 +41,12 @@ const RequireMfaSetting = ({ value, canManage }) => {
   };
 
   return (
-    <section aria-labelledby="require-mfa-title" className="rounded-2xl border border-border-color bg-secondary-bg p-5 flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h3 id="require-mfa-title" className="text-primary-text font-semibold">
-            Require two-factor authentication
-          </h3>
-          <p className="text-secondary-text text-sm">Every member must sign in with a code from an authenticator app.</p>
-        </div>
+    <MenuCard
+      title="Require two-factor authentication"
+      titleId="require-mfa-title"
+      subtitle="Every member must sign in with a code from an authenticator app."
+      bodyClassName="flex flex-col gap-2"
+      action={
         <button
           type="button"
           role="switch"
@@ -60,7 +59,7 @@ const RequireMfaSetting = ({ value, canManage }) => {
           }`}>
           <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${value ? "left-5.5" : "left-0.5"}`} />
         </button>
-      </div>
+      }>
       {canManage && blockedOn && (
         <p className="text-sm text-secondary-text">
           Turn on two-factor for your own account first in{" "}
@@ -70,7 +69,7 @@ const RequireMfaSetting = ({ value, canManage }) => {
           .
         </p>
       )}
-    </section>
+    </MenuCard>
   );
 };
 

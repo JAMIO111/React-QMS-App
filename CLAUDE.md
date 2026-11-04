@@ -96,6 +96,10 @@ Summary of the brief:
 - NCR files: upload to `nc-files` at `<org>/ncr/<ncr id>/<uuid>-<name>` (`uploadFileToSupabase`), then
   `POST /ncrs/{id}/attachments`; storage policies allow uploads only into an existing NCR's folder and
   never delete. Forms built with react-hook-form use `noValidate` (TextInput sets native `required`).
+- Settings pages use `src/components/ui/MenuCard.jsx` for every card (header strip with title, subtitle and an
+  optional `action`; `as="form"` etc., extra props go to the root; `Accordion` is a collapsible MenuCard).
+  Profile pictures: `ModalImageUploader` crops to a square with `ui/ImageCropper.jsx` and uploads a 512 × 512
+  WebP made by `cropToBlob` (`src/lib/cropImage.js`), so large photos fit the bucket limit.
 - Icons: **Lucide only**, imported from `@/components/icons` (`<Name>Icon`, default size 1em so
   icons follow text size). Add new icons there; ESLint rejects `react-icons` and direct
   `lucide-react` imports elsewhere.

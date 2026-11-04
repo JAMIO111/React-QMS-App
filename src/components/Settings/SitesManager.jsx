@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Field from "../ui/Field";
 import { describeApiError } from "../../lib/api-client";
+import MenuCard from "../ui/MenuCard";
 import { useDepartments, useSites, useStructureMutation } from "../../hooks/useQmsApi";
 
 const codeProps = {
@@ -154,11 +155,7 @@ const SitesManager = ({ canManage }) => {
   const sites = data?.data ?? [];
 
   return (
-    <section aria-label="Sites" className="rounded-2xl border border-border-color bg-secondary-bg p-5 flex flex-col gap-4">
-      <div>
-        <h3 className="text-primary-text text-xl font-semibold">Sites and departments</h3>
-        <p className="text-secondary-text text-sm">Select a site to see its departments.</p>
-      </div>
+    <MenuCard aria-label="Sites" title="Sites and departments" subtitle="Select a site to see its departments." bodyClassName="flex flex-col gap-4">
       {isLoading && <p className="text-secondary-text">Loading sites…</p>}
       {error && <p className="text-error-color">{describeApiError(error)}</p>}
       <ul className="flex flex-col gap-2">
@@ -174,7 +171,7 @@ const SitesManager = ({ canManage }) => {
           onSubmit={(fields, reset) => mutation.mutate({ resource: "sites", body: fields }, { onSuccess: reset })}
         />
       )}
-    </section>
+    </MenuCard>
   );
 };
 

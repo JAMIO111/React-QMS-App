@@ -67,12 +67,7 @@ const SettingsAccount = () => {
       <div className="flex flex-col w-1/2 gap-5">
         <TwoFactorCard />
         {/* Password Card */}
-        <div className="flex flex-col bg-secondary-bg rounded-3xl border border-border-color p-5">
-          <p className="text-primary-text text-xl mb-1">Password</p>
-          <p className="text-secondary-text text-sm mb-5">
-            You can change your password here. Please enter your current
-            password and then your new password.
-          </p>
+        <MenuCard title="Password" subtitle="Enter your current password, then your new password." bodyClassName="flex flex-col gap-1">
           <TextInput
             icon={RectangleEllipsisIcon}
             placeholder="Current Password..."
@@ -88,15 +83,10 @@ const SettingsAccount = () => {
           <div className="h-10 flex flex-row justify-between items-center">
             <CTAButton type="main" text="Change Password" />
           </div>
-        </div>
-        {/* Optional small card */}
-        <div className="flex flex-col bg-secondary-bg rounded-3xl border border-border-color p-5">
-          <p className="text-primary-text text-xl mb-2">Delete Account</p>
-          <p className="text-secondary-text text-sm mb-5">
-            Permanently delete your account. This cannot be undone.
-          </p>
+        </MenuCard>
+        <MenuCard title="Delete Account" subtitle="Permanently delete your account. This cannot be undone.">
           <CTAButton type="cancel" text="Delete Account" />
-        </div>
+        </MenuCard>
       </div>
     </div>
   );

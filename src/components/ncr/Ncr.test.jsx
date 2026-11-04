@@ -522,7 +522,7 @@ describe("NC page layout, costs and files", () => {
     expect(screen.getByText("Unsaved file")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Save upload" }));
     await waitFor(() => expect(lastCall("POST /ncrs/n1/attachments")?.body).toEqual({ storagePath: "org-1/ncr/n1/u1-photo.jpg", fileName: "photo.jpg", contentType: "image/jpeg", sizeBytes: 4 }));
-    expect(upload).toHaveBeenCalledWith(file, "nc-files", "org-1", "n1");
+    expect(upload).toHaveBeenCalledWith(file, "nc-files", "org-1", "n1", "ncr");
 
     await userEvent.click(screen.getByRole("button", { name: "Remove report.pdf" }));
     const dialog = screen.getByRole("dialog", { name: "Remove report.pdf?" });

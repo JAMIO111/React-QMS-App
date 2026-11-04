@@ -30,6 +30,9 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   parts_org_part_number_key: 'A part with this number already exists',
   part_revisions_part_revision_key: 'This part already has that revision',
   ncr_classifications_name_key: 'An entry with this name already exists',
+  gauges_org_asset_number_key: 'A gauge with this asset number already exists',
+  gauge_types_name_key: 'A gauge type with this name already exists',
+  calibration_readings_one_per_characteristic: 'This characteristic already has a reading',
 };
 
 /**
@@ -64,6 +67,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'invalid_classification', pg.message ?? 'That classification change is not allowed');
     case 'QM005': // app.nonconformance_rules (messages are written for users)
       return new ApiError(409, 'ncr_rule', pg.message ?? 'That change is not allowed for this non-conformance');
+    case 'QM006': // calibration rules (messages are written for users)
+      return new ApiError(409, 'calibration_rule', pg.message ?? 'That change is not allowed for this calibration record');
     case 'P0002': // no_data_found raised by app functions
       return ApiError.notFound();
     case '57014': // query_canceled (statement_timeout)

@@ -9,6 +9,17 @@ import { ApiExceptionFilter } from './common/api-exception.filter';
 import { ApiRequest, resolveCorrelationId } from './common/request-context';
 import { ENV, Env } from './config/env';
 import { DatabaseService } from './database/database.service';
+import { CalibrationDashboardController, CalibrationDashboardService } from './calibration/calibration-dashboard';
+import {
+  CalibrationAttachmentsController,
+  CalibrationsController,
+  GaugeCharacteristicsController,
+  GaugesController,
+  GaugeTypeCharacteristicsController,
+  GaugeTypesController,
+} from './calibration/calibration.controller';
+import { CalibrationRecordsService } from './calibration/calibration-records.service';
+import { CalibrationService } from './calibration/calibration.service';
 import { HealthController } from './health/health.controller';
 import { CustomersController, PartRevisionsController, PartsController, SuppliersController, UnitsController } from './master-data/master-data.controller';
 import { MasterDataService } from './master-data/master-data.service';
@@ -73,6 +84,13 @@ export class AppModule implements NestModule {
         NcrDashboardController,
         NcrClassificationsController,
         EmployeesController,
+        GaugesController,
+        GaugeCharacteristicsController,
+        GaugeTypesController,
+        GaugeTypeCharacteristicsController,
+        CalibrationsController,
+        CalibrationAttachmentsController,
+        CalibrationDashboardController,
       ],
       providers: [
         { provide: ENV, useValue: env },
@@ -83,6 +101,9 @@ export class AppModule implements NestModule {
         NcrService,
         NcrRecordsService,
         NcrDashboardService,
+        CalibrationService,
+        CalibrationRecordsService,
+        CalibrationDashboardService,
         OrganisationsService,
         StructureService,
         MembersService,

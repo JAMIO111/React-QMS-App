@@ -6,11 +6,13 @@ import DataNavBar2 from "./DataNavBar2";
 import { EllipsisIcon } from "@/components/icons";
 import { useColumnSizingInfo } from "../hooks/useColumnSizingInfo";
 
+const defaultRowLabel = (row) => row.reference ?? row.id;
+
 /** Fixed utility columns: never sorted, resized or hidden. */
 const utilityColumn = { enableSorting: false, enableResizing: false, enableHiding: false, meta: { align: "center" } };
 
 /**
- * Non-conformance register table: selection, row actions and server-side paging/sorting around the
+ * Register table (non-conformances, gauges): selection, row actions and server-side paging/sorting around the
  * generic <Table>. Column visibility and sizing are owned by the page (see useTablePreferences) so
  * the column menu can live in the page header.
  */
@@ -39,6 +41,8 @@ const TableWrapper = ({
   rowSelection,
   setRowSelection,
   onRowDoubleClick,
+  ariaLabel = "Non-conformance records",
+  rowLabel = defaultRowLabel,
 }) => {
   const [, setSearchParams] = useSearchParams();
   const sizingInfo = useColumnSizingInfo();
@@ -62,6 +66,8 @@ const TableWrapper = ({
   // The columns are memoised; the actions button calls the latest handler through this ref.
   const ellipsisClick = useRef(handleEllipsisClick);
   ellipsisClick.current = handleEllipsisClick;
+  const labelOf = useRef(rowLabel);
+  labelOf.current = rowLabel;
 
   const tableColumns = useMemo(
     () => [
@@ -85,7 +91,7 @@ const TableWrapper = ({
         cell: ({ row }) => (
           <input
             type="checkbox"
-            aria-label={`Select ${row.original.reference ?? row.id}`}
+            aria-label={`Select ${labelOf.current(row.original)}`}
             checked={row.getIsSelected()}
             disabled={!row.getCanSelect()}
             onChange={row.getToggleSelectedHandler()}
@@ -171,7 +177,7 @@ const TableWrapper = ({
         <Table
           table={table}
           isLoading={isLoading}
-          ariaLabel="Non-conformance records"
+          ariaLabel={ariaLabel}
           onRowDoubleClick={onRowDoubleClick ? (row) => onRowDoubleClick(row.original) : undefined}
         />
       </div>

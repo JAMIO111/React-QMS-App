@@ -36,6 +36,11 @@ const Employees = lazy(() => import("./components/Employees.jsx"));
 const PartsPage = lazy(() => import("./components/master-data/PartsPage.jsx"));
 const NcrPage = lazy(() => import("./components/ncr/NcrPage.jsx"));
 const NcDashboard = lazy(() => import("./components/ncr/NcDashboard.jsx"));
+const CalibrationDashboard = lazy(() => import("./components/calibration/CalibrationDashboard.jsx"));
+const GaugeRegister = lazy(() => import("./components/calibration/GaugeRegister.jsx"));
+const GaugePage = lazy(() => import("./components/calibration/GaugePage.jsx"));
+const CalibrationRecordPage = lazy(() => import("./components/calibration/CalibrationRecordPage.jsx"));
+const SettingsCalibration = lazy(() => import("./components/Settings/SettingsCalibration.jsx"));
 const PartDetailPage = lazy(() => import("./components/master-data/PartDetailPage.jsx"));
 const PartiesPage = lazy(() => import("./components/master-data/PartiesPage.jsx"));
 const AuthPage = lazy(() => import("./components/AuthPage.jsx"));
@@ -93,6 +98,10 @@ const router = createBrowserRouter([
           { path: "Non-Conformance", element: <NcDashboard /> },
           { path: "Non-Conformance/:type", element: <NonConformance /> },
           { path: "Non-Conformance/:type/:id", element: <NcrPage /> },
+          { path: "Calibration", element: <CalibrationDashboard /> },
+          { path: "Calibration/Gauges", element: <GaugeRegister /> },
+          { path: "Calibration/Gauges/:id", element: <GaugePage key="gauge" /> },
+          { path: "Calibration/Gauges/:gaugeId/calibrations/:calibrationId", element: <CalibrationRecordPage /> },
           {
             path: "Settings",
             element: <Settings />,
@@ -118,6 +127,7 @@ const router = createBrowserRouter([
                   </div>
                 ),
               },
+              { path: "Calibration", element: <SettingsCalibration /> },
               {
                 path: "Notifications",
                 element: <div>Notifications</div>,

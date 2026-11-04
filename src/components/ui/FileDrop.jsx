@@ -35,12 +35,13 @@ const FileIcon = ({ name, type }) => {
 };
 
 /**
- * Drag-and-drop attachments for a non-conformance (ported from the original FileDrop). New files
- * are listed as unsaved until "Save uploads": each is uploaded to the private nc-files bucket at
- * <org>/ncr/<ncr id>/… and then recorded through the API. Removing a saved file asks for a reason
- * and keeps the stored file as evidence (it can be restored).
+ * Drag-and-drop attachments for a record (ported from the original NC FileDrop). New files are
+ * listed as unsaved until "Save uploads": each is uploaded to a private bucket at
+ * <org>/<folder>/<record id>/… and then recorded through the API (POST `attachUrl`). Removing a
+ * saved file asks for a reason and keeps the stored file as evidence (it can be restored through
+ * `${itemBase}/<id>/delete|restore`).
  */
-const FileDrop = ({ ncrId, canEdit = true }) => {
+export const AttachmentDrop = ({ recordId, bucket, folder, attachments, mutation, attachUrl, itemBase, title = "File upload", subtitle, canEdit = true }) => {
   const [dragActive, setDragActive] = useState(false);
   const [newFiles, setNewFiles] = useState([]); // [{ file, previewUrl }]
   const [isSaving, setIsSaving] = useState(false);
@@ -49,8 +50,6 @@ const FileDrop = ({ ncrId, canEdit = true }) => {
   const fileInputRef = useRef(null);
   const { showToast } = useToast();
   const { organisationId } = useOrganisation();
-  const attachments = useNcrAttachments(ncrId);
-  const mutation = useNcrMutation();
   const saved = attachments.data ?? [];
 
   useEffect(() => () => newFiles.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl)), [newFiles]);
@@ -79,8 +78,8 @@ const FileDrop = ({ ncrId, canEdit = true }) => {
     const failed = [];
     for (const entry of newFiles) {
       try {
-        const { path } = await uploadFileToSupabase(entry.file, "nc-files", organisationId, ncrId);
-        await apiFetch(`/ncrs/${ncrId}/attachments`, {
+        const { path } = await uploadFileToSupabase(entry.file, bucket, organisationId, recordId, folder);
+        await apiFetch(attachUrl, {
           method: "POST",
           organisationId,
           body: { storagePath: path, fileName: entry.file.name, contentType: entry.file.type || null, sizeBytes: entry.file.size },
@@ -115,8 +114,8 @@ const FileDrop = ({ ncrId, canEdit = true }) => {
   return (
     <div className="flex h-full w-full flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h3 className="text-xl font-semibold text-primary-text">File upload</h3>
-        <p className="text-sm text-secondary-text">Photos, reports and other evidence for this non-conformance.</p>
+        <h3 className="text-xl font-semibold text-primary-text">{title}</h3>
+        {subtitle && <p className="text-sm text-secondary-text">{subtitle}</p>}
       </div>
       {canEdit && (
         <div
@@ -241,7 +240,7 @@ const FileDrop = ({ ncrId, canEdit = true }) => {
                             </button>
                           ) : (
                             <>
-                              <DownloadLink bucket="nc-files" file={{ id: file.id, path: file.storagePath, name }} />
+                              <DownloadLink bucket={bucket} file={{ id: file.id, path: file.storagePath, name }} />
                               {canEdit && !file.deletedAt && (
                                 <button type="button" aria-label={`Remove ${name}`} title="Remove" onClick={() => { mutation.reset(); setRemoving(file); }}
                                   className="rounded-lg p-1.5 text-error-color hover:bg-secondary-text/5 cursor-pointer">
@@ -250,7 +249,7 @@ const FileDrop = ({ ncrId, canEdit = true }) => {
                               )}
                               {canEdit && file.deletedAt && (
                                 <button type="button" aria-label={`Restore ${name}`} title="Restore"
-                                  onClick={() => mutation.mutate({ path: `/ncr-attachments/${file.id}/restore` }, { onError: (e) => showToast({ type: "error", title: "Not restored", message: describeApiError(e) }) })}
+                                  onClick={() => mutation.mutate({ path: `${itemBase}/${file.id}/restore` }, { onError: (e) => showToast({ type: "error", title: "Not restored", message: describeApiError(e) }) })}
                                   className="rounded-lg p-1.5 text-primary-text hover:bg-secondary-text/5 cursor-pointer">
                                   <RotateCcwIcon className="h-5 w-5" />
                                 </button>
@@ -278,10 +277,10 @@ const FileDrop = ({ ncrId, canEdit = true }) => {
           onClose={() => setRemoving(null)}
           onConfirm={(reason) =>
             mutation.mutate(
-              { path: `/ncr-attachments/${removing.id}/delete`, body: { reason } },
+              { path: `${itemBase}/${removing.id}/delete`, body: { reason } },
               {
                 onSuccess: () => {
-                  showToast({ type: "success", title: "Removed", message: `${removing.fileName} was removed from this NC.` });
+                  showToast({ type: "success", title: "Removed", message: `${removing.fileName} was removed. It can be restored with “Show removed”.` });
                   setRemoving(null);
                 },
               }
@@ -290,6 +289,25 @@ const FileDrop = ({ ncrId, canEdit = true }) => {
         />
       )}
     </div>
+  );
+};
+
+/** Photos, reports and other evidence for a non-conformance (nc-files bucket). */
+const FileDrop = ({ ncrId, canEdit = true }) => {
+  const attachments = useNcrAttachments(ncrId);
+  const mutation = useNcrMutation();
+  return (
+    <AttachmentDrop
+      recordId={ncrId}
+      bucket="nc-files"
+      folder="ncr"
+      attachments={attachments}
+      mutation={mutation}
+      attachUrl={`/ncrs/${ncrId}/attachments`}
+      itemBase="/ncr-attachments"
+      subtitle="Photos, reports and other evidence for this non-conformance."
+      canEdit={canEdit}
+    />
   );
 };
 

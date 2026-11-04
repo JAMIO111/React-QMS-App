@@ -97,6 +97,14 @@ import {
   Hourglass as LucideHourglass,
   Table as LucideTable,
   GripVertical as LucideGripVertical,
+  Gauge as LucideGauge,
+  Ruler as LucideRuler,
+  ClipboardCheck as LucideClipboardCheck,
+  ShieldAlert as LucideShieldAlert,
+  CalendarClock as LucideCalendarClock,
+  Thermometer as LucideThermometer,
+  Droplets as LucideDroplets,
+  FlaskConical as LucideFlaskConical,
   ChevronUp as LucideChevronUp,
 } from "lucide-react";
 
@@ -204,4 +212,12 @@ export const ImageIcon = withDefaults(LucideImage);
 export const HourglassIcon = withDefaults(LucideHourglass);
 export const TableIcon = withDefaults(LucideTable);
 export const GripVerticalIcon = withDefaults(LucideGripVertical);
+export const GaugeIcon = withDefaults(LucideGauge);
+export const RulerIcon = withDefaults(LucideRuler);
+export const ClipboardCheckIcon = withDefaults(LucideClipboardCheck);
+export const ShieldAlertIcon = withDefaults(LucideShieldAlert);
+export const CalendarClockIcon = withDefaults(LucideCalendarClock);
+export const ThermometerIcon = withDefaults(LucideThermometer);
+export const DropletsIcon = withDefaults(LucideDroplets);
+export const FlaskConicalIcon = withDefaults(LucideFlaskConical);
 export const ChevronUpIcon = withDefaults(LucideChevronUp);

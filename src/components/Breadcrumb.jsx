@@ -1,10 +1,11 @@
 import React from "react";
 import { useLocation, Link } from "react-router-dom";
-import { BoxesIcon, FolderOpenIcon, HouseIcon, SettingsIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { BoxesIcon, FolderOpenIcon, GaugeIcon, HouseIcon, SettingsIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
 
 const iconMap = {
   Dashboard: <HouseIcon />,
   "Non-Conformance": <TriangleAlertIcon />,
+  Calibration: <GaugeIcon />,
   Inventory: <BoxesIcon />,
   "Human-Resources": <UsersIcon />,
   Settings: <SettingsIcon />,

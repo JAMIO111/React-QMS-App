@@ -159,12 +159,12 @@ export const useCreateOrganisation = () => {
 // Members, roles and invitations (Phase 1.5)
 // ---------------------------------------------------------------------------
 
-export const useMembers = () => {
+export const useMembers = ({ enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
   return useQuery({
     queryKey: orgKey(organisationId, "members"),
     queryFn: () => apiFetch("/members", { organisationId }),
-    enabled: !!organisationId,
+    enabled: !!organisationId && enabled,
     retry: false,
   });
 };

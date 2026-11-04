@@ -94,10 +94,10 @@ export const deleteRow = async (table, id) => {
  * (storage policies only allow paths that start with an organisation the user belongs to).
  * @returns {Promise<{ path: string }>}
  */
-export const uploadFileToSupabase = async (file, bucket, organisationId, id_ref) => {
+export const uploadFileToSupabase = async (file, bucket, organisationId, id_ref, folder = "ncr") => {
   const actualFile = file.file ?? file; // unwrap if needed
   const fileName = (actualFile.name || "unnamed_file").replace(/[/\\]/g, "_").replace(/\.{2,}/g, ".");
-  const filePath = `${organisationId}/ncr/${id_ref}/${crypto.randomUUID()}-${fileName}`;
+  const filePath = `${organisationId}/${folder}/${id_ref}/${crypto.randomUUID()}-${fileName}`;
 
   const { error } = await supabase.storage
     .from(bucket)

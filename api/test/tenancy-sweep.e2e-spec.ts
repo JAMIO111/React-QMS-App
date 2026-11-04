@@ -70,6 +70,29 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/ncr-costs/{id}/restore': undefined,
     'POST /api/v1/ncr-attachments/{id}/delete': { reason: 'Hijacked' },
     'POST /api/v1/ncr-attachments/{id}/restore': undefined,
+    'GET /api/v1/gauges/{id}': undefined,
+    'PATCH /api/v1/gauges/{id}': { description: 'Hijacked' },
+    'POST /api/v1/gauges/{id}/delete': { reason: 'Hijacked' },
+    'POST /api/v1/gauges/{id}/restore': undefined,
+    'GET /api/v1/gauges/{id}/history': undefined,
+    'GET /api/v1/gauges/{id}/characteristics': undefined,
+    'POST /api/v1/gauges/{id}/characteristics': { name: 'Hijacked', nominal: 1, toleranceMinus: 0, tolerancePlus: 0, unitCode: 'mm' },
+    'GET /api/v1/gauges/{id}/calibrations': undefined,
+    'POST /api/v1/gauges/{id}/calibrations': { outcome: 'fail' },
+    'PATCH /api/v1/gauge-characteristics/{id}': { name: 'Hijacked' },
+    'PATCH /api/v1/gauge-types/{id}': { name: 'Hijacked' },
+    'GET /api/v1/gauge-types/{id}/characteristics': undefined,
+    'POST /api/v1/gauge-types/{id}/characteristics': { name: 'Hijacked', nominal: 1, toleranceMinus: 0, tolerancePlus: 0, unitCode: 'mm' },
+    'PATCH /api/v1/gauge-type-characteristics/{id}': { name: 'Hijacked' },
+    'GET /api/v1/calibrations/{id}': undefined,
+    'PATCH /api/v1/calibrations/{id}': { notes: 'Hijacked' },
+    'POST /api/v1/calibrations/{id}/delete': { reason: 'Hijacked' },
+    'POST /api/v1/calibrations/{id}/restore': undefined,
+    'POST /api/v1/calibrations/{id}/raise-ncr': undefined,
+    'GET /api/v1/calibrations/{id}/attachments': undefined,
+    'POST /api/v1/calibrations/{id}/attachments': { storagePath: `${b.org}/calibration/${a.calibration}/x.pdf`, fileName: 'x.pdf', sizeBytes: 1 },
+    'POST /api/v1/calibration-attachments/{id}/delete': { reason: 'Hijacked' },
+    'POST /api/v1/calibration-attachments/{id}/restore': undefined,
   })[`${op.method} ${op.path}`];
 
 const hasSample = (op: Op) =>
@@ -103,6 +126,29 @@ const hasSample = (op: Op) =>
     'POST /api/v1/ncr-costs/{id}/restore',
     'POST /api/v1/ncr-attachments/{id}/delete',
     'POST /api/v1/ncr-attachments/{id}/restore',
+    'GET /api/v1/gauges/{id}',
+    'PATCH /api/v1/gauges/{id}',
+    'POST /api/v1/gauges/{id}/delete',
+    'POST /api/v1/gauges/{id}/restore',
+    'GET /api/v1/gauges/{id}/history',
+    'GET /api/v1/gauges/{id}/characteristics',
+    'POST /api/v1/gauges/{id}/characteristics',
+    'GET /api/v1/gauges/{id}/calibrations',
+    'POST /api/v1/gauges/{id}/calibrations',
+    'PATCH /api/v1/gauge-characteristics/{id}',
+    'PATCH /api/v1/gauge-types/{id}',
+    'GET /api/v1/gauge-types/{id}/characteristics',
+    'POST /api/v1/gauge-types/{id}/characteristics',
+    'PATCH /api/v1/gauge-type-characteristics/{id}',
+    'GET /api/v1/calibrations/{id}',
+    'PATCH /api/v1/calibrations/{id}',
+    'POST /api/v1/calibrations/{id}/delete',
+    'POST /api/v1/calibrations/{id}/restore',
+    'POST /api/v1/calibrations/{id}/raise-ncr',
+    'GET /api/v1/calibrations/{id}/attachments',
+    'POST /api/v1/calibrations/{id}/attachments',
+    'POST /api/v1/calibration-attachments/{id}/delete',
+    'POST /api/v1/calibration-attachments/{id}/restore',
   ].includes(`${op.method} ${op.path}`);
 
 /** Organisation A's record id for the resource a path refers to. */
@@ -119,6 +165,12 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/ncr-classifications/')) return a.classification;
   if (path.startsWith('/api/v1/ncr-costs/')) return a.cost;
   if (path.startsWith('/api/v1/ncr-attachments/')) return a.attachment;
+  if (path.startsWith('/api/v1/gauges/')) return a.gauge;
+  if (path.startsWith('/api/v1/gauge-characteristics/')) return a.gaugeCharacteristic;
+  if (path.startsWith('/api/v1/gauge-types/')) return a.gaugeType;
+  if (path.startsWith('/api/v1/gauge-type-characteristics/')) return a.typeCharacteristic;
+  if (path.startsWith('/api/v1/calibrations/')) return a.calibration;
+  if (path.startsWith('/api/v1/calibration-attachments/')) return a.calibrationAttachment;
   return undefined;
 };
 
@@ -158,6 +210,12 @@ beforeAll(async () => {
   a.ncr = (await one(`insert into public.nonconformances (organisation_id, reference, source, title) values ($1, 'A-NCR-1', 'internal', 'Alpha NCR') returning id`, [ids.orgA])).id;
   a.cost = (await one(`insert into public.ncr_costs (organisation_id, nonconformance_id, cost_type, currency, amount) values ($1, $2, 'scrap', 'GBP', 10) returning id`, [ids.orgA, a.ncr])).id;
   a.attachment = (await one(`insert into public.ncr_attachments (organisation_id, nonconformance_id, storage_path, file_name, size_bytes) values ($1::uuid, $2::uuid, $1::text || '/ncr/' || $2::text || '/a.txt', 'a.txt', 1) returning id`, [ids.orgA, a.ncr])).id;
+  a.gaugeType = (await one(`insert into public.gauge_types (organisation_id, name) values ($1, 'Alpha caliper') returning id`, [ids.orgA])).id;
+  a.typeCharacteristic = (await one(`insert into public.gauge_type_characteristics (organisation_id, gauge_type_id, name, nominal, tolerance_minus, tolerance_plus, unit_code) values ($1, $2, 'Alpha check', 25, 0.02, 0.02, 'mm') returning id`, [ids.orgA, a.gaugeType])).id;
+  a.gauge = (await one(`insert into public.gauges (organisation_id, asset_number, description, gauge_type_id, site_id) values ($1, 'A-G1', 'Alpha gauge', $2, $3) returning id`, [ids.orgA, a.gaugeType, ids.siteA])).id;
+  a.gaugeCharacteristic = (await one('select id from public.gauge_characteristics where gauge_id = $1', [a.gauge])).id;
+  a.calibration = (await one(`insert into public.calibrations (organisation_id, gauge_id, reference, outcome) values ($1, $2, 'A-CAL-1', 'fail') returning id`, [ids.orgA, a.gauge])).id;
+  a.calibrationAttachment = (await one(`insert into public.calibration_attachments (organisation_id, calibration_id, storage_path, file_name, size_bytes) values ($1::uuid, $2::uuid, $1::text || '/calibration/' || $2::text || '/a.pdf', 'a.pdf', 1) returning id`, [ids.orgA, a.calibration])).id;
   b.org = ids.orgB;
   b.viewerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'viewer'`, [ids.orgB])).id;
   await admin.query(`insert into public.departments (organisation_id, site_id, code, name) values ($1, $2, 'QA', 'Quality B')`, [ids.orgB, ids.siteB]);
@@ -222,6 +280,16 @@ describe('tenancy sweep over every API route', () => {
       ncr: 'Alpha NCR/draft/true', classification: 'Alpha failure',
       cost: '10/true', attachment: 'true', costs: 1, attachments: 1,
     });
+    const cal = await admin.query(
+      `select (select description || '/' || (deleted_at is null) from public.gauges where id = $1) gauge,
+              (select count(*)::int from public.gauge_characteristics where gauge_id = $1) characteristics,
+              (select coalesce(notes, '') || '/' || (deleted_at is null) || '/' || (nonconformance_id is null) from public.calibrations where id = $2) calibration,
+              (select count(*)::int from public.calibrations where gauge_id = $1) calibrations,
+              (select name from public.gauge_types where id = $3) type,
+              (select count(*)::int from public.gauge_type_characteristics where gauge_type_id = $3) template`,
+      [a.gauge, a.calibration, a.gaugeType],
+    );
+    expect(cal.rows[0]).toEqual({ gauge: 'Alpha gauge/true', characteristics: 1, calibration: '/true/true', calibrations: 1, type: 'Alpha caliper', template: 1 });
   });
 
   it('never includes another organisation’s identifiers in list responses', async () => {
@@ -229,7 +297,10 @@ describe('tenancy sweep over every API route', () => {
     const lists = ops.filter((o) => o.scoped && o.method === 'GET' && !o.path.includes('{id}'));
     const leaks: string[] = [];
     // Routes that need query parameters get a valid set, so the tenant check is what is tested.
-    const listQuery: Record<string, string> = { '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31' };
+    const listQuery: Record<string, string> = {
+      '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31',
+      '/api/v1/calibration-dashboard': '?from=2025-01-01&to=2027-12-31',
+    };
     for (const op of lists) {
       const res = await call(op, op.path + (listQuery[op.path] ?? ''), auth);
       expect(res.status).toBe(200);

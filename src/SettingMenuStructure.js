@@ -1,4 +1,4 @@
-import { BellIcon, DatabaseIcon, MonitorCogIcon, SettingsIcon, ShieldUserIcon, UserCogIcon } from "@/components/icons";
+import { BellIcon, DatabaseIcon, GaugeIcon, MonitorCogIcon, SettingsIcon, ShieldUserIcon, UserCogIcon } from "@/components/icons";
 
 const SettingMenuStructure = [
   {
@@ -31,6 +31,13 @@ const SettingMenuStructure = [
     path: "Data-Management",
     icon: DatabaseIcon,
     permission: "lookups.manage",
+    subMenu: [],
+  },
+  {
+    name: "Calibration",
+    path: "Calibration",
+    icon: GaugeIcon,
+    permission: "calibration.read",
     subMenu: [],
   },
   {

@@ -67,6 +67,19 @@ BEGIN
     SELECT a, id, 'scrap', 'GBP', 10 FROM public.nonconformances WHERE organisation_id = a AND reference = 'SW-NCR-1';
   INSERT INTO public.ncr_attachments (organisation_id, nonconformance_id, storage_path, file_name, size_bytes)
     SELECT a, id, a || '/ncr/' || id || '/sweep.txt', 'sweep.txt', 5 FROM public.nonconformances WHERE organisation_id = a AND reference = 'SW-NCR-1';
+  -- Calibration.
+  INSERT INTO public.gauge_types (organisation_id, name) VALUES (a, 'Sweep caliper');
+  INSERT INTO public.gauge_type_characteristics (organisation_id, gauge_type_id, name, nominal, tolerance_minus, tolerance_plus, unit_code)
+    SELECT a, id, '25 mm block', 25, 0.02, 0.02, 'mm' FROM public.gauge_types WHERE organisation_id = a;
+  INSERT INTO public.gauges (organisation_id, asset_number, description, gauge_type_id)
+    SELECT a, 'SW-G1', 'Sweep caliper', id FROM public.gauge_types WHERE organisation_id = a;
+  INSERT INTO public.calibrations (organisation_id, gauge_id, reference, outcome)
+    SELECT a, id, 'SW-CAL-1', 'pass' FROM public.gauges WHERE organisation_id = a;
+  INSERT INTO public.calibration_readings (organisation_id, calibration_id, characteristic_id, name, nominal, tolerance_minus, tolerance_plus, unit_code, as_found)
+    SELECT a, c.id, k.id, k.name, k.nominal, k.tolerance_minus, k.tolerance_plus, k.unit_code, 25.01
+    FROM public.calibrations c JOIN public.gauge_characteristics k ON k.gauge_id = c.gauge_id WHERE c.organisation_id = a;
+  INSERT INTO public.calibration_attachments (organisation_id, calibration_id, storage_path, file_name, size_bytes)
+    SELECT a, id, a || '/calibration/' || id || '/cert.pdf', 'cert.pdf', 5 FROM public.calibrations WHERE organisation_id = a;
 
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));

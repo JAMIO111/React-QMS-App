@@ -90,6 +90,7 @@ const Navbar = () => {
                           title={subItem.name}
                           label={subItem.name}
                           path={subItem.path}
+                          end={!!subItem.end}
                           isFirst={index === 0}
                           isLast={index === item.subMenu?.length - 1}
                           closeMenu={closeMenu}

@@ -632,6 +632,29 @@ input:-webkit-autofill:active {
   appearance: none;
 }
 
+/* Chart colours (dataviz reference palette, validated for these card surfaces with
+   validate_palette.js). Series 1–3 are the NC types in fixed order: internal, customer, supplier.
+   Status colours are for severity only and always appear with a label. */
+:root,
+.light {
+  --chart-series-1: #2a78d6;
+  --chart-series-2: #eb6834;
+  --chart-series-3: #1baf7a;
+  --chart-grid: rgba(0, 0, 0, 0.08);
+}
+.dark {
+  --chart-series-1: #3987e5;
+  --chart-series-2: #d95926;
+  --chart-series-3: #199e70;
+  --chart-grid: rgba(255, 255, 255, 0.08);
+}
+:root {
+  --chart-critical: #d03b3b;
+  --chart-serious: #ec835a;
+  --chart-warning: #fab219;
+  --chart-neutral: #9a9a96;
+}
+
 /* The page behind the app (overscroll, loading screens, gaps) follows the theme, and native controls
    (select menus, scrollbars, date inputs) use the matching light/dark rendering. */
 html,

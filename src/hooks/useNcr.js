@@ -85,6 +85,18 @@ export const useNcrRanges = (source) => {
   });
 };
 
+/** NC dashboard figures for a period ({ source?, from, to } — YYYY-MM-DD). */
+export const useNcDashboard = ({ source, from, to }) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "dashboard", source ?? "all", from, to),
+    queryFn: () => apiFetch(`/ncr-dashboard?${toQuery({ source, from, to })}`, { organisationId }),
+    enabled: !!organisationId && !!from && !!to,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+};
+
 /** Costs of an NCR: { data, totals: { baseCurrency, net, gross, count } }. */
 export const useNcrCosts = (id, { deleted = "exclude" } = {}) => {
   const { organisationId } = useOrganisation();

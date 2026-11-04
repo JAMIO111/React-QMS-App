@@ -179,3 +179,31 @@ describe('attachments', () => {
     await api().post(`/api/v1/ncr-attachments/${fileId}/delete`).set(h).send({ reason: 'Late' }).expect(409);
   });
 });
+
+describe('NC dashboard', () => {
+  it('summarises the period: KPIs, trend, failure modes, stages, severity and parts', async () => {
+    const h = await as(ids.ownerA);
+    const today = new Date().toISOString().slice(0, 10);
+    const res = await api().get(`/api/v1/ncr-dashboard?source=internal&from=2026-10-01&to=${today}`).set(h).expect(200);
+    const d = res.body;
+    // ncr: detected 2026-10-05, minor and qty 1 (set by the locking test), £162.50, closed today.
+    // ncrAtB: detected 2026-11-01, minor, qty 3, £25, draft.
+    expect(d.kpis).toMatchObject({ raised: 2, open: 1, criticalOpen: 0, closed: 1, cost: 187.5, quantity: 4, raisedPrevious: 0, costPrevious: 0 });
+    expect(d.kpis.avgDaysToClose).toBeGreaterThan(0);
+    expect(d.baseCurrency).toBe('GBP');
+    expect(d.trend.reduce((t: number, b: { internal: number }) => t + b.internal, 0)).toBe(2);
+    expect(d.trend.every((b: { customer: number; supplier: number }) => b.customer === 0 && b.supplier === 0)).toBe(true);
+    expect(d.trend.reduce((t: number, b: { cost: number }) => t + b.cost, 0)).toBe(187.5);
+    expect(d.byFailureMode).toEqual([{ key: 'none', label: 'Not classified', count: 2 }]);
+    expect(d.byStage.find((s: { key: string }) => s.key === 'draft').count).toBe(1);
+    expect(d.bySeverity.map((s: { count: number }) => s.count)).toEqual([0, 0, 2, 0]);
+    expect(d.topParts).toEqual([]);
+
+    // The site-scoped user only counts their own site's NCR.
+    const site = await api().get(`/api/v1/ncr-dashboard?from=2026-10-01&to=${today}`).set(await as(SITE_USER)).expect(200);
+    expect(site.body.kpis).toMatchObject({ raised: 1, cost: 25 });
+
+    await api().get('/api/v1/ncr-dashboard?from=2026-12-01&to=2026-01-01').set(h).expect(400);
+    await api().get('/api/v1/ncr-dashboard').set(h).expect(400);
+  });
+});

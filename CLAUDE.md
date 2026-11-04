@@ -27,7 +27,8 @@ Summary of the brief:
   caller's JWT claims (RLS + audit apply). New data access must go through it. Deployed with the
   frontend to a Vercel dev environment from `Dev` (`docs/deployment-vercel.md`).
 - Routes in `src/main.jsx`; side menu in `src/MenuStructure.js`. Routed areas: Dashboard
-  (simple overview), Non-Conformance registers (`/Non-Conformance/:type` — Internal, Customer,
+  (simple overview), NC dashboard (`/Non-Conformance`, `NcDashboard.jsx`, data from `GET /ncr-dashboard?from&to&source`;
+  chart colours are the validated `--chart-*` variables in `src/index.css`), Non-Conformance registers (`/Non-Conformance/:type` — Internal, Customer,
   Supplier; NC form at `/Non-Conformance/:type/:id`, `new` creates; hooks in `src/hooks/useNcr.js`), Human Resources (employee list), Settings.
 - Holiday-let code was removed; it is preserved on branch `archive/holiday-let`.
 - Database schema is versioned in `supabase/migrations/`; the live project matches it (see

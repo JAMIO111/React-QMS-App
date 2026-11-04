@@ -16,6 +16,7 @@ import { EmployeesController, NcrClassificationsController, NcrController } from
 import { NcrService } from './ncr/ncr.service';
 import { NcrAttachmentsController, NcrChildRecordsController, NcrCostsController } from './ncr/ncr-records.controller';
 import { NcrRecordsService } from './ncr/ncr-records.service';
+import { NcrDashboardController, NcrDashboardService } from './ncr/ncr-dashboard';
 import { MeController } from './me/me.controller';
 import { MeService } from './me/me.service';
 import { InvitationMailer } from './members/invitation-mailer.service';
@@ -69,6 +70,7 @@ export class AppModule implements NestModule {
         NcrChildRecordsController,
         NcrCostsController,
         NcrAttachmentsController,
+        NcrDashboardController,
         NcrClassificationsController,
         EmployeesController,
       ],
@@ -80,6 +82,7 @@ export class AppModule implements NestModule {
         MasterDataService,
         NcrService,
         NcrRecordsService,
+        NcrDashboardService,
         OrganisationsService,
         StructureService,
         MembersService,

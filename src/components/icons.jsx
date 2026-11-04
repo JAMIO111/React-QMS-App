@@ -94,6 +94,8 @@ import {
   Wrench as LucideWrench,
   Coins as LucideCoins,
   Image as LucideImage,
+  Hourglass as LucideHourglass,
+  Table as LucideTable,
 } from "lucide-react";
 
 const withDefaults = (Icon) => {
@@ -197,3 +199,5 @@ export const TagsIcon = withDefaults(LucideTags);
 export const WrenchIcon = withDefaults(LucideWrench);
 export const CoinsIcon = withDefaults(LucideCoins);
 export const ImageIcon = withDefaults(LucideImage);
+export const HourglassIcon = withDefaults(LucideHourglass);
+export const TableIcon = withDefaults(LucideTable);

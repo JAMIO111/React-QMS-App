@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 
-const SubMenuItem = ({ closeMenu, label, isLast, isFirst, path }) => {
+const SubMenuItem = ({ closeMenu, label, isLast, isFirst, path, end = false }) => {
   return (
     <div
       className={`${
@@ -8,6 +8,7 @@ const SubMenuItem = ({ closeMenu, label, isLast, isFirst, path }) => {
       } flex flex-row items-center justify-start rounded-lg w-full h-8 pr-3`}>
       <NavLink
         to={path}
+        end={end}
         onClick={closeMenu}
         className={({ isActive }) =>
           `flex flex-row items-center justify-start w-full h-8 pr-3 pl-4 ${

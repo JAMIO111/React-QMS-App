@@ -228,8 +228,10 @@ describe('tenancy sweep over every API route', () => {
     const auth = { Authorization: `Bearer ${await token(ids.ownerB)}`, 'X-Organisation-Id': ids.orgB };
     const lists = ops.filter((o) => o.scoped && o.method === 'GET' && !o.path.includes('{id}'));
     const leaks: string[] = [];
+    // Routes that need query parameters get a valid set, so the tenant check is what is tested.
+    const listQuery: Record<string, string> = { '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31' };
     for (const op of lists) {
-      const res = await call(op, op.path, auth);
+      const res = await call(op, op.path + (listQuery[op.path] ?? ''), auth);
       expect(res.status).toBe(200);
       const text = JSON.stringify(res.body);
       for (const [name, id] of Object.entries(a)) if (text.includes(id)) leaks.push(`${op.path} contains A ${name}`);

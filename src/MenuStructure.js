@@ -11,8 +11,9 @@ export const menuStructure = [
     name: "Non-Conformance",
     icon: TriangleAlertIcon,
     permission: "ncr.read",
-    path: "/Non-Conformance/Internal",
+    path: "/Non-Conformance",
     subMenu: [
+      { name: "Dashboard", path: "/Non-Conformance", end: true },
       { name: "Internal", path: "/Non-Conformance/Internal" },
       { name: "Customer", path: "/Non-Conformance/Customer" },
       { name: "Supplier", path: "/Non-Conformance/Supplier" },

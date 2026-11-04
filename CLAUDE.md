@@ -108,6 +108,10 @@ Summary of the brief:
     with problems; one effective plan revision or refuse; part-specific values by `spec_key`, unit must match;
     conditional ones returned as not applicable). API `GET /control-plan-resolution`; `ResolutionView` /
     `RequirementPreview` on the plan and part pages. PC4 must call the resolver inside the create transaction.
+  - **PC3b done:** `part_customers` (several customers per part, customer part number, one primary;
+    `parts.customer_id` dropped — `customer` in the API is the primary); plan scope may name a single part
+    without a family; a plan for the part overrides family plans (resolver `scopeLevel`, `overriddenPlans`);
+    bulk family membership `POST /part-families/{id}/parts`.
   - **Next:** PC4 In-Process Inspection, PC5 NC link, PC6 SPC charts (I-MR, X-bar/R).
     Build in that order; charts only on traceable measurements.
 - NC register filters live in the URL (`FILTER_KEYS` in `src/hooks/useNCMFilters.jsx`); `/ncrs` takes
@@ -144,7 +148,7 @@ stages, soft delete, legacy NCM copy; NC registers and form on the API) are done
 attachments with the NC page in the original form layout (`ncr_costs`, `ncr_attachments`, `FileDrop`,
 `NcrCosts`) — see plan §9–§12;
 Calibration (Phase 4) was brought forward as a complete slice (`docs/calibration-plan.md`, migrations `20251106100000_calibration.sql`, `20251107100000_calibration_attributes.sql`; demo data `supabase/seed/calibration_demo.sql`);
-slices 2.2/2.3 are replaced by the process control plan (`docs/process-control-plan.md`); PC1–PC3 are done, next: PC4.
+slices 2.2/2.3 are replaced by the process control plan (`docs/process-control-plan.md`); PC1–PC3 and PC3b are done, next: PC4.
 The project still signs tokens with the legacy HS256 secret (JWKS endpoint is empty), so the API
 needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.
 

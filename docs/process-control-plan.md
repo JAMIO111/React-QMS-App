@@ -316,3 +316,38 @@ no failed API calls.
 **Next:** PC4 — In-Process Inspection: start an inspection (resolver + frozen snapshot), samples
 and measurements (unrounded values, unit equal to the requirement's, pass/fail by the database),
 gauge validation from Calibration, corrections and retests as new rows.
+
+## 12. Slice PC3b — scope and master-data refinements — done (2026-11-04)
+
+**Decisions (agreed 2026-11-04):** a plan for a single part **overrides** family plans for that part
+(two plans at the same level still block); parts can have **several customers**.
+
+**Database** (`20251108140000_scope_and_part_customers.sql`)
+- `part_customers` (part, customer, the customer's own part number, one primary — the first added
+  becomes primary, making another primary moves the flag, removing the primary promotes another).
+  Existing `parts.customer_id` links copied in as primary, then the column is dropped. The NC form
+  keeps its own customer (unchanged).
+- `control_plan_applicability.part_family_id` is optional when a part is named (check: family or
+  part). Only scope entries naming a part *with* its family stop the part changing family. Parts of
+  conditional characteristics may be in the family scope or named directly.
+- Resolver: candidates are plans naming the part or covering its family; if any plan in force names
+  the part, only those count (`scopeLevel: part`, `overriddenPlans` lists the family plans it
+  replaces); otherwise family plans; more than one at the chosen level → `ambiguous_plan`. A part
+  with no family resolves when a plan names it (standalone plans).
+
+**API:** parts gain `customers` (detail) and keep `customer` as the primary; `POST /parts/{id}/customers`,
+`PATCH|DELETE /part-customers/{id}`; part search also matches customer part numbers and the
+`customerId` filter covers every customer of a part. `POST /part-families/{id}/parts {add, remove}`
+(bulk; moving from another family allowed). Scope entries accept `partId` without `partFamilyId`;
+plan summaries list `parts` named on their own.
+
+**Frontend:** part page *Customers* card (add with their part number, make primary, remove); family
+page *Add parts* (search, multi-select, warns which parts move from another family) and remove per
+row; plan scope dialog chooses *A part family* or *A single part*; scope table and register show
+single-part entries ("overrides family plans"); the requirement view says when the part's own plan
+overrides a family plan.
+
+**Tests:** SQL `scope_and_part_customers.test.sql` (+ master data, resolver, sweep, guardrails);
+API e2e `scope-and-customers.e2e-spec.ts` + sweep over the new routes (140 e2e); frontend +3 (201).
+Browser check: add a part to a family in bulk, add two customers with part numbers, change the
+primary, find the part by the customer's part number — no console errors, no failed API calls.

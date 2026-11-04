@@ -108,6 +108,10 @@ const sampleBody = (op: Op): object | undefined =>
     'DELETE /api/v1/control-plan-applicability/{id}': undefined,
     'PATCH /api/v1/control-plan-revisions/{id}': { changeReason: 'Hijacked' },
     'POST /api/v1/control-plan-revisions/{id}/transitions': { action: 'obsolete', reason: 'Hijacked' },
+    'POST /api/v1/parts/{id}/customers': { customerId: a.customer },
+    'PATCH /api/v1/part-customers/{id}': { customerPartNumber: 'HIJACK' },
+    'DELETE /api/v1/part-customers/{id}': undefined,
+    'POST /api/v1/part-families/{id}/parts': { remove: [a.part] },
     'GET /api/v1/control-plan-revisions/{id}': undefined,
     'GET /api/v1/control-plan-revisions/{id}/comparison': undefined,
     'POST /api/v1/control-plan-revisions/{id}/operations': { operationCode: 'OP-99', name: 'Hijacked' },
@@ -188,6 +192,10 @@ const hasSample = (op: Op) =>
     'DELETE /api/v1/control-plan-applicability/{id}',
     'PATCH /api/v1/control-plan-revisions/{id}',
     'POST /api/v1/control-plan-revisions/{id}/transitions',
+    'POST /api/v1/parts/{id}/customers',
+    'PATCH /api/v1/part-customers/{id}',
+    'DELETE /api/v1/part-customers/{id}',
+    'POST /api/v1/part-families/{id}/parts',
     'GET /api/v1/control-plan-revisions/{id}',
     'GET /api/v1/control-plan-revisions/{id}/comparison',
     'POST /api/v1/control-plan-revisions/{id}/operations',
@@ -219,6 +227,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/gauge-type-characteristics/')) return a.typeCharacteristic;
   if (path.startsWith('/api/v1/calibrations/')) return a.calibration;
   if (path.startsWith('/api/v1/calibration-attachments/')) return a.calibrationAttachment;
+  if (path.startsWith('/api/v1/part-customers/')) return a.partCustomer;
   if (path.startsWith('/api/v1/machines/')) return a.machine;
   if (path.startsWith('/api/v1/part-families/')) return a.family;
   if (path.startsWith('/api/v1/part-revision-characteristics/')) return a.specValue;
@@ -272,6 +281,7 @@ beforeAll(async () => {
   a.gaugeCharacteristic = (await one('select id from public.gauge_characteristics where gauge_id = $1', [a.gauge])).id;
   a.calibration = (await one(`insert into public.calibrations (organisation_id, gauge_id, reference, outcome) values ($1, $2, 'A-CAL-1', 'fail') returning id`, [ids.orgA, a.gauge])).id;
   a.calibrationAttachment = (await one(`insert into public.calibration_attachments (organisation_id, calibration_id, storage_path, file_name, size_bytes) values ($1::uuid, $2::uuid, $1::text || '/calibration/' || $2::text || '/a.pdf', 'a.pdf', 1) returning id`, [ids.orgA, a.calibration])).id;
+  a.partCustomer = (await one(`insert into public.part_customers (organisation_id, part_id, customer_id, customer_part_number) values ($1, $2, $3, 'A-CPN') returning id`, [ids.orgA, a.part, a.customer])).id;
   a.machine = (await one(`insert into public.machines (organisation_id, code, name) values ($1, 'A-M1', 'Alpha machine') returning id`, [ids.orgA])).id;
   a.family = (await one(`insert into public.part_families (organisation_id, code, name) values ($1, 'A-FAM', 'Alpha family') returning id`, [ids.orgA])).id;
   a.specValue = (await one(`insert into public.part_revision_characteristics (organisation_id, part_revision_id, characteristic_key, nominal, unit_code) values ($1, $2, 'LENGTH', 10, 'mm') returning id`, [ids.orgA, a.draftRevision])).id;
@@ -370,6 +380,12 @@ describe('tenancy sweep over every API route', () => {
       machine: 'Alpha machine', family: 'Alpha family', spec: '10', plan: 'Alpha plan', scope: 1, revisions: 'draft/',
       operations: 'OP-10/Alpha op', characteristics: 'OD/Alpha OD', reactions: 0,
     });
+    const md = await admin.query(
+      `select (select string_agg(customer_part_number || '/' || is_primary, ',') from public.part_customers where part_id = $1) customers,
+              (select part_family_id::text from public.parts where id = $1) family`,
+      [a.part],
+    );
+    expect(md.rows[0]).toEqual({ customers: 'A-CPN/true', family: null });
   });
 
   it('never includes another organisation’s identifiers in list responses', async () => {

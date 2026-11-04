@@ -47,7 +47,7 @@ audited(relname) AS (VALUES
   ('machines'), ('part_families'), ('part_revision_characteristics'), ('control_plans'),
   ('control_plan_applicability'), ('control_plan_revisions'),
   ('control_plan_operations'), ('control_plan_characteristics'), ('characteristic_applicability'),
-  ('sampling_rules'), ('reaction_plans')
+  ('sampling_rules'), ('reaction_plans'), ('part_customers')
 )
 SELECT rule, object FROM (
   SELECT '1 rls disabled' AS rule, format('%I.%I', nspname, relname) AS object

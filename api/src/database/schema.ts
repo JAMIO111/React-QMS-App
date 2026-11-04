@@ -92,7 +92,6 @@ export const parts = pgTable('parts', {
   partNumber: text('part_number').notNull(),
   name: text('name').notNull(),
   description: text('description'),
-  customerId: uuid('customer_id'),
   partFamilyId: uuid('part_family_id'),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

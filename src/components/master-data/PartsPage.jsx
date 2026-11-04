@@ -120,8 +120,8 @@ const PartsPage = () => {
       },
       {
         id: "customer",
-        header: "Customer",
-        headerString: "Customer",
+        header: "Primary customer",
+        headerString: "Primary customer",
         size: 200,
         cell: ({ row }) => <span className="table-row-item">{row.original.customer ? row.original.customer.name : "—"}</span>,
       },

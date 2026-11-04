@@ -36,9 +36,10 @@ BEGIN
   org := app.create_organisation('Master Works', 'Main site', 'MAIN', NULL);
   INSERT INTO public.customers (organisation_id, code, name, display_name) VALUES (org, 'ACME', 'Acme Fabrication Ltd', 'Acme') RETURNING id INTO cust;
   INSERT INTO public.suppliers (organisation_id, code, name) VALUES (org, 'STEEL', 'Steel Supplies Ltd');
-  INSERT INTO public.parts (organisation_id, part_number, name, customer_id) VALUES (org, 'BRK-100', 'Bracket', cust) RETURNING id INTO part;
+  INSERT INTO public.parts (organisation_id, part_number, name) VALUES (org, 'BRK-100', 'Bracket') RETURNING id INTO part;
+  INSERT INTO public.part_customers (organisation_id, part_id, customer_id) VALUES (org, part, cust);
   PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.parts (organisation_id, part_number, name) VALUES (%L, 'brk-100', 'Duplicate')$q$, org), 'part numbers unique regardless of case');
-  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.parts (organisation_id, part_number, name, customer_id) VALUES (%L, 'X-1', 'X', %L)$q$, org, foreign_cust), 'cannot reference another organisation''s customer');
+  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.part_customers (organisation_id, part_id, customer_id) VALUES (%L, %L, %L)$q$, org, part, foreign_cust), 'cannot reference another organisation''s customer');
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.parts SET organisation_id = %L WHERE id = %L$q$, other, part), 'organisation_id cannot change');
   PERFORM pg_temp.assert_fails(format($q$DELETE FROM public.parts WHERE id = %L$q$, part), 'parts are deactivated, not deleted');
   INSERT INTO public.suppliers (organisation_id, code, name, created_by, created_at)

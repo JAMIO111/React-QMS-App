@@ -96,10 +96,13 @@ const ControlPlansPage = () => {
       { id: "title", accessorKey: "title", header: "Title", headerString: "Title", size: 300, cell: (i) => <span className="table-row-item">{i.getValue()}</span> },
       {
         id: "families",
-        header: "Families",
-        headerString: "Families",
-        size: 150,
-        cell: ({ row }) => <span className="table-row-item">{row.original.families.length ? row.original.families.join(", ") : "—"}</span>,
+        header: "Scope",
+        headerString: "Scope",
+        size: 180,
+        cell: ({ row }) => {
+          const scope = [...row.original.families, ...(row.original.parts ?? [])];
+          return <span className="table-row-item">{scope.length ? scope.join(", ") : "—"}</span>;
+        },
       },
       {
         id: "effectiveRevision",

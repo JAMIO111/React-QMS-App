@@ -33,6 +33,8 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   gauges_org_asset_number_key: 'A gauge with this asset number already exists',
   gauge_types_name_key: 'A gauge type with this name already exists',
   calibration_readings_one_per_characteristic: 'This characteristic already has a reading',
+  part_customers_key: 'This customer is already linked to the part',
+  control_plan_applicability_target: 'Choose a part family or a part',
   machines_org_code_key: 'A machine with this code already exists',
   part_families_org_code_key: 'A part family with this code already exists',
   part_revision_characteristics_key: 'This revision already has a value for that characteristic key',

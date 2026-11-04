@@ -40,6 +40,12 @@ const ResolutionView = ({ resolution: r, showPlanLink = true }) => {
             {r.operationCode ? ` · ${r.operationCode}` : ""}
             {!blocked && ` · ${applicable} check${applicable === 1 ? "" : "s"}`}
           </span>
+          {!blocked && r.scopeLevel === "part" && (
+            <span className="text-xs text-secondary-text">
+              Plan for this part
+              {r.overriddenPlans?.length ? `; overrides the family plan${r.overriddenPlans.length > 1 ? "s" : ""} ${r.overriddenPlans.map((p) => p.planCode).join(", ")}` : ""}
+            </span>
+          )}
           {blocked && (
             <ul className="list-disc pl-5">
               {r.problems.map((p, i) => (

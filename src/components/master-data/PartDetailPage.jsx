@@ -8,10 +8,10 @@ import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useMasterDataMutation, usePart } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
-import { CustomerSelect } from "./PartsPage";
 import { ActiveBadge, buttonClass, ErrorNotice, SelectField } from "./shared";
 import { usePartFamilies } from "../../hooks/useProcessControl";
 import SpecValues from "./SpecValues";
+import PartCustomers from "./PartCustomers";
 import RequirementPreview from "../process-control/RequirementPreview";
 
 const STATUS_STYLE = {
@@ -34,7 +34,6 @@ const PartDetails = ({ part, canManage }) => {
     partNumber: p.partNumber,
     name: p.name,
     description: p.description ?? "",
-    customerId: p.customer?.id ?? null,
     partFamilyId: p.partFamily?.id ?? null,
     active: p.active,
   });
@@ -52,7 +51,6 @@ const PartDetails = ({ part, canManage }) => {
           partNumber: form.partNumber.trim(),
           name: form.name.trim(),
           description: form.description.trim(),
-          customerId: form.customerId,
           partFamilyId: form.partFamilyId,
           active: form.active,
         },
@@ -67,18 +65,6 @@ const PartDetails = ({ part, canManage }) => {
         <Field label="Part number" value={form.partNumber} onChange={set("partNumber")} disabled={!canManage} required maxLength={60} />
         <Field label="Name" value={form.name} onChange={set("name")} disabled={!canManage} required maxLength={200} />
         <Field label="Description" value={form.description} onChange={set("description")} disabled={!canManage} maxLength={2000} className="md:col-span-2" />
-        <div className="flex flex-col gap-1">
-          <label htmlFor="part-customer" className="text-sm font-medium text-primary-text">
-            Customer
-          </label>
-          {canManage ? (
-            <CustomerSelect id="part-customer" value={form.customerId} onChange={(v) => setForm((f) => ({ ...f, customerId: v }))} />
-          ) : (
-            <p id="part-customer" className="py-2 text-primary-text">
-              {part.customer?.name ?? "—"}
-            </p>
-          )}
-        </div>
         {canManage ? (
           <SelectField
             label="Part family"
@@ -203,7 +189,7 @@ const Revisions = ({ part, canManage }) => {
         <p className="text-sm text-secondary-text">No revisions yet. Add one, then release it when the drawing is approved.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] border-separate border-spacing-0 text-sm text-primary-text">
+          <table className="w-full min-w-[640px] border-separate border-spacing-0 text-sm text-primary-text" aria-label="Revisions">
             <thead>
               <tr className="text-left text-secondary-text">
                 <th scope="col" className="border-b border-border-color px-2 py-2 font-normal">Revision</th>
@@ -283,6 +269,7 @@ const PartDetailPage = () => {
             </span>
           </div>
           <PartDetails part={part} canManage={canManage} />
+          <PartCustomers part={part} canManage={canManage} />
           <Revisions part={part} canManage={canManage} />
           <SpecValues part={part} canManage={canManage} />
           {can("process_control.read") && (

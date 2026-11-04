@@ -15,6 +15,7 @@ import {
   CreatePartFamilyBody,
   CreatePlanRevisionBody,
   CreateSpecValueBody,
+  FamilyMembershipBody,
   HistoryEntry,
   Machine,
   MachineListQuery,
@@ -119,6 +120,16 @@ export class PartFamiliesController {
   @ApiOkResponse({ schema: openApiSchema(PartFamilyDetail) })
   get(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.getFamily(ctx, parse(Uuid, id));
+  }
+
+  /** Add parts to the family (moving them from another family) and/or take parts out of it. */
+  @Post(':id/parts')
+  @HttpCode(200)
+  @OrganisationScoped(MD_MANAGE)
+  @ApiBody({ schema: openApiSchema(FamilyMembershipBody) })
+  @ApiOkResponse({ schema: openApiSchema(PartFamilyDetail) })
+  changeMembers(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.changeFamilyMembers(ctx, parse(Uuid, id), parse(FamilyMembershipBody, body));
   }
 
   @Patch(':id')

@@ -86,6 +86,8 @@ BEGIN
   UPDATE public.parts SET part_family_id = (SELECT id FROM public.part_families WHERE organisation_id = a) WHERE organisation_id = a AND part_number = 'SW-P1';
   INSERT INTO public.part_revision_characteristics (organisation_id, part_revision_id, characteristic_key, nominal, lower_limit, upper_limit, unit_code)
     SELECT a, id, 'LENGTH', 100, 99.9, 100.1, 'mm' FROM public.part_revisions WHERE organisation_id = a;
+  INSERT INTO public.part_customers (organisation_id, part_id, customer_id, customer_part_number)
+    SELECT a, p.id, c.id, 'CUST-PN-1' FROM public.parts p, public.customers c WHERE p.organisation_id = a AND p.part_number = 'SW-P1' AND c.organisation_id = a AND c.code = 'SWC';
   INSERT INTO public.control_plans (organisation_id, plan_code, title) VALUES (a, 'SW-CP-1', 'Sweep plan');
   INSERT INTO public.control_plan_applicability (organisation_id, control_plan_id, part_family_id)
     SELECT a, p.id, f.id FROM public.control_plans p, public.part_families f WHERE p.organisation_id = a AND f.organisation_id = a;

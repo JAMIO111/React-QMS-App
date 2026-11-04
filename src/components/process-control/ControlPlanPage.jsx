@@ -10,11 +10,11 @@ import PeoplePicker from "../calibration/PeoplePicker";
 import { useConfirm } from "../../contexts/ConfirmationModalProvider";
 import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions, useSites } from "../../hooks/useQmsApi";
-import { useParts } from "../../hooks/useMasterData";
 import { useControlPlan, usePartFamilies, useProcessControlMutation } from "../../hooks/useProcessControl";
 import { describeApiError } from "../../lib/api-client";
 import { ActiveBadge, buttonClass, ErrorNotice, FormError, SelectField, TextAreaField } from "../master-data/shared";
 import ControlPlanHistory from "./ControlPlanHistory";
+import { PartPicker } from "../ncr/Pickers";
 import RequirementPreview from "./RequirementPreview";
 import { formatDate, formatDateTime } from "../../lib/processControl";
 import { RevisionStatusPill } from "./shared";
@@ -77,15 +77,20 @@ const AddScopeForm = ({ plan, onDone }) => {
   const mutation = useProcessControlMutation();
   const families = usePartFamilies();
   const sites = useSites();
-  const [form, setForm] = useState({ partFamilyId: plan.applicability[0]?.partFamily.id ?? null, partId: null, siteId: null, operationCode: "" });
-  const parts = useParts({ partFamilyId: form.partFamilyId ?? undefined });
+  const firstFamily = plan.applicability.find((a) => a.partFamily)?.partFamily.id ?? null;
+  const [form, setForm] = useState({ target: "family", partFamilyId: firstFamily, partId: null, part: null, siteId: null, operationCode: "" });
+  const ready = form.target === "family" ? !!form.partFamilyId : !!form.partId;
 
   const submit = (e) => {
     e.preventDefault();
     mutation.mutate(
       {
         path: `/control-plans/${plan.id}/applicability`,
-        body: { partFamilyId: form.partFamilyId, partId: form.partId, siteId: form.siteId, operationCode: form.operationCode.trim() || null },
+        body: {
+          ...(form.target === "family" ? { partFamilyId: form.partFamilyId } : { partId: form.partId }),
+          siteId: form.siteId,
+          operationCode: form.operationCode.trim() || null,
+        },
       },
       { onSuccess: onDone }
     );
@@ -93,23 +98,33 @@ const AddScopeForm = ({ plan, onDone }) => {
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
-      <SelectField
-        label="Part family"
-        required
-        placeholder="Choose a family"
-        value={form.partFamilyId}
-        onChange={(v) => setForm((f) => ({ ...f, partFamilyId: v, partId: null }))}
-        options={(families.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} · ${f.name}` }))}
-      />
-      <SelectField
-        label="Part"
-        placeholder="All parts in the family"
-        value={form.partId}
-        disabled={!form.partFamilyId}
-        onChange={(v) => setForm((f) => ({ ...f, partId: v }))}
-        options={(parts.data?.items ?? []).map((p) => ({ value: p.id, label: `${p.partNumber} · ${p.name}` }))}
-        hint="Narrow the plan to one part of the family (optional)"
-      />
+      <div role="radiogroup" aria-label="Applies to" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {[
+          { value: "family", label: "A part family", hint: "Every part in the family." },
+          { value: "part", label: "A single part", hint: "Overrides family plans for that part; works for parts without a family." },
+        ].map((o) => (
+          <label
+            key={o.value}
+            className={`flex cursor-pointer flex-col gap-1 rounded-lg border p-2 text-sm ${form.target === o.value ? "border-brand-primary bg-brand-primary/10" : "border-border-color"}`}>
+            <span className="flex items-center gap-2 font-medium text-primary-text">
+              <input type="radio" name="target" checked={form.target === o.value} onChange={() => setForm((f) => ({ ...f, target: o.value }))} /> {o.label}
+            </span>
+            <span className="text-xs text-secondary-text">{o.hint}</span>
+          </label>
+        ))}
+      </div>
+      {form.target === "family" ? (
+        <SelectField
+          label="Part family"
+          required
+          placeholder="Choose a family"
+          value={form.partFamilyId}
+          onChange={(v) => setForm((f) => ({ ...f, partFamilyId: v }))}
+          options={(families.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} · ${f.name}` }))}
+        />
+      ) : (
+        <PartPicker label="Part" required value={form.partId} current={form.part} onChange={(id, item) => setForm((f) => ({ ...f, partId: id ?? null, part: item ?? null }))} />
+      )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <SelectField
           label="Site"
@@ -125,7 +140,7 @@ const AddScopeForm = ({ plan, onDone }) => {
         <button type="button" className={buttonClass.neutral} onClick={onDone}>
           Cancel
         </button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !form.partFamilyId}>
+        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !ready}>
           {mutation.isPending ? "Adding…" : "Add scope"}
         </button>
       </div>
@@ -142,7 +157,7 @@ const Scope = ({ plan, canManage }) => {
   const remove = async (a) => {
     const ok = await confirm({
       title: "Remove this scope entry?",
-      message: `${a.partFamily.code}${a.part ? ` · ${a.part.partNumber}` : ""} will no longer be covered by this entry.`,
+      message: `${[a.partFamily?.code, a.part?.partNumber].filter(Boolean).join(" · ")} will no longer be covered by this entry.`,
       confirmText: "Remove",
       cancelText: "Cancel",
       type: "warning",
@@ -157,7 +172,7 @@ const Scope = ({ plan, canManage }) => {
   return (
     <MenuCard
       title="Scope"
-      subtitle="Where the plan applies: a part family, optionally narrowed to a part, site or operation."
+      subtitle="Where the plan applies: part families and/or single parts, optionally for one site or operation. A plan for a single part overrides family plans for it."
       bodyClassName="overflow-x-auto"
       action={
         canManage && (
@@ -167,7 +182,7 @@ const Scope = ({ plan, canManage }) => {
         )
       }>
       {plan.applicability.length === 0 ? (
-        <p className="text-sm text-secondary-text">No scope yet: the plan does not apply to any part. Add a part family.</p>
+        <p className="text-sm text-secondary-text">No scope yet: the plan does not apply to any part. Add a part family or a single part.</p>
       ) : (
         <table className="w-full min-w-[560px] border-separate border-spacing-0 text-sm text-primary-text" aria-label="Scope">
           <thead>
@@ -183,12 +198,29 @@ const Scope = ({ plan, canManage }) => {
             {plan.applicability.map((a) => (
               <tr key={a.id}>
                 <td className={td}>
-                  <Link to={`/Part-Families/${a.partFamily.id}`} className="text-link-color hover:underline">
-                    {a.partFamily.code}
-                  </Link>{" "}
-                  <span className="text-secondary-text">· {a.partFamily.name}</span>
+                  {a.partFamily ? (
+                    <>
+                      <Link to={`/Part-Families/${a.partFamily.id}`} className="text-link-color hover:underline">
+                        {a.partFamily.code}
+                      </Link>{" "}
+                      <span className="text-secondary-text">· {a.partFamily.name}</span>
+                    </>
+                  ) : (
+                    <span className="text-secondary-text">Single part</span>
+                  )}
                 </td>
-                <td className={td}>{a.part ? <Link to={`/Parts/${a.part.id}`} className="text-link-color hover:underline">{a.part.partNumber}</Link> : "All parts"}</td>
+                <td className={td}>
+                  {a.part ? (
+                    <>
+                      <Link to={`/Parts/${a.part.id}`} className="text-link-color hover:underline">
+                        {a.part.partNumber}
+                      </Link>
+                      <span className="ml-2 text-xs text-secondary-text">overrides family plans</span>
+                    </>
+                  ) : (
+                    "All parts"
+                  )}
+                </td>
                 <td className={td}>{a.site?.name ?? "All sites"}</td>
                 <td className={`${td} font-mono`}>{a.operationCode ?? <span className="font-sans">All</span>}</td>
                 {canManage && (

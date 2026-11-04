@@ -17,6 +17,7 @@ import {
   CreatePartFamilyBody,
   CreatePlanRevisionBody,
   CreateSpecValueBody,
+  FamilyMembershipBody,
   HistoryEntry,
   Machine,
   MachineListQuery,
@@ -99,7 +100,7 @@ const toRevision = (r: Row): PlanRevision => ({
 });
 const toApplicability = (r: Row): Applicability => ({
   id: r.id as string,
-  partFamily: { id: r.part_family_id as string, code: r.family_code as string, name: r.family_name as string },
+  partFamily: r.part_family_id ? { id: r.part_family_id as string, code: r.family_code as string, name: r.family_name as string } : null,
   part: r.part_id ? { id: r.part_id as string, partNumber: r.part_number as string } : null,
   site: r.site_id ? { id: r.site_id as string, name: r.site_name as string } : null,
   operationCode: (r.operation_code as string) ?? null,
@@ -112,6 +113,7 @@ const toPlanSummary = (r: Row): ControlPlanSummary => ({
   owner: person(r.owner_id, r.owner_name),
   active: r.active as boolean,
   families: (r.families as string[]) ?? [],
+  parts: (r.parts as string[]) ?? [],
   effectiveRevision: (r.effective_revision as string) ?? null,
   openRevision: r.open_code ? { revisionCode: r.open_code as string, status: r.open_status as PlanRevision['status'] } : null,
   updatedAt: iso(r.updated_at)!,
@@ -122,6 +124,8 @@ const PLAN_SELECT = `
          greatest(p.updated_at, (select max(r.updated_at) from public.control_plan_revisions r where r.control_plan_id = p.id)) as updated_at,
          (select array_agg(distinct f.code order by f.code) from public.control_plan_applicability a
             join public.part_families f on f.id = a.part_family_id where a.control_plan_id = p.id) as families,
+         (select array_agg(distinct pt.part_number order by pt.part_number) from public.control_plan_applicability a
+            join public.parts pt on pt.id = a.part_id where a.control_plan_id = p.id and a.part_family_id is null) as parts,
          (select r.revision_code from public.control_plan_revisions r where r.control_plan_id = p.id and r.status = 'effective') as effective_revision,
          o.revision_code as open_code, o.status as open_status
   from public.control_plans p
@@ -221,6 +225,30 @@ export class ProcessControlService {
       const result = await db.execute(sql`update public.part_families set ${sql.join(assignments(body, FAMILY_COLUMNS), sql`, `)}
         where id = ${id}::uuid and organisation_id = ${orgOf(ctx)}::uuid returning id`);
       if (!result.rows.length) throw ApiError.notFound('part_family_not_found', 'Part family not found');
+      return this.loadFamily(db, ctx, id);
+    });
+  }
+
+  /**
+   * Bulk family membership: `add` moves the parts into this family (from none or another family),
+   * `remove` takes them out. The database refuses a part a control plan names with its family.
+   */
+  changeFamilyMembers(ctx: RequestContext, id: string, body: z.infer<typeof FamilyMembershipBody>): Promise<PartFamilyDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.loadFamily(db, ctx, id); // 404 when not visible
+      const org = orgOf(ctx);
+      if (body.add?.length) {
+        const known = await db.execute<{ n: string }>(sql`select count(*) as n from public.parts
+          where organisation_id = ${org}::uuid and id = any(string_to_array(${body.add.join(',')}, ',')::uuid[])`);
+        if (Number(known.rows[0].n) !== new Set(body.add).size) throw ApiError.badRequest('invalid_reference', 'A part to add was not found');
+        await db.execute(sql`update public.parts set part_family_id = ${id}::uuid
+          where organisation_id = ${org}::uuid and id = any(string_to_array(${body.add.join(',')}, ',')::uuid[])
+            and part_family_id is distinct from ${id}::uuid`);
+      }
+      if (body.remove?.length) {
+        await db.execute(sql`update public.parts set part_family_id = null
+          where organisation_id = ${org}::uuid and part_family_id = ${id}::uuid and id = any(string_to_array(${body.remove.join(',')}, ',')::uuid[])`);
+      }
       return this.loadFamily(db, ctx, id);
     });
   }
@@ -359,7 +387,7 @@ export class ProcessControlService {
     return this.database.asUser(ctx, async (db) => {
       await this.loadPlan(db, ctx, planId);
       await db.execute(sql`insert into public.control_plan_applicability (organisation_id, control_plan_id, part_family_id, part_id, site_id, operation_code)
-        values (${orgOf(ctx)}::uuid, ${planId}::uuid, ${body.partFamilyId}::uuid, ${body.partId ?? null}::uuid, ${body.siteId ?? null}::uuid, ${body.operationCode ?? null})`);
+        values (${orgOf(ctx)}::uuid, ${planId}::uuid, ${body.partFamilyId ?? null}::uuid, ${body.partId ?? null}::uuid, ${body.siteId ?? null}::uuid, ${body.operationCode ?? null})`);
       return this.loadPlan(db, ctx, planId);
     });
   }
@@ -492,15 +520,15 @@ export class ProcessControlService {
     const applicability = await db.execute<Row>(sql`
       select a.*, f.code as family_code, f.name as family_name, pt.part_number, s.name as site_name
       from public.control_plan_applicability a
-      join public.part_families f on f.id = a.part_family_id
+      left join public.part_families f on f.id = a.part_family_id
       left join public.parts pt on pt.id = a.part_id
       left join public.sites s on s.id = a.site_id
       where a.control_plan_id = ${id}::uuid
-      order by upper(f.code), pt.part_number nulls first, s.name nulls first, a.operation_code nulls first`);
+      order by upper(f.code) nulls last, pt.part_number nulls first, s.name nulls first, a.operation_code nulls first`);
     const revisions = await db.execute<Row>(sql`${sql.raw(REVISION_SELECT)} where r.control_plan_id = ${id}::uuid
       order by r.created_at desc, r.revision_code desc`);
     const scope = await db.execute<Row>(sql`select distinct p.id, p.part_number, p.name from public.control_plan_applicability a
-      join public.parts p on p.part_family_id = a.part_family_id and (a.part_id is null or a.part_id = p.id)
+      join public.parts p on p.id = a.part_id or (a.part_id is null and p.part_family_id = a.part_family_id)
       where a.control_plan_id = ${id}::uuid and p.active order by p.part_number`);
     return {
       ...toPlanSummary(result.rows[0]),

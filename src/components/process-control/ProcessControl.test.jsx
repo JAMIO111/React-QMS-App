@@ -245,6 +245,7 @@ describe("Part specification values", () => {
     partFamily: { id: "f1", code: "HCR", name: "Rods" },
     active: true,
     currentRevision: "A",
+    customers: [],
     revisions: [
       { id: "r2", partId: "p1", revision: "B", drawingRef: null, changeSummary: null, status: "draft", releasedAt: null, createdAt: "2026-11-04T10:00:00Z" },
       { id: "r1", partId: "p1", revision: "A", drawingRef: null, changeSummary: null, status: "released", releasedAt: "2026-11-01T10:00:00Z", createdAt: "2026-11-01T10:00:00Z" },
@@ -449,5 +450,85 @@ describe("Requirement preview", () => {
     await userEvent.selectOptions(await screen.findByLabelText("Part"), "p1");
     expect(await screen.findByText("An inspection could not start")).toBeInTheDocument();
     expect(screen.getByText(/More than one control plan applies/)).toBeInTheDocument();
+  });
+});
+
+describe("Part customers, family membership and single-part scope", () => {
+  const partDetail = {
+    id: "p1",
+    partNumber: "HCR-100",
+    name: "Rod 100",
+    description: null,
+    customer: { id: "c1", code: "ACME", name: "Acme" },
+    partFamily: null,
+    active: true,
+    currentRevision: null,
+    revisions: [],
+    customers: [{ id: "pc1", customer: { id: "c1", code: "ACME", name: "Acme" }, customerPartNumber: null, isPrimary: true }],
+  };
+
+  it("adds a customer with their part number, not offering ones already linked", async () => {
+    const sent = [];
+    routeApi({
+      "GET /parts/p1": partDetail,
+      "GET /part-families": page([]),
+      "GET /control-plan-resolution": { status: "blocked", problems: [{ code: "no_family", message: "x" }], part: partDetail, requirements: [], overriddenPlans: [], candidatePlans: [] },
+      "GET /customers": page([
+        { id: "c1", code: "ACME", name: "Acme", displayName: null, active: true },
+        { id: "c2", code: "BETA", name: "Beta", displayName: null, active: true },
+      ]),
+      "POST /parts/p1/customers": (_p, opts) => (sent.push(opts.body), partDetail),
+      "PATCH /part-customers/pc1": (_p, opts) => (sent.push(opts.body), partDetail),
+    });
+    renderAt("/Parts/p1");
+    const card = await screen.findByRole("table", { name: "Customers" });
+    expect(within(card).getByText("Primary")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Add customer" }));
+    const dialog = screen.getByRole("dialog");
+    // Customers already linked are not offered again.
+    expect(within(dialog).queryByRole("option", { name: "ACME · Acme" })).toBeNull();
+    await userEvent.selectOptions(await within(dialog).findByLabelText("Customer"), "c2");
+    await userEvent.type(within(dialog).getByLabelText("Customer's part number"), "B-55012");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add customer" }));
+    expect(sent[0]).toEqual({ customerId: "c2", customerPartNumber: "B-55012" });
+  });
+
+  it("adds parts to a family, saying which ones move from another family", async () => {
+    let body;
+    const family = { id: "f1", code: "HCR", name: "Rods", description: null, active: true, partCount: 0, planCount: 0, parts: [], plans: [] };
+    routeApi({
+      "GET /part-families/f1": family,
+      "GET /parts": page([
+        { id: "p1", partNumber: "HCR-100", name: "Rod 100", partFamily: null, active: true },
+        { id: "p2", partNumber: "HCR-200", name: "Rod 200", partFamily: { id: "f9", code: "OLD", name: "Old" }, active: true },
+      ]),
+      "POST /part-families/f1/parts": (_p, opts) => ((body = opts.body), family),
+    });
+    renderAt("/Part-Families/f1");
+    await userEvent.click(await screen.findByRole("button", { name: "Add parts" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.click(await within(dialog).findByRole("checkbox", { name: /HCR-100/ }));
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: /HCR-200/ }));
+    expect(within(dialog).getByText(/HCR-200 moves from another family into HCR/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add 2 parts" }));
+    expect(body).toEqual({ add: ["p1", "p2"] });
+  });
+
+  it("scopes a plan to a single part", async () => {
+    let body;
+    routeApi({
+      "GET /control-plans/cp1": { ...plan([rev({})]), scopeParts: [] },
+      "GET /part-families": page([]),
+      "GET /parts": page([{ id: "p7", partNumber: "SPECIAL-1", name: "One-off", partFamily: null, active: true }]),
+      "POST /control-plans/cp1/applicability": (_p, opts) => ((body = opts.body), { ...plan([rev({})]), scopeParts: [] }),
+    });
+    renderAt("/Process-Control/Plans/cp1");
+    await userEvent.click(await screen.findByRole("button", { name: "Add scope" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("radio", { name: /A single part/ }));
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Part/ }));
+    await userEvent.click(await within(dialog).findByRole("option", { name: /SPECIAL-1/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add scope" }));
+    expect(body).toEqual({ partId: "p7", siteId: null, operationCode: null });
   });
 });

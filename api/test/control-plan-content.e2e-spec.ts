@@ -212,6 +212,6 @@ describe('requirement resolution', () => {
     await api().get('/api/v1/control-plan-resolution').set(h).expect(400);
     await api().get(`/api/v1/control-plan-resolution?partId=${ids.orgB}`).set(h).expect(404);
     const lone = (await api().get(`/api/v1/control-plan-resolution?partId=${ctx.outside}`).set(h).expect(200)).body;
-    expect(lone.problems[0]).toMatchObject({ code: 'no_family', message: 'Part OTHER is not in a part family, so no control plan applies to it' });
+    expect(lone.problems.find((p: { code: string }) => p.code === 'no_family')).toMatchObject({ message: 'Part OTHER is not in a part family and no control plan names it' });
   });
 });

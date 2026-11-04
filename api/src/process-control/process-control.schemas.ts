@@ -185,7 +185,8 @@ export type PlanRevision = z.infer<typeof PlanRevision>;
 
 export const Applicability = z.object({
   id: z.string().uuid(),
-  partFamily: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }),
+  /** Empty when the entry names a single part on its own (a standalone or overriding plan). */
+  partFamily: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }).nullable(),
   part: z.object({ id: z.string().uuid(), partNumber: z.string() }).nullable(),
   site: Ref.nullable(),
   operationCode: z.string().nullable(),
@@ -200,6 +201,8 @@ export const ControlPlanSummary = z.object({
   owner: Ref.nullable(),
   active: z.boolean(),
   families: z.array(z.string()),
+  /** Part numbers the plan names on their own (part-specific plans override family plans). */
+  parts: z.array(z.string()),
   effectiveRevision: z.string().nullable(),
   /** The working copy (draft or under review), if any. */
   openRevision: z.object({ revisionCode: z.string(), status: PlanRevisionStatus }).nullable(),
@@ -242,14 +245,19 @@ export const UpdateControlPlanBody = updateOf({
   ownerId: planFields.ownerId,
   active: z.boolean().optional(),
 });
+/**
+ * A family (optionally narrowed to one of its parts), or a single part on its own. A plan for the
+ * part itself overrides family plans for that part.
+ */
 export const CreateApplicabilityBody = z
   .object({
-    partFamilyId: z.string().uuid(),
+    partFamilyId: z.string().uuid().nullable().optional(),
     partId: z.string().uuid().nullable().optional(),
     siteId: z.string().uuid().nullable().optional(),
     operationCode: OperationCode.nullable().optional(),
   })
-  .strict();
+  .strict()
+  .refine((b) => !!b.partFamilyId || !!b.partId, { message: 'Choose a part family or a part' });
 export const CreatePlanRevisionBody = z
   .object({ revisionCode: RevisionCode, changeReason: optionalText(2000), effectiveFrom: NullableIso.optional() })
   .strict();
@@ -477,8 +485,20 @@ export const Resolution = z.object({
   siteId: z.string().uuid().nullable(),
   plan: z.object({ id: z.string().uuid(), planCode: z.string(), title: z.string() }).nullable(),
   planRevision: z.object({ id: z.string().uuid(), revisionCode: z.string() }).nullable(),
+  /** "part": the plan names this part; "family": it covers the part's family. */
+  scopeLevel: z.enum(['part', 'family']).nullable(),
+  /** Family plans in force that the part's own plan overrides. */
+  overriddenPlans: z.array(z.object({ id: z.string().uuid(), planCode: z.string(), revisionCode: z.string() })),
   /** Plans whose scope covers the part (revisionId null: no effective revision). */
-  candidatePlans: z.array(z.object({ id: z.string().uuid(), planCode: z.string(), title: z.string(), revisionId: z.string().uuid().nullable(), revisionCode: z.string().nullable() })),
+  candidatePlans: z.array(
+    z.object({ id: z.string().uuid(), planCode: z.string(), title: z.string(), revisionId: z.string().uuid().nullable(), revisionCode: z.string().nullable(), level: z.enum(['part', 'family']) }),
+  ),
   requirements: z.array(Requirement),
 });
 export type Resolution = z.infer<typeof Resolution>;
+
+/** Add parts to a family and/or take parts out of it, in one go. */
+export const FamilyMembershipBody = z
+  .object({ add: z.array(z.string().uuid()).max(500).optional(), remove: z.array(z.string().uuid()).max(500).optional() })
+  .strict()
+  .refine((b) => (b.add?.length ?? 0) + (b.remove?.length ?? 0) > 0, { message: 'Choose parts to add or remove' });

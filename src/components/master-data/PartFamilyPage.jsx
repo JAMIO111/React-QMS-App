@@ -1,12 +1,74 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeftIcon, PencilIcon } from "@/components/icons";
+import { ArrowLeftIcon, PencilIcon, PlusIcon, Trash2Icon } from "@/components/icons";
 import Dialog from "../ui/Dialog";
 import MenuCard from "../ui/MenuCard";
 import { usePermissions } from "../../hooks/useQmsApi";
-import { usePartFamily } from "../../hooks/useProcessControl";
+import { usePartFamily, useProcessControlMutation } from "../../hooks/useProcessControl";
+import { useParts } from "../../hooks/useMasterData";
+import { useConfirm } from "../../contexts/ConfirmationModalProvider";
+import { useToast } from "../../contexts/ToastProvider";
+import { describeApiError } from "../../lib/api-client";
 import { PartFamilyForm } from "./PartFamiliesPage";
-import { ActiveBadge, buttonClass, ErrorNotice } from "./shared";
+import { ActiveBadge, buttonClass, ErrorNotice, FormError, SearchBox } from "./shared";
+
+/** Choose parts to add to the family; parts in another family are moved (shown with their family). */
+const AddPartsForm = ({ family, onDone }) => {
+  const mutation = useProcessControlMutation();
+  const [q, setQ] = useState("");
+  const onSearch = useCallback((v) => setQ(v), []);
+  const parts = useParts({ q });
+  const [chosen, setChosen] = useState([]);
+  const candidates = (parts.data?.items ?? []).filter((p) => p.partFamily?.id !== family.id);
+  const moving = candidates.filter((p) => chosen.includes(p.id) && p.partFamily);
+
+  const submit = (e) => {
+    e.preventDefault();
+    mutation.mutate({ path: `/part-families/${family.id}/parts`, body: { add: chosen } }, { onSuccess: onDone });
+  };
+
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-3">
+      <SearchBox label="Search part number, name or customer part number" onSearch={onSearch} />
+      <div className="max-h-72 overflow-y-auto rounded-lg border border-border-color p-2" role="group" aria-label="Parts">
+        {parts.isLoading && <p className="text-sm text-secondary-text">Loading…</p>}
+        {!parts.isLoading && candidates.length === 0 && <p className="text-sm text-secondary-text">No other parts match.</p>}
+        {candidates.map((p) => (
+          <label key={p.id} className="flex items-center gap-2 py-1 text-sm text-primary-text">
+            <input
+              type="checkbox"
+              checked={chosen.includes(p.id)}
+              onChange={(e) => setChosen((c) => (e.target.checked ? [...c, p.id] : c.filter((x) => x !== p.id)))}
+            />
+            <span className="font-mono">{p.partNumber}</span>
+            <span className="text-secondary-text">· {p.name}</span>
+            {p.partFamily && <span className="ml-auto text-xs text-secondary-text">now in {p.partFamily.code}</span>}
+          </label>
+        ))}
+        {parts.hasNextPage && (
+          <button type="button" className={`${buttonClass.neutral} mt-2`} onClick={() => parts.fetchNextPage()}>
+            Load more
+          </button>
+        )}
+      </div>
+      {moving.length > 0 && (
+        <p className="text-sm text-primary-text">
+          {moving.length === 1 ? `${moving[0].partNumber} moves` : `${moving.length} parts move`} from another family into {family.code}; that family's control plans
+          will no longer apply to {moving.length === 1 ? "it" : "them"}.
+        </p>
+      )}
+      <FormError error={mutation.error} />
+      <div className="flex justify-end gap-2">
+        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+          Cancel
+        </button>
+        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || chosen.length === 0}>
+          {mutation.isPending ? "Adding…" : chosen.length ? `Add ${chosen.length} part${chosen.length === 1 ? "" : "s"}` : "Add parts"}
+        </button>
+      </div>
+    </form>
+  );
+};
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2";
@@ -19,6 +81,24 @@ const PartFamilyPage = () => {
   const canSeePlans = can("process_control.read");
   const { data: family, isLoading, error } = usePartFamily(id);
   const [editing, setEditing] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const membership = useProcessControlMutation();
+  const confirm = useConfirm();
+  const { showToast } = useToast();
+  const removePart = async (p) => {
+    const ok = await confirm({
+      title: `Take ${p.partNumber} out of ${family.code}?`,
+      message: "Family control plans will no longer apply to it.",
+      confirmText: "Remove",
+      cancelText: "Cancel",
+      type: "warning",
+    });
+    if (ok)
+      membership.mutate(
+        { path: `/part-families/${family.id}/parts`, body: { remove: [p.id] } },
+        { onError: (err) => showToast({ type: "error", title: "Not removed", message: describeApiError(err) }) }
+      );
+  };
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-4 overflow-y-auto p-4">
@@ -42,7 +122,17 @@ const PartFamilyPage = () => {
           </div>
           {family.description && <p className="max-w-3xl text-sm text-primary-text">{family.description}</p>}
 
-          <MenuCard title="Parts" subtitle="Assign a part to this family on the part's own page." bodyClassName="overflow-x-auto">
+          <MenuCard
+            title="Parts"
+            subtitle="Parts in this family get the family's control plans (unless a plan of their own overrides it)."
+            bodyClassName="overflow-x-auto"
+            action={
+              canManage && (
+                <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => setAdding(true)}>
+                  <PlusIcon className="h-4 w-4" /> Add parts
+                </button>
+              )
+            }>
             {family.parts.length === 0 ? (
               <p className="text-sm text-secondary-text">No parts in this family yet.</p>
             ) : (
@@ -53,6 +143,7 @@ const PartFamilyPage = () => {
                     <th scope="col" className={th}>Name</th>
                     <th scope="col" className={th}>Current revision</th>
                     <th scope="col" className={th}>Status</th>
+                    {canManage && <th scope="col" className={th}><span className="sr-only">Actions</span></th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -68,6 +159,15 @@ const PartFamilyPage = () => {
                       <td className={td}>
                         <ActiveBadge active={p.active} />
                       </td>
+                      {canManage && (
+                        <td className={td}>
+                          <div className="flex justify-end">
+                            <button type="button" className={buttonClass.danger} onClick={() => removePart(p)} aria-label={`Remove ${p.partNumber} from the family`}>
+                              <Trash2Icon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -106,6 +206,11 @@ const PartFamilyPage = () => {
                 </table>
               )}
             </MenuCard>
+          )}
+          {adding && (
+            <Dialog title={`Add parts to ${family.code}`} onClose={() => setAdding(false)} width="max-w-2xl">
+              <AddPartsForm family={family} onDone={() => setAdding(false)} />
+            </Dialog>
           )}
           {editing && (
             <Dialog title={`Edit ${family.code}`} onClose={() => setEditing(false)}>

@@ -108,7 +108,7 @@ BEGIN
   r := app.resolve_inspection_requirements(pin);
   PERFORM pg_temp.assert_eq(r -> 'problems' -> 0 ->> 'code', 'unit_mismatch', 'incompatible unit blocks');
   r := app.resolve_inspection_requirements(lone);
-  PERFORM pg_temp.assert_eq(r -> 'problems' -> 0 ->> 'code', 'no_family', 'part without family blocks');
+  PERFORM pg_temp.assert_eq(r -> 'problems' @> '[{"code": "no_family"}]', true, 'part without family (and no plan naming it) blocks');
   r := app.resolve_inspection_requirements(draftonly);
   PERFORM pg_temp.assert_eq((SELECT string_agg(e ->> 'code', ',') FROM jsonb_array_elements(r -> 'problems') e), 'no_released_revision', 'no released revision blocks');
   r := app.resolve_inspection_requirements(draftonly, NULL, NULL, (SELECT id FROM public.part_revisions WHERE part_id = draftonly));

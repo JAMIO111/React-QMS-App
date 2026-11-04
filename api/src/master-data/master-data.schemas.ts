@@ -70,6 +70,7 @@ export const PartSummary = z.object({
   partNumber: z.string(),
   name: z.string(),
   description: z.string().nullable(),
+  /** The primary customer (see `customers` on the detail for all of them). */
   customer: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }).nullable(),
   partFamily: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }).nullable(),
   active: z.boolean(),
@@ -77,7 +78,14 @@ export const PartSummary = z.object({
   currentRevision: z.string().nullable(),
 });
 export type PartSummary = z.infer<typeof PartSummary>;
-export const PartDetail = PartSummary.extend({ revisions: z.array(PartRevision) });
+export const PartCustomer = z.object({
+  /** Id of the part–customer link. */
+  id: z.string().uuid(),
+  customer: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }),
+  customerPartNumber: z.string().nullable(),
+  isPrimary: z.boolean(),
+});
+export const PartDetail = PartSummary.extend({ revisions: z.array(PartRevision), customers: z.array(PartCustomer) });
 export type PartDetail = z.infer<typeof PartDetail>;
 
 const PartNumber = z
@@ -96,6 +104,7 @@ export const CreatePartBody = z
     partNumber: PartNumber,
     name: z.string().trim().min(1).max(200),
     description: optionalText(2000),
+    /** Optional first (primary) customer; more can be added afterwards. */
     customerId: z.string().uuid().nullable().optional(),
     partFamilyId: z.string().uuid().nullable().optional(),
     /** Optional first revision, created as a draft. */
@@ -107,7 +116,6 @@ export const UpdatePartBody = z
     partNumber: PartNumber.optional(),
     name: z.string().trim().min(1).max(200).optional(),
     description: optionalText(2000),
-    customerId: z.string().uuid().nullable().optional(),
     partFamilyId: z.string().uuid().nullable().optional(),
     active: z.boolean().optional(),
   })
@@ -120,5 +128,21 @@ export const CreateRevisionBody = z
   .strict();
 export const UpdateRevisionBody = z
   .object({ revision: RevisionCode.optional(), drawingRef: optionalText(100), changeSummary: optionalText(2000) })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
+
+const CustomerPartNumber = z
+  .string()
+  .trim()
+  .max(60)
+  .regex(/^(\S(.*\S)?)?$/, 'No leading or trailing spaces')
+  .transform((v) => (v === '' ? null : v))
+  .nullable()
+  .optional();
+export const AddPartCustomerBody = z
+  .object({ customerId: z.string().uuid(), customerPartNumber: CustomerPartNumber, isPrimary: z.boolean().optional() })
+  .strict();
+export const UpdatePartCustomerBody = z
+  .object({ customerPartNumber: CustomerPartNumber, isPrimary: z.literal(true).optional() })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });

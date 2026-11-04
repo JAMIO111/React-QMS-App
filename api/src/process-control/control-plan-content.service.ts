@@ -340,7 +340,7 @@ export class ControlPlanContentService {
     const sampling = await db.execute<Row>(sql`select * from public.sampling_rules where control_plan_revision_id = ${id}::uuid order by ${sql.raw(SAMPLING_ORDER)}`);
     const reactions = await db.execute<Row>(sql`select * from public.reaction_plans where control_plan_revision_id = ${id}::uuid order by trigger_type, created_at, id`);
     const scope = await db.execute<Row>(sql`select distinct p.id, p.part_number, p.name from public.control_plan_applicability a
-        join public.parts p on p.part_family_id = a.part_family_id and (a.part_id is null or a.part_id = p.id)
+        join public.parts p on p.id = a.part_id or (a.part_id is null and p.part_family_id = a.part_family_id)
         where a.control_plan_id = ${r.control_plan_id as string}::uuid and p.active order by p.part_number`);
     const characteristics = chars.rows.map((c) => toCharacteristic(c, parts.rows, sampling.rows, reactions.rows));
     const operations: PlanOperation[] = ops.rows.map((o) => ({

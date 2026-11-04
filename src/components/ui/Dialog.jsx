@@ -45,7 +45,9 @@ const Dialog = ({ title, onClose, children, width = "max-w-lg" }) => {
             <XIcon className="h-5 w-5" />
           </button>
         </div>
-        {children}
+        {/* A dialog is portalled, but React still bubbles its events to the page's components:
+            keep a dialog's form submit from also submitting a form the dialog was opened from. */}
+        <div onSubmit={(e) => e.stopPropagation()}>{children}</div>
       </div>
     </div>,
     document.getElementById("modal-root") ?? document.body

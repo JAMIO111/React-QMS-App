@@ -61,6 +61,15 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/ncrs/{id}/restore': undefined,
     'GET /api/v1/ncrs/{id}/history': undefined,
     'PATCH /api/v1/ncr-classifications/{id}': { name: 'Hijacked' },
+    'GET /api/v1/ncrs/{id}/costs': undefined,
+    'POST /api/v1/ncrs/{id}/costs': { costType: 'scrap', currency: 'GBP', amount: 1 },
+    'GET /api/v1/ncrs/{id}/attachments': undefined,
+    'POST /api/v1/ncrs/{id}/attachments': { storagePath: `${b.org}/ncr/${a.ncr}/x.txt`, fileName: 'x.txt', sizeBytes: 1 },
+    'PATCH /api/v1/ncr-costs/{id}': { amount: 999 },
+    'POST /api/v1/ncr-costs/{id}/delete': { reason: 'Hijacked' },
+    'POST /api/v1/ncr-costs/{id}/restore': undefined,
+    'POST /api/v1/ncr-attachments/{id}/delete': { reason: 'Hijacked' },
+    'POST /api/v1/ncr-attachments/{id}/restore': undefined,
   })[`${op.method} ${op.path}`];
 
 const hasSample = (op: Op) =>
@@ -85,6 +94,15 @@ const hasSample = (op: Op) =>
     'POST /api/v1/ncrs/{id}/restore',
     'GET /api/v1/ncrs/{id}/history',
     'PATCH /api/v1/ncr-classifications/{id}',
+    'GET /api/v1/ncrs/{id}/costs',
+    'POST /api/v1/ncrs/{id}/costs',
+    'GET /api/v1/ncrs/{id}/attachments',
+    'POST /api/v1/ncrs/{id}/attachments',
+    'PATCH /api/v1/ncr-costs/{id}',
+    'POST /api/v1/ncr-costs/{id}/delete',
+    'POST /api/v1/ncr-costs/{id}/restore',
+    'POST /api/v1/ncr-attachments/{id}/delete',
+    'POST /api/v1/ncr-attachments/{id}/restore',
   ].includes(`${op.method} ${op.path}`);
 
 /** Organisation A's record id for the resource a path refers to. */
@@ -99,6 +117,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/part-revisions/')) return a.draftRevision;
   if (path.startsWith('/api/v1/ncrs/')) return a.ncr;
   if (path.startsWith('/api/v1/ncr-classifications/')) return a.classification;
+  if (path.startsWith('/api/v1/ncr-costs/')) return a.cost;
+  if (path.startsWith('/api/v1/ncr-attachments/')) return a.attachment;
   return undefined;
 };
 
@@ -136,6 +156,9 @@ beforeAll(async () => {
   a.draftRevision = (await one(`insert into public.part_revisions (organisation_id, part_id, revision) values ($1, $2, 'A') returning id`, [ids.orgA, a.part])).id;
   a.classification = (await one(`insert into public.ncr_classifications (organisation_id, kind, name) values ($1, 'failure_mode', 'Alpha failure') returning id`, [ids.orgA])).id;
   a.ncr = (await one(`insert into public.nonconformances (organisation_id, reference, source, title) values ($1, 'A-NCR-1', 'internal', 'Alpha NCR') returning id`, [ids.orgA])).id;
+  a.cost = (await one(`insert into public.ncr_costs (organisation_id, nonconformance_id, cost_type, currency, amount) values ($1, $2, 'scrap', 'GBP', 10) returning id`, [ids.orgA, a.ncr])).id;
+  a.attachment = (await one(`insert into public.ncr_attachments (organisation_id, nonconformance_id, storage_path, file_name, size_bytes) values ($1::uuid, $2::uuid, $1::text || '/ncr/' || $2::text || '/a.txt', 'a.txt', 1) returning id`, [ids.orgA, a.ncr])).id;
+  b.org = ids.orgB;
   b.viewerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'viewer'`, [ids.orgB])).id;
   await admin.query(`insert into public.departments (organisation_id, site_id, code, name) values ($1, $2, 'QA', 'Quality B')`, [ids.orgB, ids.siteB]);
 });
@@ -186,13 +209,18 @@ describe('tenancy sweep over every API route', () => {
               (select name from public.parts where id = $7) part,
               (select status || '/' || coalesce(drawing_ref, '') || '/' || (select count(*) from public.part_revisions where part_id = $7) from public.part_revisions where id = $8) revision,
               (select title || '/' || stage || '/' || (deleted_at is null) from public.nonconformances where id = $9) ncr,
-              (select name from public.ncr_classifications where id = $10) classification`,
-      [a.site, a.department, a.ownerMembership, a.ownerAssignment, a.customer, a.supplier, a.part, a.draftRevision, a.ncr, a.classification],
+              (select name from public.ncr_classifications where id = $10) classification,
+              (select amount || '/' || (deleted_at is null) from public.ncr_costs where id = $11) cost,
+              (select (deleted_at is null)::text from public.ncr_attachments where id = $12) attachment,
+              (select count(*)::int from public.ncr_costs where nonconformance_id = $9) costs,
+              (select count(*)::int from public.ncr_attachments where nonconformance_id = $9) attachments`,
+      [a.site, a.department, a.ownerMembership, a.ownerAssignment, a.customer, a.supplier, a.part, a.draftRevision, a.ncr, a.classification, a.cost, a.attachment],
     );
     expect(rows[0]).toEqual({
       site: 'Alpha main', dept: 'Quality A', member: 'active', assignment: 1,
       customer: 'Alpha customer', supplier: 'Alpha supplier', part: 'Alpha part', revision: 'draft//1',
       ncr: 'Alpha NCR/draft/true', classification: 'Alpha failure',
+      cost: '10/true', attachment: 'true', costs: 1, attachments: 1,
     });
   });
 

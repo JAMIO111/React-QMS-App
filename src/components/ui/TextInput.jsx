@@ -1,5 +1,5 @@
 import { CircleAlertIcon, XIcon } from "@/components/icons";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useId, useRef, useState } from "react";
 
 const TextInput = forwardRef(
   (
@@ -16,6 +16,8 @@ const TextInput = forwardRef(
       prefix,
       suffix,
       textTransform = "none", // ⬅️ new prop
+      hint,
+      id: idProp,
       ...rest
     },
     ref,
@@ -29,6 +31,9 @@ const TextInput = forwardRef(
     }, [controlled, value]);
     const current = (controlled ? value : ownValue) ?? "";
 
+    const autoId = useId();
+    const id = idProp ?? autoId;
+    const errorMessage = typeof error === "string" ? error : error?.message;
     const inputRef = useRef(null);
     const setRefs = (el) => {
       inputRef.current = el;
@@ -68,18 +73,16 @@ const TextInput = forwardRef(
     };
 
     return (
-      <div className="flex flex-col gap-1 h-17 min-w-0">
+      <div className="flex flex-col gap-1 min-h-17 min-w-0">
         {label && (
-          <div className="flex items-center gap-1">
-            <label className="block text-sm font-medium text-secondary-text">
-              {label}
-            </label>
+          <label htmlFor={id} className="block text-sm font-medium text-secondary-text">
+            {label}
             {required && (
-              <label className="text-error-color text-sm" title="Required">
-                *
-              </label>
+              <span className="text-error-color" title="Required">
+                {" "}*
+              </span>
             )}
-          </div>
+          </label>
         )}
         <div
           className={`group flex border flex-row relative items-center rounded-lg pl-2 pr-10 py-2 bg-text-input-color
@@ -89,6 +92,7 @@ const TextInput = forwardRef(
   focus-within:ring-3 focus-within:ring-brand-primary/20
   transition-all duration-150
   min-w-0
+  ${rest.disabled ? "opacity-60 hover:border-border-color" : ""}
   ${
     error
       ? "border-error-color hover:border-error-color focus-within:border-error-color focus-within:ring-error-color/20"
@@ -114,11 +118,15 @@ const TextInput = forwardRef(
           <input
             onKeyDown={dataType === "number" ? handleKeyDownNumeric : undefined}
             ref={setRefs}
+            id={id}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={errorMessage || hint ? `${id}-help` : undefined}
+            required={required || undefined}
             type={dataType}
             value={current}
             onChange={handleChange}
             placeholder={placeholder}
-            className={`placeholder:normal-case input-no-arrows flex-grow w-full min-w-0 bg-transparent outline-none text-primary-text placeholder:text-sm placeholder:text-muted
+            className={`placeholder:normal-case input-no-arrows flex-grow w-full min-w-0 bg-transparent outline-none text-primary-text placeholder:text-sm placeholder:text-muted disabled:cursor-not-allowed
               ${prefix ? "pl-5" : ""}
               ${suffix ? "pr-4 text-right" : ""}
               ${textTransform !== "none" ? `capitalize-${textTransform}` : ""}
@@ -140,11 +148,16 @@ const TextInput = forwardRef(
               type="button"
               onClick={clear}
               className="absolute right-2 text-secondary-text hover:text-primary-text hover:bg-secondary-bg rounded-sm p-0.5 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-              aria-label="Clear">
+              aria-label={label ? `Clear ${label}` : "Clear"}>
               <XIcon className="w-5 h-5" />
             </button>
           )}
         </div>
+        {(errorMessage || hint) && (
+          <p id={`${id}-help`} className={`text-xs ${errorMessage ? "text-error-color" : "text-secondary-text"}`}>
+            {errorMessage || hint}
+          </p>
+        )}
       </div>
     );
   },

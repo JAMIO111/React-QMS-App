@@ -12,6 +12,7 @@ const CTAButton = ({
   textSize = "text-md",
   borderRadius = "rounded-lg",
   disabled = false,
+  buttonType = "button",
 }) => {
   const baseClass =
     "flex flex-row gap-2 py-1 px-2 truncate items-center justify-center transition-transform duration-200 ease-in-out";
@@ -34,6 +35,7 @@ const CTAButton = ({
 
   return (
     <button
+      type={buttonType}
       disabled={disabled}
       title={title}
       onClick={callbackFn}

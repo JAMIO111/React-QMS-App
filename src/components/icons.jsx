@@ -81,6 +81,19 @@ import {
   UserCog as LucideUserCog,
   Users as LucideUsers,
   X as LucideX,
+  ArrowRightLeft as LucideArrowRightLeft,
+  ClipboardList as LucideClipboardList,
+  Factory as LucideFactory,
+  FileText as LucideFileText,
+  Hash as LucideHash,
+  History as LucideHistory,
+  Inbox as LucideInbox,
+  Paperclip as LucidePaperclip,
+  Receipt as LucideReceipt,
+  Tags as LucideTags,
+  Wrench as LucideWrench,
+  Coins as LucideCoins,
+  Image as LucideImage,
 } from "lucide-react";
 
 const withDefaults = (Icon) => {
@@ -171,3 +184,16 @@ export const UploadIcon = withDefaults(LucideUpload);
 export const UserCogIcon = withDefaults(LucideUserCog);
 export const UsersIcon = withDefaults(LucideUsers);
 export const XIcon = withDefaults(LucideX);
+export const ArrowRightLeftIcon = withDefaults(LucideArrowRightLeft);
+export const ClipboardListIcon = withDefaults(LucideClipboardList);
+export const FactoryIcon = withDefaults(LucideFactory);
+export const FileTextIcon = withDefaults(LucideFileText);
+export const HashIcon = withDefaults(LucideHash);
+export const HistoryIcon = withDefaults(LucideHistory);
+export const InboxIcon = withDefaults(LucideInbox);
+export const PaperclipIcon = withDefaults(LucidePaperclip);
+export const ReceiptIcon = withDefaults(LucideReceipt);
+export const TagsIcon = withDefaults(LucideTags);
+export const WrenchIcon = withDefaults(LucideWrench);
+export const CoinsIcon = withDefaults(LucideCoins);
+export const ImageIcon = withDefaults(LucideImage);

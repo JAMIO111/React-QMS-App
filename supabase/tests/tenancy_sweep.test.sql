@@ -63,6 +63,10 @@ BEGIN
   INSERT INTO public.ncr_classifications (organisation_id, kind, name) VALUES (a, 'failure_mode', 'Sweep failure');
   INSERT INTO public.nonconformances (organisation_id, reference, source, title, severity, quantity_affected)
     VALUES (a, 'SW-NCR-1', 'internal', 'Sweep NCR', 'minor', 1);
+  INSERT INTO public.ncr_costs (organisation_id, nonconformance_id, cost_type, currency, amount)
+    SELECT a, id, 'scrap', 'GBP', 10 FROM public.nonconformances WHERE organisation_id = a AND reference = 'SW-NCR-1';
+  INSERT INTO public.ncr_attachments (organisation_id, nonconformance_id, storage_path, file_name, size_bytes)
+    SELECT a, id, a || '/ncr/' || id || '/sweep.txt', 'sweep.txt', 5 FROM public.nonconformances WHERE organisation_id = a AND reference = 'SW-NCR-1';
 
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));

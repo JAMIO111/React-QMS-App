@@ -73,6 +73,28 @@ export const useEmployees = () => {
   });
 };
 
+/** Costs of an NCR: { data, totals: { baseCurrency, net, gross, count } }. */
+export const useNcrCosts = (id, { deleted = "exclude" } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "costs", id, deleted),
+    queryFn: () => apiFetch(`/ncrs/${id}/costs?deleted=${deleted}`, { organisationId }),
+    enabled: !!organisationId && !!id,
+    retry: false,
+  });
+};
+
+/** Files attached to an NCR (metadata; the files themselves are in the nc-files bucket). */
+export const useNcrAttachments = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "attachments", id),
+    queryFn: () => apiFetch(`/ncrs/${id}/attachments`, { organisationId }).then((r) => r.data),
+    enabled: !!organisationId && !!id,
+    retry: false,
+  });
+};
+
 /**
  * Any NCR or classification change: { path, method, body, reason }. Refreshes every NCR query
  * (lists, detail, history) of the organisation.

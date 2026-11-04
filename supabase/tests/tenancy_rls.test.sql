@@ -57,9 +57,13 @@ VALUES ('00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-0000000
 INSERT INTO public."Notification Recipients" (organisation_id, notification_id, recipient_id)
 VALUES ('00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-0000000000b3');
 
+-- NCR files live at <org>/ncr/<nonconformance id>/... (one NCR per organisation here).
+INSERT INTO public.nonconformances (id, organisation_id, reference, source, title) VALUES
+  ('00000000-0000-0000-0000-0000000000ac', '00000000-0000-0000-0000-00000000000a', 'A-NCR-1', 'internal', 'A NCR'),
+  ('00000000-0000-0000-0000-0000000000bc', '00000000-0000-0000-0000-00000000000b', 'B-NCR-1', 'internal', 'B NCR');
 INSERT INTO storage.objects (bucket_id, name) VALUES
-  ('nc-files', '00000000-0000-0000-0000-00000000000a/ncr/NCM-25-001/a.jpg'),
-  ('nc-files', '00000000-0000-0000-0000-00000000000b/ncr/NCM-25-001/b.pdf'),
+  ('nc-files', '00000000-0000-0000-0000-00000000000a/ncr/00000000-0000-0000-0000-0000000000ac/a.jpg'),
+  ('nc-files', '00000000-0000-0000-0000-00000000000b/ncr/00000000-0000-0000-0000-0000000000bc/b.pdf'),
   ('nc-files', 'legacy_without_org.jpg'),
   ('avatars', 'users/00000000-0000-0000-0000-0000000000a1/me.png'),
   ('avatars', 'users/00000000-0000-0000-0000-0000000000b1/me.png');
@@ -143,9 +147,11 @@ BEGIN
   -- Storage: A objects and own/shared avatars only.
   PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM storage.objects WHERE bucket_id = 'nc-files'$q$), 1::bigint, 'A files only');
   PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM storage.objects WHERE bucket_id = 'avatars'$q$), 1::bigint, 'own avatar only');
-  PERFORM pg_temp.assert_fails($q$INSERT INTO storage.objects (bucket_id, name) VALUES ('nc-files', '00000000-0000-0000-0000-00000000000b/x.txt')$q$, 'upload into B');
+  PERFORM pg_temp.assert_fails($q$INSERT INTO storage.objects (bucket_id, name) VALUES ('nc-files', '00000000-0000-0000-0000-00000000000b/ncr/00000000-0000-0000-0000-0000000000bc/x.txt')$q$, 'upload into B');
+  PERFORM pg_temp.assert_fails($q$INSERT INTO storage.objects (bucket_id, name) VALUES ('nc-files', '00000000-0000-0000-0000-00000000000a/ncr/00000000-0000-0000-0000-0000000000bc/x.txt')$q$, 'upload under A into a B NCR');
+  PERFORM pg_temp.assert_fails($q$INSERT INTO storage.objects (bucket_id, name) VALUES ('nc-files', '00000000-0000-0000-0000-00000000000a/x.txt')$q$, 'upload outside an NCR folder');
   PERFORM pg_temp.assert_fails($q$INSERT INTO storage.objects (bucket_id, name) VALUES ('avatars', 'users/00000000-0000-0000-0000-0000000000b1/x.png')$q$, 'upload as someone else');
-  PERFORM pg_temp.assert_ok($q$INSERT INTO storage.objects (bucket_id, name) VALUES ('nc-files', '00000000-0000-0000-0000-00000000000a/ncr/x.txt')$q$, 'upload into A');
+  PERFORM pg_temp.assert_ok($q$INSERT INTO storage.objects (bucket_id, name) VALUES ('nc-files', '00000000-0000-0000-0000-00000000000a/ncr/00000000-0000-0000-0000-0000000000ac/x.txt')$q$, 'upload into A');
   PERFORM pg_temp.logout();
 END $$;
 

@@ -7,9 +7,13 @@ const SideMenuItem = ({
   icon: Icon,
   index,
   arrLength,
+  disabled,
+  active = false,
 }) => {
+  // Greyed: explicitly disabled, or (old behaviour) every step after the first while creating.
+  const grey = disabled ?? (isCreating && index !== 0);
   return (
-    <div className="group cursor-pointer flex w-full gap-1 pl-2 justify-start hover:bg-border-color/50 hover:border-border-color hover:border hover:pr-1 rounded-xl h-22">
+    <div className={`group flex w-full gap-1 pl-2 justify-start rounded-xl h-22 ${grey ? "cursor-not-allowed" : "cursor-pointer hover:bg-border-color/50 hover:border-border-color hover:border hover:pr-1"} ${active ? "bg-border-color/40" : ""}`}>
       <div className="flex justify-center items-center h-full w-1/4">
         <div className="flex flex-col justify-center items-center h-full">
           <div
@@ -18,13 +22,13 @@ const SideMenuItem = ({
             } w-0.5 h-5`}></div>
           <div
             className={`${
-              isCreating && index !== 0
+              grey
                 ? "border-border-dark-color bg-border-color/20"
                 : "border-brand-primary bg-brand-primary/50"
             } flex justify-center items-center rounded-xl h-12 w-12 border-2`}>
             <Icon
               className={`${
-                isCreating && index !== 0 ? "text-secondary-text" : "text-white"
+                grey ? "text-secondary-text" : "text-white"
               } h-6 w-6`}
             />
           </div>

@@ -96,7 +96,7 @@ export const deleteRow = async (table, id) => {
  */
 export const uploadFileToSupabase = async (file, bucket, organisationId, id_ref) => {
   const actualFile = file.file ?? file; // unwrap if needed
-  const fileName = (actualFile.name || "unnamed_file").replace(/[/\\]/g, "_");
+  const fileName = (actualFile.name || "unnamed_file").replace(/[/\\]/g, "_").replace(/\.{2,}/g, ".");
   const filePath = `${organisationId}/ncr/${id_ref}/${crypto.randomUUID()}-${fileName}`;
 
   const { error } = await supabase.storage

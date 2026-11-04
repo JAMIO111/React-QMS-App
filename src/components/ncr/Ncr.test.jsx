@@ -12,7 +12,10 @@ vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => (
 vi.mock("../../hooks/useQmsApi", () => ({
   usePermissions: () => ({ can: (p) => permissions.includes(p) }),
   useSites: () => ({ data: { data: [{ id: "s1", code: "MAIN", name: "Main site" }] } }),
+  useOrganisationDetails: () => ({ data: { settings: { baseCurrency: "GBP", vatRate: 0.2 } } }),
 }));
+const upload = vi.fn();
+vi.mock("@/api/supabaseApi", () => ({ uploadFileToSupabase: (...a) => upload(...a), generateSignedUrl: vi.fn() }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock("../../contexts/SearchProvider", () => ({ useGlobalSearch: () => ({ debouncedSearchTerm: "" }) }));
 
@@ -53,6 +56,9 @@ const routeApi = (routes) =>
       "GET /suppliers": page([{ id: "sp1", code: "STEEL", name: "Steel Supplies", displayName: null }]),
       ...routes,
     };
+    // Every NCR page also loads its costs, files and history.
+    if (!(k in all) && /^GET \/ncrs\/[^/]+\/costs$/.test(k)) return { data: [], totals: { baseCurrency: "GBP", net: 0, gross: 0, count: 0 } };
+    if (!(k in all) && /^GET \/ncrs\/[^/]+\/(attachments|history)$/.test(k)) return { data: [] };
     if (!(k in all)) throw new Error(`unexpected ${k}`);
     return typeof all[k] === "function" ? all[k](path, opts) : all[k];
   });
@@ -253,7 +259,7 @@ describe("NC form", () => {
       },
     });
     renderAt("/Non-Conformance/Internal/n1");
-    await userEvent.click(await screen.findByRole("tab", { name: "History" }));
+    await screen.findByRole("heading", { level: 2, name: "History" });
     const items = await screen.findAllByRole("listitem");
     const text = items.map((li) => li.textContent);
     expect(text).toContain("Stage: Draft → Open");
@@ -300,5 +306,131 @@ describe("Settings → Data Management", () => {
     expect(await screen.findByText("Dimensional")).toBeInTheDocument();
     expect(screen.queryByLabelText("New failure mode")).toBeNull();
     expect(screen.queryByRole("button", { name: /Deactivate/ })).toBeNull();
+  });
+});
+
+describe("NC page layout, costs and files", () => {
+  const costList = {
+    data: [
+      { id: "c1", costType: "scrap", description: "Scrapped bar", incurredOn: "2026-11-01", currency: "GBP", vatTreatment: "inclusive", vatRate: 0.2, amount: 120,
+        exchangeRate: 1, netAmount: 100, vatAmount: 20, grossAmount: 120, baseCurrency: "GBP", netBase: 100, grossBase: 120,
+        createdAt: "2026-11-01T09:00:00Z", createdBy: { id: "u1", name: "Ada Owner" }, deletedAt: null, deleteReason: null },
+    ],
+    totals: { baseCurrency: "GBP", net: 100, gross: 120, count: 1 },
+  };
+
+  it("shows the old form's sections; costs and files wait until the NC is saved", async () => {
+    routeApi({});
+    renderAt("/Non-Conformance/Internal/new");
+    const nav = await screen.findByRole("navigation", { name: "Sections" });
+    expect(within(nav).getByRole("button", { name: "Go to NC Details" })).toBeEnabled();
+    expect(within(nav).getByRole("button", { name: "Go to Cost" })).toBeDisabled();
+    expect(within(nav).getByRole("button", { name: "Go to Additional Info" })).toBeDisabled();
+    expect(screen.queryByRole("table", { name: "Costs" })).toBeNull();
+  });
+
+  it("lists costs with base-currency totals and adds a cost with a VAT preview", async () => {
+    routeApi({ "GET /ncrs/n1": ncr(), "GET /ncrs/n1/costs": costList, "POST /ncrs/n1/costs": (_p, o) => ({ id: "c2", ...o.body }) });
+    renderAt("/Non-Conformance/Internal/n1");
+    const table = await screen.findByRole("table", { name: "Costs" });
+    expect(within(table).getByText("Scrapped bar")).toBeInTheDocument();
+    expect(within(table).getByText("Total (1 item)")).toBeInTheDocument();
+    expect(within(table).getAllByText("£120.00").length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole("button", { name: "New item" }));
+    const dialog = screen.getByRole("dialog", { name: "New cost item" });
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Cost type/ }));
+    await userEvent.click(await within(dialog).findByRole("option", { name: "Labour" }));
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "VAT option" }));
+    await userEvent.click(within(dialog).getByRole("option", { name: "VAT exclusive" }));
+    await userEvent.type(within(dialog).getByLabelText(/Amount \(ex\. VAT\)/), "50");
+    const preview = within(dialog).getByLabelText("Cost preview");
+    expect(preview).toHaveTextContent("£50.00");
+    expect(preview).toHaveTextContent("£10.00");
+    expect(preview).toHaveTextContent("£60.00");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
+    await waitFor(() => expect(lastCall("POST /ncrs/n1/costs").body).toMatchObject({ costType: "labour", currency: "GBP", vatTreatment: "exclusive", vatRate: 0.2, amount: 50, exchangeRate: 1 }));
+  });
+
+  it("asks for an exchange rate for a foreign currency", async () => {
+    routeApi({ "GET /ncrs/n1": ncr(), "POST /ncrs/n1/costs": (_p, o) => ({ id: "c2", ...o.body }) });
+    renderAt("/Non-Conformance/Internal/n1");
+    await userEvent.click(await screen.findByRole("button", { name: "New item" }));
+    const dialog = screen.getByRole("dialog", { name: "New cost item" });
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Cost type/ }));
+    await userEvent.click(await within(dialog).findByRole("option", { name: "Transport" }));
+    const currency = within(dialog).getByRole("combobox", { name: /Currency/ });
+    await userEvent.click(currency);
+    await userEvent.type(currency, "EUR");
+    await userEvent.click(within(dialog).getByRole("option", { name: /^EUR/ }));
+    await userEvent.type(within(dialog).getByLabelText(/^Amount/), "100");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
+    expect(await within(dialog).findByText("Enter the exchange rate")).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByLabelText(/Exchange rate/), "0.85");
+    expect(within(dialog).getByLabelText("Cost preview")).toHaveTextContent("£85.00");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
+    await waitFor(() => expect(lastCall("POST /ncrs/n1/costs").body).toMatchObject({ costType: "transport", currency: "EUR", amount: 100, exchangeRate: 0.85 }));
+  });
+
+  it("deletes a cost with a reason", async () => {
+    routeApi({ "GET /ncrs/n1": ncr(), "GET /ncrs/n1/costs": costList, "POST /ncr-costs/c1/delete": {} });
+    renderAt("/Non-Conformance/Internal/n1");
+    await userEvent.click(await screen.findByRole("button", { name: "Delete Scrap cost" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete scrap cost?" });
+    await userEvent.type(within(dialog).getByLabelText("Reason for deleting"), "Duplicate");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    expect(lastCall("POST /ncr-costs/c1/delete").body).toEqual({ reason: "Duplicate" });
+  });
+
+  it("uploads dropped files to the NC folder and records them; removing asks for a reason", async () => {
+    upload.mockResolvedValue({ path: "org-1/ncr/n1/u1-photo.jpg" });
+    routeApi({
+      "GET /ncrs/n1": ncr(),
+      "GET /ncrs/n1/attachments": { data: [{ id: "f1", fileName: "report.pdf", contentType: "application/pdf", sizeBytes: 2048, description: null, storagePath: "org-1/ncr/n1/x-report.pdf",
+        createdAt: "2026-11-01T09:00:00Z", createdBy: { id: "u1", name: "Ada Owner" }, deletedAt: null, deleteReason: null }] },
+      "POST /ncrs/n1/attachments": (_p, o) => ({ id: "f2", ...o.body }),
+      "POST /ncr-attachments/f1/delete": {},
+    });
+    renderAt("/Non-Conformance/Internal/n1");
+    expect(await screen.findByText("report.pdf")).toBeInTheDocument();
+    const file = new File(["jpeg"], "photo.jpg", { type: "image/jpeg" });
+    globalThis.URL.createObjectURL ??= () => "blob:preview";
+    globalThis.URL.revokeObjectURL ??= () => {};
+    await userEvent.upload(screen.getByTestId("file-input"), file);
+    expect(screen.getByText("Unsaved file")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save upload" }));
+    await waitFor(() => expect(lastCall("POST /ncrs/n1/attachments")?.body).toEqual({ storagePath: "org-1/ncr/n1/u1-photo.jpg", fileName: "photo.jpg", contentType: "image/jpeg", sizeBytes: 4 }));
+    expect(upload).toHaveBeenCalledWith(file, "nc-files", "org-1", "n1");
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove report.pdf" }));
+    const dialog = screen.getByRole("dialog", { name: "Remove report.pdf?" });
+    await userEvent.type(within(dialog).getByLabelText("Reason for removing"), "Wrong file");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+    expect(lastCall("POST /ncr-attachments/f1/delete").body).toEqual({ reason: "Wrong file" });
+  });
+
+  it("hides cost and file editing on a closed NC", async () => {
+    routeApi({ "GET /ncrs/n1": ncr({ stage: "closed" }), "GET /ncrs/n1/costs": costList });
+    renderAt("/Non-Conformance/Internal/n1");
+    expect(await screen.findByRole("table", { name: "Costs" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New item" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Add files/ })).toBeNull();
+  });
+});
+
+describe("dialogs inside the NC form", () => {
+  it("saving a cost does not also save the NC", async () => {
+    routeApi({ "GET /ncrs/n1": ncr(), "POST /ncrs/n1/costs": (_p, o) => ({ id: "c9", ...o.body }), "PATCH /ncrs/n1": (_p, o) => ncr(o.body) });
+    renderAt("/Non-Conformance/Internal/n1");
+    const title = await screen.findByLabelText("Title *");
+    await userEvent.type(title, " (edited)");
+    await userEvent.click(screen.getByRole("button", { name: "New item" }));
+    const dialog = screen.getByRole("dialog", { name: "New cost item" });
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Cost type/ }));
+    await userEvent.click(await within(dialog).findByRole("option", { name: "Rework" }));
+    await userEvent.type(within(dialog).getByLabelText(/^Amount/), "10");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
+    await waitFor(() => expect(lastCall("POST /ncrs/n1/costs")).toBeTruthy());
+    expect(lastCall("PATCH /ncrs/n1")).toBeUndefined();
   });
 });

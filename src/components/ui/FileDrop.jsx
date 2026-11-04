@@ -1,546 +1,294 @@
-import { useState, useRef, useEffect } from "react";
-import { CloudUploadIcon, SaveIcon, Undo2Icon, XIcon } from "@/components/icons";
-import { uploadFileToSupabase, saveFileMetadata } from "@/api/supabaseApi";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { CloudUploadIcon, RotateCcwIcon, SaveIcon, Trash2Icon, Undo2Icon, XIcon } from "@/components/icons";
+import { uploadFileToSupabase } from "@/api/supabaseApi";
 import CTAButton from "../CTAButton";
-import { useToast } from "@/contexts/ToastProvider";
-import supabase from "../../supabase-client";
 import DownloadLink from "./DownloadLink";
-import { formatDate } from "../../lib/utils";
-import { useUser } from "../../contexts/UserProvider";
+import ReasonDialog from "../ncr/ReasonDialog";
+import { useToast } from "@/contexts/ToastProvider";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
+import { useNcrAttachments, useNcrMutation } from "../../hooks/useNcr";
+import { apiFetch, describeApiError } from "../../lib/api-client";
 
-const FileDrop = ({ ncm_id }) => {
-  const [, setDragActive] = useState(false);
-  const fileInputRef = useRef(null);
-  const [visibleFiles, setVisibleFiles] = useState([]); // already saved in DB
-  const [newFiles, setNewFiles] = useState([]); // local File objects
-  const [deletedFiles, setDeletedFiles] = useState([]); // for soft delete
+/** Largest file the database accepts (ncr_attachments.size_bytes). */
+const MAX_FILE_SIZE_MB = 25;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+const formatBytes = (bytes, decimals = 1) => {
+  if (!bytes) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(decimals))} ${sizes[i]}`;
+};
+
+const ICONS = {
+  pdf: ["/icons/pdf-icon.svg", "PDF"],
+  doc: ["/icons/word-icon.png", "Word"], docx: ["/icons/word-icon.png", "Word"],
+  xls: ["/icons/excel-icon.png", "Excel"], xlsx: ["/icons/excel-icon.png", "Excel"], csv: ["/icons/excel-icon.png", "Excel"],
+  ppt: ["/icons/ppt-icon.png", "PowerPoint"], pptx: ["/icons/ppt-icon.png", "PowerPoint"],
+};
+const FileIcon = ({ name, type }) => {
+  const ext = name.split(".").pop()?.toLowerCase();
+  const [main] = (type || "").split("/");
+  const [src, alt] = ICONS[ext] ?? (main === "video" ? ["/icons/video-icon.png", "Video"] : main === "audio" ? ["/icons/audio-icon.png", "Audio"] : ["/icons/file-icon.png", "File"]);
+  return <img src={src} alt={alt} className="h-10 w-10" />;
+};
+
+/**
+ * Drag-and-drop attachments for a non-conformance (ported from the original FileDrop). New files
+ * are listed as unsaved until "Save uploads": each is uploaded to the private nc-files bucket at
+ * <org>/ncr/<ncr id>/… and then recorded through the API. Removing a saved file asks for a reason
+ * and keeps the stored file as evidence (it can be restored).
+ */
+const FileDrop = ({ ncrId, canEdit = true }) => {
+  const [dragActive, setDragActive] = useState(false);
+  const [newFiles, setNewFiles] = useState([]); // [{ file, previewUrl }]
   const [isSaving, setIsSaving] = useState(false);
+  const [removing, setRemoving] = useState(null);
+  const [showRemoved, setShowRemoved] = useState(false);
+  const fileInputRef = useRef(null);
   const { showToast } = useToast();
-  const { profile } = useUser();
   const { organisationId } = useOrganisation();
-  const queryClient = useQueryClient();
+  const attachments = useNcrAttachments(ncrId);
+  const mutation = useNcrMutation();
+  const saved = attachments.data ?? [];
 
-  const fetchExistingFiles = async (ncm_id) => {
-    const { data, error } = await supabase
-      .from("v_nc_files")
-      .select("*")
-      .eq("organisation_id", organisationId)
-      .eq("id_ref", ncm_id);
+  useEffect(() => () => newFiles.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl)), [newFiles]);
 
-    if (error) throw new Error(error.message);
-    else return data;
+  const addFiles = (files) => {
+    const valid = [];
+    Array.from(files).forEach((file) => {
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        showToast({ type: "error", title: "File too large", message: `"${file.name}" is over ${MAX_FILE_SIZE_MB} MB and was not added.` });
+        return;
+      }
+      const duplicate = newFiles.some((f) => f.file.name === file.name && f.file.size === file.size && f.file.lastModified === file.lastModified);
+      if (!duplicate) valid.push({ file, previewUrl: file.type?.startsWith("image/") ? URL.createObjectURL(file) : null });
+    });
+    if (valid.length) setNewFiles((prev) => [...prev, ...valid]);
   };
 
-  const {
-    data: existingFiles,
-    error,
-    isLoading,
-    isError,
-  } = useQuery({
-    queryKey: ["NC Files", organisationId, ncm_id],
-    queryFn: () => fetchExistingFiles(ncm_id),
-    enabled: !!ncm_id && !!organisationId,
-    staleTime: 5 * 60 * 1000, // optional: keeps cache "fresh" for 5 mins
-    cacheTime: 15 * 60 * 1000, // optional: cache kept in memory for 10 mins
-  });
-
-  useEffect(() => {
-    return () => {
-      newFiles.forEach((file) => {
-        if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
-      });
-    };
-  }, [newFiles]);
-
-  useEffect(() => {
-    if (existingFiles && existingFiles.length > 0) {
-      setVisibleFiles(existingFiles);
-    }
-  }, [existingFiles]);
-
-  const getSaveButtonText = () => {
-    if (isSaving) return "Saving...";
-
-    const hasUploads = newFiles.length > 0;
-    const hasDeletions = deletedFiles.length > 0;
-
-    if (hasUploads && hasDeletions) return "Save changes";
-    if (hasUploads) return "Save uploads";
-    if (hasDeletions) return "Save deletion";
-
-    return "Save"; // fallback
-  };
-
-  const undoAllDeletions = () => {
-    setVisibleFiles((prev) => [...prev, ...deletedFiles]);
-    setDeletedFiles([]);
+  const discard = (entry) => {
+    if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+    setNewFiles((prev) => prev.filter((f) => f !== entry));
   };
 
   const handleSave = async () => {
-    try {
-      if (!ncm_id) throw new Error("Missing NCM ID");
-
-      const didDelete = deletedFiles.length > 0;
-      const didUpload = newFiles.length > 0;
-
-      let deletedCount = 0;
-      let uploadedCount = 0;
-
-      setIsSaving(true);
-
-      // DELETE FILES
-      if (didDelete) {
-        try {
-          for (const file of deletedFiles) {
-            const { error: deleteDbError } = await supabase
-              .from("NC Files")
-              .delete()
-              .eq("id", file.id);
-            if (deleteDbError) throw deleteDbError;
-
-            const { error: deleteStorageError } = await supabase.storage
-              .from("nc-files")
-              .remove([file.path]);
-            if (deleteStorageError) throw deleteStorageError;
-
-            deletedCount++;
-          }
-        } catch (deleteError) {
-          console.error("Error deleting files:", deleteError.message);
-          showToast({
-            type: "error",
-            title: "Delete Failed",
-            message: `An error occurred while deleting files: ${deleteError.message}`,
-          });
-          return;
-        }
+    setIsSaving(true);
+    let uploaded = 0;
+    const failed = [];
+    for (const entry of newFiles) {
+      try {
+        const { path } = await uploadFileToSupabase(entry.file, "nc-files", organisationId, ncrId);
+        await apiFetch(`/ncrs/${ncrId}/attachments`, {
+          method: "POST",
+          organisationId,
+          body: { storagePath: path, fileName: entry.file.name, contentType: entry.file.type || null, sizeBytes: entry.file.size },
+        });
+        uploaded++;
+      } catch (err) {
+        failed.push(entry);
+        showToast({ type: "error", title: "Upload failed", message: `"${entry.file.name}": ${describeApiError(err)}` });
       }
-
-      // UPLOAD FILES
-      if (didUpload) {
-        for (const file of newFiles) {
-          try {
-            const { path } = await uploadFileToSupabase(
-              file,
-              "nc-files",
-              organisationId,
-              ncm_id
-            );
-
-            await saveFileMetadata(
-              {
-                file: file.file ?? file,
-                path,
-                id_ref: ncm_id,
-                organisationId,
-              },
-              "NC Files"
-            );
-
-            uploadedCount++;
-          } catch (fileError) {
-            console.error(
-              `Error uploading file: ${file.file.name}`,
-              fileError.message
-            );
-            if (fileError.message.includes("The resource already exists")) {
-              showToast({
-                type: "error",
-                title: "Upload Failed",
-                message: `Failed to upload file "${file.file.name}": Duplicate file exists. Rename the file and try again.`,
-              });
-            } else {
-              showToast({
-                type: "error",
-                title: "Upload Failed",
-                message: `Failed to upload file "${file.file.name}": ${fileError.message}`,
-              });
-            }
-          }
-        }
-      }
-
-      // RESET
-      setNewFiles([]);
-      setDeletedFiles([]);
-      await queryClient.invalidateQueries({
-        queryKey: ["NC Files", organisationId, ncm_id],
-      });
-
-      // SHOW TOASTS BASED ON SUCCESSFUL ACTIONS
-      if (deletedCount && uploadedCount) {
-        showToast({
-          type: "success",
-          title: "Upload Successful",
-          message: `Uploaded ${uploadedCount} file(s) successfully.`,
-        });
-        setTimeout(() => {
-          showToast({
-            type: "success",
-            title: "Delete Successful",
-            message: `Deleted ${deletedCount} file(s) successfully.`,
-          });
-        }, 1000);
-      } else if (deletedCount) {
-        showToast({
-          type: "success",
-          title: "Delete Successful",
-          message: `Deleted ${deletedCount} file(s) successfully.`,
-        });
-      } else if (uploadedCount) {
-        showToast({
-          type: "success",
-          title: "Upload Successful",
-          message: `Uploaded ${uploadedCount} file(s) successfully.`,
-        });
-      } else {
-        showToast({
-          type: "info",
-          title: "No Changes",
-          message: "No files were added or deleted.",
-        });
-      }
-    } catch (error) {
-      console.error("Unexpected error saving files:", error.message);
-      showToast({
-        type: "error",
-        title: "Save Failed",
-        message: `Unexpected error: ${error.message}`,
-      });
-    } finally {
-      setIsSaving(false);
     }
+    setNewFiles(failed);
+    setIsSaving(false);
+    await attachments.refetch();
+    if (uploaded) showToast({ type: "success", title: "Uploaded", message: `${uploaded} ${uploaded === 1 ? "file" : "files"} attached.` });
   };
 
-  const formatBytes = (bytes, decimals = 2) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const dm = decimals;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+  const onDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(e.type === "dragenter" || e.type === "dragover");
   };
-
-  const getFileIcon = (file) => {
-    const extension = file.name.split(".").pop()?.toLowerCase();
-    const [mainType] = (file.type || "").split("/");
-    if (!file.type)
-      return (
-        <img src="/icons/file-icon.png" alt="file" className="w-10 h-10" />
-      );
-
-    if (mainType === "video")
-      return (
-        <img src="/icons/video-icon.png" alt="video" className="w-10 h-10" />
-      );
-    if (mainType === "audio")
-      return (
-        <img src="/icons/audio-icon.png" alt="audio" className="w-10 h-10" />
-      );
-    if (mainType === "text" && extension !== "csv")
-      return <img src="/icons/text.png" alt="text" className="w-10 h-10" />;
-
-    switch (extension) {
-      case "pdf":
-        return (
-          <img src="/icons/pdf-icon.svg" alt="PDF" className="w-10 h-10" />
-        );
-      case "doc":
-      case "docx":
-      case "docm":
-      case "dotx":
-        return (
-          <img src="/icons/word-icon.png" alt="Word" className="w-10 h-10" />
-        );
-      case "xls":
-      case "xlsx":
-      case "xlsb":
-      case "xlr":
-      case "xlt":
-      case "ods":
-      case "csv":
-      case "xlsm":
-      case "xltx":
-      case "xltm":
-      case "xlam":
-        return (
-          <img src="/icons/excel-icon.png" alt="Excel" className="w-10 h-10" />
-        );
-      case "ppt":
-      case "pptx":
-      case "pptm":
-      case "potx":
-      case "potm":
-      case "ppsx":
-      case "ppsm":
-      case "ppam":
-      case "sldx":
-      case "sldm":
-      case "thmx":
-        return (
-          <img
-            src="/icons/ppt-icon.png"
-            alt="PowerPoint"
-            className="w-10 h-10"
-          />
-        );
-      default:
-        return (
-          <img src="/icons/file-icon.png" alt="File" className="w-10 h-10" />
-        );
-    }
-  };
-
-  const addFiles = (files) => {
-    const MAX_FILE_SIZE_MB = 50;
-    const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-    const validFiles = [];
-
-    Array.from(files).forEach((file) => {
-      if (file.size > MAX_FILE_SIZE_BYTES) {
-        showToast({
-          type: "error",
-          title: "File Too Large",
-          message: `"${file.name}" exceeds the ${MAX_FILE_SIZE_MB}MB limit and was not added.`,
-        });
-        return;
-      }
-
-      const alreadyAdded = newFiles.some(
-        (f) =>
-          f.file.name === file.name &&
-          f.file.size === file.size &&
-          f.file.lastModified === file.lastModified
-      );
-
-      if (!alreadyAdded) {
-        validFiles.push({
-          file,
-          previewUrl: URL.createObjectURL(file),
-        });
-      }
-    });
-
-    if (validFiles.length > 0) {
-      setNewFiles((prev) => [...prev, ...validFiles]);
-    }
-  };
-
-  const handleFileChange = (event) => {
-    if (event.target.files) {
-      addFiles(event.target.files);
-      event.target.value = ""; // allows re-selection of same file
-    }
-  };
-
-  // 📦 Handles file drop events
-  const handleDrop = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
+  const onDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     setDragActive(false);
-    if (event.dataTransfer.files) {
-      addFiles(event.dataTransfer.files);
-    }
+    if (canEdit && e.dataTransfer?.files) addFiles(e.dataTransfer.files);
   };
 
-  // 🎯 Handles drag-over states for styling
-  const handleDrag = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (event.type === "dragenter" || event.type === "dragover") {
-      setDragActive(true);
-    } else if (event.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
+  const visibleSaved = saved.filter((f) => showRemoved || !f.deletedAt);
+  const rows = [...newFiles.map((entry) => ({ entry })), ...visibleSaved.map((file) => ({ file }))];
 
   return (
-    <div className="flex flex-col gap-4 h-full w-full">
+    <div className="flex h-full w-full flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h2 className="text-2xl text-primary-text font-semibold">
-          File Upload
-        </h2>
-        <p className="text-secondary-text text-sm">
-          Upload files and attachments to your claim here.
-        </p>
+        <h3 className="text-xl font-semibold text-primary-text">File upload</h3>
+        <p className="text-sm text-secondary-text">Photos, reports and other evidence for this non-conformance.</p>
       </div>
-      <div
-        onDragEnter={handleDrag}
-        onDragOver={handleDrag}
-        onDragLeave={handleDrag}
-        onDrop={handleDrop}
-        onClick={() => fileInputRef.current.click()}
-        className="flex flex-col gap-5 py-10 items-center justify-center h-full w-full bg-secondary-bg border-2 border-dashed border-border-dark-color rounded-xl p-4 cursor-pointer hover:bg-primary-text/5 transition-colors">
-        <CloudUploadIcon className="w-18 h-18 text-primary-text" />
-        <div className="flex flex-col items-center gap-2">
-          <span className="text-primary-text text-lg">
-            Drag and drop files here or click to select
-          </span>
-          <span className="text-secondary-text">(Max file size 50MB)</span>
+      {canEdit && (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="Add files: drag and drop here or press to choose"
+          onDragEnter={onDrag}
+          onDragOver={onDrag}
+          onDragLeave={onDrag}
+          onDrop={onDrop}
+          onClick={() => fileInputRef.current?.click()}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), fileInputRef.current?.click())}
+          className={`flex w-full cursor-pointer flex-col items-center justify-center gap-5 rounded-xl border-2 border-dashed p-4 py-10 transition-colors ${
+            dragActive ? "border-brand-primary bg-brand-primary/10" : "border-border-dark-color bg-secondary-bg hover:bg-primary-text/5"
+          }`}>
+          <CloudUploadIcon className="h-18 w-18 text-primary-text" />
+          <div className="flex flex-col items-center gap-2 text-center">
+            <span className="text-lg text-primary-text">Drag and drop files here or click to select</span>
+            <span className="text-secondary-text">(Max file size {MAX_FILE_SIZE_MB} MB)</span>
+          </div>
+          <input
+            type="file"
+            data-testid="file-input"
+            onChange={(e) => {
+              if (e.target.files) addFiles(e.target.files);
+              e.target.value = "";
+            }}
+            ref={fileInputRef}
+            hidden
+            multiple
+          />
         </div>
-        <input
-          type="file"
-          onChange={handleFileChange}
-          ref={fileInputRef}
-          hidden
-          multiple
-        />
-      </div>
-      <div className="flex flex-col gap-2 h-full w-full">
-        <div className="flex flex-row justify-between items-center">
-          <h3 className="text-lg text-primary-text">Files & Attachments</h3>
-          <div className="flex gap-3">
-            {deletedFiles.length > 0 && (
-              <CTAButton
-                width="w-36"
-                text="Undo Delete"
-                type="neutral"
-                icon={Undo2Icon}
-                callbackFn={undoAllDeletions}
-              />
+      )}
+
+      <div className="flex w-full flex-col gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-lg text-primary-text">Files & attachments</h4>
+          <div className="flex items-center gap-3">
+            {saved.some((f) => f.deletedAt) && (
+              <label className="flex items-center gap-2 text-sm text-secondary-text">
+                <input type="checkbox" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)} />
+                Show removed
+              </label>
             )}
-            {(newFiles.length > 0 || deletedFiles.length > 0) && (
-              <CTAButton
-                icon={SaveIcon}
-                iconSize="h-4 w-4"
-                width="w-40"
-                text={getSaveButtonText()}
-                disabled={isSaving}
-                type={
-                  deletedFiles.length > 0 && newFiles.length === 0
-                    ? "cancel"
-                    : "success"
-                }
-                callbackFn={handleSave}
-              />
+            {newFiles.length > 0 && (
+              <>
+                <CTAButton text="Discard" type="neutral" icon={Undo2Icon} callbackFn={() => setNewFiles([])} disabled={isSaving} />
+                <CTAButton
+                  icon={SaveIcon}
+                  iconSize="h-4 w-4"
+                  text={isSaving ? "Saving…" : newFiles.length === 1 ? "Save upload" : `Save ${newFiles.length} uploads`}
+                  disabled={isSaving}
+                  type="success"
+                  callbackFn={handleSave}
+                />
+              </>
             )}
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full w-full p-4 bg-secondary-bg border-dashed border-2 border-border-dark-color rounded-lg">
-              <p className="text-secondary-text">Loading files...</p>
-            </div>
-          ) : isError ? (
-            <div className="flex items-center justify-center h-full w-full p-4 bg-secondary-bg border-dashed border-2 border-border-dark-color rounded-lg">
-              <p className="text-error-color">
-                Error loading files: {error.message}
-              </p>
-            </div>
-          ) : newFiles.length + visibleFiles.length > 0 ? (
-            <div className="border-dashed border-2 border-border-dark-color rounded-lg overflow-clip">
-              <table className="w-full table-auto text-sm text-left text-secondary-text">
-                <thead className="bg-primary-bg text-primary-text">
-                  <tr>
-                    <th className="px-2 py-2 text-center">Preview</th>
-                    <th className="px-4 py-2">File Name</th>
-                    <th className="px-4 py-2">Size</th>
-                    <th className="px-4 py-2">Uploaded By</th>
-                    <th className="px-4 py-2 w-10">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...newFiles, ...visibleFiles].map((f) => {
-                    const file = f.file ?? f;
-                    const isImage = file.type?.startsWith("image/");
-                    const previewUrl = f.previewUrl ?? file.url ?? null;
-                    const uniqueKey = `${file.name}-${file.lastModified}-${file.size}`;
-
-                    return (
-                      <tr
-                        key={uniqueKey}
-                        className="border-t border-border-color hover:bg-primary-text/5">
-                        <td>
-                          <div className="flex items-center justify-center p-2">
-                            {isImage ? (
-                              <img
-                                src={previewUrl || "/icons/image-icon.png"}
-                                alt={file.name}
-                                className={`rounded-md ${
-                                  previewUrl
-                                    ? "w-16 h-16 object-cover"
-                                    : "w-10 h-10"
-                                }`}
-                                onLoad={() => {
-                                  if (f.previewUrl)
-                                    URL.revokeObjectURL(f.previewUrl);
-                                }}
-                              />
-                            ) : (
-                              <div className="mb-2">{getFileIcon(file)}</div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-2">
-                          <div className="flex flex-col gap-1.5 justify-center items-start">
-                            {file.name}
-                            {!file.id && (
-                              <div className="text-xs text-gray-900 italic bg-warning-color/60 border border-warning-color py-0.5 px-1.5 rounded-md">
-                                Unsaved File
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap">
-                          {formatBytes(file.size)}
-                        </td>
-                        <td className="px-4 py-2">
-                          {file.id ? (
-                            <div className="flex flex-col gap-1.5">
-                              <span>
-                                {file.owner_first_name} {file.owner_surname}
-                              </span>
-                              <span className="text-xs text-secondary-text">
-                                {formatDate(file.created_at, "ddd d mmm yyyy")}
-                              </span>
-                            </div>
+        {attachments.isLoading ? (
+          <p className="rounded-lg border-2 border-dashed border-border-dark-color bg-secondary-bg p-4 text-center text-secondary-text">Loading files…</p>
+        ) : attachments.error ? (
+          <p role="alert" className="rounded-lg border-2 border-dashed border-border-dark-color bg-secondary-bg p-4 text-center text-error-color">
+            {describeApiError(attachments.error)}
+          </p>
+        ) : rows.length === 0 ? (
+          <p className="rounded-lg border-2 border-dashed border-border-dark-color bg-secondary-bg p-4 text-center text-muted">No files attached yet.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border-2 border-dashed border-border-dark-color">
+            <table className="w-full table-auto text-left text-sm text-secondary-text" aria-label="Attached files">
+              <thead className="bg-primary-bg text-primary-text">
+                <tr>
+                  <th className="px-2 py-2 text-center">Preview</th>
+                  <th className="px-4 py-2">File name</th>
+                  <th className="px-4 py-2">Size</th>
+                  <th className="px-4 py-2">Uploaded by</th>
+                  <th className="w-10 px-4 py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ entry, file }) => {
+                  const name = entry ? entry.file.name : file.fileName;
+                  const type = entry ? entry.file.type : file.contentType;
+                  return (
+                    <tr key={entry ? `new-${name}-${entry.file.lastModified}-${entry.file.size}` : file.id}
+                      className={`border-t border-border-color hover:bg-primary-text/5 ${file?.deletedAt ? "opacity-60" : ""}`}>
+                      <td>
+                        <div className="flex items-center justify-center p-2">
+                          {entry?.previewUrl ? (
+                            <img src={entry.previewUrl} alt={name} className="h-16 w-16 rounded-md object-cover" />
+                          ) : type?.startsWith("image/") ? (
+                            <img src="/icons/image-icon.png" alt="Image" className="h-10 w-10" />
                           ) : (
-                            `${profile.first_name} ${profile.surname}`
+                            <FileIcon name={name} type={type} />
                           )}
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          <div className="flex flex-row justify-center items-center gap-3">
-                            <DownloadLink bucket="nc-files" file={file} />
-                            <button
-                              title="Remove"
-                              className="text-error-color hover:bg-secondary-text/5 p-1.5 rounded-lg cursor-pointer"
-                              onClick={() => {
-                                if (f.id) {
-                                  setDeletedFiles((prev) =>
-                                    prev.find((x) => x.id === f.id)
-                                      ? prev
-                                      : [...prev, f]
-                                  );
-                                  setVisibleFiles((prev) =>
-                                    prev.filter((x) => x.id !== f.id)
-                                  );
-                                } else {
-                                  setNewFiles((prev) =>
-                                    prev.filter((x) => x !== f)
-                                  );
-                                }
-                              }}>
-                              <XIcon className="w-5 h-5" />
-                            </button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex flex-col items-start gap-1.5">
+                          <span className="text-primary-text">{name}</span>
+                          {entry && <span className="rounded-md border border-warning-color bg-warning-color/60 px-1.5 py-0.5 text-xs italic text-gray-900">Unsaved file</span>}
+                          {file?.deletedAt && <span className="text-xs text-error-color">Removed: {file.deleteReason}</span>}
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2">{formatBytes(entry ? entry.file.size : file.sizeBytes)}</td>
+                      <td className="px-4 py-2">
+                        {file ? (
+                          <div className="flex flex-col gap-1">
+                            <span>{file.createdBy?.name ?? "—"}</span>
+                            <span className="text-xs">{new Date(file.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full w-full p-4 bg-secondary-bg border-dashed border-2 border-border-dark-color rounded-lg">
-              <p className="text-secondary-text">No files uploaded yet.</p>
-            </div>
-          )}
-        </div>
+                        ) : (
+                          "You"
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <div className="flex items-center justify-center gap-3">
+                          {entry ? (
+                            <button type="button" aria-label={`Discard ${name}`} title="Discard" onClick={() => discard(entry)} className="rounded-lg p-1.5 text-error-color hover:bg-secondary-text/5 cursor-pointer">
+                              <XIcon className="h-5 w-5" />
+                            </button>
+                          ) : (
+                            <>
+                              <DownloadLink bucket="nc-files" file={{ id: file.id, path: file.storagePath, name }} />
+                              {canEdit && !file.deletedAt && (
+                                <button type="button" aria-label={`Remove ${name}`} title="Remove" onClick={() => { mutation.reset(); setRemoving(file); }}
+                                  className="rounded-lg p-1.5 text-error-color hover:bg-secondary-text/5 cursor-pointer">
+                                  <Trash2Icon className="h-5 w-5" />
+                                </button>
+                              )}
+                              {canEdit && file.deletedAt && (
+                                <button type="button" aria-label={`Restore ${name}`} title="Restore"
+                                  onClick={() => mutation.mutate({ path: `/ncr-attachments/${file.id}/restore` }, { onError: (e) => showToast({ type: "error", title: "Not restored", message: describeApiError(e) }) })}
+                                  className="rounded-lg p-1.5 text-primary-text hover:bg-secondary-text/5 cursor-pointer">
+                                  <RotateCcwIcon className="h-5 w-5" />
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      {removing && (
+        <ReasonDialog
+          title={`Remove ${removing.fileName}?`}
+          label="Reason for removing"
+          confirmText="Remove"
+          pending={mutation.isPending}
+          error={mutation.error}
+          onClose={() => setRemoving(null)}
+          onConfirm={(reason) =>
+            mutation.mutate(
+              { path: `/ncr-attachments/${removing.id}/delete`, body: { reason } },
+              {
+                onSuccess: () => {
+                  showToast({ type: "success", title: "Removed", message: `${removing.fileName} was removed from this NC.` });
+                  setRemoving(null);
+                },
+              }
+            )
+          }
+        />
+      )}
     </div>
   );
 };

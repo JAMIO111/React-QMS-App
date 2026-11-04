@@ -1,223 +1,74 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { Controller, useForm } from "react-hook-form";
-import { ArrowLeftIcon, RotateCcwIcon, Trash2Icon } from "@/components/icons";
-import Field from "../ui/Field";
-import Dialog from "../ui/Dialog";
+import {
+  AlignCenterIcon,
+  ArrowLeftIcon,
+  BoxIcon,
+  ClipboardListIcon,
+  FactoryIcon,
+  FileTextIcon,
+  HashIcon,
+  HistoryIcon,
+  HouseIcon,
+  InboxIcon,
+  LayersIcon,
+  PoundSterlingIcon,
+  QrCodeIcon,
+  ReceiptIcon,
+  RotateCcwIcon,
+  SaveIcon,
+  TagIcon,
+  TagsIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+  Undo2Icon,
+  UsersIcon,
+  WrenchIcon,
+} from "@/components/icons";
 import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import RHFTextArea from "../ui/RHFTextArea";
+import TextInput from "../ui/TextInput";
+import FileDrop from "../ui/FileDrop";
+import SideMenuItem from "../SideMenuItem";
 import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions, useSites } from "../../hooks/useQmsApi";
-import { useClassifications, useEmployees, useNcr, useNcrHistory, useNcrMutation } from "../../hooks/useNcr";
+import { useClassifications, useEmployees, useNcr, useNcrMutation } from "../../hooks/useNcr";
 import { describeApiError } from "../../lib/api-client";
-import { FIELD_LABELS, NC_TYPES, SEVERITIES, STAGES, formatDate, nextStages, stageOf } from "../../lib/ncr";
+import { NC_TYPES, SEVERITIES, formatDate, stageOf } from "../../lib/ncr";
 import { SeverityPill, StagePill } from "./Pills";
 import DeleteNcrDialog from "./DeleteNcrDialog";
-import { PartPicker, PartyPicker, RevisionPicker, TextAreaField } from "./Pickers";
+import { PartPicker, PartyPicker, RevisionPicker } from "./Pickers";
+import ReasonDialog from "./ReasonDialog";
+import StageBar from "./StageBar";
+import NcrHistory from "./NcrHistory";
+import NcrCosts from "./NcrCosts";
+import { EMPTY, changedFields, toBody, toForm } from "./formModel";
 
-const EMPTY = {
-  title: "", severity: null, description: "", requirement: "", actualResult: "", siteId: null, detectedAt: new Date().toISOString().slice(0, 10),
-  detectionProcessId: null, partId: null, partRevisionId: null, lotNumber: "", serialNumber: "", quantityAffected: "", quantityInspected: "",
-  customerId: null, customerReference: "", supplierId: null, purchaseOrder: "", workOrder: "",
-  failureModeId: null, subFailureModeId: null, causalProcessId: null, responsibleEmployeeId: null,
-};
-
-/** API record → form values. */
-const toForm = (n) => ({
-  title: n.title ?? "", severity: n.severity, description: n.description ?? "", requirement: n.requirement ?? "", actualResult: n.actualResult ?? "",
-  siteId: n.site?.id ?? null, detectedAt: n.detectedAt, detectionProcessId: n.detectionProcess?.id ?? null,
-  partId: n.part?.id ?? null, partRevisionId: n.partRevisionId ?? null, lotNumber: n.lotNumber ?? "", serialNumber: n.serialNumber ?? "",
-  quantityAffected: n.quantityAffected ?? "", quantityInspected: n.quantityInspected ?? "",
-  customerId: n.customer?.id ?? null, customerReference: n.customerReference ?? "", supplierId: n.supplier?.id ?? null,
-  purchaseOrder: n.purchaseOrder ?? "", workOrder: n.workOrder ?? "",
-  failureModeId: n.failureMode?.id ?? null, subFailureModeId: n.subFailureMode?.id ?? null, causalProcessId: n.causalProcess?.id ?? null,
-  responsibleEmployeeId: n.responsibleEmployee?.id ?? null,
-});
-
-/** Form values → API body (empty strings → null, quantities → numbers). Only fields relevant to the source. */
-const toBody = (form, source) => {
-  const body = { ...form, title: form.title.trim() };
-  for (const k of ["quantityAffected", "quantityInspected"]) body[k] = form[k] === "" || form[k] === null ? null : Number(form[k]);
-  for (const [k, v] of Object.entries(body)) if (typeof v === "string" && k !== "title" && k !== "detectedAt") body[k] = v.trim() === "" ? null : v.trim();
-  if (source !== "customer") { delete body.customerId; delete body.customerReference; }
-  if (source !== "supplier") { delete body.supplierId; delete body.purchaseOrder; }
-  if (source === "supplier") delete body.workOrder;
-  return body;
-};
-
-const changedFields = (body, original) => Object.fromEntries(Object.entries(body).filter(([k, v]) => JSON.stringify(v ?? null) !== JSON.stringify(original[k] ?? null)));
-
-const Section = ({ title, children }) => (
-  <fieldset className="flex flex-col gap-3 rounded-2xl border border-border-color bg-secondary-bg p-4">
-    <legend className="px-1 text-sm font-semibold text-primary-text">{title}</legend>
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">{children}</div>
-  </fieldset>
+/** Section title with a rule, as in the original NC entry form. */
+const SectionHeading = ({ id, title, sectionRef }) => (
+  <div ref={sectionRef} id={id} className="flex scroll-mt-5 flex-row items-center justify-start gap-3 px-2">
+    <h2 className="whitespace-nowrap text-2xl text-primary-text">{title}</h2>
+    <div className="h-0.5 w-full bg-border-color" />
+  </div>
+);
+const Card = ({ children, className = "" }) => (
+  <div className={`flex flex-col gap-4 rounded-2xl bg-secondary-bg p-6 shadow-lg shadow-shadow-color ${className}`}>{children}</div>
 );
 
-/** Reason dialog for cancelling or reopening. */
-const ReasonDialog = ({ title, label, confirmText, onConfirm, onClose, pending, error }) => {
-  const [reason, setReason] = useState("");
-  return (
-    <Dialog title={title} onClose={onClose}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          onConfirm(reason.trim());
-        }}
-        className="flex flex-col gap-3">
-        <TextAreaField label={label} value={reason} onChange={setReason} maxLength={1000} />
-        {error && (
-          <p role="alert" className="text-sm text-error-color">
-            {describeApiError(error)}
-          </p>
-        )}
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
-            Back
-          </button>
-          <button type="submit" disabled={pending || reason.trim().length < 3} className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
-            {pending ? "Saving…" : confirmText}
-          </button>
-        </div>
-      </form>
-    </Dialog>
-  );
+const btn = {
+  save: "flex items-center gap-2 rounded-lg border border-success-btn-border bg-success-btn-bg px-3 py-1 text-primary-text hover:bg-success-btn-bg-hover disabled:opacity-50 cursor-pointer",
+  main: "flex items-center gap-2 rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1 text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer",
+  neutral: "flex items-center gap-2 rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1 text-primary-text hover:bg-neutral-btn-bg-hover disabled:opacity-50 cursor-pointer",
+  danger: "flex items-center gap-2 rounded-lg border border-error-btn-border bg-error-btn-bg px-3 py-1 text-primary-text hover:bg-error-btn-bg-hover disabled:opacity-50 cursor-pointer",
 };
 
-const StageBar = ({ ncr, canUpdate, dirty, onMove, onCancel, onReopen, pending }) => {
-  const options = nextStages(ncr.stage);
-  const shown = STAGES.filter((s) => s.key !== "cancelled" || ncr.stage === "cancelled");
-  const current = STAGES.findIndex((s) => s.key === ncr.stage);
-  const blocked = !canUpdate || !!ncr.deletedAt;
-  return (
-    <section aria-label="Stage" className="flex flex-col gap-3 rounded-2xl border border-border-color bg-secondary-bg p-4">
-      <ol className="flex flex-wrap items-center gap-1 text-xs">
-        {shown.map((s, i) => (
-          <li key={s.key} aria-current={s.key === ncr.stage ? "step" : undefined}
-            className={`rounded-full px-2 py-1 ${s.key === ncr.stage ? s.tone + " font-semibold" : i < current && ncr.stage !== "cancelled" ? "text-primary-text" : "text-secondary-text"}`}>
-            {s.label}
-          </li>
-        ))}
-      </ol>
-      {ncr.stageReason && (
-        <p className="text-sm text-secondary-text">
-          Last stage change: <span className="text-primary-text">{ncr.stageReason}</span>
-        </p>
-      )}
-      {!blocked && (
-        <div className="flex flex-wrap items-center gap-2">
-          {options.forward.slice(0, 1).map((to) => (
-            <button key={to} type="button" disabled={pending || dirty} onClick={() => onMove(to)}
-              className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
-              {to === "open" ? "Open this NC" : `Move to ${stageOf(to).label}`}
-            </button>
-          ))}
-          {options.forward.length > 1 && (
-            <select aria-label="Move to a later stage" disabled={pending || dirty} value="" onChange={(e) => e.target.value && onMove(e.target.value)}
-              className="rounded-lg border border-border-color bg-text-input-color px-2 py-1.5 text-sm text-primary-text">
-              <option value="">Skip to…</option>
-              {options.forward.slice(1).map((to) => (
-                <option key={to} value={to}>
-                  {stageOf(to).label}
-                </option>
-              ))}
-            </select>
-          )}
-          {options.cancel && (
-            <button type="button" disabled={pending || dirty} onClick={onCancel} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover disabled:opacity-50 cursor-pointer">
-              Cancel NC
-            </button>
-          )}
-          {options.reopen && (
-            <button type="button" disabled={pending} onClick={onReopen} className="flex items-center gap-1 rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover disabled:opacity-50 cursor-pointer">
-              <RotateCcwIcon className="h-4 w-4" /> Reopen
-            </button>
-          )}
-          {dirty && <span className="text-sm text-secondary-text">Save your changes before changing the stage.</span>}
-        </div>
-      )}
-    </section>
-  );
-};
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const LONG_TEXT = new Set(["description", "requirement", "actual_result", "stage_reason", "delete_reason"]);
-
-/** One stored value as people read it: labels for stages and severities, names for linked records. */
-const formatValue = (field, value, names) => {
-  if (value === null || value === undefined || value === "") return "—";
-  if (field === "stage") return stageOf(value).label;
-  if (field === "severity") return SEVERITIES.find((s) => s.key === value)?.label ?? value;
-  if (field === "detected_at") return formatDate(String(value).slice(0, 10));
-  if (field.endsWith("_at")) return new Date(value).toLocaleString("en-GB");
-  if (typeof value === "string" && UUID.test(value)) return names?.[value] ?? "a record you cannot see";
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  return String(value);
-};
-
-const Change = ({ field, entry }) => {
-  const label = FIELD_LABELS[field] ?? field;
-  const from = formatValue(field, entry.previous?.[field], entry.names);
-  const to = formatValue(field, entry.current?.[field], entry.names);
-  if (field === "deleted_at") return <li>{entry.current?.deleted_at ? "Deleted" : "Restored"}</li>;
-  if (LONG_TEXT.has(field)) {
-    return (
-      <li>
-        {label}:
-        <div className="mt-1 grid gap-1 sm:grid-cols-2">
-          <p className="whitespace-pre-wrap rounded-lg bg-primary-bg px-2 py-1">
-            <span className="block text-xs">Before</span>
-            <span className="text-primary-text">{from}</span>
-          </p>
-          <p className="whitespace-pre-wrap rounded-lg bg-primary-bg px-2 py-1">
-            <span className="block text-xs">After</span>
-            <span className="text-primary-text">{to}</span>
-          </p>
-        </div>
-      </li>
-    );
-  }
-  return (
-    <li>
-      {label}: <span className="line-through decoration-secondary-text/60">{from}</span> →{" "}
-      <span className="font-medium text-primary-text">{to}</span>
-    </li>
-  );
-};
-
-// Stamps set alongside another change; the change itself says enough.
-const HIDDEN = new Set(["updated_at", "updated_by", "closed_by", "deleted_by"]);
-
-const History = ({ id }) => {
-  const { data, isLoading, error } = useNcrHistory(id);
-  if (isLoading) return <p className="text-secondary-text">Loading history…</p>;
-  if (error) return <p role="alert" className="text-error-color">{describeApiError(error)}</p>;
-  return (
-    <ol className="flex flex-col gap-3">
-      {data.map((e) => {
-        const fields = e.action === "insert" ? [] : e.changedFields.filter((f) => !HIDDEN.has(f));
-        return (
-          <li key={e.id} className="rounded-xl border border-border-color bg-secondary-bg p-3 text-sm">
-            <p className="text-primary-text">
-              <strong>{e.actor?.name ?? "System"}</strong> {e.action === "insert" ? "created this record" : "changed"}{" "}
-              <span className="text-secondary-text">· {new Date(e.at).toLocaleString("en-GB")}</span>
-              {e.reason && <span className="text-secondary-text"> · “{e.reason}”</span>}
-            </p>
-            {fields.length > 0 && (
-              <ul className="mt-1 flex list-disc flex-col gap-1 pl-5 text-secondary-text">
-                {fields.map((f) => (
-                  <Change key={f} field={f} entry={e} />
-                ))}
-              </ul>
-            )}
-          </li>
-        );
-      })}
-    </ol>
-  );
-};
-
-/** Create or view/edit an NCR: /Non-Conformance/:type/new and /Non-Conformance/:type/:id. */
+/**
+ * Create or view/edit an NCR (/Non-Conformance/:type/new and /:type/:id), laid out like the
+ * original NC entry form: header with Revert / Save, a side menu of sections (NC Details, Cost,
+ * Investigation, Additional Info, History) and scrolling cards.
+ */
 const NcrPage = () => {
   const { type, id: routeId } = useParams();
   const isNew = routeId === "new";
@@ -233,8 +84,9 @@ const NcrPage = () => {
   const mutation = useNcrMutation();
   const { control, reset, watch, setValue } = useForm({ defaultValues: EMPTY });
   const form = watch();
-  const [tab, setTab] = useState("details");
   const [dialog, setDialog] = useState(null); // "cancel" | "reopen" | "delete"
+  const scrollRef = useRef(null);
+  const refs = { details: useRef(null), cost: useRef(null), investigation: useRef(null), info: useRef(null), history: useRef(null) };
 
   const original = useMemo(() => (ncr ? toForm(ncr) : EMPTY), [ncr]);
   useEffect(() => reset(original), [original, reset]);
@@ -315,173 +167,216 @@ const NcrPage = () => {
       }
     />
   );
+  const text = (name, label, props = {}) => (
+    <TextInput label={label} value={form[name] ?? ""} onChange={set(name)} disabled={!canEdit} placeholder={`Enter ${label.toLowerCase()}`} {...props} />
+  );
+
+  const sections = [
+    { key: "details", title: "NC Details", subtitle: "Log NC information", icon: ClipboardListIcon },
+    { key: "cost", title: "Cost", subtitle: "Track NC expenses", icon: PoundSterlingIcon, needsRecord: true },
+    { key: "investigation", title: "Investigation", subtitle: "Classify the cause", icon: WrenchIcon },
+    { key: "info", title: "Additional Info", subtitle: "Files and attachments", icon: InboxIcon, needsRecord: true },
+    { key: "history", title: "History", subtitle: "Who changed what", icon: HistoryIcon, needsRecord: true },
+  ];
+  const goTo = (key) => refs[key].current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-4 overflow-y-auto p-4">
-      <Link to={`/Non-Conformance/${type}`} className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
-        <ArrowLeftIcon className="h-4 w-4" /> {ncType.label} register
-      </Link>
-
-      <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold text-primary-text">{isNew ? `New ${ncType.one}` : ncr.reference}</h1>
-        {!isNew && <StagePill stage={ncr.stage} />}
-        {!isNew && <SeverityPill severity={ncr.severity} />}
-        {!isNew && (
-          <span className="text-sm text-secondary-text">
-            Raised {formatDate(ncr.createdAt)} by {ncr.createdBy?.name ?? "—"}
-            {ncr.closedAt && ` · closed ${formatDate(ncr.closedAt)} by ${ncr.closedBy?.name ?? "—"}`}
-          </span>
-        )}
-        {!isNew && can("ncr.delete") && !ncr.deletedAt && (
-          <button type="button" onClick={() => setDialog("delete")} className="ml-auto flex items-center gap-1 rounded-lg border border-error-btn-border bg-error-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-error-btn-bg-hover cursor-pointer">
-            <Trash2Icon className="h-4 w-4" /> Delete
-          </button>
-        )}
-      </header>
-
-      {!isNew && ncr.deletedAt && (
-        <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
-          Deleted {formatDate(ncr.deletedAt)} by {ncr.deletedBy?.name ?? "—"}: “{ncr.deleteReason}”.
-          {can("ncr.delete") && (
-            <button type="button" onClick={restore} disabled={mutation.isPending} className="flex items-center gap-1 rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1 hover:bg-neutral-btn-bg-hover cursor-pointer">
-              <RotateCcwIcon className="h-4 w-4" /> Restore
+    <div className="flex h-full min-h-0 w-full min-w-0 grow flex-col overflow-hidden bg-primary-bg">
+      {/* Header: back to the register, title, and the save / revert actions. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-color bg-primary-bg px-5 py-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-3 py-2">
+          <Link to={`/Non-Conformance/${type}`} className="flex items-center gap-1 text-sm text-link-color hover:underline">
+            <ArrowLeftIcon className="h-4 w-4" /> {ncType.label} register
+          </Link>
+          <h1 className="text-xl font-semibold text-primary-text">{isNew ? `New ${ncType.one}` : ncr.reference}</h1>
+          {!isNew && <SeverityPill severity={ncr.severity} />}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {isNew && canEdit && (
+            <>
+              <button type="submit" form="ncr-form" disabled={mutation.isPending || !form.title.trim()} className={btn.neutral}>
+                Save as draft
+              </button>
+              <button type="button" onClick={() => save(true)} disabled={mutation.isPending || !form.title.trim()} className={btn.save}>
+                <SaveIcon className="h-4 w-4" /> {mutation.isPending ? "Saving…" : "Raise NC"}
+              </button>
+            </>
+          )}
+          {!isNew && canEdit && (
+            <>
+              {dirty && (
+                <button type="button" onClick={() => reset(original)} className={btn.neutral}>
+                  <Undo2Icon className="h-4 w-4" /> Discard changes
+                </button>
+              )}
+              <button type="submit" form="ncr-form" disabled={mutation.isPending || !dirty || !form.title.trim()} className={btn.save}>
+                <SaveIcon className="h-4 w-4" /> {mutation.isPending ? "Saving…" : "Save changes"}
+              </button>
+            </>
+          )}
+          {!isNew && can("ncr.delete") && !ncr.deletedAt && (
+            <button type="button" onClick={() => setDialog("delete")} className={btn.danger}>
+              <Trash2Icon className="h-4 w-4" /> Delete
             </button>
           )}
         </div>
-      )}
+      </div>
 
-      {!isNew && (
-        <StageBar
-          ncr={ncr}
-          canUpdate={can("ncr.update")}
-          dirty={dirty}
-          pending={mutation.isPending}
-          onMove={(to) => transition(to)}
-          onCancel={() => setDialog("cancel")}
-          onReopen={() => setDialog("reopen")}
-        />
-      )}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Side menu of sections, as in the original form. */}
+        <nav aria-label="Sections" className="hidden h-full w-70 shrink-0 flex-col overflow-y-auto border-r border-border-color bg-primary-bg px-3 md:flex">
+          <div className="mb-2 flex flex-col gap-2 border-b border-border-dark-color pb-3 pt-4">
+            {isNew ? <span className="text-sm text-secondary-text">Not saved yet</span> : <StagePill stage={ncr.stage} />}
+          </div>
+          {sections.map((s, i, arr) => {
+            const disabled = isNew && !!s.needsRecord;
+            return (
+              <button key={s.key} type="button" disabled={disabled} onClick={() => goTo(s.key)} aria-label={`Go to ${s.title}`}>
+                <SideMenuItem title={s.title} subtitle={disabled ? "Save the NC first" : s.subtitle} icon={s.icon} index={i} arrLength={arr.length} disabled={disabled} />
+              </button>
+            );
+          })}
+        </nav>
 
-      {!isNew && (
-        <div role="tablist" aria-label="Sections" className="flex gap-2 border-b border-border-color">
-          {[["details", "Details"], ["history", "History"]].map(([k, label]) => (
-            <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
-              className={`-mb-px border-b-2 px-3 py-2 text-sm cursor-pointer ${tab === k ? "border-theme text-primary-text font-semibold" : "border-transparent text-secondary-text"}`}>
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {tab === "history" && !isNew ? (
-        <History id={ncr.id} />
-      ) : (
-        <form
-          aria-label="Non-conformance details"
-          className="flex flex-col gap-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            save(false);
-          }}>
+        <div ref={scrollRef} className="flex h-full min-w-0 grow flex-col gap-5 overflow-y-auto bg-primary-bg p-5">
+          {!isNew && ncr.deletedAt && (
+            <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
+              Deleted {formatDate(ncr.deletedAt)} by {ncr.deletedBy?.name ?? "—"}: “{ncr.deleteReason}”.
+              {can("ncr.delete") && (
+                <button type="button" onClick={restore} disabled={mutation.isPending} className={btn.neutral}>
+                  <RotateCcwIcon className="h-4 w-4" /> Restore
+                </button>
+              )}
+            </div>
+          )}
           {locked && (
-            <p className="text-sm text-secondary-text">
+            <p className="px-2 text-sm text-secondary-text">
               {ncr.deletedAt ? "Deleted records are read-only." : `This non-conformance is ${stageOf(ncr.stage).label.toLowerCase()}; reopen it to make changes.`}
             </p>
           )}
-          <Section title="What happened">
-            <Field label="Title *" value={form.title} onChange={set("title")} disabled={!canEdit} required maxLength={200} className="md:col-span-2 xl:col-span-3" />
-            {controlled("severity", (f) => (
-              <RHFComboBox {...f} label="Severity" placeholder="Select severity…" sort={false} hint="Needed to open" options={SEVERITIES.map((s) => ({ id: s.key, name: s.label }))} />
-            ))}
-            {controlled("detectedAt", (f) => (
-              <RHFDatePickerPopout {...f} label="Detected on" required valueFormat="iso" maxDate={new Date()} />
-            ))}
-            {controlled("detectionProcessId", (f) => (
-              <RHFComboBox {...f} label="Where detected" placeholder="Select a process…" options={opt(lists?.processes)} />
-            ))}
-            {controlled("siteId", (f) => (
-              <RHFComboBox {...f} label="Site" placeholder="Select a site…" options={(sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))} />
-            ))}
-            <TextAreaField label="Description" value={form.description} onChange={set("description")} disabled={!canEdit} maxLength={5000} className="md:col-span-2 xl:col-span-3" />
-            <TextAreaField label="Requirement / specification" value={form.requirement} onChange={set("requirement")} disabled={!canEdit} rows={2} maxLength={2000} />
-            <TextAreaField label="Actual result" value={form.actualResult} onChange={set("actualResult")} disabled={!canEdit} rows={2} maxLength={2000} />
-          </Section>
-
-          <Section title={source === "customer" ? "Customer and product" : source === "supplier" ? "Supplier and product" : "Product"}>
-            {source === "customer" && (
-              <>
-                {controlled("customerId", (f) => <PartyPicker {...f} kind="customers" label="Customer" current={ncr?.customer} required />)}
-                <Field label="Customer reference" value={form.customerReference} onChange={set("customerReference")} disabled={!canEdit} maxLength={60} hint="Their complaint or claim number" />
-              </>
-            )}
-            {source === "supplier" && (
-              <>
-                {controlled("supplierId", (f) => <PartyPicker {...f} kind="suppliers" label="Supplier" current={ncr?.supplier} required />)}
-                <Field label="Purchase order" value={form.purchaseOrder} onChange={set("purchaseOrder")} disabled={!canEdit} maxLength={60} />
-              </>
-            )}
-            {source !== "supplier" && <Field label="Work order" value={form.workOrder} onChange={set("workOrder")} disabled={!canEdit} maxLength={60} />}
-            {controlled("partId", (f) => <PartPicker {...f} current={ncr?.part} />, () => setValue("partRevisionId", null, { shouldDirty: true }))}
-            {controlled("partRevisionId", (f) => <RevisionPicker {...f} partId={form.partId} />)}
-            <Field label="Lot / batch" value={form.lotNumber} onChange={set("lotNumber")} disabled={!canEdit} maxLength={60} />
-            <Field label="Serial number" value={form.serialNumber} onChange={set("serialNumber")} disabled={!canEdit} maxLength={60} />
-            <Field label="Quantity affected" type="number" min="0" step="any" value={form.quantityAffected} onChange={set("quantityAffected")} disabled={!canEdit} hint="Needed to open" />
-            <Field label="Quantity inspected" type="number" min="0" step="any" value={form.quantityInspected} onChange={set("quantityInspected")} disabled={!canEdit} />
-          </Section>
-
-          <Section title="Classification">
-            {controlled(
-              "failureModeId",
-              (f) => <RHFComboBox {...f} label="Failure mode" placeholder="Select a failure mode…" options={opt(lists?.failureModes)} />,
-              () => setValue("subFailureModeId", null, { shouldDirty: true })
-            )}
-            {controlled("subFailureModeId", (f) => (
-              <RHFComboBox {...f} label="Sub-failure mode" options={opt(subs)}
-                disabled={f.disabled || !form.failureModeId} placeholder={form.failureModeId ? "Select a sub-failure mode…" : "Choose a failure mode first"} />
-            ))}
-            {controlled("causalProcessId", (f) => (
-              <RHFComboBox {...f} label="Causal process" placeholder="Select a process…" options={opt(lists?.processes)} />
-            ))}
-            {source !== "supplier" && (
-              controlled("responsibleEmployeeId", (f) => (
-                <RHFComboBox {...f} label="Responsible operator" placeholder="Select a person…"
-                  options={(employees ?? []).filter((e) => e.active || e.id === form.responsibleEmployeeId).map((e) => ({ id: e.id, name: e.name, hint: e.jobTitle ?? undefined }))} />
-              ))
-            )}
-          </Section>
-
           {mutation.error && !dialog && (
             <p role="alert" className="rounded-lg border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
               {describeApiError(mutation.error)}
             </p>
           )}
-          {canEdit && (
-            <div className="flex flex-wrap gap-2">
-              {isNew ? (
-                <>
-                  <button type="button" onClick={() => save(true)} disabled={mutation.isPending || !form.title.trim()} className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-4 py-2 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
-                    {mutation.isPending ? "Saving…" : "Raise NC"}
-                  </button>
-                  <button type="submit" disabled={mutation.isPending || !form.title.trim()} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-4 py-2 text-sm text-primary-text hover:bg-neutral-btn-bg-hover disabled:opacity-50 cursor-pointer">
-                    Save as draft
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button type="submit" disabled={mutation.isPending || !dirty || !form.title.trim()} className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-4 py-2 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
-                    {mutation.isPending ? "Saving…" : "Save changes"}
-                  </button>
-                  {dirty && (
-                    <button type="button" onClick={() => reset(original)} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-4 py-2 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
-                      Discard changes
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
+
+          <form
+            id="ncr-form"
+            noValidate
+            aria-label="Non-conformance details"
+            className="flex flex-col gap-5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (canEdit && form.title.trim() && (isNew || dirty)) save(false);
+            }}>
+            <SectionHeading id="ncr-details" title="NC Details" sectionRef={refs.details} />
+            {!isNew && (
+              <StageBar
+                ncr={ncr}
+                canUpdate={can("ncr.update")}
+                dirty={dirty}
+                pending={mutation.isPending}
+                onMove={(to) => transition(to)}
+                onCancel={() => setDialog("cancel")}
+                onReopen={() => setDialog("reopen")}
+              />
+            )}
+            <Card>
+              <div className="grid w-full grid-cols-1 items-start gap-x-8 gap-y-4 lg:grid-cols-2">
+                <div className="lg:col-span-2">{text("title", "Title", { required: true, maxLength: 200, icon: FileTextIcon, placeholder: "Short summary of the problem" })}</div>
+                {controlled("detectedAt", (f) => <RHFDatePickerPopout {...f} label="Detected on" required valueFormat="iso" maxDate={new Date()} />)}
+                {controlled("severity", (f) => (
+                  <RHFComboBox {...f} label="Severity" icon={TriangleAlertIcon} placeholder="Select severity" sort={false} hint="Needed to open" options={SEVERITIES.map((s) => ({ id: s.key, name: s.label }))} />
+                ))}
+                {source === "customer" && (
+                  <>
+                    {controlled("customerId", (f) => <PartyPicker {...f} kind="customers" label="Customer" icon={UsersIcon} current={ncr?.customer} required />)}
+                    {text("customerReference", "Customer reference", { maxLength: 60, icon: HashIcon, hint: "Their complaint or claim number" })}
+                  </>
+                )}
+                {source === "supplier" && (
+                  <>
+                    {controlled("supplierId", (f) => <PartyPicker {...f} kind="suppliers" label="Supplier" icon={UsersIcon} current={ncr?.supplier} required />)}
+                    {text("purchaseOrder", "Purchase order", { maxLength: 60, icon: ReceiptIcon })}
+                  </>
+                )}
+                {source !== "supplier" && text("workOrder", "Work order", { maxLength: 60, icon: BoxIcon })}
+                {controlled("partId", (f) => <PartPicker {...f} icon={QrCodeIcon} current={ncr?.part} />, () => setValue("partRevisionId", null, { shouldDirty: true }))}
+                {controlled("partRevisionId", (f) => <RevisionPicker {...f} icon={LayersIcon} partId={form.partId} />)}
+                {text("lotNumber", "Lot / batch", { maxLength: 60, icon: HashIcon })}
+                {text("serialNumber", "Serial number", { maxLength: 60, icon: HashIcon })}
+                <div className="flex w-full items-start gap-5">
+                  {text("quantityInspected", "Quantity inspected", { dataType: "number", icon: LayersIcon, placeholder: "Enter qty" })}
+                  {text("quantityAffected", "Quantity affected", { dataType: "number", icon: LayersIcon, placeholder: "Enter qty", hint: "Needed to open" })}
+                </div>
+                {controlled("siteId", (f) => (
+                  <RHFComboBox {...f} label="Site" icon={HouseIcon} placeholder="Select a site" options={(sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))} />
+                ))}
+                {controlled("detectionProcessId", (f) => (
+                  <RHFComboBox {...f} label="Where detected" icon={FactoryIcon} placeholder="Select a process" options={opt(lists?.processes)} />
+                ))}
+                <div className="lg:col-span-2">
+                  <RHFTextArea label="Description" icon={AlignCenterIcon} value={form.description} onChange={set("description")} disabled={!canEdit} max={5000} rows={4} placeholder="Describe the non-conformance" />
+                </div>
+                <RHFTextArea label="Requirement / specification" icon={ClipboardListIcon} value={form.requirement} onChange={set("requirement")} disabled={!canEdit} max={2000} rows={3} placeholder="What it should have been" />
+                <RHFTextArea label="Actual result" icon={AlignCenterIcon} value={form.actualResult} onChange={set("actualResult")} disabled={!canEdit} max={2000} rows={3} placeholder="What was found" />
+              </div>
+            </Card>
+
+            {!isNew && (
+              <>
+                <SectionHeading id="ncr-cost" title="Cost" sectionRef={refs.cost} />
+                <Card>
+                  <NcrCosts ncrId={ncr.id} canEdit={can("ncr.update") && !locked} />
+                </Card>
+              </>
+            )}
+
+            <SectionHeading id="ncr-investigation" title="Investigation" sectionRef={refs.investigation} />
+            <Card>
+              <div className="grid w-full grid-cols-1 items-start gap-x-8 gap-y-4 lg:grid-cols-2">
+                {controlled(
+                  "failureModeId",
+                  (f) => <RHFComboBox {...f} label="Failure mode" icon={TagIcon} placeholder="Select a failure mode" options={opt(lists?.failureModes)} />,
+                  () => setValue("subFailureModeId", null, { shouldDirty: true })
+                )}
+                {controlled("subFailureModeId", (f) => (
+                  <RHFComboBox {...f} label="Sub-failure mode" icon={TagsIcon} options={opt(subs)}
+                    disabled={f.disabled || !form.failureModeId} placeholder={form.failureModeId ? "Select a sub-failure mode" : "Choose a failure mode first"} />
+                ))}
+                {controlled("causalProcessId", (f) => (
+                  <RHFComboBox {...f} label="Causal process" icon={FactoryIcon} placeholder="Select a process" options={opt(lists?.processes)} />
+                ))}
+                {source !== "supplier" &&
+                  controlled("responsibleEmployeeId", (f) => (
+                    <RHFComboBox {...f} label="Responsible operator" icon={UsersIcon} placeholder="Select an operator"
+                      options={(employees ?? []).filter((e) => e.active || e.id === form.responsibleEmployeeId).map((e) => ({ id: e.id, name: e.name, hint: e.jobTitle ?? undefined }))} />
+                  ))}
+              </div>
+              <p className="text-sm text-secondary-text">Containment, root cause (8D) and corrective actions will be added here in a later release.</p>
+            </Card>
+          </form>
+
+          {!isNew && (
+            <>
+              <SectionHeading id="ncr-info" title="Additional Information" sectionRef={refs.info} />
+              <Card>
+                <FileDrop ncrId={ncr.id} canEdit={can("ncr.update") && !locked} />
+                <p className="pl-1 text-sm italic text-secondary-text">
+                  {ncr.reference} raised by {ncr.createdBy?.name ?? "Unknown"} on{" "}
+                  {new Date(ncr.createdAt).toLocaleString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  {ncr.closedAt && ` · closed ${formatDate(ncr.closedAt)} by ${ncr.closedBy?.name ?? "—"}`}
+                </p>
+              </Card>
+
+              <SectionHeading id="ncr-history" title="History" sectionRef={refs.history} />
+              <Card>
+                <NcrHistory id={ncr.id} />
+              </Card>
+            </>
           )}
-        </form>
-      )}
+        </div>
+      </div>
 
       {dialog === "cancel" && (
         <ReasonDialog title={`Cancel ${ncr.reference}?`} label="Why is it being cancelled?" confirmText="Cancel NC" pending={mutation.isPending} error={mutation.error}

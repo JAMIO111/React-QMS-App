@@ -1,29 +1,27 @@
 import { useState } from "react";
 import { ChevronDownIcon } from "@/components/icons";
+import MenuCard from "../ui/MenuCard";
 
+/** A MenuCard whose body opens and closes from the button in its header. */
 const Accordion = ({ title, subtitle, children }) => {
   const [expanded, setExpanded] = useState(false);
-  const iconClass = expanded ? "rotate-180" : "";
   return (
-    <div className="flex flex-col grow-1 w-full px-5 py-3 rounded-2xl bg-secondary-bg border border-border-color">
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-primary-text text-xl font-semibold">{title}</h2>
-          <h3 className="text-secondary-text text-sm">{subtitle}</h3>
-        </div>
+    <MenuCard
+      title={title}
+      subtitle={subtitle}
+      className="w-full"
+      action={
         <button
           type="button"
           aria-expanded={expanded}
           aria-label={`${expanded ? "Collapse" : "Expand"} ${title}`}
           onClick={() => setExpanded((prev) => !prev)}
-          className={`flex items-center justify-center w-8 h-8 rounded-md text-secondary-text hover:bg-border-color/50 transition-colors cursor-pointer`}>
-          <ChevronDownIcon
-            className={`w-7 h-7 transition-transform ${iconClass}`}
-          />
+          className="flex h-8 w-8 items-center justify-center rounded-md text-secondary-text transition-colors hover:bg-border-color/50 cursor-pointer">
+          <ChevronDownIcon className={`h-7 w-7 transition-transform ${expanded ? "rotate-180" : ""}`} />
         </button>
-      </div>
-      {expanded && <div className="mt-4">{children}</div>}
-    </div>
+      }>
+      {expanded && children}
+    </MenuCard>
   );
 };
 

@@ -5,6 +5,7 @@ import { useAuth } from "../../contexts/AuthProvider";
 import { useConfirm } from "../../contexts/ConfirmationModalProvider";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeMfaError, removeFactor, verifiedTotpFactors } from "../../lib/mfa";
+import MenuCard from "../ui/MenuCard";
 import EnrolAuthenticator from "../mfa/EnrolAuthenticator";
 
 /** Settings → Account: turn two-factor authentication on or off for your own account. */
@@ -48,20 +49,18 @@ const TwoFactorCard = () => {
   };
 
   return (
-    <section aria-labelledby="two-factor-title" className="flex flex-col gap-3 bg-secondary-bg rounded-3xl border border-border-color p-5">
-      <div className="flex items-center justify-between gap-3">
-        <h2 id="two-factor-title" className="text-primary-text text-xl">
-          Two-factor authentication
-        </h2>
-        {enabled && (
+    <MenuCard
+      title="Two-factor authentication"
+      titleId="two-factor-title"
+      subtitle="Sign in with your password and a code from an authenticator app on your phone."
+      bodyClassName="flex flex-col gap-3"
+      action={
+        enabled && (
           <span className="flex items-center gap-1 rounded-full bg-success-color/15 px-2 py-0.5 text-sm text-success-color">
             <ShieldCheckIcon className="h-4 w-4" /> On
           </span>
-        )}
-      </div>
-      <p className="text-secondary-text text-sm">
-        Sign in with your password and a code from an authenticator app on your phone.
-      </p>
+        )
+      }>
       {error && (
         <p role="alert" className="text-sm text-error-color">
           {error}
@@ -96,7 +95,7 @@ const TwoFactorCard = () => {
           Turn off two-factor
         </button>
       )}
-    </section>
+    </MenuCard>
   );
 };
 

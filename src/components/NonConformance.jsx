@@ -240,7 +240,8 @@ const NonConformance = () => {
                 callback={handleActiveModalType}
                 icon={<SlidersHorizontalIcon className="h-4.5 w-4.5" />}
               />
-              {activeModalType === "Filter" && <FilterPane onClose={handleCloseModal} source={ncType.source} />}
+              {/* The drawer calls onClose after sliding out; by then another menu may be open, so only clear the filter. */}
+              {activeModalType === "Filter" && <FilterPane onClose={() => setActiveModalType((t) => (t === "Filter" ? null : t))} source={ncType.source} />}
             </div>
           </Suspense>
         </div>

@@ -5,6 +5,7 @@ import { describeApiError } from "../../lib/api-client";
 import { useAuth } from "../../contexts/AuthProvider";
 import { useConfirm } from "../../contexts/ConfirmationModalProvider";
 import { useToast } from "../../contexts/ToastProvider";
+import MenuCard from "../ui/MenuCard";
 import { useMemberMutation, useMembers, usePermissions, useRoles, useSites } from "../../hooks/useQmsApi";
 
 const STATUS_STYLES = {
@@ -49,8 +50,7 @@ const InviteForm = ({ roles, sites }) => {
   };
 
   return (
-    <form onSubmit={submit} aria-label="Invite member" className="rounded-2xl border border-border-color bg-secondary-bg p-5 flex flex-col gap-3">
-      <h3 className="text-primary-text text-xl font-semibold">Invite someone</h3>
+    <MenuCard as="form" onSubmit={submit} aria-label="Invite member" title="Invite someone" subtitle="They get an email with a link to join" bodyClassName="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Email address" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="flex-1 min-w-56" />
         <label className="flex flex-col gap-1 text-sm font-medium text-primary-text">
@@ -91,7 +91,7 @@ const InviteForm = ({ roles, sites }) => {
           {note}
         </p>
       )}
-    </form>
+    </MenuCard>
   );
 };
 
@@ -236,14 +236,16 @@ const SettingsUsers = () => {
 
       {canManage && <InviteForm roles={roleList} sites={siteList} />}
 
-      <section aria-label="Members" className="rounded-2xl border border-border-color bg-secondary-bg p-5">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-primary-text text-xl font-semibold">Members</h3>
+      <MenuCard
+        aria-label="Members"
+        title="Members"
+        subtitle="People in the organisation and their roles"
+        action={
           <label className="flex items-center gap-2 text-sm text-secondary-text">
             <input type="checkbox" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)} />
             Show removed
           </label>
-        </div>
+        }>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
@@ -261,10 +263,9 @@ const SettingsUsers = () => {
             </tbody>
           </table>
         </div>
-      </section>
+      </MenuCard>
 
-      <section aria-label="Roles" className="rounded-2xl border border-border-color bg-secondary-bg p-5 flex flex-col gap-2">
-        <h3 className="text-primary-text text-xl font-semibold">Roles</h3>
+      <MenuCard aria-label="Roles" title="Roles" subtitle="What each role can do" bodyClassName="flex flex-col gap-2">
         {roleList.map((r) => (
           <details key={r.id} className="text-primary-text">
             <summary className="cursor-pointer">
@@ -277,7 +278,7 @@ const SettingsUsers = () => {
             </ul>
           </details>
         ))}
-      </section>
+      </MenuCard>
     </div>
   );
 };

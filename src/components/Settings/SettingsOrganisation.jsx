@@ -6,18 +6,18 @@ import OrganisationLogo from "./OrganisationLogo";
 import RequireMfaSetting from "./RequireMfaSetting";
 import { describeApiError, API_URL } from "../../lib/api-client";
 import { useOrganisationDetails, usePermissions, useUpdateOrganisation } from "../../hooks/useQmsApi";
+import MenuCard from "../ui/MenuCard";
 import { useToast } from "../../contexts/ToastProvider";
 
 /** Shown instead of a section when the API cannot be reached. */
 export const ApiUnavailable = ({ error }) => (
-  <div role="alert" className="rounded-2xl border border-border-color bg-secondary-bg p-5 text-primary-text">
-    <h3 className="font-semibold mb-1">Organisation settings need the QMS API</h3>
+  <MenuCard as="div" role="alert" title="Organisation settings need the QMS API">
     <p className="text-sm text-secondary-text">
       {error?.code === "api_unreachable"
         ? `The API could not be reached at ${API_URL}. Start it with "npm run api:dev" (see api/README.md) or set VITE_API_URL.`
         : describeApiError(error)}
     </p>
-  </div>
+  </MenuCard>
 );
 
 const toForm = (org) => ({
@@ -74,7 +74,7 @@ const SettingsOrganisation = () => {
         </p>
       </div>
 
-      <form onSubmit={submit} className="rounded-2xl border border-border-color bg-secondary-bg p-5 flex flex-col gap-4" aria-label="Organisation details">
+      <MenuCard as="form" onSubmit={submit} aria-label="Organisation details" title="Details" subtitle="Name, currency, VAT and NCR numbering" bodyClassName="flex flex-col gap-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Name" value={form.name} onChange={set("name")} disabled={!canManage} required minLength={2} maxLength={100} />
           <Field label="Identifier" value={org.slug} disabled hint="Used in links; set when the organisation was created" />
@@ -132,7 +132,7 @@ const SettingsOrganisation = () => {
             {update.isPending ? "Saving…" : "Save changes"}
           </button>
         )}
-      </form>
+      </MenuCard>
 
       <OrganisationLogo logoPath={org.settings.logoPath ?? null} canManage={canManage} />
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { THEME_COLOURS, applyThemeColour, setPendingThemeColour } from "../../lib/theme-colours";
 import { describeApiError } from "../../lib/api-client";
 import { useUpdateOrganisation } from "../../hooks/useQmsApi";
+import MenuCard from "../ui/MenuCard";
 import { useToast } from "../../contexts/ToastProvider";
 
 /** How long to wait after the last click before saving, so rapid changes become one request. */
@@ -89,16 +90,9 @@ const ThemeColourPicker = ({ value, canManage }) => {
   };
 
   return (
-    <fieldset className="rounded-2xl border border-border-color bg-secondary-bg p-5 flex flex-col gap-3">
+    <MenuCard title="Theme colour" subtitle="Used for buttons, highlights and active items across the app, in light and dark mode.">
+      <fieldset className="flex flex-col gap-3">
       <legend className="sr-only">Theme colour</legend>
-      <div>
-        <h3 className="text-primary-text font-semibold" aria-hidden="true">
-          Theme colour
-        </h3>
-        <p className="text-secondary-text text-sm">
-          Used for buttons, highlights and active items across the app, in light and dark mode.
-        </p>
-      </div>
       <div className="flex flex-wrap gap-3">
         {THEME_COLOURS.map((c) => {
           const isSelected = c.value === selected;
@@ -133,7 +127,8 @@ const ThemeColourPicker = ({ value, canManage }) => {
           {describeApiError(error)}
         </p>
       )}
-    </fieldset>
+      </fieldset>
+    </MenuCard>
   );
 };
 

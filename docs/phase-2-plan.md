@@ -166,8 +166,8 @@ applied to the live project before the next starts.
 |---|---|
 | **2.0** | Auth gate: set-password and forgot-password flows, MFA enrolment and per-org enforcement |
 | **2.1** | Units catalogue, customers, suppliers, parts, part revisions (+ legacy master data migrated) |
-| **2.2** | Inspection plans and characteristics (versioning, release) |
-| **2.3** | Inspection records and manual results; failure → NCR prompt/auto |
+| **2.2** | *Replaced (2026-11-04) by the process control plan, `docs/process-control-plan.md` slices PC1–PC4* |
+| **2.3** | *Replaced by `docs/process-control-plan.md` PC4–PC5 (inspection records, measurements, NC from a failure)* |
 | **2.4** | NCR core: register, detail, stage machine, classifications, comments, attachments, history; legacy NCRs migrated; legacy screens switched over |
 | **2.5** | Containment, investigation / root cause, dispositions with approval, costs |
 | **2.6** | CAPA: links, actions, effectiveness verification, NCR closure rules |

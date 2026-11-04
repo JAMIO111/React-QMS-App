@@ -37,6 +37,14 @@ import { OrganisationsController } from './organisations/organisations.controlle
 import { OrganisationsService } from './organisations/organisations.service';
 import { DepartmentsController, SitesController } from './structure/structure.controller';
 import { StructureService } from './structure/structure.service';
+import {
+  ControlPlanRevisionsController,
+  ControlPlansController,
+  MachinesController,
+  PartFamiliesController,
+  SpecValuesController,
+} from './process-control/process-control.controller';
+import { ProcessControlService } from './process-control/process-control.service';
 import { OrganisationGuard } from './tenancy/organisation.guard';
 
 @Module({})
@@ -91,6 +99,11 @@ export class AppModule implements NestModule {
         CalibrationsController,
         CalibrationAttachmentsController,
         CalibrationDashboardController,
+        MachinesController,
+        PartFamiliesController,
+        SpecValuesController,
+        ControlPlansController,
+        ControlPlanRevisionsController,
       ],
       providers: [
         { provide: ENV, useValue: env },
@@ -104,6 +117,7 @@ export class AppModule implements NestModule {
         CalibrationService,
         CalibrationRecordsService,
         CalibrationDashboardService,
+        ProcessControlService,
         OrganisationsService,
         StructureService,
         MembersService,

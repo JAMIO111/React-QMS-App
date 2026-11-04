@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import Table from "../Table";
 import { SearchIcon } from "@/components/icons";
@@ -98,3 +98,70 @@ export const ActiveBadge = ({ active }) =>
   ) : (
     <span className="rounded-full bg-border-color px-2 py-0.5 text-xs text-secondary-text">Inactive</span>
   );
+
+const selectClass =
+  "rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-primary-text hover:border-border-dark-color focus:outline-none focus:border-brand-primary disabled:opacity-60";
+
+/** Labelled native select. options: [{ value, label }]; an empty value means "none". */
+export const SelectField = ({ label, value, onChange, options, placeholder = "— None —", required = false, disabled = false, hint, className = "" }) => {
+  const id = useId();
+  return (
+    <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
+      <label htmlFor={id} className="text-sm font-medium text-secondary-text">
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value ?? ""}
+        required={required}
+        disabled={disabled}
+        aria-describedby={hint ? `${id}-help` : undefined}
+        onChange={(e) => onChange(e.target.value || null)}
+        className={selectClass}>
+        {(!required || !value) && <option value="">{placeholder}</option>}
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      {hint && (
+        <p id={`${id}-help`} className="text-xs text-secondary-text">
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+};
+
+/** Error line under a form. */
+export const FormError = ({ error }) =>
+  error ? (
+    <p role="alert" className="text-sm text-error-color">
+      {describeApiError(error)}
+    </p>
+  ) : null;
+
+/** Labelled multi-line text input. */
+export const TextAreaField = ({ label, hint, className = "", rows = 3, ...props }) => {
+  const id = useId();
+  return (
+    <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
+      <label htmlFor={id} className="text-sm font-medium text-secondary-text">
+        {label}
+      </label>
+      <textarea
+        id={id}
+        rows={rows}
+        aria-describedby={hint ? `${id}-help` : undefined}
+        className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-primary-text hover:border-border-dark-color focus:outline-none focus:border-brand-primary disabled:opacity-60"
+        {...props}
+      />
+      {hint && (
+        <p id={`${id}-help`} className="text-xs text-secondary-text">
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+};

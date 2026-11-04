@@ -130,6 +130,7 @@ export class MasterDataService {
       const where: SQL[] = [sql`p.organisation_id = ${ctx.organisationId!}::uuid`];
       if (!q.includeInactive) where.push(sql`p.active`);
       if (q.customerId) where.push(sql`p.customer_id = ${q.customerId}::uuid`);
+      if (q.partFamilyId) where.push(sql`p.part_family_id = ${q.partFamilyId}::uuid`);
       if (q.q) where.push(sql`(p.part_number ilike ${likePattern(q.q)} or p.name ilike ${likePattern(q.q)})`);
       if (cursor) where.push(sql`(upper(p.part_number), p.id) > (${cursor.k}, ${cursor.id}::uuid)`);
       const rows = await this.selectParts(db, sql.join(where, sql` and `), q.limit + 1);
@@ -217,13 +218,18 @@ export class MasterDataService {
       customer_id: string | null;
       customer_code: string | null;
       customer_name: string | null;
+      family_id: string | null;
+      family_code: string | null;
+      family_name: string | null;
       current_revision: string | null;
     }>(sql`
       select p.id, p.part_number, p.name, p.description, p.active,
              c.id as customer_id, c.code as customer_code, coalesce(c.display_name, c.name) as customer_name,
+             f.id as family_id, f.code as family_code, f.name as family_name,
              (select r.revision from public.part_revisions r where r.part_id = p.id and r.status = 'released') as current_revision
       from public.parts p
       left join public.customers c on c.id = p.customer_id and c.organisation_id = p.organisation_id
+      left join public.part_families f on f.id = p.part_family_id
       where ${where}
       order by upper(p.part_number), p.id
       limit ${limit}`);
@@ -234,6 +240,7 @@ export class MasterDataService {
       description: r.description,
       active: r.active,
       customer: r.customer_id ? { id: r.customer_id, code: r.customer_code!, name: r.customer_name! } : null,
+      partFamily: r.family_id ? { id: r.family_id, code: r.family_code!, name: r.family_name! } : null,
       currentRevision: r.current_revision,
     }));
   }

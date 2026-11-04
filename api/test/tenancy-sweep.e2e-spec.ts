@@ -93,6 +93,21 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/calibrations/{id}/attachments': { storagePath: `${b.org}/calibration/${a.calibration}/x.pdf`, fileName: 'x.pdf', sizeBytes: 1 },
     'POST /api/v1/calibration-attachments/{id}/delete': { reason: 'Hijacked' },
     'POST /api/v1/calibration-attachments/{id}/restore': undefined,
+    'PATCH /api/v1/machines/{id}': { name: 'Hijacked' },
+    'GET /api/v1/part-families/{id}': undefined,
+    'PATCH /api/v1/part-families/{id}': { name: 'Hijacked' },
+    'GET /api/v1/part-revisions/{id}/characteristics': undefined,
+    'POST /api/v1/part-revisions/{id}/characteristics': { characteristicKey: 'HIJACK', nominal: 1, unitCode: 'mm' },
+    'PATCH /api/v1/part-revision-characteristics/{id}': { nominal: 999 },
+    'DELETE /api/v1/part-revision-characteristics/{id}': undefined,
+    'GET /api/v1/control-plans/{id}': undefined,
+    'PATCH /api/v1/control-plans/{id}': { title: 'Hijacked' },
+    'GET /api/v1/control-plans/{id}/history': undefined,
+    'POST /api/v1/control-plans/{id}/applicability': { partFamilyId: a.family },
+    'POST /api/v1/control-plans/{id}/revisions': { revisionCode: 'Z' },
+    'DELETE /api/v1/control-plan-applicability/{id}': undefined,
+    'PATCH /api/v1/control-plan-revisions/{id}': { changeReason: 'Hijacked' },
+    'POST /api/v1/control-plan-revisions/{id}/transitions': { action: 'obsolete', reason: 'Hijacked' },
   })[`${op.method} ${op.path}`];
 
 const hasSample = (op: Op) =>
@@ -149,6 +164,21 @@ const hasSample = (op: Op) =>
     'POST /api/v1/calibrations/{id}/attachments',
     'POST /api/v1/calibration-attachments/{id}/delete',
     'POST /api/v1/calibration-attachments/{id}/restore',
+    'PATCH /api/v1/machines/{id}',
+    'GET /api/v1/part-families/{id}',
+    'PATCH /api/v1/part-families/{id}',
+    'GET /api/v1/part-revisions/{id}/characteristics',
+    'POST /api/v1/part-revisions/{id}/characteristics',
+    'PATCH /api/v1/part-revision-characteristics/{id}',
+    'DELETE /api/v1/part-revision-characteristics/{id}',
+    'GET /api/v1/control-plans/{id}',
+    'PATCH /api/v1/control-plans/{id}',
+    'GET /api/v1/control-plans/{id}/history',
+    'POST /api/v1/control-plans/{id}/applicability',
+    'POST /api/v1/control-plans/{id}/revisions',
+    'DELETE /api/v1/control-plan-applicability/{id}',
+    'PATCH /api/v1/control-plan-revisions/{id}',
+    'POST /api/v1/control-plan-revisions/{id}/transitions',
   ].includes(`${op.method} ${op.path}`);
 
 /** Organisation A's record id for the resource a path refers to. */
@@ -171,6 +201,12 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/gauge-type-characteristics/')) return a.typeCharacteristic;
   if (path.startsWith('/api/v1/calibrations/')) return a.calibration;
   if (path.startsWith('/api/v1/calibration-attachments/')) return a.calibrationAttachment;
+  if (path.startsWith('/api/v1/machines/')) return a.machine;
+  if (path.startsWith('/api/v1/part-families/')) return a.family;
+  if (path.startsWith('/api/v1/part-revision-characteristics/')) return a.specValue;
+  if (path.startsWith('/api/v1/control-plans/')) return a.plan;
+  if (path.startsWith('/api/v1/control-plan-applicability/')) return a.applicability;
+  if (path.startsWith('/api/v1/control-plan-revisions/')) return a.planRevision;
   return undefined;
 };
 
@@ -216,6 +252,12 @@ beforeAll(async () => {
   a.gaugeCharacteristic = (await one('select id from public.gauge_characteristics where gauge_id = $1', [a.gauge])).id;
   a.calibration = (await one(`insert into public.calibrations (organisation_id, gauge_id, reference, outcome) values ($1, $2, 'A-CAL-1', 'fail') returning id`, [ids.orgA, a.gauge])).id;
   a.calibrationAttachment = (await one(`insert into public.calibration_attachments (organisation_id, calibration_id, storage_path, file_name, size_bytes) values ($1::uuid, $2::uuid, $1::text || '/calibration/' || $2::text || '/a.pdf', 'a.pdf', 1) returning id`, [ids.orgA, a.calibration])).id;
+  a.machine = (await one(`insert into public.machines (organisation_id, code, name) values ($1, 'A-M1', 'Alpha machine') returning id`, [ids.orgA])).id;
+  a.family = (await one(`insert into public.part_families (organisation_id, code, name) values ($1, 'A-FAM', 'Alpha family') returning id`, [ids.orgA])).id;
+  a.specValue = (await one(`insert into public.part_revision_characteristics (organisation_id, part_revision_id, characteristic_key, nominal, unit_code) values ($1, $2, 'LENGTH', 10, 'mm') returning id`, [ids.orgA, a.draftRevision])).id;
+  a.plan = (await one(`insert into public.control_plans (organisation_id, plan_code, title) values ($1, 'A-CP', 'Alpha plan') returning id`, [ids.orgA])).id;
+  a.applicability = (await one(`insert into public.control_plan_applicability (organisation_id, control_plan_id, part_family_id) values ($1, $2, $3) returning id`, [ids.orgA, a.plan, a.family])).id;
+  a.planRevision = (await one(`insert into public.control_plan_revisions (organisation_id, control_plan_id, revision_code) values ($1, $2, 'A') returning id`, [ids.orgA, a.plan])).id;
   b.org = ids.orgB;
   b.viewerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'viewer'`, [ids.orgB])).id;
   await admin.query(`insert into public.departments (organisation_id, site_id, code, name) values ($1, $2, 'QA', 'Quality B')`, [ids.orgB, ids.siteB]);
@@ -290,6 +332,15 @@ describe('tenancy sweep over every API route', () => {
       [a.gauge, a.calibration, a.gaugeType],
     );
     expect(cal.rows[0]).toEqual({ gauge: 'Alpha gauge/true', characteristics: 1, calibration: '/true/true', calibrations: 1, type: 'Alpha caliper', template: 1 });
+    const pc = await admin.query(
+      `select (select name from public.machines where id = $1) machine, (select name from public.part_families where id = $2) family,
+              (select nominal::text from public.part_revision_characteristics where id = $3) spec,
+              (select title from public.control_plans where id = $4) plan,
+              (select count(*)::int from public.control_plan_applicability where control_plan_id = $4) scope,
+              (select string_agg(status || '/' || coalesce(change_reason, ''), ',') from public.control_plan_revisions where control_plan_id = $4) revisions`,
+      [a.machine, a.family, a.specValue, a.plan],
+    );
+    expect(pc.rows[0]).toEqual({ machine: 'Alpha machine', family: 'Alpha family', spec: '10', plan: 'Alpha plan', scope: 1, revisions: 'draft/' });
   });
 
   it('never includes another organisation’s identifiers in list responses', async () => {

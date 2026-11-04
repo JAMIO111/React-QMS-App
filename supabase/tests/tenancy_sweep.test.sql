@@ -80,6 +80,17 @@ BEGIN
     FROM public.calibrations c JOIN public.gauge_characteristics k ON k.gauge_id = c.gauge_id WHERE c.organisation_id = a;
   INSERT INTO public.calibration_attachments (organisation_id, calibration_id, storage_path, file_name, size_bytes)
     SELECT a, id, a || '/calibration/' || id || '/cert.pdf', 'cert.pdf', 5 FROM public.calibrations WHERE organisation_id = a;
+  -- Process control (PC1).
+  INSERT INTO public.machines (organisation_id, code, name, site_id) VALUES (a, 'SW-M1', 'Sweep lathe', site);
+  INSERT INTO public.part_families (organisation_id, code, name) VALUES (a, 'SWF', 'Sweep family');
+  UPDATE public.parts SET part_family_id = (SELECT id FROM public.part_families WHERE organisation_id = a) WHERE organisation_id = a AND part_number = 'SW-P1';
+  INSERT INTO public.part_revision_characteristics (organisation_id, part_revision_id, characteristic_key, nominal, lower_limit, upper_limit, unit_code)
+    SELECT a, id, 'LENGTH', 100, 99.9, 100.1, 'mm' FROM public.part_revisions WHERE organisation_id = a;
+  INSERT INTO public.control_plans (organisation_id, plan_code, title) VALUES (a, 'SW-CP-1', 'Sweep plan');
+  INSERT INTO public.control_plan_applicability (organisation_id, control_plan_id, part_family_id)
+    SELECT a, p.id, f.id FROM public.control_plans p, public.part_families f WHERE p.organisation_id = a AND f.organisation_id = a;
+  INSERT INTO public.control_plan_revisions (organisation_id, control_plan_id, revision_code)
+    SELECT a, id, 'A' FROM public.control_plans WHERE organisation_id = a;
 
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));

@@ -33,6 +33,14 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   gauges_org_asset_number_key: 'A gauge with this asset number already exists',
   gauge_types_name_key: 'A gauge type with this name already exists',
   calibration_readings_one_per_characteristic: 'This characteristic already has a reading',
+  machines_org_code_key: 'A machine with this code already exists',
+  part_families_org_code_key: 'A part family with this code already exists',
+  part_revision_characteristics_key: 'This revision already has a value for that characteristic key',
+  control_plans_org_code_key: 'A control plan with this code already exists',
+  control_plan_applicability_scope_key: 'The plan already has this scope entry',
+  control_plan_revisions_code_key: 'This plan already has that revision',
+  control_plan_revisions_one_open: 'This plan already has a revision in draft or under review; finish or withdraw it first',
+  control_plan_revisions_one_effective: 'This plan already has an effective revision',
 };
 
 /**
@@ -69,6 +77,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'ncr_rule', pg.message ?? 'That change is not allowed for this non-conformance');
     case 'QM006': // calibration rules (messages are written for users)
       return new ApiError(409, 'calibration_rule', pg.message ?? 'That change is not allowed for this calibration record');
+    case 'QM007': // process control rules (messages are written for users)
+      return new ApiError(409, 'control_plan_rule', pg.message ?? 'That change is not allowed for this control plan');
     case 'P0002': // no_data_found raised by app functions
       return ApiError.notFound();
     case '57014': // query_canceled (statement_timeout)

@@ -1,4 +1,4 @@
-import { BoxesIcon, GaugeIcon, LayoutDashboardIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { BoxesIcon, ClipboardCheckIcon, GaugeIcon, LayoutDashboardIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
@@ -20,6 +20,13 @@ export const menuStructure = [
     ],
   },
   {
+    name: "Process Control",
+    icon: ClipboardCheckIcon,
+    permission: "process_control.read",
+    path: "/Process-Control",
+    subMenu: [{ name: "Control Plans", path: "/Process-Control/Plans" }],
+  },
+  {
     name: "Calibration",
     icon: GaugeIcon,
     permission: "calibration.read",
@@ -36,6 +43,8 @@ export const menuStructure = [
     path: "/Parts",
     subMenu: [
       { name: "Parts", path: "/Parts" },
+      { name: "Part Families", path: "/Part-Families" },
+      { name: "Machines", path: "/Machines" },
       { name: "Customers", path: "/Customers" },
       { name: "Suppliers", path: "/Suppliers" },
     ],

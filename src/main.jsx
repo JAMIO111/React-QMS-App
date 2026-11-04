@@ -43,6 +43,11 @@ const CalibrationRecordPage = lazy(() => import("./components/calibration/Calibr
 const SettingsCalibration = lazy(() => import("./components/Settings/SettingsCalibration.jsx"));
 const PartDetailPage = lazy(() => import("./components/master-data/PartDetailPage.jsx"));
 const PartiesPage = lazy(() => import("./components/master-data/PartiesPage.jsx"));
+const MachinesPage = lazy(() => import("./components/master-data/MachinesPage.jsx"));
+const PartFamiliesPage = lazy(() => import("./components/master-data/PartFamiliesPage.jsx"));
+const PartFamilyPage = lazy(() => import("./components/master-data/PartFamilyPage.jsx"));
+const ControlPlansPage = lazy(() => import("./components/process-control/ControlPlansPage.jsx"));
+const ControlPlanPage = lazy(() => import("./components/process-control/ControlPlanPage.jsx"));
 const AuthPage = lazy(() => import("./components/AuthPage.jsx"));
 const Login = lazy(() => import("./components/Login.jsx"));
 const SignUp = lazy(() => import("./components/SignUp.jsx"));
@@ -140,6 +145,12 @@ const router = createBrowserRouter([
           { path: "Parts/:id", element: <PartDetailPage /> },
           { path: "Customers", element: <PartiesPage key="customers" kind="customers" /> },
           { path: "Suppliers", element: <PartiesPage key="suppliers" kind="suppliers" /> },
+          { path: "Machines", element: <MachinesPage /> },
+          { path: "Part-Families", element: <PartFamiliesPage /> },
+          { path: "Part-Families/:id", element: <PartFamilyPage /> },
+          { path: "Process-Control", element: <Navigate to="Plans" replace /> },
+          { path: "Process-Control/Plans", element: <ControlPlansPage /> },
+          { path: "Process-Control/Plans/:id", element: <ControlPlanPage /> },
         ],
       },
     ],

@@ -71,6 +71,7 @@ export const PartSummary = z.object({
   name: z.string(),
   description: z.string().nullable(),
   customer: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }).nullable(),
+  partFamily: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }).nullable(),
   active: z.boolean(),
   /** The released revision, if any. */
   currentRevision: z.string().nullable(),
@@ -96,6 +97,7 @@ export const CreatePartBody = z
     name: z.string().trim().min(1).max(200),
     description: optionalText(2000),
     customerId: z.string().uuid().nullable().optional(),
+    partFamilyId: z.string().uuid().nullable().optional(),
     /** Optional first revision, created as a draft. */
     initialRevision: z.object({ revision: RevisionCode, drawingRef: optionalText(100) }).strict().optional(),
   })
@@ -106,11 +108,12 @@ export const UpdatePartBody = z
     name: z.string().trim().min(1).max(200).optional(),
     description: optionalText(2000),
     customerId: z.string().uuid().nullable().optional(),
+    partFamilyId: z.string().uuid().nullable().optional(),
     active: z.boolean().optional(),
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
-export const PartListQuery = ListQuery.extend({ q: Search, customerId: z.string().uuid().optional(), includeInactive: booleanFlag });
+export const PartListQuery = ListQuery.extend({ q: Search, customerId: z.string().uuid().optional(), partFamilyId: z.string().uuid().optional(), includeInactive: booleanFlag });
 
 export const CreateRevisionBody = z
   .object({ revision: RevisionCode, drawingRef: optionalText(100), changeSummary: optionalText(2000) })

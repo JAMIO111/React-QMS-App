@@ -90,6 +90,17 @@ Summary of the brief:
   - **API** in `api/src/calibration/`; Raise NC is `POST /calibrations/{id}/raise-ncr` (draft internal NC, linked).
   - **Frontend:** `src/components/calibration/`, hooks `src/hooks/useCalibration.js`, helpers `src/lib/calibration.js`. Routes `/Calibration` (dashboard), `/Calibration/Gauges` (register, URL filters via `useUrlFilters`/`useGaugeFilters`), `/Calibration/Gauges/:id`, `/Calibration/Gauges/:gaugeId/calibrations/:calibrationId` (`new` creates), and Settings → Calibration (types).
   - `AttachmentDrop` in `ui/FileDrop.jsx` is the generic drag-and-drop uploader (bucket/folder/endpoints); `TableWrapper` takes `ariaLabel`/`rowLabel`.
+- Process control (`docs/process-control-plan.md`, replaces Phase 2 slices 2.2/2.3; agreed decisions P1–P4):
+  - **PC1 done:** `machines`, `part_families` (+ `parts.part_family_id`), `part_revision_characteristics`
+    (part-specific values by `characteristic_key`, draft-only edits, copied into a new draft),
+    `control_plans`, `control_plan_applicability`, `control_plan_revisions` (draft → pending_approval →
+    approved → effective → superseded | obsolete; `QM007` → `409 control_plan_rule`). Permissions
+    `process_control.read` / `.manage` / `.approve`. API in `api/src/process-control/`; hooks
+    `src/hooks/useProcessControl.js`; pages `src/components/process-control/` (`/Process-Control/Plans`,
+    `/Process-Control/Plans/:id`) and `master-data/` (`/Machines`, `/Part-Families`, `/Part-Families/:id`,
+    spec values on the part page).
+  - **Next:** PC2 plan authoring, PC3 requirement resolver, PC4 In-Process Inspection, PC5 NC link, PC6 SPC
+    charts (I-MR, X-bar/R). Build in that order; charts only on traceable measurements.
 - NC register filters live in the URL (`FILTER_KEYS` in `src/hooks/useNCMFilters.jsx`); `/ncrs` takes
   stage, severity, from/to, partId, customerId, supplierId, costMin/costMax, qtyMin/qtyMax; slider limits from
   `GET /ncrs/ranges`. List parameters go to SQL as one text value (`string_to_array`), never a JS array.
@@ -124,7 +135,7 @@ stages, soft delete, legacy NCM copy; NC registers and form on the API) are done
 attachments with the NC page in the original form layout (`ncr_costs`, `ncr_attachments`, `FileDrop`,
 `NcrCosts`) — see plan §9–§12;
 Calibration (Phase 4) was brought forward as a complete slice (`docs/calibration-plan.md`, migrations `20251106100000_calibration.sql`, `20251107100000_calibration_attributes.sql`; demo data `supabase/seed/calibration_demo.sql`);
-next: 2.2 inspection plans.
+slices 2.2/2.3 are replaced by the process control plan (`docs/process-control-plan.md`); PC1 is done, next: PC2.
 The project still signs tokens with the legacy HS256 secret (JWKS endpoint is empty), so the API
 needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.
 

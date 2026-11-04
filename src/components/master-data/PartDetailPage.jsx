@@ -9,7 +9,9 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useMasterDataMutation, usePart } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
 import { CustomerSelect } from "./PartsPage";
-import { ActiveBadge, buttonClass, ErrorNotice } from "./shared";
+import { ActiveBadge, buttonClass, ErrorNotice, SelectField } from "./shared";
+import { usePartFamilies } from "../../hooks/useProcessControl";
+import SpecValues from "./SpecValues";
 
 const STATUS_STYLE = {
   draft: "bg-warning-color/15 text-primary-text",
@@ -26,7 +28,15 @@ const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-GB", { d
 const PartDetails = ({ part, canManage }) => {
   const mutation = useMasterDataMutation();
   const { showToast } = useToast();
-  const toForm = (p) => ({ partNumber: p.partNumber, name: p.name, description: p.description ?? "", customerId: p.customer?.id ?? null, active: p.active });
+  const families = usePartFamilies();
+  const toForm = (p) => ({
+    partNumber: p.partNumber,
+    name: p.name,
+    description: p.description ?? "",
+    customerId: p.customer?.id ?? null,
+    partFamilyId: p.partFamily?.id ?? null,
+    active: p.active,
+  });
   const [form, setForm] = useState(toForm(part));
   useEffect(() => setForm(toForm(part)), [part]);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
@@ -37,7 +47,14 @@ const PartDetails = ({ part, canManage }) => {
       {
         path: `/parts/${part.id}`,
         method: "PATCH",
-        body: { partNumber: form.partNumber.trim(), name: form.name.trim(), description: form.description.trim(), customerId: form.customerId, active: form.active },
+        body: {
+          partNumber: form.partNumber.trim(),
+          name: form.name.trim(),
+          description: form.description.trim(),
+          customerId: form.customerId,
+          partFamilyId: form.partFamilyId,
+          active: form.active,
+        },
       },
       { onSuccess: () => showToast({ type: "success", title: "Saved", message: "Part updated." }) }
     );
@@ -61,6 +78,22 @@ const PartDetails = ({ part, canManage }) => {
             </p>
           )}
         </div>
+        {canManage ? (
+          <SelectField
+            label="Part family"
+            value={form.partFamilyId}
+            onChange={(v) => setForm((f) => ({ ...f, partFamilyId: v }))}
+            options={(families.data?.items ?? [])
+              .concat(part.partFamily && !(families.data?.items ?? []).some((f) => f.id === part.partFamily.id) ? [part.partFamily] : [])
+              .map((f) => ({ value: f.id, label: `${f.code} · ${f.name}` }))}
+            hint="Family control plans apply to this part"
+          />
+        ) : (
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium text-secondary-text">Part family</span>
+            <p className="py-2 text-primary-text">{part.partFamily ? `${part.partFamily.code} · ${part.partFamily.name}` : "—"}</p>
+          </div>
+        )}
         {canManage && (
           <label className="flex items-center gap-2 self-end pb-2 text-sm text-primary-text">
             <input type="checkbox" checked={form.active} onChange={set("active")} /> Active
@@ -250,6 +283,7 @@ const PartDetailPage = () => {
           </div>
           <PartDetails part={part} canManage={canManage} />
           <Revisions part={part} canManage={canManage} />
+          <SpecValues part={part} canManage={canManage} />
         </>
       )}
     </div>

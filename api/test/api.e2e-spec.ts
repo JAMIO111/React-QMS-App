@@ -86,7 +86,7 @@ describe('GET/PATCH /me', () => {
       'Alpha Precision',
       'Beta Castings',
     ]);
-    for (const m of res.body.memberships) expect(m.permissions).toEqual(['calibration.read', 'master_data.read', 'ncr.read']);
+    for (const m of res.body.memberships) expect(m.permissions).toEqual(['calibration.read', 'master_data.read', 'ncr.read', 'process_control.read']);
   });
 
   it('hides organisations where membership is suspended', async () => {

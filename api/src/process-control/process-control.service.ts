@@ -499,7 +499,15 @@ export class ProcessControlService {
       order by upper(f.code), pt.part_number nulls first, s.name nulls first, a.operation_code nulls first`);
     const revisions = await db.execute<Row>(sql`${sql.raw(REVISION_SELECT)} where r.control_plan_id = ${id}::uuid
       order by r.created_at desc, r.revision_code desc`);
-    return { ...toPlanSummary(result.rows[0]), applicability: applicability.rows.map(toApplicability), revisions: revisions.rows.map(toRevision) };
+    const scope = await db.execute<Row>(sql`select distinct p.id, p.part_number, p.name from public.control_plan_applicability a
+      join public.parts p on p.part_family_id = a.part_family_id and (a.part_id is null or a.part_id = p.id)
+      where a.control_plan_id = ${id}::uuid and p.active order by p.part_number`);
+    return {
+      ...toPlanSummary(result.rows[0]),
+      applicability: applicability.rows.map(toApplicability),
+      revisions: revisions.rows.map(toRevision),
+      scopeParts: scope.rows.map((p) => ({ id: p.id as string, partNumber: p.part_number as string, name: p.name as string })),
+    };
   }
 
   private async loadRevision(db: Db, ctx: RequestContext, id: string): Promise<PlanRevision> {

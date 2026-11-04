@@ -280,3 +280,39 @@ add a conditional part-specific LENGTH check for HCR-200, comparison shows "Tole
 
 **Next:** PC3 — the requirement resolver (effective plan revision + released part revision →
 frozen requirements, blocking on ambiguity or missing values) with a preview on the plan page.
+
+## 11. Slice PC3 — requirement resolver — done (2026-11-04)
+
+**Database** (`20251108130000_requirement_resolver.sql`): `app.resolve_inspection_requirements(part,
+operation?, site?, part revision?)` → jsonb. Runs with the caller's rights (RLS), read-only.
+- Finds plans whose scope covers the part's family (and part / site / operation when given) and
+  needs exactly one with an effective revision.
+- Uses the part's released revision (or the one given, which must be released).
+- Resolves each characteristic: fixed values from the plan; part-specific values from the part
+  revision's value with the same `spec_key` (unit must equal the plan's); conditional ones are
+  returned with `applicable: false` and the rule ("Only for HCR-200") rather than dropped. Each
+  requirement keeps its sources (plan characteristic id, part value id), sampling rules and its own
+  plus the revision's general reactions.
+- `status: blocked` with every problem in words when: part inactive, no family, no released
+  revision / revision not released, no plan or no effective revision, more than one plan
+  (ambiguous — never picks one), operation not in the plan, missing part value, unit mismatch,
+  no characteristics.
+- PC4 will call it inside the transaction that creates an inspection and freeze the result.
+
+**API:** `GET /control-plan-resolution?partId&operationCode&siteId&partRevisionId`
+(`process_control.read`); the plan detail gains `scopeParts`.
+
+**Frontend:** `ResolutionView` ("Ready for inspection" / "An inspection could not start" with the
+reasons; requirements with values as the operator reads them, part-specific ones marked "from part
+value …", excluded ones greyed with the rule). Shown as *Preview requirements* on the plan page
+(choose a part in scope, optional operation) and *Inspection requirements* on the part page.
+
+**Tests:** SQL `requirement_resolver.test.sql` on the brief's rod example (every blocking case,
+ambiguity resolved by narrowing scopes to operations, other organisation refused) + the tenancy
+sweep; API e2e +2 (137); frontend +2 (198). Browser check: preview for HCR-100 ready, an operation
+outside the scope blocked with the reason, part page shows the requirements — no console errors,
+no failed API calls.
+
+**Next:** PC4 — In-Process Inspection: start an inspection (resolver + frozen snapshot), samples
+and measurements (unrounded values, unit equal to the requirement's, pass/fail by the database),
+gauge validation from Calibration, corrections and retests as new rows.

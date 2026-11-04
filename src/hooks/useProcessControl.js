@@ -55,3 +55,11 @@ export const REVISION_STATUS = {
 
 export const useControlPlanRevision = (id) => useDetail(`/control-plan-revisions/${id}`, !!id);
 export const useRevisionComparison = (id, enabled = true) => useDetail(`/control-plan-revisions/${id}/comparison`, !!id && enabled);
+
+/** Which plan applies to a part and its resolved requirements (or why it is blocked). */
+export const useResolution = ({ partId, operationCode, siteId } = {}, enabled = true) => {
+  const qs = new URLSearchParams({ partId: partId ?? "" });
+  if (operationCode) qs.set("operationCode", operationCode);
+  if (siteId) qs.set("siteId", siteId);
+  return useDetail(`/control-plan-resolution?${qs}`, !!partId && enabled);
+};

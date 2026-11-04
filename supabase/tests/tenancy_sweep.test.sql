@@ -106,6 +106,7 @@ BEGIN
   INSERT INTO public.reaction_plans (organisation_id, control_plan_revision_id, trigger_type, action, instruction)
     SELECT a, id, 'out_of_spec', 'hold', 'Quarantine the batch' FROM public.control_plan_revisions WHERE organisation_id = a;
 
+  INSERT INTO sweep VALUES ('pc_part', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'));
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));
 END $$;
@@ -198,6 +199,7 @@ BEGIN
   PERFORM pg_temp.assert_fails(format('SELECT app.create_default_roles(%L)', a), 'create_default_roles is not callable');
   PERFORM pg_temp.assert_fails($q$SELECT app.touch_updated()$q$, 'trigger functions are not callable');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.my_invitations() WHERE organisation_id = a), 0::bigint, 'my_invitations');
+  PERFORM pg_temp.assert_fails(format('SELECT app.resolve_inspection_requirements(%L)', (SELECT value FROM sweep WHERE key = 'pc_part')), 'resolve_inspection_requirements(A part)');
   PERFORM pg_temp.logout();
 END $$;
 

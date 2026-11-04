@@ -104,7 +104,11 @@ Summary of the brief:
     all/selected; SPC `imr`/`xbar_r`), `characteristic_applicability`, `sampling_rules`, `reaction_plans`; all carry
     `control_plan_revision_id`, are draft-only and copied into a new revision. Comparison in
     `api/src/process-control/revision-compare.ts`; page `RevisionPage.jsx` (`/Process-Control/Plans/:planId/revisions/:revisionId`).
-  - **Next:** PC3 requirement resolver, PC4 In-Process Inspection, PC5 NC link, PC6 SPC charts (I-MR, X-bar/R).
+  - **PC3 done:** `app.resolve_inspection_requirements(part, op?, site?, part revision?)` → jsonb (status ok/blocked
+    with problems; one effective plan revision or refuse; part-specific values by `spec_key`, unit must match;
+    conditional ones returned as not applicable). API `GET /control-plan-resolution`; `ResolutionView` /
+    `RequirementPreview` on the plan and part pages. PC4 must call the resolver inside the create transaction.
+  - **Next:** PC4 In-Process Inspection, PC5 NC link, PC6 SPC charts (I-MR, X-bar/R).
     Build in that order; charts only on traceable measurements.
 - NC register filters live in the URL (`FILTER_KEYS` in `src/hooks/useNCMFilters.jsx`); `/ncrs` takes
   stage, severity, from/to, partId, customerId, supplierId, costMin/costMax, qtyMin/qtyMax; slider limits from
@@ -140,7 +144,7 @@ stages, soft delete, legacy NCM copy; NC registers and form on the API) are done
 attachments with the NC page in the original form layout (`ncr_costs`, `ncr_attachments`, `FileDrop`,
 `NcrCosts`) — see plan §9–§12;
 Calibration (Phase 4) was brought forward as a complete slice (`docs/calibration-plan.md`, migrations `20251106100000_calibration.sql`, `20251107100000_calibration_attributes.sql`; demo data `supabase/seed/calibration_demo.sql`);
-slices 2.2/2.3 are replaced by the process control plan (`docs/process-control-plan.md`); PC1 and PC2 are done, next: PC3.
+slices 2.2/2.3 are replaced by the process control plan (`docs/process-control-plan.md`); PC1–PC3 are done, next: PC4.
 The project still signs tokens with the legacy HS256 secret (JWKS endpoint is empty), so the API
 needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.
 

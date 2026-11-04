@@ -178,3 +178,40 @@ describe('revisions', () => {
     expect(a.operations[1].characteristics).toHaveLength(2);
   });
 });
+
+describe('requirement resolution', () => {
+  it('blocks until the part has a released revision with the values the plan needs', async () => {
+    const h = await as(ids.ownerA);
+    const blocked = (await api().get(`/api/v1/control-plan-resolution?partId=${ctx['HCR-100']}`).set(h).expect(200)).body;
+    expect(blocked).toMatchObject({ status: 'blocked', plan: { planCode: 'CP-1' }, planRevision: { revisionCode: 'A' }, partRevision: null });
+    // Values cannot be looked up without a revision, so only that is reported.
+    expect(blocked.problems.map((p: { code: string }) => p.code)).toEqual(['no_released_revision']);
+
+    const rev = (await api().post(`/api/v1/parts/${ctx['HCR-100']}/revisions`).set(h).send({ revision: 'A' }).expect(201)).body;
+    await api().post(`/api/v1/part-revisions/${rev.id}/characteristics`).set(h).send({ characteristicKey: 'LENGTH', nominal: 100, lowerLimit: 99.9, upperLimit: 100.1, unitCode: 'mm' }).expect(201);
+    await api().post(`/api/v1/part-revisions/${rev.id}/release`).set(h).expect(200);
+
+    // Inspectors (process_control.read) can preview.
+    const ok = (await api().get(`/api/v1/control-plan-resolution?partId=${ctx['HCR-100']}`).set(await as(ids.inspectorA)).expect(200)).body;
+    expect(ok).toMatchObject({ status: 'ok', problems: [], partRevision: { revision: 'A', status: 'released' } });
+    const byKey = Object.fromEntries(ok.requirements.map((r: { characteristicKey: string }) => [r.characteristicKey, r]));
+    expect(byKey.OD).toMatchObject({ nominal: 25, lowerLimit: 24.95, upperLimit: 25.05, unitCode: 'mm', applicable: true, resolved: true });
+    expect(byKey.LENGTH).toMatchObject({ valueSource: 'part_spec', nominal: 100, upperLimit: 100.1, partRevisionCharacteristicId: expect.any(String) });
+    expect(byKey.GROOVE_POS).toMatchObject({ applicable: false, applicability: 'Only for HCR-200' });
+    expect(byKey.OD.sampling).toHaveLength(2);
+    expect(byKey.OD.reactions.map((r: { action: string }) => r.action).sort()).toEqual(['hold', 'stop']);
+
+    const op = (await api().get(`/api/v1/control-plan-resolution?partId=${ctx['HCR-100']}&operationCode=op-030`).set(h).expect(200)).body;
+    expect(op.requirements.map((r: { characteristicKey: string }) => r.characteristicKey)).toEqual(['GROOVE_POS', 'VISUAL']);
+    const missingOp = (await api().get(`/api/v1/control-plan-resolution?partId=${ctx['HCR-100']}&operationCode=OP-999`).set(h).expect(200)).body;
+    expect(missingOp.problems[0].code).toBe('operation_not_in_plan');
+  });
+
+  it('validates the query and hides other parts', async () => {
+    const h = await as(ids.ownerA);
+    await api().get('/api/v1/control-plan-resolution').set(h).expect(400);
+    await api().get(`/api/v1/control-plan-resolution?partId=${ids.orgB}`).set(h).expect(404);
+    const lone = (await api().get(`/api/v1/control-plan-resolution?partId=${ctx.outside}`).set(h).expect(200)).body;
+    expect(lone.problems[0]).toMatchObject({ code: 'no_family', message: 'Part OTHER is not in a part family, so no control plan applies to it' });
+  });
+});

@@ -12,6 +12,8 @@ import {
   PlanOperation,
   PlanRevision,
   ReplaceReactionsBody,
+  Resolution,
+  ResolutionQuery,
   RevisionComparison,
   RevisionDetail,
   UpdateCharacteristicBody,
@@ -137,6 +139,21 @@ export class ControlPlanContentService {
       const base = baseId ? await this.load(db, ctx, baseId) : null;
       if (base && base.controlPlanId !== target.controlPlanId) throw ApiError.badRequest('invalid_comparison', 'Both revisions must belong to the same plan');
       return compareRevisions(base, target);
+    });
+  }
+
+  /**
+   * The requirements that apply to a part (PC3): the one effective plan revision whose scope covers
+   * it, resolved against the part's released revision — or "blocked" with the reasons. Read-only;
+   * PC4 runs the same database function when it creates an inspection.
+   */
+  resolve(ctx: RequestContext, q: z.infer<typeof ResolutionQuery>): Promise<Resolution> {
+    return this.database.asUser(ctx, async (db) => {
+      const part = await db.execute(sql`select 1 from public.parts where id = ${q.partId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!part.rows.length) throw ApiError.notFound('part_not_found', 'Part not found');
+      const result = await db.execute<{ r: Resolution }>(sql`select app.resolve_inspection_requirements(
+        ${q.partId}::uuid, ${q.operationCode ?? null}, ${q.siteId ?? null}::uuid, ${q.partRevisionId ?? null}::uuid) as r`);
+      return result.rows[0].r;
     });
   }
 

@@ -395,3 +395,59 @@ describe("Revision page", () => {
     expect(screen.queryByRole("button", { name: "Edit OD" })).toBeNull();
   });
 });
+
+describe("Requirement preview", () => {
+  const resolution = (over) => ({
+    status: "ok",
+    problems: [],
+    resolvedAt: "2026-11-04T12:00:00Z",
+    part: { id: "p1", partNumber: "HCR-100", name: "Rod 100" },
+    partFamily: { id: "f1", code: "HCR", name: "Rods" },
+    partRevision: { id: "r1", revision: "A", drawingRef: null, status: "released" },
+    operationCode: null,
+    siteId: null,
+    plan: { id: "cp1", planCode: "CP-HCR-001", title: "Rods" },
+    planRevision: { id: "cr1", revisionCode: "A" },
+    candidatePlans: [],
+    requirements: [
+      { planCharacteristicId: "c1", characteristicKey: "LENGTH", charNumber: null, name: "Overall length", operationCode: "OP-020", operationName: "Turning", machineId: null, dataType: "variable", valueSource: "part_spec", specKey: "LENGTH", partRevisionCharacteristicId: "v1", applicable: true, applicability: "All parts in scope", resolved: true, nominal: 100, lowerLimit: 99.9, upperLimit: 100.1, unitCode: "mm", method: null, gaugeType: null, criticality: "major", spcEligible: false, chartType: null, subgroupSize: null, decimals: null, sampling: [], reactions: [] },
+      { planCharacteristicId: "c2", characteristicKey: "GROOVE_POS", charNumber: null, name: "Groove position", operationCode: "OP-030", operationName: "Grooving", machineId: null, dataType: "variable", valueSource: "part_spec", specKey: "GROOVE_POS", partRevisionCharacteristicId: null, applicable: false, applicability: "Only for HCR-200", resolved: true, nominal: null, lowerLimit: null, upperLimit: null, unitCode: "mm", method: null, gaugeType: null, criticality: "major", spcEligible: false, chartType: null, subgroupSize: null, decimals: null, sampling: [], reactions: [] },
+    ],
+    ...over,
+  });
+
+  it("resolves a part from the plan's scope, showing part values and excluded checks", async () => {
+    const seen = [];
+    routeApi({
+      "GET /control-plans/cp1": { ...plan([rev({ status: "effective", effectiveFrom: "2026-11-01T00:00:00Z" })]), scopeParts: [{ id: "p1", partNumber: "HCR-100", name: "Rod 100" }] },
+      "GET /part-families": page([]),
+      "GET /control-plan-resolution": (path) => (seen.push(path), resolution()),
+    });
+    renderAt("/Process-Control/Plans/cp1");
+    await userEvent.selectOptions(await screen.findByLabelText("Part"), "p1");
+    expect(await screen.findByText("Ready for inspection")).toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "Requirements for HCR-100" });
+    expect(within(table).getByText("100 (99.9 – 100.1) mm")).toBeInTheDocument();
+    expect(within(table).getByText(/Not applicable: Only for HCR-200/)).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Operation"), "op-020");
+    await userEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await screen.findByText("Ready for inspection");
+    expect(seen.at(-1)).toContain("operationCode=op-020");
+  });
+
+  it("explains why an inspection could not start", async () => {
+    routeApi({
+      "GET /control-plans/cp1": { ...plan([]), scopeParts: [{ id: "p1", partNumber: "HCR-100", name: "Rod 100" }] },
+      "GET /part-families": page([]),
+      "GET /control-plan-resolution": resolution({
+        status: "blocked",
+        problems: [{ code: "ambiguous_plan", message: "More than one control plan applies (CP-HCR-001, CP-HCR-002); narrow their scope" }],
+        requirements: [],
+      }),
+    });
+    renderAt("/Process-Control/Plans/cp1");
+    await userEvent.selectOptions(await screen.findByLabelText("Part"), "p1");
+    expect(await screen.findByText("An inspection could not start")).toBeInTheDocument();
+    expect(screen.getByText(/More than one control plan applies/)).toBeInTheDocument();
+  });
+});

@@ -12,6 +12,7 @@ import { CustomerSelect } from "./PartsPage";
 import { ActiveBadge, buttonClass, ErrorNotice, SelectField } from "./shared";
 import { usePartFamilies } from "../../hooks/useProcessControl";
 import SpecValues from "./SpecValues";
+import RequirementPreview from "../process-control/RequirementPreview";
 
 const STATUS_STYLE = {
   draft: "bg-warning-color/15 text-primary-text",
@@ -284,6 +285,14 @@ const PartDetailPage = () => {
           <PartDetails part={part} canManage={canManage} />
           <Revisions part={part} canManage={canManage} />
           <SpecValues part={part} canManage={canManage} />
+          {can("process_control.read") && (
+            <RequirementPreview
+              key={part.id}
+              partId={part.id}
+              title="Inspection requirements"
+              subtitle="The control plan that applies to this part and what is checked, from its released revision."
+            />
+          )}
         </>
       )}
     </div>

@@ -15,6 +15,7 @@ import { useControlPlan, usePartFamilies, useProcessControlMutation } from "../.
 import { describeApiError } from "../../lib/api-client";
 import { ActiveBadge, buttonClass, ErrorNotice, FormError, SelectField, TextAreaField } from "../master-data/shared";
 import ControlPlanHistory from "./ControlPlanHistory";
+import RequirementPreview from "./RequirementPreview";
 import { formatDate, formatDateTime } from "../../lib/processControl";
 import { RevisionStatusPill } from "./shared";
 
@@ -481,6 +482,7 @@ const ControlPlanPage = () => {
           <PlanDetails plan={plan} canManage={canManage} />
           <Scope plan={plan} canManage={canManage} />
           <Revisions plan={plan} canManage={canManage} canApprove={canApprove} />
+          <RequirementPreview parts={plan.scopeParts} showPlanLink={false} />
           <Accordion title="History" subtitle="Every change to the plan, its scope and its revisions.">
             <ControlPlanHistory id={plan.id} />
           </Accordion>

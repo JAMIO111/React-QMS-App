@@ -209,6 +209,8 @@ export type ControlPlanSummary = z.infer<typeof ControlPlanSummary>;
 export const ControlPlanDetail = ControlPlanSummary.extend({
   applicability: z.array(Applicability),
   revisions: z.array(PlanRevision),
+  /** Active parts covered by the scope (for previews). */
+  scopeParts: z.array(z.object({ id: z.string().uuid(), partNumber: z.string(), name: z.string() })),
 });
 export type ControlPlanDetail = z.infer<typeof ControlPlanDetail>;
 
@@ -423,3 +425,60 @@ export const RevisionComparison = z.object({
   summary: z.object({ added: z.number().int(), removed: z.number().int(), changed: z.number().int() }),
 });
 export type RevisionComparison = z.infer<typeof RevisionComparison>;
+
+// ---- requirement resolution (PC3) -------------------------------------------------------------------
+
+export const ResolutionQuery = z
+  .object({
+    partId: z.string().uuid(),
+    operationCode: z.string().trim().max(30).optional(),
+    siteId: z.string().uuid().optional(),
+    partRevisionId: z.string().uuid().optional(),
+  })
+  .strict();
+const Requirement = z.object({
+  planCharacteristicId: z.string().uuid(),
+  characteristicKey: z.string(),
+  charNumber: z.string().nullable(),
+  name: z.string(),
+  operationCode: z.string(),
+  operationName: z.string(),
+  machineId: z.string().uuid().nullable(),
+  dataType: z.enum(['variable', 'attribute']),
+  valueSource: z.enum(['plan', 'part_spec']),
+  specKey: z.string().nullable(),
+  partRevisionCharacteristicId: z.string().uuid().nullable(),
+  applicable: z.boolean(),
+  applicability: z.string(),
+  /** False when a part-specific value is missing or in another unit (the resolution is then blocked). */
+  resolved: z.boolean(),
+  nominal: z.number().nullable(),
+  lowerLimit: z.number().nullable(),
+  upperLimit: z.number().nullable(),
+  unitCode: z.string().nullable(),
+  method: z.string().nullable(),
+  gaugeType: Ref.nullable(),
+  criticality: z.enum(['critical', 'major', 'minor']),
+  spcEligible: z.boolean(),
+  chartType: z.enum(['imr', 'xbar_r']).nullable(),
+  subgroupSize: z.number().int().nullable(),
+  decimals: z.number().int().nullable(),
+  sampling: z.array(z.object({ triggerType: SamplingTrigger, intervalValue: z.number().int().nullable(), sampleSize: z.number().int() })),
+  reactions: z.array(z.object({ triggerType: ReactionTrigger, action: ReactionAction, instruction: z.string() })),
+});
+export const Resolution = z.object({
+  status: z.enum(['ok', 'blocked']),
+  problems: z.array(z.object({ code: z.string(), message: z.string(), characteristicKey: z.string().optional() })),
+  resolvedAt: Iso,
+  part: z.object({ id: z.string().uuid(), partNumber: z.string(), name: z.string() }),
+  partFamily: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }).nullable(),
+  partRevision: z.object({ id: z.string().uuid(), revision: z.string(), drawingRef: z.string().nullable(), status: z.string() }).nullable(),
+  operationCode: z.string().nullable(),
+  siteId: z.string().uuid().nullable(),
+  plan: z.object({ id: z.string().uuid(), planCode: z.string(), title: z.string() }).nullable(),
+  planRevision: z.object({ id: z.string().uuid(), revisionCode: z.string() }).nullable(),
+  /** Plans whose scope covers the part (revisionId null: no effective revision). */
+  candidatePlans: z.array(z.object({ id: z.string().uuid(), planCode: z.string(), title: z.string(), revisionId: z.string().uuid().nullable(), revisionCode: z.string().nullable() })),
+  requirements: z.array(Requirement),
+});
+export type Resolution = z.infer<typeof Resolution>;

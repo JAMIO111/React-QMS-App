@@ -36,6 +36,8 @@ import {
   CreateCharacteristicBody,
   CreateOperationBody,
   ReplaceReactionsBody,
+  Resolution,
+  ResolutionQuery,
   RevisionComparison,
   RevisionDetail,
   UpdateCharacteristicBody,
@@ -295,6 +297,18 @@ export class ControlPlanContentController {
   @ApiOkResponse({ schema: openApiSchema(RevisionComparison) })
   compare(@Ctx() ctx: RequestContext, @Param('id') id: string, @Query('with') withId?: string) {
     return this.service.compare(ctx, parse(Uuid, id), withId ? parse(Uuid, withId) : undefined);
+  }
+
+  /** Which plan revision applies to a part (and operation / site), with its resolved requirements or why it is blocked. */
+  @Get('control-plan-resolution')
+  @OrganisationScoped(PC_READ)
+  @ApiQuery({ name: 'partId', required: true, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'operationCode', required: false, schema: { type: 'string' } })
+  @ApiQuery({ name: 'siteId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'partRevisionId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiOkResponse({ schema: openApiSchema(Resolution) })
+  resolve(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.resolve(ctx, parse(ResolutionQuery, query));
   }
 
   @Post('control-plan-revisions/:id/operations')

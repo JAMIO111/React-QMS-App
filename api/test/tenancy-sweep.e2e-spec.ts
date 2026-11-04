@@ -282,6 +282,7 @@ beforeAll(async () => {
   a.characteristic = (await one(`insert into public.control_plan_characteristics (organisation_id, control_plan_revision_id, operation_id, characteristic_key, name, upper_limit, unit_code) values ($1, $2, $3, 'OD', 'Alpha OD', 5, 'mm') returning id`, [ids.orgA, a.planRevision, a.operation])).id;
   b.org = ids.orgB;
   b.viewerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'viewer'`, [ids.orgB])).id;
+  b.part = (await one(`insert into public.parts (organisation_id, part_number, name) values ($1, 'B-PART', 'Beta part') returning id`, [ids.orgB])).id;
   await admin.query(`insert into public.departments (organisation_id, site_id, code, name) values ($1, $2, 'QA', 'Quality B')`, [ids.orgB, ids.siteB]);
 });
 
@@ -379,6 +380,7 @@ describe('tenancy sweep over every API route', () => {
     const listQuery: Record<string, string> = {
       '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/calibration-dashboard': '?from=2025-01-01&to=2027-12-31',
+      '/api/v1/control-plan-resolution': `?partId=${b.part}`,
     };
     for (const op of lists) {
       const res = await call(op, op.path + (listQuery[op.path] ?? ''), auth);

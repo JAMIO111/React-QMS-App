@@ -225,7 +225,10 @@ approve with comment (A superseded), new draft and the "reason needed" refusal, 
 page, part spec values (released locked, new draft edited), machines, dark mode — no console
 errors, no failed API calls.
 
-**Needs the user:** apply the migration to the live project (SQL editor), as for earlier slices.
+**Live (2026-11-04):** migration applied and recorded as `20251108110000`, in one transaction with a
+smoke test as the real Owner (create family, plan, scope; A and B through approval to effective, A
+superseded, 7 events, history) whose data was rolled back; 26 role grants (13 per role set: templates
+and the one organisation); guardrails 0 violations.
 
 **Next:** PC2 — operations, characteristics (fixed / variable / conditional), sampling rules,
 reaction plans, copy-on-new-revision and revision comparison.

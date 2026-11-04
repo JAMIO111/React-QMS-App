@@ -49,7 +49,7 @@ const Navbar = () => {
             isMenuExpanded ? "flex-row mx-3" : "flex-col gap-3"
           }`}>
           {/* The organisation's own logo; Fortress QMS's mark until one is uploaded. */}
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[10px] border border-border-color bg-white p-0.25">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[10px] border border-border-color bg-white">
             <img
               className="h-full w-full object-contain"
               src={logoUrl || FortressMark}

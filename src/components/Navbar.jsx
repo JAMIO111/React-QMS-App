@@ -51,7 +51,7 @@ const Navbar = () => {
           {/* The organisation's own logo; Fortress QMS's mark until one is uploaded. */}
           <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[10px] border border-border-color bg-white p-0.25">
             <img
-              className="h-full w-full object-fill"
+              className="h-full w-full object-contain"
               src={logoUrl || FortressMark}
               alt={logoUrl ? `${orgName} logo` : "Fortress QMS"}
             />

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 const PREFIX = "qms.table.";
-const EMPTY = { columnVisibility: {}, columnSizing: {} };
+const EMPTY = { columnVisibility: {}, columnSizing: {}, columnOrder: [] };
 
 const load = (key) => {
   try {
@@ -10,7 +10,8 @@ const load = (key) => {
     const parsed = JSON.parse(raw);
     const clean = (obj, type) =>
       Object.fromEntries(Object.entries(obj && typeof obj === "object" ? obj : {}).filter(([, v]) => typeof v === type));
-    return { columnVisibility: clean(parsed.columnVisibility, "boolean"), columnSizing: clean(parsed.columnSizing, "number") };
+    const order = Array.isArray(parsed.columnOrder) ? parsed.columnOrder.filter((id) => typeof id === "string") : [];
+    return { columnVisibility: clean(parsed.columnVisibility, "boolean"), columnSizing: clean(parsed.columnSizing, "number"), columnOrder: order };
   } catch {
     return EMPTY;
   }
@@ -19,7 +20,7 @@ const load = (key) => {
 const resolve = (updater, previous) => (typeof updater === "function" ? updater(previous) : updater);
 
 /**
- * Column visibility and widths for one table, remembered in this browser under `key`
+ * Column visibility, widths and order for one table, remembered in this browser under `key`
  * (e.g. "nc-register:Internal"). The setters accept TanStack updaters, so they can be passed
  * straight to useReactTable as onColumnVisibilityChange / onColumnSizingChange.
  */
@@ -37,13 +38,17 @@ export function useTablePreferences(key) {
     (updater) => setState((s) => ({ ...s, columnSizing: resolve(updater, s.columnSizing) })),
     []
   );
+  const setColumnOrder = useCallback(
+    (updater) => setState((s) => ({ ...s, columnOrder: resolve(updater, s.columnOrder) })),
+    []
+  );
   const resetColumns = useCallback(() => setState((s) => ({ ...s, ...EMPTY })), []);
 
   useEffect(() => {
     try {
-      const { columnVisibility, columnSizing } = current;
-      if (!Object.keys(columnVisibility).length && !Object.keys(columnSizing).length) localStorage.removeItem(PREFIX + key);
-      else localStorage.setItem(PREFIX + key, JSON.stringify({ columnVisibility, columnSizing }));
+      const { columnVisibility, columnSizing, columnOrder } = current;
+      if (!Object.keys(columnVisibility).length && !Object.keys(columnSizing).length && !columnOrder.length) localStorage.removeItem(PREFIX + key);
+      else localStorage.setItem(PREFIX + key, JSON.stringify({ columnVisibility, columnSizing, columnOrder }));
     } catch {
       // Storage unavailable: preferences last for this page only.
     }
@@ -54,6 +59,8 @@ export function useTablePreferences(key) {
     setColumnVisibility,
     columnSizing: current.columnSizing,
     setColumnSizing,
+    columnOrder: current.columnOrder ?? [],
+    setColumnOrder,
     resetColumns,
   };
 }

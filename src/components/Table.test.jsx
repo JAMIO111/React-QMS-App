@@ -178,3 +178,54 @@ describe("Table pinned columns", () => {
     expect(within(cells[cells.length - 1]).getByRole("button", { name: "More" })).toBeInTheDocument();
   });
 });
+
+describe("Table column reordering", () => {
+  const cols = [
+    { id: "sel", header: "Sel", cell: () => null, size: 40, meta: { pin: "left" } },
+    { id: "name", accessorKey: "name", header: "Name", size: 200 },
+    { id: "qty", accessorKey: "qty", header: "Qty", size: 100 },
+    { id: "note", header: "Note", cell: () => "n", size: 90 },
+  ];
+  const Reorderable = ({ reorder = true }) => {
+    const [columnOrder, setColumnOrder] = useState([]);
+    const table = useReactTable({
+      data,
+      columns: cols,
+      state: { columnOrder },
+      onColumnOrderChange: setColumnOrder,
+      enableColumnReordering: reorder,
+      getCoreRowModel: getCoreRowModel(),
+    });
+    return <Table table={table} ariaLabel="Parts" />;
+  };
+  const headerIds = () => [...document.querySelectorAll("thead th[data-column-id]")].map((th) => th.dataset.columnId);
+  const th = (id) => document.querySelector(`thead th[data-column-id="${id}"]`);
+  const dataTransfer = { setData: () => {}, effectAllowed: "" };
+
+  it("moves a column by dragging its header onto another", () => {
+    render(<Reorderable />);
+    expect(headerIds()).toEqual(["sel", "name", "qty", "note"]);
+    expect(th("name")).toHaveAttribute("draggable", "true");
+    expect(th("sel")).not.toHaveAttribute("draggable");
+    fireEvent.dragStart(th("note"), { dataTransfer });
+    // jsdom headers have no width, so clientX 0 is the left half: drop before "name".
+    fireEvent.dragOver(th("name"), { dataTransfer, clientX: 0 });
+    fireEvent.drop(th("name"), { dataTransfer });
+    expect(headerIds()).toEqual(["sel", "note", "name", "qty"]);
+    // Row cells follow the header order.
+    expect([...screen.getAllByRole("row")[1].querySelectorAll("td[data-column-id]")].map((td) => td.dataset.columnId)).toEqual(["sel", "note", "name", "qty"]);
+  });
+
+  it("does not start a move from the resize handle, and pinned columns stay put", () => {
+    render(<Reorderable />);
+    fireEvent.dragStart(th("name"), { dataTransfer });
+    fireEvent.dragOver(th("sel"), { dataTransfer, clientX: 0 });
+    fireEvent.drop(th("sel"), { dataTransfer });
+    expect(headerIds()).toEqual(["sel", "name", "qty", "note"]);
+  });
+
+  it("is off unless the table opts in", () => {
+    render(<Reorderable reorder={false} />);
+    expect(th("name")).not.toHaveAttribute("draggable");
+  });
+});

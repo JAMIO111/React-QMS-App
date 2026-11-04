@@ -96,6 +96,8 @@ import {
   Image as LucideImage,
   Hourglass as LucideHourglass,
   Table as LucideTable,
+  GripVertical as LucideGripVertical,
+  ChevronUp as LucideChevronUp,
 } from "lucide-react";
 
 const withDefaults = (Icon) => {
@@ -201,3 +203,5 @@ export const CoinsIcon = withDefaults(LucideCoins);
 export const ImageIcon = withDefaults(LucideImage);
 export const HourglassIcon = withDefaults(LucideHourglass);
 export const TableIcon = withDefaults(LucideTable);
+export const GripVerticalIcon = withDefaults(LucideGripVertical);
+export const ChevronUpIcon = withDefaults(LucideChevronUp);

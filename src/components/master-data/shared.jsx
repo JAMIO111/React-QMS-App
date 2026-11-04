@@ -44,7 +44,7 @@ export const ErrorNotice = ({ error }) => (
 );
 
 /**
- * A master-data list: the shared Table with resizable, hideable columns remembered under
+ * A master-data list: the shared Table with resizable, hideable, reorderable columns remembered under
  * `storageKey`, rows from a paged query, and "Load more".
  */
 export const DataList = ({ storageKey, columns, query, onOpen, emptyMessage, ariaLabel }) => {
@@ -57,10 +57,13 @@ export const DataList = ({ storageKey, columns, query, onOpen, emptyMessage, ari
     state: {
       columnVisibility: prefs.columnVisibility,
       columnSizing: prefs.columnSizing,
+      columnOrder: prefs.columnOrder,
       columnSizingInfo: sizingInfo.columnSizingInfo,
     },
     onColumnVisibilityChange: prefs.setColumnVisibility,
     onColumnSizingChange: prefs.setColumnSizing,
+    onColumnOrderChange: prefs.setColumnOrder,
+    enableColumnReordering: true,
     onColumnSizingInfoChange: sizingInfo.onColumnSizingInfoChange,
     columnResizeMode: "onChange",
     enableSorting: false, // lists come ordered by code / number from the server

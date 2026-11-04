@@ -62,9 +62,9 @@ Summary of the brief:
 - Tables: reuse `src/components/Table.jsx` with a TanStack table instance (see its header comment and
   `TableWrapper.jsx`): one `<table>` + `<colgroup>`, so header and rows always line up. Sorting
   (header click, `sortDescFirst: false`), resizing (`columnResizeMode: "onChange"`, min/maxSize,
-  double-click resets), show/hide via `ColumnVisibilityMenu`, `meta.pin: "left" | "right"` keeps a column fixed
+  double-click resets), show/hide and reorder via `ColumnVisibilityMenu` (`columnOrder`/`onColumnOrderChange`: drag handles, Move up/down), header drag-and-drop to reorder (table opts in with `enableColumnReordering: true`; pinned columns and `enableReordering: false` stay put; helpers in `src/lib/columnOrder.js`), `meta.pin: "left" | "right"` keeps a column fixed
   while the rest scroll sideways (row select / actions in `TableWrapper`). Persist with
-  `useTablePreferences(key)`; when `columnSizing` is controlled also use `useColumnSizingInfo()`
+  `useTablePreferences(key)` (visibility, sizing and order); when `columnSizing` is controlled also use `useColumnSizingInfo()`
   or resizing lags one mouse move. Column meta: `align`, `sortKey` (server sort field).
 - Auth: `/forgot-password`, `/set-password` (invite/reset landing), `/mfa` (code or set-up).
   `AuthProvider` exposes `assurance` (`aal1`/`aal2`); `ProtectedRoute` sends users to `/mfa` when

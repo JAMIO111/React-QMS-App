@@ -34,6 +34,8 @@ const TableWrapper = ({
   onColumnVisibilityChange,
   columnSizing,
   onColumnSizingChange,
+  columnOrder,
+  onColumnOrderChange,
   rowSelection,
   setRowSelection,
   onRowDoubleClick,
@@ -128,6 +130,7 @@ const TableWrapper = ({
       sorting,
       columnVisibility,
       columnSizing,
+      ...(columnOrder ? { columnOrder } : {}),
       columnSizingInfo: sizingInfo.columnSizingInfo,
       pagination: { pageIndex: page - 1, pageSize },
     },
@@ -142,6 +145,7 @@ const TableWrapper = ({
     onSortingChange: setSorting,
     onColumnVisibilityChange,
     onColumnSizingChange,
+    ...(onColumnOrderChange ? { onColumnOrderChange, enableColumnReordering: true } : {}),
     onColumnSizingInfoChange: sizingInfo.onColumnSizingInfoChange,
     onRowSelectionChange: (updater) => {
       const next = typeof updater === "function" ? updater(rowSelection) : updater;

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { applyOrder, moveColumn } from "../lib/columnOrder";
 import { flexRender } from "@tanstack/react-table";
 import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon } from "@/components/icons";
 
@@ -20,6 +21,9 @@ import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon } from "@/components/ico
  * pin: "left" | "right" to keep a column fixed at that edge while the others scroll sideways
  * (e.g. row selection and row actions). Pinned columns come first / last, with the filler column
  * between the scrolling columns and the right-pinned ones.
+ * - reordering: when the table sets enableColumnReordering: true (and owns columnOrder), drag a header onto another to move it
+ *   (pinned columns and columns with enableReordering: false stay put). ColumnVisibilityMenu offers
+ *   the same with Move up / Move down for keyboard users.
  */
 const alignClass = (column) => {
   const align = column.columnDef.meta?.align ?? column.columnDef.meta?.flexPos;
@@ -45,6 +49,16 @@ const Table = ({
   ariaLabel = "Table",
 }) => {
   const [activeRowId, setActiveRowId] = useState(null);
+  // Header drag-and-drop: the column being dragged and where it would land.
+  const [drag, setDrag] = useState(null); // { from, over, after }
+  const fromResizer = useRef(false);
+  // TanStack always supplies an onColumnOrderChange, so tables opt in explicitly.
+  const canReorder = table.options.enableColumnReordering === true;
+  const reorderable = (column) => canReorder && !column.columnDef.meta?.pin && column.columnDef.enableReordering !== false;
+  const dropColumn = (from, to, after) => {
+    const all = applyOrder(table.getAllLeafColumns().map((c) => c.id), table.getState().columnOrder);
+    table.setColumnOrder(moveColumn(all, from, to, after));
+  };
   const visible = table.getVisibleLeafColumns();
   const pinOf = (column) => column.columnDef.meta?.pin;
   const leftCols = visible.filter((c) => pinOf(c) === "left");
@@ -96,6 +110,8 @@ const Table = ({
                 const sorted = column.getIsSorted();
                 const canSort = column.getCanSort();
                 const content = header.isPlaceholder ? null : flexRender(column.columnDef.header, header.getContext());
+                const movable = reorderable(column);
+                const target = drag && drag.over === column.id && drag.from !== column.id;
                 return (
                   <th
                     key={header.id}
@@ -103,7 +119,43 @@ const Table = ({
                     data-column-id={column.id}
                     aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : canSort ? "none" : undefined}
                     style={offset[column.id]}
-                    className={`relative border-b border-r border-border-color p-0 font-normal text-secondary-text ${pinClass(column)}`}>
+                    draggable={movable || undefined}
+                    title={movable ? "Drag to move this column" : undefined}
+                    onMouseDown={movable ? (e) => (fromResizer.current = !!e.target.closest?.(".table-resizer")) : undefined}
+                    onDragStart={
+                      movable
+                        ? (e) => {
+                            // Dragging the resize handle resizes; it must not start a move.
+                            if (fromResizer.current) return e.preventDefault();
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", column.id);
+                            setDrag({ from: column.id, over: null, after: false });
+                          }
+                        : undefined
+                    }
+                    onDragOver={
+                      movable && drag
+                        ? (e) => {
+                            e.preventDefault();
+                            const r = e.currentTarget.getBoundingClientRect();
+                            const after = e.clientX > r.left + r.width / 2;
+                            if (drag.over !== column.id || drag.after !== after) setDrag({ ...drag, over: column.id, after });
+                          }
+                        : undefined
+                    }
+                    onDrop={
+                      movable && drag
+                        ? (e) => {
+                            e.preventDefault();
+                            dropColumn(drag.from, column.id, drag.after);
+                            setDrag(null);
+                          }
+                        : undefined
+                    }
+                    onDragEnd={movable ? () => setDrag(null) : undefined}
+                    className={`relative border-b border-r border-border-color p-0 font-normal text-secondary-text ${pinClass(column)} ${
+                      drag?.from === column.id ? "opacity-50" : ""
+                    } ${target ? (drag.after ? "shadow-[inset_-3px_0_0_var(--brand-primary)]" : "shadow-[inset_3px_0_0_var(--brand-primary)]") : ""}`}>
                     {canSort ? (
                       <button
                         type="button"

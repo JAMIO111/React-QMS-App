@@ -73,7 +73,7 @@ const NonConformance = () => {
   const { updateFilters } = filters;
 
   const allColumns = useMemo(() => getColumnsForNcType(type), [type]);
-  const { columnVisibility, setColumnVisibility, columnSizing, setColumnSizing, resetColumns } = useTablePreferences(`nc-register:${type}`);
+  const { columnVisibility, setColumnVisibility, columnSizing, setColumnSizing, columnOrder, setColumnOrder, resetColumns } = useTablePreferences(`nc-register:${type}`);
 
   const setPage = useCallback(
     (newPage) =>
@@ -219,7 +219,7 @@ const NonConformance = () => {
                 />
               )}
               {!viewGrid && (
-                <ColumnVisibilityMenu columns={allColumns} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} onReset={resetColumns} />
+                <ColumnVisibilityMenu columns={allColumns} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} columnOrder={columnOrder} onColumnOrderChange={setColumnOrder} onReset={resetColumns} />
               )}
               <ViewToggle viewGrid={viewGrid} setViewGrid={handleToggleView} />
               {can("ncr.create") && (
@@ -305,6 +305,8 @@ const NonConformance = () => {
               onColumnVisibilityChange={setColumnVisibility}
               columnSizing={columnSizing}
               onColumnSizingChange={setColumnSizing}
+              columnOrder={columnOrder}
+              onColumnOrderChange={setColumnOrder}
               rowSelection={rowSelection}
               setRowSelection={setRowSelection}
               onRowDoubleClick={openRecord}

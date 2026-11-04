@@ -195,7 +195,7 @@ const RHFComboBox = ({
     <div className={`w-full min-w-0 ${className}`}>
       <div className="flex gap-1 flex-col">
         {label && (
-          <label htmlFor={id} className="text-sm font-medium text-primary-text">
+          <label htmlFor={id} className="text-sm font-medium text-secondary-text">
             {label}
             {required && (
               <span className="text-error-color" title="Required">
@@ -208,15 +208,18 @@ const RHFComboBox = ({
         <div ref={dropdownRef} className="relative">
           <div
             onClick={() => (isOpen ? close() : open())}
-            className={`${error ? "border-error-color hover:border-error-color/70" : ""} ${
-              isOpen ? (error ? "ring-3 ring-error-color/30" : "border-brand-primary hover:border-brand-primary") : error ? "" : "border-transparent"
-            } shadow-s border hover:shadow-m rounded-lg px-2 py-2 bg-text-input-color flex items-center justify-between ${
-              inactive ? "opacity-60 cursor-not-allowed hover:shadow-s" : "cursor-pointer"
-            }`}>
+            // Same frame as TextInput: border, darker on hover, brand border + soft ring when focused or open.
+            className={`flex items-center justify-between rounded-lg border bg-text-input-color py-2 pl-2 pr-2 transition-all duration-150 ${
+              error
+                ? "border-error-color hover:border-error-color focus-within:ring-3 focus-within:ring-error-color/20"
+                : isOpen
+                  ? "border-brand-primary ring-3 ring-brand-primary/20"
+                  : "border-border-color hover:border-border-dark-color focus-within:border-brand-primary focus-within:ring-3 focus-within:ring-brand-primary/20"
+            } ${isOpen && error ? "ring-3 ring-error-color/20" : ""} ${inactive ? "opacity-60 cursor-not-allowed hover:border-border-color" : "cursor-pointer"}`}>
             {error ? (
-              <CircleAlertIcon title={errorMessage} className="w-5 h-5 text-error-color mr-2 flex-shrink-0" />
+              <CircleAlertIcon title={errorMessage} className="w-5 h-5 text-error-color mr-3 flex-shrink-0" />
             ) : Icon ? (
-              <Icon className="w-5 h-5 text-primary-text mr-2 flex-shrink-0 pointer-events-none" />
+              <Icon className="w-5 h-5 text-primary-text mr-3 flex-shrink-0 pointer-events-none" />
             ) : null}
 
             <div className="flex flex-grow min-w-0 h-6 mr-2">
@@ -252,7 +255,7 @@ const RHFComboBox = ({
                     ? dependentPlaceholder ?? `Please select a ${dependentKey.replace(/_/g, " ")} first`
                     : selectedOption?.name || placeholder
                 }
-                className={`ml-1 w-full h-full outline-none bg-transparent truncate placeholder:text-sm placeholder:text-muted disabled:cursor-not-allowed ${
+                className={`w-full h-full outline-none bg-transparent truncate placeholder:text-sm placeholder:text-muted disabled:cursor-not-allowed ${
                   !selectedOption && !searchTerm ? "text-sm text-muted" : "text-base text-primary-text"
                 }`}
               />

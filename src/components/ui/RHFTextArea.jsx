@@ -34,19 +34,20 @@ const RHFTextAreaInput = forwardRef(
             )}
           </label>
         )}
+        {/* Same frame as TextInput: border, darker on hover, brand border + soft ring when focused. */}
         <div
-          className={`shadow-s hover:shadow-m border ${
-            error &&
-            "border-error-color hover:border-error-color/70 focus-within:border-error-color focus-within:hover:border-error-color focus-within:ring-3 focus-within:ring-error-color/20"
-          } ${disabled ? "opacity-60" : ""} relative flex rounded-lg px-2 py-2 bg-text-input-color border-transparent
-         focus-within:border-brand-primary focus-within:hover:border-brand-primary`}>
+          className={`relative flex rounded-lg border bg-text-input-color px-2 py-2 transition-all duration-150 ${
+            error
+              ? "border-error-color hover:border-error-color focus-within:border-error-color focus-within:ring-3 focus-within:ring-error-color/20"
+              : "border-border-color hover:border-border-dark-color focus-within:border-brand-primary focus-within:ring-3 focus-within:ring-brand-primary/20"
+          } ${disabled ? "opacity-60 hover:border-border-color" : ""}`}>
           {error ? (
             <CircleAlertIcon
               title={errorMessage}
-              className="w-5 h-5 text-error-color mr-2 flex-shrink-0"
+              className="w-5 h-5 text-error-color mr-3 flex-shrink-0"
             />
           ) : (
-            Icon && <Icon className="w-5 h-5 text-primary-text mr-2 flex-shrink-0 pointer-events-none" />
+            Icon && <Icon className="w-5 h-5 text-primary-text mr-3 flex-shrink-0 pointer-events-none" />
           )}
 
           <textarea

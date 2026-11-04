@@ -5,15 +5,15 @@ const Field = ({ label, hint, error, className = "", inputClassName = "", ...inp
   const id = useId();
   return (
     <div className={`flex flex-col gap-1 min-w-0 ${className}`}>
-      <label htmlFor={id} className="text-sm font-medium text-primary-text">
+      <label htmlFor={id} className="text-sm font-medium text-secondary-text">
         {label}
       </label>
       <input
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={hint || error ? `${id}-help` : undefined}
-        className={`rounded-lg border px-3 py-2 bg-text-input-color text-primary-text shadow-s focus:outline-none focus:border-brand-primary disabled:opacity-60 ${
-          error ? "border-error-color" : "border-border-color"
+        className={`rounded-lg border px-3 py-2 bg-text-input-color text-primary-text outline-none transition-all duration-150 placeholder:text-sm placeholder:text-muted disabled:opacity-60 ${
+          error ? "border-error-color focus:ring-3 focus:ring-error-color/20" : "border-border-color hover:border-border-dark-color focus:border-brand-primary focus:ring-3 focus:ring-brand-primary/20"
         } ${inputClassName}`}
         {...inputProps}
       />

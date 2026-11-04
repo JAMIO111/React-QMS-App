@@ -6,7 +6,7 @@ export const TextAreaField = ({ label, value, onChange, disabled, rows = 3, maxL
   const id = useId();
   return (
     <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
-      <label htmlFor={id} className="text-sm font-medium text-primary-text">
+      <label htmlFor={id} className="text-sm font-medium text-secondary-text">
         {label}
       </label>
       <textarea
@@ -16,7 +16,7 @@ export const TextAreaField = ({ label, value, onChange, disabled, rows = 3, maxL
         disabled={disabled}
         rows={rows}
         maxLength={maxLength}
-        className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-primary-text shadow-s focus:outline-none focus:border-brand-primary disabled:opacity-60"
+        className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-primary-text outline-none transition-all duration-150 placeholder:text-sm placeholder:text-muted hover:border-border-dark-color focus:border-brand-primary focus:ring-3 focus:ring-brand-primary/20 disabled:opacity-60"
       />
     </div>
   );

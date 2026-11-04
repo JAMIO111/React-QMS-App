@@ -172,9 +172,13 @@ export default function DateRangePicker({
         <input
           type="text"
           readOnly
-          className={`border ${isOpen ? "border-cta-color" : ""} ${
-            error ? "border-error-color" : "border-transparent"
-          } placeholder:normal-case cursor-pointer placeholder:text-sm placeholder:text-muted w-full shadow-s hover:shadow-m text-primary-text pr-4 pl-11 py-2 rounded-lg bg-text-input-color focus:outline-none`}
+          className={`border transition-all duration-150 ${
+            error
+              ? "border-error-color focus:ring-3 focus:ring-error-color/20"
+              : isOpen
+                ? "border-brand-primary ring-3 ring-brand-primary/20"
+                : "border-border-color hover:border-border-dark-color focus:border-brand-primary focus:ring-3 focus:ring-brand-primary/20"
+          } placeholder:normal-case cursor-pointer placeholder:text-sm placeholder:text-muted w-full text-primary-text pr-4 pl-11 py-2 rounded-lg bg-text-input-color outline-none`}
           value={
             startDate && endDate
               ? `${formatDate(startDate)} - ${formatDate(endDate)}`

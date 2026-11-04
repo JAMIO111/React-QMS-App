@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { XIcon, TagIcon, TagsIcon, Trash2Icon, QrCodeIcon, UsersIcon } from "@/components/icons";
 import { useNCMFilters } from "../hooks/useNCMFilters";
 import { useClassifications, useNcrRanges } from "../hooks/useNcr";
@@ -45,7 +46,9 @@ const Pills = ({ legend, options, selected, onToggle }) => (
 /**
  * Register filters (kept in the URL): detected date, stage, severity, part, customer or supplier,
  * total cost and quantity ranges, failure mode, sub-failure mode and deleted records.
- * Choices apply with "Apply"; Escape or a click outside closes without applying.
+ * A full-height drawer that slides in from the right edge of the window and scrolls on its own;
+ * Apply / Reset stay at the bottom. Choices apply with "Apply"; Escape, the backdrop or the close
+ * button slide it away without applying.
  */
 const FilterPane = ({ onClose, source }) => {
   const filters = useNCMFilters();
@@ -65,6 +68,13 @@ const FilterPane = ({ onClose, source }) => {
   const [subFailureMode, setSubFailureMode] = useState(filters.subFailureMode || null);
   const [deleted, setDeleted] = useState(filters.deleted || "exclude");
   const paneRef = useRef(null);
+  const [closing, setClosing] = useState(false);
+  // Slide out, then let the page remove the drawer.
+  const close = () => {
+    if (closing) return;
+    setClosing(true);
+    setTimeout(() => onClose?.(), 180);
+  };
 
   const currency = ranges?.baseCurrency ?? "GBP";
   // Keep a filter already applied inside the slider even if it is above the current maximum.
@@ -80,27 +90,21 @@ const FilterPane = ({ onClose, source }) => {
 
   useEffect(() => {
     // An Escape already used to close a dropdown inside the pane leaves the pane open.
-    const onKey = (e) => e.key === "Escape" && !e.defaultPrevented && onClose?.();
-    const onDown = (e) => {
-      if (!(e.target instanceof Element)) return;
-      // Inside the pane, on the Filter button, or in a popover the pane opened (date picker calendar).
-      if (paneRef.current?.contains(e.target) || e.target.closest('[title="Filter"], [data-popover]')) return;
-      onClose?.();
-    };
+    const onKey = (e) => e.key === "Escape" && !e.defaultPrevented && closeRef.current();
     document.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onDown);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("mousedown", onDown);
-    };
-  }, [onClose]);
+    // Focus the drawer so keyboard users start inside it.
+    paneRef.current?.focus();
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  const closeRef = useRef(close);
+  closeRef.current = close;
 
   const toggle = (setter) => (key) => setter((s) => (s.includes(key) ? s.filter((k) => k !== key) : [...s, key]));
   /** Range → URL values; an end left at its limit means "no limit". */
   const bound = ([lo, hi], max) => [lo !== undefined && lo > 0 ? String(lo) : "", hi !== undefined && max > 0 && hi < max ? String(hi) : ""];
   const apply = (values) => {
     filters.updateFilters(values);
-    onClose?.();
+    close();
   };
   const applyAll = () => {
     const [costMinV, costMaxV] = bound(cost, costMax);
@@ -127,19 +131,30 @@ const FilterPane = ({ onClose, source }) => {
     apply(Object.fromEntries(["stage", "severity", "from", "to", "part", "partLabel", "customer", "customerLabel", "supplier", "supplierLabel",
       "costMin", "costMax", "qtyMin", "qtyMax", "failureMode", "subFailureMode", "deleted"].map((k) => [k, ""])));
 
-  return (
-    <div
-      ref={paneRef}
-      role="dialog"
-      aria-label="Filter non-conformances"
-      className="border absolute bg-primary-bg text-primary-text z-1000 top-32 right-4 flex max-h-[calc(100dvh-9rem)] flex-col rounded-2xl border-border-color shadow-lg shadow-shadow-color w-96 max-w-[calc(100vw-2rem)]">
-      <div className="flex shrink-0 px-4 py-1 bg-secondary-bg border-b border-border-color flex-row justify-between items-center rounded-t-2xl">
+  return createPortal(
+    <div className="fixed inset-0 z-[9000]">
+      {/* Backdrop: a click outside the drawer closes it. */}
+      <div
+        aria-hidden="true"
+        onMouseDown={close}
+        className={`absolute inset-0 bg-black/30 ${closing ? "animate-out fade-out" : "animate-in fade-in"} duration-200 fill-mode-forwards`}
+      />
+      <aside
+        ref={paneRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Filter non-conformances"
+        className={`absolute inset-y-0 right-0 flex h-dvh w-96 max-w-full flex-col border-l border-border-color bg-primary-bg text-primary-text shadow-2xl shadow-shadow-color outline-none ${
+          closing ? "animate-out slide-out-to-right" : "animate-in slide-in-from-right"
+        } duration-200 ease-out fill-mode-forwards`}>
+      <div className="flex shrink-0 px-4 py-3 bg-secondary-bg border-b border-border-color flex-row justify-between items-center">
         <h3 className="text-xl">Filter</h3>
-        <button type="button" aria-label="Close filters" className="hover:bg-primary-bg rounded-md cursor-pointer hover:text-error-color p-1" onClick={onClose}>
+        <button type="button" aria-label="Close filters" className="hover:bg-primary-bg rounded-md cursor-pointer hover:text-error-color p-1" onClick={close}>
           <XIcon />
         </button>
       </div>
-      <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-4 py-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
         <div className="grid grid-cols-2 gap-2">
           <RHFDatePickerPopout label="Detected from" placeholder="Any date" valueFormat="iso" clearable value={from} onChange={setFrom} maxDate={to ?? new Date()} />
           <RHFDatePickerPopout label="Detected to" placeholder="Any date" valueFormat="iso" clearable value={to} onChange={setTo} minDate={from ?? undefined} maxDate={new Date()} />
@@ -186,7 +201,7 @@ const FilterPane = ({ onClose, source }) => {
         <RHFComboBox label="Sub-failure mode" icon={TagsIcon} placeholder="All sub-failure modes" options={subs} value={subFailureMode} onChange={setSubFailureMode} />
         <RHFComboBox label="Deleted records" icon={Trash2Icon} options={DELETED_OPTIONS} value={deleted} onChange={(v) => setDeleted(v ?? "exclude")} sort={false} clearable={false} />
       </div>
-      <div className="flex shrink-0 justify-between gap-2 border-t border-border-color px-4 py-3">
+      <div className="flex shrink-0 justify-between gap-2 border-t border-border-color bg-secondary-bg px-4 py-3">
         <button type="button" className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm hover:bg-neutral-btn-bg-hover cursor-pointer" onClick={resetAll}>
           Reset all
         </button>
@@ -194,7 +209,9 @@ const FilterPane = ({ onClose, source }) => {
           Apply
         </button>
       </div>
-    </div>
+      </aside>
+    </div>,
+    document.body
   );
 };
 

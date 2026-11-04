@@ -173,7 +173,7 @@ describe("NC registers", () => {
     await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
     await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("failureModeId=fm1&subFailureModeId=sf1"));
     expect(lastCall("GET /ncrs").path).toContain("page=1");
-    expect(screen.queryByRole("dialog", { name: "Filter non-conformances" })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filter non-conformances" })).toBeNull());
 
     const active = screen.getByLabelText("Active filters");
     expect(active).toHaveTextContent("Failure mode: Dimensional");
@@ -241,6 +241,21 @@ describe("NC registers", () => {
     expect(within(pane).getByRole("slider", { name: "Total cost minimum" })).toBeDisabled();
   });
 
+  it("opens the filters as a full-height drawer that closes from its backdrop", async () => {
+    routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 } });
+    renderAt("/Non-Conformance/Internal");
+    await screen.findByText("No records found.");
+    await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
+    const drawer = screen.getByRole("dialog", { name: "Filter non-conformances" });
+    expect(drawer.tagName).toBe("ASIDE");
+    expect(drawer).toHaveClass("inset-y-0", "right-0", "h-dvh");
+    expect(drawer.parentElement.parentElement).toBe(document.body);
+    await userEvent.click(within(drawer).getByText("Closed"));
+    fireEvent.mouseDown(drawer.previousElementSibling);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filter non-conformances" })).toBeNull());
+    expect(lastCall("GET /ncrs").path).not.toContain("stage=");
+  });
+
   it("closes the filter pane on Escape without applying", async () => {
     routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 } });
     renderAt("/Non-Conformance/Internal");
@@ -248,7 +263,7 @@ describe("NC registers", () => {
     await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
     await userEvent.click(within(screen.getByRole("dialog", { name: "Filter non-conformances" })).getByText("Closed"));
     await userEvent.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog", { name: "Filter non-conformances" })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filter non-conformances" })).toBeNull());
     expect(lastCall("GET /ncrs").path).not.toContain("stage=");
   });
 });

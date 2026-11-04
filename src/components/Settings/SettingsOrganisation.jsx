@@ -81,7 +81,7 @@ const SettingsOrganisation = () => {
   };
 
   return (
-    <div className="flex flex-col p-5 gap-5 w-full overflow-y-auto">
+    <div className="flex flex-col gap-5 w-full">
       <div>
         <h2 className="text-primary-text text-2xl font-semibold">
           Organisation

@@ -345,3 +345,45 @@ backward move refused, delete/restore, 4 history entries, 4 outbox events); guar
 
 **Known gaps:** NC files, costs and 8D from the legacy screens are not yet on the new model
 (slices 2.5/2.6); the deployed frontend reads the new tables only after the next push.
+
+## 12. NCR costs, attachments and the original form layout — done (2026-11-04, part of 2.5 brought forward)
+
+At the user's request the original NC entry form (`legacy/nc-entry-form/`, restored from git
+history for reference) was ported onto the new model: its layout, drag-and-drop files and costs.
+
+**Database** (`20251104140000_ncr_costs_attachments.sql`)
+- `ncr_costs`: cost type (15 categories), date, currency, VAT treatment (none / inclusive /
+  exclusive) and rate, amount and exchange rate; net / VAT / gross and base-currency values are
+  worked out by `app.ncr_cost_amounts()` (the API and screen only preview them). Soft delete with
+  a reason; deleted lines are locked until restored.
+- `ncr_attachments`: metadata for files in the private `nc-files` bucket at
+  `<org>/ncr/<ncr id>/<uuid>-<name>` (CHECK: path in this NCR's folder, no `..`; ≤ 25 MB). Removing
+  a file is a soft delete with a reason; the stored object is kept.
+- Both: lock with the parent NCR (closed, cancelled or deleted → QM005), site-aware RLS through
+  `app.ncr_site()`, table-level INSERT + `app.stamp_created()`, column-level UPDATE, no DELETE,
+  audited; added to guardrails and both tenancy sweeps.
+- Storage policies replaced: read with `ncr.read`, upload with `ncr.update` at the NCR's site, only
+  into an existing NCR's folder (`app.ncr_file_allowed`); users can no longer update or delete
+  stored objects. The legacy `"Costs"` and `"NC Files"` tables were empty, so nothing was copied.
+
+**API:** `GET/POST /ncrs/{id}/costs` (list with base-currency totals; `deleted` filter),
+`PATCH /ncr-costs/{id}`, `POST /ncr-costs/{id}/delete|restore`, `GET/POST /ncrs/{id}/attachments`
+(the client uploads to storage first; the API checks the folder and that the object exists),
+`POST /ncr-attachments/{id}/delete|restore`.
+
+**Frontend:** `NcrPage` rebuilt in the original layout: header (back, reference, Save changes /
+Discard changes / Delete), side menu of sections (`SideMenuItem`: NC Details, Cost,
+Investigation, Additional Info, History; record-only sections disabled while creating) and
+cards. `NcrCosts` + `CostForm` (ported CostData / CostInputForm: VAT option and rate, currency
+with exchange rate, live preview), `FileDrop` on the API (drag and drop, unsaved list, previews,
+download, remove with reason, restore). Shared fixes: `TextInput` / `RHFTextArea` labelled with
+required, disabled, hint and error; `CTAButton` defaults to `type="button"`; `Dialog` stops a
+dialog's form submit from reaching the page's form.
+
+**Tests:** SQL `ncr_costs_attachments.test.sql` (amounts, locking, soft delete, storage folder,
+site scoping, isolation; mutation-checked) and updated `tenancy_rls`; API `ncr-records.e2e-spec.ts`
++ sweep (109 e2e); frontend +7 (137). Browser check of the page, cost dialog and files in light
+and dark mode with stubbed data — no console errors.
+
+**Live:** migration run by the user in the SQL editor and recorded; tables, triggers, functions
+and the two new storage policies confirmed.

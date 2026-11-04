@@ -73,6 +73,9 @@ Summary of the brief:
   `sort={false}` keeps your order; server search via `filterLocally={false}` + `onSearchChange`
   (see `RemoteComboBox`, `PartPicker`, `PartyPicker` in `src/components/ncr/Pickers.jsx`). Dates:
   `valueFormat="iso"` for date-only API fields, `minDate`/`maxDate`, `clearable`.
+- NCR files: upload to `nc-files` at `<org>/ncr/<ncr id>/<uuid>-<name>` (`uploadFileToSupabase`), then
+  `POST /ncrs/{id}/attachments`; storage policies allow uploads only into an existing NCR's folder and
+  never delete. Forms built with react-hook-form use `noValidate` (TextInput sets native `required`).
 - Icons: **Lucide only**, imported from `@/components/icons` (`<Name>Icon`, default size 1em so
   icons follow text size). Add new icons there; ESLint rejects `react-icons` and direct
   `lucide-react` imports elsewhere.
@@ -93,7 +96,9 @@ built-in email for now). **Phase 2** (first complete QMS workflow) is planned an
 (slices 2.0 auth gate → 2.1 parts → 2.2 inspection plans → 2.3 results → 2.4 NCR core → 2.5
 containment/investigation/disposition → 2.6 CAPA → 2.7 exit check); slices 2.0 (password flows, MFA), 2.1 (master data: units, customers, suppliers, parts,
 revisions, outbox) and 2.4 (NCR core, brought forward: `nonconformances`, `ncr_classifications`,
-stages, soft delete, legacy NCM copy; NC registers and form on the API) are done — see plan §9–§11;
+stages, soft delete, legacy NCM copy; NC registers and form on the API) are done, plus NCR costs and
+attachments with the NC page in the original form layout (`ncr_costs`, `ncr_attachments`, `FileDrop`,
+`NcrCosts`) — see plan §9–§12;
 next: 2.2 inspection plans.
 The project still signs tokens with the legacy HS256 secret (JWKS endpoint is empty), so the API
 needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.

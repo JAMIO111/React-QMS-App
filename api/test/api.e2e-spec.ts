@@ -139,7 +139,7 @@ describe('organisation scope', () => {
       name: 'Alpha Precision',
       slug: 'alpha-precision',
       status: 'active',
-      settings: { baseCurrency: 'GBP', vatRate: 0.2, ncrReferencePrefix: 'NCM', themeColour: 'purple', requireMfa: false },
+      settings: { baseCurrency: 'GBP', vatRate: 0.2, ncrReferencePrefix: 'NCM', themeColour: 'purple', requireMfa: false, logoPath: null },
     });
   });
 

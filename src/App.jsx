@@ -9,9 +9,18 @@ import NoOrganisation from "./components/NoOrganisation";
 import LoadingSpinner from "./components/LoadingSpinner";
 import { useOrganisation } from "./contexts/OrganisationProvider";
 import ThemeColourSync from "./components/ThemeColourSync";
+import { useEffect } from "react";
 
 function App() {
   const { organisation, error } = useOrganisation();
+
+  // Browser tab: "Fortress QMS | <organisation>".
+  useEffect(() => {
+    document.title = organisation?.name ? `Fortress QMS | ${organisation.name}` : "Fortress QMS";
+    return () => {
+      document.title = "Fortress QMS";
+    };
+  }, [organisation?.name]);
 
   if (organisation === undefined) {
     return (

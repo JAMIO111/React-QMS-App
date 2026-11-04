@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
+import supabase from "../supabase-client";
 import { useAuth } from "../contexts/AuthProvider";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 
@@ -41,6 +42,47 @@ export const useOrganisationDetails = () => {
     enabled: !!organisationId,
     retry: false,
   });
+};
+
+/**
+ * The organisation's logo as a short-lived link to the private org-logos bucket, or null when the
+ * organisation has none. Every member may read it (storage policy), so the menu can show it.
+ */
+export const useOrganisationLogo = () => {
+  const { organisationId } = useOrganisation();
+  const { data: org } = useOrganisationDetails();
+  const path = org?.settings?.logoPath ?? null;
+  return useQuery({
+    queryKey: orgKey(organisationId, "logo", path),
+    queryFn: async () => {
+      const { data, error } = await supabase.storage.from("org-logos").createSignedUrl(path, 60 * 60);
+      if (error) throw error;
+      return data?.signedUrl ?? null;
+    },
+    enabled: !!organisationId && !!path,
+    staleTime: 50 * 60 * 1000,
+    retry: false,
+  });
+};
+
+/** Logo files: PNG, JPG, WebP or SVG up to 1 MB (the bucket enforces the same). */
+export const LOGO_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/svg+xml": "svg" };
+export const LOGO_MAX_BYTES = 1024 * 1024;
+
+/** Uploads a logo to <organisation id>/logo/<random>.<ext> and returns its path. */
+export const uploadOrganisationLogo = async (file, organisationId) => {
+  const ext = LOGO_TYPES[file.type];
+  if (!ext) throw new Error("Use a PNG, JPG, WebP or SVG image.");
+  if (file.size > LOGO_MAX_BYTES) throw new Error("The logo must be 1 MB or smaller.");
+  const path = `${organisationId}/logo/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from("org-logos").upload(path, file, { contentType: file.type, upsert: false });
+  if (error) throw new Error(`Upload failed: ${error.message}`);
+  return path;
+};
+
+/** Removes a replaced or cleared logo file (best effort; the setting is what the app uses). */
+export const removeOrganisationLogoFile = async (path) => {
+  if (path) await supabase.storage.from("org-logos").remove([path]);
 };
 
 export const useUpdateOrganisation = () => {

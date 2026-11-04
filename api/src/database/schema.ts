@@ -29,6 +29,7 @@ export const organisationSettings = pgTable('organisation_settings', {
   ncrReferencePrefix: text('ncr_reference_prefix').notNull(),
   themeColour: text('theme_colour').notNull(),
   requireMfa: boolean('require_mfa').notNull(),
+  logoPath: text('logo_path'),
 });
 
 export const organisationUsers = pgTable('organisation_users', {

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Field from "../ui/Field";
 import SitesManager from "./SitesManager";
 import ThemeColourPicker from "./ThemeColourPicker";
+import OrganisationLogo from "./OrganisationLogo";
 import RequireMfaSetting from "./RequireMfaSetting";
 import { describeApiError, API_URL } from "../../lib/api-client";
 import { useOrganisationDetails, usePermissions, useUpdateOrganisation } from "../../hooks/useQmsApi";
@@ -132,6 +133,8 @@ const SettingsOrganisation = () => {
           </button>
         )}
       </form>
+
+      <OrganisationLogo logoPath={org.settings.logoPath ?? null} canManage={canManage} />
 
       <ThemeColourPicker value={org.settings.themeColour ?? "purple"} canManage={canManage} />
 

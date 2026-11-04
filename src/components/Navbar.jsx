@@ -1,16 +1,20 @@
 import { useState } from "react";
-import Logo from "../assets/dryden-logo-square.png";
+import FortressMark from "../assets/fortress-qms.svg";
 import { CircleHelpIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, SettingsIcon } from "@/components/icons";
 import NavItem from "./NavItem";
 import Logout from "./Logout";
 import { menuStructure } from "../MenuStructure";
-import { useCanSee } from "../hooks/useQmsApi";
+import { useCanSee, useOrganisationLogo } from "../hooks/useQmsApi";
+import { useOrganisation } from "../contexts/OrganisationProvider";
 import SubMenuItem from "./SubMenuItem";
 import ThemeToggle from "./ThemeToggle";
 
 const Navbar = () => {
   const [isMenuExpanded, setIsMenuExpanded] = useState(false);
   const canSee = useCanSee();
+  const { organisation } = useOrganisation();
+  const { data: logoUrl } = useOrganisationLogo();
+  const orgName = organisation?.name ?? "";
   const [isSubMenuOpen, setIsSubMenuOpen] = useState(null);
 
   const toggleMenu = () => {
@@ -39,19 +43,16 @@ const Navbar = () => {
           className={`flex justify-start items-center py-3 border-b-1 border-border-color ${
             isMenuExpanded ? "flex-row mx-3" : "flex-col gap-3"
           }`}>
-          <div className="flex bg-primary-bg border border-primary-text rounded-xl p-0.5 items-center justify-start gap-3">
-            <div className="flex justify-center items-center bg-white rounded-[10px] p-1">
-              <img className="w-6 h-6" src={Logo} alt="Logo" />
-            </div>
+          {/* The organisation's own logo; Fortress QMS's mark until one is uploaded. */}
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border-color bg-white p-0.5">
+            <img className="h-full w-full object-contain" src={logoUrl || FortressMark} alt={logoUrl ? `${orgName} logo` : "Fortress QMS"} />
           </div>
           {isMenuExpanded && (
-            <div className="flex flex-col justify-between items-start flex-1">
-              <h1 className="ml-3 flex-1 text-sm text-primary-text">
-                Dryden Services Ltd
+            <div className="ml-3 flex min-w-0 flex-1 flex-col justify-between items-start">
+              <h1 className="w-full truncate text-sm font-semibold text-primary-text" title={orgName}>
+                {orgName || "Fortress QMS"}
               </h1>
-              <p className="ml-3 flex-1 text-xs text-secondary-text">
-                Business Portal
-              </p>
+              <p className="text-xs text-secondary-text">Fortress QMS</p>
             </div>
           )}
           <button

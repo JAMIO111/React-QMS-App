@@ -25,7 +25,15 @@ export class OrganisationsService {
   }
 
   update(ctx: RequestContext, organisationId: string, body: UpdateOrganisationBody): Promise<OrganisationResponse> {
+    const logoPath = body.settings?.logoPath;
+    if (logoPath && (!logoPath.startsWith(`${organisationId}/logo/`) || logoPath.includes('..') || logoPath.length === `${organisationId}/logo/`.length)) {
+      throw ApiError.badRequest('invalid_path', `Upload the logo to ${organisationId}/logo/ in the org-logos bucket`);
+    }
     return this.database.asUser(ctx, async (db) => {
+      if (logoPath) {
+        const stored = await db.execute(sql`select 1 from storage.objects where bucket_id = 'org-logos' and name = ${logoPath}`);
+        if (!stored.rows.length) throw ApiError.badRequest('file_not_uploaded', 'Upload the logo before saving it');
+      }
       if (body.name !== undefined) {
         const updated = await db.update(organisations).set({ name: body.name }).where(eq(organisations.id, organisationId)).returning({ id: organisations.id });
         if (updated.length === 0) throw ApiError.forbidden();
@@ -40,6 +48,7 @@ export class OrganisationsService {
             ...(s.ncrReferencePrefix !== undefined ? { ncrReferencePrefix: s.ncrReferencePrefix } : {}),
             ...(s.themeColour !== undefined ? { themeColour: s.themeColour } : {}),
             ...(s.requireMfa !== undefined ? { requireMfa: s.requireMfa } : {}),
+            ...(s.logoPath !== undefined ? { logoPath: s.logoPath } : {}),
           })
           .where(eq(organisationSettings.organisationId, organisationId))
           .returning({ id: organisationSettings.organisationId });
@@ -67,6 +76,7 @@ export class OrganisationsService {
         ncrReferencePrefix: row.settings.ncrReferencePrefix,
         themeColour: row.settings.themeColour as OrganisationResponse['settings']['themeColour'],
         requireMfa: row.settings.requireMfa,
+        logoPath: row.settings.logoPath ?? null,
       },
     };
   }

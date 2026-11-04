@@ -15,7 +15,15 @@ export const OrganisationResponse = z.object({
   name: z.string(),
   slug: z.string(),
   status: z.enum(['active', 'suspended']),
-  settings: z.object({ baseCurrency: z.string(), vatRate: z.number(), ncrReferencePrefix: z.string(), themeColour: ThemeColour, requireMfa: z.boolean() }),
+  settings: z.object({
+    baseCurrency: z.string(),
+    vatRate: z.number(),
+    ncrReferencePrefix: z.string(),
+    themeColour: ThemeColour,
+    requireMfa: z.boolean(),
+    /** Path of the logo in the private org-logos bucket (<organisation id>/logo/...), or null. */
+    logoPath: z.string().nullable(),
+  }),
 });
 export type OrganisationResponse = z.infer<typeof OrganisationResponse>;
 
@@ -40,6 +48,8 @@ export const UpdateOrganisationBody = z
         ncrReferencePrefix: z.string().trim().regex(/^[A-Za-z0-9]{1,10}$/, 'Use 1–10 letters or digits').transform((v) => v.toUpperCase()).optional(),
         themeColour: ThemeColour.optional(),
         requireMfa: z.boolean().optional(),
+        /** Set after uploading to org-logos at <organisation id>/logo/...; null removes the logo. */
+        logoPath: z.string().trim().max(300).nullable().optional(),
       })
       .strict()
       .refine((s) => Object.keys(s).length > 0, { message: 'Provide at least one setting' })

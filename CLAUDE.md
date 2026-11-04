@@ -47,7 +47,11 @@ Summary of the brief:
   New features should call the API, not Supabase tables.
 - Frontend reads the current user from `profiles` and memberships via `OrganisationProvider`;
   every query filters by the current `organisationId`. Storage paths: `nc-files/<org_id>/...`,
-  `avatars/users/<user_id>/...` (both private).
+  `avatars/users/<user_id>/...`, `org-logos/<org_id>/logo/...` (all private).
+- Product name: **Fortress QMS** (tab title `Fortress QMS | <organisation>` set in `App.jsx`; mark in
+  `public/fortress-qms.svg` / `src/assets/fortress-qms.svg`). Organisation logo: `organisation_settings.logo_path`
+  → private `org-logos` bucket at `<org_id>/logo/...` (members read, `organisation.manage` writes); shown in the
+  side menu via `useOrganisationLogo()`, managed in Settings → Organisation (`OrganisationLogo.jsx`).
 - Theme colour: `organisation_settings.theme_colour` (blue/red/yellow/green/orange/purple/pink, set in
   Settings → Organisation) → `<html data-theme-colour>` (`src/lib/theme-colours.js`,
   `ThemeColourSync`). `src/index.css` gives each mode three shades (`theme-light`, `theme`,

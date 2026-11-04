@@ -91,6 +91,27 @@ describe('PATCH /organisations/current', () => {
     expect(again.body.settings.themeColour).toBe('green');
   });
 
+  it('sets and removes the organisation logo', async () => {
+    const h = await as(ids.ownerA, ids.orgA);
+    const path = `${ids.orgA}/logo/brand.png`;
+    expect((await api().get('/api/v1/organisations/current').set(h).expect(200)).body.settings.logoPath).toBeNull();
+    const notYet = await api().patch('/api/v1/organisations/current').set(h).send({ settings: { logoPath: path } }).expect(400);
+    expect(notYet.body.error.code).toBe('file_not_uploaded');
+    for (const bad of [`${ids.orgB}/logo/x.png`, `${ids.orgA}/other/x.png`, `${ids.orgA}/logo/../x.png`, `${ids.orgA}/logo/`]) {
+      const res = await api().patch('/api/v1/organisations/current').set(h).send({ settings: { logoPath: bad } }).expect(400);
+      expect(res.body.error.code).toBe('invalid_path');
+    }
+    await admin.query(`insert into storage.buckets (id, name) values ('org-logos', 'org-logos') on conflict do nothing`);
+    await admin.query(`insert into storage.objects (bucket_id, name) values ('org-logos', $1)`, [path]);
+    const set = await api().patch('/api/v1/organisations/current').set(h).send({ settings: { logoPath: path } }).expect(200);
+    expect(set.body.settings.logoPath).toBe(path);
+    // Other members see it (they need it for the menu) but cannot change it.
+    expect((await api().get('/api/v1/organisations/current').set(await as(ids.inspectorA, ids.orgA)).expect(200)).body.settings.logoPath).toBe(path);
+    await api().patch('/api/v1/organisations/current').set(await as(ids.inspectorA, ids.orgA)).send({ settings: { logoPath: null } }).expect(403);
+    const removed = await api().patch('/api/v1/organisations/current').set(h).send({ settings: { logoPath: null } }).expect(200);
+    expect(removed.body.settings.logoPath).toBeNull();
+  });
+
   it('forbids members without organisation.manage', async () => {
     await api().patch('/api/v1/organisations/current').set(await as(ids.inspectorA, ids.orgA)).send({ settings: { themeColour: 'red' } }).expect(403);
     const res = await api().patch('/api/v1/organisations/current').set(await as(ids.inspectorA, ids.orgA)).send({ name: 'Hijack' }).expect(403);

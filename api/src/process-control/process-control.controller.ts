@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { pageSchema } from '../common/pagination';
@@ -31,6 +31,16 @@ import {
   UpdateSpecValueBody,
 } from './process-control.schemas';
 import { ProcessControlService } from './process-control.service';
+import { ControlPlanContentService } from './control-plan-content.service';
+import {
+  CreateCharacteristicBody,
+  CreateOperationBody,
+  ReplaceReactionsBody,
+  RevisionComparison,
+  RevisionDetail,
+  UpdateCharacteristicBody,
+  UpdateOperationBody,
+} from './process-control.schemas';
 
 const MD_READ = 'master_data.read';
 const MD_MANAGE = 'master_data.manage';
@@ -261,5 +271,87 @@ export class ControlPlanRevisionsController {
   @ApiOkResponse({ schema: openApiSchema(PlanRevision) })
   transition(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.transitionRevision(ctx, parse(Uuid, id), parse(PlanRevisionTransitionBody, body));
+  }
+}
+
+/** Content of a revision (PC2): operations, characteristics, sampling, reactions; comparison. */
+@ApiTags('control-plans')
+@ApiBearerAuth()
+@Controller()
+export class ControlPlanContentController {
+  constructor(private readonly service: ControlPlanContentService) {}
+
+  @Get('control-plan-revisions/:id')
+  @OrganisationScoped(PC_READ)
+  @ApiOkResponse({ schema: openApiSchema(RevisionDetail) })
+  get(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.getRevision(ctx, parse(Uuid, id));
+  }
+
+  /** What changed compared with the revision it replaces (or `with`, another revision of the plan). */
+  @Get('control-plan-revisions/:id/comparison')
+  @OrganisationScoped(PC_READ)
+  @ApiQuery({ name: 'with', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiOkResponse({ schema: openApiSchema(RevisionComparison) })
+  compare(@Ctx() ctx: RequestContext, @Param('id') id: string, @Query('with') withId?: string) {
+    return this.service.compare(ctx, parse(Uuid, id), withId ? parse(Uuid, withId) : undefined);
+  }
+
+  @Post('control-plan-revisions/:id/operations')
+  @HttpCode(201)
+  @OrganisationScoped(PC_MANAGE)
+  @ApiBody({ schema: openApiSchema(CreateOperationBody) })
+  @ApiCreatedResponse({ schema: openApiSchema(RevisionDetail) })
+  addOperation(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addOperation(ctx, parse(Uuid, id), parse(CreateOperationBody, body));
+  }
+
+  @Patch('control-plan-operations/:id')
+  @OrganisationScoped(PC_MANAGE)
+  @ApiBody({ schema: openApiSchema(UpdateOperationBody) })
+  @ApiOkResponse({ schema: openApiSchema(RevisionDetail) })
+  updateOperation(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.updateOperation(ctx, parse(Uuid, id), parse(UpdateOperationBody, body));
+  }
+
+  @Delete('control-plan-operations/:id')
+  @OrganisationScoped(PC_MANAGE)
+  @ApiOkResponse({ schema: openApiSchema(RevisionDetail) })
+  removeOperation(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.removeOperation(ctx, parse(Uuid, id));
+  }
+
+  @Post('control-plan-revisions/:id/characteristics')
+  @HttpCode(201)
+  @OrganisationScoped(PC_MANAGE)
+  @ApiBody({ schema: openApiSchema(CreateCharacteristicBody) })
+  @ApiCreatedResponse({ schema: openApiSchema(RevisionDetail) })
+  addCharacteristic(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addCharacteristic(ctx, parse(Uuid, id), parse(CreateCharacteristicBody, body));
+  }
+
+  /** Partial update; `partIds`, `sampling` and `reactions`, when given, replace the existing ones. */
+  @Patch('control-plan-characteristics/:id')
+  @OrganisationScoped(PC_MANAGE)
+  @ApiBody({ schema: openApiSchema(UpdateCharacteristicBody) })
+  @ApiOkResponse({ schema: openApiSchema(RevisionDetail) })
+  updateCharacteristic(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.updateCharacteristic(ctx, parse(Uuid, id), parse(UpdateCharacteristicBody, body));
+  }
+
+  @Delete('control-plan-characteristics/:id')
+  @OrganisationScoped(PC_MANAGE)
+  @ApiOkResponse({ schema: openApiSchema(RevisionDetail) })
+  removeCharacteristic(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.removeCharacteristic(ctx, parse(Uuid, id));
+  }
+
+  /** Replace the reactions that apply to every characteristic of the revision. */
+  @Put('control-plan-revisions/:id/reactions')
+  @OrganisationScoped(PC_MANAGE)
+  @ApiBody({ schema: openApiSchema(ReplaceReactionsBody) })
+  @ApiOkResponse({ schema: openApiSchema(RevisionDetail) })
+  replaceReactions(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.replaceRevisionReactions(ctx, parse(Uuid, id), parse(ReplaceReactionsBody, body));
   }
 }

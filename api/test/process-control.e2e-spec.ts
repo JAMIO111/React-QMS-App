@@ -125,6 +125,12 @@ describe('control plans', () => {
     await api().patch(`/api/v1/control-plan-revisions/${ctx.revA}`).set(inspector).send({ changeReason: 'x' }).expect(403);
     await api().post(`/api/v1/control-plan-revisions/${ctx.revA}/transitions`).set(inspector).send({ action: 'submit' }).expect(403);
 
+    // An empty revision cannot be submitted; add one check (later revisions copy it).
+    const empty = await api().post(`/api/v1/control-plan-revisions/${ctx.revA}/transitions`).set(owner).send({ action: 'submit' }).expect(409);
+    expect(empty.body.error.message).toMatch(/Add at least one characteristic/);
+    const withOp = await api().post(`/api/v1/control-plan-revisions/${ctx.revA}/operations`).set(owner).send({ operationCode: 'OP-020', name: 'Turning' }).expect(201);
+    await api().post(`/api/v1/control-plan-revisions/${ctx.revA}/characteristics`).set(owner)
+      .send({ operationId: withOp.body.operations[0].id, characteristicKey: 'OD', name: 'Outer diameter', nominal: 25, lowerLimit: 24.95, upperLimit: 25.05, unitCode: 'mm' }).expect(201);
     const noReason = await api().post(`/api/v1/control-plan-revisions/${ctx.revA}/transitions`).set(owner).send({ action: 'submit' }).expect(409);
     expect(noReason.body.error.message).toMatch(/Describe the change/);
     await api().patch(`/api/v1/control-plan-revisions/${ctx.revA}`).set(owner).send({ changeReason: 'Initial issue' }).expect(200);
@@ -170,7 +176,7 @@ describe('control plans', () => {
     );
     const history = await api().get(`/api/v1/control-plans/${ctx.plan}/history`).set(owner).expect(200);
     const types = new Set(history.body.data.map((e: { entityType: string }) => e.entityType));
-    expect(types).toEqual(new Set(['control_plans', 'control_plan_applicability', 'control_plan_revisions']));
+    expect(types).toEqual(new Set(['control_plans', 'control_plan_applicability', 'control_plan_revisions', 'control_plan_operations', 'control_plan_characteristics']));
     const ownerEntry = history.body.data.find((e: { entityType: string; action: string }) => e.entityType === 'control_plans' && e.action === 'insert');
     expect(ownerEntry.names[ids.ownerA]).toBe('Ada Owner');
     // Revision updates carry only changed fields; the revision is named by its id.

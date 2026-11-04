@@ -232,3 +232,51 @@ and the one organisation); guardrails 0 violations.
 
 **Next:** PC2 — operations, characteristics (fixed / variable / conditional), sampling rules,
 reaction plans, copy-on-new-revision and revision comparison.
+
+## 10. Slice PC2 — plan authoring — done (2026-11-04)
+
+**Database** (`20251108120000_control_plan_authoring.sql`)
+- `control_plan_operations` (code normalised, unique per revision; sequence; machine or work centre).
+- `control_plan_characteristics`: stable `characteristic_key` (cannot be renamed; identifies the
+  characteristic across revisions), number, name, operation (same revision, enforced by a composite
+  key), `data_type` variable | attribute, `value_source` plan (fixed) | part_spec (bound by
+  `spec_key`), `applies_to` all | selected (conditional), `NUMERIC` nominal/limits, unit, method,
+  required gauge type, criticality, SPC (`imr` with subgroup 1 or `xbar_r` with 2–10), display
+  decimals. One CHECK constraint holds the value rules per kind.
+- `characteristic_applicability` (parts of a conditional characteristic; must be in the plan's scope),
+  `sampling_rules` (first-off, last-off, every N minutes / parts, start of shift, after tool change,
+  after set-up, on demand; one per trigger; interval required exactly for the "every N" kinds),
+  `reaction_plans` (out of spec, SPC signal, gauge invalid, missed check → warn / hold / stop /
+  notify / raise NC; per characteristic or revision-wide).
+- Every child row carries `control_plan_revision_id`; add/change/remove only while the revision is a
+  draft (`QM007`); audited; removing a characteristic removes its rules; an operation with
+  characteristics cannot be removed; switching back to "all parts" clears the part list.
+- A new revision copies the revision it supersedes (all children, part lists as they were).
+- Submitting needs at least one characteristic and parts for every conditional one.
+- `app.control_plan_history()` now covers the content (removed rows found through their delete events).
+
+**API:** `GET /control-plan-revisions/{id}` (content, revision-wide reactions, parts in scope),
+`GET …/comparison` (against the superseded revision or `?with=`), `POST …/operations`,
+`PATCH|DELETE /control-plan-operations/{id}`, `POST …/characteristics`,
+`PATCH|DELETE /control-plan-characteristics/{id}` (`partIds`, `sampling`, `reactions` replace their
+sets), `PUT …/reactions`. Values are made consistent with the kind (pass/fail checks drop unit and
+limits; part-specific checks drop limits) and problems are reported in words before the database
+check. The comparison (`revision-compare.ts`, unit tested) lists added / removed / changed
+characteristics with before → after fields, classifies limit changes as tightened / loosened /
+shifted, and lists operation and general reaction changes.
+
+**Frontend:** `/Process-Control/Plans/:planId/revisions/:revisionId`: operations with their
+characteristics as operators read them (e.g. "25.00 (24.95 – 25.05) mm", "From part: LENGTH (mm)",
+"Every 30 min × 5", "X-bar/R, n = 5"), add/edit dialogs (characteristic: kind, limits or spec key,
+applies to all / selected parts, method, gauge type, criticality, sampling rules, reactions, SPC),
+general reactions, and "Changes from revision X". Read-only unless a draft and `process_control.manage`.
+The plan page links each revision and offers "Edit checks" on the draft.
+
+**Tests:** SQL `control_plan_authoring.test.sql` (+ PC1 test, guardrails, tenancy sweep seeded);
+API unit +4 (comparison), e2e `control-plan-content.e2e-spec.ts` + sweep over the new routes
+(135 e2e); frontend +3 (196). Browser check extended: open the draft's checks, tighten OD,
+add a conditional part-specific LENGTH check for HCR-200, comparison shows "Tolerance tightened" and
+"1 added · 1 changed" — no console errors, no failed API calls.
+
+**Next:** PC3 — the requirement resolver (effective plan revision + released part revision →
+frozen requirements, blocking on ambiguity or missing values) with a preview on the plan page.

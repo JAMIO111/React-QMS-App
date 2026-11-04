@@ -45,7 +45,9 @@ audited(relname) AS (VALUES
   ('gauge_types'), ('gauge_type_characteristics'), ('gauges'), ('gauge_characteristics'), ('calibrations'),
   ('calibration_readings'), ('calibration_attachments'),
   ('machines'), ('part_families'), ('part_revision_characteristics'), ('control_plans'),
-  ('control_plan_applicability'), ('control_plan_revisions')
+  ('control_plan_applicability'), ('control_plan_revisions'),
+  ('control_plan_operations'), ('control_plan_characteristics'), ('characteristic_applicability'),
+  ('sampling_rules'), ('reaction_plans')
 )
 SELECT rule, object FROM (
   SELECT '1 rls disabled' AS rule, format('%I.%I', nspname, relname) AS object

@@ -386,7 +386,9 @@ const Revisions = ({ plan, canManage, canApprove }) => {
               return (
                 <tr key={r.id}>
                   <td className={`${td} font-mono`}>
-                    {r.revisionCode}
+                    <Link to={`/Process-Control/Plans/${plan.id}/revisions/${r.id}`} className="text-link-color hover:underline" aria-label={`Open revision ${r.revisionCode}`}>
+                      {r.revisionCode}
+                    </Link>
                     {r.supersedesRevision && <div className="font-sans text-xs text-secondary-text">replaces {r.supersedesRevision.revisionCode}</div>}
                   </td>
                   <td className={td}>
@@ -418,9 +420,14 @@ const Revisions = ({ plan, canManage, canApprove }) => {
                     <div className="flex flex-wrap justify-end gap-2">
                       {actions.map((a) =>
                         a === "edit" ? (
-                          <button key={a} type="button" className={buttonClass.neutral} onClick={() => setEditing(r)} aria-label={`Edit revision ${r.revisionCode}`}>
-                            Edit
-                          </button>
+                          <span key={a} className="flex gap-2">
+                            <Link to={`/Process-Control/Plans/${plan.id}/revisions/${r.id}`} className={buttonClass.primary}>
+                              Edit checks
+                            </Link>
+                            <button type="button" className={buttonClass.neutral} onClick={() => setEditing(r)} aria-label={`Edit revision ${r.revisionCode}`}>
+                              Details
+                            </button>
+                          </span>
                         ) : (
                           <button key={a} type="button" className={buttonClass[ACTIONS[a].style]} onClick={() => setActing({ revision: r, action: a })}>
                             {a === "obsolete" && r.status === "draft" ? "Discard" : ACTIONS[a].label}

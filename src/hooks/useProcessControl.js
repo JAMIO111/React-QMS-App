@@ -52,3 +52,6 @@ export const REVISION_STATUS = {
   superseded: { label: "Superseded", className: "bg-border-color text-secondary-text" },
   obsolete: { label: "Obsolete", className: "bg-border-color text-secondary-text line-through" },
 };
+
+export const useControlPlanRevision = (id) => useDetail(`/control-plan-revisions/${id}`, !!id);
+export const useRevisionComparison = (id, enabled = true) => useDetail(`/control-plan-revisions/${id}/comparison`, !!id && enabled);

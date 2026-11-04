@@ -91,6 +91,20 @@ BEGIN
     SELECT a, p.id, f.id FROM public.control_plans p, public.part_families f WHERE p.organisation_id = a AND f.organisation_id = a;
   INSERT INTO public.control_plan_revisions (organisation_id, control_plan_id, revision_code)
     SELECT a, id, 'A' FROM public.control_plans WHERE organisation_id = a;
+  -- Process control (PC2): plan content.
+  INSERT INTO public.control_plan_operations (organisation_id, control_plan_revision_id, operation_code, name)
+    SELECT a, id, 'OP-10', 'Sweep turning' FROM public.control_plan_revisions WHERE organisation_id = a;
+  INSERT INTO public.control_plan_characteristics (organisation_id, control_plan_revision_id, operation_id, characteristic_key, name,
+                                                   value_source, applies_to, unit_code, spec_key)
+    SELECT a, o.control_plan_revision_id, o.id, 'LENGTH', 'Length', 'part_spec', 'selected', 'mm', 'LENGTH'
+    FROM public.control_plan_operations o WHERE o.organisation_id = a;
+  INSERT INTO public.characteristic_applicability (organisation_id, control_plan_revision_id, plan_characteristic_id, part_id)
+    SELECT a, c.control_plan_revision_id, c.id, p.id FROM public.control_plan_characteristics c, public.parts p
+    WHERE c.organisation_id = a AND p.organisation_id = a AND p.part_number = 'SW-P1';
+  INSERT INTO public.sampling_rules (organisation_id, control_plan_revision_id, plan_characteristic_id, trigger_type, sample_size)
+    SELECT a, control_plan_revision_id, id, 'first_off', 1 FROM public.control_plan_characteristics WHERE organisation_id = a;
+  INSERT INTO public.reaction_plans (organisation_id, control_plan_revision_id, trigger_type, action, instruction)
+    SELECT a, id, 'out_of_spec', 'hold', 'Quarantine the batch' FROM public.control_plan_revisions WHERE organisation_id = a;
 
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));

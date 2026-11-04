@@ -19,6 +19,7 @@ vi.mock("../../contexts/ConfirmationModalProvider", () => ({ useConfirm: () => a
 
 import ControlPlansPage from "./ControlPlansPage";
 import ControlPlanPage from "./ControlPlanPage";
+import RevisionPage from "./RevisionPage";
 import MachinesPage from "../master-data/MachinesPage";
 import PartFamilyPage from "../master-data/PartFamilyPage";
 import PartDetailPage from "../master-data/PartDetailPage";
@@ -73,6 +74,7 @@ const renderAt = (url) =>
         <Routes>
           <Route path="/Process-Control/Plans" element={<ControlPlansPage />} />
           <Route path="/Process-Control/Plans/:id" element={<ControlPlanPage />} />
+          <Route path="/Process-Control/Plans/:planId/revisions/:revisionId" element={<RevisionPage />} />
           <Route path="/Machines" element={<MachinesPage />} />
           <Route path="/Part-Families/:id" element={<PartFamilyPage />} />
           <Route path="/Parts/:id" element={<PartDetailPage />} />
@@ -269,5 +271,127 @@ describe("Part specification values", () => {
     const released = await screen.findByRole("table", { name: "Specification values of revision A" });
     expect(within(released).queryByRole("button")).toBeNull();
     expect(screen.getByText(/Revision A is released; its values are locked/)).toBeInTheDocument();
+  });
+});
+
+describe("Revision page", () => {
+  const characteristic = (over) => ({
+    id: "c1",
+    operationId: "o1",
+    characteristicKey: "OD",
+    sequence: 10,
+    charNumber: "3",
+    name: "Outer diameter",
+    dataType: "variable",
+    valueSource: "plan",
+    appliesTo: "all",
+    nominal: 25,
+    lowerLimit: 24.95,
+    upperLimit: 25.05,
+    unitCode: "mm",
+    specKey: null,
+    method: "Micrometer, 3 positions",
+    gaugeType: { id: "g1", name: "Micrometer 0-25" },
+    criticality: "critical",
+    spcEligible: true,
+    chartType: "xbar_r",
+    subgroupSize: 5,
+    decimals: 2,
+    notes: null,
+    parts: [],
+    sampling: [{ id: "s1", triggerType: "every_n_minutes", intervalValue: 30, sampleSize: 5 }],
+    reactions: [],
+    ...over,
+  });
+  const detail = (over) => ({
+    ...rev({ id: "cr2", revisionCode: "B", supersedesRevision: { id: "cr1", revisionCode: "A" } }),
+    plan: { id: "cp1", planCode: "CP-HCR-001", title: "Rods", active: true },
+    operations: [
+      {
+        id: "o1",
+        operationCode: "OP-020",
+        sequence: 20,
+        name: "CNC turning",
+        machine: null,
+        workCentre: "Turning",
+        notes: null,
+        characteristics: [
+          characteristic({}),
+          characteristic({ id: "c2", characteristicKey: "GROOVE_POS", name: "Groove position", charNumber: null, valueSource: "part_spec", specKey: "GROOVE_POS", nominal: null, lowerLimit: null, upperLimit: null, appliesTo: "selected", parts: [{ id: "p2", partNumber: "HCR-200" }], spcEligible: false, chartType: null, subgroupSize: null, sampling: [], gaugeType: null, method: null, criticality: "major" }),
+        ],
+      },
+    ],
+    reactions: [],
+    scopeParts: [
+      { id: "p1", partNumber: "HCR-100", name: "Rod 100" },
+      { id: "p2", partNumber: "HCR-200", name: "Rod 200" },
+    ],
+    ...over,
+  });
+  const comparison = {
+    base: { id: "cr1", revisionCode: "A" },
+    target: { id: "cr2", revisionCode: "B" },
+    operations: [],
+    characteristics: [{ characteristicKey: "OD", name: "Outer diameter", change: "changed", tolerance: "tightened", fields: [{ field: "upperLimit", label: "Upper limit", from: "25.1", to: "25.05" }] }],
+    reactions: [],
+    summary: { added: 0, removed: 0, changed: 1 },
+  };
+
+  it("shows characteristics as operators read them, with the changes from the previous revision", async () => {
+    routeApi({ "GET /control-plan-revisions/cr2": detail(), "GET /control-plan-revisions/cr2/comparison": comparison });
+    renderAt("/Process-Control/Plans/cp1/revisions/cr2");
+    const table = await screen.findByRole("table", { name: "Characteristics at OP-020" });
+    expect(within(table).getByText("25.00 (24.95 – 25.05) mm")).toBeInTheDocument();
+    expect(within(table).getByText("From part: GROOVE_POS (mm)")).toBeInTheDocument();
+    expect(within(table).getByText("HCR-200")).toBeInTheDocument();
+    expect(within(table).getByText("Every 30 min × 5")).toBeInTheDocument();
+    expect(within(table).getByText("X-bar/R, n = 5")).toBeInTheDocument();
+    expect(await screen.findByText("Tolerance tightened")).toBeInTheDocument();
+    expect(screen.getByText("0 added · 1 changed · 0 removed")).toBeInTheDocument();
+  });
+
+  it("adds a conditional part-specific characteristic", async () => {
+    let body;
+    routeApi({
+      "GET /control-plan-revisions/cr2": detail(),
+      "GET /control-plan-revisions/cr2/comparison": comparison,
+      "GET /units": { data: [{ code: "mm", name: "Millimetre", quantityKind: "length" }] },
+      "GET /gauge-types": { data: [] },
+      "POST /control-plan-revisions/cr2/characteristics": (_p, opts) => ((body = opts.body), detail()),
+    });
+    renderAt("/Process-Control/Plans/cp1/revisions/cr2");
+    await userEvent.click(await screen.findByRole("button", { name: "Characteristic" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("Key"), "LENGTH");
+    await userEvent.type(within(dialog).getByLabelText("Name"), "Overall length");
+    await userEvent.click(within(dialog).getByRole("radio", { name: /Part-specific/ }));
+    await userEvent.type(within(dialog).getByLabelText("Specification key"), "LENGTH");
+    await userEvent.click(within(dialog).getByRole("radio", { name: /Selected parts only/ }));
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: "HCR-100" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save characteristic" }));
+    expect(body).toMatchObject({
+      operationId: "o1",
+      characteristicKey: "LENGTH",
+      sequence: 20,
+      name: "Overall length",
+      dataType: "variable",
+      valueSource: "part_spec",
+      specKey: "LENGTH",
+      unitCode: "mm",
+      nominal: null,
+      appliesTo: "selected",
+      partIds: ["p1"],
+      sampling: [{ triggerType: "first_off", intervalValue: null, sampleSize: 1 }],
+      spcEligible: false,
+    });
+  });
+
+  it("is read-only once the revision is no longer a draft", async () => {
+    routeApi({ "GET /control-plan-revisions/cr2": detail({ status: "effective" }), "GET /control-plan-revisions/cr2/comparison": comparison });
+    renderAt("/Process-Control/Plans/cp1/revisions/cr2");
+    await screen.findByRole("table", { name: "Characteristics at OP-020" });
+    expect(screen.getByText(/This revision is locked/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add operation" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit OD" })).toBeNull();
   });
 });

@@ -41,6 +41,10 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   control_plan_revisions_code_key: 'This plan already has that revision',
   control_plan_revisions_one_open: 'This plan already has a revision in draft or under review; finish or withdraw it first',
   control_plan_revisions_one_effective: 'This plan already has an effective revision',
+  control_plan_operations_code_key: 'This revision already has an operation with that code',
+  control_plan_characteristics_key: 'This revision already has a characteristic with that key',
+  characteristic_applicability_key: 'That part is already listed',
+  sampling_rules_one_per_trigger: 'Each sampling trigger can be used once per characteristic',
 };
 
 /**

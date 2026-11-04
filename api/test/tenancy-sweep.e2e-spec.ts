@@ -108,6 +108,15 @@ const sampleBody = (op: Op): object | undefined =>
     'DELETE /api/v1/control-plan-applicability/{id}': undefined,
     'PATCH /api/v1/control-plan-revisions/{id}': { changeReason: 'Hijacked' },
     'POST /api/v1/control-plan-revisions/{id}/transitions': { action: 'obsolete', reason: 'Hijacked' },
+    'GET /api/v1/control-plan-revisions/{id}': undefined,
+    'GET /api/v1/control-plan-revisions/{id}/comparison': undefined,
+    'POST /api/v1/control-plan-revisions/{id}/operations': { operationCode: 'OP-99', name: 'Hijacked' },
+    'POST /api/v1/control-plan-revisions/{id}/characteristics': { operationId: a.operation, characteristicKey: 'HIJACK', name: 'Hijacked', upperLimit: 1, unitCode: 'mm' },
+    'PUT /api/v1/control-plan-revisions/{id}/reactions': { reactions: [] },
+    'PATCH /api/v1/control-plan-operations/{id}': { name: 'Hijacked' },
+    'DELETE /api/v1/control-plan-operations/{id}': undefined,
+    'PATCH /api/v1/control-plan-characteristics/{id}': { name: 'Hijacked' },
+    'DELETE /api/v1/control-plan-characteristics/{id}': undefined,
   })[`${op.method} ${op.path}`];
 
 const hasSample = (op: Op) =>
@@ -179,6 +188,15 @@ const hasSample = (op: Op) =>
     'DELETE /api/v1/control-plan-applicability/{id}',
     'PATCH /api/v1/control-plan-revisions/{id}',
     'POST /api/v1/control-plan-revisions/{id}/transitions',
+    'GET /api/v1/control-plan-revisions/{id}',
+    'GET /api/v1/control-plan-revisions/{id}/comparison',
+    'POST /api/v1/control-plan-revisions/{id}/operations',
+    'POST /api/v1/control-plan-revisions/{id}/characteristics',
+    'PUT /api/v1/control-plan-revisions/{id}/reactions',
+    'PATCH /api/v1/control-plan-operations/{id}',
+    'DELETE /api/v1/control-plan-operations/{id}',
+    'PATCH /api/v1/control-plan-characteristics/{id}',
+    'DELETE /api/v1/control-plan-characteristics/{id}',
   ].includes(`${op.method} ${op.path}`);
 
 /** Organisation A's record id for the resource a path refers to. */
@@ -207,11 +225,13 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/control-plans/')) return a.plan;
   if (path.startsWith('/api/v1/control-plan-applicability/')) return a.applicability;
   if (path.startsWith('/api/v1/control-plan-revisions/')) return a.planRevision;
+  if (path.startsWith('/api/v1/control-plan-operations/')) return a.operation;
+  if (path.startsWith('/api/v1/control-plan-characteristics/')) return a.characteristic;
   return undefined;
 };
 
 const call = (op: Op, path: string, headers: Record<string, string>, body?: object) => {
-  const m = op.method.toLowerCase() as 'get' | 'post' | 'patch' | 'delete';
+  const m = op.method.toLowerCase() as 'get' | 'post' | 'patch' | 'put' | 'delete';
   const req = api()[m](path).set(headers);
   return body === undefined ? req : req.send(body);
 };
@@ -258,6 +278,8 @@ beforeAll(async () => {
   a.plan = (await one(`insert into public.control_plans (organisation_id, plan_code, title) values ($1, 'A-CP', 'Alpha plan') returning id`, [ids.orgA])).id;
   a.applicability = (await one(`insert into public.control_plan_applicability (organisation_id, control_plan_id, part_family_id) values ($1, $2, $3) returning id`, [ids.orgA, a.plan, a.family])).id;
   a.planRevision = (await one(`insert into public.control_plan_revisions (organisation_id, control_plan_id, revision_code) values ($1, $2, 'A') returning id`, [ids.orgA, a.plan])).id;
+  a.operation = (await one(`insert into public.control_plan_operations (organisation_id, control_plan_revision_id, operation_code, name) values ($1, $2, 'OP-10', 'Alpha op') returning id`, [ids.orgA, a.planRevision])).id;
+  a.characteristic = (await one(`insert into public.control_plan_characteristics (organisation_id, control_plan_revision_id, operation_id, characteristic_key, name, upper_limit, unit_code) values ($1, $2, $3, 'OD', 'Alpha OD', 5, 'mm') returning id`, [ids.orgA, a.planRevision, a.operation])).id;
   b.org = ids.orgB;
   b.viewerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'viewer'`, [ids.orgB])).id;
   await admin.query(`insert into public.departments (organisation_id, site_id, code, name) values ($1, $2, 'QA', 'Quality B')`, [ids.orgB, ids.siteB]);
@@ -337,10 +359,16 @@ describe('tenancy sweep over every API route', () => {
               (select nominal::text from public.part_revision_characteristics where id = $3) spec,
               (select title from public.control_plans where id = $4) plan,
               (select count(*)::int from public.control_plan_applicability where control_plan_id = $4) scope,
-              (select string_agg(status || '/' || coalesce(change_reason, ''), ',') from public.control_plan_revisions where control_plan_id = $4) revisions`,
-      [a.machine, a.family, a.specValue, a.plan],
+              (select string_agg(status || '/' || coalesce(change_reason, ''), ',') from public.control_plan_revisions where control_plan_id = $4) revisions,
+              (select string_agg(operation_code || '/' || name, ',') from public.control_plan_operations where control_plan_revision_id = $5) operations,
+              (select string_agg(characteristic_key || '/' || name, ',') from public.control_plan_characteristics where control_plan_revision_id = $5) characteristics,
+              (select count(*)::int from public.reaction_plans where control_plan_revision_id = $5) reactions`,
+      [a.machine, a.family, a.specValue, a.plan, a.planRevision],
     );
-    expect(pc.rows[0]).toEqual({ machine: 'Alpha machine', family: 'Alpha family', spec: '10', plan: 'Alpha plan', scope: 1, revisions: 'draft/' });
+    expect(pc.rows[0]).toEqual({
+      machine: 'Alpha machine', family: 'Alpha family', spec: '10', plan: 'Alpha plan', scope: 1, revisions: 'draft/',
+      operations: 'OP-10/Alpha op', characteristics: 'OD/Alpha OD', reactions: 0,
+    });
   });
 
   it('never includes another organisation’s identifiers in list responses', async () => {

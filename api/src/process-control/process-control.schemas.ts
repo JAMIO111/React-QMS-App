@@ -274,3 +274,152 @@ export type PlanRevisionTransitionBody = z.infer<typeof PlanRevisionTransitionBo
 
 /** Same shape as the gauge history, so the frontend timeline is shared. */
 export { HistoryEntry } from '../calibration/calibration.schemas';
+
+// ---- plan content (PC2) ------------------------------------------------------------------------
+
+export const SamplingTrigger = z.enum(['first_off', 'last_off', 'every_n_minutes', 'every_n_parts', 'start_of_shift', 'after_tool_change', 'after_setup', 'manual']);
+export const ReactionTrigger = z.enum(['out_of_spec', 'spc_signal', 'gauge_invalid', 'missed_check']);
+export const ReactionAction = z.enum(['warn', 'hold', 'stop', 'notify', 'raise_ncr']);
+
+export const SamplingRule = z.object({
+  id: z.string().uuid(),
+  triggerType: SamplingTrigger,
+  intervalValue: z.number().int().nullable(),
+  sampleSize: z.number().int(),
+});
+export const Reaction = z.object({
+  id: z.string().uuid(),
+  triggerType: ReactionTrigger,
+  action: ReactionAction,
+  instruction: z.string(),
+});
+export const PlanCharacteristic = z.object({
+  id: z.string().uuid(),
+  operationId: z.string().uuid(),
+  characteristicKey: z.string(),
+  sequence: z.number().int(),
+  charNumber: z.string().nullable(),
+  name: z.string(),
+  dataType: z.enum(['variable', 'attribute']),
+  valueSource: z.enum(['plan', 'part_spec']),
+  appliesTo: z.enum(['all', 'selected']),
+  nominal: z.number().nullable(),
+  lowerLimit: z.number().nullable(),
+  upperLimit: z.number().nullable(),
+  unitCode: z.string().nullable(),
+  specKey: z.string().nullable(),
+  method: z.string().nullable(),
+  gaugeType: Ref.nullable(),
+  criticality: z.enum(['critical', 'major', 'minor']),
+  spcEligible: z.boolean(),
+  chartType: z.enum(['imr', 'xbar_r']).nullable(),
+  subgroupSize: z.number().int().nullable(),
+  decimals: z.number().int().nullable(),
+  notes: z.string().nullable(),
+  parts: z.array(z.object({ id: z.string().uuid(), partNumber: z.string() })),
+  sampling: z.array(SamplingRule),
+  reactions: z.array(Reaction),
+});
+export type PlanCharacteristic = z.infer<typeof PlanCharacteristic>;
+export const PlanOperation = z.object({
+  id: z.string().uuid(),
+  operationCode: z.string(),
+  sequence: z.number().int(),
+  name: z.string(),
+  machine: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }).nullable(),
+  workCentre: z.string().nullable(),
+  notes: z.string().nullable(),
+  characteristics: z.array(PlanCharacteristic),
+});
+export type PlanOperation = z.infer<typeof PlanOperation>;
+export const RevisionDetail = PlanRevision.extend({
+  plan: z.object({ id: z.string().uuid(), planCode: z.string(), title: z.string(), active: z.boolean() }),
+  operations: z.array(PlanOperation),
+  /** Reactions that apply to every characteristic of the revision. */
+  reactions: z.array(Reaction),
+  /** Parts covered by the plan's scope (for conditional characteristics). */
+  scopeParts: z.array(z.object({ id: z.string().uuid(), partNumber: z.string(), name: z.string() })),
+});
+export type RevisionDetail = z.infer<typeof RevisionDetail>;
+
+const operationFields = {
+  operationCode: OperationCode,
+  sequence: z.number().int().min(0).max(100000).optional(),
+  name: z.string().trim().min(1).max(200),
+  machineId: z.string().uuid().nullable().optional(),
+  workCentre: optionalText(100),
+  notes: optionalText(2000),
+};
+export const CreateOperationBody = z.object(operationFields).strict();
+export const UpdateOperationBody = updateOf({
+  operationCode: OperationCode.optional(),
+  sequence: operationFields.sequence,
+  name: operationFields.name.optional(),
+  machineId: operationFields.machineId,
+  workCentre: operationFields.workCentre,
+  notes: operationFields.notes,
+});
+
+const SamplingInput = z
+  .object({ triggerType: SamplingTrigger, intervalValue: z.number().int().min(1).max(100000).nullable().optional(), sampleSize: z.number().int().min(1).max(100) })
+  .strict();
+const ReactionInput = z.object({ triggerType: ReactionTrigger, action: ReactionAction, instruction: z.string().trim().min(1).max(2000) }).strict();
+const characteristicFields = {
+  operationId: z.string().uuid(),
+  sequence: z.number().int().min(0).max(100000).optional(),
+  charNumber: optionalText(20),
+  name: z.string().trim().min(1).max(200),
+  dataType: z.enum(['variable', 'attribute']).optional(),
+  valueSource: z.enum(['plan', 'part_spec']).optional(),
+  appliesTo: z.enum(['all', 'selected']).optional(),
+  nominal: Decimal.nullable().optional(),
+  lowerLimit: Decimal.nullable().optional(),
+  upperLimit: Decimal.nullable().optional(),
+  unitCode: z.string().trim().min(1).max(20).nullable().optional(),
+  specKey: CharacteristicKey.nullable().optional(),
+  method: optionalText(500),
+  gaugeTypeId: z.string().uuid().nullable().optional(),
+  criticality: z.enum(['critical', 'major', 'minor']).optional(),
+  spcEligible: z.boolean().optional(),
+  chartType: z.enum(['imr', 'xbar_r']).nullable().optional(),
+  subgroupSize: z.number().int().min(1).max(10).nullable().optional(),
+  decimals: z.number().int().min(0).max(6).nullable().optional(),
+  notes: optionalText(2000),
+  /** Replace the part list (conditional characteristics). */
+  partIds: z.array(z.string().uuid()).max(500).optional(),
+  /** Replace the sampling rules. */
+  sampling: z.array(SamplingInput).max(8).optional(),
+  /** Replace the characteristic's reactions. */
+  reactions: z.array(ReactionInput).max(20).optional(),
+};
+export const CreateCharacteristicBody = z.object({ ...characteristicFields, characteristicKey: CharacteristicKey }).strict();
+export type CreateCharacteristicBody = z.infer<typeof CreateCharacteristicBody>;
+export const UpdateCharacteristicBody = updateOf({
+  ...characteristicFields,
+  operationId: characteristicFields.operationId.optional(),
+  name: characteristicFields.name.optional(),
+});
+export type UpdateCharacteristicBody = z.infer<typeof UpdateCharacteristicBody>;
+export const ReplaceReactionsBody = z.object({ reactions: z.array(ReactionInput).max(20) }).strict();
+
+// ---- revision comparison --------------------------------------------------------------------------
+
+export const FieldChange = z.object({ field: z.string(), label: z.string(), from: z.string().nullable(), to: z.string().nullable() });
+export const RevisionComparison = z.object({
+  base: z.object({ id: z.string().uuid(), revisionCode: z.string() }).nullable(),
+  target: z.object({ id: z.string().uuid(), revisionCode: z.string() }),
+  operations: z.array(z.object({ operationCode: z.string(), change: z.enum(['added', 'removed', 'changed']), fields: z.array(FieldChange) })),
+  characteristics: z.array(
+    z.object({
+      characteristicKey: z.string(),
+      name: z.string(),
+      change: z.enum(['added', 'removed', 'changed']),
+      /** For measured characteristics whose limits changed. */
+      tolerance: z.enum(['tightened', 'loosened', 'shifted']).nullable(),
+      fields: z.array(FieldChange),
+    }),
+  ),
+  reactions: z.array(z.object({ change: z.enum(['added', 'removed']), description: z.string() })),
+  summary: z.object({ added: z.number().int(), removed: z.number().int(), changed: z.number().int() }),
+});
+export type RevisionComparison = z.infer<typeof RevisionComparison>;

@@ -70,6 +70,10 @@ BEGIN
   PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.control_plan_revisions (organisation_id, control_plan_id, revision_code, status) VALUES (%L, %L, 'A', 'effective')$q$, org, plan), 'new revisions start as draft');
   INSERT INTO public.control_plan_revisions (organisation_id, control_plan_id, revision_code) VALUES (org, plan, 'A') RETURNING id INTO cr_a;
   PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.control_plan_revisions (organisation_id, control_plan_id, revision_code) VALUES (%L, %L, 'B')$q$, org, plan), 'one working copy per plan');
+  -- Content (PC2): one operation with one characteristic; later revisions copy it.
+  INSERT INTO public.control_plan_operations (organisation_id, control_plan_revision_id, operation_code, name) VALUES (org, cr_a, 'OP-020', 'Turning');
+  INSERT INTO public.control_plan_characteristics (organisation_id, control_plan_revision_id, operation_id, characteristic_key, name, nominal, lower_limit, upper_limit, unit_code)
+    SELECT org, cr_a, id, 'OD', 'Outer diameter', 25, 24.95, 25.05, 'mm' FROM public.control_plan_operations WHERE control_plan_revision_id = cr_a;
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.control_plan_revisions SET status = 'pending_approval' WHERE id = %L$q$, cr_a), 'submitting needs a change reason');
   UPDATE public.control_plan_revisions SET change_reason = 'Initial issue', status = 'pending_approval' WHERE id = cr_a;
   PERFORM pg_temp.assert_eq((SELECT submitted_by FROM public.control_plan_revisions WHERE id = cr_a), '32000000-0000-0000-0000-000000000101'::uuid, 'submitter stamped');

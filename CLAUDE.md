@@ -55,7 +55,8 @@ Summary of the brief:
 - Tables: reuse `src/components/Table.jsx` with a TanStack table instance (see its header comment and
   `TableWrapper.jsx`): one `<table>` + `<colgroup>`, so header and rows always line up. Sorting
   (header click, `sortDescFirst: false`), resizing (`columnResizeMode: "onChange"`, min/maxSize,
-  double-click resets), show/hide via `ColumnVisibilityMenu`. Persist with
+  double-click resets), show/hide via `ColumnVisibilityMenu`, `meta.pin: "left" | "right"` keeps a column fixed
+  while the rest scroll sideways (row select / actions in `TableWrapper`). Persist with
   `useTablePreferences(key)`; when `columnSizing` is controlled also use `useColumnSizingInfo()`
   or resizing lags one mouse move. Column meta: `align`, `sortKey` (server sort field).
 - Auth: `/forgot-password`, `/set-password` (invite/reset landing), `/mfa` (code or set-up).
@@ -73,6 +74,11 @@ Summary of the brief:
   `sort={false}` keeps your order; server search via `filterLocally={false}` + `onSearchChange`
   (see `RemoteComboBox`, `PartPicker`, `PartyPicker` in `src/components/ncr/Pickers.jsx`). Dates:
   `valueFormat="iso"` for date-only API fields, `minDate`/`maxDate`, `clearable`.
+  The calendar opens in a portal (`data-popover`), so panes that close on outside clicks must ignore
+  `[data-popover]`. Ranges: `src/components/ui/RangeSlider.jsx` (two handles, `value=[lo, hi]`, `format`).
+- NC register filters live in the URL (`FILTER_KEYS` in `src/hooks/useNCMFilters.jsx`); `/ncrs` takes
+  stage, severity, from/to, partId, customerId, supplierId, costMin/costMax, qtyMin/qtyMax; slider limits from
+  `GET /ncrs/ranges`. List parameters go to SQL as one text value (`string_to_array`), never a JS array.
 - NCR files: upload to `nc-files` at `<org>/ncr/<ncr id>/<uuid>-<name>` (`uploadFileToSupabase`), then
   `POST /ncrs/{id}/attachments`; storage policies allow uploads only into an existing NCR's folder and
   never delete. Forms built with react-hook-form use `noValidate` (TextInput sets native `required`).

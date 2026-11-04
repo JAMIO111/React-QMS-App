@@ -102,6 +102,40 @@ describe('costs', () => {
   });
 });
 
+describe('register filters', () => {
+  const refs = async (qs: string) =>
+    ((await api().get(`/api/v1/ncrs?source=internal&${qs}`).set(await as(ids.ownerA)).expect(200)).body.data as { id: string }[]).map((n) => n.id).sort();
+
+  it('filters by total cost, quantity, severity and detected date', async () => {
+    const h = await as(ids.ownerA);
+    await api().patch(`/api/v1/ncrs/${ncr}`).set(h).send({ severity: 'major', quantityAffected: 12, detectedAt: '2026-10-05' }).expect(200);
+    await api().patch(`/api/v1/ncrs/${ncrAtB}`).set(h).send({ severity: 'minor', quantityAffected: 3, detectedAt: '2026-11-01' }).expect(200);
+    // ncr has 162.50 of costs, ncrAtB has 25.00 (added in the cost tests).
+    expect(await refs('costMin=100')).toEqual([ncr]);
+    expect(await refs('costMax=100')).toEqual([ncrAtB]);
+    expect(await refs('costMin=20&costMax=30')).toEqual([ncrAtB]);
+    expect(await refs('qtyMin=10')).toEqual([ncr]);
+    expect(await refs('qtyMax=5')).toEqual([ncrAtB]);
+    expect(await refs('severity=major')).toEqual([ncr]);
+    expect(await refs('severity=major,minor')).toEqual([ncr, ncrAtB].sort());
+    expect(await refs('from=2026-10-20')).toEqual([ncrAtB]);
+    expect(await refs('to=2026-10-20')).toEqual([ncr]);
+    expect(await refs('severity=major&qtyMax=5')).toEqual([]);
+    // Stages (both are drafts here; the register's stage filter takes a comma-separated list).
+    expect(await refs('stage=draft')).toEqual([ncr, ncrAtB].sort());
+    expect(await refs('stage=open,closed')).toEqual([]);
+    await api().get('/api/v1/ncrs?severity=huge').set(h).expect(400);
+    await api().get('/api/v1/ncrs?costMin=-1').set(h).expect(400);
+  });
+
+  it('reports the highest cost and quantity for the sliders', async () => {
+    const res = await api().get('/api/v1/ncrs/ranges?source=internal').set(await as(ids.ownerA)).expect(200);
+    expect(res.body).toEqual({ cost: { max: 162.5 }, quantity: { max: 12 }, baseCurrency: 'GBP' });
+    const supplier = await api().get('/api/v1/ncrs/ranges?source=supplier').set(await as(ids.ownerA)).expect(200);
+    expect(supplier.body).toMatchObject({ cost: { max: 0 }, quantity: { max: 0 } });
+  });
+});
+
 describe('attachments', () => {
   let fileId: string;
 

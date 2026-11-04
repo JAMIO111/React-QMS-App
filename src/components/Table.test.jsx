@@ -148,3 +148,33 @@ describe("Table", () => {
     expect(screen.getByRole("cell", { name: "No records found." })).toBeInTheDocument();
   });
 });
+
+describe("Table pinned columns", () => {
+  const pinned = [
+    { id: "sel", header: "Sel", cell: () => <input type="checkbox" aria-label="pick" />, size: 40, meta: { pin: "left" }, enableSorting: false, enableResizing: false },
+    { id: "name", accessorKey: "name", header: "Name", size: 200 },
+    { id: "qty", accessorKey: "qty", header: "Qty", size: 100 },
+    { id: "act", header: "Act", cell: () => <button type="button">More</button>, size: 50, meta: { pin: "right" }, enableSorting: false, enableResizing: false },
+  ];
+  const Pinned = () => {
+    const table = useReactTable({ data, columns: pinned, getCoreRowModel: getCoreRowModel() });
+    return <Table table={table} ariaLabel="Pinned" />;
+  };
+
+  it("keeps the left and right pinned columns at their edges, with the filler column in between", () => {
+    render(<Pinned />);
+    const ids = [...document.querySelectorAll("col")].map((c) => c.dataset.columnId);
+    expect(ids).toEqual(["sel", "name", "qty", "__filler", "act"]);
+    const [headerRow] = screen.getAllByRole("row");
+    const ths = headerRow.querySelectorAll("th");
+    expect(ths[0]).toHaveClass("sticky");
+    expect(ths[0].style.left).toBe("0px");
+    expect(ths[ths.length - 1]).toHaveClass("sticky");
+    expect(ths[ths.length - 1].style.right).toBe("0px");
+    expect(ths[1]).not.toHaveClass("sticky");
+    const cells = screen.getAllByRole("row")[1].querySelectorAll("td");
+    expect(cells[0]).toHaveClass("sticky");
+    expect(cells[cells.length - 1]).toHaveClass("sticky");
+    expect(within(cells[cells.length - 1]).getByRole("button", { name: "More" })).toBeInTheDocument();
+  });
+});

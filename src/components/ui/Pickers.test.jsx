@@ -6,6 +6,7 @@ import { Controller, useForm } from "react-hook-form";
 import { addDays, format } from "date-fns";
 import RHFComboBox from "./RHFComboBox";
 import RHFDatePickerPopout from "./RHFDatePickerPopout";
+import RangeSlider from "./RangeSlider";
 
 const options = [
   { id: "c", name: "Cosmetic" },
@@ -152,5 +153,46 @@ describe("RHFDatePickerPopout", () => {
     expect(screen.getByText("null")).toBeInTheDocument();
     rerender(<Dated disabled />);
     expect(screen.getByRole("button", { name: /^Detected on/ })).toBeDisabled();
+  });
+});
+
+describe("RangeSlider", () => {
+  const Ranged = (props) => {
+    const [v, setV] = useState([0, 100]);
+    return (
+      <>
+        <RangeSlider label="Total cost" min={0} max={100} value={v} onChange={setV} format={(n) => `£${n}`} {...props} />
+        <output>{v.join("-")}</output>
+      </>
+    );
+  };
+
+  it("has two labelled handles that cannot cross, and shows the chosen range", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    render(<Ranged />);
+    expect(screen.getByRole("group", { name: "Total cost" })).toHaveTextContent("Any");
+    const lo = screen.getByRole("slider", { name: "Total cost minimum" });
+    const hi = screen.getByRole("slider", { name: "Total cost maximum" });
+    fireEvent.change(hi, { target: { value: "40" } });
+    fireEvent.change(lo, { target: { value: "70" } });
+    expect(screen.getByText("40-40")).toBeInTheDocument();
+    fireEvent.change(lo, { target: { value: "10" } });
+    expect(screen.getByText("£10 – £40")).toBeInTheDocument();
+    expect(lo).toHaveAttribute("aria-valuetext", "£10");
+  });
+
+  it("uses native range inputs, so the browser gives keyboard control", () => {
+    render(<Ranged />);
+    for (const name of ["Total cost minimum", "Total cost maximum"]) {
+      const handle = screen.getByRole("slider", { name });
+      expect(handle).toHaveAttribute("type", "range");
+      expect(handle).toHaveAttribute("step", "1");
+    }
+  });
+
+  it("can be disabled", () => {
+    render(<Ranged disabled hint="No costs yet." />);
+    expect(screen.getByRole("slider", { name: "Total cost minimum" })).toBeDisabled();
+    expect(screen.getByText("No costs yet.")).toBeInTheDocument();
   });
 });

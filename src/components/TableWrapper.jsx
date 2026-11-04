@@ -65,6 +65,7 @@ const TableWrapper = ({
     () => [
       {
         ...utilityColumn,
+        meta: { ...utilityColumn.meta, pin: "left" },
         id: "__select",
         headerString: "Select",
         header: ({ table }) => (
@@ -96,6 +97,7 @@ const TableWrapper = ({
       ...columns,
       {
         ...utilityColumn,
+        meta: { ...utilityColumn.meta, pin: "right" },
         id: "__actions",
         headerString: "Actions",
         header: () => <span className="sr-only">Actions</span>,

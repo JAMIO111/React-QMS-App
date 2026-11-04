@@ -52,14 +52,15 @@ export const RemoteComboBox = ({ items, isFetching, onSearch, current, value, on
       onSearchChange={onSearch}
       emptyMessage={isFetching ? "Searching…" : "No matches"}
       onChange={(id) => {
-        setPicked(items.find((i) => i.id === id) ?? null);
-        onChange(id);
+        const item = items.find((i) => i.id === id) ?? null;
+        setPicked(item);
+        onChange(id, item);
       }}
     />
   );
 };
 
-const partOption = (p) => ({ id: p.id, name: `${p.partNumber} · ${p.name}` });
+const partOption = (p) => ({ id: p.id, name: p.name ? `${p.partNumber} · ${p.name}` : p.partNumber });
 
 /** Part search (server-side). `current` is the saved part ({ id, partNumber, name }). */
 export const PartPicker = ({ current, label = "Part", ...props }) => {

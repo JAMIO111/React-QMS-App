@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useId } from "react";
+import { createPortal } from "react-dom";
 import { format, isValid, parseISO } from "date-fns";
 import RHFDatePicker from "./RHFDatePicker";
 import { CalendarIcon, CircleAlertIcon, XIcon } from "@/components/icons";
@@ -37,11 +38,12 @@ const RHFDatePickerPopout = ({
   className = "",
 }) => {
   const [open, setOpen] = useState(false);
-  const [alignRight, setAlignRight] = useState(false);
+  const [pos, setPos] = useState(null);
   const id = useId();
   const helpId = `${id}-help`;
   const wrapperRef = useRef(null);
   const triggerRef = useRef(null);
+  const popRef = useRef(null);
 
   const date = toDate(value);
   const errorMessage = typeof error === "string" ? error : error?.message;
@@ -55,26 +57,40 @@ const RHFDatePickerPopout = ({
   useEffect(() => {
     if (!open) return undefined;
     const handleClickOutside = (e) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) close(false);
+      if (!wrapperRef.current?.contains(e.target) && !popRef.current?.contains(e.target)) close(false);
     };
     const handleKey = (e) => {
       if (e.key === "Escape") close(true);
     };
+    // The calendar floats over the page, so it closes rather than drift when something scrolls.
+    const handleScroll = (e) => !popRef.current?.contains(e.target) && close(false);
     document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("keydown", handleKey);
+    window.addEventListener("scroll", handleScroll, true);
+    window.addEventListener("resize", handleScroll);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleKey);
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", handleScroll);
     };
     // close only depends on onBlur
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
-    if (open && wrapperRef.current) {
-      // The calendar is about 30rem wide; open it to the left when there is no room on the right.
-      const rect = wrapperRef.current.getBoundingClientRect();
-      setAlignRight(window.innerWidth - rect.left < 500 && rect.right > 500);
+    if (open && triggerRef.current) {
+      // The calendar (about 30rem by 20rem) floats over the page, so a scrolling or narrow container
+      // (a filter pane, a dialog) cannot cut it off: below the field, or above it when there is no room.
+      const rect = triggerRef.current.getBoundingClientRect();
+      const width = 490;
+      const height = 330;
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+      const below = rect.bottom + 8;
+      const top = below + height > window.innerHeight && rect.top - height - 8 > 0 ? rect.top - height - 8 : below;
+      setPos({ top, left });
+    } else {
+      setPos(null);
     }
   }, [open]);
 
@@ -138,8 +154,14 @@ const RHFDatePickerPopout = ({
         </p>
       )}
 
-      {open && (
-        <div role="dialog" aria-label={`Choose ${label.toLowerCase()}`} className={`absolute top-full z-50 mt-2 w-max ${alignRight ? "right-0" : "left-0"}`}>
+      {open && createPortal(
+        <div
+          ref={popRef}
+          data-popover
+          role="dialog"
+          aria-label={`Choose ${label.toLowerCase()}`}
+          style={pos ?? { visibility: "hidden" }}
+          className="fixed z-[9500] w-max">
           <RHFDatePicker
             value={date}
             minDate={toDate(minDate)}
@@ -149,7 +171,8 @@ const RHFDatePickerPopout = ({
               close(true);
             }}
           />
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

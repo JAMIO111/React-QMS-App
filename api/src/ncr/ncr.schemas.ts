@@ -78,6 +78,17 @@ export const NcrListQuery = z.object({
   supplierId: z.string().uuid().optional(),
   from: isoDate.optional(),
   to: isoDate.optional(),
+  severity: z
+    .string()
+    .optional()
+    .transform((v) => (v ? v.split(',').filter(Boolean) : []))
+    .pipe(z.array(Severity)),
+  /** Total cost (gross, base currency) between these, inclusive. */
+  costMin: z.coerce.number().min(0).optional(),
+  costMax: z.coerce.number().min(0).optional(),
+  /** Quantity affected between these, inclusive. */
+  qtyMin: z.coerce.number().min(0).optional(),
+  qtyMax: z.coerce.number().min(0).optional(),
   sort: z.enum(SORTABLE).default('reference'),
   order: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().min(1).default(1),
@@ -195,3 +206,11 @@ export const UpdateClassificationBody = z
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
 
 export const Employee = z.object({ id: z.string().uuid(), name: z.string(), jobTitle: z.string().nullable(), active: z.boolean() });
+
+export const NcrRangesQuery = z.object({ source: NcrSource.optional() });
+/** Highest values in the register, to size the cost and quantity sliders. */
+export const NcrRanges = z.object({
+  cost: z.object({ max: z.number() }),
+  quantity: z.object({ max: z.number() }),
+  baseCurrency: z.string(),
+});

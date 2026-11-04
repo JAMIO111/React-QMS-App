@@ -14,6 +14,8 @@ import {
   HistoryEntry,
   NcrDetail,
   NcrListQuery,
+  NcrRanges,
+  NcrRangesQuery,
   NcrSummary,
   TransitionBody,
   UpdateClassificationBody,
@@ -122,7 +124,8 @@ export class NcrService {
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`n.organisation_id = ${ctx.organisationId!}::uuid`];
       if (q.source) where.push(sql`n.source = ${q.source}`);
-      if (q.stage.length) where.push(sql`n.stage = any(${q.stage}::text[])`);
+      // Lists go in as one comma-separated text value (an array parameter would be sent as a row).
+      if (q.stage.length) where.push(sql`n.stage = any(string_to_array(${q.stage.join(',')}, ','))`);
       if (q.deleted === 'exclude') where.push(sql`n.deleted_at is null`);
       if (q.deleted === 'only') where.push(sql`n.deleted_at is not null`);
       if (q.failureModeId) where.push(sql`n.failure_mode_id = ${q.failureModeId}::uuid`);
@@ -132,6 +135,11 @@ export class NcrService {
       if (q.supplierId) where.push(sql`n.supplier_id = ${q.supplierId}::uuid`);
       if (q.from) where.push(sql`n.detected_at >= ${q.from}::date`);
       if (q.to) where.push(sql`n.detected_at <= ${q.to}::date`);
+      if (q.severity.length) where.push(sql`n.severity = any(string_to_array(${q.severity.join(',')}, ','))`);
+      if (q.costMin !== undefined) where.push(sql`coalesce(tc.total, 0) >= ${q.costMin}`);
+      if (q.costMax !== undefined) where.push(sql`coalesce(tc.total, 0) <= ${q.costMax}`);
+      if (q.qtyMin !== undefined) where.push(sql`coalesce(n.quantity_affected, 0) >= ${q.qtyMin}`);
+      if (q.qtyMax !== undefined) where.push(sql`coalesce(n.quantity_affected, 0) <= ${q.qtyMax}`);
       if (q.q) {
         const like = likePattern(q.q);
         where.push(sql`(n.reference ilike ${like} or n.title ilike ${like} or n.description ilike ${like} or n.work_order ilike ${like}
@@ -151,6 +159,20 @@ export class NcrService {
         total = Number(count.rows[0].n);
       }
       return { data: result.rows.map(toSummary), page: q.page, pageSize: q.pageSize, total };
+    });
+  }
+
+  /** Highest total cost and quantity among the register's (non-deleted) NCRs. */
+  ranges(ctx: RequestContext, q: z.infer<typeof NcrRangesQuery>): Promise<z.infer<typeof NcrRanges>> {
+    return this.database.asUser(ctx, async (db) => {
+      const result = await db.execute<Row>(sql`
+        select coalesce(max(coalesce(tc.total, 0)), 0) as cost_max, coalesce(max(n.quantity_affected), 0) as qty_max,
+               (select base_currency from public.organisation_settings where organisation_id = ${ctx.organisationId!}::uuid) as base_currency
+        ${sql.raw(FROM)}
+        where n.organisation_id = ${ctx.organisationId!}::uuid and n.deleted_at is null
+          ${q.source ? sql`and n.source = ${q.source}` : sql``}`);
+      const r = result.rows[0] ?? {};
+      return { cost: { max: Number(r.cost_max ?? 0) }, quantity: { max: Number(r.qty_max ?? 0) }, baseCurrency: (r.base_currency as string) ?? 'GBP' };
     });
   }
 

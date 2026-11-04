@@ -14,6 +14,8 @@ import {
   HistoryEntry,
   NcrDetail,
   NcrListQuery,
+  NcrRanges,
+  NcrRangesQuery,
   NcrPage,
   SORTABLE,
   TransitionBody,
@@ -44,6 +46,11 @@ export class NcrController {
   @ApiQuery({ name: 'supplierId', required: false })
   @ApiQuery({ name: 'from', required: false, description: 'Detected on or after (YYYY-MM-DD)' })
   @ApiQuery({ name: 'to', required: false, description: 'Detected on or before (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'severity', required: false, description: 'Comma-separated severities' })
+  @ApiQuery({ name: 'costMin', required: false, description: 'Total cost (base currency, gross) at least' })
+  @ApiQuery({ name: 'costMax', required: false, description: 'Total cost (base currency, gross) at most' })
+  @ApiQuery({ name: 'qtyMin', required: false, description: 'Quantity affected at least' })
+  @ApiQuery({ name: 'qtyMax', required: false, description: 'Quantity affected at most' })
   @ApiQuery({ name: 'sort', required: false, enum: [...SORTABLE] })
   @ApiQuery({ name: 'order', required: false, enum: ['asc', 'desc'] })
   @ApiQuery({ name: 'page', required: false })
@@ -51,6 +58,15 @@ export class NcrController {
   @ApiOkResponse({ schema: openApiSchema(NcrPage) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.list(ctx, parse(NcrListQuery, query));
+  }
+
+  /** Highest total cost and quantity in the register (for filter sliders). Declared before :id. */
+  @Get('ranges')
+  @OrganisationScoped('ncr.read', SITE_SCOPED)
+  @ApiQuery({ name: 'source', required: false, enum: ['internal', 'customer', 'supplier'] })
+  @ApiOkResponse({ schema: openApiSchema(NcrRanges) })
+  ranges(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.ranges(ctx, parse(NcrRangesQuery, query));
   }
 
   @Post()

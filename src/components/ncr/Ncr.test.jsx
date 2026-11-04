@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, within, waitFor } from "@testing-library/react";
+import { render, screen, within, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -184,6 +184,61 @@ describe("NC registers", () => {
     await userEvent.click(within(screen.getByLabelText("Active filters")).getByRole("button", { name: "Clear all" }));
     await waitFor(() => expect(lastCall("GET /ncrs").path).not.toContain("failureModeId"));
     expect(screen.queryByLabelText("Active filters")).toBeNull();
+  });
+
+  it("filters by date, severity, part, customer, total cost and quantity", async () => {
+    routeApi({
+      "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 },
+      "GET /ncrs/ranges": { cost: { max: 873 }, quantity: { max: 48 }, baseCurrency: "GBP" },
+    });
+    renderAt("/Non-Conformance/Internal");
+    await screen.findByText("No records found.");
+    await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
+    const pane = screen.getByRole("dialog", { name: "Filter non-conformances" });
+
+    await userEvent.click(within(pane).getByText("Critical"));
+    await userEvent.click(within(pane).getByText("Major"));
+    await userEvent.click(within(pane).getByRole("combobox", { name: "Part number" }));
+    await userEvent.click(await within(pane).findByRole("option", { name: "BRK-100 · Bracket" }));
+    await userEvent.click(within(pane).getByRole("combobox", { name: "Customer" }));
+    await userEvent.click(await within(pane).findByRole("option", { name: /^Acme/ }));
+
+    // Sliders run from 0 to the register's highest value, rounded up (£873 → £900, 48 → 50).
+    const costMin = within(pane).getByRole("slider", { name: "Total cost minimum" });
+    const costMax = within(pane).getByRole("slider", { name: "Total cost maximum" });
+    expect(costMax).toHaveAttribute("max", "900");
+    fireEvent.change(costMin, { target: { value: "100" } });
+    fireEvent.change(costMax, { target: { value: "500" } });
+    fireEvent.change(within(pane).getByRole("slider", { name: "Quantity affected minimum" }), { target: { value: "5" } });
+    expect(within(pane).getByText("£100 – £500")).toBeInTheDocument();
+
+    // Detected from: the 1st of this month.
+    const first = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    await userEvent.click(within(pane).getByRole("button", { name: /^Detected from/ }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Choose detected from" })).getByRole("button", { name: format(first, "EEEE d MMMM yyyy") }));
+    expect(screen.getByRole("dialog", { name: "Filter non-conformances" })).toBeInTheDocument();
+
+    await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("severity=critical%2Cmajor"));
+    const path = lastCall("GET /ncrs").path;
+    for (const part of ["partId=p1", "customerId=c1", "costMin=100", "costMax=500", "qtyMin=5", `from=${format(first, "yyyy-MM-dd")}`]) expect(path).toContain(part);
+    expect(path).not.toContain("qtyMax");
+    const active = screen.getByLabelText("Active filters");
+    for (const text of ["Severity: Critical, Major", "Part: BRK-100 · Bracket", "Customer: Acme", "Total cost £100 – £500", "Quantity from 5"]) expect(active).toHaveTextContent(text);
+    await userEvent.click(within(active).getByRole("button", { name: "Remove filter Total cost £100 – £500" }));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).not.toContain("costMin"));
+  });
+
+  it("offers the supplier filter on the supplier register", async () => {
+    routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 }, "GET /ncrs/ranges": { cost: { max: 0 }, quantity: { max: 0 }, baseCurrency: "GBP" } });
+    renderAt("/Non-Conformance/Supplier");
+    await screen.findByText("No records found.");
+    await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
+    const pane = screen.getByRole("dialog", { name: "Filter non-conformances" });
+    expect(within(pane).getByRole("combobox", { name: "Supplier" })).toBeInTheDocument();
+    expect(within(pane).queryByRole("combobox", { name: "Customer" })).toBeNull();
+    expect(within(pane).getByText("No costs recorded in this register yet.")).toBeInTheDocument();
+    expect(within(pane).getByRole("slider", { name: "Total cost minimum" })).toBeDisabled();
   });
 
   it("closes the filter pane on Escape without applying", async () => {

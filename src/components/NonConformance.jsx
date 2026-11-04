@@ -2,10 +2,11 @@ import { useState, useEffect, useRef, Suspense, useMemo, useCallback } from "rea
 import { useNavigate, useSearchParams, useParams, Navigate } from "react-router-dom";
 import { PlusIcon, ShareIcon, SlidersHorizontalIcon } from "@/components/icons";
 import { useNcrs } from "../hooks/useNcr";
-import { useNCMFilters } from "../hooks/useNCMFilters";
+import { FILTER_KEYS, useNCMFilters } from "../hooks/useNCMFilters";
 import { usePermissions } from "../hooks/useQmsApi";
 import { useGlobalSearch } from "../contexts/SearchProvider";
 import { exportCSV } from "../lib/csvHelper";
+import { formatMoney } from "../lib/costs";
 import { NC_TYPES, formatDate, stageOf } from "../lib/ncr";
 import { useClassifications } from "../hooks/useNcr";
 import { XIcon } from "@/components/icons";
@@ -98,6 +99,16 @@ const NonConformance = () => {
     failureModeId: filters.failureMode,
     subFailureModeId: filters.subFailureMode,
     deleted: filters.deleted || undefined,
+    severity: filters.severity,
+    from: filters.from,
+    to: filters.to,
+    partId: filters.part,
+    customerId: ncType?.source === "supplier" ? undefined : filters.customer,
+    supplierId: ncType?.source === "supplier" ? filters.supplier : undefined,
+    costMin: filters.costMin,
+    costMax: filters.costMax,
+    qtyMin: filters.qtyMin,
+    qtyMax: filters.qtyMax,
     sort: sortColumn,
     order: sorting[0]?.desc ? "desc" : "asc",
     page,
@@ -157,12 +168,22 @@ const NonConformance = () => {
   if (!ncType) return <Navigate to="/Non-Conformance/Internal" replace />;
 
   const totalQuantity = selectedRows.reduce((acc, r) => acc + (Number(r.quantityAffected) || 0), 0);
-  const filterCount = ["stage", "failureMode", "subFailureMode", "deleted"].filter((k) => filters[k]).length;
+  const filterCount = [
+    "stage", "severity", "failureMode", "subFailureMode", "deleted", "part", ncType.source === "supplier" ? "supplier" : "customer",
+  ].filter((k) => filters[k]).length + (filters.from || filters.to ? 1 : 0) + (filters.costMin || filters.costMax ? 1 : 0) + (filters.qtyMin || filters.qtyMax ? 1 : 0);
+  const between = (lo, hi, fmt = (v) => v) => (lo && hi ? `${fmt(lo)} – ${fmt(hi)}` : lo ? `from ${fmt(lo)}` : `up to ${fmt(hi)}`);
+  const partyKey = ncType.source === "supplier" ? "supplier" : "customer";
   const nameOf = (id) => (lists?.all ?? []).find((c) => c.id === id)?.name ?? "…";
   // What the register is currently filtered by, each removable on its own.
   const activeFilters = [
     ...(filters.search ? [{ key: "search", label: `Search: “${filters.search}”`, clear: { search: "" } }] : []),
+    ...(filters.from || filters.to ? [{ key: "date", label: `Detected ${between(filters.from, filters.to, formatDate)}`, clear: { from: "", to: "" } }] : []),
     ...(filters.stage ? [{ key: "stage", label: `Stage: ${filters.stage.split(",").map((k) => stageOf(k).label).join(", ")}`, clear: { stage: "" } }] : []),
+    ...(filters.severity ? [{ key: "severity", label: `Severity: ${filters.severity.split(",").map((k) => k[0].toUpperCase() + k.slice(1)).join(", ")}`, clear: { severity: "" } }] : []),
+    ...(filters.part ? [{ key: "part", label: `Part: ${filters.partLabel || "selected part"}`, clear: { part: "", partLabel: "" } }] : []),
+    ...(filters[partyKey] ? [{ key: partyKey, label: `${partyKey === "supplier" ? "Supplier" : "Customer"}: ${filters[`${partyKey}Label`] || "selected"}`, clear: { [partyKey]: "", [`${partyKey}Label`]: "" } }] : []),
+    ...(filters.costMin || filters.costMax ? [{ key: "cost", label: `Total cost ${between(filters.costMin, filters.costMax, (v) => formatMoney(Number(v), rows[0]?.costCurrency ?? "GBP").replace(/\.00$/, ""))}`, clear: { costMin: "", costMax: "" } }] : []),
+    ...(filters.qtyMin || filters.qtyMax ? [{ key: "qty", label: `Quantity ${between(filters.qtyMin, filters.qtyMax)}`, clear: { qtyMin: "", qtyMax: "" } }] : []),
     ...(filters.failureMode ? [{ key: "failureMode", label: `Failure mode: ${nameOf(filters.failureMode)}`, clear: { failureMode: "", subFailureMode: "" } }] : []),
     ...(filters.subFailureMode ? [{ key: "subFailureMode", label: `Sub-failure mode: ${nameOf(filters.subFailureMode)}`, clear: { subFailureMode: "" } }] : []),
     ...(filters.deleted ? [{ key: "deleted", label: filters.deleted === "only" ? "Deleted only" : "Including deleted", clear: { deleted: "" } }] : []),
@@ -219,7 +240,7 @@ const NonConformance = () => {
                 callback={handleActiveModalType}
                 icon={<SlidersHorizontalIcon className="h-4.5 w-4.5" />}
               />
-              {activeModalType === "Filter" && <FilterPane onClose={handleCloseModal} />}
+              {activeModalType === "Filter" && <FilterPane onClose={handleCloseModal} source={ncType.source} />}
             </div>
           </Suspense>
         </div>
@@ -234,7 +255,7 @@ const NonConformance = () => {
               </button>
             </span>
           ))}
-          <button type="button" onClick={() => clearFilters({ search: "", stage: "", failureMode: "", subFailureMode: "", deleted: "" })} className="text-link-color hover:underline cursor-pointer">
+          <button type="button" onClick={() => clearFilters(Object.fromEntries(FILTER_KEYS.map((k) => [k, ""])))} className="text-link-color hover:underline cursor-pointer">
             Clear all
           </button>
         </div>

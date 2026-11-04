@@ -73,6 +73,18 @@ export const useEmployees = () => {
   });
 };
 
+/** Highest total cost and quantity in a register: { cost: { max }, quantity: { max }, baseCurrency }. */
+export const useNcrRanges = (source) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "ranges", source),
+    queryFn: () => apiFetch(`/ncrs/ranges${source ? `?source=${source}` : ""}`, { organisationId }),
+    enabled: !!organisationId,
+    staleTime: 60_000,
+    retry: false,
+  });
+};
+
 /** Costs of an NCR: { data, totals: { baseCurrency, net, gross, count } }. */
 export const useNcrCosts = (id, { deleted = "exclude" } = {}) => {
   const { organisationId } = useOrganisation();

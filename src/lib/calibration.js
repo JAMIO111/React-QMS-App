@@ -48,7 +48,8 @@ export const formatInterval = (value, unit) => {
 export const formatNumber = (n) => (n === null || n === undefined || n === "" ? "—" : String(Number(Number(n).toPrecision(12))));
 
 /** "25 ±0.02 mm" or "25 +0.03/−0.01 mm". */
-export const formatTolerance = ({ nominal, toleranceMinus, tolerancePlus, unitCode }) => {
+export const formatTolerance = ({ kind, nominal, toleranceMinus, tolerancePlus, unitCode }) => {
+  if (kind === "attribute") return "Pass / fail";
   const tol = Number(toleranceMinus) === Number(tolerancePlus) ? `±${formatNumber(tolerancePlus)}` : `+${formatNumber(tolerancePlus)}/−${formatNumber(toleranceMinus)}`;
   return `${formatNumber(nominal)} ${tol} ${unitCode}`;
 };
@@ -80,7 +81,13 @@ export const describeDue = (days) => {
 };
 
 /** Gauge columns as named in the history (audit trail). */
+export const CHARACTERISTIC_KINDS = [
+  { id: "variable", name: "Measured", hint: "A value against nominal ± tolerance" },
+  { id: "attribute", name: "Pass / fail", hint: "A check, e.g. free from damage, valid certificate" },
+];
+
 export const GAUGE_FIELD_LABELS = {
+  kind: "Type of check",
   asset_number: "Asset number",
   description: "Description",
   gauge_type_id: "Type",

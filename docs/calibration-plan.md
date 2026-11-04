@@ -12,6 +12,7 @@ next item on the Phase 2 plan.
 | C1 | Bring forward now or plan only? | Build now as a complete slice. |
 | C2 | Where are calibration characteristics defined? | On **gauge types** as templates (Settings → Calibration). A new gauge of a type gets copies, which can then be edited, added to or switched off per gauge. |
 | C3 | What happens when a calibration fails? | The gauge is **quarantined** automatically. The record offers **Raise NC**, which creates a draft internal NC linked to the calibration. |
+| C4 | Checks that are yes/no ("free from damage", "valid certificate")? | Characteristics are **measured** (`variable`: nominal ± tolerance, unit) or **pass / fail** (`attribute`: no limits). Pass/fail readings are recorded as found and, after rework, as left; they count towards the outcome like measured ones (migration `20251107100000_calibration_attributes.sql`). |
 
 ## Data model (`supabase/migrations/20251106100000_calibration.sql`)
 
@@ -96,6 +97,15 @@ next item on the Phase 2 plan.
   - certificates;
   - Raise NC on failure.
 - Settings → Calibration: gauge types and their template characteristics.
+
+## Demo data
+
+`supabase/seed/calibration_demo.sql` (not a migration) adds demo calibration data to one organisation:
+- a calibration supplier;
+- 7 gauge types with measured and pass/fail characteristics;
+- 23 gauges (G-1001…G-1023) with their calibration history.
+
+Run it in the SQL editor; the organisation name goes at the top of the script. It stops if the demo gauges already exist.
 
 ## Not in this slice
 

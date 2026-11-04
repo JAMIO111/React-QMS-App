@@ -4,45 +4,68 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useCalibrationMutation } from "../../hooks/useCalibration";
 import { useUnits } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
-import { formatNumber, formatTolerance } from "../../lib/calibration";
+import { CHARACTERISTIC_KINDS, formatNumber, formatTolerance } from "../../lib/calibration";
 
 const input = "w-full rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-sm text-primary-text focus:outline-none focus:border-brand-primary disabled:opacity-60";
-const EMPTY = { name: "", nominal: "", toleranceMinus: "", tolerancePlus: "", unitCode: "mm", method: "" };
+const EMPTY = { kind: "variable", name: "", nominal: "", toleranceMinus: "", tolerancePlus: "", unitCode: "mm", method: "" };
+const str = (v) => (v === null || v === undefined ? "" : String(v));
 const toForm = (c) => ({
+  kind: c.kind ?? "variable",
   name: c.name,
-  nominal: String(c.nominal),
-  toleranceMinus: String(c.toleranceMinus),
-  tolerancePlus: String(c.tolerancePlus),
-  unitCode: c.unitCode,
+  nominal: str(c.nominal),
+  toleranceMinus: str(c.toleranceMinus),
+  tolerancePlus: str(c.tolerancePlus),
+  unitCode: c.unitCode ?? "mm",
   method: c.method ?? "",
 });
 const isNumber = (v) => v !== "" && !Number.isNaN(Number(v));
-const valid = (f) => f.name.trim() && isNumber(f.nominal) && isNumber(f.toleranceMinus) && Number(f.toleranceMinus) >= 0 && isNumber(f.tolerancePlus) && Number(f.tolerancePlus) >= 0 && f.unitCode;
-const toBody = (f) => ({
-  name: f.name.trim(),
-  nominal: Number(f.nominal),
-  toleranceMinus: Number(f.toleranceMinus),
-  tolerancePlus: Number(f.tolerancePlus),
-  unitCode: f.unitCode,
-  method: f.method.trim() || null,
-});
+const valid = (f) =>
+  f.name.trim() &&
+  (f.kind === "attribute" ||
+    (isNumber(f.nominal) && isNumber(f.toleranceMinus) && Number(f.toleranceMinus) >= 0 && isNumber(f.tolerancePlus) && Number(f.tolerancePlus) >= 0 && f.unitCode));
+const toBody = (f) =>
+  f.kind === "attribute"
+    ? { kind: "attribute", name: f.name.trim(), method: f.method.trim() || null }
+    : {
+        kind: "variable",
+        name: f.name.trim(),
+        nominal: Number(f.nominal),
+        toleranceMinus: Number(f.toleranceMinus),
+        tolerancePlus: Number(f.tolerancePlus),
+        unitCode: f.unitCode,
+        method: f.method.trim() || null,
+      };
 
 /** Name, nominal, tolerances, unit and method, as one row of inputs. */
 const Fields = ({ form, setForm, units, idPrefix }) => {
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const attribute = form.kind === "attribute";
   return (
     <>
-      <td className="p-1"><input aria-label="Characteristic" className={input} value={form.name} onChange={set("name")} maxLength={120} placeholder="e.g. 25 mm gauge block" id={`${idPrefix}-name`} /></td>
-      <td className="p-1"><input aria-label="Nominal" className={`${input} text-right`} inputMode="decimal" value={form.nominal} onChange={set("nominal")} placeholder="25" /></td>
-      <td className="p-1"><input aria-label="Tolerance minus" className={`${input} text-right`} inputMode="decimal" value={form.toleranceMinus} onChange={set("toleranceMinus")} placeholder="0.02" /></td>
-      <td className="p-1"><input aria-label="Tolerance plus" className={`${input} text-right`} inputMode="decimal" value={form.tolerancePlus} onChange={set("tolerancePlus")} placeholder="0.02" /></td>
       <td className="p-1">
-        <select aria-label="Unit" className={input} value={form.unitCode} onChange={set("unitCode")}>
-          {(units ?? [{ code: form.unitCode, name: form.unitCode }]).map((u) => (
-            <option key={u.code} value={u.code}>{u.code}</option>
+        <select aria-label="Type of check" className={input} value={form.kind} onChange={set("kind")}>
+          {CHARACTERISTIC_KINDS.map((k) => (
+            <option key={k.id} value={k.id} title={k.hint}>{k.name}</option>
           ))}
         </select>
       </td>
+      <td className="p-1"><input aria-label="Characteristic" className={input} value={form.name} onChange={set("name")} maxLength={120} placeholder={attribute ? "e.g. Free from damage" : "e.g. 25 mm gauge block"} id={`${idPrefix}-name`} /></td>
+      {attribute ? (
+        <td colSpan={4} className="p-1 text-xs text-secondary-text">Recorded as pass or fail — no limits</td>
+      ) : (
+        <>
+          <td className="p-1"><input aria-label="Nominal" className={`${input} text-right`} inputMode="decimal" value={form.nominal} onChange={set("nominal")} placeholder="25" /></td>
+          <td className="p-1"><input aria-label="Tolerance minus" className={`${input} text-right`} inputMode="decimal" value={form.toleranceMinus} onChange={set("toleranceMinus")} placeholder="0.02" /></td>
+          <td className="p-1"><input aria-label="Tolerance plus" className={`${input} text-right`} inputMode="decimal" value={form.tolerancePlus} onChange={set("tolerancePlus")} placeholder="0.02" /></td>
+          <td className="p-1">
+            <select aria-label="Unit" className={input} value={form.unitCode} onChange={set("unitCode")}>
+              {(units ?? [{ code: form.unitCode, name: form.unitCode }]).map((u) => (
+                <option key={u.code} value={u.code}>{u.code}</option>
+              ))}
+            </select>
+          </td>
+        </>
+      )}
       <td className="p-1"><input aria-label="Method" className={input} value={form.method} onChange={set("method")} maxLength={500} placeholder="Optional" /></td>
     </>
   );
@@ -101,10 +124,11 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
         <p className="rounded-lg border-2 border-dashed border-border-dark-color p-4 text-center text-sm text-secondary-text">{emptyText ?? "No characteristics yet."}</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm" aria-label="Calibration characteristics">
+          <table className="w-full min-w-[840px] text-left text-sm" aria-label="Calibration characteristics">
             <thead className="text-secondary-text">
               <tr>
-                <th className="w-[28%] px-1 py-1 font-medium">Characteristic</th>
+                <th className="w-[12%] px-1 py-1 font-medium">Type</th>
+                <th className="w-[24%] px-1 py-1 font-medium">Characteristic</th>
                 <th className="w-[11%] px-1 py-1 text-right font-medium">Nominal</th>
                 <th className="w-[10%] px-1 py-1 text-right font-medium">Tol −</th>
                 <th className="w-[10%] px-1 py-1 text-right font-medium">Tol +</th>
@@ -129,14 +153,25 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
                 ) : (
                   <tr key={c.id} className={`border-t border-border-color ${c.active ? "" : "opacity-60"}`}>
                     <td className="px-1 py-1.5">
+                      <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${c.kind === "attribute" ? "bg-theme/15 text-theme" : "bg-border-color text-primary-text"}`}>
+                        {c.kind === "attribute" ? "Pass / fail" : "Measured"}
+                      </span>
+                    </td>
+                    <td className="px-1 py-1.5">
                       {c.name}
                       {!c.active && <span className="ml-2 text-xs text-secondary-text">(switched off)</span>}
-                      <span className="block text-xs text-secondary-text">{formatNumber(c.lower)} to {formatNumber(c.upper)} {c.unitCode}</span>
+                      {c.kind !== "attribute" && <span className="block text-xs text-secondary-text">{formatNumber(c.lower)} to {formatNumber(c.upper)} {c.unitCode}</span>}
                     </td>
-                    <td className="px-1 py-1.5 text-right">{formatNumber(c.nominal)}</td>
-                    <td className="px-1 py-1.5 text-right">{formatNumber(c.toleranceMinus)}</td>
-                    <td className="px-1 py-1.5 text-right">{formatNumber(c.tolerancePlus)}</td>
-                    <td className="px-1 py-1.5">{c.unitCode}</td>
+                    {c.kind === "attribute" ? (
+                      <td colSpan={4} className="px-1 py-1.5 text-secondary-text">—</td>
+                    ) : (
+                      <>
+                        <td className="px-1 py-1.5 text-right">{formatNumber(c.nominal)}</td>
+                        <td className="px-1 py-1.5 text-right">{formatNumber(c.toleranceMinus)}</td>
+                        <td className="px-1 py-1.5 text-right">{formatNumber(c.tolerancePlus)}</td>
+                        <td className="px-1 py-1.5">{c.unitCode}</td>
+                      </>
+                    )}
                     <td className="px-1 py-1.5 text-secondary-text">{c.method ?? "—"}</td>
                     {canEdit && (
                       <td className="px-1 py-1.5">

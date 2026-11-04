@@ -4,6 +4,8 @@ export const GaugeStatus = z.enum(['active', 'in_calibration', 'quarantined', 'o
 export const IntervalUnit = z.enum(['days', 'weeks', 'months', 'years']);
 export const CalibrationSource = z.enum(['internal', 'external']);
 export const Outcome = z.enum(['pass', 'adjusted', 'fail']);
+/** variable: a measured value against nominal ± tolerance; attribute: a pass/fail check (e.g. free from damage). */
+export const CharacteristicKind = z.enum(['variable', 'attribute']);
 /** Where a gauge stands against its due date. Only active and in-calibration gauges are "in use". */
 export const DueState = z.enum(['overdue', 'due_soon', 'ok', 'not_set', 'not_in_use']);
 export const DueFilter = z.enum(['overdue', 'due_30', 'due_90', 'not_set']);
@@ -36,14 +38,16 @@ const tolerance = z.number().finite().min(0).max(1e9);
 export const Characteristic = z.object({
   id: z.string().uuid(),
   sortOrder: z.number(),
+  kind: CharacteristicKind,
   name: z.string(),
-  nominal: z.number(),
-  toleranceMinus: z.number(),
-  tolerancePlus: z.number(),
+  /** Limits and unit of a variable characteristic (null for attributes). */
+  nominal: z.number().nullable(),
+  toleranceMinus: z.number().nullable(),
+  tolerancePlus: z.number().nullable(),
   /** nominal − toleranceMinus and nominal + tolerancePlus. */
-  lower: z.number(),
-  upper: z.number(),
-  unitCode: z.string(),
+  lower: z.number().nullable(),
+  upper: z.number().nullable(),
+  unitCode: z.string().nullable(),
   method: z.string().nullable(),
   active: z.boolean(),
   /** Gauge characteristics copied from a gauge type's template keep a link to it. */
@@ -53,26 +57,37 @@ export type Characteristic = z.infer<typeof Characteristic>;
 
 const characteristicFields = {
   sortOrder: z.number().int().min(0).max(10000).optional(),
+  kind: CharacteristicKind.optional(),
   name: z.string().trim().min(1).max(120),
-  nominal: value,
-  toleranceMinus: tolerance,
-  tolerancePlus: tolerance,
-  unitCode: z.string().trim().min(1).max(16),
+  nominal: value.nullable().optional(),
+  toleranceMinus: tolerance.nullable().optional(),
+  tolerancePlus: tolerance.nullable().optional(),
+  unitCode: z.string().trim().min(1).max(16).nullable().optional(),
   method: text(500),
 };
-export const CreateCharacteristicBody = z.object(characteristicFields).strict();
+const LIMITS = ['nominal', 'toleranceMinus', 'tolerancePlus', 'unitCode'] as const;
+export const CreateCharacteristicBody = z
+  .object(characteristicFields)
+  .strict()
+  .transform((b) => (b.kind === 'attribute' ? { ...b, nominal: null, toleranceMinus: null, tolerancePlus: null, unitCode: null } : { ...b, kind: 'variable' as const }))
+  .refine((b) => b.kind === 'attribute' || LIMITS.every((k) => b[k] !== null && b[k] !== undefined), {
+    message: 'A measured characteristic needs a nominal, both tolerances and a unit',
+    path: ['nominal'],
+  });
 export const UpdateCharacteristicBody = z
   .object({
     ...characteristicFields,
     name: characteristicFields.name.optional(),
-    nominal: value.optional(),
-    toleranceMinus: tolerance.optional(),
-    tolerancePlus: tolerance.optional(),
-    unitCode: characteristicFields.unitCode.optional(),
     active: z.boolean().optional(),
   })
   .strict()
-  .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
+  .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' })
+  // Switching to a pass/fail check drops the limits; switching to measured needs them all.
+  .transform((b) => (b.kind === 'attribute' ? { ...b, nominal: null, toleranceMinus: null, tolerancePlus: null, unitCode: null } : b))
+  .refine((b) => b.kind !== 'variable' || LIMITS.every((k) => b[k] !== null && b[k] !== undefined), {
+    message: 'A measured characteristic needs a nominal, both tolerances and a unit',
+    path: ['nominal'],
+  });
 
 export const GaugeType = z.object({
   id: z.string().uuid(),
@@ -248,15 +263,20 @@ export const Reading = z.object({
   id: z.string().uuid(),
   characteristicId: z.string().uuid().nullable(),
   sortOrder: z.number(),
+  kind: CharacteristicKind,
   name: z.string(),
-  nominal: z.number(),
-  toleranceMinus: z.number(),
-  tolerancePlus: z.number(),
-  lower: z.number(),
-  upper: z.number(),
-  unitCode: z.string(),
-  asFound: z.number(),
+  nominal: z.number().nullable(),
+  toleranceMinus: z.number().nullable(),
+  tolerancePlus: z.number().nullable(),
+  lower: z.number().nullable(),
+  upper: z.number().nullable(),
+  unitCode: z.string().nullable(),
+  /** Measured values (variable characteristics). */
+  asFound: z.number().nullable(),
   asLeft: z.number().nullable(),
+  /** Pass/fail (attribute characteristics). */
+  asFoundPass: z.boolean().nullable(),
+  asLeftPass: z.boolean().nullable(),
   asFoundOk: z.boolean(),
   asLeftOk: z.boolean().nullable(),
   notes: z.string().nullable(),
@@ -297,14 +317,21 @@ export const CalibrationDetail = CalibrationSummary.extend({
 });
 export type CalibrationDetail = z.infer<typeof CalibrationDetail>;
 
+/** A value for a measured characteristic, or pass/fail for a check. */
 const ReadingInput = z
   .object({
     characteristicId: z.string().uuid(),
-    asFound: value,
+    asFound: value.nullable().optional(),
     asLeft: value.nullable().optional(),
+    asFoundPass: z.boolean().nullable().optional(),
+    asLeftPass: z.boolean().nullable().optional(),
     notes: text(500),
   })
-  .strict();
+  .strict()
+  .refine((r) => (r.asFound !== undefined && r.asFound !== null) !== (r.asFoundPass !== undefined && r.asFoundPass !== null), {
+    message: 'Give either an as-found value or pass/fail',
+    path: ['asFound'],
+  });
 
 const calibrationFields = {
   calibratedOn: isoDate.optional(),

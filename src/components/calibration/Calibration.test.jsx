@@ -250,3 +250,42 @@ describe("settings", () => {
     await waitFor(() => expect(lastCall("POST /gauge-types").body).toEqual({ name: "Micrometer 0-25", description: null, intervalValue: 1, intervalUnit: "years" }));
   });
 });
+
+describe("pass/fail checks", () => {
+  const check = { id: "k9", sortOrder: 3, kind: "attribute", name: "Free from damage", nominal: null, toleranceMinus: null, tolerancePlus: null, lower: null, upper: null, unitCode: null, method: null, active: true, templateId: null };
+
+  it("adds a pass/fail characteristic without limits", async () => {
+    routeApi({ "POST /gauges/g1/characteristics": (path, { body }) => ({ ...check, ...body }), "GET /gauges/g1/calibrations": { data: [] } });
+    renderAt("/Calibration/Gauges/g1");
+    await userEvent.click(await screen.findByRole("button", { name: "Add characteristic" }));
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Type of check" }), "attribute");
+    expect(screen.queryByRole("textbox", { name: "Nominal" })).not.toBeInTheDocument();
+    await userEvent.type(screen.getByRole("textbox", { name: "Characteristic" }), "Valid certificate");
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(lastCall("POST /gauges/g1/characteristics").body).toEqual({ kind: "attribute", name: "Valid certificate", method: null }));
+  });
+
+  it("records a check as pass or fail", async () => {
+    routeApi({
+      "GET /gauges/g1/characteristics": { data: [...characteristics, check] },
+      "POST /gauges/g1/calibrations": () => record({ id: "c9" }),
+      "GET /calibrations/c9": record({ id: "c9" }),
+      "GET /calibrations/c9/attachments": { data: [] },
+    });
+    renderAt("/Calibration/Gauges/g1/calibrations/new");
+    await userEvent.type(await screen.findByRole("textbox", { name: "25 mm block as found" }), "25");
+    await userEvent.type(screen.getByRole("textbox", { name: "100 mm block as found" }), "100");
+    const asFound = screen.getByRole("radiogroup", { name: "Free from damage as found" });
+    await userEvent.click(within(asFound).getByRole("radio", { name: "Fail" }));
+    expect(screen.getByText("Saving quarantines G-001.")).toBeInTheDocument();
+    // Reworked: pass as left → adjusted.
+    await userEvent.click(within(screen.getByRole("radiogroup", { name: "Free from damage as left" })).getByRole("radio", { name: "Pass" }));
+    expect(screen.queryByText("Saving quarantines G-001.")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save calibration" }));
+    await waitFor(() => expect(lastCall("POST /gauges/g1/calibrations").body.readings).toEqual([
+      { characteristicId: "k1", asFound: 25, asLeft: null, notes: null },
+      { characteristicId: "k2", asFound: 100, asLeft: null, notes: null },
+      { characteristicId: "k9", asFoundPass: false, asLeftPass: true, notes: null },
+    ]));
+  });
+});

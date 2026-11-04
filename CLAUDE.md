@@ -84,7 +84,7 @@ Summary of the brief:
   The calendar opens in a portal (`data-popover`), so panes that close on outside clicks must ignore
   `[data-popover]`. Ranges: `src/components/ui/RangeSlider.jsx` (two handles, `value=[lo, hi]`, `format`).
 - Calibration (Phase 4, brought forward; `docs/calibration-plan.md`):
-  - **Tables:** `gauge_types` + `gauge_type_characteristics` (templates), `gauges`, `gauge_characteristics` (copied from the type on insert), `calibrations` (`CAL-YY-NNN`), `calibration_readings` (limits copied; `as_found_ok`/`as_left_ok` worked out) and `calibration_attachments` (private `calibration-files` bucket at `<org>/calibration/<calibration id>/...`).
+  - **Tables:** `gauge_types` + `gauge_type_characteristics` (templates), `gauges`, `gauge_characteristics` (copied from the type on insert), `calibrations` (`CAL-YY-NNN`), `calibration_readings` (limits copied; `as_found_ok`/`as_left_ok` worked out; characteristics are `kind` `variable` (nominal ± tolerance) or `attribute` (pass/fail: `as_found_pass`/`as_left_pass`)) and `calibration_attachments` (private `calibration-files` bucket at `<org>/calibration/<calibration id>/...`).
   - **Database rules:** outcome pass/adjusted/fail is worked out from the readings. The gauge's last/next dates and quarantine/reinstatement follow its latest calibration, via a *deferred* constraint trigger — flush with `set constraints calibrations_after immediate` before reading back. Errors use `QM006` (`409 calibration_rule`).
   - **Permissions:** `calibration.read` / `.manage` / `.record`, site-scoped through the gauge.
   - **API** in `api/src/calibration/`; Raise NC is `POST /calibrations/{id}/raise-ncr` (draft internal NC, linked).
@@ -119,7 +119,7 @@ revisions, outbox) and 2.4 (NCR core, brought forward: `nonconformances`, `ncr_c
 stages, soft delete, legacy NCM copy; NC registers and form on the API) are done, plus NCR costs and
 attachments with the NC page in the original form layout (`ncr_costs`, `ncr_attachments`, `FileDrop`,
 `NcrCosts`) — see plan §9–§12;
-Calibration (Phase 4) was brought forward as a complete slice (`docs/calibration-plan.md`, migration `20251106100000_calibration.sql`);
+Calibration (Phase 4) was brought forward as a complete slice (`docs/calibration-plan.md`, migrations `20251106100000_calibration.sql`, `20251107100000_calibration_attributes.sql`; demo data `supabase/seed/calibration_demo.sql`);
 next: 2.2 inspection plans.
 The project still signs tokens with the legacy HS256 secret (JWKS endpoint is empty), so the API
 needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.

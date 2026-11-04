@@ -69,15 +69,18 @@ const toReading = (r: Row): z.infer<typeof Reading> => ({
   id: r.id as string,
   characteristicId: (r.characteristic_id as string) ?? null,
   sortOrder: Number(r.sort_order),
+  kind: r.kind as z.infer<typeof Reading>['kind'],
   name: r.name as string,
-  nominal: Number(r.nominal),
-  toleranceMinus: Number(r.tolerance_minus),
-  tolerancePlus: Number(r.tolerance_plus),
-  lower: Number(r.nominal) - Number(r.tolerance_minus),
-  upper: Number(r.nominal) + Number(r.tolerance_plus),
-  unitCode: r.unit_code as string,
-  asFound: Number(r.as_found),
+  nominal: num(r.nominal),
+  toleranceMinus: num(r.tolerance_minus),
+  tolerancePlus: num(r.tolerance_plus),
+  lower: r.nominal == null ? null : Number(r.nominal) - Number(r.tolerance_minus),
+  upper: r.nominal == null ? null : Number(r.nominal) + Number(r.tolerance_plus),
+  unitCode: (r.unit_code as string) ?? null,
+  asFound: num(r.as_found),
   asLeft: num(r.as_left),
+  asFoundPass: (r.as_found_pass as boolean) ?? null,
+  asLeftPass: (r.as_left_pass as boolean) ?? null,
   asFoundOk: r.as_found_ok as boolean,
   asLeftOk: (r.as_left_ok as boolean) ?? null,
   notes: (r.notes as string) ?? null,
@@ -178,9 +181,10 @@ export class CalibrationRecordsService {
       const gauge = await db.execute<Row>(sql`select site_id from public.gauges where id = ${cal.gauge.id}::uuid`);
 
       const out = cal.readings.filter((r) => !r.asFoundOk);
-      const lines = out.map(
-        (r) =>
-          `- ${r.name}: as found ${fmt(r.asFound)} ${r.unitCode} (limits ${fmt(r.lower)} to ${fmt(r.upper)})${r.asLeft !== null ? `, as left ${fmt(r.asLeft)}` : ''}`,
+      const lines = out.map((r) =>
+        r.kind === 'attribute'
+          ? `- ${r.name}: failed as found${r.asLeftPass !== null ? `, ${r.asLeftPass ? 'passed' : 'failed'} as left` : ''}`
+          : `- ${r.name}: as found ${fmt(r.asFound!)} ${r.unitCode} (limits ${fmt(r.lower!)} to ${fmt(r.upper!)})${r.asLeft !== null ? `, as left ${fmt(r.asLeft)}` : ''}`,
       );
       const title = `Calibration ${cal.outcome === 'fail' ? 'failure' : 'out of tolerance'}: ${cal.gauge.assetNumber} ${cal.gauge.description}`.slice(0, 200);
       const description = [
@@ -244,13 +248,15 @@ export class CalibrationRecordsService {
   /** Adds or updates one reading per characteristic (readings are never removed, only corrected). */
   private async saveReadings(db: Db, ctx: RequestContext, id: string, readings: NonNullable<CreateCalibrationBody['readings']>) {
     for (const r of readings) {
+      const [found, left, foundPass, leftPass, notes] = [r.asFound ?? null, r.asLeft ?? null, r.asFoundPass ?? null, r.asLeftPass ?? null, r.notes ?? null];
       const updated = await db.execute(sql`
-        update public.calibration_readings set as_found = ${r.asFound}, as_left = ${r.asLeft ?? null}, notes = ${r.notes ?? null}
+        update public.calibration_readings
+        set as_found = ${found}, as_left = ${left}, as_found_pass = ${foundPass}, as_left_pass = ${leftPass}, notes = ${notes}
         where calibration_id = ${id}::uuid and characteristic_id = ${r.characteristicId}::uuid returning id`);
       if (updated.rows.length) continue;
       await db.execute(sql`
-        insert into public.calibration_readings (organisation_id, calibration_id, characteristic_id, as_found, as_left, notes)
-        values (${ctx.organisationId!}::uuid, ${id}::uuid, ${r.characteristicId}::uuid, ${r.asFound}, ${r.asLeft ?? null}, ${r.notes ?? null})`);
+        insert into public.calibration_readings (organisation_id, calibration_id, characteristic_id, as_found, as_left, as_found_pass, as_left_pass, notes)
+        values (${ctx.organisationId!}::uuid, ${id}::uuid, ${r.characteristicId}::uuid, ${found}, ${left}, ${foundPass}, ${leftPass}, ${notes})`);
     }
   }
 

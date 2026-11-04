@@ -39,6 +39,22 @@ const today = () => new Date().toISOString().slice(0, 10);
 const str = (v) => (v === null || v === undefined ? "" : String(v));
 const num = (v) => (v === "" || v === null || v === undefined ? null : Number(v));
 const isNum = (v) => v === "" || v === null || v === undefined || !Number.isNaN(Number(v));
+/** Pass / Fail buttons for a check; pressing the chosen one again clears it (as left only). */
+const PassFail = ({ label, value, onChange, disabled, allowClear }) => (
+  <div role="radiogroup" aria-label={label} className="inline-flex rounded-lg border border-border-color bg-primary-bg p-0.5">
+    {[
+      [true, "Pass", "bg-success-color text-white"],
+      [false, "Fail", "bg-error-color text-white"],
+    ].map(([v, text, on]) => (
+      <button key={text} type="button" role="radio" aria-checked={value === v} disabled={disabled}
+        onClick={() => onChange(value === v && allowClear ? null : v)}
+        className={`rounded-md px-2.5 py-0.5 text-xs cursor-pointer disabled:cursor-default ${value === v ? on : "text-primary-text hover:bg-border-color/50"}`}>
+        {text}
+      </button>
+    ))}
+  </div>
+);
+
 const readingInput = "w-28 rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-right text-sm text-primary-text focus:outline-none focus:border-brand-primary disabled:opacity-60";
 
 const Card = ({ title, subtitle, children, action }) => (
@@ -133,7 +149,7 @@ const CalibrationRecordPage = () => {
   );
   const original = useMemo(() => (record.data ? fieldsOf(record.data) : blank), [record.data, blank]);
   const originalReadings = useMemo(
-    () => Object.fromEntries((record.data?.readings ?? []).filter((r) => r.characteristicId).map((r) => [r.characteristicId, { asFound: str(r.asFound), asLeft: str(r.asLeft), notes: str(r.notes) }])),
+    () => Object.fromEntries((record.data?.readings ?? []).filter((r) => r.characteristicId).map((r) => [r.characteristicId, { asFound: str(r.asFound), asLeft: str(r.asLeft), asFoundPass: r.asFoundPass ?? null, asLeftPass: r.asLeftPass ?? null, notes: str(r.notes) }])),
     [record.data]
   );
   const [form, setForm] = useState(original);
@@ -154,22 +170,33 @@ const CalibrationRecordPage = () => {
   const locked = !!c?.deletedAt || !!g?.deletedAt;
   const canEdit = can("calibration.record") && !locked;
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v?.target ? v.target.value : v }));
-  const setReading = (id, k) => (e) => setReadings((r) => ({ ...r, [id]: { asFound: "", asLeft: "", notes: "", ...r[id], [k]: e.target.value } }));
+  const setReading = (id, k) => (e) =>
+    setReadings((r) => ({ ...r, [id]: { asFound: "", asLeft: "", asFoundPass: null, asLeftPass: null, notes: "", ...r[id], [k]: e?.target ? e.target.value : e } }));
 
   const judged = rows.map((row) => {
     const v = readings[row.key] ?? {};
+    if (row.kind === "attribute") return { ...row, input: v, asFoundOk: v.asFoundPass ?? undefined, asLeftOk: v.asLeftPass ?? undefined };
     return { ...row, input: v, asFoundOk: inTolerance(v.asFound, row), asLeftOk: inTolerance(v.asLeft, row) };
   });
-  const entered = judged.filter((r) => r.input.asFound !== undefined && r.input.asFound !== "");
+  const isEntered = (r) => (r.kind === "attribute" ? r.input.asFoundPass === true || r.input.asFoundPass === false : r.input.asFound !== undefined && r.input.asFound !== "");
+  const entered = judged.filter(isEntered);
+  /** API reading: a value for a measured characteristic, pass/fail for a check. */
+  const toReading = (r) =>
+    r.kind === "attribute"
+      ? { characteristicId: r.characteristicId, asFoundPass: r.input.asFoundPass, asLeftPass: r.input.asLeftPass ?? null, notes: (r.input.notes ?? "").trim() || null }
+      : { characteristicId: r.characteristicId, asFound: Number(r.input.asFound), asLeft: num(r.input.asLeft), notes: (r.input.notes ?? "").trim() || null };
+  const snapshot = (v) => JSON.stringify({ a: v?.asFound ?? "", l: v?.asLeft ?? "", fp: v?.asFoundPass ?? null, lp: v?.asLeftPass ?? null, n: v?.notes ?? "" });
   const liveOutcome = outcomeFromReadings(entered);
   const outcome = liveOutcome ?? form.outcome;
-  const readingsValid = judged.every((r) => isNum(r.input.asFound) && isNum(r.input.asLeft)) && !judged.some((r) => (r.input.asLeft ?? "") !== "" && (r.input.asFound ?? "") === "");
+  const variables = judged.filter((r) => r.kind !== "attribute");
+  const readingsValid =
+    variables.every((r) => isNum(r.input.asFound) && isNum(r.input.asLeft)) &&
+    !variables.some((r) => (r.input.asLeft ?? "") !== "" && (r.input.asFound ?? "") === "") &&
+    !judged.some((r) => r.kind === "attribute" && r.input.asLeftPass != null && r.input.asFoundPass == null);
   const valid = form.calibratedOn && readingsValid && isNum(form.temperatureC) && isNum(form.humidityPct) && (entered.length > 0 || form.outcome);
 
   const body = toBody(form);
-  const changedReadings = entered
-    .filter((r) => JSON.stringify({ a: r.input.asFound, l: r.input.asLeft ?? "", n: r.input.notes ?? "" }) !== JSON.stringify({ a: originalReadings[r.key]?.asFound, l: originalReadings[r.key]?.asLeft ?? "", n: originalReadings[r.key]?.notes ?? "" }))
-    .map((r) => ({ characteristicId: r.characteristicId, asFound: Number(r.input.asFound), asLeft: num(r.input.asLeft), notes: (r.input.notes ?? "").trim() || null }));
+  const changedReadings = entered.filter((r) => snapshot(r.input) !== snapshot(originalReadings[r.key])).map(toReading);
   const originalBody = toBody(original);
   const changedFields = Object.fromEntries(Object.entries(body).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(originalBody[k])));
   if (!liveOutcome && form.outcome !== original.outcome) changedFields.outcome = form.outcome;
@@ -178,7 +205,7 @@ const CalibrationRecordPage = () => {
   const save = () => {
     if (!valid) return;
     if (isNew) {
-      const readingsBody = entered.map((r) => ({ characteristicId: r.characteristicId, asFound: Number(r.input.asFound), asLeft: num(r.input.asLeft), notes: (r.input.notes ?? "").trim() || null }));
+      const readingsBody = entered.map(toReading);
       mutation.mutate(
         { path: `/gauges/${gaugeId}/calibrations`, body: { ...body, ...(readingsBody.length ? { readings: readingsBody } : { outcome: form.outcome }) } },
         {
@@ -289,7 +316,7 @@ const CalibrationRecordPage = () => {
         {g.deletedAt && <p role="status" className="rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm">This gauge is deleted; its records are read-only.</p>}
         {mutation.error && !dialog && <p role="alert" className="rounded-lg border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">{describeApiError(mutation.error)}</p>}
 
-        <Card title="Readings" subtitle="As found (before any adjustment) and, if adjusted, as left. Limits include the tolerance.">
+        <Card title="Readings" subtitle="As found (before any adjustment) and, if adjusted or reworked, as left. Limits include the tolerance; checks are pass or fail.">
           {characteristics.isLoading ? (
             <p className="text-secondary-text">Loading characteristics…</p>
           ) : rows.length === 0 ? (
@@ -319,8 +346,23 @@ const CalibrationRecordPage = () => {
                         {r.method && <span className="block text-xs text-secondary-text">{r.method}</span>}
                       </td>
                       <td className="whitespace-nowrap py-1.5 pr-2 text-secondary-text">
-                        {formatNumber(r.lower)} to {formatNumber(r.upper)} {r.unitCode}
+                        {r.kind === "attribute" ? "Pass / fail" : `${formatNumber(r.lower)} to ${formatNumber(r.upper)} ${r.unitCode}`}
                       </td>
+                      {r.kind === "attribute" ? (
+                        <>
+                          <td className="py-1.5 pr-2 text-right">
+                            <PassFail label={`${r.name} as found`} value={r.input.asFoundPass ?? null} onChange={setReading(r.key, "asFoundPass")} disabled={!canEdit} />
+                          </td>
+                          <td className="py-1.5 pr-2"><Verdict ok={r.asFoundOk} /></td>
+                          <td className="py-1.5 pr-2 text-right">
+                            {(r.input.asFoundPass === false || r.input.asLeftPass != null) && (
+                              <PassFail label={`${r.name} as left`} value={r.input.asLeftPass ?? null} onChange={setReading(r.key, "asLeftPass")} disabled={!canEdit} allowClear />
+                            )}
+                          </td>
+                          <td className="py-1.5 pr-2"><Verdict ok={r.asLeftOk} /></td>
+                        </>
+                      ) : (
+                      <>
                       <td className="py-1.5 pr-2 text-right">
                         <input aria-label={`${r.name} as found`} inputMode="decimal" className={readingInput} value={r.input.asFound ?? ""} onChange={setReading(r.key, "asFound")} disabled={!canEdit}
                           aria-invalid={!isNum(r.input.asFound) || undefined} />
@@ -331,6 +373,8 @@ const CalibrationRecordPage = () => {
                           placeholder={r.asFoundOk === false ? "After adjustment" : ""} aria-invalid={!isNum(r.input.asLeft) || undefined} />
                       </td>
                       <td className="py-1.5 pr-2"><Verdict ok={r.asLeftOk} /></td>
+                      </>
+                      )}
                       <td className="py-1.5">
                         <input aria-label={`${r.name} notes`} className="w-full rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-sm focus:outline-none focus:border-brand-primary disabled:opacity-60"
                           value={r.input.notes ?? ""} onChange={setReading(r.key, "notes")} disabled={!canEdit} maxLength={500} />
@@ -348,7 +392,7 @@ const CalibrationRecordPage = () => {
                 <OutcomePill outcome={liveOutcome} />
                 <span className="text-secondary-text">
                   {outcomeOf(liveOutcome).help}. Worked out from the readings
-                  {entered.length < judged.length ? ` (${judged.length - entered.length} of ${judged.length} not measured).` : "."}
+                  {entered.length < judged.length ? ` (${judged.length - entered.length} of ${judged.length} not recorded).` : "."}
                 </span>
               </>
             ) : (

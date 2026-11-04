@@ -227,3 +227,41 @@ describe('dashboard', () => {
     await api().get('/api/v1/calibration-dashboard?from=2026-02-01&to=2026-01-01').set(h).expect(400);
   });
 });
+
+describe('pass/fail (attribute) characteristics', () => {
+  it('adds a check without limits and records it as pass or fail', async () => {
+    const h = await as(ids.ownerA);
+    const t = await api().post(`/api/v1/gauge-types/${typeId}/characteristics`).set(h)
+      .send({ kind: 'attribute', name: 'Valid certificate', nominal: 5, unitCode: 'mm' }).expect(201);
+    expect(t.body).toMatchObject({ kind: 'attribute', nominal: null, unitCode: null, lower: null });
+    await api().post(`/api/v1/gauge-types/${typeId}/characteristics`).set(h).send({ name: 'No limits' }).expect(400);
+
+    const g = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-ATTR', description: 'Attribute test', gaugeTypeId: typeId }).expect(201)).body;
+    const ch = (await api().get(`/api/v1/gauges/${g.id}/characteristics`).set(h).expect(200)).body.data;
+    const check = ch.find((c: { kind: string }) => c.kind === 'attribute');
+    const measured = ch.filter((c: { kind: string }) => c.kind === 'variable');
+    expect(check.name).toBe('Valid certificate');
+
+    // A value for a check (or pass/fail for a measurement) is refused.
+    await api().post(`/api/v1/gauges/${g.id}/calibrations`).set(h).send({ readings: [{ characteristicId: check.id, asFound: 1 }] }).expect(409);
+    await api().post(`/api/v1/gauges/${g.id}/calibrations`).set(h).send({ readings: [{ characteristicId: check.id, asFound: 1, asFoundPass: true }] }).expect(400);
+
+    const res = await api().post(`/api/v1/gauges/${g.id}/calibrations`).set(h)
+      .send({ readings: [...measured.map((c: { id: string; nominal: number }) => ({ characteristicId: c.id, asFound: c.nominal })), { characteristicId: check.id, asFoundPass: false }] })
+      .expect(201);
+    expect(res.body).toMatchObject({ outcome: 'fail', failedCount: 1, gauge: { status: 'quarantined' } });
+    expect(res.body.readings.find((r: { kind: string }) => r.kind === 'attribute')).toMatchObject({ asFoundPass: false, asFoundOk: false, asFound: null, lower: null });
+    const ncr = await api().post(`/api/v1/calibrations/${res.body.id}/raise-ncr`).set(h).expect(201);
+    expect((await api().get(`/api/v1/ncrs/${ncr.body.id}`).set(h).expect(200)).body.description).toContain('- Valid certificate: failed as found');
+
+    const fixed = await api().patch(`/api/v1/calibrations/${res.body.id}`).set(h).send({ readings: [{ characteristicId: check.id, asFoundPass: false, asLeftPass: true }] }).expect(200);
+    expect(fixed.body).toMatchObject({ outcome: 'adjusted', gauge: { status: 'active' } });
+
+    // Switch the template check back to measured: needs limits.
+    await api().patch(`/api/v1/gauge-type-characteristics/${t.body.id}`).set(h).send({ kind: 'variable' }).expect(400);
+    const back = await api().patch(`/api/v1/gauge-type-characteristics/${t.body.id}`).set(h)
+      .send({ kind: 'variable', nominal: 1, toleranceMinus: 0, tolerancePlus: 0, unitCode: 'mm' }).expect(200);
+    expect(back.body).toMatchObject({ kind: 'variable', lower: 1, upper: 1 });
+    await api().patch(`/api/v1/gauge-type-characteristics/${t.body.id}`).set(h).send({ kind: 'attribute' }).expect(200);
+  });
+});

@@ -64,7 +64,7 @@ const GAUGE_COLUMNS: Record<string, string> = {
   commissionedOn: 'commissioned_on', notes: 'notes',
 };
 const CHARACTERISTIC_COLUMNS: Record<string, string> = {
-  sortOrder: 'sort_order', name: 'name', nominal: 'nominal', toleranceMinus: 'tolerance_minus', tolerancePlus: 'tolerance_plus',
+  sortOrder: 'sort_order', kind: 'kind', name: 'name', nominal: 'nominal', toleranceMinus: 'tolerance_minus', tolerancePlus: 'tolerance_plus',
   unitCode: 'unit_code', method: 'method', active: 'active',
 };
 const TYPE_COLUMNS: Record<string, string> = {
@@ -144,17 +144,17 @@ const toGaugeSummary = (r: Row): GaugeSummary => ({
 });
 
 export const toCharacteristic = (r: Row): Characteristic => {
-  const nominal = Number(r.nominal);
   return {
     id: r.id as string,
     sortOrder: Number(r.sort_order),
+    kind: r.kind as Characteristic['kind'],
     name: r.name as string,
-    nominal,
-    toleranceMinus: Number(r.tolerance_minus),
-    tolerancePlus: Number(r.tolerance_plus),
-    lower: Number(r.lower_limit),
-    upper: Number(r.upper_limit),
-    unitCode: r.unit_code as string,
+    nominal: num(r.nominal),
+    toleranceMinus: num(r.tolerance_minus),
+    tolerancePlus: num(r.tolerance_plus),
+    lower: num(r.lower_limit),
+    upper: num(r.upper_limit),
+    unitCode: (r.unit_code as string) ?? null,
     method: (r.method as string) ?? null,
     active: r.active as boolean,
     ...('template_id' in r ? { templateId: (r.template_id as string) ?? null } : {}),

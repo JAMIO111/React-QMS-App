@@ -167,4 +167,33 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM audit.events WHERE entity_type IN ('gauges', 'calibrations', 'calibration_readings')) > 5, true, 'calibration audited');
 END $$;
 
+-- Attribute (pass/fail) characteristics: copied from the template, recorded as pass/fail.
+DO $$
+DECLARE
+  org uuid := (SELECT v FROM ids WHERE k = 'org');
+  t uuid := (SELECT v FROM ids WHERE k = 't');
+  g3 uuid; c uuid; k_var uuid; k_attr uuid;
+BEGIN
+  PERFORM pg_temp.login('31000000-0000-0000-0000-000000000101');
+  INSERT INTO public.gauge_type_characteristics (organisation_id, gauge_type_id, sort_order, kind, name) VALUES (org, t, 4, 'attribute', 'Free from damage');
+  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.gauge_type_characteristics (organisation_id, gauge_type_id, kind, name, nominal, tolerance_minus, tolerance_plus, unit_code) VALUES (%L, %L, 'attribute', 'x', 1, 0, 0, 'mm')$q$, org, t), 'attributes have no limits');
+  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.gauge_type_characteristics (organisation_id, gauge_type_id, kind, name) VALUES (%L, %L, 'variable', 'x')$q$, org, t), 'variables need limits');
+  INSERT INTO public.gauges (organisation_id, asset_number, description, gauge_type_id) VALUES (org, 'G-003', 'Caliper 3', t) RETURNING id INTO g3;
+  PERFORM pg_temp.assert_eq((SELECT kind FROM public.gauge_characteristics WHERE gauge_id = g3 AND name = 'Free from damage'), 'attribute', 'kind copied from the template');
+  SELECT id INTO k_var FROM public.gauge_characteristics WHERE gauge_id = g3 AND name = '25 mm block';
+  SELECT id INTO k_attr FROM public.gauge_characteristics WHERE gauge_id = g3 AND kind = 'attribute';
+
+  INSERT INTO public.calibrations (organisation_id, gauge_id, reference, outcome) VALUES (org, g3, 'x', 'pass') RETURNING id INTO c;
+  INSERT INTO public.calibration_readings (organisation_id, calibration_id, characteristic_id, as_found) VALUES (org, c, k_var, 25.0);
+  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.calibration_readings (organisation_id, calibration_id, characteristic_id, as_found) VALUES (%L, %L, %L, 1)$q$, org, c, k_attr), 'attribute reading is not a value');
+  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.calibration_readings (organisation_id, calibration_id, characteristic_id) VALUES (%L, %L, %L)$q$, org, c, k_attr), 'attribute reading needs pass or fail');
+  INSERT INTO public.calibration_readings (organisation_id, calibration_id, characteristic_id, as_found_pass) VALUES (org, c, k_attr, false);
+  PERFORM pg_temp.assert_eq((SELECT outcome FROM public.calibrations WHERE id = c), 'fail', 'a failed check fails the calibration');
+  PERFORM pg_temp.assert_eq((SELECT status FROM public.gauges WHERE id = g3), 'quarantined', 'and quarantines the gauge');
+  UPDATE public.calibration_readings SET as_left_pass = true WHERE characteristic_id = k_attr;
+  PERFORM pg_temp.assert_eq((SELECT outcome FROM public.calibrations WHERE id = c), 'adjusted', 'passing after rework: adjusted');
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.calibration_readings SET as_found_pass = true WHERE characteristic_id = %L$q$, k_var), 'a measured reading takes no pass/fail');
+  PERFORM pg_temp.logout();
+END $$;
+
 ROLLBACK;

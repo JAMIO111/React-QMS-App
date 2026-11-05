@@ -125,6 +125,7 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/control-plan-operations/{id}': { name: 'Hijacked' },
     'DELETE /api/v1/control-plan-operations/{id}': undefined,
     'PATCH /api/v1/control-plan-characteristics/{id}': { name: 'Hijacked' },
+    'PATCH /api/v1/characteristic-templates/{id}': { name: 'Hijacked' },
     'DELETE /api/v1/control-plan-characteristics/{id}': undefined,
   })[`${op.method} ${op.path}`];
 
@@ -214,6 +215,7 @@ const hasSample = (op: Op) =>
     'PATCH /api/v1/control-plan-operations/{id}',
     'DELETE /api/v1/control-plan-operations/{id}',
     'PATCH /api/v1/control-plan-characteristics/{id}',
+    'PATCH /api/v1/characteristic-templates/{id}',
     'DELETE /api/v1/control-plan-characteristics/{id}',
   ].includes(`${op.method} ${op.path}`);
 
@@ -248,6 +250,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/control-plan-revisions/')) return a.planRevision;
   if (path.startsWith('/api/v1/control-plan-operations/')) return a.operation;
   if (path.startsWith('/api/v1/control-plan-characteristics/')) return a.characteristic;
+  if (path.startsWith('/api/v1/characteristic-templates/')) return a.characteristicTemplate;
   return undefined;
 };
 
@@ -302,6 +305,7 @@ beforeAll(async () => {
   a.planRevision = (await one(`insert into public.control_plan_revisions (organisation_id, control_plan_id, revision_code) values ($1, $2, 'A') returning id`, [ids.orgA, a.plan])).id;
   a.operation = (await one(`insert into public.control_plan_operations (organisation_id, control_plan_revision_id, operation_code, name) values ($1, $2, 'OP-10', 'Alpha op') returning id`, [ids.orgA, a.planRevision])).id;
   a.characteristic = (await one(`insert into public.control_plan_characteristics (organisation_id, control_plan_revision_id, operation_id, characteristic_key, name, upper_limit, unit_code) values ($1, $2, $3, 'OD', 'Alpha OD', 5, 'mm') returning id`, [ids.orgA, a.planRevision, a.operation])).id;
+  a.characteristicTemplate = (await one(`insert into public.characteristic_templates (organisation_id, name, characteristic_key, upper_limit, unit_code) values ($1, 'Alpha OD template', 'OD', 5, 'mm') returning id`, [ids.orgA])).id;
   // An in-process inspection of A, started the only way there is: app.start_inspection as A's owner.
   const client = await admin.connect();
   try {

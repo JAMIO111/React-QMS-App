@@ -41,6 +41,7 @@ const GaugeRegister = lazy(() => import("./components/calibration/GaugeRegister.
 const GaugePage = lazy(() => import("./components/calibration/GaugePage.jsx"));
 const CalibrationRecordPage = lazy(() => import("./components/calibration/CalibrationRecordPage.jsx"));
 const SettingsCalibration = lazy(() => import("./components/Settings/SettingsCalibration.jsx"));
+const SettingsProcessControl = lazy(() => import("./components/Settings/SettingsProcessControl.jsx"));
 const PartDetailPage = lazy(() => import("./components/master-data/PartDetailPage.jsx"));
 const PartiesPage = lazy(() => import("./components/master-data/PartiesPage.jsx"));
 const MachinesPage = lazy(() => import("./components/master-data/MachinesPage.jsx"));
@@ -137,6 +138,7 @@ const router = createBrowserRouter([
                 ),
               },
               { path: "Calibration", element: <SettingsCalibration /> },
+              { path: "Process-Control", element: <SettingsProcessControl /> },
               {
                 path: "Notifications",
                 element: <div>Notifications</div>,

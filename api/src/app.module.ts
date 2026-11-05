@@ -45,6 +45,8 @@ import {
   PartFamiliesController,
   SpecValuesController,
 } from './process-control/process-control.controller';
+import { CharacteristicTemplatesController } from './process-control/characteristic-templates.controller';
+import { CharacteristicTemplatesService } from './process-control/characteristic-templates.service';
 import { ProcessControlService } from './process-control/process-control.service';
 import { InspectionMeasurementsController, InspectionsController } from './inspection/inspection.controller';
 import { InspectionService } from './inspection/inspection.service';
@@ -110,6 +112,7 @@ export class AppModule implements NestModule {
         ControlPlansController,
         ControlPlanRevisionsController,
         ControlPlanContentController,
+        CharacteristicTemplatesController,
         InspectionsController,
         InspectionMeasurementsController,
       ],
@@ -127,6 +130,7 @@ export class AppModule implements NestModule {
         CalibrationDashboardService,
         ProcessControlService,
         ControlPlanContentService,
+        CharacteristicTemplatesService,
         InspectionService,
         OrganisationsService,
         StructureService,

@@ -18,6 +18,10 @@ const useDetail = (path, enabled = true) => {
   });
 };
 
+export const useCharacteristicTemplates = ({ includeInactive = false, enabled = true } = {}) => {
+  const query = useDetail(`/characteristic-templates${includeInactive ? "?includeInactive=true" : ""}`, enabled);
+  return { ...query, data: query.data?.data };
+};
 export const useMachines = ({ q = "", includeInactive = false, siteId } = {}) => usePagedList("machines", { q, includeInactive, siteId });
 export const usePartFamilies = ({ q = "", includeInactive = false } = {}) => usePagedList("part-families", { q, includeInactive });
 export const usePartFamily = (id) => useDetail(`/part-families/${id}`, !!id);

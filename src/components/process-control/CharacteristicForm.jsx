@@ -5,7 +5,7 @@ import Field from "../ui/Field";
 import { useToast } from "../../contexts/ToastProvider";
 import { useUnits } from "../../hooks/useMasterData";
 import { useGaugeTypes } from "../../hooks/useCalibration";
-import { useProcessControlMutation } from "../../hooks/useProcessControl";
+import { useCharacteristicTemplates, useProcessControlMutation } from "../../hooks/useProcessControl";
 import { REACTION_ACTIONS, REACTION_TRIGGERS, SAMPLING_TRIGGERS } from "../../lib/processControl";
 import { buttonClass, FormError, SelectField, TextAreaField } from "../master-data/shared";
 
@@ -32,15 +32,21 @@ const Fieldset = ({ legend, children, className = "" }) => (
  * Add or edit a characteristic of a draft revision: what is checked (fixed limits, part-specific
  * values or pass/fail), at which operation, for which parts, how (method, gauge type), how often
  * (sampling rules), what to do on a failure (reactions) and whether it is charted (SPC).
+ *
+ * A new characteristic can start from a reusable template (Settings → Process control): picking one
+ * copies its values into the form. With `asTemplate` the same form edits a template instead, without
+ * the revision-specific fields (operation, drawing number, parts).
  */
-const CharacteristicForm = ({ revision, characteristic, operationId, onDone }) => {
+const CharacteristicForm = ({ revision, characteristic, operationId, onDone, asTemplate = false }) => {
   const mutation = useProcessControlMutation();
   const { showToast } = useToast();
   const units = useUnits();
   const gaugeTypes = useGaugeTypes();
+  const templates = useCharacteristicTemplates({ enabled: !asTemplate && !characteristic });
   const c = characteristic;
   const [form, setForm] = useState({
-    operationId: c?.operationId ?? operationId ?? revision.operations[0]?.id ?? null,
+    operationId: asTemplate ? null : c?.operationId ?? operationId ?? revision.operations[0]?.id ?? null,
+    description: text(c?.description),
     characteristicKey: c?.characteristicKey ?? "",
     charNumber: text(c?.charNumber),
     name: text(c?.name),
@@ -51,7 +57,7 @@ const CharacteristicForm = ({ revision, characteristic, operationId, onDone }) =
     unitCode: c?.unitCode ?? "mm",
     specKey: text(c?.specKey),
     appliesTo: c?.appliesTo ?? "all",
-    partIds: c?.parts.map((p) => p.id) ?? [],
+    partIds: c?.parts?.map((p) => p.id) ?? [],
     method: text(c?.method),
     gaugeTypeId: c?.gaugeType?.id ?? null,
     criticality: c?.criticality ?? "minor",
@@ -66,6 +72,7 @@ const CharacteristicForm = ({ revision, characteristic, operationId, onDone }) =
     reactions: c?.reactions.map(({ triggerType, action, instruction }) => ({ triggerType, action, instruction })) ?? [],
   });
   const [problem, setProblem] = useState(null);
+  const [templateId, setTemplateId] = useState(null);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const setValue = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
   const measured = form.kind !== "attribute";
@@ -73,19 +80,44 @@ const CharacteristicForm = ({ revision, characteristic, operationId, onDone }) =
   const updateRow = (list, i, patch) => setForm((f) => ({ ...f, [list]: f[list].map((r, j) => (j === i ? { ...r, ...patch } : r)) }));
   const removeRow = (list, i) => setForm((f) => ({ ...f, [list]: f[list].filter((_, j) => j !== i) }));
 
+  // Copies a template's values; the operation, drawing number and parts of this revision stay as they are.
+  const applyTemplate = (id) => {
+    setTemplateId(id);
+    const t = templates.data?.find((x) => x.id === id);
+    if (!t) return;
+    setForm((f) => ({
+      ...f,
+      characteristicKey: t.characteristicKey,
+      name: t.name,
+      kind: kindOf(t),
+      nominal: text(t.nominal),
+      lowerLimit: text(t.lowerLimit),
+      upperLimit: text(t.upperLimit),
+      unitCode: t.unitCode ?? f.unitCode,
+      specKey: text(t.specKey),
+      method: text(t.method),
+      gaugeTypeId: t.gaugeType?.id ?? null,
+      criticality: t.criticality,
+      spcEligible: t.spcEligible,
+      chartType: t.chartType ?? "imr",
+      subgroupSize: text(t.subgroupSize ?? 5),
+      decimals: text(t.decimals),
+      notes: text(t.notes),
+      sampling: t.sampling.map(({ triggerType, intervalValue, sampleSize }) => ({ triggerType, intervalValue: text(intervalValue), sampleSize: text(sampleSize) })),
+      reactions: t.reactions.map(({ triggerType, action, instruction }) => ({ triggerType, action, instruction })),
+    }));
+  };
+
   const submit = (e) => {
     e.preventDefault();
     const nums = [form.nominal, form.lowerLimit, form.upperLimit].map(toNumber);
     if (form.kind === "fixed" && nums.some((n) => n !== null && Number.isNaN(n))) return setProblem("Nominal and limits must be numbers.");
-    if (form.appliesTo === "selected" && form.partIds.length === 0) return setProblem("Choose at least one part, or apply the check to all parts.");
+    if (!asTemplate && form.appliesTo === "selected" && form.partIds.length === 0) return setProblem("Choose at least one part, or apply the check to all parts.");
     setProblem(null);
-    const body = {
-      operationId: form.operationId,
-      charNumber: form.charNumber.trim(),
+    const content = {
       name: form.name.trim(),
       dataType: measured ? "variable" : "attribute",
       valueSource: form.kind === "variable" ? "part_spec" : "plan",
-      appliesTo: form.appliesTo,
       nominal: form.kind === "fixed" ? nums[0] : null,
       lowerLimit: form.kind === "fixed" ? nums[1] : null,
       upperLimit: form.kind === "fixed" ? nums[2] : null,
@@ -99,13 +131,32 @@ const CharacteristicForm = ({ revision, characteristic, operationId, onDone }) =
       subgroupSize: measured && form.spcEligible ? (form.chartType === "imr" ? 1 : toNumber(form.subgroupSize)) : null,
       decimals: toNumber(form.decimals),
       notes: form.notes.trim(),
-      partIds: form.appliesTo === "selected" ? form.partIds : [],
       sampling: form.sampling.map((s) => ({
         triggerType: s.triggerType,
         intervalValue: SAMPLING_TRIGGERS[s.triggerType].interval ? toNumber(s.intervalValue) : null,
         sampleSize: toNumber(s.sampleSize) ?? 1,
       })),
       reactions: form.reactions.map((r) => ({ ...r, instruction: r.instruction.trim() })).filter((r) => r.instruction),
+    };
+    if (asTemplate) {
+      const body = { ...content, description: form.description.trim(), characteristicKey: form.characteristicKey.trim() };
+      mutation.mutate(
+        c ? { path: `/characteristic-templates/${c.id}`, method: "PATCH", body } : { path: "/characteristic-templates", body },
+        {
+          onSuccess: () => {
+            showToast({ type: "success", title: "Saved", message: `${body.name} saved.` });
+            onDone();
+          },
+        }
+      );
+      return;
+    }
+    const body = {
+      ...content,
+      operationId: form.operationId,
+      charNumber: form.charNumber.trim(),
+      appliesTo: form.appliesTo,
+      partIds: form.appliesTo === "selected" ? form.partIds : [],
     };
     mutation.mutate(
       c
@@ -127,27 +178,46 @@ const CharacteristicForm = ({ revision, characteristic, operationId, onDone }) =
   const unitOptions = (units.data ?? []).map((u) => ({ value: u.code, label: `${u.code} · ${u.name}` }));
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4" aria-label="Characteristic">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <form onSubmit={submit} className="flex flex-col gap-4" aria-label={asTemplate ? "Characteristic template" : "Characteristic"}>
+      {!asTemplate && !c && (templates.data?.length ?? 0) > 0 && (
+        <SelectField
+          label="Start from a template"
+          placeholder="— Blank characteristic —"
+          value={templateId}
+          onChange={applyTemplate}
+          options={templates.data.map((t) => ({ value: t.id, label: `${t.name} (${t.characteristicKey})` }))}
+          hint="Fills in the fields below from Settings → Process control; you can still change them"
+        />
+      )}
+      {asTemplate && <Field label="Template name" value={form.name} onChange={set("name")} required maxLength={200} hint="e.g. Outer diameter ±0.05" />}
+      <div className={`grid grid-cols-1 gap-3 ${asTemplate ? "" : "sm:grid-cols-3"}`}>
         <Field
           label="Key"
           value={form.characteristicKey}
           onChange={set("characteristicKey")}
           required
-          disabled={!!c}
+          disabled={!!c && !asTemplate}
           maxLength={40}
-          hint={c ? "Identifies it across revisions" : "e.g. OD — kept across revisions"}
+          hint={c && !asTemplate ? "Identifies it across revisions" : "e.g. OD — kept across revisions"}
         />
-        <Field label="Number" value={form.charNumber} onChange={set("charNumber")} maxLength={20} hint="Balloon on the drawing (optional)" />
-        <SelectField
-          label="Operation"
-          required
-          value={form.operationId}
-          onChange={setValue("operationId")}
-          options={revision.operations.map((o) => ({ value: o.id, label: `${o.operationCode} · ${o.name}` }))}
-        />
+        {!asTemplate && (
+          <>
+            <Field label="Number" value={form.charNumber} onChange={set("charNumber")} maxLength={20} hint="Balloon on the drawing (optional)" />
+            <SelectField
+              label="Operation"
+              required
+              value={form.operationId}
+              onChange={setValue("operationId")}
+              options={revision.operations.map((o) => ({ value: o.id, label: `${o.operationCode} · ${o.name}` }))}
+            />
+          </>
+        )}
       </div>
-      <Field label="Name" value={form.name} onChange={set("name")} required maxLength={200} hint="e.g. Outer diameter" />
+      {asTemplate ? (
+        <Field label="Description" value={form.description} onChange={set("description")} maxLength={1000} hint="Optional: when to use this template" />
+      ) : (
+        <Field label="Name" value={form.name} onChange={set("name")} required maxLength={200} hint="e.g. Outer diameter" />
+      )}
 
       <Fieldset legend="Requirement">
         <div role="radiogroup" aria-label="Kind of check" className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -188,6 +258,7 @@ const CharacteristicForm = ({ revision, characteristic, operationId, onDone }) =
         )}
       </Fieldset>
 
+      {!asTemplate && (
       <Fieldset legend="Applies to">
         <div className="flex flex-wrap gap-4 text-sm text-primary-text">
           <label className="flex items-center gap-2">
@@ -217,6 +288,7 @@ const CharacteristicForm = ({ revision, characteristic, operationId, onDone }) =
             </div>
           ))}
       </Fieldset>
+      )}
 
       <Fieldset legend="How">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -348,7 +420,7 @@ const CharacteristicForm = ({ revision, characteristic, operationId, onDone }) =
           Cancel
         </button>
         <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>
-          {mutation.isPending ? "Saving…" : "Save characteristic"}
+          {mutation.isPending ? "Saving…" : asTemplate ? "Save template" : "Save characteristic"}
         </button>
       </div>
     </form>

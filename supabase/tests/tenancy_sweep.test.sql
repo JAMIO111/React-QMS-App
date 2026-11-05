@@ -104,6 +104,7 @@ BEGIN
   INSERT INTO public.characteristic_applicability (organisation_id, control_plan_revision_id, plan_characteristic_id, part_id)
     SELECT a, c.control_plan_revision_id, c.id, p.id FROM public.control_plan_characteristics c, public.parts p
     WHERE c.organisation_id = a AND p.organisation_id = a AND p.part_number = 'SW-P1';
+  INSERT INTO public.characteristic_templates (organisation_id, name, characteristic_key, upper_limit, unit_code) VALUES (a, 'Sweep template', 'OD', 5, 'mm');
   INSERT INTO public.sampling_rules (organisation_id, control_plan_revision_id, plan_characteristic_id, trigger_type, sample_size)
     SELECT a, control_plan_revision_id, id, 'first_off', 1 FROM public.control_plan_characteristics WHERE organisation_id = a;
   INSERT INTO public.reaction_plans (organisation_id, control_plan_revision_id, trigger_type, action, instruction)

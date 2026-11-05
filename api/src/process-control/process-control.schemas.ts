@@ -370,10 +370,10 @@ export const UpdateOperationBody = updateOf({
   notes: operationFields.notes,
 });
 
-const SamplingInput = z
+export const SamplingInput = z
   .object({ triggerType: SamplingTrigger, intervalValue: z.number().int().min(1).max(100000).nullable().optional(), sampleSize: z.number().int().min(1).max(100) })
   .strict();
-const ReactionInput = z.object({ triggerType: ReactionTrigger, action: ReactionAction, instruction: z.string().trim().min(1).max(2000) }).strict();
+export const ReactionInput = z.object({ triggerType: ReactionTrigger, action: ReactionAction, instruction: z.string().trim().min(1).max(2000) }).strict();
 const characteristicFields = {
   operationId: z.string().uuid(),
   sequence: z.number().int().min(0).max(100000).optional(),
@@ -410,6 +410,51 @@ export const UpdateCharacteristicBody = updateOf({
   name: characteristicFields.name.optional(),
 });
 export type UpdateCharacteristicBody = z.infer<typeof UpdateCharacteristicBody>;
+// ---- reusable characteristic templates (Settings → Process control) -----------------------------
+
+export const CharacteristicTemplate = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  characteristicKey: z.string(),
+  dataType: z.enum(['variable', 'attribute']),
+  valueSource: z.enum(['plan', 'part_spec']),
+  nominal: z.number().nullable(),
+  lowerLimit: z.number().nullable(),
+  upperLimit: z.number().nullable(),
+  unitCode: z.string().nullable(),
+  specKey: z.string().nullable(),
+  method: z.string().nullable(),
+  gaugeType: Ref.nullable(),
+  criticality: z.enum(['critical', 'major', 'minor']),
+  spcEligible: z.boolean(),
+  chartType: z.enum(['imr', 'xbar_r']).nullable(),
+  subgroupSize: z.number().int().nullable(),
+  decimals: z.number().int().nullable(),
+  notes: z.string().nullable(),
+  sampling: z.array(z.object({ triggerType: SamplingTrigger, intervalValue: z.number().int().nullable(), sampleSize: z.number().int() })),
+  reactions: z.array(z.object({ triggerType: ReactionTrigger, action: ReactionAction, instruction: z.string() })),
+  active: z.boolean(),
+  updatedAt: Iso,
+});
+export type CharacteristicTemplate = z.infer<typeof CharacteristicTemplate>;
+export const CharacteristicTemplateQuery = z.object({ includeInactive: booleanFlag });
+const { operationId: _op, sequence: _seq, charNumber: _num, appliesTo: _applies, partIds: _parts, ...templateContent } = characteristicFields;
+const templateFields = {
+  ...templateContent,
+  description: optionalText(1000),
+  characteristicKey: CharacteristicKey,
+};
+export const CreateCharacteristicTemplateBody = z.object(templateFields).strict();
+export type CreateCharacteristicTemplateBody = z.infer<typeof CreateCharacteristicTemplateBody>;
+export const UpdateCharacteristicTemplateBody = updateOf({
+  ...templateFields,
+  name: templateFields.name.optional(),
+  characteristicKey: CharacteristicKey.optional(),
+  active: z.boolean().optional(),
+});
+export type UpdateCharacteristicTemplateBody = z.infer<typeof UpdateCharacteristicTemplateBody>;
+
 export const ReplaceReactionsBody = z.object({ reactions: z.array(ReactionInput).max(20) }).strict();
 
 // ---- revision comparison --------------------------------------------------------------------------

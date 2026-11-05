@@ -1,4 +1,4 @@
-import { BellIcon, DatabaseIcon, GaugeIcon, MonitorCogIcon, SettingsIcon, ShieldUserIcon, UserCogIcon } from "@/components/icons";
+import { BellIcon, ClipboardListIcon, DatabaseIcon, GaugeIcon, MonitorCogIcon, SettingsIcon, ShieldUserIcon, UserCogIcon } from "@/components/icons";
 
 const SettingMenuStructure = [
   {
@@ -38,6 +38,13 @@ const SettingMenuStructure = [
     path: "Calibration",
     icon: GaugeIcon,
     permission: "calibration.read",
+    subMenu: [],
+  },
+  {
+    name: "Process control",
+    path: "Process-Control",
+    icon: ClipboardListIcon,
+    permission: "process_control.read",
     subMenu: [],
   },
   {

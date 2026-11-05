@@ -248,7 +248,7 @@ export const AttachmentDrop = ({ recordId, bucket, folder, attachments, mutation
                                 </button>
                               )}
                               {canEdit && file.deletedAt && (
-                                <button type="button" aria-label={`Restore ${name}`} title="Restore"
+                                <button type="button" aria-label={`Restore ${name}`} title="Restore" disabled={mutation.isPending}
                                   onClick={() => mutation.mutate({ path: `${itemBase}/${file.id}/restore` }, { onError: (e) => showToast({ type: "error", title: "Not restored", message: describeApiError(e) }) })}
                                   className="rounded-lg p-1.5 text-primary-text hover:bg-secondary-text/5 cursor-pointer">
                                   <RotateCcwIcon className="h-5 w-5" />

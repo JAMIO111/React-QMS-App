@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
+import { optimisticHandlers, settle } from "../lib/optimistic";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { key, usePagedList } from "./useMasterData";
 
@@ -44,7 +45,8 @@ export const useProcessControlMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ path, method = "POST", body, reason }) => apiFetch(path, { method, body, organisationId, reason }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: key(organisationId) }),
+    ...optimisticHandlers(queryClient, key(organisationId)),
+    onSuccess: (_data, _request, context) => settle(queryClient, key(organisationId), context),
   });
 };
 

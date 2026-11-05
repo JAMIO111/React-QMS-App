@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
+import { optimisticHandlers, settle } from "../lib/optimistic";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "calibration", ...rest];
@@ -60,9 +61,10 @@ export const useCalibrationMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ path, method = "POST", body }) => apiFetch(path, { method, body, organisationId }),
-    onSuccess: (_data, { path }) => {
-      queryClient.invalidateQueries({ queryKey: key(organisationId) });
+    ...optimisticHandlers(queryClient, key(organisationId)),
+    onSuccess: (_data, { path }, context) => {
       if (path.endsWith("/raise-ncr")) queryClient.invalidateQueries({ queryKey: ["api", "org", organisationId, "ncr"] });
+      return settle(queryClient, key(organisationId), context);
     },
   });
 };

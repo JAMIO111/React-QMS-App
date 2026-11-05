@@ -162,7 +162,7 @@ const PartFamilyPage = () => {
                       {canManage && (
                         <td className={td}>
                           <div className="flex justify-end">
-                            <button type="button" className={buttonClass.danger} onClick={() => removePart(p)} aria-label={`Remove ${p.partNumber} from the family`}>
+                            <button type="button" className={buttonClass.danger} disabled={membership.isPending} onClick={() => removePart(p)} aria-label={`Remove ${p.partNumber} from the family`}>
                               <Trash2Icon className="h-4 w-4" />
                             </button>
                           </div>

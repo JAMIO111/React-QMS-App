@@ -227,7 +227,7 @@ const Scope = ({ plan, canManage }) => {
                 {canManage && (
                   <td className={td}>
                     <div className="flex justify-end">
-                      <button type="button" className={buttonClass.danger} onClick={() => remove(a)} aria-label="Remove scope entry">
+                      <button type="button" className={buttonClass.danger} disabled={mutation.isPending} onClick={() => remove(a)} aria-label="Remove scope entry">
                         <Trash2Icon className="h-4 w-4" />
                       </button>
                     </div>

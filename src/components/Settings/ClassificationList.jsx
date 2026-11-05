@@ -55,6 +55,7 @@ const Row = ({ item, canManage, children }) => {
                 </button>
                 <button
                   type="button"
+                  disabled={mutation.isPending}
                   onClick={() => patch({ active: !item.active }, `${item.name} ${item.active ? "deactivated" : "reactivated"}.`)}
                   className="text-link-color hover:underline cursor-pointer"
                   aria-label={`${item.active ? "Deactivate" : "Reactivate"} ${item.name}`}>

@@ -114,7 +114,7 @@ const NcrCosts = ({ ncrId, canEdit }) => {
                     <td className="px-2 py-2">
                       <div className="flex justify-end gap-1">
                         {c.deletedAt ? (
-                          <button type="button" aria-label={`Restore ${costTypeName(c.costType)} cost`} title="Restore"
+                          <button type="button" aria-label={`Restore ${costTypeName(c.costType)} cost`} title="Restore" disabled={mutation.isPending}
                             onClick={() => mutation.mutate({ path: `/ncr-costs/${c.id}/restore` }, { onError: (e) => showToast({ type: "error", title: "Not restored", message: describeApiError(e) }) })}
                             className="rounded-lg p-1.5 text-primary-text hover:bg-border-color/50 cursor-pointer">
                             <RotateCcwIcon className="h-4 w-4" />

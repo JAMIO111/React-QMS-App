@@ -165,7 +165,7 @@ const Operation = ({ operation, editable, onEdit, onAddCharacteristic, onEditCha
             <button type="button" className={buttonClass.neutral} onClick={() => onEdit(operation)} aria-label={`Edit ${operation.operationCode}`}>
               <PencilIcon className="h-4 w-4" />
             </button>
-            <button type="button" className={buttonClass.danger} onClick={removeOperation} aria-label={`Remove ${operation.operationCode}`}>
+            <button type="button" className={buttonClass.danger} disabled={mutation.isPending} onClick={removeOperation} aria-label={`Remove ${operation.operationCode}`}>
               <Trash2Icon className="h-4 w-4" />
             </button>
           </div>
@@ -217,7 +217,7 @@ const Operation = ({ operation, editable, onEdit, onAddCharacteristic, onEditCha
                       <button type="button" className={buttonClass.neutral} onClick={() => onEditCharacteristic(ch)} aria-label={`Edit ${ch.characteristicKey}`}>
                         <PencilIcon className="h-4 w-4" />
                       </button>
-                      <button type="button" className={buttonClass.danger} onClick={() => removeCharacteristic(ch)} aria-label={`Remove ${ch.characteristicKey}`}>
+                      <button type="button" className={buttonClass.danger} disabled={mutation.isPending} onClick={() => removeCharacteristic(ch)} aria-label={`Remove ${ch.characteristicKey}`}>
                         <Trash2Icon className="h-4 w-4" />
                       </button>
                     </div>

@@ -1,5 +1,5 @@
-import React from "react";
-import { LogOutIcon } from "@/components/icons";
+import React, { useState } from "react";
+import { LoaderCircleIcon, LogOutIcon } from "@/components/icons";
 import { signOut } from "../authService";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -7,8 +7,11 @@ import { useQueryClient } from "@tanstack/react-query";
 const Logout = ({ isExpanded }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
 
   const handleLogout = async () => {
+    if (busy) return;
+    setBusy(true);
     try {
       await signOut(); // wait for Supabase to complete logout
       queryClient.clear(); // drop the previous user's cached data
@@ -16,6 +19,7 @@ const Logout = ({ isExpanded }) => {
     } catch (error) {
       console.error("Logout failed:", error.message);
       // Optionally show an alert or toast to the user
+      setBusy(false);
     }
   };
 
@@ -23,8 +27,10 @@ const Logout = ({ isExpanded }) => {
     <button
       title="Logout"
       onClick={handleLogout}
+      disabled={busy}
+      aria-busy={busy || undefined}
       className="mx-auto w-fit p-2 flex justify-center items-center gap-3 cursor-pointer text-secondary-text hover:text-error-color transition-colors">
-      <LogOutIcon className="rotate-180 h-7 w-7" />
+      {busy ? <LoaderCircleIcon className="h-7 w-7 animate-spin" /> : <LogOutIcon className="rotate-180 h-7 w-7" />}
       {isExpanded && <span>Logout</span>}
     </button>
   );

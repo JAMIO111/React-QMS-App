@@ -197,7 +197,7 @@ const SpecValues = ({ part, canManage }) => {
                             <button type="button" className={buttonClass.neutral} onClick={() => setEditing(v)} aria-label={`Edit ${v.characteristicKey}`}>
                               <PencilIcon className="h-4 w-4" />
                             </button>
-                            <button type="button" className={buttonClass.danger} onClick={() => remove(v)} aria-label={`Remove ${v.characteristicKey}`}>
+                            <button type="button" className={buttonClass.danger} disabled={mutation.isPending} onClick={() => remove(v)} aria-label={`Remove ${v.characteristicKey}`}>
                               <Trash2Icon className="h-4 w-4" />
                             </button>
                           </div>

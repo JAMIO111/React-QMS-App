@@ -6,6 +6,7 @@ import { useConfirm } from "../../contexts/ConfirmationModalProvider";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeMfaError, removeFactor, verifiedTotpFactors } from "../../lib/mfa";
 import MenuCard from "../ui/MenuCard";
+import LoadingButton from "../ui/LoadingButton";
 import EnrolAuthenticator from "../mfa/EnrolAuthenticator";
 
 /** Settings → Account: turn two-factor authentication on or off for your own account. */
@@ -17,6 +18,7 @@ const TwoFactorCard = () => {
   const [factors, setFactors] = useState(undefined);
   const [enrolling, setEnrolling] = useState(false);
   const [error, setError] = useState(null);
+  const [removing, setRemoving] = useState(false);
 
   const load = useCallback(() => {
     verifiedTotpFactors()
@@ -37,6 +39,7 @@ const TwoFactorCard = () => {
       type: "warning",
     });
     if (!ok) return;
+    setRemoving(true);
     try {
       for (const f of factors) await removeFactor(f.id);
       await refreshAssurance({});
@@ -45,6 +48,8 @@ const TwoFactorCard = () => {
       load();
     } catch (err) {
       showToast({ type: "error", title: "Not changed", message: describeMfaError(err) });
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -88,12 +93,13 @@ const TwoFactorCard = () => {
         />
       )}
       {enabled && (
-        <button
-          type="button"
+        <LoadingButton
+          loading={removing}
+          loadingText="Turning off…"
           onClick={remove}
-          className="self-start rounded-lg border border-error-btn-border bg-error-btn-bg px-4 py-2 text-primary-text hover:bg-error-btn-bg-hover cursor-pointer">
+          className="self-start rounded-lg border border-error-btn-border bg-error-btn-bg px-4 py-2 text-primary-text hover:bg-error-btn-bg-hover cursor-pointer disabled:opacity-50">
           Turn off two-factor
-        </button>
+        </LoadingButton>
       )}
     </MenuCard>
   );

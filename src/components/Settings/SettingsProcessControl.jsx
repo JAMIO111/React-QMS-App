@@ -75,7 +75,7 @@ const SettingsProcessControl = () => {
               {canManage && (
                 <div className="flex items-center gap-3 text-sm">
                   <button type="button" onClick={() => setEditing(t)} className={link}>Edit</button>
-                  <button type="button" onClick={() => toggleActive(t)} className={link}>{t.active ? "Make inactive" : "Make active"}</button>
+                  <button type="button" disabled={mutation.isPending} onClick={() => toggleActive(t)} className={`${link} disabled:opacity-50`}>{t.active ? "Make inactive" : "Make active"}</button>
                 </div>
               )}
             </li>

@@ -94,7 +94,7 @@ const TypeCard = ({ type, canManage }) => {
             {canManage && (
               <>
                 <button type="button" onClick={() => setEditing(true)} className="text-link-color hover:underline cursor-pointer">Edit</button>
-                <button type="button" onClick={() => patch({ active: !type.active }, `${type.name} ${type.active ? "made inactive" : "made active"}.`)} className="text-link-color hover:underline cursor-pointer">
+                <button type="button" disabled={mutation.isPending} onClick={() => patch({ active: !type.active }, `${type.name} ${type.active ? "made inactive" : "made active"}.`)} className="text-link-color hover:underline disabled:opacity-50 cursor-pointer">
                   {type.active ? "Make inactive" : "Make active"}
                 </button>
               </>

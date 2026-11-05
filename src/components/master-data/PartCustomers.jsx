@@ -126,7 +126,8 @@ const PartCustomers = ({ part, canManage }) => {
                     canManage && (
                       <button
                         type="button"
-                        className="text-xs text-link-color hover:underline cursor-pointer"
+                        className="text-xs text-link-color hover:underline cursor-pointer disabled:opacity-50"
+                        disabled={mutation.isPending}
                         onClick={() => mutation.mutate({ path: `/part-customers/${link.id}`, method: "PATCH", body: { isPrimary: true } }, { onError: failed("Not changed") })}>
                         Make primary
                       </button>
@@ -139,7 +140,7 @@ const PartCustomers = ({ part, canManage }) => {
                       <button type="button" className={buttonClass.neutral} onClick={() => setEditing(link)} aria-label={`Edit ${link.customer.code}`}>
                         <PencilIcon className="h-4 w-4" />
                       </button>
-                      <button type="button" className={buttonClass.danger} onClick={() => remove(link)} aria-label={`Remove ${link.customer.code}`}>
+                      <button type="button" className={buttonClass.danger} disabled={mutation.isPending} onClick={() => remove(link)} aria-label={`Remove ${link.customer.code}`}>
                         <Trash2Icon className="h-4 w-4" />
                       </button>
                     </div>

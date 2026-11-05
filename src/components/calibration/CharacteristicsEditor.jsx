@@ -186,7 +186,7 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
                           <button type="button" aria-label={`Edit ${c.name}`} onClick={() => { setEditing(c.id); setEditForm(toForm(c)); }} className="rounded p-1 hover:bg-border-color/50 cursor-pointer">
                             <PencilIcon />
                           </button>
-                          <button type="button" onClick={() => patch(c.id, { active: !c.active })} className="whitespace-nowrap rounded px-1 text-xs text-link-color hover:underline cursor-pointer" title={formatTolerance(c)}>
+                          <button type="button" disabled={mutation.isPending} onClick={() => patch(c.id, { active: !c.active })} className="whitespace-nowrap rounded px-1 text-xs text-link-color hover:underline disabled:opacity-50 cursor-pointer" title={formatTolerance(c)}>
                             {c.active ? "Switch off" : "Switch on"}
                           </button>
                         </div>

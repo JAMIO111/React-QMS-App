@@ -43,6 +43,8 @@ export const ErrorNotice = ({ error }) => (
   </p>
 );
 
+const NO_ROWS = [];
+
 /**
  * A master-data list: the shared Table with resizable, hideable, reorderable columns remembered under
  * `storageKey`, rows from a paged query, and "Load more".
@@ -51,7 +53,7 @@ export const DataList = ({ storageKey, columns, query, onOpen, emptyMessage, ari
   const prefs = useTablePreferences(storageKey);
   const sizingInfo = useColumnSizingInfo();
   const table = useReactTable({
-    data: query.data?.items ?? [],
+    data: query.data?.items ?? NO_ROWS, // a stable fallback: a fresh [] each render re-triggers TanStack's page reset in a loop
     columns,
     getRowId: (row) => row.id,
     state: {

@@ -57,7 +57,7 @@ const SettingsProcessControl = () => {
             </button>
           )
         }>
-        <Switch checked={showInactive} onChange={setShowInactive}>Show inactive</Switch>
+        <Switch checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)}>Show inactive</Switch>
         {isLoading && <LoadingScreen size="sm" />}
         {!isLoading && templates?.length === 0 && <p className="text-secondary-text">No templates yet.</p>}
         <ul className="flex flex-col gap-2">

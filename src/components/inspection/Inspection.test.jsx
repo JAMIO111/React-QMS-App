@@ -3,7 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { dueChecks, previewResult } from "../../lib/inspection";
+import { nextSample, previewResult } from "../../lib/inspection";
 
 let permissions;
 const apiFetch = vi.fn();
@@ -74,6 +74,7 @@ const inspection = (over) => ({
     req({ id: "q-vis", characteristicKey: "VISUAL", charNumber: null, name: "No chatter marks", dataType: "attribute", nominal: null, lowerLimit: null, upperLimit: null, unitCode: null, gaugeType: null, criticality: "minor", sampling: [] }),
     req({ id: "q-groove", characteristicKey: "GROOVE_POS", name: "Groove position", applicable: false, applicability: "Only for HCR-200" }),
   ],
+  schedule: [{ number: 1, position: 1, trigger: "first_off", requirementIds: ["q-od", "q-vis"] }],
   samples: [],
   measurements: [],
   ...over,
@@ -120,13 +121,20 @@ describe("pass/fail preview", () => {
     expect(previewResult(q, "abc")).toBeNull();
   });
 
-  it("lists checks due from the sampling rules", () => {
+  it("works out the next sample: the planned one plus timed checks that are due", () => {
     const now = new Date("2026-11-05T10:00:00Z");
+    const taken = { id: "s1", isRetest: false, triggerType: "first_off" };
     const insp = inspection({
-      requirements: [req({ sampling: [{ triggerType: "every_n_minutes", intervalValue: 30, sampleSize: 5 }] })],
-      measurements: [{ id: "m1", requirementId: "q-od", measuredAt: "2026-11-05T09:00:00Z" }],
+      requirements: [req({ sampling: [{ triggerType: "first_off", intervalValue: null, sampleSize: 1 }, { triggerType: "every_n_minutes", intervalValue: 30, sampleSize: 1 }] }), req({ id: "q-len", sampling: [{ triggerType: "every_n_parts", intervalValue: 1, sampleSize: 1 }] })],
+      schedule: [
+        { number: 1, position: 1, trigger: "first_off", requirementIds: ["q-od", "q-len"] },
+        { number: 2, position: 2, trigger: "every_n_parts", requirementIds: ["q-len"] },
+      ],
+      samples: [taken],
+      measurements: [{ id: "m1", sampleId: "s1", requirementId: "q-od", measuredAt: "2026-11-05T09:00:00Z", supersedesId: null }],
     });
-    expect(dueChecks(insp, now)[0].reasons).toEqual([{ kind: "overdue", text: "Every 30 min × 5" }]);
+    expect(nextSample(insp, now)).toMatchObject({ kind: "planned", number: 2, requirementIds: ["q-len", "q-od"] });
+    expect(nextSample(inspection({ ...insp, samples: [taken, { id: "s2", isRetest: false, triggerType: "every_n_parts" }] }), new Date("2026-11-05T09:10:00Z"))).toBeNull();
   });
 });
 
@@ -184,18 +192,22 @@ const pickGauge = async (form, name, option) => {
 };
 
 describe("Inspection page", () => {
-  it("offers only the plan's triggers and blocks checks that are not due", async () => {
+  it("records samples in order, listing exactly the checks the plan requires for the next one", async () => {
     const withSample = inspection({
+      schedule: [
+        { number: 1, position: 1, trigger: "first_off", requirementIds: ["q-od", "q-vis"] },
+        { number: 2, position: 2, trigger: "every_n_parts", requirementIds: ["q-od"] },
+      ],
       samples: [{ id: "s1", sampleNumber: 1, sampledAt: new Date().toISOString(), unitReference: null, triggerType: "first_off", isRetest: false, notes: null, takenBy: null }],
       measurements: [{ id: "m1", sampleId: "s1", requirementId: "q-od", valueNumeric: "25.00", valuePass: null, unitCode: "mm", result: "pass", gauge: null, gaugeOverrideReason: null, measuredAt: new Date().toISOString(), measuredBy: null, supersedesId: null, supersededById: null, correctionReason: null, retestOfId: null, notes: null }],
     });
     routeApi({ "GET /inspections/i1": withSample, "GET /gauges": gauges });
     renderAt("/Inspections/i1");
     const form = await screen.findByRole("form", { name: "New sample" });
-    const trigger = within(form).getByLabelText("Trigger");
-    expect([...trigger.options].map((o) => o.value)).toEqual(["first_off"]);
-    expect(within(form).getByText("First-off already measured")).toBeInTheDocument();
-    expect(within(form).queryByLabelText("Outer diameter reading")).not.toBeInTheDocument();
+    expect(within(form).getByText("Sample 2")).toBeInTheDocument();
+    expect(within(form).getByLabelText("Outer diameter reading")).toBeInTheDocument();
+    expect(within(form).queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(screen.getByText("1 of 2 planned samples recorded. Record them in order.")).toBeInTheDocument();
   });
 
   it("shows the unit next to the value input", async () => {
@@ -223,7 +235,10 @@ describe("Inspection page", () => {
     await userEvent.type(within(form).getByLabelText("Outer diameter reading"), "25.05");
     expect(within(form).getByRole("status", { name: "Result for Outer diameter" })).toHaveTextContent("Pass");
     await userEvent.click(within(form).getByRole("button", { name: "Save sample" }));
-    expect(body).toEqual({ unitReference: "", triggerType: "first_off", readings: [{ requirementId: "q-od", valueNumeric: "25.05", gaugeId: "g1" }] });
+    expect(within(form).getByRole("alert")).toHaveTextContent("No chatter marks: enter a reading");
+    await userEvent.click(within(form).getByRole("radio", { name: "Pass" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Save sample" }));
+    expect(body).toEqual({ unitReference: "", readings: [{ requirementId: "q-od", valueNumeric: "25.05", gaugeId: "g1" }, { requirementId: "q-vis", valuePass: true }] });
   });
 
   it("asks for an override reason for an overdue gauge", async () => {

@@ -7,7 +7,7 @@ import MenuCard from "../ui/MenuCard";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useGauges } from "../../hooks/useCalibration";
 import { useInspection, useInspectionMutation } from "../../hooks/useInspection";
-import { describeLimits, dueChecks, isDecimal, previewResult, samplingBlock, TRIGGER_LABEL, triggerChoices } from "../../lib/inspection";
+import { describeLimits, eventTriggers, isDecimal, nextSample, previewResult, TRIGGER_LABEL } from "../../lib/inspection";
 import { formatDate, formatDateTime } from "../../lib/processControl";
 import { buttonClass, ErrorNotice, FormError, SelectField, TextAreaField } from "../master-data/shared";
 import { ResultBadge, StatusPill } from "./shared";
@@ -109,24 +109,28 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
     const t = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(t);
   }, []);
-  const choices = triggerChoices(inspection, now);
-  const [chosen, setTriggerType] = useState(null);
-  // The plan decides which triggers exist; default to the first one that has something due.
-  const triggerType = choices.find((c) => c.trigger === chosen)?.trigger ?? (choices.find((c) => c.available) ?? choices[0]).trigger;
-  const blocks = Object.fromEntries(applicable.map((q) => [q.id, samplingBlock(inspection, q, triggerType, now)]));
+  const events = eventTriggers(inspection);
+  const [mode, setMode] = useState("planned");
+  const next = nextSample(inspection, now);
+  const isEvent = events.includes(mode);
+  // A planned sample lists exactly the checks the plan requires now; an event sample the checks planned for that event.
+  const shown = isEvent ? applicable.filter((q) => q.sampling.some((s) => s.triggerType === mode)) : applicable.filter((q) => next?.requirementIds.includes(q.id));
+  const nothingToDo = !isEvent && !next;
   const [problem, setProblem] = useState(null);
   const setRow = (id, patch) => setRows((r) => ({ ...r, [id]: { ...r[id], ...patch } }));
   const byGauge = Object.fromEntries(gauges.map((g) => [g.id, g]));
-  const operations = [...new Set(applicable.map((q) => q.operationCode))];
+  const operations = [...new Set(shown.map((q) => q.operationCode))];
 
   const submit = (e) => {
     e.preventDefault();
     const readings = [];
-    for (const q of applicable) {
-      if (blocks[q.id]) continue;
+    for (const q of shown) {
       const r = rows[q.id];
       const filled = q.dataType === "attribute" ? r.value !== null : String(r.value).trim() !== "";
-      if (!filled) continue;
+      if (!filled) {
+        if (isEvent) continue;
+        return setProblem(`${q.name}: enter a reading — every check listed is part of this sample`);
+      }
       if (q.dataType === "variable" && !isDecimal(r.value)) return setProblem(`${q.name}: enter a number, e.g. 25.05`);
       readings.push({
         requirementId: q.id,
@@ -138,7 +142,7 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
     if (!readings.length) return setProblem("Enter at least one reading.");
     setProblem(null);
     mutation.mutate(
-      { path: `/inspections/${inspection.id}/samples`, body: { unitReference, triggerType, readings } },
+      { path: `/inspections/${inspection.id}/samples`, body: { unitReference, ...(isEvent ? { triggerType: mode } : {}), readings } },
       {
         onSuccess: () => {
           setRows(blank());
@@ -149,38 +153,35 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
   };
 
   return (
-    <MenuCard as="form" onSubmit={submit} title={`Sample ${inspection.samples.length + 1}`} subtitle="Leave a check empty if it is not measured this time." aria-label="New sample" bodyClassName="flex flex-col gap-4">
+    <MenuCard
+      as="form"
+      onSubmit={submit}
+      title={isEvent ? `Extra sample · ${TRIGGER_LABEL[mode]}` : next?.number ? `Sample ${next.number}` : next ? "Timed check" : "Sampling complete"}
+      subtitle={isEvent ? "Only the checks the plan samples on this event." : next?.number ? `Part ${next.position} of the lot · ${TRIGGER_LABEL[next.trigger]}. Samples are recorded in order.` : next ? "Checks that are due again." : undefined}
+      aria-label="New sample"
+      bodyClassName="flex flex-col gap-4">
       <div className="flex flex-wrap gap-3">
         <Field label="Unit / serial" value={unitReference} onChange={(e) => setUnitReference(e.target.value)} maxLength={60} className="w-48" hint="Optional" />
-        <SelectField
-          label="Trigger"
-          required
-          value={triggerType}
-          onChange={setTriggerType}
-          options={choices.map((c) => ({ value: c.trigger, label: c.available ? c.label : `${c.label} — ${c.reason}` }))}
-          hint="From the control plan sampling rules"
-          className="w-72"
-        />
+        {events.length > 0 && (
+          <SelectField
+            label="Sample type"
+            value={mode}
+            onChange={setMode}
+            options={[{ value: "planned", label: next ? "Next planned sample" : "Planned samples" }, ...events.map((t) => ({ value: t, label: `Extra · ${TRIGGER_LABEL[t]}` }))]}
+            className="w-64"
+          />
+        )}
       </div>
+      {nothingToDo && <p className="text-sm text-secondary-text">All planned samples are recorded and no timed check is due. Complete the inspection when you are done.</p>}
       {operations.map((op) => (
         <fieldset key={op} className="flex flex-col gap-2">
           <legend className="mb-1 font-mono text-sm text-secondary-text">{op}</legend>
-          {applicable
+          {shown
             .filter((q) => q.operationCode === op)
             .map((q) => {
               const r = rows[q.id];
               const gauge = byGauge[r.gaugeId];
               const gProblem = gaugeProblem(gauge, q);
-              if (blocks[q.id])
-                return (
-                  <div key={q.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border-color p-3 opacity-70">
-                    <div className="font-medium text-primary-text">
-                      {q.charNumber && <span className="mr-1 text-secondary-text">#{q.charNumber}</span>}
-                      {q.name}
-                    </div>
-                    <span className="text-sm text-secondary-text">{blocks[q.id]}</span>
-                  </div>
-                );
               return (
                 <div key={q.id} className="grid grid-cols-1 items-center gap-2 rounded-xl border border-border-color p-3 md:grid-cols-[minmax(12rem,1fr)_auto_auto_6rem]">
                   <div className="min-w-0">
@@ -232,7 +233,7 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
         </p>
       )}
       <FormError error={mutation.error} />
-      <button type="submit" className={`${buttonClass.primary} min-h-11 self-start`} disabled={mutation.isPending || applicable.every((q) => blocks[q.id])}>
+      <button type="submit" className={`${buttonClass.primary} min-h-11 self-start`} disabled={mutation.isPending || nothingToDo}>
         {mutation.isPending ? "Saving…" : "Save sample"}
       </button>
     </MenuCard>
@@ -413,26 +414,34 @@ const ReadingsGrid = ({ inspection, onOpen }) => {
   );
 };
 
-const DueChecks = ({ inspection }) => {
-  const rows = dueChecks(inspection).filter((r) => r.reasons.length);
-  if (!rows.length) return null;
+/** The samples the plan calls for, in order, with what is recorded so far. */
+const SamplePlan = ({ inspection }) => {
+  const next = nextSample(inspection);
+  const nameOf = (id) => inspection.requirements.find((q) => q.id === id)?.name ?? "";
+  const taken = next?.plannedTaken ?? inspection.schedule.length;
   return (
-    <MenuCard title="Checks due" subtitle="From the sampling rules. Part counts and events (tool change, set-up, shift) are for you to judge.">
-      <ul className="flex flex-col gap-1 text-sm">
-        {rows.map(({ requirement, reasons }) => (
-          <li key={requirement.id} className="flex flex-wrap items-center gap-2">
-            <span className="font-medium text-primary-text">{requirement.name}</span>
-            {reasons.map((r, i) => (
-              <span
-                key={i}
-                className={`rounded-full px-2 py-0.5 text-xs ${r.kind === "overdue" ? "bg-error-color/15 text-error-color" : r.kind === "due" ? "bg-warning-color/15 text-primary-text" : "bg-border-color text-secondary-text"}`}>
-                {r.kind === "overdue" ? "Overdue · " : r.kind === "due" ? "Due · " : ""}
-                {r.text}
-              </span>
-            ))}
+    <MenuCard title="Sample plan" subtitle={`${Math.min(taken, inspection.schedule.length)} of ${inspection.schedule.length} planned samples recorded. Record them in order.`}>
+      <ol className="flex max-h-64 flex-col gap-1 overflow-y-auto text-sm" aria-label="Planned samples">
+        {inspection.schedule.map((s, i) => {
+          const state = i < taken ? "done" : i === taken ? "next" : "later";
+          const ids = state === "next" ? next.requirementIds : s.requirementIds;
+          return (
+            <li key={s.number} className={`flex flex-wrap items-center gap-2 rounded-lg px-2 py-1 ${state === "next" ? "bg-brand-primary/10" : ""} ${state === "later" ? "text-secondary-text" : "text-primary-text"}`}>
+              <span className="w-24 font-medium tabular-nums">Sample {s.number}</span>
+              <span className="w-28 text-xs text-secondary-text">Part {s.position} · {TRIGGER_LABEL[s.trigger]}</span>
+              <span className="min-w-0 flex-1 truncate">{ids.map(nameOf).join(", ")}</span>
+              <span className="text-xs">{state === "done" ? "Recorded" : state === "next" ? "Next" : ""}</span>
+            </li>
+          );
+        })}
+        {next?.kind === "timed" && (
+          <li className="flex flex-wrap items-center gap-2 rounded-lg bg-warning-color/15 px-2 py-1 text-primary-text">
+            <span className="w-24 font-medium">Timed check</span>
+            <span className="min-w-0 flex-1 truncate">{next.requirementIds.map(nameOf).join(", ")}</span>
+            <span className="text-xs">Due</span>
           </li>
-        ))}
-      </ul>
+        )}
+      </ol>
     </MenuCard>
   );
 };
@@ -492,7 +501,7 @@ const InspectionPage = () => {
             {inspection.abandonReason && <p className="mt-2 text-sm text-primary-text">Reason: “{inspection.abandonReason}”</p>}
           </MenuCard>
 
-          {open && <DueChecks inspection={inspection} />}
+          {open && <SamplePlan inspection={inspection} />}
           {open && canRecord && <SampleEntry key={inspection.samples.length} inspection={inspection} gauges={gauges} canOverride={can("inspection.override_gauge")} />}
 
           <MenuCard title="Readings" subtitle="Select a reading for its history, a correction or a retest.">

@@ -41,36 +41,6 @@ export const describeLimits = (q) => {
   return `${parts.filter(Boolean).join(" · ")}${q.unitCode ? ` ${q.unitCode}` : ""}`;
 };
 
-/**
- * Which checks are due now, from each requirement's sampling rules and the samples taken so far:
- * first-off when nothing is measured yet; "every N minutes" when the last reading is older than N.
- * Part-count and event triggers (tool change, set-up, shift) cannot be known here and are listed as
- * "when it happens".
- */
-export const dueChecks = (inspection, now = new Date()) => {
-  const last = new Map();
-  for (const m of inspection.measurements) {
-    const t = new Date(m.measuredAt).getTime();
-    if (!last.has(m.requirementId) || last.get(m.requirementId) < t) last.set(m.requirementId, t);
-  }
-  return inspection.requirements
-    .filter((q) => q.applicable)
-    .map((q) => {
-      const measured = last.get(q.id);
-      const reasons = [];
-      for (const s of q.sampling) {
-        if (s.triggerType === "first_off" && !measured) reasons.push({ kind: "due", text: `First-off × ${s.sampleSize}` });
-        if (s.triggerType === "every_n_minutes") {
-          const dueAt = measured ? measured + s.intervalValue * 60_000 : now.getTime();
-          if (dueAt <= now.getTime()) reasons.push({ kind: measured ? "overdue" : "due", text: `Every ${s.intervalValue} min × ${s.sampleSize}` });
-          else reasons.push({ kind: "later", text: `Next in ${Math.ceil((dueAt - now.getTime()) / 60_000)} min`, dueAt });
-        }
-      }
-      if (!q.sampling.length && !measured) reasons.push({ kind: "due", text: "Not measured yet" });
-      return { requirement: q, measured: !!measured, reasons };
-    });
-};
-
 /** Readings of a requirement that count towards its sampling rules (not corrections, not retests). */
 const countedReadings = (inspection, requirementId) => {
   const retestSamples = new Set(inspection.samples.filter((s) => s.isRetest).map((s) => s.id));
@@ -80,41 +50,35 @@ const countedReadings = (inspection, requirementId) => {
     .map((m) => ({ triggerType: triggerBySample.get(m.sampleId), measuredAt: new Date(m.measuredAt).getTime() }));
 };
 
-/**
- * Why a check cannot be sampled on this trigger now (null when it can). Same rules as the API, which
- * enforces them: the trigger must be in the plan; first-off once; every N minutes only once N minutes
- * have passed since the last reading; every N parts at most ceil(lot size / N) times; events as planned.
- * Checks without sampling rules are not restricted.
- */
-export const samplingBlock = (inspection, q, trigger, now = new Date()) => {
-  if (!q.sampling.length) return null;
-  const rule = q.sampling.find((s) => s.triggerType === trigger);
-  if (!rule) return `Not sampled on ${TRIGGER_LABEL[trigger]?.toLowerCase() ?? trigger} in the control plan`;
-  const readings = countedReadings(inspection, q.id);
-  if (trigger === "first_off" && readings.length) return "First-off already measured";
-  if (trigger === "every_n_minutes" && rule.intervalValue && readings.length) {
-    const dueAt = Math.max(...readings.map((r) => r.measuredAt)) + rule.intervalValue * 60_000;
-    if (dueAt > now.getTime()) return `Not due yet — next in ${Math.ceil((dueAt - now.getTime()) / 60_000)} min`;
-  }
-  if (trigger === "every_n_parts" && rule.intervalValue) {
-    if (!inspection.lotSize) return "Set the lot size to sample by part count";
-    const allowed = Math.ceil(inspection.lotSize / rule.intervalValue);
-    const taken = readings.filter((r) => r.triggerType === "every_n_parts").length;
-    if (taken >= allowed) return `All ${allowed} samples for a lot of ${inspection.lotSize} taken`;
-  }
-  return null;
-};
+const EVENT_TRIGGERS = ["start_of_shift", "after_setup", "after_tool_change", "manual"];
+const PLANNED_TRIGGERS = ["first_off", "last_off", "every_n_parts"];
 
-/** The triggers the plan defines for this inspection, each with whether any check can use it now. */
-export const triggerChoices = (inspection, now = new Date()) => {
-  const applicable = inspection.requirements.filter((q) => q.applicable);
-  const planned = [...new Set(applicable.flatMap((q) => q.sampling.map((s) => s.triggerType)))];
-  const triggers = planned.length ? planned : ["manual"];
-  return triggers.map((trigger) => {
-    const blocks = applicable.map((q) => samplingBlock(inspection, q, trigger, now));
-    const open = blocks.some((b) => b === null);
-    return { trigger, label: TRIGGER_LABEL[trigger] ?? trigger, available: open, reason: open ? null : blocks.find(Boolean) };
-  });
+/** Event triggers (shift start, set-up, tool change, manual) the plan has rules for: samples outside the planned sequence. */
+export const eventTriggers = (inspection) => [
+  ...new Set(inspection.requirements.filter((q) => q.applicable).flatMap((q) => q.sampling.map((s) => s.triggerType)).filter((t) => EVENT_TRIGGERS.includes(t))),
+];
+
+/**
+ * What the next sample must contain (the API enforces the same): the next planned sample of
+ * `inspection.schedule` plus timed checks (every N minutes) that are due again, or a timed extra once the
+ * planned samples are all recorded. Null when nothing is left to sample.
+ */
+export const nextSample = (inspection, now = new Date()) => {
+  const plannedTaken = inspection.samples.filter((s) => !s.isRetest && PLANNED_TRIGGERS.includes(s.triggerType)).length;
+  const last = new Map();
+  for (const q of inspection.requirements) for (const r of countedReadings(inspection, q.id)) last.set(q.id, Math.max(last.get(q.id) ?? 0, r.measuredAt));
+  const timed = inspection.requirements
+    .filter((q) => q.applicable)
+    .filter((q) => {
+      const rule = q.sampling.find((s) => s.triggerType === "every_n_minutes");
+      return rule && last.has(q.id) && last.get(q.id) + (rule.intervalValue ?? 0) * 60_000 <= now.getTime();
+    })
+    .map((q) => q.id);
+  const planned = inspection.schedule[plannedTaken];
+  const base = { plannedTaken, timed };
+  if (planned) return { ...base, kind: "planned", number: planned.number, position: planned.position, trigger: planned.trigger, requirementIds: [...new Set([...planned.requirementIds, ...timed])] };
+  if (timed.length) return { ...base, kind: "timed", number: null, position: null, trigger: "every_n_minutes", requirementIds: timed };
+  return null;
 };
 
 /** The trigger recorded on the inspection itself when it starts: the plan's first-off, else its first rule. */

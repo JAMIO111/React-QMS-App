@@ -39,7 +39,7 @@ beforeAll(async () => {
   const rev = (await api().post(`/api/v1/control-plan-revisions/${ctx.planRev}/operations`).set(h).send({ operationCode: 'OP-020', name: 'Turning' }).expect(201)).body;
   const op = rev.operations[0].id;
   const add = (body: object) => api().post(`/api/v1/control-plan-revisions/${ctx.planRev}/characteristics`).set(h).send({ operationId: op, ...body }).expect(201);
-  await add({ characteristicKey: 'OD', name: 'Outer diameter', nominal: 25, lowerLimit: 24.95, upperLimit: 25.05, unitCode: 'mm', gaugeTypeId: type.id });
+  await add({ characteristicKey: 'OD', name: 'Outer diameter', nominal: 25, lowerLimit: 24.95, upperLimit: 25.05, unitCode: 'mm', gaugeTypeId: type.id, sampling: [{ triggerType: 'first_off', sampleSize: 1 }, { triggerType: 'every_n_parts', intervalValue: 60, sampleSize: 1 }] });
   await add({ characteristicKey: 'LENGTH', name: 'Overall length', valueSource: 'part_spec', specKey: 'LENGTH', unitCode: 'mm' });
   await add({ characteristicKey: 'VISUAL', name: 'No chatter marks', dataType: 'attribute' });
   await api().patch(`/api/v1/control-plan-revisions/${ctx.planRev}`).set(h).send({ changeReason: 'First' }).expect(200);
@@ -90,9 +90,14 @@ describe('starting an inspection', () => {
 describe('recording', () => {
   it('saves a sample with exact values and works out pass/fail', async () => {
     const h = await as(ids.ownerA);
-    const missingGauge = await api().post(`/api/v1/inspections/${ctx.rec}/samples`).set(h).send({ readings: [{ requirementId: ctx.od, valueNumeric: '25.0' }] }).expect(409);
+    const rest = [{ requirementId: ctx.len, valueNumeric: '100' }, { requirementId: ctx.vis, valuePass: true }];
+    const rec0 = (await api().get(`/api/v1/inspections/${ctx.rec}`).set(h).expect(200)).body;
+    expect(rec0.schedule.map((x: { number: number; position: number; trigger: string; requirementIds: string[] }) => [x.number, x.position, x.trigger, x.requirementIds.length])).toEqual([[1, 1, 'first_off', 3], [2, 61, 'every_n_parts', 1]]);
+    const partial = await api().post(`/api/v1/inspections/${ctx.rec}/samples`).set(h).send({ readings: [{ requirementId: ctx.od, valueNumeric: '25.0', gaugeId: ctx.mic }] }).expect(409);
+    expect(partial.body.error.message).toMatch(/^Sample 1 still needs: Overall length, No chatter marks/);
+    const missingGauge = await api().post(`/api/v1/inspections/${ctx.rec}/samples`).set(h).send({ readings: [{ requirementId: ctx.od, valueNumeric: '25.0' }, ...rest] }).expect(409);
     expect(missingGauge.body.error.message).toBe('Outer diameter must be measured with a Micrometer 0-25 gauge; choose the gauge used');
-    const overdue = await api().post(`/api/v1/inspections/${ctx.rec}/samples`).set(h).send({ readings: [{ requirementId: ctx.od, valueNumeric: '25.0', gaugeId: ctx.oldMic }] }).expect(409);
+    const overdue = await api().post(`/api/v1/inspections/${ctx.rec}/samples`).set(h).send({ readings: [{ requirementId: ctx.od, valueNumeric: '25.0', gaugeId: ctx.oldMic }, ...rest] }).expect(409);
     expect(overdue.body.error.message).toMatch(/^Gauge MIC-2 is overdue for calibration/);
     // Nothing was saved by the refused requests (all or nothing).
     expect((await api().get(`/api/v1/inspections/${ctx.rec}`).set(h).expect(200)).body.samples).toEqual([]);
@@ -138,7 +143,7 @@ describe('recording', () => {
 
   it('records a failure and its retest, then completes with result fail', async () => {
     const h = await as(ids.ownerA);
-    let rec = (await api().post(`/api/v1/inspections/${ctx.rec}/samples`).set(h).send({ triggerType: 'every_n_minutes', readings: [{ requirementId: ctx.od, valueNumeric: '25.06', gaugeId: ctx.mic }] }).expect(201)).body;
+    let rec = (await api().post(`/api/v1/inspections/${ctx.rec}/samples`).set(h).send({ readings: [{ requirementId: ctx.od, valueNumeric: '25.06', gaugeId: ctx.mic }] }).expect(201)).body;
     const failed = rec.measurements.find((m: { valueNumeric: string }) => m.valueNumeric === '25.06');
     expect(failed.result).toBe('fail');
     rec = (
@@ -177,8 +182,9 @@ describe('recording', () => {
     const insp = await as(ids.inspectorA);
     const rec = (await api().post('/api/v1/inspections').set(insp).send({ siteId: ids.siteA, partId: ctx.part }).expect(201)).body;
     const od = rec.requirements.find((q: { characteristicKey: string }) => q.characteristicKey === 'OD').id;
-    await api().post(`/api/v1/inspections/${rec.id}/samples`).set(insp).send({ readings: [{ requirementId: od, valueNumeric: '25', gaugeId: ctx.oldMic, gaugeOverrideReason: 'please' }] }).expect(403);
-    await api().post(`/api/v1/inspections/${rec.id}/samples`).set(insp).send({ readings: [{ requirementId: od, valueNumeric: '25', gaugeId: ctx.mic }] }).expect(201);
+    const rest = [{ requirementId: rec.requirements.find((q: { characteristicKey: string }) => q.characteristicKey === 'LENGTH').id, valueNumeric: '100' }, { requirementId: rec.requirements.find((q: { characteristicKey: string }) => q.characteristicKey === 'VISUAL').id, valuePass: true }];
+    await api().post(`/api/v1/inspections/${rec.id}/samples`).set(insp).send({ readings: [{ requirementId: od, valueNumeric: '25', gaugeId: ctx.oldMic, gaugeOverrideReason: 'please' }, ...rest] }).expect(403);
+    await api().post(`/api/v1/inspections/${rec.id}/samples`).set(insp).send({ readings: [{ requirementId: od, valueNumeric: '25', gaugeId: ctx.mic }, ...rest] }).expect(201);
     // Viewers read only.
     await api().get(`/api/v1/inspections/${rec.id}`).set(await as(ids.dual)).expect(200);
     await api().post('/api/v1/inspections').set(await as(ids.dual)).send({ siteId: ids.siteA, partId: ctx.part }).expect(403);

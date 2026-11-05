@@ -6,7 +6,7 @@ import { decodeCursor, Page, toPage } from '../common/pagination';
 import type { RequestContext } from '../common/request-context';
 import { iso, num, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
-import { samplingViolation, SamplingRule } from './sampling-rules';
+import { buildSchedule, EVENT_TRIGGERS, eventViolations, nextSample, PLANNED_TRIGGERS, PlanRequirement, plannedViolations, timedDue } from './sampling-rules';
 import {
   AbandonBody,
   AddSampleBody,
@@ -108,10 +108,10 @@ export class InspectionService {
   addSample(ctx: RequestContext, id: string, body: z.infer<typeof AddSampleBody>): Promise<InspectionDetail> {
     return this.database.asUser(ctx, async (db) => {
       await this.requireRecord(db, ctx, id);
-      if (!body.isRetest) await this.assertSamplingAllowed(db, id, body);
+      const trigger = body.isRetest ? (body.triggerType ?? 'manual') : await this.planSample(db, id, body);
       const sample = await db.execute<{ id: string }>(sql`insert into public.inspection_samples
         (organisation_id, inspection_record_id, unit_reference, trigger_type, is_retest, notes)
-        values (${orgOf(ctx)}::uuid, ${id}::uuid, ${body.unitReference ?? null}, ${body.triggerType ?? 'manual'}, ${body.isRetest ?? false}, ${body.notes ?? null})
+        values (${orgOf(ctx)}::uuid, ${id}::uuid, ${body.unitReference ?? null}, ${trigger}, ${body.isRetest ?? false}, ${body.notes ?? null})
         returning id`);
       const sampleId = sample.rows[0].id;
       for (const r of body.readings) {
@@ -124,30 +124,41 @@ export class InspectionService {
     });
   }
 
-  /** Enforces the control plan's sampling rules (time, lot size, first off, events) for a new sample. */
-  private async assertSamplingAllowed(db: Db, id: string, body: z.infer<typeof AddSampleBody>) {
-    const trigger = body.triggerType ?? 'manual';
-    const rec = await db.execute<Row>(sql`select lot_size from public.inspection_records where id = ${id}::uuid`);
-    const lotSize = rec.rows[0]?.lot_size == null ? null : Number(rec.rows[0].lot_size);
-    const ids = [...new Set(body.readings.map((r) => r.requirementId))];
-    const reqs = await db.execute<Row>(sql`select id, char_number, name, sampling from public.resolved_inspection_requirements
-      where inspection_record_id = ${id}::uuid`);
-    const history = await db.execute<Row>(sql`select m.requirement_id, s.trigger_type, m.measured_at
-      from public.inspection_measurements m join public.inspection_samples s on s.id = m.sample_id
-      where m.inspection_record_id = ${id}::uuid and m.supersedes_id is null and not s.is_retest`);
-    const now = new Date();
-    const problems: string[] = [];
-    for (const reqId of ids) {
-      const req = reqs.rows.find((r) => r.id === reqId);
-      if (!req) continue; // unknown requirements are refused by the database
-      const readings = history.rows
-        .filter((h) => h.requirement_id === reqId)
-        .map((h) => ({ triggerType: h.trigger_type as string, measuredAt: new Date(h.measured_at as string) }));
-      const label = `${(req.char_number as string) ?? ''} ${req.name as string}`.trim();
-      const problem = samplingViolation(label, (req.sampling as SamplingRule[]) ?? [], trigger, { readings }, lotSize, now);
-      if (problem) problems.push(problem);
+  /**
+   * Applies the control plan's sampling rules to a new (non-retest) sample and returns the trigger to record.
+   * Event samples (shift start, set-up, tool change, manual) must be checks the plan samples on that event.
+   * Otherwise the sample is the next one of the planned sequence — exactly the checks it lists, plus timed
+   * checks that are due — or a timed extra once the sequence is complete.
+   */
+  private async planSample(db: Db, id: string, body: z.infer<typeof AddSampleBody>): Promise<string> {
+    const rec = await db.execute<Row>(sql`select lot_size, status from public.inspection_records where id = ${id}::uuid`);
+    if (rec.rows[0]?.status !== 'in_progress') return body.triggerType ?? 'manual'; // the database refuses closed inspections
+    const lot = rec.rows[0]?.lot_size == null ? null : Number(rec.rows[0].lot_size);
+    const reqRows = await db.execute<Row>(sql`select id, char_number, name, applicable, sampling from public.resolved_inspection_requirements where inspection_record_id = ${id}::uuid`);
+    const reqs: PlanRequirement[] = reqRows.rows.map((q) => ({
+      id: q.id as string,
+      name: `${(q.char_number as string) ?? ''} ${q.name as string}`.trim(),
+      charNumber: (q.char_number as string) ?? null,
+      applicable: q.applicable as boolean,
+      sampling: (q.sampling as PlanRequirement['sampling']) ?? [],
+    }));
+    const sent = [...new Set(body.readings.map((r) => r.requirementId))];
+    const trigger = body.triggerType ?? '';
+    if (EVENT_TRIGGERS.includes(trigger)) {
+      const problems = eventViolations(trigger, reqs, sent.filter((x) => reqs.some((q) => q.id === x)));
+      if (problems.length) throw new ApiError(409, 'inspection_rule', problems.join('; '));
+      return trigger;
     }
+    const samples = await db.execute<Row>(sql`select trigger_type from public.inspection_samples where inspection_record_id = ${id}::uuid and not is_retest`);
+    const plannedTaken = samples.rows.filter((x) => PLANNED_TRIGGERS.includes(x.trigger_type as string)).length;
+    const last = await db.execute<Row>(sql`select requirement_id, max(m.measured_at) as at from public.inspection_measurements m
+      join public.inspection_samples s on s.id = m.sample_id
+      where m.inspection_record_id = ${id}::uuid and not s.is_retest and m.supersedes_id is null group by requirement_id`);
+    const lastMs = new Map(last.rows.map((x) => [x.requirement_id as string, new Date(x.at as string).getTime()]));
+    const next = nextSample(buildSchedule(reqs, lot), plannedTaken, timedDue(reqs, lastMs, new Date()));
+    const problems = plannedViolations(next, sent, (rid) => reqs.find((q) => q.id === rid)?.name ?? rid);
     if (problems.length) throw new ApiError(409, 'inspection_rule', problems.join('; '));
+    return next!.trigger;
   }
 
   /** Records a correction of a reading (a new row; the original is kept). */
@@ -234,6 +245,10 @@ export class InspectionService {
         sampling: (q.sampling as never) ?? [],
         reactions: (q.reactions as never) ?? [],
       })),
+      schedule: (buildSchedule(
+        reqs.rows.map((q) => ({ id: q.id as string, name: q.name as string, charNumber: (q.char_number as string) ?? null, applicable: q.applicable as boolean, sampling: ((q.sampling as never) ?? []) as PlanRequirement['sampling'] })),
+        r.lot_size == null ? null : Number(r.lot_size),
+      ) as InspectionDetail['schedule']),
       samples: samples.rows.map((s) => ({
         id: s.id as string,
         sampleNumber: Number(s.sample_number),

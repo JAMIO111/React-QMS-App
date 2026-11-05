@@ -116,6 +116,8 @@ export const InspectionDetail = InspectionSummary.extend({
   completedBy: Ref.nullable(),
   abandonReason: z.string().nullable(),
   requirements: z.array(Requirement),
+  /** The planned samples in the order they must be recorded, from the plan's sampling rules and the lot size. */
+  schedule: z.array(z.object({ number: z.number().int(), position: z.number().int(), trigger: Trigger, requirementIds: z.array(z.string().uuid()) })),
   samples: z.array(Sample),
   measurements: z.array(Measurement),
 });

@@ -18,6 +18,7 @@ const members = [{ membershipId: "m1", email: "a@x.test", firstName: "Ann", surn
 
 let permissions;
 const mutate = vi.fn();
+const mutateAsync = vi.fn().mockResolvedValue({});
 const confirm = vi.fn();
 
 vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }) }));
@@ -26,7 +27,7 @@ vi.mock("../../hooks/useSubscription", () => ({
   useSubscriptionOverview: () => ({ data: overview }),
   useSeatAssignments: () => ({ data: members }),
   useInvoices: () => ({ data: [] }),
-  useSubscriptionMutation: () => ({ mutate, isPending: false }),
+  useSubscriptionMutation: () => ({ mutate, mutateAsync, isPending: false }),
 }));
 vi.mock("../../contexts/ConfirmationModalProvider", () => ({ useConfirm: () => confirm }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
@@ -71,5 +72,16 @@ describe("SettingsSubscription", () => {
     await userEvent.selectOptions(select, "controller");
     expect(confirm).not.toHaveBeenCalled();
     expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it("collects seat changes and saves them only on Apply", async () => {
+    permissions = ["subscription.read", "subscription.manage"];
+    confirm.mockResolvedValue(true);
+    render(<SettingsSubscription />);
+    await userEvent.click(screen.getByRole("button", { name: "Add Observer seat" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add Observer seat" }));
+    expect(mutateAsync).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Apply changes" }));
+    expect(mutateAsync).toHaveBeenCalledWith({ action: "seats", planSlug: "observer", quantity: 4 });
   });
 });

@@ -108,30 +108,45 @@ const Overview = ({ overview }) => {
 
 const PricingCards = ({ catalogue, overview, canManage }) => {
   const [annual, setAnnual] = useState(overview.subscription?.billingInterval === "year");
+  const [draft, setDraft] = useState({});
   const mutation = useSubscriptionMutation();
   const confirm = useConfirm();
   const { showToast } = useToast();
   const seatsOf = (slug) => overview.items.find((i) => i.planSlug === slug);
+  const purchased = (slug) => seatsOf(slug)?.purchased ?? 0;
+  const wanted = (slug) => draft[slug] ?? purchased(slug);
+  const changes = catalogue.plans.filter((p) => wanted(p.slug) !== purchased(p.slug));
 
-  const buy = async (plan, delta) => {
-    const current = seatsOf(plan.slug);
-    const quantity = Math.max(0, (current?.purchased ?? 0) + delta);
-    const price = annual ? plan.annual : plan.monthly;
+  const step = (plan, delta) => {
+    const min = seatsOf(plan.slug)?.assigned ?? 0;
+    const next = Math.max(min, wanted(plan.slug) + delta);
+    setDraft((d) => ({ ...d, [plan.slug]: next }));
+  };
+
+  const costChange = changes.reduce((t, p) => {
+    const price = annual ? p.annual : p.monthly;
+    return t + (wanted(p.slug) - purchased(p.slug)) * (price?.unitAmount ?? 0);
+  }, 0);
+
+  const apply = async () => {
+    const lines = changes.map((p) => `${p.name}: ${purchased(p.slug)} → ${wanted(p.slug)}`).join("; ");
     const ok = await confirm({
-      title: `${delta > 0 ? "Add" : "Remove"} a ${plan.name} seat?`,
-      message: `${plan.name} seats: ${current?.purchased ?? 0} → ${quantity}. Recurring cost changes by ${money(Math.abs(delta) * (price?.unitAmount ?? 0), price?.currency)} per ${annual ? "year" : "month"} (excluding VAT).`,
-      confirmText: "Confirm",
+      title: "Apply seat changes?",
+      message: `${lines}. Recurring cost changes by ${costChange < 0 ? "-" : ""}${money(Math.abs(costChange))} per ${annual ? "year" : "month"} (excluding VAT).`,
+      confirmText: "Apply",
       cancelText: "Cancel",
       type: "info",
     });
     if (!ok) return;
-    mutation.mutate(
-      { action: "seats", planSlug: plan.slug, quantity },
-      {
-        onSuccess: () => showToast({ type: "success", title: "Seats updated", message: `${plan.name}: ${quantity} seat${quantity === 1 ? "" : "s"}.` }),
-        onError: (error) => showToast({ type: "error", title: "Not changed", message: describeApiError(error) }),
-      },
-    );
+    try {
+      for (const p of changes) {
+        await mutation.mutateAsync({ action: "seats", planSlug: p.slug, quantity: wanted(p.slug) });
+      }
+      setDraft({});
+      showToast({ type: "success", title: "Seats updated", message: lines });
+    } catch (error) {
+      showToast({ type: "error", title: "Not changed", message: describeApiError(error) });
+    }
   };
 
   return (
@@ -147,6 +162,7 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
         {catalogue.plans.map((plan) => {
           const price = annual ? plan.annual : plan.monthly;
           const owned = seatsOf(plan.slug);
+          const qty = wanted(plan.slug);
           return (
             <div key={plan.slug} aria-label={`${plan.name} package`} role="group" className="flex flex-col gap-2 rounded-xl border border-border-color p-4">
               <h3 className="text-base font-semibold text-primary-text">{plan.name}</h3>
@@ -160,23 +176,26 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
                   Billed {money(plan.annual.unitAmount, plan.annual.currency)}/user/year — saves {money(plan.annualSaving, plan.annual.currency)}
                 </p>
               )}
-              <p className="text-sm text-secondary-text">
-                {owned ? `${owned.purchased} purchased, ${owned.assigned} assigned` : "No seats purchased"}
-              </p>
+              <p className="text-sm text-secondary-text">{owned?.assigned ?? 0} assigned</p>
               {canManage && (
-                <div className="mt-auto flex gap-2">
-                  <LoadingButton className={button} loading={mutation.isPending} onClick={() => buy(plan, 1)}>
-                    Add seat
-                  </LoadingButton>
-                  <LoadingButton className={button} disabled={!owned || owned.purchased <= owned.assigned} loading={mutation.isPending} onClick={() => buy(plan, -1)}>
-                    Remove seat
-                  </LoadingButton>
+                <div className="mt-auto flex items-center gap-3">
+                  <button type="button" aria-label={`Remove ${plan.name} seat`} className={button} disabled={mutation.isPending || qty <= (owned?.assigned ?? 0)} onClick={() => step(plan, -1)}>−</button>
+                  <span aria-label={`${plan.name} seats`} className="min-w-6 text-center text-primary-text">{qty}</span>
+                  <button type="button" aria-label={`Add ${plan.name} seat`} className={button} disabled={mutation.isPending} onClick={() => step(plan, 1)}>+</button>
                 </div>
               )}
             </div>
           );
         })}
       </div>
+      {canManage && changes.length > 0 && (
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button type="button" className={button} disabled={mutation.isPending} onClick={() => setDraft({})}>Discard</button>
+          <LoadingButton className={`${button} bg-cta-color text-white`} loading={mutation.isPending} loadingText="Applying…" onClick={apply}>
+            Apply changes
+          </LoadingButton>
+        </div>
+      )}
     </MenuCard>
   );
 };

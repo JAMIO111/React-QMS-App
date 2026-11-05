@@ -28,6 +28,7 @@ import CalibrationDashboard from "./CalibrationDashboard";
 import CalibrationRecordPage from "./CalibrationRecordPage";
 import GaugePage from "./GaugePage";
 import GaugeRegister from "./GaugeRegister";
+import { shouldPromptForStatus, statusAfterCalibration } from "../../lib/calibration";
 import SettingsCalibration from "../Settings/SettingsCalibration";
 
 const ALL = ["calibration.read", "calibration.manage", "calibration.record", "ncr.create"];
@@ -178,9 +179,38 @@ describe("gauge page", () => {
   });
 });
 
+describe("gauge status after a calibration", () => {
+  it("offers to update the status after a fail and applies the choice", async () => {
+    routeApi({
+      "GET /gauges/g1": gauge({ status: "active" }),
+      "POST /gauges/g1/calibrations": () => record({ id: "c9", outcome: "fail" }),
+      "PATCH /gauges/g1": (_p, o) => ({ ...gauge({ status: "active" }), ...o.body }),
+      "GET /calibrations/c9": record({ id: "c9", outcome: "fail" }),
+      "GET /calibrations/c9/attachments": { data: [] },
+    });
+    renderAt("/Calibration/Gauges/g1/calibrations/new");
+    await userEvent.type(await screen.findByRole("textbox", { name: "25 mm block as found" }), "26");
+    await userEvent.type(screen.getByRole("textbox", { name: "100 mm block as found" }), "100");
+    await userEvent.click(screen.getByRole("button", { name: "Save calibration" }));
+    const dialog = await screen.findByRole("dialog", { name: "Update gauge status?" });
+    await userEvent.click(within(dialog).getByRole("radio", { name: /Out of service/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Update status" }));
+    await waitFor(() => expect(lastCall("PATCH /gauges/g1").body).toEqual({ status: "out_of_service", statusReason: null }));
+    await waitFor(() => expect(screen.getByTestId("where").textContent).toBe("/Calibration/Gauges/g1/calibrations/c9"));
+  });
+
+  it("does not ask when a pass leaves an active gauge active", () => {
+    expect(shouldPromptForStatus("active", "pass")).toBe(false);
+    expect(shouldPromptForStatus("quarantined", "pass")).toBe(false);
+    expect(shouldPromptForStatus("lost", "pass")).toBe(true);
+    expect(shouldPromptForStatus("active", "fail")).toBe(true);
+    expect(statusAfterCalibration("active", "fail")).toBe("quarantined");
+  });
+});
+
 describe("calibration record", () => {
   it("judges readings as they are typed and saves them", async () => {
-    routeApi({ "POST /gauges/g1/calibrations": () => record({ id: "c9" }), "GET /calibrations/c9": record({ id: "c9" }), "GET /calibrations/c9/attachments": { data: [] } });
+    routeApi({ "POST /gauges/g1/calibrations": () => record({ id: "c9", outcome: "adjusted" }), "GET /calibrations/c9": record({ id: "c9", outcome: "adjusted" }), "GET /calibrations/c9/attachments": { data: [] } });
     renderAt("/Calibration/Gauges/g1/calibrations/new");
     const found25 = await screen.findByRole("textbox", { name: "25 mm block as found" });
     await userEvent.type(found25, "25.01");

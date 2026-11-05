@@ -123,3 +123,16 @@ export const GAUGE_FIELD_LABELS = {
   active: "Active",
   sort_order: "Order",
 };
+
+/**
+ * What the database does on its own: a failed calibration quarantines an active or in-calibration gauge,
+ * a pass or adjustment returns a quarantined or in-calibration gauge to active. Anything else stays.
+ */
+export const statusAfterCalibration = (status, outcome) => {
+  if (outcome === "fail" && (status === "active" || status === "in_calibration")) return "quarantined";
+  if (outcome !== "fail" && (status === "quarantined" || status === "in_calibration")) return "active";
+  return status;
+};
+
+/** A fail always asks; a pass only asks when the gauge is not active (for example it was lost and has turned up). */
+export const shouldPromptForStatus = (status, outcome) => outcome === "fail" || statusAfterCalibration(status, outcome) !== "active";

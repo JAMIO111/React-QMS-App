@@ -22,10 +22,11 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useCalibration, useCalibrationAttachments, useCalibrationMutation, useGauge, useGaugeCharacteristics } from "../../hooks/useCalibration";
 import { useMe, usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
-import { OUTCOMES, formatInterval, formatNumber, inTolerance, outcomeFromReadings, outcomeOf } from "../../lib/calibration";
+import { OUTCOMES, shouldPromptForStatus, statusAfterCalibration, statusOf, formatInterval, formatNumber, inTolerance, outcomeFromReadings, outcomeOf } from "../../lib/calibration";
 import { formatDate } from "../../lib/ncr";
 import { PartyPicker } from "../ncr/Pickers";
 import ReasonDialog from "../ncr/ReasonDialog";
+import GaugeStatusPrompt from "./GaugeStatusPrompt";
 import { AttachmentDrop } from "../ui/FileDrop";
 import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
@@ -126,6 +127,7 @@ const CalibrationRecordPage = () => {
   const attachments = useCalibrationAttachments(isNew ? null : calibrationId);
   const mutation = useCalibrationMutation();
   const [dialog, setDialog] = useState(null); // "delete"
+  const [statusPrompt, setStatusPrompt] = useState(null); // the calibration just recorded
 
   // Depend on values, not objects, so a refetch does not wipe what is being typed.
   const defaultSource = gauge.data?.calibrationSource ?? "internal";
@@ -203,6 +205,22 @@ const CalibrationRecordPage = () => {
   if (!liveOutcome && form.outcome !== original.outcome) changedFields.outcome = form.outcome;
   const dirty = !isNew && (Object.keys(changedFields).length > 0 || changedReadings.length > 0);
 
+  const goToRecord = (created) => navigate(`/Calibration/Gauges/${gaugeId}/calibrations/${created.id}`, { replace: true });
+  const applyGaugeStatus = (created, status, statusReason) => {
+    setStatusPrompt(null);
+    // The gauge shows the new status at once and goes back if the save fails.
+    if (status !== statusAfterCalibration(g.status, created.outcome)) {
+      mutation.mutate(
+        { path: `/gauges/${gaugeId}`, method: "PATCH", body: { status, statusReason } },
+        {
+          onSuccess: () => showToast({ type: "success", title: "Gauge status updated", message: `${g.assetNumber} is now ${statusOf(status).label.toLowerCase()}.` }),
+          onError: (err) => showToast({ type: "error", title: "Gauge status not updated", message: describeApiError(err) }),
+        }
+      );
+    }
+    goToRecord(created);
+  };
+
   const save = () => {
     if (!valid) return;
     if (isNew) {
@@ -217,7 +235,9 @@ const CalibrationRecordPage = () => {
               title: `Calibration ${created.reference} recorded`,
               message: created.outcome === "fail" ? `Result: fail. ${g.assetNumber} is now quarantined.` : `Result: ${o.label.toLowerCase()}. Next due ${formatDate(created.nextDueOn)}.`,
             });
-            navigate(`/Calibration/Gauges/${gaugeId}/calibrations/${created.id}`, { replace: true });
+            // A gauge manager may set the gauge's status to follow the result before moving on.
+            if (can("calibration.manage") && g && shouldPromptForStatus(g.status, created.outcome)) setStatusPrompt(created);
+            else goToRecord(created);
           },
         }
       );
@@ -457,6 +477,9 @@ const CalibrationRecordPage = () => {
         {isNew && <p className="text-sm text-secondary-text">Certificates can be attached once the calibration is saved.</p>}
       </div>
 
+      {statusPrompt && (
+        <GaugeStatusPrompt gauge={g} calibration={statusPrompt} onSkip={() => { const c2 = statusPrompt; setStatusPrompt(null); goToRecord(c2); }} onApply={(status, reason) => applyGaugeStatus(statusPrompt, status, reason)} />
+      )}
       {dialog === "delete" && (
         <ReasonDialog
           title={`Delete ${c.reference}?`}

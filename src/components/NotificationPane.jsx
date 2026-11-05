@@ -1,106 +1,96 @@
 import { createPortal } from "react-dom";
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useNotification } from "../contexts/NotificationProvider";
 import { XIcon } from "@/components/icons";
 import SlidingSelectorGeneric from "./ui/SlidingSelectorGeneric";
 import NotificationCard from "./NotificationCard";
 import { useMarkNotificationsRead, useNotifications } from "../hooks/useNotifications";
-import { Link } from "react-router-dom";
 import LoadingScreen from "./ui/LoadingScreen";
 
-const NotificationPane = () => {
-  const { isOpen, closePane } = useNotification();
+/** Full-height drawer that slides in from the right, like the filter pane. */
+const Drawer = ({ onClose }) => {
   const [typeFilter, setTypeFilter] = useState("New");
-
+  const [closing, setClosing] = useState(false);
+  const paneRef = useRef(null);
   const { data, isLoading, isError } = useNotifications();
   const markRead = useMarkNotificationsRead();
   const notifications = data?.data;
 
-  if (typeof window === "undefined") return null;
-  const root = document.getElementById("notification-root");
-  if (!root) return null;
+  // Slide out, then let the provider remove the drawer.
+  const close = () => {
+    if (closing) return;
+    setClosing(true);
+    setTimeout(onClose, 180);
+  };
+  const closeRef = useRef(close);
+  closeRef.current = close;
 
-  return createPortal(
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          className="fixed p-5 inset-0 z-50 flex justify-end bg-black/30"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={closePane} // Clicking the backdrop closes the pane
-        >
-          <motion.div
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ duration: 0.3 }}
-            className="w-120 max-w-full h-full bg-primary-bg p-4 shadow-s border border-border-color/50 rounded-2xl"
-            onClick={(e) => e.stopPropagation()} // Prevent backdrop close when clicking inside
-          >
-            <div className="flex justify-between items-center mb-3 text-primary-text">
-              <h2 className="text-lg font-semibold">Notifications</h2>
-              <button
-                className="hover:bg-border-color transition-colors duration-300 rounded-md cursor-pointer p-1.5"
-                onClick={closePane}>
-                <XIcon />
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && !e.defaultPrevented && closeRef.current();
+    document.addEventListener("keydown", onKey);
+    paneRef.current?.focus();
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  const shown = (notifications ?? []).filter((n) => (typeFilter === "All" ? true : typeFilter === "New" ? !n.read : n.read));
+
+  return (
+    <div className="fixed inset-0 z-[9000]">
+      <div
+        aria-hidden="true"
+        onMouseDown={close}
+        className={`absolute inset-0 bg-black/30 ${closing ? "animate-out fade-out" : "animate-in fade-in"} duration-200 fill-mode-forwards`}
+      />
+      <aside
+        ref={paneRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Notifications"
+        className={`absolute inset-y-0 right-0 flex h-dvh w-96 max-w-full flex-col border-l border-border-color bg-primary-bg text-primary-text shadow-2xl shadow-shadow-color outline-none ${
+          closing ? "animate-out slide-out-to-right" : "animate-in slide-in-from-right"
+        } duration-200 ease-out fill-mode-forwards`}>
+        <div className="flex shrink-0 flex-row items-center justify-between border-b border-border-color bg-secondary-bg px-4 py-3">
+          <h3 className="text-xl">Notifications</h3>
+          <button type="button" aria-label="Close notifications" className="cursor-pointer rounded-md p-1 hover:bg-primary-bg hover:text-error-color" onClick={close}>
+            <XIcon />
+          </button>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
+          <SlidingSelectorGeneric options={["All", "New", "Read"]} value={typeFilter} onChange={setTypeFilter} />
+          <div className="flex items-center justify-between text-sm">
+            <Link to="/Settings/Notifications" onClick={close} className="text-brand-primary hover:underline">
+              Notification settings
+            </Link>
+            {data?.unread > 0 && (
+              <button type="button" onClick={() => markRead.mutate({ all: true })} className="cursor-pointer text-secondary-text hover:underline">
+                Mark all as read
               </button>
-            </div>
-            <SlidingSelectorGeneric
-              options={["All", "New", "Read"]}
-              value={typeFilter}
-              onChange={setTypeFilter}
-            />
-            <div className="mt-3 flex items-center justify-between text-sm">
-              <Link to="/Settings/Notifications" onClick={closePane} className="text-brand-primary hover:underline">
-                Notification settings
-              </Link>
-              {data?.unread > 0 && (
-                <button
-                  type="button"
-                  onClick={() => markRead.mutate({ all: true })}
-                  className="text-secondary-text hover:underline cursor-pointer">
-                  Mark all as read
-                </button>
-              )}
-            </div>
-            <div className="mt-4 flex flex-col gap-2">
-              {isLoading ? (
-                <LoadingScreen size="sm" />
-              ) : isError ? (
-                <div className="flex-col text-center items-center justify-center text-error-color border border-dashed border-border-color/50 p-6 rounded-xl">
-                  Error loading notifications.
-                </div>
-              ) : notifications && notifications.length > 0 ? (
-                notifications
-                  .filter((notification) => {
-                    if (typeFilter === "All") return true;
-                    if (typeFilter === "New")
-                      return notification.read === false;
-                    if (typeFilter === "Read")
-                      return notification.read === true;
-                    return true;
-                  })
-                  .map((notification) => (
-                    <NotificationCard
-                      key={notification.id}
-                      notification={notification}
-                      closePane={closePane}
-                    />
-                  ))
-              ) : (
-                <div className="flex-col text-center items-center justify-center text-secondary-text border border-dashed border-border-color/50 p-6 rounded-xl">
-                  No Notifications to show.
-                </div>
-              )}
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>,
-    root
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            {isLoading ? (
+              <LoadingScreen size="sm" />
+            ) : isError ? (
+              <div className="rounded-xl border border-dashed border-border-color/50 p-6 text-center text-error-color">Error loading notifications.</div>
+            ) : shown.length > 0 ? (
+              shown.map((n) => <NotificationCard key={n.id} notification={n} closePane={close} />)
+            ) : (
+              <div className="rounded-xl border border-dashed border-border-color/50 p-6 text-center text-secondary-text">No Notifications to show.</div>
+            )}
+          </div>
+        </div>
+      </aside>
+    </div>
   );
+};
+
+const NotificationPane = () => {
+  const { isOpen, closePane } = useNotification();
+  const root = typeof window === "undefined" ? null : document.getElementById("notification-root");
+  if (!root || !isOpen) return null;
+  return createPortal(<Drawer onClose={closePane} />, root);
 };
 
 export default NotificationPane;

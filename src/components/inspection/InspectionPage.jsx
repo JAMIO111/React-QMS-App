@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeftIcon, CircleAlertIcon, HistoryIcon } from "@/components/icons";
 import Field from "../ui/Field";
@@ -7,11 +7,12 @@ import MenuCard from "../ui/MenuCard";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useGauges } from "../../hooks/useCalibration";
 import { useInspection, useInspectionMutation } from "../../hooks/useInspection";
-import { describeLimits, dueChecks, isDecimal, previewResult, TRIGGER_LABEL } from "../../lib/inspection";
+import { describeLimits, dueChecks, isDecimal, previewResult, samplingBlock, TRIGGER_LABEL, triggerChoices } from "../../lib/inspection";
 import { formatDate, formatDateTime } from "../../lib/processControl";
 import { buttonClass, ErrorNotice, FormError, SelectField, TextAreaField } from "../master-data/shared";
 import { ResultBadge, StatusPill } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
+import RHFComboBox from "../ui/RHFComboBox";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
@@ -50,14 +51,17 @@ const ValueInput = ({ requirement, value, onChange, label }) =>
       ))}
     </div>
   ) : (
-    <input
-      aria-label={label}
-      inputMode="decimal"
-      autoComplete="off"
-      value={value ?? ""}
-      onChange={(e) => onChange(e.target.value)}
-      className="min-h-11 w-32 rounded-lg border border-border-color bg-text-input-color px-3 text-right text-lg tabular-nums text-primary-text focus:outline-none focus:border-brand-primary"
-    />
+    <div className="flex items-center gap-2">
+      <input
+        aria-label={label}
+        inputMode="decimal"
+        autoComplete="off"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="min-h-11 w-32 rounded-lg border border-border-color bg-text-input-color px-3 text-right text-lg tabular-nums text-primary-text focus:outline-none focus:border-brand-primary"
+      />
+      {requirement.unitCode && <span className="text-sm text-secondary-text">{requirement.unitCode}</span>}
+    </div>
   );
 
 const Preview = ({ requirement, value }) => {
@@ -67,26 +71,25 @@ const Preview = ({ requirement, value }) => {
   return <ResultBadge result={previewResult(requirement, value)} />;
 };
 
-const GaugeSelect = ({ requirement, gauges, value, onChange }) => (
-  <select
-    aria-label={`Gauge for ${requirement.name}`}
-    value={value ?? ""}
-    onChange={(e) => onChange(e.target.value || null)}
-    className="min-h-11 w-52 rounded-lg border border-border-color bg-text-input-color px-2 text-sm text-primary-text focus:outline-none focus:border-brand-primary">
-    <option value="">{requirement.gaugeType ? `Choose a ${requirement.gaugeType.name}` : "No gauge"}</option>
-    {gauges
-      .filter((g) => !requirement.gaugeType || g.type?.id === requirement.gaugeType.id || g.id === value)
-      .map((g) => {
-        const problem = gaugeProblem(g, requirement);
-        return (
-          <option key={g.id} value={g.id}>
-            {g.assetNumber} · {g.description}
-            {problem ? ` (${problem})` : ""}
-          </option>
-        );
-      })}
-  </select>
-);
+const GaugeSelect = ({ requirement, gauges, value, onChange }) => {
+  const options = gauges
+    .filter((g) => !requirement.gaugeType || g.type?.id === requirement.gaugeType.id || g.id === value)
+    .map((g) => {
+      const problem = gaugeProblem(g, requirement);
+      return { id: g.id, name: `${g.assetNumber} · ${g.description}`, hint: problem ? `Not usable: ${problem}` : undefined };
+    });
+  return (
+    <div className="w-104 max-w-full" role="group" aria-label={`Gauge for ${requirement.name}`}>
+      <RHFComboBox
+        value={value ?? null}
+        onChange={(id) => onChange(id ?? null)}
+        options={options}
+        sort={false}
+        placeholder={requirement.gaugeType ? `Choose a ${requirement.gaugeType.name}` : "No gauge"}
+      />
+    </div>
+  );
+};
 
 /** One sampling occasion: a reading for each check measured now (others left empty), saved together. */
 const SampleEntry = ({ inspection, gauges, canOverride }) => {
@@ -101,7 +104,16 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
   const blank = () => Object.fromEntries(applicable.map((q) => [q.id, { value: q.dataType === "attribute" ? null : "", gaugeId: lastGauge[q.id] ?? null, override: "" }]));
   const [rows, setRows] = useState(blank);
   const [unitReference, setUnitReference] = useState("");
-  const [triggerType, setTriggerType] = useState(inspection.samples.length ? "every_n_minutes" : inspection.triggerType);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const choices = triggerChoices(inspection, now);
+  const [chosen, setTriggerType] = useState(null);
+  // The plan decides which triggers exist; default to the first one that has something due.
+  const triggerType = choices.find((c) => c.trigger === chosen)?.trigger ?? (choices.find((c) => c.available) ?? choices[0]).trigger;
+  const blocks = Object.fromEntries(applicable.map((q) => [q.id, samplingBlock(inspection, q, triggerType, now)]));
   const [problem, setProblem] = useState(null);
   const setRow = (id, patch) => setRows((r) => ({ ...r, [id]: { ...r[id], ...patch } }));
   const byGauge = Object.fromEntries(gauges.map((g) => [g.id, g]));
@@ -111,6 +123,7 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
     e.preventDefault();
     const readings = [];
     for (const q of applicable) {
+      if (blocks[q.id]) continue;
       const r = rows[q.id];
       const filled = q.dataType === "attribute" ? r.value !== null : String(r.value).trim() !== "";
       if (!filled) continue;
@@ -144,8 +157,9 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
           required
           value={triggerType}
           onChange={setTriggerType}
-          options={Object.entries(TRIGGER_LABEL).map(([value, label]) => ({ value, label }))}
-          className="w-52"
+          options={choices.map((c) => ({ value: c.trigger, label: c.available ? c.label : `${c.label} — ${c.reason}` }))}
+          hint="From the control plan sampling rules"
+          className="w-72"
         />
       </div>
       {operations.map((op) => (
@@ -157,6 +171,16 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
               const r = rows[q.id];
               const gauge = byGauge[r.gaugeId];
               const gProblem = gaugeProblem(gauge, q);
+              if (blocks[q.id])
+                return (
+                  <div key={q.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border-color p-3 opacity-70">
+                    <div className="font-medium text-primary-text">
+                      {q.charNumber && <span className="mr-1 text-secondary-text">#{q.charNumber}</span>}
+                      {q.name}
+                    </div>
+                    <span className="text-sm text-secondary-text">{blocks[q.id]}</span>
+                  </div>
+                );
               return (
                 <div key={q.id} className="grid grid-cols-1 items-center gap-2 rounded-xl border border-border-color p-3 md:grid-cols-[minmax(12rem,1fr)_auto_auto_6rem]">
                   <div className="min-w-0">
@@ -208,7 +232,7 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
         </p>
       )}
       <FormError error={mutation.error} />
-      <button type="submit" className={`${buttonClass.primary} min-h-11 self-start`} disabled={mutation.isPending}>
+      <button type="submit" className={`${buttonClass.primary} min-h-11 self-start`} disabled={mutation.isPending || applicable.every((q) => blocks[q.id])}>
         {mutation.isPending ? "Saving…" : "Save sample"}
       </button>
     </MenuCard>
@@ -347,7 +371,7 @@ const ReadingsGrid = ({ inspection, onOpen }) => {
           <tr>
             <th scope="col" className={`${th} sticky left-0 bg-secondary-bg`}>Check</th>
             {inspection.samples.map((s) => (
-              <th key={s.id} scope="col" className={`${th} whitespace-nowrap text-center`} title={`${TRIGGER_LABEL[s.triggerType]} · ${formatDateTime(s.sampledAt)}`}>
+              <th key={s.id} scope="col" className={`${th} whitespace-nowrap text-right`} title={`${TRIGGER_LABEL[s.triggerType]} · ${formatDateTime(s.sampledAt)}`}>
                 #{s.sampleNumber}
                 {s.isRetest && <span className="ml-1 text-xs">(retest)</span>}
                 {s.unitReference && <div className="text-xs">{s.unitReference}</div>}
@@ -365,9 +389,9 @@ const ReadingsGrid = ({ inspection, onOpen }) => {
               {inspection.samples.map((s) => {
                 const m = current.find((x) => x.sampleId === s.id && x.requirementId === q.id);
                 return (
-                  <td key={s.id} className={`${td} text-center`}>
+                  <td key={s.id} className={`${td} text-right`}>
                     {m ? (
-                      <button type="button" onClick={() => onOpen(q, m)} className="inline-flex flex-col items-center gap-0.5 rounded-md px-1 hover:bg-primary-text/5 cursor-pointer" aria-label={`${q.name}, sample ${s.sampleNumber}: details`}>
+                      <button type="button" onClick={() => onOpen(q, m)} className="inline-flex flex-col items-end gap-0.5 rounded-md px-1 hover:bg-primary-text/5 cursor-pointer" aria-label={`${q.name}, sample ${s.sampleNumber}: details`}>
                         <Reading m={m} requirement={q} />
                         {(m.supersedesId || (m.gauge && !m.gauge.valid)) && (
                           <span className="flex items-center gap-1 text-xs text-secondary-text">
@@ -454,7 +478,7 @@ const InspectionPage = () => {
                 ["Machine", inspection.machine ? `${inspection.machine.code} · ${inspection.machine.name}` : "—"],
                 ["Work order", inspection.workOrder ?? "—"],
                 ["Lot / serial", [inspection.lot, inspection.serial].filter(Boolean).join(" · ") || "—"],
-                ["Trigger", TRIGGER_LABEL[inspection.triggerType]],
+                ["Lot size", inspection.lotSize ?? "—"],
                 ["Operator", inspection.startedBy?.name ?? "—"],
                 ["Started", formatDateTime(inspection.startedAt)],
                 [inspection.status === "abandoned" ? "Abandoned" : "Completed", inspection.completedAt ? `${formatDateTime(inspection.completedAt)} · ${inspection.completedBy?.name ?? ""}` : "—"],

@@ -7,14 +7,14 @@ import { PartPicker } from "../ncr/Pickers";
 import { useSites } from "../../hooks/useQmsApi";
 import { useMachines, useResolution } from "../../hooks/useProcessControl";
 import { useInspectionMutation } from "../../hooks/useInspection";
-import { TRIGGER_LABEL } from "../../lib/inspection";
+import { needsLotSize, startTrigger } from "../../lib/inspection";
 import { buttonClass, FormError, SelectField } from "../master-data/shared";
 import ResolutionView from "../process-control/ResolutionView";
 import LoadingScreen from "../ui/LoadingScreen";
 
 /**
  * Start an in-process inspection: production context (site, part, operation, machine, work order,
- * lot, serial, trigger), a live preview of the requirements the operator will get, then Start —
+ * lot, lot size, serial), a live preview of the requirements the operator will get, then Start —
  * which resolves them again in the database and freezes them with the inspection.
  */
 const StartInspectionPage = () => {
@@ -33,13 +33,16 @@ const StartInspectionPage = () => {
     workOrder: "",
     lot: "",
     serial: "",
-    triggerType: "first_off",
+    lotSize: "",
   });
   const siteId = form.siteId ?? (siteList.length === 1 ? siteList[0].id : null);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const [appliedOp, setAppliedOp] = useState(form.operationCode.trim());
   const preview = useResolution({ partId: form.partId, operationCode: appliedOp || undefined, siteId: siteId ?? undefined });
-  const ready = !!siteId && preview.data?.status === "ok";
+  const requirements = preview.data?.requirements ?? [];
+  const lotSizeNeeded = needsLotSize(requirements);
+  const lotSizeValid = /^[1-9]\d{0,8}$/.test(form.lotSize.trim());
+  const ready = !!siteId && preview.data?.status === "ok" && (!lotSizeNeeded || lotSizeValid) && (!form.lotSize.trim() || lotSizeValid);
 
   const submit = (e) => {
     e.preventDefault();
@@ -54,7 +57,8 @@ const StartInspectionPage = () => {
           workOrder: form.workOrder,
           lot: form.lot,
           serial: form.serial,
-          triggerType: form.triggerType,
+          ...(form.lotSize.trim() ? { lotSize: Number(form.lotSize) } : {}),
+          triggerType: startTrigger(requirements),
         },
       },
       { onSuccess: (rec) => navigate(`/Inspections/${rec.id}`, { replace: true }) }
@@ -96,12 +100,14 @@ const StartInspectionPage = () => {
           <Field label="Work order" value={form.workOrder} onChange={set("workOrder")} maxLength={60} />
           <Field label="Lot / batch" value={form.lot} onChange={set("lot")} maxLength={60} />
           <Field label="Serial" value={form.serial} onChange={set("serial")} maxLength={60} hint="When a single serialised unit is inspected" />
-          <SelectField
-            label="Trigger"
-            required
-            value={form.triggerType}
-            onChange={(v) => setForm((f) => ({ ...f, triggerType: v }))}
-            options={Object.entries(TRIGGER_LABEL).map(([value, label]) => ({ value, label }))}
+          <Field
+            label="Lot size (parts)"
+            inputMode="numeric"
+            value={form.lotSize}
+            onChange={set("lotSize")}
+            maxLength={9}
+            error={form.lotSize.trim() && !lotSizeValid ? "Enter a whole number of parts" : undefined}
+            hint={lotSizeNeeded ? "Required — the plan samples every N parts" : "Optional"}
           />
         </div>
         <FormError error={mutation.error} />

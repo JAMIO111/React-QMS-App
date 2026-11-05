@@ -63,7 +63,7 @@ describe('starting an inspection', () => {
 
   it('starts with a frozen snapshot of the requirements', async () => {
     const h = await as(ids.ownerA);
-    const rec = (await api().post('/api/v1/inspections').set(h).send({ siteId: ids.siteA, partId: ctx.part, workOrder: 'WO-77', lot: 'L-1', triggerType: 'first_off' }).expect(201)).body;
+    const rec = (await api().post('/api/v1/inspections').set(h).send({ siteId: ids.siteA, partId: ctx.part, workOrder: 'WO-77', lot: 'L-1', lotSize: 120, triggerType: 'first_off' }).expect(201)).body;
     ctx.rec = rec.id;
     expect(rec).toMatchObject({
       reference: expect.stringMatching(/^IPI-\d\d-0001$/),

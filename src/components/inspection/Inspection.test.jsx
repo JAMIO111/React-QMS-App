@@ -59,6 +59,7 @@ const inspection = (over) => ({
   machine: null,
   workOrder: "WO-77",
   lot: "L-1",
+  lotSize: null,
   serial: null,
   triggerType: "first_off",
   startedAt: "2026-11-05T08:00:00Z",
@@ -144,8 +145,26 @@ describe("Start inspection", () => {
     await userEvent.type(screen.getByLabelText("Work order"), "WO-77");
     await userEvent.selectOptions(screen.getByLabelText("Machine"), "m1");
     await userEvent.click(screen.getByRole("button", { name: "Start inspection" }));
-    expect(body).toEqual({ siteId: "s1", partId: "p1", machineId: "m1", workOrder: "WO-77", lot: "", serial: "", triggerType: "first_off" });
+    expect(body).toEqual({ siteId: "s1", partId: "p1", machineId: "m1", workOrder: "WO-77", lot: "", serial: "", triggerType: "manual" });
     expect(await screen.findByRole("heading", { name: "IPI-26-0001" })).toBeInTheDocument();
+  });
+
+  it("requires a lot size when the plan samples every N parts", async () => {
+    let body;
+    routeApi({
+      "GET /machines": page([]),
+      "GET /control-plan-resolution": { status: "ok", problems: [], part: { id: "p1", partNumber: "HCR-100", name: "Rod 100" }, partRevision: { revision: "A" }, plan: { id: "cp1", planCode: "CP-1" }, planRevision: { revisionCode: "B" }, requirements: [req({ sampling: [{ triggerType: "first_off", intervalValue: null, sampleSize: 1 }, { triggerType: "every_n_parts", intervalValue: 50, sampleSize: 1 }] })], overriddenPlans: [] },
+      "POST /inspections": (_p, opts) => ((body = opts.body), inspection()),
+      "GET /inspections/i1": inspection(),
+      "GET /gauges": gauges,
+    });
+    renderAt("/Inspections/new?partId=p1");
+    const start = await screen.findByRole("button", { name: "Start inspection" });
+    expect(start).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("Lot size (parts)"), "120");
+    expect(start).toBeEnabled();
+    await userEvent.click(start);
+    expect(body).toMatchObject({ lotSize: 120, triggerType: "first_off" });
   });
 
   it("cannot start while blocked", async () => {
@@ -159,7 +178,33 @@ describe("Start inspection", () => {
   });
 });
 
+const pickGauge = async (form, name, option) => {
+  await userEvent.click(within(within(form).getByRole("group", { name: `Gauge for ${name}` })).getByRole("combobox"));
+  await userEvent.click(await screen.findByRole("option", { name: option }));
+};
+
 describe("Inspection page", () => {
+  it("offers only the plan's triggers and blocks checks that are not due", async () => {
+    const withSample = inspection({
+      samples: [{ id: "s1", sampleNumber: 1, sampledAt: new Date().toISOString(), unitReference: null, triggerType: "first_off", isRetest: false, notes: null, takenBy: null }],
+      measurements: [{ id: "m1", sampleId: "s1", requirementId: "q-od", valueNumeric: "25.00", valuePass: null, unitCode: "mm", result: "pass", gauge: null, gaugeOverrideReason: null, measuredAt: new Date().toISOString(), measuredBy: null, supersedesId: null, supersededById: null, correctionReason: null, retestOfId: null, notes: null }],
+    });
+    routeApi({ "GET /inspections/i1": withSample, "GET /gauges": gauges });
+    renderAt("/Inspections/i1");
+    const form = await screen.findByRole("form", { name: "New sample" });
+    const trigger = within(form).getByLabelText("Trigger");
+    expect([...trigger.options].map((o) => o.value)).toEqual(["first_off"]);
+    expect(within(form).getByText("First-off already measured")).toBeInTheDocument();
+    expect(within(form).queryByLabelText("Outer diameter reading")).not.toBeInTheDocument();
+  });
+
+  it("shows the unit next to the value input", async () => {
+    routeApi({ "GET /inspections/i1": inspection(), "GET /gauges": gauges });
+    renderAt("/Inspections/i1");
+    const form = await screen.findByRole("form", { name: "New sample" });
+    expect(within(form).getAllByText("mm").length).toBeGreaterThan(0);
+  });
+
   it("records a sample: limits beside each input, live pass/fail, empty checks skipped", async () => {
     let body;
     routeApi({
@@ -171,7 +216,7 @@ describe("Inspection page", () => {
     const form = await screen.findByRole("form", { name: "New sample" });
     expect(within(form).getByText("LSL 24.95 · Nom 25 · USL 25.05 mm")).toBeInTheDocument();
     expect(screen.getByText("Groove position — Only for HCR-200")).toBeInTheDocument();
-    await userEvent.selectOptions(within(form).getByLabelText("Gauge for Outer diameter"), "g1");
+    await pickGauge(form, "Outer diameter", /MIC-1/);
     await userEvent.type(within(form).getByLabelText("Outer diameter reading"), "25.06");
     expect(within(form).getByRole("status", { name: "Result for Outer diameter" })).toHaveTextContent("Fail");
     await userEvent.clear(within(form).getByLabelText("Outer diameter reading"));
@@ -186,7 +231,7 @@ describe("Inspection page", () => {
     routeApi({ "GET /inspections/i1": inspection(), "GET /gauges": gauges, "POST /inspections/i1/samples": (_p, opts) => ((body = opts.body), inspection()) });
     renderAt("/Inspections/i1");
     const form = await screen.findByRole("form", { name: "New sample" });
-    await userEvent.selectOptions(within(form).getByLabelText("Gauge for Outer diameter"), "g2");
+    await pickGauge(form, "Outer diameter", /MIC-2/);
     expect(within(form).getByText(/Gauge MIC-2 is overdue/)).toBeInTheDocument();
     await userEvent.type(within(form).getByLabelText("Override reason for Outer diameter"), "Only mic on shift");
     await userEvent.type(within(form).getByLabelText("Outer diameter reading"), "25");

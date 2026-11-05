@@ -6,6 +6,7 @@ import { decodeCursor, Page, toPage } from '../common/pagination';
 import type { RequestContext } from '../common/request-context';
 import { iso, num, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
+import { samplingViolation, SamplingRule } from './sampling-rules';
 import {
   AbandonBody,
   AddSampleBody,
@@ -50,6 +51,7 @@ const toSummary = (r: Row): InspectionSummary => ({
   machine: r.machine_id ? { id: r.machine_id as string, code: r.machine_code as string, name: r.machine_name as string } : null,
   workOrder: (r.work_order as string) ?? null,
   lot: (r.lot as string) ?? null,
+  lotSize: r.lot_size == null ? null : Number(r.lot_size),
   serial: (r.serial as string) ?? null,
   triggerType: r.trigger_type as InspectionSummary['triggerType'],
   startedAt: iso(r.started_at)!,
@@ -97,7 +99,7 @@ export class InspectionService {
       const result = await db.execute<{ id: string }>(sql`select app.start_inspection(
         ${body.siteId}::uuid, ${body.partId}::uuid, ${body.operationCode ?? null}, ${body.machineId ?? null}::uuid,
         ${body.workOrder ?? null}, ${body.lot ?? null}, ${body.serial ?? null}, ${body.triggerType ?? 'manual'},
-        ${body.partRevisionId ?? null}::uuid, ${body.notes ?? null}) as id`);
+        ${body.partRevisionId ?? null}::uuid, ${body.notes ?? null}, ${body.lotSize ?? null}::integer) as id`);
       return this.load(db, ctx, result.rows[0].id);
     });
   }
@@ -106,6 +108,7 @@ export class InspectionService {
   addSample(ctx: RequestContext, id: string, body: z.infer<typeof AddSampleBody>): Promise<InspectionDetail> {
     return this.database.asUser(ctx, async (db) => {
       await this.requireRecord(db, ctx, id);
+      if (!body.isRetest) await this.assertSamplingAllowed(db, id, body);
       const sample = await db.execute<{ id: string }>(sql`insert into public.inspection_samples
         (organisation_id, inspection_record_id, unit_reference, trigger_type, is_retest, notes)
         values (${orgOf(ctx)}::uuid, ${id}::uuid, ${body.unitReference ?? null}, ${body.triggerType ?? 'manual'}, ${body.isRetest ?? false}, ${body.notes ?? null})
@@ -119,6 +122,32 @@ export class InspectionService {
       }
       return this.load(db, ctx, id);
     });
+  }
+
+  /** Enforces the control plan's sampling rules (time, lot size, first off, events) for a new sample. */
+  private async assertSamplingAllowed(db: Db, id: string, body: z.infer<typeof AddSampleBody>) {
+    const trigger = body.triggerType ?? 'manual';
+    const rec = await db.execute<Row>(sql`select lot_size from public.inspection_records where id = ${id}::uuid`);
+    const lotSize = rec.rows[0]?.lot_size == null ? null : Number(rec.rows[0].lot_size);
+    const ids = [...new Set(body.readings.map((r) => r.requirementId))];
+    const reqs = await db.execute<Row>(sql`select id, char_number, name, sampling from public.resolved_inspection_requirements
+      where inspection_record_id = ${id}::uuid`);
+    const history = await db.execute<Row>(sql`select m.requirement_id, s.trigger_type, m.measured_at
+      from public.inspection_measurements m join public.inspection_samples s on s.id = m.sample_id
+      where m.inspection_record_id = ${id}::uuid and m.supersedes_id is null and not s.is_retest`);
+    const now = new Date();
+    const problems: string[] = [];
+    for (const reqId of ids) {
+      const req = reqs.rows.find((r) => r.id === reqId);
+      if (!req) continue; // unknown requirements are refused by the database
+      const readings = history.rows
+        .filter((h) => h.requirement_id === reqId)
+        .map((h) => ({ triggerType: h.trigger_type as string, measuredAt: new Date(h.measured_at as string) }));
+      const label = `${(req.char_number as string) ?? ''} ${req.name as string}`.trim();
+      const problem = samplingViolation(label, (req.sampling as SamplingRule[]) ?? [], trigger, { readings }, lotSize, now);
+      if (problem) problems.push(problem);
+    }
+    if (problems.length) throw new ApiError(409, 'inspection_rule', problems.join('; '));
   }
 
   /** Records a correction of a reading (a new row; the original is kept). */

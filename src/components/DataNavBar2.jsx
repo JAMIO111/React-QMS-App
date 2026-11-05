@@ -85,7 +85,7 @@ const DataNavBar = ({ table, totalCount, onRefresh, isLoading }) => {
         </select>
 
         <span className="ml-2">{totalCount} Results</span>
-        {isLoading && <LoadingScreen size="sm" />}
+        {isLoading && <LoadingScreen size="inline" className="ml-3" />}
       </div>
 
       <button

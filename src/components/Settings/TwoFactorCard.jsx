@@ -8,6 +8,7 @@ import { describeMfaError, removeFactor, verifiedTotpFactors } from "../../lib/m
 import MenuCard from "../ui/MenuCard";
 import LoadingButton from "../ui/LoadingButton";
 import EnrolAuthenticator from "../mfa/EnrolAuthenticator";
+import LoadingScreen from "../ui/LoadingScreen";
 
 /** Settings → Account: turn two-factor authentication on or off for your own account. */
 const TwoFactorCard = () => {
@@ -71,7 +72,7 @@ const TwoFactorCard = () => {
           {error}
         </p>
       )}
-      {factors === undefined && !error && <p className="text-secondary-text text-sm">Loading…</p>}
+      {factors === undefined && !error && <LoadingScreen size="sm" />}
       {factors !== undefined && !enabled && !enrolling && (
         <button
           type="button"

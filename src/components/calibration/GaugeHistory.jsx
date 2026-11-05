@@ -2,6 +2,7 @@ import { useGaugeHistory } from "../../hooks/useCalibration";
 import { describeApiError } from "../../lib/api-client";
 import { GAUGE_FIELD_LABELS, statusOf } from "../../lib/calibration";
 import { formatDate } from "../../lib/ncr";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATES = new Set(["last_calibrated_on", "next_due_on", "commissioned_on"]);
@@ -22,7 +23,7 @@ const formatValue = (field, value, names) => {
 /** Who changed the gauge or its characteristics, and how (before → after). */
 const GaugeHistory = ({ id }) => {
   const { data, isLoading, error } = useGaugeHistory(id);
-  if (isLoading) return <p className="text-secondary-text">Loading history…</p>;
+  if (isLoading) return <LoadingScreen size="sm" />;
   if (error) return <p role="alert" className="text-error-color">{describeApiError(error)}</p>;
   if (!data?.length) return <p className="text-secondary-text">No changes recorded yet.</p>;
   return (

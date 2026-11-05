@@ -7,6 +7,7 @@ import { describeApiError } from "../../lib/api-client";
 import { INTERVAL_UNITS, formatInterval } from "../../lib/calibration";
 import MenuCard from "../ui/MenuCard";
 import CharacteristicsEditor from "../calibration/CharacteristicsEditor";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const input = "rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-sm text-primary-text focus:outline-none focus:border-brand-primary";
 const button = "rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer";
@@ -173,7 +174,7 @@ const SettingsCalibration = () => {
           </div>
         )}
         {isLoading ? (
-          <p className="text-secondary-text">Loading gauge types…</p>
+          <LoadingScreen size="sm" />
         ) : (
           <ul className="flex flex-col gap-3" aria-label="Gauge types">
             {(types ?? []).map((t) => (

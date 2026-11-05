@@ -11,6 +11,7 @@ import { describeLimits, dueChecks, isDecimal, previewResult, TRIGGER_LABEL } fr
 import { formatDate, formatDateTime } from "../../lib/processControl";
 import { buttonClass, ErrorNotice, FormError, SelectField, TextAreaField } from "../master-data/shared";
 import { ResultBadge, StatusPill } from "./shared";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
@@ -432,7 +433,7 @@ const InspectionPage = () => {
       <Link to="/Inspections" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
         <ArrowLeftIcon className="h-4 w-4" /> Inspections
       </Link>
-      {isLoading && <p className="text-secondary-text">Loading inspection…</p>}
+      {isLoading && <LoadingScreen />}
       {error && <ErrorNotice error={error} />}
       {inspection && (
         <>

@@ -8,7 +8,7 @@ import { AuthProvider } from "./contexts/AuthProvider.jsx";
 import { UserProvider } from "./contexts/UserProvider.jsx";
 import { OrganisationProvider } from "./contexts/OrganisationProvider.jsx";
 import { ModalProvider } from "./contexts/ModalContext";
-import LoadingSpinner from "./components/LoadingSpinner.jsx";
+import LoadingScreen from "./components/ui/LoadingScreen.jsx";
 import "./index.css";
 import { applyStoredThemeColour } from "./lib/theme-colours";
 
@@ -178,9 +178,7 @@ createRoot(document.getElementById("root")).render(
                 <ModalProvider>
                   <Suspense
                     fallback={
-                      <div className="flex items-center justify-center h-screen bg-primary-bg">
-                        <LoadingSpinner />
-                      </div>
+                      <div className="h-screen bg-primary-bg"><LoadingScreen fullscreen /></div>
                     }>
                     <RouterProvider router={router} />
                   </Suspense>

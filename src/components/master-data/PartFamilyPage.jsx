@@ -11,6 +11,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
 import { PartFamilyForm } from "./PartFamiliesPage";
 import { ActiveBadge, buttonClass, ErrorNotice, FormError, SearchBox } from "./shared";
+import LoadingScreen from "../ui/LoadingScreen";
 
 /** Choose parts to add to the family; parts in another family are moved (shown with their family). */
 const AddPartsForm = ({ family, onDone }) => {
@@ -31,7 +32,7 @@ const AddPartsForm = ({ family, onDone }) => {
     <form onSubmit={submit} className="flex flex-col gap-3">
       <SearchBox label="Search part number, name or customer part number" onSearch={onSearch} />
       <div className="max-h-72 overflow-y-auto rounded-lg border border-border-color p-2" role="group" aria-label="Parts">
-        {parts.isLoading && <p className="text-sm text-secondary-text">Loading…</p>}
+        {parts.isLoading && <LoadingScreen size="sm" />}
         {!parts.isLoading && candidates.length === 0 && <p className="text-sm text-secondary-text">No other parts match.</p>}
         {candidates.map((p) => (
           <label key={p.id} className="flex items-center gap-2 py-1 text-sm text-primary-text">
@@ -105,7 +106,7 @@ const PartFamilyPage = () => {
       <Link to="/Part-Families" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
         <ArrowLeftIcon className="h-4 w-4" /> Part families
       </Link>
-      {isLoading && <p className="text-secondary-text">Loading family…</p>}
+      {isLoading && <LoadingScreen />}
       {error && <ErrorNotice error={error} />}
       {family && (
         <>

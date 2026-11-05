@@ -7,6 +7,7 @@ import SlidingSelectorGeneric from "./ui/SlidingSelectorGeneric";
 import NotificationCard from "./NotificationCard";
 import { useNotifications } from "../hooks/useNotifications";
 import { useUser } from "../contexts/UserProvider";
+import LoadingScreen from "./ui/LoadingScreen";
 
 const NotificationPane = () => {
   const { profile } = useUser();
@@ -54,9 +55,7 @@ const NotificationPane = () => {
             />
             <div className="mt-4 flex flex-col gap-2">
               {isLoading ? (
-                <div className="flex-col text-center items-center justify-center text-secondary-text border border-dashed border-border-color/50 p-6 rounded-xl">
-                  Loading Notifications...
-                </div>
+                <LoadingScreen size="sm" />
               ) : isError ? (
                 <div className="flex-col text-center items-center justify-center text-error-color border border-dashed border-border-color/50 p-6 rounded-xl">
                   Error loading notifications.

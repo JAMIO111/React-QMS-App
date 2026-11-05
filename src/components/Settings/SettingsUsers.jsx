@@ -14,6 +14,7 @@ import {
   useRoles,
   useSites,
 } from "../../hooks/useQmsApi";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const STATUS_STYLES = {
   active: "bg-green-500/15 text-green-700 dark:text-green-300",
@@ -329,7 +330,7 @@ const SettingsUsers = () => {
   const canManage = can("members.manage");
 
   if (members.isLoading || roles.isLoading)
-    return <p className="text-secondary-text p-4">Loading members…</p>;
+    return <LoadingScreen />;
   if (members.error?.status === 403) {
     return (
       <p className="text-secondary-text p-4">

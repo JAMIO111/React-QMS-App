@@ -34,6 +34,7 @@ import TextInput from "../ui/TextInput";
 import { btn } from "./buttons";
 import PeoplePicker from "./PeoplePicker";
 import { GaugeStatusPill, OutcomePill } from "./Pills";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const str = (v) => (v === null || v === undefined ? "" : String(v));
@@ -239,7 +240,7 @@ const CalibrationRecordPage = () => {
     );
   const restore = () => mutation.mutate({ path: `/calibrations/${c.id}/restore` }, { onSuccess: () => showToast({ type: "success", title: "Restored", message: `${c.reference} was restored.` }) });
 
-  if (gauge.isLoading || (!isNew && record.isLoading)) return <p className="p-4 text-secondary-text">Loading…</p>;
+  if (gauge.isLoading || (!isNew && record.isLoading)) return <LoadingScreen />;
   const loadError = gauge.error ?? record.error;
   if (loadError) {
     return (
@@ -318,7 +319,7 @@ const CalibrationRecordPage = () => {
 
         <Card title="Readings" subtitle="As found (before any adjustment) and, if adjusted or reworked, as left. Limits include the tolerance; checks are pass or fail.">
           {characteristics.isLoading ? (
-            <p className="text-secondary-text">Loading characteristics…</p>
+            <LoadingScreen size="sm" />
           ) : rows.length === 0 ? (
             <p className="rounded-lg border-2 border-dashed border-border-dark-color p-4 text-center text-sm text-secondary-text">
               This gauge has no characteristics. Choose the outcome below, or{" "}

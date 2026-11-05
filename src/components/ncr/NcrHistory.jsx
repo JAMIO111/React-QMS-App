@@ -1,6 +1,7 @@
 import { useNcrHistory } from "../../hooks/useNcr";
 import { describeApiError } from "../../lib/api-client";
 import { FIELD_LABELS, SEVERITIES, formatDate, stageOf } from "../../lib/ncr";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LONG_TEXT = new Set(["description", "requirement", "actual_result", "stage_reason", "delete_reason"]);
@@ -53,7 +54,7 @@ const HIDDEN = new Set(["updated_at", "updated_by", "closed_by", "deleted_by"]);
 /** Who changed what and when, with before and after values. */
 const NcrHistory = ({ id }) => {
   const { data, isLoading, error } = useNcrHistory(id);
-  if (isLoading) return <p className="text-secondary-text">Loading history…</p>;
+  if (isLoading) return <LoadingScreen size="sm" />;
   if (error) return <p role="alert" className="text-error-color">{describeApiError(error)}</p>;
   return (
     <ol className="flex flex-col gap-3">

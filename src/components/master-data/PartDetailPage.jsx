@@ -14,6 +14,7 @@ import { usePartFamilies } from "../../hooks/useProcessControl";
 import SpecValues from "./SpecValues";
 import PartCustomers from "./PartCustomers";
 import RequirementPreview from "../process-control/RequirementPreview";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const STATUS_STYLE = {
   draft: "bg-warning-color/15 text-primary-text",
@@ -256,7 +257,7 @@ const PartDetailPage = () => {
       <Link to="/Parts" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
         <ArrowLeftIcon className="h-4 w-4" /> Parts
       </Link>
-      {isLoading && <p className="text-secondary-text">Loading part…</p>}
+      {isLoading && <LoadingScreen />}
       {error && <ErrorNotice error={error} />}
       {part && (
         <>

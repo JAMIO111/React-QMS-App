@@ -8,6 +8,7 @@ import { describeMfaError, verifiedTotpFactors, verifyCode } from "../../lib/mfa
 import { AuthCard, AuthNotice } from "../auth/AuthCard";
 import CodeForm from "./CodeForm";
 import EnrolAuthenticator from "./EnrolAuthenticator";
+import LoadingScreen from "../ui/LoadingScreen";
 
 /** Only same-site paths, so ?next= cannot send people to another website. */
 export const safeNext = (value) => (value && value.startsWith("/") && !value.startsWith("//") ? value : "/Dashboard");
@@ -41,9 +42,7 @@ const MfaPage = () => {
   if (user === undefined || assurance === undefined) {
     return (
       <AuthCard title="Two-factor authentication">
-        <p role="status" className="text-secondary-text">
-          Loading…
-        </p>
+        <LoadingScreen size="sm" />
       </AuthCard>
     );
   }
@@ -81,9 +80,7 @@ const MfaPage = () => {
   if (factors === undefined) {
     return (
       <AuthCard title="Two-factor authentication">
-        <p role="status" className="text-secondary-text">
-          Loading…
-        </p>
+        <LoadingScreen size="sm" />
       </AuthCard>
     );
   }

@@ -6,6 +6,7 @@ import { useCalibrationMutation } from "../../hooks/useCalibration";
 import { useUnits } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
 import { CHARACTERISTIC_KINDS, formatNumber, formatTolerance } from "../../lib/calibration";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const input = "w-full rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-sm text-primary-text focus:outline-none focus:border-brand-primary disabled:opacity-60";
 const EMPTY = { kind: "variable", name: "", nominal: "", toleranceMinus: "", tolerancePlus: "", unitCode: "mm", method: "" };
@@ -111,7 +112,7 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
       }
     );
 
-  if (isLoading) return <p className="text-secondary-text">Loading characteristics…</p>;
+  if (isLoading) return <LoadingScreen size="sm" />;
   if (error) return <p role="alert" className="text-error-color">{describeApiError(error)}</p>;
 
   return (

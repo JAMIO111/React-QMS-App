@@ -19,6 +19,7 @@ import { PartPicker } from "../ncr/Pickers";
 import RequirementPreview from "./RequirementPreview";
 import { formatDate, formatDateTime } from "../../lib/processControl";
 import { RevisionStatusPill } from "./shared";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
@@ -499,7 +500,7 @@ const ControlPlanPage = () => {
       <Link to="/Process-Control/Plans" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
         <ArrowLeftIcon className="h-4 w-4" /> Control plans
       </Link>
-      {isLoading && <p className="text-secondary-text">Loading plan…</p>}
+      {isLoading && <LoadingScreen />}
       {error && <ErrorNotice error={error} />}
       {plan && (
         <>

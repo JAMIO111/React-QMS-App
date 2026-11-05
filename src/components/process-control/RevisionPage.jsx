@@ -13,6 +13,7 @@ import { CRITICALITY, REACTION_ACTIONS, REACTION_TRIGGERS, describeRequirement, 
 import { buttonClass, ErrorNotice, FormError, SelectField } from "../master-data/shared";
 import CharacteristicForm from "./CharacteristicForm";
 import { RevisionStatusPill } from "./shared";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
@@ -310,7 +311,7 @@ const RevisionPage = () => {
       <Link to={`/Process-Control/Plans/${planId}`} className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
         <ArrowLeftIcon className="h-4 w-4" /> {revision ? revision.plan.planCode : "Control plan"}
       </Link>
-      {isLoading && <p className="text-secondary-text">Loading revision…</p>}
+      {isLoading && <LoadingScreen />}
       {error && <ErrorNotice error={error} />}
       {revision && (
         <>

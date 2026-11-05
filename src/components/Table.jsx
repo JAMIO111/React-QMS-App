@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { applyOrder, moveColumn } from "../lib/columnOrder";
 import { flexRender } from "@tanstack/react-table";
 import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon } from "@/components/icons";
+import LoadingScreen from "./ui/LoadingScreen";
 
 /**
  * Reusable data table for a TanStack Table instance.
@@ -200,7 +201,7 @@ const Table = ({
           {rows.length === 0 && (
             <tr>
               <td colSpan={colSpan} className="p-6 text-center text-secondary-text italic select-none">
-                {isLoading ? "Loading…" : emptyMessage}
+                {isLoading ? <LoadingScreen size="sm" /> : emptyMessage}
               </td>
             </tr>
           )}

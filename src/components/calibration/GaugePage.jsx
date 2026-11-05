@@ -41,6 +41,7 @@ import GaugeHistory from "./GaugeHistory";
 import PeoplePicker from "./PeoplePicker";
 import { DuePill, GaugeStatusPill, OutcomePill } from "./Pills";
 import { btn } from "./buttons";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const EMPTY = {
   assetNumber: "", description: "", gaugeTypeId: null, manufacturer: "", model: "", serialNumber: "",
@@ -86,7 +87,7 @@ const SubHeading = ({ children }) => <h3 className="text-sm font-semibold upperc
 const CalibrationList = ({ gaugeId, canRecord }) => {
   const [showDeleted, setShowDeleted] = useState(false);
   const { data, isLoading, error } = useGaugeCalibrations(gaugeId, { deleted: showDeleted ? "include" : "exclude" });
-  if (isLoading) return <p className="text-secondary-text">Loading calibrations…</p>;
+  if (isLoading) return <LoadingScreen size="sm" />;
   if (error) return <p role="alert" className="text-error-color">{describeApiError(error)}</p>;
   return (
     <div className="flex flex-col gap-3">
@@ -200,7 +201,7 @@ const GaugePage = () => {
   const restore = () =>
     mutation.mutate({ path: `/gauges/${gauge.id}/restore` }, { onSuccess: () => showToast({ type: "success", title: "Restored", message: `${gauge.assetNumber} is back in the register.` }) });
 
-  if (!isNew && isLoading) return <p className="p-4 text-secondary-text">Loading…</p>;
+  if (!isNew && isLoading) return <LoadingScreen />;
   if (!isNew && error) {
     return (
       <div className="flex flex-col gap-3 p-4">

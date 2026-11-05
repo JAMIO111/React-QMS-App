@@ -11,6 +11,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
 import { costTypeName, formatMoney } from "../../lib/costs";
 import { formatDate } from "../../lib/ncr";
+import LoadingScreen from "../ui/LoadingScreen";
 
 /**
  * Cost lines of an NCR (ported from the original CostData): table with totals in the
@@ -84,7 +85,7 @@ const NcrCosts = ({ ncrId, canEdit }) => {
           <tbody className="text-secondary-text">
             {costs.isLoading ? (
               <tr>
-                <td colSpan={8} className="py-4 text-center">Loading costs…</td>
+                <td colSpan={8}><LoadingScreen size="sm" /></td>
               </tr>
             ) : costs.error ? (
               <tr>

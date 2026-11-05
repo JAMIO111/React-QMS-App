@@ -4,6 +4,7 @@ import MenuCard from "../ui/MenuCard";
 import { useResolution } from "../../hooks/useProcessControl";
 import { FormError, SelectField } from "../master-data/shared";
 import ResolutionView from "./ResolutionView";
+import LoadingScreen from "../ui/LoadingScreen";
 
 /**
  * What an operator would get for a part (and optionally one operation): the plan revision that
@@ -43,7 +44,7 @@ const RequirementPreview = ({ parts = [], partId: fixedPartId, title = "Preview 
         </button>
       </form>
       {!fixedPartId && !partId && <p className="text-sm text-secondary-text">{parts.length ? "Choose a part to preview." : "The plan's scope has no active parts."}</p>}
-      {query.isLoading && (fixedPartId || partId) && <p className="text-sm text-secondary-text">Resolving…</p>}
+      {query.isLoading && (fixedPartId || partId) && <LoadingScreen size="sm" />}
       {query.error && <FormError error={query.error} />}
       {query.data && <ResolutionView resolution={query.data} showPlanLink={showPlanLink} />}
     </MenuCard>

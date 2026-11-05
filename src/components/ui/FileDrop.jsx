@@ -9,6 +9,7 @@ import { useToast } from "@/contexts/ToastProvider";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useNcrAttachments, useNcrMutation } from "../../hooks/useNcr";
 import { apiFetch, describeApiError } from "../../lib/api-client";
+import LoadingScreen from "./LoadingScreen";
 
 /** Largest file the database accepts (ncr_attachments.size_bytes). */
 const MAX_FILE_SIZE_MB = 25;
@@ -177,7 +178,7 @@ export const AttachmentDrop = ({ recordId, bucket, folder, attachments, mutation
         </div>
 
         {attachments.isLoading ? (
-          <p className="rounded-lg border-2 border-dashed border-border-dark-color bg-secondary-bg p-4 text-center text-secondary-text">Loading files…</p>
+          <LoadingScreen size="sm" />
         ) : attachments.error ? (
           <p role="alert" className="rounded-lg border-2 border-dashed border-border-dark-color bg-secondary-bg p-4 text-center text-error-color">
             {describeApiError(attachments.error)}

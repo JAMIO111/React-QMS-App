@@ -8,6 +8,7 @@ import MenuCard from "../ui/MenuCard";
 import Dialog from "../ui/Dialog";
 import Switch from "../ui/Switch";
 import CharacteristicForm from "../process-control/CharacteristicForm";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const link = "text-link-color hover:underline cursor-pointer";
 
@@ -57,7 +58,7 @@ const SettingsProcessControl = () => {
           )
         }>
         <Switch checked={showInactive} onChange={setShowInactive}>Show inactive</Switch>
-        {isLoading && <p className="text-secondary-text">Loading…</p>}
+        {isLoading && <LoadingScreen size="sm" />}
         {!isLoading && templates?.length === 0 && <p className="text-secondary-text">No templates yet.</p>}
         <ul className="flex flex-col gap-2">
           {templates?.map((t) => (

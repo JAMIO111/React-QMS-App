@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { ArrowLeftIcon, RefreshCwIcon } from "@/components/icons";
-import LoadingBar from "./ui/LoadingBar";
+import LoadingScreen from "./ui/LoadingScreen";
 
 const DataNavBar = ({
   isLoading,
@@ -89,7 +89,7 @@ const DataNavBar = ({
           <option value="100">100 rows</option>
         </select>
         <span className="ml-2">{totalCount} Results</span>
-        {isLoading && <LoadingBar />}
+        {isLoading && <LoadingScreen size="sm" />}
       </div>
       <button
         onClick={handleClick}

@@ -10,6 +10,7 @@ import { useInspectionMutation } from "../../hooks/useInspection";
 import { TRIGGER_LABEL } from "../../lib/inspection";
 import { buttonClass, FormError, SelectField } from "../master-data/shared";
 import ResolutionView from "../process-control/ResolutionView";
+import LoadingScreen from "../ui/LoadingScreen";
 
 /**
  * Start an in-process inspection: production context (site, part, operation, machine, work order,
@@ -110,7 +111,7 @@ const StartInspectionPage = () => {
       </MenuCard>
       {form.partId && (
         <MenuCard title="Requirements" subtitle="Frozen with the inspection when it starts.">
-          {preview.isLoading && <p className="text-sm text-secondary-text">Resolving…</p>}
+          {preview.isLoading && <LoadingScreen size="sm" />}
           {preview.error && <FormError error={preview.error} />}
           {preview.data && <ResolutionView resolution={preview.data} />}
         </MenuCard>

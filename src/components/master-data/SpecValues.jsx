@@ -9,6 +9,7 @@ import { useUnits } from "../../hooks/useMasterData";
 import { useProcessControlMutation, useSpecValues } from "../../hooks/useProcessControl";
 import { describeApiError } from "../../lib/api-client";
 import { buttonClass, FormError, SelectField } from "./shared";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2";
@@ -165,7 +166,7 @@ const SpecValues = ({ part, canManage }) => {
               </p>
             )}
           </div>
-          {isLoading && <p className="text-sm text-secondary-text">Loading values…</p>}
+          {isLoading && <LoadingScreen size="sm" />}
           {error && <FormError error={error} />}
           {values && values.length === 0 && <p className="text-sm text-secondary-text">No values on this revision.</p>}
           {values && values.length > 0 && (

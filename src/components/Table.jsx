@@ -71,10 +71,10 @@ const Table = ({
   [...rightCols].reverse().reduce((x, c) => ((offset[c.id] = { right: x }), x + c.getSize()), 0);
   const lastLeft = leftCols.at(-1)?.id;
   const firstRight = rightCols[0]?.id;
-  const pinClass = (column) =>
+  const pinClass = (column, bg = "bg-primary-bg") =>
     !pinOf(column)
       ? ""
-      : `sticky z-[2] bg-primary-bg ${column.id === lastLeft ? "shadow-[4px_0_6px_-4px_rgba(0,0,0,0.3)]" : ""} ${
+      : `sticky z-[2] ${bg} ${column.id === lastLeft ? "shadow-[4px_0_6px_-4px_rgba(0,0,0,0.3)]" : ""} ${
           column.id === firstRight ? "border-l shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.3)]" : ""
         }`;
   const headerById = (headerGroup) => Object.fromEntries(headerGroup.headers.map((h) => [h.column.id, h]));
@@ -197,7 +197,7 @@ const Table = ({
           })}
         </thead>
 
-        <tbody>
+        <tbody className="bg-secondary-bg">
           {rows.length === 0 && (
             <tr>
               <td colSpan={colSpan} className="p-6 text-center text-secondary-text italic select-none">
@@ -233,7 +233,7 @@ const Table = ({
                         key={cell.id}
                         data-column-id={cell.column.id}
                         style={offset[cell.column.id]}
-                        className={`border-b border-r p-0 align-middle ${cell.column.getIsResizing() ? "border-r-cta-color" : "border-border-color"} ${pinClass(cell.column)}`}>
+                        className={`border-b border-r p-0 align-middle ${cell.column.getIsResizing() ? "border-r-cta-color" : "border-border-color"} ${pinClass(cell.column, "bg-secondary-bg")}`}>
                         <div
                           className={`flex min-w-0 items-center overflow-hidden whitespace-nowrap px-2 py-1 ${alignClass(cell.column)} ${
                             // A pinned cell is opaque, so it repeats the row's highlight itself.

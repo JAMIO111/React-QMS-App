@@ -40,6 +40,7 @@ const CalibrationDashboard = lazy(() => import("./components/calibration/Calibra
 const GaugeRegister = lazy(() => import("./components/calibration/GaugeRegister.jsx"));
 const GaugePage = lazy(() => import("./components/calibration/GaugePage.jsx"));
 const CalibrationRecordPage = lazy(() => import("./components/calibration/CalibrationRecordPage.jsx"));
+const SettingsNotifications = lazy(() => import("./components/Settings/SettingsNotifications.jsx"));
 const SettingsSubscription = lazy(() => import("./components/Settings/SettingsSubscription.jsx"));
 const RequireModule = lazy(() => import("./components/RequireModule.jsx"));
 const SettingsCalibration = lazy(() => import("./components/Settings/SettingsCalibration.jsx"));
@@ -154,7 +155,7 @@ const router = createBrowserRouter([
               { path: "Process-Control", element: <SettingsProcessControl /> },
               {
                 path: "Notifications",
-                element: <div>Notifications</div>,
+                element: <SettingsNotifications />,
               },
               { path: "Admin", element: <div>Admin Settings</div> },
             ],

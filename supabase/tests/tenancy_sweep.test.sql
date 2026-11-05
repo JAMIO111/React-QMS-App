@@ -132,6 +132,10 @@ BEGIN
     VALUES (a, 'in_sweep', 'INV-1', 5000, 1000, 6000, 'paid');
   INSERT INTO public.billing_payments (organisation_id, provider_payment_id, invoice_id, amount, status)
     SELECT a, 'pay_sweep', id, 6000, 'succeeded' FROM public.billing_invoices WHERE organisation_id = a;
+  INSERT INTO public.notification_preferences (organisation_id, user_id, event_type_id, enabled)
+    SELECT a, '50000000-0000-0000-0000-0000000000a1', id, false FROM public.notification_event_types WHERE key = 'parts.created';
+  INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)
+    SELECT a, '50000000-0000-0000-0000-0000000000a1', id FROM public.notifications WHERE organisation_id = a LIMIT 1;
   INSERT INTO sweep VALUES ('pc_part', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'));
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));

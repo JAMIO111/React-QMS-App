@@ -5,17 +5,17 @@ import { useNotification } from "../contexts/NotificationProvider";
 import { XIcon } from "@/components/icons";
 import SlidingSelectorGeneric from "./ui/SlidingSelectorGeneric";
 import NotificationCard from "./NotificationCard";
-import { useNotifications } from "../hooks/useNotifications";
-import { useUser } from "../contexts/UserProvider";
+import { useMarkNotificationsRead, useNotifications } from "../hooks/useNotifications";
+import { Link } from "react-router-dom";
 import LoadingScreen from "./ui/LoadingScreen";
 
 const NotificationPane = () => {
-  const { profile } = useUser();
   const { isOpen, closePane } = useNotification();
   const [typeFilter, setTypeFilter] = useState("New");
 
-  const { data: notifications, isLoading, isError } = useNotifications();
-  console.log("Notifications:", notifications);
+  const { data, isLoading, isError } = useNotifications();
+  const markRead = useMarkNotificationsRead();
+  const notifications = data?.data;
 
   if (typeof window === "undefined") return null;
   const root = document.getElementById("notification-root");
@@ -51,8 +51,20 @@ const NotificationPane = () => {
               options={["All", "New", "Read"]}
               value={typeFilter}
               onChange={setTypeFilter}
-              notifications={notifications}
             />
+            <div className="mt-3 flex items-center justify-between text-sm">
+              <Link to="/Settings/Notifications" onClick={closePane} className="text-brand-primary hover:underline">
+                Notification settings
+              </Link>
+              {data?.unread > 0 && (
+                <button
+                  type="button"
+                  onClick={() => markRead.mutate({ all: true })}
+                  className="text-secondary-text hover:underline cursor-pointer">
+                  Mark all as read
+                </button>
+              )}
+            </div>
             <div className="mt-4 flex flex-col gap-2">
               {isLoading ? (
                 <LoadingScreen size="sm" />
@@ -75,7 +87,6 @@ const NotificationPane = () => {
                       key={notification.id}
                       notification={notification}
                       closePane={closePane}
-                      userId={profile.id}
                     />
                   ))
               ) : (

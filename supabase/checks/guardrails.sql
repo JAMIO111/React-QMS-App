@@ -36,6 +36,7 @@ global_tables(relname, why) AS (VALUES
   ('role_permissions', 'scoped through roles'),
   ('units',            'global catalogue of measurement units, read-only'),
   ('subscription_plans',        'global commercial catalogue, read-only'),
+  ('notification_event_types',  'global catalogue of notification events, read-only'),
   ('subscription_prices',       'global commercial catalogue, read-only'),
   ('modules',                   'global module catalogue, read-only'),
   ('features',                  'global feature catalogue, read-only'),

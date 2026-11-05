@@ -90,6 +90,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'inspection_rule', pg.message ?? 'That change is not allowed for this inspection');
     case 'QM009': // subscription seat and package rules (messages are written for users)
       return new ApiError(409, 'subscription_rule', pg.message ?? 'That subscription change is not allowed');
+    case 'QM010': // notification type the caller cannot choose
+      return new ApiError(404, 'notification_type_not_found', 'That notification type does not exist');
     case 'P0002': // no_data_found raised by app functions
       return ApiError.notFound();
     case '57014': // query_canceled (statement_timeout)

@@ -1,0 +1,38 @@
+/** Where a notification leads, from its entity type and the ids stored in `details`. */
+export function notificationLink(n) {
+  const d = n.details ?? {};
+  switch (n.entityType) {
+    case "nonconformances":
+      return d.deleted ? null : `/Non-Conformance/${d.source === "customer" ? "Customer" : d.source === "supplier" ? "Supplier" : "Internal"}/${n.entityId}`;
+    case "gauges":
+      return `/Calibration/Gauges/${n.entityId}`;
+    case "calibrations":
+      return d.gauge_id ? `/Calibration/Gauges/${d.gauge_id}/calibrations/${n.entityId}` : null;
+    case "inspection_records":
+      return `/Inspections/${n.entityId}`;
+    case "control_plans":
+      return `/Process-Control/Plans/${n.entityId}`;
+    case "control_plan_revisions":
+      return d.control_plan_id ? `/Process-Control/Plans/${d.control_plan_id}/revisions/${n.entityId}` : null;
+    case "parts":
+      return `/Parts/${n.entityId}`;
+    case "part_families":
+      return `/Part-Families/${n.entityId}`;
+    case "user_subscription_assignments":
+    case "organisation_subscriptions":
+    case "billing_invoices":
+      return "/Settings/Subscription";
+    case "organisation_users":
+      return "/Settings/Users";
+    default:
+      return null;
+  }
+}
+
+export function timeAgo(iso, now = Date.now()) {
+  const s = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}

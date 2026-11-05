@@ -124,6 +124,27 @@ export class InspectionService {
     });
   }
 
+  /** An inspection can only be completed once every planned sample is recorded (abandon it otherwise). */
+  private async assertPlannedSamplesDone(db: Db, id: string) {
+    const rec = await db.execute<Row>(sql`select lot_size, status from public.inspection_records where id = ${id}::uuid`);
+    if (rec.rows[0]?.status !== 'in_progress') return; // the database reports the status
+    const reqRows = await db.execute<Row>(sql`select id, char_number, name, applicable, sampling from public.resolved_inspection_requirements where inspection_record_id = ${id}::uuid`);
+    const reqs: PlanRequirement[] = reqRows.rows.map((q) => ({
+      id: q.id as string,
+      name: q.name as string,
+      charNumber: (q.char_number as string) ?? null,
+      applicable: q.applicable as boolean,
+      sampling: (q.sampling as PlanRequirement['sampling']) ?? [],
+    }));
+    const schedule = buildSchedule(reqs, rec.rows[0]?.lot_size == null ? null : Number(rec.rows[0].lot_size));
+    const samples = await db.execute<Row>(sql`select trigger_type from public.inspection_samples where inspection_record_id = ${id}::uuid and not is_retest`);
+    const taken = samples.rows.filter((x) => PLANNED_TRIGGERS.includes(x.trigger_type as string)).length;
+    if (taken < schedule.length) {
+      const next = schedule[taken];
+      throw new ApiError(409, 'inspection_rule', `Cannot complete: ${taken} of ${schedule.length} planned samples are recorded; sample ${next.number} (part ${next.position}) is next. Abandon the inspection to stop early`);
+    }
+  }
+
   /**
    * Applies the control plan's sampling rules to a new (non-retest) sample and returns the trigger to record.
    * Event samples (shift start, set-up, tool change, manual) must be checks the plan samples on that event.
@@ -180,16 +201,17 @@ export class InspectionService {
   }
 
   complete(ctx: RequestContext, id: string): Promise<InspectionDetail> {
-    return this.setStatus(ctx, id, sql`status = 'completed'`);
+    return this.setStatus(ctx, id, sql`status = 'completed'`, (db) => this.assertPlannedSamplesDone(db, id));
   }
 
   abandon(ctx: RequestContext, id: string, body: z.infer<typeof AbandonBody>): Promise<InspectionDetail> {
     return this.setStatus(ctx, id, sql`status = 'abandoned', abandon_reason = ${body.reason}`);
   }
 
-  private setStatus(ctx: RequestContext, id: string, set: SQL): Promise<InspectionDetail> {
+  private setStatus(ctx: RequestContext, id: string, set: SQL, before?: (db: Db) => Promise<void>): Promise<InspectionDetail> {
     return this.database.asUser(ctx, async (db) => {
       await this.requireRecord(db, ctx, id);
+      await before?.(db);
       const result = await db.execute(sql`update public.inspection_records set ${set} where id = ${id}::uuid returning id`);
       // Visible but not updatable (row level security): the caller may only read.
       if (!result.rows.length) throw ApiError.forbidden();

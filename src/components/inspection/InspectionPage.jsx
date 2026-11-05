@@ -462,6 +462,7 @@ const InspectionPage = () => {
   const [reason, setReason] = useState("");
   const open = inspection?.status === "in_progress";
   const canRecord = can("inspection.record");
+  const plannedLeft = open ? inspection.schedule.length - (nextSample(inspection)?.plannedTaken ?? inspection.schedule.length) : 0;
   const notApplicable = inspection?.requirements.filter((q) => !q.applicable) ?? [];
 
   return (
@@ -525,9 +526,10 @@ const InspectionPage = () => {
 
           {open && canRecord && (
             <div className="flex flex-wrap gap-2">
-              <button type="button" className={`${buttonClass.primary} min-h-11`} disabled={mutation.isPending} onClick={() => mutation.mutate({ path: `/inspections/${inspection.id}/complete` })}>
+              <button type="button" className={`${buttonClass.primary} min-h-11`} disabled={mutation.isPending || plannedLeft > 0} onClick={() => mutation.mutate({ path: `/inspections/${inspection.id}/complete` })}>
                 Complete inspection
               </button>
+              {plannedLeft > 0 && <p className="self-center text-sm text-secondary-text">{plannedLeft} planned {plannedLeft === 1 ? "sample" : "samples"} still to record. Abandon the inspection to stop early.</p>}
               <button type="button" className={`${buttonClass.neutral} min-h-11`} onClick={() => setAbandoning(true)}>
                 Abandon
               </button>

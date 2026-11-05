@@ -165,8 +165,7 @@ describe('recording', () => {
     const h = await as(ids.ownerA);
     const rec = (await api().post('/api/v1/inspections').set(h).send({ siteId: ids.siteA, partId: ctx.part, operationCode: 'op-020' }).expect(201)).body;
     const incomplete = await api().post(`/api/v1/inspections/${rec.id}/complete`).set(h).expect(409);
-    // In the plan's order (same sequence, so by key: LENGTH, OD, VISUAL).
-    expect(incomplete.body.error.message).toBe('Measure every check before completing; missing: Overall length, Outer diameter, No chatter marks');
+    expect(incomplete.body.error.message).toBe('Cannot complete: 0 of 1 planned samples are recorded; sample 1 (part 1) is next. Abandon the inspection to stop early');
     await api().post(`/api/v1/inspections/${rec.id}/abandon`).set(h).send({}).expect(400);
     const abandoned = (await api().post(`/api/v1/inspections/${rec.id}/abandon`).set(h).send({ reason: 'Wrong lot' }).expect(200)).body;
     expect(abandoned).toMatchObject({ status: 'abandoned', result: null, abandonReason: 'Wrong lot' });

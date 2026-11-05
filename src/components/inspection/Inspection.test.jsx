@@ -227,6 +227,13 @@ describe("Inspection page", () => {
     expect(within(form).queryByRole("group", { name: "Gauge for No chatter marks" })).not.toBeInTheDocument();
   });
 
+  it("cannot complete while planned samples remain", async () => {
+    routeApi({ "GET /inspections/i1": inspection(), "GET /gauges": gauges });
+    renderAt("/Inspections/i1");
+    expect(await screen.findByRole("button", { name: "Complete inspection" })).toBeDisabled();
+    expect(screen.getByText(/1 planned sample still to record/)).toBeInTheDocument();
+  });
+
   it("shows the unit next to the value input", async () => {
     routeApi({ "GET /inspections/i1": inspection(), "GET /gauges": gauges });
     renderAt("/Inspections/i1");

@@ -172,8 +172,8 @@
   --theme-dark: var(--tc-800);
   --brand-primary: var(--tc-700);
   --brand-secondary: var(--color-orange-700);
-  --primary-bg: 239, 239, 242;
-  --secondary-bg: 244, 244, 244;
+  --primary-bg: 238, 238, 242;
+  --secondary-bg: 248, 248, 248;
   --tertiary-bg: 251, 251, 251;
   --bg-dark: 0.92, 0, 264;
   --bg: 0.96, 0, 264;

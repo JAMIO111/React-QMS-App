@@ -144,7 +144,7 @@ const TypeCard = ({ type, canManage }) => {
           onSubmit={(body) => patch(body, `${body.name} saved.`)}
         />
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-5">
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-2 font-semibold text-primary-text">
               {type.name}
@@ -157,7 +157,7 @@ const TypeCard = ({ type, canManage }) => {
                 </span>
               )}
             </p>
-            <p className="text-sm text-secondary-text">
+            <p className="text-sm pt-2 text-secondary-text">
               {type.characteristicCount}{" "}
               {type.characteristicCount === 1
                 ? "characteristic"

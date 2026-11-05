@@ -210,6 +210,23 @@ describe("Inspection page", () => {
     expect(screen.getByText("1 of 2 planned samples recorded. Record them in order.")).toBeInTheDocument();
   });
 
+  it("offers a gauge for pass/fail checks whose plan names a gauge type", async () => {
+    let body;
+    const gonogo = inspection({
+      requirements: [req({ id: "q-thread", name: "Thread go/no-go", dataType: "attribute", nominal: null, lowerLimit: null, upperLimit: null, unitCode: null, gaugeType: { id: "t-mic", name: "Micrometer 0-25" } })],
+      schedule: [{ number: 1, position: 1, trigger: "first_off", requirementIds: ["q-thread"] }],
+    });
+    routeApi({ "GET /inspections/i1": gonogo, "GET /gauges": gauges, "POST /inspections/i1/samples": (_p, opts) => ((body = opts.body), gonogo) });
+    renderAt("/Inspections/i1");
+    const form = await screen.findByRole("form", { name: "New sample" });
+    await pickGauge(form, "Thread go/no-go", /MIC-1/);
+    await userEvent.click(within(form).getByRole("radio", { name: "Pass" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Save sample" }));
+    expect(body.readings).toEqual([{ requirementId: "q-thread", valuePass: true, gaugeId: "g1" }]);
+    // No gauge type (e.g. a visual check): no picker.
+    expect(within(form).queryByRole("group", { name: "Gauge for No chatter marks" })).not.toBeInTheDocument();
+  });
+
   it("shows the unit next to the value input", async () => {
     routeApi({ "GET /inspections/i1": inspection(), "GET /gauges": gauges });
     renderAt("/Inspections/i1");

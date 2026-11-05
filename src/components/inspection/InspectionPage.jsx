@@ -27,6 +27,9 @@ const gaugeProblem = (gauge, requirement) => {
   return null;
 };
 
+/** Variable checks always take a gauge; pass/fail checks when the plan names a gauge type (go/no-go, bore gauges). */
+const usesGauge = (q) => q.dataType === "variable" || !!q.gaugeType;
+
 /** The reading currently in force for a requirement in a sample (the end of its correction chain). */
 const currentReadings = (measurements) => measurements.filter((m) => !m.supersededById);
 
@@ -193,7 +196,7 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
                     <div className="text-sm tabular-nums text-primary-text">{describeLimits(q)}</div>
                     {q.method && <div className="text-xs text-secondary-text">{q.method}</div>}
                   </div>
-                  {q.dataType === "variable" ? (
+                  {usesGauge(q) ? (
                     <div className="flex flex-col gap-1">
                       <GaugeSelect requirement={q} gauges={gauges} value={r.gaugeId} onChange={(v) => setRow(q.id, { gaugeId: v })} />
                       {gProblem && (
@@ -265,7 +268,7 @@ const ReadingDialog = ({ inspection, requirement, reading, gauges, canCorrect, c
   const submit = (e) => {
     e.preventDefault();
     const val = requirement.dataType === "attribute" ? { valuePass: value } : { valueNumeric: String(value).trim() };
-    const gauge = requirement.dataType === "variable" ? { gaugeId, ...(override.trim() ? { gaugeOverrideReason: override.trim() } : {}) } : {};
+    const gauge = usesGauge(requirement) ? { gaugeId, ...(override.trim() ? { gaugeOverrideReason: override.trim() } : {}) } : {};
     mutation.mutate(
       mode === "correct"
         ? { path: `/inspection-measurements/${reading.id}/correction`, body: { ...val, ...gauge, reason } }
@@ -332,7 +335,7 @@ const ReadingDialog = ({ inspection, requirement, reading, gauges, canCorrect, c
             <div className="flex flex-wrap items-center gap-3">
               <ValueInput requirement={requirement} value={value} onChange={setValue} label={mode === "correct" ? "Corrected value" : "Retest value"} />
               <Preview requirement={requirement} value={value} />
-              {requirement.dataType === "variable" && <GaugeSelect requirement={requirement} gauges={gauges} value={gaugeId} onChange={setGaugeId} />}
+              {usesGauge(requirement) && <GaugeSelect requirement={requirement} gauges={gauges} value={gaugeId} onChange={setGaugeId} />}
             </div>
             {gProblem &&
               (canOverride ? (

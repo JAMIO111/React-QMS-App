@@ -21,6 +21,7 @@ DECLARE
   a uuid; b uuid; site uuid; owner_role uuid; invite uuid; fm bigint; status bigint; proc bigint;
   part uuid := gen_random_uuid(); cust uuid := gen_random_uuid(); supp uuid := gen_random_uuid();
   emp uuid := gen_random_uuid(); d8 uuid := gen_random_uuid(); ncr uuid := gen_random_uuid(); notif uuid := gen_random_uuid();
+  inspection uuid;
 BEGIN
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
   a := app.create_organisation('Sweep Alpha');
@@ -108,6 +109,18 @@ BEGIN
   INSERT INTO public.reaction_plans (organisation_id, control_plan_revision_id, trigger_type, action, instruction)
     SELECT a, id, 'out_of_spec', 'hold', 'Quarantine the batch' FROM public.control_plan_revisions WHERE organisation_id = a;
 
+  -- In-process inspection (PC4): make the sweep plan effective with one check, then inspect SW-P1.
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
+  UPDATE public.control_plan_revisions SET change_reason = 'Sweep' WHERE organisation_id = a;
+  UPDATE public.control_plan_revisions SET status = 'pending_approval' WHERE organisation_id = a;
+  UPDATE public.control_plan_revisions SET status = 'approved' WHERE organisation_id = a;
+  UPDATE public.control_plan_revisions SET status = 'effective' WHERE organisation_id = a;
+  inspection := app.start_inspection(site, (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'));
+  INSERT INTO public.inspection_samples (organisation_id, inspection_record_id) VALUES (a, inspection);
+  INSERT INTO public.inspection_measurements (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric)
+    SELECT a, s.inspection_record_id, s.id, q.id, 100 FROM public.inspection_samples s
+    JOIN public.resolved_inspection_requirements q ON q.inspection_record_id = s.inspection_record_id WHERE s.organisation_id = a;
+  PERFORM pg_temp.logout();
   INSERT INTO sweep VALUES ('pc_part', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'));
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));
@@ -202,6 +215,7 @@ BEGIN
   PERFORM pg_temp.assert_fails($q$SELECT app.touch_updated()$q$, 'trigger functions are not callable');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.my_invitations() WHERE organisation_id = a), 0::bigint, 'my_invitations');
   PERFORM pg_temp.assert_fails(format('SELECT app.resolve_inspection_requirements(%L)', (SELECT value FROM sweep WHERE key = 'pc_part')), 'resolve_inspection_requirements(A part)');
+  PERFORM pg_temp.assert_fails(format('SELECT app.start_inspection(%L, %L)', (SELECT id FROM public.sites LIMIT 1), (SELECT value FROM sweep WHERE key = 'pc_part')), 'start_inspection(A part)');
   PERFORM pg_temp.logout();
 END $$;
 

@@ -1,4 +1,4 @@
-import { BoxesIcon, ClipboardCheckIcon, GaugeIcon, LayoutDashboardIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, GaugeIcon, LayoutDashboardIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
@@ -18,6 +18,13 @@ export const menuStructure = [
       { name: "Customer", path: "/Non-Conformance/Customer" },
       { name: "Supplier", path: "/Non-Conformance/Supplier" },
     ],
+  },
+  {
+    name: "In-Process Inspection",
+    icon: ClipboardListIcon,
+    permission: "inspection.read",
+    path: "/Inspections",
+    subMenu: [],
   },
   {
     name: "Process Control",

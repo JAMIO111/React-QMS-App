@@ -33,6 +33,7 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   gauges_org_asset_number_key: 'A gauge with this asset number already exists',
   gauge_types_name_key: 'A gauge type with this name already exists',
   calibration_readings_one_per_characteristic: 'This characteristic already has a reading',
+  inspection_measurements_supersedes_key: 'This reading has already been corrected; correct the latest reading instead',
   part_customers_key: 'This customer is already linked to the part',
   control_plan_applicability_target: 'Choose a part family or a part',
   machines_org_code_key: 'A machine with this code already exists',
@@ -85,6 +86,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'calibration_rule', pg.message ?? 'That change is not allowed for this calibration record');
     case 'QM007': // process control rules (messages are written for users)
       return new ApiError(409, 'control_plan_rule', pg.message ?? 'That change is not allowed for this control plan');
+    case 'QM008': // in-process inspection rules (messages are written for users)
+      return new ApiError(409, 'inspection_rule', pg.message ?? 'That change is not allowed for this inspection');
     case 'P0002': // no_data_found raised by app functions
       return ApiError.notFound();
     case '57014': // query_canceled (statement_timeout)

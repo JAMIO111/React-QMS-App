@@ -351,3 +351,55 @@ overrides a family plan.
 API e2e `scope-and-customers.e2e-spec.ts` + sweep over the new routes (140 e2e); frontend +3 (201).
 Browser check: add a part to a family in bulk, add two customers with part numbers, change the
 primary, find the part by the customer's part number — no console errors, no failed API calls.
+
+## 13. Slice PC4 — In-Process Inspection — done (2026-11-05)
+
+**Database** (`20251108150000_in_process_inspection.sql`)
+- Permissions `inspection.read` / `.record` / `.correct` / `.override_gauge` (Owner, Admin, Quality
+  manager, Quality engineer: all; Inspector: read + record; Viewer: read), site-scoped through the
+  inspection's site.
+- `inspection_records` (`IPI-YY-NNNN`, site, part + released revision, plan + effective revision,
+  operation, machine, work order, lot, serial, trigger, operator, status `in_progress → completed |
+  abandoned`, result, resolver snapshot) and `resolved_inspection_requirements` (frozen, one per
+  characteristic, applicable or not with the rule). **Only** `app.start_inspection()` creates them: it
+  checks `inspection.record` at the site, runs the resolver in the same transaction and refuses
+  (`QM008`, the resolver's reasons) when it is blocked. Users have no INSERT on either table; the
+  context and requirements never change.
+- `inspection_samples` (numbered, time, unit/serial, trigger, retest flag; only while in progress).
+- `inspection_measurements`, insert-only: `NUMERIC` value exactly as entered or pass/fail; unit equal
+  to the requirement's; result by the database (limits inclusive, unrounded); the gauge's asset
+  number, status and due date copied at the time of use; a gauge that is not active, overdue, deleted
+  or not the required type (a gauge without a type is not the required type) needs a reason and
+  `inspection.override_gauge`; a required gauge type needs a gauge; one first reading per check per
+  sample; corrections are new rows (`supersedes_id`, reason, `inspection.correct`, each reading
+  corrected once, also after completion); retests point at a failed reading and never replace it.
+- Completion needs every applicable check measured; result `fail` when any current (uncorrected)
+  reading failed. Abandon needs a reason. Events `inspection.started`, `inspection.completed` /
+  `abandoned`, `inspection.measurement.failed`. All tables audited.
+
+**API** (`api/src/inspection/`): `GET/POST /inspections` (list with search/status/result/part;
+start), `GET /inspections/{id}` (context, requirements, samples, every reading with its correction
+chain), `POST /inspections/{id}/samples` (sample + readings, all or nothing), `POST
+/inspection-measurements/{id}/correction`, `POST /inspections/{id}/complete|abandon`. Values travel
+as decimal strings so nothing is rounded between the screen and the database. `QM008` → `409
+inspection_rule`.
+
+**Frontend:** menu *In-Process Inspection*: register (`/Inspections`), start (`/Inspections/new`:
+site, part, operation, machine, work order, lot, serial, trigger, live requirement preview; Start only
+when ready) and the inspection page (`/Inspections/:id`): context, checks due from the sampling rules
+(first-off, every N minutes; part-count and event triggers left to the operator), sample entry
+(limits and method beside each input, large touch targets, gauge picker filtered by the required
+type with its calibration state, override reason only for users who may override, live pass/fail with
+icon and word using the database's rule), readings grid by check and sample (latest value of a
+corrected reading, history dialog with corrections, gauge and retests; correct and retest actions),
+not-applicable checks with their rule, Complete / Abandon.
+
+**Tests:** SQL `in_process_inspection.test.sql` (+ sweep with a real inspection, guardrails); API e2e
+`inspection.e2e-spec.ts` + sweep over the new routes (147 e2e); frontend +8 (209). The SQL test
+found a real bug before release: a gauge without a type passed the "required type" check (NULL
+comparison) — fixed with `coalesce(…, false)`. Browser check: start for HCR-100 at OP-020 with a work
+order, a failing OD reading, correction with a reason, completion with result pass, register entry;
+tablet width (820 px) entry screenshot — no console errors, no failed API calls.
+
+**Next:** PC5 — Raise NC from a failed reading / sample / inspection (pre-filled, linked), reaction
+plan prompts on failure.

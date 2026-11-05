@@ -49,6 +49,9 @@ const PartFamilyPage = lazy(() => import("./components/master-data/PartFamilyPag
 const ControlPlansPage = lazy(() => import("./components/process-control/ControlPlansPage.jsx"));
 const ControlPlanPage = lazy(() => import("./components/process-control/ControlPlanPage.jsx"));
 const RevisionPage = lazy(() => import("./components/process-control/RevisionPage.jsx"));
+const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
+const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
+const InspectionPage = lazy(() => import("./components/inspection/InspectionPage.jsx"));
 const AuthPage = lazy(() => import("./components/AuthPage.jsx"));
 const Login = lazy(() => import("./components/Login.jsx"));
 const SignUp = lazy(() => import("./components/SignUp.jsx"));
@@ -153,6 +156,9 @@ const router = createBrowserRouter([
           { path: "Process-Control/Plans", element: <ControlPlansPage /> },
           { path: "Process-Control/Plans/:id", element: <ControlPlanPage /> },
           { path: "Process-Control/Plans/:planId/revisions/:revisionId", element: <RevisionPage /> },
+          { path: "Inspections", element: <InspectionsPage /> },
+          { path: "Inspections/new", element: <StartInspectionPage /> },
+          { path: "Inspections/:id", element: <InspectionPage /> },
         ],
       },
     ],

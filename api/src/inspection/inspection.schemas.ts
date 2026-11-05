@@ -1,0 +1,170 @@
+import { z } from 'zod';
+import { ListQuery } from '../common/pagination';
+
+const Iso = z.string().datetime({ offset: true });
+const Ref = z.object({ id: z.string().uuid(), name: z.string() });
+const optionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((v) => (v === '' ? null : v))
+    .nullable()
+    .optional();
+export const Trigger = z.enum(['first_off', 'last_off', 'every_n_minutes', 'every_n_parts', 'start_of_shift', 'after_tool_change', 'after_setup', 'manual']);
+
+/**
+ * A measured value exactly as entered: a JSON number or a decimal string (e.g. "25.0500"). It is passed
+ * to the database as text and stored as NUMERIC, so nothing is rounded on the way.
+ */
+export const DecimalInput = z
+  .union([z.number().finite(), z.string().trim()])
+  .transform((v) => String(v))
+  .pipe(z.string().regex(/^-?\d{1,12}(\.\d{1,12})?$/, 'Enter a number, e.g. 25.05'));
+
+export const InspectionListQuery = ListQuery.extend({
+  q: z.string().trim().max(100).optional(),
+  status: z.enum(['in_progress', 'completed', 'abandoned']).optional(),
+  result: z.enum(['pass', 'fail']).optional(),
+  partId: z.string().uuid().optional(),
+});
+
+export const InspectionSummary = z.object({
+  id: z.string().uuid(),
+  reference: z.string(),
+  status: z.enum(['in_progress', 'completed', 'abandoned']),
+  result: z.enum(['pass', 'fail']).nullable(),
+  part: z.object({ id: z.string().uuid(), partNumber: z.string(), name: z.string() }),
+  partRevision: z.string(),
+  plan: z.object({ id: z.string().uuid(), planCode: z.string(), revisionCode: z.string() }),
+  operationCode: z.string().nullable(),
+  site: Ref,
+  machine: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }).nullable(),
+  workOrder: z.string().nullable(),
+  lot: z.string().nullable(),
+  serial: z.string().nullable(),
+  triggerType: Trigger,
+  startedAt: Iso,
+  startedBy: Ref.nullable(),
+  /** Current readings that failed (corrected readings excluded). */
+  failures: z.number().int(),
+});
+export type InspectionSummary = z.infer<typeof InspectionSummary>;
+
+export const Requirement = z.object({
+  id: z.string().uuid(),
+  sequence: z.number().int(),
+  characteristicKey: z.string(),
+  charNumber: z.string().nullable(),
+  name: z.string(),
+  operationCode: z.string(),
+  dataType: z.enum(['variable', 'attribute']),
+  valueSource: z.enum(['plan', 'part_spec']),
+  specKey: z.string().nullable(),
+  applicable: z.boolean(),
+  applicability: z.string(),
+  nominal: z.number().nullable(),
+  lowerLimit: z.number().nullable(),
+  upperLimit: z.number().nullable(),
+  unitCode: z.string().nullable(),
+  method: z.string().nullable(),
+  gaugeType: Ref.nullable(),
+  criticality: z.enum(['critical', 'major', 'minor']),
+  spcEligible: z.boolean(),
+  chartType: z.enum(['imr', 'xbar_r']).nullable(),
+  subgroupSize: z.number().int().nullable(),
+  decimals: z.number().int().nullable(),
+  sampling: z.array(z.object({ triggerType: Trigger, intervalValue: z.number().int().nullable(), sampleSize: z.number().int() })),
+  reactions: z.array(z.object({ triggerType: z.string(), action: z.string(), instruction: z.string() })),
+});
+export const Sample = z.object({
+  id: z.string().uuid(),
+  sampleNumber: z.number().int(),
+  sampledAt: Iso,
+  unitReference: z.string().nullable(),
+  triggerType: Trigger,
+  isRetest: z.boolean(),
+  notes: z.string().nullable(),
+  takenBy: Ref.nullable(),
+});
+export const Measurement = z.object({
+  id: z.string().uuid(),
+  sampleId: z.string().uuid(),
+  requirementId: z.string().uuid(),
+  /** Exactly as stored (decimal string), never rounded. */
+  valueNumeric: z.string().nullable(),
+  valuePass: z.boolean().nullable(),
+  unitCode: z.string().nullable(),
+  result: z.enum(['pass', 'fail']),
+  gauge: z
+    .object({ id: z.string().uuid(), assetNumber: z.string(), status: z.string(), nextDueOn: z.string().nullable(), valid: z.boolean() })
+    .nullable(),
+  gaugeOverrideReason: z.string().nullable(),
+  measuredAt: Iso,
+  measuredBy: Ref.nullable(),
+  supersedesId: z.string().uuid().nullable(),
+  /** Set when a later correction replaced this reading. */
+  supersededById: z.string().uuid().nullable(),
+  correctionReason: z.string().nullable(),
+  retestOfId: z.string().uuid().nullable(),
+  notes: z.string().nullable(),
+});
+export const InspectionDetail = InspectionSummary.extend({
+  notes: z.string().nullable(),
+  completedAt: Iso.nullable(),
+  completedBy: Ref.nullable(),
+  abandonReason: z.string().nullable(),
+  requirements: z.array(Requirement),
+  samples: z.array(Sample),
+  measurements: z.array(Measurement),
+});
+export type InspectionDetail = z.infer<typeof InspectionDetail>;
+
+export const StartInspectionBody = z
+  .object({
+    siteId: z.string().uuid(),
+    partId: z.string().uuid(),
+    operationCode: z.string().trim().max(30).optional(),
+    machineId: z.string().uuid().nullable().optional(),
+    workOrder: optionalText(60),
+    lot: optionalText(60),
+    serial: optionalText(60),
+    triggerType: Trigger.optional(),
+    partRevisionId: z.string().uuid().optional(),
+    notes: optionalText(2000),
+  })
+  .strict();
+
+const ReadingInput = z
+  .object({
+    requirementId: z.string().uuid(),
+    valueNumeric: DecimalInput.optional(),
+    valuePass: z.boolean().optional(),
+    gaugeId: z.string().uuid().nullable().optional(),
+    gaugeOverrideReason: optionalText(1000),
+    retestOfId: z.string().uuid().optional(),
+    notes: optionalText(1000),
+  })
+  .strict()
+  .refine((r) => (r.valueNumeric === undefined) !== (r.valuePass === undefined), { message: 'Give a measured value or pass/fail' });
+/** A sampling occasion with its readings, saved together. */
+export const AddSampleBody = z
+  .object({
+    unitReference: optionalText(60),
+    triggerType: Trigger.optional(),
+    isRetest: z.boolean().optional(),
+    notes: optionalText(1000),
+    readings: z.array(ReadingInput).min(1).max(200),
+  })
+  .strict();
+export const CorrectionBody = z
+  .object({
+    valueNumeric: DecimalInput.optional(),
+    valuePass: z.boolean().optional(),
+    gaugeId: z.string().uuid().nullable().optional(),
+    gaugeOverrideReason: optionalText(1000),
+    reason: z.string().trim().min(1, 'Say why the reading is corrected').max(1000),
+  })
+  .strict()
+  .refine((r) => (r.valueNumeric === undefined) !== (r.valuePass === undefined), { message: 'Give the corrected value or pass/fail' });
+export const AbandonBody = z.object({ reason: z.string().trim().min(1, 'Give a reason').max(2000) }).strict();

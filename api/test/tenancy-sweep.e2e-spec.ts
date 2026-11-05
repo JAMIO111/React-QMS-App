@@ -112,6 +112,11 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/part-customers/{id}': { customerPartNumber: 'HIJACK' },
     'DELETE /api/v1/part-customers/{id}': undefined,
     'POST /api/v1/part-families/{id}/parts': { remove: [a.part] },
+    'GET /api/v1/inspections/{id}': undefined,
+    'POST /api/v1/inspections/{id}/samples': { readings: [{ requirementId: a.requirement, valueNumeric: '1' }] },
+    'POST /api/v1/inspections/{id}/complete': undefined,
+    'POST /api/v1/inspections/{id}/abandon': { reason: 'Hijacked' },
+    'POST /api/v1/inspection-measurements/{id}/correction': { valueNumeric: '1', reason: 'Hijacked' },
     'GET /api/v1/control-plan-revisions/{id}': undefined,
     'GET /api/v1/control-plan-revisions/{id}/comparison': undefined,
     'POST /api/v1/control-plan-revisions/{id}/operations': { operationCode: 'OP-99', name: 'Hijacked' },
@@ -196,6 +201,11 @@ const hasSample = (op: Op) =>
     'PATCH /api/v1/part-customers/{id}',
     'DELETE /api/v1/part-customers/{id}',
     'POST /api/v1/part-families/{id}/parts',
+    'GET /api/v1/inspections/{id}',
+    'POST /api/v1/inspections/{id}/samples',
+    'POST /api/v1/inspections/{id}/complete',
+    'POST /api/v1/inspections/{id}/abandon',
+    'POST /api/v1/inspection-measurements/{id}/correction',
     'GET /api/v1/control-plan-revisions/{id}',
     'GET /api/v1/control-plan-revisions/{id}/comparison',
     'POST /api/v1/control-plan-revisions/{id}/operations',
@@ -228,6 +238,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/calibrations/')) return a.calibration;
   if (path.startsWith('/api/v1/calibration-attachments/')) return a.calibrationAttachment;
   if (path.startsWith('/api/v1/part-customers/')) return a.partCustomer;
+  if (path.startsWith('/api/v1/inspections/')) return a.inspection;
+  if (path.startsWith('/api/v1/inspection-measurements/')) return a.measurement;
   if (path.startsWith('/api/v1/machines/')) return a.machine;
   if (path.startsWith('/api/v1/part-families/')) return a.family;
   if (path.startsWith('/api/v1/part-revision-characteristics/')) return a.specValue;
@@ -290,6 +302,30 @@ beforeAll(async () => {
   a.planRevision = (await one(`insert into public.control_plan_revisions (organisation_id, control_plan_id, revision_code) values ($1, $2, 'A') returning id`, [ids.orgA, a.plan])).id;
   a.operation = (await one(`insert into public.control_plan_operations (organisation_id, control_plan_revision_id, operation_code, name) values ($1, $2, 'OP-10', 'Alpha op') returning id`, [ids.orgA, a.planRevision])).id;
   a.characteristic = (await one(`insert into public.control_plan_characteristics (organisation_id, control_plan_revision_id, operation_id, characteristic_key, name, upper_limit, unit_code) values ($1, $2, $3, 'OD', 'Alpha OD', 5, 'mm') returning id`, [ids.orgA, a.planRevision, a.operation])).id;
+  // An in-process inspection of A, started the only way there is: app.start_inspection as A's owner.
+  const client = await admin.connect();
+  try {
+    await client.query('begin');
+    await client.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ sub: ids.ownerA, role: 'authenticated' })]);
+    await client.query('set local role authenticated');
+    const q1 = async (text: string, params: unknown[] = []) => (await client.query(text, params)).rows[0];
+    const ipart = (await q1(`insert into public.parts (organisation_id, part_number, name, part_family_id) values ($1, 'A-INSP', 'Alpha inspected', $2) returning id`, [ids.orgA, a.family])).id;
+    const irev = (await q1(`insert into public.part_revisions (organisation_id, part_id, revision) values ($1, $2, 'A') returning id`, [ids.orgA, ipart])).id;
+    await client.query(`update public.part_revisions set status = 'released' where id = $1`, [irev]);
+    const iplan = (await q1(`insert into public.control_plans (organisation_id, plan_code, title) values ($1, 'A-CP-INSP', 'Alpha inspection plan') returning id`, [ids.orgA])).id;
+    await client.query(`insert into public.control_plan_applicability (organisation_id, control_plan_id, part_id) values ($1, $2, $3)`, [ids.orgA, iplan, ipart]);
+    const iprev = (await q1(`insert into public.control_plan_revisions (organisation_id, control_plan_id, revision_code, change_reason) values ($1, $2, 'A', 'Sweep') returning id`, [ids.orgA, iplan])).id;
+    const iop = (await q1(`insert into public.control_plan_operations (organisation_id, control_plan_revision_id, operation_code, name) values ($1, $2, 'OP-10', 'Op') returning id`, [ids.orgA, iprev])).id;
+    await client.query(`insert into public.control_plan_characteristics (organisation_id, control_plan_revision_id, operation_id, characteristic_key, name, upper_limit, unit_code) values ($1, $2, $3, 'OD', 'OD', 5, 'mm')`, [ids.orgA, iprev, iop]);
+    for (const status of ['pending_approval', 'approved', 'effective']) await client.query(`update public.control_plan_revisions set status = $1 where id = $2`, [status, iprev]);
+    a.inspection = (await q1(`select app.start_inspection($1, $2) as id`, [ids.siteA, ipart])).id;
+    a.requirement = (await q1(`select id from public.resolved_inspection_requirements where inspection_record_id = $1`, [a.inspection])).id;
+    const isample = (await q1(`insert into public.inspection_samples (organisation_id, inspection_record_id) values ($1, $2) returning id`, [ids.orgA, a.inspection])).id;
+    a.measurement = (await q1(`insert into public.inspection_measurements (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric) values ($1, $2, $3, $4, 1) returning id`, [ids.orgA, a.inspection, isample, a.requirement])).id;
+    await client.query('commit');
+  } finally {
+    client.release();
+  }
   b.org = ids.orgB;
   b.viewerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'viewer'`, [ids.orgB])).id;
   b.part = (await one(`insert into public.parts (organisation_id, part_number, name) values ($1, 'B-PART', 'Beta part') returning id`, [ids.orgB])).id;
@@ -386,6 +422,13 @@ describe('tenancy sweep over every API route', () => {
       [a.part],
     );
     expect(md.rows[0]).toEqual({ customers: 'A-CPN/true', family: null });
+    const insp = await admin.query(
+      `select (select status || '/' || coalesce(abandon_reason, '') from public.inspection_records where id = $1) inspection,
+              (select count(*)::int from public.inspection_samples where inspection_record_id = $1) samples,
+              (select count(*)::int from public.inspection_measurements where inspection_record_id = $1) readings`,
+      [a.inspection],
+    );
+    expect(insp.rows[0]).toEqual({ inspection: 'in_progress/', samples: 1, readings: 1 });
   });
 
   it('never includes another organisation’s identifiers in list responses', async () => {

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import MenuCard from "../ui/MenuCard";
+import StatTile from "../ui/StatTile";
 import LoadingScreen from "../ui/LoadingScreen";
 import ClassificationList from "./ClassificationList";
 import { FactoryIcon, PackageIcon, UsersIcon } from "@/components/icons";
@@ -26,13 +27,7 @@ const MASTER_DATA = [
   { to: "/Parts", label: "Parts", hint: "Products, revisions and specs", Icon: PackageIcon },
 ];
 
-const Stat = ({ label, active, total }) => (
-  <div className="flex flex-1 flex-col rounded-2xl border border-border-color bg-secondary-bg px-5 py-3">
-    <span className="text-xs uppercase tracking-wide text-tertiary-text">{label}</span>
-    <span className="text-2xl font-semibold text-primary-text">{active}</span>
-    <span className="text-xs text-secondary-text">{total - active > 0 ? `${total - active} inactive` : "all active"}</span>
-  </div>
-);
+const Stat = ({ label, active, total }) => <StatTile label={label} value={active} note={total - active > 0 ? `${total - active} inactive` : "all active"} />;
 
 const SettingsDataManagement = () => {
   const { can } = usePermissions();

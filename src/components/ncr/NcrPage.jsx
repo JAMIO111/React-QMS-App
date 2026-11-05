@@ -45,6 +45,7 @@ import StageBar from "./StageBar";
 import NcrHistory from "./NcrHistory";
 import NcrCosts from "./NcrCosts";
 import { EMPTY, changedFields, toBody, toForm } from "./formModel";
+import LoadingScreen from "../ui/LoadingScreen";
 
 /** Section title with a rule, as in the original NC entry form. */
 const SectionHeading = ({ id, title, sectionRef }) => (
@@ -137,7 +138,7 @@ const NcrPage = () => {
       { onSuccess: () => showToast({ type: "success", title: "Restored", message: `${ncr.reference} is back in the register.` }) }
     );
 
-  if (!isNew && isLoading) return <p className="p-4 text-secondary-text">Loading…</p>;
+  if (!isNew && isLoading) return <LoadingScreen />;
   if (!isNew && error) {
     return (
       <div className="flex flex-col gap-3 p-4">

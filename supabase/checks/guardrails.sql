@@ -34,7 +34,13 @@ global_tables(relname, why) AS (VALUES
   ('permissions',      'global catalogue, read-only'),
   ('roles',            'system templates have no organisation; org roles carry organisation_id'),
   ('role_permissions', 'scoped through roles'),
-  ('units',            'global catalogue of measurement units, read-only')
+  ('units',            'global catalogue of measurement units, read-only'),
+  ('subscription_plans',        'global commercial catalogue, read-only'),
+  ('notification_event_types',  'global catalogue of notification events, read-only'),
+  ('subscription_prices',       'global commercial catalogue, read-only'),
+  ('modules',                   'global module catalogue, read-only'),
+  ('features',                  'global feature catalogue, read-only'),
+  ('subscription_entitlements', 'global package-to-feature mapping, read-only')
 ),
 audited(relname) AS (VALUES
   ('organisations'), ('organisation_settings'), ('sites'), ('departments'), ('organisation_users'),
@@ -43,7 +49,14 @@ audited(relname) AS (VALUES
   ('customers'), ('suppliers'), ('parts'), ('part_revisions'), ('ncr_classifications'), ('nonconformances'),
   ('ncr_costs'), ('ncr_attachments'),
   ('gauge_types'), ('gauge_type_characteristics'), ('gauges'), ('gauge_characteristics'), ('calibrations'),
-  ('calibration_readings'), ('calibration_attachments')
+  ('calibration_readings'), ('calibration_attachments'),
+  ('machines'), ('part_families'), ('part_revision_characteristics'), ('control_plans'),
+  ('control_plan_applicability'), ('control_plan_revisions'),
+  ('control_plan_operations'), ('control_plan_characteristics'), ('characteristic_applicability'),
+  ('sampling_rules'), ('reaction_plans'), ('characteristic_templates'), ('part_customers'),
+  ('inspection_records'), ('resolved_inspection_requirements'), ('inspection_samples'), ('inspection_measurements'),
+  ('organisation_subscriptions'), ('organisation_subscription_items'), ('user_subscription_assignments'),
+  ('billing_invoices'), ('billing_payments')
 )
 SELECT rule, object FROM (
   SELECT '1 rls disabled' AS rule, format('%I.%I', nspname, relname) AS object

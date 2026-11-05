@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Switch from "@/components/ui/Switch";
 import Field from "../ui/Field";
 import { ApiUnavailable } from "./SettingsOrganisation";
 import { describeApiError } from "../../lib/api-client";
@@ -13,6 +14,7 @@ import {
   useRoles,
   useSites,
 } from "../../hooks/useQmsApi";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const STATUS_STYLES = {
   active: "bg-green-500/15 text-green-700 dark:text-green-300",
@@ -328,7 +330,7 @@ const SettingsUsers = () => {
   const canManage = can("members.manage");
 
   if (members.isLoading || roles.isLoading)
-    return <p className="text-secondary-text p-4">Loading members…</p>;
+    return <LoadingScreen />;
   if (members.error?.status === 403) {
     return (
       <p className="text-secondary-text p-4">
@@ -364,14 +366,12 @@ const SettingsUsers = () => {
         title="Members"
         subtitle="People in the organisation and their roles"
         action={
-          <label className="flex items-center gap-2 text-sm text-secondary-text">
-            <input
-              type="checkbox"
-              checked={showRemoved}
-              onChange={(e) => setShowRemoved(e.target.checked)}
-            />
+          <Switch
+            className="text-sm text-secondary-text"
+            checked={showRemoved}
+            onChange={(e) => setShowRemoved(e.target.checked)}>
             Show removed
-          </label>
+          </Switch>
         }>
         <div className="overflow-x-auto">
           <table className="w-full text-left">

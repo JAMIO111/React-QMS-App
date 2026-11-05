@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { pageSchema } from '../common/pagination';
@@ -6,6 +6,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
+  AddPartCustomerBody,
   CreatePartBody,
   CreatePartyBody,
   CreateRevisionBody,
@@ -16,6 +17,7 @@ import {
   PartSummary,
   PartyListQuery,
   UpdatePartBody,
+  UpdatePartCustomerBody,
   UpdatePartyBody,
   UpdateRevisionBody,
   Unit,
@@ -127,6 +129,16 @@ export class PartsController {
     return this.service.updatePart(ctx, parse(Uuid, id), parse(UpdatePartBody, body));
   }
 
+  /** Add a customer the part is sold to (with the customer's own part number). */
+  @Post(':id/customers')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(AddPartCustomerBody) })
+  @ApiCreatedResponse({ schema: openApiSchema(PartDetail) })
+  addCustomer(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addPartCustomer(ctx, parse(Uuid, id), parse(AddPartCustomerBody, body));
+  }
+
   @Post(':id/revisions')
   @HttpCode(201)
   @OrganisationScoped(MANAGE)
@@ -168,5 +180,28 @@ export class PartRevisionsController {
   @ApiOkResponse({ schema: openApiSchema(PartRevision) })
   obsolete(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.transitionRevision(ctx, parse(Uuid, id), 'obsolete');
+  }
+}
+
+@ApiTags('parts')
+@ApiBearerAuth()
+@Controller('part-customers')
+export class PartCustomersController {
+  constructor(private readonly service: MasterDataService) {}
+
+  /** Change the customer's part number, or make this the primary customer. */
+  @Patch(':id')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(UpdatePartCustomerBody) })
+  @ApiOkResponse({ schema: openApiSchema(PartDetail) })
+  update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.updatePartCustomer(ctx, parse(Uuid, id), parse(UpdatePartCustomerBody, body));
+  }
+
+  @Delete(':id')
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ schema: openApiSchema(PartDetail) })
+  remove(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.removePartCustomer(ctx, parse(Uuid, id));
   }
 }

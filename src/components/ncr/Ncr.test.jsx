@@ -408,15 +408,14 @@ describe("Settings → Data Management", () => {
   it("adds failure modes and sub-failure modes, renames and deactivates", async () => {
     routeApi({ "POST /ncr-classifications": (_p, o) => ({ id: "x", ...o.body }), "PATCH /ncr-classifications/fm2": (_p, o) => ({ id: "fm2", ...o.body }) });
     renderAt("/Settings");
-    await userEvent.click(screen.getByRole("button", { name: "Expand Failure modes" }));
     expect(await screen.findByText("Oversize")).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText("New failure mode"), "Contamination");
-    await userEvent.click(screen.getAllByRole("button", { name: "Add" }).at(-1));
+    await userEvent.click(within(screen.getByLabelText("New failure mode").closest("form")).getByRole("button", { name: "Add" }));
     expect(lastCall("POST /ncr-classifications").body).toEqual({ kind: "failure_mode", name: "Contamination" });
     await userEvent.type(screen.getAllByLabelText("New sub-failure mode")[0], "Undersize");
     await userEvent.click(screen.getAllByRole("button", { name: "Add" })[0]);
     expect(lastCall("POST /ncr-classifications").body).toEqual({ kind: "sub_failure_mode", name: "Undersize", parentId: "fm1" });
-    await userEvent.click(screen.getByRole("button", { name: "Deactivate Cosmetic" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Cosmetic active" }));
     expect(lastCall("PATCH /ncr-classifications/fm2").body).toEqual({ active: false });
   });
 
@@ -424,10 +423,9 @@ describe("Settings → Data Management", () => {
     permissions = ["ncr.read"];
     routeApi({});
     renderAt("/Settings");
-    await userEvent.click(screen.getByRole("button", { name: "Expand Failure modes" }));
     expect(await screen.findByText("Dimensional")).toBeInTheDocument();
     expect(screen.queryByLabelText("New failure mode")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Deactivate/ })).toBeNull();
+    expect(screen.queryByRole("switch", { name: /^(?!Show).* active$/ })).toBeNull();
   });
 });
 

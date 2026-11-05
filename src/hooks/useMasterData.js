@@ -1,11 +1,12 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
+import { optimisticHandlers, settle } from "../lib/optimistic";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 
 /** Query keys live under ["api", "org", organisationId, …] like the other API hooks. */
-const key = (organisationId, ...rest) => ["api", "org", organisationId, "master", ...rest];
+export const key = (organisationId, ...rest) => ["api", "org", organisationId, "master", ...rest];
 
-const queryString = (params) => {
+export const queryString = (params) => {
   const qs = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== "" && v !== false) qs.set(k, String(v));
@@ -15,7 +16,7 @@ const queryString = (params) => {
 };
 
 /** A keyset-paginated list (`{ data, nextCursor }`) with "load more". */
-const usePagedList = (resource, params, { enabled = true } = {}) => {
+export const usePagedList = (resource, params, { enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
   return useInfiniteQuery({
     queryKey: key(organisationId, resource, params),
@@ -39,7 +40,8 @@ export const useUnits = () =>
 
 /** kind: "customers" | "suppliers" */
 export const useParties = (kind, { q = "", includeInactive = false } = {}) => usePagedList(kind, { q, includeInactive });
-export const useParts = ({ q = "", includeInactive = false, customerId } = {}) => usePagedList("parts", { q, includeInactive, customerId });
+export const useParts = ({ q = "", includeInactive = false, customerId, partFamilyId } = {}) =>
+  usePagedList("parts", { q, includeInactive, customerId, partFamilyId });
 
 export const usePart = (id) => {
   const { organisationId } = useOrganisation();
@@ -60,6 +62,7 @@ export const useMasterDataMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ path, method = "POST", body, reason }) => apiFetch(path, { method, body, organisationId, reason }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: key(organisationId) }),
+    ...optimisticHandlers(queryClient, key(organisationId)),
+    onSuccess: (_data, _request, context) => settle(queryClient, key(organisationId), context),
   });
 };

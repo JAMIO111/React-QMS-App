@@ -6,7 +6,7 @@ import { SearchProvider } from "./contexts/SearchProvider.jsx";
 import { NotificationProvider } from "./contexts/NotificationProvider";
 import NotificationPane from "./components/NotificationPane";
 import NoOrganisation from "./components/NoOrganisation";
-import LoadingSpinner from "./components/LoadingSpinner";
+import LoadingScreen from "./components/ui/LoadingScreen";
 import { useOrganisation } from "./contexts/OrganisationProvider";
 import ThemeColourSync from "./components/ThemeColourSync";
 import { useEffect } from "react";
@@ -24,9 +24,7 @@ function App() {
 
   if (organisation === undefined) {
     return (
-      <div className="flex items-center justify-center h-screen bg-primary-bg">
-        <LoadingSpinner />
-      </div>
+      <div className="h-screen bg-primary-bg"><LoadingScreen fullscreen /></div>
     );
   }
   if (organisation === null) return <NoOrganisation error={error} />;

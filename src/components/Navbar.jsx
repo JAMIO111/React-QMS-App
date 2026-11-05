@@ -10,6 +10,7 @@ import NavItem from "./NavItem";
 import Logout from "./Logout";
 import { menuStructure } from "../MenuStructure";
 import { useCanSee, useOrganisationLogo } from "../hooks/useQmsApi";
+import { useModuleAccess } from "../hooks/useSubscription";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import SubMenuItem from "./SubMenuItem";
 import ThemeToggle from "./ThemeToggle";
@@ -17,6 +18,7 @@ import ThemeToggle from "./ThemeToggle";
 const Navbar = () => {
   const [isMenuExpanded, setIsMenuExpanded] = useState(false);
   const canSee = useCanSee();
+  const hasModule = useModuleAccess();
   const { organisation } = useOrganisation();
   const { data: logoUrl } = useOrganisationLogo();
   const orgName = organisation?.name ?? "";
@@ -80,7 +82,7 @@ const Navbar = () => {
         <div className="flex flex-col h-full overflow-y-auto justify-between">
           <ul className="gap-1 flex-1 flex flex-col pt-3">
             {menuStructure
-              .filter((item) => canSee(item.permission))
+              .filter((item) => canSee(item.permission) && hasModule(item.module))
               .map((item) => (
                 <li key={item.name}>
                   <NavItem

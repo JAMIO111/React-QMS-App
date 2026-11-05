@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Switch from "@/components/ui/Switch";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeftIcon, PlusIcon } from "@/components/icons";
 import Field from "../ui/Field";
@@ -8,8 +9,12 @@ import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useMasterDataMutation, usePart } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
-import { CustomerSelect } from "./PartsPage";
-import { ActiveBadge, buttonClass, ErrorNotice } from "./shared";
+import { ActiveBadge, buttonClass, ErrorNotice, SelectField } from "./shared";
+import { usePartFamilies } from "../../hooks/useProcessControl";
+import SpecValues from "./SpecValues";
+import PartCustomers from "./PartCustomers";
+import RequirementPreview from "../process-control/RequirementPreview";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const STATUS_STYLE = {
   draft: "bg-warning-color/15 text-primary-text",
@@ -26,7 +31,14 @@ const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-GB", { d
 const PartDetails = ({ part, canManage }) => {
   const mutation = useMasterDataMutation();
   const { showToast } = useToast();
-  const toForm = (p) => ({ partNumber: p.partNumber, name: p.name, description: p.description ?? "", customerId: p.customer?.id ?? null, active: p.active });
+  const families = usePartFamilies();
+  const toForm = (p) => ({
+    partNumber: p.partNumber,
+    name: p.name,
+    description: p.description ?? "",
+    partFamilyId: p.partFamily?.id ?? null,
+    active: p.active,
+  });
   const [form, setForm] = useState(toForm(part));
   useEffect(() => setForm(toForm(part)), [part]);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
@@ -37,7 +49,13 @@ const PartDetails = ({ part, canManage }) => {
       {
         path: `/parts/${part.id}`,
         method: "PATCH",
-        body: { partNumber: form.partNumber.trim(), name: form.name.trim(), description: form.description.trim(), customerId: form.customerId, active: form.active },
+        body: {
+          partNumber: form.partNumber.trim(),
+          name: form.name.trim(),
+          description: form.description.trim(),
+          partFamilyId: form.partFamilyId,
+          active: form.active,
+        },
       },
       { onSuccess: () => showToast({ type: "success", title: "Saved", message: "Part updated." }) }
     );
@@ -49,22 +67,26 @@ const PartDetails = ({ part, canManage }) => {
         <Field label="Part number" value={form.partNumber} onChange={set("partNumber")} disabled={!canManage} required maxLength={60} />
         <Field label="Name" value={form.name} onChange={set("name")} disabled={!canManage} required maxLength={200} />
         <Field label="Description" value={form.description} onChange={set("description")} disabled={!canManage} maxLength={2000} className="md:col-span-2" />
-        <div className="flex flex-col gap-1">
-          <label htmlFor="part-customer" className="text-sm font-medium text-primary-text">
-            Customer
-          </label>
-          {canManage ? (
-            <CustomerSelect id="part-customer" value={form.customerId} onChange={(v) => setForm((f) => ({ ...f, customerId: v }))} />
-          ) : (
-            <p id="part-customer" className="py-2 text-primary-text">
-              {part.customer?.name ?? "—"}
-            </p>
-          )}
-        </div>
+        {canManage ? (
+          <SelectField
+            label="Part family"
+            value={form.partFamilyId}
+            onChange={(v) => setForm((f) => ({ ...f, partFamilyId: v }))}
+            options={(families.data?.items ?? [])
+              .concat(part.partFamily && !(families.data?.items ?? []).some((f) => f.id === part.partFamily.id) ? [part.partFamily] : [])
+              .map((f) => ({ value: f.id, label: `${f.code} · ${f.name}` }))}
+            hint="Family control plans apply to this part"
+          />
+        ) : (
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium text-secondary-text">Part family</span>
+            <p className="py-2 text-primary-text">{part.partFamily ? `${part.partFamily.code} · ${part.partFamily.name}` : "—"}</p>
+          </div>
+        )}
         {canManage && (
-          <label className="flex items-center gap-2 self-end pb-2 text-sm text-primary-text">
-            <input type="checkbox" checked={form.active} onChange={set("active")} /> Active
-          </label>
+          <Switch className="self-end pb-2 text-sm text-primary-text" checked={form.active} onChange={set("active")}>
+            Active
+          </Switch>
         )}
       </div>
       {mutation.error && (
@@ -169,7 +191,7 @@ const Revisions = ({ part, canManage }) => {
         <p className="text-sm text-secondary-text">No revisions yet. Add one, then release it when the drawing is approved.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] border-separate border-spacing-0 text-sm text-primary-text">
+          <table className="w-full min-w-[640px] border-separate border-spacing-0 text-sm text-primary-text" aria-label="Revisions">
             <thead>
               <tr className="text-left text-secondary-text">
                 <th scope="col" className="border-b border-border-color px-2 py-2 font-normal">Revision</th>
@@ -235,7 +257,7 @@ const PartDetailPage = () => {
       <Link to="/Parts" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
         <ArrowLeftIcon className="h-4 w-4" /> Parts
       </Link>
-      {isLoading && <p className="text-secondary-text">Loading part…</p>}
+      {isLoading && <LoadingScreen />}
       {error && <ErrorNotice error={error} />}
       {part && (
         <>
@@ -249,7 +271,17 @@ const PartDetailPage = () => {
             </span>
           </div>
           <PartDetails part={part} canManage={canManage} />
+          <PartCustomers part={part} canManage={canManage} />
           <Revisions part={part} canManage={canManage} />
+          <SpecValues part={part} canManage={canManage} />
+          {can("process_control.read") && (
+            <RequirementPreview
+              key={part.id}
+              partId={part.id}
+              title="Inspection requirements"
+              subtitle="The control plan that applies to this part and what is checked, from its released revision."
+            />
+          )}
         </>
       )}
     </div>

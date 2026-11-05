@@ -53,6 +53,7 @@ import {
   Minus as LucideMinus,
   MonitorCog as LucideMonitorCog,
   MoonStar as LucideMoonStar,
+  LoaderCircle as LucideLoaderCircle,
   Package as LucidePackage,
   PanelLeftClose as LucidePanelLeftClose,
   PanelLeftOpen as LucidePanelLeftOpen,
@@ -90,6 +91,7 @@ import {
   Inbox as LucideInbox,
   Paperclip as LucidePaperclip,
   Receipt as LucideReceipt,
+  CreditCard as LucideCreditCard,
   Tags as LucideTags,
   Wrench as LucideWrench,
   Coins as LucideCoins,
@@ -172,6 +174,7 @@ export const PackageIcon = withDefaults(LucidePackage);
 export const PanelLeftCloseIcon = withDefaults(LucidePanelLeftClose);
 export const PanelLeftOpenIcon = withDefaults(LucidePanelLeftOpen);
 export const PencilIcon = withDefaults(LucidePencil);
+export const LoaderCircleIcon = withDefaults(LucideLoaderCircle);
 export const PlusIcon = withDefaults(LucidePlus);
 export const PoundSterlingIcon = withDefaults(LucidePoundSterling);
 export const QrCodeIcon = withDefaults(LucideQrCode);
@@ -204,6 +207,7 @@ export const HashIcon = withDefaults(LucideHash);
 export const HistoryIcon = withDefaults(LucideHistory);
 export const InboxIcon = withDefaults(LucideInbox);
 export const PaperclipIcon = withDefaults(LucidePaperclip);
+export const CreditCardIcon = withDefaults(LucideCreditCard);
 export const ReceiptIcon = withDefaults(LucideReceipt);
 export const TagsIcon = withDefaults(LucideTags);
 export const WrenchIcon = withDefaults(LucideWrench);

@@ -1,11 +1,10 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthProvider";
 import { useMe } from "../hooks/useQmsApi";
+import LoadingScreen from "./ui/LoadingScreen";
 
 const Loading = () => (
-  <div role="status" className="flex h-screen items-center justify-center bg-primary-bg text-secondary-text">
-    Loading…
-  </div>
+  <LoadingScreen fullscreen />
 );
 
 /**

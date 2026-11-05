@@ -143,7 +143,7 @@ describe("Table", () => {
 
   it("shows loading and empty states across the full width", () => {
     const { rerender } = render(<Harness rows={[]} isLoading />);
-    expect(screen.getByRole("cell", { name: "Loading…" })).toHaveAttribute("colspan", "4");
+    expect(screen.getByRole("cell", { name: "Loading, please wait…" })).toHaveAttribute("colspan", "4");
     rerender(<Harness rows={[]} />);
     expect(screen.getByRole("cell", { name: "No records found." })).toBeInTheDocument();
   });

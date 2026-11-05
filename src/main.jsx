@@ -8,7 +8,7 @@ import { AuthProvider } from "./contexts/AuthProvider.jsx";
 import { UserProvider } from "./contexts/UserProvider.jsx";
 import { OrganisationProvider } from "./contexts/OrganisationProvider.jsx";
 import { ModalProvider } from "./contexts/ModalContext";
-import LoadingSpinner from "./components/LoadingSpinner.jsx";
+import LoadingScreen from "./components/ui/LoadingScreen.jsx";
 import "./index.css";
 import { applyStoredThemeColour } from "./lib/theme-colours";
 
@@ -40,9 +40,22 @@ const CalibrationDashboard = lazy(() => import("./components/calibration/Calibra
 const GaugeRegister = lazy(() => import("./components/calibration/GaugeRegister.jsx"));
 const GaugePage = lazy(() => import("./components/calibration/GaugePage.jsx"));
 const CalibrationRecordPage = lazy(() => import("./components/calibration/CalibrationRecordPage.jsx"));
+const SettingsNotifications = lazy(() => import("./components/Settings/SettingsNotifications.jsx"));
+const SettingsSubscription = lazy(() => import("./components/Settings/SettingsSubscription.jsx"));
+const RequireModule = lazy(() => import("./components/RequireModule.jsx"));
 const SettingsCalibration = lazy(() => import("./components/Settings/SettingsCalibration.jsx"));
+const SettingsProcessControl = lazy(() => import("./components/Settings/SettingsProcessControl.jsx"));
 const PartDetailPage = lazy(() => import("./components/master-data/PartDetailPage.jsx"));
 const PartiesPage = lazy(() => import("./components/master-data/PartiesPage.jsx"));
+const MachinesPage = lazy(() => import("./components/master-data/MachinesPage.jsx"));
+const PartFamiliesPage = lazy(() => import("./components/master-data/PartFamiliesPage.jsx"));
+const PartFamilyPage = lazy(() => import("./components/master-data/PartFamilyPage.jsx"));
+const ControlPlansPage = lazy(() => import("./components/process-control/ControlPlansPage.jsx"));
+const ControlPlanPage = lazy(() => import("./components/process-control/ControlPlanPage.jsx"));
+const RevisionPage = lazy(() => import("./components/process-control/RevisionPage.jsx"));
+const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
+const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
+const InspectionPage = lazy(() => import("./components/inspection/InspectionPage.jsx"));
 const AuthPage = lazy(() => import("./components/AuthPage.jsx"));
 const Login = lazy(() => import("./components/Login.jsx"));
 const SignUp = lazy(() => import("./components/SignUp.jsx"));
@@ -95,13 +108,23 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <Dashboard /> },
           { path: "Dashboard", element: <Dashboard /> },
-          { path: "Non-Conformance", element: <NcDashboard /> },
-          { path: "Non-Conformance/:type", element: <NonConformance /> },
-          { path: "Non-Conformance/:type/:id", element: <NcrPage /> },
-          { path: "Calibration", element: <CalibrationDashboard /> },
-          { path: "Calibration/Gauges", element: <GaugeRegister /> },
-          { path: "Calibration/Gauges/:id", element: <GaugePage key="gauge" /> },
-          { path: "Calibration/Gauges/:gaugeId/calibrations/:calibrationId", element: <CalibrationRecordPage /> },
+          {
+            element: <RequireModule module="nonconformance" />,
+            children: [
+            { path: "Non-Conformance", element: <NcDashboard /> },
+            { path: "Non-Conformance/:type", element: <NonConformance /> },
+            { path: "Non-Conformance/:type/:id", element: <NcrPage /> },
+            ],
+          },
+          {
+            element: <RequireModule module="calibration" />,
+            children: [
+            { path: "Calibration", element: <CalibrationDashboard /> },
+            { path: "Calibration/Gauges", element: <GaugeRegister /> },
+            { path: "Calibration/Gauges/:id", element: <GaugePage key="gauge" /> },
+            { path: "Calibration/Gauges/:gaugeId/calibrations/:calibrationId", element: <CalibrationRecordPage /> },
+            ],
+          },
           {
             path: "Settings",
             element: <Settings />,
@@ -110,6 +133,7 @@ const router = createBrowserRouter([
               { path: "Organisation", element: <SettingsOrganisation /> },
               { path: "Users", element: <SettingsUsers /> },
               { path: "General", element: <Navigate to="../Organisation" replace /> },
+              { path: "Subscription", element: <SettingsSubscription /> },
               { path: "Account", element: <SettingsAccount /> },
               {
                 path: "System-Preferences",
@@ -128,9 +152,10 @@ const router = createBrowserRouter([
                 ),
               },
               { path: "Calibration", element: <SettingsCalibration /> },
+              { path: "Process-Control", element: <SettingsProcessControl /> },
               {
                 path: "Notifications",
-                element: <div>Notifications</div>,
+                element: <SettingsNotifications />,
               },
               { path: "Admin", element: <div>Admin Settings</div> },
             ],
@@ -140,6 +165,26 @@ const router = createBrowserRouter([
           { path: "Parts/:id", element: <PartDetailPage /> },
           { path: "Customers", element: <PartiesPage key="customers" kind="customers" /> },
           { path: "Suppliers", element: <PartiesPage key="suppliers" kind="suppliers" /> },
+          { path: "Machines", element: <MachinesPage /> },
+          { path: "Part-Families", element: <PartFamiliesPage /> },
+          { path: "Part-Families/:id", element: <PartFamilyPage /> },
+          {
+            element: <RequireModule module="control_plans" />,
+            children: [
+            { path: "Process-Control", element: <Navigate to="Plans" replace /> },
+            { path: "Process-Control/Plans", element: <ControlPlansPage /> },
+            { path: "Process-Control/Plans/:id", element: <ControlPlanPage /> },
+            { path: "Process-Control/Plans/:planId/revisions/:revisionId", element: <RevisionPage /> },
+            ],
+          },
+          {
+            element: <RequireModule module="inspections" />,
+            children: [
+            { path: "Inspections", element: <InspectionsPage /> },
+            { path: "Inspections/new", element: <StartInspectionPage /> },
+            { path: "Inspections/:id", element: <InspectionPage /> },
+            ],
+          },
         ],
       },
     ],
@@ -157,9 +202,7 @@ createRoot(document.getElementById("root")).render(
                 <ModalProvider>
                   <Suspense
                     fallback={
-                      <div className="flex items-center justify-center h-screen bg-primary-bg">
-                        <LoadingSpinner />
-                      </div>
+                      <div className="h-screen bg-primary-bg"><LoadingScreen fullscreen /></div>
                     }>
                     <RouterProvider router={router} />
                   </Suspense>

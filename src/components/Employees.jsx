@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useGlobalSearch } from "../contexts/SearchProvider";
 import CTAButton from "./CTAButton";
 import { PencilIcon, PlusIcon } from "@/components/icons";
+import LoadingScreen from "./ui/LoadingScreen";
 
 const Employees = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -55,7 +56,7 @@ const Employees = () => {
         className={
           "grid xl:grid-cols-5 lg:grid-cols-4 md:grid-cols-3 sm:grid-cols-2 xs:grid-cols-1 gap-5 pr-3 overflow-auto"
         }>
-        {isLoading && <div>Loading...</div>}
+        {isLoading && <LoadingScreen />}
         {error && <div>Error: {error.message}</div>}
         {data &&
           filteredData.map((employee) => (

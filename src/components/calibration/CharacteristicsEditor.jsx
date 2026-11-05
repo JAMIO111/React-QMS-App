@@ -1,10 +1,12 @@
 import { useState } from "react";
+import Switch from "@/components/ui/Switch";
 import { ChevronDownIcon, ChevronUpIcon, PencilIcon, PlusIcon } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
 import { useCalibrationMutation } from "../../hooks/useCalibration";
 import { useUnits } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
 import { CHARACTERISTIC_KINDS, formatNumber, formatTolerance } from "../../lib/calibration";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const input = "w-full rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-sm text-primary-text focus:outline-none focus:border-brand-primary disabled:opacity-60";
 const EMPTY = { kind: "variable", name: "", nominal: "", toleranceMinus: "", tolerancePlus: "", unitCode: "mm", method: "" };
@@ -110,15 +112,15 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
       }
     );
 
-  if (isLoading) return <p className="text-secondary-text">Loading characteristics…</p>;
+  if (isLoading) return <LoadingScreen size="sm" />;
   if (error) return <p role="alert" className="text-error-color">{describeApiError(error)}</p>;
 
   return (
     <div className="flex flex-col gap-3">
       {onShowInactive && (
-        <label className="flex items-center gap-2 self-end text-sm text-secondary-text">
-          <input type="checkbox" checked={!!showInactive} onChange={(e) => onShowInactive(e.target.checked)} /> Show switched-off
-        </label>
+        <Switch className="self-end text-sm text-secondary-text" checked={!!showInactive} onChange={(e) => onShowInactive(e.target.checked)}>
+          Show switched-off
+        </Switch>
       )}
       {ordered.length === 0 && !adding ? (
         <p className="rounded-lg border-2 border-dashed border-border-dark-color p-4 text-center text-sm text-secondary-text">{emptyText ?? "No characteristics yet."}</p>
@@ -185,7 +187,7 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
                           <button type="button" aria-label={`Edit ${c.name}`} onClick={() => { setEditing(c.id); setEditForm(toForm(c)); }} className="rounded p-1 hover:bg-border-color/50 cursor-pointer">
                             <PencilIcon />
                           </button>
-                          <button type="button" onClick={() => patch(c.id, { active: !c.active })} className="whitespace-nowrap rounded px-1 text-xs text-link-color hover:underline cursor-pointer" title={formatTolerance(c)}>
+                          <button type="button" disabled={mutation.isPending} onClick={() => patch(c.id, { active: !c.active })} className="whitespace-nowrap rounded px-1 text-xs text-link-color hover:underline disabled:opacity-50 cursor-pointer" title={formatTolerance(c)}>
                             {c.active ? "Switch off" : "Switch on"}
                           </button>
                         </div>

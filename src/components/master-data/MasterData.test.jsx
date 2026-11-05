@@ -25,6 +25,7 @@ const parts = [
 ];
 const detail = {
   ...parts[0],
+  customers: [{ id: "pc1", customer: { id: "c1", code: "ACME", name: "Acme" }, customerPartNumber: "AC-7781", isPrimary: true }],
   revisions: [
     { id: "r3", partId: "p1", revision: "C", drawingRef: "DRG-100 iss C", changeSummary: "Thicker", status: "draft", releasedAt: null, createdAt: "2026-11-03T10:00:00Z" },
     { id: "r2", partId: "p1", revision: "B", drawingRef: "DRG-100 iss B", changeSummary: "Hole moved", status: "released", releasedAt: "2026-10-01T10:00:00Z", createdAt: "2026-09-01T10:00:00Z" },
@@ -112,7 +113,7 @@ describe("PartDetailPage", () => {
     routeApi({ "GET /parts/p1": detail, "GET /customers": page([]) });
     renderAt("/Parts/p1");
     expect(await screen.findByText("Current revision:")).toHaveTextContent("Current revision: B");
-    const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+    const rows = within(screen.getByRole("table", { name: "Revisions" })).getAllByRole("row").slice(1);
     expect(rows.map((r) => within(r).getAllByRole("cell")[1].textContent)).toEqual(["draft", "released", "superseded"]);
   });
 

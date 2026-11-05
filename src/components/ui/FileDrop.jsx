@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Switch from "./Switch";
 import { CloudUploadIcon, RotateCcwIcon, SaveIcon, Trash2Icon, Undo2Icon, XIcon } from "@/components/icons";
 import { uploadFileToSupabase } from "@/api/supabaseApi";
 import CTAButton from "../CTAButton";
@@ -8,6 +9,7 @@ import { useToast } from "@/contexts/ToastProvider";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useNcrAttachments, useNcrMutation } from "../../hooks/useNcr";
 import { apiFetch, describeApiError } from "../../lib/api-client";
+import LoadingScreen from "./LoadingScreen";
 
 /** Largest file the database accepts (ncr_attachments.size_bytes). */
 const MAX_FILE_SIZE_MB = 25;
@@ -155,10 +157,9 @@ export const AttachmentDrop = ({ recordId, bucket, folder, attachments, mutation
           <h4 className="text-lg text-primary-text">Files & attachments</h4>
           <div className="flex items-center gap-3">
             {saved.some((f) => f.deletedAt) && (
-              <label className="flex items-center gap-2 text-sm text-secondary-text">
-                <input type="checkbox" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)} />
+              <Switch className="text-sm text-secondary-text" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)}>
                 Show removed
-              </label>
+              </Switch>
             )}
             {newFiles.length > 0 && (
               <>
@@ -177,7 +178,7 @@ export const AttachmentDrop = ({ recordId, bucket, folder, attachments, mutation
         </div>
 
         {attachments.isLoading ? (
-          <p className="rounded-lg border-2 border-dashed border-border-dark-color bg-secondary-bg p-4 text-center text-secondary-text">Loading files…</p>
+          <LoadingScreen size="sm" />
         ) : attachments.error ? (
           <p role="alert" className="rounded-lg border-2 border-dashed border-border-dark-color bg-secondary-bg p-4 text-center text-error-color">
             {describeApiError(attachments.error)}
@@ -248,7 +249,7 @@ export const AttachmentDrop = ({ recordId, bucket, folder, attachments, mutation
                                 </button>
                               )}
                               {canEdit && file.deletedAt && (
-                                <button type="button" aria-label={`Restore ${name}`} title="Restore"
+                                <button type="button" aria-label={`Restore ${name}`} title="Restore" disabled={mutation.isPending}
                                   onClick={() => mutation.mutate({ path: `${itemBase}/${file.id}/restore` }, { onError: (e) => showToast({ type: "error", title: "Not restored", message: describeApiError(e) }) })}
                                   className="rounded-lg p-1.5 text-primary-text hover:bg-secondary-text/5 cursor-pointer">
                                   <RotateCcwIcon className="h-5 w-5" />

@@ -21,6 +21,7 @@ DECLARE
   a uuid; b uuid; site uuid; owner_role uuid; invite uuid; fm bigint; status bigint; proc bigint;
   part uuid := gen_random_uuid(); cust uuid := gen_random_uuid(); supp uuid := gen_random_uuid();
   emp uuid := gen_random_uuid(); d8 uuid := gen_random_uuid(); ncr uuid := gen_random_uuid(); notif uuid := gen_random_uuid();
+  inspection uuid;
 BEGIN
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
   a := app.create_organisation('Sweep Alpha');
@@ -80,7 +81,62 @@ BEGIN
     FROM public.calibrations c JOIN public.gauge_characteristics k ON k.gauge_id = c.gauge_id WHERE c.organisation_id = a;
   INSERT INTO public.calibration_attachments (organisation_id, calibration_id, storage_path, file_name, size_bytes)
     SELECT a, id, a || '/calibration/' || id || '/cert.pdf', 'cert.pdf', 5 FROM public.calibrations WHERE organisation_id = a;
+  -- Process control (PC1).
+  INSERT INTO public.machines (organisation_id, code, name, site_id) VALUES (a, 'SW-M1', 'Sweep lathe', site);
+  INSERT INTO public.part_families (organisation_id, code, name) VALUES (a, 'SWF', 'Sweep family');
+  UPDATE public.parts SET part_family_id = (SELECT id FROM public.part_families WHERE organisation_id = a) WHERE organisation_id = a AND part_number = 'SW-P1';
+  INSERT INTO public.part_revision_characteristics (organisation_id, part_revision_id, characteristic_key, nominal, lower_limit, upper_limit, unit_code)
+    SELECT a, id, 'LENGTH', 100, 99.9, 100.1, 'mm' FROM public.part_revisions WHERE organisation_id = a;
+  INSERT INTO public.part_customers (organisation_id, part_id, customer_id, customer_part_number)
+    SELECT a, p.id, c.id, 'CUST-PN-1' FROM public.parts p, public.customers c WHERE p.organisation_id = a AND p.part_number = 'SW-P1' AND c.organisation_id = a AND c.code = 'SWC';
+  INSERT INTO public.control_plans (organisation_id, plan_code, title) VALUES (a, 'SW-CP-1', 'Sweep plan');
+  INSERT INTO public.control_plan_applicability (organisation_id, control_plan_id, part_family_id)
+    SELECT a, p.id, f.id FROM public.control_plans p, public.part_families f WHERE p.organisation_id = a AND f.organisation_id = a;
+  INSERT INTO public.control_plan_revisions (organisation_id, control_plan_id, revision_code)
+    SELECT a, id, 'A' FROM public.control_plans WHERE organisation_id = a;
+  -- Process control (PC2): plan content.
+  INSERT INTO public.control_plan_operations (organisation_id, control_plan_revision_id, operation_code, name)
+    SELECT a, id, 'OP-10', 'Sweep turning' FROM public.control_plan_revisions WHERE organisation_id = a;
+  INSERT INTO public.control_plan_characteristics (organisation_id, control_plan_revision_id, operation_id, characteristic_key, name,
+                                                   value_source, applies_to, unit_code, spec_key)
+    SELECT a, o.control_plan_revision_id, o.id, 'LENGTH', 'Length', 'part_spec', 'selected', 'mm', 'LENGTH'
+    FROM public.control_plan_operations o WHERE o.organisation_id = a;
+  INSERT INTO public.characteristic_applicability (organisation_id, control_plan_revision_id, plan_characteristic_id, part_id)
+    SELECT a, c.control_plan_revision_id, c.id, p.id FROM public.control_plan_characteristics c, public.parts p
+    WHERE c.organisation_id = a AND p.organisation_id = a AND p.part_number = 'SW-P1';
+  INSERT INTO public.characteristic_templates (organisation_id, name, characteristic_key, upper_limit, unit_code) VALUES (a, 'Sweep template', 'OD', 5, 'mm');
+  INSERT INTO public.sampling_rules (organisation_id, control_plan_revision_id, plan_characteristic_id, trigger_type, sample_size)
+    SELECT a, control_plan_revision_id, id, 'first_off', 1 FROM public.control_plan_characteristics WHERE organisation_id = a;
+  INSERT INTO public.reaction_plans (organisation_id, control_plan_revision_id, trigger_type, action, instruction)
+    SELECT a, id, 'out_of_spec', 'hold', 'Quarantine the batch' FROM public.control_plan_revisions WHERE organisation_id = a;
 
+  -- In-process inspection (PC4): make the sweep plan effective with one check, then inspect SW-P1.
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
+  UPDATE public.control_plan_revisions SET change_reason = 'Sweep' WHERE organisation_id = a;
+  UPDATE public.control_plan_revisions SET status = 'pending_approval' WHERE organisation_id = a;
+  UPDATE public.control_plan_revisions SET status = 'approved' WHERE organisation_id = a;
+  UPDATE public.control_plan_revisions SET status = 'effective' WHERE organisation_id = a;
+  inspection := app.start_inspection(site, (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'));
+  INSERT INTO public.inspection_samples (organisation_id, inspection_record_id) VALUES (a, inspection);
+  INSERT INTO public.inspection_measurements (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric)
+    SELECT a, s.inspection_record_id, s.id, q.id, 100 FROM public.inspection_samples s
+    JOIN public.resolved_inspection_requirements q ON q.inspection_record_id = s.inspection_record_id WHERE s.organisation_id = a;
+  PERFORM pg_temp.logout();
+
+  -- Subscription: seats and an assignment through the API functions, invoice and payment as the provider would.
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
+  PERFORM app.set_subscription_seats(a, 'controller', 2);
+  PERFORM app.assign_subscription_package((SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'), 'controller');
+  PERFORM pg_temp.logout();
+  INSERT INTO public.billing_invoices (organisation_id, provider_invoice_id, invoice_number, subtotal, tax_amount, total_amount, status)
+    VALUES (a, 'in_sweep', 'INV-1', 5000, 1000, 6000, 'paid');
+  INSERT INTO public.billing_payments (organisation_id, provider_payment_id, invoice_id, amount, status)
+    SELECT a, 'pay_sweep', id, 6000, 'succeeded' FROM public.billing_invoices WHERE organisation_id = a;
+  INSERT INTO public.notification_preferences (organisation_id, user_id, event_type_id, enabled)
+    SELECT a, '50000000-0000-0000-0000-0000000000a1', id, false FROM public.notification_event_types WHERE key = 'parts.created';
+  INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)
+    SELECT a, '50000000-0000-0000-0000-0000000000a1', id FROM public.notifications WHERE organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('pc_part', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'));
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));
 END $$;
@@ -173,6 +229,8 @@ BEGIN
   PERFORM pg_temp.assert_fails(format('SELECT app.create_default_roles(%L)', a), 'create_default_roles is not callable');
   PERFORM pg_temp.assert_fails($q$SELECT app.touch_updated()$q$, 'trigger functions are not callable');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.my_invitations() WHERE organisation_id = a), 0::bigint, 'my_invitations');
+  PERFORM pg_temp.assert_fails(format('SELECT app.resolve_inspection_requirements(%L)', (SELECT value FROM sweep WHERE key = 'pc_part')), 'resolve_inspection_requirements(A part)');
+  PERFORM pg_temp.assert_fails(format('SELECT app.start_inspection(%L, %L)', (SELECT id FROM public.sites LIMIT 1), (SELECT value FROM sweep WHERE key = 'pc_part')), 'start_inspection(A part)');
   PERFORM pg_temp.logout();
 END $$;
 

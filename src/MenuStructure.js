@@ -1,4 +1,4 @@
-import { BoxesIcon, GaugeIcon, LayoutDashboardIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, GaugeIcon, LayoutDashboardIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
@@ -11,6 +11,7 @@ export const menuStructure = [
     name: "Non-Conformance",
     icon: TriangleAlertIcon,
     permission: "ncr.read",
+    module: "nonconformance",
     path: "/Non-Conformance",
     subMenu: [
       { name: "Dashboard", path: "/Non-Conformance", end: true },
@@ -20,9 +21,26 @@ export const menuStructure = [
     ],
   },
   {
+    name: "In-Process Inspection",
+    icon: ClipboardListIcon,
+    permission: "inspection.read",
+    module: "inspections",
+    path: "/Inspections",
+    subMenu: [],
+  },
+  {
+    name: "Process Control",
+    icon: ClipboardCheckIcon,
+    permission: "process_control.read",
+    module: "control_plans",
+    path: "/Process-Control",
+    subMenu: [{ name: "Control Plans", path: "/Process-Control/Plans" }],
+  },
+  {
     name: "Calibration",
     icon: GaugeIcon,
     permission: "calibration.read",
+    module: "calibration",
     path: "/Calibration",
     subMenu: [
       { name: "Dashboard", path: "/Calibration", end: true },
@@ -36,6 +54,8 @@ export const menuStructure = [
     path: "/Parts",
     subMenu: [
       { name: "Parts", path: "/Parts" },
+      { name: "Part Families", path: "/Part-Families" },
+      { name: "Machines", path: "/Machines" },
       { name: "Customers", path: "/Customers" },
       { name: "Suppliers", path: "/Suppliers" },
     ],

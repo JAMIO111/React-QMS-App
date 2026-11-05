@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import Switch from "@/components/ui/Switch";
 import { PlusIcon } from "@/components/icons";
 import Field from "../ui/Field";
 import Dialog from "../ui/Dialog";
@@ -64,9 +65,9 @@ const PartyForm = ({ kind, party, onDone }) => {
         />
       </label>
       {party && (
-        <label className="flex items-center gap-2 text-sm text-primary-text">
-          <input type="checkbox" checked={form.active} onChange={set("active")} /> Active (inactive {label}s are hidden from pickers)
-        </label>
+        <Switch className="text-sm text-primary-text" checked={form.active} onChange={set("active")}>
+          Active (inactive {label}s are hidden from pickers)
+        </Switch>
       )}
       {mutation.error && (
         <p role="alert" className="text-sm text-error-color">
@@ -135,9 +136,9 @@ const PartiesPage = ({ kind }) => {
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <SearchBox label={`Search ${label.title.toLowerCase()}`} onSearch={onSearch} />
-        <label className="flex items-center gap-2 text-sm text-primary-text">
-          <input type="checkbox" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)} /> Show inactive
-        </label>
+        <Switch className="text-sm text-primary-text" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)}>
+          Show inactive
+        </Switch>
       </div>
       <DataList
         storageKey={`master:${kind}`}

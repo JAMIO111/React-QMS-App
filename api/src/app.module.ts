@@ -21,7 +21,7 @@ import {
 import { CalibrationRecordsService } from './calibration/calibration-records.service';
 import { CalibrationService } from './calibration/calibration.service';
 import { HealthController } from './health/health.controller';
-import { CustomersController, PartRevisionsController, PartsController, SuppliersController, UnitsController } from './master-data/master-data.controller';
+import { CustomersController, PartCustomersController, PartRevisionsController, PartsController, SuppliersController, UnitsController } from './master-data/master-data.controller';
 import { MasterDataService } from './master-data/master-data.service';
 import { EmployeesController, NcrClassificationsController, NcrController } from './ncr/ncr.controller';
 import { NcrService } from './ncr/ncr.service';
@@ -37,6 +37,24 @@ import { OrganisationsController } from './organisations/organisations.controlle
 import { OrganisationsService } from './organisations/organisations.service';
 import { DepartmentsController, SitesController } from './structure/structure.controller';
 import { StructureService } from './structure/structure.service';
+import {
+  ControlPlanContentController,
+  ControlPlanRevisionsController,
+  ControlPlansController,
+  MachinesController,
+  PartFamiliesController,
+  SpecValuesController,
+} from './process-control/process-control.controller';
+import { BillingController } from './billing/billing.controller';
+import { BillingService } from './billing/billing.service';
+import { NotificationsController } from './notifications/notifications.controller';
+import { NotificationsService } from './notifications/notifications.service';
+import { CharacteristicTemplatesController } from './process-control/characteristic-templates.controller';
+import { CharacteristicTemplatesService } from './process-control/characteristic-templates.service';
+import { ProcessControlService } from './process-control/process-control.service';
+import { InspectionMeasurementsController, InspectionsController } from './inspection/inspection.controller';
+import { InspectionService } from './inspection/inspection.service';
+import { ControlPlanContentService } from './process-control/control-plan-content.service';
 import { OrganisationGuard } from './tenancy/organisation.guard';
 
 @Module({})
@@ -77,6 +95,7 @@ export class AppModule implements NestModule {
         SuppliersController,
         PartsController,
         PartRevisionsController,
+        PartCustomersController,
         NcrController,
         NcrChildRecordsController,
         NcrCostsController,
@@ -91,6 +110,17 @@ export class AppModule implements NestModule {
         CalibrationsController,
         CalibrationAttachmentsController,
         CalibrationDashboardController,
+        MachinesController,
+        PartFamiliesController,
+        SpecValuesController,
+        ControlPlansController,
+        ControlPlanRevisionsController,
+        ControlPlanContentController,
+        CharacteristicTemplatesController,
+        BillingController,
+        NotificationsController,
+        InspectionsController,
+        InspectionMeasurementsController,
       ],
       providers: [
         { provide: ENV, useValue: env },
@@ -104,6 +134,12 @@ export class AppModule implements NestModule {
         CalibrationService,
         CalibrationRecordsService,
         CalibrationDashboardService,
+        ProcessControlService,
+        ControlPlanContentService,
+        CharacteristicTemplatesService,
+        BillingService,
+        NotificationsService,
+        InspectionService,
         OrganisationsService,
         StructureService,
         MembersService,

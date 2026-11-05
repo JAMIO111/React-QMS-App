@@ -3,6 +3,7 @@ import Field from "../ui/Field";
 import { describeApiError } from "../../lib/api-client";
 import MenuCard from "../ui/MenuCard";
 import { useDepartments, useSites, useStructureMutation } from "../../hooks/useQmsApi";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const codeProps = {
   required: true,
@@ -53,7 +54,7 @@ const Departments = ({ site, canManage }) => {
 
   return (
     <div className="flex flex-col gap-2 pl-4 border-l border-border-color">
-      {isLoading && <p className="text-sm text-secondary-text">Loading departments…</p>}
+      {isLoading && <LoadingScreen size="sm" />}
       {error && <p className="text-sm text-error-color">{describeApiError(error)}</p>}
       {!isLoading && departments.length === 0 && <p className="text-sm text-secondary-text">No departments yet.</p>}
       <ul className="flex flex-col gap-1">
@@ -156,7 +157,7 @@ const SitesManager = ({ canManage }) => {
 
   return (
     <MenuCard aria-label="Sites" title="Sites and departments" subtitle="Select a site to see its departments." bodyClassName="flex flex-col gap-4">
-      {isLoading && <p className="text-secondary-text">Loading sites…</p>}
+      {isLoading && <LoadingScreen size="sm" />}
       {error && <p className="text-error-color">{describeApiError(error)}</p>}
       <ul className="flex flex-col gap-2">
         {sites.map((site) => (

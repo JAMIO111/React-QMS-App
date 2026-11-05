@@ -16,11 +16,9 @@ const Header = () => {
   const jobTitle = profile?.job_title ?? "";
   const { signedUrl: avatarUrl } = useSignedAvatarUrl(profile?.avatar_path);
   const { openPane } = useNotification();
-  const { data: notifications } = useNotifications();
+  const { data: notificationData } = useNotifications();
 
-  const newNotifications = notifications
-    ? notifications.filter((n) => !n.read).length
-    : 0;
+  const newNotifications = notificationData?.unread ?? 0;
 
   return (
     <header className="flex justify-between items-center border-b-1 border-border-color bg-secondary-bg px-4">

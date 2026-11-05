@@ -12,6 +12,7 @@ import {
 } from "../../hooks/useQmsApi";
 import MenuCard from "../ui/MenuCard";
 import { useToast } from "../../contexts/ToastProvider";
+import LoadingScreen from "../ui/LoadingScreen";
 
 /** Shown instead of a section when the API cannot be reached. */
 export const ApiUnavailable = ({ error }) => (
@@ -49,7 +50,7 @@ const SettingsOrganisation = () => {
   useEffect(() => setForm(JSON.parse(formSource)), [formSource]);
 
   if (isLoading)
-    return <p className="text-secondary-text p-4">Loading organisation…</p>;
+    return <LoadingScreen />;
   if (error) return <ApiUnavailable error={error} />;
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));

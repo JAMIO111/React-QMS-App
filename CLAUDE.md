@@ -90,6 +90,42 @@ Summary of the brief:
   - **API** in `api/src/calibration/`; Raise NC is `POST /calibrations/{id}/raise-ncr` (draft internal NC, linked).
   - **Frontend:** `src/components/calibration/`, hooks `src/hooks/useCalibration.js`, helpers `src/lib/calibration.js`. Routes `/Calibration` (dashboard), `/Calibration/Gauges` (register, URL filters via `useUrlFilters`/`useGaugeFilters`), `/Calibration/Gauges/:id`, `/Calibration/Gauges/:gaugeId/calibrations/:calibrationId` (`new` creates), and Settings → Calibration (types).
   - `AttachmentDrop` in `ui/FileDrop.jsx` is the generic drag-and-drop uploader (bucket/folder/endpoints); `TableWrapper` takes `ariaLabel`/`rowLabel`.
+- Process control (`docs/process-control-plan.md`, replaces Phase 2 slices 2.2/2.3; agreed decisions P1–P4):
+  - **PC1 done:** `machines`, `part_families` (+ `parts.part_family_id`), `part_revision_characteristics`
+    (part-specific values by `characteristic_key`, draft-only edits, copied into a new draft),
+    `control_plans`, `control_plan_applicability`, `control_plan_revisions` (draft → pending_approval →
+    approved → effective → superseded | obsolete; `QM007` → `409 control_plan_rule`). Permissions
+    `process_control.read` / `.manage` / `.approve`. API in `api/src/process-control/`; hooks
+    `src/hooks/useProcessControl.js`; pages `src/components/process-control/` (`/Process-Control/Plans`,
+    `/Process-Control/Plans/:id`) and `master-data/` (`/Machines`, `/Part-Families`, `/Part-Families/:id`,
+    spec values on the part page).
+  - **PC2 done:** revision content — `control_plan_operations`, `control_plan_characteristics` (stable
+    `characteristic_key`; `data_type` variable/attribute, `value_source` plan/part_spec + `spec_key`, `applies_to`
+    all/selected; SPC `imr`/`xbar_r`), `characteristic_applicability`, `sampling_rules`, `reaction_plans`; all carry
+    `control_plan_revision_id`, are draft-only and copied into a new revision. Comparison in
+    `api/src/process-control/revision-compare.ts`; page `RevisionPage.jsx` (`/Process-Control/Plans/:planId/revisions/:revisionId`).
+  - **PC3 done:** `app.resolve_inspection_requirements(part, op?, site?, part revision?)` → jsonb (status ok/blocked
+    with problems; one effective plan revision or refuse; part-specific values by `spec_key`, unit must match;
+    conditional ones returned as not applicable). API `GET /control-plan-resolution`; `ResolutionView` /
+    `RequirementPreview` on the plan and part pages. PC4 must call the resolver inside the create transaction.
+  - **PC3b done:** `part_customers` (several customers per part, customer part number, one primary;
+    `parts.customer_id` dropped — `customer` in the API is the primary); plan scope may name a single part
+    without a family; a plan for the part overrides family plans (resolver `scopeLevel`, `overriddenPlans`);
+    bulk family membership `POST /part-families/{id}/parts`.
+  - **PC4 done:** `inspection_records` (`IPI-YY-NNNN`, created only by `app.start_inspection()`, which runs the
+    resolver in the same transaction; `QM008` → `409 inspection_rule`), `resolved_inspection_requirements` (frozen),
+    `inspection_samples`, `inspection_measurements` (insert-only; NUMERIC as entered, pass/fail by the DB, gauge state
+    copied, override needs `inspection.override_gauge`, corrections `supersedes_id` + reason with `inspection.correct`,
+    retests `retest_of_id`). Permissions `inspection.read/.record/.correct/.override_gauge` (site-scoped). API
+    `api/src/inspection/`; pages `src/components/inspection/` (`/Inspections`, `/Inspections/new`, `/Inspections/:id`).
+  - **Next:** PC5 NC link, PC6 SPC charts (I-MR, X-bar/R).
+    Build in that order; charts only on traceable measurements.
+- Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
+  `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
+  `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;
+  Settings → Subscription & billing; `RequireModule` + `useModuleAccess` for UI gating; seat limit error `QM009` → `409 subscription_rule`.
+  Stripe/webhooks deferred.
+- Notifications (in-app; `docs/notifications-plan.md`): `emit_notification` trigger on `audit.events` → `notifications`; event catalogue `notification_event_types`; visibility = permission + subscription + user preference (defaults follow access); API `api/src/notifications/`, hooks `src/hooks/useNotifications.jsx`, Settings → Notifications. Email later.
 - NC register filters live in the URL (`FILTER_KEYS` in `src/hooks/useNCMFilters.jsx`); `/ncrs` takes
   stage, severity, from/to, partId, customerId, supplierId, costMin/costMax, qtyMin/qtyMax; slider limits from
   `GET /ncrs/ranges`. List parameters go to SQL as one text value (`string_to_array`), never a JS array.
@@ -100,6 +136,7 @@ Summary of the brief:
   optional `action`; `as="form"` etc., extra props go to the root; `Accordion` is a collapsible MenuCard).
   Profile pictures: `ModalImageUploader` crops to a square with `ui/ImageCropper.jsx` and uploads a 512 × 512
   WebP made by `cropToBlob` (`src/lib/cropImage.js`), so large photos fit the bucket limit.
+- **Optimistic UI for all new features:** toggles, quick edits and similar small saves update the screen immediately (TanStack `onMutate` + `setQueryData`), then revert to the previous data in `onError` (with an error toast) and refetch in `onSettled`. Example: `usePreferenceMutation` in `src/hooks/useNotifications.jsx`. Use a pending/loading button only for heavier submits.
 - Icons: **Lucide only**, imported from `@/components/icons` (`<Name>Icon`, default size 1em so
   icons follow text size). Add new icons there; ESLint rejects `react-icons` and direct
   `lucide-react` imports elsewhere.
@@ -124,7 +161,7 @@ stages, soft delete, legacy NCM copy; NC registers and form on the API) are done
 attachments with the NC page in the original form layout (`ncr_costs`, `ncr_attachments`, `FileDrop`,
 `NcrCosts`) — see plan §9–§12;
 Calibration (Phase 4) was brought forward as a complete slice (`docs/calibration-plan.md`, migrations `20251106100000_calibration.sql`, `20251107100000_calibration_attributes.sql`; demo data `supabase/seed/calibration_demo.sql`);
-next: 2.2 inspection plans.
+slices 2.2/2.3 are replaced by the process control plan (`docs/process-control-plan.md`); PC1–PC4 (and PC3b) are done, next: PC5.
 The project still signs tokens with the legacy HS256 secret (JWKS endpoint is empty), so the API
 needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.
 

@@ -1,80 +1,46 @@
-import supabase from "@/supabase-client";
-import CTAButton from "./CTAButton";
 import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
-import useSignedAvatarUrl from "@/hooks/useSignedAvatarURL";
+import { notificationLink, timeAgo } from "@/lib/notifications";
+import { useMarkNotificationsRead } from "@/hooks/useNotifications";
 
-const NotificationCard = ({ notification, closePane, userId }) => {
+const NotificationCard = ({ notification, closePane }) => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { signedUrl: avatarUrl } = useSignedAvatarUrl(notification.avatar_path);
+  const markRead = useMarkNotificationsRead();
+  const link = notificationLink(notification);
+
+  const open = () => {
+    if (!notification.read) markRead.mutate({ ids: [notification.id] });
+    if (link) {
+      closePane();
+      navigate(link);
+    }
+  };
+
   return (
-    <div className="flex bg-secondary-bg shadow-md gap-3 items-start p-3 border border-border-color rounded-xl">
-      <div className="flex justify-center items-center border border-border-color rounded-full h-10 aspect-square">
-        <img
-          src={avatarUrl || "/fortress-qms.png"}
-          alt={notification?.title}
-          className="w-10 h-10 rounded-lg object-cover"
-        />
-      </div>
-      <div className="flex flex-col justify-start items-start w-full">
-        <div className="flex w-full justify-between items-center mb-1">
-          <h3 className="font-semibold text-primary-text">
-            {notification.title}
-          </h3>
-          <span className="text-xs text-secondary-text">
-            {new Date(notification.delivered_at).toLocaleString("en-GB", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </span>
+    <div
+      className={`flex gap-3 items-start p-3 border rounded-xl bg-secondary-bg ${notification.read ? "border-border-color" : "border-brand-primary/50"}`}>
+      <span
+        aria-hidden="true"
+        className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${notification.read ? "bg-transparent" : "bg-brand-primary"}`}
+      />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="font-semibold text-primary-text">{notification.title}</h3>
+          <span className="shrink-0 text-xs text-secondary-text">{timeAgo(notification.createdAt)}</span>
         </div>
-        <p className="text-sm text-secondary-text">
-          <span className="font-semibold text-sm">
-            {notification.created_by}
-          </span>{" "}
-          {notification.body}{" "}
-          <span className="font-semibold text-sm">{notification.doc_ref}</span>
-        </p>
-        <div className="flex w-full justify-start items-center mt-2 gap-3">
-          {notification?.meta_data && (
-            <CTAButton
-              type="main"
-              title="View"
-              text={notification?.meta_data?.buttonText}
-              textSize="text-sm"
-              callbackFn={() => {
-                closePane();
-                navigate(notification?.meta_data?.url);
-              }}
-            />
+        {notification.body && <p className="text-sm text-secondary-text break-words">{notification.body}</p>}
+        <div className="mt-2 flex gap-3 text-sm">
+          {link && (
+            <button type="button" onClick={open} className="font-medium text-brand-primary hover:underline cursor-pointer">
+              View
+            </button>
           )}
-          {notification.read ? null : (
-            <CTAButton
-              type="neutral"
-              title="Mark as Read"
-              text="Mark as Read"
-              textSize="text-sm"
-              callbackFn={async () => {
-                const { error } = await supabase
-                  .from("Notification Recipients")
-                  .update({ read: true })
-                  .eq("id", notification.id)
-                  .eq("recipient_id", userId);
-
-                if (error) {
-                  console.error("Failed to mark as read:", error);
-                  return;
-                }
-
-                queryClient.invalidateQueries({
-                  queryKey: ["Notifications", userId],
-                });
-              }}
-            />
+          {!notification.read && (
+            <button
+              type="button"
+              onClick={() => markRead.mutate({ ids: [notification.id] })}
+              className="text-secondary-text hover:underline cursor-pointer">
+              Mark as read
+            </button>
           )}
         </div>
       </div>

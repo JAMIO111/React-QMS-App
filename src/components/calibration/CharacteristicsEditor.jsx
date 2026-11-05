@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Switch from "@/components/ui/Switch";
 import { ChevronDownIcon, ChevronUpIcon, PencilIcon, PlusIcon } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
 import { useCalibrationMutation } from "../../hooks/useCalibration";
@@ -116,9 +117,9 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
   return (
     <div className="flex flex-col gap-3">
       {onShowInactive && (
-        <label className="flex items-center gap-2 self-end text-sm text-secondary-text">
-          <input type="checkbox" checked={!!showInactive} onChange={(e) => onShowInactive(e.target.checked)} /> Show switched-off
-        </label>
+        <Switch className="self-end text-sm text-secondary-text" checked={!!showInactive} onChange={(e) => onShowInactive(e.target.checked)}>
+          Show switched-off
+        </Switch>
       )}
       {ordered.length === 0 && !adding ? (
         <p className="rounded-lg border-2 border-dashed border-border-dark-color p-4 text-center text-sm text-secondary-text">{emptyText ?? "No characteristics yet."}</p>

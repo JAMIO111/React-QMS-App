@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import Switch from "@/components/ui/Switch";
 import { PlusIcon } from "@/components/icons";
 import Field from "../ui/Field";
 import Dialog from "../ui/Dialog";
@@ -57,9 +58,9 @@ const MachineForm = ({ machine, onDone }) => {
       </div>
       <Field label="Description" value={form.description} onChange={set("description")} maxLength={1000} />
       {machine && (
-        <label className="flex items-center gap-2 text-sm text-primary-text">
-          <input type="checkbox" checked={form.active} onChange={set("active")} /> Active (inactive machines are hidden from pickers)
-        </label>
+        <Switch className="text-sm text-primary-text" checked={form.active} onChange={set("active")}>
+          Active (inactive machines are hidden from pickers)
+        </Switch>
       )}
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
@@ -123,9 +124,9 @@ const MachinesPage = () => {
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <SearchBox label="Search machines" onSearch={onSearch} />
-        <label className="flex items-center gap-2 text-sm text-primary-text">
-          <input type="checkbox" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)} /> Show inactive
-        </label>
+        <Switch className="text-sm text-primary-text" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)}>
+          Show inactive
+        </Switch>
       </div>
       <DataList
         storageKey="master:machines"

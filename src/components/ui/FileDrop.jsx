@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Switch from "./Switch";
 import { CloudUploadIcon, RotateCcwIcon, SaveIcon, Trash2Icon, Undo2Icon, XIcon } from "@/components/icons";
 import { uploadFileToSupabase } from "@/api/supabaseApi";
 import CTAButton from "../CTAButton";
@@ -155,10 +156,9 @@ export const AttachmentDrop = ({ recordId, bucket, folder, attachments, mutation
           <h4 className="text-lg text-primary-text">Files & attachments</h4>
           <div className="flex items-center gap-3">
             {saved.some((f) => f.deletedAt) && (
-              <label className="flex items-center gap-2 text-sm text-secondary-text">
-                <input type="checkbox" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)} />
+              <Switch className="text-sm text-secondary-text" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)}>
                 Show removed
-              </label>
+              </Switch>
             )}
             {newFiles.length > 0 && (
               <>

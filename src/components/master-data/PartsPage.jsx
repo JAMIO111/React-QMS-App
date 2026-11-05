@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import Switch from "@/components/ui/Switch";
 import { Link, useNavigate } from "react-router-dom";
 import { PlusIcon } from "@/components/icons";
 import Field from "../ui/Field";
@@ -145,9 +146,9 @@ const PartsPage = () => {
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <SearchBox label="Search part number or name" onSearch={onSearch} />
-        <label className="flex items-center gap-2 text-sm text-primary-text">
-          <input type="checkbox" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)} /> Show inactive
-        </label>
+        <Switch className="text-sm text-primary-text" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)}>
+          Show inactive
+        </Switch>
       </div>
       <DataList
         storageKey="master:parts"

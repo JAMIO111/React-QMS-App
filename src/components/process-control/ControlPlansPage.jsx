@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import Switch from "@/components/ui/Switch";
 import { Link, useNavigate } from "react-router-dom";
 import { PlusIcon } from "@/components/icons";
 import Field from "../ui/Field";
@@ -164,9 +165,9 @@ const ControlPlansPage = () => {
           className="w-56"
         />
         <SelectField label="Revision status" placeholder="Any" value={status} onChange={setStatus} options={STATUS_FILTERS} className="w-56" />
-        <label className="flex items-center gap-2 pb-2 text-sm text-primary-text">
-          <input type="checkbox" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)} /> Show inactive
-        </label>
+        <Switch className="pb-2 text-sm text-primary-text" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)}>
+          Show inactive
+        </Switch>
       </div>
       <DataList
         storageKey="process-control:plans"

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Switch from "@/components/ui/Switch";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeftIcon, PlusIcon } from "@/components/icons";
 import Field from "../ui/Field";
@@ -82,9 +83,9 @@ const PartDetails = ({ part, canManage }) => {
           </div>
         )}
         {canManage && (
-          <label className="flex items-center gap-2 self-end pb-2 text-sm text-primary-text">
-            <input type="checkbox" checked={form.active} onChange={set("active")} /> Active
-          </label>
+          <Switch className="self-end pb-2 text-sm text-primary-text" checked={form.active} onChange={set("active")}>
+            Active
+          </Switch>
         )}
       </div>
       {mutation.error && (

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Switch from "@/components/ui/Switch";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeftIcon, PlusIcon, Trash2Icon } from "@/components/icons";
 import Field from "../ui/Field";
@@ -58,9 +59,9 @@ const PlanDetails = ({ plan, canManage }) => {
         <Field label="Description" value={form.description} onChange={set("description")} disabled={!canManage} maxLength={2000} className="md:col-span-2" />
         <PeoplePicker label="Owner" value={form.ownerId} onChange={(v) => setForm((f) => ({ ...f, ownerId: v ?? null }))} current={plan.owner} disabled={!canManage} clearable />
         {canManage && (
-          <label className="flex items-center gap-2 self-end pb-2 text-sm text-primary-text">
-            <input type="checkbox" checked={form.active} onChange={set("active")} /> Active (inactive plans take no new revisions)
-          </label>
+          <Switch className="self-end pb-2 text-sm text-primary-text" checked={form.active} onChange={set("active")}>
+            Active (inactive plans take no new revisions)
+          </Switch>
         )}
       </div>
       <FormError error={mutation.error} />

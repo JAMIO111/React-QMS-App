@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import Switch from "@/components/ui/Switch";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Controller, useForm } from "react-hook-form";
 import {
@@ -92,9 +93,9 @@ const CalibrationList = ({ gaugeId, canRecord }) => {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-secondary-text">{data.length ? `${data.length} ${data.length === 1 ? "record" : "records"}` : "No calibrations recorded yet."}</p>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-secondary-text">
-            <input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} /> Show deleted
-          </label>
+          <Switch className="text-sm text-secondary-text" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)}>
+            Show deleted
+          </Switch>
           {canRecord && (
             <Link to={`/Calibration/Gauges/${gaugeId}/calibrations/new`} className={btn.main}>
               <ClipboardCheckIcon className="h-4 w-4" /> Record calibration

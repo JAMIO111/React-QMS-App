@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Switch from "@/components/ui/Switch";
 import { PencilIcon, PlusIcon, RotateCcwIcon, Trash2Icon } from "@/components/icons";
 import CTAButton from "../CTAButton";
 import Dialog from "../ui/Dialog";
@@ -49,10 +50,9 @@ const NcrCosts = ({ ncrId, canEdit }) => {
           <p className="text-sm text-secondary-text">Expenses caused by this non-conformance.</p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-secondary-text">
-            <input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} />
+          <Switch className="text-sm text-secondary-text" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)}>
             Show deleted
-          </label>
+          </Switch>
           {canEdit && (
             <CTAButton
               type="main"

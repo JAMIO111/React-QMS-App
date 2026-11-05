@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import Switch from "@/components/ui/Switch";
 import { Link, useNavigate } from "react-router-dom";
 import { PlusIcon } from "@/components/icons";
 import Field from "../ui/Field";
@@ -44,9 +45,9 @@ export const PartFamilyForm = ({ family, onDone, onCreated }) => {
         hint="What the parts share: material, route, inspection strategy."
       />
       {family && (
-        <label className="flex items-center gap-2 text-sm text-primary-text">
-          <input type="checkbox" checked={form.active} onChange={set("active")} /> Active
-        </label>
+        <Switch className="text-sm text-primary-text" checked={form.active} onChange={set("active")}>
+          Active
+        </Switch>
       )}
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
@@ -108,9 +109,9 @@ const PartFamiliesPage = () => {
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <SearchBox label="Search families" onSearch={onSearch} />
-        <label className="flex items-center gap-2 text-sm text-primary-text">
-          <input type="checkbox" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)} /> Show inactive
-        </label>
+        <Switch className="text-sm text-primary-text" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)}>
+          Show inactive
+        </Switch>
       </div>
       <DataList
         storageKey="master:part-families"

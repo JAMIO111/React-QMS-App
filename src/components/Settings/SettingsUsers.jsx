@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Switch from "@/components/ui/Switch";
 import Field from "../ui/Field";
 import { ApiUnavailable } from "./SettingsOrganisation";
 import { describeApiError } from "../../lib/api-client";
@@ -364,14 +365,12 @@ const SettingsUsers = () => {
         title="Members"
         subtitle="People in the organisation and their roles"
         action={
-          <label className="flex items-center gap-2 text-sm text-secondary-text">
-            <input
-              type="checkbox"
-              checked={showRemoved}
-              onChange={(e) => setShowRemoved(e.target.checked)}
-            />
+          <Switch
+            className="text-sm text-secondary-text"
+            checked={showRemoved}
+            onChange={(e) => setShowRemoved(e.target.checked)}>
             Show removed
-          </label>
+          </Switch>
         }>
         <div className="overflow-x-auto">
           <table className="w-full text-left">

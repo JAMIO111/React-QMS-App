@@ -40,13 +40,24 @@ export const useNotificationPreferences = () => {
   });
 };
 
-const usePreferenceMutation = (request) => {
+const usePreferenceMutation = (request, optimistic) => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const prefKey = key(organisationId, "preferences");
   return useMutation({
     mutationFn: (arg) => request(arg, organisationId),
-    onSuccess: (result) => {
-      queryClient.setQueryData(key(organisationId, "preferences"), result);
+    // Update the screen straight away and put the previous data back if the save fails.
+    onMutate: async (arg) => {
+      await queryClient.cancelQueries({ queryKey: prefKey });
+      const previous = queryClient.getQueryData(prefKey);
+      if (previous) queryClient.setQueryData(prefKey, { ...previous, data: optimistic(previous.data, arg) });
+      return { previous };
+    },
+    onError: (_e, _arg, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(prefKey, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: prefKey });
       queryClient.invalidateQueries({ queryKey: key(organisationId, "list") });
     },
   });
@@ -54,7 +65,18 @@ const usePreferenceMutation = (request) => {
 
 /** `{ eventKey, enabled }`; enabled null returns the event to its default. */
 export const useSetNotificationPreference = () =>
-  usePreferenceMutation((body, organisationId) => apiFetch("/notification-preferences", { method: "PUT", body, organisationId }));
+  usePreferenceMutation(
+    (body, organisationId) => apiFetch("/notification-preferences", { method: "PUT", body, organisationId }),
+    (rows, { eventKey, enabled }) =>
+      rows.map((p) =>
+        p.eventKey !== eventKey
+          ? p
+          : { ...p, enabled: enabled === null ? p.defaultEnabled : enabled, overridden: enabled !== null },
+      ),
+  );
 
 export const useResetNotificationPreferences = () =>
-  usePreferenceMutation((_, organisationId) => apiFetch("/notification-preferences", { method: "DELETE", organisationId }));
+  usePreferenceMutation(
+    (_, organisationId) => apiFetch("/notification-preferences", { method: "DELETE", organisationId }),
+    (rows) => rows.map((p) => ({ ...p, enabled: p.defaultEnabled, overridden: false })),
+  );

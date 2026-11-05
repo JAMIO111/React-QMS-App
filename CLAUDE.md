@@ -136,6 +136,7 @@ Summary of the brief:
   optional `action`; `as="form"` etc., extra props go to the root; `Accordion` is a collapsible MenuCard).
   Profile pictures: `ModalImageUploader` crops to a square with `ui/ImageCropper.jsx` and uploads a 512 × 512
   WebP made by `cropToBlob` (`src/lib/cropImage.js`), so large photos fit the bucket limit.
+- **Optimistic UI for all new features:** toggles, quick edits and similar small saves update the screen immediately (TanStack `onMutate` + `setQueryData`), then revert to the previous data in `onError` (with an error toast) and refetch in `onSettled`. Example: `usePreferenceMutation` in `src/hooks/useNotifications.jsx`. Use a pending/loading button only for heavier submits.
 - Icons: **Lucide only**, imported from `@/components/icons` (`<Name>Icon`, default size 1em so
   icons follow text size). Add new icons there; ESLint rejects `react-icons` and direct
   `lucide-react` imports elsewhere.

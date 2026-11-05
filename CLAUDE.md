@@ -120,6 +120,11 @@ Summary of the brief:
     `api/src/inspection/`; pages `src/components/inspection/` (`/Inspections`, `/Inspections/new`, `/Inspections/:id`).
   - **Next:** PC5 NC link, PC6 SPC charts (I-MR, X-bar/R).
     Build in that order; charts only on traceable measurements.
+- Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
+  `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
+  `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;
+  Settings → Subscription & billing; `RequireModule` + `useModuleAccess` for UI gating; seat limit error `QM009` → `409 subscription_rule`.
+  Stripe/webhooks deferred.
 - NC register filters live in the URL (`FILTER_KEYS` in `src/hooks/useNCMFilters.jsx`); `/ncrs` takes
   stage, severity, from/to, partId, customerId, supplierId, costMin/costMax, qtyMin/qtyMax; slider limits from
   `GET /ncrs/ranges`. List parameters go to SQL as one text value (`string_to_array`), never a JS array.

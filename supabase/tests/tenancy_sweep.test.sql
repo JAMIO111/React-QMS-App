@@ -122,6 +122,16 @@ BEGIN
     SELECT a, s.inspection_record_id, s.id, q.id, 100 FROM public.inspection_samples s
     JOIN public.resolved_inspection_requirements q ON q.inspection_record_id = s.inspection_record_id WHERE s.organisation_id = a;
   PERFORM pg_temp.logout();
+
+  -- Subscription: seats and an assignment through the API functions, invoice and payment as the provider would.
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
+  PERFORM app.set_subscription_seats(a, 'controller', 2);
+  PERFORM app.assign_subscription_package((SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'), 'controller');
+  PERFORM pg_temp.logout();
+  INSERT INTO public.billing_invoices (organisation_id, provider_invoice_id, invoice_number, subtotal, tax_amount, total_amount, status)
+    VALUES (a, 'in_sweep', 'INV-1', 5000, 1000, 6000, 'paid');
+  INSERT INTO public.billing_payments (organisation_id, provider_payment_id, invoice_id, amount, status)
+    SELECT a, 'pay_sweep', id, 6000, 'succeeded' FROM public.billing_invoices WHERE organisation_id = a;
   INSERT INTO sweep VALUES ('pc_part', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'));
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));

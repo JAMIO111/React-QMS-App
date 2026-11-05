@@ -91,6 +91,7 @@ import {
   Inbox as LucideInbox,
   Paperclip as LucidePaperclip,
   Receipt as LucideReceipt,
+  CreditCard as LucideCreditCard,
   Tags as LucideTags,
   Wrench as LucideWrench,
   Coins as LucideCoins,
@@ -206,6 +207,7 @@ export const HashIcon = withDefaults(LucideHash);
 export const HistoryIcon = withDefaults(LucideHistory);
 export const InboxIcon = withDefaults(LucideInbox);
 export const PaperclipIcon = withDefaults(LucidePaperclip);
+export const CreditCardIcon = withDefaults(LucideCreditCard);
 export const ReceiptIcon = withDefaults(LucideReceipt);
 export const TagsIcon = withDefaults(LucideTags);
 export const WrenchIcon = withDefaults(LucideWrench);

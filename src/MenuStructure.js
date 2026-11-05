@@ -11,6 +11,7 @@ export const menuStructure = [
     name: "Non-Conformance",
     icon: TriangleAlertIcon,
     permission: "ncr.read",
+    module: "nonconformance",
     path: "/Non-Conformance",
     subMenu: [
       { name: "Dashboard", path: "/Non-Conformance", end: true },
@@ -23,6 +24,7 @@ export const menuStructure = [
     name: "In-Process Inspection",
     icon: ClipboardListIcon,
     permission: "inspection.read",
+    module: "inspections",
     path: "/Inspections",
     subMenu: [],
   },
@@ -30,6 +32,7 @@ export const menuStructure = [
     name: "Process Control",
     icon: ClipboardCheckIcon,
     permission: "process_control.read",
+    module: "control_plans",
     path: "/Process-Control",
     subMenu: [{ name: "Control Plans", path: "/Process-Control/Plans" }],
   },
@@ -37,6 +40,7 @@ export const menuStructure = [
     name: "Calibration",
     icon: GaugeIcon,
     permission: "calibration.read",
+    module: "calibration",
     path: "/Calibration",
     subMenu: [
       { name: "Dashboard", path: "/Calibration", end: true },

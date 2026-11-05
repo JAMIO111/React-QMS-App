@@ -34,7 +34,12 @@ global_tables(relname, why) AS (VALUES
   ('permissions',      'global catalogue, read-only'),
   ('roles',            'system templates have no organisation; org roles carry organisation_id'),
   ('role_permissions', 'scoped through roles'),
-  ('units',            'global catalogue of measurement units, read-only')
+  ('units',            'global catalogue of measurement units, read-only'),
+  ('subscription_plans',        'global commercial catalogue, read-only'),
+  ('subscription_prices',       'global commercial catalogue, read-only'),
+  ('modules',                   'global module catalogue, read-only'),
+  ('features',                  'global feature catalogue, read-only'),
+  ('subscription_entitlements', 'global package-to-feature mapping, read-only')
 ),
 audited(relname) AS (VALUES
   ('organisations'), ('organisation_settings'), ('sites'), ('departments'), ('organisation_users'),
@@ -48,7 +53,9 @@ audited(relname) AS (VALUES
   ('control_plan_applicability'), ('control_plan_revisions'),
   ('control_plan_operations'), ('control_plan_characteristics'), ('characteristic_applicability'),
   ('sampling_rules'), ('reaction_plans'), ('characteristic_templates'), ('part_customers'),
-  ('inspection_records'), ('resolved_inspection_requirements'), ('inspection_samples'), ('inspection_measurements')
+  ('inspection_records'), ('resolved_inspection_requirements'), ('inspection_samples'), ('inspection_measurements'),
+  ('organisation_subscriptions'), ('organisation_subscription_items'), ('user_subscription_assignments'),
+  ('billing_invoices'), ('billing_payments')
 )
 SELECT rule, object FROM (
   SELECT '1 rls disabled' AS rule, format('%I.%I', nspname, relname) AS object

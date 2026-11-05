@@ -45,6 +45,8 @@ import {
   PartFamiliesController,
   SpecValuesController,
 } from './process-control/process-control.controller';
+import { BillingController } from './billing/billing.controller';
+import { BillingService } from './billing/billing.service';
 import { CharacteristicTemplatesController } from './process-control/characteristic-templates.controller';
 import { CharacteristicTemplatesService } from './process-control/characteristic-templates.service';
 import { ProcessControlService } from './process-control/process-control.service';
@@ -113,6 +115,7 @@ export class AppModule implements NestModule {
         ControlPlanRevisionsController,
         ControlPlanContentController,
         CharacteristicTemplatesController,
+        BillingController,
         InspectionsController,
         InspectionMeasurementsController,
       ],
@@ -131,6 +134,7 @@ export class AppModule implements NestModule {
         ProcessControlService,
         ControlPlanContentService,
         CharacteristicTemplatesService,
+        BillingService,
         InspectionService,
         OrganisationsService,
         StructureService,

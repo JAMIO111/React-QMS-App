@@ -88,6 +88,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'control_plan_rule', pg.message ?? 'That change is not allowed for this control plan');
     case 'QM008': // in-process inspection rules (messages are written for users)
       return new ApiError(409, 'inspection_rule', pg.message ?? 'That change is not allowed for this inspection');
+    case 'QM009': // subscription seat and package rules (messages are written for users)
+      return new ApiError(409, 'subscription_rule', pg.message ?? 'That subscription change is not allowed');
     case 'P0002': // no_data_found raised by app functions
       return ApiError.notFound();
     case '57014': // query_canceled (statement_timeout)

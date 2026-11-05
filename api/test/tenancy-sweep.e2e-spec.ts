@@ -126,6 +126,8 @@ const sampleBody = (op: Op): object | undefined =>
     'DELETE /api/v1/control-plan-operations/{id}': undefined,
     'PATCH /api/v1/control-plan-characteristics/{id}': { name: 'Hijacked' },
     'PATCH /api/v1/characteristic-templates/{id}': { name: 'Hijacked' },
+    'PUT /api/v1/subscription/assignments/{id}': { planSlug: 'controller' },
+    'DELETE /api/v1/subscription/assignments/{id}': undefined,
     'DELETE /api/v1/control-plan-characteristics/{id}': undefined,
   })[`${op.method} ${op.path}`];
 
@@ -216,6 +218,8 @@ const hasSample = (op: Op) =>
     'DELETE /api/v1/control-plan-operations/{id}',
     'PATCH /api/v1/control-plan-characteristics/{id}',
     'PATCH /api/v1/characteristic-templates/{id}',
+    'PUT /api/v1/subscription/assignments/{id}',
+    'DELETE /api/v1/subscription/assignments/{id}',
     'DELETE /api/v1/control-plan-characteristics/{id}',
   ].includes(`${op.method} ${op.path}`);
 
@@ -251,6 +255,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/control-plan-operations/')) return a.operation;
   if (path.startsWith('/api/v1/control-plan-characteristics/')) return a.characteristic;
   if (path.startsWith('/api/v1/characteristic-templates/')) return a.characteristicTemplate;
+  if (path.startsWith('/api/v1/subscription/assignments/')) return a.ownerMembership;
   return undefined;
 };
 
@@ -444,6 +449,7 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/calibration-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/control-plan-resolution': `?partId=${b.part}`,
+      '/api/v1/subscription/check': '?module=inspections',
     };
     for (const op of lists) {
       const res = await call(op, op.path + (listQuery[op.path] ?? ''), auth);

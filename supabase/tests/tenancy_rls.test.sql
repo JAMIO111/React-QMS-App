@@ -96,7 +96,8 @@ BEGIN
   PERFORM pg_temp.login('00000000-0000-0000-0000-0000000000ff');
   FOR r IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
            WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v')
-             AND c.relname NOT IN ('permissions', 'roles', 'role_permissions', 'profiles', 'units') LOOP
+             AND c.relname NOT IN ('permissions', 'roles', 'role_permissions', 'profiles', 'units',
+                                'subscription_plans', 'subscription_prices', 'modules', 'features', 'subscription_entitlements') LOOP
     PERFORM pg_temp.assert_eq(pg_temp.count_rows(format('SELECT 1 FROM public.%I', r.relname)), 0::bigint, 'outsider reads ' || r.relname);
   END LOOP;
   -- Only system role templates and their permissions are visible; only own profile.

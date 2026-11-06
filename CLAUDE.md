@@ -226,7 +226,7 @@ Summary of the brief:
     (declared before `:id`; alerts in force matching any of them, most severe first, each with `matched` and the caller's `acknowledged`; a part also matches its family), `GET|POST :id/attachments`,
     `POST /quality-alert-attachments/{id}/delete|restore`; the scope body takes `links` and the detail returns `links` (label is `null` when the caller cannot read the record). UI: `ActiveAlertsBanner`
     (information only, never blocks) on Start inspection, the part, part family and machine (edit dialog) pages; `AlertLinks.jsx` (pickers, read-only list), `AlertFiles.jsx` (`AttachmentDrop`) in the draft
-    editor and, read-only, on the alert page. Remaining for the module: **DOC4** exit check.
+    editor and, read-only, on the alert page. **DOC4 done (exit check):** `docs/documentation-exit-report.md` (evidence, advisor findings, limitations; no browser check yet). Migration `20251121100000_rls_initplan_wrap.sql` wraps `auth.uid()` as `(select auth.uid())` in five SELECT policies (advisor `auth_rls_initplan`).
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

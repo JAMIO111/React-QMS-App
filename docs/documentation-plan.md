@@ -126,7 +126,7 @@ A draft can be edited and deleted (soft); anything issued cannot. Critical/High 
    list, notifications.
 4. **DOC3 Where work happens, attachments, links** (done 2026-11-06): `GET /quality-alerts/active` and the banner on inspection start, part, family and machine pages; files on drafts
    (private `quality-alert-files` bucket, frozen once issued, copied by a revision); links to NC, supplier, gauge and calibration (a part link is the alert's scope, so not repeated).
-5. **DOC4 Exit check:** guardrails, sweeps, docs, browser check.
+5. **DOC4 Exit check** (done 2026-11-06, except the browser check): guardrails, sweeps, live advisors, mutation checks, docs; see `docs/documentation-exit-report.md`.
 
 ## 11. Still open (small, can be settled while building)
 

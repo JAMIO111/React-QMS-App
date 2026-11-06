@@ -369,23 +369,30 @@
   align-items: center;
 }
 
+/* Scrollbars everywhere: thin, transparent track, soft rounded thumb that works on light and dark backgrounds
+   (the same look as the modal dialogs). .no-scrollbar hides one completely. */
 ::-webkit-scrollbar {
-  width: 8px; /* or height for horizontal scroll bars */
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: transparent;
 }
-
-/* Handle (thumb) */
 ::-webkit-scrollbar-thumb {
-  background: #888;
+  background: rgba(128, 128, 128, 0.45);
   border-radius: 4px;
-  height: 50%;
 }
-
-/* Handle on hover */
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: rgba(128, 128, 128, 0.7);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(128, 128, 128, 0.45) transparent;
+  }
 }
 .no-scrollbar {
   scrollbar-width: none;

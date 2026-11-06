@@ -7,7 +7,7 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { makeIds, requireDb, seed, startApp, token } from './helpers';
 
-const ids = makeIds('4');
+const ids = makeIds('a4');
 let app: INestApplication;
 let admin: Pool;
 const api = () => request(app.getHttpServer());

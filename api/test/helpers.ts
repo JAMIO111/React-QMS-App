@@ -8,11 +8,13 @@ export const JWT_SECRET = 'e2e-secret-that-is-at-least-32-characters-long';
 export const ISSUER = 'e2e-issuer';
 
 /**
- * Ids for one e2e suite's seed. Each suite uses its own hex digit (1–9, a–f) so suites never share (and never
- * mutate each other's) users or organisations.
+ * Ids for one e2e suite's seed. Every suite needs its OWN prefix (one or two hex characters, padded with zeros to the
+ * first uuid group) so suites never share, or mutate, each other's users and organisations: `seed` stops when the
+ * organisation exists, so two suites with one prefix would silently depend on which runs first.
  */
 export function makeIds(suite: number | string) {
-  const id = (tail: string) => `${suite}0000000-0000-0000-0000-${tail.padStart(12, '0')}`;
+  const head = String(suite).padEnd(8, '0');
+  const id = (tail: string) => `${head}-0000-0000-0000-${tail.padStart(12, '0')}`;
   return {
     orgA: id('a'),
     orgB: id('b'),

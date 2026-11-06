@@ -19,6 +19,7 @@ import { useCalibrationMutation } from "../hooks/useCalibration";
 import { useSubscriptionMutation } from "../hooks/useSubscription";
 import { useAlertMutation } from "../hooks/useDocumentation";
 import { useMarkNotificationsRead } from "../hooks/useNotifications";
+import { useCapaMutation } from "../hooks/useCapa";
 
 /** What other modules have on screen: each must be marked stale by an action in any module. */
 const watched = [
@@ -85,6 +86,8 @@ describe("every action refreshes every module's data", () => {
     ["SPC baseline", useCreateBaseline, { partId: "p1" }],
     ["subscription", useSubscriptionMutation, { action: "seats", planSlug: "controller", quantity: 2 }],
     ["notifications read", useMarkNotificationsRead, { all: true }],
+    ["CAPA / 8D", useCapaMutation, { action: "update", id: "c1", body: { title: "x" } }],
+    ["CAPA / 8D action", useCapaMutation, { action: "completeAction", id: "a1", body: {} }],
   ];
 
   it.each(cases)("%s", async (_name, useHook, variables) => {

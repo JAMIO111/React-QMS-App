@@ -237,6 +237,13 @@ Summary of the brief:
     `POST /capas/{id}/complete-step|reopen-step|cancel|reopen|team|ncrs`, `PATCH /capa-team/{id}`, `POST /capa-ncr-links/{id}/unlink`, `GET /ncrs/{id}/capas`; commands answer with the whole 8D. UI
     `src/components/capa/`: register `/CAPA`, step page `/CAPA/:id/:step` (`CapaPage`, `Stepper`, `StepFooter` with the checklist, `steps/D0Initiate`, `steps/D1Team`; D2–D8 say "not available yet"),
     `NcrCapaCard` in the NC page's Investigation card (**Start a new 8D** prefilled from the NC, **Link to an existing 8D**, unlink with a reason); hooks `useCapa.js`, helpers `lib/capa.js`. Next: CAPA2 (D2, D3).
+  - **CAPA2 done (D2 problem, D3 containment):** migration `20251123100000_capa_d2_d3.sql`. 5W2H columns on `capas` (`d2_who … d2_how_many`, plus `d3_no_containment_reason`), edited with the header; `app.start_capa` fills
+    D2 (what, where, when, how many) from the NC. `capa_analyses` (kind `is_is_not` now, `ishikawa` and `five_whys` allowed by the table for CAPA3; `data` jsonb object ≤ 200 kB, validated per kind by the API
+    (`ANALYSIS_DATA` in `capa.schemas.ts`); removal sets `deleted_at`, never deleted) and `capa_actions` (phase `interim` now, `corrective`/`preventive` allowed; written under RLS, `app.capa_action_rules` keeps the owner on
+    the team, stamps `done_at/by`, needs a reason to cancel, reopening clears the stamps; **a team member who owns open actions cannot leave**). `app.capa_step_problems` now covers D2 (what, where, when) and D3 (no open
+    actions, and one done or a reason there is none). **Nothing locks** after a step is completed. API: `POST /capas/{id}/analyses|actions`, `PATCH|DELETE /capa-analyses/{id}`, `PATCH /capa-actions/{id}`,
+    `POST /capa-actions/{id}/complete|cancel|reopen`; the detail carries `problem`, `d3NoContainmentReason`, `analyses`, `actions`. UI `steps/D2Problem.jsx` (5W2H modal, Is / Is-Not modal with the eight standard questions),
+    `steps/D3Containment.jsx`, and the reusable `ActionList.jsx` (add, edit, done with evidence, cancel with reason, reopen) for D5 and D7. Next: CAPA3 (D4).
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

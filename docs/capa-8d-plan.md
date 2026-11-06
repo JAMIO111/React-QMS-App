@@ -87,7 +87,7 @@ Pickers use `RHFComboBox`, dates `RHFDatePickerPopout`, files `AttachmentDrop`; 
 ## 8. Delivery slices (each complete and tested before the next)
 
 1. **CAPA1 Core, NC integration, D0 and D1** (done 2026-11-06): migration (tables, numbering, permissions, steps, team, NC links, closure rule), API, register, step shell with stepper, D0, D1, NC page card (start / link / list).
-2. **CAPA2 D2 and D3:** 5W2H and Is / Is-Not modals, interim containment actions.
+2. **CAPA2 D2 and D3** (done 2026-11-06): 5W2H and Is / Is-Not modals, interim containment actions.
 3. **CAPA3 D4:** root causes with verification, Ishikawa and 5 Whys modals.
 4. **CAPA4 D5, D6, D7:** corrective and preventive actions, effectiveness verification, automatic stage, reopening on a failed verification.
 5. **CAPA5 D8, files, report, exit check:** closure, attachments, print report, guardrails, sweeps, docs, exit report.

@@ -58,9 +58,11 @@ export const useNcrCapas = (ncrId, { enabled = true } = {}) => {
 };
 
 /**
- * action: create | update | completeStep | reopenStep | cancel | reopen | addTeam | updateTeam | linkNcr | unlinkNcr.
+ * action: create | update | completeStep | reopenStep | cancel | reopen | addTeam | updateTeam | linkNcr | unlinkNcr | addAnalysis | updateAnalysis |
+ * removeAnalysis | addAction | updateAction | completeAction | cancelAction | reopenAction.
  * Every command answers with the 8D, which is put in the cache; then everything in the organisation is refreshed (lib/refresh.js).
- * `id` is the 8D, except for updateTeam (the team member) and unlinkNcr (the link).
+ * `id` is the 8D, except for updateTeam (the team member), unlinkNcr (the link), updateAnalysis and removeAnalysis (the analysis) and the action
+ * commands that work on one action (updateAction, completeAction, cancelAction, reopenAction).
  */
 export const useCapaMutation = () => {
   const { organisationId } = useOrganisation();
@@ -89,6 +91,22 @@ export const useCapaMutation = () => {
           return post(`/capas/${id}/ncrs`);
         case "unlinkNcr":
           return post(`/capa-ncr-links/${id}/unlink`);
+        case "addAnalysis":
+          return post(`/capas/${id}/analyses`);
+        case "updateAnalysis":
+          return post(`/capa-analyses/${id}`, "PATCH");
+        case "removeAnalysis":
+          return post(`/capa-analyses/${id}`, "DELETE");
+        case "addAction":
+          return post(`/capas/${id}/actions`);
+        case "updateAction":
+          return post(`/capa-actions/${id}`, "PATCH");
+        case "completeAction":
+          return post(`/capa-actions/${id}/complete`);
+        case "cancelAction":
+          return post(`/capa-actions/${id}/cancel`);
+        case "reopenAction":
+          return post(`/capa-actions/${id}/reopen`);
         default:
           throw new Error(`Unknown action ${action}`);
       }

@@ -199,7 +199,8 @@ describe('steps D0 and D1', () => {
     ctx.c3 = fresh.id;
     expect(fresh.steps[0]).toMatchObject({ step: 'd0', completed: false, problems: ['Describe the problem in the problem statement'] });
     expect(fresh.steps[1].problems).toEqual(['Add at least two people to the team']);
-    expect(fresh.steps[2].problems).toEqual(['This step is not available yet']);
+    expect(fresh.steps[2].problems).toEqual(['Say what is wrong (the What of 5W2H)', 'Say where it was found (the Where of 5W2H)', 'Say when it was found (the When of 5W2H)']);
+    expect(fresh.steps[4].problems).toEqual(['This step is not available yet']);
     const early = await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd1' });
     expect(early.status).toBe(409);
     expect(early.body.error).toMatchObject({ code: 'capa_rule', message: 'D1 cannot be completed yet: Add at least two people to the team' });
@@ -215,7 +216,7 @@ describe('steps D0 and D1', () => {
     expect(d0.steps[0]).toMatchObject({ completed: true, note: 'Scope agreed', completedBy: { name: 'Ada Owner' }, problems: [] });
     await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd0' }).expect(409);
     const blocked = await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd2' });
-    expect(blocked.body.error.message).toBe('D2 cannot be completed yet: This step is not available yet');
+    expect(blocked.body.error.message).toBe('D2 cannot be completed yet: Say what is wrong (the What of 5W2H); Say where it was found (the Where of 5W2H); Say when it was found (the When of 5W2H)');
     await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd9' }).expect(400);
     await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(await as(ids.inspectorA)).send({ step: 'd2' }).expect(403);
   });
@@ -248,5 +249,122 @@ describe('cancelling and reopening', () => {
     const back = (await api().post(`/api/v1/capas/${ctx.c3}/reopen`).set(h).send({ reason: 'It was valid' }).expect(200)).body;
     expect(back.stage).toBe('open');
     await api().patch(`/api/v1/capas/${ctx.c3}`).set(h).send({ title: 'Edited after reopening' }).expect(200);
+  });
+});
+
+describe('D2: the 5W2H and Is / Is-Not', () => {
+  it('is filled from the non-conformance an 8D is started from', async () => {
+    const d = (await api().get(`/api/v1/capas/${ctx.c1}`).set(await owner()).expect(200)).body;
+    expect(d.problem).toMatchObject({ what: expect.stringContaining('Cracked bar stock'), where: expect.any(String), when: expect.stringMatching(/^Detected \d/), howMany: '3 affected', who: null, why: null, how: null });
+    expect(d.steps[2].problems).toEqual([]);
+    expect(d.analyses).toEqual([]);
+    expect(d.actions).toEqual([]);
+  });
+
+  it('saves the 5W2H with the header, trimming, and clears a field with null or blank', async () => {
+    const h = await owner();
+    const d = (await api().patch(`/api/v1/capas/${ctx.c2}`).set(h).send({ d2What: '  Burrs on the bore  ', d2Who: 'Night shift', d2Where: 'Lathe 2', d2When: 'Since Monday', d2Why: 'Customer rejected 40 parts', d2How: 'Found at final inspection', d2HowMany: '40 of 400' }).expect(200)).body;
+    expect(d.problem).toEqual({ what: 'Burrs on the bore', who: 'Night shift', where: 'Lathe 2', when: 'Since Monday', why: 'Customer rejected 40 parts', how: 'Found at final inspection', howMany: '40 of 400' });
+    expect(d.steps[2].problems).toEqual([]);
+    const cleared = (await api().patch(`/api/v1/capas/${ctx.c2}`).set(h).send({ d2Who: '', d2Why: null }).expect(200)).body;
+    expect(cleared.problem).toMatchObject({ who: null, why: null, what: 'Burrs on the bore' });
+    await api().patch(`/api/v1/capas/${ctx.c2}`).set(h).send({ d2What: 'x'.repeat(2001) }).expect(400);
+    await api().patch(`/api/v1/capas/${ctx.c2}`).set(await as(ids.inspectorA)).send({ d2What: 'Not allowed' }).expect(403);
+  });
+
+  it('keeps an Is / Is-Not analysis with its rows; edits it; removes it with the record kept', async () => {
+    const h = await owner();
+    const rows = [
+      { key: 'what_object', dimension: 'what', question: 'Which part has the problem?', is: 'Rod 100', isNot: 'Rod 200', distinctive: 'Bar from the new lot', changes: 'New supplier lot' },
+      { key: 'where_site', dimension: 'where', question: 'Where is it found?', is: 'Lathe 2', isNot: 'Lathe 1', distinctive: '', changes: '' },
+    ];
+    const d = (await api().post(`/api/v1/capas/${ctx.c2}/analyses`).set(h).send({ kind: 'is_is_not', title: 'Is / Is-Not', data: { rows } }).expect(201)).body;
+    expect(d.analyses).toEqual([expect.objectContaining({ kind: 'is_is_not', title: 'Is / Is-Not', step: 'd2', createdBy: { id: expect.any(String), name: 'Ada Owner' }, data: { rows } })]);
+    const id = d.analyses[0].id;
+    const edited = (await api().patch(`/api/v1/capa-analyses/${id}`).set(h).send({ title: 'Is / Is-Not, lot 77', data: { rows: [rows[0]] } }).expect(200)).body;
+    expect(edited.analyses[0]).toMatchObject({ title: 'Is / Is-Not, lot 77', data: { rows: [rows[0]] } });
+    const removed = (await api().delete(`/api/v1/capa-analyses/${id}`).set(h).expect(200)).body;
+    expect(removed.analyses).toEqual([]);
+    const gone = await api().patch(`/api/v1/capa-analyses/${id}`).set(h).send({ title: 'Back' });
+    expect(gone.status).toBe(404);
+    const kept = await admin.query(`select deleted_at is not null as removed from public.capa_analyses where id = $1`, [id]);
+    expect(kept.rows[0].removed).toBe(true);
+  });
+
+  it('refuses data that does not fit the kind, unknown kinds, and strangers', async () => {
+    const h = await owner();
+    const bad = await api().post(`/api/v1/capas/${ctx.c2}/analyses`).set(h).send({ kind: 'is_is_not', title: 'x', data: { rows: [{ key: 'a', dimension: 'sideways' }] } });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error.code).toBe('invalid_analysis');
+    await api().post(`/api/v1/capas/${ctx.c2}/analyses`).set(h).send({ kind: 'swot', title: 'x', data: {} }).expect(400);
+    await api().post(`/api/v1/capas/${ctx.c2}/analyses`).set(h).send({ kind: 'is_is_not', title: 'x', data: { rows: [], extra: 1 } }).expect(400);
+    await api().post(`/api/v1/capas/${ctx.c2}/analyses`).set(await as(ids.inspectorA)).send({ kind: 'is_is_not', title: 'x', data: {} }).expect(403);
+    await api().post(`/api/v1/capas/${ctx.c2}/analyses`).set(await as(ids.ownerB, ids.orgB)).send({ kind: 'is_is_not', title: 'x', data: {} }).expect(404);
+  });
+});
+
+describe('D3: interim containment', () => {
+  it('adds actions with an owner from the team and a due date; the owner must be on the team', async () => {
+    const h = await owner();
+    const d = (await api().get(`/api/v1/capas/${ctx.c1}`).set(h).expect(200)).body; // the inspector joined the team (as champion) in D1
+    ctx.tInspector = d.team.find((t: { membershipId: string; endedAt: string | null }) => t.membershipId === ctx.mInspector && !t.endedAt).id;
+    const added = (await api().post(`/api/v1/capas/${ctx.c1}/actions`).set(h).send({ phase: 'interim', description: 'Quarantine lot 77', ownerTeamMemberId: ctx.tInspector, dueDate: '2099-01-02' }).expect(201)).body;
+    expect(added.actions).toEqual([expect.objectContaining({ phase: 'interim', description: 'Quarantine lot 77', status: 'open', dueDate: '2099-01-02', overdue: false, owner: { teamMemberId: ctx.tInspector, name: expect.any(String) }, doneAt: null })]);
+    ctx.act = added.actions[0].id;
+    await api().post(`/api/v1/capas/${ctx.c1}/actions`).set(h).send({ phase: 'interim', description: 'x', ownerTeamMemberId: '00000000-0000-0000-0000-000000000000' }).expect(409);
+    await api().post(`/api/v1/capas/${ctx.c1}/actions`).set(h).send({ phase: 'corrective', description: 'Not yet' }).expect(400);
+    await api().post(`/api/v1/capas/${ctx.c1}/actions`).set(h).send({ phase: 'interim', description: '' }).expect(400);
+    await api().post(`/api/v1/capas/${ctx.c1}/actions`).set(await as(ids.inspectorA)).send({ phase: 'interim', description: 'Not allowed' }).expect(403);
+  });
+
+  it('marks an action overdue past its due date, edits it, completes it with evidence, cancels another with a reason, reopens', async () => {
+    const h = await owner();
+    const edited = (await api().patch(`/api/v1/capa-actions/${ctx.act}`).set(h).send({ description: 'Quarantine lots 77 and 78', dueDate: '2020-01-01' }).expect(200)).body;
+    expect(edited.actions[0]).toMatchObject({ description: 'Quarantine lots 77 and 78', overdue: true });
+    expect(edited.steps[3].problems).toEqual(['Finish or cancel the 1 open containment action', 'Add an interim containment action, or say why none is needed']);
+    const done = (await api().post(`/api/v1/capa-actions/${ctx.act}/complete`).set(h).send({ evidenceNote: 'In the cage' }).expect(200)).body;
+    expect(done.actions[0]).toMatchObject({ status: 'done', evidenceNote: 'In the cage', overdue: false, doneAt: expect.any(String), doneBy: { name: 'Ada Owner' } });
+    expect(done.steps[3].problems).toEqual([]);
+    const second = (await api().post(`/api/v1/capas/${ctx.c1}/actions`).set(h).send({ phase: 'interim', description: 'Check the customer stock' }).expect(201)).body.actions.find((a: { description: string }) => a.description === 'Check the customer stock');
+    await api().post(`/api/v1/capa-actions/${second.id}/cancel`).set(h).send({}).expect(400);
+    const cancelled = (await api().post(`/api/v1/capa-actions/${second.id}/cancel`).set(h).send({ reason: 'Customer has no stock' }).expect(200)).body;
+    expect(cancelled.actions.find((a: { id: string }) => a.id === second.id)).toMatchObject({ status: 'cancelled', cancelReason: 'Customer has no stock' });
+    const reopened = (await api().post(`/api/v1/capa-actions/${ctx.act}/reopen`).set(h).send().expect(200)).body;
+    expect(reopened.actions.find((a: { id: string }) => a.id === ctx.act)).toMatchObject({ status: 'open', doneAt: null, doneBy: null });
+    await api().post(`/api/v1/capa-actions/${ctx.act}/complete`).set(h).send({}).expect(200);
+    await api().post(`/api/v1/capa-actions/${ctx.act}/complete`).set(await as(ids.inspectorA)).send({}).expect(403);
+  });
+
+  it('a team member who owns an open action cannot leave until it is done or handed on', async () => {
+    const h = await owner();
+    const open = (await api().post(`/api/v1/capas/${ctx.c1}/actions`).set(h).send({ phase: 'interim', description: 'Sort 100%', ownerTeamMemberId: ctx.tInspector }).expect(201)).body.actions.find((a: { description: string }) => a.description === 'Sort 100%');
+    const refused = await api().patch(`/api/v1/capa-team/${ctx.tInspector}`).set(h).send({ ended: true });
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.message).toBe('This person still owns open actions; give them to someone else first');
+    await api().post(`/api/v1/capa-actions/${open.id}/complete`).set(h).send({}).expect(200);
+    await api().patch(`/api/v1/capa-team/${ctx.tInspector}`).set(h).send({ ended: true }).expect(200);
+  });
+
+  it('with no containment, a reason is enough; the step completes, and nothing locks afterwards', async () => {
+    const h = await owner();
+    const fresh = (await api().post('/api/v1/capas').set(h).send({ title: 'No containment needed', problemStatement: 'Found in the lab' }).expect(201)).body;
+    expect(fresh.steps[3].problems).toEqual(['Add an interim containment action, or say why none is needed']);
+    const d = (await api().patch(`/api/v1/capas/${fresh.id}`).set(h).send({ d3NoContainmentReason: 'No product left the plant' }).expect(200)).body;
+    expect(d.d3NoContainmentReason).toBe('No product left the plant');
+    expect(d.steps[3].problems).toEqual([]);
+    await api().patch(`/api/v1/capas/${fresh.id}`).set(h).send({ d2What: 'Leak at the weld', d2Where: 'Line 3', d2When: 'Today' }).expect(200);
+    const after = (await api().post(`/api/v1/capas/${fresh.id}/complete-step`).set(h).send({ step: 'd2' }).expect(200)).body;
+    expect(after.steps[2].completed).toBe(true);
+    await api().patch(`/api/v1/capas/${fresh.id}`).set(h).send({ d2Why: 'Edited after D2 was completed' }).expect(200); // a fluid document
+    const analysis = (await api().post(`/api/v1/capas/${fresh.id}/analyses`).set(h).send({ kind: 'is_is_not', title: 'Added after D2 was completed', data: { rows: [] } }).expect(201)).body;
+    expect(analysis.analyses).toHaveLength(1);
+    await api().post(`/api/v1/capas/${fresh.id}/cancel`).set(h).send({ reason: 'Test' }).expect(200);
+    await api().post(`/api/v1/capas/${fresh.id}/actions`).set(h).send({ phase: 'interim', description: 'Too late' }).expect(409);
+    await api().post(`/api/v1/capas/${fresh.id}/analyses`).set(h).send({ kind: 'is_is_not', title: 'Too late', data: { rows: [] } }).expect(409);
+  });
+
+  it('actions and analyses belong to their organisation', async () => {
+    await api().post(`/api/v1/capa-actions/${ctx.act}/complete`).set(await as(ids.ownerB, ids.orgB)).send({}).expect(404);
+    await api().patch(`/api/v1/capa-actions/${ctx.act}`).set(await as(ids.ownerB, ids.orgB)).send({ description: 'Hijacked' }).expect(404);
   });
 });

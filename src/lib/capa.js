@@ -51,3 +51,33 @@ export const ncrHref = (ncr) => `/Non-Conformance/${NC_TYPE[ncr.source] ?? "Inte
 
 /** The step page to open for an 8D: its current step. */
 export const capaHref = (capa, step) => `/CAPA/${capa.id}/${step ?? capa.currentStep ?? "d0"}`;
+
+/** D2: the seven questions of 5W2H, in the order they are asked. `required` ones are needed to complete D2. */
+export const FIVE_W2H = [
+  { key: "what", label: "What", prompt: "What is wrong? What is the defect, failure or complaint?", required: true },
+  { key: "where", label: "Where", prompt: "Where was it found: site, line, machine, customer?", required: true },
+  { key: "when", label: "When", prompt: "When was it found, and when did it start?", required: true },
+  { key: "who", label: "Who", prompt: "Who found it, and who is involved or affected?" },
+  { key: "why", label: "Why it matters", prompt: "Why is it a problem? What is the impact on the customer or the business?" },
+  { key: "how", label: "How", prompt: "How was it found or detected?" },
+  { key: "howMany", label: "How many", prompt: "How many parts, batches or customers are affected?" },
+];
+
+/** D2: the Is / Is-Not comparison. Each row is one question; what it IS, what it IS NOT, what is distinctive, what changed. */
+export const IS_IS_NOT_ROWS = [
+  { key: "what_object", dimension: "what", question: "Which part, product or process has the problem?" },
+  { key: "what_defect", dimension: "what", question: "What is the defect or failure?" },
+  { key: "where_place", dimension: "where", question: "Where is it found: site, line, machine?" },
+  { key: "where_on", dimension: "where", question: "Where on the part or in the process?" },
+  { key: "when_first", dimension: "when", question: "When was it first seen?" },
+  { key: "when_pattern", dimension: "when", question: "When does it happen: shift, time of day, batch?" },
+  { key: "extent_size", dimension: "extent", question: "How many are affected?" },
+  { key: "extent_trend", dimension: "extent", question: "Is it getting better, worse or staying the same?" },
+];
+export const DIMENSIONS = { what: "What", where: "Where", when: "When", extent: "How big" };
+
+export const ACTION_STATUS = {
+  open: { label: "Open", tone: "bg-info-color/15 text-info-color" },
+  done: { label: "Done", tone: "bg-success-color/15 text-success-color" },
+  cancelled: { label: "Cancelled", tone: "bg-border-color text-secondary-text line-through" },
+};

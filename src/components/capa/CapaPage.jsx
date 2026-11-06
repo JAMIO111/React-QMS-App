@@ -12,9 +12,11 @@ import Stepper from "./Stepper";
 import StepFooter from "./StepFooter";
 import D0Initiate from "./steps/D0Initiate";
 import D1Team from "./steps/D1Team";
+import D2Problem from "./steps/D2Problem";
+import D3Containment from "./steps/D3Containment";
 import StepNotAvailable from "./steps/StepNotAvailable";
 
-const STEP_PAGES = { d0: D0Initiate, d1: D1Team };
+const STEP_PAGES = { d0: D0Initiate, d1: D1Team, d2: D2Problem, d3: D3Containment };
 
 /**
  * One 8D, step by step. `/CAPA/:id` opens the step the 8D is at; `/CAPA/:id/:step` shows D0…D8 with the stepper beside it. Each step page has its

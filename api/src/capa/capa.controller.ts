@@ -1,9 +1,9 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { AddTeamBody, CapaDetail, CapaList, CompleteStepBody, CreateCapaBody, LinkNcrBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, UpdateCapaBody, UpdateTeamBody } from './capa.schemas';
+import { AddTeamBody, CapaDetail, CapaList, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, LinkNcrBody, UpdateActionBody, UpdateAnalysisBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, UpdateCapaBody, UpdateTeamBody } from './capa.schemas';
 import { CapaService } from './capa.service';
 
 const READ = 'capa.read';
@@ -104,6 +104,24 @@ export class CapasController {
     return this.service.addTeamMember(ctx, parse(Uuid, id), parse(AddTeamBody, body));
   }
 
+  @Post(':id/analyses')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(CreateAnalysisBody) })
+  @ApiCreatedResponse({ description: 'Saves an analysis made with a tool (Is / Is-Not now); its data is checked against the kind', schema: openApiSchema(CapaDetail) })
+  addAnalysis(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addAnalysis(ctx, parse(Uuid, id), parse(CreateAnalysisBody, body));
+  }
+
+  @Post(':id/actions')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(CreateActionBody) })
+  @ApiCreatedResponse({ description: 'Adds an action (interim containment now); the owner must be on the team', schema: openApiSchema(CapaDetail) })
+  addAction(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addAction(ctx, parse(Uuid, id), parse(CreateActionBody, body));
+  }
+
   @Post(':id/ncrs')
   @HttpCode(201)
   @OrganisationScoped(MANAGE)
@@ -156,5 +174,68 @@ export class NcrCapasController {
   @ApiOkResponse({ description: 'The 8Ds this non-conformance is linked to', schema: openApiSchema(NcrCapaList) })
   forNcr(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.forNcr(ctx, parse(Uuid, id));
+  }
+}
+
+@ApiTags('capa')
+@ApiBearerAuth()
+@Controller('capa-analyses')
+export class CapaAnalysesController {
+  constructor(private readonly service: CapaService) {}
+
+  @Patch(':id')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(UpdateAnalysisBody) })
+  @ApiOkResponse({ schema: openApiSchema(CapaDetail) })
+  update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.updateAnalysis(ctx, parse(Uuid, id), parse(UpdateAnalysisBody, body));
+  }
+
+  @Delete(':id')
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'Marks the analysis removed (the record stays); answers with the 8D', schema: openApiSchema(CapaDetail) })
+  remove(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.removeAnalysis(ctx, parse(Uuid, id));
+  }
+}
+
+@ApiTags('capa')
+@ApiBearerAuth()
+@Controller('capa-actions')
+export class CapaActionsController {
+  constructor(private readonly service: CapaService) {}
+
+  @Patch(':id')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(UpdateActionBody) })
+  @ApiOkResponse({ schema: openApiSchema(CapaDetail) })
+  update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.updateAction(ctx, parse(Uuid, id), parse(UpdateActionBody, body));
+  }
+
+  @Post(':id/complete')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(CompleteActionBody) })
+  @ApiOkResponse({ description: 'Marks the action done (stamped by the database), with an optional evidence note', schema: openApiSchema(CapaDetail) })
+  complete(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.completeAction(ctx, parse(Uuid, id), parse(CompleteActionBody, body ?? {}));
+  }
+
+  @Post(':id/cancel')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ schema: openApiSchema(CapaDetail) })
+  cancel(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.cancelAction(ctx, parse(Uuid, id), parse(ReasonBody, body));
+  }
+
+  @Post(':id/reopen')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'Puts a done or cancelled action back to open', schema: openApiSchema(CapaDetail) })
+  reopen(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.reopenAction(ctx, parse(Uuid, id));
   }
 }

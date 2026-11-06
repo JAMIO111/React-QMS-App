@@ -161,6 +161,11 @@ BEGIN
   PERFORM app.issue_quality_alert(qa);
   -- CAPA1: an 8D started from a non-conformance (steps, the creator as leader, the NC link).
   PERFORM app.start_capa(a, NULL, NULL, NULL, NULL, (SELECT id FROM public.nonconformances WHERE organisation_id = a AND deleted_at IS NULL LIMIT 1));
+  -- CAPA2: an Is / Is-Not analysis and an interim containment action.
+  INSERT INTO public.capa_analyses (organisation_id, capa_id, kind, title, step, data)
+    SELECT a, id, 'is_is_not', 'Sweep Is / Is-Not', 'd2', '{"rows": []}'::jsonb FROM public.capas WHERE organisation_id = a LIMIT 1;
+  INSERT INTO public.capa_actions (organisation_id, capa_id, phase, description)
+    SELECT a, id, 'interim', 'Sweep containment' FROM public.capas WHERE organisation_id = a LIMIT 1;
   PERFORM pg_temp.logout();
 
   -- Subscription: seats and an assignment through the API functions, invoice and payment as the provider would.

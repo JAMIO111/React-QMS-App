@@ -5,7 +5,7 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { iso, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
-import { AddTeamBody, CapaDetail, CapaSummary, CompleteStepBody, CreateCapaBody, LinkNcrBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, STEPS, UpdateCapaBody, UpdateTeamBody } from './capa.schemas';
+import { AddTeamBody, ANALYSIS_DATA, CapaDetail, CapaSummary, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, LinkNcrBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, STEPS, UpdateActionBody, UpdateAnalysisBody, UpdateCapaBody, UpdateTeamBody } from './capa.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown' } : null);
@@ -14,6 +14,7 @@ const RUNNING = sql`c.stage not in ('closed', 'cancelled')`;
 const SELECT = sql`
   select c.id, c.reference, c.method, c.title, c.problem_statement, c.stage, c.stage_reason, c.source, c.severity, c.external_reference,
          c.owner_membership_id, c.due_date::text as due_date, c.closed_at, c.created_at, c.updated_at, c.created_by,
+         c.d2_who, c.d2_what, c.d2_where, c.d2_when, c.d2_why, c.d2_how, c.d2_how_many, c.d3_no_containment_reason,
          (c.due_date is not null and c.due_date < current_date and ${RUNNING}) as overdue,
          (select count(*) from public.capa_steps s where s.capa_id = c.id and s.completed_at is not null)::int as steps_done,
          (select min(s.step) from public.capa_steps s where s.capa_id = c.id and s.completed_at is null) as next_step,
@@ -44,9 +45,20 @@ const toSummary = (r: Row): CapaSummary => ({
   closedAt: iso(r.closed_at),
 });
 
+/** The step each analysis kind belongs to. */
+const STEP_OF_KIND = { is_is_not: 'd2' } as const;
+/** An analysis's data checked against its kind's shape (400 with the reason when it does not fit). */
+const parseData = (kind: keyof typeof ANALYSIS_DATA, data: Record<string, unknown>) => {
+  const parsed = ANALYSIS_DATA[kind].safeParse(data);
+  if (!parsed.success) throw ApiError.badRequest('invalid_analysis', parsed.error.issues.map((i) => `${i.path.join('.') || 'data'}: ${i.message}`).join('; '));
+  return parsed.data;
+};
+
 const HEADER_COLUMNS: Record<string, string> = {
   title: 'title', problemStatement: 'problem_statement', source: 'source', severity: 'severity', externalReference: 'external_reference',
   ownerMembershipId: 'owner_membership_id', dueDate: 'due_date',
+  d2Who: 'd2_who', d2What: 'd2_what', d2Where: 'd2_where', d2When: 'd2_when', d2Why: 'd2_why', d2How: 'd2_how', d2HowMany: 'd2_how_many',
+  d3NoContainmentReason: 'd3_no_containment_reason',
 };
 
 /**
@@ -146,6 +158,85 @@ export class CapaService {
     });
   }
 
+  // ---- analyses (D2 and D4 tools) ------------------------------------------------------------
+
+  addAnalysis(ctx: RequestContext, id: string, body: CreateAnalysisBody): Promise<CapaDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      const data = parseData(body.kind, body.data);
+      await db.execute(sql`
+        insert into public.capa_analyses (organisation_id, capa_id, kind, title, step, data)
+        values (${orgOf(ctx)}::uuid, ${id}::uuid, ${body.kind}, ${body.title}, ${STEP_OF_KIND[body.kind]}, ${JSON.stringify(data)}::jsonb)`);
+      return this.load(db, ctx, id);
+    });
+  }
+
+  updateAnalysis(ctx: RequestContext, analysisId: string, body: UpdateAnalysisBody): Promise<CapaDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<{ capa_id: string; kind: keyof typeof ANALYSIS_DATA }>(sql`select capa_id, kind from public.capa_analyses where id = ${analysisId}::uuid and organisation_id = ${orgOf(ctx)}::uuid and deleted_at is null`);
+      if (!found.rows.length) throw ApiError.notFound('analysis_not_found', 'Analysis not found');
+      const sets: SQL[] = [];
+      if (body.title !== undefined) sets.push(sql`title = ${body.title}`);
+      if (body.data !== undefined) sets.push(sql`data = ${JSON.stringify(parseData(found.rows[0].kind, body.data))}::jsonb`);
+      const updated = await db.execute(sql`update public.capa_analyses set ${sql.join(sets, sql`, `)} where id = ${analysisId}::uuid and organisation_id = ${orgOf(ctx)}::uuid returning id`);
+      if (updated.rows.length === 0) throw ApiError.forbidden('You are not allowed to change this analysis');
+      return this.load(db, ctx, found.rows[0].capa_id);
+    });
+  }
+
+  removeAnalysis(ctx: RequestContext, analysisId: string): Promise<CapaDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<{ capa_id: string }>(sql`select capa_id from public.capa_analyses where id = ${analysisId}::uuid and organisation_id = ${orgOf(ctx)}::uuid and deleted_at is null`);
+      if (!found.rows.length) throw ApiError.notFound('analysis_not_found', 'Analysis not found');
+      const updated = await db.execute(sql`update public.capa_analyses set deleted_at = now() where id = ${analysisId}::uuid and organisation_id = ${orgOf(ctx)}::uuid returning id`);
+      if (updated.rows.length === 0) throw ApiError.forbidden('You are not allowed to remove this analysis');
+      return this.load(db, ctx, found.rows[0].capa_id);
+    });
+  }
+
+  // ---- actions (interim containment now) -----------------------------------------------------
+
+  addAction(ctx: RequestContext, id: string, body: CreateActionBody): Promise<CapaDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      await db.execute(sql`
+        insert into public.capa_actions (organisation_id, capa_id, phase, description, owner_team_member_id, due_date)
+        values (${orgOf(ctx)}::uuid, ${id}::uuid, ${body.phase}, ${body.description}, ${body.ownerTeamMemberId ?? null}::uuid, ${body.dueDate ?? null}::date)`);
+      return this.load(db, ctx, id);
+    });
+  }
+
+  updateAction(ctx: RequestContext, actionId: string, body: UpdateActionBody): Promise<CapaDetail> {
+    const sets: SQL[] = [];
+    if (body.description !== undefined) sets.push(sql`description = ${body.description}`);
+    if (body.ownerTeamMemberId !== undefined) sets.push(sql`owner_team_member_id = ${body.ownerTeamMemberId}::uuid`);
+    if (body.dueDate !== undefined) sets.push(sql`due_date = ${body.dueDate}::date`);
+    if (body.evidenceNote !== undefined) sets.push(sql`evidence_note = ${body.evidenceNote || null}`);
+    return this.changeAction(ctx, actionId, sets);
+  }
+
+  completeAction(ctx: RequestContext, actionId: string, body: CompleteActionBody): Promise<CapaDetail> {
+    return this.changeAction(ctx, actionId, [sql`status = 'done'`, sql`evidence_note = coalesce(${body.evidenceNote || null}, evidence_note)`]);
+  }
+
+  cancelAction(ctx: RequestContext, actionId: string, body: ReasonBody): Promise<CapaDetail> {
+    return this.changeAction(ctx, actionId, [sql`status = 'cancelled'`, sql`cancel_reason = ${body.reason}`]);
+  }
+
+  reopenAction(ctx: RequestContext, actionId: string): Promise<CapaDetail> {
+    return this.changeAction(ctx, actionId, [sql`status = 'open'`]);
+  }
+
+  private changeAction(ctx: RequestContext, actionId: string, sets: SQL[]): Promise<CapaDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<{ capa_id: string }>(sql`select capa_id from public.capa_actions where id = ${actionId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!found.rows.length) throw ApiError.notFound('action_not_found', 'Action not found');
+      const updated = await db.execute(sql`update public.capa_actions set ${sql.join(sets, sql`, `)} where id = ${actionId}::uuid and organisation_id = ${orgOf(ctx)}::uuid returning id`);
+      if (updated.rows.length === 0) throw ApiError.forbidden('You are not allowed to change this action');
+      return this.load(db, ctx, found.rows[0].capa_id);
+    });
+  }
+
   // ---- non-conformance links ---------------------------------------------------------------
 
   linkNcr(ctx: RequestContext, id: string, body: LinkNcrBody): Promise<CapaDetail> {
@@ -218,7 +309,7 @@ export class CapaService {
     const rows = await db.execute<Row>(sql`${SELECT} where c.id = ${id}::uuid and c.organisation_id = ${orgOf(ctx)}::uuid`);
     if (!rows.rows.length) throw ApiError.notFound('capa_not_found', '8D not found');
     const r = rows.rows[0];
-    const [steps, team, ncrs] = await Promise.all([
+    const [steps, team, ncrs, analyses, actions] = await Promise.all([
       db.execute<Row>(sql`select s.step, s.completed_at, s.completed_by, s.note, s.reopened_at, s.reopen_reason, ${sql.raw(personName('p'))} as completed_by_name
         from public.capa_steps s left join public.profiles p on p.id = s.completed_by where s.capa_id = ${id}::uuid order by s.step`),
       db.execute<Row>(sql`select t.id, t.membership_id, m.user_id, t.external_name, t.external_company, t.external_email, t.role, t.ended_at,
@@ -235,6 +326,19 @@ export class CapaService {
         left join public.nonconformances n on n.id = l.nonconformance_id
         left join public.profiles pl on pl.id = l.created_by
         where l.capa_id = ${id}::uuid order by l.ended_at is not null, l.created_at`),
+      db.execute<Row>(sql`select a.id, a.kind, a.title, a.step, a.data, a.created_at, a.updated_at, a.created_by, ${sql.raw(personName('p'))} as created_by_name
+        from public.capa_analyses a left join public.profiles p on p.id = a.created_by
+        where a.capa_id = ${id}::uuid and a.deleted_at is null order by a.created_at`),
+      db.execute<Row>(sql`select x.id, x.phase, x.description, x.root_cause_id, x.owner_team_member_id, x.due_date::text as due_date, x.status, x.done_at, x.done_by,
+          x.evidence_note, x.cancel_reason, x.created_at, ${sql.raw(personName('pd'))} as done_by_name,
+          coalesce(${sql.raw(personName('po'))}, t.external_name, om.invited_email) as owner_name,
+          (x.status = 'open' and x.due_date is not null and x.due_date < current_date) as overdue
+        from public.capa_actions x
+        left join public.capa_team_members t on t.id = x.owner_team_member_id
+        left join public.organisation_users om on om.id = t.membership_id
+        left join public.profiles po on po.id = om.user_id
+        left join public.profiles pd on pd.id = x.done_by
+        where x.capa_id = ${id}::uuid order by x.created_at`),
     ]);
     const incomplete = steps.rows.filter((s) => !s.completed_at).map((s) => s.step as string);
     const problems = new Map<string, string[]>();
@@ -247,6 +351,33 @@ export class CapaService {
     return {
       ...toSummary(r),
       problemStatement: (r.problem_statement as string) ?? null,
+      problem: { who: (r.d2_who as string) ?? null, what: (r.d2_what as string) ?? null, where: (r.d2_where as string) ?? null, when: (r.d2_when as string) ?? null, why: (r.d2_why as string) ?? null, how: (r.d2_how as string) ?? null, howMany: (r.d2_how_many as string) ?? null },
+      d3NoContainmentReason: (r.d3_no_containment_reason as string) ?? null,
+      analyses: analyses.rows.map((a) => ({
+        id: a.id as string,
+        kind: a.kind as 'is_is_not',
+        title: a.title as string,
+        step: a.step as CapaDetail['analyses'][number]['step'],
+        data: a.data as Record<string, unknown>,
+        createdBy: person(a.created_by, a.created_by_name),
+        createdAt: iso(a.created_at)!,
+        updatedAt: iso(a.updated_at)!,
+      })),
+      actions: actions.rows.map((x) => ({
+        id: x.id as string,
+        phase: x.phase as CapaDetail['actions'][number]['phase'],
+        description: x.description as string,
+        rootCauseId: (x.root_cause_id as string) ?? null,
+        owner: x.owner_team_member_id ? { teamMemberId: x.owner_team_member_id as string, name: (x.owner_name as string) ?? 'Unknown' } : null,
+        dueDate: (x.due_date as string) ?? null,
+        overdue: !!x.overdue,
+        status: x.status as 'open' | 'done' | 'cancelled',
+        doneAt: iso(x.done_at),
+        doneBy: person(x.done_by, x.done_by_name),
+        evidenceNote: (x.evidence_note as string) ?? null,
+        cancelReason: (x.cancel_reason as string) ?? null,
+        createdAt: iso(x.created_at)!,
+      })),
       createdBy: person(r.created_by, r.created_by_name),
       updatedAt: iso(r.updated_at)!,
       steps: STEPS.map((step) => {

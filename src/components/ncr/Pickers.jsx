@@ -3,15 +3,16 @@ import RHFComboBox from "../ui/RHFComboBox";
 import { useParts, usePart, useParties } from "../../hooks/useMasterData";
 import { useNcrs } from "../../hooks/useNcr";
 
-export const TextAreaField = ({ label, value, onChange, disabled, rows = 3, maxLength, className = "" }) => {
+export const TextAreaField = ({ label, value, onChange, disabled, rows = 3, maxLength, className = "", required, hint }) => {
   const id = useId();
   return (
     <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
-      <label htmlFor={id} className="text-sm font-medium text-secondary-text">
+      <label htmlFor={id} className="text-sm font-medium text-secondary-text" data-required={required || undefined}>
         {label}
       </label>
       <textarea
         id={id}
+        aria-required={required || undefined}
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
@@ -19,6 +20,7 @@ export const TextAreaField = ({ label, value, onChange, disabled, rows = 3, maxL
         maxLength={maxLength}
         className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-primary-text outline-none transition-all duration-150 placeholder:text-sm placeholder:text-muted hover:border-border-dark-color focus:border-brand-primary focus:ring-3 focus:ring-brand-primary/20 disabled:opacity-60"
       />
+      {hint && <p className="text-xs text-secondary-text">{hint}</p>}
     </div>
   );
 };

@@ -48,7 +48,7 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
           });
       }}>
       <label className="flex flex-col gap-1 text-xs text-secondary-text">
-        Name
+        <span data-required>Name</span>
         <input
           className={`${input} w-56`}
           value={name}
@@ -58,7 +58,7 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
         />
       </label>
       <label className="flex flex-col gap-1 text-xs text-secondary-text">
-        Interval
+        <span data-required>Interval</span>
         <span className="flex gap-1">
           <input
             aria-label="Interval"

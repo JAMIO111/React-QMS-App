@@ -65,7 +65,7 @@ const IshikawaDialog = ({ capa, analysis, onClose }) => {
       <form className="flex flex-col gap-4" noValidate onSubmit={(e) => { e.preventDefault(); save(); }}>
         <p className="text-sm text-secondary-text">List everything that could cause the effect, under each heading. Star the likely ones. Nothing here is a root cause until it is verified.</p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <Field label="Title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
+          <Field label="Title" required value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
           <Field label="Effect (the problem)" value={effect} onChange={(e) => setEffect(e.target.value)} maxLength={300} />
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">

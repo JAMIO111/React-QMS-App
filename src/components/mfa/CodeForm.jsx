@@ -25,7 +25,7 @@ const CodeForm = ({ onSubmit, submitLabel = "Verify", describeError, autoFocus =
 
   return (
     <form onSubmit={submit} className="flex w-full flex-col gap-3" noValidate>
-      <label htmlFor={id} className="text-primary-text">
+      <label htmlFor={id} className="text-primary-text" data-required>
         6-digit code from your authenticator app
       </label>
       <input

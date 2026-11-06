@@ -91,7 +91,7 @@ const CostForm = ({ cost, baseCurrency = "GBP", vatRate = 0.2, onSubmit, onCance
         {field("incurredOn", (f) => <RHFDatePickerPopout {...f} label="Date" required valueFormat="iso" maxDate={new Date()} />)}
         {field("vatTreatment", (f) => <RHFComboBox {...f} label="VAT option" icon={ReceiptIcon} options={VAT_OPTIONS} sort={false} clearable={false} />)}
         {v.vatTreatment !== "none" &&
-          field("vatRatePercent", (f) => <TextInput {...f} label="VAT rate" dataType="number" icon={ReceiptIcon} suffix="%" placeholder="20" value={f.value ?? ""} />)}
+          field("vatRatePercent", (f) => <TextInput {...f} label="VAT rate" required dataType="number" icon={ReceiptIcon} suffix="%" placeholder="20" value={f.value ?? ""} />)}
         {field("currency", (f) => <RHFComboBox {...f} label="Currency" required icon={CoinsIcon} placeholder="Select a currency" options={CURRENCY_OPTIONS} sort={false} clearable={false} />)}
         {field("amount", (f) => (
           <TextInput {...f} label={amountLabel} required dataType="number" icon={CoinsIcon} prefix={currencySymbol(v.currency).length <= 2 ? currencySymbol(v.currency) : undefined} placeholder="0.00" value={f.value ?? ""} />

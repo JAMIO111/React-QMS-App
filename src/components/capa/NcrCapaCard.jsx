@@ -19,7 +19,7 @@ const LinkExistingDialog = ({ ncr, linkedIds, onClose }) => {
     <Dialog title="Link to an existing 8D" onClose={onClose}>
       <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (picked) mutation.mutate({ action: "linkNcr", id: picked, body: { ncrId: ncr.id } }, { onSuccess: onClose }); }}>
         <p className="text-sm text-secondary-text">{ncr.reference} will be addressed by this 8D together with any other non-conformances linked to it. Only running 8Ds are listed.</p>
-        <RHFComboBox label="8D" value={picked} onChange={setPicked} options={options} placeholder="Search by number or title…" filterLocally={false} onSearchChange={setQ}
+        <RHFComboBox label="8D" required value={picked} onChange={setPicked} options={options} placeholder="Search by number or title…" filterLocally={false} onSearchChange={setQ}
           emptyMessage={running.isFetching ? "Searching…" : "No running 8D matches"} sort={false} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">

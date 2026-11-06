@@ -192,6 +192,7 @@ const NcFields = ({ inspection, draft, measurementIds, onClose }) => {
         <label
           htmlFor={`${id}-title`}
           className="text-sm font-medium text-secondary-text"
+          data-required
         >
           Title
         </label>
@@ -214,6 +215,7 @@ const NcFields = ({ inspection, draft, measurementIds, onClose }) => {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <SelectField
           label="Severity"
+          required={open}
           value={severity}
           onChange={setSeverity}
           options={SEVERITIES}
@@ -223,6 +225,7 @@ const NcFields = ({ inspection, draft, measurementIds, onClose }) => {
           <label
             htmlFor={`${id}-qty`}
             className="text-sm font-medium text-secondary-text"
+            data-required={open || undefined}
           >
             Quantity affected
           </label>

@@ -109,7 +109,7 @@ export const SelectField = ({ label, value, onChange, options, placeholder = "â€
   const id = useId();
   return (
     <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
-      <label htmlFor={id} className="text-sm font-medium text-secondary-text">
+      <label htmlFor={id} className="text-sm font-medium text-secondary-text" data-required={required || undefined}>
         {label}
       </label>
       <select
@@ -145,16 +145,17 @@ export const FormError = ({ error }) =>
   ) : null;
 
 /** Labelled multi-line text input. */
-export const TextAreaField = ({ label, hint, className = "", rows = 3, ...props }) => {
+export const TextAreaField = ({ label, hint, className = "", rows = 3, required, ...props }) => {
   const id = useId();
   return (
     <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
-      <label htmlFor={id} className="text-sm font-medium text-secondary-text">
+      <label htmlFor={id} className="text-sm font-medium text-secondary-text" data-required={required || undefined}>
         {label}
       </label>
       <textarea
         id={id}
         rows={rows}
+        aria-required={required || undefined}
         aria-describedby={hint ? `${id}-help` : undefined}
         className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-primary-text hover:border-border-dark-color focus:outline-none focus:border-brand-primary disabled:opacity-60"
         {...props}

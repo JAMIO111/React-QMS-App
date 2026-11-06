@@ -23,8 +23,8 @@ const CauseDialog = ({ capa, cause, onClose }) => {
           const body = { kind: form.kind, description: form.description.trim() };
           mutation.mutate(cause ? { action: "updateRootCause", id: cause.id, body } : { action: "addRootCause", id: capa.id, body }, { onSuccess: onClose });
         }}>
-        <RHFComboBox label="Kind" value={form.kind} onChange={(v) => setForm((f) => ({ ...f, kind: v ?? "occurrence" }))} options={ROOT_CAUSE_OPTIONS} sort={false} clearable={false} hint={ROOT_CAUSE_KINDS[form.kind].help} />
-        <TextAreaField label="The root cause" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} maxLength={2000} hint="A cause you can verify and fix, not a symptom" />
+        <RHFComboBox label="Kind" required value={form.kind} onChange={(v) => setForm((f) => ({ ...f, kind: v ?? "occurrence" }))} options={ROOT_CAUSE_OPTIONS} sort={false} clearable={false} hint={ROOT_CAUSE_KINDS[form.kind].help} />
+        <TextAreaField label="The root cause" required value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} maxLength={2000} hint="A cause you can verify and fix, not a symptom" />
         {cause?.verified && <p className="text-sm text-warning-color">Changing the words or the kind withdraws its verification, so it has to be verified again.</p>}
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
@@ -51,7 +51,7 @@ const VerifyDialog = ({ cause, onClose }) => {
         }}>
         <p className="text-sm text-primary-text">{cause.description}</p>
         <p className="text-sm text-secondary-text">A cause is verified when you have shown it produces the problem and that removing it stops the problem: a trial, a test, a measurement, or reproducing it.</p>
-        <Field label="How was it verified?" value={method} onChange={(e) => setMethod(e.target.value)} maxLength={200} placeholder="e.g. Trial with a new tool on three lots" />
+        <Field label="How was it verified?" required value={method} onChange={(e) => setMethod(e.target.value)} maxLength={200} placeholder="e.g. Trial with a new tool on three lots" />
         <TextAreaField label="What was found (optional)" value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={2000} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">

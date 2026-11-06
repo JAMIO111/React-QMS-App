@@ -360,7 +360,7 @@ const ReadingDialog = ({ inspection, requirement, reading, gauges, canCorrect, c
             </div>
             {gProblem &&
               (canOverride ? (
-                <Field label={`Gauge is ${gProblem}: reason to use it anyway`} value={override} onChange={(e) => setOverride(e.target.value)} maxLength={1000} />
+                <Field label={`Gauge is ${gProblem}: reason to use it anyway`} required value={override} onChange={(e) => setOverride(e.target.value)} maxLength={1000} />
               ) : (
                 <p className="text-sm text-error-color">The gauge is {gProblem}; choose another or ask a supervisor.</p>
               ))}

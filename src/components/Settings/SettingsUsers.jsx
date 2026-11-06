@@ -148,8 +148,8 @@ const InviteForm = ({ roles, sites, departments }) => {
         </button>
       </div>
       <fieldset className="flex flex-col gap-1" aria-label="Departments">
-        <legend className="text-sm font-medium text-primary-text">
-          Departments{needsDepartment ? " (required)" : ""}
+        <legend className="text-sm font-medium text-primary-text" data-required={needsDepartment || undefined}>
+          Departments
         </legend>
         <p className="text-xs text-secondary-text">
           Where this person works. Alerts and notices addressed to a department reach its members.

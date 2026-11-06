@@ -14,7 +14,7 @@ const ReasonDialog = ({ title, label, confirmText, onConfirm, onClose, pending, 
           onConfirm(reason.trim());
         }}
         className="flex flex-col gap-3">
-        <TextAreaField label={label} value={reason} onChange={setReason} maxLength={1000} />
+        <TextAreaField label={label} required value={reason} onChange={setReason} maxLength={1000} />
         {error && (
           <p role="alert" className="text-sm text-error-color">
             {describeApiError(error)}

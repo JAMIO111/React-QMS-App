@@ -33,8 +33,8 @@ const VerifyDialog = ({ capa, onClose }) => {
           <label className="flex items-center gap-2"><input type="radio" name="effective" checked={effective} onChange={() => setEffective(true)} /> Yes, the problem has not come back</label>
           <label className="flex items-center gap-2"><input type="radio" name="effective" checked={!effective} onChange={() => setEffective(false)} /> No, it came back or the fix is not enough</label>
         </fieldset>
-        <TextAreaField label="How effectiveness was checked" value={method} onChange={(e) => setMethod(e.target.value)} rows={2} maxLength={200} hint="e.g. audit of the next 5 lots, 30 days of SPC" />
-        <TextAreaField label={effective ? "Notes (optional)" : "What was found"} value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} />
+        <TextAreaField label="How effectiveness was checked" required value={method} onChange={(e) => setMethod(e.target.value)} rows={2} maxLength={200} hint="e.g. audit of the next 5 lots, 30 days of SPC" />
+        <TextAreaField label={effective ? "Notes (optional)" : "What was found"} required={!effective} value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} />
         {!effective && <p className="text-sm text-warning-color">A failed verification reopens D5 and D6 so the actions can be put right.</p>}
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">

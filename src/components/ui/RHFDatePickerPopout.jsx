@@ -102,14 +102,9 @@ const RHFDatePickerPopout = ({
 
   return (
     <div ref={wrapperRef} className={`relative flex h-fit w-full min-w-0 flex-col gap-1 ${className}`}>
-      <label htmlFor={id} className="text-sm font-medium text-secondary-text">
+      <label htmlFor={id} className="text-sm font-medium text-secondary-text" data-required={required || undefined}>
         {label}
-        {required && (
-          <span className="text-error-color" title="Required">
-            {" "}*
-          </span>
-        )}
-      </label>
+        </label>
       <div className="relative">
         <button
           ref={(el) => {

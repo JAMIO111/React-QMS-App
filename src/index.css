@@ -760,3 +760,9 @@ html.dark {
   border-top-width: 1px;
   border-color: var(--color-border-color);
 }
+
+/* A field that must be filled in to save or to move on: components pass `required`, which sets data-required on the label. */
+[data-required]::after {
+  content: " *";
+  color: var(--color-error-color);
+}

@@ -274,7 +274,7 @@ describe("NC form", () => {
     renderAt("/Non-Conformance/Internal/new");
     expect(await screen.findByRole("heading", { name: "New internal non-conformance" })).toBeInTheDocument();
     expect(screen.queryByLabelText(/Customer$/)).toBeNull();
-    await userEvent.type(screen.getByLabelText("Title *"), "Bore oversize");
+    await userEvent.type(screen.getByLabelText("Title"), "Bore oversize");
     await pick(/^Severity/, "Major");
     await userEvent.type(screen.getByLabelText("Quantity affected"), "4");
     await userEvent.type(screen.getByLabelText("Work order"), "WO-7");
@@ -297,7 +297,7 @@ describe("NC form", () => {
   it("asks for the customer on customer NCs and the supplier on supplier NCs", async () => {
     routeApi({ "POST /ncrs": (_p, o) => ncr({ ...o.body, id: "n8" }), "GET /ncrs/n8": ncr({ id: "n8", source: "customer" }) });
     renderAt("/Non-Conformance/Customer/new");
-    await userEvent.type(await screen.findByLabelText("Title *"), "Complaint");
+    await userEvent.type(await screen.findByLabelText("Title"), "Complaint");
     await pick(/^Customer/, /^Acme/);
     await userEvent.type(screen.getByLabelText("Customer reference"), "CLM-9");
     await userEvent.click(screen.getByRole("button", { name: "Save as draft" }));
@@ -308,7 +308,7 @@ describe("NC form", () => {
   it("sends only the changed fields when editing", async () => {
     routeApi({ "GET /ncrs/n1": ncr(), "PATCH /ncrs/n1": (_p, o) => ncr(o.body) });
     renderAt("/Non-Conformance/Internal/n1");
-    const title = await screen.findByLabelText("Title *");
+    const title = await screen.findByLabelText("Title");
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
     await userEvent.clear(title);
     await userEvent.type(title, "Bore oversize on op 20");
@@ -334,7 +334,7 @@ describe("NC form", () => {
     routeApi({ "GET /ncrs/n1": ncr({ stage: "closed", closedAt: "2026-11-02T09:00:00Z", closedBy: { id: "u1", name: "Ada Owner" } }) });
     renderAt("/Non-Conformance/Internal/n1");
     expect(await screen.findByText(/This non-conformance is closed; reopen it/)).toBeInTheDocument();
-    expect(screen.getByLabelText("Title *")).toBeDisabled();
+    expect(screen.getByLabelText("Title")).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Reopen" }));
     expect(screen.getByRole("dialog", { name: "Reopen NCM-26-001?" })).toBeInTheDocument();
@@ -355,7 +355,7 @@ describe("NC form", () => {
     routeApi({ "GET /ncrs/n1": ncr({ deletedAt: "2026-11-03T09:00:00Z", deletedBy: { id: "u1", name: "Ada Owner" }, deleteReason: "Raised in error" }), "POST /ncrs/n1/restore": ncr() });
     renderAt("/Non-Conformance/Internal/n1");
     expect(await screen.findByText(/Raised in error/)).toBeInTheDocument();
-    expect(screen.getByLabelText("Title *")).toBeDisabled();
+    expect(screen.getByLabelText("Title")).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Restore" }));
     expect(lastCall("POST /ncrs/n1/restore")).toBeTruthy();
   });
@@ -364,7 +364,7 @@ describe("NC form", () => {
     permissions = ["ncr.read"];
     routeApi({ "GET /ncrs/n1": ncr() });
     renderAt("/Non-Conformance/Internal/n1");
-    expect(await screen.findByLabelText("Title *")).toBeDisabled();
+    expect(await screen.findByLabelText("Title")).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Move to Contained" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
   });
@@ -542,7 +542,7 @@ describe("dialogs inside the NC form", () => {
   it("saving a cost does not also save the NC", async () => {
     routeApi({ "GET /ncrs/n1": ncr(), "POST /ncrs/n1/costs": (_p, o) => ({ id: "c9", ...o.body }), "PATCH /ncrs/n1": (_p, o) => ncr(o.body) });
     renderAt("/Non-Conformance/Internal/n1");
-    const title = await screen.findByLabelText("Title *");
+    const title = await screen.findByLabelText("Title");
     await userEvent.type(title, " (edited)");
     await userEvent.click(screen.getByRole("button", { name: "New item" }));
     const dialog = screen.getByRole("dialog", { name: "New cost item" });

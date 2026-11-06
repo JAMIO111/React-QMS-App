@@ -195,14 +195,9 @@ const RHFComboBox = ({
     <div className={`w-full min-w-0 ${className}`}>
       <div className="flex gap-1 flex-col">
         {label && (
-          <label htmlFor={id} className="text-sm font-medium text-secondary-text">
+          <label htmlFor={id} className="text-sm font-medium text-secondary-text" data-required={required || undefined}>
             {label}
-            {required && (
-              <span className="text-error-color" title="Required">
-                {" "}*
-              </span>
-            )}
-          </label>
+            </label>
         )}
 
         <div ref={dropdownRef} className="relative">

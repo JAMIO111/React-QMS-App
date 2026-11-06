@@ -23,7 +23,7 @@ const FiveW2HDialog = ({ capa, onClose }) => {
         <p className="text-sm text-secondary-text">Answer each question with facts. What, where and when are needed to complete D2.</p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {FIVE_W2H.map((q) => (
-            <TextAreaField key={q.key} label={`${q.label}${q.required ? " *" : ""}`} value={form[q.key]} onChange={(e) => setForm((f) => ({ ...f, [q.key]: e.target.value }))} rows={3} maxLength={2000} hint={q.prompt} />
+            <TextAreaField key={q.key} label={q.label} required={q.required} value={form[q.key]} onChange={(e) => setForm((f) => ({ ...f, [q.key]: e.target.value }))} rows={3} maxLength={2000} hint={q.prompt} />
           ))}
         </div>
         <FormError error={mutation.error} />
@@ -54,7 +54,7 @@ const IsIsNotDialog = ({ capa, analysis, onClose }) => {
     <Dialog title="Is / Is-Not comparison" onClose={onClose} width="max-w-6xl">
       <form className="flex flex-col gap-3" noValidate onSubmit={submit}>
         <p className="text-sm text-secondary-text">Compare where the problem is with where it could be but is not. What is distinctive about the IS, and what changed, points to the cause.</p>
-        <Field label="Title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} className="max-w-md" />
+        <Field label="Title" required value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} className="max-w-md" />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[56rem] border-separate border-spacing-0 text-sm" aria-label="Is / Is-Not rows">
             <thead>

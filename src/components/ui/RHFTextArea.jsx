@@ -25,14 +25,9 @@ const RHFTextAreaInput = forwardRef(
     return (
       <div className="w-full min-w-0">
         {label && (
-          <label htmlFor={id} className="block mb-1 text-sm font-medium text-secondary-text">
+          <label htmlFor={id} className="block mb-1 text-sm font-medium text-secondary-text" data-required={required || undefined}>
             {label}
-            {required && (
-              <span className="text-error-color" title="Required">
-                {" "}*
-              </span>
-            )}
-          </label>
+            </label>
         )}
         {/* Same frame as TextInput: border, darker on hover, brand border + soft ring when focused. */}
         <div

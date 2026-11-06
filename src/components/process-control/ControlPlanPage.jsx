@@ -286,7 +286,7 @@ const RevisionForm = ({ plan, revision, onDone }) => {
           hint="Leave empty to make it effective on approval"
         />
       </div>
-      <TextAreaField label="Reason for change" value={form.changeReason} onChange={set("changeReason")} maxLength={2000} hint="Required before submitting for approval" />
+      <TextAreaField label="Reason for change" required value={form.changeReason} onChange={set("changeReason")} maxLength={2000} hint="Required before submitting for approval" />
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
         <button type="button" className={buttonClass.neutral} onClick={onDone}>

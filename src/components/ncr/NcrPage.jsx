@@ -298,7 +298,7 @@ const NcrPage = () => {
                 <div className="lg:col-span-2">{text("title", "Title", { required: true, maxLength: 200, icon: FileTextIcon, placeholder: "Short summary of the problem" })}</div>
                 {controlled("detectedAt", (f) => <RHFDatePickerPopout {...f} label="Detected on" required valueFormat="iso" maxDate={new Date()} />)}
                 {controlled("severity", (f) => (
-                  <RHFComboBox {...f} label="Severity" icon={TriangleAlertIcon} placeholder="Select severity" sort={false} hint="Needed to open" options={SEVERITIES.map((s) => ({ id: s.key, name: s.label }))} />
+                  <RHFComboBox {...f} label="Severity" required icon={TriangleAlertIcon} placeholder="Select severity" sort={false} hint="Needed to open" options={SEVERITIES.map((s) => ({ id: s.key, name: s.label }))} />
                 ))}
                 {source === "customer" && (
                   <>
@@ -319,7 +319,7 @@ const NcrPage = () => {
                 {text("serialNumber", "Serial number", { maxLength: 60, icon: HashIcon })}
                 <div className="flex w-full items-start gap-5">
                   {text("quantityInspected", "Quantity inspected", { dataType: "number", icon: LayersIcon, placeholder: "Enter qty" })}
-                  {text("quantityAffected", "Quantity affected", { dataType: "number", icon: LayersIcon, placeholder: "Enter qty", hint: "Needed to open" })}
+                  {text("quantityAffected", "Quantity affected", { required: true, dataType: "number", icon: LayersIcon, placeholder: "Enter qty", hint: "Needed to open" })}
                 </div>
                 {controlled("siteId", (f) => (
                   <RHFComboBox {...f} label="Site" icon={HouseIcon} placeholder="Select a site" options={(sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))} />

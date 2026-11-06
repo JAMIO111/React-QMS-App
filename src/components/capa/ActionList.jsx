@@ -25,11 +25,11 @@ const ActionDialog = ({ capa, phase, action, withCause, onClose }) => {
   return (
     <Dialog title={action ? "Edit action" : "Add an action"} onClose={onClose}>
       <form className="flex flex-col gap-3" noValidate onSubmit={submit}>
-        <TextAreaField label="What will be done" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} maxLength={2000} />
+        <TextAreaField label="What will be done" required value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} maxLength={2000} />
         {withCause && <RHFComboBox label="Root cause it addresses" value={form.rootCauseId} onChange={(v) => setForm((f) => ({ ...f, rootCauseId: v ?? null }))} options={causeOptions(capa)} placeholder="Not linked to a cause" hint="The cause from D4 this action removes" />}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <RHFComboBox label="Owner" value={form.ownerTeamMemberId} onChange={(v) => setForm((f) => ({ ...f, ownerTeamMemberId: v }))} options={ownerOptions(capa)} placeholder="Nobody yet" hint="Anyone on the team of this 8D" />
-          <RHFDatePickerPopout label="Due date" valueFormat="iso" clearable value={form.dueDate} onChange={(v) => setForm((f) => ({ ...f, dueDate: v ?? null }))} placeholder="No due date" />
+          <RHFComboBox label="Owner" required={phase === "corrective"} value={form.ownerTeamMemberId} onChange={(v) => setForm((f) => ({ ...f, ownerTeamMemberId: v }))} options={ownerOptions(capa)} placeholder="Nobody yet" hint="Anyone on the team of this 8D" />
+          <RHFDatePickerPopout label="Due date" required={phase === "corrective"} valueFormat="iso" clearable value={form.dueDate} onChange={(v) => setForm((f) => ({ ...f, dueDate: v ?? null }))} placeholder="No due date" />
         </div>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">

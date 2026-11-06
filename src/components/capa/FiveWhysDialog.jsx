@@ -54,7 +54,7 @@ const FiveWhysDialog = ({ capa, analysis, onClose }) => {
       <form className="flex flex-col gap-4" noValidate onSubmit={run(false)}>
         <p className="text-sm text-secondary-text">Ask why, answer from facts, then ask why of that answer. Stop when you reach something you can fix and verify.</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
+          <Field label="Title" required value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
           <RHFComboBox label="This chain explains" value={kind} onChange={(v) => setKind(v ?? "occurrence")} options={ROOT_CAUSE_OPTIONS} sort={false} clearable={false} hint={ROOT_CAUSE_KINDS[kind].help} />
         </div>
         <TextAreaField label="The problem" value={problem} onChange={(e) => setProblem(e.target.value)} rows={2} maxLength={500} />

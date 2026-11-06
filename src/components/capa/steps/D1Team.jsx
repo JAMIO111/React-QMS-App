@@ -98,7 +98,7 @@ const D1Team = ({ capa, editable }) => {
             e.preventDefault();
             if (adding.membershipId) mutation.mutate({ action: "addTeam", id: capa.id, body: { membershipId: adding.membershipId, role: adding.role } }, { onSuccess: () => setAdding({ membershipId: null, role: "member" }) });
           }}>
-          <RHFComboBox label="Add a member of the organisation" value={adding.membershipId} onChange={(v) => setAdding((a) => ({ ...a, membershipId: v }))} options={choices} placeholder="Choose a person" />
+          <RHFComboBox label="Add a member of the organisation" required value={adding.membershipId} onChange={(v) => setAdding((a) => ({ ...a, membershipId: v }))} options={choices} placeholder="Choose a person" />
           <RHFComboBox label="Role" value={adding.role} onChange={(v) => setAdding((a) => ({ ...a, role: v ?? "member" }))} options={MEMBER_ROLES} sort={false} clearable={false} />
           <button type="submit" className={buttonClass.primary} disabled={!adding.membershipId || mutation.isPending}>Add</button>
         </form>

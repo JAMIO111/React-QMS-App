@@ -38,7 +38,7 @@ const HeaderForm = ({ capa, editable }) => {
     <MenuCard title="The problem" subtitle="What went wrong, how serious it is and who is responsible" as="form" aria-label="8D details" bodyClassName="flex flex-col gap-3" noValidate
       onSubmit={(e) => { e.preventDefault(); if (dirty) mutation.mutate({ action: "update", id: capa.id, body: changes }); }}>
       <Field label="Title" value={form.title} onChange={set("title")} disabled={!editable} required maxLength={200} />
-      <TextAreaField label="Problem statement" value={form.problemStatement} onChange={set("problemStatement")} disabled={!editable} rows={4} maxLength={5000}
+      <TextAreaField label="Problem statement" required value={form.problemStatement} onChange={set("problemStatement")} disabled={!editable} rows={4} maxLength={5000}
         hint="State the problem as a fact the customer would recognise, without naming a cause" />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <RHFComboBox label="Source" value={form.source} onChange={(v) => setForm((f) => ({ ...f, source: v ?? f.source }))} options={SOURCES} sort={false} clearable={false} disabled={!editable} />
@@ -66,7 +66,7 @@ const LinkNcrDialog = ({ capa, onClose }) => {
     <Dialog title="Link a non-conformance" onClose={onClose}>
       <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (picked) mutation.mutate({ action: "linkNcr", id: capa.id, body: { ncrId: picked } }, { onSuccess: onClose }); }}>
         <p className="text-sm text-secondary-text">One 8D can address many non-conformances. The same non-conformance can also be in other 8Ds.</p>
-        <NcrPicker label="Non-conformance" value={picked} onChange={(id) => setPicked(id)} />
+        <NcrPicker label="Non-conformance" required value={picked} onChange={(id) => setPicked(id)} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>

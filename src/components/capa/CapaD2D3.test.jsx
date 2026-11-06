@@ -68,8 +68,8 @@ describe("D2: describe the problem", () => {
     renderAt("/CAPA/c1/d2");
     await userEvent.click(await screen.findByRole("button", { name: "Open 5W2H" }));
     const dialog = screen.getByRole("dialog", { name: "5W2H: describe the problem" });
-    expect(within(dialog).getByLabelText("What *")).toHaveValue("Cracked bar stock");
-    await userEvent.type(within(dialog).getByLabelText("When *"), "Since Monday");
+    expect(within(dialog).getByLabelText("What")).toHaveValue("Cracked bar stock");
+    await userEvent.type(within(dialog).getByLabelText("When"), "Since Monday");
     await userEvent.type(within(dialog).getByLabelText("How many"), " (lot 77)");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save 5W2H" }));
     await waitFor(() => expect(body).toEqual({ d2When: "Since Monday", d2HowMany: "3 of 10 inspected (lot 77)" }));

@@ -157,12 +157,12 @@ const QualityAlertForm = () => {
           <SelectField label="Category" required value={form.category} onChange={(v) => setValue("category")(v ?? "product")} options={CATEGORIES} />
           <SelectField label="Severity" required value={form.severity} onChange={(v) => setValue("severity")(v ?? "medium")} options={SEVERITIES} hint="High and critical alerts need an acknowledge-by date to be issued" />
         </div>
-        <TextAreaField label="Description" value={form.description} onChange={set("description")} rows={5} maxLength={10000} hint="The details of the issue" />
-        <TextAreaField label="Required action" value={form.requiredAction} onChange={set("requiredAction")} rows={3} maxLength={5000} hint="What people must do" />
+        <TextAreaField label="Description" required value={form.description} onChange={set("description")} rows={5} maxLength={10000} hint="The details of the issue" />
+        <TextAreaField label="Required action" required value={form.requiredAction} onChange={set("requiredAction")} rows={3} maxLength={5000} hint="What people must do" />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <RHFDatePickerPopout label="Effective date" valueFormat="iso" clearable value={form.effectiveDate} onChange={(v) => setValue("effectiveDate")(v ?? "")} hint="When it applies" placeholder="Select a date" />
+          <RHFDatePickerPopout label="Effective date" required valueFormat="iso" clearable value={form.effectiveDate} onChange={(v) => setValue("effectiveDate")(v ?? "")} hint="When it applies" placeholder="Select a date" />
           <RHFDatePickerPopout label="Expiry date" valueFormat="iso" clearable value={form.expiryDate} onChange={(v) => setValue("expiryDate")(v ?? "")} hint="Optional" placeholder="Select a date" />
-          <RHFDatePickerPopout label="Acknowledge by" valueFormat="iso" clearable value={form.acknowledgeBy} onChange={(v) => setValue("acknowledgeBy")(v ?? "")} hint="When people must have confirmed" placeholder="Select a date" />
+          <RHFDatePickerPopout label="Acknowledge by" required={form.severity === "high" || form.severity === "critical"} valueFormat="iso" clearable value={form.acknowledgeBy} onChange={(v) => setValue("acknowledgeBy")(v ?? "")} hint="When people must have confirmed" placeholder="Select a date" />
         </div>
       </MenuCard>
 
@@ -226,7 +226,7 @@ const QualityAlertForm = () => {
         <p className="text-sm text-secondary-text">Files can be attached once the draft is saved.</p>
       )}
 
-      <MenuCard title="Who must acknowledge" subtitle="Choose departments, roles or named people. At least one is needed to issue." bodyClassName="flex flex-col gap-3">
+      <MenuCard title={<span data-required>Who must acknowledge</span>} subtitle="Choose departments, roles or named people. At least one is needed to issue." bodyClassName="flex flex-col gap-3">
         <Checks legend="Departments (their members)" options={deptOptions} selected={form.targetDepartments} onToggle={toggle("targetDepartments")} />
         {roleOptions.length > 0 && <Checks legend="Roles (everyone holding the role)" options={roleOptions} selected={form.targetRoles} onToggle={toggle("targetRoles")} />}
         {people.length > 0 && <Checks legend="Named people" options={people} selected={form.targetPeople} onToggle={toggle("targetPeople")} />}

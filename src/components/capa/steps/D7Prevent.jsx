@@ -9,7 +9,7 @@ const D7Prevent = ({ capa, editable }) => (
     <ReasonCard key={`n${capa.updatedAt}`} capa={capa} editable={editable} field="d7NoPreventiveReason" value={capa.d7NoPreventiveReason} title="No preventive action needed?"
       subtitle="If nothing else is exposed, say why instead of adding an action" ariaLabel="No preventive action" label="Why no preventive action is needed" saveLabel="Save reason" />
     <ReasonCard key={`l${capa.updatedAt}`} capa={capa} editable={editable} field="d7LessonsLearned" value={capa.d7LessonsLearned} title="Lessons learned"
-      subtitle="What the organisation should remember from this 8D" ariaLabel="Lessons learned" label="What was learned" rows={4} saveLabel="Save lessons" />
+      subtitle="What the organisation should remember from this 8D" ariaLabel="Lessons learned" label="What was learned" required rows={4} saveLabel="Save lessons" />
   </div>
 );
 

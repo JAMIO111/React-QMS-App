@@ -25,8 +25,45 @@ export const useInspectionMutation = () => {
   return useMutation({
     mutationFn: ({ path, method = "POST", body }) => apiFetch(path, { method, body, organisationId }),
     onSuccess: (data) => {
-      if (data?.id) queryClient.setQueryData(key(organisationId, data.id), data);
+      // Most commands answer with the inspection; raising an NC answers { ncr, inspection }.
+      const detail = data?.inspection ?? data;
+      if (detail?.id) queryClient.setQueryData(key(organisationId, detail.id), detail);
       queryClient.invalidateQueries({ queryKey: ["api", "org", organisationId, "master", "inspections"] });
     },
+  });
+};
+
+/** The suggested NC for some failed readings; an empty list is the suggestion for a manual NC. Never cached. */
+export const useNcrDraft = (inspectionId, measurementIds, enabled = true) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "ncr-draft", inspectionId, measurementIds.join(",")),
+    queryFn: () => apiFetch(`/inspections/${inspectionId}/ncr-draft?measurementIds=${measurementIds.join(",")}`, { organisationId }),
+    enabled: !!organisationId && !!inspectionId && enabled,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+};
+
+/** The inspection readings behind a non-conformance (only those the user may read). */
+export const useNcrInspectionSource = (ncrId, enabled = true) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "ncr-source", ncrId),
+    queryFn: () => apiFetch(`/ncrs/${ncrId}/inspection-source`, { organisationId }),
+    enabled: !!organisationId && !!ncrId && enabled,
+    retry: false,
+  });
+};
+
+/** Inspections that used a gauge since its previous calibration (impact assessment). */
+export const useGaugeUsage = (calibrationId, enabled = true) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "gauge-usage", calibrationId),
+    queryFn: () => apiFetch(`/calibrations/${calibrationId}/gauge-usage`, { organisationId }),
+    enabled: !!organisationId && !!calibrationId && enabled,
+    retry: false,
   });
 };

@@ -118,8 +118,16 @@ Summary of the brief:
     copied, override needs `inspection.override_gauge`, corrections `supersedes_id` + reason with `inspection.correct`,
     retests `retest_of_id`). Permissions `inspection.read/.record/.correct/.override_gauge` (site-scoped). API
     `api/src/inspection/`; pages `src/components/inspection/` (`/Inspections`, `/Inspections/new`, `/Inspections/:id`).
-  - **Next:** PC5 NC link, PC6 SPC charts (I-MR, X-bar/R).
-    Build in that order; charts only on traceable measurements.
+  - **PC5 done:** `inspection_ncr_links` (frozen; NC ↔ failed reading, or whole inspection) and
+    `inspection_failure_acknowledgements` (note required). Completing an inspection needs every current failed
+    reading acknowledged or linked to an NC (`app.inspection_record_rules`, `QM008`). `app.raise_ncr_from_inspection()`
+    (needs `inspection.read` + `ncr.create`; NC source stays `internal`; prompts only, never silent; one NC per event)
+    and `app.gauge_usage()` (impact report only). API in `api/src/inspection/`: `GET /inspections/{id}/ncr-draft`
+    (`ncr-draft.ts` builds the pre-fill and containment window), `POST /inspections/{id}/raise-ncr`,
+    `POST /inspection-measurements/{id}/acknowledge`, `GET /ncrs/{id}/inspection-source`, `GET /calibrations/{id}/gauge-usage`.
+    UI: `Failures.jsx` card on the inspection page, `NcrInspectionSource.jsx` on the NC page, `GaugeUsage.jsx` on an
+    out-of-tolerance calibration.
+  - **Next:** PC6 SPC charts (I-MR, X-bar/R). Charts only on traceable measurements.
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;
@@ -161,7 +169,7 @@ stages, soft delete, legacy NCM copy; NC registers and form on the API) are done
 attachments with the NC page in the original form layout (`ncr_costs`, `ncr_attachments`, `FileDrop`,
 `NcrCosts`) — see plan §9–§12;
 Calibration (Phase 4) was brought forward as a complete slice (`docs/calibration-plan.md`, migrations `20251106100000_calibration.sql`, `20251107100000_calibration_attributes.sql`; demo data `supabase/seed/calibration_demo.sql`);
-slices 2.2/2.3 are replaced by the process control plan (`docs/process-control-plan.md`); PC1–PC4 (and PC3b) are done, next: PC5.
+slices 2.2/2.3 are replaced by the process control plan (`docs/process-control-plan.md`); PC1–PC5 (and PC3b) are done, next: PC6.
 The project still signs tokens with the legacy HS256 secret (JWKS endpoint is empty), so the API
 needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.
 

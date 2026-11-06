@@ -155,6 +155,10 @@ describe('recording', () => {
     ).body;
     const retest = rec.measurements.find((m: { retestOfId: string | null }) => m.retestOfId === failed.id);
     expect(retest).toMatchObject({ result: 'pass', gauge: { assetNumber: 'MIC-2', valid: false }, gaugeOverrideReason: 'Only mic on shift' });
+    // The failed reading stays current (a passing retest does not erase it): it must be acknowledged (or have an NC) first.
+    const blocked = await api().post(`/api/v1/inspections/${ctx.rec}/complete`).set(h).expect(409);
+    expect(blocked.body.error.message).toBe('Acknowledge or raise an NC for each failed reading before completing: Outer diameter (sample 2)');
+    await api().post(`/api/v1/inspection-measurements/${failed.id}/acknowledge`).set(h).send({ note: 'Retested OK with the micrometer on shift' }).expect(201);
     rec = (await api().post(`/api/v1/inspections/${ctx.rec}/complete`).set(h).expect(200)).body;
     expect(rec).toMatchObject({ status: 'completed', result: 'fail', completedBy: { id: ids.ownerA } });
     const late = await api().post(`/api/v1/inspections/${ctx.rec}/samples`).set(h).send({ readings: [{ requirementId: ctx.vis, valuePass: true }] }).expect(409);

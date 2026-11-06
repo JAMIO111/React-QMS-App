@@ -401,5 +401,48 @@ comparison) — fixed with `coalesce(…, false)`. Browser check: start for HCR-
 order, a failing OD reading, correction with a reason, completion with result pass, register entry;
 tablet width (820 px) entry screenshot — no console errors, no failed API calls.
 
-**Next:** PC5 — Raise NC from a failed reading / sample / inspection (pre-filled, linked), reaction
+**Next (was):** PC5 — Raise NC from a failed reading / sample / inspection (pre-filled, linked), reaction
 plan prompts on failure.
+
+## 14. Slice PC5 — NC integration from inspections — plan (2026-11-06)
+
+**Decisions (agreed 2026-11-06):** (1) an NC raised from an inspection is source **`internal`** with a
+link (as calibration does; no NC screen changes — the `inspection` source is not handled by the NC
+screens and cannot be changed after creation); (2) an inspection **cannot be completed** while a
+current failed reading is neither acknowledged nor linked to an NC; (3) a reaction with action "raise
+NC" **prompts** (dialog opens pre-filled), it never creates silently; (4) **one NC per event**: tick
+the failed readings that belong together (default all current failures); several NCs per inspection
+are possible; with no readings ticked it is a manual NC for a defect no measurement caught.
+
+**Database** (`20251108160000_inspection_ncr_integration.sql`)
+- `inspection_ncr_links` (NC ↔ inspection ↔ reading; a null reading = manual NC): insert only through
+  `app.raise_ncr_from_inspection()`, no UPDATE/DELETE, so a reading stays linked whatever happens to
+  the NC; readable with `inspection.read` at the inspection's site.
+- `inspection_failure_acknowledgements` (one per failed reading, note required, who/when set by the
+  database): only for a *current* (uncorrected) failed reading of an open or completed inspection.
+- `app.raise_ncr_from_inspection(inspection, readings[], title, description, severity, quantity,
+  requirement, actual, open)`: needs `ncr.create` and `inspection.read` at the site; creates the NC
+  (internal, draft or open) with part, part revision, site, work order, lot, serial, detection date
+  and detector taken from the inspection (not overridable — traceability), the text fields from the
+  caller; links every reading; emits `inspection.ncr_raised`.
+- Completion rule in `app.inspection_record_rules()`: every current failed reading needs an
+  acknowledgement or an NC link (QM008 lists them).
+- `app.gauge_usage(gauge, from, to)` (needs `calibration.read` at the gauge's site): inspections and
+  reading counts that used the gauge in a period — the impact assessment (PCB §9); reads only.
+
+**API:** `GET /inspections/{id}/ncr-draft` (pre-filled suggestion, built by `ncr-draft.ts`: requirement
+and actual result text, severity = highest criticality, quantity = failed samples, description with
+machine/operator/gauge/plan revision and the **containment window** — last good reading to first
+failure), `POST /inspections/{id}/raise-ncr`, `POST /inspection-measurements/{id}/acknowledge`;
+inspection detail gains per-reading `acknowledgement` and `ncrs`; `GET /ncrs/{id}/inspection-source`;
+`GET /calibrations/{id}/gauge-usage`.
+
+**Frontend:** inspection page *Failures* card (each current failure with its reaction instructions,
+Acknowledge / Raise NC, tick several to raise one NC, manual NC); Raise NC dialog (pre-filled,
+editable); NC page *Source inspection* card; calibration page *Measurements made with this gauge*.
+
+**Out of scope here (named, not forgotten):** holding a lot and alerting quality (need lot master data
+and a notification worker — the `inspection.measurement.failed` event is emitted for that);
+SPC-signal reactions (PC6); overdue-check alerts (worker).
+
+**PC5 status (2026-11-06): done.** Migration `20251108160000_inspection_ncr_integration.sql`, API, UI and tests as agreed above (decisions: NC source `internal` + permanent link; acknowledgement or NC required before completing; reaction "raise NC" only prompts; one NC per event). Next: PC6.

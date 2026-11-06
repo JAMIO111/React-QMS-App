@@ -44,6 +44,8 @@ import ReasonDialog from "./ReasonDialog";
 import StageBar from "./StageBar";
 import NcrHistory from "./NcrHistory";
 import NcrCosts from "./NcrCosts";
+import NcrInspectionSource from "../inspection/NcrInspectionSource";
+import { useNcrInspectionSource } from "../../hooks/useInspection";
 import { EMPTY, changedFields, toBody, toForm } from "./formModel";
 import LoadingScreen from "../ui/LoadingScreen";
 
@@ -79,6 +81,7 @@ const NcrPage = () => {
   const { can } = usePermissions();
   const { showToast } = useToast();
   const { data: ncr, isLoading, error } = useNcr(isNew ? null : routeId);
+  const { data: inspectionSource } = useNcrInspectionSource(isNew ? null : routeId, can("inspection.read"));
   const { data: lists } = useClassifications();
   const { data: employees } = useEmployees();
   const { data: sites } = useSites();
@@ -330,6 +333,15 @@ const NcrPage = () => {
                 <RHFTextArea label="Actual result" icon={AlignCenterIcon} value={form.actualResult} onChange={set("actualResult")} disabled={!canEdit} max={2000} rows={3} placeholder="What was found" />
               </div>
             </Card>
+
+            {!isNew && inspectionSource?.inspections?.length > 0 && (
+              <>
+                <SectionHeading id="ncr-source" title="Source inspection" />
+                <Card>
+                  <NcrInspectionSource source={inspectionSource} />
+                </Card>
+              </>
+            )}
 
             {!isNew && (
               <>

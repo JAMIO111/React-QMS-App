@@ -121,6 +121,15 @@ BEGIN
   INSERT INTO public.inspection_measurements (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric)
     SELECT a, s.inspection_record_id, s.id, q.id, 100 FROM public.inspection_samples s
     JOIN public.resolved_inspection_requirements q ON q.inspection_record_id = s.inspection_record_id WHERE s.organisation_id = a;
+  -- PC5: a failing second sample, acknowledged, and an NC raised from it.
+  INSERT INTO public.inspection_samples (organisation_id, inspection_record_id) VALUES (a, inspection);
+  INSERT INTO public.inspection_measurements (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric)
+    SELECT a, s.inspection_record_id, s.id, q.id, 105 FROM public.inspection_samples s
+    JOIN public.resolved_inspection_requirements q ON q.inspection_record_id = s.inspection_record_id
+    WHERE s.organisation_id = a AND s.sample_number = 2;
+  INSERT INTO public.inspection_failure_acknowledgements (organisation_id, inspection_record_id, measurement_id, note)
+    SELECT a, inspection_record_id, id, 'Seen by the sweep' FROM public.inspection_measurements WHERE inspection_record_id = inspection AND result = 'fail';
+  PERFORM app.raise_ncr_from_inspection(inspection, ARRAY(SELECT id FROM public.inspection_measurements WHERE inspection_record_id = inspection AND result = 'fail'), 'Sweep NC from inspection');
   PERFORM pg_temp.logout();
 
   -- Subscription: seats and an assignment through the API functions, invoice and payment as the provider would.
@@ -230,6 +239,8 @@ BEGIN
   PERFORM pg_temp.assert_fails($q$SELECT app.touch_updated()$q$, 'trigger functions are not callable');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.my_invitations() WHERE organisation_id = a), 0::bigint, 'my_invitations');
   PERFORM pg_temp.assert_fails(format('SELECT app.resolve_inspection_requirements(%L)', (SELECT value FROM sweep WHERE key = 'pc_part')), 'resolve_inspection_requirements(A part)');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.gauge_usage((SELECT id FROM public.gauges LIMIT 1))), 0::bigint, 'gauge_usage of A');
+  PERFORM pg_temp.assert_fails(format('SELECT app.raise_ncr_from_inspection(%L, ARRAY[]::uuid[], %L)', (SELECT id FROM public.inspection_records LIMIT 1), 'x'), 'raise_ncr_from_inspection(A inspection)');
   PERFORM pg_temp.assert_fails(format('SELECT app.start_inspection(%L, %L)', (SELECT id FROM public.sites LIMIT 1), (SELECT value FROM sweep WHERE key = 'pc_part')), 'start_inspection(A part)');
   PERFORM pg_temp.logout();
 END $$;

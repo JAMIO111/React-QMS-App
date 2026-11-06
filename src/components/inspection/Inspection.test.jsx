@@ -17,6 +17,8 @@ vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: v
 
 import InspectionPage from "./InspectionPage";
 import StartInspectionPage from "./StartInspectionPage";
+import NcrInspectionSource from "./NcrInspectionSource";
+import GaugeUsage from "./GaugeUsage";
 
 const page = (data, nextCursor = null) => ({ data, nextCursor });
 const req = (over) => ({
@@ -77,6 +79,7 @@ const inspection = (over) => ({
   schedule: [{ number: 1, position: 1, trigger: "first_off", requirementIds: ["q-od", "q-vis"] }],
   samples: [],
   measurements: [],
+  ncrs: [],
   ...over,
 });
 const gauges = {
@@ -287,8 +290,8 @@ describe("Inspection page", () => {
     const withReadings = inspection({
       samples: [{ id: "s1", sampleNumber: 1, sampledAt: "2026-11-05T08:05:00Z", unitReference: null, triggerType: "first_off", isRetest: false, notes: null, takenBy: null }],
       measurements: [
-        { id: "m1", sampleId: "s1", requirementId: "q-od", valueNumeric: "25.50", valuePass: null, unitCode: "mm", result: "fail", gauge: null, gaugeOverrideReason: null, measuredAt: "2026-11-05T08:05:00Z", measuredBy: { id: "u1", name: "Ada" }, supersedesId: null, supersededById: "m2", correctionReason: null, retestOfId: null, notes: null },
-        { id: "m2", sampleId: "s1", requirementId: "q-od", valueNumeric: "25.00", valuePass: null, unitCode: "mm", result: "pass", gauge: null, gaugeOverrideReason: null, measuredAt: "2026-11-05T08:06:00Z", measuredBy: { id: "u1", name: "Ada" }, supersedesId: "m1", supersededById: null, correctionReason: "Typo", retestOfId: null, notes: null },
+        { id: "m1", sampleId: "s1", requirementId: "q-od", valueNumeric: "25.50", valuePass: null, unitCode: "mm", result: "fail", gauge: null, gaugeOverrideReason: null, measuredAt: "2026-11-05T08:05:00Z", measuredBy: { id: "u1", name: "Ada" }, supersedesId: null, supersededById: "m2", correctionReason: null, retestOfId: null, notes: null, acknowledgement: null, ncrs: [] },
+        { id: "m2", sampleId: "s1", requirementId: "q-od", valueNumeric: "25.00", valuePass: null, unitCode: "mm", result: "pass", gauge: null, gaugeOverrideReason: null, measuredAt: "2026-11-05T08:06:00Z", measuredBy: { id: "u1", name: "Ada" }, supersedesId: "m1", supersededById: null, correctionReason: "Typo", retestOfId: null, notes: null, acknowledgement: null, ncrs: [] },
       ],
     });
     routeApi({ "GET /inspections/i1": withReadings, "GET /gauges": gauges, "POST /inspection-measurements/m2/correction": (_p, opts) => ((body = opts.body), withReadings) });
@@ -313,5 +316,108 @@ describe("Inspection page", () => {
     await screen.findByRole("heading", { name: "IPI-26-0001" });
     expect(screen.queryByRole("form", { name: "New sample" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Complete inspection" })).toBeNull();
+  });
+});
+
+describe("Failures and non-conformances (PC5)", () => {
+  const failing = () =>
+    inspection({
+      requirements: [req({}), ...inspection().requirements.slice(1)].map((q) => (q.id === "q-od" ? { ...q, reactions: [{ triggerType: "any", action: "stop_line", instruction: "Stop the line and call the supervisor" }] } : q)),
+      samples: [{ id: "s1", sampleNumber: 1, sampledAt: "2026-11-05T08:05:00Z", unitReference: null, triggerType: "first_off", isRetest: false, notes: null, takenBy: null }],
+      measurements: [
+        { id: "m1", sampleId: "s1", requirementId: "q-od", valueNumeric: "25.50", valuePass: null, unitCode: "mm", result: "fail", gauge: null, gaugeOverrideReason: null, measuredAt: "2026-11-05T08:05:00Z", measuredBy: null, supersedesId: null, supersededById: null, correctionReason: null, retestOfId: null, notes: null, acknowledgement: null, ncrs: [] },
+      ],
+    });
+  const draft = {
+    title: "Outer diameter out of limits: HCR-100 (IPI-26-0001)",
+    description: "Context…",
+    severity: "critical",
+    quantityAffected: 1,
+    requirement: "24.95–25.05 mm",
+    actualResult: "25.50 mm",
+    readings: [{ id: "m1", requirementName: "Outer diameter", sampleNumber: 1, value: "25.50 mm", limits: "24.95–25.05 mm", measuredAt: "2026-11-05T08:05:00Z", alreadyLinked: [] }],
+    containment: [],
+  };
+
+  it("shows the reaction plan and acknowledges a failed reading with a note", async () => {
+    let body;
+    const f = failing();
+    routeApi({ "GET /inspections/i1": f, "GET /gauges": gauges, "POST /inspection-measurements/m1/acknowledge": (_p, o) => ((body = o.body), f) });
+    permissions.push("ncr.create");
+    renderAt("/Inspections/i1");
+    const list = await screen.findByRole("list", { name: "Failed readings" });
+    expect(within(list).getByText("Stop the line and call the supervisor")).toBeInTheDocument();
+    await userEvent.click(within(list).getByRole("button", { name: "Acknowledge" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("What is being done"), "Quarantined the tray");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Acknowledge" }));
+    expect(body).toEqual({ note: "Quarantined the tray" });
+  });
+
+  it("raises a pre-filled NC for ticked readings and never without the permission", async () => {
+    let body;
+    const f = failing();
+    routeApi({
+      "GET /inspections/i1": f,
+      "GET /gauges": gauges,
+      "GET /inspections/i1/ncr-draft": draft,
+      "POST /inspections/i1/raise-ncr": (_p, o) => ((body = o.body), { ncr: { id: "n1", reference: "NC-1", stage: "draft", source: "internal" }, inspection: f }),
+      "GET /ncrs/n1": {},
+    });
+    permissions.push("ncr.create");
+    renderAt("/Inspections/i1");
+    await userEvent.click(await screen.findByRole("checkbox", { name: /Select Outer diameter sample 1/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Raise NC for 1 selected reading" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByLabelText("Title")).toHaveValue(draft.title);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Raise non-conformance" }));
+    expect(body).toMatchObject({ measurementIds: ["m1"], title: draft.title, severity: "critical", quantityAffected: 1, open: false });
+  });
+
+  it("offers no NC controls without ncr.create", async () => {
+    routeApi({ "GET /inspections/i1": failing(), "GET /gauges": gauges });
+    renderAt("/Inspections/i1");
+    await screen.findByRole("list", { name: "Failed readings" });
+    expect(screen.queryByRole("button", { name: /Raise NC/ })).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("shows source readings on an NC, including a later correction", () => {
+    render(
+      <MemoryRouter>
+        <NcrInspectionSource
+          source={{
+            inspections: [
+              {
+                id: "i1", reference: "IPI-26-0001", part: { partNumber: "HCR-100" }, plan: { planCode: "CP-1", revisionCode: "A" }, operationCode: "OP-020", startedAt: "2026-11-05T08:00:00Z", wholeInspection: false,
+                readings: [{ id: "m1", requirementName: "Outer diameter", sampleNumber: 1, valueNumeric: "25.50", valuePass: null, unitCode: "mm", limits: "24.95–25.05", result: "fail", measuredAt: "2026-11-05T08:05:00Z", gaugeAssetNumber: "MIC-1", correctedTo: { valueNumeric: "25.00", valuePass: null, result: "pass", reason: "Typo" } }],
+              },
+            ],
+          }}
+        />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole("link", { name: "IPI-26-0001" })).toHaveAttribute("href", "/Inspections/i1");
+    expect(screen.getByText(/Corrected later to/)).toHaveTextContent("The original reading stays on record");
+  });
+
+  it("lists the inspections that used an out-of-tolerance gauge", async () => {
+    routeApi({
+      "GET /calibrations/c1/gauge-usage": {
+        gauge: { id: "g1", assetNumber: "MIC-1" },
+        previous: { reference: "CAL-26-001", calibratedOn: "2026-05-01" },
+        totals: { inspections: 1, readings: 6, failedReadings: 1 },
+        inspections: [{ id: "i1", reference: "IPI-26-0001", status: "completed", partNumber: "HCR-100", readings: 6, failedReadings: 1, overrides: 0, firstUsed: "2026-11-05T08:00:00Z", lastUsed: "2026-11-05T08:00:00Z" }],
+      },
+    });
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter>
+          <GaugeUsage calibrationId="c1" />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    expect(await screen.findByText(/used MIC-1 since CAL-26-001/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "IPI-26-0001" })).toBeInTheDocument();
   });
 });

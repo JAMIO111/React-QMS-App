@@ -112,6 +112,11 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/part-customers/{id}': { customerPartNumber: 'HIJACK' },
     'DELETE /api/v1/part-customers/{id}': undefined,
     'POST /api/v1/part-families/{id}/parts': { remove: [a.part] },
+    'GET /api/v1/inspections/{id}/ncr-draft': undefined,
+    'POST /api/v1/inspections/{id}/raise-ncr': { title: 'Hijacked' },
+    'POST /api/v1/inspection-measurements/{id}/acknowledge': { note: 'Hijacked' },
+    'GET /api/v1/ncrs/{id}/inspection-source': undefined,
+    'GET /api/v1/calibrations/{id}/gauge-usage': undefined,
     'GET /api/v1/inspections/{id}': undefined,
     'POST /api/v1/inspections/{id}/samples': { readings: [{ requirementId: a.requirement, valueNumeric: '1' }] },
     'POST /api/v1/inspections/{id}/complete': undefined,
@@ -204,6 +209,11 @@ const hasSample = (op: Op) =>
     'PATCH /api/v1/part-customers/{id}',
     'DELETE /api/v1/part-customers/{id}',
     'POST /api/v1/part-families/{id}/parts',
+    'GET /api/v1/inspections/{id}/ncr-draft',
+    'POST /api/v1/inspections/{id}/raise-ncr',
+    'POST /api/v1/inspection-measurements/{id}/acknowledge',
+    'GET /api/v1/ncrs/{id}/inspection-source',
+    'GET /api/v1/calibrations/{id}/gauge-usage',
     'GET /api/v1/inspections/{id}',
     'POST /api/v1/inspections/{id}/samples',
     'POST /api/v1/inspections/{id}/complete',
@@ -438,6 +448,12 @@ describe('tenancy sweep over every API route', () => {
       [a.inspection],
     );
     expect(insp.rows[0]).toEqual({ inspection: 'in_progress/', samples: 1, readings: 1 });
+    const links = await admin.query(
+      `select (select count(*)::int from public.inspection_ncr_links where inspection_record_id = $1) links,
+              (select count(*)::int from public.inspection_failure_acknowledgements where inspection_record_id = $1) acknowledgements`,
+      [a.inspection],
+    );
+    expect(links.rows[0]).toEqual({ links: 0, acknowledgements: 0 });
   });
 
   it('never includes another organisation’s identifiers in list responses', async () => {

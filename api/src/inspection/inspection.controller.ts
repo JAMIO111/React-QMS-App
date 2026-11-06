@@ -6,11 +6,18 @@ import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
   AbandonBody,
+  AcknowledgeBody,
   AddSampleBody,
   CorrectionBody,
+  DraftQuery,
+  GaugeUsage,
   InspectionDetail,
   InspectionListQuery,
   InspectionSummary,
+  NcDraft,
+  NcrInspectionSource,
+  RaiseNcrBody,
+  RaisedNcr,
   StartInspectionBody,
 } from './inspection.schemas';
 import { InspectionService } from './inspection.service';
@@ -73,6 +80,25 @@ export class InspectionsController {
     return this.service.complete(ctx, parse(Uuid, id));
   }
 
+  /** The suggested NC for failed readings (default: current failures without an NC): pre-filled text, severity, quantity, containment window. */
+  @Get(':id/ncr-draft')
+  @OrganisationScoped(READ)
+  @ApiQuery({ name: 'measurementIds', required: false, schema: { type: 'string' }, description: 'Comma-separated failed readings' })
+  @ApiOkResponse({ schema: openApiSchema(NcDraft) })
+  ncrDraft(@Ctx() ctx: RequestContext, @Param('id') id: string, @Query() query: unknown) {
+    return this.service.ncrDraft(ctx, parse(Uuid, id), parse(DraftQuery, query));
+  }
+
+  /** Raise an NC (source internal) for failed readings — or for the inspection as a whole — linked permanently. */
+  @Post(':id/raise-ncr')
+  @HttpCode(201)
+  @OrganisationScoped('ncr.create')
+  @ApiBody({ schema: openApiSchema(RaiseNcrBody) })
+  @ApiCreatedResponse({ schema: openApiSchema(RaisedNcr) })
+  raiseNcr(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.raiseNcr(ctx, parse(Uuid, id), parse(RaiseNcrBody, body));
+  }
+
   @Post(':id/abandon')
   @HttpCode(200)
   @OrganisationScoped(RECORD)
@@ -89,6 +115,16 @@ export class InspectionsController {
 export class InspectionMeasurementsController {
   constructor(private readonly service: InspectionService) {}
 
+  /** A person has seen this failed reading and says what is being done (a note is required). */
+  @Post(':id/acknowledge')
+  @HttpCode(201)
+  @OrganisationScoped(RECORD)
+  @ApiBody({ schema: openApiSchema(AcknowledgeBody) })
+  @ApiCreatedResponse({ schema: openApiSchema(InspectionDetail) })
+  acknowledge(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.acknowledge(ctx, parse(Uuid, id), parse(AcknowledgeBody, body));
+  }
+
   /** Correct a reading: a new reading with a reason replaces it; the original is kept (needs inspection.correct). */
   @Post(':id/correction')
   @HttpCode(201)
@@ -97,5 +133,36 @@ export class InspectionMeasurementsController {
   @ApiCreatedResponse({ schema: openApiSchema(InspectionDetail) })
   correct(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.correct(ctx, parse(Uuid, id), parse(CorrectionBody, body));
+  }
+}
+
+/** The inspection behind a non-conformance raised from an inspection. */
+@ApiTags('inspections')
+@ApiBearerAuth()
+@Controller('ncrs')
+export class NcrInspectionSourceController {
+  constructor(private readonly service: InspectionService) {}
+
+  @Get(':id/inspection-source')
+  @OrganisationScoped('ncr.read')
+  @ApiOkResponse({ schema: openApiSchema(NcrInspectionSource) })
+  get(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.ncrSource(ctx, parse(Uuid, id));
+  }
+}
+
+/** Impact assessment for a calibration found out of tolerance. */
+@ApiTags('inspections')
+@ApiBearerAuth()
+@Controller('calibrations')
+export class GaugeUsageController {
+  constructor(private readonly service: InspectionService) {}
+
+  /** Inspections that used the gauge since its previous calibration. Reads only. */
+  @Get(':id/gauge-usage')
+  @OrganisationScoped('calibration.read')
+  @ApiOkResponse({ schema: openApiSchema(GaugeUsage) })
+  usage(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.gaugeUsage(ctx, parse(Uuid, id));
   }
 }

@@ -19,7 +19,7 @@ DO $$
 DECLARE
   org uuid; site uuid; site_b uuid; fam uuid; p100 uuid; p200 uuid; plan uuid; rev uuid; op uuid; op30 uuid; groove uuid; mic_type uuid;
   mic uuid; old_mic uuid; caliper uuid; rec uuid; s1 uuid; s2 uuid; od uuid; len uuid; vis uuid; m_od uuid; m_fix uuid; m uuid; m_len uuid;
-  r jsonb; m_id uuid;
+  r jsonb; m_id uuid; failed_od uuid;
 BEGIN
   PERFORM pg_temp.login('36000000-0000-0000-0000-000000000101');
   org := app.create_organisation('IPI Works', 'Plant A', 'PA', NULL);
@@ -117,6 +117,7 @@ BEGIN
 
   INSERT INTO public.inspection_samples (organisation_id, inspection_record_id, is_retest) VALUES (org, rec, true) RETURNING id INTO s2;
   INSERT INTO public.inspection_measurements (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric, gauge_id) VALUES (org, rec, s2, od, 25.06, mic) RETURNING id INTO m;
+  failed_od := m;
   PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.inspection_measurements (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric, gauge_id, retest_of_id) VALUES (%L, %L, %L, %L, 25.0, %L, %L)$q$, org, rec, s2, od, mic, m_od), 'retest only of a failed reading');
   -- Overdue gauge with an override reason (owner may override): recorded with its state.
   INSERT INTO public.inspection_samples (organisation_id, inspection_record_id, is_retest) VALUES (org, rec, true) RETURNING id INTO s1;
@@ -124,7 +125,11 @@ BEGIN
     VALUES (org, rec, s1, od, 25.00, old_mic, m, 'Only micrometer on shift; checked against slip gauge') RETURNING id INTO m_id;
   PERFORM pg_temp.assert_eq((SELECT (result, gauge_valid, gauge_status)::text FROM public.inspection_measurements WHERE id = m_id), '(pass,f,active)', 'override recorded with the gauge state');
 
-  -- Completion: the failed OD reading in sample 2 stays current, so the result is fail.
+  -- Completion: the failed OD reading in sample 2 stays current (a passing retest does not erase it);
+  -- it has to be acknowledged (or have an NC raised) first — PC5. The result is then fail.
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.inspection_records SET status = 'completed' WHERE id = %L$q$, rec), 'unhandled failure blocks completion');
+  INSERT INTO public.inspection_failure_acknowledgements (organisation_id, inspection_record_id, measurement_id, note)
+    VALUES (org, rec, failed_od, 'Retested OK with the micrometer on shift');
   UPDATE public.inspection_records SET status = 'completed' WHERE id = rec;
   PERFORM pg_temp.assert_eq((SELECT (status, result, completed_by IS NOT NULL)::text FROM public.inspection_records WHERE id = rec), '(completed,fail,t)', 'completed with result fail');
   PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.inspection_samples (organisation_id, inspection_record_id) VALUES (%L, %L)$q$, org, rec), 'no samples after completion');

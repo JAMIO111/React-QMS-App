@@ -10,6 +10,7 @@ import { useInspection, useInspectionMutation } from "../../hooks/useInspection"
 import { describeLimits, eventTriggers, isDecimal, nextSample, previewResult, TRIGGER_LABEL } from "../../lib/inspection";
 import { formatDate, formatDateTime } from "../../lib/processControl";
 import { buttonClass, ErrorNotice, FormError, SelectField, TextAreaField } from "../master-data/shared";
+import Failures from "./Failures";
 import { ResultBadge, StatusPill } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
 import RHFComboBox from "../ui/RHFComboBox";
@@ -511,6 +512,8 @@ const InspectionPage = () => {
           <MenuCard title="Readings" subtitle="Select a reading for its history, a correction or a retest.">
             <ReadingsGrid inspection={inspection} onOpen={(requirement, reading) => setOpened({ requirement, reading })} />
           </MenuCard>
+
+          <Failures inspection={inspection} canRecord={canRecord} canRaise={can("ncr.create") && inspection.status !== "abandoned"} />
 
           {notApplicable.length > 0 && (
             <MenuCard title="Not applicable to this part" subtitle="Listed with the rule that excludes them.">

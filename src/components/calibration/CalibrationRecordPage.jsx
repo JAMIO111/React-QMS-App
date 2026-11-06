@@ -24,6 +24,7 @@ import { useMe, usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { OUTCOMES, shouldPromptForStatus, statusAfterCalibration, statusOf, formatInterval, formatNumber, inTolerance, outcomeFromReadings, outcomeOf } from "../../lib/calibration";
 import { formatDate } from "../../lib/ncr";
+import GaugeUsage from "../inspection/GaugeUsage";
 import { PartyPicker } from "../ncr/Pickers";
 import ReasonDialog from "../ncr/ReasonDialog";
 import GaugeStatusPrompt from "./GaugeStatusPrompt";
@@ -454,6 +455,12 @@ const CalibrationRecordPage = () => {
             </div>
           </div>
         </Card>
+
+        {!isNew && outOfTolerance && can("inspection.read") && can("calibration.read") && (
+          <Card title="Measurements made with this gauge" subtitle="Impact assessment: in-process inspections that used the gauge since its previous calibration">
+            <GaugeUsage calibrationId={c.id} />
+          </Card>
+        )}
 
         {!isNew && (
           <Card title="Certificates">

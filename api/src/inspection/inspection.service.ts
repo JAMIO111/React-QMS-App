@@ -9,13 +9,21 @@ import { DatabaseService, Db } from '../database/database.service';
 import { buildSchedule, EVENT_TRIGGERS, eventViolations, nextSample, PLANNED_TRIGGERS, PlanRequirement, plannedViolations, timedDue } from './sampling-rules';
 import {
   AbandonBody,
+  AcknowledgeBody,
   AddSampleBody,
   CorrectionBody,
+  DraftQuery,
+  GaugeUsage,
   InspectionDetail,
   InspectionListQuery,
   InspectionSummary,
+  NcDraft,
+  NcrInspectionSource,
+  NcrRef,
+  RaiseNcrBody,
   StartInspectionBody,
 } from './inspection.schemas';
+import { buildNcDraft, isCurrent, limitsText } from './ncr-draft';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) || 'Unknown user' } : null);
@@ -208,6 +216,147 @@ export class InspectionService {
     return this.setStatus(ctx, id, sql`status = 'abandoned', abandon_reason = ${body.reason}`);
   }
 
+  // ---- NC integration (PC5) ----------------------------------------------------------------
+
+  /** The suggested NC for some failed readings (default: current failures that have no NC yet). */
+  ncrDraft(ctx: RequestContext, id: string, q: z.infer<typeof DraftQuery>): Promise<NcDraft> {
+    return this.database.asUser(ctx, async (db) => {
+      const inspection = await this.load(db, ctx, id);
+      const ids = q.measurementIds ?? inspection.measurements.filter((m) => m.result === 'fail' && isCurrent(m) && m.ncrs.length === 0).map((m) => m.id);
+      const failed = new Set(inspection.measurements.filter((m) => m.result === 'fail').map((m) => m.id));
+      if (ids.some((x) => !failed.has(x))) throw ApiError.badRequest('invalid_reference', 'Only failed readings of this inspection can be chosen');
+      return buildNcDraft(inspection, ids);
+    });
+  }
+
+  /** Creates the NC and links the readings in one transaction (app.raise_ncr_from_inspection). */
+  raiseNcr(ctx: RequestContext, id: string, body: z.infer<typeof RaiseNcrBody>): Promise<{ ncr: { id: string; reference: string; stage: string; source: string }; inspection: InspectionDetail }> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.requireRecord(db, ctx, id);
+      const ids = body.measurementIds.length ? body.measurementIds.join(',') : '';
+      const result = await db.execute<{ id: string }>(sql`select app.raise_ncr_from_inspection(
+        ${id}::uuid, string_to_array(${ids}, ',')::uuid[] , ${body.title}, ${body.description ?? null}, ${body.severity ?? null},
+        ${body.quantityAffected ?? null}::numeric, ${body.requirement ?? null}, ${body.actualResult ?? null}, ${body.open ?? false}) as id`);
+      const ncr = await db.execute<Row>(sql`select id, reference, stage, source from public.nonconformances where id = ${result.rows[0].id}::uuid`);
+      const n = ncr.rows[0];
+      return {
+        ncr: { id: n.id as string, reference: n.reference as string, stage: n.stage as string, source: n.source as string },
+        inspection: await this.load(db, ctx, id),
+      };
+    });
+  }
+
+  acknowledge(ctx: RequestContext, measurementId: string, body: z.infer<typeof AcknowledgeBody>): Promise<InspectionDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      const m = await db.execute<Row>(sql`select inspection_record_id from public.inspection_measurements where id = ${measurementId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!m.rows.length) throw ApiError.notFound('measurement_not_found', 'Reading not found');
+      const record = m.rows[0].inspection_record_id as string;
+      await db.execute(sql`insert into public.inspection_failure_acknowledgements (organisation_id, inspection_record_id, measurement_id, note)
+        values (${orgOf(ctx)}::uuid, ${record}::uuid, ${measurementId}::uuid, ${body.note})`);
+      return this.load(db, ctx, record);
+    });
+  }
+
+  /** The inspections and readings behind a non-conformance raised from inspections (those the caller may read). */
+  ncrSource(ctx: RequestContext, ncrId: string): Promise<z.infer<typeof NcrInspectionSource>> {
+    return this.database.asUser(ctx, async (db) => {
+      const ncr = await db.execute(sql`select 1 from public.nonconformances where id = ${ncrId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!ncr.rows.length) throw ApiError.notFound('ncr_not_found', 'Non-conformance not found');
+      const links = await db.execute<Row>(sql`select inspection_record_id, measurement_id from public.inspection_ncr_links
+        where nonconformance_id = ${ncrId}::uuid and organisation_id = ${orgOf(ctx)}::uuid order by created_at, id`);
+      const out: z.infer<typeof NcrInspectionSource>['inspections'] = [];
+      for (const recordId of [...new Set(links.rows.map((l) => l.inspection_record_id as string))]) {
+        const insp = await this.load(db, ctx, recordId);
+        const wanted = links.rows.filter((l) => l.inspection_record_id === recordId && l.measurement_id).map((l) => l.measurement_id as string);
+        const reqById = new Map(insp.requirements.map((q) => [q.id, q]));
+        const sampleNo = new Map(insp.samples.map((x) => [x.id, x.sampleNumber]));
+        const finalOf = (m: InspectionDetail['measurements'][number]) => {
+          let cur = m;
+          while (cur.supersededById) {
+            const next = insp.measurements.find((x) => x.id === cur.supersededById);
+            if (!next) break;
+            cur = next;
+          }
+          return cur;
+        };
+        out.push({
+          id: insp.id,
+          reference: insp.reference,
+          status: insp.status,
+          result: insp.result,
+          part: insp.part,
+          plan: insp.plan,
+          operationCode: insp.operationCode,
+          startedAt: insp.startedAt,
+          wholeInspection: links.rows.some((l) => l.inspection_record_id === recordId && !l.measurement_id),
+          readings: wanted.flatMap((mid) => {
+            const m = insp.measurements.find((x) => x.id === mid);
+            if (!m) return [];
+            const q = reqById.get(m.requirementId)!;
+            const last = finalOf(m);
+            return [
+              {
+                id: m.id,
+                requirementName: q.name,
+                sampleNumber: sampleNo.get(m.sampleId) ?? 0,
+                valueNumeric: m.valueNumeric,
+                valuePass: m.valuePass,
+                unitCode: m.unitCode,
+                limits: limitsText(q),
+                result: m.result,
+                measuredAt: m.measuredAt,
+                gaugeAssetNumber: m.gauge?.assetNumber ?? null,
+                correctedTo: last.id === m.id ? null : { valueNumeric: last.valueNumeric, valuePass: last.valuePass, result: last.result, reason: last.correctionReason },
+              },
+            ];
+          }),
+        });
+      }
+      return { inspections: out };
+    });
+  }
+
+  /** Which inspections used a gauge since its previous calibration (impact assessment; reads only). */
+  gaugeUsage(ctx: RequestContext, calibrationId: string): Promise<z.infer<typeof GaugeUsage>> {
+    return this.database.asUser(ctx, async (db) => {
+      const cal = await db.execute<Row>(sql`select c.id, c.reference, c.gauge_id, c.calibrated_on::text as calibrated_on, c.outcome, g.asset_number
+        from public.calibrations c join public.gauges g on g.id = c.gauge_id
+        where c.id = ${calibrationId}::uuid and c.organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!cal.rows.length) throw ApiError.notFound('calibration_not_found', 'Calibration record not found');
+      const c = cal.rows[0];
+      const prev = await db.execute<Row>(sql`select reference, calibrated_on::text as calibrated_on from public.calibrations
+        where gauge_id = ${c.gauge_id as string}::uuid and deleted_at is null and id <> ${calibrationId}::uuid
+          and (calibrated_on, created_at) < (${c.calibrated_on as string}::date, (select created_at from public.calibrations where id = ${calibrationId}::uuid))
+        order by calibrated_on desc, created_at desc limit 1`);
+      const p = prev.rows[0];
+      const usage = await db.execute<Row>(sql`select * from app.gauge_usage(
+        ${c.gauge_id as string}::uuid, ${p ? sql`(${p.calibrated_on as string}::date)::timestamptz` : sql`null`},
+        ((${c.calibrated_on as string}::date) + 1)::timestamptz)`);
+      const inspections = usage.rows.map((u) => ({
+        id: u.inspection_record_id as string,
+        reference: u.reference as string,
+        status: u.status as string,
+        partNumber: u.part_number as string,
+        readings: Number(u.readings),
+        failedReadings: Number(u.failed_readings),
+        overrides: Number(u.overrides),
+        firstUsed: iso(u.first_used)!,
+        lastUsed: iso(u.last_used)!,
+      }));
+      return {
+        calibration: { id: c.id as string, reference: c.reference as string, calibratedOn: c.calibrated_on as string, outcome: c.outcome as string },
+        gauge: { id: c.gauge_id as string, assetNumber: c.asset_number as string },
+        previous: p ? { reference: p.reference as string, calibratedOn: p.calibrated_on as string } : null,
+        inspections,
+        totals: {
+          inspections: inspections.length,
+          readings: inspections.reduce((n, i) => n + i.readings, 0),
+          failedReadings: inspections.reduce((n, i) => n + i.failedReadings, 0),
+        },
+      };
+    });
+  }
+
   private setStatus(ctx: RequestContext, id: string, set: SQL, before?: (db: Db) => Promise<void>): Promise<InspectionDetail> {
     return this.database.asUser(ctx, async (db) => {
       await this.requireRecord(db, ctx, id);
@@ -235,8 +384,19 @@ export class InspectionService {
         (select c.id from public.inspection_measurements c where c.supersedes_id = m.id) as superseded_by_id
       from public.inspection_measurements m left join public.profiles pp on pp.id = m.created_by
       where m.inspection_record_id = ${id}::uuid order by m.measured_at, m.id`);
+    const acks = await db.execute<Row>(sql`select a.measurement_id, a.note, a.acknowledged_at, a.created_by, ${sql.raw(personName('pp'))} as by_name
+      from public.inspection_failure_acknowledgements a left join public.profiles pp on pp.id = a.created_by
+      where a.inspection_record_id = ${id}::uuid`);
+    // Only NCs the caller may read are named (row level security hides the others).
+    const links = await db.execute<Row>(sql`select l.measurement_id, n.id as ncr_id, n.reference, n.stage, n.title
+      from public.inspection_ncr_links l join public.nonconformances n on n.id = l.nonconformance_id
+      where l.inspection_record_id = ${id}::uuid order by n.created_at, n.id`);
+    const ncrOf = (l: Row): NcrRef => ({ id: l.ncr_id as string, reference: l.reference as string, stage: l.stage as string, title: l.title as string });
+    const allNcrs = new Map<string, NcrRef>();
+    for (const l of links.rows) allNcrs.set(l.ncr_id as string, ncrOf(l));
     return {
       ...toSummary(r),
+      ncrs: [...allNcrs.values()],
       notes: (r.notes as string) ?? null,
       completedAt: iso(r.completed_at),
       completedBy: person(r.completed_by, r.completed_by_name),
@@ -306,6 +466,11 @@ export class InspectionService {
         correctionReason: (m.correction_reason as string) ?? null,
         retestOfId: (m.retest_of_id as string) ?? null,
         notes: (m.notes as string) ?? null,
+        acknowledgement: (() => {
+          const a = acks.rows.find((x) => x.measurement_id === m.id);
+          return a ? { note: a.note as string, at: iso(a.acknowledged_at)!, by: person(a.created_by, a.by_name) } : null;
+        })(),
+        ncrs: links.rows.filter((l) => l.measurement_id === m.id).map(ncrOf),
       })),
     };
   }

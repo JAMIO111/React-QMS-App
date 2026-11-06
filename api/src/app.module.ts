@@ -52,7 +52,7 @@ import { NotificationsService } from './notifications/notifications.service';
 import { CharacteristicTemplatesController } from './process-control/characteristic-templates.controller';
 import { CharacteristicTemplatesService } from './process-control/characteristic-templates.service';
 import { ProcessControlService } from './process-control/process-control.service';
-import { InspectionMeasurementsController, InspectionsController } from './inspection/inspection.controller';
+import { GaugeUsageController, InspectionMeasurementsController, InspectionsController, NcrInspectionSourceController } from './inspection/inspection.controller';
 import { InspectionService } from './inspection/inspection.service';
 import { ControlPlanContentService } from './process-control/control-plan-content.service';
 import { OrganisationGuard } from './tenancy/organisation.guard';
@@ -121,6 +121,8 @@ export class AppModule implements NestModule {
         NotificationsController,
         InspectionsController,
         InspectionMeasurementsController,
+        NcrInspectionSourceController,
+        GaugeUsageController,
       ],
       providers: [
         { provide: ENV, useValue: env },

@@ -52,6 +52,9 @@ export const InspectionSummary = z.object({
 });
 export type InspectionSummary = z.infer<typeof InspectionSummary>;
 
+export const NcrRef = z.object({ id: z.string().uuid(), reference: z.string(), stage: z.string(), title: z.string() });
+export type NcrRef = z.infer<typeof NcrRef>;
+
 export const Requirement = z.object({
   id: z.string().uuid(),
   sequence: z.number().int(),
@@ -109,6 +112,10 @@ export const Measurement = z.object({
   correctionReason: z.string().nullable(),
   retestOfId: z.string().uuid().nullable(),
   notes: z.string().nullable(),
+  /** A person has seen this failed reading and said what is being done (PC5). */
+  acknowledgement: z.object({ note: z.string(), at: Iso, by: Ref.nullable() }).nullable(),
+  /** Non-conformances raised from this reading (those the caller may see). */
+  ncrs: z.array(NcrRef),
 });
 export const InspectionDetail = InspectionSummary.extend({
   notes: z.string().nullable(),
@@ -120,6 +127,8 @@ export const InspectionDetail = InspectionSummary.extend({
   schedule: z.array(z.object({ number: z.number().int(), position: z.number().int(), trigger: Trigger, requirementIds: z.array(z.string().uuid()) })),
   samples: z.array(Sample),
   measurements: z.array(Measurement),
+  /** Every non-conformance raised from this inspection (readings or the inspection as a whole). */
+  ncrs: z.array(NcrRef),
 });
 export type InspectionDetail = z.infer<typeof InspectionDetail>;
 
@@ -172,3 +181,121 @@ export const CorrectionBody = z
   .strict()
   .refine((r) => (r.valueNumeric === undefined) !== (r.valuePass === undefined), { message: 'Give the corrected value or pass/fail' });
 export const AbandonBody = z.object({ reason: z.string().trim().min(1, 'Give a reason').max(2000) }).strict();
+
+// ---- NC integration (PC5) -----------------------------------------------------------------------
+
+export const Severity = z.enum(['critical', 'major', 'minor']);
+export const DraftQuery = z.object({
+  /**
+   * Comma-separated failed readings. Absent: the current failed readings that have no NC yet.
+   * Present but empty (`measurementIds=`): none — the suggestion for a manual NC.
+   */
+  measurementIds: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v.split(',').map((x) => x.trim()).filter(Boolean)))
+    .pipe(z.array(z.string().uuid()).max(200).optional()),
+});
+export const NcDraft = z.object({
+  title: z.string(),
+  description: z.string(),
+  severity: Severity.nullable(),
+  quantityAffected: z.number().nullable(),
+  requirement: z.string(),
+  actualResult: z.string(),
+  /** The readings the NC would cover (empty: a manual NC for the inspection as a whole). */
+  readings: z.array(
+    z.object({
+      id: z.string().uuid(),
+      requirementName: z.string(),
+      sampleNumber: z.number().int(),
+      value: z.string(),
+      limits: z.string(),
+      measuredAt: Iso,
+      alreadyLinked: z.array(NcrRef),
+    }),
+  ),
+  /** Per check: the last good reading before the first selected failure (null: none in this inspection). */
+  containment: z.array(
+    z.object({
+      name: z.string(),
+      lastGood: z.object({ sampleNumber: z.number().int(), measuredAt: Iso, value: z.string() }).nullable(),
+      firstFailure: z.object({ sampleNumber: z.number().int(), measuredAt: Iso, value: z.string() }),
+    }),
+  ),
+});
+export type NcDraft = z.infer<typeof NcDraft>;
+
+export const RaiseNcrBody = z
+  .object({
+    /** Failed readings the NC covers; empty for a defect no measurement caught. */
+    measurementIds: z.array(z.string().uuid()).max(200).default([]),
+    title: z.string().trim().min(1, 'Give the non-conformance a title').max(200),
+    description: optionalText(10000),
+    severity: Severity.nullable().optional(),
+    quantityAffected: z.number().min(0).max(1_000_000_000).nullable().optional(),
+    requirement: optionalText(4000),
+    actualResult: optionalText(4000),
+    /** Create straight into "open" (needs severity and quantity). */
+    open: z.boolean().optional(),
+  })
+  .strict();
+export const RaisedNcr = z.object({
+  ncr: z.object({ id: z.string().uuid(), reference: z.string(), stage: z.string(), source: z.string() }),
+  inspection: InspectionDetail,
+});
+export const AcknowledgeBody = z.object({ note: z.string().trim().min(1, 'Say what is being done').max(1000) }).strict();
+
+export const NcrInspectionSource = z.object({
+  inspections: z.array(
+    z.object({
+      id: z.string().uuid(),
+      reference: z.string(),
+      status: z.enum(['in_progress', 'completed', 'abandoned']),
+      result: z.enum(['pass', 'fail']).nullable(),
+      part: z.object({ id: z.string().uuid(), partNumber: z.string(), name: z.string() }),
+      plan: z.object({ id: z.string().uuid(), planCode: z.string(), revisionCode: z.string() }),
+      operationCode: z.string().nullable(),
+      startedAt: Iso,
+      /** True when the NC covers the inspection as a whole (no reading linked). */
+      wholeInspection: z.boolean(),
+      readings: z.array(
+        z.object({
+          id: z.string().uuid(),
+          requirementName: z.string(),
+          sampleNumber: z.number().int(),
+          valueNumeric: z.string().nullable(),
+          valuePass: z.boolean().nullable(),
+          unitCode: z.string().nullable(),
+          limits: z.string(),
+          result: z.enum(['pass', 'fail']),
+          measuredAt: Iso,
+          gaugeAssetNumber: z.string().nullable(),
+          /** The latest reading that replaced this one, if it was corrected afterwards. */
+          correctedTo: z.object({ valueNumeric: z.string().nullable(), valuePass: z.boolean().nullable(), result: z.enum(['pass', 'fail']), reason: z.string().nullable() }).nullable(),
+        }),
+      ),
+    }),
+  ),
+});
+
+export const GaugeUsage = z.object({
+  calibration: z.object({ id: z.string().uuid(), reference: z.string(), calibratedOn: z.string(), outcome: z.string() }),
+  gauge: z.object({ id: z.string().uuid(), assetNumber: z.string() }),
+  /** The calibration before this one; the period starts on its date (null: from the start). */
+  previous: z.object({ reference: z.string(), calibratedOn: z.string() }).nullable(),
+  inspections: z.array(
+    z.object({
+      id: z.string().uuid(),
+      reference: z.string(),
+      status: z.string(),
+      partNumber: z.string(),
+      readings: z.number().int(),
+      failedReadings: z.number().int(),
+      overrides: z.number().int(),
+      firstUsed: Iso,
+      lastUsed: Iso,
+    }),
+  ),
+  totals: z.object({ inspections: z.number().int(), readings: z.number().int(), failedReadings: z.number().int() }),
+});

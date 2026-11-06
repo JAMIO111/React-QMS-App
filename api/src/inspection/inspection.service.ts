@@ -24,6 +24,7 @@ import {
   RaiseNcrBody,
   StartInspectionBody,
 } from './inspection.schemas';
+import { SpcService } from '../spc/spc.service';
 import { buildNcDraft, isCurrent, limitsText } from './ncr-draft';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -77,7 +78,10 @@ const toSummary = (r: Row): InspectionSummary => ({
  */
 @Injectable()
 export class InspectionService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly spc: SpcService,
+  ) {}
 
   list(ctx: RequestContext, q: z.infer<typeof InspectionListQuery>): Promise<Page<InspectionSummary>> {
     const cursor = decodeCursor(q.cursor);
@@ -115,7 +119,7 @@ export class InspectionService {
 
   /** A sample and its readings, saved in one transaction (all or nothing). */
   addSample(ctx: RequestContext, id: string, body: z.infer<typeof AddSampleBody>): Promise<InspectionDetail> {
-    return this.database.asUser(ctx, async (db) => {
+    return this.database.asUser(ctx, async (db, client) => {
       await this.requireRecord(db, ctx, id);
       const trigger = body.isRetest ? (body.triggerType ?? 'manual') : await this.planSample(db, id, body);
       const sample = await db.execute<{ id: string }>(sql`insert into public.inspection_samples
@@ -129,6 +133,14 @@ export class InspectionService {
           (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric, value_pass, value_count, gauge_id, gauge_override_reason, retest_of_id, notes)
           values (${orgOf(ctx)}::uuid, ${id}::uuid, ${sampleId}::uuid, ${r.requirementId}::uuid, ${r.valueNumeric ?? null}::numeric,
                   ${r.valuePass ?? null}, ${r.valueCount ?? null}::integer, ${r.gaugeId ?? null}::uuid, ${r.gaugeOverrideReason ?? null}, ${r.retestOfId ?? null}::uuid, ${r.notes ?? null})`);
+      }
+      // A signal on the points just recorded becomes an alert (retests re-measure a failed reading and are not charted).
+      if (!body.isRetest) {
+        const at = await db.execute<Row>(sql`select r.part_id, min(m.measured_at) as since from public.inspection_measurements m
+          join public.inspection_records r on r.id = m.inspection_record_id where m.sample_id = ${sampleId}::uuid group by r.part_id`);
+        if (at.rows[0]) {
+          await this.spc.raiseAlerts(db, client, ctx, at.rows[0].part_id as string, body.readings.map((r) => r.requirementId), new Date(new Date(at.rows[0].since as string).getTime() - 1000));
+        }
       }
       return this.load(db, ctx, id);
     });

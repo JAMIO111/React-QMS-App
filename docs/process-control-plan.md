@@ -581,3 +581,12 @@ whole family) or the parts of a family. Retests and abandoned inspections are le
 too. Measured values are rescaled to each reading's own tolerance so different parts can be pooled; only Pp/Ppk (overall σ) are reported because a within σ
 belongs to one control chart. A group is called higher/lower only at |z| > 3 against all other groups together (a deliberately conservative bar). Out of scope:
 ANOVA and other formal variance tests, machine trends over time, control-chart overlays per machine.
+
+## 20. Slice PC11 — SPC alerts — done (2026-11-06)
+
+Decisions taken without further questions (redirect if wrong): an alert is a stored record plus an in-app notification, raised when a sample is *saved*
+(no background worker exists), from the chart the control plan already defines (saved baseline, else trial limits, the baseline's rules); only signals on points
+recorded by that save alert. Two chart rules fire together for one spike (rule 1 and the moving range), and the next point back in control has a large
+moving range too, so one outlier can raise up to three alerts; this is the chart's own behaviour, not filtered. Pass/fail and count charts alert by inspection
+(one alert per inspection and rule). Acknowledging needs `spc.manage` and a note; alerts are immutable otherwise and never deleted. Out of scope: email/push,
+per-characteristic alert settings or muting, escalation, a dashboard KPI, and re-evaluating when a baseline changes or a reading is corrected.

@@ -136,6 +136,9 @@ BEGIN
     SELECT a, id, 'SWEEP', 'imr', 1, now() - interval '1 day', now(), 5, true,
            ARRAY[gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid()], 100, 103, 97, 1, 3.3, 0, 1
     FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1';
+  -- PC11: an SPC alert, raised through the function.
+  PERFORM app.raise_spc_alerts(a, (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'),
+    '[{"characteristicKey":"SWEEP","characteristicName":"Sweep","operationCode":"OP-1","variant":"imr","rule":"we1","side":"above","pointAt":"2026-11-05T08:00:00Z","summary":"Rule 1","inspectionId":null,"inspectionReference":null}]'::jsonb);
   PERFORM pg_temp.logout();
 
   -- Subscription: seats and an assignment through the API functions, invoice and payment as the provider would.

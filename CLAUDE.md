@@ -176,7 +176,16 @@ Summary of the brief:
     count: defects per unit. Each group is flagged higher/lower/similar vs all the others together (|z| > 3: two-proportion, Poisson, or Welch on tolerance-scaled means).
     `GET /spc/characteristics` also takes `partFamilyId` and `all=true` (not only SPC characteristics). UI `AnalysisPage.jsx` at `/Process-Control/Analysis`
     (URL `scope|part|family|by|c|from|to`). Demo data: `spc_demo_count_chart.sql` now has two machines and two parts. Plan §19. Not done: ANOVA/variance tests, trend by machine.
-  - **Next (later phases):** alerts (need a worker).
+  - **PC11 done (SPC alerts):** migration `20251116100000_spc_alerts.sql`. `spc_alerts` (audited, RLS `spc.read`, **no table INSERT/UPDATE grants**): written only by
+    `app.raise_spc_alerts(org, part, jsonb)` (caller needs `inspection.record`; duplicates ignored: unique per point for I-MR/X-bar-R, per inspection and rule for
+    P/C/U whose point grows) and `app.acknowledge_spc_alert(id, note)` (`spc.manage`, note required, once; acknowledged alerts are frozen, never deleted; errors `QM008`).
+    **No worker:** `InspectionService.addSample` calls `SpcService.raiseAlerts` (behind a savepoint, so it can never lose the readings) which evaluates the charts of the
+    characteristics just measured (`groupSignals`, shared with the dashboard overview; saved baseline, else trial limits) and alerts on signals at points from the new
+    reading on, incl. moving-range/range (`rule: range`); retests and corrections do not alert. Notification event `spc_alerts.created` (on by default for `spc.manage`;
+    `.updated` = acknowledged, off); as for all notifications the person who recorded the reading is not told of their own action. API `GET /spc/alerts?status&partId&limit`
+    (`{ data, openCount }`), `POST /spc/alerts/{id}/acknowledge`; UI `AlertsPage.jsx` at `/Process-Control/Alerts` ("SPC Alerts" menu), notifications link there. An alert
+    never raises an NC. Plan §20. Not done: email/push, alert rules per characteristic, dashboard KPI, alerts when limits/baselines change.
+  - **Next (later phases):** email delivery of notifications, scheduled (worker) evaluation.
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

@@ -65,3 +65,23 @@ export const useCreateBaseline = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: key(organisationId) }),
   });
 };
+
+/** Alerts raised by control-chart signals: `status` open | acknowledged | all. */
+export const useSpcAlerts = (status = "open", partId) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "alerts", status, partId),
+    queryFn: () => apiFetch(`/spc/alerts?${qs({ status, partId })}`, { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+  });
+};
+
+export const useAcknowledgeAlert = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, note }) => apiFetch(`/spc/alerts/${id}/acknowledge`, { method: "POST", body: { note }, organisationId }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: key(organisationId, "alerts") }),
+  });
+};

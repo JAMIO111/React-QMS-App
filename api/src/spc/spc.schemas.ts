@@ -236,3 +236,30 @@ export const Analysis = z.object({
   warnings: z.array(z.string()),
 });
 export type Analysis = z.infer<typeof Analysis>;
+
+export const AlertsQuery = z.object({
+  status: z.enum(['open', 'acknowledged', 'all']).default('open'),
+  partId: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+});
+export const AcknowledgeAlertBody = z.object({ note: z.string().trim().min(1, 'Say what was done about it').max(2000) }).strict();
+export const AlertOut = z.object({
+  id: z.string().uuid(),
+  part: z.object({ id: z.string().uuid(), partNumber: z.string() }),
+  characteristicKey: z.string(),
+  characteristicName: z.string(),
+  operationCode: z.string(),
+  variant: z.enum(['imr', 'xbar_r', 'p', 'c', 'u']),
+  rule: z.enum(['we1', 'we2', 'we3', 'we4', 'range']),
+  side: z.enum(['above', 'below']).nullable(),
+  summary: z.string(),
+  pointAt: Iso,
+  inspection: z.object({ id: z.string().uuid(), reference: z.string().nullable() }).nullable(),
+  status: z.enum(['open', 'acknowledged']),
+  raisedAt: Iso,
+  acknowledgedAt: Iso.nullable(),
+  acknowledgedBy: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
+  note: z.string().nullable(),
+});
+export type AlertOut = z.infer<typeof AlertOut>;
+export const AlertsOut = z.object({ data: z.array(AlertOut), openCount: z.number().int() });

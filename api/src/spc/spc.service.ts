@@ -5,7 +5,7 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { iso, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
-import { Analysis, AnalysisQuery, BaselineQuery, Baseline, Chart, ChartQuery, CharacteristicsQuery, CreateBaselineBody } from './spc.schemas';
+import { AcknowledgeAlertBody, AlertOut, AlertsQuery, Analysis, AnalysisQuery, BaselineQuery, Baseline, Chart, ChartQuery, CharacteristicsQuery, CreateBaselineBody } from './spc.schemas';
 import { controlLimits, countRate, defectsKind, isProvisional, Limits, MINIMUM_POINTS, pBar, PROVISIONAL_BELOW, Rule, RULE_TEXT } from './spc';
 import { AnalysisReading, compareGroups, groupStats, Kind } from './analysis';
 import { capability } from './capability';
@@ -247,40 +247,14 @@ export class SpcService {
         const key = g.characteristic_key as string;
         const op = g.operation_code as string;
         const groupRows = await this.readings(db, ctx, { partId, characteristicKey: key, operationCode: op });
-        if (isPRows(groupRows) || isCountRows(groupRows)) {
-          const found = await this.pOverview(db, ctx, g, groupRows, since);
-          if (found) {
-            monitored += 1;
-            if (!found.baseline) withoutBaseline += 1;
-            if (found.signals.length) withSignals += 1;
-            for (const m of found.signals) byRule[m.rule] = (byRule[m.rule] ?? 0) + 1;
-            signalCount += found.signals.length;
-            recent.push(...found.signals);
-          }
-          continue;
-        }
-        const data = assemble(groupRows);
-        if (!data.chartType || !data.points.length) continue;
+        const found = await this.groupSignals(db, ctx, g, groupRows, since);
+        if (!found) continue;
         monitored += 1;
-        const b = await db.execute<Row>(sql`${BASELINE_SELECT} where b.organisation_id = ${orgOf(ctx)}::uuid and b.part_id = ${partId}::uuid
-          and b.characteristic_key = ${key} and b.operation_code = ${op} and b.chart_type = ${data.chartType} and b.superseded_at is null`);
-        const base = b.rows[0] ? toBaseline(b.rows[0]) : null;
-        const usable = base && base.subgroupSize === data.subgroupSize && base.unitCode === data.unitCode ? base : null;
-        if (!usable) withoutBaseline += 1;
-        const res = evaluate(data, usable ? (usable.limits as Limits) : null, usable ? usable.rules : parseRules(undefined));
-        const mine: SpcOverview['recent'] = [];
-        for (const sg of res.signals) {
-          const pt = data.points[sg.index];
-          if (new Date(pt.at).getTime() >= since) mine.push({ ...overviewRow(g, pt, data.unitCode), rule: sg.rule, text: RULE_TEXT[sg.rule] });
-        }
-        for (const i of res.dispersionSignals) {
-          const pt = data.points[i];
-          if (new Date(pt.at).getTime() >= since) mine.push({ ...overviewRow(g, pt, data.unitCode), rule: 'range', text: `${data.chartType === 'imr' ? 'Moving range' : 'Range'} above its upper limit` });
-        }
-        if (mine.length) withSignals += 1;
-        for (const m of mine) byRule[m.rule] = (byRule[m.rule] ?? 0) + 1;
-        signalCount += mine.length;
-        recent.push(...mine);
+        if (!found.baseline) withoutBaseline += 1;
+        if (found.signals.length) withSignals += 1;
+        for (const m of found.signals) byRule[m.rule] = (byRule[m.rule] ?? 0) + 1;
+        signalCount += found.signals.length;
+        recent.push(...found.signals);
       }
       recent.sort((x, y) => y.at.localeCompare(x.at));
       return {
@@ -293,6 +267,128 @@ export class SpcService {
         byRule: Object.entries(byRule).map(([rule, count]) => ({ rule, count })),
         recent: recent.slice(0, opts.maxRecent),
       };
+    });
+  }
+
+  /**
+   * The signals of one characteristic's chart (saved baseline, else trial limits) on points from `since` on, with the chart
+   * variant. Null when there is nothing charted. Shared by the dashboard overview and by alerts.
+   */
+  private async groupSignals(db: Db, ctx: RequestContext, g: Row, groupRows: ReadingRow[], since: number): Promise<{ variant: AlertVariant; baseline: Baseline | null; signals: SpcOverview['recent'] } | null> {
+    const partId = g.part_id as string;
+    const key = g.characteristic_key as string;
+    const op = g.operation_code as string;
+    if (isPRows(groupRows) || isCountRows(groupRows)) {
+      const found = await this.pOverview(db, ctx, g, groupRows, since);
+      return found ? { variant: found.variant, baseline: found.baseline, signals: found.signals } : null;
+    }
+    const data = assemble(groupRows);
+    if (!data.chartType || !data.points.length) return null;
+    const b = await db.execute<Row>(sql`${BASELINE_SELECT} where b.organisation_id = ${orgOf(ctx)}::uuid and b.part_id = ${partId}::uuid
+      and b.characteristic_key = ${key} and b.operation_code = ${op} and b.chart_type = ${data.chartType} and b.superseded_at is null`);
+    const base = b.rows[0] ? toBaseline(b.rows[0]) : null;
+    const usable = base && base.subgroupSize === data.subgroupSize && base.unitCode === data.unitCode ? base : null;
+    const res = evaluate(data, usable ? (usable.limits as Limits) : null, usable ? usable.rules : parseRules(undefined));
+    const mine: SpcOverview['recent'] = [];
+    for (const sg of res.signals) {
+      const pt = data.points[sg.index];
+      if (new Date(pt.at).getTime() >= since) mine.push({ ...overviewRow(g, pt, data.unitCode), rule: sg.rule, text: RULE_TEXT[sg.rule], side: sg.side });
+    }
+    for (const i of res.dispersionSignals) {
+      const pt = data.points[i];
+      if (new Date(pt.at).getTime() >= since) mine.push({ ...overviewRow(g, pt, data.unitCode), rule: 'range', text: `${data.chartType === 'imr' ? 'Moving range' : 'Range'} above its upper limit`, side: 'above' });
+    }
+    return { variant: data.chartType, baseline: usable, signals: mine };
+  }
+
+  /**
+   * Alerts for the signals on points just recorded (point time at or after `since`) in the characteristics of the given
+   * requirements. Runs inside the save's transaction behind a savepoint, so a problem here never loses the readings.
+   * The database ignores a point that has already raised the same alert.
+   */
+  async raiseAlerts(db: Db, client: { query: (q: string) => Promise<unknown> }, ctx: RequestContext, partId: string, requirementIds: string[], since: Date): Promise<number> {
+    if (!requirementIds.length) return 0;
+    await client.query('SAVEPOINT spc_alerts');
+    try {
+      const reqs = await db.execute<Row>(sql`select distinct q.characteristic_key, q.operation_code, p.part_number, p.name as part_name, q.name
+        from public.resolved_inspection_requirements q join public.parts p on p.id = ${partId}::uuid
+        where q.id = any (string_to_array(${requirementIds.join(',')}, ',')::uuid[]) and q.spc_eligible`);
+      const alerts: Record<string, unknown>[] = [];
+      for (const r of reqs.rows) {
+        const g: Row = { part_id: partId, part_number: r.part_number, characteristic_key: r.characteristic_key, operation_code: r.operation_code, name: r.name };
+        const rows = await this.readings(db, ctx, { partId, characteristicKey: r.characteristic_key as string, operationCode: r.operation_code as string });
+        const found = await this.groupSignals(db, ctx, g, rows, since.getTime());
+        for (const sg of found?.signals ?? []) {
+          alerts.push({
+            characteristicKey: sg.characteristicKey,
+            characteristicName: sg.characteristicName,
+            operationCode: sg.operationCode,
+            variant: found!.variant,
+            rule: sg.rule,
+            side: sg.side ?? null,
+            pointAt: sg.at,
+            summary: `${sg.rule === 'range' ? '' : `${RULE_LABEL_SHORT[sg.rule]}: `}${sg.text}`.slice(0, 300),
+            inspectionId: sg.inspections[0]?.id ?? null,
+            inspectionReference: sg.inspections[0]?.reference ?? null,
+          });
+        }
+      }
+      let raised = 0;
+      if (alerts.length) {
+        const res = await db.execute<Row>(sql`select app.raise_spc_alerts(${orgOf(ctx)}::uuid, ${partId}::uuid, ${JSON.stringify(alerts)}::jsonb) as n`);
+        raised = Number(res.rows[0].n);
+      }
+      await client.query('RELEASE SAVEPOINT spc_alerts');
+      return raised;
+    } catch {
+      await client.query('ROLLBACK TO SAVEPOINT spc_alerts').catch(() => undefined);
+      return 0;
+    }
+  }
+
+  // ---- Alerts ------------------------------------------------------------------------------------
+
+  private static readonly ALERT_SELECT = sql`select a.*, ${personName('pa')} as ack_name from public.spc_alerts a left join public.profiles pa on pa.id = a.acknowledged_by`;
+
+  private toAlert(r: Row): AlertOut {
+    return {
+      id: r.id as string,
+      part: { id: r.part_id as string, partNumber: r.part_number as string },
+      characteristicKey: r.characteristic_key as string,
+      characteristicName: r.characteristic_name as string,
+      operationCode: r.operation_code as string,
+      variant: r.variant as AlertOut['variant'],
+      rule: r.rule as AlertOut['rule'],
+      side: (r.side as AlertOut['side']) ?? null,
+      summary: r.summary as string,
+      pointAt: iso(r.point_at)!,
+      inspection: r.inspection_record_id ? { id: r.inspection_record_id as string, reference: (r.inspection_reference as string) ?? null } : null,
+      status: r.status as AlertOut['status'],
+      raisedAt: iso(r.created_at)!,
+      acknowledgedAt: iso(r.acknowledged_at),
+      acknowledgedBy: r.acknowledged_by ? { id: r.acknowledged_by as string, name: (r.ack_name as string) ?? 'Unknown' } : null,
+      note: (r.acknowledgement_note as string) ?? null,
+    };
+  }
+
+  alerts(ctx: RequestContext, q: z.infer<typeof AlertsQuery>) {
+    return this.database.asUser(ctx, async (db) => {
+      const where: SQL[] = [sql`a.organisation_id = ${orgOf(ctx)}::uuid`];
+      if (q.status !== 'all') where.push(sql`a.status = ${q.status}`);
+      if (q.partId) where.push(sql`a.part_id = ${q.partId}::uuid`);
+      const rows = await db.execute<Row>(sql`${SpcService.ALERT_SELECT} where ${sql.join(where, sql` and `)} order by a.created_at desc, a.id limit ${q.limit}`);
+      const open = await db.execute<Row>(sql`select count(*)::int as n from public.spc_alerts where organisation_id = ${orgOf(ctx)}::uuid and status = 'open'`);
+      return { data: rows.rows.map((r) => this.toAlert(r)), openCount: Number(open.rows[0].n) };
+    });
+  }
+
+  acknowledgeAlert(ctx: RequestContext, id: string, body: z.infer<typeof AcknowledgeAlertBody>): Promise<AlertOut> {
+    return this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<Row>(sql`select 1 from public.spc_alerts where id = ${id}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!found.rows.length) throw ApiError.notFound('alert_not_found', 'SPC alert not found');
+      await db.execute(sql`select app.acknowledge_spc_alert(${id}::uuid, ${body.note})`);
+      const r = await db.execute<Row>(sql`${SpcService.ALERT_SELECT} where a.id = ${id}::uuid`);
+      return this.toAlert(r.rows[0]);
     });
   }
 
@@ -491,8 +587,8 @@ export class SpcService {
       const cr = evaluateCount(defectsKind(cd.groups), cd.groups, cu ? cu.limits.centre : null, cu ? cu.rules : parseRules(undefined));
       const csignals: SpcOverview['recent'] = cr.signals
         .filter((sg) => new Date(cr.points[sg.index].at).getTime() >= since)
-        .map((sg) => ({ ...overviewRow(g, cr.points[sg.index] as unknown as ChartPoint, null), rule: sg.rule, text: RULE_TEXT[sg.rule] }));
-      return { baseline: cu, signals: csignals };
+        .map((sg) => ({ ...overviewRow(g, cr.points[sg.index] as unknown as ChartPoint, null), rule: sg.rule, text: RULE_TEXT[sg.rule], side: sg.side }));
+      return { variant: cr.kind as AlertVariant, baseline: cu, signals: csignals };
     }
     const data = assembleP(rows, 'inspection');
     if (!data.groups.length) return null;
@@ -501,8 +597,8 @@ export class SpcService {
     const res = evaluateP(data, usable ? usable.limits.centre : null, usable ? usable.rules : parseRules(undefined));
     const signals: SpcOverview['recent'] = res.signals
       .filter((sg) => new Date(res.points[sg.index].at).getTime() >= since)
-      .map((sg) => ({ ...overviewRow(g, res.points[sg.index] as unknown as ChartPoint, null), rule: sg.rule, text: RULE_TEXT[sg.rule] }));
-    return { baseline: usable, signals };
+      .map((sg) => ({ ...overviewRow(g, res.points[sg.index] as unknown as ChartPoint, null), rule: sg.rule, text: RULE_TEXT[sg.rule], side: sg.side }));
+    return { variant: 'p' as AlertVariant, baseline: usable, signals };
   }
 
   private async countChart(
@@ -703,6 +799,9 @@ const isPRows = (rows: ReadingRow[]) => {
   return !!last && last.valuePass !== null;
 };
 
+export type AlertVariant = 'imr' | 'xbar_r' | 'p' | 'c' | 'u';
+const RULE_LABEL_SHORT: Record<string, string> = { we1: 'Rule 1', we2: 'Rule 2', we3: 'Rule 3', we4: 'Rule 4' };
+
 const rule = (message: string) => new ApiError(HttpStatus.CONFLICT, 'spc_rule', message);
 
 export interface SpcOverview {
@@ -723,6 +822,7 @@ export interface SpcOverview {
     operationCode: string;
     rule: string;
     text: string;
+    side?: 'above' | 'below' | null;
     at: string;
     point: number;
     inspections: { id: string; reference: string }[];

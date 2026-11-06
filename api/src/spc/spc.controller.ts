@@ -1,10 +1,10 @@
-import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import { z } from 'zod';
-import { Analysis, AnalysisQuery, Baseline, BaselineQuery, CharacteristicOption, CharacteristicsQuery, Chart, ChartQuery, CreateBaselineBody } from './spc.schemas';
+import { AcknowledgeAlertBody, AlertOut, AlertsOut, AlertsQuery, Analysis, AnalysisQuery, Baseline, BaselineQuery, CharacteristicOption, CharacteristicsQuery, Chart, ChartQuery, CreateBaselineBody } from './spc.schemas';
 import { SpcService } from './spc.service';
 
 const READ = 'spc.read';
@@ -61,6 +61,27 @@ export class SpcController {
   @ApiOkResponse({ schema: openApiSchema(Analysis) })
   analysis(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.analysis(ctx, parse(AnalysisQuery, query));
+  }
+
+  /** Alerts raised by control-chart signals on newly recorded points, newest first, with the number still open. */
+  @Get('alerts')
+  @OrganisationScoped(READ)
+  @ApiQuery({ name: 'status', required: false, schema: { type: 'string', enum: ['open', 'acknowledged', 'all'] } })
+  @ApiQuery({ name: 'partId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'limit', required: false, schema: { type: 'integer' } })
+  @ApiOkResponse({ schema: openApiSchema(AlertsOut) })
+  alerts(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.alerts(ctx, parse(AlertsQuery, query));
+  }
+
+  /** Records that somebody looked into an alert and what was done (once; needs spc.manage). */
+  @Post('alerts/:id/acknowledge')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(AcknowledgeAlertBody) })
+  @ApiOkResponse({ schema: openApiSchema(AlertOut) })
+  acknowledgeAlert(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.acknowledgeAlert(ctx, parse(z.string().uuid(), id), parse(AcknowledgeAlertBody, body));
   }
 
   /** Baseline history for a characteristic, newest first (superseded ones stay visible). */

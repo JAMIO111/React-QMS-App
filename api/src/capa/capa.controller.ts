@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, Ap
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { AddTeamBody, CapaDetail, CapaList, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, LinkNcrBody, UpdateActionBody, UpdateAnalysisBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, UpdateCapaBody, UpdateTeamBody } from './capa.schemas';
+import { AddTeamBody, CapaDetail, CapaList, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, CreateRootCauseBody, LinkNcrBody, UpdateRootCauseBody, UpdateActionBody, UpdateAnalysisBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, UpdateCapaBody, UpdateTeamBody } from './capa.schemas';
 import { CapaService } from './capa.service';
 
 const READ = 'capa.read';
@@ -111,6 +111,15 @@ export class CapasController {
   @ApiCreatedResponse({ description: 'Saves an analysis made with a tool (Is / Is-Not now); its data is checked against the kind', schema: openApiSchema(CapaDetail) })
   addAnalysis(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.addAnalysis(ctx, parse(Uuid, id), parse(CreateAnalysisBody, body));
+  }
+
+  @Post(':id/root-causes')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(CreateRootCauseBody) })
+  @ApiCreatedResponse({ description: 'Records a root cause (occurrence, escape or systemic), optionally from an analysis of this 8D; it starts unverified', schema: openApiSchema(CapaDetail) })
+  addRootCause(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addRootCause(ctx, parse(Uuid, id), parse(CreateRootCauseBody, body));
   }
 
   @Post(':id/actions')
@@ -237,5 +246,27 @@ export class CapaActionsController {
   @ApiOkResponse({ description: 'Puts a done or cancelled action back to open', schema: openApiSchema(CapaDetail) })
   reopen(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.reopenAction(ctx, parse(Uuid, id));
+  }
+}
+
+@ApiTags('capa')
+@ApiBearerAuth()
+@Controller('capa-root-causes')
+export class CapaRootCausesController {
+  constructor(private readonly service: CapaService) {}
+
+  @Patch(':id')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(UpdateRootCauseBody) })
+  @ApiOkResponse({ description: 'Edits a root cause or verifies it (needs a method). Changing the words or kind of a verified cause withdraws its verification.', schema: openApiSchema(CapaDetail) })
+  update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.updateRootCause(ctx, parse(Uuid, id), parse(UpdateRootCauseBody, body));
+  }
+
+  @Delete(':id')
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'Marks the root cause removed (the record stays); answers with the 8D', schema: openApiSchema(CapaDetail) })
+  remove(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.removeRootCause(ctx, parse(Uuid, id));
   }
 }

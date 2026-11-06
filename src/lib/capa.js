@@ -81,3 +81,21 @@ export const ACTION_STATUS = {
   done: { label: "Done", tone: "bg-success-color/15 text-success-color" },
   cancelled: { label: "Cancelled", tone: "bg-border-color text-secondary-text line-through" },
 };
+
+/** D4: the three kinds of root cause. */
+export const ROOT_CAUSE_KINDS = {
+  occurrence: { label: "Occurrence", help: "Why the problem happened", tone: "bg-error-color/10 text-error-color" },
+  escape: { label: "Escape", help: "Why it was not detected before it reached the customer", tone: "bg-warning-color/20 text-primary-text" },
+  systemic: { label: "Systemic", help: "Why the system allowed it: procedures, plans, training", tone: "bg-theme/15 text-theme" },
+};
+export const ROOT_CAUSE_OPTIONS = Object.entries(ROOT_CAUSE_KINDS).map(([id, k]) => ({ id, name: k.label, hint: k.help }));
+
+/** D4: the six standard Ishikawa categories, top row then bottom row. */
+export const ISHIKAWA_CATEGORIES = [
+  { key: "man", label: "Man", hint: "People, skills, training" },
+  { key: "machine", label: "Machine", hint: "Equipment, tooling, maintenance" },
+  { key: "material", label: "Material", hint: "Raw material, components, supplier" },
+  { key: "method", label: "Method", hint: "Process, procedure, instructions" },
+  { key: "measurement", label: "Measurement", hint: "Gauges, inspection, data" },
+  { key: "environment", label: "Environment", hint: "Temperature, cleanliness, layout" },
+];

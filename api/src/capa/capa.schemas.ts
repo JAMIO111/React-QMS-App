@@ -101,10 +101,50 @@ export const IsIsNotData = z
       .max(30),
   })
   .strict();
-export const ANALYSIS_KINDS = ['is_is_not'] as const;
+export const ISHIKAWA_CATEGORIES = ['man', 'machine', 'material', 'method', 'measurement', 'environment'] as const;
+/** Ishikawa (fishbone): the effect, and causes under the six standard categories; `probable` marks the ones to investigate first. */
+export const IshikawaData = z
+  .object({
+    effect: z.string().trim().max(300).default(''),
+    categories: z
+      .array(
+        z
+          .object({
+            key: z.enum(ISHIKAWA_CATEGORIES),
+            causes: z.array(z.object({ id: z.string().trim().min(1).max(40), text: z.string().trim().min(1).max(300), probable: z.boolean().default(false) }).strict()).max(30),
+          })
+          .strict(),
+      )
+      .max(6),
+  })
+  .strict();
+/** 5 Whys: a chain of "because" answers (each one answers "why?" about the one before), ending in the root cause. `kind` says what the chain explains. */
+export const FiveWhysData = z
+  .object({
+    kind: z.enum(['occurrence', 'escape', 'systemic']).default('occurrence'),
+    problem: z.string().trim().max(500).default(''),
+    whys: z.array(z.object({ because: z.string().trim().max(500) }).strict()).max(8),
+    rootCause: z.string().trim().max(500).default(''),
+  })
+  .strict();
+export const ANALYSIS_KINDS = ['is_is_not', 'ishikawa', 'five_whys'] as const;
 export const AnalysisKind = z.enum(ANALYSIS_KINDS);
-/** Each kind's data shape; Ishikawa and 5 Whys join in a later slice. */
-export const ANALYSIS_DATA: Record<(typeof ANALYSIS_KINDS)[number], z.ZodType<Record<string, unknown>>> = { is_is_not: IsIsNotData };
+/** Each kind's data shape. */
+export const ANALYSIS_DATA: Record<(typeof ANALYSIS_KINDS)[number], z.ZodType<Record<string, unknown>>> = { is_is_not: IsIsNotData, ishikawa: IshikawaData, five_whys: FiveWhysData };
+
+// ---- root causes (D4) ----------------------------------------------------------------------------
+
+export const ROOT_CAUSE_KINDS = ['occurrence', 'escape', 'systemic'] as const;
+export const RootCauseKind = z.enum(ROOT_CAUSE_KINDS);
+export const CreateRootCauseBody = z.object({ kind: RootCauseKind, description: text(2000), sourceAnalysisId: z.string().uuid().optional() }).strict();
+export type CreateRootCauseBody = z.infer<typeof CreateRootCauseBody>;
+/** Verifying needs a method; changing the words or kind of a verified cause withdraws the verification (the database does that). */
+export const UpdateRootCauseBody = z
+  .object({ kind: RootCauseKind, description: text(2000), verified: z.boolean(), verificationMethod: z.string().trim().max(200).nullable(), verificationNote: z.string().trim().max(2000).nullable() })
+  .partial()
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
+export type UpdateRootCauseBody = z.infer<typeof UpdateRootCauseBody>;
 
 export const CreateAnalysisBody = z.object({ kind: AnalysisKind, title: text(200), data: z.record(z.unknown()).default({}) }).strict();
 export type CreateAnalysisBody = z.infer<typeof CreateAnalysisBody>;
@@ -225,6 +265,19 @@ export const Analysis = z.object({
   updatedAt: Iso,
 });
 
+export const RootCause = z.object({
+  id: z.string().uuid(),
+  kind: RootCauseKind,
+  description: z.string(),
+  sourceAnalysisId: z.string().uuid().nullable(),
+  verified: z.boolean(),
+  verifiedAt: Iso.nullable(),
+  verifiedBy: Person,
+  verificationMethod: z.string().nullable(),
+  verificationNote: z.string().nullable(),
+  createdAt: Iso,
+});
+
 export const Action = z.object({
   id: z.string().uuid(),
   phase: z.enum(['interim', 'corrective', 'preventive']),
@@ -248,6 +301,7 @@ export const CapaDetail = CapaSummary.extend({
   /** D3: why there is no interim containment, when there is none. */
   d3NoContainmentReason: z.string().nullable(),
   analyses: z.array(Analysis),
+  rootCauses: z.array(RootCause),
   actions: z.array(Action),
   createdBy: Person,
   updatedAt: Iso,

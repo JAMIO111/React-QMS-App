@@ -5,7 +5,7 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { iso, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
-import { AddTeamBody, ANALYSIS_DATA, CapaDetail, CapaSummary, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, LinkNcrBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, STEPS, UpdateActionBody, UpdateAnalysisBody, UpdateCapaBody, UpdateTeamBody } from './capa.schemas';
+import { AddTeamBody, ANALYSIS_DATA, CapaDetail, CapaSummary, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, CreateRootCauseBody, LinkNcrBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, STEPS, UpdateActionBody, UpdateAnalysisBody, UpdateCapaBody, UpdateRootCauseBody, UpdateTeamBody } from './capa.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown' } : null);
@@ -46,7 +46,7 @@ const toSummary = (r: Row): CapaSummary => ({
 });
 
 /** The step each analysis kind belongs to. */
-const STEP_OF_KIND = { is_is_not: 'd2' } as const;
+const STEP_OF_KIND = { is_is_not: 'd2', ishikawa: 'd4', five_whys: 'd4' } as const;
 /** An analysis's data checked against its kind's shape (400 with the reason when it does not fit). */
 const parseData = (kind: keyof typeof ANALYSIS_DATA, data: Record<string, unknown>) => {
   const parsed = ANALYSIS_DATA[kind].safeParse(data);
@@ -194,6 +194,42 @@ export class CapaService {
     });
   }
 
+  // ---- root causes (D4) ----------------------------------------------------------------------
+
+  addRootCause(ctx: RequestContext, id: string, body: CreateRootCauseBody): Promise<CapaDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      await db.execute(sql`
+        insert into public.capa_root_causes (organisation_id, capa_id, kind, description, source_analysis_id)
+        values (${orgOf(ctx)}::uuid, ${id}::uuid, ${body.kind}, ${body.description}, ${body.sourceAnalysisId ?? null}::uuid)`);
+      return this.load(db, ctx, id);
+    });
+  }
+
+  updateRootCause(ctx: RequestContext, causeId: string, body: UpdateRootCauseBody): Promise<CapaDetail> {
+    const sets: SQL[] = [];
+    if (body.kind !== undefined) sets.push(sql`kind = ${body.kind}`);
+    if (body.description !== undefined) sets.push(sql`description = ${body.description}`);
+    if (body.verificationMethod !== undefined) sets.push(sql`verification_method = ${body.verificationMethod || null}`);
+    if (body.verificationNote !== undefined) sets.push(sql`verification_note = ${body.verificationNote || null}`);
+    if (body.verified !== undefined) sets.push(sql`verified = ${body.verified}`);
+    return this.changeRootCause(ctx, causeId, sets);
+  }
+
+  removeRootCause(ctx: RequestContext, causeId: string): Promise<CapaDetail> {
+    return this.changeRootCause(ctx, causeId, [sql`deleted_at = now()`]);
+  }
+
+  private changeRootCause(ctx: RequestContext, causeId: string, sets: SQL[]): Promise<CapaDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<{ capa_id: string }>(sql`select capa_id from public.capa_root_causes where id = ${causeId}::uuid and organisation_id = ${orgOf(ctx)}::uuid and deleted_at is null`);
+      if (!found.rows.length) throw ApiError.notFound('root_cause_not_found', 'Root cause not found');
+      const updated = await db.execute(sql`update public.capa_root_causes set ${sql.join(sets, sql`, `)} where id = ${causeId}::uuid and organisation_id = ${orgOf(ctx)}::uuid returning id`);
+      if (updated.rows.length === 0) throw ApiError.forbidden('You are not allowed to change this root cause');
+      return this.load(db, ctx, found.rows[0].capa_id);
+    });
+  }
+
   // ---- actions (interim containment now) -----------------------------------------------------
 
   addAction(ctx: RequestContext, id: string, body: CreateActionBody): Promise<CapaDetail> {
@@ -309,7 +345,7 @@ export class CapaService {
     const rows = await db.execute<Row>(sql`${SELECT} where c.id = ${id}::uuid and c.organisation_id = ${orgOf(ctx)}::uuid`);
     if (!rows.rows.length) throw ApiError.notFound('capa_not_found', '8D not found');
     const r = rows.rows[0];
-    const [steps, team, ncrs, analyses, actions] = await Promise.all([
+    const [steps, team, ncrs, analyses, actions, causes] = await Promise.all([
       db.execute<Row>(sql`select s.step, s.completed_at, s.completed_by, s.note, s.reopened_at, s.reopen_reason, ${sql.raw(personName('p'))} as completed_by_name
         from public.capa_steps s left join public.profiles p on p.id = s.completed_by where s.capa_id = ${id}::uuid order by s.step`),
       db.execute<Row>(sql`select t.id, t.membership_id, m.user_id, t.external_name, t.external_company, t.external_email, t.role, t.ended_at,
@@ -339,6 +375,10 @@ export class CapaService {
         left join public.profiles po on po.id = om.user_id
         left join public.profiles pd on pd.id = x.done_by
         where x.capa_id = ${id}::uuid order by x.created_at`),
+      db.execute<Row>(sql`select r.id, r.kind, r.description, r.source_analysis_id, r.verified, r.verified_at, r.verified_by, r.verification_method, r.verification_note, r.created_at,
+          ${sql.raw(personName('pv'))} as verified_by_name
+        from public.capa_root_causes r left join public.profiles pv on pv.id = r.verified_by
+        where r.capa_id = ${id}::uuid and r.deleted_at is null order by case r.kind when 'occurrence' then 0 when 'escape' then 1 else 2 end, r.created_at`),
     ]);
     const incomplete = steps.rows.filter((s) => !s.completed_at).map((s) => s.step as string);
     const problems = new Map<string, string[]>();
@@ -355,13 +395,25 @@ export class CapaService {
       d3NoContainmentReason: (r.d3_no_containment_reason as string) ?? null,
       analyses: analyses.rows.map((a) => ({
         id: a.id as string,
-        kind: a.kind as 'is_is_not',
+        kind: a.kind as CapaDetail['analyses'][number]['kind'],
         title: a.title as string,
         step: a.step as CapaDetail['analyses'][number]['step'],
         data: a.data as Record<string, unknown>,
         createdBy: person(a.created_by, a.created_by_name),
         createdAt: iso(a.created_at)!,
         updatedAt: iso(a.updated_at)!,
+      })),
+      rootCauses: causes.rows.map((x) => ({
+        id: x.id as string,
+        kind: x.kind as CapaDetail['rootCauses'][number]['kind'],
+        description: x.description as string,
+        sourceAnalysisId: (x.source_analysis_id as string) ?? null,
+        verified: !!x.verified,
+        verifiedAt: iso(x.verified_at),
+        verifiedBy: person(x.verified_by, x.verified_by_name),
+        verificationMethod: (x.verification_method as string) ?? null,
+        verificationNote: (x.verification_note as string) ?? null,
+        createdAt: iso(x.created_at)!,
       })),
       actions: actions.rows.map((x) => ({
         id: x.id as string,

@@ -244,6 +244,12 @@ Summary of the brief:
     actions, and one done or a reason there is none). **Nothing locks** after a step is completed. API: `POST /capas/{id}/analyses|actions`, `PATCH|DELETE /capa-analyses/{id}`, `PATCH /capa-actions/{id}`,
     `POST /capa-actions/{id}/complete|cancel|reopen`; the detail carries `problem`, `d3NoContainmentReason`, `analyses`, `actions`. UI `steps/D2Problem.jsx` (5W2H modal, Is / Is-Not modal with the eight standard questions),
     `steps/D3Containment.jsx`, and the reusable `ActionList.jsx` (add, edit, done with evidence, cancel with reason, reopen) for D5 and D7. Next: CAPA3 (D4).
+  - **CAPA3 done (D4 root cause):** migration `20251124100000_capa_d4.sql`. `capa_root_causes` (kind occurrence / escape / systemic; written under RLS; `app.capa_root_cause_rules`: a running 8D, the source analysis must belong to the same 8D,
+    **verification is stamped by the database and needs a method; changing the words or kind of a verified cause withdraws it**, removal sets `deleted_at`, never deleted). `app.capa_step_problems` D4: at least one occurrence cause and
+    every live cause verified (an escape cause is advised, not required). `capa_analyses` now carries the `ishikawa` and `five_whys` kinds (data shapes `IshikawaData` / `FiveWhysData` in `capa.schemas.ts`, step d4). API:
+    `POST /capas/{id}/root-causes`, `PATCH|DELETE /capa-root-causes/{id}`; detail has `rootCauses`. UI `steps/D4RootCause.jsx` (causes with verify / withdraw / edit / remove, analysis tools list), modals `IshikawaDialog.jsx`
+    (six categories, probable star, live `IshikawaDiagram.jsx` SVG fishbone, "Record as root cause" once the diagram is saved) and `FiveWhysDialog.jsx` (a chain of whys each asked about the one before, "Save and record as root cause").
+    Nothing locks after D4 is completed. Next: CAPA4 (D5–D7).
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

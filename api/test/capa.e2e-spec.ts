@@ -200,7 +200,8 @@ describe('steps D0 and D1', () => {
     expect(fresh.steps[0]).toMatchObject({ step: 'd0', completed: false, problems: ['Describe the problem in the problem statement'] });
     expect(fresh.steps[1].problems).toEqual(['Add at least two people to the team']);
     expect(fresh.steps[2].problems).toEqual(['Say what is wrong (the What of 5W2H)', 'Say where it was found (the Where of 5W2H)', 'Say when it was found (the When of 5W2H)']);
-    expect(fresh.steps[4].problems).toEqual(['This step is not available yet']);
+    expect(fresh.steps[4].problems).toEqual(['Record at least one occurrence root cause (why the problem happened)']);
+    expect(fresh.steps[5].problems).toEqual(['This step is not available yet']);
     const early = await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd1' });
     expect(early.status).toBe(409);
     expect(early.body.error).toMatchObject({ code: 'capa_rule', message: 'D1 cannot be completed yet: Add at least two people to the team' });
@@ -366,5 +367,97 @@ describe('D3: interim containment', () => {
   it('actions and analyses belong to their organisation', async () => {
     await api().post(`/api/v1/capa-actions/${ctx.act}/complete`).set(await as(ids.ownerB, ids.orgB)).send({}).expect(404);
     await api().patch(`/api/v1/capa-actions/${ctx.act}`).set(await as(ids.ownerB, ids.orgB)).send({ description: 'Hijacked' }).expect(404);
+  });
+});
+
+describe('D4: root causes and the Ishikawa and 5 Whys tools', () => {
+  const fishbone = { effect: 'Burrs on the bore', categories: [{ key: 'machine', causes: [{ id: 'c1', text: 'Worn boring bar', probable: true }] }, { key: 'method', causes: [] }] };
+  const whys = { kind: 'occurrence', problem: 'Burrs on the bore', whys: [{ because: 'The tool was worn' }, { because: 'Nobody tracks tool life' }], rootCause: 'No tool life limit' };
+
+  it('keeps an Ishikawa diagram and a 5 Whys chain as analyses of D4, checking their shape', async () => {
+    const h = await owner();
+    let d = (await api().post(`/api/v1/capas/${ctx.c2}/analyses`).set(h).send({ kind: 'ishikawa', title: 'Ishikawa', data: fishbone }).expect(201)).body;
+    d = (await api().post(`/api/v1/capas/${ctx.c2}/analyses`).set(h).send({ kind: 'five_whys', title: '5 Whys: occurrence', data: whys }).expect(201)).body;
+    expect(d.analyses.filter((a: { step: string }) => a.step === 'd4').map((a: { kind: string }) => a.kind)).toEqual(['ishikawa', 'five_whys']);
+    ctx.fish = d.analyses.find((a: { kind: string }) => a.kind === 'ishikawa').id;
+    ctx.why = d.analyses.find((a: { kind: string }) => a.kind === 'five_whys').id;
+    expect(d.analyses.find((a: { kind: string }) => a.kind === 'ishikawa').data.categories[0].causes[0]).toEqual({ id: 'c1', text: 'Worn boring bar', probable: true });
+    const bad = (body: object) => api().post(`/api/v1/capas/${ctx.c2}/analyses`).set(h).send(body);
+    expect((await bad({ kind: 'ishikawa', title: 'x', data: { effect: 'e', categories: [{ key: 'weather', causes: [] }] } })).status).toBe(400);
+    expect((await bad({ kind: 'ishikawa', title: 'x', data: { effect: 'e', categories: [{ key: 'man', causes: [{ id: 'a', text: '' }] }] } })).status).toBe(400);
+    expect((await bad({ kind: 'five_whys', title: 'x', data: { kind: 'maybe', whys: [] } })).status).toBe(400);
+    expect((await bad({ kind: 'five_whys', title: 'x', data: { whys: Array.from({ length: 9 }, () => ({ because: 'x' })) } })).status).toBe(400);
+    const edited = (await api().patch(`/api/v1/capa-analyses/${ctx.why}`).set(h).send({ data: { ...whys, whys: [...whys.whys, { because: 'No limit in the control plan' }] } }).expect(200)).body;
+    expect(edited.analyses.find((a: { id: string }) => a.id === ctx.why).data.whys).toHaveLength(3);
+    // The shape is checked against the analysis's own kind when it is edited.
+    const wrong = await api().patch(`/api/v1/capa-analyses/${ctx.why}`).set(h).send({ data: { effect: 'a fishbone shape' } });
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.error.code).toBe('invalid_analysis');
+  });
+
+  it('records causes of each kind, from an analysis or on their own; they start unverified', async () => {
+    const h = await owner();
+    const first = (await api().post(`/api/v1/capas/${ctx.c2}/root-causes`).set(h).send({ kind: 'occurrence', description: 'No tool life limit', sourceAnalysisId: ctx.why }).expect(201)).body;
+    expect(first.rootCauses).toEqual([expect.objectContaining({ kind: 'occurrence', description: 'No tool life limit', sourceAnalysisId: ctx.why, verified: false, verifiedAt: null, verifiedBy: null })]);
+    ctx.rc1 = first.rootCauses[0].id;
+    const more = (await api().post(`/api/v1/capas/${ctx.c2}/root-causes`).set(h).send({ kind: 'systemic', description: 'No tool monitoring in the control plan' }).expect(201)).body;
+    const withEscape = (await api().post(`/api/v1/capas/${ctx.c2}/root-causes`).set(h).send({ kind: 'escape', description: 'Final inspection samples 1 in 50', sourceAnalysisId: ctx.fish }).expect(201)).body;
+    expect(withEscape.rootCauses.map((c: { kind: string }) => c.kind)).toEqual(['occurrence', 'escape', 'systemic']); // occurrence, escape, systemic
+    ctx.rc2 = withEscape.rootCauses[1].id;
+    ctx.rc3 = more.rootCauses.find((c: { kind: string }) => c.kind === 'systemic').id;
+    const refused = await api().post(`/api/v1/capas/${ctx.c2}/root-causes`).set(h).send({ kind: 'occurrence', description: 'x', sourceAnalysisId: ctx.nc1 });
+    expect(refused.status).toBeGreaterThanOrEqual(400); // not an analysis of this 8D
+    await api().post(`/api/v1/capas/${ctx.c2}/root-causes`).set(h).send({ kind: 'maybe', description: 'x' }).expect(400);
+    await api().post(`/api/v1/capas/${ctx.c2}/root-causes`).set(h).send({ kind: 'occurrence', description: '' }).expect(400);
+    await api().post(`/api/v1/capas/${ctx.c2}/root-causes`).set(await as(ids.inspectorA)).send({ kind: 'occurrence', description: 'Not allowed' }).expect(403);
+    await api().post(`/api/v1/capas/${ctx.c2}/root-causes`).set(await as(ids.ownerB, ids.orgB)).send({ kind: 'occurrence', description: 'Foreign' }).expect(404);
+  });
+
+  it('says what D4 needs, verifying needs a method, and the database stamps who and when', async () => {
+    const h = await owner();
+    const before = (await api().get(`/api/v1/capas/${ctx.c2}`).set(h).expect(200)).body;
+    expect(before.steps[4].problems).toEqual(['Verify the 3 root causes not yet verified']);
+    const noMethod = await api().patch(`/api/v1/capa-root-causes/${ctx.rc1}`).set(h).send({ verified: true });
+    expect(noMethod.status).toBe(409);
+    expect(noMethod.body.error).toMatchObject({ code: 'capa_rule', message: 'Say how the root cause was verified' });
+    const one = (await api().patch(`/api/v1/capa-root-causes/${ctx.rc1}`).set(h).send({ verified: true, verificationMethod: 'Trial with a new tool', verificationNote: 'Burrs stopped' }).expect(200)).body;
+    expect(one.rootCauses[0]).toMatchObject({ verified: true, verificationMethod: 'Trial with a new tool', verificationNote: 'Burrs stopped', verifiedBy: { name: 'Ada Owner' }, verifiedAt: expect.any(String) });
+    expect(one.steps[4].problems).toEqual(['Verify the 2 root causes not yet verified']);
+    await api().patch(`/api/v1/capa-root-causes/${ctx.rc2}`).set(h).send({ verified: true, verificationMethod: 'Checked the sampling plan' }).expect(200);
+    const all = (await api().patch(`/api/v1/capa-root-causes/${ctx.rc3}`).set(h).send({ verified: true, verificationMethod: 'Reviewed the control plan' }).expect(200)).body;
+    expect(all.steps[4].problems).toEqual([]);
+    await api().patch(`/api/v1/capa-root-causes/${ctx.rc1}`).set(await as(ids.inspectorA)).send({ verified: false }).expect(403);
+  });
+
+  it('changing the words of a verified cause withdraws its verification, so D4 needs it again', async () => {
+    const h = await owner();
+    const note = (await api().patch(`/api/v1/capa-root-causes/${ctx.rc1}`).set(h).send({ verificationNote: 'Burrs stopped, three lots' }).expect(200)).body;
+    expect(note.rootCauses[0].verified).toBe(true); // a note does not withdraw it
+    const changed = (await api().patch(`/api/v1/capa-root-causes/${ctx.rc1}`).set(h).send({ description: 'No tool life limit on the boring bar or the drill' }).expect(200)).body;
+    expect(changed.rootCauses[0]).toMatchObject({ verified: false, verifiedAt: null, verifiedBy: null });
+    expect(changed.steps[4].problems).toEqual(['Verify the 1 root cause not yet verified']);
+    const again = (await api().patch(`/api/v1/capa-root-causes/${ctx.rc1}`).set(h).send({ verified: true }).expect(200)).body; // the method is still there
+    expect(again.rootCauses[0].verified).toBe(true);
+    const withdrawn = (await api().patch(`/api/v1/capa-root-causes/${ctx.rc1}`).set(h).send({ verified: false }).expect(200)).body;
+    expect(withdrawn.rootCauses[0].verified).toBe(false);
+    await api().patch(`/api/v1/capa-root-causes/${ctx.rc1}`).set(h).send({ verified: true }).expect(200);
+  });
+
+  it('completes D4, which locks nothing; removing a cause marks it and it no longer counts', async () => {
+    const h = await owner();
+    const done = (await api().post(`/api/v1/capas/${ctx.c2}/complete-step`).set(h).send({ step: 'd4' }).expect(200)).body;
+    expect(done.steps[4].completed).toBe(true);
+    const edited = (await api().patch(`/api/v1/capa-root-causes/${ctx.rc2}`).set(h).send({ description: 'Final inspection samples 1 in 50 parts' }).expect(200)).body; // after D4 is complete
+    expect(edited.rootCauses.find((c: { id: string }) => c.id === ctx.rc2)).toMatchObject({ description: 'Final inspection samples 1 in 50 parts', verified: false });
+    const removed = (await api().delete(`/api/v1/capa-root-causes/${ctx.rc2}`).set(h).expect(200)).body;
+    expect(removed.rootCauses.map((c: { id: string }) => c.id)).not.toContain(ctx.rc2);
+    expect((await api().patch(`/api/v1/capa-root-causes/${ctx.rc2}`).set(h).send({ description: 'Back' })).status).toBe(404);
+    const kept = await admin.query(`select deleted_at is not null as removed from public.capa_root_causes where id = $1`, [ctx.rc2]);
+    expect(kept.rows[0].removed).toBe(true);
+  });
+
+  it('is private to the organisation', async () => {
+    await api().patch(`/api/v1/capa-root-causes/${ctx.rc1}`).set(await as(ids.ownerB, ids.orgB)).send({ description: 'Hijacked' }).expect(404);
+    await api().delete(`/api/v1/capa-root-causes/${ctx.rc1}`).set(await as(ids.ownerB, ids.orgB)).expect(404);
   });
 });

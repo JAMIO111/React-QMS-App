@@ -166,6 +166,9 @@ BEGIN
     SELECT a, id, 'is_is_not', 'Sweep Is / Is-Not', 'd2', '{"rows": []}'::jsonb FROM public.capas WHERE organisation_id = a LIMIT 1;
   INSERT INTO public.capa_actions (organisation_id, capa_id, phase, description)
     SELECT a, id, 'interim', 'Sweep containment' FROM public.capas WHERE organisation_id = a LIMIT 1;
+  -- CAPA3: a root cause.
+  INSERT INTO public.capa_root_causes (organisation_id, capa_id, kind, description)
+    SELECT a, id, 'occurrence', 'Sweep root cause' FROM public.capas WHERE organisation_id = a LIMIT 1;
   PERFORM pg_temp.logout();
 
   -- Subscription: seats and an assignment through the API functions, invoice and payment as the provider would.

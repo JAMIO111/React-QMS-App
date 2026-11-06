@@ -152,6 +152,9 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/capa-actions/{id}/complete': { evidenceNote: 'Hijacked' },
     'POST /api/v1/capa-actions/{id}/cancel': { reason: 'Hijacked' },
     'POST /api/v1/capa-actions/{id}/reopen': undefined,
+    'POST /api/v1/capas/{id}/root-causes': { kind: 'occurrence', description: 'Hijacked' },
+    'PATCH /api/v1/capa-root-causes/{id}': { description: 'Hijacked' },
+    'DELETE /api/v1/capa-root-causes/{id}': undefined,
     'GET /api/v1/ncrs/{id}/capas': undefined,
     'GET /api/v1/ncrs/{id}/inspection-source': undefined,
     'GET /api/v1/calibrations/{id}/gauge-usage': undefined,
@@ -287,6 +290,9 @@ const hasSample = (op: Op) =>
     'POST /api/v1/capa-actions/{id}/complete',
     'POST /api/v1/capa-actions/{id}/cancel',
     'POST /api/v1/capa-actions/{id}/reopen',
+    'POST /api/v1/capas/{id}/root-causes',
+    'PATCH /api/v1/capa-root-causes/{id}',
+    'DELETE /api/v1/capa-root-causes/{id}',
     'GET /api/v1/ncrs/{id}/capas',
     'GET /api/v1/ncrs/{id}/inspection-source',
     'GET /api/v1/calibrations/{id}/gauge-usage',
@@ -340,6 +346,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/capa-ncr-links/')) return a.capaLink;
   if (path.startsWith('/api/v1/capa-analyses/')) return a.capaAnalysis;
   if (path.startsWith('/api/v1/capa-actions/')) return a.capaAction;
+  if (path.startsWith('/api/v1/capa-root-causes/')) return a.capaRootCause;
   if (path.startsWith('/api/v1/inspection-measurements/')) return a.measurement;
   if (path.startsWith('/api/v1/machines/')) return a.machine;
   if (path.startsWith('/api/v1/part-families/')) return a.family;
@@ -435,6 +442,7 @@ beforeAll(async () => {
     a.capaTeam = (await q1(`select id from public.capa_team_members where capa_id = $1 limit 1`, [a.capa])).id;
     a.capaLink = (await q1(`select app.link_capa_ncr($1::uuid, $2::uuid) as id`, [a.capa, a.ncr])).id;
     a.capaAnalysis = (await q1(`insert into public.capa_analyses (organisation_id, capa_id, kind, title, step, data) values ($1, $2, 'is_is_not', 'Alpha Is / Is-Not', 'd2', '{"rows":[]}') returning id`, [ids.orgA, a.capa])).id;
+    a.capaRootCause = (await q1(`insert into public.capa_root_causes (organisation_id, capa_id, kind, description) values ($1, $2, 'occurrence', 'Alpha root cause') returning id`, [ids.orgA, a.capa])).id;
     a.capaAction = (await q1(`insert into public.capa_actions (organisation_id, capa_id, phase, description) values ($1, $2, 'interim', 'Alpha containment') returning id`, [ids.orgA, a.capa])).id;
     await client.query('commit');
   } finally {

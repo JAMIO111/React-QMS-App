@@ -169,7 +169,14 @@ Summary of the brief:
     both against the spec on the data; one-sided specs give only the one-sided index; observed and normal-expected ppm; verdict bands on Cpk
     (1.00/1.33/1.67). `null` without a limit, with < 10 readings or for pass/fail and count charts; warns below 30 readings and when the chart has
     signals (not stable). `capability.histogram` = bins over a range that includes the spec plus the normal curve (overall σ) in the same counts. UI `CapabilityCard.jsx` (table + `CapabilityHistogram`) on the SPC page. Not done: non-normal data, Cpm.
-  - **Next (later phases):** family/machine analysis, alerts (need a worker).
+  - **PC10 done (family and machine analysis):** no migration. `GET /spc/analysis?groupBy=machine|part&partId|partFamilyId&characteristicKey[&operationCode&from&to]`
+    compares one characteristic between machines (one part, or all parts of a family) or between the parts of a family (`api/src/spc/analysis.ts`,
+    `SpcService.analysis`). Measured: n, mean/sd/min/max, out-of-spec count, position in the tolerance (%), spread (6σ as % of tolerance), Pp/Ppk (overall σ only;
+    readings are rescaled to the tolerance, u = (x−mid)/half-tolerance, so parts with different specs compare; no Cp/Cpk across groups). Pass/fail: failure rate;
+    count: defects per unit. Each group is flagged higher/lower/similar vs all the others together (|z| > 3: two-proportion, Poisson, or Welch on tolerance-scaled means).
+    `GET /spc/characteristics` also takes `partFamilyId` and `all=true` (not only SPC characteristics). UI `AnalysisPage.jsx` at `/Process-Control/Analysis`
+    (URL `scope|part|family|by|c|from|to`). Demo data: `spc_demo_count_chart.sql` now has two machines and two parts. Plan §19. Not done: ANOVA/variance tests, trend by machine.
+  - **Next (later phases):** alerts (need a worker).
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

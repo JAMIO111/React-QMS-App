@@ -460,8 +460,8 @@ describe('tenancy sweep over every API route', () => {
 
   it('never includes another organisation’s identifiers in list responses', async () => {
     const auth = { Authorization: `Bearer ${await token(ids.ownerB)}`, 'X-Organisation-Id': ids.orgB };
-    // The SPC chart and baseline reads need a characteristic with readings; their isolation is tested in spc.e2e-spec.ts.
-    const needsData = ['/api/v1/spc/chart', '/api/v1/spc/baselines'];
+    // The SPC chart and baseline reads need a characteristic with readings; their isolation is tested in spc.e2e-spec.ts (analysis: spc-analysis.e2e-spec.ts).
+    const needsData = ['/api/v1/spc/chart', '/api/v1/spc/baselines', '/api/v1/spc/analysis'];
     const lists = ops.filter((o) => o.scoped && o.method === 'GET' && !o.path.includes('{id}') && !needsData.includes(o.path));
     const leaks: string[] = [];
     // Routes that need query parameters get a valid set, so the tenant check is what is tested.

@@ -13,12 +13,25 @@ const qs = (params) => {
   return p.toString();
 };
 
-export const useSpcCharacteristics = (partId) => {
+/** `partId`, or `{ partFamilyId, all }` to list every characteristic with readings in a family (analysis). */
+export const useSpcCharacteristics = (partId, { partFamilyId, all = false } = {}) => {
+  const { organisationId } = useOrganisation();
+  const scope = partId ? { partId } : { partFamilyId };
+  return useQuery({
+    queryKey: key(organisationId, "characteristics", partId, partFamilyId, all),
+    queryFn: () => apiFetch(`/spc/characteristics?${qs({ ...scope, all: all ? "true" : undefined })}`, { organisationId }),
+    enabled: !!organisationId && !!(partId || partFamilyId),
+    retry: false,
+  });
+};
+
+/** One characteristic compared between machines or the parts of a family. */
+export const useSpcAnalysis = (params, enabled = true) => {
   const { organisationId } = useOrganisation();
   return useQuery({
-    queryKey: key(organisationId, "characteristics", partId),
-    queryFn: () => apiFetch(`/spc/characteristics?partId=${partId}`, { organisationId }),
-    enabled: !!organisationId && !!partId,
+    queryKey: key(organisationId, "analysis", params),
+    queryFn: () => apiFetch(`/spc/analysis?${qs(params)}`, { organisationId }),
+    enabled: !!organisationId && !!params.characteristicKey && !!(params.partId || params.partFamilyId) && enabled,
     retry: false,
   });
 };

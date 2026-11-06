@@ -9,6 +9,9 @@
 --     1.8 for two weeks while a tool wears (weeks 3-5), then recovers; DENTS runs at about 0.6 per unit with one bad lot
 --     (lot 6, about 1.8); FLASH fails about 12 % of checks, 30 % in lot 6. Every failed reading carries an acknowledgement, so the
 --     inspections complete normally (the newest stays open).
+-- Two parts (DEMO-400, DEMO-401, every third inspection) and two machines (DEMO-INSP-2, and DEMO-INSP-3 on every other
+-- inspection, which runs about 1.7 times as many defects and failures) so Process Control > Machine & family analysis has
+-- something to compare.
 -- Charts to try: by inspection (default), by day and by lot; on FLASH switch between P and NP and leave the NP size
 -- on "Calculated" or type 30 to see the other size.
 -- Samples, readings and inspections are back-dated afterwards (the audit trail does not record that step).
@@ -21,7 +24,7 @@ DECLARE
   v_org_name text := '';  -- e.g. 'Alpha Precision'
   v_org uuid; v_site uuid; v_owner uuid; v_names text;
   v_fam uuid; v_part uuid; v_plan uuid; v_rev uuid; v_op uuid;
-  v_m1 uuid; v_rec uuid; v_s uuid; v_scr uuid; v_dnt uuid; v_fls uuid;
+  v_m1 uuid; v_m2 uuid; v_part2 uuid; v_use_part uuid; v_use_m uuid; v_mult numeric; v_rec uuid; v_s uuid; v_scr uuid; v_dnt uuid; v_fls uuid;
   v_times jsonb := '[]'::jsonb;
   k integer; s integer; u integer; v_week numeric; v_ts timestamptz; v_lot integer;
   v_lam_s numeric; v_lam_d numeric; v_pf numeric; v_units_d integer; v_checks integer;
@@ -55,9 +58,13 @@ BEGIN
 
   INSERT INTO public.part_families (organisation_id, code, name, description) VALUES (v_org, 'DEMO-CF', 'Demo defect counts', 'NP / C / U chart demo data') RETURNING id INTO v_fam;
   INSERT INTO public.parts (organisation_id, part_number, name, part_family_id) VALUES (v_org, 'DEMO-400', 'Demo panel 400', v_fam) RETURNING id INTO v_part;
+  INSERT INTO public.parts (organisation_id, part_number, name, part_family_id) VALUES (v_org, 'DEMO-401', 'Demo panel 401', v_fam) RETURNING id INTO v_part2;
+  INSERT INTO public.part_revisions (organisation_id, part_id, revision) VALUES (v_org, v_part2, 'A');
+  UPDATE public.part_revisions SET status = 'released' WHERE organisation_id = v_org AND part_id = v_part2;
   INSERT INTO public.part_revisions (organisation_id, part_id, revision) VALUES (v_org, v_part, 'A');
   UPDATE public.part_revisions SET status = 'released' WHERE organisation_id = v_org AND part_id = v_part;
   INSERT INTO public.machines (organisation_id, code, name, work_centre) VALUES (v_org, 'DEMO-INSP-2', 'Demo surface bench', 'Surface check') RETURNING id INTO v_m1;
+  INSERT INTO public.machines (organisation_id, code, name, work_centre) VALUES (v_org, 'DEMO-INSP-3', 'Demo surface bench 2', 'Surface check') RETURNING id INTO v_m2;
 
   INSERT INTO public.control_plans (organisation_id, plan_code, title) VALUES (v_org, 'CP-DEMO-005', 'Demo panels – surface check') RETURNING id INTO v_plan;
   INSERT INTO public.control_plan_applicability (organisation_id, control_plan_id, part_family_id) VALUES (v_org, v_plan, v_fam);
@@ -84,7 +91,11 @@ BEGIN
     v_pf := CASE WHEN v_lot = 6 THEN 0.30 ELSE 0.12 END;                           -- flash: one bad lot
     v_units_d := 5 + ((k * 7) % 11);                                               -- 5 to 15 units checked for dents
     v_checks := CASE WHEN k % 8 = 0 THEN 30 ELSE 50 END;                           -- 50 flash checks, a few of 30
-    v_rec := app.start_inspection(v_site, v_part, 'OP-040', v_m1, 'WO-' || (6000 + k), 'LOT-4' || lpad(v_lot::text, 2, '0'), NULL, 'every_n_parts', NULL, NULL, NULL);
+    v_use_part := CASE WHEN k % 3 = 0 THEN v_part2 ELSE v_part END;
+    v_use_m := CASE WHEN k % 2 = 0 THEN v_m2 ELSE v_m1 END;
+    v_mult := CASE WHEN k % 2 = 0 THEN 1.7 ELSE 1 END;
+    v_lam_s := v_lam_s * v_mult; v_lam_d := v_lam_d * v_mult; v_pf := least(0.6, v_pf * v_mult);
+    v_rec := app.start_inspection(v_site, v_use_part, 'OP-040', v_use_m, 'WO-' || (6000 + k), 'LOT-4' || lpad(v_lot::text, 2, '0'), NULL, 'every_n_parts', NULL, NULL, NULL);
     SELECT id INTO v_scr FROM public.resolved_inspection_requirements WHERE inspection_record_id = v_rec AND characteristic_key = 'SCRATCH';
     SELECT id INTO v_dnt FROM public.resolved_inspection_requirements WHERE inspection_record_id = v_rec AND characteristic_key = 'DENTS';
     SELECT id INTO v_fls FROM public.resolved_inspection_requirements WHERE inspection_record_id = v_rec AND characteristic_key = 'FLASH';

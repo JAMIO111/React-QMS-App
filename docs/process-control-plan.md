@@ -572,3 +572,12 @@ table or migration; measured characteristics only (I-MR, X-bar/R); within σ is 
 else trial limits), overall σ the sample standard deviation (n − 1) of every reading shown; needs at least one specification limit and 10
 readings, warns under 30 and when the chart has signals; one-sided specifications give Cpu/Cpl/Ppu/Ppl and so Cpk/Ppk only; ppm expected assumes
 normality. Out of scope: histogram, normality test, non-normal capability, Cpm, family/machine comparison.
+
+## 19. Slice PC10 — family and machine analysis — done (2026-11-06)
+
+Decisions taken without further questions (redirect if wrong): no migration; one new read endpoint `GET /spc/analysis` plus `partFamilyId`/`all` on
+`GET /spc/characteristics`; "analysis" means comparing the *same characteristic* between groups, not a roll-up dashboard. Groups are machines (for one part or a
+whole family) or the parts of a family. Retests and abandoned inspections are left out and counted; readings of another kind or unit than the most recent are
+too. Measured values are rescaled to each reading's own tolerance so different parts can be pooled; only Pp/Ppk (overall σ) are reported because a within σ
+belongs to one control chart. A group is called higher/lower only at |z| > 3 against all other groups together (a deliberately conservative bar). Out of scope:
+ANOVA and other formal variance tests, machine trends over time, control-chart overlays per machine.

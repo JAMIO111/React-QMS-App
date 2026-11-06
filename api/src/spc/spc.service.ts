@@ -5,8 +5,9 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { iso, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
-import { BaselineQuery, Baseline, Chart, ChartQuery, CharacteristicsQuery, CreateBaselineBody } from './spc.schemas';
+import { Analysis, AnalysisQuery, BaselineQuery, Baseline, Chart, ChartQuery, CharacteristicsQuery, CreateBaselineBody } from './spc.schemas';
 import { controlLimits, countRate, defectsKind, isProvisional, Limits, MINIMUM_POINTS, pBar, PROVISIONAL_BELOW, Rule, RULE_TEXT } from './spc';
+import { AnalysisReading, compareGroups, groupStats, Kind } from './analysis';
 import { capability } from './capability';
 import { applySubgroupSize, assemble, assembleDefects, assembleP, BASIS_TEXT, ChartPoint, evaluate, evaluateCount, evaluateP, parseRules, ReadingRow, SubgroupBasis } from './spc-data';
 
@@ -65,19 +66,22 @@ export class SpcService {
   /** Characteristics of a part that have numeric readings and are marked for SPC in the plan. */
   characteristics(ctx: RequestContext, q: z.infer<typeof CharacteristicsQuery>) {
     return this.database.asUser(ctx, async (db) => {
-      await this.requirePart(db, ctx, q.partId);
+      if (q.partId) await this.requirePart(db, ctx, q.partId);
+      else await this.requireFamily(db, ctx, q.partFamilyId!);
+      const inScope = q.partId ? sql`r.part_id = ${q.partId}::uuid` : sql`r.part_id in (select id from public.parts where organisation_id = ${orgOf(ctx)}::uuid and part_family_id = ${q.partFamilyId}::uuid)`;
+      const eligible = q.all === 'true' ? sql`true` : sql`q.spc_eligible`;
       const r = await db.execute<Row>(sql`
         select q.characteristic_key, q.operation_code, count(*) as readings, max(m.measured_at) as last_at,
                (array_agg(q.name order by m.measured_at desc))[1] as name,
                (array_agg(q.chart_type order by m.measured_at desc))[1] as chart_type,
                (array_agg(q.subgroup_size order by m.measured_at desc))[1] as subgroup_size,
                (array_agg(q.unit_code order by m.measured_at desc))[1] as unit_code,
-               exists (select 1 from public.spc_baselines b where b.organisation_id = ${orgOf(ctx)}::uuid and b.part_id = ${q.partId}::uuid
-                         and b.characteristic_key = q.characteristic_key and b.operation_code = q.operation_code and b.superseded_at is null) as has_baseline
+               (${q.partId ? sql`true` : sql`false`} and exists (select 1 from public.spc_baselines b where b.organisation_id = ${orgOf(ctx)}::uuid and b.part_id = ${q.partId ?? null}::uuid
+                         and b.characteristic_key = q.characteristic_key and b.operation_code = q.operation_code and b.superseded_at is null)) as has_baseline
         from public.inspection_measurements m
         join public.inspection_records r on r.id = m.inspection_record_id
         join public.resolved_inspection_requirements q on q.id = m.requirement_id
-        where m.organisation_id = ${orgOf(ctx)}::uuid and r.part_id = ${q.partId}::uuid and q.spc_eligible
+        where m.organisation_id = ${orgOf(ctx)}::uuid and ${inScope} and ${eligible}
           and ((q.data_type = 'variable' and m.value_numeric is not null) or (q.data_type = 'attribute' and m.value_pass is not null) or (q.data_type = 'count' and m.value_count is not null)) and not exists (select 1 from public.inspection_measurements c where c.supersedes_id = m.id)
         group by q.characteristic_key, q.operation_code order by q.characteristic_key, q.operation_code`);
       return r.rows.map((x) => ({
@@ -288,6 +292,92 @@ export class SpcService {
         signalCount,
         byRule: Object.entries(byRule).map(([rule, count]) => ({ rule, count })),
         recent: recent.slice(0, opts.maxRecent),
+      };
+    });
+  }
+
+  // ---- Family and machine analysis ------------------------------------------------------------
+
+  /**
+   * One characteristic compared between machines or between the parts of a family. Readings are the current ones (not
+   * corrected), of completed or in-progress inspections, not retests; they must be of the kind and unit the most recent
+   * reading has. Left-out readings are counted by reason.
+   */
+  analysis(ctx: RequestContext, q: z.infer<typeof AnalysisQuery>): Promise<Analysis> {
+    return this.database.asUser(ctx, async (db) => {
+      let scope: Analysis['scope'];
+      if (q.partId) {
+        const part = await this.requirePart(db, ctx, q.partId);
+        scope = { kind: 'part', id: part.id, label: `${part.partNumber} · ${part.name}` };
+      } else {
+        scope = { kind: 'family', ...(await this.requireFamily(db, ctx, q.partFamilyId!)) };
+      }
+      const where: SQL[] = [sql`m.organisation_id = ${orgOf(ctx)}::uuid`, sql`q.characteristic_key = ${q.characteristicKey}`,
+        sql`((q.data_type = 'variable' and m.value_numeric is not null) or (q.data_type = 'attribute' and m.value_pass is not null) or (q.data_type = 'count' and m.value_count is not null))`,
+        sql`not exists (select 1 from public.inspection_measurements c where c.supersedes_id = m.id)`];
+      where.push(q.partId ? sql`r.part_id = ${q.partId}::uuid` : sql`p.part_family_id = ${q.partFamilyId}::uuid`);
+      if (q.operationCode) where.push(sql`q.operation_code = ${q.operationCode}`);
+      if (q.from) where.push(sql`m.measured_at >= ${q.from}::timestamptz`);
+      if (q.to) where.push(sql`m.measured_at <= ${q.to}::timestamptz`);
+      const res = await db.execute<Row>(sql`
+        select m.value_numeric::float8 as value, m.value_pass, m.value_count, m.measured_at, s.is_retest, r.status, r.machine_id, mc.code as machine_code, mc.name as machine_name,
+               r.part_id, p.part_number, p.name as part_name, q.data_type, q.unit_code, q.name, q.operation_code,
+               q.nominal::float8 as nominal, q.lower_limit::float8 as lower_limit, q.upper_limit::float8 as upper_limit
+        from public.inspection_measurements m
+        join public.inspection_samples s on s.id = m.sample_id
+        join public.inspection_records r on r.id = m.inspection_record_id
+        join public.parts p on p.id = r.part_id
+        join public.resolved_inspection_requirements q on q.id = m.requirement_id
+        left join public.machines mc on mc.id = r.machine_id
+        where ${sql.join(where, sql` and `)} order by m.measured_at desc limit ${MAX_READINGS}`);
+      if (!res.rows.length) throw ApiError.notFound('no_readings', 'There are no readings for this characteristic');
+      const latest = res.rows[0];
+      const kind = latest.data_type as Kind;
+      const unit = (latest.unit_code as string) ?? null;
+      const counts: Record<string, number> = {};
+      const skip = (k: string) => (counts[k] = (counts[k] ?? 0) + 1);
+      const buckets = new Map<string, { label: string; machineId: string | null; partId: string | null; rows: AnalysisReading[] }>();
+      for (const x of res.rows) {
+        if (x.status === 'abandoned') skip('abandoned');
+        else if (x.is_retest) skip('retest');
+        else if (x.data_type !== kind) skip('chart_type');
+        else if (kind === 'variable' && ((x.unit_code as string) ?? null) !== unit) skip('unit');
+        else {
+          const key = q.groupBy === 'machine' ? ((x.machine_id as string) ?? 'none') : (x.part_id as string);
+          const label = q.groupBy === 'machine' ? (x.machine_id ? `${x.machine_code} · ${x.machine_name}` : 'No machine recorded') : `${x.part_number} · ${x.part_name}`;
+          const b = buckets.get(key) ?? { label, machineId: q.groupBy === 'machine' ? ((x.machine_id as string) ?? null) : null, partId: q.groupBy === 'part' ? (x.part_id as string) : null, rows: [] };
+          b.rows.push({
+            kind,
+            value: numOrNull(x.value),
+            pass: (x.value_pass as boolean | null) ?? null,
+            count: numOrNull(x.value_count),
+            lower: numOrNull(x.lower_limit),
+            upper: numOrNull(x.upper_limit),
+            nominal: numOrNull(x.nominal),
+          });
+          buckets.set(key, b);
+        }
+      }
+      const groups = [...buckets.entries()].map(([key, b]) => ({ key, ...b, stats: groupStats(b.rows, kind) })).sort((a, b) => a.label.localeCompare(b.label));
+      compareGroups(groups, kind);
+      const all = groups.flatMap((g) => g.rows);
+      const overall = groupStats(all, kind);
+      const toleranceScale = kind === 'variable' && new Set(all.map((r) => `${r.nominal}|${r.lower}|${r.upper}`)).size > 1;
+      const warnings: string[] = [];
+      if (groups.length < 2) warnings.push(q.groupBy === 'machine' ? 'Readings come from one machine only (or have no machine recorded), so there is nothing to compare.' : 'Only one part of the family has readings, so there is nothing to compare.');
+      if (toleranceScale) warnings.push('The readings were measured against different specifications, so positions and capability are shown on the tolerance scale (−100 % to +100 % between the limits).');
+      if (kind === 'variable' && groups.some((g) => g.stats.n < 10)) warnings.push('Groups with fewer than 10 readings have no Pp/Ppk.');
+      const small = groups.filter((g) => g.stats.n < 30).length;
+      if (groups.length >= 2 && small) warnings.push(`${small} group${small === 1 ? ' has' : 's have'} fewer than 30 readings: treat differences with care.`);
+      return {
+        groupBy: q.groupBy,
+        scope,
+        characteristic: { key: q.characteristicKey, name: (latest.name as string) ?? null, operationCode: q.operationCode ?? ((latest.operation_code as string) ?? null), kind, unitCode: unit },
+        groups: groups.map((g) => ({ key: g.key, label: g.label, machineId: g.machineId, partId: g.partId, ...g.stats })),
+        overall: { n: overall.n, mean: overall.mean, sd: overall.sd, offsetPct: overall.offsetPct, spreadPct: overall.spreadPct, pp: overall.pp, ppk: overall.ppk, rate: overall.rate, perUnit: overall.perUnit },
+        toleranceScale,
+        excluded: Object.entries(counts).map(([reason, count]) => ({ reason, text: ({ abandoned: 'Abandoned inspections', retest: 'Retests (they re-measure a failed reading)', chart_type: 'Readings of a different kind', unit: 'Recorded in a different unit' } as Record<string, string>)[reason], count })),
+        warnings,
       };
     });
   }
@@ -529,6 +619,12 @@ export class SpcService {
     const r = await db.execute<Row>(sql`select id, part_number, name from public.parts where id = ${partId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
     if (!r.rows.length) throw ApiError.notFound('part_not_found', 'Part not found');
     return { id: r.rows[0].id as string, partNumber: r.rows[0].part_number as string, name: r.rows[0].name as string };
+  }
+
+  private async requireFamily(db: Db, ctx: RequestContext, id: string) {
+    const r = await db.execute<Row>(sql`select id, code, name from public.part_families where id = ${id}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+    if (!r.rows.length) throw ApiError.notFound('part_family_not_found', 'Part family not found');
+    return { id: r.rows[0].id as string, label: `${r.rows[0].code} · ${r.rows[0].name}` };
   }
 
   /** One chart is for one operation: use the one asked for, the only one there is, or ask. */

@@ -38,6 +38,7 @@ export const menuStructure = [
       { name: "Dashboard", path: "/Process-Control", end: true },
       { name: "Control Plans", path: "/Process-Control/Plans" },
       { name: "SPC Charts", path: "/Process-Control/SPC", permission: "spc.read" },
+      { name: "Machine & family analysis", path: "/Process-Control/Analysis", permission: "spc.read" },
     ],
   },
   {

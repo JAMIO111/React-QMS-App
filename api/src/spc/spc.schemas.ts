@@ -7,7 +7,28 @@ const optionalText = (max: number) =>
   z.string().trim().max(max).transform((v) => (v === '' ? null : v)).nullable().optional();
 const Num = z.number().nullable();
 
-export const CharacteristicsQuery = z.object({ partId: z.string().uuid() });
+export const CharacteristicsQuery = z
+  .object({
+    partId: z.string().uuid().optional(),
+    /** Every part of a family (family analysis). */
+    partFamilyId: z.string().uuid().optional(),
+    /** Include characteristics that are not marked for SPC (analysis compares any characteristic with readings). */
+    all: z.enum(['true', 'false']).optional(),
+  })
+  .refine((q) => (q.partId === undefined) !== (q.partFamilyId === undefined), { message: 'Give a part or a part family' });
+
+export const AnalysisQuery = z
+  .object({
+    groupBy: z.enum(['machine', 'part']),
+    partId: z.string().uuid().optional(),
+    partFamilyId: z.string().uuid().optional(),
+    characteristicKey: z.string().trim().min(1).max(60),
+    operationCode: z.string().trim().min(1).max(40).optional(),
+    from: z.string().datetime({ offset: true }).optional(),
+    to: z.string().datetime({ offset: true }).optional(),
+  })
+  .refine((q) => (q.partId === undefined) !== (q.partFamilyId === undefined), { message: 'Give a part or a part family' })
+  .refine((q) => q.groupBy !== 'part' || q.partFamilyId !== undefined, { message: 'Comparing parts needs a part family' });
 
 export const ChartQuery = z.object({
   partId: z.string().uuid(),
@@ -185,3 +206,33 @@ export const Chart = z.object({
   reactions: z.array(z.object({ action: z.string(), instruction: z.string() })),
 });
 export type Chart = z.infer<typeof Chart>;
+
+const Stat = z.number().nullable();
+export const Analysis = z.object({
+  groupBy: z.enum(['machine', 'part']),
+  scope: z.object({ kind: z.enum(['part', 'family']), id: z.string().uuid(), label: z.string() }),
+  characteristic: z.object({ key: z.string(), name: z.string().nullable(), operationCode: z.string().nullable(), kind: z.enum(['variable', 'attribute', 'count']), unitCode: z.string().nullable() }),
+  groups: z.array(
+    z.object({
+      key: z.string(),
+      label: z.string(),
+      machineId: z.string().uuid().nullable(),
+      partId: z.string().uuid().nullable(),
+      n: z.number().int(),
+      mean: Stat, sd: Stat, min: Stat, max: Stat,
+      spec: z.object({ nominal: Num, lower: Num, upper: Num }).nullable(),
+      outOfSpec: z.number().int().nullable(),
+      offsetPct: Stat, spreadPct: Stat, pp: Stat, ppk: Stat, expectedPpm: Stat,
+      failed: z.number().int().nullable(), rate: Stat, defects: z.number().int().nullable(), perUnit: Stat,
+      z: Stat,
+      verdict: z.enum(['higher', 'lower', 'similar']).nullable(),
+    }),
+  ),
+  /** All groups pooled, for reference. */
+  overall: z.object({ n: z.number().int(), mean: Stat, sd: Stat, offsetPct: Stat, spreadPct: Stat, pp: Stat, ppk: Stat, rate: Stat, perUnit: Stat }),
+  /** True when the readings were measured against different specifications, so values are compared on the tolerance scale. */
+  toleranceScale: z.boolean(),
+  excluded: z.array(z.object({ reason: z.string(), text: z.string(), count: z.number().int() })),
+  warnings: z.array(z.string()),
+});
+export type Analysis = z.infer<typeof Analysis>;

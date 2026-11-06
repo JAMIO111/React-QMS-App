@@ -82,3 +82,6 @@ export const countDomain = (rows) => {
 };
 
 export const describeWindow = (b) => `${b.points} ${b.chartType === "imr" ? "readings" : "subgroups"}`;
+
+export const VERDICT_TEXT = { higher: "Higher than the others", lower: "Lower than the others", similar: "Similar to the others" };
+export const KIND_NAME = { variable: "Measured", attribute: "Pass / fail", count: "Defect count" };

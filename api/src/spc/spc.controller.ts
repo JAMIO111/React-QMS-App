@@ -4,7 +4,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import { z } from 'zod';
-import { Baseline, BaselineQuery, CharacteristicOption, CharacteristicsQuery, Chart, ChartQuery, CreateBaselineBody } from './spc.schemas';
+import { Analysis, AnalysisQuery, Baseline, BaselineQuery, CharacteristicOption, CharacteristicsQuery, Chart, ChartQuery, CreateBaselineBody } from './spc.schemas';
 import { SpcService } from './spc.service';
 
 const READ = 'spc.read';
@@ -20,7 +20,9 @@ export class SpcController {
   /** Characteristics of a part with numeric readings that the control plan marks for SPC. */
   @Get('characteristics')
   @OrganisationScoped(READ)
-  @ApiQuery({ name: 'partId', required: true, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'partId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'partFamilyId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'all', required: false, schema: { type: 'string', enum: ['true', 'false'] } })
   @ApiOkResponse({ schema: openApiSchema(z.array(CharacteristicOption)) })
   characteristics(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.characteristics(ctx, parse(CharacteristicsQuery, query));
@@ -40,6 +42,25 @@ export class SpcController {
   @ApiOkResponse({ schema: openApiSchema(Chart) })
   chart(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.chart(ctx, parse(ChartQuery, query));
+  }
+
+  /**
+   * Compares one characteristic between machines (for a part or a whole family) or between the parts of a family:
+   * readings, mean and spread, position in the tolerance, Pp/Ppk, failure rate or defects per unit, and which groups
+   * are clearly different from the rest.
+   */
+  @Get('analysis')
+  @OrganisationScoped(READ)
+  @ApiQuery({ name: 'groupBy', required: true, schema: { type: 'string', enum: ['machine', 'part'] } })
+  @ApiQuery({ name: 'partId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'partFamilyId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'characteristicKey', required: true, schema: { type: 'string' } })
+  @ApiQuery({ name: 'operationCode', required: false, schema: { type: 'string' } })
+  @ApiQuery({ name: 'from', required: false, schema: { type: 'string', format: 'date-time' } })
+  @ApiQuery({ name: 'to', required: false, schema: { type: 'string', format: 'date-time' } })
+  @ApiOkResponse({ schema: openApiSchema(Analysis) })
+  analysis(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.analysis(ctx, parse(AnalysisQuery, query));
   }
 
   /** Baseline history for a characteristic, newest first (superseded ones stay visible). */

@@ -55,6 +55,7 @@ const ControlPlanPage = lazy(() => import("./components/process-control/ControlP
 const RevisionPage = lazy(() => import("./components/process-control/RevisionPage.jsx"));
 const ProcessControlDashboard = lazy(() => import("./components/process-control/ProcessControlDashboard.jsx"));
 const SpcPage = lazy(() => import("./components/spc/SpcPage.jsx"));
+const AnalysisPage = lazy(() => import("./components/spc/AnalysisPage.jsx"));
 const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
 const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
 const InspectionPage = lazy(() => import("./components/inspection/InspectionPage.jsx"));
@@ -176,6 +177,7 @@ const router = createBrowserRouter([
             { path: "Process-Control", element: <ProcessControlDashboard /> },
             { path: "Process-Control/Plans", element: <ControlPlansPage /> },
             { path: "Process-Control/SPC", element: <SpcPage /> },
+            { path: "Process-Control/Analysis", element: <AnalysisPage /> },
             { path: "Process-Control/Plans/:id", element: <ControlPlanPage /> },
             { path: "Process-Control/Plans/:planId/revisions/:revisionId", element: <RevisionPage /> },
             ],

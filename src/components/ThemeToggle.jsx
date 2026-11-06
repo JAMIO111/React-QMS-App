@@ -23,15 +23,17 @@ const ThemeToggle = ({ menuExpanded }) => {
           ? "flex-row w-32 mx-auto p-1"
           : "flex-col p-0.5 w-fit h-17 mx-auto"
       }`}
-      onClick={handleToggle}>
+      onClick={handleToggle}
+    >
       {theme === "light" && (
         <div
-          className={`bg-white rounded-full ${menuExpanded ? "p-2" : "p-1.5"}`}>
+          className={`bg-white rounded-full ${menuExpanded ? "p-2" : "p-1.5"}`}
+        >
           <SunIcon className="text-neutral-900" />
         </div>
       )}
       {menuExpanded && (
-        <span className="text-sm text-primary-bg mx-auto">
+        <span className="text-sm text-primary-bg mx-auto animate-in fade-in duration-300 motion-reduce:animate-none">
           {capitalized} Mode
         </span>
       )}
@@ -39,7 +41,8 @@ const ThemeToggle = ({ menuExpanded }) => {
         <div
           className={`bg-black rounded-full mt-auto ${
             menuExpanded ? "p-2" : "p-1.5"
-          }`}>
+          }`}
+        >
           <MoonStarIcon className="text-white" />
         </div>
       )}

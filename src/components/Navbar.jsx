@@ -41,9 +41,7 @@ const Navbar = () => {
   return (
     <div className="flex bg-secondary-bg">
       <nav
-        className={`flex flex-col border-r ${
-          !isMenuExpanded ? "transition-all duration-500" : null
-        } min-w-fit border-border-color h-screen ${
+        className={`flex h-screen flex-col overflow-hidden whitespace-nowrap border-r border-border-color transition-[width] duration-300 ease-in-out motion-reduce:transition-none ${
           isMenuExpanded ? "w-68" : "w-14"
         }`}>
         <div
@@ -59,7 +57,7 @@ const Navbar = () => {
             />
           </div>
           {isMenuExpanded && (
-            <div className="ml-3 flex min-w-0 flex-1 flex-col justify-between items-start">
+            <div className="ml-3 flex min-w-0 flex-1 flex-col justify-between items-start animate-in fade-in duration-300 motion-reduce:animate-none">
               <h1
                 className="w-full truncate text-sm font-semibold text-primary-text"
                 title={orgName}>
@@ -99,7 +97,7 @@ const Navbar = () => {
                     isSubMenuOpen={isSubMenuOpen}
                   />
                   {item.subMenu && isSubMenuOpen === item.name && (
-                    <ul className="ml-4 flex flex-col">
+                    <ul className="ml-4 flex flex-col animate-in fade-in slide-in-from-top-1 duration-200 motion-reduce:animate-none">
                       {item.subMenu
                         ?.filter((subItem) => canSee(subItem.permission))
                         .map((subItem, index, visible) => (

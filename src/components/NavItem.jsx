@@ -18,7 +18,8 @@ const NavItem = ({
       <div
         className={`${
           match ? "bg-cta-color" : "bg-transparent"
-        } w-1 h-9 rounded-r-md`}></div>
+        } w-1 h-9 rounded-r-md`}
+      ></div>
       <NavLink
         title={label}
         className={({ isActive }) =>
@@ -30,9 +31,14 @@ const NavItem = ({
   }`
         }
         onClick={closeMenu}
-        to={path}>
+        to={path}
+      >
         {Icon && <Icon className="h-6 w-6" />}
-        {isExpanded && <span className="text-sm flex-1">{label}</span>}
+        {isExpanded && (
+          <span className="text-sm flex-1 animate-in fade-in duration-300 motion-reduce:animate-none">
+            {label}
+          </span>
+        )}
         {isExpanded && hasSubMenu && (
           <ChevronDownIcon
             onClick={(e) => {
@@ -40,7 +46,7 @@ const NavItem = ({
               e.stopPropagation();
               onToggleSubMenu();
             }}
-            className={`hover:bg-cta-color/20 rounded p-1.5 h-6 w-6 transition-transform ${
+            className={`hover:bg-cta-color/20 rounded p-1.5 h-6 w-6 shrink-0 transition-transform duration-200 ${
               isSubMenuOpen === label ? "rotate-180" : ""
             }`}
           />

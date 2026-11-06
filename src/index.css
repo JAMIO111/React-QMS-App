@@ -696,17 +696,28 @@ html.dark {
   }
 }
 
-/* Modal dialogs (components/ui/Dialog.jsx): sticky header and footer over a thin scrollbar; they become translucent glass while content
-   is scrolled behind them. */
+/* Modal dialogs (components/ui/Dialog.jsx): the header and footer float over the scroll area, so content slides behind them and they turn to
+   translucent glass while it does; the scroll area leaves room for both and its scrollbar track is inset by the same amounts (Dialog.jsx sets
+   --dialog-head-h and --dialog-foot-h), so the scrollbar only runs along the content. */
 .dialog-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(128, 128, 128, 0.45) transparent;
+  padding-top: var(--dialog-head-h, 3.5rem);
+  padding-bottom: var(--dialog-foot-h, 1.25rem);
+  scroll-padding-top: var(--dialog-head-h, 3.5rem);
+  scroll-padding-bottom: var(--dialog-foot-h, 1.25rem);
+}
+@supports not selector(::-webkit-scrollbar) {
+  .dialog-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(128, 128, 128, 0.45) transparent;
+  }
 }
 .dialog-scroll::-webkit-scrollbar {
   width: 8px;
 }
 .dialog-scroll::-webkit-scrollbar-track {
   background: transparent;
+  margin-top: var(--dialog-head-h, 3.5rem);
+  margin-bottom: var(--dialog-foot-h, 1.25rem);
 }
 .dialog-scroll::-webkit-scrollbar-thumb {
   background: rgba(128, 128, 128, 0.45);
@@ -722,23 +733,23 @@ html.dark {
     border-color 0.2s ease;
 }
 [data-dialog-footer] {
-  position: sticky;
-  bottom: 0;
+  position: absolute;
+  inset: auto 0 0 0;
   z-index: 10;
-  margin: 0.5rem -1.25rem -1.25rem;
+  margin: 0;
   padding: 0.75rem 1.25rem;
 }
-.dialog-scroll[data-scrolled] .dialog-head,
-.dialog-scroll[data-more] [data-dialog-footer] {
+.dialog-panel[data-scrolled] .dialog-head,
+.dialog-panel[data-more] [data-dialog-footer] {
   background-color: rgba(var(--primary-bg), 0.6);
   -webkit-backdrop-filter: blur(14px) saturate(1.4);
   backdrop-filter: blur(14px) saturate(1.4);
 }
-.dialog-scroll[data-scrolled] .dialog-head {
+.dialog-panel[data-scrolled] .dialog-head {
   border-bottom-width: 1px;
   border-color: var(--color-border-color);
 }
-.dialog-scroll[data-more] [data-dialog-footer] {
+.dialog-panel[data-more] [data-dialog-footer] {
   border-top-width: 1px;
   border-color: var(--color-border-color);
 }

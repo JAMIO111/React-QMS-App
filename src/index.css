@@ -695,3 +695,50 @@ html.dark {
     margin: 0;
   }
 }
+
+/* Modal dialogs (components/ui/Dialog.jsx): sticky header and footer over a thin scrollbar; they become translucent glass while content
+   is scrolled behind them. */
+.dialog-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 128, 0.45) transparent;
+}
+.dialog-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.dialog-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dialog-scroll::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.45);
+  border-radius: 4px;
+}
+.dialog-head,
+[data-dialog-footer] {
+  background-color: rgba(var(--primary-bg), 1);
+  border: 0 solid transparent;
+  transition:
+    background-color 0.2s ease,
+    backdrop-filter 0.2s ease,
+    border-color 0.2s ease;
+}
+[data-dialog-footer] {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  margin: 0.5rem -1.25rem -1.25rem;
+  padding: 0.75rem 1.25rem;
+}
+.dialog-scroll[data-scrolled] .dialog-head,
+.dialog-scroll[data-more] [data-dialog-footer] {
+  background-color: rgba(var(--primary-bg), 0.6);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+}
+.dialog-scroll[data-scrolled] .dialog-head {
+  border-bottom-width: 1px;
+  border-color: var(--color-border-color);
+}
+.dialog-scroll[data-more] [data-dialog-footer] {
+  border-top-width: 1px;
+  border-color: var(--color-border-color);
+}

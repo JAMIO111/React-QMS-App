@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import MenuCard from "../ui/MenuCard";
 import { CircleAlertIcon } from "@/components/icons";
@@ -39,11 +40,24 @@ const HistogramTooltip = ({ active, payload, decimals, bins }) => {
   );
 };
 
+/** A bar across one bin: a small gap each side, rounded top corners, a soft top-to-bottom fade. */
+const binShape = (fill) => (props) => {
+  const { x, y, width, height } = props;
+  const gap = Math.min(3, width / 6);
+  const w = Math.max(0, width - gap * 2);
+  const r = Math.min(6, w / 2, height);
+  if (w <= 0 || height <= 0) return <g />;
+  const x0 = x + gap;
+  const d = `M${x0},${y + height} L${x0},${y + r} Q${x0},${y} ${x0 + r},${y} L${x0 + w - r},${y} Q${x0 + w},${y} ${x0 + w},${y + r} L${x0 + w},${y + height} Z`;
+  return <path d={d} fill={fill} />;
+};
+
 /**
  * Histogram of the readings with the specification limits (solid), the nominal and the mean (dashed) and the normal
  * curve the overall σ implies. The bars are counts per bin; the curve is in the same counts.
  */
 export const CapabilityHistogram = ({ histogram, spec, mean, decimals }) => {
+  const gradientId = useId();
   const bins = histogram.bins;
   const data = histogram.curve.map((p) => ({ x: p.x, curve: p.y }));
   const lo = bins[0].from;
@@ -62,12 +76,18 @@ export const CapabilityHistogram = ({ histogram, spec, mean, decimals }) => {
     >
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 16, right: 24, bottom: 4, left: 4 }}>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--chart-series-1)" stopOpacity={0.9} />
+              <stop offset="100%" stopColor="var(--chart-series-1)" stopOpacity={0.35} />
+            </linearGradient>
+          </defs>
           <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
           <XAxis dataKey="x" type="number" domain={[lo, hi]} tick={tick} tickLine={false} tickFormatter={(v) => formatValue(v, d)} />
           <YAxis domain={[0, Math.ceil(top * 1.1)]} tick={tick} allowDecimals={false} width={36} tickLine={false} axisLine={false} />
           <Tooltip content={<HistogramTooltip decimals={d} bins={bins} />} />
           {bins.map((b) => (
-            <ReferenceArea key={b.from} x1={b.from} x2={b.to} y1={0} y2={b.count} fill="var(--chart-series-1)" fillOpacity={0.6} stroke="var(--chart-series-1)" strokeOpacity={0.9} ifOverflow="visible" />
+            <ReferenceArea key={b.from} x1={b.from} x2={b.to} y1={0} y2={b.count} shape={binShape(`url(#${gradientId})`)} ifOverflow="visible" />
           ))}
           <Line dataKey="curve" name="curve" type="monotone" stroke={neutral} strokeWidth={1.5} dot={false} activeDot={false} isAnimationActive={false} connectNulls />
           {spec.lower !== null && <ReferenceLine x={spec.lower} stroke={spec1} strokeWidth={2} label={label(`LSL ${formatValue(spec.lower, d)}`, spec1, "insideTopLeft")} />}

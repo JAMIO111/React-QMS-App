@@ -110,8 +110,9 @@ export const useAlertMutation = () => {
     },
     onSuccess: (data) => {
       if (data?.id) queryClient.setQueryData(key(organisationId, "detail", data.id), data);
-      queryClient.invalidateQueries({ queryKey: key(organisationId, "list") });
-      queryClient.invalidateQueries({ queryKey: key(organisationId, "detail") });
+      // Every view of alerts depends on these commands (the register, My alerts and the menu badge, the banners where work happens,
+      // who has acknowledged), so refresh them all rather than guess which one the person looked at.
+      queryClient.invalidateQueries({ queryKey: key(organisationId) });
     },
   });
 };

@@ -326,6 +326,35 @@ describe("My alerts", () => {
     expect(calls).toContain("POST /quality-alerts/x1/acknowledge");
   });
 
+  it("after acknowledging from the list, the row, the counts and the menu badge refresh without a reload", async () => {
+    permissions = ["documentation.read"];
+    let acknowledged = false;
+    const calls = [];
+    apiFetch.mockImplementation(async (path, opts = {}) => {
+      calls.push(`${opts.method ?? "GET"} ${path}`);
+      if (path.endsWith("/acknowledge")) return ((acknowledged = true), detail());
+      return {
+        data: [
+          item({
+            id: "x1", reference: "QA-007", revisionLetter: "A", title: "Gauge out of calibration",
+            state: acknowledged ? "acknowledged" : "open",
+            me: { firstViewedAt: "2026-11-05T09:00:00Z", acknowledgedAt: acknowledged ? "2026-11-06T10:00:00Z" : null, note: null, reachedVia: [], overdue: false },
+          }),
+        ],
+        unacknowledged: acknowledged ? 0 : 1,
+        overdue: 0,
+      };
+    });
+    renderAt("/Documentation/My-Alerts");
+    const table = await screen.findByRole("table", { name: "My alerts" });
+    await userEvent.click(within(table).getByRole("button", { name: "Acknowledge" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "I have read and understood" }));
+    await waitFor(() => expect(within(table).queryByRole("button", { name: "Acknowledge" })).toBeNull());
+    expect(within(table).getByText("Acknowledged")).toBeInTheDocument();
+    expect(screen.getByText("0 to acknowledge")).toBeInTheDocument();
+    expect(calls.filter((c) => c === "GET /quality-alerts/mine")).toHaveLength(2);
+  });
+
   it("says when nothing is addressed to me", async () => {
     permissions = ["documentation.read"];
     apiFetch.mockResolvedValue({ data: [], unacknowledged: 0, overdue: 0 });

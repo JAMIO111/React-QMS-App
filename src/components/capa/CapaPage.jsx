@@ -47,7 +47,8 @@ const CapaPage = () => {
   const live = capa.ncrs.filter((n) => !n.endedAt);
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-4 overflow-y-auto p-4">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-clip bg-primary-bg">
+      <div className="flex shrink-0 flex-col gap-3 border-b border-border-color px-4 py-3">
       <Link to="/CAPA" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
         <ArrowLeftIcon className="h-4 w-4" /> Corrective actions
       </Link>
@@ -81,9 +82,11 @@ const CapaPage = () => {
           {can("capa.manage") && !running && <button type="button" className={buttonClass.neutral} onClick={() => { mutation.reset(); setDialog("reopen"); }}>Reopen 8D</button>}
         </div>
       </header>
+      </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
-        <Stepper capa={capa} active={step} />
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[15rem_minmax(0,1fr)] lg:grid-rows-1">
+        <div className="overflow-y-auto border-border-color p-3 lg:border-r"><Stepper capa={capa} active={step} /></div>
+        <div className="min-h-0 overflow-y-auto p-4">
         <section aria-label={`${def.code} ${def.title}`} className="flex min-w-0 flex-col gap-4 rounded-2xl border border-border-color bg-secondary-bg p-5">
           <div>
             <h2 className="text-xl font-semibold text-primary-text">{def.code} · {def.title}</h2>
@@ -93,6 +96,7 @@ const CapaPage = () => {
           {Page && <Page capa={capa} editable={editable} />}
           <StepFooter capa={capa} step={step} editable={editable} />
         </section>
+        </div>
       </div>
 
       {dialog === "cancel" && (

@@ -54,6 +54,8 @@ import { CharacteristicTemplatesService } from './process-control/characteristic
 import { ProcessControlService } from './process-control/process-control.service';
 import { GaugeUsageController, InspectionMeasurementsController, InspectionsController, NcrInspectionSourceController } from './inspection/inspection.controller';
 import { InspectionService } from './inspection/inspection.service';
+import { SpcController } from './spc/spc.controller';
+import { SpcService } from './spc/spc.service';
 import { ControlPlanContentService } from './process-control/control-plan-content.service';
 import { OrganisationGuard } from './tenancy/organisation.guard';
 
@@ -122,6 +124,7 @@ export class AppModule implements NestModule {
         InspectionsController,
         InspectionMeasurementsController,
         NcrInspectionSourceController,
+        SpcController,
         GaugeUsageController,
       ],
       providers: [
@@ -142,6 +145,7 @@ export class AppModule implements NestModule {
         BillingService,
         NotificationsService,
         InspectionService,
+        SpcService,
         OrganisationsService,
         StructureService,
         MembersService,

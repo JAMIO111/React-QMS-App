@@ -118,8 +118,9 @@ export class InspectionService {
       await this.requireRecord(db, ctx, id);
       const trigger = body.isRetest ? (body.triggerType ?? 'manual') : await this.planSample(db, id, body);
       const sample = await db.execute<{ id: string }>(sql`insert into public.inspection_samples
-        (organisation_id, inspection_record_id, unit_reference, trigger_type, is_retest, notes)
-        values (${orgOf(ctx)}::uuid, ${id}::uuid, ${body.unitReference ?? null}, ${trigger}, ${body.isRetest ?? false}, ${body.notes ?? null})
+        (organisation_id, inspection_record_id, unit_reference, trigger_type, is_retest, notes, subgroup_number)
+        values (${orgOf(ctx)}::uuid, ${id}::uuid, ${body.unitReference ?? null}, ${trigger}, ${body.isRetest ?? false}, ${body.notes ?? null},
+                ${body.newSubgroup && !body.isRetest ? sql`(select coalesce(max(subgroup_number), 0) + 1 from public.inspection_samples where inspection_record_id = ${id}::uuid)` : sql`null`})
         returning id`);
       const sampleId = sample.rows[0].id;
       for (const r of body.readings) {
@@ -434,6 +435,7 @@ export class InspectionService {
       samples: samples.rows.map((s) => ({
         id: s.id as string,
         sampleNumber: Number(s.sample_number),
+        subgroupNumber: s.subgroup_number === null || s.subgroup_number === undefined ? null : Number(s.subgroup_number),
         sampledAt: iso(s.sampled_at)!,
         unitReference: (s.unit_reference as string) ?? null,
         triggerType: s.trigger_type as InspectionSummary['triggerType'],

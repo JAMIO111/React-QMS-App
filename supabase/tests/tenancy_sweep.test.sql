@@ -130,6 +130,12 @@ BEGIN
   INSERT INTO public.inspection_failure_acknowledgements (organisation_id, inspection_record_id, measurement_id, note)
     SELECT a, inspection_record_id, id, 'Seen by the sweep' FROM public.inspection_measurements WHERE inspection_record_id = inspection AND result = 'fail';
   PERFORM app.raise_ncr_from_inspection(inspection, ARRAY(SELECT id FROM public.inspection_measurements WHERE inspection_record_id = inspection AND result = 'fail'), 'Sweep NC from inspection');
+  -- PC6: a saved SPC baseline.
+  INSERT INTO public.spc_baselines (organisation_id, part_id, characteristic_key, chart_type, subgroup_size, window_from, window_to, n_points, provisional,
+      measurement_ids, centre, ucl, lcl, dispersion_centre, dispersion_ucl, dispersion_lcl, sigma)
+    SELECT a, id, 'SWEEP', 'imr', 1, now() - interval '1 day', now(), 5, true,
+           ARRAY[gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid()], 100, 103, 97, 1, 3.3, 0, 1
+    FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1';
   PERFORM pg_temp.logout();
 
   -- Subscription: seats and an assignment through the API functions, invoice and payment as the provider would.

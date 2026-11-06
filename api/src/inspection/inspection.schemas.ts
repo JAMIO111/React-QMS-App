@@ -88,6 +88,8 @@ export const Sample = z.object({
   unitReference: z.string().nullable(),
   triggerType: Trigger,
   isRetest: z.boolean(),
+  /** Samples taken at one check share a subgroup (X-bar/R); null for retests and older samples. */
+  subgroupNumber: z.number().int().nullable(),
   notes: z.string().nullable(),
   takenBy: Ref.nullable(),
 });
@@ -166,6 +168,8 @@ export const AddSampleBody = z
     unitReference: optionalText(60),
     triggerType: Trigger.optional(),
     isRetest: z.boolean().optional(),
+    /** Start a new subgroup now instead of joining the current one. */
+    newSubgroup: z.boolean().optional(),
     notes: optionalText(1000),
     readings: z.array(ReadingInput).min(1).max(200),
   })

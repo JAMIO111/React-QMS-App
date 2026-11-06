@@ -55,7 +55,7 @@ import { ProcessControlService } from './process-control/process-control.service
 import { GaugeUsageController, InspectionMeasurementsController, InspectionsController, NcrInspectionSourceController } from './inspection/inspection.controller';
 import { InspectionService } from './inspection/inspection.service';
 import { ProcessControlDashboardController, ProcessControlDashboardService } from './process-control/process-control-dashboard';
-import { QualityAlertsController } from './documentation/documentation.controller';
+import { QualityAlertAttachmentsController, QualityAlertsController } from './documentation/documentation.controller';
 import { DocumentationService } from './documentation/documentation.service';
 import { SpcController } from './spc/spc.controller';
 import { SpcService } from './spc/spc.service';
@@ -129,6 +129,7 @@ export class AppModule implements NestModule {
         NcrInspectionSourceController,
         SpcController,
         QualityAlertsController,
+        QualityAlertAttachmentsController,
         ProcessControlDashboardController,
         GaugeUsageController,
       ],

@@ -4,8 +4,9 @@ import { z } from 'zod';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { iso, personName, Row } from '../calibration/calibration.service';
+import type { Attachment, CreateAttachmentBody, DeletedQuery } from '../calibration/calibration.schemas';
 import { DatabaseService, Db } from '../database/database.service';
-import { AcknowledgeBody, AddRecipientBody, AlertDetail, MineCount, MineList, RecipientList, RecipientsPreview, AlertSummary, CreateAlertBody, ListQuery, ReasonBody, revisionLetter, ScopeInput, UpdateAlertBody } from './documentation.schemas';
+import { ActiveAlert, ActiveList, ActiveQuery, AcknowledgeBody, AddRecipientBody, AlertDetail, MineCount, MineList, RecipientList, RecipientsPreview, AlertSummary, CreateAlertBody, ListQuery, ReasonBody, revisionLetter, ScopeInput, UpdateAlertBody } from './documentation.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown' } : null);
@@ -44,6 +45,23 @@ const toSummary = (r: Row, manager = false): AlertSummary => ({
   createdBy: person(r.created_by, r.created_by_name),
   updatedAt: iso(r.updated_at)!,
   progress: manager ? { total: Number(r.r_total), viewed: Number(r.r_viewed), acknowledged: Number(r.r_ack), overdue: Number(r.r_overdue) } : null,
+});
+
+const ATTACHMENT_SELECT = sql`
+  select a.*, ${sql.raw(personName('pc'))} as created_by_name
+  from public.quality_alert_attachments a left join public.profiles pc on pc.id = a.created_by`;
+
+const toAttachment = (r: Row): z.infer<typeof Attachment> => ({
+  id: r.id as string,
+  fileName: r.file_name as string,
+  contentType: (r.content_type as string) ?? null,
+  sizeBytes: Number(r.size_bytes),
+  description: (r.description as string) ?? null,
+  storagePath: r.storage_path as string,
+  createdAt: iso(r.created_at)!,
+  createdBy: r.created_by ? { id: r.created_by as string, name: (r.created_by_name as string) ?? 'Unknown user' } : null,
+  deletedAt: iso(r.deleted_at),
+  deleteReason: (r.delete_reason as string) ?? null,
 });
 
 const COLUMNS: Record<string, string> = {
@@ -269,6 +287,104 @@ export class DocumentationService {
     });
   }
 
+  // ---- where work happens (DOC3) --------------------------------------------------------------
+
+  /**
+   * Alerts in force that affect what is being worked on (a part, its family, a machine, an operation): shown above inspection
+   * starts and on part, family and machine pages. Read-only; nothing is ever blocked.
+   */
+  active(ctx: RequestContext, q: ActiveQuery): Promise<z.infer<typeof ActiveList>> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.expire(db, ctx);
+      const rows = await db.execute<Row>(sql`
+        with ctx as (
+          select ${q.partId ?? null}::uuid as part_id,
+                 coalesce(${q.partFamilyId ?? null}::uuid, (select p.part_family_id from public.parts p where p.id = ${q.partId ?? null}::uuid)) as family_id,
+                 ${q.machineId ?? null}::uuid as machine_id, ${q.operationCode ?? null}::text as operation_code)
+        select a.id, a.reference, a.revision, a.title, a.category, a.severity, a.required_action, a.effective_date::text as effective_date, a.acknowledge_by::text as acknowledge_by,
+               exists (select 1 from public.quality_alert_parts x, ctx where x.alert_id = a.id and x.part_id = ctx.part_id) as m_part,
+               exists (select 1 from public.quality_alert_parts x, ctx where x.alert_id = a.id and x.part_family_id = ctx.family_id) as m_family,
+               exists (select 1 from public.quality_alert_machines x, ctx where x.alert_id = a.id and x.machine_id = ctx.machine_id) as m_machine,
+               exists (select 1 from public.quality_alert_operations x, ctx where x.alert_id = a.id and x.operation_code = ctx.operation_code) as m_operation,
+               (select (r.acknowledged_at is not null) from public.quality_alert_recipients r where r.alert_id = a.id and r.user_id = auth.uid()) as acknowledged
+        from public.quality_alerts a
+        where a.organisation_id = ${orgOf(ctx)}::uuid and a.deleted_at is null and a.status = 'active' and a.effective_date <= current_date
+        order by case a.severity when 'critical' then 0 when 'high' then 1 when 'medium' then 2 else 3 end, a.issued_at desc`);
+      const data = rows.rows
+        .map((r) => {
+          const matched = (['part', 'family', 'machine', 'operation'] as const).filter((k) => r[`m_${k}`]);
+          return {
+            id: r.id as string,
+            reference: r.reference as string,
+            revisionLetter: revisionLetter(Number(r.revision)),
+            title: r.title as string,
+            category: r.category as AlertSummary['category'],
+            severity: r.severity as AlertSummary['severity'],
+            requiredAction: (r.required_action as string) ?? null,
+            effectiveDate: r.effective_date as string,
+            acknowledgeBy: (r.acknowledge_by as string) ?? null,
+            matched: [...matched],
+            acknowledged: r.acknowledged === null || r.acknowledged === undefined ? null : !!r.acknowledged,
+          };
+        })
+        .filter((a) => a.matched.length > 0);
+      return { data } satisfies z.infer<typeof ActiveList>;
+    });
+  }
+
+  // ---- attachments (DOC3): files on a draft, kept when removed ---------------------------------
+
+  listAttachments(ctx: RequestContext, id: string, q: z.infer<typeof DeletedQuery>): Promise<z.infer<typeof Attachment>[]> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      const filter = q.deleted === 'exclude' ? sql`a.deleted_at is null` : q.deleted === 'only' ? sql`a.deleted_at is not null` : sql`true`;
+      const rows = await db.execute<Row>(sql`${ATTACHMENT_SELECT} where a.alert_id = ${id}::uuid and ${filter} order by a.created_at desc`);
+      return rows.rows.map(toAttachment);
+    });
+  }
+
+  /** Records a file the client has already uploaded to storage at <org>/quality-alerts/<id>/<name>. */
+  createAttachment(ctx: RequestContext, id: string, body: z.infer<typeof CreateAttachmentBody>): Promise<z.infer<typeof Attachment>> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      const folder = `${orgOf(ctx)}/quality-alerts/${id}/`;
+      if (!body.storagePath.startsWith(folder) || body.storagePath.includes('..') || body.storagePath.length === folder.length) {
+        throw ApiError.badRequest('invalid_path', `Files for this alert must be uploaded to ${folder}`);
+      }
+      const stored = await db.execute(sql`select 1 from storage.objects where bucket_id = 'quality-alert-files' and name = ${body.storagePath}`);
+      if (!stored.rows.length) throw ApiError.badRequest('file_not_uploaded', 'Upload the file before attaching it');
+      const res = await db.execute<{ id: string }>(sql`select app.add_quality_alert_attachment(${id}::uuid, ${body.storagePath}, ${body.fileName}, ${body.contentType ?? null}, ${body.sizeBytes}::bigint, ${body.description ?? null}) as id`);
+      return this.loadAttachment(db, ctx, res.rows[0].id);
+    });
+  }
+
+  removeAttachment(ctx: RequestContext, attachmentId: string, reason: string) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.assertAttachment(db, ctx, attachmentId);
+      await db.execute(sql`select app.remove_quality_alert_attachment(${attachmentId}::uuid, ${reason})`);
+      return this.loadAttachment(db, ctx, attachmentId);
+    });
+  }
+
+  restoreAttachment(ctx: RequestContext, attachmentId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.assertAttachment(db, ctx, attachmentId);
+      await db.execute(sql`select app.restore_quality_alert_attachment(${attachmentId}::uuid)`);
+      return this.loadAttachment(db, ctx, attachmentId);
+    });
+  }
+
+  private async assertAttachment(db: Db, ctx: RequestContext, id: string) {
+    const res = await db.execute(sql`select 1 from public.quality_alert_attachments where id = ${id}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+    if (!res.rows.length) throw ApiError.notFound('attachment_not_found', 'File not found');
+  }
+
+  private async loadAttachment(db: Db, ctx: RequestContext, id: string) {
+    const res = await db.execute<Row>(sql`${ATTACHMENT_SELECT} where a.id = ${id}::uuid and a.organisation_id = ${orgOf(ctx)}::uuid`);
+    if (!res.rows.length) throw ApiError.notFound('attachment_not_found', 'File not found');
+    return toAttachment(res.rows[0]);
+  }
+
   // ---- helpers ------------------------------------------------------------------------------
 
   private async isManager(db: Db, ctx: RequestContext): Promise<boolean> {
@@ -281,7 +397,9 @@ export class DocumentationService {
   }
 
   private async setScope(db: Db, id: string, scope: z.infer<typeof ScopeInput>) {
-    await db.execute(sql`select app.set_quality_alert_scope(${id}::uuid, ${JSON.stringify(scope)}::jsonb)`);
+    const { links, ...rest } = scope;
+    if (Object.keys(rest).length) await db.execute(sql`select app.set_quality_alert_scope(${id}::uuid, ${JSON.stringify(rest)}::jsonb)`);
+    if (links !== undefined) await db.execute(sql`select app.set_quality_alert_links(${id}::uuid, ${JSON.stringify(links)}::jsonb)`);
   }
 
   private async load(db: Db, ctx: RequestContext, id: string): Promise<AlertDetail> {
@@ -290,7 +408,7 @@ export class DocumentationService {
     const r = rows.rows[0];
     const manager = await this.isManager(db, ctx);
     const mineRow = await db.execute<Row>(sql`select first_viewed_at, acknowledged_at, acknowledgement_note, reached_via from public.quality_alert_recipients where alert_id = ${id}::uuid and user_id = auth.uid()`);
-    const [parts, machines, operations, departments, targets, revisions] = await Promise.all([
+    const [parts, machines, operations, departments, targets, revisions, links] = await Promise.all([
       db.execute<Row>(sql`select qp.id, qp.part_id, qp.part_family_id, coalesce(p.part_number || ' · ' || p.name, f.code || ' · ' || f.name) as label
         from public.quality_alert_parts qp left join public.parts p on p.id = qp.part_id left join public.part_families f on f.id = qp.part_family_id
         where qp.alert_id = ${id}::uuid order by label`),
@@ -308,6 +426,15 @@ export class DocumentationService {
         where t.alert_id = ${id}::uuid order by kind, label`),
       db.execute<Row>(sql`select id, revision, status, issued_at, revision_reason from public.quality_alerts
         where organisation_id = ${orgOf(ctx)}::uuid and alert_number = ${r.alert_number as number} and deleted_at is null order by revision desc`),
+      // The labels come from joins that run as the caller, so a record they cannot read has no label.
+      db.execute<Row>(sql`select l.id, l.nonconformance_id, l.supplier_id, l.gauge_id, l.calibration_id,
+          n.reference || ' · ' || n.title as nc, s.name as supplier, g.asset_number || coalesce(' · ' || g.description, '') as gauge, c.reference as calibration, n.source as nc_source, c.gauge_id as cal_gauge_id
+        from public.quality_alert_links l
+        left join public.nonconformances n on n.id = l.nonconformance_id
+        left join public.suppliers s on s.id = l.supplier_id
+        left join public.gauges g on g.id = l.gauge_id
+        left join public.calibrations c on c.id = l.calibration_id
+        where l.alert_id = ${id}::uuid order by l.created_at`),
     ]);
     const summary = toSummary(r, manager);
     const m = mineRow.rows[0];
@@ -341,6 +468,12 @@ export class DocumentationService {
           label: x.label as string,
         })),
       },
+      links: links.rows.map((x) => {
+        const kind = x.nonconformance_id ? ('nonconformance' as const) : x.supplier_id ? ('supplier' as const) : x.gauge_id ? ('gauge' as const) : ('calibration' as const);
+        const recordId = (x.nonconformance_id ?? x.supplier_id ?? x.gauge_id ?? x.calibration_id) as string;
+        const label = (kind === 'nonconformance' ? x.nc : kind === 'supplier' ? x.supplier : kind === 'gauge' ? x.gauge : x.calibration) as string | null;
+        return { id: x.id as string, kind, recordId, label: label ?? null, source: kind === 'nonconformance' ? ((x.nc_source as string) ?? null) : null, gaugeId: kind === 'calibration' ? ((x.cal_gauge_id as string) ?? null) : null };
+      }),
       revisions: revisions.rows.map((x) => ({
         id: x.id as string,
         revision: Number(x.revision),

@@ -1,9 +1,11 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { z } from 'zod';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { AcknowledgeBody, AddRecipientBody, AlertDetail, AlertList, CreateAlertBody, ListQuery, MineCount, MineList, ReasonBody, RecipientList, RecipientsPreview, UpdateAlertBody } from './documentation.schemas';
+import { Attachment, CreateAttachmentBody, DeleteBody, DeletedQuery } from '../calibration/calibration.schemas';
+import { ActiveList, ActiveQuery, AcknowledgeBody, AddRecipientBody, AlertDetail, AlertList, CreateAlertBody, ListQuery, MineCount, MineList, ReasonBody, RecipientList, RecipientsPreview, UpdateAlertBody } from './documentation.schemas';
 import { DocumentationService } from './documentation.service';
 
 const READ = 'documentation.read';
@@ -35,6 +37,18 @@ export class QualityAlertsController {
   @ApiOkResponse({ schema: openApiSchema(MineList) })
   mine(@Ctx() ctx: RequestContext) {
     return this.service.mine(ctx);
+  }
+
+  /** Alerts in force that affect a part, family, machine or operation. Declared before ':id'. */
+  @Get('active')
+  @OrganisationScoped(READ)
+  @ApiQuery({ name: 'partId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'partFamilyId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'machineId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'operationCode', required: false, schema: { type: 'string' } })
+  @ApiOkResponse({ description: 'Active alerts that affect the given work, most severe first', schema: openApiSchema(ActiveList) })
+  active(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.active(ctx, parse(ActiveQuery, query));
   }
 
   @Get('mine/count')
@@ -108,6 +122,22 @@ export class QualityAlertsController {
     return this.service.acknowledge(ctx, parse(Uuid, id), parse(AcknowledgeBody, body ?? {}));
   }
 
+  @Get(':id/attachments')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ schema: openApiSchema(z.object({ data: z.array(Attachment) })) })
+  async attachments(@Ctx() ctx: RequestContext, @Param('id') id: string, @Query() query: unknown) {
+    return { data: await this.service.listAttachments(ctx, parse(Uuid, id), parse(DeletedQuery, query)) };
+  }
+
+  @Post(':id/attachments')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(CreateAttachmentBody) })
+  @ApiCreatedResponse({ description: 'Records a file already uploaded to the alert’s folder (drafts only)', schema: openApiSchema(Attachment) })
+  createAttachment(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.createAttachment(ctx, parse(Uuid, id), parse(CreateAttachmentBody, body));
+  }
+
   @Post(':id/issue')
   @HttpCode(200)
   @OrganisationScoped(ISSUE)
@@ -132,5 +162,29 @@ export class QualityAlertsController {
   @ApiCreatedResponse({ description: 'A draft revision copied from this alert, to edit and issue', schema: openApiSchema(AlertDetail) })
   revise(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.revise(ctx, parse(Uuid, id), parse(ReasonBody, body));
+  }
+}
+
+@ApiTags('documentation')
+@ApiBearerAuth()
+@Controller('quality-alert-attachments')
+export class QualityAlertAttachmentsController {
+  constructor(private readonly service: DocumentationService) {}
+
+  @Post(':id/delete')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(DeleteBody) })
+  @ApiOkResponse({ description: 'Takes a file off a draft with a reason; the stored file is kept', schema: openApiSchema(Attachment) })
+  remove(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.removeAttachment(ctx, parse(Uuid, id), parse(DeleteBody, body).reason);
+  }
+
+  @Post(':id/restore')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ schema: openApiSchema(Attachment) })
+  restore(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.restoreAttachment(ctx, parse(Uuid, id));
   }
 }

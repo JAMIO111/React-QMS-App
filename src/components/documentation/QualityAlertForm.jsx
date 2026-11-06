@@ -8,12 +8,14 @@ import MenuCard from "../ui/MenuCard";
 import { useAllDepartments, useMembers, usePermissions, useRoles } from "../../hooks/useQmsApi";
 import { useMachines, usePartFamilies } from "../../hooks/useProcessControl";
 import { useAlertMutation, useQualityAlert } from "../../hooks/useDocumentation";
-import { CATEGORIES, SEVERITIES, referenceText } from "../../lib/qualityAlerts";
+import AlertFiles from "./AlertFiles";
+import { LinksEditor } from "./AlertLinks";
+import { CATEGORIES, SEVERITIES, linkBody, referenceText } from "../../lib/qualityAlerts";
 import { ErrorNotice, FormError, SelectField, TextAreaField, buttonClass } from "../master-data/shared";
 
 const empty = {
   title: "", category: "product", severity: "medium", description: "", requiredAction: "", effectiveDate: "", expiryDate: "", acknowledgeBy: "",
-  parts: [], machines: [], operations: [], departments: [], targetDepartments: [], targetRoles: [], targetPeople: [],
+  parts: [], machines: [], operations: [], links: [], departments: [], targetDepartments: [], targetRoles: [], targetPeople: [],
 };
 
 const fromAlert = (a) => ({
@@ -22,6 +24,7 @@ const fromAlert = (a) => ({
   parts: a.scope.parts.map((p) => ({ key: p.id, partId: p.partId, partFamilyId: p.partFamilyId, label: p.label })),
   machines: a.scope.machines.map((m) => ({ id: m.machineId, label: m.label })),
   operations: a.scope.operations,
+  links: a.links.map((l) => ({ kind: l.kind, recordId: l.recordId, label: l.label, source: l.source, gaugeId: l.gaugeId })),
   departments: a.scope.departments.map((d) => d.departmentId), targetDepartments: a.scope.targets.filter((t) => t.kind === "department").map((t) => t.departmentId),
   targetRoles: a.scope.targets.filter((t) => t.kind === "role").map((t) => t.roleId),
   targetPeople: a.scope.targets.filter((t) => t.kind === "person").map((t) => t.membershipId),
@@ -129,6 +132,7 @@ const QualityAlertForm = () => {
         parts: form.parts.map((p) => (p.partId ? { partId: p.partId } : { partFamilyId: p.partFamilyId })),
         machines: form.machines.map((m) => m.id),
         operations: form.operations,
+        links: form.links.map(linkBody),
         departments: form.departments,
         targets: [
           ...form.targetDepartments.map((departmentId) => ({ departmentId })),
@@ -205,6 +209,22 @@ const QualityAlertForm = () => {
         </div>
         <Checks legend="Departments affected" options={deptOptions} selected={form.departments} onToggle={toggle("departments")} />
       </MenuCard>
+
+      <MenuCard title="Related records" subtitle="Optional: the nonconformance, supplier, gauge or calibration this alert is about" bodyClassName="flex flex-col gap-3">
+        <LinksEditor
+          links={form.links}
+          onAdd={(l) => setForm((f) => ({ ...f, links: [...f.links, l] }))}
+          onRemove={(l) => setForm((f) => ({ ...f, links: f.links.filter((x) => !(x.kind === l.kind && x.recordId === l.recordId)) }))}
+        />
+      </MenuCard>
+
+      {id ? (
+        <MenuCard title="Files" bodyClassName="flex flex-col gap-3">
+          <AlertFiles alertId={id} canEdit />
+        </MenuCard>
+      ) : (
+        <p className="text-sm text-secondary-text">Files can be attached once the draft is saved.</p>
+      )}
 
       <MenuCard title="Who must acknowledge" subtitle="Choose departments, roles or named people. At least one is needed to issue." bodyClassName="flex flex-col gap-3">
         <Checks legend="Departments (their members)" options={deptOptions} selected={form.targetDepartments} onToggle={toggle("targetDepartments")} />

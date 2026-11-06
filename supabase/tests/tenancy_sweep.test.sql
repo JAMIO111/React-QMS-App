@@ -149,6 +149,13 @@ BEGIN
     'operations', jsonb_build_array('OP-1'),
     'departments', jsonb_build_array((SELECT id FROM public.departments WHERE organisation_id = a LIMIT 1)),
     'targets', jsonb_build_array(jsonb_build_object('membershipId', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1')))));
+  -- DOC3: an attachment and links on the draft.
+  PERFORM app.add_quality_alert_attachment(qa, a::text || '/quality-alerts/' || qa::text || '/sweep.pdf', 'sweep.pdf', 'application/pdf', 10, 'Sweep file');
+  PERFORM app.set_quality_alert_links(qa, jsonb_build_array(
+    jsonb_build_object('supplierId', (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1)),
+    jsonb_build_object('nonconformanceId', (SELECT id FROM public.nonconformances WHERE organisation_id = a LIMIT 1)),
+    jsonb_build_object('gaugeId', (SELECT id FROM public.gauges WHERE organisation_id = a LIMIT 1)),
+    jsonb_build_object('calibrationId', (SELECT id FROM public.calibrations WHERE organisation_id = a LIMIT 1))));
   -- DOC2: issued, so its recipient (the owner) exists.
   UPDATE public.quality_alerts SET description = 'd', required_action = 'a', effective_date = current_date WHERE id = qa;
   PERFORM app.issue_quality_alert(qa);

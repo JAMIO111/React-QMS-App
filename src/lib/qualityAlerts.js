@@ -32,3 +32,31 @@ export const formatDay = (d) => {
   const [y, m, day] = d.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 };
+
+export const LINK_KINDS = {
+  nonconformance: { label: "Nonconformance", field: "nonconformanceId" },
+  supplier: { label: "Supplier", field: "supplierId" },
+  gauge: { label: "Gauge", field: "gaugeId" },
+  calibration: { label: "Calibration", field: "calibrationId" },
+};
+
+/** The API's link body for a link kept in the form. */
+export const linkBody = (l) => ({ [LINK_KINDS[l.kind].field]: l.recordId });
+
+const NC_TYPE = { internal: "Internal", customer: "Customer", supplier: "Supplier" };
+
+/** Where a linked record lives in the app (null when there is no page). */
+export const linkHref = (l) => {
+  switch (l.kind) {
+    case "nonconformance":
+      return `/Non-Conformance/${NC_TYPE[l.source] ?? "Internal"}/${l.recordId}`;
+    case "supplier":
+      return "/Suppliers";
+    case "gauge":
+      return `/Calibration/Gauges/${l.recordId}`;
+    case "calibration":
+      return l.gaugeId ? `/Calibration/Gauges/${l.gaugeId}/calibrations/${l.recordId}` : null;
+    default:
+      return null;
+  }
+};

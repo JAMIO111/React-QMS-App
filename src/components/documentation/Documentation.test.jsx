@@ -24,7 +24,10 @@ vi.mock("../../hooks/useProcessControl", () => ({
   useMachines: () => ({ data: { items: [{ id: "mc1", code: "L1", name: "Lathe 1" }] } }),
   usePartFamilies: () => ({ data: { items: [{ id: "f1", code: "HCR", name: "Rods" }] } }),
 }));
-vi.mock("../ncr/Pickers", () => ({ PartPicker: () => <div /> }));
+vi.mock("../ncr/Pickers", () => ({ PartPicker: () => <div />, PartyPicker: () => <div />, RemoteComboBox: () => <div /> }));
+vi.mock("@/contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
+vi.mock("../../hooks/useNcr", () => ({ useNcrs: () => ({ data: { data: [] } }) }));
+vi.mock("../../hooks/useCalibration", () => ({ useGauges: () => ({ data: { data: [] } }), useGaugeCalibrations: () => ({ data: [] }) }));
 
 import QualityAlertsPage from "./QualityAlertsPage";
 import QualityAlertPage from "./QualityAlertPage";
@@ -44,6 +47,11 @@ const detail = (over = {}) => ({
   supersedesId: "a0",
   withdrawn: null,
   me: null,
+  links: [
+    { id: "l1", kind: "nonconformance", recordId: "n1", label: "NC-26-001 · Scrapped batch", source: "supplier", gaugeId: null },
+    { id: "l2", kind: "gauge", recordId: "g1", label: "G-001 · Micrometer", source: null, gaugeId: null },
+    { id: "l3", kind: "supplier", recordId: "s1", label: null, source: null, gaugeId: null },
+  ],
   scope: {
     parts: [{ id: "sp1", kind: "part", partId: "p1", partFamilyId: null, label: "HCR-100 · Rod 100" }],
     machines: [{ id: "sm1", machineId: "mc1", label: "L1 · Lathe 1" }],
@@ -85,9 +93,11 @@ const recipients = {
   ],
   totals: { total: 2, viewed: 1, acknowledged: 1, overdue: 1 },
 };
+const attachments = [{ id: "f1", fileName: "mill-certificate.pdf", contentType: "application/pdf", sizeBytes: 2048, description: null, storagePath: "org-1/quality-alerts/a1/x-mill-certificate.pdf", createdAt: "2026-11-05T09:00:00Z", createdBy: { id: "u1", name: "Ada Owner" }, deletedAt: null, deleteReason: null }];
 /** Answers the extra reads the alert page makes; `main` answers everything else. */
 const respond = (main) => async (path, opts = {}) => {
   if (path.endsWith("/recipients-preview")) return preview;
+  if (path.includes("/attachments")) return { data: attachments };
   if (path.endsWith("/recipients") && (opts.method ?? "GET") === "GET") return recipients;
   return typeof main === "function" ? main(path, opts) : main;
 };
@@ -342,5 +352,40 @@ describe("Register for managers", () => {
     const table = await screen.findByRole("table", { name: "Quality alerts" });
     expect(within(table).queryByText("Acknowledged")).toBeNull();
     expect(screen.queryByRole("checkbox", { name: /overdue/ })).toBeNull();
+  });
+});
+
+describe("Related records and files (DOC3)", () => {
+  it("an alert page lists linked records as links where the reader may see them, and the files", async () => {
+    permissions = ["documentation.read"];
+    apiFetch.mockImplementation(respond(() => detail()));
+    renderAt("/Documentation/Quality-Alerts/a1");
+    const card = (await screen.findByText("Related records")).closest("section, div");
+    const list = await screen.findByRole("list", { name: "Linked records" });
+    expect(within(list).getByRole("link", { name: "NC-26-001 · Scrapped batch" })).toHaveAttribute("href", "/Non-Conformance/Supplier/n1");
+    expect(within(list).getByRole("link", { name: "G-001 · Micrometer" })).toHaveAttribute("href", "/Calibration/Gauges/g1");
+    expect(within(list).getByText("Not available to you")).toBeInTheDocument(); // a record the reader cannot read: no label, no link
+    expect(within(list).getAllByRole("link")).toHaveLength(2);
+    expect(card).toBeTruthy();
+    expect(await screen.findByText("mill-certificate.pdf")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Add files/)).toBeNull(); // read-only: no upload area
+    expect(screen.queryByRole("button", { name: /Remove mill-certificate/ })).toBeNull();
+  });
+
+  it("the editor sends the links it loaded, offers files for a saved draft and removal of a link", async () => {
+    let body;
+    apiFetch.mockImplementation(respond((path, opts = {}) => (opts.method === "PATCH" ? ((body = opts.body), detail({ status: "draft", inForce: false })) : detail({ status: "draft", inForce: false }))));
+    renderAt("/Documentation/Quality-Alerts/a1/edit");
+    const form = await screen.findByRole("form", { name: "Quality alert" });
+    expect(within(form).getByRole("list", { name: "Linked records" })).toHaveTextContent("NC-26-001 · Scrapped batch");
+    expect(await within(form).findByLabelText(/Add files/)).toBeInTheDocument();
+    await userEvent.click(within(form).getByRole("button", { name: "Remove link to G-001 · Micrometer" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Save draft" }));
+    expect(body.scope.links).toEqual([{ nonconformanceId: "n1" }, { supplierId: "s1" }]);
+  });
+
+  it("a new draft says files come after the first save", async () => {
+    renderAt("/Documentation/Quality-Alerts/new");
+    expect(screen.getByText(/Files can be attached once the draft is saved/)).toBeInTheDocument();
   });
 });

@@ -218,6 +218,15 @@ Summary of the brief:
     records the first view. UI: `MyAlertsPage` (`/Documentation/My-Alerts`), acknowledgement banner and `AcknowledgeDialog`, `Tracking` (totals, filters, add a person) and
     `RecipientsPreview` on the alert page, progress column and overdue filter on the register, menu badge (`useMyAlertCount`, polled every 5 minutes; `badge` in `MenuStructure.js`). Overdue = past
     `acknowledge_by` and not acknowledged (computed, no worker; no automatic reminders). Plan §7.
+  - **DOC3 done (where work happens, attachments, links):** migration `20251120100000_quality_alert_attachments_links.sql`. `quality_alert_attachments` (files on a **draft** only, written by
+    `app.add_quality_alert_attachment` / `remove_quality_alert_attachment(id, reason)` / `restore_quality_alert_attachment`; marked deleted with a reason, never deleted; stored in the private
+    `quality-alert-files` bucket at `<org>/quality-alerts/<alert id>/<uuid>-<name>`, readable by anyone who can see the alert, uploads only into a draft folder via `app.quality_alert_file_allowed`;
+    a revision copies the live rows and keeps pointing at the same stored files) and `quality_alert_links` (one of nonconformance / supplier / gauge / calibration per row, replaced as a whole by
+    `app.set_quality_alert_links`, copied by a revision; parts, families and machines are the scope, so there is no part link). API: `GET /quality-alerts/active?partId|partFamilyId|machineId|operationCode`
+    (declared before `:id`; alerts in force matching any of them, most severe first, each with `matched` and the caller's `acknowledged`; a part also matches its family), `GET|POST :id/attachments`,
+    `POST /quality-alert-attachments/{id}/delete|restore`; the scope body takes `links` and the detail returns `links` (label is `null` when the caller cannot read the record). UI: `ActiveAlertsBanner`
+    (information only, never blocks) on Start inspection, the part, part family and machine (edit dialog) pages; `AlertLinks.jsx` (pickers, read-only list), `AlertFiles.jsx` (`AttachmentDrop`) in the draft
+    editor and, read-only, on the alert page. Remaining for the module: **DOC4** exit check.
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

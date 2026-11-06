@@ -29,8 +29,14 @@ const Target = z
   .strict()
   .refine((t) => [t.departmentId, t.roleId, t.membershipId].filter((x) => x !== undefined).length === 1, { message: 'Name one department, role or person' });
 
+const Link = z
+  .object({ nonconformanceId: z.string().uuid().optional(), supplierId: z.string().uuid().optional(), gaugeId: z.string().uuid().optional(), calibrationId: z.string().uuid().optional() })
+  .strict()
+  .refine((l) => Object.values(l).filter((x) => x !== undefined).length === 1, { message: 'Name one nonconformance, supplier, gauge or calibration' });
+
 export const ScopeInput = z
   .object({
+    links: z.array(Link).max(50),
     parts: z.array(PartScope).max(100),
     machines: z.array(z.string().uuid()).max(100),
     operations: z.array(text(40)).max(50),
@@ -128,6 +134,8 @@ export const AlertDetail = AlertSummary.extend({
       }),
     ),
   }),
+  /** Records this alert refers to. `label` is null when the caller cannot read the record; `source` (of a nonconformance) and `gaugeId` (of a calibration) are for building the link. */
+  links: z.array(z.object({ id: z.string().uuid(), kind: z.enum(['nonconformance', 'supplier', 'gauge', 'calibration']), recordId: z.string().uuid(), label: z.string().nullable(), source: z.string().nullable(), gaugeId: z.string().uuid().nullable() })),
   /** The caller's own place in it, when it is addressed to them. */
   me: z.object({ firstViewedAt: Iso.nullable(), acknowledgedAt: Iso.nullable(), note: z.string().nullable(), reachedVia: z.array(z.string()), overdue: z.boolean() }).nullable(),
   /** Every revision of this alert number, newest first. */
@@ -170,3 +178,33 @@ export const MineItem = AlertSummary.extend({
 });
 export const MineList = z.object({ data: z.array(MineItem), unacknowledged: z.number().int(), overdue: z.number().int() });
 export const MineCount = z.object({ unacknowledged: z.number().int(), overdue: z.number().int() });
+
+// ---- where work happens (DOC3) -------------------------------------------------------------------
+
+/** What is being worked on; at least one is needed. A part family is found from the part, or given for a family page. */
+export const ActiveQuery = z
+  .object({
+    partId: z.string().uuid().optional(),
+    partFamilyId: z.string().uuid().optional(),
+    machineId: z.string().uuid().optional(),
+    operationCode: z.string().trim().min(1).max(40).optional(),
+  })
+  .refine((q) => Object.values(q).some((x) => x !== undefined), { message: 'Say which part, family, machine or operation' });
+export type ActiveQuery = z.infer<typeof ActiveQuery>;
+
+export const ActiveAlert = z.object({
+  id: z.string().uuid(),
+  reference: z.string(),
+  revisionLetter: z.string(),
+  title: z.string(),
+  category: Category,
+  severity: Severity,
+  requiredAction: z.string().nullable(),
+  effectiveDate: DateOnly,
+  acknowledgeBy: DateOnly.nullable(),
+  /** What matched: the part, its family, the machine or the operation. */
+  matched: z.array(z.enum(['part', 'family', 'machine', 'operation'])),
+  /** True/false when the alert is addressed to the caller, null when it is not. */
+  acknowledged: z.boolean().nullable(),
+});
+export const ActiveList = z.object({ data: z.array(ActiveAlert) });

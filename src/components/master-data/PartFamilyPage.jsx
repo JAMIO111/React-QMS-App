@@ -10,6 +10,8 @@ import { useConfirm } from "../../contexts/ConfirmationModalProvider";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
 import { PartFamilyForm } from "./PartFamiliesPage";
+import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
+
 import { ActiveBadge, buttonClass, ErrorNotice, FormError, SearchBox } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
 
@@ -122,6 +124,7 @@ const PartFamilyPage = () => {
             )}
           </div>
           {family.description && <p className="max-w-3xl text-sm text-primary-text">{family.description}</p>}
+          <ActiveAlertsBanner partFamilyId={family.id} />
 
           <MenuCard
             title="Parts"

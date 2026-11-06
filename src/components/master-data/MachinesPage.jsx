@@ -6,6 +6,7 @@ import Dialog from "../ui/Dialog";
 import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions, useSites } from "../../hooks/useQmsApi";
 import { useMachines, useProcessControlMutation } from "../../hooks/useProcessControl";
+import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
 import { ActiveBadge, buttonClass, DataList, FormError, SearchBox, SelectField } from "./shared";
 
 const MachineForm = ({ machine, onDone }) => {
@@ -45,6 +46,7 @@ const MachineForm = ({ machine, onDone }) => {
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
+      {machine && <ActiveAlertsBanner machineId={machine.id} />}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Code" value={form.code} onChange={set("code")} required maxLength={40} hint="e.g. LATHE-01" />
         <Field label="Name" value={form.name} onChange={set("name")} required maxLength={120} />

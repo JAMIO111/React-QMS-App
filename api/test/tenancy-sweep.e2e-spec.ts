@@ -130,6 +130,10 @@ const sampleBody = (op: Op): object | undefined =>
     'GET /api/v1/quality-alerts/{id}/recipients-preview': undefined,
     'POST /api/v1/quality-alerts/{id}/recipients': { membershipId: a.ownerMembership },
     'POST /api/v1/quality-alerts/{id}/acknowledge': { note: 'Hijacked' },
+    'GET /api/v1/quality-alerts/{id}/attachments': undefined,
+    'POST /api/v1/quality-alerts/{id}/attachments': { storagePath: 'x', fileName: 'x.pdf', sizeBytes: 1 },
+    'POST /api/v1/quality-alert-attachments/{id}/delete': { reason: 'Hijacked' },
+    'POST /api/v1/quality-alert-attachments/{id}/restore': undefined,
     'GET /api/v1/ncrs/{id}/inspection-source': undefined,
     'GET /api/v1/calibrations/{id}/gauge-usage': undefined,
     'GET /api/v1/inspections/{id}': undefined,
@@ -242,6 +246,10 @@ const hasSample = (op: Op) =>
     'GET /api/v1/quality-alerts/{id}/recipients-preview',
     'POST /api/v1/quality-alerts/{id}/recipients',
     'POST /api/v1/quality-alerts/{id}/acknowledge',
+    'GET /api/v1/quality-alerts/{id}/attachments',
+    'POST /api/v1/quality-alerts/{id}/attachments',
+    'POST /api/v1/quality-alert-attachments/{id}/delete',
+    'POST /api/v1/quality-alert-attachments/{id}/restore',
     'GET /api/v1/ncrs/{id}/inspection-source',
     'GET /api/v1/calibrations/{id}/gauge-usage',
     'GET /api/v1/inspections/{id}',
@@ -288,6 +296,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/inspections/')) return a.inspection;
   if (path.startsWith('/api/v1/spc/alerts/')) return a.alert;
   if (path.startsWith('/api/v1/quality-alerts/')) return a.qualityAlert;
+  if (path.startsWith('/api/v1/quality-alert-attachments/')) return a.qualityAlertAttachment;
   if (path.startsWith('/api/v1/inspection-measurements/')) return a.measurement;
   if (path.startsWith('/api/v1/machines/')) return a.machine;
   if (path.startsWith('/api/v1/part-families/')) return a.family;
@@ -378,6 +387,7 @@ beforeAll(async () => {
     await client.query(`select app.raise_spc_alerts($1, $2, '[{"characteristicKey":"OD","characteristicName":"OD","operationCode":"OP-1","variant":"imr","rule":"we1","side":"above","pointAt":"2026-11-05T08:00:00Z","summary":"Rule 1","inspectionId":null,"inspectionReference":null}]'::jsonb)`, [ids.orgA, ipart]);
     a.alert = (await q1(`select id from public.spc_alerts where organisation_id = $1`, [ids.orgA])).id;
     a.qualityAlert = (await q1(`insert into public.quality_alerts (organisation_id, title, category, severity) values ($1, 'Alpha alert', 'product', 'low') returning id`, [ids.orgA])).id;
+    a.qualityAlertAttachment = (await q1(`select app.add_quality_alert_attachment($1::uuid, $2::text || '/quality-alerts/' || $1::text || '/a.pdf', 'a.pdf', 'application/pdf', 1) as id`, [a.qualityAlert, ids.orgA])).id;
     await client.query('commit');
   } finally {
     client.release();
@@ -501,6 +511,7 @@ describe('tenancy sweep over every API route', () => {
     const leaks: string[] = [];
     // Routes that need query parameters get a valid set, so the tenant check is what is tested.
     const listQuery: Record<string, string> = {
+      '/api/v1/quality-alerts/active': '?operationCode=OP-1',
       '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/calibration-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/control-plan-resolution': `?partId=${b.part}`,

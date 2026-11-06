@@ -12,6 +12,8 @@ import { describeApiError } from "../../lib/api-client";
 import { ActiveBadge, buttonClass, ErrorNotice, SelectField } from "./shared";
 import { usePartFamilies } from "../../hooks/useProcessControl";
 import SpecValues from "./SpecValues";
+import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
+
 import PartCustomers from "./PartCustomers";
 import RequirementPreview from "../process-control/RequirementPreview";
 import LoadingScreen from "../ui/LoadingScreen";
@@ -270,6 +272,7 @@ const PartDetailPage = () => {
               Current revision: <strong className="font-mono text-primary-text">{part.currentRevision ?? "none released"}</strong>
             </span>
           </div>
+          <ActiveAlertsBanner partId={part.id} />
           <PartDetails part={part} canManage={canManage} />
           <PartCustomers part={part} canManage={canManage} />
           <Revisions part={part} canManage={canManage} />

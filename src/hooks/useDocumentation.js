@@ -115,3 +115,43 @@ export const useAlertMutation = () => {
     },
   });
 };
+
+/**
+ * Alerts in force that affect the work on screen: { partId, partFamilyId, machineId, operationCode } (at least one). Read-only; refreshed when
+ * the screen is revisited. Needs documentation.read, so pass `enabled` from the permission check.
+ */
+export const useActiveAlerts = (context, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  const params = { partId: context.partId, partFamilyId: context.partFamilyId, machineId: context.machineId, operationCode: context.operationCode };
+  const any = Object.values(params).some(Boolean);
+  return useQuery({
+    queryKey: key(organisationId, "active", params),
+    queryFn: () => apiFetch(`/quality-alerts/active?${qs(params)}`, { organisationId }),
+    enabled: !!organisationId && enabled && any,
+    staleTime: 30_000,
+    retry: false,
+    select: (r) => r.data,
+  });
+};
+
+/** Files on an alert (removed ones included, for the draft editor). */
+export const useAlertAttachments = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "attachments", id),
+    queryFn: () => apiFetch(`/quality-alerts/${id}/attachments?deleted=include`, { organisationId }),
+    enabled: !!organisationId && !!id,
+    retry: false,
+    select: (r) => r.data,
+  });
+};
+
+/** Remove or restore a file on a draft: mutate({ path: "/quality-alert-attachments/<id>/delete", body }). */
+export const useAlertAttachmentMutation = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ path, method = "POST", body }) => apiFetch(path, { method, body, organisationId }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: key(organisationId, "attachments") }),
+  });
+};

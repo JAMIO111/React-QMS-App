@@ -11,6 +11,8 @@ import { categoryLabel, formatDay, referenceText, statusOf } from "../../lib/qua
 import { ErrorNotice, FormError, TextAreaField, buttonClass } from "../master-data/shared";
 import { AcknowledgeDialog } from "./Acknowledge";
 import { SeverityBadge, StatusPill } from "./shared";
+import AlertFiles from "./AlertFiles";
+import { LinkList } from "./AlertLinks";
 
 const Facts = ({ items }) => (
   <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
@@ -329,6 +331,16 @@ const QualityAlertPage = () => {
           <div><h2 className="mb-1 text-sm font-medium text-secondary-text">Operations</h2><List items={a.scope.operations.map((o) => ({ key: o, label: o }))} empty="No operations named." /></div>
           <div><h2 className="mb-1 text-sm font-medium text-secondary-text">Departments</h2><List items={a.scope.departments.map((d) => ({ key: d.id, label: d.label }))} empty="No departments named." /></div>
         </div>
+      </MenuCard>
+
+      {a.links.length > 0 && (
+        <MenuCard title="Related records" subtitle="What this alert refers to">
+          <LinkList links={a.links} />
+        </MenuCard>
+      )}
+
+      <MenuCard title="Files" subtitle={a.status === "draft" ? "Add files in the draft editor" : undefined}>
+        <AlertFiles alertId={a.id} canEdit={false} />
       </MenuCard>
 
       <MenuCard title="Who must acknowledge" subtitle="Everyone reached by these departments, roles and named people">

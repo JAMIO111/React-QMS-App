@@ -446,3 +446,49 @@ and a notification worker — the `inspection.measurement.failed` event is emitt
 SPC-signal reactions (PC6); overdue-check alerts (worker).
 
 **PC5 status (2026-11-06): done.** Migration `20251108160000_inspection_ncr_integration.sql`, API, UI and tests as agreed above (decisions: NC source `internal` + permanent link; acknowledgement or NC required before completing; reaction "raise NC" only prompts; one NC per event). Next: PC6.
+
+## 15. Slice PC6 — SPC control charts (I-MR, X-bar/R) — plan (2026-11-06)
+
+**Decisions (agreed 2026-11-06):** (1) subgroups are **explicit**: `inspection_samples.subgroup_number`, assigned by
+the database when a sample is added (same inspection, same trigger, not a retest, group not yet full → join; else
+a new subgroup; the operator can tick "start a new subgroup"); only complete subgroups of exactly the plan's size
+are charted, everything else is listed as excluded with the reason; (2) **saved baselines** set by quality
+engineers (`spc.manage`): a chosen window of data, calculated once and stored with the measurement ids used; a
+recalculation adds a row and supersedes the old one (old limits stay visible); a chart with no baseline shows
+**trial limits** from the data on screen, labelled provisional; (3) a rule violation is **display and prompt only**
+— marked with the rule name beside the plan's `spc_signal` reaction instruction; it never creates an NC.
+
+**Charted data (rule 7, enforced by the API):** one part, one `characteristic_key`, one operation, one unit, the
+plan's chart type and subgroup size; the current (uncorrected) reading of each sample; **excluded and counted by
+reason:** retests, abandoned inspections, other unit / chart type / subgroup size, other specification (nominal,
+LSL, USL differ from the latest — never mixed), no subgroup recorded (older samples), incomplete subgroup. Gauge
+overrides stay in the chart but are flagged. Readings are never copied: the chart reads `inspection_measurements`.
+
+**Statistics** (`api/src/spc/spc.ts`, pure and unit-tested against textbook values): I-MR limits
+`x̄ ± 2.66·MR̄`, MR chart `UCL = 3.267·MR̄`; X-bar/R `x̿ ± A2·R̄`, `D3·R̄`/`D4·R̄` (n = 2–10); σ̂ = `MR̄/1.128` or
+`R̄/d2` (σ of the plotted mean for zones: `A2·R̄/3`). Western Electric rules on the location chart, each switchable
+per baseline/view: **1** a point beyond 3σ; **2** two of three beyond 2σ, same side; **3** four of five beyond 1σ,
+same side; **4** eight in a row on one side of the centre. Range/MR chart: a point above its UCL. No variation
+(σ = 0) ⇒ zone rules skipped with a warning. Sufficiency: fewer than 25 individuals / 20 subgroups ⇒ "limits are
+provisional"; fewer than 5 ⇒ no baseline can be saved. Spec limits (solid, labelled) and control limits (dashed)
+are drawn and named differently — control limits are never presented as tolerance.
+
+**Database** (`20251108170000_spc.sql`): permissions `spc.read` (all roles with inspection.read) and `spc.manage`
+(owner, admin, quality manager, quality engineer); `inspection_samples.subgroup_number` + BEFORE INSERT assignment;
+`spc_baselines` (scope part + characteristic_key + operation + chart type, subgroup size, unit, window, `n_points`,
+`provisional`, spec set used, centre/UCL/LCL, dispersion centre/UCL/LCL, σ, enabled `rules`, `measurement_ids`,
+notes, `superseded_at/by`): insert needs `spc.manage`, no UPDATE/DELETE for users, a SECURITY DEFINER trigger
+supersedes the previous active baseline of the same scope, audited, in both sweeps and the guardrails.
+Reading charts needs `spc.read` **and** `inspection.read` at the inspection's site (RLS on the readings).
+
+**API** (`api/src/spc/`): `GET /spc/characteristics?partId` (chartable characteristics with point counts),
+`GET /spc/chart?partId&characteristicKey&operationCode&from&to&machineId&lot&rules` (points, limits, signals,
+exclusions, warnings, active baseline, reaction instructions), `GET /spc/baselines?…` (history),
+`POST /spc/baselines` (calculates server-side from the chosen window, stores).
+
+**Frontend:** menu *Process Control → SPC charts* (`/Process-Control/SPC`): part and characteristic pickers, date /
+machine / lot filters, rule switches, location chart + range chart (Recharts, `--chart-*` colours, signal markers
+by shape and text, a signals list), exclusions and warnings, baseline panel (window, calculate, history).
+
+**Out of scope here:** P/NP/C/U charts, Cp/Cpk/Pp/Ppk, family/machine comparison, alerts and notifications,
+raising an NC from a signal (decided: not now).

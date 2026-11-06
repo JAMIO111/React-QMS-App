@@ -216,6 +216,35 @@ describe('adding later failures to an existing NC', () => {
     await api().post(`/api/v1/inspections/${ctx.rec2}/add-to-ncr`).set(await as(ids.ownerB, ids.orgB)).send({ ncrId: ctx.ncr2, measurementIds: [ctx.f2] }).expect(404);
   });
 
+  it('keeps one live NC per reading: no second NC for the same sample, and the suggestion says so', async () => {
+    const owner = await h();
+    const dup = await api().post(`/api/v1/inspections/${ctx.rec2}/raise-ncr`).set(owner).send({ measurementIds: [ctx.f1], title: 'Duplicate' }).expect(409);
+    expect(dup.body.error.code).toBe('inspection_rule');
+    expect(dup.body.error.message).toMatch(/Outer diameter \(sample 1\) is already on [A-Z]+-\d\d-\d+/);
+    const draft = await api().get(`/api/v1/inspections/${ctx.rec2}/ncr-draft?measurementIds=${ctx.f1}`).set(owner).expect(409);
+    expect(draft.body.error.message).toMatch(/already covers that reading/);
+    // The default suggestion offers nothing: every failure here is on a live NC.
+    const none = (await api().get(`/api/v1/inspections/${ctx.rec2}/ncr-draft`).set(owner).expect(200)).body;
+    expect(none.readings).toEqual([]);
+  });
+
+  it('shows who linked which readings in the NC history, as raised and as added', async () => {
+    const owner = await h();
+    const history = (await api().get(`/api/v1/ncrs/${ctx.ncr2}/history`).set(owner).expect(200)).body.data;
+    const linked = history.filter((e: { action: string }) => e.action === 'readings_linked');
+    expect(linked).toHaveLength(2);
+    expect(linked[0]).toMatchObject({ actor: { id: ids.ownerA }, linked: { kind: 'raised', hidden: 0, wholeInspection: false, inspection: { reference: expect.stringMatching(/^IPI-/) } } });
+    expect(linked[0].linked.readings).toMatchObject([{ id: ctx.f1, characteristic: 'Outer diameter', sampleNumber: 1, value: '25.07 mm' }]);
+    expect(linked[1].linked).toMatchObject({ kind: 'added' });
+    expect(linked[1].linked.readings).toMatchObject([{ id: ctx.f2, sampleNumber: 3, value: '25.08 mm' }]);
+    // In time order with the NC's own entries (created first, quantity change after the add).
+    const ats = history.map((e: { at: string }) => e.at);
+    expect([...ats].sort()).toEqual(ats);
+    expect(history[0].action).toBe('insert');
+    // A viewer of the NC who cannot read inspections only sees that readings were linked.
+    expect((await api().get(`/api/v1/ncrs/${ctx.ncr2}/history`).set(await as(ids.dual)).expect(200)).body.data.some((e: { action: string }) => e.action === 'readings_linked')).toBe(true);
+  });
+
   it('refuses a closed or cancelled NC and says to raise a new one', async () => {
     const owner = await h();
     const started = (await api().post('/api/v1/inspections').set(owner).send({ siteId: ids.siteA, partId: ctx.part, workOrder: 'WO-11', triggerType: 'first_off' }).expect(201)).body;
@@ -232,6 +261,12 @@ describe('adding later failures to an existing NC', () => {
     expect(refused.body.error.message).toMatch(/cancelled and cannot take more readings; raise a new non-conformance/);
     // The failure is still unhandled and can get its own NC.
     await api().post(`/api/v1/inspections/${started.id}/raise-ncr`).set(owner).send({ measurementIds: [b], title: 'Second event' }).expect(201);
+    // The cancelled NC no longer covers its reading: it counts as unhandled and can be put on a new NC.
+    const before = (await api().get(`/api/v1/inspections/${started.id}`).set(owner).expect(200)).body;
+    expect(before.measurements.find((m: { id: string }) => m.id === a).ncrs).toMatchObject([{ id: raised.ncr.id, stage: 'cancelled' }]);
+    expect((await api().post(`/api/v1/inspections/${started.id}/complete`).set(owner).expect(409)).body.error.message).toMatch(/Outer diameter \(sample 1\)/);
+    await api().post(`/api/v1/inspections/${started.id}/raise-ncr`).set(owner).send({ measurementIds: [a], title: 'Re-raised after cancelling' }).expect(201);
+    await api().post(`/api/v1/inspections/${started.id}/complete`).set(owner).expect(200);
   });
 });
 

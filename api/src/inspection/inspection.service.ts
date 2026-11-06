@@ -224,7 +224,11 @@ export class InspectionService {
   ncrDraft(ctx: RequestContext, id: string, q: z.infer<typeof DraftQuery>): Promise<NcDraft> {
     return this.database.asUser(ctx, async (db) => {
       const inspection = await this.load(db, ctx, id);
-      const ids = q.measurementIds ?? inspection.measurements.filter((m) => m.result === 'fail' && isCurrent(m) && m.ncrs.length === 0).map((m) => m.id);
+      const live = (m: { ncrs: NcrRef[] }) => m.ncrs.find((n) => n.stage !== 'cancelled' && !n.deleted);
+      const ids = q.measurementIds ?? inspection.measurements.filter((m) => m.result === 'fail' && isCurrent(m) && !live(m)).map((m) => m.id);
+      // A reading is on one live NC only: suggesting another NC for it would be refused when raised.
+      const taken = inspection.measurements.filter((m) => ids.includes(m.id) && live(m));
+      if (taken.length) throw new ApiError(409, 'inspection_rule', `${taken.map((m) => `${live(m)!.reference}`).join(', ')} already covers ${taken.length === 1 ? 'that reading' : 'those readings'}; add to it or cancel it first`);
       const failed = new Set(inspection.measurements.filter((m) => m.result === 'fail').map((m) => m.id));
       if (ids.some((x) => !failed.has(x))) throw ApiError.badRequest('invalid_reference', 'Only failed readings of this inspection can be chosen');
       return buildNcDraft(inspection, ids);
@@ -403,10 +407,10 @@ export class InspectionService {
       from public.inspection_failure_acknowledgements a left join public.profiles pp on pp.id = a.created_by
       where a.inspection_record_id = ${id}::uuid`);
     // Only NCs the caller may read are named (row level security hides the others).
-    const links = await db.execute<Row>(sql`select l.measurement_id, n.id as ncr_id, n.reference, n.stage, n.title, n.quantity_affected
+    const links = await db.execute<Row>(sql`select l.measurement_id, n.id as ncr_id, n.reference, n.stage, n.title, n.quantity_affected, (n.deleted_at is not null) as deleted
       from public.inspection_ncr_links l join public.nonconformances n on n.id = l.nonconformance_id
       where l.inspection_record_id = ${id}::uuid order by n.created_at, n.id`);
-    const ncrOf = (l: Row): NcrRef => ({ id: l.ncr_id as string, reference: l.reference as string, stage: l.stage as string, title: l.title as string, quantityAffected: l.quantity_affected === null ? null : Number(l.quantity_affected) });
+    const ncrOf = (l: Row): NcrRef => ({ id: l.ncr_id as string, reference: l.reference as string, stage: l.stage as string, title: l.title as string, quantityAffected: l.quantity_affected === null ? null : Number(l.quantity_affected), deleted: l.deleted === true });
     const allNcrs = new Map<string, NcrRef>();
     for (const l of links.rows) allNcrs.set(l.ncr_id as string, ncrOf(l));
     return {

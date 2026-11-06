@@ -242,7 +242,8 @@ export class NcrService {
           }
         }
       }
-      if (ids.size === 0) return entries;
+      const linked = await this.linkEntries(db, id);
+      if (ids.size === 0) return this.merge(entries, linked);
       const list = [...ids].join(',');
       const named = await db.execute<Row>(sql`
         with ids as (select unnest(string_to_array(${list}, ',')::uuid[]) as id)
@@ -263,7 +264,70 @@ export class NcrService {
           }
         }
       }
-      return entries;
+      return this.merge(entries, linked);
+    });
+  }
+
+  private merge(entries: z.infer<typeof HistoryEntry>[], linked: z.infer<typeof HistoryEntry>[]) {
+    return [...entries, ...linked].sort((a, b) => a.at.localeCompare(b.at));
+  }
+
+  /**
+   * Inspection readings put on this NC, from the audit trail of the links: one entry per transaction (raising the NC
+   * from the inspection, or adding readings later). Readings of inspections the reader may not see are only counted.
+   */
+  private async linkEntries(db: Db, id: string): Promise<z.infer<typeof HistoryEntry>[]> {
+    const events = await db.execute<Row>(sql`
+      select l.id, l.created_at, l.actor_user_id, l.transaction_id::text as tx, l.inspection_record_id, l.measurement_id, l.raised_with_ncr,
+             ${sql.raw(personName('pr'))} as actor_name
+      from app.ncr_link_history(${id}::uuid) l left join public.profiles pr on pr.id = l.actor_user_id`);
+    if (!events.rows.length) return [];
+    const measurementIds = events.rows.map((e) => e.measurement_id as string | null).filter((x): x is string => !!x);
+    const recordIds = [...new Set(events.rows.map((e) => e.inspection_record_id as string))];
+    const readings = measurementIds.length
+      ? await db.execute<Row>(sql`
+          select m.id, q.name, s.sample_number, m.value_numeric::text as value_text, m.value_pass, q.unit_code
+          from public.inspection_measurements m
+          join public.resolved_inspection_requirements q on q.id = m.requirement_id
+          join public.inspection_samples s on s.id = m.sample_id
+          where m.id = any (string_to_array(${measurementIds.join(',')}, ',')::uuid[])`)
+      : { rows: [] as Row[] };
+    const byId = new Map(readings.rows.map((r) => [r.id as string, r]));
+    const records = await db.execute<Row>(sql`select id, reference from public.inspection_records where id = any (string_to_array(${recordIds.join(',')}, ',')::uuid[])`);
+    const reference = new Map(records.rows.map((r) => [r.id as string, r.reference as string]));
+
+    const groups = new Map<string, Row[]>();
+    for (const e of events.rows) groups.set(e.tx as string, [...(groups.get(e.tx as string) ?? []), e]);
+    return [...groups.values()].map((group) => {
+      const first = group[0];
+      const at = iso(first.created_at)!;
+      const recordId = first.inspection_record_id as string;
+      const shown = group.flatMap((e) => (e.measurement_id && byId.has(e.measurement_id as string) ? [byId.get(e.measurement_id as string)!] : []));
+      const whole = group.every((e) => !e.measurement_id);
+      return {
+        id: first.id as string,
+        at,
+        actor: first.actor_user_id ? { id: first.actor_user_id as string, name: (first.actor_name as string) ?? 'Unknown user' } : null,
+        action: 'readings_linked',
+        changedFields: [],
+        previous: null,
+        current: null,
+        reason: null,
+        source: 'inspection',
+        names: {},
+        linked: {
+          kind: first.raised_with_ncr === true ? ('raised' as const) : ('added' as const),
+          inspection: reference.has(recordId) ? { id: recordId, reference: reference.get(recordId)! } : null,
+          readings: shown.map((r) => ({
+            id: r.id as string,
+            characteristic: r.name as string,
+            sampleNumber: Number(r.sample_number),
+            value: r.value_pass !== null && r.value_pass !== undefined ? (r.value_pass ? 'Pass' : 'Fail') : `${r.value_text}${r.unit_code ? ` ${r.unit_code}` : ''}`,
+          })),
+          hidden: group.filter((e) => e.measurement_id).length - shown.length,
+          wholeInspection: whole,
+        },
+      };
     });
   }
 

@@ -13,7 +13,7 @@ GRANT SELECT ON ids TO authenticated;
 DO $$
 DECLARE
   org uuid; site uuid; fam uuid; part uuid; plan uuid; rev uuid; op uuid; od uuid; od2 uuid;
-  rec uuid; rec2 uuid; s1 uuid; s2 uuid; s3 uuid; s4 uuid; s5 uuid; m_good uuid; m_a uuid; m_b uuid; m_c uuid; m_d uuid; m_other uuid; ncr uuid; ncr2 uuid; m uuid;
+  rec uuid; rec2 uuid; s1 uuid; s2 uuid; s3 uuid; s4 uuid; s5 uuid; m_good uuid; m_a uuid; m_b uuid; m_c uuid; m_d uuid; m_other uuid; ncr uuid; ncr2 uuid; ncr3 uuid; m uuid;
 BEGIN
   PERFORM pg_temp.login('39000000-0000-0000-0000-000000000101');
   org := app.create_organisation('NCR Add Works', 'Plant A', 'PA', NULL);
@@ -92,6 +92,26 @@ BEGIN
   EXCEPTION WHEN SQLSTATE 'QM008' THEN
     PERFORM pg_temp.assert_eq(position('cancelled' IN SQLERRM) > 0, true, 'cancelled NC is refused with the reason');
   END;
+
+  -- One live NC per reading: a reading already on a live NC cannot go on another (raise or add).
+  PERFORM pg_temp.assert_fails(format('SELECT app.raise_ncr_from_inspection(%L, ARRAY[%L]::uuid[], %L)', rec, m_a, 'Duplicate'), 'a second NC for the same reading is refused');
+  BEGIN
+    PERFORM app.raise_ncr_from_inspection(rec, ARRAY[m_a], 'Duplicate');
+    RAISE EXCEPTION 'a second NC was raised for the same reading';
+  EXCEPTION WHEN SQLSTATE 'QM008' THEN
+    PERFORM pg_temp.assert_eq(position('Outer diameter (sample 2) is already on ' IN SQLERRM) > 0, true, 'the refusal names the reading and the NC');
+  END;
+  ncr3 := app.raise_ncr_from_inspection(rec, ARRAY[]::uuid[], 'Third NC', NULL, 'minor', 1, NULL, NULL, true);
+  PERFORM pg_temp.assert_fails(format('SELECT app.add_readings_to_ncr(%L, ARRAY[%L]::uuid[])', ncr3, m_a), 'a reading on one NC cannot be added to another');
+  -- A cancelled NC frees its readings: m_d (25.4) was never linked; the 25.3 reading is on the cancelled NC and can move.
+  PERFORM pg_temp.assert_eq(app.reading_live_ncr(m_d), NULL::text, 'a reading of no live NC is free');
+  PERFORM pg_temp.assert_eq(app.add_readings_to_ncr(ncr3, ARRAY[m_d]), 1, 'a free reading can be added');
+  -- A whole-inspection NC (no reading) is never blocked by this rule.
+  PERFORM app.raise_ncr_from_inspection(rec, ARRAY[]::uuid[], 'Another whole-inspection NC');
+
+  -- History: who linked which readings, and when (grouped by transaction in the API).
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.ncr_link_history(ncr) WHERE measurement_id IN (m_a, m_b, m_c)), 3::bigint, 'link events for the readings on the first NC');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.ncr_link_history(ncr) WHERE actor_user_id = '39000000-0000-0000-0000-000000000101'), (SELECT count(*) FROM app.ncr_link_history(ncr)), 'the actor is recorded');
 
   -- Members: a viewer reads but cannot add.
   PERFORM pg_temp.logout();

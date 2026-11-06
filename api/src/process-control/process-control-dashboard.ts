@@ -122,7 +122,7 @@ export class ProcessControlDashboardService {
     const unhandled = sql`
       m.result = 'fail' and not exists (select 1 from public.inspection_measurements c where c.supersedes_id = m.id)
       and not exists (select 1 from public.inspection_failure_acknowledgements a where a.measurement_id = m.id)
-      and not exists (select 1 from public.inspection_ncr_links l where l.measurement_id = m.id)`;
+      and app.reading_live_ncr(m.id) is null`;
 
     const spc = await this.spc.overview(ctx, { days: 30, maxCharts: 40, maxRecent: 10 });
 

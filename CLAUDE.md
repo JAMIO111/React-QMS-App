@@ -129,6 +129,10 @@ Summary of the brief:
     out-of-tolerance calibration. Later failures can be **added to an NC already raised from the same inspection**, on request only
     (`app.add_readings_to_ncr`, migration `20251112100000`; `POST /inspections/{id}/add-to-ncr`; needs `ncr.update`; refused for closed,
     cancelled or deleted NCs and for NCs not raised from that inspection; the dialog proposes the quantity affected).
+    **A reading is on at most one live NC** (live = not cancelled, not deleted; `app.reading_live_ncr`, `app.assert_readings_free`, migration
+    `20251113100000`): raising or adding refuses a reading already on one (`QM008`), a cancelled/deleted NC frees its readings (unhandled again
+    for completion and the dashboard), and the UI offers no checkbox for covered readings. The NC history shows readings linked
+    (`action: readings_linked`, from `app.ncr_link_history`): "raised this from inspection…" / "added readings from inspection…".
   - **PC6 done:** SPC control charts (I-MR, X-bar/R), `docs/process-control-plan.md` §15. `inspection_samples.subgroup_number`
     (assigned by `app.inspection_sample_rules`; API `newSubgroup`), `spc_baselines` (saved limits with the measurement ids used;
     frozen; a new baseline supersedes the old via trigger; `spc.manage` inserts, `spc.read` reads). Statistics are pure functions in

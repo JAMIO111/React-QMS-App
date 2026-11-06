@@ -85,7 +85,13 @@ BEGIN
   UPDATE public.nonconformances SET stage = 'cancelled', stage_reason = 'Raised in error' WHERE id = ncr;
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.inspection_ncr_links WHERE nonconformance_id = ncr), 2::bigint, 'links survive edits and cancellation');
 
-  -- Now every current failure is handled (m_bad acknowledged, m_bad2 linked): completion works.
+  -- The NC was cancelled, so it no longer handles m_bad2 (its link stays, but the reading is free again).
+  PERFORM pg_temp.assert_eq(app.reading_live_ncr(m_bad2), NULL::text, 'a cancelled NC frees its reading');
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.inspection_records SET status = 'completed' WHERE id = %L$q$, rec), 'a reading of a cancelled NC blocks completion again');
+  -- It can go on a new NC (and then counts as handled).
+  PERFORM app.raise_ncr_from_inspection(rec, ARRAY[m_bad2], 'Re-raised after cancellation', NULL, 'critical', 1, NULL, NULL, false);
+  PERFORM pg_temp.assert_eq(app.reading_live_ncr(m_bad2) IS NOT NULL, true, 'the reading is on the new NC');
+  -- Now every current failure is handled (m_bad acknowledged, m_bad2 on a live NC): completion works.
   UPDATE public.inspection_records SET status = 'completed' WHERE id = rec;
   PERFORM pg_temp.assert_eq((SELECT (status, result)::text FROM public.inspection_records WHERE id = rec), '(completed,fail)', 'completed with result fail');
   -- A completed inspection can still raise an NC (a failure found on review) — manual, with no readings.

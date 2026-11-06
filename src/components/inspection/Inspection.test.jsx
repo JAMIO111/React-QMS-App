@@ -456,6 +456,47 @@ describe("Failures and non-conformances (PC5)", () => {
     });
   });
 
+  describe("one live NC per reading", () => {
+    const withNcr = (stage, deleted = false) => {
+      const f = failing();
+      const n = { id: "n1", reference: "NC-26-0001", stage, title: "OD above USL", quantityAffected: 1, deleted };
+      f.measurements[0].ncrs = [n];
+      f.ncrs = [n];
+      return f;
+    };
+
+    it("offers no checkbox or raise button for a reading already on a live NC, and says why", async () => {
+      routeApi({ "GET /inspections/i1": withNcr("open"), "GET /gauges": gauges });
+      permissions.push("ncr.create", "ncr.update");
+      renderAt("/Inspections/i1");
+      const list = await screen.findByRole("list", { name: "Failed readings" });
+      expect(within(list).queryByRole("checkbox")).toBeNull();
+      expect(within(list).getByText(/On NC-26-0001; a reading goes on one non-conformance/)).toBeInTheDocument();
+      expect(screen.getByText("Every failed reading has been handled.")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Raise NC for/ })).toBeNull();
+    });
+
+    it("frees the reading again when its NC is cancelled: unhandled, struck through, selectable", async () => {
+      routeApi({ "GET /inspections/i1": withNcr("cancelled"), "GET /gauges": gauges });
+      permissions.push("ncr.create", "ncr.update");
+      renderAt("/Inspections/i1");
+      const list = await screen.findByRole("list", { name: "Failed readings" });
+      expect(within(list).getByRole("link", { name: "NC-26-0001 (cancelled)" })).toHaveClass("line-through");
+      expect(within(list).getByRole("checkbox", { name: /Select Outer diameter sample 1/ })).toBeInTheDocument();
+      expect(screen.getByText(/1 failed reading still needs an acknowledgement or a non-conformance/)).toBeInTheDocument();
+      expect(within(list).queryByText(/a reading goes on one non-conformance/)).toBeNull();
+    });
+
+    it("treats a deleted NC like a cancelled one", async () => {
+      routeApi({ "GET /inspections/i1": withNcr("open", true), "GET /gauges": gauges });
+      permissions.push("ncr.create");
+      renderAt("/Inspections/i1");
+      const list = await screen.findByRole("list", { name: "Failed readings" });
+      expect(within(list).getByRole("link", { name: "NC-26-0001 (deleted)" })).toBeInTheDocument();
+      expect(within(list).getByRole("checkbox")).toBeInTheDocument();
+    });
+  });
+
   it("offers no NC controls without ncr.create", async () => {
     routeApi({ "GET /inspections/i1": failing(), "GET /gauges": gauges });
     renderAt("/Inspections/i1");

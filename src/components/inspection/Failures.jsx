@@ -28,8 +28,15 @@ const readingText = (m, requirement) =>
       : "Fail"
     : `${m.valueNumeric}${m.unitCode ? ` ${m.unitCode}` : ""}`;
 
+/**
+ * A live NC handles its readings; a cancelled or deleted one does not (they can go on another NC). A reading is on at
+ * most one live NC, so one that has a live NC offers no way to raise another.
+ */
+const isLiveNcr = (n) => n.stage !== "cancelled" && !n.deleted;
+const liveNcr = (m) => m.ncrs.find(isLiveNcr);
+
 /** What the failed reading still needs: nothing (handled), or a person's attention. */
-const handled = (m) => !!m.acknowledgement || m.ncrs.length > 0;
+const handled = (m) => !!m.acknowledgement || !!liveNcr(m);
 
 /** The failed readings still standing (not replaced by a correction). */
 export const currentFailures = (inspection) =>
@@ -285,7 +292,7 @@ const RaiseDialog = ({ inspection, measurementIds, onClose }) => {
 };
 
 const NCR_CLOSED = ["closed", "cancelled"];
-const isOpenNcr = (n) => !NCR_CLOSED.includes(n.stage);
+const isOpenNcr = (n) => !NCR_CLOSED.includes(n.stage) && !n.deleted;
 
 /** NCs already raised for other failed readings of the same check in this inspection. */
 const earlierNcrs = (inspection, m) => {
@@ -522,7 +529,7 @@ const Failures = ({
                 className="rounded-lg border border-border-color p-3 text-sm"
               >
                 <div className="flex flex-wrap items-center gap-3">
-                  {canRaise && (
+                  {(canRaise || canUpdateNcr) && !liveNcr(m) && (
                     <input
                       type="checkbox"
                       aria-label={`Select ${q.name} sample ${sampleNo[m.sampleId]} for a non-conformance`}
@@ -564,12 +571,26 @@ const Failures = ({
                   {m.ncrs.map((n) => (
                     <Link
                       key={n.id}
-                      className="rounded-full bg-border-color px-2 py-0.5 text-xs text-primary-text hover:underline"
+                      className={`rounded-full bg-border-color px-2 py-0.5 text-xs hover:underline ${isLiveNcr(n) ? "text-primary-text" : "text-secondary-text line-through"}`}
                       to={`/Non-Conformance/Internal/${n.id}`}
+                      title={
+                        isLiveNcr(n)
+                          ? undefined
+                          : `${n.reference} is ${n.deleted ? "deleted" : n.stage}, so it no longer covers this reading`
+                      }
                     >
                       {n.reference}
+                      {isLiveNcr(n)
+                        ? ""
+                        : ` (${n.deleted ? "deleted" : n.stage})`}
                     </Link>
                   ))}
+                  {liveNcr(m) && (
+                    <span className="text-xs text-secondary-text">
+                      On {liveNcr(m).reference}; a reading goes on one
+                      non-conformance.
+                    </span>
+                  )}
                   {open && canRecord && !m.acknowledgement && (
                     <button
                       type="button"
@@ -581,7 +602,7 @@ const Failures = ({
                   )}
                 </div>
                 {canUpdateNcr &&
-                  m.ncrs.length === 0 &&
+                  !liveNcr(m) &&
                   (() => {
                     const earlier = earlierNcrs(inspection, m);
                     const live = earlier.find(isOpenNcr);

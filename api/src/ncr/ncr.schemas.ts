@@ -161,6 +161,21 @@ export const HistoryEntry = z.object({
   source: z.string(),
   /** Display names for the ids of linked records in previous/current (part, customer, failure mode…). */
   names: z.record(z.string()),
+  /**
+   * Set on entries made from inspection links (action "readings_linked"): the readings put on this NC. "raised" when the
+   * NC was created from the inspection, "added" when readings were added later.
+   */
+  linked: z
+    .object({
+      kind: z.enum(['raised', 'added']),
+      inspection: z.object({ id: z.string().uuid(), reference: z.string() }).nullable(),
+      readings: z.array(z.object({ id: z.string().uuid(), characteristic: z.string(), sampleNumber: z.number(), value: z.string() })),
+      /** Readings of inspections the reader may not see. */
+      hidden: z.number(),
+      wholeInspection: z.boolean(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const Classification = z.object({

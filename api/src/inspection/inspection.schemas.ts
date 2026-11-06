@@ -59,6 +59,8 @@ export const NcrRef = z.object({
   title: z.string(),
   /** Quantity affected as recorded on the NC (proposed, with the new samples, when readings are added). */
   quantityAffected: z.number().nullable().optional(),
+  /** Deleted NCs no longer handle their readings (with cancelled ones). */
+  deleted: z.boolean().optional(),
 });
 export type NcrRef = z.infer<typeof NcrRef>;
 

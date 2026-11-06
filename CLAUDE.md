@@ -164,7 +164,12 @@ Summary of the brief:
     (imr/xbar_r/p/np/c/u). Maths in `api/src/spc/spc.ts` (`countSeries`, `defectsKind`, `countReliability`; `detectPSignals` takes any `{z}`),
     assembly in `spc-data.ts` (`assembleDefects`, `applySubgroupSize`, `evaluateCount`), service `countChart`/`createCountBaseline`.
     Demo data `supabase/seed/spc_demo_count_chart.sql`. Plan §17.
-  - **Next (later phases):** Cp/Cpk/Pp/Ppk, family/machine analysis, alerts (need a worker).
+  - **PC9 done (process capability):** no migration. `GET /spc/chart` for I-MR and X-bar/R charts returns `capability` (`api/src/spc/capability.ts`):
+    Cp/Cpu/Cpl/Cpk from the chart's within σ (saved baseline, else trial limits), Pp/Ppu/Ppl/Ppk from the overall sample SD of the readings shown,
+    both against the spec on the data; one-sided specs give only the one-sided index; observed and normal-expected ppm; verdict bands on Cpk
+    (1.00/1.33/1.67). `null` without a limit, with < 10 readings or for pass/fail and count charts; warns below 30 readings and when the chart has
+    signals (not stable). UI `CapabilityCard.jsx` on the SPC page. Not done: histogram, non-normal data, Cpm.
+  - **Next (later phases):** family/machine analysis, alerts (need a worker).
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

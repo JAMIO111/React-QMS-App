@@ -120,6 +120,22 @@ describe('characteristics and charts', () => {
     expect(res.excluded).toMatchObject([{ reason: 'incomplete_subgroup', count: 2 }]);
   });
 
+  it('capability: Cp/Cpk from the chart’s within σ and Pp/Ppk from the overall σ, with warnings for few readings and signals', async () => {
+    const res = (await chart('characteristicKey=OD&operationCode=OP-020')).body;
+    const c = res.capability;
+    expect(c.n).toBe(20);
+    expect(c.sigmaWithin).toBeCloseTo(res.limits.sigma, 10);
+    expect(c.within.ratio).toBeCloseTo(0.1 / (6 * res.limits.sigma), 8);
+    expect(c.within.k).toBeCloseTo(Math.min(25.05 - c.mean, c.mean - 24.95) / (3 * res.limits.sigma), 8);
+    expect(c.overall.ratio).toBeCloseTo(0.1 / (6 * c.sigmaOverall), 8);
+    expect(c.warnings.join(' ')).toMatch(/Only 20 readings/);
+    expect(c.warnings.join(' ')).toMatch(/not stable/); // the 3σ point on this chart
+    const quiet = (await chart('characteristicKey=OD&operationCode=OP-020&rules=')).body;
+    expect(quiet.capability.warnings.join(' ')).not.toMatch(/not stable/);
+    const bore = (await chart('characteristicKey=BORE&operationCode=OP-020')).body;
+    expect(bore.capability.n).toBe(18);
+  });
+
   it('asks for an operation when it is ambiguous, and 404s for an unknown part or nothing charted', async () => {
     const h = await as(ids.ownerA);
     await api().get(`/api/v1/spc/chart?partId=${ctx.part}&characteristicKey=NOPE`).set(h).expect(404);

@@ -7,6 +7,7 @@ import { iso, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
 import { BaselineQuery, Baseline, Chart, ChartQuery, CharacteristicsQuery, CreateBaselineBody } from './spc.schemas';
 import { controlLimits, countRate, defectsKind, isProvisional, Limits, MINIMUM_POINTS, pBar, PROVISIONAL_BELOW, Rule, RULE_TEXT } from './spc';
+import { capability } from './capability';
 import { applySubgroupSize, assemble, assembleDefects, assembleP, BASIS_TEXT, ChartPoint, evaluate, evaluateCount, evaluateP, parseRules, ReadingRow, SubgroupBasis } from './spc-data';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -156,6 +157,12 @@ export class SpcService {
         excluded: data.excluded,
         baseline: usable,
         baselineIssue,
+        capability: capability(
+          data.points.flatMap((p) => p.readings.map((r) => Number(r.value))),
+          result.limits ? result.limits.sigma : null,
+          { lower: data.spec.lower, upper: data.spec.upper },
+          result.signals.length + result.dispersionSignals.length,
+        ),
         reactions,
       };
     });

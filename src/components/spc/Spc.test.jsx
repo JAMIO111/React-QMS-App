@@ -794,3 +794,37 @@ describe("count helpers", () => {
     expect(hi).toBeGreaterThan(30);
   });
 });
+
+describe("Process capability", () => {
+  const capability = {
+    n: 40,
+    mean: 25.002,
+    sigmaWithin: 0.01,
+    sigmaOverall: 0.015,
+    within: { ratio: 1.67, upper: 1.6, lower: 1.73, k: 1.6 },
+    overall: { ratio: 1.11, upper: 1.07, lower: 1.15, k: 1.07 },
+    observedPpm: 0,
+    expectedPpm: 650.4,
+    verdict: "excellent",
+    warnings: ["The control chart shows signals, so the process is not stable: capability indices describe a stable process and may mislead."],
+  };
+
+  it("shows Cp/Cpk and Pp/Ppk, the warning and the verdict beside the chart", async () => {
+    routeApi(base({ "GET /spc/chart": chart({ capability }) }));
+    renderAt(`${URL}&c=OD%7COP-020`);
+    const table = await screen.findByRole("table", { name: "Capability indices" });
+    expect(within(table).getByText("Cp 1.67")).toBeInTheDocument();
+    expect(within(table).getByText("Cpk 1.60")).toBeInTheDocument();
+    expect(within(table).getByText("Ppk 1.07")).toBeInTheDocument();
+    expect(screen.getByText(/process is not stable/)).toBeInTheDocument();
+    expect(screen.getByText("650 ppm")).toBeInTheDocument();
+    expect(screen.getByText(/Excellent \(1.67 or more\)/)).toBeInTheDocument();
+  });
+
+  it("leaves the card out when the API has no capability (no limit, too few readings)", async () => {
+    routeApi(base({ "GET /spc/chart": chart({ capability: null }) }));
+    renderAt(`${URL}&c=OD%7COP-020`);
+    await screen.findByText(/Trial limits \(provisional\)/);
+    expect(screen.queryByText("Process capability")).toBeNull();
+  });
+});

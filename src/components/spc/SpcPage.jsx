@@ -26,6 +26,7 @@ import {
 } from "../../lib/spc";
 import { ErrorNotice, SelectField } from "../master-data/shared";
 import BaselinePanel from "./BaselinePanel";
+import CapabilityCard from "./CapabilityCard";
 import {
   ChartKey,
   DispersionChart,
@@ -424,6 +425,10 @@ const SpcPage = () => {
                 )}
               </MenuCard>
             </>
+          )}
+
+          {chart.capability && !isRate && (
+            <CapabilityCard capability={chart.capability} decimals={decimals} unit={chart.characteristic.unitCode} />
           )}
 
           {chart.excluded.length > 0 && (

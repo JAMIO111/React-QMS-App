@@ -101,6 +101,22 @@ export const CharacteristicOption = z.object({
   hasBaseline: z.boolean(),
 });
 
+const IndicesOut = z.object({ ratio: z.number().nullable(), upper: z.number().nullable(), lower: z.number().nullable(), k: z.number().nullable() });
+export const CapabilityOut = z.object({
+  n: z.number().int(),
+  mean: z.number(),
+  sigmaWithin: z.number(),
+  sigmaOverall: z.number(),
+  /** Cp, Cpu, Cpl, Cpk: from the control chart's within-subgroup σ. */
+  within: IndicesOut,
+  /** Pp, Ppu, Ppl, Ppk: from the overall standard deviation of the readings. */
+  overall: IndicesOut,
+  observedPpm: z.number(),
+  expectedPpm: z.number().nullable(),
+  verdict: z.enum(['excellent', 'capable', 'marginal', 'not_capable']).nullable(),
+  warnings: z.array(z.string()),
+});
+
 export const Chart = z.object({
   part: z.object({ id: z.string().uuid(), partNumber: z.string(), name: z.string() }),
   characteristic: z.object({
@@ -159,6 +175,8 @@ export const Chart = z.object({
     .optional(),
   /** What is drawn: set for pass/fail and count characteristics (p, np, c, u). */
   variant: z.enum(['imr', 'xbar_r', 'p', 'np', 'c', 'u']).optional(),
+  /** Cp/Cpk/Pp/Ppk of the readings shown against the specification; null for pass/fail and count charts, without a limit or with fewer than 10 readings. */
+  capability: CapabilityOut.nullable().optional(),
   /** The plan's instructions for an SPC signal: shown, never acted on automatically. */
   reactions: z.array(z.object({ action: z.string(), instruction: z.string() })),
 });

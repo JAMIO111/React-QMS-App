@@ -564,3 +564,11 @@ integer counts with the live result; SPC page: *Show as* (P / NP) with the NP su
 limits; demo data `supabase/seed/spc_demo_count_chart.sql`.
 
 **Out of scope here:** Cp/Cpk/Pp/Ppk, family and machine analysis, alerts.
+
+## 18. Slice PC9 — process capability (Cp, Cpk, Pp, Ppk) — done (2026-11-06)
+
+Decisions taken without further questions (redirect if wrong): computed live on the chart from the readings shown (same filters), no new
+table or migration; measured characteristics only (I-MR, X-bar/R); within σ is the control chart's σ (R̄/d2 or MR̄/1.128 from the saved baseline,
+else trial limits), overall σ the sample standard deviation (n − 1) of every reading shown; needs at least one specification limit and 10
+readings, warns under 30 and when the chart has signals; one-sided specifications give Cpu/Cpl/Ppu/Ppl and so Cpk/Ppk only; ppm expected assumes
+normality. Out of scope: histogram, normality test, non-normal capability, Cpm, family/machine comparison.

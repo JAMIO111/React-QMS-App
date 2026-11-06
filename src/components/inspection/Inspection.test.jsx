@@ -374,12 +374,26 @@ describe("Failures and non-conformances (PC5)", () => {
     expect(body).toMatchObject({ measurementIds: ["m1"], title: draft.title, severity: "critical", quantityAffected: 1, open: false });
   });
 
+  it("shows which subgroup a sample joins and lets the operator start a new one", async () => {
+    let body;
+    const f = failing();
+    f.samples[0].subgroupNumber = 1;
+    routeApi({ "GET /inspections/i1": f, "GET /gauges": gauges, "POST /inspections/i1/samples": (_p, o) => ((body = o.body), f) });
+    renderAt("/Inspections/i1");
+    const form = await screen.findByRole("form", { name: "New sample" });
+    const box = within(form).getByRole("checkbox", { name: /Start a new subgroup \(this sample otherwise joins subgroup 1, sample 2 of 5\)/ });
+    await userEvent.click(box);
+    await userEvent.type(within(form).getByLabelText("Outer diameter reading"), "25.01");
+    await userEvent.click(within(form).getByRole("button", { name: "Save sample" }));
+    expect(body).toMatchObject({ newSubgroup: true });
+  });
+
   it("offers no NC controls without ncr.create", async () => {
     routeApi({ "GET /inspections/i1": failing(), "GET /gauges": gauges });
     renderAt("/Inspections/i1");
     await screen.findByRole("list", { name: "Failed readings" });
     expect(screen.queryByRole("button", { name: /Raise NC/ })).toBeNull();
-    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /for a non-conformance/ })).toBeNull();
   });
 
   it("shows source readings on an NC, including a later correction", () => {

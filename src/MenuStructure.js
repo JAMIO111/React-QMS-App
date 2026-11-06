@@ -34,7 +34,10 @@ export const menuStructure = [
     permission: "process_control.read",
     module: "control_plans",
     path: "/Process-Control",
-    subMenu: [{ name: "Control Plans", path: "/Process-Control/Plans" }],
+    subMenu: [
+      { name: "Control Plans", path: "/Process-Control/Plans" },
+      { name: "SPC Charts", path: "/Process-Control/SPC", permission: "spc.read" },
+    ],
   },
   {
     name: "Calibration",

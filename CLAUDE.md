@@ -127,7 +127,14 @@ Summary of the brief:
     `POST /inspection-measurements/{id}/acknowledge`, `GET /ncrs/{id}/inspection-source`, `GET /calibrations/{id}/gauge-usage`.
     UI: `Failures.jsx` card on the inspection page, `NcrInspectionSource.jsx` on the NC page, `GaugeUsage.jsx` on an
     out-of-tolerance calibration.
-  - **Next:** PC6 SPC charts (I-MR, X-bar/R). Charts only on traceable measurements.
+  - **PC6 done:** SPC control charts (I-MR, X-bar/R), `docs/process-control-plan.md` §15. `inspection_samples.subgroup_number`
+    (assigned by `app.inspection_sample_rules`; API `newSubgroup`), `spc_baselines` (saved limits with the measurement ids used;
+    frozen; a new baseline supersedes the old via trigger; `spc.manage` inserts, `spc.read` reads). Statistics are pure functions in
+    `api/src/spc/spc.ts` (limits, Western Electric rules 1–4), data assembly in `spc-data.ts` (only compatible data; exclusions
+    counted by reason); API `GET /spc/characteristics|chart|baselines`, `POST /spc/baselines` (`409 spc_rule`). Charts read
+    `inspection_measurements` live. UI `src/components/spc/` (`/Process-Control/SPC`, URL filters), hooks `useSpc.js`, `lib/spc.js`;
+    colours from the `--chart-*` variables, spec limits solid vs control limits dashed. A signal never raises an NC.
+  - **Next (later phases):** P/NP/C/U charts, Cp/Cpk/Pp/Ppk, alerts (need a worker).
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;
@@ -169,7 +176,7 @@ stages, soft delete, legacy NCM copy; NC registers and form on the API) are done
 attachments with the NC page in the original form layout (`ncr_costs`, `ncr_attachments`, `FileDrop`,
 `NcrCosts`) — see plan §9–§12;
 Calibration (Phase 4) was brought forward as a complete slice (`docs/calibration-plan.md`, migrations `20251106100000_calibration.sql`, `20251107100000_calibration_attributes.sql`; demo data `supabase/seed/calibration_demo.sql`);
-slices 2.2/2.3 are replaced by the process control plan (`docs/process-control-plan.md`); PC1–PC5 (and PC3b) are done, next: PC6.
+slices 2.2/2.3 are replaced by the process control plan (`docs/process-control-plan.md`); PC1–PC6 (and PC3b) are done; the process control plan is complete.
 The project still signs tokens with the legacy HS256 secret (JWKS endpoint is empty), so the API
 needs `SUPABASE_JWT_SECRET` until the project moves to signing keys.
 

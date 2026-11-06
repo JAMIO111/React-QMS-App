@@ -163,6 +163,8 @@ describe('baselines', () => {
     ctx.b1 = saved.id;
     const res = (await chart('characteristicKey=OD&operationCode=OP-020&rules=we1')).body;
     expect(res.limitsSource).toBe('baseline');
+    // Without a rules parameter the chart uses the rules saved with the baseline.
+    expect((await chart('characteristicKey=OD&operationCode=OP-020')).body.rules).toEqual(['we1', 'we4']);
     expect(res.baseline.id).toBe(saved.id);
     expect(res.limits).toEqual(saved.limits);
     expect(res.signals.some((s: { index: number }) => s.index === 17)).toBe(true);

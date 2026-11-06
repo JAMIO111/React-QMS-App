@@ -121,6 +121,11 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
   const shown = isEvent ? applicable.filter((q) => q.sampling.some((s) => s.triggerType === mode)) : applicable.filter((q) => next?.requirementIds.includes(q.id));
   const nothingToDo = !isEvent && !next;
   const [problem, setProblem] = useState(null);
+  const [newSubgroup, setNewSubgroup] = useState(false);
+  // X-bar/R checks chart subgroups of n samples taken at one check; the database fills a subgroup before starting the next.
+  const subgroupSize = Math.max(0, ...applicable.filter((q) => q.chartType === "xbar_r").map((q) => q.subgroupSize ?? 0));
+  const lastSubgroup = [...inspection.samples].reverse().find((x) => !x.isRetest && x.subgroupNumber !== null)?.subgroupNumber ?? null;
+  const inLastSubgroup = lastSubgroup === null ? 0 : inspection.samples.filter((x) => x.subgroupNumber === lastSubgroup).length;
   const setRow = (id, patch) => setRows((r) => ({ ...r, [id]: { ...r[id], ...patch } }));
   const byGauge = Object.fromEntries(gauges.map((g) => [g.id, g]));
   const operations = [...new Set(shown.map((q) => q.operationCode))];
@@ -146,11 +151,12 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
     if (!readings.length) return setProblem("Enter at least one reading.");
     setProblem(null);
     mutation.mutate(
-      { path: `/inspections/${inspection.id}/samples`, body: { unitReference, ...(isEvent ? { triggerType: mode } : {}), readings } },
+      { path: `/inspections/${inspection.id}/samples`, body: { unitReference, ...(isEvent ? { triggerType: mode } : {}), readings, ...(newSubgroup && subgroupSize ? { newSubgroup: true } : {}) } },
       {
         onSuccess: () => {
           setRows(blank());
           setUnitReference("");
+          setNewSubgroup(false);
         },
       }
     );
@@ -177,6 +183,14 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
         )}
       </div>
       {nothingToDo && <p className="text-sm text-secondary-text">All planned samples are recorded and no timed check is due. Complete the inspection when you are done.</p>}
+      {subgroupSize > 0 && (
+        <label className="flex items-center gap-2 text-sm text-primary-text">
+          <input type="checkbox" checked={newSubgroup || lastSubgroup === null || inLastSubgroup >= subgroupSize} disabled={lastSubgroup === null || inLastSubgroup >= subgroupSize} onChange={(e) => setNewSubgroup(e.target.checked)} />
+          {lastSubgroup === null || inLastSubgroup >= subgroupSize
+            ? `Starts subgroup ${(lastSubgroup ?? 0) + 1} (subgroups hold ${subgroupSize} samples for the control chart)`
+            : `Start a new subgroup (this sample otherwise joins subgroup ${lastSubgroup}, sample ${inLastSubgroup + 1} of ${subgroupSize})`}
+        </label>
+      )}
       {operations.map((op) => (
         <fieldset key={op} className="flex flex-col gap-2">
           <legend className="mb-1 font-mono text-sm text-secondary-text">{op}</legend>

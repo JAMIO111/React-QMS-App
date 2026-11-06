@@ -100,7 +100,9 @@ const Navbar = () => {
                   />
                   {item.subMenu && isSubMenuOpen === item.name && (
                     <ul className="ml-4 flex flex-col">
-                      {item.subMenu?.map((subItem, index) => (
+                      {item.subMenu
+                        ?.filter((subItem) => canSee(subItem.permission))
+                        .map((subItem, index, visible) => (
                         <li key={subItem.name}>
                           <SubMenuItem
                             title={subItem.name}
@@ -108,7 +110,7 @@ const Navbar = () => {
                             path={subItem.path}
                             end={!!subItem.end}
                             isFirst={index === 0}
-                            isLast={index === item.subMenu?.length - 1}
+                            isLast={index === visible.length - 1}
                             closeMenu={closeMenu}
                           />
                         </li>

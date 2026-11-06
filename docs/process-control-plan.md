@@ -492,3 +492,5 @@ by shape and text, a signals list), exclusions and warnings, baseline panel (win
 
 **Out of scope here:** P/NP/C/U charts, Cp/Cpk/Pp/Ppk, family/machine comparison, alerts and notifications,
 raising an NC from a signal (decided: not now).
+
+**PC6 status (2026-11-06): done.** Migration `20251108170000_spc.sql`, `api/src/spc/`, `src/components/spc/`, tests (SQL, 24 statistics unit tests, API e2e, component tests) and a browser check of the charts in light, dark and tablet width. Out of scope as listed above.

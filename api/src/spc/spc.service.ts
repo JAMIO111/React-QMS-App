@@ -113,7 +113,8 @@ export class SpcService {
         if (old.rows.length) baselineIssue = 'The saved baseline is for a different chart type, so it is not used. Save a new baseline.';
       }
 
-      const rules = parseRules(q.rules);
+      // Absent rules: those saved with the baseline in use, else all of them.
+      const rules = q.rules !== undefined ? parseRules(q.rules) : usable ? usable.rules : parseRules(undefined);
       const result = evaluate(data, usable ? usable.limits : null, rules);
       if (usable && usable.spec && data.spec.nominal !== null && (usable.spec.lower !== data.spec.lower || usable.spec.upper !== data.spec.upper)) {
         result.warnings.push('The specification has changed since the baseline was saved.');

@@ -529,3 +529,38 @@ proportions. Demo data: `supabase/seed/spc_demo_p_chart.sql`.
 **Out of scope here:** NP, C and U charts (they differ only in what is counted), % out-of-spec P charts for measured checks.
 
 **PC7 status (2026-11-06): done.** Migration `20251114100000_p_charts.sql`; statistics `pSeries`/`detectPSignals`/`zoneRules` and data `assembleP`/`evaluateP` (unit tested); API chart, characteristics, baselines and dashboard overview handle P; characteristic form offers the P chart for pass/fail checks; SPC page has the Subgroup choice, `ProportionChart`, P data table and baseline panel; demo data `supabase/seed/spc_demo_p_chart.sql`. NP, C and U charts remain out of scope.
+
+## 17. Slice PC8 — NP, C and U charts (defect counts) — plan (2026-11-06)
+
+**Decisions (agreed 2026-11-06):** (1) defect counts come from a **new "defect count" check type** (a third kind of
+characteristic beside measured and pass/fail: the inspector enters how many defects were found on the unit); (2) the **NP
+chart is a view of the P chart's data** (number failed instead of proportion failed): its subgroup size is **either set on the
+chart or calculated automatically** (the most common size, larger on a tie) and subgroups of any other size are left out and
+counted; (3) one plan choice, **"defects per unit"** (chart type `defects`): the chart is a **C chart** when every subgroup
+inspects the same number of units and a **U chart** when the number varies. Subgroups are one inspection, one day or one lot,
+chosen on the chart, as for the P chart.
+
+**Count check.** `data_type = 'count'`: value source plan, no unit, nominal or lower limit; `upper_limit` is optional and means
+*most defects allowed on one unit* (empty: recorded for charting, never fails). A reading is an exact non-negative integer
+(`inspection_measurements.value_count`); its result is pass when no limit is set or the count is within it, otherwise fail —
+so failing counts go through the normal acknowledge / NC flow. Corrections and retests work as for other readings. Each
+sample is one unit.
+
+**Statistics.** Subgroup *i* has nᵢ units and dᵢ defects. U chart: centre ū = Σd/Σn, uᵢ = dᵢ/nᵢ, limits `ū ± 3√(ū/nᵢ)` (LCL ≥ 0);
+C chart (all nᵢ equal to n): plotted dᵢ, centre c̄ = n·ū, limits `c̄ ± 3√c̄`. NP chart (equal subgroups of n): plotted dᵢ of
+failed checks, centre n·p̄, limits `n·p̄ ± 3√(n·p̄(1−p̄))`. Rules 1–4 apply in each point's own σ. Warnings: fewer than 5 subgroups ⇒
+no limits, fewer than 20 ⇒ provisional, expected defects per subgroup below 5 ⇒ the (normal / Poisson) approximation is
+unreliable. NP and P share one saved baseline (p̄ and its subgroup basis).
+
+**Database** (`20251115100000_count_checks.sql`): `data_type` `count` on control plan characteristics, templates and the frozen
+requirements; chart type `defects` (subgroup size null) for count checks; `value_count` on measurements with the one-value
+rule extended; `app.inspection_measurement_rules` works out the result of a count; `spc_baselines` accepts chart type `defects`.
+
+**API:** reading inputs, corrections and plan schemas take counts; `GET /spc/chart` accepts `display=np` and `size=auto|N` for P
+characteristics and charts count checks as C or U (`variant` in the response); baselines for `defects`.
+
+**Frontend:** characteristic form offers "Defect count" (optional max per unit, "defects per unit" SPC); the entry screen takes
+integer counts with the live result; SPC page: *Show as* (P / NP) with the NP subgroup size, C/U chart with per-subgroup
+limits; demo data `supabase/seed/spc_demo_count_chart.sql`.
+
+**Out of scope here:** Cp/Cpk/Pp/Ppk, family and machine analysis, alerts.

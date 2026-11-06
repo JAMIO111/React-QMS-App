@@ -159,6 +159,8 @@ BEGIN
   -- DOC2: issued, so its recipient (the owner) exists.
   UPDATE public.quality_alerts SET description = 'd', required_action = 'a', effective_date = current_date WHERE id = qa;
   PERFORM app.issue_quality_alert(qa);
+  -- CAPA1: an 8D started from a non-conformance (steps, the creator as leader, the NC link).
+  PERFORM app.start_capa(a, NULL, NULL, NULL, NULL, (SELECT id FROM public.nonconformances WHERE organisation_id = a AND deleted_at IS NULL LIMIT 1));
   PERFORM pg_temp.logout();
 
   -- Subscription: seats and an assignment through the API functions, invoice and payment as the provider would.

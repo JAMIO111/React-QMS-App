@@ -227,6 +227,16 @@ Summary of the brief:
     `POST /quality-alert-attachments/{id}/delete|restore`; the scope body takes `links` and the detail returns `links` (label is `null` when the caller cannot read the record). UI: `ActiveAlertsBanner`
     (information only, never blocks) on Start inspection, the part, part family and machine (edit dialog) pages; `AlertLinks.jsx` (pickers, read-only list), `AlertFiles.jsx` (`AttachmentDrop`) in the draft
     editor and, read-only, on the alert page. **DOC4 done (exit check):** `docs/documentation-exit-report.md` (evidence, advisor findings, limitations; no browser check yet). Migration `20251121100000_rls_initplan_wrap.sql` wraps `auth.uid()` as `(select auth.uid())` in five SELECT policies (advisor `auth_rls_initplan`).
+- CAPA / 8D (`docs/capa-8d-plan.md`; one `capas` record, method 8D, built in slices CAPA1–CAPA5; decisions C1–C10):
+  - **CAPA1 done (core, NC integration, D0, D1):** migration `20251122100000_capa_core.sql`. `capas` (`CAPA-000001`, stage `open → actions_in_progress → awaiting_verification → verified_effective → closed | cancelled`,
+    worked out from the steps by `app.capa_recompute_stage`, never set by hand), `capa_steps` (nine rows D0–D8, written only by `app.capa_complete_step` / `capa_reopen_step`; in order; `app.capa_step_problems` returns
+    the "still needed" list the UI shows), `capa_team_members` (organisation member **or** external contact; one leader, one champion; ended, never deleted), `capa_ncr_links` (many-to-many, ended with a reason).
+    Started only by `app.start_capa` (numbering, nine steps, creator leads and owns it, optional first NC link, `capa.created` outbox event; prefilled from an NC). Header edited under RLS (`capa.manage`) until closed or
+    cancelled; `app.cancel_capa` / `reopen_capa`. **A non-conformance cannot be closed while a linked 8D is running** (own trigger on `nonconformances`, `QM005` → `409 ncr_rule`). Permissions `capa.read/.manage/.verify`
+    (owner, admin, quality manager all; quality engineer read+manage; others read). Errors `QM013` → `409 capa_rule`. API `api/src/capa/`: `GET|POST /capas`, `GET|PATCH /capas/{id}`, `GET /capas/people`,
+    `POST /capas/{id}/complete-step|reopen-step|cancel|reopen|team|ncrs`, `PATCH /capa-team/{id}`, `POST /capa-ncr-links/{id}/unlink`, `GET /ncrs/{id}/capas`; commands answer with the whole 8D. UI
+    `src/components/capa/`: register `/CAPA`, step page `/CAPA/:id/:step` (`CapaPage`, `Stepper`, `StepFooter` with the checklist, `steps/D0Initiate`, `steps/D1Team`; D2–D8 say "not available yet"),
+    `NcrCapaCard` in the NC page's Investigation card (**Start a new 8D** prefilled from the NC, **Link to an existing 8D**, unlink with a reason); hooks `useCapa.js`, helpers `lib/capa.js`. Next: CAPA2 (D2, D3).
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

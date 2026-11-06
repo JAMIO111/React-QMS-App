@@ -48,6 +48,10 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   control_plan_characteristics_key: 'This revision already has a characteristic with that key',
   characteristic_applicability_key: 'That part is already listed',
   sampling_rules_one_per_trigger: 'Each sampling trigger can be used once per characteristic',
+  capa_team_members_person_key: 'That person is already on the team',
+  capa_team_members_one_leader: 'The team already has a leader; change their role first',
+  capa_team_members_one_champion: 'The team already has a champion; change their role first',
+  capa_ncr_links_live_key: 'That non-conformance is already linked to this 8D',
 };
 
 /**
@@ -94,6 +98,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'department_rule', pg.message ?? 'That department change is not allowed');
     case 'QM012': // quality alert rules (messages are written for users)
       return new ApiError(409, 'documentation_rule', pg.message ?? 'That change is not allowed for this quality alert');
+    case 'QM013': // CAPA / 8D rules (messages are written for users)
+      return new ApiError(409, 'capa_rule', pg.message ?? 'That change is not allowed for this 8D');
     case 'QM010': // notification type the caller cannot choose
       return new ApiError(404, 'notification_type_not_found', 'That notification type does not exist');
     case 'P0002': // no_data_found raised by app functions

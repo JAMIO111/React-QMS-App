@@ -108,6 +108,10 @@ import {
   Droplets as LucideDroplets,
   FlaskConical as LucideFlaskConical,
   ChevronUp as LucideChevronUp,
+  ChevronLeft as LucideChevronLeft,
+  ChevronRight as LucideChevronRight,
+  Link as LucideLink,
+  ListChecks as LucideListChecks,
   Activity as LucideActivity,
 } from "lucide-react";
 
@@ -227,3 +231,7 @@ export const DropletsIcon = withDefaults(LucideDroplets);
 export const FlaskConicalIcon = withDefaults(LucideFlaskConical);
 export const ActivityIcon = withDefaults(LucideActivity);
 export const ChevronUpIcon = withDefaults(LucideChevronUp);
+export const ChevronLeftIcon = withDefaults(LucideChevronLeft);
+export const ChevronRightIcon = withDefaults(LucideChevronRight);
+export const LinkIcon = withDefaults(LucideLink);
+export const ListChecksIcon = withDefaults(LucideListChecks);

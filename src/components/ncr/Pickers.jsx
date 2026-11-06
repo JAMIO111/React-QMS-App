@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import RHFComboBox from "../ui/RHFComboBox";
 import { useParts, usePart, useParties } from "../../hooks/useMasterData";
+import { useNcrs } from "../../hooks/useNcr";
 
 export const TextAreaField = ({ label, value, onChange, disabled, rows = 3, maxLength, className = "" }) => {
   const id = useId();
@@ -95,6 +96,22 @@ export const RevisionPicker = ({ partId, value, disabled, label = "Revision", ..
       sort={false}
       disabled={disabled || !partId}
       placeholder={partId ? "Select a revision…" : "Choose a part first"}
+    />
+  );
+};
+
+/** Non-conformance search by reference or title. onChange(id, item) with item { id, name, source }. */
+export const NcrPicker = ({ label = "Non-conformance", ...props }) => {
+  const [q, setSearch] = useDebouncedSearch();
+  const ncrs = useNcrs({ q, pageSize: 10 });
+  return (
+    <RemoteComboBox
+      {...props}
+      label={label}
+      placeholder="Search reference or title…"
+      items={(ncrs.data?.data ?? []).map((n) => ({ id: n.id, name: `${n.reference} · ${n.title}`, source: n.source }))}
+      isFetching={ncrs.isFetching}
+      onSearch={setSearch}
     />
   );
 };

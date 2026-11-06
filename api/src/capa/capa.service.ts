@@ -1,0 +1,291 @@
+import { Injectable } from '@nestjs/common';
+import { sql, SQL } from 'drizzle-orm';
+import { z } from 'zod';
+import { ApiError } from '../common/api-error';
+import type { RequestContext } from '../common/request-context';
+import { iso, personName, Row } from '../calibration/calibration.service';
+import { DatabaseService, Db } from '../database/database.service';
+import { AddTeamBody, CapaDetail, CapaSummary, CompleteStepBody, CreateCapaBody, LinkNcrBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, STEPS, UpdateCapaBody, UpdateTeamBody } from './capa.schemas';
+
+const orgOf = (ctx: RequestContext) => ctx.organisationId!;
+const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown' } : null);
+const RUNNING = sql`c.stage not in ('closed', 'cancelled')`;
+
+const SELECT = sql`
+  select c.id, c.reference, c.method, c.title, c.problem_statement, c.stage, c.stage_reason, c.source, c.severity, c.external_reference,
+         c.owner_membership_id, c.due_date::text as due_date, c.closed_at, c.created_at, c.updated_at, c.created_by,
+         (c.due_date is not null and c.due_date < current_date and ${RUNNING}) as overdue,
+         (select count(*) from public.capa_steps s where s.capa_id = c.id and s.completed_at is not null)::int as steps_done,
+         (select min(s.step) from public.capa_steps s where s.capa_id = c.id and s.completed_at is null) as next_step,
+         (select count(*) from public.capa_ncr_links l where l.capa_id = c.id and l.ended_at is null)::int as ncr_count,
+         ${sql.raw(personName('po'))} as owner_name, ${sql.raw(personName('pc'))} as created_by_name
+  from public.capas c
+  left join public.organisation_users om on om.id = c.owner_membership_id
+  left join public.profiles po on po.id = om.user_id
+  left join public.profiles pc on pc.id = c.created_by`;
+
+const toSummary = (r: Row): CapaSummary => ({
+  id: r.id as string,
+  reference: r.reference as string,
+  method: '8d',
+  title: r.title as string,
+  stage: r.stage as CapaSummary['stage'],
+  stageReason: (r.stage_reason as string) ?? null,
+  source: r.source as CapaSummary['source'],
+  severity: (r.severity as CapaSummary['severity']) ?? null,
+  externalReference: (r.external_reference as string) ?? null,
+  owner: r.owner_membership_id ? { membershipId: r.owner_membership_id as string, name: (r.owner_name as string) ?? 'Unknown' } : null,
+  dueDate: (r.due_date as string) ?? null,
+  overdue: !!r.overdue,
+  currentStep: ((r.next_step as string) ?? 'd8') as CapaSummary['currentStep'],
+  stepsDone: Number(r.steps_done),
+  ncrCount: Number(r.ncr_count),
+  createdAt: iso(r.created_at)!,
+  closedAt: iso(r.closed_at),
+});
+
+const HEADER_COLUMNS: Record<string, string> = {
+  title: 'title', problemStatement: 'problem_statement', source: 'source', severity: 'severity', externalReference: 'external_reference',
+  ownerMembershipId: 'owner_membership_id', dueDate: 'due_date',
+};
+
+/**
+ * Corrective actions (CAPA, method 8D), slice CAPA1: the record, its nine steps, the team and the non-conformances it addresses
+ * (docs/capa-8d-plan.md). Starting, step completion, NC links and cancelling are database functions; the header and the team are edited under
+ * row-level security. Commands answer with the whole 8D (it is small), as for quality alerts.
+ */
+@Injectable()
+export class CapaService {
+  constructor(private readonly database: DatabaseService) {}
+
+  list(ctx: RequestContext, q: ListQuery): Promise<{ data: CapaSummary[] }> {
+    return this.database.asUser(ctx, async (db) => {
+      const where: SQL[] = [sql`c.organisation_id = ${orgOf(ctx)}::uuid`];
+      if (q.stage === 'running') where.push(RUNNING);
+      else if (q.stage !== 'all') where.push(sql`c.stage = ${q.stage}`);
+      if (q.ncrId) where.push(sql`exists (select 1 from public.capa_ncr_links l where l.capa_id = c.id and l.nonconformance_id = ${q.ncrId}::uuid and l.ended_at is null)`);
+      if (q.owner === 'me') where.push(sql`om.user_id = auth.uid()`);
+      if (q.q) {
+        const like = `%${q.q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+        where.push(sql`(c.title ilike ${like} or c.reference ilike ${like})`);
+      }
+      const rows = await db.execute<Row>(sql`${SELECT} where ${sql.join(where, sql` and `)} order by c.created_at desc limit ${q.limit}`);
+      return { data: rows.rows.map(toSummary) };
+    });
+  }
+
+  get(ctx: RequestContext, id: string): Promise<CapaDetail> {
+    return this.database.asUser(ctx, (db) => this.load(db, ctx, id));
+  }
+
+  create(ctx: RequestContext, body: CreateCapaBody): Promise<CapaDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      const res = await db.execute<{ id: string }>(sql`
+        select app.start_capa(${orgOf(ctx)}::uuid, ${body.title ?? null}, ${body.problemStatement ?? null}, ${body.source ?? null}, ${body.severity ?? null}, ${body.fromNcrId ?? null}::uuid) as id`);
+      return this.load(db, ctx, res.rows[0].id);
+    });
+  }
+
+  update(ctx: RequestContext, id: string, body: UpdateCapaBody): Promise<CapaDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      const sets: SQL[] = [];
+      for (const [key, column] of Object.entries(HEADER_COLUMNS)) {
+        const value = (body as Record<string, unknown>)[key];
+        if (value === undefined) continue;
+        const cast = key === 'dueDate' ? sql`::date` : key === 'ownerMembershipId' ? sql`::uuid` : sql``;
+        sets.push(sql`${sql.raw(column)} = ${(value as string | null) === '' ? null : (value as string | null)}${cast}`);
+      }
+      const updated = await db.execute(sql`update public.capas set ${sql.join(sets, sql`, `)} where id = ${id}::uuid and organisation_id = ${orgOf(ctx)}::uuid returning id`);
+      if (updated.rows.length === 0) throw ApiError.forbidden('You are not allowed to edit this 8D');
+      return this.load(db, ctx, id);
+    });
+  }
+
+  completeStep(ctx: RequestContext, id: string, body: CompleteStepBody): Promise<CapaDetail> {
+    return this.command(ctx, id, sql`select app.capa_complete_step(${id}::uuid, ${body.step}, ${body.note ?? null})`);
+  }
+
+  reopenStep(ctx: RequestContext, id: string, body: ReopenStepBody): Promise<CapaDetail> {
+    return this.command(ctx, id, sql`select app.capa_reopen_step(${id}::uuid, ${body.step}, ${body.reason})`);
+  }
+
+  cancel(ctx: RequestContext, id: string, body: ReasonBody): Promise<CapaDetail> {
+    return this.command(ctx, id, sql`select app.cancel_capa(${id}::uuid, ${body.reason})`);
+  }
+
+  reopen(ctx: RequestContext, id: string, body: ReasonBody): Promise<CapaDetail> {
+    return this.command(ctx, id, sql`select app.reopen_capa(${id}::uuid, ${body.reason})`);
+  }
+
+  // ---- team ----------------------------------------------------------------------------------
+
+  addTeamMember(ctx: RequestContext, id: string, body: AddTeamBody): Promise<CapaDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      await db.execute(sql`
+        insert into public.capa_team_members (organisation_id, capa_id, membership_id, external_name, external_company, external_email, role)
+        values (${orgOf(ctx)}::uuid, ${id}::uuid, ${body.membershipId ?? null}::uuid, ${body.externalName ?? null}, ${body.externalCompany || null}, ${body.externalEmail || null}, ${body.role})`);
+      return this.load(db, ctx, id);
+    });
+  }
+
+  updateTeamMember(ctx: RequestContext, teamId: string, body: UpdateTeamBody): Promise<CapaDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<{ capa_id: string }>(sql`select capa_id from public.capa_team_members where id = ${teamId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!found.rows.length) throw ApiError.notFound('team_member_not_found', 'Team member not found');
+      const sets: SQL[] = [];
+      if (body.role !== undefined) sets.push(sql`role = ${body.role}`);
+      if (body.externalName !== undefined) sets.push(sql`external_name = ${body.externalName}`);
+      if (body.externalCompany !== undefined) sets.push(sql`external_company = ${body.externalCompany || null}`);
+      if (body.externalEmail !== undefined) sets.push(sql`external_email = ${body.externalEmail || null}`);
+      if (body.ended) sets.push(sql`ended_at = now()`);
+      const updated = await db.execute(sql`update public.capa_team_members set ${sql.join(sets, sql`, `)} where id = ${teamId}::uuid and organisation_id = ${orgOf(ctx)}::uuid returning id`);
+      if (updated.rows.length === 0) throw ApiError.forbidden('You are not allowed to change this team');
+      return this.load(db, ctx, found.rows[0].capa_id);
+    });
+  }
+
+  // ---- non-conformance links ---------------------------------------------------------------
+
+  linkNcr(ctx: RequestContext, id: string, body: LinkNcrBody): Promise<CapaDetail> {
+    return this.command(ctx, id, sql`select app.link_capa_ncr(${id}::uuid, ${body.ncrId}::uuid)`);
+  }
+
+  unlinkNcr(ctx: RequestContext, linkId: string, body: ReasonBody): Promise<CapaDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<{ capa_id: string }>(sql`select capa_id from public.capa_ncr_links where id = ${linkId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!found.rows.length) throw ApiError.notFound('link_not_found', 'Link not found');
+      await db.execute(sql`select app.unlink_capa_ncr(${linkId}::uuid, ${body.reason})`);
+      return this.load(db, ctx, found.rows[0].capa_id);
+    });
+  }
+
+  /** The running and finished 8Ds a non-conformance is linked to (those the caller may read). */
+  forNcr(ctx: RequestContext, ncrId: string): Promise<z.infer<typeof NcrCapaList>> {
+    return this.database.asUser(ctx, async (db) => {
+      const known = await db.execute(sql`select 1 from public.nonconformances where id = ${ncrId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!known.rows.length) throw ApiError.notFound('ncr_not_found', 'Non-conformance not found');
+      const res = await db.execute<Row>(sql`
+        select l.id as link_id, l.created_at as linked_at, c.id, c.reference, c.title, c.stage,
+               (select count(*) from public.capa_steps s where s.capa_id = c.id and s.completed_at is not null)::int as steps_done,
+               (select min(s.step) from public.capa_steps s where s.capa_id = c.id and s.completed_at is null) as next_step
+        from public.capa_ncr_links l join public.capas c on c.id = l.capa_id
+        where l.organisation_id = ${orgOf(ctx)}::uuid and l.nonconformance_id = ${ncrId}::uuid and l.ended_at is null
+        order by c.created_at desc`);
+      return {
+        data: res.rows.map((r) => ({
+          linkId: r.link_id as string,
+          capaId: r.id as string,
+          reference: r.reference as string,
+          title: r.title as string,
+          stage: r.stage as CapaSummary['stage'],
+          currentStep: ((r.next_step as string) ?? 'd8') as CapaSummary['currentStep'],
+          stepsDone: Number(r.steps_done),
+          linkedAt: iso(r.linked_at)!,
+        })),
+      };
+    });
+  }
+
+  /** Active members for the team and owner pickers (the members list itself needs members.read). */
+  people(ctx: RequestContext, q: PeopleQuery): Promise<z.infer<typeof PeopleList>> {
+    return this.database.asUser(ctx, async (db) => {
+      const like = q.q ? `%${q.q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%` : null;
+      const res = await db.execute<Row>(sql`
+        select m.id as membership_id, m.user_id, coalesce(${sql.raw(personName('p'))}, m.invited_email, 'Unknown') as name
+        from public.organisation_users m
+        left join public.profiles p on p.id = m.user_id
+        where m.organisation_id = ${orgOf(ctx)}::uuid and m.status = 'active' and m.user_id is not null
+          and (${like}::text is null or ${sql.raw(personName('p'))} ilike ${like} or m.invited_email ilike ${like})
+        order by name limit 100`);
+      return { data: res.rows.map((r) => ({ membershipId: r.membership_id as string, userId: r.user_id as string, name: r.name as string })) };
+    });
+  }
+
+  // ---- helpers ------------------------------------------------------------------------------
+
+  /** Runs a database command on an 8D the caller can see, then answers with the 8D. */
+  private command(ctx: RequestContext, id: string, statement: SQL): Promise<CapaDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      await db.execute(statement);
+      return this.load(db, ctx, id);
+    });
+  }
+
+  private async load(db: Db, ctx: RequestContext, id: string): Promise<CapaDetail> {
+    const rows = await db.execute<Row>(sql`${SELECT} where c.id = ${id}::uuid and c.organisation_id = ${orgOf(ctx)}::uuid`);
+    if (!rows.rows.length) throw ApiError.notFound('capa_not_found', '8D not found');
+    const r = rows.rows[0];
+    const [steps, team, ncrs] = await Promise.all([
+      db.execute<Row>(sql`select s.step, s.completed_at, s.completed_by, s.note, s.reopened_at, s.reopen_reason, ${sql.raw(personName('p'))} as completed_by_name
+        from public.capa_steps s left join public.profiles p on p.id = s.completed_by where s.capa_id = ${id}::uuid order by s.step`),
+      db.execute<Row>(sql`select t.id, t.membership_id, m.user_id, t.external_name, t.external_company, t.external_email, t.role, t.ended_at,
+          coalesce(${sql.raw(personName('p'))}, t.external_name, m.invited_email, 'Unknown') as name
+        from public.capa_team_members t
+        left join public.organisation_users m on m.id = t.membership_id
+        left join public.profiles p on p.id = m.user_id
+        where t.capa_id = ${id}::uuid
+        order by t.ended_at is not null, case t.role when 'leader' then 0 when 'champion' then 1 else 2 end, t.created_at`),
+      // Labels come from joins that run as the caller, so an NC they cannot read has no label.
+      db.execute<Row>(sql`select l.id, l.nonconformance_id, l.created_at, l.created_by, l.ended_at, l.end_reason,
+          n.reference, n.title, n.stage, n.source, n.severity, ${sql.raw(personName('pl'))} as linked_by_name
+        from public.capa_ncr_links l
+        left join public.nonconformances n on n.id = l.nonconformance_id
+        left join public.profiles pl on pl.id = l.created_by
+        where l.capa_id = ${id}::uuid order by l.ended_at is not null, l.created_at`),
+    ]);
+    const incomplete = steps.rows.filter((s) => !s.completed_at).map((s) => s.step as string);
+    const problems = new Map<string, string[]>();
+    await Promise.all(
+      incomplete.map(async (step) => {
+        const res = await db.execute<{ p: string[] }>(sql`select app.capa_step_problems(${id}::uuid, ${step}) as p`);
+        problems.set(step, res.rows[0].p ?? []);
+      }),
+    );
+    return {
+      ...toSummary(r),
+      problemStatement: (r.problem_statement as string) ?? null,
+      createdBy: person(r.created_by, r.created_by_name),
+      updatedAt: iso(r.updated_at)!,
+      steps: STEPS.map((step) => {
+        const s = steps.rows.find((x) => x.step === step)!;
+        return {
+          step,
+          completed: !!s.completed_at,
+          completedAt: iso(s.completed_at),
+          completedBy: person(s.completed_by, s.completed_by_name),
+          note: (s.note as string) ?? null,
+          reopenedAt: iso(s.reopened_at),
+          reopenReason: (s.reopen_reason as string) ?? null,
+          problems: problems.get(step) ?? [],
+        };
+      }),
+      team: team.rows.map((t) => ({
+        id: t.id as string,
+        membershipId: (t.membership_id as string) ?? null,
+        userId: (t.user_id as string) ?? null,
+        name: t.name as string,
+        company: (t.external_company as string) ?? null,
+        email: (t.external_email as string) ?? null,
+        role: t.role as CapaDetail['team'][number]['role'],
+        external: !t.membership_id,
+        endedAt: iso(t.ended_at),
+      })),
+      ncrs: ncrs.rows.map((n) => ({
+        id: n.id as string,
+        nonconformanceId: n.nonconformance_id as string,
+        reference: (n.reference as string) ?? null,
+        title: (n.title as string) ?? null,
+        stage: (n.stage as string) ?? null,
+        source: (n.source as string) ?? null,
+        severity: (n.severity as string) ?? null,
+        linkedAt: iso(n.created_at)!,
+        linkedBy: person(n.created_by, n.linked_by_name),
+        endedAt: iso(n.ended_at),
+        endReason: (n.end_reason as string) ?? null,
+      })),
+    };
+  }
+}

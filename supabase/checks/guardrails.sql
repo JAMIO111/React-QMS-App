@@ -58,7 +58,8 @@ audited(relname) AS (VALUES
   ('organisation_subscriptions'), ('organisation_subscription_items'), ('user_subscription_assignments'),
   ('billing_invoices'), ('billing_payments'),
   ('inspection_ncr_links'), ('inspection_failure_acknowledgements'), ('spc_baselines'), ('spc_alerts'), ('department_members'),
-  ('quality_alerts'), ('quality_alert_parts'), ('quality_alert_machines'), ('quality_alert_operations'), ('quality_alert_departments'), ('quality_alert_targets'), ('quality_alert_recipients'), ('quality_alert_attachments'), ('quality_alert_links')
+  ('quality_alerts'), ('quality_alert_parts'), ('quality_alert_machines'), ('quality_alert_operations'), ('quality_alert_departments'), ('quality_alert_targets'), ('quality_alert_recipients'), ('quality_alert_attachments'), ('quality_alert_links'),
+  ('capas'), ('capa_steps'), ('capa_team_members'), ('capa_ncr_links')
 )
 SELECT rule, object FROM (
   SELECT '1 rls disabled' AS rule, format('%I.%I', nspname, relname) AS object

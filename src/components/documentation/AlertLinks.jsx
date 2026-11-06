@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import RHFComboBox from "../ui/RHFComboBox";
-import { PartyPicker, RemoteComboBox } from "../ncr/Pickers";
-import { useNcrs } from "../../hooks/useNcr";
+import { NcrPicker, PartyPicker, RemoteComboBox } from "../ncr/Pickers";
 import { useGauges, useGaugeCalibrations } from "../../hooks/useCalibration";
 import { LINK_KINDS, linkHref } from "../../lib/qualityAlerts";
 
@@ -14,22 +13,6 @@ const useDebounced = (delay = 300) => {
     return () => clearTimeout(t);
   }, [term, delay]);
   return [q, setTerm];
-};
-
-const NcPicker = ({ onPick }) => {
-  const [q, setSearch] = useDebounced();
-  const ncrs = useNcrs({ q, pageSize: 10 });
-  return (
-    <RemoteComboBox
-      label="Add a nonconformance"
-      placeholder="Search reference or title…"
-      value={null}
-      items={(ncrs.data?.data ?? []).map((n) => ({ id: n.id, name: `${n.reference} · ${n.title}`, source: n.source }))}
-      isFetching={ncrs.isFetching}
-      onSearch={setSearch}
-      onChange={(id, item) => id && onPick({ kind: "nonconformance", recordId: id, label: item?.name ?? "Nonconformance", source: item?.source ?? null })}
-    />
-  );
 };
 
 const GaugePicker = ({ label, onChange }) => {
@@ -86,7 +69,7 @@ export const LinksEditor = ({ links, onAdd, onRemove }) => {
         ))}
       </ul>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <NcPicker onPick={add} />
+        <NcrPicker label="Add a nonconformance" value={null} onChange={(id, item) => id && add({ kind: "nonconformance", recordId: id, label: item?.name ?? "Nonconformance", source: item?.source ?? null })} />
         <PartyPicker kind="suppliers" label="Add a supplier" value={null} onChange={(id, item) => id && add({ kind: "supplier", recordId: id, label: item?.name ?? "Supplier" })} />
         <GaugePicker label="Add a gauge" onChange={(id, item) => id && add({ kind: "gauge", recordId: id, label: item ? `${item.name}${item.hint ? ` · ${item.hint}` : ""}` : "Gauge" })} />
       </div>

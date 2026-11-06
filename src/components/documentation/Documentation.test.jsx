@@ -24,9 +24,8 @@ vi.mock("../../hooks/useProcessControl", () => ({
   useMachines: () => ({ data: { items: [{ id: "mc1", code: "L1", name: "Lathe 1" }] } }),
   usePartFamilies: () => ({ data: { items: [{ id: "f1", code: "HCR", name: "Rods" }] } }),
 }));
-vi.mock("../ncr/Pickers", () => ({ PartPicker: () => <div />, PartyPicker: () => <div />, RemoteComboBox: () => <div /> }));
+vi.mock("../ncr/Pickers", () => ({ PartPicker: () => <div />, PartyPicker: () => <div />, RemoteComboBox: () => <div />, NcrPicker: () => <div /> }));
 vi.mock("@/contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
-vi.mock("../../hooks/useNcr", () => ({ useNcrs: () => ({ data: { data: [] } }) }));
 vi.mock("../../hooks/useCalibration", () => ({ useGauges: () => ({ data: { data: [] } }), useGaugeCalibrations: () => ({ data: [] }) }));
 
 import QualityAlertsPage from "./QualityAlertsPage";

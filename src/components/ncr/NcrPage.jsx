@@ -48,6 +48,7 @@ import NcrInspectionSource from "../inspection/NcrInspectionSource";
 import { useNcrInspectionSource } from "../../hooks/useInspection";
 import { EMPTY, changedFields, toBody, toForm } from "./formModel";
 import LoadingScreen from "../ui/LoadingScreen";
+import NcrCapaCard from "../capa/NcrCapaCard";
 
 /** Section title with a rule, as in the original NC entry form. */
 const SectionHeading = ({ id, title, sectionRef }) => (
@@ -373,7 +374,7 @@ const NcrPage = () => {
                       options={(employees ?? []).filter((e) => e.active || e.id === form.responsibleEmployeeId).map((e) => ({ id: e.id, name: e.name, hint: e.jobTitle ?? undefined }))} />
                   ))}
               </div>
-              <p className="text-sm text-secondary-text">Containment, root cause (8D) and corrective actions will be added here in a later release.</p>
+              {!isNew && ncr && <NcrCapaCard ncr={ncr} />}
             </Card>
           </form>
 

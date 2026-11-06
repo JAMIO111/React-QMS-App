@@ -134,6 +134,17 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/quality-alerts/{id}/attachments': { storagePath: 'x', fileName: 'x.pdf', sizeBytes: 1 },
     'POST /api/v1/quality-alert-attachments/{id}/delete': { reason: 'Hijacked' },
     'POST /api/v1/quality-alert-attachments/{id}/restore': undefined,
+    'GET /api/v1/capas/{id}': undefined,
+    'PATCH /api/v1/capas/{id}': { title: 'Hijacked' },
+    'POST /api/v1/capas/{id}/complete-step': { step: 'd0' },
+    'POST /api/v1/capas/{id}/reopen-step': { step: 'd0', reason: 'Hijacked' },
+    'POST /api/v1/capas/{id}/cancel': { reason: 'Hijacked' },
+    'POST /api/v1/capas/{id}/reopen': { reason: 'Hijacked' },
+    'POST /api/v1/capas/{id}/team': { externalName: 'Hijacker' },
+    'POST /api/v1/capas/{id}/ncrs': { ncrId: a.ncr },
+    'PATCH /api/v1/capa-team/{id}': { role: 'member' },
+    'POST /api/v1/capa-ncr-links/{id}/unlink': { reason: 'Hijacked' },
+    'GET /api/v1/ncrs/{id}/capas': undefined,
     'GET /api/v1/ncrs/{id}/inspection-source': undefined,
     'GET /api/v1/calibrations/{id}/gauge-usage': undefined,
     'GET /api/v1/inspections/{id}': undefined,
@@ -250,6 +261,17 @@ const hasSample = (op: Op) =>
     'POST /api/v1/quality-alerts/{id}/attachments',
     'POST /api/v1/quality-alert-attachments/{id}/delete',
     'POST /api/v1/quality-alert-attachments/{id}/restore',
+    'GET /api/v1/capas/{id}',
+    'PATCH /api/v1/capas/{id}',
+    'POST /api/v1/capas/{id}/complete-step',
+    'POST /api/v1/capas/{id}/reopen-step',
+    'POST /api/v1/capas/{id}/cancel',
+    'POST /api/v1/capas/{id}/reopen',
+    'POST /api/v1/capas/{id}/team',
+    'POST /api/v1/capas/{id}/ncrs',
+    'PATCH /api/v1/capa-team/{id}',
+    'POST /api/v1/capa-ncr-links/{id}/unlink',
+    'GET /api/v1/ncrs/{id}/capas',
     'GET /api/v1/ncrs/{id}/inspection-source',
     'GET /api/v1/calibrations/{id}/gauge-usage',
     'GET /api/v1/inspections/{id}',
@@ -297,6 +319,9 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/spc/alerts/')) return a.alert;
   if (path.startsWith('/api/v1/quality-alerts/')) return a.qualityAlert;
   if (path.startsWith('/api/v1/quality-alert-attachments/')) return a.qualityAlertAttachment;
+  if (path.startsWith('/api/v1/capas/')) return a.capa;
+  if (path.startsWith('/api/v1/capa-team/')) return a.capaTeam;
+  if (path.startsWith('/api/v1/capa-ncr-links/')) return a.capaLink;
   if (path.startsWith('/api/v1/inspection-measurements/')) return a.measurement;
   if (path.startsWith('/api/v1/machines/')) return a.machine;
   if (path.startsWith('/api/v1/part-families/')) return a.family;
@@ -388,6 +413,9 @@ beforeAll(async () => {
     a.alert = (await q1(`select id from public.spc_alerts where organisation_id = $1`, [ids.orgA])).id;
     a.qualityAlert = (await q1(`insert into public.quality_alerts (organisation_id, title, category, severity) values ($1, 'Alpha alert', 'product', 'low') returning id`, [ids.orgA])).id;
     a.qualityAlertAttachment = (await q1(`select app.add_quality_alert_attachment($1::uuid, $2::text || '/quality-alerts/' || $1::text || '/a.pdf', 'a.pdf', 'application/pdf', 1) as id`, [a.qualityAlert, ids.orgA])).id;
+    a.capa = (await q1(`select app.start_capa($1::uuid, 'Alpha 8D', 'Alpha problem', null, null, null) as id`, [ids.orgA])).id;
+    a.capaTeam = (await q1(`select id from public.capa_team_members where capa_id = $1 limit 1`, [a.capa])).id;
+    a.capaLink = (await q1(`select app.link_capa_ncr($1::uuid, $2::uuid) as id`, [a.capa, a.ncr])).id;
     await client.query('commit');
   } finally {
     client.release();

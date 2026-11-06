@@ -57,6 +57,8 @@ import { InspectionService } from './inspection/inspection.service';
 import { ProcessControlDashboardController, ProcessControlDashboardService } from './process-control/process-control-dashboard';
 import { QualityAlertAttachmentsController, QualityAlertsController } from './documentation/documentation.controller';
 import { DocumentationService } from './documentation/documentation.service';
+import { CapaNcrLinksController, CapasController, CapaTeamController, NcrCapasController } from './capa/capa.controller';
+import { CapaService } from './capa/capa.service';
 import { SpcController } from './spc/spc.controller';
 import { SpcService } from './spc/spc.service';
 import { ControlPlanContentService } from './process-control/control-plan-content.service';
@@ -130,6 +132,10 @@ export class AppModule implements NestModule {
         SpcController,
         QualityAlertsController,
         QualityAlertAttachmentsController,
+        CapasController,
+        CapaTeamController,
+        CapaNcrLinksController,
+        NcrCapasController,
         ProcessControlDashboardController,
         GaugeUsageController,
       ],
@@ -153,6 +159,7 @@ export class AppModule implements NestModule {
         InspectionService,
         SpcService,
         DocumentationService,
+        CapaService,
         ProcessControlDashboardService,
         OrganisationsService,
         StructureService,

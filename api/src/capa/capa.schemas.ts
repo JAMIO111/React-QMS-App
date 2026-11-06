@@ -1,0 +1,179 @@
+import { z } from 'zod';
+
+const Iso = z.string().datetime({ offset: true });
+const DateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-11-30');
+const text = (max: number) => z.string().trim().min(1).max(max);
+
+export const STAGES = ['open', 'actions_in_progress', 'awaiting_verification', 'verified_effective', 'closed', 'cancelled'] as const;
+export const STEPS = ['d0', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8'] as const;
+export const SOURCES = ['internal', 'customer', 'supplier'] as const;
+export const SEVERITIES = ['critical', 'major', 'minor'] as const;
+export const TEAM_ROLES = ['leader', 'champion', 'member', 'supplier_contact', 'customer_contact'] as const;
+export const Stage = z.enum(STAGES);
+export const Step = z.enum(STEPS);
+export const Source = z.enum(SOURCES);
+export const Severity = z.enum(SEVERITIES);
+export const TeamRole = z.enum(TEAM_ROLES);
+
+// ---- input ---------------------------------------------------------------------------------------
+
+/** Start an 8D. From a non-conformance only that is needed; the NC fills the title, problem statement, source and severity. */
+export const CreateCapaBody = z
+  .object({
+    fromNcrId: z.string().uuid().optional(),
+    title: text(200).optional(),
+    problemStatement: text(5000).optional(),
+    source: Source.optional(),
+    severity: Severity.optional(),
+  })
+  .strict()
+  .refine((b) => b.fromNcrId !== undefined || b.title !== undefined, { message: 'Give the 8D a title or start it from a non-conformance' });
+export type CreateCapaBody = z.infer<typeof CreateCapaBody>;
+
+export const UpdateCapaBody = z
+  .object({
+    title: text(200),
+    problemStatement: z.string().trim().max(5000).nullable(),
+    source: Source,
+    severity: Severity.nullable(),
+    externalReference: z.string().trim().max(100).nullable(),
+    ownerMembershipId: z.string().uuid().nullable(),
+    dueDate: DateOnly.nullable(),
+  })
+  .partial()
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
+export type UpdateCapaBody = z.infer<typeof UpdateCapaBody>;
+
+export const CompleteStepBody = z.object({ step: Step, note: z.string().trim().max(2000).optional() }).strict();
+export type CompleteStepBody = z.infer<typeof CompleteStepBody>;
+export const ReopenStepBody = z.object({ step: Step, reason: text(2000) }).strict();
+export type ReopenStepBody = z.infer<typeof ReopenStepBody>;
+export const ReasonBody = z.object({ reason: text(2000) }).strict();
+export type ReasonBody = z.infer<typeof ReasonBody>;
+
+export const AddTeamBody = z
+  .object({
+    membershipId: z.string().uuid().optional(),
+    externalName: text(120).optional(),
+    externalCompany: z.string().trim().max(120).optional(),
+    externalEmail: z.string().trim().max(200).optional(),
+    role: TeamRole.default('member'),
+  })
+  .strict()
+  .refine((b) => (b.membershipId === undefined) !== (b.externalName === undefined), { message: 'Name an organisation member or an external contact' })
+  .refine((b) => b.membershipId === undefined || ['leader', 'champion', 'member'].includes(b.role), { message: 'A member can be leader, champion or member' });
+export type AddTeamBody = z.infer<typeof AddTeamBody>;
+
+export const UpdateTeamBody = z
+  .object({
+    role: TeamRole,
+    externalName: text(120),
+    externalCompany: z.string().trim().max(120).nullable(),
+    externalEmail: z.string().trim().max(200).nullable(),
+    /** The person leaves the team (the record stays). */
+    ended: z.literal(true),
+  })
+  .partial()
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
+export type UpdateTeamBody = z.infer<typeof UpdateTeamBody>;
+
+export const LinkNcrBody = z.object({ ncrId: z.string().uuid() }).strict();
+export type LinkNcrBody = z.infer<typeof LinkNcrBody>;
+
+export const ListQuery = z.object({
+  /** Running (not closed or cancelled) by default; a stage; or all. */
+  stage: z.enum(['running', ...STAGES, 'all']).default('running'),
+  /** Only 8Ds linked to this non-conformance. */
+  ncrId: z.string().uuid().optional(),
+  /** Only 8Ds the signed-in person owns. */
+  owner: z.enum(['me']).optional(),
+  q: z.string().trim().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+});
+export type ListQuery = z.infer<typeof ListQuery>;
+
+export const PeopleQuery = z.object({ q: z.string().trim().min(1).max(100).optional() });
+export type PeopleQuery = z.infer<typeof PeopleQuery>;
+
+// ---- output --------------------------------------------------------------------------------------
+
+const Person = z.object({ id: z.string().uuid(), name: z.string() }).nullable();
+
+export const CapaSummary = z.object({
+  id: z.string().uuid(),
+  reference: z.string(),
+  method: z.literal('8d'),
+  title: z.string(),
+  stage: Stage,
+  stageReason: z.string().nullable(),
+  source: Source,
+  severity: Severity.nullable(),
+  externalReference: z.string().nullable(),
+  owner: z.object({ membershipId: z.string().uuid(), name: z.string() }).nullable(),
+  dueDate: DateOnly.nullable(),
+  overdue: z.boolean(),
+  /** The first step not yet complete (D8 once everything is). */
+  currentStep: Step,
+  stepsDone: z.number().int(),
+  ncrCount: z.number().int(),
+  createdAt: Iso,
+  closedAt: Iso.nullable(),
+});
+export type CapaSummary = z.infer<typeof CapaSummary>;
+
+export const CapaStep = z.object({
+  step: Step,
+  completed: z.boolean(),
+  completedAt: Iso.nullable(),
+  completedBy: Person,
+  note: z.string().nullable(),
+  reopenedAt: Iso.nullable(),
+  reopenReason: z.string().nullable(),
+  /** What is still needed before the step can be completed (empty = ready). */
+  problems: z.array(z.string()),
+});
+
+export const TeamMember = z.object({
+  id: z.string().uuid(),
+  membershipId: z.string().uuid().nullable(),
+  userId: z.string().uuid().nullable(),
+  name: z.string(),
+  company: z.string().nullable(),
+  email: z.string().nullable(),
+  role: TeamRole,
+  external: z.boolean(),
+  endedAt: Iso.nullable(),
+});
+
+export const NcrLink = z.object({
+  id: z.string().uuid(),
+  nonconformanceId: z.string().uuid(),
+  /** Null when the caller cannot read the non-conformance. */
+  reference: z.string().nullable(),
+  title: z.string().nullable(),
+  stage: z.string().nullable(),
+  source: z.string().nullable(),
+  severity: z.string().nullable(),
+  linkedAt: Iso,
+  linkedBy: Person,
+  endedAt: Iso.nullable(),
+  endReason: z.string().nullable(),
+});
+
+export const CapaDetail = CapaSummary.extend({
+  problemStatement: z.string().nullable(),
+  createdBy: Person,
+  updatedAt: Iso,
+  steps: z.array(CapaStep),
+  team: z.array(TeamMember),
+  ncrs: z.array(NcrLink),
+});
+export type CapaDetail = z.infer<typeof CapaDetail>;
+
+export const CapaList = z.object({ data: z.array(CapaSummary) });
+export const PeopleList = z.object({ data: z.array(z.object({ membershipId: z.string().uuid(), userId: z.string().uuid(), name: z.string() })) });
+export const NcrCapaList = z.object({
+  data: z.array(z.object({ linkId: z.string().uuid(), capaId: z.string().uuid(), reference: z.string(), title: z.string(), stage: Stage, currentStep: Step, stepsDone: z.number().int(), linkedAt: Iso })),
+});

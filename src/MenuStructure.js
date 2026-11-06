@@ -1,4 +1,4 @@
-import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, FileTextIcon, GaugeIcon, LayoutDashboardIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, FileTextIcon, GaugeIcon, LayoutDashboardIcon, ListChecksIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
@@ -19,6 +19,13 @@ export const menuStructure = [
       { name: "Customer", path: "/Non-Conformance/Customer" },
       { name: "Supplier", path: "/Non-Conformance/Supplier" },
     ],
+  },
+  {
+    name: "Corrective Actions (8D)",
+    icon: ListChecksIcon,
+    permission: "capa.read",
+    path: "/CAPA",
+    subMenu: [],
   },
   {
     name: "In-Process Inspection",

@@ -69,6 +69,8 @@ export type ReasonBody = z.infer<typeof ReasonBody>;
 export const ListQuery = z.object({
   /** Latest revisions only unless 'all'; status narrows by lifecycle. */
   status: z.enum([...STATUSES, 'all']).optional(),
+  /** Active alerts past their acknowledge-by date with people who have not acknowledged (documentation.manage). */
+  overdue: z.enum(['true', 'false']).optional(),
   category: Category.optional(),
   severity: Severity.optional(),
   q: z.string().trim().min(1).max(100).optional(),
@@ -99,6 +101,8 @@ export const AlertSummary = z.object({
   issuedBy: Person,
   createdBy: Person,
   updatedAt: Iso,
+  /** Acknowledgement progress, for people who manage documentation (null for others). */
+  progress: z.object({ total: z.number().int(), viewed: z.number().int(), acknowledged: z.number().int(), overdue: z.number().int() }).nullable(),
 });
 export type AlertSummary = z.infer<typeof AlertSummary>;
 
@@ -124,9 +128,45 @@ export const AlertDetail = AlertSummary.extend({
       }),
     ),
   }),
+  /** The caller's own place in it, when it is addressed to them. */
+  me: z.object({ firstViewedAt: Iso.nullable(), acknowledgedAt: Iso.nullable(), note: z.string().nullable(), reachedVia: z.array(z.string()), overdue: z.boolean() }).nullable(),
   /** Every revision of this alert number, newest first. */
   revisions: z.array(z.object({ id: z.string().uuid(), revision: z.number().int(), revisionLetter: z.string(), status: Status, issuedAt: Iso.nullable(), revisionReason: z.string().nullable() })),
 });
 export type AlertDetail = z.infer<typeof AlertDetail>;
 
 export const AlertList = z.object({ data: z.array(AlertSummary) });
+
+export const AcknowledgeBody = z.object({ note: z.string().trim().max(2000).optional() }).strict();
+export type AcknowledgeBody = z.infer<typeof AcknowledgeBody>;
+export const AddRecipientBody = z.object({ membershipId: z.string().uuid() }).strict();
+export type AddRecipientBody = z.infer<typeof AddRecipientBody>;
+
+export const RecipientsPreview = z.object({
+  total: z.number().int(),
+  targets: z.array(z.object({ id: z.string().uuid(), kind: z.enum(['department', 'role', 'person']), label: z.string(), count: z.number().int() })),
+});
+
+export const Recipient = z.object({
+  id: z.string().uuid(),
+  membershipId: z.string().uuid(),
+  name: z.string(),
+  reachedVia: z.array(z.string()),
+  firstViewedAt: Iso.nullable(),
+  acknowledgedAt: Iso.nullable(),
+  note: z.string().nullable(),
+  /** Past the acknowledge-by date without acknowledging. */
+  overdue: z.boolean(),
+});
+export const RecipientList = z.object({
+  data: z.array(Recipient),
+  totals: z.object({ total: z.number().int(), viewed: z.number().int(), acknowledged: z.number().int(), overdue: z.number().int() }),
+});
+
+export const MineItem = AlertSummary.extend({
+  me: z.object({ firstViewedAt: Iso.nullable(), acknowledgedAt: Iso.nullable(), note: z.string().nullable(), reachedVia: z.array(z.string()), overdue: z.boolean() }),
+  /** open: asked and not yet acknowledged; acknowledged; closed: no longer in force. */
+  state: z.enum(['open', 'acknowledged', 'closed']),
+});
+export const MineList = z.object({ data: z.array(MineItem), unacknowledged: z.number().int(), overdue: z.number().int() });
+export const MineCount = z.object({ unacknowledged: z.number().int(), overdue: z.number().int() });

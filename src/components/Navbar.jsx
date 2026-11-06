@@ -10,6 +10,7 @@ import NavItem from "./NavItem";
 import Logout from "./Logout";
 import { menuStructure } from "../MenuStructure";
 import { useCanSee, useOrganisationLogo } from "../hooks/useQmsApi";
+import { useMyAlertCount } from "../hooks/useDocumentation";
 import { useModuleAccess } from "../hooks/useSubscription";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import SubMenuItem from "./SubMenuItem";
@@ -18,6 +19,8 @@ import ThemeToggle from "./ThemeToggle";
 const Navbar = () => {
   const [isMenuExpanded, setIsMenuExpanded] = useState(false);
   const canSee = useCanSee();
+  const myAlerts = useMyAlertCount({ enabled: canSee("documentation.read") });
+  const badges = { "my-alerts": myAlerts.data?.unacknowledged ?? 0 };
   const hasModule = useModuleAccess();
   const { organisation } = useOrganisation();
   const { data: logoUrl } = useOrganisationLogo();
@@ -95,6 +98,7 @@ const Navbar = () => {
                     }
                     onToggleSubMenu={() => toggleSubMenu(item.name)}
                     isSubMenuOpen={isSubMenuOpen}
+                    badge={badges[item.badge] ?? 0}
                   />
                   {item.subMenu && isSubMenuOpen === item.name && (
                     <ul className="ml-4 flex flex-col animate-in fade-in slide-in-from-top-1 duration-200 motion-reduce:animate-none">
@@ -110,6 +114,7 @@ const Navbar = () => {
                             isFirst={index === 0}
                             isLast={index === visible.length - 1}
                             closeMenu={closeMenu}
+                            badge={badges[subItem.badge] ?? 0}
                           />
                         </li>
                       ))}

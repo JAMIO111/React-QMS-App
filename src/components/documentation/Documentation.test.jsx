@@ -14,7 +14,10 @@ vi.mock("../../hooks/useQmsApi", () => ({
   usePermissions: () => ({ can: (p) => permissions.includes(p) }),
   useAllDepartments: () => ({ data: { data: [{ id: "d1", code: "GI", name: "Goods-in" }, { id: "d2", code: "FI", name: "Final inspection" }] } }),
   useRoles: () => ({ data: { data: [{ id: "r1", key: "inspector", name: "Inspector" }] } }),
-  useMembers: () => ({ data: { data: [] } }),
+  useMembers: () => ({ data: { data: [
+    { membershipId: "m1", userId: "u1", firstName: "Ann", surname: "Tester", email: "ann@example.test", status: "active" },
+    { membershipId: "m2", userId: "u2", firstName: "Bob", surname: "Tester", email: "bob@example.test", status: "active" },
+  ] } }),
 }));
 vi.mock("../../hooks/useProcessControl", () => ({
   useMachines: () => ({ data: { items: [{ id: "mc1", code: "L1", name: "Lathe 1" }] } }),
@@ -25,11 +28,12 @@ vi.mock("../ncr/Pickers", () => ({ PartPicker: () => <div /> }));
 import QualityAlertsPage from "./QualityAlertsPage";
 import QualityAlertPage from "./QualityAlertPage";
 import QualityAlertForm from "./QualityAlertForm";
+import MyAlertsPage from "./MyAlertsPage";
 
 const summary = (over = {}) => ({
   id: "a1", number: 1, reference: "QA-001", revision: 2, revisionLetter: "B", title: "Incorrect material specification", category: "supplier", severity: "high",
   status: "active", inForce: true, effectiveDate: "2026-11-05", expiryDate: "2026-12-05", acknowledgeBy: "2026-11-07", issuedAt: "2026-11-05T09:00:00Z",
-  issuedBy: { id: "u1", name: "Ada Owner" }, createdBy: { id: "u1", name: "Ada Owner" }, updatedAt: "2026-11-05T09:00:00Z", ...over,
+  issuedBy: { id: "u1", name: "Ada Owner" }, createdBy: { id: "u1", name: "Ada Owner" }, updatedAt: "2026-11-05T09:00:00Z", progress: { total: 5, viewed: 4, acknowledged: 3, overdue: 2 }, ...over,
 });
 const detail = (over = {}) => ({
   ...summary(),
@@ -38,6 +42,7 @@ const detail = (over = {}) => ({
   revisionReason: "It was lot 76",
   supersedesId: "a0",
   withdrawn: null,
+  me: null,
   scope: {
     parts: [{ id: "sp1", kind: "part", partId: "p1", partFamilyId: null, label: "HCR-100 · Rod 100" }],
     machines: [{ id: "sm1", machineId: "mc1", label: "L1 · Lathe 1" }],
@@ -60,6 +65,7 @@ const renderAt = (url) => {
       <MemoryRouter initialEntries={[url]}>
         <Routes>
           <Route path="/Documentation/Quality-Alerts" element={<><QualityAlertsPage /><Where /></>} />
+          <Route path="/Documentation/My-Alerts" element={<><MyAlertsPage /><Where /></>} />
           <Route path="/Documentation/Quality-Alerts/new" element={<><QualityAlertForm /><Where /></>} />
           <Route path="/Documentation/Quality-Alerts/:id" element={<><QualityAlertPage /><Where /></>} />
           <Route path="/Documentation/Quality-Alerts/:id/edit" element={<><QualityAlertForm /><Where /></>} />
@@ -68,6 +74,21 @@ const renderAt = (url) => {
     </QueryClientProvider>,
   );
   return () => where;
+};
+
+const preview = { total: 2, targets: [{ id: "t1", kind: "department", label: "Goods-in", count: 2 }, { id: "t2", kind: "department", label: "Machining", count: 0 }] };
+const recipients = {
+  data: [
+    { id: "r1", membershipId: "m1", name: "Ann Tester", reachedVia: ["Department: Goods-in"], firstViewedAt: "2026-11-05T10:00:00Z", acknowledgedAt: "2026-11-05T10:05:00Z", note: "Quarantined", overdue: false },
+    { id: "r2", membershipId: "m3", name: "Cat Tester", reachedVia: ["Department: Final inspection"], firstViewedAt: null, acknowledgedAt: null, note: null, overdue: true },
+  ],
+  totals: { total: 2, viewed: 1, acknowledged: 1, overdue: 1 },
+};
+/** Answers the extra reads the alert page makes; `main` answers everything else. */
+const respond = (main) => async (path, opts = {}) => {
+  if (path.endsWith("/recipients-preview")) return preview;
+  if (path.endsWith("/recipients") && (opts.method ?? "GET") === "GET") return recipients;
+  return typeof main === "function" ? main(path, opts) : main;
 };
 
 beforeEach(() => {
@@ -102,7 +123,7 @@ describe("Quality alerts register", () => {
 
 describe("Quality alert page", () => {
   it("shows the content, scope, targets and revisions, and offers revise and withdraw on an active alert", async () => {
-    apiFetch.mockResolvedValue(detail());
+    apiFetch.mockImplementation(respond(detail()));
     renderAt("/Documentation/Quality-Alerts/a1");
     expect(await screen.findByRole("heading", { name: "Incorrect material specification" })).toBeInTheDocument();
     expect(screen.getByText(/certificate says 4140/)).toBeInTheDocument();
@@ -118,7 +139,7 @@ describe("Quality alert page", () => {
 
   it("withdraws with a required reason", async () => {
     let body;
-    apiFetch.mockImplementation(async (path, opts = {}) => (path.endsWith("/withdraw") ? ((body = opts.body), detail({ status: "withdrawn" })) : detail()));
+    apiFetch.mockImplementation(respond((path, opts = {}) => (path.endsWith("/withdraw") ? ((body = opts.body), detail({ status: "withdrawn" })) : detail())));
     renderAt("/Documentation/Quality-Alerts/a1");
     await userEvent.click(await screen.findByRole("button", { name: "Withdraw" }));
     const dialog = screen.getByRole("dialog");
@@ -131,7 +152,7 @@ describe("Quality alert page", () => {
 
   it("a draft can be edited, issued after confirming, and discarded; others cannot issue", async () => {
     const calls = [];
-    apiFetch.mockImplementation(async (path, opts = {}) => (calls.push(`${opts.method ?? "GET"} ${path}`), path.endsWith("/issue") ? detail({ status: "active" }) : detail({ status: "draft", inForce: false, revisionReason: null, withdrawn: null })));
+    apiFetch.mockImplementation(respond((path, opts = {}) => (calls.push(`${opts.method ?? "GET"} ${path}`), path.endsWith("/issue") ? detail({ status: "active" }) : detail({ status: "draft", inForce: false, revisionReason: null, withdrawn: null }))));
     confirm.mockResolvedValue(true);
     renderAt("/Documentation/Quality-Alerts/a1");
     expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
@@ -142,7 +163,7 @@ describe("Quality alert page", () => {
 
   it("without documentation.issue a draft has no Issue button", async () => {
     permissions = ["documentation.read", "documentation.manage"];
-    apiFetch.mockResolvedValue(detail({ status: "draft", inForce: false }));
+    apiFetch.mockImplementation(respond(detail({ status: "draft", inForce: false })));
     renderAt("/Documentation/Quality-Alerts/a1");
     expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Issue alert" })).toBeNull();
@@ -152,7 +173,7 @@ describe("Quality alert page", () => {
 describe("Quality alert form", () => {
   it("creates a draft with content, scope and targets", async () => {
     let body;
-    apiFetch.mockImplementation(async (path, opts = {}) => ((body = opts.body), detail({ id: "new1", status: "draft" })));
+    apiFetch.mockImplementation(respond((path, opts = {}) => (opts.method === "POST" && (body = opts.body), detail({ id: "new1", status: "draft" }))));
     const where = renderAt("/Documentation/Quality-Alerts/new");
     const form = screen.getByRole("form", { name: "Quality alert" });
     await userEvent.type(within(form).getByLabelText("Title"), "Supplier material defect");
@@ -199,5 +220,122 @@ describe("Quality alert form", () => {
     apiFetch.mockResolvedValue(detail());
     renderAt("/Documentation/Quality-Alerts/a1/edit");
     expect(await screen.findByText(/is issued and cannot be edited/)).toBeInTheDocument();
+  });
+});
+
+describe("Acknowledgement", () => {
+  it("a recipient sees a banner and acknowledges with an optional note", async () => {
+    permissions = ["documentation.read"];
+    let body;
+    const mineView = detail({ progress: null, me: { firstViewedAt: "2026-11-05T09:30:00Z", acknowledgedAt: null, note: null, reachedVia: ["Department: Goods-in"], overdue: false } });
+    apiFetch.mockImplementation(async (path, opts = {}) => (path.endsWith("/acknowledge") ? ((body = opts.body), detail({ me: { ...mineView.me, acknowledgedAt: "2026-11-05T10:00:00Z", note: "Done" } })) : mineView));
+    renderAt("/Documentation/Quality-Alerts/a1");
+    const banner = await screen.findByRole("status");
+    expect(banner).toHaveTextContent(/addressed to you/);
+    expect(banner).toHaveTextContent(/by 7 Nov 2026/);
+    await userEvent.click(within(banner).getByRole("button", { name: "Acknowledge" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("Note (optional)"), "Done");
+    await userEvent.click(within(dialog).getByRole("button", { name: "I have read and understood" }));
+    expect(body).toEqual({ note: "Done" });
+    expect(screen.queryByRole("table", { name: "Recipients" })).toBeNull(); // not a manager
+  });
+
+  it("shows an acknowledged alert as acknowledged, with no button", async () => {
+    permissions = ["documentation.read"];
+    apiFetch.mockResolvedValue(detail({ progress: null, me: { firstViewedAt: "2026-11-05T09:30:00Z", acknowledgedAt: "2026-11-05T10:00:00Z", note: null, reachedVia: ["Named"], overdue: false } }));
+    renderAt("/Documentation/Quality-Alerts/a1");
+    expect(await screen.findByText(/You acknowledged this alert on/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Acknowledge" })).toBeNull();
+  });
+
+  it("a manager sees who was asked, who has viewed and acknowledged, and who is overdue; filters; adds a person", async () => {
+    const calls = [];
+    apiFetch.mockImplementation(respond((path, opts = {}) => (calls.push(`${opts.method ?? "GET"} ${path}`), detail())));
+    renderAt("/Documentation/Quality-Alerts/a1");
+    const table = await screen.findByRole("table", { name: "Recipients" });
+    const totals = screen.getByLabelText("Acknowledgement totals");
+    expect(within(totals).getAllByText("1 of 2", { selector: "dd" })).toHaveLength(2); // viewed and acknowledged
+    expect(within(table).getByText("Overdue")).toBeInTheDocument();
+    expect(within(table).getByText(/Quarantined/)).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Show"), "open");
+    expect(within(table).queryByText("Ann Tester")).toBeNull();
+    expect(within(table).getByText("Cat Tester")).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Show"), "all");
+    await userEvent.selectOptions(screen.getByLabelText("Department"), "Goods-in");
+    expect(within(table).queryByText("Cat Tester")).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText("Person to add"), "m2");
+    await userEvent.click(within(screen.getByRole("form", { name: "Add a person" })).getByRole("button", { name: "Add" }));
+    expect(calls).toContain("POST /quality-alerts/a1/recipients");
+  });
+
+  it("a draft shows how many people each target reaches and warns about an empty one", async () => {
+    apiFetch.mockImplementation(respond(detail({ status: "draft", inForce: false })));
+    renderAt("/Documentation/Quality-Alerts/a1");
+    expect(await screen.findByText(/people will be asked to acknowledge it/)).toBeInTheDocument();
+    const list = screen.getByRole("list", { name: "People reached by each target" });
+    expect(within(list).getByText("Goods-in (department): 2")).toBeInTheDocument();
+    expect(within(list).getByText("Machining (department): nobody")).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Recipients" })).toBeNull();
+  });
+});
+
+describe("My alerts", () => {
+  const item = (over = {}) => ({ ...summary(), progress: null, state: "open", me: { firstViewedAt: null, acknowledgedAt: null, note: null, reachedVia: ["Named"], overdue: false }, ...over });
+
+  it("lists what is addressed to me, marks overdue and acknowledged, and acknowledges from the list", async () => {
+    permissions = ["documentation.read"];
+    const calls = [];
+    apiFetch.mockImplementation(async (path, opts = {}) => {
+      calls.push(`${opts.method ?? "GET"} ${path}`);
+      if (path.endsWith("/acknowledge")) return detail();
+      return {
+        data: [
+          item({ id: "x1", reference: "QA-007", revisionLetter: "A", title: "Gauge out of calibration", me: { firstViewedAt: null, acknowledgedAt: null, note: null, reachedVia: [], overdue: true } }),
+          item({ id: "x2", reference: "QA-008", revisionLetter: "A", title: "Frequency change", state: "acknowledged", me: { firstViewedAt: "2026-11-05T09:00:00Z", acknowledgedAt: "2026-11-05T10:00:00Z", note: null, reachedVia: [], overdue: false } }),
+          item({ id: "x3", reference: "QA-009", revisionLetter: "A", title: "Old news", state: "closed", status: "withdrawn" }),
+        ],
+        unacknowledged: 1,
+        overdue: 1,
+      };
+    });
+    renderAt("/Documentation/My-Alerts");
+    const table = await screen.findByRole("table", { name: "My alerts" });
+    expect(screen.getByText("1 to acknowledge, 1 overdue")).toBeInTheDocument();
+    expect(within(table).getByText("Overdue")).toBeInTheDocument();
+    expect(within(table).getByText("Acknowledged")).toBeInTheDocument();
+    expect(within(table).getByRole("link", { name: "QA-007 rev A" })).toHaveAttribute("href", "/Documentation/Quality-Alerts/x1");
+    expect(within(table).getAllByRole("button", { name: "Acknowledge" })).toHaveLength(1);
+    await userEvent.click(within(table).getByRole("button", { name: "Acknowledge" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "I have read and understood" }));
+    expect(calls).toContain("POST /quality-alerts/x1/acknowledge");
+  });
+
+  it("says when nothing is addressed to me", async () => {
+    permissions = ["documentation.read"];
+    apiFetch.mockResolvedValue({ data: [], unacknowledged: 0, overdue: 0 });
+    renderAt("/Documentation/My-Alerts");
+    expect(await screen.findByText(/No quality alerts are addressed to you/)).toBeInTheDocument();
+  });
+});
+
+describe("Register for managers", () => {
+  it("shows acknowledgement progress and filters to overdue", async () => {
+    apiFetch.mockResolvedValue({ data: [summary()] });
+    renderAt("/Documentation/Quality-Alerts");
+    const table = await screen.findByRole("table", { name: "Quality alerts" });
+    expect(within(table).getByText(/3 of 5/)).toBeInTheDocument();
+    expect(within(table).getByText(/2 overdue/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("checkbox", { name: /overdue acknowledgements/ }));
+    expect(apiFetch.mock.calls.at(-1)[0]).toContain("overdue=true");
+  });
+
+  it("readers see no progress column or overdue filter", async () => {
+    permissions = ["documentation.read"];
+    apiFetch.mockResolvedValue({ data: [summary({ progress: null })] });
+    renderAt("/Documentation/Quality-Alerts");
+    const table = await screen.findByRole("table", { name: "Quality alerts" });
+    expect(within(table).queryByText("Acknowledged")).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /overdue/ })).toBeNull();
   });
 });

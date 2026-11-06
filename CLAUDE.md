@@ -205,7 +205,19 @@ Summary of the brief:
     Permissions `documentation.read/.manage/.issue` (issue: owner, admin, quality manager; manage adds quality engineer). API `api/src/documentation/` (`/quality-alerts`: list,
     create, get, PATCH draft incl. scope, DELETE draft, `POST :id/issue|withdraw|revisions`); UI `src/components/documentation/` (register `/Documentation/Quality-Alerts`, alert page,
     `QualityAlertForm` at `/new` and `/:id/edit`), hooks `useDocumentation.js`, `lib/qualityAlerts.js`, menu group "Documentation". Recipients, viewed/acknowledged tracking, My alerts,
-    overdue list and notifications are **DOC2**; showing alerts where work happens, attachments and links to NC/supplier/gauge are **DOC3**.
+    overdue list and notifications are **DOC2** (below); showing alerts where work happens, attachments and links to NC/supplier/gauge are **DOC3**.
+  - **DOC2 done (recipients and acknowledgement):** migration `20251119100000_quality_alert_recipients.sql`. `quality_alert_recipients` = who was asked, **fixed when the alert is issued**
+    (`app.issue_quality_alert` resolves the targets with `app.resolve_quality_alert_targets`: department → active department members, role → everyone holding it, named people;
+    de-duplicated, `reached_via` lists how; refuses an alert that reaches nobody; a revision resolves afresh and everyone must acknowledge again). Written only by functions:
+    `app.mark_quality_alert_viewed` (first view, by the recipient), `app.acknowledge_quality_alert(alert, note)` (the recipient themselves, while the alert is `active`, once, frozen),
+    `app.add_quality_alert_recipient` (`documentation.issue`, active alert, active member), `app.preview_quality_alert_recipients` (manager; counts per target); withdrawing sets
+    `withdrawn_notified_at` on every recipient. Managers (`documentation.manage`) read all recipients, others only their own row. **Notifications:** `notifications.recipient_user_id`
+    (a notice with one is visible to that person only; `emit_notification`/`visible_notifications`/policy updated); event types `quality_alert_recipients.created` ("addressed to you") and
+    `.updated` (only the withdrawal notice; views and acknowledgements notify nobody). API additions: `GET /quality-alerts/mine`, `/mine/count` (declared before `:id`),
+    `GET :id/recipients`, `GET :id/recipients-preview`, `POST :id/recipients`, `POST :id/acknowledge`; list takes `overdue=true` and gives managers `progress`; detail has `me` and opening it
+    records the first view. UI: `MyAlertsPage` (`/Documentation/My-Alerts`), acknowledgement banner and `AcknowledgeDialog`, `Tracking` (totals, filters, add a person) and
+    `RecipientsPreview` on the alert page, progress column and overdue filter on the register, menu badge (`useMyAlertCount`, polled every 5 minutes; `badge` in `MenuStructure.js`). Overdue = past
+    `acknowledge_by` and not acknowledged (computed, no worker; no automatic reminders). Plan §7.
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

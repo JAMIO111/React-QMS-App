@@ -26,7 +26,8 @@ const QualityAlertsPage = () => {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const { can } = usePermissions();
-  const filters = { status: params.get("status") ?? "", category: params.get("category") ?? "", severity: params.get("severity") ?? "", q: params.get("q") ?? "" };
+  const manage = can("documentation.manage");
+  const filters = { status: params.get("status") ?? "", category: params.get("category") ?? "", severity: params.get("severity") ?? "", q: params.get("q") ?? "", ...(manage && params.get("overdue") === "true" ? { overdue: "true" } : {}) };
   const query = useQualityAlerts(filters);
   const set = (patch) =>
     setParams((prev) => {
@@ -43,7 +44,7 @@ const QualityAlertsPage = () => {
           <h1 className="text-2xl font-semibold text-primary-text">Quality alerts</h1>
           <p className="text-sm text-secondary-text">Communications that need immediate attention. Each is numbered, dated, kept in revisions and addressed to the people who must act on it.</p>
         </div>
-        {can("documentation.manage") && (
+        {manage && (
           <button type="button" className={`${buttonClass.primary} inline-flex items-center gap-1`} onClick={() => navigate("/Documentation/Quality-Alerts/new")}>
             <PlusIcon className="h-4 w-4" /> New quality alert
           </button>
@@ -51,6 +52,12 @@ const QualityAlertsPage = () => {
       </div>
 
       <MenuCard title="Register" subtitle={query.data ? `${alerts.length} shown` : undefined}>
+        {manage && (
+          <label className="mb-3 flex items-center gap-2 text-sm text-primary-text">
+            <input type="checkbox" checked={filters.overdue === "true"} onChange={(e) => set({ overdue: e.target.checked ? "true" : "" })} />
+            Only alerts with overdue acknowledgements
+          </label>
+        )}
         <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Search" value={filters.q} onChange={(e) => set({ q: e.target.value })} placeholder="Title or QA number" maxLength={100} />
           <SelectField label="Status" value={filters.status || null} onChange={(v) => set({ status: v ?? "" })} options={STATUS_OPTIONS} placeholder="Latest revision of each" />
@@ -72,6 +79,7 @@ const QualityAlertsPage = () => {
                   <th scope="col" className={th}>Status</th>
                   <th scope="col" className={th}>Effective</th>
                   <th scope="col" className={th}>Expires</th>
+                  {manage && <th scope="col" className={th}>Acknowledged</th>}
                 </tr>
               </thead>
               <tbody>
@@ -88,6 +96,18 @@ const QualityAlertsPage = () => {
                     <td className={td}><StatusPill alert={a} /></td>
                     <td className={`${td} whitespace-nowrap`}>{formatDay(a.effectiveDate)}</td>
                     <td className={`${td} whitespace-nowrap`}>{formatDay(a.expiryDate)}</td>
+                    {manage && (
+                      <td className={`${td} whitespace-nowrap`}>
+                        {a.progress && a.progress.total > 0 ? (
+                          <span>
+                            {a.progress.acknowledged} of {a.progress.total}
+                            {a.progress.overdue > 0 && <span className="ml-1 font-medium text-error-color">· {a.progress.overdue} overdue</span>}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

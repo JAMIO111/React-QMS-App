@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiNoContentResponse, ApiOk
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { AlertDetail, AlertList, CreateAlertBody, ListQuery, ReasonBody, UpdateAlertBody } from './documentation.schemas';
+import { AcknowledgeBody, AddRecipientBody, AlertDetail, AlertList, CreateAlertBody, ListQuery, MineCount, MineList, ReasonBody, RecipientList, RecipientsPreview, UpdateAlertBody } from './documentation.schemas';
 import { DocumentationService } from './documentation.service';
 
 const READ = 'documentation.read';
@@ -23,9 +23,25 @@ export class QualityAlertsController {
   @ApiQuery({ name: 'category', required: false, schema: { type: 'string' } })
   @ApiQuery({ name: 'severity', required: false, schema: { type: 'string' } })
   @ApiQuery({ name: 'q', required: false, schema: { type: 'string' } })
+  @ApiQuery({ name: 'overdue', required: false, schema: { type: 'string', enum: ['true', 'false'] } })
   @ApiOkResponse({ description: 'The newest revision of each alert (drafts only for people who manage documentation)', schema: openApiSchema(AlertList) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.list(ctx, parse(ListQuery, query));
+  }
+
+  /** Alerts addressed to the signed-in person, open first. Declared before ':id' so it is not read as an id. */
+  @Get('mine')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ schema: openApiSchema(MineList) })
+  mine(@Ctx() ctx: RequestContext) {
+    return this.service.mine(ctx);
+  }
+
+  @Get('mine/count')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'How many alerts still need the signed-in person’s acknowledgement, and how many are overdue', schema: openApiSchema(MineCount) })
+  mineCount(@Ctx() ctx: RequestContext) {
+    return this.service.mineCount(ctx);
   }
 
   @Post()
@@ -58,6 +74,38 @@ export class QualityAlertsController {
   @ApiNoContentResponse({ description: 'Discards a draft. An issued alert is withdrawn instead.' })
   async discard(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     await this.service.discard(ctx, parse(Uuid, id));
+  }
+
+  @Get(':id/recipients-preview')
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'How many people each target reaches, before the alert is issued', schema: openApiSchema(RecipientsPreview) })
+  preview(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.preview(ctx, parse(Uuid, id));
+  }
+
+  @Get(':id/recipients')
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'Who was asked to acknowledge, and who has viewed and acknowledged', schema: openApiSchema(RecipientList) })
+  recipients(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.recipients(ctx, parse(Uuid, id));
+  }
+
+  @Post(':id/recipients')
+  @HttpCode(201)
+  @OrganisationScoped(ISSUE)
+  @ApiBody({ schema: openApiSchema(AddRecipientBody) })
+  @ApiCreatedResponse({ description: 'Adds a person to an active alert; they are notified', schema: openApiSchema(AlertDetail) })
+  addRecipient(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addRecipient(ctx, parse(Uuid, id), parse(AddRecipientBody, body));
+  }
+
+  @Post(':id/acknowledge')
+  @HttpCode(200)
+  @OrganisationScoped(READ)
+  @ApiBody({ schema: openApiSchema(AcknowledgeBody) })
+  @ApiOkResponse({ description: 'The signed-in person acknowledges an alert addressed to them (once, never for someone else)', schema: openApiSchema(AlertDetail) })
+  acknowledge(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.acknowledge(ctx, parse(Uuid, id), parse(AcknowledgeBody, body ?? {}));
   }
 
   @Post(':id/issue')

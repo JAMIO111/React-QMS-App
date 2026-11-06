@@ -14,6 +14,8 @@ export function notificationLink(n) {
       return `/Process-Control/Plans/${n.entityId}`;
     case "control_plan_revisions":
       return d.control_plan_id ? `/Process-Control/Plans/${d.control_plan_id}/revisions/${n.entityId}` : null;
+    case "quality_alert_recipients":
+      return d.alert_id ? `/Documentation/Quality-Alerts/${d.alert_id}` : "/Documentation/My-Alerts";
     case "spc_alerts":
       return "/Process-Control/Alerts";
     case "parts":

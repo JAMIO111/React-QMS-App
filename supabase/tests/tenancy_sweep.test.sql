@@ -21,7 +21,7 @@ DECLARE
   a uuid; b uuid; site uuid; owner_role uuid; invite uuid; fm bigint; status bigint; proc bigint;
   part uuid := gen_random_uuid(); cust uuid := gen_random_uuid(); supp uuid := gen_random_uuid();
   emp uuid := gen_random_uuid(); d8 uuid := gen_random_uuid(); ncr uuid := gen_random_uuid(); notif uuid := gen_random_uuid();
-  inspection uuid; qa uuid;
+  inspection uuid; qa uuid; qm uuid;
 BEGIN
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
   a := app.create_organisation('Sweep Alpha');
@@ -148,7 +148,10 @@ BEGIN
     'machines', jsonb_build_array((SELECT id FROM public.machines WHERE organisation_id = a LIMIT 1)),
     'operations', jsonb_build_array('OP-1'),
     'departments', jsonb_build_array((SELECT id FROM public.departments WHERE organisation_id = a LIMIT 1)),
-    'targets', jsonb_build_array(jsonb_build_object('departmentId', (SELECT id FROM public.departments WHERE organisation_id = a LIMIT 1)))));
+    'targets', jsonb_build_array(jsonb_build_object('membershipId', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1')))));
+  -- DOC2: issued, so its recipient (the owner) exists.
+  UPDATE public.quality_alerts SET description = 'd', required_action = 'a', effective_date = current_date WHERE id = qa;
+  PERFORM app.issue_quality_alert(qa);
   PERFORM pg_temp.logout();
 
   -- Subscription: seats and an assignment through the API functions, invoice and payment as the provider would.

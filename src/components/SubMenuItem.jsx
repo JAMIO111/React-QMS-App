@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 
-const SubMenuItem = ({ closeMenu, label, isLast, isFirst, path, end = false }) => {
+const SubMenuItem = ({ closeMenu, label, isLast, isFirst, path, end = false, badge = 0 }) => {
   return (
     <div
       className={`${
@@ -28,6 +28,11 @@ const SubMenuItem = ({ closeMenu, label, isLast, isFirst, path, end = false }) =
                 "bg-cta-color/20 hover:bg-cta-color/15 font-semibold"
               } pl-6 h-8 text-sm w-full flex items-center hover:bg-cta-color/10 rounded-r-lg`}>
               {label}
+              {badge > 0 && (
+                <span aria-label={`${badge} need your attention`} className="ml-2 rounded-full bg-error-color px-1.5 text-xs font-medium text-white">
+                  {badge}
+                </span>
+              )}
             </div>
           </>
         )}

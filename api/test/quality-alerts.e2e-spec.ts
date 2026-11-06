@@ -27,6 +27,9 @@ beforeAll(async () => {
   ctx.part = (await api().post('/api/v1/parts').set(h).send({ partNumber: 'HCR-100', name: 'Rod 100', partFamilyId: fam.id, initialRevision: { revision: 'A' } }).expect(201)).body.id;
   ctx.machine = (await api().post('/api/v1/machines').set(h).send({ code: 'L1', name: 'Lathe 1', siteId: ids.siteA }).expect(201)).body.id;
   ctx.dept = (await api().post('/api/v1/departments').set(h).send({ siteId: ids.siteA, code: 'GI', name: 'Goods-in' }).expect(201)).body.id;
+  // Issuing needs somebody to reach: the inspector works in Goods-in.
+  await admin.query(`insert into public.department_members (organisation_id, department_id, membership_id)
+    select $1, $2, id from public.organisation_users where organisation_id = $1 and user_id = $3`, [ids.orgA, ctx.dept, ids.inspectorA]);
   const roles = (await api().get('/api/v1/roles').set(h).expect(200)).body.data;
   ctx.inspectorRole = roles.find((r: { key: string }) => r.key === 'inspector').id;
 });

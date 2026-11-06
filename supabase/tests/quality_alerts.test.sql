@@ -27,6 +27,7 @@ BEGIN
   INSERT INTO public.user_role_assignments (organisation_id, membership_id, role_id) SELECT org, m, id FROM public.roles WHERE organisation_id = org AND key = 'quality_engineer';
   INSERT INTO public.organisation_users (organisation_id, user_id, status) VALUES (org, '3e000000-0000-0000-0000-000000000103', 'active') RETURNING id INTO m;
   INSERT INTO public.user_role_assignments (organisation_id, membership_id, role_id) SELECT org, m, id FROM public.roles WHERE organisation_id = org AND key = 'viewer';
+  INSERT INTO public.department_members (organisation_id, department_id, membership_id) VALUES (org, dept, m);   -- the viewer works in Goods-in
   scope := jsonb_build_object('parts', jsonb_build_array(jsonb_build_object('partId', part)), 'machines', jsonb_build_array(mach),
     'operations', jsonb_build_array('OP-020'), 'departments', jsonb_build_array(dept),
     'targets', jsonb_build_array(jsonb_build_object('departmentId', dept), jsonb_build_object('roleId', role_id)));

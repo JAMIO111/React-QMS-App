@@ -20,6 +20,13 @@ describe("timeAgo", () => {
   });
 });
 
+describe("notificationLink", () => {
+  it("leads a quality alert notice to the alert, or to My alerts when the alert is not named", () => {
+    expect(notificationLink({ entityType: "quality_alert_recipients", entityId: "r1", details: { alert_id: "a1" } })).toBe("/Documentation/Quality-Alerts/a1");
+    expect(notificationLink({ entityType: "quality_alert_recipients", entityId: "r1", details: {} })).toBe("/Documentation/My-Alerts");
+  });
+});
+
 describe("groupPreferences", () => {
   it("groups by module and entity", () => {
     const g = groupPreferences([

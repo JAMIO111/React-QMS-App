@@ -10,6 +10,7 @@ const NavItem = ({
   onToggleSubMenu,
   isSubMenuOpen,
   closeMenu,
+  badge = 0,
 }) => {
   const match = useMatch(path);
 
@@ -33,10 +34,20 @@ const NavItem = ({
         onClick={closeMenu}
         to={path}
       >
-        {Icon && <Icon className="h-6 w-6" />}
+        {Icon && (
+          <span className="relative">
+            <Icon className="h-6 w-6" />
+            {badge > 0 && !isExpanded && <span aria-hidden="true" className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-error-color" />}
+          </span>
+        )}
         {isExpanded && (
           <span className="text-sm flex-1 animate-in fade-in duration-300 motion-reduce:animate-none">
             {label}
+          </span>
+        )}
+        {isExpanded && badge > 0 && (
+          <span aria-label={`${badge} need your attention`} className="rounded-full bg-error-color px-1.5 text-xs font-medium text-white">
+            {badge}
           </span>
         )}
         {isExpanded && hasSubMenu && (

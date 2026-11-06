@@ -5,7 +5,7 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { iso, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
-import { AlertDetail, AlertSummary, CreateAlertBody, ListQuery, ReasonBody, revisionLetter, ScopeInput, UpdateAlertBody } from './documentation.schemas';
+import { AcknowledgeBody, AddRecipientBody, AlertDetail, MineCount, MineList, RecipientList, RecipientsPreview, AlertSummary, CreateAlertBody, ListQuery, ReasonBody, revisionLetter, ScopeInput, UpdateAlertBody } from './documentation.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown' } : null);
@@ -15,13 +15,17 @@ const SELECT = sql`
          a.effective_date::text as effective_date, a.expiry_date::text as expiry_date, a.acknowledge_by::text as acknowledge_by,
          a.revision_reason, a.supersedes_id, a.issued_at, a.issued_by, a.withdrawn_at, a.withdrawn_by, a.withdrawn_reason, a.created_by, a.updated_at,
          (a.status = 'active' and a.effective_date <= current_date) as in_force,
+         (select count(*) from public.quality_alert_recipients r where r.alert_id = a.id)::int as r_total,
+         (select count(*) from public.quality_alert_recipients r where r.alert_id = a.id and r.first_viewed_at is not null)::int as r_viewed,
+         (select count(*) from public.quality_alert_recipients r where r.alert_id = a.id and r.acknowledged_at is not null)::int as r_ack,
+         (select count(*) from public.quality_alert_recipients r where r.alert_id = a.id and r.acknowledged_at is null and a.status = 'active' and a.acknowledge_by < current_date)::int as r_overdue,
          ${sql.raw(personName('pi'))} as issued_by_name, ${sql.raw(personName('pw'))} as withdrawn_by_name, ${sql.raw(personName('pc'))} as created_by_name
   from public.quality_alerts a
   left join public.profiles pi on pi.id = a.issued_by
   left join public.profiles pw on pw.id = a.withdrawn_by
   left join public.profiles pc on pc.id = a.created_by`;
 
-const toSummary = (r: Row): AlertSummary => ({
+const toSummary = (r: Row, manager = false): AlertSummary => ({
   id: r.id as string,
   number: Number(r.alert_number),
   reference: r.reference as string,
@@ -39,6 +43,7 @@ const toSummary = (r: Row): AlertSummary => ({
   issuedBy: person(r.issued_by, r.issued_by_name),
   createdBy: person(r.created_by, r.created_by_name),
   updatedAt: iso(r.updated_at)!,
+  progress: manager ? { total: Number(r.r_total), viewed: Number(r.r_viewed), acknowledged: Number(r.r_ack), overdue: Number(r.r_overdue) } : null,
 });
 
 const COLUMNS: Record<string, string> = {
@@ -59,12 +64,16 @@ export class DocumentationService {
   list(ctx: RequestContext, q: ListQuery): Promise<{ data: AlertSummary[] }> {
     return this.database.asUser(ctx, async (db) => {
       await this.expire(db, ctx);
+      const manager = await this.isManager(db, ctx);
       const where: SQL[] = [sql`a.organisation_id = ${orgOf(ctx)}::uuid`, sql`a.deleted_at is null`];
       // The newest revision of each alert number, unless a lifecycle state was asked for.
       if (!q.status || q.status === 'all') {
         where.push(sql`a.revision = (select max(l.revision) from public.quality_alerts l where l.organisation_id = a.organisation_id and l.alert_number = a.alert_number and l.deleted_at is null)`);
       } else {
         where.push(sql`a.status = ${q.status}`);
+      }
+      if (q.overdue === 'true' && manager) {
+        where.push(sql`a.status = 'active' and a.acknowledge_by < current_date and exists (select 1 from public.quality_alert_recipients r where r.alert_id = a.id and r.acknowledged_at is null)`);
       }
       if (q.category) where.push(sql`a.category = ${q.category}`);
       if (q.severity) where.push(sql`a.severity = ${q.severity}`);
@@ -73,14 +82,20 @@ export class DocumentationService {
         where.push(sql`(a.title ilike ${like} or a.reference ilike ${like})`);
       }
       const rows = await db.execute<Row>(sql`${SELECT} where ${sql.join(where, sql` and `)} order by a.alert_number desc, a.revision desc limit ${q.limit}`);
-      return { data: rows.rows.map(toSummary) };
+      return { data: rows.rows.map((r) => toSummary(r, manager)) };
     });
   }
 
   get(ctx: RequestContext, id: string): Promise<AlertDetail> {
     return this.database.asUser(ctx, async (db) => {
       await this.expire(db, ctx);
-      return this.load(db, ctx, id);
+      const alert = await this.load(db, ctx, id);
+      if (alert.status !== 'draft' && alert.me && !alert.me.firstViewedAt) {
+        // The first time an addressed person opens an issued alert is recorded.
+        await db.execute(sql`select app.mark_quality_alert_viewed(${id}::uuid)`);
+        return this.load(db, ctx, id);
+      }
+      return alert;
     });
   }
 
@@ -151,7 +166,115 @@ export class DocumentationService {
     });
   }
 
+  // ---- recipients and acknowledgement (DOC2) -------------------------------------------------
+
+  /** How many people each target reaches, before issuing (documentation.manage). */
+  preview(ctx: RequestContext, id: string): Promise<z.infer<typeof RecipientsPreview>> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      const res = await db.execute<Row>(sql`select app.preview_quality_alert_recipients(${id}::uuid) as p`);
+      return res.rows[0].p as z.infer<typeof RecipientsPreview>;
+    });
+  }
+
+  /** Who was asked to acknowledge, and who has seen and acknowledged it (documentation.manage). */
+  recipients(ctx: RequestContext, id: string): Promise<z.infer<typeof RecipientList>> {
+    return this.database.asUser(ctx, async (db) => {
+      const alert = await this.load(db, ctx, id);
+      const rows = await db.execute<Row>(sql`
+        select r.id, r.membership_id, r.reached_via, r.first_viewed_at, r.acknowledged_at, r.acknowledgement_note,
+               coalesce(${sql.raw(personName('p'))}, m.invited_email, 'Unknown') as name
+        from public.quality_alert_recipients r
+        join public.organisation_users m on m.id = r.membership_id
+        left join public.profiles p on p.id = r.user_id
+        where r.alert_id = ${id}::uuid and r.organisation_id = ${orgOf(ctx)}::uuid
+        order by (r.acknowledged_at is not null), name`);
+      const overdueOn = alert.status === 'active' && !!alert.acknowledgeBy && alert.acknowledgeBy < new Date().toISOString().slice(0, 10);
+      const data = rows.rows.map((r) => ({
+        id: r.id as string,
+        membershipId: r.membership_id as string,
+        name: r.name as string,
+        reachedVia: r.reached_via as string[],
+        firstViewedAt: iso(r.first_viewed_at),
+        acknowledgedAt: iso(r.acknowledged_at),
+        note: (r.acknowledgement_note as string) ?? null,
+        overdue: overdueOn && !r.acknowledged_at,
+      }));
+      return {
+        data,
+        totals: { total: data.length, viewed: data.filter((x) => x.firstViewedAt).length, acknowledged: data.filter((x) => x.acknowledgedAt).length, overdue: data.filter((x) => x.overdue).length },
+      };
+    });
+  }
+
+  /** "I have read and understood", by the person it is addressed to. */
+  acknowledge(ctx: RequestContext, id: string, body: AcknowledgeBody): Promise<AlertDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      await db.execute(sql`select app.acknowledge_quality_alert(${id}::uuid, ${body.note ?? null})`);
+      return this.load(db, ctx, id);
+    });
+  }
+
+  addRecipient(ctx: RequestContext, id: string, body: AddRecipientBody): Promise<AlertDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      await db.execute(sql`select app.add_quality_alert_recipient(${id}::uuid, ${body.membershipId}::uuid)`);
+      return this.load(db, ctx, id);
+    });
+  }
+
+  /** Alerts addressed to the caller: open ones first, overdue before the rest; ended ones stay for 30 days. */
+  mine(ctx: RequestContext): Promise<z.infer<typeof MineList>> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.expire(db, ctx);
+      const mine = await db.execute<Row>(sql`
+        select r.alert_id, r.first_viewed_at, r.acknowledged_at, r.acknowledgement_note, r.reached_via
+        from public.quality_alert_recipients r join public.quality_alerts a on a.id = r.alert_id
+        where r.organisation_id = ${orgOf(ctx)}::uuid and r.user_id = auth.uid() and a.deleted_at is null
+          and (a.status = 'active' or a.updated_at > now() - interval '30 days')`);
+      if (!mine.rows.length) return { data: [], unacknowledged: 0, overdue: 0 };
+      const ids = mine.rows.map((x) => x.alert_id as string);
+      const alerts = await db.execute<Row>(sql`${SELECT} where a.id = any (string_to_array(${ids.join(',')}, ',')::uuid[])`);
+      const by = new Map(alerts.rows.map((r) => [r.id as string, r]));
+      const rank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+      const data = mine.rows
+        .flatMap((m) => {
+          const a = by.get(m.alert_id as string);
+          if (!a) return [];
+          const summary = toSummary(a);
+          const acknowledged = !!m.acknowledged_at;
+          const overdue = !acknowledged && summary.status === 'active' && !!summary.acknowledgeBy && summary.acknowledgeBy < new Date().toISOString().slice(0, 10);
+          const state: 'open' | 'acknowledged' | 'closed' = summary.status !== 'active' ? 'closed' : acknowledged ? 'acknowledged' : 'open';
+          return [{ ...summary, state, me: { firstViewedAt: iso(m.first_viewed_at), acknowledgedAt: iso(m.acknowledged_at), note: (m.acknowledgement_note as string) ?? null, reachedVia: m.reached_via as string[], overdue } }];
+        })
+        .sort((x, y) => {
+          const order = { open: 0, acknowledged: 1, closed: 2 } as const;
+          return order[x.state] - order[y.state] || Number(y.me.overdue) - Number(x.me.overdue) || rank[x.severity] - rank[y.severity] || (y.issuedAt ?? '').localeCompare(x.issuedAt ?? '');
+        });
+      return { data, unacknowledged: data.filter((d) => d.state === 'open').length, overdue: data.filter((d) => d.me.overdue).length };
+    });
+  }
+
+  /** Just the numbers, for the menu badge. */
+  mineCount(ctx: RequestContext): Promise<z.infer<typeof MineCount>> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.expire(db, ctx);
+      const res = await db.execute<Row>(sql`
+        select count(*) filter (where a.status = 'active' and r.acknowledged_at is null)::int as unacknowledged,
+               count(*) filter (where a.status = 'active' and r.acknowledged_at is null and a.acknowledge_by < current_date)::int as overdue
+        from public.quality_alert_recipients r join public.quality_alerts a on a.id = r.alert_id
+        where r.organisation_id = ${orgOf(ctx)}::uuid and r.user_id = auth.uid() and a.deleted_at is null`);
+      return { unacknowledged: Number(res.rows[0].unacknowledged), overdue: Number(res.rows[0].overdue) };
+    });
+  }
+
   // ---- helpers ------------------------------------------------------------------------------
+
+  private async isManager(db: Db, ctx: RequestContext): Promise<boolean> {
+    const r = await db.execute<Row>(sql`select app.has_permission(${orgOf(ctx)}::uuid, 'documentation.manage') as ok`);
+    return !!r.rows[0]?.ok;
+  }
 
   private async expire(db: Db, ctx: RequestContext) {
     await db.execute(sql`select app.expire_quality_alerts(${orgOf(ctx)}::uuid)`);
@@ -165,6 +288,8 @@ export class DocumentationService {
     const rows = await db.execute<Row>(sql`${SELECT} where a.id = ${id}::uuid and a.organisation_id = ${orgOf(ctx)}::uuid and a.deleted_at is null`);
     if (!rows.rows.length) throw ApiError.notFound('quality_alert_not_found', 'Quality alert not found');
     const r = rows.rows[0];
+    const manager = await this.isManager(db, ctx);
+    const mineRow = await db.execute<Row>(sql`select first_viewed_at, acknowledged_at, acknowledgement_note, reached_via from public.quality_alert_recipients where alert_id = ${id}::uuid and user_id = auth.uid()`);
     const [parts, machines, operations, departments, targets, revisions] = await Promise.all([
       db.execute<Row>(sql`select qp.id, qp.part_id, qp.part_family_id, coalesce(p.part_number || ' · ' || p.name, f.code || ' · ' || f.name) as label
         from public.quality_alert_parts qp left join public.parts p on p.id = qp.part_id left join public.part_families f on f.id = qp.part_family_id
@@ -184,8 +309,19 @@ export class DocumentationService {
       db.execute<Row>(sql`select id, revision, status, issued_at, revision_reason from public.quality_alerts
         where organisation_id = ${orgOf(ctx)}::uuid and alert_number = ${r.alert_number as number} and deleted_at is null order by revision desc`),
     ]);
+    const summary = toSummary(r, manager);
+    const m = mineRow.rows[0];
     return {
-      ...toSummary(r),
+      ...summary,
+      me: m
+        ? {
+            firstViewedAt: iso(m.first_viewed_at),
+            acknowledgedAt: iso(m.acknowledged_at),
+            note: (m.acknowledgement_note as string) ?? null,
+            reachedVia: m.reached_via as string[],
+            overdue: !m.acknowledged_at && summary.status === 'active' && !!summary.acknowledgeBy && summary.acknowledgeBy < new Date().toISOString().slice(0, 10),
+          }
+        : null,
       description: (r.description as string) ?? null,
       requiredAction: (r.required_action as string) ?? null,
       revisionReason: (r.revision_reason as string) ?? null,

@@ -58,7 +58,12 @@ export const menuStructure = [
     icon: FileTextIcon,
     permission: "documentation.read",
     path: "/Documentation",
-    subMenu: [{ name: "Quality alerts", path: "/Documentation/Quality-Alerts" }],
+    // badge: "my-alerts" = how many alerts addressed to the signed-in person still need acknowledging (see Navbar)
+    badge: "my-alerts",
+    subMenu: [
+      { name: "My alerts", path: "/Documentation/My-Alerts", badge: "my-alerts" },
+      { name: "Quality alerts", path: "/Documentation/Quality-Alerts" },
+    ],
   },
   {
     name: "Master Data",

@@ -8,9 +8,16 @@ export const RULE_LABEL = {
 };
 export const RULES = ["we1", "we2", "we3", "we4"];
 
-export const CHART_NAME = { imr: "I-MR (individuals and moving range)", xbar_r: "X-bar/R (subgroup mean and range)" };
+export const CHART_NAME = { imr: "I-MR (individuals and moving range)", xbar_r: "X-bar/R (subgroup mean and range)", p: "P chart (proportion failed)" };
 export const DISPERSION_NAME = { imr: "Moving range", xbar_r: "Range" };
-export const LOCATION_NAME = { imr: "Individual value", xbar_r: "Subgroup mean" };
+export const LOCATION_NAME = { imr: "Individual value", xbar_r: "Subgroup mean", p: "Proportion failed" };
+export const SUBGROUP_BASIS = [
+  { value: "inspection", label: "One inspection" },
+  { value: "day", label: "One day" },
+  { value: "lot", label: "One lot" },
+];
+export const BASIS_LABEL = { inspection: "one inspection", day: "one day", lot: "one lot" };
+export const formatPercent = (v, digits = 1) => (v === null || v === undefined || Number.isNaN(v) ? "—" : `${(v * 100).toFixed(digits)}%`);
 
 /** Decimal places to show: those of the recorded readings plus one (means and limits need a little more), at most 5. */
 export const decimalsOf = (points) => {
@@ -33,6 +40,11 @@ export const chartRows = (chart) => {
     dispersion: p.dispersion,
     rules: bySignal.get(p.index) ?? [],
     rangeSignal: range.has(p.index),
+    // P charts: checks, failures and this subgroup's own limits (null while there are too few subgroups for limits).
+    checked: p.n ?? null,
+    failed: p.failed ?? null,
+    ucl: p.ucl ?? null,
+    lcl: p.lcl ?? null,
     point: p,
   }));
 };
@@ -45,6 +57,12 @@ export const yDomain = (values, extras) => {
   const hi = Math.max(...all);
   const pad = (hi - lo || Math.abs(hi) || 1) * 0.08;
   return [lo - pad, hi + pad];
+};
+
+/** Y-axis range of a P chart: from zero up to the highest proportion or limit, at most 100 %. */
+export const proportionDomain = (rows) => {
+  const top = Math.max(0.02, ...rows.flatMap((r) => [r.value, r.ucl ?? 0]));
+  return [0, Math.min(1, top * 1.1)];
 };
 
 export const describeWindow = (b) => `${b.points} ${b.chartType === "imr" ? "readings" : "subgroups"}`;

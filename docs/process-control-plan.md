@@ -498,3 +498,34 @@ raising an NC from a signal (decided: not now).
 **PC5 follow-up (2026-11-06):** a later failed reading of an inspection can be added to an NC already raised from it — never automatically. The Failures card hints at the NC for the same check and offers *Add to NC-…* (or add a ticked selection to any open NC of the inspection); the dialog proposes the quantity affected (current + new samples). Draft … awaiting-closure NCs accept readings; closed, cancelled or deleted ones are refused (raise a new NC). Migration `20251112100000_inspection_ncr_add_readings.sql`.
 
 **One live NC per reading (2026-11-06):** a failed reading can be on only one live NC (not cancelled, not deleted). Raising an NC or adding readings refuses one that is already covered (naming the NC); cancelling or deleting an NC frees its readings, which count as unhandled again for completion, the Failures card and the dashboard. The NC history gains "raised this from inspection …" and "added readings from inspection …" entries with the readings (migration `20251113100000_one_live_ncr_per_reading.sql`).
+
+## 16. Slice PC7 — P chart (proportion of failed checks) — plan (2026-11-06)
+
+**Decisions (agreed 2026-11-06):** (1) the **subgroup is chosen on the chart** — one inspection, one calendar day (UTC)
+or one lot; the choice is saved with a baseline; (2) only **pass/fail (attribute) characteristics** are P-charted: the
+plan marks one for SPC with chart type "P chart"; measured characteristics keep I-MR / X-bar/R.
+
+**Data and statistics.** Each subgroup has *n* (checked) and *d* (failed); p = d/n. Centre line p̄ = Σd/Σn; limits vary with
+each subgroup size, `p̄ ± 3·√(p̄(1−p̄)/nᵢ)`, clipped to 0…1. Retests, abandoned inspections and corrected readings are left out
+exactly as for the other charts (current reading of each sample only; excluded counts by reason; subgroups by day need no lot,
+by lot skip inspections without one, counted as excluded). The four Western Electric rules apply in units of each point's own σ
+(z = (pᵢ − p̄)/σᵢ). Sufficiency: fewer than 5 subgroups ⇒ no limits; fewer than 20 ⇒ provisional; expected failures
+n̄·p̄ < 5 (or n̄·(1−p̄) < 5) ⇒ warning that the normal-approximation limits are unreliable; p̄ = 0 ⇒ "no failures yet, no variation".
+No specification lines: the chart's job is the process rate, not tolerance.
+
+**Database** (`20251114100000_p_charts.sql`): `control_plan_characteristics` may be `spc_eligible` for an attribute check with
+`chart_type = 'p'` (subgroup size null, set by the data); `spc_baselines` accepts chart type `p`, nullable subgroup size and
+dispersion limits, and records `subgroup_basis` and `mean_subgroup_size` (centre = p̄; UCL/LCL stored at n̄ for reference — the
+chart recalculates each point's limits from p̄ and its n).
+
+**API:** `GET /spc/chart?…&subgroup=inspection|day|lot` (P charts return per-point `n`, `failed`, `proportion`, `ucl`, `lcl`),
+characteristics list and `POST /spc/baselines` (`subgroup`) handle P; plan characteristic schemas accept chart type `p` only for
+attribute checks; the dashboard's SPC overview includes P charts.
+
+**Frontend:** characteristic form offers "P chart" for pass/fail checks; SPC page shows a *Subgroup* selector for P charts, a
+proportion chart with stepped control limits (no range chart), n and failures in the tooltip and data table; baseline panel in
+proportions. Demo data: `supabase/seed/spc_demo_p_chart.sql`.
+
+**Out of scope here:** NP, C and U charts (they differ only in what is counted), % out-of-spec P charts for measured checks.
+
+**PC7 status (2026-11-06): done.** Migration `20251114100000_p_charts.sql`; statistics `pSeries`/`detectPSignals`/`zoneRules` and data `assembleP`/`evaluateP` (unit tested); API chart, characteristics, baselines and dashboard overview handle P; characteristic form offers the P chart for pass/fail checks; SPC page has the Subgroup choice, `ProportionChart`, P data table and baseline panel; demo data `supabase/seed/spc_demo_p_chart.sql`. NP, C and U charts remain out of scope.

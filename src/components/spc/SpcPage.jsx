@@ -10,18 +10,26 @@ import { useSpcCharacteristics, useSpcChart } from "../../hooks/useSpc";
 import { describeApiError } from "../../lib/api-client";
 import { formatDateTime } from "../../lib/processControl";
 import {
+  BASIS_LABEL,
   CHART_NAME,
   DISPERSION_NAME,
   LOCATION_NAME,
   RULES,
   RULE_LABEL,
+  SUBGROUP_BASIS,
   chartRows,
   decimalsOf,
+  formatPercent,
   formatValue,
 } from "../../lib/spc";
 import { ErrorNotice, SelectField } from "../master-data/shared";
 import BaselinePanel from "./BaselinePanel";
-import { ChartKey, DispersionChart, LocationChart } from "./ControlChart";
+import {
+  ChartKey,
+  DispersionChart,
+  LocationChart,
+  ProportionChart,
+} from "./ControlChart";
 
 const th =
   "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
@@ -47,6 +55,7 @@ const SpcPage = () => {
   const machineId = params.get("machine") || "";
   const showSpec = params.get("spec") !== "0";
   const rulesParam = params.get("rules"); // null: the baseline's rules (or all)
+  const basis = params.get("basis") || "inspection"; // P charts: what one point is
 
   const set = (patch) =>
     setParams((prev) => {
@@ -77,6 +86,7 @@ const SpcPage = () => {
     lot: lot || undefined,
     machineId: machineId || undefined,
     ...(rulesParam !== null ? { rules: rulesParam } : {}),
+    ...(current?.chartType === "p" ? { subgroup: basis } : {}),
   };
   const chartQuery = useSpcChart(query, !!current);
   const chart = chartQuery.data;
@@ -92,6 +102,7 @@ const SpcPage = () => {
   };
 
   const type = chart?.characteristic.chartType;
+  const isP = type === "p";
   const sourceLabel =
     chart?.limitsSource === "baseline"
       ? "Saved baseline"
@@ -134,9 +145,19 @@ const SpcPage = () => {
             onChange={(v) => set({ c: v ?? "", rules: null })}
             options={options.map((c) => ({
               value: optionKey(c),
-              label: `${c.name} (${c.key}) · ${c.operationCode} · ${c.readings} readings${c.hasBaseline ? " · baseline" : ""}`,
+              label: `${c.name} (${c.key}) · ${c.operationCode} · ${c.readings} ${c.chartType === "p" ? "checks" : "readings"}${c.hasBaseline ? " · baseline" : ""}`,
             }))}
           />
+          {current?.chartType === "p" && (
+            <SelectField
+              label="Subgroup (one point is…)"
+              required
+              value={basis}
+              onChange={(v) => set({ basis: v && v !== "inspection" ? v : "" })}
+              options={SUBGROUP_BASIS}
+              hint="Larger subgroups (a day, a lot) give steadier limits"
+            />
+          )}
           <SelectField
             label="Machine"
             value={machineId || null}
@@ -185,14 +206,16 @@ const SpcPage = () => {
               {RULE_LABEL[r].short}: {RULE_LABEL[r].name}
             </label>
           ))}
-          <label className="flex items-center gap-2 text-sm text-primary-text">
-            <input
-              type="checkbox"
-              checked={showSpec}
-              onChange={(e) => set({ spec: e.target.checked ? "" : "0" })}
-            />
-            Show specification limits
-          </label>
+          {!isP && current?.chartType !== "p" && (
+            <label className="flex items-center gap-2 text-sm text-primary-text">
+              <input
+                type="checkbox"
+                checked={showSpec}
+                onChange={(e) => set({ spec: e.target.checked ? "" : "0" })}
+              />
+              Show specification limits
+            </label>
+          )}
         </fieldset>
       </MenuCard>
 
@@ -201,9 +224,10 @@ const SpcPage = () => {
         !characteristics.isLoading &&
         options.length === 0 && (
           <p className="text-sm text-secondary-text">
-            This part has no numeric readings for characteristics marked for SPC
-            in the control plan. Mark a characteristic for SPC (I-MR or X-bar/R)
-            on the plan, then record inspections.
+            This part has no readings for characteristics marked for SPC in the
+            control plan. Mark a characteristic for SPC (I-MR or X-bar/R for a
+            measured one, a P chart for a pass/fail check) on the plan, then
+            record inspections.
           </p>
         )}
       {characteristics.error && <ErrorNotice error={characteristics.error} />}
@@ -238,30 +262,36 @@ const SpcPage = () => {
             <>
               <MenuCard
                 title={`${chart.characteristic.name ?? chart.characteristic.key} · ${LOCATION_NAME[type]}`}
-                subtitle={`${CHART_NAME[type]}${chart.characteristic.subgroupSize > 1 ? `, subgroups of ${chart.characteristic.subgroupSize}` : ""} · ${chart.part.partNumber} · ${chart.characteristic.operationCode} · ${sourceLabel}`}
+                subtitle={`${CHART_NAME[type]}${chart.characteristic.subgroupSize > 1 ? `, subgroups of ${chart.characteristic.subgroupSize}` : ""}${isP && chart.subgroup ? `, a point is ${BASIS_LABEL[chart.subgroup.basis]} (about ${Math.round(chart.subgroup.meanSize * 10) / 10} checks)` : ""} · ${chart.part.partNumber} · ${chart.characteristic.operationCode} · ${sourceLabel}`}
               >
                 <div className="flex flex-col gap-2">
-                  <ChartKey showSpec={showSpec} />
-                  <LocationChart
+                  <ChartKey showSpec={showSpec && !isP} proportion={isP} />
+                  {isP ? (
+                    <ProportionChart chart={chart} rows={rows} />
+                  ) : (
+                    <LocationChart
+                      chart={chart}
+                      rows={rows}
+                      decimals={decimals}
+                      showSpec={showSpec}
+                      valueLabel={LOCATION_NAME[type]}
+                    />
+                  )}
+                </div>
+              </MenuCard>
+              {!isP && (
+                <MenuCard
+                  title={DISPERSION_NAME[type]}
+                  subtitle="Short-term variation. A point above the upper limit is a signal."
+                >
+                  <DispersionChart
                     chart={chart}
                     rows={rows}
                     decimals={decimals}
-                    showSpec={showSpec}
-                    valueLabel={LOCATION_NAME[type]}
+                    label={DISPERSION_NAME[type]}
                   />
-                </div>
-              </MenuCard>
-              <MenuCard
-                title={DISPERSION_NAME[type]}
-                subtitle="Short-term variation. A point above the upper limit is a signal."
-              >
-                <DispersionChart
-                  chart={chart}
-                  rows={rows}
-                  decimals={decimals}
-                  label={DISPERSION_NAME[type]}
-                />
-              </MenuCard>
+                </MenuCard>
+              )}
 
               <MenuCard
                 title="Signals"
@@ -396,15 +426,34 @@ const SpcPage = () => {
                       <th scope="col" className={th}>
                         Time
                       </th>
-                      <th scope="col" className={th}>
-                        {LOCATION_NAME[type]}
-                      </th>
-                      <th scope="col" className={th}>
-                        {DISPERSION_NAME[type]}
-                      </th>
-                      <th scope="col" className={th}>
-                        Readings
-                      </th>
+                      {isP ? (
+                        <>
+                          <th scope="col" className={th}>
+                            Checked
+                          </th>
+                          <th scope="col" className={th}>
+                            Failed
+                          </th>
+                          <th scope="col" className={th}>
+                            Proportion failed
+                          </th>
+                          <th scope="col" className={th}>
+                            Limits for this size
+                          </th>
+                        </>
+                      ) : (
+                        <>
+                          <th scope="col" className={th}>
+                            {LOCATION_NAME[type]}
+                          </th>
+                          <th scope="col" className={th}>
+                            {DISPERSION_NAME[type]}
+                          </th>
+                          <th scope="col" className={th}>
+                            Readings
+                          </th>
+                        </>
+                      )}
                       <th scope="col" className={th}>
                         Signal
                       </th>
@@ -417,15 +466,36 @@ const SpcPage = () => {
                         <td className={`${td} whitespace-nowrap`}>
                           {formatDateTime(r.at)}
                         </td>
-                        <td className={`${td} tabular-nums`}>
-                          {formatValue(r.value, decimals)}
-                        </td>
-                        <td className={`${td} tabular-nums`}>
-                          {formatValue(r.dispersion, decimals)}
-                        </td>
-                        <td className={td}>
-                          {r.point.readings.map((x) => x.value).join(", ")}
-                        </td>
+                        {isP ? (
+                          <>
+                            <td className={`${td} tabular-nums`}>
+                              {r.checked}
+                            </td>
+                            <td className={`${td} tabular-nums`}>{r.failed}</td>
+                            <td className={`${td} tabular-nums`}>
+                              {formatPercent(r.value, 2)}
+                            </td>
+                            <td
+                              className={`${td} tabular-nums whitespace-nowrap`}
+                            >
+                              {r.ucl === null
+                                ? "—"
+                                : `${formatPercent(r.lcl, 2)} to ${formatPercent(r.ucl, 2)}`}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className={`${td} tabular-nums`}>
+                              {formatValue(r.value, decimals)}
+                            </td>
+                            <td className={`${td} tabular-nums`}>
+                              {formatValue(r.dispersion, decimals)}
+                            </td>
+                            <td className={td}>
+                              {r.point.readings.map((x) => x.value).join(", ")}
+                            </td>
+                          </>
+                        )}
                         <td className={td}>
                           {[
                             ...r.rules.map((x) => RULE_LABEL[x].short),

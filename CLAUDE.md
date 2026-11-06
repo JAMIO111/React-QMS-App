@@ -146,7 +146,15 @@ Summary of the brief:
     charts inspections by result, revisions by status, failures by characteristic, signals by rule; lists of latest signals, plans needing
     attention, failures needing action, inspections in progress. `SpcService.overview()` evaluates up to 40 recently measured characteristics
     like their charts (needs `spc.read`, else `spc.available` is false). Shared dashboard pieces in `src/components/dashboard/DashboardParts.jsx`.
-  - **Next (later phases):** P/NP/C/U charts, Cp/Cpk/Pp/Ppk, alerts (need a worker).
+  - **PC7 done (P chart):** pass/fail (attribute) plan characteristics can be marked for SPC with chart type `p` (migration
+    `20251114100000_p_charts.sql`: plan characteristics, templates and `spc_baselines` accept `p`; baselines keep `subgroup_basis` and
+    `mean_subgroup_size`, no dispersion limits). The subgroup is chosen on the chart: one inspection (default), one UTC day or one lot
+    (`subgroup=inspection|day|lot` on `GET /spc/chart` and `POST /spc/baselines`; URL `?basis=`). p̄ = Σd/Σn, limits `p̄ ± 3√(p̄(1−p̄)/nᵢ)` per
+    subgroup (clipped 0…1); Western Electric rules apply in each point's own σ (`pSeries`/`detectPSignals`, `zoneRules` shared in
+    `api/src/spc/spc.ts`; grouping in `spc-data.ts` `assembleP`/`evaluateP`); warns when n̄·p̄ < 5 and for < 5 / < 20 subgroups. UI
+    `ProportionChart` in `src/components/spc/ControlChart.jsx`. The dashboard SPC overview includes P charts. Demo data
+    `supabase/seed/spc_demo_p_chart.sql`.
+  - **Next (later phases):** NP/C/U charts, Cp/Cpk/Pp/Ppk, alerts (need a worker).
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

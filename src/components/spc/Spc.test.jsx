@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { chartRows, decimalsOf, yDomain } from "../../lib/spc";
 
@@ -132,7 +132,9 @@ const base = (extra = {}) => ({
   "GET /spc/baselines": [],
   ...extra,
 });
-const renderAt = (url) =>
+const renderAt = (url) => {
+  let search = "";
+  const Where = () => ((search = useLocation().search), null);
   render(
     <QueryClientProvider
       client={
@@ -141,11 +143,21 @@ const renderAt = (url) =>
     >
       <MemoryRouter initialEntries={[url]}>
         <Routes>
-          <Route path="/Process-Control/SPC" element={<SpcPage />} />
+          <Route
+            path="/Process-Control/SPC"
+            element={
+              <>
+                <SpcPage />
+                <Where />
+              </>
+            }
+          />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return () => search;
+};
 const URL = "/Process-Control/SPC?part=p1";
 
 beforeEach(() => {
@@ -230,9 +242,7 @@ describe("SPC page", () => {
     routeApi(base({ "GET /spc/characteristics": [] }));
     renderAt(URL);
     expect(
-      await screen.findByText(
-        /no numeric readings for characteristics marked for SPC/,
-      ),
+      await screen.findByText(/no readings for characteristics marked for SPC/),
     ).toBeInTheDocument();
     expect(apiFetch.mock.calls.some(([p]) => p.startsWith("/spc/chart"))).toBe(
       false,
@@ -382,5 +392,280 @@ describe("Baseline panel", () => {
     renderAt(`${URL}&c=OD%7COP-020`);
     await screen.findByText(/No baseline saved/);
     expect(screen.queryByRole("form", { name: "Save a baseline" })).toBeNull();
+  });
+});
+
+describe("P chart", () => {
+  const pPoint = (i, n, failed, ucl, extra = {}) => ({
+    index: i,
+    at: `2026-11-05T08:${String(10 + i).padStart(2, "0")}:00Z`,
+    value: failed / n,
+    dispersion: null,
+    readings: [],
+    inspections: [{ id: `i${i}`, reference: `IPI-26-000${i + 1}` }],
+    lot: null,
+    machineId: null,
+    gaugeOverride: false,
+    n,
+    failed,
+    ucl,
+    lcl: 0,
+    z: 0,
+    ...extra,
+  });
+  const pChart = (over = {}) => ({
+    part: { id: "p1", partNumber: "HCR-100", name: "Rod 100" },
+    characteristic: {
+      key: "VISUAL",
+      name: "No chatter marks",
+      operationCode: "OP-020",
+      chartType: "p",
+      subgroupSize: null,
+      unitCode: null,
+    },
+    spec: { nominal: null, lower: null, upper: null },
+    points: [
+      pPoint(0, 20, 1, 0.19),
+      pPoint(1, 20, 2, 0.19),
+      pPoint(2, 40, 9, 0.17, { z: 5.1 }),
+    ],
+    limitsSource: "trial",
+    limits: {
+      centre: 0.125,
+      ucl: 0.2,
+      lcl: 0,
+      sigma: 0.07,
+      dispersionCentre: null,
+      dispersionUcl: null,
+      dispersionLcl: null,
+    },
+    provisional: true,
+    rules: ["we1", "we2", "we3", "we4"],
+    signals: [
+      {
+        rule: "we1",
+        text: "One point beyond 3σ (outside the control limits)",
+        index: 2,
+        involved: [2],
+        side: "above",
+      },
+    ],
+    dispersionSignals: [],
+    noVariation: false,
+    warnings: [
+      "Trial limits: calculated from the subgroups shown, not a saved baseline. Save a baseline to fix them.",
+    ],
+    excluded: [
+      {
+        reason: "no_lot",
+        text: "Checks of an inspection without a lot number (subgroups by lot)",
+        count: 20,
+      },
+    ],
+    baseline: null,
+    baselineIssue: null,
+    subgroup: {
+      basis: "inspection",
+      meanSize: 26.7,
+      expectedFailures: 3.3,
+      reliable: false,
+    },
+    reactions: [],
+    ...over,
+  });
+  const pBase = (extra = {}) =>
+    base({
+      "GET /spc/characteristics": [
+        {
+          key: "VISUAL",
+          name: "No chatter marks",
+          operationCode: "OP-020",
+          chartType: "p",
+          subgroupSize: null,
+          unitCode: null,
+          readings: 80,
+          lastMeasuredAt: "2026-11-05T08:13:00Z",
+          hasBaseline: false,
+        },
+      ],
+      "GET /spc/chart": pChart(),
+      ...extra,
+    });
+
+  it("shows proportions with a subgroup choice, per-subgroup limits and no spec or range chart", async () => {
+    routeApi(pBase());
+    renderAt(`${URL}&c=VISUAL%7COP-020`);
+    expect(
+      await screen.findByText(/P chart \(proportion failed\)/),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/Subgroup \(one point is/)).toHaveValue(
+      "inspection",
+    );
+    expect(
+      screen.queryByRole("checkbox", { name: /Show specification limits/ }),
+    ).toBeNull();
+    expect(screen.queryByText("Moving range")).toBeNull();
+    expect(
+      screen.getByRole("img", {
+        name: "Proportion failed chart, 3 points, 1 signal",
+      }),
+    ).toBeInTheDocument();
+    const key = screen.getByRole("list", { name: "Chart key" });
+    expect(
+      within(key).getByText(/recalculated for each subgroup's size/),
+    ).toBeInTheDocument();
+    expect(within(key).queryByText(/Specification/)).toBeNull();
+    expect(
+      within(screen.getByRole("table", { name: "Signals" })).getByText(
+        /Rule 1: One point beyond 3σ/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("list", { name: "Excluded readings" })).getByText(
+        /20 · Checks of an inspection without a lot number/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("lists checks, failures, proportion and each subgroup's limits in the data table", async () => {
+    routeApi(pBase());
+    renderAt(`${URL}&c=VISUAL%7COP-020`);
+    const table = await screen.findByRole("table", {
+      name: "Chart data",
+      hidden: true,
+    });
+    const rows = within(table).getAllByRole("row", { hidden: true });
+    const last = within(rows[3])
+      .getAllByRole("cell", { hidden: true })
+      .map((c) => c.textContent);
+    expect(last.slice(2)).toEqual([
+      "40",
+      "9",
+      "22.50%",
+      "0.00% to 17.00%",
+      "Rule 1",
+    ]);
+  });
+
+  it("asks the API for the chosen subgroup and keeps it in the URL", async () => {
+    routeApi(pBase());
+    const where = renderAt(`${URL}&c=VISUAL%7COP-020`);
+    await screen.findByLabelText(/Subgroup \(one point is/);
+    await userEvent.selectOptions(
+      screen.getByLabelText(/Subgroup \(one point is/),
+      "day",
+    );
+    await screen.findByRole("img", { name: /Proportion failed chart/ });
+    const last = apiFetch.mock.calls
+      .filter(([p]) => p.startsWith("/spc/chart"))
+      .pop()[0];
+    expect(decodeURIComponent(last)).toContain("subgroup=day");
+    expect(where()).toContain("basis=day");
+  });
+
+  it("saves a P baseline with the subgroup in use and shows it in proportions", async () => {
+    let body;
+    const saved = {
+      id: "b1",
+      partId: "p1",
+      characteristicKey: "VISUAL",
+      operationCode: "OP-020",
+      chartType: "p",
+      subgroupSize: null,
+      subgroupBasis: "day",
+      meanSubgroupSize: 80,
+      unitCode: null,
+      windowFrom: "2026-11-01T08:00:00Z",
+      windowTo: "2026-11-05T08:00:00Z",
+      points: 5,
+      provisional: true,
+      spec: { nominal: null, lower: null, upper: null },
+      limits: {
+        centre: 0.06,
+        ucl: 0.14,
+        lcl: 0,
+        sigma: 0.03,
+        dispersionCentre: null,
+        dispersionUcl: null,
+        dispersionLcl: null,
+      },
+      rules: ["we1"],
+      notes: null,
+      createdAt: "2026-11-05T09:11:00Z",
+      createdBy: { id: "u1", name: "Ada" },
+      supersededAt: null,
+      supersededBy: null,
+    };
+    routeApi(
+      pBase({ "POST /spc/baselines": (_p, o) => ((body = o.body), saved) }),
+    );
+    renderAt(`${URL}&c=VISUAL%7COP-020&basis=day`);
+    const form = await screen.findByRole("form", { name: "Save a baseline" });
+    expect(
+      within(form).getByRole("radio", {
+        name: /All subgroups \(one day each\)/,
+      }),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      within(form).getByRole("button", { name: "Calculate and save baseline" }),
+    );
+    expect(body).toMatchObject({
+      partId: "p1",
+      characteristicKey: "VISUAL",
+      operationCode: "OP-020",
+      subgroup: "day",
+    });
+  });
+
+  it("shows the baseline in use as a proportion with its subgroup, and says when it was made for another subgroup", async () => {
+    const baseline = {
+      id: "b1",
+      partId: "p1",
+      characteristicKey: "VISUAL",
+      operationCode: "OP-020",
+      chartType: "p",
+      subgroupSize: null,
+      subgroupBasis: "inspection",
+      meanSubgroupSize: 20,
+      unitCode: null,
+      windowFrom: "2026-11-01T08:00:00Z",
+      windowTo: "2026-11-05T08:00:00Z",
+      points: 12,
+      provisional: true,
+      spec: { nominal: null, lower: null, upper: null },
+      limits: {
+        centre: 0.06,
+        ucl: 0.2,
+        lcl: 0,
+        sigma: 0.05,
+        dispersionCentre: null,
+        dispersionUcl: null,
+        dispersionLcl: null,
+      },
+      rules: ["we1"],
+      notes: null,
+      createdAt: "2026-11-05T09:11:00Z",
+      createdBy: { id: "u1", name: "Ada" },
+      supersededAt: null,
+      supersededBy: null,
+    };
+    routeApi(
+      pBase({
+        "GET /spc/chart": pChart({ limitsSource: "baseline", baseline }),
+        "GET /spc/baselines": [baseline],
+      }),
+    );
+    renderAt(`${URL}&c=VISUAL%7COP-020`);
+    expect(await screen.findByText(/In use: 12 subgroups/)).toBeInTheDocument();
+    expect(
+      screen.getByText("Centre line p̄ (proportion failed)").nextSibling,
+    ).toHaveTextContent("6.00%");
+    expect(screen.getByText("Subgroup").nextSibling).toHaveTextContent(
+      "one inspection",
+    );
+    const history = await screen.findByRole("table", {
+      name: "Baseline history",
+    });
+    expect(within(history).getByText("6.00%")).toBeInTheDocument();
   });
 });

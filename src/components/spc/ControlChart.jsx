@@ -9,7 +9,13 @@ import {
   YAxis,
 } from "recharts";
 import { formatDateTime } from "../../lib/processControl";
-import { RULE_LABEL, formatValue, yDomain } from "../../lib/spc";
+import {
+  RULE_LABEL,
+  formatPercent,
+  formatValue,
+  proportionDomain,
+  yDomain,
+} from "../../lib/spc";
 
 const tick = { fontSize: 12, fill: "currentColor" };
 
@@ -317,17 +323,22 @@ export const DispersionChart = ({ chart, rows, decimals, label }) => {
 };
 
 /** What the lines and markers mean, in words. */
-export const ChartKey = ({ showSpec }) => (
+export const ChartKey = ({ showSpec, proportion = false }) => (
   <ul
     className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-secondary-text"
     aria-label="Chart key"
   >
     <li>
-      <span aria-hidden="true">- - </span>Control limits (UCL/LCL, from the
-      process)
+      <span aria-hidden="true">- - </span>
+      {proportion
+        ? "Control limits (UCL/LCL, recalculated for each subgroup's size)"
+        : "Control limits (UCL/LCL, from the process)"}
     </li>
     <li>
-      <span aria-hidden="true">— </span>Centre line (CL)
+      <span aria-hidden="true">— </span>
+      {proportion
+        ? "Centre line p̄ (all failures over all checks)"
+        : "Centre line (CL)"}
     </li>
     {showSpec && (
       <li>
@@ -342,3 +353,124 @@ export const ChartKey = ({ showSpec }) => (
     </li>
   </ul>
 );
+
+/** Tooltip of a P chart point: how many were checked and failed, and this subgroup's own limits. */
+const ProportionTooltip = ({ active, payload }) => {
+  if (!active || !payload?.length) return null;
+  const row = payload[0].payload;
+  const p = row.point;
+  return (
+    <div className="rounded-lg border border-border-color bg-primary-bg p-2 text-xs text-primary-text shadow-md">
+      <p className="font-medium">
+        Point {row.n} · {formatDateTime(row.at)}
+      </p>
+      <p>
+        {row.failed} of {row.checked} failed (
+        <span className="tabular-nums">{formatPercent(row.value, 2)}</span>)
+      </p>
+      {row.ucl !== null && (
+        <p>
+          Limits for {row.checked} checks: {formatPercent(row.lcl, 2)} to{" "}
+          {formatPercent(row.ucl, 2)}
+        </p>
+      )}
+      {p.inspections.length > 0 && (
+        <p>{p.inspections.map((i) => i.reference).join(", ")}</p>
+      )}
+      {p.lot && <p>Lot {p.lot}</p>}
+      {row.rules.length > 0 && (
+        <p className="font-medium text-error-color">
+          {row.rules.map((r) => RULE_LABEL[r].short).join(", ")}
+        </p>
+      )}
+    </div>
+  );
+};
+
+/**
+ * P chart: the share of checks that failed in each subgroup. The control limits (dashed, stepped) follow each
+ * subgroup's size — a small subgroup has wider limits — around the centre line p̄. There is no specification here.
+ */
+export const ProportionChart = ({ chart, rows }) => {
+  const { limits } = chart;
+  const control = "var(--chart-neutral)";
+  return (
+    <div
+      className="h-72"
+      role="img"
+      aria-label={`Proportion failed chart, ${rows.length} points, ${chart.signals.length} signal${chart.signals.length === 1 ? "" : "s"}`}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart
+          data={rows}
+          margin={{ top: 8, right: 64, bottom: 4, left: 4 }}
+        >
+          <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
+          <XAxis
+            dataKey="n"
+            type="number"
+            domain={[1, Math.max(rows.length, 2)]}
+            allowDecimals={false}
+            tick={tick}
+            tickLine={false}
+          />
+          <YAxis
+            domain={proportionDomain(rows)}
+            tick={tick}
+            tickFormatter={(v) => formatPercent(v, 0)}
+            width={52}
+            tickLine={false}
+            axisLine={false}
+          />
+          <Tooltip content={<ProportionTooltip />} />
+          {limits && (
+            <ReferenceLine
+              y={limits.centre}
+              stroke={control}
+              label={limitLabel(
+                `p̄ ${formatPercent(limits.centre, 2)}`,
+                control,
+                "insideBottomRight",
+              )}
+            />
+          )}
+          <Line
+            type="stepAfter"
+            dataKey="ucl"
+            name="UCL"
+            stroke={control}
+            strokeDasharray="6 4"
+            strokeWidth={1.5}
+            dot={false}
+            activeDot={false}
+            isAnimationActive={false}
+            connectNulls={false}
+          />
+          <Line
+            type="stepAfter"
+            dataKey="lcl"
+            name="LCL"
+            stroke={control}
+            strokeDasharray="6 4"
+            strokeWidth={1.5}
+            dot={false}
+            activeDot={false}
+            isAnimationActive={false}
+            connectNulls={false}
+          />
+          <Line
+            type="linear"
+            dataKey="value"
+            stroke="var(--chart-series-1)"
+            strokeWidth={1.5}
+            isAnimationActive={false}
+            dot={({ key, ...props }) => (
+              <Marker key={key} {...props} flag={(r) => r.rules.length > 0} />
+            )}
+            activeDot={{ r: 5 }}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};

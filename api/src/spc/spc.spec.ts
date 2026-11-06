@@ -112,3 +112,64 @@ describe('Western Electric rules', () => {
     expect(dispersionSignals([null, 1, 5, 2, 4.9], { dispersionUcl: 4.9 })).toEqual([2]);
   });
 });
+
+import { detectPSignals, pBar, pLimitsAt, pReliability, pSeries, pSigma } from './spc';
+
+describe('P chart', () => {
+  const groups = [4, 6, 5, 3, 7, 5, 4, 6, 5, 5].map((d) => ({ n: 100, d }));
+
+  it('centre line is all failures over all checks', () => {
+    expect(pBar(groups)).toBeCloseTo(0.05, 10);
+    expect(pBar([{ n: 10, d: 1 }, { n: 90, d: 9 }])).toBeCloseTo(0.1, 10); // weighted by size, not a mean of proportions
+    expect(pBar([])).toBe(0);
+  });
+
+  it('limits are p̄ ± 3σ for the subgroup size, clipped to 0…1', () => {
+    close(pSigma(0.05, 100), 0.0217945, 6);
+    const l = pLimitsAt(0.05, 100);
+    close(l.ucl, 0.05 + 3 * 0.0217945, 5);
+    expect(l.lcl).toBe(0); // 0.05 − 0.0654 < 0
+    const wide = pLimitsAt(0.2, 25); // σ = 0.08
+    close(wide.ucl, 0.44, 6);
+    close(wide.lcl, 0, 6);
+    expect(pLimitsAt(0.97, 10).ucl).toBe(1);
+    // Bigger subgroups give tighter limits.
+    expect(pLimitsAt(0.1, 400).ucl).toBeLessThan(pLimitsAt(0.1, 50).ucl);
+  });
+
+  it('each point carries its own limits and z-score', () => {
+    const pts = pSeries([{ n: 100, d: 5 }, { n: 25, d: 10 }], 0.05);
+    close(pts[0].p, 0.05, 10);
+    close(pts[0].z, 0, 10);
+    close(pts[1].p, 0.4, 10);
+    close(pts[1].z, (0.4 - 0.05) / pSigma(0.05, 25), 8);
+    expect(pts[1].ucl).toBeGreaterThan(pts[0].ucl);
+  });
+
+  it('with no failures in the baseline any failure is a signal', () => {
+    const pts = pSeries([{ n: 20, d: 0 }, { n: 20, d: 1 }], 0);
+    expect(pts[0].z).toBe(0);
+    expect(pts[1].z).toBe(Infinity);
+    expect(detectPSignals(pts).map((s) => `${s.rule}@${s.index}`)).toEqual(['we1@1']);
+  });
+
+  it('rule 1: a subgroup beyond 3σ, taking its own size into account', () => {
+    // 6 of 25 = 24 % is 5.2σ above 5 % for n = 25, but 6 of 100 is only 0.5σ.
+    const pts = pSeries([{ n: 100, d: 6 }, { n: 25, d: 6 }], 0.05);
+    expect(detectPSignals(pts, ['we1']).map((s) => s.index)).toEqual([1]);
+  });
+
+  it('rules 2–4 use the same zones in σ units', () => {
+    const run = pSeries(Array.from({ length: 8 }, () => ({ n: 100, d: 6 })), 0.05); // 8 in a row above the centre
+    expect(detectPSignals(run, ['we4']).map((s) => s.index)).toEqual([7]);
+    const two = pSeries([{ n: 100, d: 5 }, { n: 100, d: 10 }, { n: 100, d: 5 }, { n: 100, d: 10 }], 0.05); // 2.3σ twice in three
+    expect(detectPSignals(two, ['we2']).map((s) => s.index)).toEqual([3]);
+    expect(detectPSignals(run, [])).toEqual([]);
+  });
+
+  it('warns when the normal approximation is unreliable', () => {
+    expect(pReliability(groups, 0.05).reliable).toBe(true); // 5 expected failures at n = 100
+    expect(pReliability(groups.map((g) => ({ n: 40, d: g.d })), 0.05)).toMatchObject({ reliable: false, expectedFailures: 2 });
+    expect(pReliability([], 0).reliable).toBe(false);
+  });
+});

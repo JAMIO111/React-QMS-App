@@ -1,9 +1,10 @@
-import { assemble, evaluate, parseRules, ReadingRow } from './spc-data';
+import { assemble, assembleP, evaluate, evaluateP, parseRules, ReadingRow } from './spc-data';
 
 let n = 0;
 const row = (value: number, over: Partial<ReadingRow> = {}): ReadingRow => ({
   id: `m${++n}`,
   value: String(value),
+  valuePass: null,
   measuredAt: new Date(Date.UTC(2026, 10, 1, 8, n)).toISOString(),
   sampleNumber: n,
   subgroupNumber: n,
@@ -108,5 +109,104 @@ describe('evaluate', () => {
     expect(parseRules(undefined)).toEqual(['we1', 'we2', 'we3', 'we4']);
     expect(parseRules('we1,we9, we4')).toEqual(['we1', 'we4']);
     expect(parseRules('')).toEqual([]);
+  });
+});
+
+
+describe('P chart data', () => {
+  const att = (pass: boolean, over: Partial<ReadingRow> = {}): ReadingRow => ({ ...row(0, { chartType: 'p', subgroupSize: null, unitCode: null, nominal: null, lower: null, upper: null, ...over }), value: '', valuePass: pass });
+  const checks = (inspectionId: string, n: number, failures: number, over: Partial<ReadingRow> = {}) =>
+    Array.from({ length: n }, (_, i) => att(i >= failures, { inspectionId, inspectionReference: `IPI-${inspectionId}`, ...over }));
+
+  it('groups by inspection: n checked and d failed per inspection, in time order', () => {
+    const d = assembleP([...checks('a', 10, 2), ...checks('b', 20, 1)], 'inspection');
+    expect(d.groups.map((g) => [g.n, g.d])).toEqual([[10, 2], [20, 1]]);
+    expect(d.groups[1].inspections).toEqual([{ id: 'b', reference: 'IPI-b' }]);
+    expect(d.excluded).toEqual([]);
+  });
+
+  it('groups by day (UTC) across inspections', () => {
+    const day = (iso: string) => ({ measuredAt: iso });
+    const rows = [
+      ...checks('a', 5, 1, day('2026-11-01T08:00:00Z')),
+      ...checks('b', 5, 1, day('2026-11-01T20:00:00Z')),
+      ...checks('c', 10, 0, day('2026-11-02T01:00:00Z')),
+    ];
+    const d = assembleP(rows, 'day');
+    expect(d.groups.map((g) => [g.n, g.d])).toEqual([[10, 2], [10, 0]]);
+    expect(d.groups[0].inspections.map((i) => i.id)).toEqual(['a', 'b']);
+  });
+
+  it('groups by lot, leaving out checks of inspections without a lot (counted)', () => {
+    const rows = [...checks('a', 4, 1, { lot: 'L1' }), ...checks('b', 4, 2, { lot: 'L1' }), ...checks('c', 6, 0, { lot: 'L2' }), ...checks('d', 3, 3, { lot: null })];
+    const d = assembleP(rows, 'lot');
+    expect(d.groups.map((g) => [g.lot, g.n, g.d])).toEqual([['L1', 8, 3], ['L2', 6, 0]]);
+    expect(d.excluded).toEqual([expect.objectContaining({ reason: 'no_lot', count: 3 })]);
+  });
+
+  it('leaves out retests, abandoned inspections and readings not taken under a P chart, and ignores measured readings', () => {
+    const rows = [
+      ...checks('a', 10, 1),
+      att(false, { isRetest: true }),
+      att(false, { inspectionStatus: 'abandoned' }),
+      att(true, { chartType: null }),
+      row(25.01), // a measured reading of the same characteristic is not a pass/fail check
+    ];
+    const d = assembleP(rows, 'inspection');
+    expect(d.groups.map((g) => [g.n, g.d])).toEqual([[10, 1]]);
+    expect(Object.fromEntries(d.excluded.map((e) => [e.reason, e.count]))).toEqual({ retest: 1, abandoned: 1, chart_type: 1 });
+  });
+
+  it('the variable chart ignores pass/fail readings', () => {
+    expect(assemble([att(false), row(25)]).points.map((p) => p.value)).toEqual([25]);
+  });
+
+  const groupsOf = (ds: [number, number][]) => assembleP(ds.flatMap(([n, d], i) => checks(`g${i}`, n, d)), 'inspection');
+
+  it('needs five subgroups before showing limits, but still shows the proportions', () => {
+    const r = evaluateP(groupsOf([[50, 2], [50, 3], [50, 1]]), null, ['we1']);
+    expect(r.limitsSource).toBe('none');
+    expect(r.warnings[0]).toMatch(/At least 5 subgroups/);
+    expect(r.points.map((p) => p.p)).toEqual([0.04, 0.06, 0.02]);
+  });
+
+  it('trial limits from the subgroups shown: centre p̄, limits for each size, provisional, a high subgroup flagged', () => {
+    const r = evaluateP(groupsOf([[100, 5], [100, 4], [100, 6], [100, 5], [100, 4], [100, 5], [100, 22]]), null, ['we1']);
+    expect(r.limitsSource).toBe('trial');
+    expect(r.provisional).toBe(true);
+    expect(r.centre).toBeCloseTo(51 / 700, 10);
+    expect(r.warnings.join(' ')).toMatch(/Trial limits/);
+    expect(r.signals.map((s) => `${s.rule}@${s.index}`)).toEqual(['we1@6']);
+    expect(r.points[0].lcl).toBe(0);
+    expect(r.atMeanSize?.meanSize).toBe(100);
+  });
+
+  it('limits follow each subgroup size', () => {
+    const r = evaluateP(groupsOf([[400, 20], [400, 20], [400, 20], [25, 1], [25, 1], [25, 1]]), 0.05, []);
+    expect(r.points[0].ucl).toBeLessThan(r.points[3].ucl); // bigger subgroups, tighter limits
+    expect(r.limitsSource).toBe('baseline');
+  });
+
+  it('uses a saved baseline’s p̄ rather than the data’s, and flags an unreliable approximation', () => {
+    const r = evaluateP(groupsOf([[20, 1], [20, 0], [20, 1], [20, 1], [20, 0], [20, 6]]), 0.02, ['we1']);
+    expect(r.centre).toBe(0.02);
+    expect(r.limitsSource).toBe('baseline');
+    expect(r.warnings.join(' ')).toMatch(/provisional/);
+    expect(r.warnings.join(' ')).toMatch(/too few for the limits to be reliable/);
+    expect(r.signals.map((s) => s.index)).toEqual([5]);
+  });
+
+  it('explains a zero-failure baseline and signals the first failure', () => {
+    const r = evaluateP(groupsOf([[30, 0], [30, 0], [30, 0], [30, 0], [30, 0], [30, 1]]), null, ['we1']);
+    expect(r.centre).toBeCloseTo(1 / 180, 10);
+    const none = evaluateP(groupsOf([[30, 0], [30, 0], [30, 0], [30, 0], [30, 0], [30, 0]]), null, ['we1']);
+    expect(none.centre).toBe(0);
+    expect(none.noVariation).toBe(true);
+    expect(none.warnings.join(' ')).toMatch(/No failures in the baseline/);
+    expect(evaluateP(groupsOf([[30, 1]]), 0, ['we1']).signals.map((s) => s.index)).toEqual([0]);
+  });
+
+  it('says so when there is nothing to chart', () => {
+    expect(evaluateP({ basis: 'day', groups: [], excluded: [] }, null, []).warnings).toEqual(['There are no pass/fail readings for these filters.']);
   });
 });

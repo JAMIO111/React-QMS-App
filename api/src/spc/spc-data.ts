@@ -1,10 +1,30 @@
-import { ChartType, controlLimits, detectSignals, dispersionSignals, isProvisional, Limits, MINIMUM_POINTS, plotted, Rule, RULE_TEXT, RULES, Signal } from './spc';
+import {
+  ChartType,
+  controlLimits,
+  detectPSignals,
+  detectSignals,
+  dispersionSignals,
+  isProvisional,
+  Limits,
+  MINIMUM_POINTS,
+  pBar,
+  pLimitsAt,
+  plotted,
+  pReliability,
+  pSeries,
+  Rule,
+  RULE_TEXT,
+  RULES,
+  Signal,
+} from './spc';
 
 /** One current (not corrected) numeric reading, with the context it was taken in. */
 export interface ReadingRow {
   id: string;
-  /** Exactly as stored. */
+  /** Exactly as stored (empty for a pass/fail reading). */
   value: string;
+  /** The result of a pass/fail reading; null for a measured one. */
+  valuePass: boolean | null;
   measuredAt: string;
   sampleNumber: number;
   subgroupNumber: number | null;
@@ -13,7 +33,7 @@ export interface ReadingRow {
   inspectionReference: string;
   inspectionStatus: 'in_progress' | 'completed' | 'abandoned';
   unitCode: string | null;
-  chartType: ChartType | null;
+  chartType: ChartType | 'p' | null;
   subgroupSize: number | null;
   nominal: number | null;
   lower: number | null;
@@ -23,7 +43,7 @@ export interface ReadingRow {
   gaugeOverride: boolean;
 }
 
-export type ExclusionReason = 'retest' | 'abandoned' | 'unit' | 'chart_type' | 'specification' | 'no_subgroup' | 'incomplete_subgroup';
+export type ExclusionReason = 'retest' | 'abandoned' | 'unit' | 'chart_type' | 'specification' | 'no_subgroup' | 'incomplete_subgroup' | 'no_lot';
 export const EXCLUSION_TEXT: Record<ExclusionReason, string> = {
   retest: 'Retests (they re-measure a failed reading)',
   abandoned: 'Abandoned inspections',
@@ -32,6 +52,7 @@ export const EXCLUSION_TEXT: Record<ExclusionReason, string> = {
   specification: 'Measured against a different specification (nominal or limits)',
   no_subgroup: 'No subgroup recorded (taken before subgroups existed)',
   incomplete_subgroup: 'Incomplete subgroup (fewer readings than the subgroup size)',
+  no_lot: 'Checks of an inspection without a lot number (subgroups by lot)',
 };
 
 export interface ChartPoint {
@@ -68,7 +89,7 @@ const byTime = (a: ReadingRow, b: ReadingRow) => a.measuredAt.localeCompare(b.me
 export function assemble(rows: ReadingRow[]): Dataset {
   const counts = new Map<ExclusionReason, number>();
   const skip = (reason: ExclusionReason, n = 1) => counts.set(reason, (counts.get(reason) ?? 0) + n);
-  const sorted = [...rows].sort(byTime);
+  const sorted = rows.filter((r) => r.valuePass === null).sort(byTime); // pass/fail readings belong to P charts
 
   let usable: ReadingRow[] = [];
   for (const r of sorted) {
@@ -202,3 +223,110 @@ export function evaluate(data: Dataset, baseline: Limits | null, rules: readonly
 
 export const parseRules = (v: string | undefined): Rule[] =>
   v === undefined ? [...RULES] : v.split(',').map((x) => x.trim()).filter((x): x is Rule => (RULES as readonly string[]).includes(x));
+
+
+// ---- P chart ---------------------------------------------------------------------------------------
+
+export type SubgroupBasis = 'inspection' | 'day' | 'lot';
+export const SUBGROUP_BASES: readonly SubgroupBasis[] = ['inspection', 'day', 'lot'];
+export const BASIS_TEXT: Record<SubgroupBasis, string> = { inspection: 'one inspection', day: 'one day', lot: 'one lot' };
+
+export interface PGroupRow {
+  at: string;
+  n: number;
+  d: number;
+  inspections: { id: string; reference: string }[];
+  lot: string | null;
+}
+
+export interface PDataset {
+  basis: SubgroupBasis;
+  groups: PGroupRow[];
+  excluded: { reason: ExclusionReason; text: string; count: number }[];
+}
+
+/**
+ * Pass/fail readings of one characteristic, grouped into subgroups: one inspection, one calendar day (UTC) or one lot.
+ * Retests, abandoned inspections and readings not taken under a P chart are left out and counted; with lots as the
+ * basis, checks of inspections without a lot number are left out too.
+ */
+export function assembleP(rows: ReadingRow[], basis: SubgroupBasis): PDataset {
+  const counts = new Map<ExclusionReason, number>();
+  const skip = (reason: ExclusionReason) => counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  const buckets = new Map<string, ReadingRow[]>();
+  for (const r of [...rows].filter((x) => x.valuePass !== null).sort(byTime)) {
+    if (r.inspectionStatus === 'abandoned') skip('abandoned');
+    else if (r.isRetest) skip('retest');
+    else if (r.chartType !== 'p') skip('chart_type');
+    else if (basis === 'lot' && !r.lot) skip('no_lot');
+    else {
+      const key = basis === 'inspection' ? r.inspectionId : basis === 'day' ? r.measuredAt.slice(0, 10) : (r.lot as string);
+      buckets.set(key, [...(buckets.get(key) ?? []), r]);
+    }
+  }
+  const groups: PGroupRow[] = [...buckets.values()]
+    .map((g) => ({
+      at: g[g.length - 1].measuredAt,
+      n: g.length,
+      d: g.filter((r) => r.valuePass === false).length,
+      inspections: [...new Map(g.map((r) => [r.inspectionId, { id: r.inspectionId, reference: r.inspectionReference }])).values()],
+      lot: [...new Set(g.map((r) => r.lot).filter(Boolean))].join(', ') || null,
+    }))
+    .sort((a, b) => a.at.localeCompare(b.at));
+  const order = Object.keys(EXCLUSION_TEXT) as ExclusionReason[];
+  return { basis, groups, excluded: order.filter((r) => counts.get(r)).map((reason) => ({ reason, text: EXCLUSION_TEXT[reason], count: counts.get(reason) as number })) };
+}
+
+export interface PChartResult {
+  limitsSource: 'baseline' | 'trial' | 'none';
+  /** p̄. */
+  centre: number | null;
+  /** Limits at the mean subgroup size, for reference; each point has its own. */
+  atMeanSize: { ucl: number; lcl: number; sigma: number; meanSize: number } | null;
+  points: (PGroupRow & { index: number; p: number; ucl: number; lcl: number; z: number | null })[];
+  signals: (Signal & { text: string })[];
+  provisional: boolean;
+  noVariation: boolean;
+  reliability: { meanSize: number; expectedFailures: number; reliable: boolean } | null;
+  warnings: string[];
+}
+
+/** Limits (a saved baseline's p̄, else trial limits from these subgroups) and signals for the chosen rules. */
+export function evaluateP(data: PDataset, baselineCentre: number | null, rules: readonly Rule[]): PChartResult {
+  const warnings: string[] = [];
+  const empty = (w: string): PChartResult => ({ limitsSource: 'none', centre: null, atMeanSize: null, points: [], signals: [], provisional: true, noVariation: false, reliability: null, warnings: [w] });
+  if (!data.groups.length) return empty('There are no pass/fail readings for these filters.');
+  let centre = baselineCentre;
+  let source: PChartResult['limitsSource'] = baselineCentre === null ? 'none' : 'baseline';
+  if (centre === null) {
+    if (data.groups.length < MINIMUM_POINTS) {
+      const r = empty(`At least ${MINIMUM_POINTS} subgroups are needed before limits can be shown; there ${data.groups.length === 1 ? 'is' : 'are'} ${data.groups.length}.`);
+      // Still show the proportions, without limits.
+      r.points = data.groups.map((g, index) => ({ ...g, index, p: g.d / g.n, ucl: NaN, lcl: NaN, z: null }));
+      return r;
+    }
+    centre = pBar(data.groups);
+    source = 'trial';
+  }
+  const series = pSeries(data.groups, centre);
+  const rel = pReliability(data.groups, centre);
+  const provisional = source === 'trial' || data.groups.length < 20;
+  if (source === 'trial') warnings.push('Trial limits: calculated from the subgroups shown, not a saved baseline. Save a baseline to fix them.');
+  else if (provisional) warnings.push(`Only ${data.groups.length} subgroups so far: treat the limits as provisional.`);
+  const noVariation = centre === 0 || centre === 1;
+  if (centre === 0) warnings.push('No failures in the baseline: any failure will be a signal. Limits at zero are not informative until failures have been seen.');
+  else if (centre === 1) warnings.push('Every check failed, so there is no variation to chart.');
+  else if (!rel.reliable) warnings.push(`Subgroups average ${Math.round(rel.meanN * 10) / 10} checks with ${Math.round(rel.expectedFailures * 100) / 100} failures expected: too few for the limits to be reliable (about 5 expected failures and 5 expected passes are needed). Use larger subgroups, for example by day or lot.`);
+  const at = pLimitsAt(centre, rel.meanN);
+  return {
+    limitsSource: source,
+    centre,
+    atMeanSize: { ucl: at.ucl, lcl: at.lcl, sigma: Math.sqrt((centre * (1 - centre)) / rel.meanN), meanSize: rel.meanN },
+    points: data.groups.map((g, index) => ({ ...g, index, p: series[index].p, ucl: series[index].ucl, lcl: series[index].lcl, z: Number.isFinite(series[index].z) ? series[index].z : null })),
+    signals: detectPSignals(series, rules).map((sg) => ({ ...sg, text: RULE_TEXT[sg.rule] })),
+    provisional,
+    noVariation,
+    reliability: { meanSize: rel.meanN, expectedFailures: rel.expectedFailures, reliable: rel.reliable },
+    warnings,
+  };
+}

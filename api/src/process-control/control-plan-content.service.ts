@@ -42,7 +42,7 @@ type CharacteristicValues = {
   unitCode: string | null;
   specKey: string | null;
   spcEligible: boolean;
-  chartType: 'imr' | 'xbar_r' | null;
+  chartType: 'imr' | 'xbar_r' | 'p' | null;
   subgroupSize: number | null;
 };
 
@@ -54,7 +54,9 @@ type CharacteristicValues = {
 export function normaliseCharacteristic(v: CharacteristicValues): { values: CharacteristicValues; problems: string[] } {
   const out = { ...v };
   if (out.dataType === 'attribute') {
-    Object.assign(out, { valueSource: 'plan', nominal: null, lowerLimit: null, upperLimit: null, unitCode: null, specKey: null, spcEligible: false });
+    // A pass/fail check can be charted only as a P chart (proportion failed); its subgroup size is whatever was checked.
+    Object.assign(out, { valueSource: 'plan', nominal: null, lowerLimit: null, upperLimit: null, unitCode: null, specKey: null });
+    if (out.spcEligible) Object.assign(out, { chartType: 'p', subgroupSize: null });
   } else if (out.valueSource === 'part_spec') {
     Object.assign(out, { nominal: null, lowerLimit: null, upperLimit: null });
   } else {
@@ -62,6 +64,7 @@ export function normaliseCharacteristic(v: CharacteristicValues): { values: Char
   }
   if (!out.spcEligible) Object.assign(out, { chartType: null, subgroupSize: null });
   else if (out.chartType === 'imr') out.subgroupSize = 1;
+  else if (out.chartType === 'p') out.subgroupSize = null;
   const problems: string[] = [];
   if (out.dataType === 'variable') {
     if (!out.unitCode) problems.push('Choose the unit of measure');
@@ -76,6 +79,7 @@ export function normaliseCharacteristic(v: CharacteristicValues): { values: Char
   }
   if (out.spcEligible) {
     if (!out.chartType) problems.push('Choose the chart type for SPC');
+    if (out.chartType === 'p' && out.dataType === 'variable') problems.push('A P chart is for pass/fail checks; use I-MR or X-bar/R for a measured characteristic');
     if (out.chartType === 'xbar_r' && (out.subgroupSize === null || out.subgroupSize < 2 || out.subgroupSize > 10)) {
       problems.push('X-bar/R charts need a subgroup size of 2 to 10');
     }

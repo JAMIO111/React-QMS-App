@@ -4,34 +4,67 @@ import Field from "../ui/Field";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useCreateBaseline, useSpcBaselines } from "../../hooks/useSpc";
 import { formatDateTime } from "../../lib/processControl";
-import { RULES, RULE_LABEL, describeWindow, formatValue } from "../../lib/spc";
+import {
+  BASIS_LABEL,
+  RULES,
+  RULE_LABEL,
+  describeWindow,
+  formatPercent,
+  formatValue,
+} from "../../lib/spc";
 import { buttonClass, FormError } from "../master-data/shared";
 
+const limitText = (b, v, decimals) =>
+  b.chartType === "p" ? formatPercent(v, 2) : formatValue(v, decimals);
 const dayStart = (d) =>
   d ? new Date(`${d}T00:00:00`).toISOString() : undefined;
 const dayEnd = (d) =>
   d ? new Date(`${d}T23:59:59.999`).toISOString() : undefined;
 
-const Limits = ({ b, decimals }) => (
-  <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
-    {[
-      ["Centre line", formatValue(b.limits.centre, decimals)],
-      ["Upper control limit", formatValue(b.limits.ucl, decimals)],
-      ["Lower control limit", formatValue(b.limits.lcl, decimals)],
-      [
-        b.chartType === "imr" ? "Average moving range" : "Average range",
-        formatValue(b.limits.dispersionCentre, decimals),
-      ],
-    ].map(([k, v]) => (
-      <div key={k}>
-        <dt className="text-secondary-text">{k}</dt>
-        <dd className="tabular-nums text-primary-text">
-          {v} {b.unitCode ?? ""}
-        </dd>
-      </div>
-    ))}
-  </dl>
-);
+const Limits = ({ b, decimals }) =>
+  b.chartType === "p" ? (
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
+      {[
+        [
+          "Centre line p̄ (proportion failed)",
+          formatPercent(b.limits.centre, 2),
+        ],
+        [
+          "Average subgroup size",
+          `${Math.round((b.meanSubgroupSize ?? 0) * 10) / 10} checks`,
+        ],
+        [
+          "Limits at that size",
+          `${formatPercent(b.limits.lcl, 2)} to ${formatPercent(b.limits.ucl, 2)}`,
+        ],
+        ["Subgroup", BASIS_LABEL[b.subgroupBasis]],
+      ].map(([k, v]) => (
+        <div key={k}>
+          <dt className="text-secondary-text">{k}</dt>
+          <dd className="tabular-nums text-primary-text">{v}</dd>
+        </div>
+      ))}
+    </dl>
+  ) : (
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
+      {[
+        ["Centre line", formatValue(b.limits.centre, decimals)],
+        ["Upper control limit", formatValue(b.limits.ucl, decimals)],
+        ["Lower control limit", formatValue(b.limits.lcl, decimals)],
+        [
+          b.chartType === "imr" ? "Average moving range" : "Average range",
+          formatValue(b.limits.dispersionCentre, decimals),
+        ],
+      ].map(([k, v]) => (
+        <div key={k}>
+          <dt className="text-secondary-text">{k}</dt>
+          <dd className="tabular-nums text-primary-text">
+            {v} {b.unitCode ?? ""}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
 
 /**
  * Saved control limits for the chosen characteristic: the one in use, the form to calculate and save a new
@@ -60,6 +93,7 @@ const BaselinePanel = ({ chart, params, rules, decimals }) => {
       characteristicKey: params.characteristicKey,
       operationCode: chart.characteristic.operationCode,
       rules,
+      ...(isP ? { subgroup: params.subgroup ?? "inspection" } : {}),
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       ...(mode === "first" ? { firstN: Number(firstN) } : {}),
       ...(mode === "range" ? { from: dayStart(from), to: dayEnd(to) } : {}),
@@ -67,10 +101,13 @@ const BaselinePanel = ({ chart, params, rules, decimals }) => {
     create.mutate(body, { onSuccess: (b) => (setSaved(b), setNotes("")) });
   };
   const active = chart.baseline;
+  const isP = chart.characteristic.chartType === "p";
   const unit =
     chart.characteristic.chartType === "imr"
       ? "readings"
-      : "complete subgroups";
+      : isP
+        ? `subgroups (${BASIS_LABEL[params.subgroup ?? "inspection"]} each)`
+        : "complete subgroups";
 
   return (
     <MenuCard
@@ -239,13 +276,13 @@ const BaselinePanel = ({ chart, params, rules, decimals }) => {
                       {b.provisional ? " (provisional)" : ""}
                     </td>
                     <td className="border-b border-border-color px-2 py-2 tabular-nums">
-                      {formatValue(b.limits.centre, decimals)}
+                      {limitText(b, b.limits.centre, decimals)}
                     </td>
                     <td className="border-b border-border-color px-2 py-2 tabular-nums">
-                      {formatValue(b.limits.ucl, decimals)}
+                      {limitText(b, b.limits.ucl, decimals)}
                     </td>
                     <td className="border-b border-border-color px-2 py-2 tabular-nums">
-                      {formatValue(b.limits.lcl, decimals)}
+                      {limitText(b, b.limits.lcl, decimals)}
                     </td>
                     <td className="border-b border-border-color px-2 py-2">
                       {b.supersededAt

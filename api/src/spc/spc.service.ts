@@ -6,8 +6,8 @@ import type { RequestContext } from '../common/request-context';
 import { iso, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
 import { BaselineQuery, Baseline, Chart, ChartQuery, CharacteristicsQuery, CreateBaselineBody } from './spc.schemas';
-import { controlLimits, isProvisional, Limits, MINIMUM_POINTS, Rule, RULE_TEXT } from './spc';
-import { assemble, ChartPoint, evaluate, parseRules, ReadingRow } from './spc-data';
+import { controlLimits, isProvisional, Limits, MINIMUM_POINTS, pBar, PROVISIONAL_BELOW, Rule, RULE_TEXT } from './spc';
+import { assemble, assembleP, BASIS_TEXT, ChartPoint, evaluate, evaluateP, parseRules, ReadingRow, SubgroupBasis } from './spc-data';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const numOrNull = (v: unknown) => (v === null || v === undefined ? null : Number(v));
@@ -19,7 +19,9 @@ const toBaseline = (r: Row): Baseline => ({
   characteristicKey: r.characteristic_key as string,
   operationCode: (r.operation_code as string) ?? null,
   chartType: r.chart_type as Baseline['chartType'],
-  subgroupSize: Number(r.subgroup_size),
+  subgroupSize: numOrNull(r.subgroup_size),
+  subgroupBasis: (r.subgroup_basis as Baseline['subgroupBasis']) ?? null,
+  meanSubgroupSize: numOrNull(r.mean_subgroup_size),
   unitCode: (r.unit_code as string) ?? null,
   windowFrom: iso(r.window_from)!,
   windowTo: iso(r.window_to)!,
@@ -30,9 +32,9 @@ const toBaseline = (r: Row): Baseline => ({
     centre: Number(r.centre),
     ucl: Number(r.ucl),
     lcl: Number(r.lcl),
-    dispersionCentre: Number(r.dispersion_centre),
-    dispersionUcl: Number(r.dispersion_ucl),
-    dispersionLcl: Number(r.dispersion_lcl),
+    dispersionCentre: numOrNull(r.dispersion_centre),
+    dispersionUcl: numOrNull(r.dispersion_ucl),
+    dispersionLcl: numOrNull(r.dispersion_lcl),
     sigma: Number(r.sigma),
   },
   rules: r.rules as Rule[],
@@ -46,6 +48,7 @@ const toBaseline = (r: Row): Baseline => ({
 const BASELINE_SELECT = sql.raw(`select b.*, b.n_points, b.spec_nominal::float8 as spec_nominal, b.spec_lower::float8 as spec_lower, b.spec_upper::float8 as spec_upper,
   b.centre::float8 as centre, b.ucl::float8 as ucl, b.lcl::float8 as lcl, b.dispersion_centre::float8 as dispersion_centre,
   b.dispersion_ucl::float8 as dispersion_ucl, b.dispersion_lcl::float8 as dispersion_lcl, b.sigma::float8 as sigma,
+  b.mean_subgroup_size::float8 as mean_subgroup_size,
   ${personName('pc')} as created_by_name
   from public.spc_baselines b left join public.profiles pc on pc.id = b.created_by`);
 
@@ -73,14 +76,14 @@ export class SpcService {
         from public.inspection_measurements m
         join public.inspection_records r on r.id = m.inspection_record_id
         join public.resolved_inspection_requirements q on q.id = m.requirement_id
-        where m.organisation_id = ${orgOf(ctx)}::uuid and r.part_id = ${q.partId}::uuid and q.spc_eligible and q.data_type = 'variable'
-          and m.value_numeric is not null and not exists (select 1 from public.inspection_measurements c where c.supersedes_id = m.id)
+        where m.organisation_id = ${orgOf(ctx)}::uuid and r.part_id = ${q.partId}::uuid and q.spc_eligible
+          and ((q.data_type = 'variable' and m.value_numeric is not null) or (q.data_type = 'attribute' and m.value_pass is not null)) and not exists (select 1 from public.inspection_measurements c where c.supersedes_id = m.id)
         group by q.characteristic_key, q.operation_code order by q.characteristic_key, q.operation_code`);
       return r.rows.map((x) => ({
         key: x.characteristic_key as string,
         name: x.name as string,
         operationCode: x.operation_code as string,
-        chartType: (x.chart_type as 'imr' | 'xbar_r') ?? null,
+        chartType: (x.chart_type as 'imr' | 'xbar_r' | 'p') ?? null,
         subgroupSize: numOrNull(x.subgroup_size),
         unitCode: (x.unit_code as string) ?? null,
         readings: Number(x.readings),
@@ -95,6 +98,7 @@ export class SpcService {
       const part = await this.requirePart(db, ctx, q.partId);
       const operationCode = await this.resolveOperation(db, ctx, q.partId, q.characteristicKey, q.operationCode);
       const rows = await this.readings(db, ctx, { ...q, operationCode });
+      if (isPRows(rows)) return this.pChart(db, ctx, q, part, operationCode, rows);
       const data = assemble(rows);
 
       const baselines = data.chartType
@@ -115,7 +119,7 @@ export class SpcService {
 
       // Absent rules: those saved with the baseline in use, else all of them.
       const rules = q.rules !== undefined ? parseRules(q.rules) : usable ? usable.rules : parseRules(undefined);
-      const result = evaluate(data, usable ? usable.limits : null, rules);
+      const result = evaluate(data, usable ? (usable.limits as Limits) : null, rules);
       if (usable && usable.spec && data.spec.nominal !== null && (usable.spec.lower !== data.spec.lower || usable.spec.upper !== data.spec.upper)) {
         result.warnings.push('The specification has changed since the baseline was saved.');
       }
@@ -171,6 +175,7 @@ export class SpcService {
     return this.database.asUser(ctx, async (db) => {
       await this.requirePart(db, ctx, body.partId);
       const rows = await this.readings(db, ctx, { partId: body.partId, characteristicKey: body.characteristicKey, operationCode: body.operationCode });
+      if (isPRows(rows)) return this.createPBaseline(db, ctx, body, rows);
       const data = assemble(rows);
       if (!data.chartType || data.subgroupSize === null) throw rule('There are no chartable readings for this characteristic.');
       let points: ChartPoint[] = data.points;
@@ -212,7 +217,8 @@ export class SpcService {
         join public.inspection_records r on r.id = m.inspection_record_id
         join public.parts p on p.id = r.part_id
         join public.resolved_inspection_requirements q on q.id = m.requirement_id
-        where m.organisation_id = ${orgOf(ctx)}::uuid and q.spc_eligible and q.data_type = 'variable' and m.value_numeric is not null
+        where m.organisation_id = ${orgOf(ctx)}::uuid and q.spc_eligible
+          and ((q.data_type = 'variable' and m.value_numeric is not null) or (q.data_type = 'attribute' and m.value_pass is not null))
           and m.measured_at >= now() - interval '90 days'
         group by r.part_id, p.part_number, p.name, q.characteristic_key, q.operation_code
         order by max(m.measured_at) desc limit ${opts.maxCharts}`);
@@ -227,7 +233,20 @@ export class SpcService {
         const partId = g.part_id as string;
         const key = g.characteristic_key as string;
         const op = g.operation_code as string;
-        const data = assemble(await this.readings(db, ctx, { partId, characteristicKey: key, operationCode: op }));
+        const groupRows = await this.readings(db, ctx, { partId, characteristicKey: key, operationCode: op });
+        if (isPRows(groupRows)) {
+          const found = await this.pOverview(db, ctx, g, groupRows, since);
+          if (found) {
+            monitored += 1;
+            if (!found.baseline) withoutBaseline += 1;
+            if (found.signals.length) withSignals += 1;
+            for (const m of found.signals) byRule[m.rule] = (byRule[m.rule] ?? 0) + 1;
+            signalCount += found.signals.length;
+            recent.push(...found.signals);
+          }
+          continue;
+        }
+        const data = assemble(groupRows);
         if (!data.chartType || !data.points.length) continue;
         monitored += 1;
         const b = await db.execute<Row>(sql`${BASELINE_SELECT} where b.organisation_id = ${orgOf(ctx)}::uuid and b.part_id = ${partId}::uuid
@@ -235,7 +254,7 @@ export class SpcService {
         const base = b.rows[0] ? toBaseline(b.rows[0]) : null;
         const usable = base && base.subgroupSize === data.subgroupSize && base.unitCode === data.unitCode ? base : null;
         if (!usable) withoutBaseline += 1;
-        const res = evaluate(data, usable ? usable.limits : null, usable ? usable.rules : parseRules(undefined));
+        const res = evaluate(data, usable ? (usable.limits as Limits) : null, usable ? usable.rules : parseRules(undefined));
         const mine: SpcOverview['recent'] = [];
         for (const sg of res.signals) {
           const pt = data.points[sg.index];
@@ -262,6 +281,127 @@ export class SpcService {
         recent: recent.slice(0, opts.maxRecent),
       };
     });
+  }
+
+  // ---- P charts (proportion failed) ----------------------------------------------------------
+
+  private async activeBaseline(db: Db, ctx: RequestContext, partId: string, key: string, op: string, chartType: string): Promise<Baseline | null> {
+    const b = await db.execute<Row>(sql`${BASELINE_SELECT} where b.organisation_id = ${orgOf(ctx)}::uuid and b.part_id = ${partId}::uuid
+      and b.characteristic_key = ${key} and b.operation_code = ${op} and b.chart_type = ${chartType} and b.superseded_at is null`);
+    return b.rows[0] ? toBaseline(b.rows[0]) : null;
+  }
+
+  private async pChart(db: Db, ctx: RequestContext, q: z.infer<typeof ChartQuery>, part: { id: string; partNumber: string; name: string }, operationCode: string, rows: ReadingRow[]): Promise<Chart> {
+    const basis: SubgroupBasis = q.subgroup ?? 'inspection';
+    const data = assembleP(rows, basis);
+    const baseline = await this.activeBaseline(db, ctx, q.partId, q.characteristicKey, operationCode, 'p');
+    let usable: Baseline | null = baseline;
+    let baselineIssue: string | null = null;
+    if (baseline && baseline.subgroupBasis !== basis) {
+      usable = null;
+      baselineIssue = `The saved baseline was made with subgroups of ${BASIS_TEXT[baseline.subgroupBasis ?? 'inspection']}; choose that subgroup to use it, or save a new baseline.`;
+    } else if (!baseline) {
+      const other = await db.execute<Row>(sql`select 1 from public.spc_baselines where organisation_id = ${orgOf(ctx)}::uuid and part_id = ${q.partId}::uuid
+        and characteristic_key = ${q.characteristicKey} and operation_code = ${operationCode} and superseded_at is null`);
+      if (other.rows.length) baselineIssue = 'The saved baseline is for a different chart type, so it is not used. Save a new baseline.';
+    }
+    const rules = q.rules !== undefined ? parseRules(q.rules) : usable ? usable.rules : parseRules(undefined);
+    const res = evaluateP(data, usable ? usable.limits.centre : null, rules);
+    const latest = await this.latestInfo(db, ctx, q.partId, q.characteristicKey, operationCode);
+    const finite = (v: number) => (Number.isFinite(v) ? v : null);
+    return {
+      part,
+      characteristic: { key: q.characteristicKey, name: latest.name, operationCode, chartType: 'p', subgroupSize: null, unitCode: null },
+      spec: { nominal: null, lower: null, upper: null },
+      points: res.points.map((pt) => ({
+        index: pt.index,
+        at: pt.at,
+        value: pt.p,
+        dispersion: null,
+        readings: [],
+        inspections: pt.inspections,
+        lot: pt.lot,
+        machineId: null,
+        gaugeOverride: false,
+        n: pt.n,
+        failed: pt.d,
+        ucl: finite(pt.ucl),
+        lcl: finite(pt.lcl),
+        z: pt.z,
+      })),
+      limitsSource: res.limitsSource,
+      limits: res.centre === null || !res.atMeanSize ? null : { centre: res.centre, ucl: res.atMeanSize.ucl, lcl: res.atMeanSize.lcl, sigma: res.atMeanSize.sigma, dispersionCentre: null, dispersionUcl: null, dispersionLcl: null },
+      provisional: res.provisional,
+      rules,
+      signals: res.signals,
+      dispersionSignals: [],
+      noVariation: res.noVariation,
+      warnings: res.warnings,
+      excluded: data.excluded,
+      baseline: usable,
+      baselineIssue,
+      subgroup: res.reliability ? { basis, meanSize: res.reliability.meanSize, expectedFailures: res.reliability.expectedFailures, reliable: res.reliability.reliable } : null,
+      reactions: latest.reactions,
+    };
+  }
+
+  /** Saves p̄ from the chosen window of subgroups; each subgroup's limits are recalculated from it and its own size. */
+  private async createPBaseline(db: Db, ctx: RequestContext, body: z.infer<typeof CreateBaselineBody>, rows: ReadingRow[]): Promise<Baseline> {
+    const data = assembleP(rows, body.subgroup);
+    let groups = data.groups;
+    if (body.firstN) groups = groups.slice(0, body.firstN);
+    else groups = groups.filter((g) => (!body.from || g.at >= body.from) && (!body.to || g.at <= body.to));
+    if (groups.length < MINIMUM_POINTS) {
+      throw rule(`A baseline needs at least ${MINIMUM_POINTS} subgroups (${BASIS_TEXT[body.subgroup]} each); the chosen window has ${groups.length}.`);
+    }
+    const centre = pBar(groups);
+    const meanN = groups.reduce((t, g) => t + g.n, 0) / groups.length;
+    const at = evaluateP({ basis: body.subgroup, groups, excluded: [] }, centre, []).atMeanSize!;
+    // Every check of the window, by id, for traceability.
+    const ids = this.windowIds(rows, body.subgroup, groups);
+    if (ids.length > 50000) throw rule('That window has too many checks; choose a shorter one.');
+    const inserted = await db.execute<{ id: string }>(sql`insert into public.spc_baselines
+      (organisation_id, part_id, characteristic_key, operation_code, chart_type, subgroup_size, subgroup_basis, mean_subgroup_size, window_from, window_to, n_points, provisional,
+       measurement_ids, centre, ucl, lcl, sigma, rules, notes)
+      values (${orgOf(ctx)}::uuid, ${body.partId}::uuid, ${body.characteristicKey}, ${body.operationCode}, 'p', null, ${body.subgroup}, ${meanN}::numeric,
+              ${groups[0].at}::timestamptz, ${groups[groups.length - 1].at}::timestamptz, ${groups.length}, ${groups.length < PROVISIONAL_BELOW.xbar_r},
+              string_to_array(${ids.join(',')}, ',')::uuid[], ${centre}::numeric, ${at.ucl}::numeric, ${at.lcl}::numeric, ${at.sigma}::numeric,
+              string_to_array(${body.rules.join(',')}, ',')::text[], ${body.notes ?? null})
+      returning id`);
+    const r = await db.execute<Row>(sql`${BASELINE_SELECT} where b.id = ${inserted.rows[0].id}::uuid`);
+    return toBaseline(r.rows[0]);
+  }
+
+  /** The ids of the checks that fall in the chosen subgroups (same grouping as the chart). */
+  private windowIds(rows: ReadingRow[], basis: SubgroupBasis, groups: { at: string; inspections: { id: string }[]; lot: string | null }[]): string[] {
+    const keys = new Set(groups.map((g) => (basis === 'inspection' ? g.inspections[0]?.id : basis === 'day' ? g.at.slice(0, 10) : g.lot)));
+    return rows
+      .filter((r) => r.valuePass !== null && r.chartType === 'p' && r.inspectionStatus !== 'abandoned' && !r.isRetest)
+      .filter((r) => keys.has(basis === 'inspection' ? r.inspectionId : basis === 'day' ? r.measuredAt.slice(0, 10) : r.lot))
+      .map((r) => r.id);
+  }
+
+  private async pOverview(db: Db, ctx: RequestContext, g: Row, rows: ReadingRow[], since: number) {
+    const data = assembleP(rows, 'inspection');
+    if (!data.groups.length) return null;
+    const baseline = await this.activeBaseline(db, ctx, g.part_id as string, g.characteristic_key as string, g.operation_code as string, 'p');
+    const usable = baseline && baseline.subgroupBasis === 'inspection' ? baseline : null;
+    const res = evaluateP(data, usable ? usable.limits.centre : null, usable ? usable.rules : parseRules(undefined));
+    const signals: SpcOverview['recent'] = res.signals
+      .filter((sg) => new Date(res.points[sg.index].at).getTime() >= since)
+      .map((sg) => ({ ...overviewRow(g, res.points[sg.index] as unknown as ChartPoint, null), rule: sg.rule, text: RULE_TEXT[sg.rule] }));
+    return { baseline: usable, signals };
+  }
+
+  private async latestInfo(db: Db, ctx: RequestContext, partId: string, key: string, op: string) {
+    const latest = await db.execute<Row>(sql`select q.name, q.reactions from public.inspection_measurements m
+      join public.resolved_inspection_requirements q on q.id = m.requirement_id join public.inspection_records r on r.id = m.inspection_record_id
+      where m.organisation_id = ${orgOf(ctx)}::uuid and r.part_id = ${partId}::uuid and q.characteristic_key = ${key} and q.operation_code = ${op}
+      order by m.measured_at desc limit 1`);
+    const reactions = ((latest.rows[0]?.reactions as { triggerType: string; action: string; instruction: string }[]) ?? [])
+      .filter((x) => x.triggerType === 'spc_signal' && x.instruction)
+      .map((x) => ({ action: x.action, instruction: x.instruction }));
+    return { name: (latest.rows[0]?.name as string) ?? null, reactions };
   }
 
   // ---- helpers ------------------------------------------------------------------------------
@@ -294,7 +434,7 @@ export class SpcService {
       sql`r.part_id = ${f.partId}::uuid`,
       sql`q.characteristic_key = ${f.characteristicKey}`,
       sql`q.operation_code = ${f.operationCode}`,
-      sql`q.spc_eligible and q.data_type = 'variable' and m.value_numeric is not null`,
+      sql`q.spc_eligible and ((q.data_type = 'variable' and m.value_numeric is not null) or (q.data_type = 'attribute' and m.value_pass is not null))`,
       sql`not exists (select 1 from public.inspection_measurements c where c.supersedes_id = m.id)`,
     ];
     if (f.from) where.push(sql`m.measured_at >= ${f.from}::timestamptz`);
@@ -302,7 +442,7 @@ export class SpcService {
     if (f.machineId) where.push(sql`r.machine_id = ${f.machineId}::uuid`);
     if (f.lot) where.push(sql`r.lot = ${f.lot}`);
     const result = await db.execute<Row>(sql`
-      select m.id, m.value_numeric::text as value, m.measured_at, s.sample_number, s.subgroup_number, s.is_retest,
+      select m.id, coalesce(m.value_numeric::text, '') as value, m.value_pass, m.measured_at, s.sample_number, s.subgroup_number, s.is_retest,
              r.id as inspection_id, r.reference, r.status, r.machine_id, r.lot,
              q.unit_code, q.chart_type, q.subgroup_size, q.nominal::float8 as nominal, q.lower_limit::float8 as lower_limit, q.upper_limit::float8 as upper_limit,
              (m.gauge_override_reason is not null) as gauge_override
@@ -314,6 +454,7 @@ export class SpcService {
     return result.rows.map((x) => ({
       id: x.id as string,
       value: x.value as string,
+      valuePass: (x.value_pass as boolean | null) ?? null,
       measuredAt: iso(x.measured_at)!,
       sampleNumber: Number(x.sample_number),
       subgroupNumber: numOrNull(x.subgroup_number),
@@ -333,6 +474,12 @@ export class SpcService {
     }));
   }
 }
+
+/** True when the most recent reading is a pass/fail check: the characteristic is charted as a P chart. */
+const isPRows = (rows: ReadingRow[]) => {
+  const last = rows.reduce<ReadingRow | null>((a, r) => (!a || r.measuredAt >= a.measuredAt ? r : a), null);
+  return !!last && last.valuePass !== null;
+};
 
 const rule = (message: string) => new ApiError(HttpStatus.CONFLICT, 'spc_rule', message);
 

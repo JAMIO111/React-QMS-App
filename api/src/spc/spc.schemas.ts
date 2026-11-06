@@ -20,6 +20,8 @@ export const ChartQuery = z.object({
   lot: z.string().trim().min(1).max(60).optional(),
   /** Comma-separated Western Electric rules to apply (absent: all; empty: none). */
   rules: z.string().optional(),
+  /** P charts only: what one point is — one inspection (default), one day or one lot. */
+  subgroup: z.enum(['inspection', 'day', 'lot']).optional(),
 });
 
 export const BaselineQuery = z.object({
@@ -38,6 +40,8 @@ export const CreateBaselineBody = z
     to: Iso.optional(),
     firstN: z.number().int().min(5).max(5000).optional(),
     rules: z.array(Rule).default([...RULES]),
+    /** P charts only: what one point is. */
+    subgroup: z.enum(['inspection', 'day', 'lot']).default('inspection'),
     notes: optionalText(2000),
   })
   .strict()
@@ -47,9 +51,10 @@ export const LimitsOut = z.object({
   centre: z.number(),
   ucl: z.number(),
   lcl: z.number(),
-  dispersionCentre: z.number(),
-  dispersionUcl: z.number(),
-  dispersionLcl: z.number(),
+  /** Moving range / range limits; null for a P chart. */
+  dispersionCentre: z.number().nullable(),
+  dispersionUcl: z.number().nullable(),
+  dispersionLcl: z.number().nullable(),
   sigma: z.number(),
 });
 export const Baseline = z.object({
@@ -57,8 +62,11 @@ export const Baseline = z.object({
   partId: z.string().uuid(),
   characteristicKey: z.string(),
   operationCode: z.string().nullable(),
-  chartType: z.enum(['imr', 'xbar_r']),
-  subgroupSize: z.number().int(),
+  chartType: z.enum(['imr', 'xbar_r', 'p']),
+  /** Null for a P chart (the size of each subgroup is whatever was checked). */
+  subgroupSize: z.number().int().nullable(),
+  subgroupBasis: z.enum(['inspection', 'day', 'lot']).nullable(),
+  meanSubgroupSize: z.number().nullable(),
   unitCode: z.string().nullable(),
   windowFrom: Iso,
   windowTo: Iso,
@@ -79,7 +87,7 @@ export const CharacteristicOption = z.object({
   key: z.string(),
   name: z.string(),
   operationCode: z.string(),
-  chartType: z.enum(['imr', 'xbar_r']).nullable(),
+  chartType: z.enum(['imr', 'xbar_r', 'p']).nullable(),
   subgroupSize: z.number().int().nullable(),
   unitCode: z.string().nullable(),
   readings: z.number().int(),
@@ -93,7 +101,7 @@ export const Chart = z.object({
     key: z.string(),
     name: z.string().nullable(),
     operationCode: z.string(),
-    chartType: z.enum(['imr', 'xbar_r']).nullable(),
+    chartType: z.enum(['imr', 'xbar_r', 'p']).nullable(),
     subgroupSize: z.number().int().nullable(),
     unitCode: z.string().nullable(),
   }),
@@ -110,6 +118,12 @@ export const Chart = z.object({
       lot: z.string().nullable(),
       machineId: z.string().uuid().nullable(),
       gaugeOverride: z.boolean(),
+      /** P chart points: checks, failures, and this subgroup's own limits (null when none can be shown yet). */
+      n: z.number().int().optional(),
+      failed: z.number().int().optional(),
+      ucl: z.number().nullable().optional(),
+      lcl: z.number().nullable().optional(),
+      z: z.number().nullable().optional(),
     }),
   ),
   limitsSource: z.enum(['baseline', 'trial', 'none']),
@@ -124,6 +138,8 @@ export const Chart = z.object({
   baseline: Baseline.nullable(),
   /** Set when a saved baseline exists but cannot be used for this chart (and why). */
   baselineIssue: z.string().nullable(),
+  /** P charts: how subgroups were formed and whether the limits can be trusted. */
+  subgroup: z.object({ basis: z.enum(['inspection', 'day', 'lot']), meanSize: z.number(), expectedFailures: z.number(), reliable: z.boolean() }).nullable().optional(),
   /** The plan's instructions for an SPC signal: shown, never acted on automatically. */
   reactions: z.array(z.object({ action: z.string(), instruction: z.string() })),
 });

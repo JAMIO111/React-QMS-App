@@ -186,6 +186,16 @@ Summary of the brief:
     (`{ data, openCount }`), `POST /spc/alerts/{id}/acknowledge`; UI `AlertsPage.jsx` at `/Process-Control/Alerts` ("SPC Alerts" menu), notifications link there. An alert
     never raises an NC. Plan §20. Not done: email/push, alert rules per characteristic, dashboard KPI, alerts when limits/baselines change.
   - **Next (later phases):** email delivery of notifications, scheduled (worker) evaluation.
+- Documentation module (`docs/documentation-plan.md`; first feature quality alerts, built in slices DOC0–DOC4):
+  - **DOC0 done (department membership):** migration `20251117100000_department_members.sql`. `department_members` (a person can be in several departments, one primary;
+    leaving sets `ended_at`, never deleted; audited; SELECT for `members.read` or the person themselves; INSERT/UPDATE (`is_primary`, `ended_at` only) need `members.manage` and
+    `app.can_manage_membership`). A role assignment scoped to a department needs an active membership of it, and a membership cannot end while such a role exists
+    (`QM011` → `409 department_rule`). Existing department-scoped assignments were backfilled as memberships. `app.list_members` now returns `departments`. `app.has_permission`
+    is unchanged: membership grants no access, and department-scoped roles still only take effect where a check passes a department (none do yet). API (`api/src/members/`):
+    invite takes `departmentIds` (+ `primaryDepartmentId`, `departmentId` for the role scope) and **requires a department unless every role is owner/admin/quality_manager**
+    (`ORGANISATION_WIDE_ROLE_KEYS` in `members.schemas.ts` and `src/lib/departments.js`; `400 department_required`); `POST /members/{id}/departments`,
+    `PATCH|DELETE /department-memberships/{id}`. UI: Settings → Users & permissions (invite form department checkboxes + primary, per-person departments, "no department" notice).
+    Next: DOC1 quality alerts core, DOC2 recipients and acknowledgement, DOC3 where work happens, attachments, links.
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

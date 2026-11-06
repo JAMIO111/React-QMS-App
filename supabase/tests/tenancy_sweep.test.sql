@@ -36,6 +36,8 @@ BEGIN
 
   INSERT INTO public.departments (organisation_id, site_id, code, name) VALUES (a, site, 'QA', 'Quality');
   INSERT INTO public.organisation_users (organisation_id, invited_email, status, invited_at) VALUES (a, 'pending@sweep.test', 'invited', now()) RETURNING id INTO invite;
+  INSERT INTO public.department_members (organisation_id, department_id, membership_id)
+    SELECT a, d.id, invite FROM public.departments d WHERE d.organisation_id = a AND d.code = 'QA';
   INSERT INTO public."Part" (id, organisation_id, part_number) VALUES (part, a, 'SW-1');
   INSERT INTO public."Customers" (id, organisation_id, name) VALUES (cust, a, 'Sweep customer');
   INSERT INTO public."Suppliers" (id, organisation_id, name) VALUES (supp, a, 'Sweep supplier');

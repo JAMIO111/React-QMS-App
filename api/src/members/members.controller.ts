@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { AssignRoleBody, Invitation, InviteBody, InviteResponse, Member, Permission, Role, UpdateMemberBody } from './members.schemas';
+import { AddDepartmentBody, AssignRoleBody, Invitation, InviteBody, InviteResponse, Member, Permission, Role, UpdateDepartmentMembershipBody, UpdateMemberBody } from './members.schemas';
 import { MembersService } from './members.service';
 
 @ApiTags('members')
@@ -55,6 +55,30 @@ export class MembersController {
   @ApiNoContentResponse({ description: 'Role removed. 409 last_owner if it would leave no active Owner.' })
   async unassign(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     await this.members.removeAssignment(ctx, parse(Uuid, id));
+  }
+
+  @Post('members/:id/departments')
+  @HttpCode(201)
+  @OrganisationScoped('members.manage')
+  @ApiBody({ schema: openApiSchema(AddDepartmentBody) })
+  @ApiCreatedResponse({ description: 'The person joins the department (the first one is primary)', schema: openApiSchema(Member) })
+  addDepartment(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.members.addDepartment(ctx, parse(Uuid, id), parse(AddDepartmentBody, body));
+  }
+
+  @Patch('department-memberships/:id')
+  @OrganisationScoped('members.manage')
+  @ApiBody({ schema: openApiSchema(UpdateDepartmentMembershipBody) })
+  @ApiOkResponse({ description: 'Makes this the person’s primary department', schema: openApiSchema(Member) })
+  setPrimary(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.members.setPrimaryDepartment(ctx, parse(Uuid, id), parse(UpdateDepartmentMembershipBody, body));
+  }
+
+  @Delete('department-memberships/:id')
+  @OrganisationScoped('members.manage')
+  @ApiOkResponse({ description: 'Takes the person out of the department (kept as history). 409 department_rule while they still hold a role in it.', schema: openApiSchema(Member) })
+  endDepartment(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.members.endDepartmentMembership(ctx, parse(Uuid, id));
   }
 
   @Get('roles')

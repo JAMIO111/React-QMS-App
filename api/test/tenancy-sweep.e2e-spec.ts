@@ -45,6 +45,9 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/departments/{id}': { name: 'Hijacked' },
     'PATCH /api/v1/members/{id}': { status: 'suspended' },
     'POST /api/v1/members/{id}/role-assignments': { roleId: b.viewerRole },
+    'POST /api/v1/members/{id}/departments': { departmentId: a.department },
+    'PATCH /api/v1/department-memberships/{id}': { primary: true },
+    'DELETE /api/v1/department-memberships/{id}': undefined,
     'DELETE /api/v1/role-assignments/{id}': undefined,
     'PATCH /api/v1/customers/{id}': { name: 'Hijacked' },
     'PATCH /api/v1/suppliers/{id}': { name: 'Hijacked' },
@@ -144,6 +147,9 @@ const hasSample = (op: Op) =>
     'PATCH /api/v1/departments/{id}',
     'PATCH /api/v1/members/{id}',
     'POST /api/v1/members/{id}/role-assignments',
+    'POST /api/v1/members/{id}/departments',
+    'PATCH /api/v1/department-memberships/{id}',
+    'DELETE /api/v1/department-memberships/{id}',
     'DELETE /api/v1/role-assignments/{id}',
     'PATCH /api/v1/customers/{id}',
     'PATCH /api/v1/suppliers/{id}',
@@ -243,6 +249,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/departments/')) return a.department;
   if (path.startsWith('/api/v1/members/')) return a.ownerMembership;
   if (path.startsWith('/api/v1/role-assignments/')) return a.ownerAssignment;
+  if (path.startsWith('/api/v1/department-memberships/')) return a.departmentMember;
   if (path.startsWith('/api/v1/customers/')) return a.customer;
   if (path.startsWith('/api/v1/suppliers/')) return a.supplier;
   if (path.startsWith('/api/v1/parts/')) return a.part;
@@ -300,6 +307,7 @@ beforeAll(async () => {
   a.department = (await one(`insert into public.departments (organisation_id, site_id, code, name) values ($1, $2, 'QA', 'Quality A') returning id`, [ids.orgA, ids.siteA])).id;
   a.ownerMembership = (await one('select id from public.organisation_users where organisation_id = $1 and user_id = $2', [ids.orgA, ids.ownerA])).id;
   a.ownerAssignment = (await one('select id from public.user_role_assignments where membership_id = $1', [a.ownerMembership])).id;
+  a.departmentMember = (await one(`insert into public.department_members (organisation_id, department_id, membership_id) values ($1, $2, $3) returning id`, [ids.orgA, a.department, a.ownerMembership])).id;
   a.ownerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'owner'`, [ids.orgA])).id;
   a.ownerUser = ids.ownerA;
   a.customer = (await one(`insert into public.customers (organisation_id, code, name) values ($1, 'ACUST', 'Alpha customer') returning id`, [ids.orgA])).id;

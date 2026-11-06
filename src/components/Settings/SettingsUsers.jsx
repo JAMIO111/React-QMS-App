@@ -8,6 +8,7 @@ import { useConfirm } from "../../contexts/ConfirmationModalProvider";
 import { useToast } from "../../contexts/ToastProvider";
 import MenuCard from "../ui/MenuCard";
 import {
+  useAllDepartments,
   useMemberMutation,
   useMembers,
   usePermissions,
@@ -15,6 +16,7 @@ import {
   useSites,
 } from "../../hooks/useQmsApi";
 import LoadingScreen from "../ui/LoadingScreen";
+import { ORGANISATION_WIDE_ROLE_KEYS, isUnassigned } from "../../lib/departments";
 
 const STATUS_STYLES = {
   active: "bg-green-500/15 text-green-700 dark:text-green-300",
@@ -40,20 +42,38 @@ const select =
 const displayName = (m) =>
   [m.firstName, m.surname].filter(Boolean).join(" ") || m.email || "Unknown";
 
-const InviteForm = ({ roles, sites }) => {
+const departmentLabel = (d, sites) => `${sites.find((x) => x.id === d.siteId)?.code ?? ""} · ${d.name}`.replace(/^ · /, "");
+
+const InviteForm = ({ roles, sites, departments }) => {
   const [email, setEmail] = useState("");
   const [roleId, setRoleId] = useState("");
   const [siteId, setSiteId] = useState("");
+  const [deptIds, setDeptIds] = useState([]);
+  const [primaryId, setPrimaryId] = useState("");
   const [note, setNote] = useState(null);
   const mutation = useMemberMutation();
+
+  const roleKey = roles.find((r) => r.id === roleId)?.key;
+  const needsDepartment = !!roleId && !ORGANISATION_WIDE_ROLE_KEYS.includes(roleKey);
+  const primary = deptIds.includes(primaryId) ? primaryId : deptIds[0];
+  const toggle = (id) => setDeptIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
 
   const submit = (e) => {
     e.preventDefault();
     setNote(null);
+    if (needsDepartment && deptIds.length === 0) {
+      setNote("Choose at least one department for this person.");
+      return;
+    }
     mutation.mutate(
       {
         action: "invite",
-        body: { email: email.trim(), roleId, ...(siteId ? { siteId } : {}) },
+        body: {
+          email: email.trim(),
+          roleId,
+          ...(siteId ? { siteId } : {}),
+          ...(deptIds.length ? { departmentIds: deptIds, primaryDepartmentId: primary } : {}),
+        },
       },
       {
         onSuccess: (res) => {
@@ -63,6 +83,8 @@ const InviteForm = ({ roles, sites }) => {
               : EMAIL_NOTES[res.email.reason],
           );
           setEmail("");
+          setDeptIds([]);
+          setPrimaryId("");
         },
       },
     );
@@ -125,6 +147,35 @@ const InviteForm = ({ roles, sites }) => {
           {mutation.isPending ? "Inviting…" : "Send invitation"}
         </button>
       </div>
+      <fieldset className="flex flex-col gap-1" aria-label="Departments">
+        <legend className="text-sm font-medium text-primary-text">
+          Departments{needsDepartment ? " (required)" : ""}
+        </legend>
+        <p className="text-xs text-secondary-text">
+          Where this person works. Alerts and notices addressed to a department reach its members.
+          {roleId && !needsDepartment ? " Not needed for owners, admins and quality managers." : ""}
+        </p>
+        {departments.length === 0 ? (
+          <p className="text-sm text-secondary-text">No departments yet. Add them under Settings → Organisation.</p>
+        ) : (
+          <ul className="flex flex-wrap gap-x-4 gap-y-1">
+            {departments.map((d) => (
+              <li key={d.id} className="flex items-center gap-2 text-sm text-primary-text">
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={deptIds.includes(d.id)} onChange={() => toggle(d.id)} />
+                  {departmentLabel(d, sites)}
+                </label>
+                {deptIds.includes(d.id) && deptIds.length > 1 && (
+                  <label className="flex items-center gap-1 text-xs text-secondary-text">
+                    <input type="radio" name="primary-department" checked={primary === d.id} onChange={() => setPrimaryId(d.id)} />
+                    primary
+                  </label>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </fieldset>
       {mutation.error && (
         <p role="alert" className="text-sm text-error-color">
           {describeApiError(mutation.error)}
@@ -139,11 +190,12 @@ const InviteForm = ({ roles, sites }) => {
   );
 };
 
-const MemberRow = ({ member, roles, sites, canManage, isSelf }) => {
+const MemberRow = ({ member, roles, sites, departments, canManage, isSelf }) => {
   const mutation = useMemberMutation();
   const confirm = useConfirm();
   const { showToast } = useToast();
   const [roleToAdd, setRoleToAdd] = useState("");
+  const [deptToAdd, setDeptToAdd] = useState("");
   const siteName = (id) => sites.find((s) => s.id === id)?.code ?? "site";
   const manageable = canManage && !isSelf && member.status !== "removed";
 
@@ -277,6 +329,74 @@ const MemberRow = ({ member, roles, sites, canManage, isSelf }) => {
           </form>
         )}
       </td>
+      <td className="py-3 pr-3">
+        <ul className="flex flex-wrap gap-1.5" aria-label={`Departments of ${displayName(member)}`}>
+          {(member.departments ?? []).map((d) => (
+            <li key={d.id} className="flex items-center gap-1 rounded-full border border-border-color px-2 py-0.5 text-sm text-primary-text">
+              {d.name}
+              <span className="text-secondary-text">@{d.siteName}</span>
+              {d.isPrimary ? (
+                <span className="rounded-full bg-brand-primary/15 px-1.5 text-xs text-primary-text">primary</span>
+              ) : (
+                canManage &&
+                member.status !== "removed" && (
+                  <button
+                    type="button"
+                    aria-label={`Make ${d.name} the primary department of ${displayName(member)}`}
+                    className="text-xs text-secondary-text hover:text-primary-text cursor-pointer"
+                    disabled={mutation.isPending}
+                    onClick={() => run({ action: "setPrimaryDepartment", departmentMembershipId: d.id }, `${d.name} is now the primary department.`)}>
+                    make primary
+                  </button>
+                )
+              )}
+              {canManage && member.status !== "removed" && (
+                <button
+                  type="button"
+                  aria-label={`Remove ${displayName(member)} from ${d.name}`}
+                  className="ml-0.5 text-secondary-text hover:text-error-color cursor-pointer"
+                  disabled={mutation.isPending}
+                  onClick={() => run({ action: "endDepartment", departmentMembershipId: d.id }, `Removed from ${d.name}.`)}>
+                  ×
+                </button>
+              )}
+            </li>
+          ))}
+          {(member.departments ?? []).length === 0 && (
+            <li className={`text-sm ${isUnassigned(member) ? "text-error-color" : "text-secondary-text"}`}>
+              {isUnassigned(member) ? "No department — alerts to departments will not reach them" : "None"}
+            </li>
+          )}
+        </ul>
+        {canManage && member.status !== "removed" && (
+          <form
+            className="mt-2 flex gap-2"
+            aria-label={`Add department to ${displayName(member)}`}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (deptToAdd) run({ action: "addDepartment", membershipId: member.membershipId, body: { departmentId: deptToAdd } }, "Department added.");
+              setDeptToAdd("");
+            }}>
+            <select
+              aria-label={`Department to add for ${displayName(member)}`}
+              className={`${select} py-1 text-sm`}
+              value={deptToAdd}
+              onChange={(e) => setDeptToAdd(e.target.value)}>
+              <option value="">Add department…</option>
+              {departments
+                .filter((d) => !(member.departments ?? []).some((m) => m.departmentId === d.id))
+                .map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {departmentLabel(d, sites)}
+                  </option>
+                ))}
+            </select>
+            <button type="submit" className={button} disabled={!deptToAdd || mutation.isPending}>
+              Add
+            </button>
+          </form>
+        )}
+      </td>
       <td className="py-3 text-right whitespace-nowrap">
         {manageable && (
           <div className="flex justify-end gap-2">
@@ -326,6 +446,7 @@ const SettingsUsers = () => {
   const members = useMembers();
   const roles = useRoles();
   const sites = useSites();
+  const departments = useAllDepartments();
   const [showRemoved, setShowRemoved] = useState(false);
   const canManage = can("members.manage");
 
@@ -343,6 +464,8 @@ const SettingsUsers = () => {
 
   const roleList = roles.data?.data ?? [];
   const siteList = sites.data?.data ?? [];
+  const departmentList = departments.data?.data ?? [];
+  const unassigned = (members.data?.data ?? []).filter(isUnassigned);
   const all = members.data?.data ?? [];
   const visible = showRemoved ? all : all.filter((m) => m.status !== "removed");
 
@@ -359,7 +482,14 @@ const SettingsUsers = () => {
         </p>
       </div>
 
-      {canManage && <InviteForm roles={roleList} sites={siteList} />}
+      {canManage && <InviteForm roles={roleList} sites={siteList} departments={departmentList} />}
+
+      {unassigned.length > 0 && (
+        <p role="status" className="rounded-lg border border-border-color p-3 text-sm text-primary-text">
+          {unassigned.length} {unassigned.length === 1 ? "person has" : "people have"} no department
+          ({unassigned.map(displayName).join(", ")}). Alerts addressed to a department will not reach them until they are added to one.
+        </p>
+      )}
 
       <MenuCard
         aria-label="Members"
@@ -380,6 +510,7 @@ const SettingsUsers = () => {
                 <th className="py-2 pr-3 font-medium">Person</th>
                 <th className="py-2 pr-3 font-medium">Status</th>
                 <th className="py-2 pr-3 font-medium">Roles</th>
+                <th className="py-2 pr-3 font-medium">Departments</th>
                 <th className="py-2 font-medium sr-only">Actions</th>
               </tr>
             </thead>
@@ -390,6 +521,7 @@ const SettingsUsers = () => {
                   member={m}
                   roles={roleList}
                   sites={siteList}
+                  departments={departmentList}
                   canManage={canManage}
                   isSelf={m.userId === user?.id}
                 />

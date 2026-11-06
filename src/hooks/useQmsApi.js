@@ -125,6 +125,17 @@ export const useDepartments = (siteId, { includeInactive = false } = {}) => {
   });
 };
 
+/** Every department of the organisation, across sites (for choosing where people belong). */
+export const useAllDepartments = ({ includeInactive = false } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: orgKey(organisationId, "departments", "all", { includeInactive }),
+    queryFn: () => apiFetch(`/departments?limit=200${includeInactive ? "&includeInactive=true" : ""}`, { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+  });
+};
+
 /** Create/update for sites and departments; refreshes the organisation's structure lists. */
 export const useStructureMutation = () => {
   const { organisationId } = useOrganisation();
@@ -188,7 +199,7 @@ export const useMemberMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ action, membershipId, assignmentId, body }) => {
+    mutationFn: ({ action, membershipId, assignmentId, departmentMembershipId, body }) => {
       switch (action) {
         case "invite":
           return apiFetch("/members/invitations", { method: "POST", body, organisationId });
@@ -198,6 +209,12 @@ export const useMemberMutation = () => {
           return apiFetch(`/members/${membershipId}/role-assignments`, { method: "POST", body, organisationId });
         case "unassign":
           return apiFetch(`/role-assignments/${assignmentId}`, { method: "DELETE", organisationId });
+        case "addDepartment":
+          return apiFetch(`/members/${membershipId}/departments`, { method: "POST", body, organisationId });
+        case "setPrimaryDepartment":
+          return apiFetch(`/department-memberships/${departmentMembershipId}`, { method: "PATCH", body: { primary: true }, organisationId });
+        case "endDepartment":
+          return apiFetch(`/department-memberships/${departmentMembershipId}`, { method: "DELETE", organisationId });
         default:
           throw new Error(`Unknown member action ${action}`);
       }

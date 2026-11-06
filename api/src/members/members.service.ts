@@ -6,15 +6,18 @@ import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { InvitationMailer } from './invitation-mailer.service';
 import {
+  AddDepartmentBody,
   AssignRoleBody,
   Invitation,
   InviteBody,
   Member,
   MembershipStatus,
+  ORGANISATION_WIDE_ROLE_KEYS,
   Permission,
   Role,
   RoleAssignment,
   TRANSITIONS,
+  UpdateDepartmentMembershipBody,
   UpdateMemberBody,
 } from './members.schemas';
 
@@ -29,6 +32,7 @@ interface MemberRow {
   invited_at: Date | null;
   joined_at: Date | null;
   roles: z.infer<typeof RoleAssignment>[];
+  departments: Member['departments'];
 }
 
 const toMember = (r: MemberRow): Member => ({
@@ -42,6 +46,7 @@ const toMember = (r: MemberRow): Member => ({
   invitedAt: r.invited_at ? new Date(r.invited_at).toISOString() : null,
   joinedAt: r.joined_at ? new Date(r.joined_at).toISOString() : null,
   roles: r.roles,
+  departments: r.departments ?? [],
 });
 
 /**
@@ -69,11 +74,32 @@ export class MembersService {
         throw new ApiError(409, existing.status === 'invited' ? 'already_invited' : 'already_member',
           existing.status === 'invited' ? 'This email address already has a pending invitation' : 'This person is already a member of the organisation');
       }
+      // A department is required unless the role is organisation-wide (owner, admin, quality manager).
+      const role = await db.execute<{ key: string }>(sql`select key from public.roles where id = ${body.roleId}::uuid and organisation_id = ${ctx.organisationId}::uuid`);
+      if (role.rows.length === 0) throw ApiError.badRequest('invalid_reference', 'Role not found in this organisation');
+      const departmentIds = [...new Set([...(body.departmentId ? [body.departmentId] : []), ...body.departmentIds])];
+      if (departmentIds.length === 0 && !ORGANISATION_WIDE_ROLE_KEYS.includes(role.rows[0].key)) {
+        throw ApiError.badRequest('department_required', 'Choose at least one department for this person (only owners, admins and quality managers can be invited without one)');
+      }
+      if (body.primaryDepartmentId && !departmentIds.includes(body.primaryDepartmentId)) {
+        throw ApiError.badRequest('invalid_reference', 'The primary department must be one of the chosen departments');
+      }
+      if (departmentIds.length) {
+        const found = await db.execute(sql`select 1 from public.departments d where d.organisation_id = ${ctx.organisationId}::uuid and d.active
+          and d.id = any (string_to_array(${departmentIds.join(',')}, ',')::uuid[])`);
+        if (found.rows.length !== departmentIds.length) throw ApiError.badRequest('invalid_reference', 'A department was not found in this organisation, or is no longer active');
+      }
       const inserted = await db.execute<{ id: string }>(sql`
         insert into public.organisation_users (organisation_id, invited_email, status, invited_at)
         values (${ctx.organisationId}::uuid, ${body.email}, 'invited', now())
         returning id`);
       const membershipId = inserted.rows[0].id;
+      const primary = body.primaryDepartmentId ?? departmentIds[0];
+      for (const departmentId of departmentIds) {
+        await db.execute(sql`
+          insert into public.department_members (organisation_id, department_id, membership_id, is_primary)
+          values (${ctx.organisationId}::uuid, ${departmentId}::uuid, ${membershipId}::uuid, ${departmentId === primary})`);
+      }
       await db.execute(sql`
         insert into public.user_role_assignments (organisation_id, membership_id, role_id, site_id, department_id)
         values (${ctx.organisationId}::uuid, ${membershipId}::uuid, ${body.roleId}::uuid,
@@ -134,6 +160,50 @@ export class MembersService {
       }
       // The last-owner rule is checked at commit (QM001 -> 409 last_owner).
     });
+  }
+
+  /** Puts a person in a department (optionally as their primary one). */
+  addDepartment(ctx: RequestContext, membershipId: string, body: AddDepartmentBody): Promise<Member> {
+    return this.database.asUser(ctx, async (db) => {
+      const member = await this.one(db, ctx.organisationId!, membershipId);
+      if (member.status === 'removed') throw new ApiError(409, 'member_removed', 'A removed member cannot be put in a department');
+      const dept = await db.execute(sql`select 1 from public.departments where id = ${body.departmentId}::uuid and organisation_id = ${ctx.organisationId}::uuid and active`);
+      if (dept.rows.length === 0) throw ApiError.badRequest('invalid_reference', 'Department not found in this organisation, or no longer active');
+      if (member.departments.some((d) => d.departmentId === body.departmentId)) {
+        throw new ApiError(409, 'already_in_department', 'This person is already in that department');
+      }
+      await db.execute(sql`
+        insert into public.department_members (organisation_id, department_id, membership_id, is_primary)
+        values (${ctx.organisationId}::uuid, ${body.departmentId}::uuid, ${membershipId}::uuid, ${body.primary ?? false})`);
+      return this.one(db, ctx.organisationId!, membershipId);
+    });
+  }
+
+  /** Takes a person out of a department (the membership is kept as history). */
+  endDepartmentMembership(ctx: RequestContext, id: string): Promise<Member> {
+    return this.database.asUser(ctx, async (db) => {
+      const row = await this.departmentMembership(db, ctx, id);
+      const updated = await db.execute(sql`update public.department_members set ended_at = now() where id = ${id}::uuid and organisation_id = ${ctx.organisationId}::uuid returning id`);
+      if (updated.rows.length === 0) throw ApiError.forbidden('You cannot change a member who outranks you');
+      return this.one(db, ctx.organisationId!, row.membershipId);
+    });
+  }
+
+  setPrimaryDepartment(ctx: RequestContext, id: string, _body: UpdateDepartmentMembershipBody): Promise<Member> {
+    return this.database.asUser(ctx, async (db) => {
+      const row = await this.departmentMembership(db, ctx, id);
+      const updated = await db.execute(sql`update public.department_members set is_primary = true where id = ${id}::uuid and organisation_id = ${ctx.organisationId}::uuid returning id`);
+      if (updated.rows.length === 0) throw ApiError.forbidden('You cannot change a member who outranks you');
+      return this.one(db, ctx.organisationId!, row.membershipId);
+    });
+  }
+
+  private async departmentMembership(db: Db, ctx: RequestContext, id: string) {
+    const r = await db.execute<{ membership_id: string; ended_at: Date | null }>(sql`
+      select membership_id, ended_at from public.department_members where id = ${id}::uuid and organisation_id = ${ctx.organisationId}::uuid`);
+    if (r.rows.length === 0) throw ApiError.notFound('department_membership_not_found', 'Department membership not found');
+    if (r.rows[0].ended_at) throw new ApiError(409, 'department_rule', 'This department membership has already ended');
+    return { membershipId: r.rows[0].membership_id };
   }
 
   roles(ctx: RequestContext): Promise<z.infer<typeof Role>[]> {

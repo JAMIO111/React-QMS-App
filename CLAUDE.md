@@ -195,7 +195,17 @@ Summary of the brief:
     invite takes `departmentIds` (+ `primaryDepartmentId`, `departmentId` for the role scope) and **requires a department unless every role is owner/admin/quality_manager**
     (`ORGANISATION_WIDE_ROLE_KEYS` in `members.schemas.ts` and `src/lib/departments.js`; `400 department_required`); `POST /members/{id}/departments`,
     `PATCH|DELETE /department-memberships/{id}`. UI: Settings → Users & permissions (invite form department checkboxes + primary, per-person departments, "no department" notice).
-    Next: DOC1 quality alerts core, DOC2 recipients and acknowledgement, DOC3 where work happens, attachments, links.
+  - **DOC1 done (quality alerts core):** migration `20251118100000_quality_alerts.sql`. `quality_alerts` = one row per **revision** (`QA-001`, `revision` 1 = A, 2 = B …; numbers per
+    organisation from `app.quality_alert_counters`, assigned by trigger whatever the caller sends). Statuses draft → active → expired | withdrawn | superseded. Drafts are inserted/edited
+    by `documentation.manage` under RLS (column-level UPDATE on content only; drafts visible only to managers, issued alerts to `documentation.read`); **every lifecycle step is a
+    SECURITY DEFINER function**: `app.set_quality_alert_scope` (replaces parts/families, machines, operations, affected departments and **targets** = who must acknowledge: department,
+    role or person; child tables are SELECT-only), `app.issue_quality_alert` (needs `documentation.issue`; description, required action, effective date, ≥1 target; high/critical need
+    acknowledge-by; supersedes the revision it replaces), `app.revise_quality_alert` (draft copy + reason, one open draft per number), `app.withdraw_quality_alert` (reason),
+    `app.discard_quality_alert_draft`, `app.expire_quality_alerts` (no worker: the API runs it on list/get). Issued content is frozen (trigger, `QM012` → `409 documentation_rule`).
+    Permissions `documentation.read/.manage/.issue` (issue: owner, admin, quality manager; manage adds quality engineer). API `api/src/documentation/` (`/quality-alerts`: list,
+    create, get, PATCH draft incl. scope, DELETE draft, `POST :id/issue|withdraw|revisions`); UI `src/components/documentation/` (register `/Documentation/Quality-Alerts`, alert page,
+    `QualityAlertForm` at `/new` and `/:id/edit`), hooks `useDocumentation.js`, `lib/qualityAlerts.js`, menu group "Documentation". Recipients, viewed/acknowledged tracking, My alerts,
+    overdue list and notifications are **DOC2**; showing alerts where work happens, attachments and links to NC/supplier/gauge are **DOC3**.
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

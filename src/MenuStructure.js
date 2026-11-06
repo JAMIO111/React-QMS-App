@@ -1,4 +1,4 @@
-import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, GaugeIcon, LayoutDashboardIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, FileTextIcon, GaugeIcon, LayoutDashboardIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
@@ -52,6 +52,13 @@ export const menuStructure = [
       { name: "Dashboard", path: "/Calibration", end: true },
       { name: "Gauges", path: "/Calibration/Gauges" },
     ],
+  },
+  {
+    name: "Documentation",
+    icon: FileTextIcon,
+    permission: "documentation.read",
+    path: "/Documentation",
+    subMenu: [{ name: "Quality alerts", path: "/Documentation/Quality-Alerts" }],
   },
   {
     name: "Master Data",

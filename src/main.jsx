@@ -57,6 +57,9 @@ const ProcessControlDashboard = lazy(() => import("./components/process-control/
 const SpcPage = lazy(() => import("./components/spc/SpcPage.jsx"));
 const AnalysisPage = lazy(() => import("./components/spc/AnalysisPage.jsx"));
 const AlertsPage = lazy(() => import("./components/spc/AlertsPage.jsx"));
+const QualityAlertsPage = lazy(() => import("./components/documentation/QualityAlertsPage.jsx"));
+const QualityAlertPage = lazy(() => import("./components/documentation/QualityAlertPage.jsx"));
+const QualityAlertForm = lazy(() => import("./components/documentation/QualityAlertForm.jsx"));
 const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
 const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
 const InspectionPage = lazy(() => import("./components/inspection/InspectionPage.jsx"));
@@ -180,6 +183,10 @@ const router = createBrowserRouter([
             { path: "Process-Control/SPC", element: <SpcPage /> },
             { path: "Process-Control/Analysis", element: <AnalysisPage /> },
             { path: "Process-Control/Alerts", element: <AlertsPage /> },
+            { path: "Documentation/Quality-Alerts", element: <QualityAlertsPage /> },
+            { path: "Documentation/Quality-Alerts/new", element: <QualityAlertForm /> },
+            { path: "Documentation/Quality-Alerts/:id", element: <QualityAlertPage /> },
+            { path: "Documentation/Quality-Alerts/:id/edit", element: <QualityAlertForm /> },
             { path: "Process-Control/Plans/:id", element: <ControlPlanPage /> },
             { path: "Process-Control/Plans/:planId/revisions/:revisionId", element: <RevisionPage /> },
             ],

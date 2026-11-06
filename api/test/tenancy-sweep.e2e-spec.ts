@@ -120,6 +120,12 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/inspections/{id}/add-to-ncr': { ncrId: a.ncr, measurementIds: [a.measurement] },
     'POST /api/v1/inspection-measurements/{id}/acknowledge': { note: 'Hijacked' },
     'POST /api/v1/spc/alerts/{id}/acknowledge': { note: 'Hijacked' },
+    'GET /api/v1/quality-alerts/{id}': undefined,
+    'PATCH /api/v1/quality-alerts/{id}': { title: 'Hijacked' },
+    'DELETE /api/v1/quality-alerts/{id}': undefined,
+    'POST /api/v1/quality-alerts/{id}/issue': undefined,
+    'POST /api/v1/quality-alerts/{id}/withdraw': { reason: 'Hijacked' },
+    'POST /api/v1/quality-alerts/{id}/revisions': { reason: 'Hijacked' },
     'GET /api/v1/ncrs/{id}/inspection-source': undefined,
     'GET /api/v1/calibrations/{id}/gauge-usage': undefined,
     'GET /api/v1/inspections/{id}': undefined,
@@ -222,6 +228,12 @@ const hasSample = (op: Op) =>
     'POST /api/v1/inspections/{id}/add-to-ncr',
     'POST /api/v1/inspection-measurements/{id}/acknowledge',
     'POST /api/v1/spc/alerts/{id}/acknowledge',
+    'GET /api/v1/quality-alerts/{id}',
+    'PATCH /api/v1/quality-alerts/{id}',
+    'DELETE /api/v1/quality-alerts/{id}',
+    'POST /api/v1/quality-alerts/{id}/issue',
+    'POST /api/v1/quality-alerts/{id}/withdraw',
+    'POST /api/v1/quality-alerts/{id}/revisions',
     'GET /api/v1/ncrs/{id}/inspection-source',
     'GET /api/v1/calibrations/{id}/gauge-usage',
     'GET /api/v1/inspections/{id}',
@@ -267,6 +279,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/part-customers/')) return a.partCustomer;
   if (path.startsWith('/api/v1/inspections/')) return a.inspection;
   if (path.startsWith('/api/v1/spc/alerts/')) return a.alert;
+  if (path.startsWith('/api/v1/quality-alerts/')) return a.qualityAlert;
   if (path.startsWith('/api/v1/inspection-measurements/')) return a.measurement;
   if (path.startsWith('/api/v1/machines/')) return a.machine;
   if (path.startsWith('/api/v1/part-families/')) return a.family;
@@ -356,6 +369,7 @@ beforeAll(async () => {
     a.measurement = (await q1(`insert into public.inspection_measurements (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric) values ($1, $2, $3, $4, 1) returning id`, [ids.orgA, a.inspection, isample, a.requirement])).id;
     await client.query(`select app.raise_spc_alerts($1, $2, '[{"characteristicKey":"OD","characteristicName":"OD","operationCode":"OP-1","variant":"imr","rule":"we1","side":"above","pointAt":"2026-11-05T08:00:00Z","summary":"Rule 1","inspectionId":null,"inspectionReference":null}]'::jsonb)`, [ids.orgA, ipart]);
     a.alert = (await q1(`select id from public.spc_alerts where organisation_id = $1`, [ids.orgA])).id;
+    a.qualityAlert = (await q1(`insert into public.quality_alerts (organisation_id, title, category, severity) values ($1, 'Alpha alert', 'product', 'low') returning id`, [ids.orgA])).id;
     await client.query('commit');
   } finally {
     client.release();

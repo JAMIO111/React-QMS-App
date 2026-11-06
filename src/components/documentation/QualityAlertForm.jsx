@@ -1,0 +1,215 @@
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { PartPicker } from "../ncr/Pickers";
+import Field from "../ui/Field";
+import MenuCard from "../ui/MenuCard";
+import { useAllDepartments, useMembers, usePermissions, useRoles } from "../../hooks/useQmsApi";
+import { useMachines, usePartFamilies } from "../../hooks/useProcessControl";
+import { useAlertMutation, useQualityAlert } from "../../hooks/useDocumentation";
+import { CATEGORIES, SEVERITIES, referenceText } from "../../lib/qualityAlerts";
+import { ErrorNotice, FormError, SelectField, TextAreaField, buttonClass } from "../master-data/shared";
+
+const empty = {
+  title: "", category: "product", severity: "medium", description: "", requiredAction: "", effectiveDate: "", expiryDate: "", acknowledgeBy: "",
+  parts: [], machines: [], operations: [], departments: [], targetDepartments: [], targetRoles: [], targetPeople: [],
+};
+
+const fromAlert = (a) => ({
+  title: a.title, category: a.category, severity: a.severity, description: a.description ?? "", requiredAction: a.requiredAction ?? "",
+  effectiveDate: a.effectiveDate ?? "", expiryDate: a.expiryDate ?? "", acknowledgeBy: a.acknowledgeBy ?? "",
+  parts: a.scope.parts.map((p) => ({ key: p.id, partId: p.partId, partFamilyId: p.partFamilyId, label: p.label })),
+  machines: a.scope.machines.map((m) => ({ id: m.machineId, label: m.label })),
+  operations: a.scope.operations,
+  departments: a.scope.departments.map((d) => d.departmentId), targetDepartments: a.scope.targets.filter((t) => t.kind === "department").map((t) => t.departmentId),
+  targetRoles: a.scope.targets.filter((t) => t.kind === "role").map((t) => t.roleId),
+  targetPeople: a.scope.targets.filter((t) => t.kind === "person").map((t) => t.membershipId),
+});
+
+const Chips = ({ items, onRemove, label }) => (
+  <ul className="flex flex-wrap gap-1.5" aria-label={label}>
+    {items.map((x) => (
+      <li key={x.key} className="flex items-center gap-1 rounded-full border border-border-color px-2 py-0.5 text-sm text-primary-text">
+        {x.label}
+        <button type="button" aria-label={`Remove ${x.label}`} className="text-secondary-text hover:text-error-color cursor-pointer" onClick={() => onRemove(x.key)}>
+          ×
+        </button>
+      </li>
+    ))}
+  </ul>
+);
+
+const Checks = ({ legend, options, selected, onToggle }) => (
+  <fieldset className="flex flex-col gap-1">
+    <legend className="text-sm font-medium text-secondary-text">{legend}</legend>
+    {options.length === 0 ? (
+      <p className="text-sm text-secondary-text">None available.</p>
+    ) : (
+      <ul className="flex flex-wrap gap-x-4 gap-y-1">
+        {options.map((o) => (
+          <li key={o.id}>
+            <label className="flex items-center gap-1 text-sm text-primary-text">
+              <input type="checkbox" checked={selected.includes(o.id)} onChange={() => onToggle(o.id)} /> {o.label}
+            </label>
+          </li>
+        ))}
+      </ul>
+    )}
+  </fieldset>
+);
+
+/** Create or edit a draft quality alert: the content, what it affects and who must acknowledge it. */
+const QualityAlertForm = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { can } = usePermissions();
+  const existing = useQualityAlert(id);
+  const mutation = useAlertMutation();
+  const [form, setForm] = useState(empty);
+  const [loaded, setLoaded] = useState(!id);
+  const [problem, setProblem] = useState(null);
+  const [operation, setOperation] = useState("");
+  const [partAdded, setPartAdded] = useState(null);
+
+  const departments = useAllDepartments();
+  const machines = useMachines();
+  const families = usePartFamilies();
+  const roles = useRoles();
+  const members = useMembers({ enabled: can("members.read") });
+
+  useEffect(() => {
+    if (id && existing.data && !loaded) {
+      setForm(fromAlert(existing.data));
+      setLoaded(true);
+    }
+  }, [id, existing.data, loaded]);
+
+  if (id && existing.isLoading) return <p className="p-4 text-secondary-text">Loading…</p>;
+  if (id && existing.error) return <div className="p-4"><ErrorNotice error={existing.error} /></div>;
+  if (id && existing.data && existing.data.status !== "draft") {
+    return <p className="p-4 text-primary-text">{referenceText(existing.data)} is issued and cannot be edited. Issue a revision from the alert page instead.</p>;
+  }
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setValue = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
+  const toggle = (k) => (value) => setForm((f) => ({ ...f, [k]: f[k].includes(value) ? f[k].filter((x) => x !== value) : [...f[k], value] }));
+  const deptOptions = (departments.data?.data ?? []).map((d) => ({ id: d.id, label: `${d.code} · ${d.name}` }));
+  const roleOptions = (roles.data?.data ?? []).map((r) => ({ id: r.id, label: r.name }));
+  const people = (members.data?.data ?? []).filter((m) => m.status !== "removed").map((m) => ({ id: m.membershipId, label: [m.firstName, m.surname].filter(Boolean).join(" ") || m.email }));
+  const machineOptions = (machines.data?.items ?? []).filter((m) => !form.machines.some((x) => x.id === m.id)).map((m) => ({ value: m.id, label: `${m.code} · ${m.name}` }));
+  const familyOptions = (families.data?.items ?? []).filter((f) => !form.parts.some((p) => p.partFamilyId === f.id)).map((f) => ({ value: f.id, label: `${f.code} · ${f.name}` }));
+
+  const addPart = (partId, item) => {
+    if (partId && !form.parts.some((p) => p.partId === partId)) setForm((f) => ({ ...f, parts: [...f.parts, { key: partId, partId, partFamilyId: null, label: item?.name ?? "Part" }] }));
+    setPartAdded(null);
+  };
+  const addOperation = () => {
+    const code = operation.trim();
+    if (code && !form.operations.includes(code)) setForm((f) => ({ ...f, operations: [...f.operations, code] }));
+    setOperation("");
+  };
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!form.title.trim()) return setProblem("Give the alert a title.");
+    if (form.expiryDate && form.effectiveDate && form.expiryDate < form.effectiveDate) return setProblem("The expiry date cannot be before the effective date.");
+    setProblem(null);
+    const nullable = (v) => (v.trim() ? v.trim() : null);
+    const body = {
+      title: form.title.trim(),
+      category: form.category,
+      severity: form.severity,
+      description: nullable(form.description),
+      requiredAction: nullable(form.requiredAction),
+      effectiveDate: form.effectiveDate || null,
+      expiryDate: form.expiryDate || null,
+      acknowledgeBy: form.acknowledgeBy || null,
+      scope: {
+        parts: form.parts.map((p) => (p.partId ? { partId: p.partId } : { partFamilyId: p.partFamilyId })),
+        machines: form.machines.map((m) => m.id),
+        operations: form.operations,
+        departments: form.departments,
+        targets: [
+          ...form.targetDepartments.map((departmentId) => ({ departmentId })),
+          ...form.targetRoles.map((roleId) => ({ roleId })),
+          ...form.targetPeople.map((membershipId) => ({ membershipId })),
+        ],
+      },
+    };
+    mutation.mutate(id ? { action: "update", id, body } : { action: "create", body }, { onSuccess: (a) => navigate(`/Documentation/Quality-Alerts/${a.id}`) });
+  };
+
+  return (
+    <form className="flex h-full min-h-0 w-full min-w-0 flex-col gap-4 overflow-y-auto p-4" onSubmit={submit} noValidate aria-label="Quality alert">
+      <div>
+        <h1 className="text-2xl font-semibold text-primary-text">{id ? `Edit ${referenceText(existing.data)}` : "New quality alert"}</h1>
+        <p className="text-sm text-secondary-text">A draft can be changed freely. Once issued it is frozen; corrections are issued as revisions.</p>
+      </div>
+
+      <MenuCard title="The alert" bodyClassName="flex flex-col gap-3">
+        <Field label="Title" value={form.title} onChange={set("title")} required maxLength={200} hint="What is wrong, in one line. e.g. Incorrect material specification on bar stock lot 77" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <SelectField label="Category" required value={form.category} onChange={(v) => setValue("category")(v ?? "product")} options={CATEGORIES} />
+          <SelectField label="Severity" required value={form.severity} onChange={(v) => setValue("severity")(v ?? "medium")} options={SEVERITIES} hint="High and critical alerts need an acknowledge-by date to be issued" />
+        </div>
+        <TextAreaField label="Description" value={form.description} onChange={set("description")} rows={5} maxLength={10000} hint="The details of the issue" />
+        <TextAreaField label="Required action" value={form.requiredAction} onChange={set("requiredAction")} rows={3} maxLength={5000} hint="What people must do" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Field label="Effective date" type="date" value={form.effectiveDate} onChange={set("effectiveDate")} hint="When it applies" />
+          <Field label="Expiry date" type="date" value={form.expiryDate} onChange={set("expiryDate")} hint="Optional" />
+          <Field label="Acknowledge by" type="date" value={form.acknowledgeBy} onChange={set("acknowledgeBy")} hint="When people must have confirmed" />
+        </div>
+      </MenuCard>
+
+      <MenuCard title="What it affects" subtitle="Optional, but it is how the alert is found where people work" bodyClassName="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium text-secondary-text">Products</h2>
+          <Chips label="Products" items={form.parts.map((p) => ({ key: p.key, label: `${p.label}${p.partFamilyId ? " (family)" : ""}` }))} onRemove={(k) => setForm((f) => ({ ...f, parts: f.parts.filter((p) => p.key !== k) }))} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <PartPicker label="Add a part" value={partAdded} onChange={addPart} />
+            <SelectField
+              label="Add a part family"
+              value={null}
+              onChange={(v) => v && setForm((f) => ({ ...f, parts: [...f.parts, { key: v, partId: null, partFamilyId: v, label: familyOptions.find((o) => o.value === v)?.label ?? "Family" }] }))}
+              options={familyOptions}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium text-secondary-text">Machines</h2>
+          <Chips label="Machines" items={form.machines.map((m) => ({ key: m.id, label: m.label }))} onRemove={(k) => setForm((f) => ({ ...f, machines: f.machines.filter((m) => m.id !== k) }))} />
+          <SelectField
+            label="Add a machine"
+            value={null}
+            onChange={(v) => v && setForm((f) => ({ ...f, machines: [...f.machines, { id: v, label: machineOptions.find((o) => o.value === v)?.label ?? "Machine" }] }))}
+            options={machineOptions}
+            className="sm:w-1/2"
+          />
+        </div>
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium text-secondary-text">Operations</h2>
+          <Chips label="Operations" items={form.operations.map((o) => ({ key: o, label: o }))} onRemove={(k) => setForm((f) => ({ ...f, operations: f.operations.filter((o) => o !== k) }))} />
+          <div className="flex items-end gap-2">
+            <Field label="Add an operation code" value={operation} onChange={(e) => setOperation(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addOperation())} maxLength={40} placeholder="e.g. OP-020" className="sm:w-1/2" />
+            <button type="button" className={buttonClass.neutral} onClick={addOperation} disabled={!operation.trim()}>Add</button>
+          </div>
+        </div>
+        <Checks legend="Departments affected" options={deptOptions} selected={form.departments} onToggle={toggle("departments")} />
+      </MenuCard>
+
+      <MenuCard title="Who must acknowledge" subtitle="Choose departments, roles or named people. At least one is needed to issue." bodyClassName="flex flex-col gap-3">
+        <Checks legend="Departments (their members)" options={deptOptions} selected={form.targetDepartments} onToggle={toggle("targetDepartments")} />
+        {roleOptions.length > 0 && <Checks legend="Roles (everyone holding the role)" options={roleOptions} selected={form.targetRoles} onToggle={toggle("targetRoles")} />}
+        {people.length > 0 && <Checks legend="Named people" options={people} selected={form.targetPeople} onToggle={toggle("targetPeople")} />}
+      </MenuCard>
+
+      {problem && <p role="alert" className="text-sm text-error-color">{problem}</p>}
+      <FormError error={mutation.error} />
+      <div className="flex justify-end gap-2">
+        <button type="button" className={buttonClass.neutral} onClick={() => navigate(id ? `/Documentation/Quality-Alerts/${id}` : "/Documentation/Quality-Alerts")}>Cancel</button>
+        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save draft"}</button>
+      </div>
+    </form>
+  );
+};
+
+export default QualityAlertForm;

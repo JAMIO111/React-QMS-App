@@ -120,7 +120,7 @@ A draft can be edited and deleted (soft); anything issued cannot. Critical/High 
 ## 10. Delivery slices (each complete and tested before the next)
 
 1. **DOC0 Department membership** (done 2026-11-06; architecture change D1): migration, API, onboarding and Users screen, migration of existing data.
-2. **DOC1 Quality alerts core:** tables, numbering, draft → active → withdrawn/expired, scope, targets, frozen rules, revisions,
+2. **DOC1 Quality alerts core** (done 2026-11-06): tables, numbering, draft → active → withdrawn/expired, scope, targets, frozen rules, revisions,
    register + alert page + draft editor. No recipients yet beyond storing targets.
 3. **DOC2 Recipients and acknowledgement:** resolve on issue, viewed/acknowledged, My alerts, menu count, tracking view, overdue
    list, notifications.

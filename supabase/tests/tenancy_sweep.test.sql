@@ -21,7 +21,7 @@ DECLARE
   a uuid; b uuid; site uuid; owner_role uuid; invite uuid; fm bigint; status bigint; proc bigint;
   part uuid := gen_random_uuid(); cust uuid := gen_random_uuid(); supp uuid := gen_random_uuid();
   emp uuid := gen_random_uuid(); d8 uuid := gen_random_uuid(); ncr uuid := gen_random_uuid(); notif uuid := gen_random_uuid();
-  inspection uuid;
+  inspection uuid; qa uuid;
 BEGIN
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
   a := app.create_organisation('Sweep Alpha');
@@ -141,6 +141,14 @@ BEGIN
   -- PC11: an SPC alert, raised through the function.
   PERFORM app.raise_spc_alerts(a, (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'),
     '[{"characteristicKey":"SWEEP","characteristicName":"Sweep","operationCode":"OP-1","variant":"imr","rule":"we1","side":"above","pointAt":"2026-11-05T08:00:00Z","summary":"Rule 1","inspectionId":null,"inspectionReference":null}]'::jsonb);
+  -- DOC1: a quality alert draft with scope and targets.
+  INSERT INTO public.quality_alerts (organisation_id, title, category, severity) VALUES (a, 'Sweep alert', 'product', 'low') RETURNING id INTO qa;
+  PERFORM app.set_quality_alert_scope(qa, jsonb_build_object(
+    'parts', jsonb_build_array(jsonb_build_object('partId', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'))),
+    'machines', jsonb_build_array((SELECT id FROM public.machines WHERE organisation_id = a LIMIT 1)),
+    'operations', jsonb_build_array('OP-1'),
+    'departments', jsonb_build_array((SELECT id FROM public.departments WHERE organisation_id = a LIMIT 1)),
+    'targets', jsonb_build_array(jsonb_build_object('departmentId', (SELECT id FROM public.departments WHERE organisation_id = a LIMIT 1)))));
   PERFORM pg_temp.logout();
 
   -- Subscription: seats and an assignment through the API functions, invoice and payment as the provider would.

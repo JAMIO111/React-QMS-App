@@ -1,6 +1,7 @@
 import { useState } from "react";
 import MenuCard from "../ui/MenuCard";
 import Field from "../ui/Field";
+import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useCreateBaseline, useSpcBaselines } from "../../hooks/useSpc";
 import { formatDateTime } from "../../lib/processControl";
@@ -201,18 +202,8 @@ const BaselinePanel = ({ chart, params, rules, decimals }) => {
               )}
               {mode === "range" && (
                 <div className="flex flex-wrap gap-3">
-                  <Field
-                    label="From"
-                    type="date"
-                    value={from}
-                    onChange={(e) => setFrom(e.target.value)}
-                  />
-                  <Field
-                    label="To"
-                    type="date"
-                    value={to}
-                    onChange={(e) => setTo(e.target.value)}
-                  />
+                  <RHFDatePickerPopout label="From" valueFormat="iso" clearable value={from} onChange={(d) => setFrom(d ?? "")} placeholder="Select a date" />
+                  <RHFDatePickerPopout label="To" valueFormat="iso" clearable value={to} onChange={(d) => setTo(d ?? "")} placeholder="Select a date" />
                 </div>
               )}
             </fieldset>

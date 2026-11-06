@@ -80,8 +80,9 @@ const Navbar = () => {
             )}
           </button>
         </div>
-        <div className="flex flex-col h-full overflow-y-auto justify-between">
-          <ul className="gap-1 flex-1 flex flex-col pt-3">
+        <div className="flex min-h-0 flex-1 flex-col">
+          {/* Only the modules scroll; the scrollbar is hidden so it never narrows the menu. */}
+          <ul className="no-scrollbar flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pt-3">
             {menuStructure
               .filter((item) => canSee(item.permission) && hasModule(item.module))
               .map((item) => (
@@ -123,8 +124,8 @@ const Navbar = () => {
                 </li>
               ))}
           </ul>
-          <div className="border-t-1 mt-2 border-border-color"></div>
-          <ul className="gap-2 flex my-2 flex-col">
+          <div className="mt-2 shrink-0 border-t-1 border-border-color"></div>
+          <ul className="my-2 flex shrink-0 flex-col gap-2">
             <NavItem
               label="Settings"
               icon={SettingsIcon}

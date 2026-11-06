@@ -387,6 +387,13 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
 .shimmer {
   position: relative;
   overflow: hidden;

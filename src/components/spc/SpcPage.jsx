@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { CircleAlertIcon } from "@/components/icons";
 import Field from "../ui/Field";
+import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import MenuCard from "../ui/MenuCard";
 import { PartPicker } from "../ncr/Pickers";
 import { usePart } from "../../hooks/useMasterData";
@@ -204,18 +205,8 @@ const SpcPage = () => {
               label: `${m.code} · ${m.name}`,
             }))}
           />
-          <Field
-            label="From"
-            type="date"
-            value={from}
-            onChange={(e) => set({ from: e.target.value })}
-          />
-          <Field
-            label="To"
-            type="date"
-            value={to}
-            onChange={(e) => set({ to: e.target.value })}
-          />
+          <RHFDatePickerPopout label="From" valueFormat="iso" clearable value={from} onChange={(d) => set({ from: d ?? "" })} placeholder="Any date" />
+          <RHFDatePickerPopout label="To" valueFormat="iso" clearable value={to} onChange={(d) => set({ to: d ?? "" })} placeholder="Any date" />
           <Field
             label="Lot"
             value={lot}

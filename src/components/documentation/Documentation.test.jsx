@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { format } from "date-fns";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -182,7 +183,8 @@ describe("Quality alert form", () => {
     await userEvent.type(within(form).getByLabelText("Description"), "Cracks found");
     await userEvent.type(within(form).getByLabelText("Required action"), "Stop using lot 12");
     await userEvent.type(within(form).getByLabelText("Add an operation code"), "OP-020{enter}");
-    await userEvent.selectOptions(within(form).getByLabelText("Add a machine"), "mc1");
+    await userEvent.click(within(form).getByRole("combobox", { name: "Add a machine" }));
+    await userEvent.click(screen.getByRole("option", { name: /Lathe 1/ }));
     const target = within(within(form).getByRole("group", { name: "Departments (their members)" }));
     await userEvent.click(target.getByRole("checkbox", { name: /Goods-in/ }));
     await userEvent.click(within(form).getByRole("button", { name: "Save draft" }));
@@ -200,8 +202,11 @@ describe("Quality alert form", () => {
     await userEvent.click(within(form).getByRole("button", { name: "Save draft" }));
     expect(within(form).getByRole("alert")).toHaveTextContent("Give the alert a title");
     await userEvent.type(within(form).getByLabelText("Title"), "x");
-    await userEvent.type(within(form).getByLabelText("Effective date"), "2026-11-10");
-    await userEvent.type(within(form).getByLabelText("Expiry date"), "2026-11-01");
+    const day = (d) => format(new Date(new Date().getFullYear(), new Date().getMonth(), d), "EEEE d MMMM yyyy");
+    await userEvent.click(within(form).getByRole("button", { name: /Effective date/ }));
+    await userEvent.click(screen.getByRole("button", { name: day(10) }));
+    await userEvent.click(within(form).getByRole("button", { name: /Expiry date/ }));
+    await userEvent.click(screen.getByRole("button", { name: day(1) }));
     await userEvent.click(within(form).getByRole("button", { name: "Save draft" }));
     expect(within(form).getByRole("alert")).toHaveTextContent("expiry date cannot be before");
     expect(apiFetch).not.toHaveBeenCalled();

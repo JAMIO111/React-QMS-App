@@ -2,6 +2,7 @@ import { Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveConta
 import { useSearchParams } from "react-router-dom";
 import { CircleAlertIcon } from "@/components/icons";
 import Field from "../ui/Field";
+import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import MenuCard from "../ui/MenuCard";
 import { PartPicker } from "../ncr/Pickers";
 import { usePart } from "../../hooks/useMasterData";
@@ -161,8 +162,8 @@ const AnalysisPage = () => {
             onChange={(v) => set({ c: v ?? "" })}
             options={options.map((c) => ({ value: optionKey(c), label: `${c.name} (${c.key}) · ${c.operationCode} · ${c.readings} readings` }))}
           />
-          <Field label="From" type="date" value={from} onChange={(e) => set({ from: e.target.value })} />
-          <Field label="To" type="date" value={to} onChange={(e) => set({ to: e.target.value })} />
+          <RHFDatePickerPopout label="From" valueFormat="iso" clearable value={from} onChange={(d) => set({ from: d ?? "" })} placeholder="Any date" />
+          <RHFDatePickerPopout label="To" valueFormat="iso" clearable value={to} onChange={(d) => set({ to: d ?? "" })} placeholder="Any date" />
         </div>
       </MenuCard>
 

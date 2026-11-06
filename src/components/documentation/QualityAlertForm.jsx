@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PartPicker } from "../ncr/Pickers";
 import Field from "../ui/Field";
+import RHFComboBox from "../ui/RHFComboBox";
+import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import MenuCard from "../ui/MenuCard";
 import { useAllDepartments, useMembers, usePermissions, useRoles } from "../../hooks/useQmsApi";
 import { useMachines, usePartFamilies } from "../../hooks/useProcessControl";
@@ -95,8 +97,8 @@ const QualityAlertForm = () => {
   const deptOptions = (departments.data?.data ?? []).map((d) => ({ id: d.id, label: `${d.code} · ${d.name}` }));
   const roleOptions = (roles.data?.data ?? []).map((r) => ({ id: r.id, label: r.name }));
   const people = (members.data?.data ?? []).filter((m) => m.status !== "removed").map((m) => ({ id: m.membershipId, label: [m.firstName, m.surname].filter(Boolean).join(" ") || m.email }));
-  const machineOptions = (machines.data?.items ?? []).filter((m) => !form.machines.some((x) => x.id === m.id)).map((m) => ({ value: m.id, label: `${m.code} · ${m.name}` }));
-  const familyOptions = (families.data?.items ?? []).filter((f) => !form.parts.some((p) => p.partFamilyId === f.id)).map((f) => ({ value: f.id, label: `${f.code} · ${f.name}` }));
+  const machineOptions = (machines.data?.items ?? []).filter((m) => !form.machines.some((x) => x.id === m.id)).map((m) => ({ id: m.id, name: m.name, hint: m.code }));
+  const familyOptions = (families.data?.items ?? []).filter((f) => !form.parts.some((p) => p.partFamilyId === f.id)).map((f) => ({ id: f.id, name: f.name, hint: f.code }));
 
   const addPart = (partId, item) => {
     if (partId && !form.parts.some((p) => p.partId === partId)) setForm((f) => ({ ...f, parts: [...f.parts, { key: partId, partId, partFamilyId: null, label: item?.name ?? "Part" }] }));
@@ -154,9 +156,9 @@ const QualityAlertForm = () => {
         <TextAreaField label="Description" value={form.description} onChange={set("description")} rows={5} maxLength={10000} hint="The details of the issue" />
         <TextAreaField label="Required action" value={form.requiredAction} onChange={set("requiredAction")} rows={3} maxLength={5000} hint="What people must do" />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Field label="Effective date" type="date" value={form.effectiveDate} onChange={set("effectiveDate")} hint="When it applies" />
-          <Field label="Expiry date" type="date" value={form.expiryDate} onChange={set("expiryDate")} hint="Optional" />
-          <Field label="Acknowledge by" type="date" value={form.acknowledgeBy} onChange={set("acknowledgeBy")} hint="When people must have confirmed" />
+          <RHFDatePickerPopout label="Effective date" valueFormat="iso" clearable value={form.effectiveDate} onChange={(v) => setValue("effectiveDate")(v ?? "")} hint="When it applies" placeholder="Select a date" />
+          <RHFDatePickerPopout label="Expiry date" valueFormat="iso" clearable value={form.expiryDate} onChange={(v) => setValue("expiryDate")(v ?? "")} hint="Optional" placeholder="Select a date" />
+          <RHFDatePickerPopout label="Acknowledge by" valueFormat="iso" clearable value={form.acknowledgeBy} onChange={(v) => setValue("acknowledgeBy")(v ?? "")} hint="When people must have confirmed" placeholder="Select a date" />
         </div>
       </MenuCard>
 
@@ -166,10 +168,14 @@ const QualityAlertForm = () => {
           <Chips label="Products" items={form.parts.map((p) => ({ key: p.key, label: `${p.label}${p.partFamilyId ? " (family)" : ""}` }))} onRemove={(k) => setForm((f) => ({ ...f, parts: f.parts.filter((p) => p.key !== k) }))} />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <PartPicker label="Add a part" value={partAdded} onChange={addPart} />
-            <SelectField
+            <RHFComboBox
               label="Add a part family"
+              placeholder="Search part families…"
               value={null}
-              onChange={(v) => v && setForm((f) => ({ ...f, parts: [...f.parts, { key: v, partId: null, partFamilyId: v, label: familyOptions.find((o) => o.value === v)?.label ?? "Family" }] }))}
+              onChange={(v) => {
+                const o = familyOptions.find((x) => x.id === v);
+                if (v) setForm((f) => ({ ...f, parts: [...f.parts, { key: v, partId: null, partFamilyId: v, label: o ? `${o.hint} · ${o.name}` : "Family" }] }));
+              }}
               options={familyOptions}
             />
           </div>
@@ -177,10 +183,14 @@ const QualityAlertForm = () => {
         <div className="flex flex-col gap-2">
           <h2 className="text-sm font-medium text-secondary-text">Machines</h2>
           <Chips label="Machines" items={form.machines.map((m) => ({ key: m.id, label: m.label }))} onRemove={(k) => setForm((f) => ({ ...f, machines: f.machines.filter((m) => m.id !== k) }))} />
-          <SelectField
+          <RHFComboBox
             label="Add a machine"
+            placeholder="Search machines…"
             value={null}
-            onChange={(v) => v && setForm((f) => ({ ...f, machines: [...f.machines, { id: v, label: machineOptions.find((o) => o.value === v)?.label ?? "Machine" }] }))}
+            onChange={(v) => {
+              const o = machineOptions.find((x) => x.id === v);
+              if (v) setForm((f) => ({ ...f, machines: [...f.machines, { id: v, label: o ? `${o.hint} · ${o.name}` : "Machine" }] }));
+            }}
             options={machineOptions}
             className="sm:w-1/2"
           />

@@ -201,7 +201,7 @@ describe('steps D0 and D1', () => {
     expect(fresh.steps[1].problems).toEqual(['Add at least two people to the team']);
     expect(fresh.steps[2].problems).toEqual(['Say what is wrong (the What of 5W2H)', 'Say where it was found (the Where of 5W2H)', 'Say when it was found (the When of 5W2H)']);
     expect(fresh.steps[4].problems).toEqual(['Record at least one occurrence root cause (why the problem happened)']);
-    expect(fresh.steps[5].problems).toEqual(['This step is not available yet']);
+    expect(fresh.steps[8].problems).toEqual(['This step is not available yet']);
     const early = await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd1' });
     expect(early.status).toBe(409);
     expect(early.body.error).toMatchObject({ code: 'capa_rule', message: 'D1 cannot be completed yet: Add at least two people to the team' });
@@ -313,7 +313,7 @@ describe('D3: interim containment', () => {
     expect(added.actions).toEqual([expect.objectContaining({ phase: 'interim', description: 'Quarantine lot 77', status: 'open', dueDate: '2099-01-02', overdue: false, owner: { teamMemberId: ctx.tInspector, name: expect.any(String) }, doneAt: null })]);
     ctx.act = added.actions[0].id;
     await api().post(`/api/v1/capas/${ctx.c1}/actions`).set(h).send({ phase: 'interim', description: 'x', ownerTeamMemberId: '00000000-0000-0000-0000-000000000000' }).expect(409);
-    await api().post(`/api/v1/capas/${ctx.c1}/actions`).set(h).send({ phase: 'corrective', description: 'Not yet' }).expect(400);
+    await api().post(`/api/v1/capas/${ctx.c1}/actions`).set(h).send({ phase: 'bogus', description: 'Not a phase' }).expect(400);
     await api().post(`/api/v1/capas/${ctx.c1}/actions`).set(h).send({ phase: 'interim', description: '' }).expect(400);
     await api().post(`/api/v1/capas/${ctx.c1}/actions`).set(await as(ids.inspectorA)).send({ phase: 'interim', description: 'Not allowed' }).expect(403);
   });
@@ -459,5 +459,67 @@ describe('D4: root causes and the Ishikawa and 5 Whys tools', () => {
   it('is private to the organisation', async () => {
     await api().patch(`/api/v1/capa-root-causes/${ctx.rc1}`).set(await as(ids.ownerB, ids.orgB)).send({ description: 'Hijacked' }).expect(404);
     await api().delete(`/api/v1/capa-root-causes/${ctx.rc1}`).set(await as(ids.ownerB, ids.orgB)).expect(404);
+  });
+});
+
+describe('D5 to D7: corrective actions, verification, prevention', () => {
+  const owner = () => as(ids.ownerA);
+
+  it('adds corrective actions to a root cause; the stage follows the actions', async () => {
+    const h = await owner();
+    const added = (await api().post(`/api/v1/capas/${ctx.c2}/actions`).set(h).send({ phase: 'corrective', description: 'Fit a tool life counter', rootCauseId: ctx.rc1, dueDate: '2099-02-01' }).expect(201)).body;
+    ctx.corr = added.actions.find((a: { phase: string }) => a.phase === 'corrective').id;
+    expect(added.stage).toBe('actions_in_progress');
+    expect(added.steps[5].problems.length).toBeGreaterThan(0);
+    await api().post(`/api/v1/capas/${ctx.c2}/actions`).set(h).send({ phase: 'corrective', description: 'x', rootCauseId: ctx.nc1 }).expect(409);
+    await api().post(`/api/v1/capas/${ctx.c2}/actions`).set(await as(ids.inspectorA)).send({ phase: 'corrective', description: 'Nope' }).expect(403);
+    const done = (await api().post(`/api/v1/capa-actions/${ctx.corr}/complete`).set(h).send({ evidenceNote: 'Counter fitted' }).expect(200)).body;
+    expect(done.stage).toBe('awaiting_verification');
+    expect(done.verificationState).toBe('none');
+  });
+
+  it('verification needs capa.verify and a method; a failed one needs a note and reopens D5 and D6', async () => {
+    const h = await owner();
+    await api().post(`/api/v1/capas/${ctx.c2}/complete-step`).set(h).send({ step: 'd5' });
+    await api().post(`/api/v1/capas/${ctx.c2}/verifications`).set(await as(ids.inspectorA)).send({ effective: true, method: 'x' }).expect(403);
+    await api().post(`/api/v1/capas/${ctx.c2}/verifications`).set(h).send({ effective: true, method: '' }).expect(400);
+    const noNote = await api().post(`/api/v1/capas/${ctx.c2}/verifications`).set(h).send({ effective: false, method: 'Audit' });
+    expect(noNote.status).toBe(409);
+    const failed = (await api().post(`/api/v1/capas/${ctx.c2}/verifications`).set(h).send({ effective: false, method: 'Audit of 5 lots', notes: 'Burrs again' }).expect(201)).body;
+    expect(failed.verificationState).toBe('failed');
+    expect(failed.stage).toBe('actions_in_progress');
+    expect(failed.verifications[0]).toMatchObject({ effective: false, method: 'Audit of 5 lots', notes: 'Burrs again', verifiedBy: { name: 'Ada Owner' } });
+    expect(failed.steps[5].completed).toBe(false);
+    const added = (await api().post(`/api/v1/capas/${ctx.c2}/actions`).set(h).send({ phase: 'corrective', description: 'Second inspection', rootCauseId: ctx.rc3 }).expect(201)).body;
+    const second = added.actions.find((a: { description: string }) => a.description === 'Second inspection').id;
+    await api().post(`/api/v1/capa-actions/${second}/complete`).set(h).send({ evidenceNote: 'In place' }).expect(200);
+    const ok = (await api().post(`/api/v1/capas/${ctx.c2}/verifications`).set(h).send({ effective: true, method: 'Audit of 5 more lots' }).expect(201)).body;
+    expect(ok.verificationState).toBe('effective');
+    expect(ok.stage).toBe('verified_effective');
+    expect(ok.verifications).toHaveLength(2);
+    ctx.second = second;
+  });
+
+  it('changing the corrective actions afterwards makes the verification stale', async () => {
+    const h = await owner();
+    const reopened = (await api().post(`/api/v1/capa-actions/${ctx.second}/reopen`).set(h).send({}).expect(200)).body;
+    expect(reopened.verificationState).toBe('stale');
+    expect(reopened.stage).toBe('actions_in_progress');
+  });
+
+  it('D7 keeps lessons learned and a reason for no preventive action; preventive actions do not move the stage', async () => {
+    const h = await owner();
+    const d = (await api().patch(`/api/v1/capas/${ctx.c2}`).set(h).send({ d7LessonsLearned: 'Tool life belongs in every plan', d7NoPreventiveReason: 'Nothing else exposed' }).expect(200)).body;
+    expect(d).toMatchObject({ d7LessonsLearned: 'Tool life belongs in every plan', d7NoPreventiveReason: 'Nothing else exposed' });
+    expect(d.steps[7].problems).toEqual([]);
+    const cleared = (await api().patch(`/api/v1/capas/${ctx.c2}`).set(h).send({ d7NoPreventiveReason: null }).expect(200)).body;
+    expect(cleared.steps[7].problems).toEqual(['Add a preventive action, or say why none is needed']);
+    const stage = cleared.stage;
+    const prev = (await api().post(`/api/v1/capas/${ctx.c2}/actions`).set(h).send({ phase: 'preventive', description: 'Add tool life to the template', rootCauseId: ctx.rc3 }).expect(201)).body;
+    expect(prev.stage).toBe(stage);
+  });
+
+  it('is private to the organisation', async () => {
+    await api().post(`/api/v1/capas/${ctx.c2}/verifications`).set(await as(ids.ownerB, ids.orgB)).send({ effective: true, method: 'Hijacked' }).expect(404);
   });
 });

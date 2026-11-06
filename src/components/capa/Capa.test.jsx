@@ -196,10 +196,10 @@ describe("8D step page", () => {
     await waitFor(() => expect(calls).toEqual([["/capas/c1/reopen-step", { step: "d1", reason: "A member left" }]]));
   });
 
-  it("steps D5 to D8 say they are not available yet", async () => {
+  it("step D8 says it is not available yet", async () => {
     apiFetch.mockImplementation(respond(() => detail()));
-    renderAt("/CAPA/c1/d5");
-    expect(await screen.findByText(/D5 · Choose permanent corrective actions is not available yet/)).toBeInTheDocument();
+    renderAt("/CAPA/c1/d8");
+    expect(await screen.findByText(/D8 · Close and recognise the team is not available yet/)).toBeInTheDocument();
   });
 
   it("a reader sees everything but cannot change or complete anything", async () => {

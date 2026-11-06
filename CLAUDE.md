@@ -249,7 +249,14 @@ Summary of the brief:
     every live cause verified (an escape cause is advised, not required). `capa_analyses` now carries the `ishikawa` and `five_whys` kinds (data shapes `IshikawaData` / `FiveWhysData` in `capa.schemas.ts`, step d4). API:
     `POST /capas/{id}/root-causes`, `PATCH|DELETE /capa-root-causes/{id}`; detail has `rootCauses`. UI `steps/D4RootCause.jsx` (causes with verify / withdraw / edit / remove, analysis tools list), modals `IshikawaDialog.jsx`
     (six categories, probable star, live `IshikawaDiagram.jsx` SVG fishbone, "Record as root cause" once the diagram is saved) and `FiveWhysDialog.jsx` (a chain of whys each asked about the one before, "Save and record as root cause").
-    Nothing locks after D4 is completed. Next: CAPA4 (D5–D7).
+    Nothing locks after D4 is completed.
+  - **CAPA4 done (D5 corrective, D6 implement and verify, D7 prevent):** migration `20251125100000_capa_d5_d7.sql`. `capa_actions` phases are now interim/corrective/preventive with an optional `root_cause_id` (same 8D, editable);
+    `d7_lessons_learned` and `d7_no_preventive_reason` on `capas`. `capa_verifications` (append-only, ordered by `seq`, written only by `app.record_capa_verification`, needs `capa.verify`; refuses open corrective actions, none done, no method, or a failed
+    result without notes; a failed one reopens D5 and D6 with the reason) stores `actions_fingerprint` (`app.capa_actions_fingerprint`: corrective, non-cancelled actions' id:status:done_at), so changing the actions afterwards makes the latest verification **stale**
+    (`app.capa_verification_state` none/effective/failed/stale; `app.capa_verification_status` for readers). **Stage is worked out** (`app.capa_recompute_stage`, trigger on actions): D4 not complete → open; effective verification and nothing open → verified_effective;
+    failed → actions_in_progress; nothing open and ≥1 corrective done → awaiting_verification; else actions_in_progress. `app.capa_step_problems` now covers D0–D7. API: `POST /capas/{id}/verifications` (`capa.verify`), detail has `verifications`, `verificationState`,
+    `d7LessonsLearned`, `d7NoPreventiveReason`, actions carry `rootCauseId`. UI `steps/D5Corrective.jsx` (causes with action counts + `ActionList withCause`), `D6Implement.jsx` (actions, verification card and dialog), `D7Prevent.jsx`, shared `ReasonCard.jsx`
+    (also used by D3). Nothing locks. Next: CAPA5 (D8 close, files, print report, exit check).
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

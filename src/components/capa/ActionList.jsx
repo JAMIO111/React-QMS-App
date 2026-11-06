@@ -5,25 +5,28 @@ import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import ReasonDialog from "../ncr/ReasonDialog";
 import { useCapaMutation } from "../../hooks/useCapa";
-import { ACTION_STATUS, roleLabel } from "../../lib/capa";
+import { ACTION_STATUS, ROOT_CAUSE_KINDS, roleLabel } from "../../lib/capa";
 import { formatDay } from "../../lib/qualityAlerts";
 import { FormError, TextAreaField, buttonClass } from "../master-data/shared";
 
 /** The people an action can be given to: everyone still on the team. */
 const ownerOptions = (capa) => capa.team.filter((t) => !t.endedAt).map((t) => ({ id: t.id, name: t.name, hint: roleLabel(t.role) }));
 
-const ActionDialog = ({ capa, phase, action, onClose }) => {
+const causeOptions = (capa) => capa.rootCauses.map((c) => ({ id: c.id, name: c.description, hint: ROOT_CAUSE_KINDS[c.kind]?.label }));
+
+const ActionDialog = ({ capa, phase, action, withCause, onClose }) => {
   const mutation = useCapaMutation();
-  const [form, setForm] = useState({ description: action?.description ?? "", ownerTeamMemberId: action?.owner?.teamMemberId ?? null, dueDate: action?.dueDate ?? null });
+  const [form, setForm] = useState({ description: action?.description ?? "", ownerTeamMemberId: action?.owner?.teamMemberId ?? null, dueDate: action?.dueDate ?? null, rootCauseId: action?.rootCause?.id ?? action?.rootCauseId ?? null });
   const submit = (e) => {
     e.preventDefault();
-    const body = { description: form.description.trim(), ownerTeamMemberId: form.ownerTeamMemberId, dueDate: form.dueDate };
+    const body = { description: form.description.trim(), ownerTeamMemberId: form.ownerTeamMemberId, dueDate: form.dueDate, ...(withCause ? { rootCauseId: form.rootCauseId } : {}) };
     mutation.mutate(action ? { action: "updateAction", id: action.id, body } : { action: "addAction", id: capa.id, body: { phase, ...body } }, { onSuccess: onClose });
   };
   return (
     <Dialog title={action ? "Edit action" : "Add an action"} onClose={onClose}>
       <form className="flex flex-col gap-3" noValidate onSubmit={submit}>
         <TextAreaField label="What will be done" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} maxLength={2000} />
+        {withCause && <RHFComboBox label="Root cause it addresses" value={form.rootCauseId} onChange={(v) => setForm((f) => ({ ...f, rootCauseId: v ?? null }))} options={causeOptions(capa)} placeholder="Not linked to a cause" hint="The cause from D4 this action removes" />}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <RHFComboBox label="Owner" value={form.ownerTeamMemberId} onChange={(v) => setForm((f) => ({ ...f, ownerTeamMemberId: v }))} options={ownerOptions(capa)} placeholder="Nobody yet" hint="Anyone on the team of this 8D" />
           <RHFDatePickerPopout label="Due date" valueFormat="iso" clearable value={form.dueDate} onChange={(v) => setForm((f) => ({ ...f, dueDate: v ?? null }))} placeholder="No due date" />
@@ -63,10 +66,10 @@ const DoneDialog = ({ action, onClose }) => {
 };
 
 /**
- * The actions of one phase (interim containment now; corrective and preventive in later steps): owner from the team, due date, status.
+ * The actions of one phase (interim containment, corrective, preventive): owner from the team, due date, status.
  * Anything can be edited at any time while the 8D is running; "done" and "cancelled" can be undone with Reopen.
  */
-const ActionList = ({ capa, phase, editable, title, subtitle, addLabel, emptyText }) => {
+const ActionList = ({ capa, phase, editable, title, subtitle, addLabel, emptyText, withCause = false }) => {
   const mutation = useCapaMutation();
   const [dialog, setDialog] = useState(null); // { type: "add" | "edit" | "done" | "cancel", action? }
   const actions = capa.actions.filter((a) => a.phase === phase);
@@ -86,7 +89,7 @@ const ActionList = ({ capa, phase, editable, title, subtitle, addLabel, emptyTex
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ACTION_STATUS[a.status].tone}`}>{ACTION_STATUS[a.status].label}</span>
               </div>
               <p className="text-xs text-secondary-text">
-                Owner: {a.owner?.name ?? "nobody yet"}
+                {withCause && <>Addresses: {capa.rootCauses.find((c) => c.id === (a.rootCause?.id ?? a.rootCauseId))?.description ?? "no root cause linked"} · </>}Owner: {a.owner?.name ?? "nobody yet"}
                 {a.dueDate && <> · Due {formatDay(a.dueDate)}{a.overdue && <span className="font-medium text-error-color"> · overdue</span>}</>}
                 {a.status === "done" && a.doneAt && <> · Done by {a.doneBy?.name ?? "someone"} on {formatDay(a.doneAt.slice(0, 10))}</>}
               </p>
@@ -105,7 +108,7 @@ const ActionList = ({ capa, phase, editable, title, subtitle, addLabel, emptyTex
         </ul>
       )}
       <FormError error={dialog ? null : mutation.error} />
-      {(dialog?.type === "add" || dialog?.type === "edit") && <ActionDialog capa={capa} phase={phase} action={dialog.action} onClose={close} />}
+      {(dialog?.type === "add" || dialog?.type === "edit") && <ActionDialog capa={capa} phase={phase} action={dialog.action} withCause={withCause} onClose={close} />}
       {dialog?.type === "done" && <DoneDialog action={dialog.action} onClose={close} />}
       {dialog?.type === "cancel" && (
         <ReasonDialog title="Cancel the action?" label="Why is it no longer needed?" confirmText="Cancel action" pending={mutation.isPending} error={mutation.error} onClose={close}

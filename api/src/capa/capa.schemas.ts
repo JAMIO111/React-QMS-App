@@ -50,6 +50,9 @@ export const UpdateCapaBody = z
     d2HowMany: Words,
     // D3: why there is no interim containment
     d3NoContainmentReason: Words,
+    // D7: what was learned, and why there is no preventive action
+    d7LessonsLearned: z.string().trim().max(4000).nullable(),
+    d7NoPreventiveReason: Words,
   })
   .partial()
   .strict()
@@ -157,19 +160,23 @@ export type UpdateAnalysisBody = z.infer<typeof UpdateAnalysisBody>;
 
 // ---- actions (D3 now; D5 and D7 later) -----------------------------------------------------------
 
-export const ACTION_PHASES = ['interim'] as const;
+export const ACTION_PHASES = ['interim', 'corrective', 'preventive'] as const;
 export const CreateActionBody = z
-  .object({ phase: z.enum(ACTION_PHASES), description: text(2000), ownerTeamMemberId: z.string().uuid().nullable().optional(), dueDate: DateOnly.nullable().optional() })
+  .object({ phase: z.enum(ACTION_PHASES), description: text(2000), rootCauseId: z.string().uuid().nullable().optional(), ownerTeamMemberId: z.string().uuid().nullable().optional(), dueDate: DateOnly.nullable().optional() })
   .strict();
 export type CreateActionBody = z.infer<typeof CreateActionBody>;
 export const UpdateActionBody = z
-  .object({ description: text(2000), ownerTeamMemberId: z.string().uuid().nullable(), dueDate: DateOnly.nullable(), evidenceNote: z.string().trim().max(2000).nullable() })
+  .object({ description: text(2000), rootCauseId: z.string().uuid().nullable(), ownerTeamMemberId: z.string().uuid().nullable(), dueDate: DateOnly.nullable(), evidenceNote: z.string().trim().max(2000).nullable() })
   .partial()
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
 export type UpdateActionBody = z.infer<typeof UpdateActionBody>;
 export const CompleteActionBody = z.object({ evidenceNote: z.string().trim().max(2000).optional() }).strict();
 export type CompleteActionBody = z.infer<typeof CompleteActionBody>;
+
+/** Did the corrective actions work? A failed verification needs a note (the database checks) and reopens D5 and D6. */
+export const CreateVerificationBody = z.object({ effective: z.boolean(), method: text(200), notes: z.string().trim().max(2000).nullable().optional() }).strict();
+export type CreateVerificationBody = z.infer<typeof CreateVerificationBody>;
 
 export const LinkNcrBody = z.object({ ncrId: z.string().uuid() }).strict();
 export type LinkNcrBody = z.infer<typeof LinkNcrBody>;
@@ -278,6 +285,15 @@ export const RootCause = z.object({
   createdAt: Iso,
 });
 
+export const Verification = z.object({
+  id: z.string().uuid(),
+  effective: z.boolean(),
+  method: z.string(),
+  notes: z.string().nullable(),
+  verifiedBy: Person,
+  verifiedAt: Iso,
+});
+
 export const Action = z.object({
   id: z.string().uuid(),
   phase: z.enum(['interim', 'corrective', 'preventive']),
@@ -303,6 +319,12 @@ export const CapaDetail = CapaSummary.extend({
   analyses: z.array(Analysis),
   rootCauses: z.array(RootCause),
   actions: z.array(Action),
+  /** Every verification, newest first, and the state of the latest: none, effective, failed, or stale (the corrective actions changed after it). */
+  verifications: z.array(Verification),
+  verificationState: z.enum(['none', 'effective', 'failed', 'stale']),
+  /** D7: what was learned, and why there is no preventive action when there is none. */
+  d7LessonsLearned: z.string().nullable(),
+  d7NoPreventiveReason: z.string().nullable(),
   createdBy: Person,
   updatedAt: Iso,
   steps: z.array(CapaStep),

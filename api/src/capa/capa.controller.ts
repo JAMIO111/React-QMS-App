@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, Ap
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { AddTeamBody, CapaDetail, CapaList, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, CreateRootCauseBody, LinkNcrBody, UpdateRootCauseBody, UpdateActionBody, UpdateAnalysisBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, UpdateCapaBody, UpdateTeamBody } from './capa.schemas';
+import { AddTeamBody, CapaDetail, CapaList, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, CreateRootCauseBody, CreateVerificationBody, LinkNcrBody, UpdateRootCauseBody, UpdateActionBody, UpdateAnalysisBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, UpdateCapaBody, UpdateTeamBody } from './capa.schemas';
 import { CapaService } from './capa.service';
 
 const READ = 'capa.read';
@@ -120,6 +120,15 @@ export class CapasController {
   @ApiCreatedResponse({ description: 'Records a root cause (occurrence, escape or systemic), optionally from an analysis of this 8D; it starts unverified', schema: openApiSchema(CapaDetail) })
   addRootCause(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.addRootCause(ctx, parse(Uuid, id), parse(CreateRootCauseBody, body));
+  }
+
+  @Post(':id/verifications')
+  @HttpCode(201)
+  @OrganisationScoped('capa.verify')
+  @ApiBody({ schema: openApiSchema(CreateVerificationBody) })
+  @ApiCreatedResponse({ description: 'Records whether the corrective actions worked. Needs capa.verify, nothing open, one action done; a failed verification needs a note and reopens D5 and D6.', schema: openApiSchema(CapaDetail) })
+  addVerification(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addVerification(ctx, parse(Uuid, id), parse(CreateVerificationBody, body));
   }
 
   @Post(':id/actions')

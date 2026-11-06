@@ -169,6 +169,11 @@ BEGIN
   -- CAPA3: a root cause.
   INSERT INTO public.capa_root_causes (organisation_id, capa_id, kind, description)
     SELECT a, id, 'occurrence', 'Sweep root cause' FROM public.capas WHERE organisation_id = a LIMIT 1;
+  -- CAPA4: a corrective action carried out and verified.
+  INSERT INTO public.capa_actions (organisation_id, capa_id, phase, description)
+    SELECT a, id, 'corrective', 'Sweep corrective action' FROM public.capas WHERE organisation_id = a LIMIT 1;
+  UPDATE public.capa_actions SET status = 'done' WHERE organisation_id = a AND phase = 'corrective';
+  PERFORM app.record_capa_verification((SELECT id FROM public.capas WHERE organisation_id = a LIMIT 1), true, 'Sweep check', NULL);
   PERFORM pg_temp.logout();
 
   -- Subscription: seats and an assignment through the API functions, invoice and payment as the provider would.

@@ -59,7 +59,7 @@ export const useNcrCapas = (ncrId, { enabled = true } = {}) => {
 
 /**
  * action: create | update | completeStep | reopenStep | cancel | reopen | addTeam | updateTeam | linkNcr | unlinkNcr | addAnalysis | updateAnalysis |
- * removeAnalysis | addRootCause | updateRootCause | removeRootCause | addAction | updateAction | completeAction | cancelAction | reopenAction.
+ * removeAnalysis | addRootCause | updateRootCause | removeRootCause | addVerification | addAction | updateAction | completeAction | cancelAction | reopenAction.
  * Every command answers with the 8D, which is put in the cache; then everything in the organisation is refreshed (lib/refresh.js).
  * `id` is the 8D, except for updateTeam (the team member), unlinkNcr (the link), updateAnalysis and removeAnalysis (the analysis) and the action
  * commands that work on one action (updateAction, completeAction, cancelAction, reopenAction) and the root cause commands that work on one cause.
@@ -103,6 +103,8 @@ export const useCapaMutation = () => {
           return post(`/capa-root-causes/${id}`, "PATCH");
         case "removeRootCause":
           return post(`/capa-root-causes/${id}`, "DELETE");
+        case "addVerification":
+          return post(`/capas/${id}/verifications`);
         case "addAction":
           return post(`/capas/${id}/actions`);
         case "updateAction":

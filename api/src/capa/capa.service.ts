@@ -5,7 +5,7 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { iso, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
-import { AddTeamBody, ANALYSIS_DATA, CapaDetail, CapaSummary, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, CreateRootCauseBody, LinkNcrBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, STEPS, UpdateActionBody, UpdateAnalysisBody, UpdateCapaBody, UpdateRootCauseBody, UpdateTeamBody } from './capa.schemas';
+import { AddTeamBody, ANALYSIS_DATA, CapaDetail, CapaSummary, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, CreateRootCauseBody, CreateVerificationBody, LinkNcrBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, STEPS, UpdateActionBody, UpdateAnalysisBody, UpdateCapaBody, UpdateRootCauseBody, UpdateTeamBody } from './capa.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown' } : null);
@@ -14,7 +14,7 @@ const RUNNING = sql`c.stage not in ('closed', 'cancelled')`;
 const SELECT = sql`
   select c.id, c.reference, c.method, c.title, c.problem_statement, c.stage, c.stage_reason, c.source, c.severity, c.external_reference,
          c.owner_membership_id, c.due_date::text as due_date, c.closed_at, c.created_at, c.updated_at, c.created_by,
-         c.d2_who, c.d2_what, c.d2_where, c.d2_when, c.d2_why, c.d2_how, c.d2_how_many, c.d3_no_containment_reason,
+         c.d2_who, c.d2_what, c.d2_where, c.d2_when, c.d2_why, c.d2_how, c.d2_how_many, c.d3_no_containment_reason, c.d7_lessons_learned, c.d7_no_preventive_reason,
          (c.due_date is not null and c.due_date < current_date and ${RUNNING}) as overdue,
          (select count(*) from public.capa_steps s where s.capa_id = c.id and s.completed_at is not null)::int as steps_done,
          (select min(s.step) from public.capa_steps s where s.capa_id = c.id and s.completed_at is null) as next_step,
@@ -58,7 +58,7 @@ const HEADER_COLUMNS: Record<string, string> = {
   title: 'title', problemStatement: 'problem_statement', source: 'source', severity: 'severity', externalReference: 'external_reference',
   ownerMembershipId: 'owner_membership_id', dueDate: 'due_date',
   d2Who: 'd2_who', d2What: 'd2_what', d2Where: 'd2_where', d2When: 'd2_when', d2Why: 'd2_why', d2How: 'd2_how', d2HowMany: 'd2_how_many',
-  d3NoContainmentReason: 'd3_no_containment_reason',
+  d3NoContainmentReason: 'd3_no_containment_reason', d7LessonsLearned: 'd7_lessons_learned', d7NoPreventiveReason: 'd7_no_preventive_reason',
 };
 
 /**
@@ -230,14 +230,21 @@ export class CapaService {
     });
   }
 
-  // ---- actions (interim containment now) -----------------------------------------------------
+  // ---- verification (D6) ---------------------------------------------------------------------
+
+  /** Records whether the corrective actions worked (capa.verify). A failed one reopens D5 and D6. */
+  addVerification(ctx: RequestContext, id: string, body: CreateVerificationBody): Promise<CapaDetail> {
+    return this.command(ctx, id, sql`select app.record_capa_verification(${id}::uuid, ${body.effective}, ${body.method}, ${body.notes ?? null})`);
+  }
+
+  // ---- actions (interim containment, corrective, preventive) ---------------------------------
 
   addAction(ctx: RequestContext, id: string, body: CreateActionBody): Promise<CapaDetail> {
     return this.database.asUser(ctx, async (db) => {
       await this.load(db, ctx, id);
       await db.execute(sql`
-        insert into public.capa_actions (organisation_id, capa_id, phase, description, owner_team_member_id, due_date)
-        values (${orgOf(ctx)}::uuid, ${id}::uuid, ${body.phase}, ${body.description}, ${body.ownerTeamMemberId ?? null}::uuid, ${body.dueDate ?? null}::date)`);
+        insert into public.capa_actions (organisation_id, capa_id, phase, description, root_cause_id, owner_team_member_id, due_date)
+        values (${orgOf(ctx)}::uuid, ${id}::uuid, ${body.phase}, ${body.description}, ${body.rootCauseId ?? null}::uuid, ${body.ownerTeamMemberId ?? null}::uuid, ${body.dueDate ?? null}::date)`);
       return this.load(db, ctx, id);
     });
   }
@@ -245,6 +252,7 @@ export class CapaService {
   updateAction(ctx: RequestContext, actionId: string, body: UpdateActionBody): Promise<CapaDetail> {
     const sets: SQL[] = [];
     if (body.description !== undefined) sets.push(sql`description = ${body.description}`);
+    if (body.rootCauseId !== undefined) sets.push(sql`root_cause_id = ${body.rootCauseId}::uuid`);
     if (body.ownerTeamMemberId !== undefined) sets.push(sql`owner_team_member_id = ${body.ownerTeamMemberId}::uuid`);
     if (body.dueDate !== undefined) sets.push(sql`due_date = ${body.dueDate}::date`);
     if (body.evidenceNote !== undefined) sets.push(sql`evidence_note = ${body.evidenceNote || null}`);
@@ -345,7 +353,7 @@ export class CapaService {
     const rows = await db.execute<Row>(sql`${SELECT} where c.id = ${id}::uuid and c.organisation_id = ${orgOf(ctx)}::uuid`);
     if (!rows.rows.length) throw ApiError.notFound('capa_not_found', '8D not found');
     const r = rows.rows[0];
-    const [steps, team, ncrs, analyses, actions, causes] = await Promise.all([
+    const [steps, team, ncrs, analyses, actions, causes, verifications, vstate] = await Promise.all([
       db.execute<Row>(sql`select s.step, s.completed_at, s.completed_by, s.note, s.reopened_at, s.reopen_reason, ${sql.raw(personName('p'))} as completed_by_name
         from public.capa_steps s left join public.profiles p on p.id = s.completed_by where s.capa_id = ${id}::uuid order by s.step`),
       db.execute<Row>(sql`select t.id, t.membership_id, m.user_id, t.external_name, t.external_company, t.external_email, t.role, t.ended_at,
@@ -379,6 +387,10 @@ export class CapaService {
           ${sql.raw(personName('pv'))} as verified_by_name
         from public.capa_root_causes r left join public.profiles pv on pv.id = r.verified_by
         where r.capa_id = ${id}::uuid and r.deleted_at is null order by case r.kind when 'occurrence' then 0 when 'escape' then 1 else 2 end, r.created_at`),
+      db.execute<Row>(sql`select v.id, v.effective, v.method, v.notes, v.verified_by, v.created_at, ${sql.raw(personName('pv'))} as verified_by_name
+        from public.capa_verifications v left join public.profiles pv on pv.id = v.verified_by
+        where v.capa_id = ${id}::uuid order by v.seq desc`),
+      db.execute<{ s: string }>(sql`select app.capa_verification_status(${id}::uuid) as s`),
     ]);
     const incomplete = steps.rows.filter((s) => !s.completed_at).map((s) => s.step as string);
     const problems = new Map<string, string[]>();
@@ -415,6 +427,17 @@ export class CapaService {
         verificationNote: (x.verification_note as string) ?? null,
         createdAt: iso(x.created_at)!,
       })),
+      verifications: verifications.rows.map((v) => ({
+        id: v.id as string,
+        effective: !!v.effective,
+        method: v.method as string,
+        notes: (v.notes as string) ?? null,
+        verifiedBy: person(v.verified_by, v.verified_by_name),
+        verifiedAt: iso(v.created_at)!,
+      })),
+      verificationState: vstate.rows[0].s as CapaDetail['verificationState'],
+      d7LessonsLearned: (r.d7_lessons_learned as string) ?? null,
+      d7NoPreventiveReason: (r.d7_no_preventive_reason as string) ?? null,
       actions: actions.rows.map((x) => ({
         id: x.id as string,
         phase: x.phase as CapaDetail['actions'][number]['phase'],

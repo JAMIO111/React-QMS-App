@@ -428,7 +428,7 @@ const SpcPage = () => {
           )}
 
           {chart.capability && !isRate && (
-            <CapabilityCard capability={chart.capability} decimals={decimals} unit={chart.characteristic.unitCode} />
+            <CapabilityCard capability={chart.capability} decimals={decimals} unit={chart.characteristic.unitCode} spec={chart.spec} />
           )}
 
           {chart.excluded.length > 0 && (

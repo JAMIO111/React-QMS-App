@@ -805,6 +805,11 @@ describe("Process capability", () => {
     overall: { ratio: 1.11, upper: 1.07, lower: 1.15, k: 1.07 },
     observedPpm: 0,
     expectedPpm: 650.4,
+    histogram: {
+      binWidth: 0.01,
+      bins: [24.95, 24.97, 24.99, 25.01, 25.03].map((from, i) => ({ from, to: from + 0.02, count: [2, 8, 15, 12, 3][i] })),
+      curve: [24.95, 24.99, 25.01, 25.05].map((x, i) => ({ x, y: [1, 14, 12, 1][i] })),
+    },
     verdict: "excellent",
     warnings: ["The control chart shows signals, so the process is not stable: capability indices describe a stable process and may mislead."],
   };
@@ -819,6 +824,8 @@ describe("Process capability", () => {
     expect(screen.getByText(/process is not stable/)).toBeInTheDocument();
     expect(screen.getByText("650 ppm")).toBeInTheDocument();
     expect(screen.getByText(/Excellent \(1.67 or more\)/)).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Histogram of 40 readings against the specification" })).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Histogram key" })).getByText(/Normal curve/)).toBeInTheDocument();
   });
 
   it("leaves the card out when the API has no capability (no limit, too few readings)", async () => {

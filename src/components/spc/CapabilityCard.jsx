@@ -1,3 +1,4 @@
+import { Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import MenuCard from "../ui/MenuCard";
 import { CircleAlertIcon } from "@/components/icons";
 import { formatValue } from "../../lib/spc";
@@ -11,12 +12,55 @@ const VERDICT = {
 const index = (v) => (v === null || v === undefined ? "—" : v.toFixed(2));
 const ppm = (v) => (v === null || v === undefined ? "—" : v < 1 ? "< 1" : Math.round(v).toLocaleString("en-GB"));
 
+const tick = { fontSize: 12, fill: "currentColor" };
+const label = (text, color, position) => ({ value: text, position, fontSize: 11, fill: color });
+
+/**
+ * Histogram of the readings with the specification limits (solid), the nominal and the mean (dashed) and the normal
+ * curve the overall σ implies. The bars are counts per bin; the curve is in the same counts.
+ */
+export const CapabilityHistogram = ({ histogram, spec, mean, decimals }) => {
+  const rows = histogram.bins.map((b) => ({ x: (b.from + b.to) / 2, from: b.from, to: b.to, count: b.count }));
+  const curve = histogram.curve.map((p) => ({ x: p.x, curve: p.y }));
+  const data = [...rows, ...curve].sort((a, b) => a.x - b.x);
+  const lo = histogram.bins[0].from;
+  const hi = histogram.bins[histogram.bins.length - 1].to;
+  const spec1 = "var(--chart-series-2)";
+  const neutral = "var(--chart-neutral)";
+  const d = Math.max(2, decimals - 1);
+  return (
+    <div
+      className="h-64"
+      role="img"
+      aria-label={`Histogram of ${rows.reduce((t, r) => t + r.count, 0)} readings against the specification`}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 16, right: 24, bottom: 4, left: 4 }}>
+          <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
+          <XAxis dataKey="x" type="number" domain={[lo, hi]} tick={tick} tickLine={false} tickFormatter={(v) => formatValue(v, d)} />
+          <YAxis tick={tick} allowDecimals={false} width={36} tickLine={false} axisLine={false} />
+          <Tooltip
+            formatter={(v, name) => [name === "count" ? v : Number(v).toFixed(1), name === "count" ? "Readings" : "Normal curve"]}
+            labelFormatter={(v) => `${formatValue(v, d)} ${""}`.trim()}
+          />
+          <Bar dataKey="count" name="count" fill="var(--chart-series-1)" fillOpacity={0.6} barSize={Math.max(6, 520 / rows.length - 4)} isAnimationActive={false} />
+          <Line dataKey="curve" name="curve" type="monotone" stroke={neutral} strokeWidth={1.5} dot={false} activeDot={false} isAnimationActive={false} connectNulls />
+          {spec.lower !== null && <ReferenceLine x={spec.lower} stroke={spec1} strokeWidth={2} label={label(`LSL ${formatValue(spec.lower, d)}`, spec1, "insideTopLeft")} />}
+          {spec.upper !== null && <ReferenceLine x={spec.upper} stroke={spec1} strokeWidth={2} label={label(`USL ${formatValue(spec.upper, d)}`, spec1, "insideTopRight")} />}
+          {spec.nominal !== null && <ReferenceLine x={spec.nominal} stroke={spec1} strokeDasharray="4 3" label={label("Nominal", spec1, "insideTopLeft")} />}
+          <ReferenceLine x={mean} stroke={neutral} strokeDasharray="6 4" label={label(`Mean ${formatValue(mean, d)}`, neutral, "insideTopRight")} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
 /**
  * Process capability against the specification: Cp/Cpk (within σ, from the control chart) and Pp/Ppk (overall σ of
  * the readings). Calculated by the API from the readings shown; indices that need both limits are blank for a
  * one-sided specification.
  */
-const CapabilityCard = ({ capability: c, decimals, unit }) => (
+const CapabilityCard = ({ capability: c, decimals, unit, spec }) => (
   <MenuCard
     title="Process capability"
     subtitle="How well the process fits the specification (not the control limits), for the readings shown."
@@ -30,6 +74,17 @@ const CapabilityCard = ({ capability: c, decimals, unit }) => (
             </li>
           ))}
         </ul>
+      )}
+      {c.histogram && spec && (
+        <div className="flex flex-col gap-1">
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-secondary-text" aria-label="Histogram key">
+            <li>▮ Readings per bin</li>
+            <li>— Normal curve (overall σ)</li>
+            <li>━ Specification (LSL/USL)</li>
+            <li>- - Mean</li>
+          </ul>
+          <CapabilityHistogram histogram={c.histogram} spec={spec} mean={c.mean} decimals={decimals} />
+        </div>
       )}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[420px] border-separate border-spacing-0 text-sm text-primary-text" aria-label="Capability indices">

@@ -168,7 +168,7 @@ Summary of the brief:
     Cp/Cpu/Cpl/Cpk from the chart's within σ (saved baseline, else trial limits), Pp/Ppu/Ppl/Ppk from the overall sample SD of the readings shown,
     both against the spec on the data; one-sided specs give only the one-sided index; observed and normal-expected ppm; verdict bands on Cpk
     (1.00/1.33/1.67). `null` without a limit, with < 10 readings or for pass/fail and count charts; warns below 30 readings and when the chart has
-    signals (not stable). UI `CapabilityCard.jsx` on the SPC page. Not done: histogram, non-normal data, Cpm.
+    signals (not stable). `capability.histogram` = bins over a range that includes the spec plus the normal curve (overall σ) in the same counts. UI `CapabilityCard.jsx` (table + `CapabilityHistogram`) on the SPC page. Not done: non-normal data, Cpm.
   - **Next (later phases):** family/machine analysis, alerts (need a worker).
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with

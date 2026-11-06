@@ -1,4 +1,4 @@
-import { capability, indices, normalCdf, sampleSd, verdict } from './capability';
+import { capability, histogram, indices, normalCdf, sampleSd, verdict } from './capability';
 
 const close = (a: number | null, b: number, d = 3) => expect(a).toBeCloseTo(b, d);
 
@@ -56,5 +56,28 @@ describe('capability of a set of readings', () => {
   });
   it('says so when every reading is identical', () => {
     expect(capability(Array(12).fill(25), 0.004, spec, 0)!.warnings[0]).toMatch(/no variation/);
+  });
+});
+
+describe('histogram', () => {
+  const spec = { lower: 24.95, upper: 25.05 };
+  const xs = Array.from({ length: 40 }, (_, i) => 25 + ((i % 5) - 2) * 0.005);
+  it('counts every reading once, over a range that holds the specification', () => {
+    const h = histogram(xs, spec, 25, 0.004);
+    expect(h.bins.reduce((t, b) => t + b.count, 0)).toBe(40);
+    expect(h.bins[0].from).toBeLessThanOrEqual(24.95);
+    expect(h.bins[h.bins.length - 1].to).toBeGreaterThanOrEqual(25.05);
+    expect(h.bins.length).toBeGreaterThanOrEqual(8);
+    expect(h.bins.length).toBeLessThanOrEqual(20);
+  });
+  it('scales the normal curve to the same counts (area ≈ readings × bin width / bin width)', () => {
+    const h = histogram(xs, spec, 25, 0.004);
+    const step = h.curve[1].x - h.curve[0].x;
+    const area = h.curve.reduce((t, p) => t + p.y * step, 0) / h.binWidth;
+    expect(area).toBeGreaterThan(38);
+    expect(area).toBeLessThan(42);
+  });
+  it('is part of the capability result', () => {
+    expect(capability(xs, 0.004, spec, 0)!.histogram!.bins.length).toBeGreaterThan(0);
   });
 });

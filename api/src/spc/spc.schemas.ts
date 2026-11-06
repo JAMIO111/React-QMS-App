@@ -113,6 +113,10 @@ export const CapabilityOut = z.object({
   overall: IndicesOut,
   observedPpm: z.number(),
   expectedPpm: z.number().nullable(),
+  /** Readings in bins over a range that includes the specification, and the normal curve (overall σ) in the same counts. */
+  histogram: z
+    .object({ binWidth: z.number(), bins: z.array(z.object({ from: z.number(), to: z.number(), count: z.number().int() })), curve: z.array(z.object({ x: z.number(), y: z.number() })) })
+    .nullable(),
   verdict: z.enum(['excellent', 'capable', 'marginal', 'not_capable']).nullable(),
   warnings: z.array(z.string()),
 });

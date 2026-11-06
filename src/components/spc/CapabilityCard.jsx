@@ -15,6 +15,32 @@ const ppm = (v) => (v === null || v === undefined ? "—" : v < 1 ? "< 1" : Math
 const tick = { fontSize: 12, fill: "currentColor" };
 const label = (text, color, position) => ({ value: text, position, fontSize: 11, fill: color });
 
+/** Tooltip in the same style as the control charts: rounded, themed border and background, readable in light and dark. */
+const HistogramTooltip = ({ active, payload, decimals }) => {
+  if (!active || !payload?.length) return null;
+  const row = payload[0].payload;
+  const bin = row.from !== undefined;
+  return (
+    <div className="rounded-lg border border-border-color bg-primary-bg p-2 text-xs text-primary-text shadow-md">
+      {bin ? (
+        <>
+          <p className="font-medium">
+            {formatValue(row.from, decimals)} to {formatValue(row.to, decimals)}
+          </p>
+          <p>
+            {row.count} {row.count === 1 ? "reading" : "readings"}
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="font-medium">{formatValue(row.x, decimals)}</p>
+          <p>Normal curve: {Number(row.curve).toFixed(1)} expected</p>
+        </>
+      )}
+    </div>
+  );
+};
+
 /**
  * Histogram of the readings with the specification limits (solid), the nominal and the mean (dashed) and the normal
  * curve the overall σ implies. The bars are counts per bin; the curve is in the same counts.
@@ -28,6 +54,8 @@ export const CapabilityHistogram = ({ histogram, spec, mean, decimals }) => {
   const spec1 = "var(--chart-series-2)";
   const neutral = "var(--chart-neutral)";
   const d = Math.max(2, decimals - 1);
+  // The nominal and mean lines are usually close: put each label on the outer side of its own line (Recharts: insideTopLeft draws to the right of a vertical line, insideTopRight to its left), so they never overlap.
+  const nominalRight = spec.nominal !== null && spec.nominal >= mean;
   return (
     <div
       className="h-64"
@@ -39,16 +67,13 @@ export const CapabilityHistogram = ({ histogram, spec, mean, decimals }) => {
           <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
           <XAxis dataKey="x" type="number" domain={[lo, hi]} tick={tick} tickLine={false} tickFormatter={(v) => formatValue(v, d)} />
           <YAxis tick={tick} allowDecimals={false} width={36} tickLine={false} axisLine={false} />
-          <Tooltip
-            formatter={(v, name) => [name === "count" ? v : Number(v).toFixed(1), name === "count" ? "Readings" : "Normal curve"]}
-            labelFormatter={(v) => `${formatValue(v, d)} ${""}`.trim()}
-          />
+          <Tooltip content={<HistogramTooltip decimals={d} />} />
           <Bar dataKey="count" name="count" fill="var(--chart-series-1)" fillOpacity={0.6} barSize={Math.max(6, 520 / rows.length - 4)} isAnimationActive={false} />
           <Line dataKey="curve" name="curve" type="monotone" stroke={neutral} strokeWidth={1.5} dot={false} activeDot={false} isAnimationActive={false} connectNulls />
           {spec.lower !== null && <ReferenceLine x={spec.lower} stroke={spec1} strokeWidth={2} label={label(`LSL ${formatValue(spec.lower, d)}`, spec1, "insideTopLeft")} />}
           {spec.upper !== null && <ReferenceLine x={spec.upper} stroke={spec1} strokeWidth={2} label={label(`USL ${formatValue(spec.upper, d)}`, spec1, "insideTopRight")} />}
-          {spec.nominal !== null && <ReferenceLine x={spec.nominal} stroke={spec1} strokeDasharray="4 3" label={label("Nominal", spec1, "insideTopLeft")} />}
-          <ReferenceLine x={mean} stroke={neutral} strokeDasharray="6 4" label={label(`Mean ${formatValue(mean, d)}`, neutral, "insideTopRight")} />
+          {spec.nominal !== null && <ReferenceLine x={spec.nominal} stroke={spec1} strokeDasharray="4 3" label={label("Nominal", spec1, nominalRight ? "insideTopLeft" : "insideTopRight")} />}
+          <ReferenceLine x={mean} stroke={neutral} strokeDasharray="6 4" label={label(`Mean ${formatValue(mean, d)}`, neutral, nominalRight ? "insideTopRight" : "insideTopLeft")} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

@@ -9,8 +9,7 @@
 --     the newest still in progress, and 5 of DEMO-200 (a short run: provisional / trial limits).
 -- Every reading is inside specification, so nothing needs an NC: the charts show a process that is
 -- "in spec but not in control" — the point of SPC. Samples, readings and inspections are back-dated
--- afterwards so the time axis is meaningful (this step needs session_replication_role; if the
--- editor refuses it the data is still complete, just all stamped "now").
+-- afterwards so the time axis is meaningful (the audit trail does not record that step).
 -- Safe to re-run: it stops if DEMO-100 already exists in the organisation.
 --
 -- Which organisation: put its name below. Left empty, the script uses the only organisation if
@@ -125,20 +124,23 @@ BEGIN
     END LOOP;
   END LOOP;
 
-  -- ---- back-date (needs triggers off for this session's last statements) ----------------------
+  -- ---- back-date ---------------------------------------------------------------------------
+  -- Readings are stamped "now" by their triggers, so the triggers on the three inspection tables are
+  -- switched off for these updates and straight back on (all inside this one transaction).
   EXECUTE 'RESET ROLE';
-  BEGIN
-    EXECUTE 'SET LOCAL session_replication_role = replica';
-    UPDATE public.inspection_records r SET started_at = (t ->> 'start')::timestamptz,
-        completed_at = CASE WHEN (t ->> 'open')::boolean THEN NULL ELSE (t ->> 'start')::timestamptz + interval '90 minutes' END
-      FROM jsonb_array_elements(v_times) t WHERE r.id = (t ->> 'id')::uuid;
-    UPDATE public.inspection_samples s SET sampled_at = (t ->> 'start')::timestamptz + s.sample_number * interval '8 minutes'
-      FROM jsonb_array_elements(v_times) t WHERE s.inspection_record_id = (t ->> 'id')::uuid;
-    UPDATE public.inspection_measurements m SET measured_at = s.sampled_at + interval '1 minute'
-      FROM public.inspection_samples s WHERE s.id = m.sample_id AND s.organisation_id = v_org AND s.inspection_record_id IN (SELECT (t ->> 'id')::uuid FROM jsonb_array_elements(v_times) t);
-    EXECUTE 'SET LOCAL session_replication_role = origin';
-  EXCEPTION WHEN insufficient_privilege THEN
-    RAISE NOTICE 'Could not back-date (session_replication_role not allowed): the readings are stamped with the time this script ran.';
-  END;
+  ALTER TABLE public.inspection_records DISABLE TRIGGER USER;
+  ALTER TABLE public.inspection_samples DISABLE TRIGGER USER;
+  ALTER TABLE public.inspection_measurements DISABLE TRIGGER USER;
+  UPDATE public.inspection_records r SET started_at = (t ->> 'start')::timestamptz,
+      completed_at = CASE WHEN (t ->> 'open')::boolean THEN NULL ELSE (t ->> 'start')::timestamptz + interval '90 minutes' END
+    FROM jsonb_array_elements(v_times) t WHERE r.id = (t ->> 'id')::uuid;
+  UPDATE public.inspection_samples s SET sampled_at = (t ->> 'start')::timestamptz + s.sample_number * interval '8 minutes'
+    FROM jsonb_array_elements(v_times) t WHERE s.inspection_record_id = (t ->> 'id')::uuid;
+  UPDATE public.inspection_measurements m SET measured_at = s.sampled_at + interval '1 minute'
+    FROM public.inspection_samples s WHERE s.id = m.sample_id AND s.organisation_id = v_org
+      AND s.inspection_record_id IN (SELECT (t ->> 'id')::uuid FROM jsonb_array_elements(v_times) t);
+  ALTER TABLE public.inspection_records ENABLE TRIGGER USER;
+  ALTER TABLE public.inspection_samples ENABLE TRIGGER USER;
+  ALTER TABLE public.inspection_measurements ENABLE TRIGGER USER;
   RAISE NOTICE 'Added the SPC demo data to organisation %. Open Process Control > SPC Charts and choose DEMO-100.', v_org;
 END $$;

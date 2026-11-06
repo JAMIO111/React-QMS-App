@@ -1,4 +1,4 @@
-import { Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import MenuCard from "../ui/MenuCard";
 import { CircleAlertIcon } from "@/components/icons";
 import { formatValue } from "../../lib/spc";
@@ -16,27 +16,25 @@ const tick = { fontSize: 12, fill: "currentColor" };
 const label = (text, color, position) => ({ value: text, position, fontSize: 11, fill: color });
 
 /** Tooltip in the same style as the control charts: rounded, themed border and background, readable in light and dark. */
-const HistogramTooltip = ({ active, payload, decimals }) => {
+const HistogramTooltip = ({ active, payload, decimals, bins }) => {
   if (!active || !payload?.length) return null;
-  const row = payload[0].payload;
-  const bin = row.from !== undefined;
+  const x = payload[0].payload.x;
+  const bin = bins.find((b) => x >= b.from && x < b.to) ?? (x >= bins[bins.length - 1].to ? bins[bins.length - 1] : null);
   return (
     <div className="rounded-lg border border-border-color bg-primary-bg p-2 text-xs text-primary-text shadow-md">
       {bin ? (
         <>
           <p className="font-medium">
-            {formatValue(row.from, decimals)} to {formatValue(row.to, decimals)}
+            {formatValue(bin.from, decimals)} to {formatValue(bin.to, decimals)}
           </p>
           <p>
-            {row.count} {row.count === 1 ? "reading" : "readings"}
+            {bin.count} {bin.count === 1 ? "reading" : "readings"}
           </p>
         </>
       ) : (
-        <>
-          <p className="font-medium">{formatValue(row.x, decimals)}</p>
-          <p>Normal curve: {Number(row.curve).toFixed(1)} expected</p>
-        </>
+        <p className="font-medium">{formatValue(x, decimals)}</p>
       )}
+      <p className="text-secondary-text">Normal curve: {Number(payload[0].payload.curve).toFixed(1)} expected</p>
     </div>
   );
 };
@@ -46,11 +44,11 @@ const HistogramTooltip = ({ active, payload, decimals }) => {
  * curve the overall σ implies. The bars are counts per bin; the curve is in the same counts.
  */
 export const CapabilityHistogram = ({ histogram, spec, mean, decimals }) => {
-  const rows = histogram.bins.map((b) => ({ x: (b.from + b.to) / 2, from: b.from, to: b.to, count: b.count }));
-  const curve = histogram.curve.map((p) => ({ x: p.x, curve: p.y }));
-  const data = [...rows, ...curve].sort((a, b) => a.x - b.x);
-  const lo = histogram.bins[0].from;
-  const hi = histogram.bins[histogram.bins.length - 1].to;
+  const bins = histogram.bins;
+  const data = histogram.curve.map((p) => ({ x: p.x, curve: p.y }));
+  const lo = bins[0].from;
+  const hi = bins[bins.length - 1].to;
+  const top = Math.max(1, ...bins.map((b) => b.count), ...histogram.curve.map((p) => p.y));
   const spec1 = "var(--chart-series-2)";
   const neutral = "var(--chart-neutral)";
   const d = Math.max(2, decimals - 1);
@@ -60,15 +58,17 @@ export const CapabilityHistogram = ({ histogram, spec, mean, decimals }) => {
     <div
       className="h-64"
       role="img"
-      aria-label={`Histogram of ${rows.reduce((t, r) => t + r.count, 0)} readings against the specification`}
+      aria-label={`Histogram of ${bins.reduce((t, b) => t + b.count, 0)} readings against the specification`}
     >
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 16, right: 24, bottom: 4, left: 4 }}>
           <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
           <XAxis dataKey="x" type="number" domain={[lo, hi]} tick={tick} tickLine={false} tickFormatter={(v) => formatValue(v, d)} />
-          <YAxis tick={tick} allowDecimals={false} width={36} tickLine={false} axisLine={false} />
-          <Tooltip content={<HistogramTooltip decimals={d} />} />
-          <Bar dataKey="count" name="count" fill="var(--chart-series-1)" fillOpacity={0.6} barSize={Math.max(6, 520 / rows.length - 4)} isAnimationActive={false} />
+          <YAxis domain={[0, Math.ceil(top * 1.1)]} tick={tick} allowDecimals={false} width={36} tickLine={false} axisLine={false} />
+          <Tooltip content={<HistogramTooltip decimals={d} bins={bins} />} />
+          {bins.map((b) => (
+            <ReferenceArea key={b.from} x1={b.from} x2={b.to} y1={0} y2={b.count} fill="var(--chart-series-1)" fillOpacity={0.6} stroke="var(--chart-series-1)" strokeOpacity={0.9} ifOverflow="visible" />
+          ))}
           <Line dataKey="curve" name="curve" type="monotone" stroke={neutral} strokeWidth={1.5} dot={false} activeDot={false} isAnimationActive={false} connectNulls />
           {spec.lower !== null && <ReferenceLine x={spec.lower} stroke={spec1} strokeWidth={2} label={label(`LSL ${formatValue(spec.lower, d)}`, spec1, "insideTopLeft")} />}
           {spec.upper !== null && <ReferenceLine x={spec.upper} stroke={spec1} strokeWidth={2} label={label(`USL ${formatValue(spec.upper, d)}`, spec1, "insideTopRight")} />}

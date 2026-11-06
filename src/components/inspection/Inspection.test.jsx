@@ -378,6 +378,8 @@ describe("Failures and non-conformances (PC5)", () => {
     let body;
     const f = failing();
     f.samples[0].subgroupNumber = 1;
+    f.requirements[0].sampling = [{ triggerType: "first_off", intervalValue: null, sampleSize: 3 }];
+    f.schedule = [1, 2, 3].map((n) => ({ number: n, position: n, trigger: "first_off", requirementIds: ["q-od"] })); // two more samples are planned
     routeApi({ "GET /inspections/i1": f, "GET /gauges": gauges, "POST /inspections/i1/samples": (_p, o) => ((body = o.body), f) });
     renderAt("/Inspections/i1");
     const form = await screen.findByRole("form", { name: "New sample" });

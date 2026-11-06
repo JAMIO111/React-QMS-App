@@ -36,11 +36,11 @@ beforeAll(async () => {
   const op = rev.operations[0].id;
   await api().post(`/api/v1/control-plan-revisions/${planRev}/characteristics`).set(h).send({
     operationId: op, characteristicKey: 'OD', name: 'Outer diameter', nominal: 25, lowerLimit: 24.95, upperLimit: 25.05, unitCode: 'mm',
-    criticality: 'major', spcEligible: true, chartType: 'imr', subgroupSize: 1,
+    criticality: 'major', spcEligible: true, chartType: 'imr', subgroupSize: 1, sampling: [{ triggerType: 'first_off', sampleSize: 18 }],
   }).expect(201);
   await api().post(`/api/v1/control-plan-revisions/${planRev}/characteristics`).set(h).send({
     operationId: op, characteristicKey: 'BORE', name: 'Bore', nominal: 10, lowerLimit: 9.9, upperLimit: 10.1, unitCode: 'mm',
-    criticality: 'major', spcEligible: true, chartType: 'xbar_r', subgroupSize: 3,
+    criticality: 'major', spcEligible: true, chartType: 'xbar_r', subgroupSize: 3, sampling: [{ triggerType: 'first_off', sampleSize: 18 }],
     reactions: [{ triggerType: 'spc_signal', action: 'notify', instruction: 'Tell the quality engineer; do not adjust the machine yet' }],
   }).expect(201);
   await api().patch(`/api/v1/control-plan-revisions/${planRev}`).set(h).send({ changeReason: 'First' }).expect(200);
@@ -69,7 +69,8 @@ describe('subgroups', () => {
     expect(detail.samples.slice(0, 7).map((s: { subgroupNumber: number }) => s.subgroupNumber)).toEqual([1, 1, 1, 2, 2, 2, 3]);
     const rec2 = (await api().post('/api/v1/inspections').set(h).send({ siteId: ids.siteA, partId: ctx.part, triggerType: 'first_off' }).expect(201)).body;
     ctx.rec2 = rec2.id;
-    const reading = [{ requirementId: rec2.requirements.find((q: { characteristicKey: string }) => q.characteristicKey === 'OD').id, valueNumeric: '25.000' }];
+    const idOf = (key: string) => rec2.requirements.find((q: { characteristicKey: string }) => q.characteristicKey === key).id;
+    const reading = [{ requirementId: idOf('OD'), valueNumeric: '25.000' }, { requirementId: idOf('BORE'), valueNumeric: '10.000' }];
     await api().post(`/api/v1/inspections/${rec2.id}/samples`).set(h).send({ readings: reading }).expect(201);
     const second = (await api().post(`/api/v1/inspections/${rec2.id}/samples`).set(h).send({ newSubgroup: true, readings: reading }).expect(201)).body;
     expect(second.samples.map((s: { subgroupNumber: number }) => s.subgroupNumber)).toEqual([1, 2]);
@@ -80,7 +81,7 @@ describe('characteristics and charts', () => {
   it('lists the characteristics of a part that can be charted', async () => {
     const res = await api().get(`/api/v1/spc/characteristics?partId=${ctx.part}`).set(await as(ids.ownerA)).expect(200);
     expect(res.body).toMatchObject([
-      { key: 'BORE', operationCode: 'OP-020', chartType: 'xbar_r', subgroupSize: 3, unitCode: 'mm', readings: 18, hasBaseline: false },
+      { key: 'BORE', operationCode: 'OP-020', chartType: 'xbar_r', subgroupSize: 3, unitCode: 'mm', readings: 20, hasBaseline: false },
       { key: 'OD', operationCode: 'OP-020', chartType: 'imr', subgroupSize: 1, unitCode: 'mm', readings: 20, hasBaseline: false },
     ]);
   });
@@ -115,7 +116,8 @@ describe('characteristics and charts', () => {
     expect(res.points[0]).toMatchObject({ value: 10, dispersion: expect.closeTo(0.04, 6) });
     expect(res.points[0].readings).toHaveLength(3);
     expect(res.reactions).toEqual([{ action: 'notify', instruction: 'Tell the quality engineer; do not adjust the machine yet' }]);
-    expect(res.excluded).toEqual([]);
+    // The second inspection's two samples are in different subgroups, so neither is complete.
+    expect(res.excluded).toMatchObject([{ reason: 'incomplete_subgroup', count: 2 }]);
   });
 
   it('asks for an operation when it is ambiguous, and 404s for an unknown part or nothing charted', async () => {

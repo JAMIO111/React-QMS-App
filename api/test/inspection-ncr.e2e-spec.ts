@@ -33,7 +33,7 @@ beforeAll(async () => {
   const rev = (await api().post(`/api/v1/control-plan-revisions/${planRev}/operations`).set(h).send({ operationCode: 'OP-020', name: 'Turning' }).expect(201)).body;
   await api().post(`/api/v1/control-plan-revisions/${planRev}/characteristics`).set(h).send({
     operationId: rev.operations[0].id, characteristicKey: 'OD', name: 'Outer diameter', nominal: 25, lowerLimit: 24.95, upperLimit: 25.05, unitCode: 'mm',
-    gaugeTypeId: type.id, criticality: 'critical', reactions: [{ triggerType: 'out_of_spec', action: 'hold', instruction: 'Quarantine since the last good check' }],
+    gaugeTypeId: type.id, criticality: 'critical', sampling: [{ triggerType: 'first_off', sampleSize: 3 }], reactions: [{ triggerType: 'out_of_spec', action: 'hold', instruction: 'Quarantine since the last good check' }],
   }).expect(201);
   await api().patch(`/api/v1/control-plan-revisions/${planRev}`).set(h).send({ changeReason: 'First' }).expect(200);
   await api().post(`/api/v1/control-plan-revisions/${planRev}/transitions`).set(h).send({ action: 'submit' }).expect(200);

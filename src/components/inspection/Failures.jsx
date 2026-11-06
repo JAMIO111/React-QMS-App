@@ -284,15 +284,177 @@ const RaiseDialog = ({ inspection, measurementIds, onClose }) => {
   );
 };
 
+const NCR_CLOSED = ["closed", "cancelled"];
+const isOpenNcr = (n) => !NCR_CLOSED.includes(n.stage);
+
+/** NCs already raised for other failed readings of the same check in this inspection. */
+const earlierNcrs = (inspection, m) => {
+  const found = new Map();
+  for (const x of currentFailures(inspection)) {
+    if (x.id !== m.id && x.requirementId === m.requirementId)
+      for (const n of x.ncrs) found.set(n.id, n);
+  }
+  return [...found.values()];
+};
+
+/**
+ * Add failed readings to an NC already raised from this inspection. Never automatic: the person picks the NC
+ * and confirms the quantity affected (proposed from the samples that are new to it). Closed and cancelled NCs
+ * are not offered — raise a new one instead.
+ */
+const AddToNcrDialog = ({
+  inspection,
+  measurementIds,
+  ncrs,
+  preferredId,
+  onClose,
+}) => {
+  const mutation = useInspectionMutation();
+  const id = useId();
+  const [ncrId, setNcrId] = useState(preferredId ?? ncrs[0].id);
+  const [custom, setCustom] = useState(null);
+  const ncr = ncrs.find((n) => n.id === ncrId);
+  const byRequirement = Object.fromEntries(
+    inspection.requirements.map((q) => [q.id, q]),
+  );
+  const sampleNo = Object.fromEntries(
+    inspection.samples.map((x) => [x.id, x.sampleNumber]),
+  );
+  const picked = inspection.measurements.filter((m) =>
+    measurementIds.includes(m.id),
+  );
+  const counted = new Set(
+    inspection.measurements
+      .filter((m) => m.ncrs.some((n) => n.id === ncrId))
+      .map((m) => m.sampleId),
+  );
+  const added = new Set(
+    picked.map((m) => m.sampleId).filter((x) => !counted.has(x)),
+  ).size;
+  const proposed = (ncr.quantityAffected ?? 0) + added;
+  const quantity = custom ?? String(proposed);
+
+  const submit = (e) => {
+    e.preventDefault();
+    mutation.mutate(
+      {
+        path: `/inspections/${inspection.id}/add-to-ncr`,
+        body: {
+          ncrId,
+          measurementIds,
+          ...(quantity !== "" ? { quantityAffected: Number(quantity) } : {}),
+        },
+      },
+      { onSuccess: onClose },
+    );
+  };
+
+  return (
+    <Dialog
+      title="Add to an existing non-conformance"
+      onClose={onClose}
+      width="max-w-xl"
+    >
+      <form className="flex flex-col gap-3" onSubmit={submit}>
+        <ul className="text-sm text-primary-text" aria-label="Readings to add">
+          {picked.map((m) => (
+            <li key={m.id}>
+              {byRequirement[m.requirementId].name}, sample #
+              {sampleNo[m.sampleId]}:{" "}
+              <span className="tabular-nums">
+                {readingText(m, byRequirement[m.requirementId])}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1 text-sm font-medium text-secondary-text">
+            Non-conformance
+          </legend>
+          {ncrs.map((n) => (
+            <label
+              key={n.id}
+              className="flex items-start gap-2 text-sm text-primary-text"
+            >
+              <input
+                type="radio"
+                name={`${id}-ncr`}
+                checked={ncrId === n.id}
+                onChange={() => {
+                  setNcrId(n.id);
+                  setCustom(null);
+                }}
+              />
+              <span>
+                {n.reference} — {n.title}{" "}
+                <span className="text-secondary-text">({n.stage})</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor={`${id}-qty`}
+            className="text-sm font-medium text-secondary-text"
+          >
+            Quantity affected
+          </label>
+          <input
+            id={`${id}-qty`}
+            type="number"
+            min="0"
+            step="any"
+            className={inputClass}
+            value={quantity}
+            onChange={(e) => setCustom(e.target.value)}
+          />
+          <p className="text-xs text-secondary-text">
+            Currently {ncr.quantityAffected ?? "not set"}; {added} new sample
+            {added === 1 ? "" : "s"} added. Leave empty to keep the NC's figure.
+          </p>
+        </div>
+        <p className="text-xs text-secondary-text">
+          The readings are linked permanently. A closed or cancelled
+          non-conformance cannot take more readings.
+        </p>
+        <FormError error={mutation.error} />
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            className={buttonClass.neutral}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className={buttonClass.primary}
+            disabled={mutation.isPending}
+          >
+            Add to {ncr.reference}
+          </button>
+        </div>
+      </form>
+    </Dialog>
+  );
+};
+
 /**
  * Failed readings that need a person: read the reaction plan, acknowledge, or raise an NC. A
  * completed-inspection rule in the database requires every failure to be acknowledged or have an NC.
  */
-const Failures = ({ inspection, canRecord, canRaise }) => {
+const Failures = ({
+  inspection,
+  canRecord,
+  canRaise,
+  canUpdateNcr = false,
+}) => {
   const failures = currentFailures(inspection);
   const [picked, setPicked] = useState([]);
   const [ack, setAck] = useState(null);
   const [raising, setRaising] = useState(null); // measurement id list
+  const [adding, setAdding] = useState(null); // { ids, preferredId }
+  const openNcrs = inspection.ncrs.filter(isOpenNcr);
   const byRequirement = Object.fromEntries(
     inspection.requirements.map((q) => [q.id, q]),
   );
@@ -418,21 +580,73 @@ const Failures = ({ inspection, canRecord, canRaise }) => {
                     </button>
                   )}
                 </div>
+                {canUpdateNcr &&
+                  m.ncrs.length === 0 &&
+                  (() => {
+                    const earlier = earlierNcrs(inspection, m);
+                    const live = earlier.find(isOpenNcr);
+                    if (live)
+                      return (
+                        <p className="mt-2 flex flex-wrap items-center gap-2 text-primary-text">
+                          <span>
+                            {q.name} already has {live.reference} ({live.stage}
+                            ).
+                          </span>
+                          <button
+                            type="button"
+                            className={buttonClass.neutral}
+                            onClick={() =>
+                              setAdding({ ids: [m.id], preferredId: live.id })
+                            }
+                          >
+                            Add to {live.reference}
+                          </button>
+                        </p>
+                      );
+                    if (earlier.length)
+                      return (
+                        <p className="mt-2 text-secondary-text">
+                          {earlier.map((n) => n.reference).join(", ")} for this
+                          check {earlier.length > 1 ? "are" : "is"}{" "}
+                          {earlier[0].stage}; raise a new non-conformance.
+                        </p>
+                      );
+                    return null;
+                  })()}
               </li>
             );
           })}
         </ul>
       )}
-      {canRaise && picked.length > 0 && (
-        <div className="mt-3">
-          <button
-            type="button"
-            className={buttonClass.primary}
-            onClick={() => setRaising(picked)}
-          >
-            Raise NC for {picked.length} selected reading
-            {picked.length > 1 ? "s" : ""}
-          </button>
+      {(canRaise || canUpdateNcr) && picked.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {canRaise && (
+            <button
+              type="button"
+              className={buttonClass.primary}
+              onClick={() => setRaising(picked)}
+            >
+              Raise NC for {picked.length} selected reading
+              {picked.length > 1 ? "s" : ""}
+            </button>
+          )}
+          {canUpdateNcr && openNcrs.length > 0 && (
+            <button
+              type="button"
+              className={buttonClass.neutral}
+              onClick={() =>
+                setAdding({
+                  ids: picked,
+                  preferredId: earlierNcrs(
+                    inspection,
+                    failures.find((f) => f.id === picked[0]),
+                  ).find(isOpenNcr)?.id,
+                })
+              }
+            >
+              Add {picked.length} selected to an existing NC
+            </button>
+          )}
         </div>
       )}
       {ack && (
@@ -440,6 +654,18 @@ const Failures = ({ inspection, canRecord, canRaise }) => {
           reading={ack}
           requirement={byRequirement[ack.requirementId]}
           onClose={() => setAck(null)}
+        />
+      )}
+      {adding && openNcrs.length > 0 && (
+        <AddToNcrDialog
+          inspection={inspection}
+          measurementIds={adding.ids}
+          ncrs={openNcrs}
+          preferredId={adding.preferredId}
+          onClose={() => {
+            setAdding(null);
+            setPicked([]);
+          }}
         />
       )}
       {raising && (

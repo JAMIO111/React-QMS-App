@@ -390,6 +390,72 @@ describe("Failures and non-conformances (PC5)", () => {
     expect(body).toMatchObject({ newSubgroup: true });
   });
 
+  describe("adding a later failure to an NC already raised", () => {
+    const twoFailures = (stage = "open") => {
+      const f = failing();
+      const n = { id: "n1", reference: "NC-26-0001", stage, title: "OD above USL", quantityAffected: 1 };
+      f.measurements[0].ncrs = [n];
+      f.samples.push({ ...f.samples[0], id: "s2", sampleNumber: 2 });
+      f.measurements.push({ ...f.measurements[0], id: "m2", sampleId: "s2", valueNumeric: "25.08", ncrs: [], acknowledgement: null });
+      f.ncrs = [n];
+      return f;
+    };
+
+    it("suggests the NC for the same check and adds the reading only when asked, proposing the quantity", async () => {
+      let body;
+      const f = twoFailures();
+      routeApi({ "GET /inspections/i1": f, "GET /gauges": gauges, "POST /inspections/i1/add-to-ncr": (_p, o) => ((body = o.body), f) });
+      permissions.push("ncr.create", "ncr.update");
+      renderAt("/Inspections/i1");
+      const list = await screen.findByRole("list", { name: "Failed readings" });
+      expect(within(list).getByText(/Outer diameter already has NC-26-0001 \(open\)/)).toBeInTheDocument();
+      expect(apiFetch.mock.calls.some((call) => call[1]?.method === "POST")).toBe(false); // nothing happens on its own
+      await userEvent.click(within(list).getByRole("button", { name: "Add to NC-26-0001" }));
+      const dialog = screen.getByRole("dialog");
+      expect(within(dialog).getByText(/sample #2/)).toBeInTheDocument();
+      expect(within(dialog).getByLabelText("Quantity affected")).toHaveValue(2); // 1 already + 1 new sample
+      await userEvent.click(within(dialog).getByRole("button", { name: "Add to NC-26-0001" }));
+      expect(body).toEqual({ ncrId: "n1", measurementIds: ["m2"], quantityAffected: 2 });
+    });
+
+    it("lets the quantity be edited and sends nothing for it when cleared", async () => {
+      let body;
+      const f = twoFailures();
+      routeApi({ "GET /inspections/i1": f, "GET /gauges": gauges, "POST /inspections/i1/add-to-ncr": (_p, o) => ((body = o.body), f) });
+      permissions.push("ncr.update");
+      renderAt("/Inspections/i1");
+      await userEvent.click(await screen.findByRole("button", { name: "Add to NC-26-0001" }));
+      const dialog = screen.getByRole("dialog");
+      await userEvent.clear(within(dialog).getByLabelText("Quantity affected"));
+      await userEvent.click(within(dialog).getByRole("button", { name: "Add to NC-26-0001" }));
+      expect(body).toEqual({ ncrId: "n1", measurementIds: ["m2"] });
+    });
+
+    it("does not offer a closed or cancelled NC and points to raising a new one", async () => {
+      routeApi({ "GET /inspections/i1": twoFailures("closed"), "GET /gauges": gauges });
+      permissions.push("ncr.create", "ncr.update");
+      renderAt("/Inspections/i1");
+      const list = await screen.findByRole("list", { name: "Failed readings" });
+      expect(within(list).getByText(/NC-26-0001 for this check is closed; raise a new non-conformance/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^Add to NC/ })).toBeNull();
+      await userEvent.click(within(list).getByRole("checkbox", { name: /Select Outer diameter sample 2/ }));
+      expect(screen.queryByRole("button", { name: /to an existing NC/ })).toBeNull();
+    });
+
+    it("offers a ticked selection for any open NC of the inspection, and nothing without ncr.update", async () => {
+      routeApi({ "GET /inspections/i1": twoFailures(), "GET /gauges": gauges });
+      permissions.push("ncr.create", "ncr.update");
+      const { unmount } = renderAt("/Inspections/i1");
+      await userEvent.click(await screen.findByRole("checkbox", { name: /Select Outer diameter sample 2/ }));
+      expect(screen.getByRole("button", { name: "Add 1 selected to an existing NC" })).toBeInTheDocument();
+      unmount();
+      permissions = permissions.filter((p) => p !== "ncr.update");
+      renderAt("/Inspections/i1");
+      await screen.findByRole("list", { name: "Failed readings" });
+      expect(screen.queryByRole("button", { name: /^Add to NC/ })).toBeNull();
+    });
+  });
+
   it("offers no NC controls without ncr.create", async () => {
     routeApi({ "GET /inspections/i1": failing(), "GET /gauges": gauges });
     renderAt("/Inspections/i1");

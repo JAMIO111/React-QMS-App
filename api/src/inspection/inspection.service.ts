@@ -11,6 +11,7 @@ import {
   AbandonBody,
   AcknowledgeBody,
   AddSampleBody,
+  AddToNcrBody,
   CorrectionBody,
   DraftQuery,
   GaugeUsage,
@@ -247,6 +248,19 @@ export class InspectionService {
     });
   }
 
+  /** Links more failed readings of this inspection to an NC raised from it (the database refuses closed or cancelled NCs). */
+  addToNcr(ctx: RequestContext, id: string, body: z.infer<typeof AddToNcrBody>): Promise<InspectionDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.requireRecord(db, ctx, id);
+      const ids = [...new Set(body.measurementIds)];
+      const own = await db.execute<Row>(sql`select count(*) as n from public.inspection_measurements
+        where inspection_record_id = ${id}::uuid and id = any (string_to_array(${ids.join(',')}, ',')::uuid[])`);
+      if (Number(own.rows[0].n) !== ids.length) throw ApiError.badRequest('invalid_reference', 'Choose failed readings of this inspection');
+      await db.execute(sql`select app.add_readings_to_ncr(${body.ncrId}::uuid, string_to_array(${ids.join(',')}, ',')::uuid[], ${body.quantityAffected ?? null}::numeric)`);
+      return this.load(db, ctx, id);
+    });
+  }
+
   acknowledge(ctx: RequestContext, measurementId: string, body: z.infer<typeof AcknowledgeBody>): Promise<InspectionDetail> {
     return this.database.asUser(ctx, async (db) => {
       const m = await db.execute<Row>(sql`select inspection_record_id from public.inspection_measurements where id = ${measurementId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
@@ -389,10 +403,10 @@ export class InspectionService {
       from public.inspection_failure_acknowledgements a left join public.profiles pp on pp.id = a.created_by
       where a.inspection_record_id = ${id}::uuid`);
     // Only NCs the caller may read are named (row level security hides the others).
-    const links = await db.execute<Row>(sql`select l.measurement_id, n.id as ncr_id, n.reference, n.stage, n.title
+    const links = await db.execute<Row>(sql`select l.measurement_id, n.id as ncr_id, n.reference, n.stage, n.title, n.quantity_affected
       from public.inspection_ncr_links l join public.nonconformances n on n.id = l.nonconformance_id
       where l.inspection_record_id = ${id}::uuid order by n.created_at, n.id`);
-    const ncrOf = (l: Row): NcrRef => ({ id: l.ncr_id as string, reference: l.reference as string, stage: l.stage as string, title: l.title as string });
+    const ncrOf = (l: Row): NcrRef => ({ id: l.ncr_id as string, reference: l.reference as string, stage: l.stage as string, title: l.title as string, quantityAffected: l.quantity_affected === null ? null : Number(l.quantity_affected) });
     const allNcrs = new Map<string, NcrRef>();
     for (const l of links.rows) allNcrs.set(l.ncr_id as string, ncrOf(l));
     return {

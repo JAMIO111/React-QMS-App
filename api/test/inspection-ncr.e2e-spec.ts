@@ -164,6 +164,77 @@ describe('raising an NC', () => {
   });
 });
 
+describe('adding later failures to an existing NC', () => {
+  const h = () => as(ids.ownerA);
+  const measure = (sampleNumber: number, rec: { measurements: { sampleId: string; valueNumeric: string; id: string }[]; samples: { id: string; sampleNumber: number }[] }) => {
+    const sample = rec.samples.find((x) => x.sampleNumber === sampleNumber)!;
+    return rec.measurements.find((m) => m.sampleId === sample.id)!;
+  };
+
+  it('links a later failed reading to the NC raised for an earlier one, only on request', async () => {
+    const owner = await h();
+    const started = (await api().post('/api/v1/inspections').set(owner).send({ siteId: ids.siteA, partId: ctx.part, workOrder: 'WO-10', triggerType: 'first_off' }).expect(201)).body;
+    ctx.rec2 = started.id;
+    const od = started.requirements[0].id;
+    let rec: Parameters<typeof measure>[1] = started;
+    for (const v of ['25.07', '25.0', '25.08']) {
+      rec = (await api().post(`/api/v1/inspections/${ctx.rec2}/samples`).set(owner).send({ readings: [{ requirementId: od, valueNumeric: v, gaugeId: ctx.mic }] }).expect(201)).body;
+    }
+    ctx.f1 = measure(1, rec).id;
+    ctx.f2 = measure(3, rec).id;
+    const raised = (await api().post(`/api/v1/inspections/${ctx.rec2}/raise-ncr`).set(owner).send({ measurementIds: [ctx.f1], title: 'OD above USL', severity: 'critical', quantityAffected: 1 }).expect(201)).body;
+    ctx.ncr2 = raised.ncr.id;
+    // Nothing was linked to the later failure automatically.
+    const before = raised.inspection.measurements.find((m: { id: string }) => m.id === ctx.f2);
+    expect(before.ncrs).toEqual([]);
+    expect(raised.inspection.ncrs).toMatchObject([{ id: ctx.ncr2, stage: 'draft', quantityAffected: 1 }]);
+  });
+
+  it('adds it on request: linked permanently, quantity updated, handled for completion', async () => {
+    const owner = await h();
+    const res = (await api().post(`/api/v1/inspections/${ctx.rec2}/add-to-ncr`).set(owner).send({ ncrId: ctx.ncr2, measurementIds: [ctx.f2], quantityAffected: 2 }).expect(200)).body;
+    expect(res.measurements.find((m: { id: string }) => m.id === ctx.f2).ncrs).toMatchObject([{ id: ctx.ncr2 }]);
+    expect(res.ncrs).toMatchObject([{ id: ctx.ncr2, quantityAffected: 2 }]);
+    expect((await api().get(`/api/v1/ncrs/${ctx.ncr2}`).set(owner).expect(200)).body.quantityAffected).toBe(2);
+    const source = (await api().get(`/api/v1/ncrs/${ctx.ncr2}/inspection-source`).set(owner).expect(200)).body;
+    expect(source.inspections[0].readings.map((r: { id: string }) => r.id).sort()).toEqual([ctx.f1, ctx.f2].sort());
+    // Both failures are handled, so the inspection completes.
+    await api().post(`/api/v1/inspections/${ctx.rec2}/complete`).set(owner).expect(200);
+  });
+
+  it('refuses a repeat, a passing reading, other inspections’ readings and people who may not change NCs', async () => {
+    const owner = await h();
+    const again = await api().post(`/api/v1/inspections/${ctx.rec2}/add-to-ncr`).set(owner).send({ ncrId: ctx.ncr2, measurementIds: [ctx.f2] }).expect(409);
+    expect(again.body.error.code).toBe('inspection_rule');
+    expect(again.body.error.message).toMatch(/already on/);
+    const rec = (await api().get(`/api/v1/inspections/${ctx.rec2}`).set(owner).expect(200)).body;
+    const passing = rec.measurements.find((m: { result: string }) => m.result === 'pass');
+    await api().post(`/api/v1/inspections/${ctx.rec2}/add-to-ncr`).set(owner).send({ ncrId: ctx.ncr2, measurementIds: [passing.id] }).expect(409);
+    await api().post(`/api/v1/inspections/${ctx.rec2}/add-to-ncr`).set(owner).send({ ncrId: ctx.ncr2, measurementIds: [ctx.bad] }).expect(400); // a reading of another inspection
+    await api().post(`/api/v1/inspections/${ctx.rec2}/add-to-ncr`).set(owner).send({ ncrId: ctx.ncr2, measurementIds: [] }).expect(400);
+    await api().post(`/api/v1/inspections/${ctx.rec2}/add-to-ncr`).set(await as(ids.dual)).send({ ncrId: ctx.ncr2, measurementIds: [ctx.f2] }).expect(403);
+    await api().post(`/api/v1/inspections/${ctx.rec2}/add-to-ncr`).set(await as(ids.ownerB, ids.orgB)).send({ ncrId: ctx.ncr2, measurementIds: [ctx.f2] }).expect(404);
+  });
+
+  it('refuses a closed or cancelled NC and says to raise a new one', async () => {
+    const owner = await h();
+    const started = (await api().post('/api/v1/inspections').set(owner).send({ siteId: ids.siteA, partId: ctx.part, workOrder: 'WO-11', triggerType: 'first_off' }).expect(201)).body;
+    const od = started.requirements[0].id;
+    let rec: Parameters<typeof measure>[1] = started;
+    for (const v of ['25.07', '25.08', '25.0']) {
+      rec = (await api().post(`/api/v1/inspections/${started.id}/samples`).set(owner).send({ readings: [{ requirementId: od, valueNumeric: v, gaugeId: ctx.mic }] }).expect(201)).body;
+    }
+    const a = measure(1, rec).id;
+    const b = measure(2, rec).id;
+    const raised = (await api().post(`/api/v1/inspections/${started.id}/raise-ncr`).set(owner).send({ measurementIds: [a], title: 'OD above USL', severity: 'critical', quantityAffected: 1, open: true }).expect(201)).body;
+    await api().post(`/api/v1/ncrs/${raised.ncr.id}/transitions`).set(owner).send({ to: 'cancelled', reason: 'Raised in error' }).expect(200);
+    const refused = await api().post(`/api/v1/inspections/${started.id}/add-to-ncr`).set(owner).send({ ncrId: raised.ncr.id, measurementIds: [b] }).expect(409);
+    expect(refused.body.error.message).toMatch(/cancelled and cannot take more readings; raise a new non-conformance/);
+    // The failure is still unhandled and can get its own NC.
+    await api().post(`/api/v1/inspections/${started.id}/raise-ncr`).set(owner).send({ measurementIds: [b], title: 'Second event' }).expect(201);
+  });
+});
+
 describe('gauge impact assessment', () => {
   it('lists the inspections that used the gauge since its previous calibration', async () => {
     const h = await as(ids.ownerA);
@@ -174,9 +245,9 @@ describe('gauge impact assessment', () => {
       calibration: { id: failing.id, outcome: 'fail', calibratedOn: day(0) },
       gauge: { assetNumber: 'MIC-1' },
       previous: { calibratedOn: day(-1) },
-      totals: { inspections: 1, readings: 4, failedReadings: 2 },
+      totals: { inspections: 3, readings: 10, failedReadings: 6 }, // the first inspection and the two from the add-to-NC tests
     });
-    expect(usage.inspections).toMatchObject([{ id: ctx.rec, partNumber: 'HCR-100', readings: 4, failedReadings: 2, overrides: 0 }]);
+    expect(usage.inspections).toEqual(expect.arrayContaining([expect.objectContaining({ id: ctx.rec, partNumber: 'HCR-100', readings: 4, failedReadings: 2, overrides: 0 })]));
     // The earlier (passing) calibration has nothing before it, so its period starts at the beginning.
     await api().get(`/api/v1/calibrations/${ids.orgB}/gauge-usage`).set(h).expect(404);
   });

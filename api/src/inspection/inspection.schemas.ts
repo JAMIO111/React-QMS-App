@@ -52,7 +52,14 @@ export const InspectionSummary = z.object({
 });
 export type InspectionSummary = z.infer<typeof InspectionSummary>;
 
-export const NcrRef = z.object({ id: z.string().uuid(), reference: z.string(), stage: z.string(), title: z.string() });
+export const NcrRef = z.object({
+  id: z.string().uuid(),
+  reference: z.string(),
+  stage: z.string(),
+  title: z.string(),
+  /** Quantity affected as recorded on the NC (proposed, with the new samples, when readings are added). */
+  quantityAffected: z.number().nullable().optional(),
+});
 export type NcrRef = z.infer<typeof NcrRef>;
 
 export const Requirement = z.object({
@@ -242,6 +249,15 @@ export const RaiseNcrBody = z
     actualResult: optionalText(4000),
     /** Create straight into "open" (needs severity and quantity). */
     open: z.boolean().optional(),
+  })
+  .strict();
+/** Add failed readings of this inspection to an NC already raised from it (not closed or cancelled). */
+export const AddToNcrBody = z
+  .object({
+    ncrId: z.string().uuid(),
+    measurementIds: z.array(z.string().uuid()).min(1).max(200),
+    /** New quantity affected; omit to leave the NC's figure alone. */
+    quantityAffected: z.number().min(0).max(1_000_000_000).nullable().optional(),
   })
   .strict();
 export const RaisedNcr = z.object({

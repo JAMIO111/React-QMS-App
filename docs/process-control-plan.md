@@ -494,3 +494,5 @@ by shape and text, a signals list), exclusions and warnings, baseline panel (win
 raising an NC from a signal (decided: not now).
 
 **PC6 status (2026-11-06): done.** Migration `20251108170000_spc.sql`, `api/src/spc/`, `src/components/spc/`, tests (SQL, 24 statistics unit tests, API e2e, component tests) and a browser check of the charts in light, dark and tablet width. Out of scope as listed above.
+
+**PC5 follow-up (2026-11-06):** a later failed reading of an inspection can be added to an NC already raised from it — never automatically. The Failures card hints at the NC for the same check and offers *Add to NC-…* (or add a ticked selection to any open NC of the inspection); the dialog proposes the quantity affected (current + new samples). Draft … awaiting-closure NCs accept readings; closed, cancelled or deleted ones are refused (raise a new NC). Migration `20251112100000_inspection_ncr_add_readings.sql`.

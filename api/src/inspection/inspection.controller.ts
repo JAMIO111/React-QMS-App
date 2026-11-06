@@ -8,6 +8,7 @@ import {
   AbandonBody,
   AcknowledgeBody,
   AddSampleBody,
+  AddToNcrBody,
   CorrectionBody,
   DraftQuery,
   GaugeUsage,
@@ -97,6 +98,16 @@ export class InspectionsController {
   @ApiCreatedResponse({ schema: openApiSchema(RaisedNcr) })
   raiseNcr(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.raiseNcr(ctx, parse(Uuid, id), parse(RaiseNcrBody, body));
+  }
+
+  /** Add later failed readings to an NC already raised from this inspection (draft … awaiting closure; refused when closed or cancelled). */
+  @Post(':id/add-to-ncr')
+  @HttpCode(200)
+  @OrganisationScoped('ncr.update')
+  @ApiBody({ schema: openApiSchema(AddToNcrBody) })
+  @ApiOkResponse({ schema: openApiSchema(InspectionDetail) })
+  addToNcr(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addToNcr(ctx, parse(Uuid, id), parse(AddToNcrBody, body));
   }
 
   @Post(':id/abandon')

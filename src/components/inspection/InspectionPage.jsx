@@ -527,7 +527,7 @@ const InspectionPage = () => {
             <ReadingsGrid inspection={inspection} onOpen={(requirement, reading) => setOpened({ requirement, reading })} />
           </MenuCard>
 
-          <Failures inspection={inspection} canRecord={canRecord} canRaise={can("ncr.create") && inspection.status !== "abandoned"} />
+          <Failures inspection={inspection} canRecord={canRecord} canRaise={can("ncr.create") && inspection.status !== "abandoned"} canUpdateNcr={can("ncr.update") && inspection.status !== "abandoned"} />
 
           {notApplicable.length > 0 && (
             <MenuCard title="Not applicable to this part" subtitle="Listed with the rule that excludes them.">

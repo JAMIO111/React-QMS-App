@@ -126,7 +126,9 @@ Summary of the brief:
     (`ncr-draft.ts` builds the pre-fill and containment window), `POST /inspections/{id}/raise-ncr`,
     `POST /inspection-measurements/{id}/acknowledge`, `GET /ncrs/{id}/inspection-source`, `GET /calibrations/{id}/gauge-usage`.
     UI: `Failures.jsx` card on the inspection page, `NcrInspectionSource.jsx` on the NC page, `GaugeUsage.jsx` on an
-    out-of-tolerance calibration.
+    out-of-tolerance calibration. Later failures can be **added to an NC already raised from the same inspection**, on request only
+    (`app.add_readings_to_ncr`, migration `20251112100000`; `POST /inspections/{id}/add-to-ncr`; needs `ncr.update`; refused for closed,
+    cancelled or deleted NCs and for NCs not raised from that inspection; the dialog proposes the quantity affected).
   - **PC6 done:** SPC control charts (I-MR, X-bar/R), `docs/process-control-plan.md` §15. `inspection_samples.subgroup_number`
     (assigned by `app.inspection_sample_rules`; API `newSubgroup`), `spc_baselines` (saved limits with the measurement ids used;
     frozen; a new baseline supersedes the old via trigger; `spc.manage` inserts, `spc.read` reads). Statistics are pure functions in

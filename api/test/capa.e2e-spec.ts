@@ -193,7 +193,7 @@ describe('non-conformance links', () => {
 });
 
 describe('steps D0 and D1', () => {
-  it('say what is still needed, complete in order, and say why when something is missing', async () => {
+  it('say what is still needed, complete in any order, and say why when something is missing', async () => {
     const h = await owner();
     const fresh = (await api().post('/api/v1/capas').set(h).send({ title: 'Steps 8D' }).expect(201)).body;
     ctx.c3 = fresh.id;
@@ -202,30 +202,31 @@ describe('steps D0 and D1', () => {
     expect(fresh.steps[2].problems).toEqual(['This step is not available yet']);
     const early = await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd1' });
     expect(early.status).toBe(409);
-    expect(early.body.error).toMatchObject({ code: 'capa_rule', message: 'Complete D0 first' });
+    expect(early.body.error).toMatchObject({ code: 'capa_rule', message: 'D1 cannot be completed yet: Add at least two people to the team' });
     const missing = await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd0' });
     expect(missing.body.error.message).toBe('D0 cannot be completed yet: Describe the problem in the problem statement');
     await api().patch(`/api/v1/capas/${ctx.c3}`).set(h).send({ problemStatement: 'Parts leaking at the weld' }).expect(200);
-    const d0 = (await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd0', note: 'Scope agreed' }).expect(200)).body;
-    expect(d0).toMatchObject({ stepsDone: 1, currentStep: 'd1' });
-    expect(d0.steps[0]).toMatchObject({ completed: true, note: 'Scope agreed', completedBy: { name: 'Ada Owner' }, problems: [] });
-    await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd0' }).expect(409);
+    // Any order: D1 can be done before D0 once the team is in place.
     await api().post(`/api/v1/capas/${ctx.c3}/team`).set(h).send({ membershipId: ctx.mInspector, role: 'member' }).expect(201);
     const d1 = (await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd1' }).expect(200)).body;
-    expect(d1).toMatchObject({ stepsDone: 2, currentStep: 'd2' });
+    expect(d1).toMatchObject({ stepsDone: 1, currentStep: 'd0' });
+    const d0 = (await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd0', note: 'Scope agreed' }).expect(200)).body;
+    expect(d0).toMatchObject({ stepsDone: 2, currentStep: 'd2' });
+    expect(d0.steps[0]).toMatchObject({ completed: true, note: 'Scope agreed', completedBy: { name: 'Ada Owner' }, problems: [] });
+    await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd0' }).expect(409);
     const blocked = await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd2' });
     expect(blocked.body.error.message).toBe('D2 cannot be completed yet: This step is not available yet');
     await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd9' }).expect(400);
     await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(await as(ids.inspectorA)).send({ step: 'd2' }).expect(403);
   });
 
-  it('reopening a step reopens the later ones too, with a reason', async () => {
+  it('reopening a step needs a reason and touches no other step', async () => {
     const h = await owner();
     await api().post(`/api/v1/capas/${ctx.c3}/reopen-step`).set(h).send({ step: 'd0' }).expect(400);
     const d = (await api().post(`/api/v1/capas/${ctx.c3}/reopen-step`).set(h).send({ step: 'd0', reason: 'The scope changed' }).expect(200)).body;
-    expect(d).toMatchObject({ stepsDone: 0, currentStep: 'd0' });
+    expect(d).toMatchObject({ stepsDone: 1, currentStep: 'd0' });
     expect(d.steps[0]).toMatchObject({ completed: false, reopenReason: 'The scope changed' });
-    expect(d.steps[1].reopenReason).toBe('Reopened with D0: The scope changed');
+    expect(d.steps[1]).toMatchObject({ completed: true, reopenReason: null });
     await api().post(`/api/v1/capas/${ctx.c3}/reopen-step`).set(h).send({ step: 'd0', reason: 'again' }).expect(409);
   });
 });

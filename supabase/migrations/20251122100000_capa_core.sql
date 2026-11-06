@@ -6,7 +6,7 @@
 --  * The record is started by app.start_capa (numbering, the nine steps, the creator as leader, an optional first NC link). There is no table INSERT.
 --    Header content (title, problem statement, source, severity, external reference, owner, due date) is edited under RLS with capa.manage until the
 --    8D is closed or cancelled; stage and the closing columns change only through functions (no UPDATE grant on them).
---  * Steps (capa_steps) are written only by app.capa_complete_step / app.capa_reopen_step. A step can be completed only in order and only when
+--  * Steps (capa_steps) are written only by app.capa_complete_step / app.capa_reopen_step. A step can be completed in any order (an 8D is a fluid document: nothing locks) and only when
 --    app.capa_step_problems says nothing is missing; the same function feeds the "still needed" checklist in the UI.
 --  * Team members are organisation members or external contacts (decision C2). NC links are many-to-many (C4) and are ended with a reason, never deleted.
 --  * Closing a non-conformance is refused while a linked 8D is still running (C7), by its own trigger on nonconformances.
@@ -379,10 +379,10 @@ BEGIN
   UPDATE public.capa_ncr_links SET ended_at = now(), ended_by = auth.uid(), end_reason = btrim(p_reason) WHERE id = p_link;
 END $$;
 
--- Completes a step: in order, and only when nothing is still needed.
+-- Completes a step, in any order, when nothing is still needed for it. Completing marks the step done; it does not lock anything.
 CREATE FUNCTION app.capa_complete_step(p_capa uuid, p_step text, p_note text DEFAULT NULL) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
-DECLARE c public.capas%ROWTYPE; s public.capa_steps%ROWTYPE; v_problems text[]; v_earlier text;
+DECLARE c public.capas%ROWTYPE; s public.capa_steps%ROWTYPE; v_problems text[];
 BEGIN
   c := app.capa_for_update(p_capa, 'capa.manage');
   SELECT * INTO s FROM public.capa_steps WHERE capa_id = p_capa AND step = p_step;
@@ -392,10 +392,6 @@ BEGIN
   IF s.completed_at IS NOT NULL THEN
     RAISE EXCEPTION '% is already complete', upper(p_step) USING ERRCODE = 'QM013';
   END IF;
-  SELECT upper(step) INTO v_earlier FROM public.capa_steps WHERE capa_id = p_capa AND step < p_step AND completed_at IS NULL ORDER BY step LIMIT 1;
-  IF v_earlier IS NOT NULL THEN
-    RAISE EXCEPTION 'Complete % first', v_earlier USING ERRCODE = 'QM013';
-  END IF;
   v_problems := app.capa_step_problems(p_capa, p_step);
   IF cardinality(v_problems) > 0 THEN
     RAISE EXCEPTION '% cannot be completed yet: %', upper(p_step), array_to_string(v_problems, '; ') USING ERRCODE = 'QM013';
@@ -404,7 +400,7 @@ BEGIN
   PERFORM app.capa_recompute_stage(p_capa);
 END $$;
 
--- Reopens a step, and every later step that was complete (they build on it). Needs a reason.
+-- Reopens one step (marks it not done again). Needs a reason; no other step is touched.
 CREATE FUNCTION app.capa_reopen_step(p_capa uuid, p_step text, p_reason text) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE c public.capas%ROWTYPE; s public.capa_steps%ROWTYPE;
@@ -422,8 +418,8 @@ BEGIN
   END IF;
   UPDATE public.capa_steps SET completed_at = NULL, completed_by = NULL, note = NULL,
          reopened_at = now(), reopened_by = auth.uid(),
-         reopen_reason = CASE WHEN step = p_step THEN btrim(p_reason) ELSE 'Reopened with ' || upper(p_step) || ': ' || btrim(p_reason) END
-   WHERE capa_id = p_capa AND step >= p_step AND completed_at IS NOT NULL;
+         reopen_reason = btrim(p_reason)
+   WHERE id = s.id;
   PERFORM app.capa_recompute_stage(p_capa);
 END $$;
 

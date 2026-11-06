@@ -172,11 +172,11 @@ describe("8D step page", () => {
     expect(await screen.findByRole("heading", { name: /D1 · Form the team/ })).toBeInTheDocument();
   });
 
-  it("lists what is missing and disables completing; an earlier step must be done first", async () => {
+  it("lists what is missing and disables completing; an earlier step does not have to be done first", async () => {
     apiFetch.mockImplementation(respond(() => detail({ steps: steps(0, { d0: [], d1: ["Name a team leader", "Add at least two people to the team"] }) })));
     renderAt("/CAPA/c1/d1");
     const status = await screen.findByRole("status", { name: "Still needed" });
-    expect(within(status).getByText("Complete D0 first")).toBeInTheDocument();
+    expect(within(status).queryByText(/first/)).toBeNull();
     expect(within(status).getByText("Name a team leader")).toBeInTheDocument();
     expect(within(status).getByText("Add at least two people to the team")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Complete D1 and continue" })).toBeDisabled();

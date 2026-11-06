@@ -9,7 +9,7 @@ import { FormError, buttonClass } from "../master-data/shared";
 
 /**
  * Under every step: what is still needed (worked out by the database), Back, and Complete step and continue. A complete step shows who
- * completed it and offers to reopen it, which also reopens every later step.
+ * completed it and offers to reopen it. Steps are markers, not gates: any step can be completed in any order and nothing locks.
  */
 const StepFooter = ({ capa, step, editable }) => {
   const navigate = useNavigate();
@@ -19,9 +19,8 @@ const StepFooter = ({ capa, step, editable }) => {
   const prev = STEPS[i - 1];
   const next = STEPS[i + 1];
   const s = capa.steps.find((x) => x.step === step);
-  const earlier = capa.steps.slice(0, i).find((x) => !x.completed);
   const code = STEPS[i].code;
-  const ready = s.problems.length === 0 && !earlier;
+  const ready = s.problems.length === 0;
 
   return (
     <div className="flex flex-col gap-3 border-t border-border-color pt-4">
@@ -39,7 +38,6 @@ const StepFooter = ({ capa, step, editable }) => {
             <>
               <p className="mb-1 flex items-center gap-2 font-medium text-primary-text"><CircleAlertIcon className="h-4 w-4 text-warning-color" /> Still needed to complete {code}</p>
               <ul className="list-disc pl-6 text-primary-text">
-                {earlier && <li>Complete {earlier.step.toUpperCase()} first</li>}
                 {s.problems.map((p) => <li key={p}>{p}</li>)}
               </ul>
             </>
@@ -76,7 +74,7 @@ const StepFooter = ({ capa, step, editable }) => {
       {reopening && (
         <ReasonDialog
           title={`Reopen ${code}?`}
-          label={`Why is ${code} being reopened? Every later step that is complete is reopened too.`}
+          label={`Why is ${code} being reopened?`}
           confirmText={`Reopen ${code}`}
           pending={mutation.isPending}
           error={mutation.error}

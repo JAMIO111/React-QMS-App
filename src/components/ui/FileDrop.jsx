@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Switch from "./Switch";
 import { CloudUploadIcon, RotateCcwIcon, SaveIcon, Trash2Icon, Undo2Icon, XIcon } from "@/components/icons";
 import { uploadFileToSupabase } from "@/api/supabaseApi";
@@ -9,6 +10,7 @@ import { useToast } from "@/contexts/ToastProvider";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useNcrAttachments, useNcrMutation } from "../../hooks/useNcr";
 import { apiFetch, describeApiError } from "../../lib/api-client";
+import { refreshOrganisation } from "../../lib/refresh";
 import LoadingScreen from "./LoadingScreen";
 
 /** Largest file the database accepts (ncr_attachments.size_bytes). */
@@ -52,6 +54,7 @@ export const AttachmentDrop = ({ recordId, bucket, folder, attachments, mutation
   const fileInputRef = useRef(null);
   const { showToast } = useToast();
   const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
   const saved = attachments.data ?? [];
 
   useEffect(() => () => newFiles.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl)), [newFiles]);
@@ -94,7 +97,8 @@ export const AttachmentDrop = ({ recordId, bucket, folder, attachments, mutation
     }
     setNewFiles(failed);
     setIsSaving(false);
-    await attachments.refetch();
+    // The record's file count, history and lists elsewhere change too, so refresh the organisation, not only this list.
+    await refreshOrganisation(queryClient, organisationId);
     if (uploaded) showToast({ type: "success", title: "Uploaded", message: `${uploaded} ${uploaded === 1 ? "file" : "files"} attached.` });
   };
 

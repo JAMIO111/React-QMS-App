@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
+import { refreshOrganisation } from "../lib/refresh";
 
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "notifications", ...rest];
 
@@ -24,7 +25,7 @@ export const useMarkNotificationsRead = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body) => apiFetch("/notifications/read", { method: "POST", body, organisationId }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: key(organisationId, "list") }),
+    onSuccess: () => refreshOrganisation(queryClient, organisationId),
   });
 };
 

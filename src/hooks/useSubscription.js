@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
+import { refreshOrganisation } from "../lib/refresh";
 
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "subscription", ...rest];
 
@@ -59,6 +60,7 @@ export const useSubscriptionMutation = () => {
           throw new Error(`Unknown subscription action ${action}`);
       }
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: key(organisationId) }),
+    // Seats and packages decide what people may use, so permissions are refreshed too.
+    onSettled: () => refreshOrganisation(queryClient, organisationId, { me: true }),
   });
 };

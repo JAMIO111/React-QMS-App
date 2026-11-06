@@ -5,6 +5,8 @@
  * changed — anything the server works out (stamps, numbers, joined names) arrives with the refetch.
  * If the request fails the previous cache is put back.
  */
+import { refreshOrganisation } from "./refresh";
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const isPrimitive = (v) => v === null || ["string", "number", "boolean"].includes(typeof v);
@@ -75,8 +77,11 @@ export const optimisticHandlers = (queryClient, rootKey) => ({
   },
 });
 
-/** Refetch after a mutation; waits for it only when the screen was not already updated optimistically. */
-export const settle = (queryClient, rootKey, context) => {
-  const refetch = queryClient.invalidateQueries({ queryKey: rootKey });
+/**
+ * Refetch after a mutation; waits for it only when the screen was not already updated optimistically. Refreshes the whole
+ * organisation's data, not just `rootKey` (see lib/refresh.js): other modules show what this action changed.
+ */
+export const settle = (queryClient, organisationId, context, options) => {
+  const refetch = refreshOrganisation(queryClient, organisationId, options);
   return context?.optimistic ? undefined : refetch;
 };

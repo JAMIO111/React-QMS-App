@@ -62,9 +62,6 @@ export const useCalibrationMutation = () => {
   return useMutation({
     mutationFn: ({ path, method = "POST", body }) => apiFetch(path, { method, body, organisationId }),
     ...optimisticHandlers(queryClient, key(organisationId)),
-    onSuccess: (_data, { path }, context) => {
-      if (path.endsWith("/raise-ncr")) queryClient.invalidateQueries({ queryKey: ["api", "org", organisationId, "ncr"] });
-      return settle(queryClient, key(organisationId), context);
-    },
+    onSuccess: (_data, _request, context) => settle(queryClient, organisationId, context),
   });
 };

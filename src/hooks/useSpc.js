@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
+import { refreshOrganisation } from "../lib/refresh";
 
 /** SPC control charts (PC6): read live from the inspection measurements; baselines are saved limits. */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "spc", ...rest];
@@ -62,7 +63,7 @@ export const useCreateBaseline = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body) => apiFetch("/spc/baselines", { method: "POST", body, organisationId }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: key(organisationId) }),
+    onSuccess: () => refreshOrganisation(queryClient, organisationId),
   });
 };
 
@@ -82,6 +83,6 @@ export const useAcknowledgeAlert = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, note }) => apiFetch(`/spc/alerts/${id}/acknowledge`, { method: "POST", body: { note }, organisationId }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: key(organisationId, "alerts") }),
+    onSuccess: () => refreshOrganisation(queryClient, organisationId),
   });
 };

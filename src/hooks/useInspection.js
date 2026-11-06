@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
+import { refreshOrganisation } from "../lib/refresh";
 import { usePagedList } from "./useMasterData";
 
 /** In-process inspections (PC4). Query keys under ["api", "org", id, "master", …] via usePagedList, and "inspection". */
@@ -28,7 +29,8 @@ export const useInspectionMutation = () => {
       // Most commands answer with the inspection; raising an NC answers { ncr, inspection }.
       const detail = data?.inspection ?? data;
       if (detail?.id) queryClient.setQueryData(key(organisationId, detail.id), detail);
-      queryClient.invalidateQueries({ queryKey: ["api", "org", organisationId, "master", "inspections"] });
+      // Readings feed SPC charts, alerts and the dashboard; a raised NC appears in the NC views: refresh everything.
+      refreshOrganisation(queryClient, organisationId);
     },
   });
 };

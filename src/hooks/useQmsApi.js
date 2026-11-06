@@ -3,6 +3,7 @@ import { apiFetch } from "../lib/api-client";
 import supabase from "../supabase-client";
 import { useAuth } from "../contexts/AuthProvider";
 import { useOrganisation } from "../contexts/OrganisationProvider";
+import { refreshOrganisation } from "../lib/refresh";
 
 /** GET /me — profile, memberships and effective permissions (requires the API). */
 export const useMe = () => {
@@ -95,8 +96,7 @@ export const useUpdateOrganisation = () => {
       apiFetch("/organisations/current", { method: "PATCH", body, organisationId, reason }),
     onSuccess: (data) => {
       queryClient.setQueryData(orgKey(organisationId, "details"), data);
-      queryClient.invalidateQueries({ queryKey: ["memberships"] });
-      queryClient.invalidateQueries({ queryKey: ["api", "me"] });
+      refreshOrganisation(queryClient, organisationId, { me: true });
     },
   });
 };
@@ -147,8 +147,8 @@ export const useStructureMutation = () => {
         body,
         organisationId,
       }),
-    onSuccess: (_data, { resource }) =>
-      queryClient.invalidateQueries({ queryKey: orgKey(organisationId, resource) }),
+    // Sites and departments appear in members, alerts, machines and more, so refresh the whole organisation.
+    onSuccess: () => refreshOrganisation(queryClient, organisationId),
   });
 };
 
@@ -220,8 +220,8 @@ export const useMemberMutation = () => {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: orgKey(organisationId, "members") });
-      queryClient.invalidateQueries({ queryKey: ["api", "me"] });
+      // Departments and roles decide who an alert reaches and what people may do.
+      refreshOrganisation(queryClient, organisationId, { me: true });
     },
   });
 };

@@ -130,6 +130,6 @@ export const useNcrMutation = () => {
   return useMutation({
     mutationFn: ({ path, method = "POST", body, reason }) => apiFetch(path, { method, body, organisationId, reason }),
     ...optimisticHandlers(queryClient, key(organisationId)),
-    onSuccess: (_data, _request, context) => settle(queryClient, key(organisationId), context),
+    onSuccess: (_data, _request, context) => settle(queryClient, organisationId, context),
   });
 };

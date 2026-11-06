@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
+import { refreshOrganisation } from "../lib/refresh";
 
 /** Quality alerts (DOC1): the register, one alert with its scope and revisions, and the lifecycle actions. */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "documentation", ...rest];
@@ -112,7 +113,7 @@ export const useAlertMutation = () => {
       if (data?.id) queryClient.setQueryData(key(organisationId, "detail", data.id), data);
       // Every view of alerts depends on these commands (the register, My alerts and the menu badge, the banners where work happens,
       // who has acknowledged), so refresh them all rather than guess which one the person looked at.
-      queryClient.invalidateQueries({ queryKey: key(organisationId) });
+      refreshOrganisation(queryClient, organisationId);
     },
   });
 };
@@ -153,6 +154,6 @@ export const useAlertAttachmentMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ path, method = "POST", body }) => apiFetch(path, { method, body, organisationId }),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: key(organisationId, "attachments") }),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };

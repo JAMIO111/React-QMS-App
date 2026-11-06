@@ -71,7 +71,7 @@ export const Requirement = z.object({
   charNumber: z.string().nullable(),
   name: z.string(),
   operationCode: z.string(),
-  dataType: z.enum(['variable', 'attribute']),
+  dataType: z.enum(['variable', 'attribute', 'count']),
   valueSource: z.enum(['plan', 'part_spec']),
   specKey: z.string().nullable(),
   applicable: z.boolean(),
@@ -84,7 +84,7 @@ export const Requirement = z.object({
   gaugeType: Ref.nullable(),
   criticality: z.enum(['critical', 'major', 'minor']),
   spcEligible: z.boolean(),
-  chartType: z.enum(['imr', 'xbar_r']).nullable(),
+  chartType: z.enum(['imr', 'xbar_r', 'p', 'defects']).nullable(),
   subgroupSize: z.number().int().nullable(),
   decimals: z.number().int().nullable(),
   sampling: z.array(z.object({ triggerType: Trigger, intervalValue: z.number().int().nullable(), sampleSize: z.number().int() })),
@@ -109,6 +109,7 @@ export const Measurement = z.object({
   /** Exactly as stored (decimal string), never rounded. */
   valueNumeric: z.string().nullable(),
   valuePass: z.boolean().nullable(),
+  valueCount: z.number().int().nullable(),
   unitCode: z.string().nullable(),
   result: z.enum(['pass', 'fail']),
   gauge: z
@@ -164,13 +165,15 @@ const ReadingInput = z
     requirementId: z.string().uuid(),
     valueNumeric: DecimalInput.optional(),
     valuePass: z.boolean().optional(),
+    /** Defects found on this unit (a defect count check). */
+    valueCount: z.number().int().min(0).max(100000).optional(),
     gaugeId: z.string().uuid().nullable().optional(),
     gaugeOverrideReason: optionalText(1000),
     retestOfId: z.string().uuid().optional(),
     notes: optionalText(1000),
   })
   .strict()
-  .refine((r) => (r.valueNumeric === undefined) !== (r.valuePass === undefined), { message: 'Give a measured value or pass/fail' });
+  .refine((r) => [r.valueNumeric, r.valuePass, r.valueCount].filter((v) => v !== undefined).length === 1, { message: 'Give a measured value, pass/fail or a defect count' });
 /** A sampling occasion with its readings, saved together. */
 export const AddSampleBody = z
   .object({
@@ -187,12 +190,13 @@ export const CorrectionBody = z
   .object({
     valueNumeric: DecimalInput.optional(),
     valuePass: z.boolean().optional(),
+    valueCount: z.number().int().min(0).max(100000).optional(),
     gaugeId: z.string().uuid().nullable().optional(),
     gaugeOverrideReason: optionalText(1000),
     reason: z.string().trim().min(1, 'Say why the reading is corrected').max(1000),
   })
   .strict()
-  .refine((r) => (r.valueNumeric === undefined) !== (r.valuePass === undefined), { message: 'Give the corrected value or pass/fail' });
+  .refine((r) => [r.valueNumeric, r.valuePass, r.valueCount].filter((v) => v !== undefined).length === 1, { message: 'Give the corrected value, pass/fail or defect count' });
 export const AbandonBody = z.object({ reason: z.string().trim().min(1, 'Give a reason').max(2000) }).strict();
 
 // ---- NC integration (PC5) -----------------------------------------------------------------------
@@ -288,13 +292,14 @@ export const NcrInspectionSource = z.object({
           sampleNumber: z.number().int(),
           valueNumeric: z.string().nullable(),
           valuePass: z.boolean().nullable(),
+          valueCount: z.number().int().nullable(),
           unitCode: z.string().nullable(),
           limits: z.string(),
           result: z.enum(['pass', 'fail']),
           measuredAt: Iso,
           gaugeAssetNumber: z.string().nullable(),
           /** The latest reading that replaced this one, if it was corrected afterwards. */
-          correctedTo: z.object({ valueNumeric: z.string().nullable(), valuePass: z.boolean().nullable(), result: z.enum(['pass', 'fail']), reason: z.string().nullable() }).nullable(),
+          correctedTo: z.object({ valueNumeric: z.string().nullable(), valuePass: z.boolean().nullable(), valueCount: z.number().int().nullable(), result: z.enum(['pass', 'fail']), reason: z.string().nullable() }).nullable(),
         }),
       ),
     }),

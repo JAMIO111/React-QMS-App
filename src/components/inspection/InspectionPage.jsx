@@ -58,19 +58,20 @@ const ValueInput = ({ requirement, value, onChange, label }) =>
     <div className="flex items-center gap-2">
       <input
         aria-label={label}
-        inputMode="decimal"
+        inputMode={requirement.dataType === "count" ? "numeric" : "decimal"}
         autoComplete="off"
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
         className="min-h-11 w-32 rounded-lg border border-border-color bg-text-input-color px-3 text-right text-lg tabular-nums text-primary-text focus:outline-none focus:border-brand-primary"
       />
-      {requirement.unitCode && <span className="text-sm text-secondary-text">{requirement.unitCode}</span>}
+      {requirement.dataType === "count" ? <span className="text-sm text-secondary-text">{Number(value) === 1 ? "defect" : "defects"}</span> : requirement.unitCode && <span className="text-sm text-secondary-text">{requirement.unitCode}</span>}
     </div>
   );
 
 const Preview = ({ requirement, value }) => {
   if (requirement.dataType === "attribute") return value === null || value === undefined ? null : <ResultBadge result={value ? "pass" : "fail"} />;
   if (value === null || value === undefined || value === "") return null;
+  if (requirement.dataType === "count") return /^\d{1,6}$/.test(String(value).trim()) ? <ResultBadge result={previewResult(requirement, value)} /> : <span className="text-xs text-error-color">Enter a whole number</span>;
   if (!isDecimal(value)) return <span className="text-xs text-error-color">Not a number</span>;
   return <ResultBadge result={previewResult(requirement, value)} />;
 };
@@ -141,9 +142,10 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
         return setProblem(`${q.name}: enter a reading — every check listed is part of this sample`);
       }
       if (q.dataType === "variable" && !isDecimal(r.value)) return setProblem(`${q.name}: enter a number, e.g. 25.05`);
+      if (q.dataType === "count" && !/^\d{1,6}$/.test(String(r.value).trim())) return setProblem(`${q.name}: enter the number of defects found on this unit (0 if none)`);
       readings.push({
         requirementId: q.id,
-        ...(q.dataType === "attribute" ? { valuePass: r.value } : { valueNumeric: String(r.value).trim() }),
+        ...readingValue(q, r.value),
         ...(r.gaugeId ? { gaugeId: r.gaugeId } : {}),
         ...(r.override.trim() ? { gaugeOverrideReason: r.override.trim() } : {}),
       });
@@ -258,10 +260,14 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
   );
 };
 
+/** The API fields for a typed-in value: pass/fail, a defect count or a measured value (kept as typed). */
+const readingValue = (requirement, value) =>
+  requirement.dataType === "attribute" ? { valuePass: value } : requirement.dataType === "count" ? { valueCount: Number(String(value).trim()) } : { valueNumeric: String(value).trim() };
+
 const Reading = ({ m, requirement }) =>
   requirement.dataType === "attribute" ? <ResultBadge result={m.result} /> : (
     <span className="inline-flex items-center gap-1">
-      <span className="tabular-nums">{m.valueNumeric}</span>
+      <span className="tabular-nums">{requirement.dataType === "count" ? m.valueCount : m.valueNumeric}</span>
       <ResultBadge result={m.result} />
     </span>
   );
@@ -282,7 +288,7 @@ const ReadingDialog = ({ inspection, requirement, reading, gauges, canCorrect, c
 
   const submit = (e) => {
     e.preventDefault();
-    const val = requirement.dataType === "attribute" ? { valuePass: value } : { valueNumeric: String(value).trim() };
+    const val = readingValue(requirement, value);
     const gauge = usesGauge(requirement) ? { gaugeId, ...(override.trim() ? { gaugeOverrideReason: override.trim() } : {}) } : {};
     mutation.mutate(
       mode === "correct"

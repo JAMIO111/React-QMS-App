@@ -12,6 +12,7 @@ import { formatDateTime } from "../../lib/processControl";
 import {
   BASIS_LABEL,
   CHART_NAME,
+  COUNT_VARIANTS,
   DISPERSION_NAME,
   LOCATION_NAME,
   RULES,
@@ -19,6 +20,7 @@ import {
   SUBGROUP_BASIS,
   chartRows,
   decimalsOf,
+  formatCount,
   formatPercent,
   formatValue,
 } from "../../lib/spc";
@@ -55,7 +57,9 @@ const SpcPage = () => {
   const machineId = params.get("machine") || "";
   const showSpec = params.get("spec") !== "0";
   const rulesParam = params.get("rules"); // null: the baseline's rules (or all)
-  const basis = params.get("basis") || "inspection"; // P charts: what one point is
+  const basis = params.get("basis") || "inspection"; // P, NP, C and U charts: what one point is
+  const display = params.get("display") === "np" ? "np" : "p"; // pass/fail checks: P chart or NP chart
+  const sizeParam = params.get("size") || ""; // NP chart subgroup size; empty = calculated
 
   const set = (patch) =>
     setParams((prev) => {
@@ -86,7 +90,8 @@ const SpcPage = () => {
     lot: lot || undefined,
     machineId: machineId || undefined,
     ...(rulesParam !== null ? { rules: rulesParam } : {}),
-    ...(current?.chartType === "p" ? { subgroup: basis } : {}),
+    ...(current?.chartType === "p" || current?.chartType === "defects" ? { subgroup: basis } : {}),
+    ...(current?.chartType === "p" && display === "np" ? { display: "np", size: sizeParam || "auto" } : {}),
   };
   const chartQuery = useSpcChart(query, !!current);
   const chart = chartQuery.data;
@@ -101,8 +106,11 @@ const SpcPage = () => {
     set({ rules: next.join(",") === "" ? "" : next.join(",") });
   };
 
-  const type = chart?.characteristic.chartType;
+  const type = chart?.variant ?? chart?.characteristic.chartType;
   const isP = type === "p";
+  const isCount = COUNT_VARIANTS.includes(type);
+  const isRate = isP || isCount; // no dispersion chart, no specification, subgroups of checks or units
+  const noun = type === "c" || type === "u" ? "units" : "checks";
   const sourceLabel =
     chart?.limitsSource === "baseline"
       ? "Saved baseline"
@@ -145,10 +153,10 @@ const SpcPage = () => {
             onChange={(v) => set({ c: v ?? "", rules: null })}
             options={options.map((c) => ({
               value: optionKey(c),
-              label: `${c.name} (${c.key}) · ${c.operationCode} · ${c.readings} ${c.chartType === "p" ? "checks" : "readings"}${c.hasBaseline ? " · baseline" : ""}`,
+              label: `${c.name} (${c.key}) · ${c.operationCode} · ${c.readings} ${c.chartType === "p" ? "checks" : c.chartType === "defects" ? "units" : "readings"}${c.hasBaseline ? " · baseline" : ""}`,
             }))}
           />
-          {current?.chartType === "p" && (
+          {(current?.chartType === "p" || current?.chartType === "defects") && (
             <SelectField
               label="Subgroup (one point is…)"
               required
@@ -156,6 +164,34 @@ const SpcPage = () => {
               onChange={(v) => set({ basis: v && v !== "inspection" ? v : "" })}
               options={SUBGROUP_BASIS}
               hint="Larger subgroups (a day, a lot) give steadier limits"
+            />
+          )}
+          {current?.chartType === "p" && (
+            <SelectField
+              label="Show as"
+              required
+              value={display}
+              onChange={(v) => set({ display: v === "np" ? "np" : "", size: "" })}
+              options={[
+                { value: "p", label: "P chart (proportion failed)" },
+                { value: "np", label: "NP chart (number failed)" },
+              ]}
+              hint="Both read the same pass/fail checks and share one baseline"
+            />
+          )}
+          {current?.chartType === "p" && display === "np" && (
+            <Field
+              label="NP subgroup size (checks)"
+              type="number"
+              min={1}
+              value={sizeParam}
+              onChange={(e) => set({ size: e.target.value })}
+              placeholder="Calculated"
+              hint={
+                chart?.subgroup?.size
+                  ? `${sizeParam ? "Using" : "Calculated: the most common size,"} ${chart.subgroup.size} checks per subgroup; others are left out`
+                  : "Empty = the most common subgroup size"
+              }
             />
           )}
           <SelectField
@@ -206,7 +242,7 @@ const SpcPage = () => {
               {RULE_LABEL[r].short}: {RULE_LABEL[r].name}
             </label>
           ))}
-          {!isP && current?.chartType !== "p" && (
+          {!isRate && current?.chartType !== "p" && current?.chartType !== "defects" && (
             <label className="flex items-center gap-2 text-sm text-primary-text">
               <input
                 type="checkbox"
@@ -226,8 +262,8 @@ const SpcPage = () => {
           <p className="text-sm text-secondary-text">
             This part has no readings for characteristics marked for SPC in the
             control plan. Mark a characteristic for SPC (I-MR or X-bar/R for a
-            measured one, a P chart for a pass/fail check) on the plan, then
-            record inspections.
+            measured one, a P or NP chart for a pass/fail check, defects per
+            unit for a defect count) on the plan, then record inspections.
           </p>
         )}
       {characteristics.error && <ErrorNotice error={characteristics.error} />}
@@ -262,12 +298,12 @@ const SpcPage = () => {
             <>
               <MenuCard
                 title={`${chart.characteristic.name ?? chart.characteristic.key} · ${LOCATION_NAME[type]}`}
-                subtitle={`${CHART_NAME[type]}${chart.characteristic.subgroupSize > 1 ? `, subgroups of ${chart.characteristic.subgroupSize}` : ""}${isP && chart.subgroup ? `, a point is ${BASIS_LABEL[chart.subgroup.basis]} (about ${Math.round(chart.subgroup.meanSize * 10) / 10} checks)` : ""} · ${chart.part.partNumber} · ${chart.characteristic.operationCode} · ${sourceLabel}`}
+                subtitle={`${CHART_NAME[type]}${chart.characteristic.subgroupSize > 1 ? `, subgroups of ${chart.characteristic.subgroupSize}` : ""}${isRate && chart.subgroup ? `, a point is ${BASIS_LABEL[chart.subgroup.basis]} (${type === "np" || type === "c" ? "" : "about "}${Math.round(chart.subgroup.meanSize * 10) / 10} ${noun})` : ""} · ${chart.part.partNumber} · ${chart.characteristic.operationCode} · ${sourceLabel}`}
               >
                 <div className="flex flex-col gap-2">
-                  <ChartKey showSpec={showSpec && !isP} proportion={isP} />
-                  {isP ? (
-                    <ProportionChart chart={chart} rows={rows} />
+                  <ChartKey showSpec={showSpec && !isRate} proportion={isRate} variant={type} />
+                  {isRate ? (
+                    <ProportionChart chart={chart} rows={rows} variant={type} />
                   ) : (
                     <LocationChart
                       chart={chart}
@@ -279,7 +315,7 @@ const SpcPage = () => {
                   )}
                 </div>
               </MenuCard>
-              {!isP && (
+              {!isRate && (
                 <MenuCard
                   title={DISPERSION_NAME[type]}
                   subtitle="Short-term variation. A point above the upper limit is a signal."
@@ -426,16 +462,16 @@ const SpcPage = () => {
                       <th scope="col" className={th}>
                         Time
                       </th>
-                      {isP ? (
+                      {isRate ? (
                         <>
                           <th scope="col" className={th}>
-                            Checked
+                            {noun === "units" ? "Units" : "Checked"}
                           </th>
                           <th scope="col" className={th}>
-                            Failed
+                            {noun === "units" ? "Defects" : "Failed"}
                           </th>
                           <th scope="col" className={th}>
-                            Proportion failed
+                            {isP ? "Proportion failed" : type === "u" ? "Defects per unit" : "Plotted"}
                           </th>
                           <th scope="col" className={th}>
                             Limits for this size
@@ -466,21 +502,23 @@ const SpcPage = () => {
                         <td className={`${td} whitespace-nowrap`}>
                           {formatDateTime(r.at)}
                         </td>
-                        {isP ? (
+                        {isRate ? (
                           <>
                             <td className={`${td} tabular-nums`}>
                               {r.checked}
                             </td>
                             <td className={`${td} tabular-nums`}>{r.failed}</td>
                             <td className={`${td} tabular-nums`}>
-                              {formatPercent(r.value, 2)}
+                              {isP ? formatPercent(r.value, 2) : formatCount(r.value)}
                             </td>
                             <td
                               className={`${td} tabular-nums whitespace-nowrap`}
                             >
                               {r.ucl === null
                                 ? "—"
-                                : `${formatPercent(r.lcl, 2)} to ${formatPercent(r.ucl, 2)}`}
+                                : isP
+                                  ? `${formatPercent(r.lcl, 2)} to ${formatPercent(r.ucl, 2)}`
+                                  : `${formatCount(r.lcl)} to ${formatCount(r.ucl)}`}
                             </td>
                           </>
                         ) : (

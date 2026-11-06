@@ -16,11 +16,12 @@ const inputClass =
 
 const describe = (t) => {
   if (t.dataType === "attribute") return "Pass / fail";
+  if (t.dataType === "count") return t.upperLimit !== null && t.upperLimit !== undefined ? `Defects, at most ${t.upperLimit} per unit` : "Defects counted";
   if (t.valueSource === "part_spec") return `Part-specific (${t.specKey ?? "—"})${t.unitCode ? ` · ${t.unitCode}` : ""}`;
   return `${t.nominal ?? "—"} (${t.lowerLimit ?? "—"} to ${t.upperLimit ?? "—"})${t.unitCode ? ` ${t.unitCode}` : ""}`;
 };
 
-const kindOf = (t) => (t.dataType === "attribute" ? "Attribute" : t.valueSource === "part_spec" ? "Part spec" : "Variable");
+const kindOf = (t) => (t.dataType === "attribute" ? "Attribute" : t.dataType === "count" ? "Count" : t.valueSource === "part_spec" ? "Part spec" : "Variable");
 
 /** Settings → Process control: reusable characteristics picked from a dropdown on a control plan revision. */
 const SettingsProcessControl = () => {
@@ -50,6 +51,7 @@ const SettingsProcessControl = () => {
       inactive: all.filter((t) => !t.active).length,
       variable: all.filter((t) => kindOf(t) === "Variable").length,
       attribute: all.filter((t) => kindOf(t) === "Attribute").length,
+      count: all.filter((t) => kindOf(t) === "Count").length,
       spec: all.filter((t) => kindOf(t) === "Part spec").length,
     };
   }, [templates]);
@@ -81,6 +83,7 @@ const SettingsProcessControl = () => {
           <StatTile label="Templates" value={counts.total - counts.inactive} note={counts.inactive ? `${counts.inactive} inactive` : "all active"} />
           <StatTile label="Variable" value={counts.variable} note="Measured, with limits" />
           <StatTile label="Attribute" value={counts.attribute} note="Pass / fail" />
+          <StatTile label="Count" value={counts.count} note="Defects per unit" />
           <StatTile label="Part-specific" value={counts.spec} note="Limits from the part" />
         </div>
       )}

@@ -190,7 +190,7 @@ export class ProcessControlDashboardService {
         order by 9, 7 nulls last limit 12`);
 
       const failures = await rows(sql`
-        select m.value_numeric::text as value_text, m.value_pass, m.measured_at, r.id as inspection_id, r.reference, p.part_number,
+        select m.value_numeric::text as value_text, m.value_pass, m.value_count, m.measured_at, r.id as inspection_id, r.reference, p.part_number,
                q.name, q.nominal, q.lower_limit, q.upper_limit, q.unit_code
         from public.inspection_measurements m
         join public.inspection_records r on r.id = m.inspection_record_id join public.parts p on p.id = r.part_id
@@ -204,8 +204,10 @@ export class ProcessControlDashboardService {
         from public.inspection_records r join public.parts p on p.id = r.part_id
         where r.organisation_id = ${org}::uuid and r.status = 'in_progress' order by r.started_at limit 10`);
 
+      const hasLimit = (v: unknown) => v !== null && v !== undefined;
       const limitsText = (r: Row) => {
         if (r.value_pass !== null && r.value_pass !== undefined) return 'Pass/fail check';
+        if (r.value_count !== null && r.value_count !== undefined) return hasLimit(r.upper_limit) ? `at most ${n(r.upper_limit)} defects per unit` : 'defects counted';
         const unit = r.unit_code ? ` ${r.unit_code}` : '';
         const lo = r.lower_limit === null ? null : n(r.lower_limit);
         const hi = r.upper_limit === null ? null : n(r.upper_limit);
@@ -243,7 +245,7 @@ export class ProcessControlDashboardService {
           reference: String(r.reference),
           partNumber: String(r.part_number),
           characteristic: String(r.name),
-          value: r.value_pass !== null && r.value_pass !== undefined ? (r.value_pass ? 'Pass' : 'Fail') : `${r.value_text}${r.unit_code ? ` ${r.unit_code}` : ''}`,
+          value: r.value_pass !== null && r.value_pass !== undefined ? (r.value_pass ? 'Pass' : 'Fail') : r.value_count !== null && r.value_count !== undefined ? `${r.value_count} ${Number(r.value_count) === 1 ? 'defect' : 'defects'}` : `${r.value_text}${r.unit_code ? ` ${r.unit_code}` : ''}`,
           limits: limitsText(r),
           measuredAt: iso(r.measured_at)!,
         })),

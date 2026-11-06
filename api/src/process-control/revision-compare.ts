@@ -33,7 +33,7 @@ const characteristicValues = (c: PlanCharacteristic, operationCode: string): Rec
   operation: ['Operation', operationCode],
   name: ['Name', c.name],
   charNumber: ['Characteristic number', c.charNumber],
-  dataType: ['Type', c.dataType === 'attribute' ? 'Pass / fail' : 'Measured'],
+  dataType: ['Type', c.dataType === 'attribute' ? 'Pass / fail' : c.dataType === 'count' ? 'Defect count' : 'Measured'],
   valueSource: ['Values from', c.dataType === 'attribute' ? null : c.valueSource === 'part_spec' ? `Part specification (${c.specKey})` : 'This plan'],
   appliesTo: ['Applies to', c.appliesTo === 'selected' ? `Selected parts: ${c.parts.map((p) => p.partNumber).sort().join(', ')}` : 'All parts in scope'],
   nominal: ['Nominal', num(c.nominal)],
@@ -43,7 +43,7 @@ const characteristicValues = (c: PlanCharacteristic, operationCode: string): Rec
   method: ['Method', c.method],
   gaugeType: ['Gauge type', c.gaugeType?.name ?? null],
   criticality: ['Criticality', c.criticality],
-  spc: ['SPC', c.spcEligible ? (c.chartType === 'p' ? 'P chart (proportion failed)' : `${c.chartType === 'xbar_r' ? 'X-bar/R' : 'I-MR'}, subgroup ${c.subgroupSize}`) : null],
+  spc: ['SPC', c.spcEligible ? (c.chartType === 'p' ? 'P chart (proportion failed)' : c.chartType === 'defects' ? 'Defects per unit (C or U chart)' : `${c.chartType === 'xbar_r' ? 'X-bar/R' : 'I-MR'}, subgroup ${c.subgroupSize}`) : null],
   sampling: ['Sampling', join(c.sampling.map(describeSampling))],
   reactions: ['Reactions', join(c.reactions.map(describeReaction))],
 });

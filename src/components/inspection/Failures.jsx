@@ -26,7 +26,9 @@ const readingText = (m, requirement) =>
     ? m.valuePass
       ? "Pass"
       : "Fail"
-    : `${m.valueNumeric}${m.unitCode ? ` ${m.unitCode}` : ""}`;
+    : requirement.dataType === "count"
+      ? `${m.valueCount} ${m.valueCount === 1 ? "defect" : "defects"}`
+      : `${m.valueNumeric}${m.unitCode ? ` ${m.unitCode}` : ""}`;
 
 /**
  * A live NC handles its readings; a cancelled or deleted one does not (they can go on another NC). A reading is on at

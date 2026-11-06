@@ -224,7 +224,7 @@ export function pReliability(groups: readonly PGroup[], centre: number) {
 }
 
 /** Western Electric rules 1–4 in each point's own σ units. */
-export function detectPSignals(points: readonly PPoint[], enabled: readonly Rule[] = RULES): Signal[] {
+export function detectPSignals(points: readonly { z: number }[], enabled: readonly Rule[] = RULES): Signal[] {
   const on = new Set(enabled);
   const out: Signal[] = [];
   if (on.has('we1')) {
@@ -234,4 +234,69 @@ export function detectPSignals(points: readonly PPoint[], enabled: readonly Rule
   }
   zoneRules(points.map((pt) => pt.z), on, out);
   return out.sort((a, b) => a.index - b.index || RULES.indexOf(a.rule) - RULES.indexOf(b.rule));
+}
+
+// ---- NP, C and U charts: counts of failed checks / defects ------------------------------------------
+
+/** Which chart a count series is drawn as. np: failed checks per fixed-size subgroup; c: defects per equal-size subgroup; u: defects per unit. */
+export type CountKind = 'np' | 'c' | 'u';
+
+export interface CountPoint extends PGroup {
+  /** What is plotted: the count d (np, c) or the rate d / n (u). */
+  y: number;
+  /** Centre line and control limits for this subgroup (lcl never below 0; np ucl never above n). */
+  centre: number;
+  ucl: number;
+  lcl: number;
+  /** Distance from the centre line in σ of this subgroup (±Infinity when σ is 0 and y differs). */
+  z: number;
+}
+
+/**
+ * Centre line rate: u = all defects over all units; for np it is p̄ (failures over checks), the same number as the P chart's.
+ * Identical arithmetic, so it is the same function.
+ */
+export const countRate = pBar;
+
+/** C or U chart: C when every subgroup holds the same number of units, otherwise U. */
+export const defectsKind = (groups: readonly PGroup[]): 'c' | 'u' => (groups.length > 0 && groups.every((g) => g.n === groups[0].n) ? 'c' : 'u');
+
+/**
+ * Every subgroup against the centre line. `rate` is ū (defects per unit) for c and u, p̄ for np; `size` is the common
+ * subgroup size (c, np), ignored for u.
+ */
+export function countSeries(kind: CountKind, groups: readonly PGroup[], rate: number, size = groups[0]?.n ?? 1): CountPoint[] {
+  return groups.map((g) => {
+    let y: number;
+    let centre: number;
+    let sigma: number;
+    let cap = Infinity;
+    if (kind === 'u') {
+      y = g.d / g.n;
+      centre = rate;
+      sigma = Math.sqrt(rate / g.n);
+    } else if (kind === 'c') {
+      y = g.d;
+      centre = rate * size;
+      sigma = Math.sqrt(centre);
+    } else {
+      y = g.d;
+      centre = rate * size;
+      sigma = Math.sqrt(size * rate * (1 - rate));
+      cap = size;
+    }
+    const z = sigma > 0 ? (y - centre) / sigma : y === centre ? 0 : y > centre ? Infinity : -Infinity;
+    return { ...g, y, centre, ucl: Math.min(cap, centre + 3 * sigma), lcl: Math.max(0, centre - 3 * sigma), z };
+  });
+}
+
+/**
+ * The normal approximation needs about five expected events per subgroup (defects for c and u, failures for np):
+ * below that the lower limit is stuck at zero and the limits are unreliable.
+ */
+export function countReliability(kind: CountKind, groups: readonly PGroup[], rate: number) {
+  const meanN = groups.length ? groups.reduce((t, g) => t + g.n, 0) / groups.length : 0;
+  const expected = meanN * rate;
+  const passes = kind === 'np' ? meanN * (1 - rate) : Infinity;
+  return { meanN, expected, reliable: expected >= 5 && passes >= 5 };
 }

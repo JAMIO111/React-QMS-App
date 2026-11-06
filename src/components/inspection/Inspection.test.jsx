@@ -124,6 +124,13 @@ describe("pass/fail preview", () => {
     expect(previewResult(q, "abc")).toBeNull();
   });
 
+  it("judges a defect count against the most allowed per unit; no limit never fails", () => {
+    expect(previewResult({ dataType: "count", upperLimit: 2 }, "2")).toBe("pass");
+    expect(previewResult({ dataType: "count", upperLimit: 2 }, "3")).toBe("fail");
+    expect(previewResult({ dataType: "count", upperLimit: null }, "40")).toBe("pass");
+    expect(previewResult({ dataType: "count", upperLimit: 2 }, "1.5")).toBeNull();
+  });
+
   it("works out the next sample: the planned one plus timed checks that are due", () => {
     const now = new Date("2026-11-05T10:00:00Z");
     const taken = { id: "s1", isRetest: false, triggerType: "first_off" };
@@ -266,6 +273,32 @@ describe("Inspection page", () => {
     await userEvent.click(within(form).getByRole("radio", { name: "Pass" }));
     await userEvent.click(within(form).getByRole("button", { name: "Save sample" }));
     expect(body).toEqual({ unitReference: "", readings: [{ requirementId: "q-od", valueNumeric: "25.05", gaugeId: "g1" }, { requirementId: "q-vis", valuePass: true }] });
+  });
+
+  it("records a defect count: a whole number per unit, judged live against the most allowed", async () => {
+    let body;
+    const count = { id: "q-scr", characteristicKey: "SCRATCH", charNumber: null, name: "Scratches", dataType: "count", nominal: null, lowerLimit: null, upperLimit: 2, unitCode: null, gaugeType: null, criticality: "minor", chartType: "defects", subgroupSize: null, sampling: [] };
+    const counted = inspection({ requirements: [req(count)], schedule: [{ number: 1, position: 1, trigger: "first_off", requirementIds: ["q-scr"] }] });
+    routeApi({
+      "GET /inspections/i1": counted,
+      "GET /gauges": gauges,
+      "POST /inspections/i1/samples": (_p, opts) => ((body = opts.body), counted),
+    });
+    renderAt("/Inspections/i1");
+    const form = await screen.findByRole("form", { name: "New sample" });
+    expect(within(form).getByText("At most 2 defects per unit")).toBeInTheDocument();
+    const input = within(form).getByLabelText("Scratches reading");
+    await userEvent.type(input, "3");
+    expect(within(form).getByRole("status", { name: "Result for Scratches" })).toHaveTextContent("Fail");
+    await userEvent.clear(input);
+    await userEvent.type(input, "1.5");
+    await userEvent.click(within(form).getByRole("button", { name: "Save sample" }));
+    expect(within(form).getByRole("alert")).toHaveTextContent("Scratches: enter the number of defects found on this unit (0 if none)");
+    await userEvent.clear(input);
+    await userEvent.type(input, "0");
+    expect(within(form).getByRole("status", { name: "Result for Scratches" })).toHaveTextContent("Pass");
+    await userEvent.click(within(form).getByRole("button", { name: "Save sample" }));
+    expect(body).toEqual({ unitReference: "", readings: [{ requirementId: "q-scr", valueCount: 0 }] });
   });
 
   it("asks for an override reason for an overdue gauge", async () => {

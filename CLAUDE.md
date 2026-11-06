@@ -154,7 +154,17 @@ Summary of the brief:
     `api/src/spc/spc.ts`; grouping in `spc-data.ts` `assembleP`/`evaluateP`); warns when n̄·p̄ < 5 and for < 5 / < 20 subgroups. UI
     `ProportionChart` in `src/components/spc/ControlChart.jsx`. The dashboard SPC overview includes P charts. Demo data
     `supabase/seed/spc_demo_p_chart.sql`.
-  - **Next (later phases):** NP/C/U charts, Cp/Cpk/Pp/Ppk, alerts (need a worker).
+  - **PC8 done (NP, C and U charts):** new check type **defect count** (`data_type='count'`: no unit/nominal/lower limit; optional `upper_limit` =
+    most defects per unit, empty = never fails; integer `inspection_measurements.value_count`, one unit per sample; migration
+    `20251115100000_count_checks.sql`, plan chart type `defects`, baselines `chart_type='defects'` keep `subgroup_basis`/`mean_subgroup_size`).
+    One "defects per unit" SPC choice: the chart is a **C chart** when every subgroup holds the same number of units, else a **U chart**
+    (ū ± 3√(ū/nᵢ); C: c̄ ± 3√c̄), subgroups one inspection/day/lot (`?basis=`). The **NP chart** is a view of the P chart's pass/fail data
+    (`GET /spc/chart?display=np&size=auto|N`, URL `?display=np&size=`): subgroup size set or calculated (most common, larger on tie), other
+    sizes excluded (reason `size`); NP and P share one baseline (`POST /spc/baselines` takes optional `size`). Chart responses carry `variant`
+    (imr/xbar_r/p/np/c/u). Maths in `api/src/spc/spc.ts` (`countSeries`, `defectsKind`, `countReliability`; `detectPSignals` takes any `{z}`),
+    assembly in `spc-data.ts` (`assembleDefects`, `applySubgroupSize`, `evaluateCount`), service `countChart`/`createCountBaseline`.
+    Demo data `supabase/seed/spc_demo_count_chart.sql`. Plan §17.
+  - **Next (later phases):** Cp/Cpk/Pp/Ppk, family/machine analysis, alerts (need a worker).
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

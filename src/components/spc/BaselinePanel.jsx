@@ -9,20 +9,35 @@ import {
   RULES,
   RULE_LABEL,
   describeWindow,
+  formatCount,
   formatPercent,
   formatValue,
 } from "../../lib/spc";
 import { buttonClass, FormError } from "../master-data/shared";
 
 const limitText = (b, v, decimals) =>
-  b.chartType === "p" ? formatPercent(v, 2) : formatValue(v, decimals);
+  b.chartType === "p" ? formatPercent(v, 2) : b.chartType === "defects" ? formatCount(v) : formatValue(v, decimals);
 const dayStart = (d) =>
   d ? new Date(`${d}T00:00:00`).toISOString() : undefined;
 const dayEnd = (d) =>
   d ? new Date(`${d}T23:59:59.999`).toISOString() : undefined;
 
 const Limits = ({ b, decimals }) =>
-  b.chartType === "p" ? (
+  b.chartType === "defects" ? (
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
+      {[
+        ["Centre line ū (defects per unit)", formatCount(b.limits.centre)],
+        ["Average subgroup size", `${Math.round((b.meanSubgroupSize ?? 0) * 10) / 10} units`],
+        ["Limits at that size (per unit)", `${formatCount(b.limits.lcl)} to ${formatCount(b.limits.ucl)}`],
+        ["Subgroup", BASIS_LABEL[b.subgroupBasis]],
+      ].map(([k, v]) => (
+        <div key={k}>
+          <dt className="text-secondary-text">{k}</dt>
+          <dd className="tabular-nums text-primary-text">{v}</dd>
+        </div>
+      ))}
+    </dl>
+  ) : b.chartType === "p" ? (
     <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
       {[
         [
@@ -94,6 +109,8 @@ const BaselinePanel = ({ chart, params, rules, decimals }) => {
       operationCode: chart.characteristic.operationCode,
       rules,
       ...(isP ? { subgroup: params.subgroup ?? "inspection" } : {}),
+      // The NP chart is a view of the pass/fail data: the limits are made from subgroups of the size it shows.
+      ...(chart.variant === "np" && chart.subgroup?.size ? { size: chart.subgroup.size } : {}),
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       ...(mode === "first" ? { firstN: Number(firstN) } : {}),
       ...(mode === "range" ? { from: dayStart(from), to: dayEnd(to) } : {}),
@@ -101,7 +118,7 @@ const BaselinePanel = ({ chart, params, rules, decimals }) => {
     create.mutate(body, { onSuccess: (b) => (setSaved(b), setNotes("")) });
   };
   const active = chart.baseline;
-  const isP = chart.characteristic.chartType === "p";
+  const isP = chart.characteristic.chartType === "p" || chart.characteristic.chartType === "defects";
   const unit =
     chart.characteristic.chartType === "imr"
       ? "readings"

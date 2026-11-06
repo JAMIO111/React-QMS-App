@@ -17,6 +17,10 @@ export const isDecimal = (text) => /^-?\d{1,12}(\.\d{1,12})?$/.test(String(text)
  * 25.05 against 25.05 is exact.
  */
 export const previewResult = (requirement, text) => {
+  if (requirement.dataType === "count") {
+    if (!/^\d{1,6}$/.test(String(text).trim())) return null;
+    return requirement.upperLimit === null || requirement.upperLimit === undefined || Number(text) <= Number(requirement.upperLimit) ? "pass" : "fail";
+  }
   if (!isDecimal(text)) return null;
   const v = String(text).trim();
   const cmp = (a, b) => {
@@ -37,6 +41,7 @@ export const previewResult = (requirement, text) => {
 /** Limits as shown next to the input: LSL / nominal / USL with the unit. */
 export const describeLimits = (q) => {
   if (q.dataType === "attribute") return "Pass / fail";
+  if (q.dataType === "count") return q.upperLimit !== null && q.upperLimit !== undefined ? `At most ${q.upperLimit} defects per unit` : "Defects counted";
   const parts = [q.lowerLimit !== null ? `LSL ${q.lowerLimit}` : null, q.nominal !== null ? `Nom ${q.nominal}` : null, q.upperLimit !== null ? `USL ${q.upperLimit}` : null];
   return `${parts.filter(Boolean).join(" · ")}${q.unitCode ? ` ${q.unitCode}` : ""}`;
 };

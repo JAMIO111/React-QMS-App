@@ -22,6 +22,10 @@ export const ChartQuery = z.object({
   rules: z.string().optional(),
   /** P charts only: what one point is — one inspection (default), one day or one lot. */
   subgroup: z.enum(['inspection', 'day', 'lot']).optional(),
+  /** Pass/fail characteristics: show the P chart (default) or the NP chart (counts of failures in subgroups of one size). */
+  display: z.enum(['p', 'np']).optional(),
+  /** NP chart subgroup size: a number of checks, or 'auto' (default) for the most common size. */
+  size: z.string().regex(/^(auto|[1-9]\d{0,3})$/).optional(),
 });
 
 export const BaselineQuery = z.object({
@@ -42,6 +46,8 @@ export const CreateBaselineBody = z
     rules: z.array(Rule).default([...RULES]),
     /** P charts only: what one point is. */
     subgroup: z.enum(['inspection', 'day', 'lot']).default('inspection'),
+    /** Pass/fail characteristics: limits from subgroups of this size only (what an NP chart shows); absent: every subgroup (P chart). */
+    size: z.union([z.literal('auto'), z.number().int().min(1).max(9999)]).optional(),
     notes: optionalText(2000),
   })
   .strict()
@@ -62,7 +68,7 @@ export const Baseline = z.object({
   partId: z.string().uuid(),
   characteristicKey: z.string(),
   operationCode: z.string().nullable(),
-  chartType: z.enum(['imr', 'xbar_r', 'p']),
+  chartType: z.enum(['imr', 'xbar_r', 'p', 'defects']),
   /** Null for a P chart (the size of each subgroup is whatever was checked). */
   subgroupSize: z.number().int().nullable(),
   subgroupBasis: z.enum(['inspection', 'day', 'lot']).nullable(),
@@ -87,7 +93,7 @@ export const CharacteristicOption = z.object({
   key: z.string(),
   name: z.string(),
   operationCode: z.string(),
-  chartType: z.enum(['imr', 'xbar_r', 'p']).nullable(),
+  chartType: z.enum(['imr', 'xbar_r', 'p', 'defects']).nullable(),
   subgroupSize: z.number().int().nullable(),
   unitCode: z.string().nullable(),
   readings: z.number().int(),
@@ -101,7 +107,7 @@ export const Chart = z.object({
     key: z.string(),
     name: z.string().nullable(),
     operationCode: z.string(),
-    chartType: z.enum(['imr', 'xbar_r', 'p']).nullable(),
+    chartType: z.enum(['imr', 'xbar_r', 'p', 'defects']).nullable(),
     subgroupSize: z.number().int().nullable(),
     unitCode: z.string().nullable(),
   }),
@@ -118,7 +124,7 @@ export const Chart = z.object({
       lot: z.string().nullable(),
       machineId: z.string().uuid().nullable(),
       gaugeOverride: z.boolean(),
-      /** P chart points: checks, failures, and this subgroup's own limits (null when none can be shown yet). */
+      /** P, NP, C and U chart points: checks (units), failures (defects for C and U), and this subgroup's own limits (null when none can be shown yet). */
       n: z.number().int().optional(),
       failed: z.number().int().optional(),
       ucl: z.number().nullable().optional(),
@@ -139,7 +145,20 @@ export const Chart = z.object({
   /** Set when a saved baseline exists but cannot be used for this chart (and why). */
   baselineIssue: z.string().nullable(),
   /** P charts: how subgroups were formed and whether the limits can be trusted. */
-  subgroup: z.object({ basis: z.enum(['inspection', 'day', 'lot']), meanSize: z.number(), expectedFailures: z.number(), reliable: z.boolean() }).nullable().optional(),
+  subgroup: z
+    .object({
+      basis: z.enum(['inspection', 'day', 'lot']),
+      meanSize: z.number(),
+      /** Expected failures (P, NP) or defects (C, U) per subgroup. */
+      expectedFailures: z.number(),
+      reliable: z.boolean(),
+      /** NP and C charts: the one subgroup size every point has. */
+      size: z.number().int().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+  /** What is drawn: set for pass/fail and count characteristics (p, np, c, u). */
+  variant: z.enum(['imr', 'xbar_r', 'p', 'np', 'c', 'u']).optional(),
   /** The plan's instructions for an SPC signal: shown, never acted on automatically. */
   reactions: z.array(z.object({ action: z.string(), instruction: z.string() })),
 });

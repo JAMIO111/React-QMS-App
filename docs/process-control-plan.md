@@ -530,7 +530,7 @@ proportions. Demo data: `supabase/seed/spc_demo_p_chart.sql`.
 
 **PC7 status (2026-11-06): done.** Migration `20251114100000_p_charts.sql`; statistics `pSeries`/`detectPSignals`/`zoneRules` and data `assembleP`/`evaluateP` (unit tested); API chart, characteristics, baselines and dashboard overview handle P; characteristic form offers the P chart for pass/fail checks; SPC page has the Subgroup choice, `ProportionChart`, P data table and baseline panel; demo data `supabase/seed/spc_demo_p_chart.sql`. NP, C and U charts remain out of scope.
 
-## 17. Slice PC8 — NP, C and U charts (defect counts) — plan (2026-11-06)
+## 17. Slice PC8 — NP, C and U charts (defect counts) — done (2026-11-06)
 
 **Decisions (agreed 2026-11-06):** (1) defect counts come from a **new "defect count" check type** (a third kind of
 characteristic beside measured and pass/fail: the inspector enters how many defects were found on the unit); (2) the **NP

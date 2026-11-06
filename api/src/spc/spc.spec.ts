@@ -1,4 +1,4 @@
-import { controlLimits, detectSignals, dispersionSignals, isProvisional, MINIMUM_POINTS, plotted } from './spc';
+import { countReliability, countSeries, controlLimits, defectsKind, detectSignals, dispersionSignals, isProvisional, MINIMUM_POINTS, plotted } from './spc';
 
 const close = (a: number, b: number, digits = 3) => expect(a).toBeCloseTo(b, digits);
 
@@ -171,5 +171,60 @@ describe('P chart', () => {
     expect(pReliability(groups, 0.05).reliable).toBe(true); // 5 expected failures at n = 100
     expect(pReliability(groups.map((g) => ({ n: 40, d: g.d })), 0.05)).toMatchObject({ reliable: false, expectedFailures: 2 });
     expect(pReliability([], 0).reliable).toBe(false);
+  });
+});
+
+describe('NP, C and U charts', () => {
+  const equal = [4, 6, 5, 3, 7, 5].map((d) => ({ n: 25, d }));
+  it('picks C when every subgroup has the same number of units, otherwise U', () => {
+    expect(defectsKind(equal)).toBe('c');
+    expect(defectsKind([{ n: 25, d: 1 }, { n: 30, d: 2 }])).toBe('u');
+    expect(defectsKind([])).toBe('u');
+  });
+
+  it('C chart: centre c̄ = n·ū, limits c̄ ± 3√c̄, lower limit not below 0', () => {
+    const ubar = 30 / 150;
+    const pts = countSeries('c', equal, ubar, 25);
+    close(pts[0].centre, 5);
+    close(pts[0].ucl, 5 + 3 * Math.sqrt(5));
+    expect(pts[0].lcl).toBe(0);
+    expect(pts[0].y).toBe(4);
+    close(pts[4].z, (7 - 5) / Math.sqrt(5));
+  });
+
+  it('U chart: ū ± 3√(ū/n) with each subgroup its own size', () => {
+    const groups = [{ n: 10, d: 5 }, { n: 40, d: 8 }];
+    const ubar = 13 / 50;
+    const pts = countSeries('u', groups, ubar);
+    close(pts[0].y, 0.5);
+    close(pts[0].ucl, ubar + 3 * Math.sqrt(ubar / 10));
+    close(pts[1].ucl, ubar + 3 * Math.sqrt(ubar / 40));
+    expect(pts[1].ucl).toBeLessThan(pts[0].ucl);
+    expect(pts[0].centre).toBe(ubar);
+  });
+
+  it('NP chart: n·p̄ ± 3√(n·p̄(1−p̄)), upper limit never above n', () => {
+    const pts = countSeries('np', [{ n: 50, d: 5 }, { n: 50, d: 20 }], 0.1, 50);
+    close(pts[0].centre, 5);
+    close(pts[0].ucl, 5 + 3 * Math.sqrt(50 * 0.1 * 0.9));
+    close(pts[0].lcl, 0);
+    expect(countSeries('np', [{ n: 5, d: 5 }], 0.9, 5)[0].ucl).toBe(5);
+  });
+
+  it('with no variation any difference from the centre is infinitely far; equal is zero', () => {
+    const pts = countSeries('c', [{ n: 10, d: 0 }, { n: 10, d: 1 }], 0, 10);
+    expect(pts[0].z).toBe(0);
+    expect(pts[1].z).toBe(Infinity);
+  });
+
+  it('count points feed the same Western Electric rules', () => {
+    const pts = countSeries('c', [...equal, { n: 25, d: 20 }], 0.2, 25);
+    expect(detectPSignals(pts, ['we1']).map((x) => x.index)).toEqual([6]);
+  });
+
+  it('needs about five expected events per subgroup', () => {
+    expect(countReliability('u', equal, 0.2)).toMatchObject({ expected: 5, reliable: true });
+    expect(countReliability('u', equal, 0.1).reliable).toBe(false);
+    expect(countReliability('np', equal, 0.9).reliable).toBe(false); // too few expected passes
   });
 });

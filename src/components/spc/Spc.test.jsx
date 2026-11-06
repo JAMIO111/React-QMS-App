@@ -669,3 +669,128 @@ describe("P chart", () => {
     expect(within(history).getByText("6.00%")).toBeInTheDocument();
   });
 });
+
+describe("NP, C and U charts", () => {
+  const cPoint = (i, n, failed, ucl, extra = {}) => ({
+    index: i,
+    at: `2026-11-05T08:${String(10 + i).padStart(2, "0")}:00Z`,
+    value: failed,
+    dispersion: null,
+    readings: [],
+    inspections: [{ id: `i${i}`, reference: `IPI-26-000${i + 1}` }],
+    lot: null,
+    machineId: null,
+    gaugeOverride: false,
+    n,
+    failed,
+    ucl,
+    lcl: 0,
+    z: 0,
+    ...extra,
+  });
+  const countChart = (variant, over = {}) => ({
+    part: { id: "p1", partNumber: "HCR-100", name: "Rod 100" },
+    characteristic: {
+      key: variant === "np" ? "VISUAL" : "SCRATCH",
+      name: variant === "np" ? "No chatter marks" : "Scratches",
+      operationCode: "OP-020",
+      chartType: variant === "np" ? "p" : "defects",
+      subgroupSize: null,
+      unitCode: null,
+    },
+    variant,
+    spec: { nominal: null, lower: null, upper: null },
+    points: [cPoint(0, 10, 8, 11.3), cPoint(1, 10, 12, 11.3), cPoint(2, 10, 30, 11.3, { z: 5.1 })],
+    limitsSource: "trial",
+    limits: { centre: 5, ucl: 11.7, lcl: 0, sigma: 2.2, dispersionCentre: null, dispersionUcl: null, dispersionLcl: null },
+    provisional: true,
+    rules: ["we1", "we2", "we3", "we4"],
+    signals: [{ rule: "we1", text: "One point beyond 3σ (outside the control limits)", index: 2, involved: [2], side: "above" }],
+    dispersionSignals: [],
+    noVariation: false,
+    warnings: [],
+    excluded: [{ reason: "size", text: "Subgroups of a different size than the NP chart uses (10)", count: 1 }],
+    baseline: null,
+    baselineIssue: null,
+    subgroup: { basis: "inspection", meanSize: 10, expectedFailures: 5, reliable: true, size: 10 },
+    reactions: [],
+    ...over,
+  });
+  const option = (key, name, chartType) => ({
+    key,
+    name,
+    operationCode: "OP-020",
+    chartType,
+    subgroupSize: null,
+    unitCode: null,
+    readings: 30,
+    lastMeasuredAt: "2026-11-05T08:13:00Z",
+    hasBaseline: false,
+  });
+
+  it("a defects characteristic shows a C chart with defect counts, per-subgroup limits and no spec or range chart", async () => {
+    routeApi(base({ "GET /spc/characteristics": [option("SCRATCH", "Scratches", "defects")], "GET /spc/chart": countChart("c") }));
+    renderAt(`${URL}&c=SCRATCH%7COP-020`);
+    expect(await screen.findByText(/C chart \(defects per subgroup\)/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Subgroup \(one point is/)).toHaveValue("inspection");
+    expect(screen.queryByLabelText("Show as")).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /Show specification limits/ })).toBeNull();
+    expect(screen.queryByText("Moving range")).toBeNull();
+    expect(screen.getByRole("img", { name: "Defects chart, 3 points, 1 signal" })).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Chart key" })).getByText(/Centre line c̄/)).toBeInTheDocument();
+    expect(within(screen.getByRole("table", { name: "Signals" })).getByText(/Rule 1: One point beyond 3σ/)).toBeInTheDocument();
+    await userEvent.click(screen.getByText("Show the data behind the chart"));
+    const data = screen.getByRole("table", { name: "Chart data" });
+    expect(within(data).getByRole("columnheader", { name: "Units" })).toBeInTheDocument();
+    expect(within(data).getByRole("columnheader", { name: "Defects" })).toBeInTheDocument();
+  });
+
+  it("a U chart plots defects per unit", async () => {
+    routeApi(
+      base({
+        "GET /spc/characteristics": [option("SCRATCH", "Scratches", "defects")],
+        "GET /spc/chart": countChart("u", { points: [cPoint(0, 10, 8, 1.4, { value: 0.8 }), cPoint(1, 5, 6, 2.1, { value: 1.2 })], signals: [] }),
+      }),
+    );
+    renderAt(`${URL}&c=SCRATCH%7COP-020`);
+    expect(await screen.findByText(/U chart \(defects per unit\)/)).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Defects per unit chart, 2 points, 0 signals" })).toBeInTheDocument();
+    await userEvent.click(screen.getByText("Show the data behind the chart"));
+    const data = screen.getByRole("table", { name: "Chart data" });
+    expect(within(data).getByRole("columnheader", { name: "Defects per unit" })).toBeInTheDocument();
+    expect(within(data).getByText("1.2")).toBeInTheDocument();
+  });
+
+  it("a pass/fail characteristic can be shown as an NP chart; the size is calculated unless one is typed", async () => {
+    const seen = [];
+    routeApi(
+      base({
+        "GET /spc/characteristics": [option("VISUAL", "No chatter marks", "p")],
+        "GET /spc/chart": (path) => {
+          seen.push(path);
+          return path.includes("display=np") ? countChart("np") : countChart("p", { characteristic: { key: "VISUAL", name: "No chatter marks", operationCode: "OP-020", chartType: "p", subgroupSize: null, unitCode: null }, points: [cPoint(0, 10, 2, 0.4, { value: 0.2 })], signals: [], excluded: [] });
+        },
+      }),
+    );
+    const search = renderAt(`${URL}&c=VISUAL%7COP-020&display=np`);
+    expect(await screen.findByText(/NP chart \(number failed, subgroups of one size\)/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Show as")).toHaveValue("np");
+    expect(seen.at(-1)).toMatch(/display=np/);
+    expect(seen.at(-1)).toMatch(/size=auto/);
+    expect(screen.getByText(/Calculated: the most common size, 10 checks per subgroup/)).toBeInTheDocument();
+    expect(screen.getByText(/Subgroups of a different size/)).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/NP subgroup size/), "8");
+    expect(search()).toContain("size=8");
+  });
+});
+
+describe("count helpers", () => {
+  it("formats counts and finds an axis from zero that holds the points and limits", async () => {
+    const { countDomain, formatCount } = await import("../../lib/spc");
+    expect(formatCount(1.2345)).toBe("1.23");
+    expect(formatCount(null)).toBe("—");
+    const [lo, hi] = countDomain([{ value: 3, ucl: 11 }, { value: 30, ucl: null }]);
+    expect(lo).toBe(0);
+    expect(hi).toBeGreaterThan(30);
+  });
+});

@@ -126,9 +126,9 @@ export class InspectionService {
       const sampleId = sample.rows[0].id;
       for (const r of body.readings) {
         await db.execute(sql`insert into public.inspection_measurements
-          (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric, value_pass, gauge_id, gauge_override_reason, retest_of_id, notes)
+          (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric, value_pass, value_count, gauge_id, gauge_override_reason, retest_of_id, notes)
           values (${orgOf(ctx)}::uuid, ${id}::uuid, ${sampleId}::uuid, ${r.requirementId}::uuid, ${r.valueNumeric ?? null}::numeric,
-                  ${r.valuePass ?? null}, ${r.gaugeId ?? null}::uuid, ${r.gaugeOverrideReason ?? null}, ${r.retestOfId ?? null}::uuid, ${r.notes ?? null})`);
+                  ${r.valuePass ?? null}, ${r.valueCount ?? null}::integer, ${r.gaugeId ?? null}::uuid, ${r.gaugeOverrideReason ?? null}, ${r.retestOfId ?? null}::uuid, ${r.notes ?? null})`);
       }
       return this.load(db, ctx, id);
     });
@@ -200,10 +200,10 @@ export class InspectionService {
       const m = orig.rows[0];
       const gaugeId = body.gaugeId !== undefined ? body.gaugeId : (m.gauge_id as string | null);
       await db.execute(sql`insert into public.inspection_measurements
-        (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric, value_pass, gauge_id, gauge_override_reason,
+        (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric, value_pass, value_count, gauge_id, gauge_override_reason,
          supersedes_id, correction_reason, retest_of_id)
         values (${orgOf(ctx)}::uuid, ${m.inspection_record_id as string}::uuid, ${m.sample_id as string}::uuid, ${m.requirement_id as string}::uuid,
-                ${body.valueNumeric ?? null}::numeric, ${body.valuePass ?? null}, ${gaugeId}::uuid,
+                ${body.valueNumeric ?? null}::numeric, ${body.valuePass ?? null}, ${body.valueCount ?? null}::integer, ${gaugeId}::uuid,
                 ${body.gaugeOverrideReason ?? (body.gaugeId === undefined ? ((m.gauge_override_reason as string) ?? null) : null)},
                 ${measurementId}::uuid, ${body.reason}, ${(m.retest_of_id as string) ?? null}::uuid)`);
       return this.load(db, ctx, m.inspection_record_id as string);
@@ -320,12 +320,13 @@ export class InspectionService {
                 sampleNumber: sampleNo.get(m.sampleId) ?? 0,
                 valueNumeric: m.valueNumeric,
                 valuePass: m.valuePass,
+                valueCount: m.valueCount,
                 unitCode: m.unitCode,
                 limits: limitsText(q),
                 result: m.result,
                 measuredAt: m.measuredAt,
                 gaugeAssetNumber: m.gauge?.assetNumber ?? null,
-                correctedTo: last.id === m.id ? null : { valueNumeric: last.valueNumeric, valuePass: last.valuePass, result: last.result, reason: last.correctionReason },
+                correctedTo: last.id === m.id ? null : { valueNumeric: last.valueNumeric, valuePass: last.valuePass, valueCount: last.valueCount, result: last.result, reason: last.correctionReason },
               },
             ];
           }),
@@ -427,7 +428,7 @@ export class InspectionService {
         charNumber: (q.char_number as string) ?? null,
         name: q.name as string,
         operationCode: q.operation_code as string,
-        dataType: q.data_type as 'variable' | 'attribute',
+        dataType: q.data_type as 'variable' | 'attribute' | 'count',
         valueSource: q.value_source as 'plan' | 'part_spec',
         specKey: (q.spec_key as string) ?? null,
         applicable: q.applicable as boolean,
@@ -440,7 +441,7 @@ export class InspectionService {
         gaugeType: q.gauge_type_id ? { id: q.gauge_type_id as string, name: (q.gauge_type_name as string) ?? '' } : null,
         criticality: q.criticality as 'critical' | 'major' | 'minor',
         spcEligible: q.spc_eligible as boolean,
-        chartType: (q.chart_type as 'imr' | 'xbar_r') ?? null,
+        chartType: (q.chart_type as 'imr' | 'xbar_r' | 'p' | 'defects') ?? null,
         subgroupSize: q.subgroup_size === null ? null : Number(q.subgroup_size),
         decimals: q.decimals === null ? null : Number(q.decimals),
         sampling: (q.sampling as never) ?? [],
@@ -467,6 +468,7 @@ export class InspectionService {
         requirementId: m.requirement_id as string,
         valueNumeric: (m.value_text as string) ?? null,
         valuePass: (m.value_pass as boolean) ?? null,
+        valueCount: m.value_count === null || m.value_count === undefined ? null : Number(m.value_count),
         unitCode: (m.unit_code as string) ?? null,
         result: m.result as 'pass' | 'fail',
         gauge: m.gauge_id

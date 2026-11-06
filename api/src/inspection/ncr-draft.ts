@@ -11,6 +11,7 @@ export const stamp = (iso: string) => `${iso.slice(0, 10)} ${iso.slice(11, 16)} 
 /** The requirement as written on a drawing: "24.95 to 25.05 mm", "at most 1.6 µm", "Pass". */
 export const limitsText = (q: Requirement): string => {
   if (q.dataType === 'attribute') return 'Pass';
+  if (q.dataType === 'count') return q.upperLimit !== null ? `at most ${q.upperLimit} defects per unit` : 'defects counted';
   const unit = q.unitCode ? ` ${q.unitCode}` : '';
   if (q.lowerLimit !== null && q.upperLimit !== null) return `${q.lowerLimit} to ${q.upperLimit}${unit}`;
   if (q.upperLimit !== null) return `at most ${q.upperLimit}${unit}`;
@@ -19,7 +20,7 @@ export const limitsText = (q: Requirement): string => {
 };
 
 export const valueText = (m: Reading, q: Requirement): string =>
-  q.dataType === 'attribute' ? (m.valuePass ? 'Pass' : 'Fail') : `${m.valueNumeric}${m.unitCode ? ` ${m.unitCode}` : ''}`;
+  q.dataType === 'attribute' ? (m.valuePass ? 'Pass' : 'Fail') : q.dataType === 'count' ? `${m.valueCount} ${m.valueCount === 1 ? 'defect' : 'defects'}` : `${m.valueNumeric}${m.unitCode ? ` ${m.unitCode}` : ''}`;
 
 /** A reading that has not been replaced by a correction. */
 export const isCurrent = (m: Reading) => !m.supersededById;

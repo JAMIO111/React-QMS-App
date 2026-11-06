@@ -286,7 +286,7 @@ export class NcrService {
     const recordIds = [...new Set(events.rows.map((e) => e.inspection_record_id as string))];
     const readings = measurementIds.length
       ? await db.execute<Row>(sql`
-          select m.id, q.name, s.sample_number, m.value_numeric::text as value_text, m.value_pass, q.unit_code
+          select m.id, q.name, s.sample_number, m.value_numeric::text as value_text, m.value_pass, m.value_count, q.unit_code
           from public.inspection_measurements m
           join public.resolved_inspection_requirements q on q.id = m.requirement_id
           join public.inspection_samples s on s.id = m.sample_id
@@ -322,7 +322,7 @@ export class NcrService {
             id: r.id as string,
             characteristic: r.name as string,
             sampleNumber: Number(r.sample_number),
-            value: r.value_pass !== null && r.value_pass !== undefined ? (r.value_pass ? 'Pass' : 'Fail') : `${r.value_text}${r.unit_code ? ` ${r.unit_code}` : ''}`,
+            value: r.value_pass !== null && r.value_pass !== undefined ? (r.value_pass ? 'Pass' : 'Fail') : r.value_count !== null && r.value_count !== undefined ? `${r.value_count} ${Number(r.value_count) === 1 ? 'defect' : 'defects'}` : `${r.value_text}${r.unit_code ? ` ${r.unit_code}` : ''}`,
           })),
           hidden: group.filter((e) => e.measurement_id).length - shown.length,
           wholeInspection: whole,

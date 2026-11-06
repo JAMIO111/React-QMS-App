@@ -5,8 +5,12 @@ import { ResultBadge } from "./shared";
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
 
-const Value = ({ valueNumeric, valuePass, unitCode }) =>
-  valueNumeric !== null && valueNumeric !== undefined ? (
+const Value = ({ valueNumeric, valuePass, valueCount, unitCode }) =>
+  valueCount !== null && valueCount !== undefined ? (
+    <span className="tabular-nums">
+      {valueCount} {valueCount === 1 ? "defect" : "defects"}
+    </span>
+  ) : valueNumeric !== null && valueNumeric !== undefined ? (
     <span className="tabular-nums">
       {valueNumeric}
       {unitCode ? ` ${unitCode}` : ""}

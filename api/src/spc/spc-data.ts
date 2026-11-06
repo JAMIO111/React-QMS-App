@@ -1,5 +1,11 @@
 import {
   ChartType,
+  countRate,
+  countReliability,
+  countSeries,
+  CountKind,
+  CountPoint,
+  defectsKind,
   controlLimits,
   detectPSignals,
   detectSignals,
@@ -25,6 +31,8 @@ export interface ReadingRow {
   value: string;
   /** The result of a pass/fail reading; null for a measured one. */
   valuePass: boolean | null;
+  /** Defects counted on one unit (a count reading); null for other kinds. */
+  valueCount?: number | null;
   measuredAt: string;
   sampleNumber: number;
   subgroupNumber: number | null;
@@ -33,7 +41,7 @@ export interface ReadingRow {
   inspectionReference: string;
   inspectionStatus: 'in_progress' | 'completed' | 'abandoned';
   unitCode: string | null;
-  chartType: ChartType | 'p' | null;
+  chartType: ChartType | 'p' | 'defects' | null;
   subgroupSize: number | null;
   nominal: number | null;
   lower: number | null;
@@ -43,7 +51,7 @@ export interface ReadingRow {
   gaugeOverride: boolean;
 }
 
-export type ExclusionReason = 'retest' | 'abandoned' | 'unit' | 'chart_type' | 'specification' | 'no_subgroup' | 'incomplete_subgroup' | 'no_lot';
+export type ExclusionReason = 'retest' | 'abandoned' | 'unit' | 'chart_type' | 'specification' | 'no_subgroup' | 'incomplete_subgroup' | 'no_lot' | 'size';
 export const EXCLUSION_TEXT: Record<ExclusionReason, string> = {
   retest: 'Retests (they re-measure a failed reading)',
   abandoned: 'Abandoned inspections',
@@ -53,6 +61,7 @@ export const EXCLUSION_TEXT: Record<ExclusionReason, string> = {
   no_subgroup: 'No subgroup recorded (taken before subgroups existed)',
   incomplete_subgroup: 'Incomplete subgroup (fewer readings than the subgroup size)',
   no_lot: 'Checks of an inspection without a lot number (subgroups by lot)',
+  size: 'Subgroups of a different size than the NP chart uses',
 };
 
 export interface ChartPoint {
@@ -330,3 +339,121 @@ export function evaluateP(data: PDataset, baselineCentre: number | null, rules: 
     warnings,
   };
 }
+
+
+// ---- NP, C and U charts ----------------------------------------------------------------------------
+
+/**
+ * Count readings (defects found on one unit) of one characteristic grouped like the P chart's subgroups: one reading is
+ * one unit, so a subgroup's n is its units and d its defects. Retests, abandoned inspections and readings taken under
+ * another chart type are left out and counted.
+ */
+export function assembleDefects(rows: ReadingRow[], basis: SubgroupBasis): PDataset {
+  const counts = new Map<ExclusionReason, number>();
+  const skip = (reason: ExclusionReason) => counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  const buckets = new Map<string, ReadingRow[]>();
+  for (const r of [...rows].filter((x) => x.valueCount !== null && x.valueCount !== undefined).sort(byTime)) {
+    if (r.inspectionStatus === 'abandoned') skip('abandoned');
+    else if (r.isRetest) skip('retest');
+    else if (r.chartType !== 'defects') skip('chart_type');
+    else if (basis === 'lot' && !r.lot) skip('no_lot');
+    else {
+      const key = basis === 'inspection' ? r.inspectionId : basis === 'day' ? r.measuredAt.slice(0, 10) : (r.lot as string);
+      buckets.set(key, [...(buckets.get(key) ?? []), r]);
+    }
+  }
+  const groups: PGroupRow[] = [...buckets.values()]
+    .map((g) => ({
+      at: g[g.length - 1].measuredAt,
+      n: g.length,
+      d: g.reduce((t, r) => t + (r.valueCount as number), 0),
+      inspections: [...new Map(g.map((r) => [r.inspectionId, { id: r.inspectionId, reference: r.inspectionReference }])).values()],
+      lot: [...new Set(g.map((r) => r.lot).filter(Boolean))].join(', ') || null,
+    }))
+    .sort((a, b) => a.at.localeCompare(b.at));
+  const order = Object.keys(EXCLUSION_TEXT) as ExclusionReason[];
+  return { basis, groups, excluded: order.filter((r) => counts.get(r)).map((reason) => ({ reason, text: EXCLUSION_TEXT[reason], count: counts.get(reason) as number })) };
+}
+
+/** The size most subgroups have (the larger on a tie): what an NP chart uses when it is left to calculate. */
+export function commonSize(groups: readonly { n: number }[]): number | null {
+  const tally = new Map<number, number>();
+  for (const g of groups) tally.set(g.n, (tally.get(g.n) ?? 0) + 1);
+  let best: number | null = null;
+  for (const [n, c] of tally) if (best === null || c > (tally.get(best) as number) || (c === tally.get(best) && n > best)) best = n;
+  return best;
+}
+
+/** Keeps the subgroups of one size (a number, or the most common one for 'auto'); the others are counted as excluded. */
+export function applySubgroupSize(data: PDataset, size: 'auto' | number): { data: PDataset; size: number | null } {
+  const chosen = size === 'auto' ? commonSize(data.groups) : size;
+  const kept = data.groups.filter((g) => g.n === chosen);
+  const dropped = data.groups.length - kept.length;
+  const excluded = dropped ? [...data.excluded, { reason: 'size' as const, text: `${EXCLUSION_TEXT.size} (${chosen})`, count: dropped }] : data.excluded;
+  return { data: { ...data, groups: kept, excluded }, size: chosen };
+}
+
+export interface CountChartResult {
+  kind: CountKind;
+  limitsSource: 'baseline' | 'trial' | 'none';
+  /** ū (defects per unit) for c and u, p̄ for np. */
+  rate: number | null;
+  /** Subgroup size of an np or c chart (the same for every point); null for u. */
+  size: number | null;
+  /** Centre and limits at the mean subgroup size, for reference; each point has its own. */
+  atMeanSize: { centre: number; ucl: number; lcl: number; sigma: number; meanSize: number } | null;
+  points: (PGroupRow & { index: number; y: number; centre: number; ucl: number; lcl: number; z: number | null })[];
+  signals: (Signal & { text: string })[];
+  provisional: boolean;
+  noVariation: boolean;
+  reliability: { meanSize: number; expected: number; reliable: boolean } | null;
+  warnings: string[];
+}
+
+/**
+ * Limits (a saved baseline's rate, else trial limits from these subgroups) and signals for an NP, C or U chart.
+ * The groups must already be of one size for np; c is chosen by the caller (kind) when sizes are equal.
+ */
+export function evaluateCount(kind: CountKind, groups: PGroupRow[], baselineRate: number | null, rules: readonly Rule[], unit: 'checks' | 'units' = 'units'): CountChartResult {
+  const warnings: string[] = [];
+  const noun = kind === 'np' ? 'failures' : 'defects';
+  const size = kind === 'u' ? null : (groups[0]?.n ?? null);
+  const empty = (w: string): CountChartResult => ({ kind, limitsSource: 'none', rate: null, size, atMeanSize: null, points: [], signals: [], provisional: true, noVariation: false, reliability: null, warnings: [w] });
+  if (!groups.length) return empty(`There are no ${kind === 'np' ? 'pass/fail' : 'count'} readings for these filters.`);
+  let rate = baselineRate;
+  let source: CountChartResult['limitsSource'] = baselineRate === null ? 'none' : 'baseline';
+  if (rate === null) {
+    if (groups.length < MINIMUM_POINTS) {
+      const r = empty(`At least ${MINIMUM_POINTS} subgroups are needed before limits can be shown; there ${groups.length === 1 ? 'is' : 'are'} ${groups.length}.`);
+      r.points = groups.map((g, index) => ({ ...g, index, y: kind === 'u' ? g.d / g.n : g.d, centre: NaN, ucl: NaN, lcl: NaN, z: null }));
+      return r;
+    }
+    rate = countRate(groups);
+    source = 'trial';
+  }
+  const series: CountPoint[] = countSeries(kind, groups, rate, size ?? 1);
+  const rel = countReliability(kind, groups, rate);
+  const provisional = source === 'trial' || groups.length < 20;
+  if (source === 'trial') warnings.push('Trial limits: calculated from the subgroups shown, not a saved baseline. Save a baseline to fix them.');
+  else if (provisional) warnings.push(`Only ${groups.length} subgroups so far: treat the limits as provisional.`);
+  const noVariation = rate === 0 || (kind === 'np' && rate === 1);
+  if (rate === 0) warnings.push(`No ${noun} in the baseline: any ${kind === 'np' ? 'failure' : 'defect'} will be a signal. Limits at zero are not informative until some have been seen.`);
+  else if (kind === 'np' && rate === 1) warnings.push('Every check failed, so there is no variation to chart.');
+  else if (!rel.reliable) warnings.push(`Subgroups average ${Math.round(rel.meanN * 10) / 10} ${unit} with ${Math.round(rel.expected * 100) / 100} ${noun} expected: too few for the limits to be reliable (about 5 expected${kind === 'np' ? ' failures and 5 expected passes' : ' defects'} are needed). Use larger subgroups, for example by day or lot.`);
+  const mid = countSeries(kind, [{ n: kind === 'u' ? rel.meanN : (size as number), d: 0 }], rate, size ?? 1)[0];
+  return {
+    kind,
+    limitsSource: source,
+    rate,
+    size,
+    atMeanSize: { centre: mid.centre, ucl: mid.ucl, lcl: mid.lcl, sigma: kind === 'u' ? Math.sqrt(rate / rel.meanN) : kind === 'c' ? Math.sqrt(mid.centre) : Math.sqrt((size as number) * rate * (1 - rate)), meanSize: rel.meanN },
+    points: groups.map((g, index) => ({ ...g, index, y: series[index].y, centre: series[index].centre, ucl: series[index].ucl, lcl: series[index].lcl, z: Number.isFinite(series[index].z) ? series[index].z : null })),
+    signals: detectPSignals(series, rules).map((sg) => ({ ...sg, text: RULE_TEXT[sg.rule] })),
+    provisional,
+    noVariation,
+    reliability: { meanSize: rel.meanN, expected: rel.expected, reliable: rel.reliable },
+    warnings,
+  };
+}
+
+export { defectsKind };

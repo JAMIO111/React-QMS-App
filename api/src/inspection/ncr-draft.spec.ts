@@ -35,6 +35,7 @@ const reading = (id: number, sampleId: number, requirementId: number, value: str
   requirementId: U(requirementId),
   valueNumeric: value,
   valuePass: null,
+  valueCount: null,
   unitCode: 'mm',
   result,
   gauge: { id: U(900), assetNumber: 'MIC-1', status: 'active', nextDueOn: '2026-12-01', valid: true },
@@ -51,12 +52,14 @@ const reading = (id: number, sampleId: number, requirementId: number, value: str
   ...over,
 });
 const sample = (id: number, n: number, ref: string | null = null) => ({
-  id: U(id), sampleNumber: n, sampledAt: '2026-11-05T08:00:00.000Z', unitReference: ref, triggerType: 'first_off' as const, isRetest: false, notes: null, takenBy: null,
+  id: U(id), sampleNumber: n, sampledAt: '2026-11-05T08:00:00.000Z', unitReference: ref, triggerType: 'first_off' as const, isRetest: false, subgroupNumber: null, notes: null, takenBy: null,
 });
 
 const inspection = (over: Partial<InspectionDetail> = {}): InspectionDetail => ({
   id: U(500),
   reference: 'IPI-26-0001',
+  lotSize: null,
+  schedule: [],
   status: 'in_progress',
   result: null,
   part: { id: U(600), partNumber: 'HCR-100', name: 'Rod 100' },

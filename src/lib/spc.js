@@ -8,9 +8,19 @@ export const RULE_LABEL = {
 };
 export const RULES = ["we1", "we2", "we3", "we4"];
 
-export const CHART_NAME = { imr: "I-MR (individuals and moving range)", xbar_r: "X-bar/R (subgroup mean and range)", p: "P chart (proportion failed)" };
+export const CHART_NAME = {
+  imr: "I-MR (individuals and moving range)",
+  xbar_r: "X-bar/R (subgroup mean and range)",
+  p: "P chart (proportion failed)",
+  np: "NP chart (number failed, subgroups of one size)",
+  c: "C chart (defects per subgroup)",
+  u: "U chart (defects per unit)",
+};
 export const DISPERSION_NAME = { imr: "Moving range", xbar_r: "Range" };
-export const LOCATION_NAME = { imr: "Individual value", xbar_r: "Subgroup mean", p: "Proportion failed" };
+export const LOCATION_NAME = { imr: "Individual value", xbar_r: "Subgroup mean", p: "Proportion failed", np: "Number failed", c: "Defects", u: "Defects per unit" };
+/** Charts of counts of failed checks or defects (no dispersion chart, no specification): np, c and u. */
+export const COUNT_VARIANTS = ["np", "c", "u"];
+export const formatCount = (v, digits = 2) => (v === null || v === undefined || Number.isNaN(v) ? "—" : String(Math.round(v * 10 ** digits) / 10 ** digits));
 export const SUBGROUP_BASIS = [
   { value: "inspection", label: "One inspection" },
   { value: "day", label: "One day" },
@@ -63,6 +73,12 @@ export const yDomain = (values, extras) => {
 export const proportionDomain = (rows) => {
   const top = Math.max(0.02, ...rows.flatMap((r) => [r.value, r.ucl ?? 0]));
   return [0, Math.min(1, top * 1.1)];
+};
+
+/** Y-axis range of an NP, C or U chart: from zero up to the highest count (or rate) or limit. */
+export const countDomain = (rows) => {
+  const top = Math.max(1, ...rows.flatMap((r) => [r.value, r.ucl ?? 0]));
+  return [0, top * 1.1];
 };
 
 export const describeWindow = (b) => `${b.points} ${b.chartType === "imr" ? "readings" : "subgroups"}`;

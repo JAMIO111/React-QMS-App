@@ -41,6 +41,11 @@ const KINDS = [
     label: "Pass / fail",
     hint: "A visual or go/no-go check without a measured value.",
   },
+  {
+    value: "count",
+    label: "Defect count",
+    hint: "The number of defects found on each unit, e.g. scratches or missing rivets.",
+  },
 ];
 const nextSequence = (revision, operationId) =>
   Math.max(
@@ -52,7 +57,9 @@ const nextSequence = (revision, operationId) =>
 const kindOf = (c) =>
   c.dataType === "attribute"
     ? "attribute"
-    : c.valueSource === "part_spec"
+    : c.dataType === "count"
+      ? "count"
+      : c.valueSource === "part_spec"
       ? "variable"
       : "fixed";
 
@@ -111,7 +118,7 @@ const CharacteristicForm = ({
     gaugeTypeId: c?.gaugeType?.id ?? null,
     criticality: c?.criticality ?? "minor",
     spcEligible: c?.spcEligible ?? false,
-    chartType: c?.chartType && c.chartType !== "p" ? c.chartType : "imr", // "p" is implied by a pass/fail check
+    chartType: c?.chartType && c.chartType !== "p" && c.chartType !== "defects" ? c.chartType : "imr", // "p" and "defects" are implied by the kind of check
     subgroupSize: text(c?.subgroupSize ?? 5),
     decimals: text(c?.decimals),
     notes: text(c?.notes),
@@ -135,7 +142,7 @@ const CharacteristicForm = ({
       [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value,
     }));
   const setValue = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
-  const measured = form.kind !== "attribute";
+  const measured = form.kind === "fixed" || form.kind === "variable";
 
   const updateRow = (list, i, patch) =>
     setForm((f) => ({
@@ -164,7 +171,7 @@ const CharacteristicForm = ({
       gaugeTypeId: t.gaugeType?.id ?? null,
       criticality: t.criticality,
       spcEligible: t.spcEligible,
-      chartType: t.chartType && t.chartType !== "p" ? t.chartType : "imr",
+      chartType: t.chartType && t.chartType !== "p" && t.chartType !== "defects" ? t.chartType : "imr",
       subgroupSize: text(t.subgroupSize ?? 5),
       decimals: text(t.decimals),
       notes: text(t.notes),
@@ -202,19 +209,20 @@ const CharacteristicForm = ({
     setProblem(null);
     const content = {
       name: form.name.trim(),
-      dataType: measured ? "variable" : "attribute",
+      dataType: form.kind === "count" ? "count" : measured ? "variable" : "attribute",
       valueSource: form.kind === "variable" ? "part_spec" : "plan",
       nominal: form.kind === "fixed" ? nums[0] : null,
       lowerLimit: form.kind === "fixed" ? nums[1] : null,
-      upperLimit: form.kind === "fixed" ? nums[2] : null,
+      upperLimit: form.kind === "fixed" ? nums[2] : form.kind === "count" ? toNumber(form.upperLimit) : null,
       unitCode: measured ? form.unitCode : null,
       specKey: form.kind === "variable" ? form.specKey.trim() || null : null,
       method: form.method.trim(),
       gaugeTypeId: form.gaugeTypeId,
       criticality: form.criticality,
-      // A measured check is charted as I-MR or X-bar/R; a pass/fail check as a P chart (proportion failed).
+      // A measured check is charted as I-MR or X-bar/R; a pass/fail check as a P chart (proportion failed);
+      // a defect count as defects per unit (the chart is a C or a U chart, chosen by the data).
       spcEligible: form.spcEligible,
-      chartType: form.spcEligible ? (measured ? form.chartType : "p") : null,
+      chartType: form.spcEligible ? (measured ? form.chartType : form.kind === "count" ? "defects" : "p") : null,
       subgroupSize:
         form.spcEligible && measured
           ? form.chartType === "imr"
@@ -388,7 +396,7 @@ const CharacteristicForm = ({
         <div
           role="radiogroup"
           aria-label="Kind of check"
-          className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+          className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4"
         >
           {KINDS.map((k) => (
             <label
@@ -459,6 +467,16 @@ const CharacteristicForm = ({
               hint="Part values must use this unit"
             />
           </div>
+        )}
+        {form.kind === "count" && (
+          <Field
+            label="Most defects allowed per unit"
+            inputMode="numeric"
+            value={form.upperLimit}
+            onChange={set("upperLimit")}
+            hint="Empty = defects are only counted, a unit never fails"
+            className="sm:w-72"
+          />
         )}
         {measured && (
           <Field
@@ -709,20 +727,44 @@ const CharacteristicForm = ({
         </button>
       </Fieldset>
 
-      {!measured && (
+      {form.kind === "attribute" && (
         <Fieldset legend="SPC">
           <Switch
             className="text-sm text-primary-text"
             checked={form.spcEligible}
             onChange={set("spcEligible")}
           >
-            Chart this check as a P chart (proportion of checks that fail)
+            Chart this check (P chart: proportion of checks that fail, or NP
+            chart: how many)
           </Switch>
           {form.spcEligible && (
             <p className="text-sm text-secondary-text">
-              Each point is the share of checks that failed in a subgroup (one
-              inspection, day or lot, chosen on the chart). The size of each
-              subgroup is simply how many were checked.
+              Each point is the share (P) or the number (NP) of checks that
+              failed in a subgroup (one inspection, day or lot, chosen on the
+              chart). The size of each subgroup is simply how many were
+              checked; the NP chart uses subgroups of one size that you set or
+              leave to be calculated.
+            </p>
+          )}
+        </Fieldset>
+      )}
+
+      {form.kind === "count" && (
+        <Fieldset legend="SPC">
+          <Switch
+            className="text-sm text-primary-text"
+            checked={form.spcEligible}
+            onChange={set("spcEligible")}
+          >
+            Chart this check (defects per unit)
+          </Switch>
+          {form.spcEligible && (
+            <p className="text-sm text-secondary-text">
+              Each point is the defects found in a subgroup (one inspection,
+              day or lot, chosen on the chart). Every sample is one unit. The
+              chart is a C chart when every subgroup inspects the same number
+              of units and a U chart (defects per unit) when the number
+              varies.
             </p>
           )}
         </Fieldset>

@@ -49,6 +49,7 @@ const fmt = (v, decimals) => (v === null || v === undefined ? null : decimals ==
 /** The requirement as an operator reads it: "25 (24.95 – 25.05) mm", "≤ 1.6 µm", "From part: LENGTH (mm)", "Pass / fail". */
 export const describeRequirement = (c) => {
   if (c.dataType === "attribute") return "Pass / fail";
+  if (c.dataType === "count") return c.upperLimit !== null && c.upperLimit !== undefined ? `Defects, ≤ ${c.upperLimit} per unit` : "Defects counted";
   if (c.valueSource === "part_spec") return `From part: ${c.specKey}${c.unitCode ? ` (${c.unitCode})` : ""}`;
   const [n, lo, hi] = [fmt(c.nominal, c.decimals), fmt(c.lowerLimit, c.decimals), fmt(c.upperLimit, c.decimals)];
   const unit = c.unitCode ? ` ${c.unitCode}` : "";
@@ -57,4 +58,4 @@ export const describeRequirement = (c) => {
   return `${n !== null ? `${n}, ` : ""}≥ ${lo}${unit}`;
 };
 
-export const describeSpc = (c) => (c.spcEligible ? `${c.chartType === "xbar_r" ? "X-bar/R" : "I-MR"}${c.chartType === "xbar_r" ? `, n = ${c.subgroupSize}` : ""}` : null);
+export const describeSpc = (c) => (c.spcEligible ? (c.chartType === "defects" ? "Defects per unit (C/U)" : c.chartType === "p" ? "P / NP" : `${c.chartType === "xbar_r" ? "X-bar/R" : "I-MR"}${c.chartType === "xbar_r" ? `, n = ${c.subgroupSize}` : ""}`) : null);

@@ -1,4 +1,4 @@
-import { assemble, assembleP, evaluate, evaluateP, parseRules, ReadingRow } from './spc-data';
+import { applySubgroupSize, assemble, assembleDefects, assembleP, commonSize, evaluate, evaluateCount, evaluateP, parseRules, ReadingRow } from './spc-data';
 
 let n = 0;
 const row = (value: number, over: Partial<ReadingRow> = {}): ReadingRow => ({
@@ -208,5 +208,63 @@ describe('P chart data', () => {
 
   it('says so when there is nothing to chart', () => {
     expect(evaluateP({ basis: 'day', groups: [], excluded: [] }, null, []).warnings).toEqual(['There are no pass/fail readings for these filters.']);
+  });
+});
+
+describe('count charts (NP, C, U)', () => {
+  const count = (defects: number, inspectionId: string, over: Partial<ReadingRow> = {}) =>
+    row(0, { value: '', valueCount: defects, chartType: 'defects', subgroupSize: null, unitCode: null, nominal: null, lower: null, upper: null, inspectionId, inspectionReference: inspectionId, ...over });
+  const pf = (pass: boolean, inspectionId: string) => row(0, { value: '', valuePass: pass, chartType: 'p', subgroupSize: null, unitCode: null, nominal: null, lower: null, upper: null, inspectionId });
+
+  it('defects: one reading is one unit; a subgroup sums its defects', () => {
+    const d = assembleDefects([count(2, 'a'), count(0, 'a'), count(3, 'b'), count(1, 'b'), count(1, 'b')], 'inspection');
+    expect(d.groups.map((g) => [g.n, g.d])).toEqual([[2, 2], [3, 5]]);
+  });
+
+  it('leaves out and counts retests, abandoned inspections and other chart types', () => {
+    const d = assembleDefects([count(1, 'a'), count(1, 'a', { isRetest: true }), count(1, 'b', { inspectionStatus: 'abandoned' }), count(1, 'c', { chartType: 'p' })], 'inspection');
+    expect(d.groups).toHaveLength(1);
+    expect(d.excluded.map((e) => [e.reason, e.count])).toEqual([['retest', 1], ['abandoned', 1], ['chart_type', 1]]);
+  });
+
+  it('chooses the most common size automatically, the larger on a tie', () => {
+    expect(commonSize([{ n: 5 }, { n: 5 }, { n: 8 }])).toBe(5);
+    expect(commonSize([{ n: 5 }, { n: 8 }])).toBe(8);
+    expect(commonSize([])).toBeNull();
+  });
+
+  it('NP: keeps subgroups of the chosen size (auto or fixed) and counts the rest', () => {
+    const rows = [
+      ...[1, 2, 3, 4, 5].flatMap((k) => [pf(false, `i${k}`), pf(true, `i${k}`), pf(true, `i${k}`)]),
+      pf(false, 'odd'),
+    ];
+    const base = assembleP(rows, 'inspection');
+    const auto = applySubgroupSize(base, 'auto');
+    expect(auto.size).toBe(3);
+    expect(auto.data.groups).toHaveLength(5);
+    expect(auto.data.excluded).toEqual([expect.objectContaining({ reason: 'size', count: 1 })]);
+    expect(applySubgroupSize(base, 1).data.groups).toHaveLength(1);
+  });
+
+  it('evaluateCount: trial limits from five subgroups, saved rate when there is one', () => {
+    const groups = [3, 5, 4, 6, 2].map((d, i) => ({ at: `2026-11-0${i + 1}T08:00:00.000Z`, n: 20, d, inspections: [], lot: null }));
+    const trial = evaluateCount('c', groups, null, []);
+    expect(trial).toMatchObject({ limitsSource: 'trial', size: 20, provisional: true });
+    expect(trial.rate).toBeCloseTo(0.2);
+    expect(trial.atMeanSize?.centre).toBeCloseTo(4);
+    expect(evaluateCount('c', groups, 0.5, []).limitsSource).toBe('baseline');
+    expect(evaluateCount('c', groups.slice(0, 3), null, []).points[0].ucl).toBeNaN();
+  });
+
+  it('a defects subgroup above its limit signals; the cleared baseline rate sets the centre', () => {
+    const groups = [2, 3, 2, 3, 2, 14].map((d, i) => ({ at: `2026-11-0${i + 1}T08:00:00.000Z`, n: 10, d, inspections: [], lot: null }));
+    const r = evaluateCount('c', groups, 0.25, ['we1']);
+    expect(r.points[0].centre).toBeCloseTo(2.5);
+    expect(r.signals.map((x) => x.index)).toEqual([5]);
+  });
+
+  it('warns when too few defects are expected per subgroup', () => {
+    const groups = [0, 1, 0, 1, 0].map((d, i) => ({ at: `2026-11-0${i + 1}T08:00:00.000Z`, n: 10, d, inspections: [], lot: null }));
+    expect(evaluateCount('u', groups, null, []).warnings.join(' ')).toMatch(/too few/);
   });
 });

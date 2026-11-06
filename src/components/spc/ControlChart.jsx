@@ -10,9 +10,12 @@ import {
 } from "recharts";
 import { formatDateTime } from "../../lib/processControl";
 import {
+  LOCATION_NAME,
   RULE_LABEL,
   formatPercent,
   formatValue,
+  countDomain,
+  formatCount,
   proportionDomain,
   yDomain,
 } from "../../lib/spc";
@@ -323,7 +326,7 @@ export const DispersionChart = ({ chart, rows, decimals, label }) => {
 };
 
 /** What the lines and markers mean, in words. */
-export const ChartKey = ({ showSpec, proportion = false }) => (
+export const ChartKey = ({ showSpec, proportion = false, variant = "p" }) => (
   <ul
     className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-secondary-text"
     aria-label="Chart key"
@@ -337,7 +340,7 @@ export const ChartKey = ({ showSpec, proportion = false }) => (
     <li>
       <span aria-hidden="true">— </span>
       {proportion
-        ? "Centre line p̄ (all failures over all checks)"
+        ? { p: "Centre line p̄ (all failures over all checks)", np: "Centre line n·p̄ (expected failures per subgroup)", c: "Centre line c̄ (average defects per subgroup)", u: "Centre line ū (all defects over all units)" }[variant]
         : "Centre line (CL)"}
     </li>
     {showSpec && (
@@ -355,7 +358,7 @@ export const ChartKey = ({ showSpec, proportion = false }) => (
 );
 
 /** Tooltip of a P chart point: how many were checked and failed, and this subgroup's own limits. */
-const ProportionTooltip = ({ active, payload }) => {
+const ProportionTooltip = ({ active, payload, variant = "p" }) => {
   if (!active || !payload?.length) return null;
   const row = payload[0].payload;
   const p = row.point;
@@ -364,14 +367,25 @@ const ProportionTooltip = ({ active, payload }) => {
       <p className="font-medium">
         Point {row.n} · {formatDateTime(row.at)}
       </p>
-      <p>
-        {row.failed} of {row.checked} failed (
-        <span className="tabular-nums">{formatPercent(row.value, 2)}</span>)
-      </p>
+      {variant === "p" ? (
+        <p>
+          {row.failed} of {row.checked} failed (
+          <span className="tabular-nums">{formatPercent(row.value, 2)}</span>)
+        </p>
+      ) : variant === "np" ? (
+        <p>
+          {row.failed} of {row.checked} checks failed
+        </p>
+      ) : (
+        <p>
+          {row.failed} {row.failed === 1 ? "defect" : "defects"} in {row.checked} {row.checked === 1 ? "unit" : "units"}
+          {variant === "u" && <> (<span className="tabular-nums">{formatCount(row.value)}</span> per unit)</>}
+        </p>
+      )}
       {row.ucl !== null && (
         <p>
-          Limits for {row.checked} checks: {formatPercent(row.lcl, 2)} to{" "}
-          {formatPercent(row.ucl, 2)}
+          Limits for {row.checked} {variant === "p" || variant === "np" ? "checks" : "units"}:{" "}
+          {variant === "p" ? `${formatPercent(row.lcl, 2)} to ${formatPercent(row.ucl, 2)}` : `${formatCount(row.lcl)} to ${formatCount(row.ucl)}`}
         </p>
       )}
       {p.inspections.length > 0 && (
@@ -391,14 +405,17 @@ const ProportionTooltip = ({ active, payload }) => {
  * P chart: the share of checks that failed in each subgroup. The control limits (dashed, stepped) follow each
  * subgroup's size — a small subgroup has wider limits — around the centre line p̄. There is no specification here.
  */
-export const ProportionChart = ({ chart, rows }) => {
+/** The P chart (proportion failed) and the count charts built on the same data: NP, C and U (`variant`). */
+export const ProportionChart = ({ chart, rows, variant = "p" }) => {
   const { limits } = chart;
+  const proportion = variant === "p";
+  const centreLabel = { p: "p̄", np: "n·p̄", c: "c̄", u: "ū" }[variant];
   const control = "var(--chart-neutral)";
   return (
     <div
       className="h-72"
       role="img"
-      aria-label={`Proportion failed chart, ${rows.length} points, ${chart.signals.length} signal${chart.signals.length === 1 ? "" : "s"}`}
+      aria-label={`${LOCATION_NAME[variant]} chart, ${rows.length} points, ${chart.signals.length} signal${chart.signals.length === 1 ? "" : "s"}`}
     >
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
@@ -415,20 +432,20 @@ export const ProportionChart = ({ chart, rows }) => {
             tickLine={false}
           />
           <YAxis
-            domain={proportionDomain(rows)}
+            domain={proportion ? proportionDomain(rows) : countDomain(rows)}
             tick={tick}
-            tickFormatter={(v) => formatPercent(v, 0)}
+            tickFormatter={(v) => (proportion ? formatPercent(v, 0) : formatCount(v, 1))}
             width={52}
             tickLine={false}
             axisLine={false}
           />
-          <Tooltip content={<ProportionTooltip />} />
+          <Tooltip content={<ProportionTooltip variant={variant} />} />
           {limits && (
             <ReferenceLine
               y={limits.centre}
               stroke={control}
               label={limitLabel(
-                `p̄ ${formatPercent(limits.centre, 2)}`,
+                `${centreLabel} ${proportion ? formatPercent(limits.centre, 2) : formatCount(limits.centre)}`,
                 control,
                 "insideBottomRight",
               )}

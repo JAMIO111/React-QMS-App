@@ -708,11 +708,11 @@ describe("Revision page", () => {
     expect(within(dialog).queryByText(/Chart this characteristic/)).toBeNull();
     await userEvent.click(
       within(dialog).getByRole("switch", {
-        name: /Chart this check as a P chart/,
+        name: /Chart this check \(P chart/,
       }),
     );
     expect(
-      within(dialog).getByText(/Each point is the share of checks that failed/),
+      within(dialog).getByText(/Each point is the share \(P\) or the number \(NP\)/),
     ).toBeInTheDocument();
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Save characteristic" }),
@@ -723,6 +723,40 @@ describe("Revision page", () => {
       chartType: "p",
       subgroupSize: null,
       unitCode: null,
+    });
+  });
+
+  it("adds a defect count with the most allowed per unit, charted as defects per unit (no unit, no subgroup size)", async () => {
+    let body;
+    routeApi({
+      "GET /control-plan-revisions/cr2": detail(),
+      "GET /control-plan-revisions/cr2/comparison": comparison,
+      "GET /units": { data: [{ code: "mm", name: "Millimetre", quantityKind: "length" }] },
+      "GET /gauge-types": { data: [] },
+      "POST /control-plan-revisions/cr2/characteristics": (_p, opts) => ((body = opts.body), detail()),
+    });
+    renderAt("/Process-Control/Plans/cp1/revisions/cr2");
+    await userEvent.click(await screen.findByRole("button", { name: "Characteristic" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("Key"), "SCRATCH");
+    await userEvent.type(within(dialog).getByLabelText("Name"), "Scratches");
+    await userEvent.click(within(dialog).getByRole("radio", { name: /Defect count/ }));
+    expect(within(dialog).queryByLabelText("Unit")).toBeNull();
+    expect(within(dialog).queryByLabelText(/Lower limit/)).toBeNull();
+    await userEvent.type(within(dialog).getByLabelText("Most defects allowed per unit"), "3");
+    await userEvent.click(within(dialog).getByRole("switch", { name: /Chart this check \(defects per unit\)/ }));
+    expect(within(dialog).getByText(/C chart when every subgroup inspects the same number/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save characteristic" }));
+    expect(body).toMatchObject({
+      dataType: "count",
+      valueSource: "plan",
+      nominal: null,
+      lowerLimit: null,
+      upperLimit: 3,
+      unitCode: null,
+      spcEligible: true,
+      chartType: "defects",
+      subgroupSize: null,
     });
   });
 

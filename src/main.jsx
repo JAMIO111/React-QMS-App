@@ -53,6 +53,7 @@ const PartFamilyPage = lazy(() => import("./components/master-data/PartFamilyPag
 const ControlPlansPage = lazy(() => import("./components/process-control/ControlPlansPage.jsx"));
 const ControlPlanPage = lazy(() => import("./components/process-control/ControlPlanPage.jsx"));
 const RevisionPage = lazy(() => import("./components/process-control/RevisionPage.jsx"));
+const ProcessControlDashboard = lazy(() => import("./components/process-control/ProcessControlDashboard.jsx"));
 const SpcPage = lazy(() => import("./components/spc/SpcPage.jsx"));
 const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
 const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
@@ -172,7 +173,7 @@ const router = createBrowserRouter([
           {
             element: <RequireModule module="control_plans" />,
             children: [
-            { path: "Process-Control", element: <Navigate to="Plans" replace /> },
+            { path: "Process-Control", element: <ProcessControlDashboard /> },
             { path: "Process-Control/Plans", element: <ControlPlansPage /> },
             { path: "Process-Control/SPC", element: <SpcPage /> },
             { path: "Process-Control/Plans/:id", element: <ControlPlanPage /> },

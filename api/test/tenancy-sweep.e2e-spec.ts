@@ -469,6 +469,7 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/control-plan-resolution': `?partId=${b.part}`,
       '/api/v1/subscription/check': '?module=inspections',
       '/api/v1/spc/characteristics': `?partId=${b.part}`,
+      '/api/v1/process-control-dashboard': '?from=2025-01-01&to=2027-12-31',
     };
     for (const op of lists) {
       const res = await call(op, op.path + (listQuery[op.path] ?? ''), auth);

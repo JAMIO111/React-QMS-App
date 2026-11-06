@@ -6,7 +6,7 @@ import type { RequestContext } from '../common/request-context';
 import { iso, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
 import { BaselineQuery, Baseline, Chart, ChartQuery, CharacteristicsQuery, CreateBaselineBody } from './spc.schemas';
-import { controlLimits, isProvisional, Limits, MINIMUM_POINTS, Rule } from './spc';
+import { controlLimits, isProvisional, Limits, MINIMUM_POINTS, Rule, RULE_TEXT } from './spc';
 import { assemble, ChartPoint, evaluate, parseRules, ReadingRow } from './spc-data';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -195,6 +195,75 @@ export class SpcService {
     });
   }
 
+  /**
+   * Where the processes stand: every characteristic with readings in the last `lookbackDays` (most recent first,
+   * at most `maxCharts`) is evaluated like its chart (saved baseline, else trial limits) and the signals raised by
+   * points from the last `days` days are collected. Needs spc.read; without it `available` is false.
+   */
+  overview(ctx: RequestContext, opts: { days: number; maxCharts: number; maxRecent: number }): Promise<SpcOverview> {
+    return this.database.asUser(ctx, async (db) => {
+      const empty: SpcOverview = { available: false, windowDays: opts.days, monitored: 0, withSignals: 0, withoutBaseline: 0, signalCount: 0, byRule: [], recent: [] };
+      const allowed = await db.execute<Row>(sql`select app.has_permission(${orgOf(ctx)}::uuid, 'spc.read') as ok`);
+      if (!allowed.rows[0]?.ok) return empty;
+      const groups = await db.execute<Row>(sql`
+        select r.part_id, p.part_number, p.name as part_name, q.characteristic_key, q.operation_code,
+               (array_agg(q.name order by m.measured_at desc))[1] as name, max(m.measured_at) as last_at
+        from public.inspection_measurements m
+        join public.inspection_records r on r.id = m.inspection_record_id
+        join public.parts p on p.id = r.part_id
+        join public.resolved_inspection_requirements q on q.id = m.requirement_id
+        where m.organisation_id = ${orgOf(ctx)}::uuid and q.spc_eligible and q.data_type = 'variable' and m.value_numeric is not null
+          and m.measured_at >= now() - interval '90 days'
+        group by r.part_id, p.part_number, p.name, q.characteristic_key, q.operation_code
+        order by max(m.measured_at) desc limit ${opts.maxCharts}`);
+      const since = Date.now() - opts.days * 86_400_000;
+      const byRule: Record<string, number> = {};
+      const recent: SpcOverview['recent'] = [];
+      let withSignals = 0;
+      let withoutBaseline = 0;
+      let monitored = 0;
+      let signalCount = 0;
+      for (const g of groups.rows) {
+        const partId = g.part_id as string;
+        const key = g.characteristic_key as string;
+        const op = g.operation_code as string;
+        const data = assemble(await this.readings(db, ctx, { partId, characteristicKey: key, operationCode: op }));
+        if (!data.chartType || !data.points.length) continue;
+        monitored += 1;
+        const b = await db.execute<Row>(sql`${BASELINE_SELECT} where b.organisation_id = ${orgOf(ctx)}::uuid and b.part_id = ${partId}::uuid
+          and b.characteristic_key = ${key} and b.operation_code = ${op} and b.chart_type = ${data.chartType} and b.superseded_at is null`);
+        const base = b.rows[0] ? toBaseline(b.rows[0]) : null;
+        const usable = base && base.subgroupSize === data.subgroupSize && base.unitCode === data.unitCode ? base : null;
+        if (!usable) withoutBaseline += 1;
+        const res = evaluate(data, usable ? usable.limits : null, usable ? usable.rules : parseRules(undefined));
+        const mine: SpcOverview['recent'] = [];
+        for (const sg of res.signals) {
+          const pt = data.points[sg.index];
+          if (new Date(pt.at).getTime() >= since) mine.push({ ...overviewRow(g, pt, data.unitCode), rule: sg.rule, text: RULE_TEXT[sg.rule] });
+        }
+        for (const i of res.dispersionSignals) {
+          const pt = data.points[i];
+          if (new Date(pt.at).getTime() >= since) mine.push({ ...overviewRow(g, pt, data.unitCode), rule: 'range', text: `${data.chartType === 'imr' ? 'Moving range' : 'Range'} above its upper limit` });
+        }
+        if (mine.length) withSignals += 1;
+        for (const m of mine) byRule[m.rule] = (byRule[m.rule] ?? 0) + 1;
+        signalCount += mine.length;
+        recent.push(...mine);
+      }
+      recent.sort((x, y) => y.at.localeCompare(x.at));
+      return {
+        available: true,
+        windowDays: opts.days,
+        monitored,
+        withSignals,
+        withoutBaseline,
+        signalCount,
+        byRule: Object.entries(byRule).map(([rule, count]) => ({ rule, count })),
+        recent: recent.slice(0, opts.maxRecent),
+      };
+    });
+  }
+
   // ---- helpers ------------------------------------------------------------------------------
 
   private async requirePart(db: Db, ctx: RequestContext, partId: string) {
@@ -266,3 +335,38 @@ export class SpcService {
 }
 
 const rule = (message: string) => new ApiError(HttpStatus.CONFLICT, 'spc_rule', message);
+
+export interface SpcOverview {
+  available: boolean;
+  windowDays: number;
+  /** Characteristics with charted points. */
+  monitored: number;
+  /** Of those, how many raised a signal in the window. */
+  withSignals: number;
+  withoutBaseline: number;
+  signalCount: number;
+  byRule: { rule: string; count: number }[];
+  recent: {
+    partId: string;
+    partNumber: string;
+    characteristicKey: string;
+    characteristicName: string;
+    operationCode: string;
+    rule: string;
+    text: string;
+    at: string;
+    point: number;
+    inspections: { id: string; reference: string }[];
+  }[];
+}
+
+const overviewRow = (g: Row, pt: ChartPoint, _unit: string | null) => ({
+  partId: g.part_id as string,
+  partNumber: g.part_number as string,
+  characteristicKey: g.characteristic_key as string,
+  characteristicName: (g.name as string) ?? (g.characteristic_key as string),
+  operationCode: g.operation_code as string,
+  at: pt.at,
+  point: pt.index + 1,
+  inspections: pt.inspections,
+});

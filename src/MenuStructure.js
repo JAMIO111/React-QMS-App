@@ -35,6 +35,7 @@ export const menuStructure = [
     module: "control_plans",
     path: "/Process-Control",
     subMenu: [
+      { name: "Dashboard", path: "/Process-Control", end: true },
       { name: "Control Plans", path: "/Process-Control/Plans" },
       { name: "SPC Charts", path: "/Process-Control/SPC", permission: "spc.read" },
     ],

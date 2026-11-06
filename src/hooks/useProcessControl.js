@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { optimisticHandlers, settle } from "../lib/optimistic";
 import { useOrganisation } from "../contexts/OrganisationProvider";
@@ -68,4 +68,16 @@ export const useResolution = ({ partId, operationCode, siteId } = {}, enabled = 
   if (operationCode) qs.set("operationCode", operationCode);
   if (siteId) qs.set("siteId", siteId);
   return useDetail(`/control-plan-resolution?${qs}`, !!partId && enabled);
+};
+
+/** Process control dashboard figures for a period ({ from, to } — YYYY-MM-DD). */
+export const useProcessControlDashboard = ({ from, to }) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: ["api", "org", organisationId, "process-control-dashboard", from, to],
+    queryFn: () => apiFetch(`/process-control-dashboard?from=${from}&to=${to}`, { organisationId }),
+    enabled: !!organisationId && !!from && !!to,
+    retry: false,
+    placeholderData: keepPreviousData,
+  });
 };

@@ -134,6 +134,12 @@ Summary of the brief:
     counted by reason); API `GET /spc/characteristics|chart|baselines`, `POST /spc/baselines` (`409 spc_rule`). Charts read
     `inspection_measurements` live. UI `src/components/spc/` (`/Process-Control/SPC`, URL filters), hooks `useSpc.js`, `lib/spc.js`;
     colours from the `--chart-*` variables, spec limits solid vs control limits dashed. A signal never raises an NC.
+  - **Process control dashboard** (`/Process-Control`, `ProcessControlDashboard.jsx`; API `GET /process-control-dashboard?from&to`
+    in `api/src/process-control/process-control-dashboard.ts`): plan pipeline and SPC as of today, inspections for a period (URL `?period=`).
+    KPIs awaiting approval, effective plans, inspections, first-pass rate, open failures (no acknowledgement/NC), SPC signals (30 days);
+    charts inspections by result, revisions by status, failures by characteristic, signals by rule; lists of latest signals, plans needing
+    attention, failures needing action, inspections in progress. `SpcService.overview()` evaluates up to 40 recently measured characteristics
+    like their charts (needs `spc.read`, else `spc.available` is false). Shared dashboard pieces in `src/components/dashboard/DashboardParts.jsx`.
   - **Next (later phases):** P/NP/C/U charts, Cp/Cpk/Pp/Ppk, alerts (need a worker).
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with

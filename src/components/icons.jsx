@@ -108,6 +108,7 @@ import {
   Droplets as LucideDroplets,
   FlaskConical as LucideFlaskConical,
   ChevronUp as LucideChevronUp,
+  Activity as LucideActivity,
 } from "lucide-react";
 
 const withDefaults = (Icon) => {
@@ -224,4 +225,5 @@ export const CalendarClockIcon = withDefaults(LucideCalendarClock);
 export const ThermometerIcon = withDefaults(LucideThermometer);
 export const DropletsIcon = withDefaults(LucideDroplets);
 export const FlaskConicalIcon = withDefaults(LucideFlaskConical);
+export const ActivityIcon = withDefaults(LucideActivity);
 export const ChevronUpIcon = withDefaults(LucideChevronUp);

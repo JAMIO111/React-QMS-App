@@ -52,10 +52,10 @@ const StepFooter = ({ capa, step, editable }) => {
           </Link>
         ) : <span />}
         <div className="flex flex-wrap items-center gap-2">
-          {editable && s.completed && (
+          {editable && s.completed && step !== "d8" && (
             <button type="button" className={buttonClass.neutral} onClick={() => { mutation.reset(); setReopening(true); }}>Reopen {code}</button>
           )}
-          {editable && !s.completed && (
+          {editable && !s.completed && step !== "d8" && (
             <button
               type="button"
               className={buttonClass.primary}

@@ -18,9 +18,9 @@ import D4RootCause from "./steps/D4RootCause";
 import D5Corrective from "./steps/D5Corrective";
 import D6Implement from "./steps/D6Implement";
 import D7Prevent from "./steps/D7Prevent";
-import StepNotAvailable from "./steps/StepNotAvailable";
+import D8Close from "./steps/D8Close";
 
-const STEP_PAGES = { d0: D0Initiate, d1: D1Team, d2: D2Problem, d3: D3Containment, d4: D4RootCause, d5: D5Corrective, d6: D6Implement, d7: D7Prevent };
+const STEP_PAGES = { d0: D0Initiate, d1: D1Team, d2: D2Problem, d3: D3Containment, d4: D4RootCause, d5: D5Corrective, d6: D6Implement, d7: D7Prevent, d8: D8Close };
 
 /**
  * One 8D, step by step. `/CAPA/:id` opens the step the 8D is at; `/CAPA/:id/:step` shows D0…D8 with the stepper beside it. Each step page has its
@@ -76,6 +76,7 @@ const CapaPage = () => {
           {capa.stageReason && <p className="mt-1 text-sm text-secondary-text">{capa.stage === "cancelled" ? "Cancelled" : "Reopened"}: {capa.stageReason}</p>}
         </div>
         <div className="flex gap-2">
+          <Link to={`/CAPA/${capa.id}/report`} className={buttonClass.neutral}>Report</Link>
           {can("capa.manage") && running && <button type="button" className={buttonClass.danger} onClick={() => { mutation.reset(); setDialog("cancel"); }}>Cancel 8D</button>}
           {can("capa.manage") && !running && <button type="button" className={buttonClass.neutral} onClick={() => { mutation.reset(); setDialog("reopen"); }}>Reopen 8D</button>}
         </div>
@@ -89,7 +90,7 @@ const CapaPage = () => {
             <p className="mt-1 max-w-3xl text-sm text-secondary-text">{def.help}</p>
           </div>
           {!running && <p role="status" className="rounded-lg border border-border-color bg-primary-bg p-3 text-sm text-primary-text">This 8D is {capa.stage}. Reopen it to make changes.</p>}
-          {Page ? <Page capa={capa} editable={editable} /> : <StepNotAvailable step={def} />}
+          {Page && <Page capa={capa} editable={editable} />}
           <StepFooter capa={capa} step={step} editable={editable} />
         </section>
       </div>

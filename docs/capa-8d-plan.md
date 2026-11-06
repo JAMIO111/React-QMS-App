@@ -90,7 +90,7 @@ Pickers use `RHFComboBox`, dates `RHFDatePickerPopout`, files `AttachmentDrop`; 
 2. **CAPA2 D2 and D3** (done 2026-11-06): 5W2H and Is / Is-Not modals, interim containment actions.
 3. **CAPA3 D4** (done 2026-11-06): root causes with verification, Ishikawa and 5 Whys modals.
 4. **CAPA4 D5, D6, D7** (done 2026-11-06): corrective and preventive actions (linked to a root cause), effectiveness verification (`capa_verifications`, append-only, stale when the corrective actions change afterwards), automatic stage, reopening D5 and D6 on a failed verification, lessons learned and "no preventive action" reason.
-5. **CAPA5 D8, files, report, exit check:** closure, attachments, print report, guardrails, sweeps, docs, exit report.
+5. **CAPA5 D8, files, report, exit check** (done 2026-11-06): `app.close_capa` (needs `capa.verify`), evidence files (`capa_attachments`, `capa-files` bucket), printable report `/CAPA/:id/report`, guardrails and sweeps, `docs/capa-exit-report.md`. Evidence files belong to the 8D as a whole (not to a step).
 
 ## 9. Not in this build
 

@@ -5,7 +5,8 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { iso, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
-import { AddTeamBody, ANALYSIS_DATA, CapaDetail, CapaSummary, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, CreateRootCauseBody, CreateVerificationBody, LinkNcrBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, STEPS, UpdateActionBody, UpdateAnalysisBody, UpdateCapaBody, UpdateRootCauseBody, UpdateTeamBody } from './capa.schemas';
+import { Attachment, CreateAttachmentBody, DeletedQuery } from '../calibration/calibration.schemas';
+import { AddTeamBody, ANALYSIS_DATA, CapaDetail, CapaSummary, CloseCapaBody, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, CreateRootCauseBody, CreateVerificationBody, LinkNcrBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, STEPS, UpdateActionBody, UpdateAnalysisBody, UpdateCapaBody, UpdateRootCauseBody, UpdateTeamBody } from './capa.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown' } : null);
@@ -14,16 +15,17 @@ const RUNNING = sql`c.stage not in ('closed', 'cancelled')`;
 const SELECT = sql`
   select c.id, c.reference, c.method, c.title, c.problem_statement, c.stage, c.stage_reason, c.source, c.severity, c.external_reference,
          c.owner_membership_id, c.due_date::text as due_date, c.closed_at, c.created_at, c.updated_at, c.created_by,
-         c.d2_who, c.d2_what, c.d2_where, c.d2_when, c.d2_why, c.d2_how, c.d2_how_many, c.d3_no_containment_reason, c.d7_lessons_learned, c.d7_no_preventive_reason,
+         c.d2_who, c.d2_what, c.d2_where, c.d2_when, c.d2_why, c.d2_how, c.d2_how_many, c.d3_no_containment_reason, c.d7_lessons_learned, c.d7_no_preventive_reason, c.d8_recognition, c.closed_by,
          (c.due_date is not null and c.due_date < current_date and ${RUNNING}) as overdue,
          (select count(*) from public.capa_steps s where s.capa_id = c.id and s.completed_at is not null)::int as steps_done,
          (select min(s.step) from public.capa_steps s where s.capa_id = c.id and s.completed_at is null) as next_step,
          (select count(*) from public.capa_ncr_links l where l.capa_id = c.id and l.ended_at is null)::int as ncr_count,
-         ${sql.raw(personName('po'))} as owner_name, ${sql.raw(personName('pc'))} as created_by_name
+         ${sql.raw(personName('po'))} as owner_name, ${sql.raw(personName('pc'))} as created_by_name, ${sql.raw(personName('pcb'))} as closed_by_name
   from public.capas c
   left join public.organisation_users om on om.id = c.owner_membership_id
   left join public.profiles po on po.id = om.user_id
-  left join public.profiles pc on pc.id = c.created_by`;
+  left join public.profiles pc on pc.id = c.created_by
+  left join public.profiles pcb on pcb.id = c.closed_by`;
 
 const toSummary = (r: Row): CapaSummary => ({
   id: r.id as string,
@@ -43,6 +45,23 @@ const toSummary = (r: Row): CapaSummary => ({
   ncrCount: Number(r.ncr_count),
   createdAt: iso(r.created_at)!,
   closedAt: iso(r.closed_at),
+});
+
+const ATTACHMENT_SELECT = sql`
+  select a.*, ${sql.raw(personName('pc'))} as created_by_name
+  from public.capa_attachments a left join public.profiles pc on pc.id = a.created_by`;
+
+const toAttachment = (r: Row): z.infer<typeof Attachment> => ({
+  id: r.id as string,
+  fileName: r.file_name as string,
+  contentType: (r.content_type as string) ?? null,
+  sizeBytes: Number(r.size_bytes),
+  description: (r.description as string) ?? null,
+  storagePath: r.storage_path as string,
+  createdAt: iso(r.created_at)!,
+  createdBy: r.created_by ? { id: r.created_by as string, name: (r.created_by_name as string) ?? 'Unknown user' } : null,
+  deletedAt: iso(r.deleted_at),
+  deleteReason: (r.delete_reason as string) ?? null,
 });
 
 /** The step each analysis kind belongs to. */
@@ -128,6 +147,59 @@ export class CapaService {
 
   reopen(ctx: RequestContext, id: string, body: ReasonBody): Promise<CapaDetail> {
     return this.command(ctx, id, sql`select app.reopen_capa(${id}::uuid, ${body.reason})`);
+  }
+
+  /** Closes the 8D (D8): needs capa.verify, everything done and verified effective. */
+  close(ctx: RequestContext, id: string, body: CloseCapaBody): Promise<CapaDetail> {
+    return this.command(ctx, id, sql`select app.close_capa(${id}::uuid, ${body.recognition ?? null})`);
+  }
+
+  // ---- evidence files (D8 and any step) ------------------------------------------------------
+
+  listAttachments(ctx: RequestContext, id: string, q: z.infer<typeof DeletedQuery>): Promise<z.infer<typeof Attachment>[]> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      const filter = q.deleted === 'exclude' ? sql`a.deleted_at is null` : q.deleted === 'only' ? sql`a.deleted_at is not null` : sql`true`;
+      const rows = await db.execute<Row>(sql`${ATTACHMENT_SELECT} where a.capa_id = ${id}::uuid and ${filter} order by a.created_at desc`);
+      return rows.rows.map(toAttachment);
+    });
+  }
+
+  /** Records a file the client has already uploaded to storage at <org>/capa/<id>/<name>. */
+  createAttachment(ctx: RequestContext, id: string, body: z.infer<typeof CreateAttachmentBody>): Promise<z.infer<typeof Attachment>> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      const folder = `${orgOf(ctx)}/capa/${id}/`;
+      if (!body.storagePath.startsWith(folder) || body.storagePath.includes('..') || body.storagePath.length === folder.length) {
+        throw ApiError.badRequest('invalid_path', `Files for this 8D must be uploaded to ${folder}`);
+      }
+      const stored = await db.execute(sql`select 1 from storage.objects where bucket_id = 'capa-files' and name = ${body.storagePath}`);
+      if (!stored.rows.length) throw ApiError.badRequest('file_not_uploaded', 'Upload the file before attaching it');
+      const res = await db.execute<{ id: string }>(sql`select app.add_capa_attachment(${id}::uuid, ${body.storagePath}, ${body.fileName}, ${body.contentType ?? null}, ${body.sizeBytes}::bigint, ${body.description ?? null}) as id`);
+      return this.loadAttachment(db, ctx, res.rows[0].id);
+    });
+  }
+
+  removeAttachment(ctx: RequestContext, attachmentId: string, reason: string) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.loadAttachment(db, ctx, attachmentId);
+      await db.execute(sql`select app.remove_capa_attachment(${attachmentId}::uuid, ${reason})`);
+      return this.loadAttachment(db, ctx, attachmentId);
+    });
+  }
+
+  restoreAttachment(ctx: RequestContext, attachmentId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.loadAttachment(db, ctx, attachmentId);
+      await db.execute(sql`select app.restore_capa_attachment(${attachmentId}::uuid)`);
+      return this.loadAttachment(db, ctx, attachmentId);
+    });
+  }
+
+  private async loadAttachment(db: Db, ctx: RequestContext, id: string) {
+    const res = await db.execute<Row>(sql`${ATTACHMENT_SELECT} where a.id = ${id}::uuid and a.organisation_id = ${orgOf(ctx)}::uuid`);
+    if (!res.rows.length) throw ApiError.notFound('attachment_not_found', 'File not found');
+    return toAttachment(res.rows[0]);
   }
 
   // ---- team ----------------------------------------------------------------------------------
@@ -437,6 +509,8 @@ export class CapaService {
       })),
       verificationState: vstate.rows[0].s as CapaDetail['verificationState'],
       d7LessonsLearned: (r.d7_lessons_learned as string) ?? null,
+      d8Recognition: (r.d8_recognition as string) ?? null,
+      closedBy: person(r.closed_by, r.closed_by_name),
       d7NoPreventiveReason: (r.d7_no_preventive_reason as string) ?? null,
       actions: actions.rows.map((x) => ({
         id: x.id as string,

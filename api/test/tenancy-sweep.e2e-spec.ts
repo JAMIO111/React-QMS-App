@@ -154,6 +154,11 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/capa-actions/{id}/reopen': undefined,
     'POST /api/v1/capas/{id}/root-causes': { kind: 'occurrence', description: 'Hijacked' },
     'POST /api/v1/capas/{id}/verifications': { effective: true, method: 'Hijacked' },
+    'POST /api/v1/capas/{id}/close': { recognition: 'Hijacked' },
+    'GET /api/v1/capas/{id}/attachments': undefined,
+    'POST /api/v1/capas/{id}/attachments': { storagePath: 'x/capa/y/z.pdf', fileName: 'z.pdf', sizeBytes: 1 },
+    'POST /api/v1/capa-attachments/{id}/delete': { reason: 'Hijacked' },
+    'POST /api/v1/capa-attachments/{id}/restore': undefined,
     'PATCH /api/v1/capa-root-causes/{id}': { description: 'Hijacked' },
     'DELETE /api/v1/capa-root-causes/{id}': undefined,
     'GET /api/v1/ncrs/{id}/capas': undefined,
@@ -293,6 +298,11 @@ const hasSample = (op: Op) =>
     'POST /api/v1/capa-actions/{id}/reopen',
     'POST /api/v1/capas/{id}/root-causes',
     'POST /api/v1/capas/{id}/verifications',
+    'POST /api/v1/capas/{id}/close',
+    'GET /api/v1/capas/{id}/attachments',
+    'POST /api/v1/capas/{id}/attachments',
+    'POST /api/v1/capa-attachments/{id}/delete',
+    'POST /api/v1/capa-attachments/{id}/restore',
     'PATCH /api/v1/capa-root-causes/{id}',
     'DELETE /api/v1/capa-root-causes/{id}',
     'GET /api/v1/ncrs/{id}/capas',
@@ -345,6 +355,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/quality-alert-attachments/')) return a.qualityAlertAttachment;
   if (path.startsWith('/api/v1/capas/')) return a.capa;
   if (path.startsWith('/api/v1/capa-team/')) return a.capaTeam;
+  if (path.startsWith('/api/v1/capa-attachments/')) return a.capaAttachment;
   if (path.startsWith('/api/v1/capa-ncr-links/')) return a.capaLink;
   if (path.startsWith('/api/v1/capa-analyses/')) return a.capaAnalysis;
   if (path.startsWith('/api/v1/capa-actions/')) return a.capaAction;
@@ -444,6 +455,7 @@ beforeAll(async () => {
     a.capaTeam = (await q1(`select id from public.capa_team_members where capa_id = $1 limit 1`, [a.capa])).id;
     a.capaLink = (await q1(`select app.link_capa_ncr($1::uuid, $2::uuid) as id`, [a.capa, a.ncr])).id;
     a.capaAnalysis = (await q1(`insert into public.capa_analyses (organisation_id, capa_id, kind, title, step, data) values ($1, $2, 'is_is_not', 'Alpha Is / Is-Not', 'd2', '{"rows":[]}') returning id`, [ids.orgA, a.capa])).id;
+    a.capaAttachment = (await q1(`select app.add_capa_attachment($2::uuid, $1::text || '/capa/' || $2::text || '/a.pdf', 'a.pdf', 'application/pdf', 1) as id`, [ids.orgA, a.capa])).id;
     a.capaRootCause = (await q1(`insert into public.capa_root_causes (organisation_id, capa_id, kind, description) values ($1, $2, 'occurrence', 'Alpha root cause') returning id`, [ids.orgA, a.capa])).id;
     a.capaAction = (await q1(`insert into public.capa_actions (organisation_id, capa_id, phase, description) values ($1, $2, 'interim', 'Alpha containment') returning id`, [ids.orgA, a.capa])).id;
     await client.query('commit');

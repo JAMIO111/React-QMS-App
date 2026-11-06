@@ -127,7 +127,7 @@ BEGIN
   PERFORM pg_temp.assert_fails(format($q$SELECT app.capa_complete_step(%L, 'd0')$q$, c), 'D0 only once');
   PERFORM pg_temp.assert_eq(app.capa_step_problems(c, 'd1'), ARRAY[]::text[], 'D1 is ready: a leader and two people');
   PERFORM pg_temp.assert_eq(app.capa_step_problems(c2, 'd1'), ARRAY['Add at least two people to the team'], 'one person is not a team');
-  PERFORM pg_temp.assert_eq(app.capa_step_problems(c, 'd8'), ARRAY['This step is not available yet'], 'later steps arrive in later slices');
+  PERFORM pg_temp.assert_eq(app.capa_step_problems(c, 'd99'), ARRAY['This step is not available yet'], 'an unknown step is not available');
   PERFORM pg_temp.assert_fails(format($q$SELECT app.capa_reopen_step(%L, 'd0', ' ')$q$, c), 'a reason to reopen');
   PERFORM app.capa_reopen_step(c, 'd0', 'The scope changed');
   PERFORM pg_temp.assert_eq((SELECT array_agg(step ORDER BY step) FROM public.capa_steps WHERE capa_id = c AND completed_at IS NOT NULL), ARRAY['d1'], 'reopening D0 touches no other step');

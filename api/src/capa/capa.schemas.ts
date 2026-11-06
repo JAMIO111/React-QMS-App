@@ -178,6 +178,10 @@ export type CompleteActionBody = z.infer<typeof CompleteActionBody>;
 export const CreateVerificationBody = z.object({ effective: z.boolean(), method: text(200), notes: z.string().trim().max(2000).nullable().optional() }).strict();
 export type CreateVerificationBody = z.infer<typeof CreateVerificationBody>;
 
+/** Closes the 8D at D8 (needs capa.verify): optional recognition note. */
+export const CloseCapaBody = z.object({ recognition: z.string().trim().max(2000).nullable().optional() }).strict();
+export type CloseCapaBody = z.infer<typeof CloseCapaBody>;
+
 export const LinkNcrBody = z.object({ ncrId: z.string().uuid() }).strict();
 export type LinkNcrBody = z.infer<typeof LinkNcrBody>;
 
@@ -324,6 +328,9 @@ export const CapaDetail = CapaSummary.extend({
   verificationState: z.enum(['none', 'effective', 'failed', 'stale']),
   /** D7: what was learned, and why there is no preventive action when there is none. */
   d7LessonsLearned: z.string().nullable(),
+  /** D8: the recognition note and who closed the 8D (closedAt is on the summary). */
+  d8Recognition: z.string().nullable(),
+  closedBy: Person.nullable(),
   d7NoPreventiveReason: z.string().nullable(),
   createdBy: Person,
   updatedAt: Iso,

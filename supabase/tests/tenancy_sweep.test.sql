@@ -174,6 +174,8 @@ BEGIN
     SELECT a, id, 'corrective', 'Sweep corrective action' FROM public.capas WHERE organisation_id = a LIMIT 1;
   UPDATE public.capa_actions SET status = 'done' WHERE organisation_id = a AND phase = 'corrective';
   PERFORM app.record_capa_verification((SELECT id FROM public.capas WHERE organisation_id = a LIMIT 1), true, 'Sweep check', NULL);
+  -- CAPA5: an evidence file.
+  PERFORM app.add_capa_attachment((SELECT id FROM public.capas WHERE organisation_id = a LIMIT 1), a::text || '/capa/' || (SELECT id FROM public.capas WHERE organisation_id = a LIMIT 1)::text || '/sweep.pdf', 'sweep.pdf', 'application/pdf', 10, 'Sweep file');
   PERFORM pg_temp.logout();
 
   -- Subscription: seats and an assignment through the API functions, invoice and payment as the provider would.

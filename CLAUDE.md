@@ -256,7 +256,13 @@ Summary of the brief:
     (`app.capa_verification_state` none/effective/failed/stale; `app.capa_verification_status` for readers). **Stage is worked out** (`app.capa_recompute_stage`, trigger on actions): D4 not complete → open; effective verification and nothing open → verified_effective;
     failed → actions_in_progress; nothing open and ≥1 corrective done → awaiting_verification; else actions_in_progress. `app.capa_step_problems` now covers D0–D7. API: `POST /capas/{id}/verifications` (`capa.verify`), detail has `verifications`, `verificationState`,
     `d7LessonsLearned`, `d7NoPreventiveReason`, actions carry `rootCauseId`. UI `steps/D5Corrective.jsx` (causes with action counts + `ActionList withCause`), `D6Implement.jsx` (actions, verification card and dialog), `D7Prevent.jsx`, shared `ReasonCard.jsx`
-    (also used by D3). Nothing locks. Next: CAPA5 (D8 close, files, print report, exit check).
+    (also used by D3). Nothing locks.
+  - **CAPA5 done (D8 close, files, report, exit check):** migration `20251126100000_capa_d8_close_files.sql`. `app.close_capa(id, recognition)` (needs `capa.verify`; D0–D7 complete and stage verified_effective; completes D8, stage → closed,
+    `closed_at/by`, `capas.d8_recognition`, event `capa.closed`); `app.capa_complete_step` refuses D8 (only closing completes it); `app.reopen_capa` also marks D8 not done again; `app.capa_step_problems` covers D8 ("Complete Dn first", "must be verified
+    effective"). `capa_attachments` (functions only: `app.add_capa_attachment` / `remove_capa_attachment(id, reason)` / `restore_capa_attachment`, running 8Ds only; never deleted; private `capa-files` bucket at `<org>/capa/<capa id>/<uuid>-<name>`,
+    uploads via `app.capa_file_allowed` only into a running 8D with `capa.manage`, reads with `capa.read` even when closed). API: `POST /capas/{id}/close`, `GET|POST /capas/{id}/attachments`, `POST /capa-attachments/{id}/delete|restore`; detail has
+    `d8Recognition`, `closedBy`. UI `steps/D8Close.jsx` (close dialog, closure summary), `CapaFiles.jsx` (`AttachmentDrop`), `CapaReportPage.jsx` at `/CAPA/:id/report` (whole 8D as one document; "Print or save as PDF" prints only the report), "Report" link
+    in the 8D header. Exit report `docs/capa-exit-report.md`. The CAPA module is complete; not done: email/push for owners and due dates, customer-format PDF, CAPA dashboard, 8Ds that are not method 8D.
 - Subscriptions (`docs/subscription-plan.md`, migration `20251110100000_subscriptions.sql`): packages are separate from RBAC;
   `app.has_permission` = RBAC AND MFA AND entitlement (`app.check_entitlement`), only for organisations with
   `organisation_settings.entitlements_enforced`. Billing permissions `subscription.*`/`invoices.read`; API `api/src/billing/`;

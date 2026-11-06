@@ -201,7 +201,7 @@ describe('steps D0 and D1', () => {
     expect(fresh.steps[1].problems).toEqual(['Add at least two people to the team']);
     expect(fresh.steps[2].problems).toEqual(['Say what is wrong (the What of 5W2H)', 'Say where it was found (the Where of 5W2H)', 'Say when it was found (the When of 5W2H)']);
     expect(fresh.steps[4].problems).toEqual(['Record at least one occurrence root cause (why the problem happened)']);
-    expect(fresh.steps[8].problems).toEqual(['This step is not available yet']);
+    expect(fresh.steps[8].problems).toEqual([...['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7'].map((s) => `Complete ${s} first`), 'The corrective actions must be verified as effective before the 8D can be closed']);
     const early = await api().post(`/api/v1/capas/${ctx.c3}/complete-step`).set(h).send({ step: 'd1' });
     expect(early.status).toBe(409);
     expect(early.body.error).toMatchObject({ code: 'capa_rule', message: 'D1 cannot be completed yet: Add at least two people to the team' });
@@ -521,5 +521,68 @@ describe('D5 to D7: corrective actions, verification, prevention', () => {
 
   it('is private to the organisation', async () => {
     await api().post(`/api/v1/capas/${ctx.c2}/verifications`).set(await as(ids.ownerB, ids.orgB)).send({ effective: true, method: 'Hijacked' }).expect(404);
+  });
+});
+
+describe('D8: closing, evidence files', () => {
+  const owner = () => as(ids.ownerA);
+  const folder = () => `${ids.orgA}/capa/${ctx.c2}/`;
+
+  it('says what is missing before the 8D can be closed', async () => {
+    const h = await owner();
+    const d = (await api().get(`/api/v1/capas/${ctx.c2}`).set(h).expect(200)).body;
+    expect(d.steps[8].problems.length).toBeGreaterThan(0);
+    const refused = await api().post(`/api/v1/capas/${ctx.c2}/close`).set(h).send({});
+    expect(refused.status).toBe(409);
+    expect(refused.body.error?.code ?? refused.body.code).toBe('capa_rule');
+    await api().post(`/api/v1/capas/${ctx.c2}/complete-step`).set(h).send({ step: 'd8' }).expect(409); // D8 only through closing
+  });
+
+  it('keeps evidence files: attach after upload, remove with a reason, restore', async () => {
+    const h = await owner();
+    const path = `${folder()}u1-evidence.pdf`;
+    await api().post(`/api/v1/capas/${ctx.c2}/attachments`).set(h).send({ storagePath: path, fileName: 'evidence.pdf', sizeBytes: 10 }).expect(400); // not uploaded yet
+    await admin.query(`insert into storage.objects (bucket_id, name) values ('capa-files', $1)`, [path]);
+    await api().post(`/api/v1/capas/${ctx.c2}/attachments`).set(h).send({ storagePath: `${ids.orgA}/capa/${ctx.c1}/x.pdf`, fileName: 'x.pdf', sizeBytes: 1 }).expect(400); // another 8D's folder
+    const att = (await api().post(`/api/v1/capas/${ctx.c2}/attachments`).set(h).send({ storagePath: path, fileName: 'evidence.pdf', contentType: 'application/pdf', sizeBytes: 10 }).expect(201)).body;
+    ctx.capaFile = att.id;
+    expect((await api().get(`/api/v1/capas/${ctx.c2}/attachments`).set(h).expect(200)).body.data).toHaveLength(1);
+    await api().post(`/api/v1/capas/${ctx.c2}/attachments`).set(await as(ids.inspectorA)).send({ storagePath: path, fileName: 'evidence.pdf', sizeBytes: 10 }).expect(403);
+    await api().post(`/api/v1/capa-attachments/${att.id}/delete`).set(h).send({ reason: 'x' }).expect(400);
+    const removed = (await api().post(`/api/v1/capa-attachments/${att.id}/delete`).set(h).send({ reason: 'Wrong file' }).expect(200)).body;
+    expect(removed).toMatchObject({ deleteReason: 'Wrong file', deletedAt: expect.any(String) });
+    expect((await api().get(`/api/v1/capas/${ctx.c2}/attachments`).set(h).expect(200)).body.data).toHaveLength(0);
+    expect((await api().get(`/api/v1/capas/${ctx.c2}/attachments?deleted=include`).set(h).expect(200)).body.data).toHaveLength(1);
+    const restored = (await api().post(`/api/v1/capa-attachments/${att.id}/restore`).set(h).expect(200)).body;
+    expect(restored.deletedAt).toBeNull();
+    await api().get(`/api/v1/capas/${ctx.c2}/attachments`).set(await as(ids.ownerB, ids.orgB)).expect(404);
+    await api().post(`/api/v1/capa-attachments/${att.id}/delete`).set(await as(ids.ownerB, ids.orgB)).send({ reason: 'Hijacked' }).expect(404);
+  });
+
+  it('closes a verified 8D with a recognition note; closed is read-only; reopening undoes it', async () => {
+    const h = await owner();
+    // Get the 8D ready: every earlier step done (marked directly), corrective actions done and verified.
+    await admin.query(`update public.capa_steps set completed_at = now() where capa_id = $1 and step <> 'd8' and completed_at is null`, [ctx.c2]);
+    await api().post(`/api/v1/capa-actions/${ctx.second}/complete`).set(h).send({ evidenceNote: 'Back in place' }).expect(200);
+    const verified = (await api().post(`/api/v1/capas/${ctx.c2}/verifications`).set(h).send({ effective: true, method: 'Final audit' }).expect(201)).body;
+    expect(verified.stage).toBe('verified_effective');
+    expect(verified.steps[8].problems).toEqual([]);
+    await api().post(`/api/v1/capas/${ctx.c2}/close`).set(await as(ids.inspectorA)).send({}).expect(403);
+    const closed = (await api().post(`/api/v1/capas/${ctx.c2}/close`).set(h).send({ recognition: 'Thank you to the team' }).expect(200)).body;
+    expect(closed).toMatchObject({ stage: 'closed', d8Recognition: 'Thank you to the team', closedBy: { name: 'Ada Owner' }, closedAt: expect.any(String) });
+    expect(closed.steps[8].completed).toBe(true);
+    await api().post(`/api/v1/capas/${ctx.c2}/close`).set(h).send({}).expect(409);
+    await api().patch(`/api/v1/capas/${ctx.c2}`).set(h).send({ title: 'Changed after closure' }).expect(409);
+    await admin.query(`insert into storage.objects (bucket_id, name) values ('capa-files', $1)`, [`${folder()}u2-late.pdf`]);
+    await api().post(`/api/v1/capas/${ctx.c2}/attachments`).set(h).send({ storagePath: `${folder()}u2-late.pdf`, fileName: 'late.pdf', sizeBytes: 1 }).expect(409);
+    expect((await api().get(`/api/v1/capas/${ctx.c2}/attachments`).set(h).expect(200)).body.data).toHaveLength(1); // still listed
+    const reopened = (await api().post(`/api/v1/capas/${ctx.c2}/reopen`).set(h).send({ reason: 'Customer wants more evidence' }).expect(200)).body;
+    expect(reopened.stage).toBe('verified_effective');
+    expect(reopened.closedAt).toBeNull();
+    expect(reopened.steps[8].completed).toBe(false);
+  });
+
+  it('is private to the organisation', async () => {
+    await api().post(`/api/v1/capas/${ctx.c2}/close`).set(await as(ids.ownerB, ids.orgB)).send({}).expect(404);
   });
 });

@@ -3,7 +3,9 @@ import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, Ap
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { AddTeamBody, CapaDetail, CapaList, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, CreateRootCauseBody, CreateVerificationBody, LinkNcrBody, UpdateRootCauseBody, UpdateActionBody, UpdateAnalysisBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, UpdateCapaBody, UpdateTeamBody } from './capa.schemas';
+import { Attachment, CreateAttachmentBody, DeleteBody, DeletedQuery } from '../calibration/calibration.schemas';
+import { z } from 'zod';
+import { AddTeamBody, CapaDetail, CapaList, CloseCapaBody, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, CreateRootCauseBody, CreateVerificationBody, LinkNcrBody, UpdateRootCauseBody, UpdateActionBody, UpdateAnalysisBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, UpdateCapaBody, UpdateTeamBody } from './capa.schemas';
 import { CapaService } from './capa.service';
 
 const READ = 'capa.read';
@@ -84,6 +86,32 @@ export class CapasController {
   @ApiOkResponse({ schema: openApiSchema(CapaDetail) })
   cancel(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.cancel(ctx, parse(Uuid, id), parse(ReasonBody, body));
+  }
+
+  @Post(':id/close')
+  @HttpCode(200)
+  @OrganisationScoped('capa.verify')
+  @ApiBody({ schema: openApiSchema(CloseCapaBody) })
+  @ApiOkResponse({ description: 'Closes the 8D at D8: needs capa.verify, D0 to D7 complete and the actions verified effective', schema: openApiSchema(CapaDetail) })
+  close(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.close(ctx, parse(Uuid, id), parse(CloseCapaBody, body ?? {}));
+  }
+
+  @Get(':id/attachments')
+  @OrganisationScoped(READ)
+  @ApiQuery({ name: 'deleted', required: false, schema: { type: 'string', enum: ['exclude', 'include', 'only'] } })
+  @ApiOkResponse({ schema: openApiSchema(z.object({ data: z.array(Attachment) })) })
+  async attachments(@Ctx() ctx: RequestContext, @Param('id') id: string, @Query() query: unknown) {
+    return { data: await this.service.listAttachments(ctx, parse(Uuid, id), parse(DeletedQuery, query)) };
+  }
+
+  @Post(':id/attachments')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(CreateAttachmentBody) })
+  @ApiCreatedResponse({ description: 'Records a file already uploaded to the 8D’s folder (running 8Ds only)', schema: openApiSchema(Attachment) })
+  createAttachment(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.createAttachment(ctx, parse(Uuid, id), parse(CreateAttachmentBody, body));
   }
 
   @Post(':id/reopen')
@@ -277,5 +305,29 @@ export class CapaRootCausesController {
   @ApiOkResponse({ description: 'Marks the root cause removed (the record stays); answers with the 8D', schema: openApiSchema(CapaDetail) })
   remove(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.removeRootCause(ctx, parse(Uuid, id));
+  }
+}
+
+@ApiTags('capa')
+@ApiBearerAuth()
+@Controller('capa-attachments')
+export class CapaAttachmentsController {
+  constructor(private readonly service: CapaService) {}
+
+  @Post(':id/delete')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(DeleteBody) })
+  @ApiOkResponse({ description: 'Takes a file off a running 8D with a reason; the stored file is kept', schema: openApiSchema(Attachment) })
+  remove(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.removeAttachment(ctx, parse(Uuid, id), parse(DeleteBody, body).reason);
+  }
+
+  @Post(':id/restore')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ schema: openApiSchema(Attachment) })
+  restore(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.restoreAttachment(ctx, parse(Uuid, id));
   }
 }

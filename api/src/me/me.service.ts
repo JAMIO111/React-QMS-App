@@ -35,9 +35,15 @@ export class MeService {
       name: string;
       slug: string;
       permissions: string[] | null;
+      access_state: string | null;
+      onboarding: string;
     }>(sql`
       select m.id as membership_id, o.id as organisation_id, o.name, o.slug,
-             array(select p from app.my_permissions(o.id) p order by p) as permissions
+             array(select p from app.my_permissions(o.id) p order by p) as permissions,
+             app.organisation_access_state(o.id) as access_state,
+             case when o.onboarding_completed_at is not null then 'complete'
+                  when exists (select 1 from public.organisation_onboarding w where w.organisation_id = o.id) then 'in_progress'
+                  else 'none' end as onboarding
       from public.organisation_users m
       join public.organisations o on o.id = m.organisation_id and o.status = 'active'
       where m.user_id = auth.uid() and m.status = 'active'
@@ -65,6 +71,8 @@ export class MeService {
       memberships: memberships.rows.filter((m) => !blockedIds.has(m.organisation_id)).map((m) => ({
         membershipId: m.membership_id,
         organisation: { id: m.organisation_id, name: m.name, slug: m.slug },
+        accessState: (m.access_state ?? 'open') as 'open' | 'needs_subscription' | 'lapsed',
+        onboarding: m.onboarding as 'none' | 'in_progress' | 'complete',
         permissions: m.permissions ?? [],
       })),
     };

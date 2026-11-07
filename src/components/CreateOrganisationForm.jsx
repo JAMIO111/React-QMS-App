@@ -7,10 +7,27 @@ import { useCreateOrganisation } from "../hooks/useQmsApi";
  * Creates an organisation through the API (the creator becomes its Owner). One idempotency key per
  * form, so a double click or a retry after a network blip cannot create two organisations.
  */
+/** The browser's own time zone, as the default for the first site (people can change it). */
+const browserTimeZone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    return "";
+  }
+};
+const TIME_ZONES = (() => {
+  try {
+    return Intl.supportedValuesOf("timeZone");
+  } catch {
+    return [];
+  }
+})();
+
 const CreateOrganisationForm = ({ onCreated }) => {
   const [name, setName] = useState("");
   const [siteName, setSiteName] = useState("Main site");
   const [siteCode, setSiteCode] = useState("MAIN");
+  const [timeZone, setTimeZone] = useState(browserTimeZone);
   const idempotencyKey = useRef(newIdempotencyKey());
   const create = useCreateOrganisation();
 
@@ -18,7 +35,7 @@ const CreateOrganisationForm = ({ onCreated }) => {
     e.preventDefault();
     create.mutate(
       {
-        body: { name: name.trim(), site: { name: siteName.trim(), code: siteCode.trim() } },
+        body: { name: name.trim(), site: { name: siteName.trim(), code: siteCode.trim() }, ...(timeZone.trim() ? { timeZone: timeZone.trim() } : {}) },
         idempotencyKey: idempotencyKey.current,
       },
       { onSuccess: (organisation) => onCreated?.(organisation) }
@@ -56,6 +73,20 @@ const CreateOrganisationForm = ({ onCreated }) => {
           hint="Short code, e.g. MAIN"
         />
       </div>
+      <Field
+        label="Time zone"
+        value={timeZone}
+        onChange={(e) => setTimeZone(e.target.value)}
+        list="create-org-time-zones"
+        maxLength={60}
+        placeholder="e.g. Europe/London"
+        hint="Where your first site is. You can change it later."
+      />
+      <datalist id="create-org-time-zones">
+        {TIME_ZONES.map((z) => (
+          <option key={z} value={z} />
+        ))}
+      </datalist>
       {create.error && (
         <p role="alert" className="text-sm text-error-color">
           {describeApiError(create.error)}

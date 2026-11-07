@@ -33,6 +33,17 @@ export const usePermissions = () => {
   };
 };
 
+/**
+ * Whether the current organisation may be used (accessState: open | needs_subscription | lapsed) and where the owner's set-up wizard is
+ * (onboarding: none | in_progress | complete). Both come from GET /me.
+ */
+export const useOrganisationAccess = () => {
+  const { organisationId } = useOrganisation();
+  const me = useMe();
+  const membership = me.data?.memberships?.find((m) => m.organisation.id === organisationId);
+  return { accessState: membership?.accessState ?? "open", onboarding: membership?.onboarding ?? "none", isLoading: me.isLoading };
+};
+
 const orgKey = (organisationId, ...rest) => ["api", "org", organisationId, ...rest];
 
 export const useOrganisationDetails = () => {

@@ -39,10 +39,27 @@ describe("CreateOrganisationForm", () => {
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ id: "org-new", name: "Acme Ltd" }));
     expect(apiFetch).toHaveBeenCalledWith("/organisations", {
       method: "POST",
-      body: { name: "Acme Ltd", site: { name: "Main site", code: "LDS" } },
+      body: { name: "Acme Ltd", site: { name: "Main site", code: "LDS" }, timeZone: expect.any(String) },
       idempotencyKey: expect.any(String),
     });
     expect(selectOrganisation).toHaveBeenCalledWith("org-new");
+  });
+
+  it("sends the time zone it is given, and leaves it out when it is cleared", async () => {
+    apiFetch.mockResolvedValue({ id: "org-new", name: "Acme Ltd" });
+    renderForm();
+    await userEvent.type(screen.getByLabelText("Organisation name"), "Acme Ltd");
+    const zone = screen.getByLabelText("Time zone");
+    await userEvent.clear(zone);
+    await userEvent.type(zone, "Europe/Paris");
+    await userEvent.click(screen.getByRole("button", { name: "Create organisation" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    expect(apiFetch.mock.calls[0][1].body.timeZone).toBe("Europe/Paris");
+    apiFetch.mockClear();
+    await userEvent.clear(zone);
+    await userEvent.click(screen.getByRole("button", { name: "Create organisation" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    expect(apiFetch.mock.calls[0][1].body).not.toHaveProperty("timeZone");
   });
 
   it("reuses the same idempotency key when retrying after an error", async () => {

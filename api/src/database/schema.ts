@@ -19,6 +19,8 @@ export const organisations = pgTable('organisations', {
   name: text('name').notNull(),
   slug: text('slug').notNull(),
   status: text('status').notNull(),
+  legalName: text('legal_name'),
+  country: text('country'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
 });
 

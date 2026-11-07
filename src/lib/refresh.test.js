@@ -20,6 +20,7 @@ import { useSubscriptionMutation } from "../hooks/useSubscription";
 import { useAlertMutation } from "../hooks/useDocumentation";
 import { useMarkNotificationsRead } from "../hooks/useNotifications";
 import { useCapaMutation } from "../hooks/useCapa";
+import { useOnboardingMutation } from "../hooks/useOnboarding";
 
 /** What other modules have on screen: each must be marked stale by an action in any module. */
 const watched = [
@@ -87,6 +88,8 @@ describe("every action refreshes every module's data", () => {
     ["subscription", useSubscriptionMutation, { action: "seats", planSlug: "controller", quantity: 2 }],
     ["notifications read", useMarkNotificationsRead, { all: true }],
     ["CAPA / 8D", useCapaMutation, { action: "update", id: "c1", body: { title: "x" } }],
+    ["set-up wizard step", useOnboardingMutation, { action: "setStep", body: { step: "details", status: "done" } }],
+    ["set-up wizard finish", useOnboardingMutation, { action: "complete" }],
     ["CAPA / 8D action", useCapaMutation, { action: "completeAction", id: "a1", body: {} }],
   ];
 

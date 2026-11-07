@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import "./App.css";
 import Navbar from "./components/Navbar";
 import Header from "./components/Header";
@@ -8,11 +8,17 @@ import NotificationPane from "./components/NotificationPane";
 import NoOrganisation from "./components/NoOrganisation";
 import LoadingScreen from "./components/ui/LoadingScreen";
 import { useOrganisation } from "./contexts/OrganisationProvider";
+import { useOrganisationAccess, usePermissions } from "./hooks/useQmsApi";
+import SubscriptionNeeded from "./components/onboarding/SubscriptionNeeded";
+import { setupDeferred } from "./lib/onboarding";
 import ThemeColourSync from "./components/ThemeColourSync";
 import { useEffect } from "react";
 
 function App() {
   const { organisation, error } = useOrganisation();
+  const { accessState, onboarding, isLoading: accessLoading } = useOrganisationAccess();
+  const { can } = usePermissions();
+  const { pathname } = useLocation();
 
   // Browser tab: "Fortress QMS | <organisation>".
   useEffect(() => {
@@ -29,6 +35,14 @@ function App() {
   }
   if (organisation === null) return <NoOrganisation error={error} />;
 
+  // An owner who has not finished the set-up wizard is taken to it (once per session: "Finish later" lets them into the app).
+  if (!accessLoading && onboarding === "in_progress" && can("organisation.manage") && !setupDeferred() && !pathname.startsWith("/setup")) {
+    return <Navigate to="/setup" replace />;
+  }
+  // An organisation without a valid subscription leaves only billing and set-up (the database refuses the rest too).
+  const gated = !accessLoading && accessState !== "open";
+  const settingsRoute = pathname.startsWith("/Settings");
+
   return (
     <SearchProvider>
       <NotificationProvider>
@@ -41,7 +55,7 @@ function App() {
           <main className="flex flex-col flex-1 h-full min-w-0 min-h-0">
             <Header />
             <div className="relative flex flex-col flex-1 overflow-clip min-w-0 min-h-0">
-              <Outlet />
+              {gated && !settingsRoute ? <SubscriptionNeeded /> : <Outlet />}
             </div>
           </main>
         </div>

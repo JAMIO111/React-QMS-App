@@ -15,6 +15,9 @@ export const OrganisationResponse = z.object({
   name: z.string(),
   slug: z.string(),
   status: z.enum(['active', 'suspended']),
+  legalName: z.string().nullable(),
+  /** ISO 3166-1 alpha-2, upper case. */
+  country: z.string().nullable(),
   settings: z.object({
     baseCurrency: z.string(),
     vatRate: z.number(),
@@ -27,9 +30,18 @@ export const OrganisationResponse = z.object({
 });
 export type OrganisationResponse = z.infer<typeof OrganisationResponse>;
 
+const Country = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z]{2}$/, 'Use a two-letter country code')
+  .transform((v) => v.toUpperCase());
+
 export const CreateOrganisationBody = z
   .object({
     name: z.string().trim().min(2).max(100),
+    /** IANA time zone of the first site (e.g. Europe/London); the database checks it exists. */
+    timeZone: z.string().trim().min(1).max(60).optional(),
+    country: Country.optional(),
     site: z
       .object({ name: z.string().trim().min(1).max(100), code: SiteCode })
       .strict()
@@ -41,6 +53,8 @@ export type CreateOrganisationBody = z.infer<typeof CreateOrganisationBody>;
 export const UpdateOrganisationBody = z
   .object({
     name: z.string().trim().min(2).max(100).optional(),
+    legalName: z.string().trim().max(200).nullable().optional(),
+    country: Country.nullable().optional(),
     settings: z
       .object({
         baseCurrency: z.string().trim().regex(/^[A-Za-z]{3}$/, 'Use a 3-letter ISO currency code').transform((v) => v.toUpperCase()).optional(),
@@ -56,7 +70,7 @@ export const UpdateOrganisationBody = z
       .optional(),
   })
   .strict()
-  .refine((b) => b.name !== undefined || b.settings !== undefined, { message: 'Provide name and/or settings' });
+  .refine((b) => b.name !== undefined || b.legalName !== undefined || b.country !== undefined || b.settings !== undefined, { message: 'Provide something to change' });
 export type UpdateOrganisationBody = z.infer<typeof UpdateOrganisationBody>;
 
 export const IdempotencyKey = z.string().regex(/^[A-Za-z0-9._:-]{1,200}$/, 'Idempotency-Key must be 1–200 safe characters');

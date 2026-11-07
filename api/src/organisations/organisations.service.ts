@@ -10,11 +10,11 @@ import type { CreateOrganisationBody, OrganisationResponse, UpdateOrganisationBo
 export class OrganisationsService {
   constructor(private readonly database: DatabaseService) {}
 
-  /** Creates an organisation with the caller as Owner (app.create_organisation does the work atomically). */
+  /** Starts an organisation with the caller as Owner (app.start_organisation: create, time zone, country, the billing gate and the wizard row, atomically). */
   create(ctx: RequestContext, body: CreateOrganisationBody, idempotencyKey?: string): Promise<OrganisationResponse> {
     return this.database.asUser(ctx, async (db) => {
       const result = await db.execute<{ id: string }>(
-        sql`select app.create_organisation(${body.name}, ${body.site?.name ?? 'Main site'}, ${body.site?.code ?? 'MAIN'}, ${idempotencyKey ?? null}) as id`,
+        sql`select app.start_organisation(${body.name}, ${body.site?.name ?? 'Main site'}, ${body.site?.code ?? 'MAIN'}, ${body.timeZone ?? null}, ${body.country ?? null}, ${idempotencyKey ?? null}) as id`,
       );
       return this.load(db, result.rows[0].id);
     });
@@ -34,8 +34,16 @@ export class OrganisationsService {
         const stored = await db.execute(sql`select 1 from storage.objects where bucket_id = 'org-logos' and name = ${logoPath}`);
         if (!stored.rows.length) throw ApiError.badRequest('file_not_uploaded', 'Upload the logo before saving it');
       }
-      if (body.name !== undefined) {
-        const updated = await db.update(organisations).set({ name: body.name }).where(eq(organisations.id, organisationId)).returning({ id: organisations.id });
+      if (body.name !== undefined || body.legalName !== undefined || body.country !== undefined) {
+        const updated = await db
+          .update(organisations)
+          .set({
+            ...(body.name !== undefined ? { name: body.name } : {}),
+            ...(body.legalName !== undefined ? { legalName: body.legalName || null } : {}),
+            ...(body.country !== undefined ? { country: body.country } : {}),
+          })
+          .where(eq(organisations.id, organisationId))
+          .returning({ id: organisations.id });
         if (updated.length === 0) throw ApiError.forbidden();
       }
       if (body.settings) {
@@ -70,6 +78,8 @@ export class OrganisationsService {
       name: row.org.name,
       slug: row.org.slug,
       status: row.org.status as OrganisationResponse['status'],
+      legalName: row.org.legalName ?? null,
+      country: row.org.country ?? null,
       settings: {
         baseCurrency: row.settings.baseCurrency,
         vatRate: Number(row.settings.vatRate),

@@ -30,6 +30,8 @@ export const ApiUnavailable = ({ error }) => (
 
 const toForm = (org) => ({
   name: org?.name ?? "",
+  legalName: org?.legalName ?? "",
+  country: org?.country ?? "",
   baseCurrency: org?.settings.baseCurrency ?? "",
   vatPercent: org ? String(Math.round(org.settings.vatRate * 10000) / 100) : "",
   ncrReferencePrefix: org?.settings.ncrReferencePrefix ?? "",
@@ -62,6 +64,9 @@ const SettingsOrganisation = () => {
       {
         body: {
           name: form.name.trim(),
+          // Only what changed, so saving the currency does not touch the legal details.
+          ...(form.legalName.trim() !== (org.legalName ?? "") ? { legalName: form.legalName.trim() || null } : {}),
+          ...(form.country.trim().toUpperCase() !== (org.country ?? "") ? { country: form.country.trim().toUpperCase() || null } : {}),
           settings: {
             baseCurrency: form.baseCurrency.trim(),
             vatRate: Math.round(vatRate * 10000) / 10000,
@@ -110,6 +115,23 @@ const SettingsOrganisation = () => {
             required
             minLength={2}
             maxLength={100}
+          />
+          <Field
+            label="Legal name"
+            value={form.legalName}
+            onChange={set("legalName")}
+            disabled={!canManage}
+            maxLength={200}
+            hint="Used on documents and invoices"
+          />
+          <Field
+            label="Country"
+            value={form.country}
+            onChange={(e) => setForm((f) => ({ ...f, country: e.target.value.toUpperCase() }))}
+            disabled={!canManage}
+            pattern="[A-Za-z]{2}"
+            maxLength={2}
+            hint="Two-letter ISO code, e.g. GB"
           />
           <Field
             label="Identifier"

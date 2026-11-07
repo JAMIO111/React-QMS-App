@@ -24,6 +24,10 @@ export const Profile = z.object({
 export const Membership = z.object({
   membershipId: z.string().uuid(),
   organisation: z.object({ id: z.string().uuid(), name: z.string(), slug: z.string() }),
+  /** open | needs_subscription (nothing bought yet) | lapsed. Anything but open leaves only billing and set-up (see app.organisation_access_state). */
+  accessState: z.enum(['open', 'needs_subscription', 'lapsed']),
+  /** none | in_progress | complete: the owner's set-up wizard (only people who can set the organisation up see in_progress). */
+  onboarding: z.enum(['none', 'in_progress', 'complete']),
   permissions: z.array(z.string()),
 });
 

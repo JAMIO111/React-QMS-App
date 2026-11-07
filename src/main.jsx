@@ -66,6 +66,7 @@ const CapaPage = lazy(() => import("./components/capa/CapaPage.jsx"));
 const CapaReportPage = lazy(() => import("./components/capa/CapaReportPage.jsx"));
 const MyActionsPage = lazy(() => import("./components/capa/MyActionsPage.jsx"));
 const PlatformPage = lazy(() => import("./components/platform/PlatformPage.jsx"));
+const SetupWizard = lazy(() => import("./components/onboarding/SetupWizard.jsx"));
 const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
 const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
 const InspectionPage = lazy(() => import("./components/inspection/InspectionPage.jsx"));
@@ -118,6 +119,9 @@ const router = createBrowserRouter([
     children: [
       // The operator area spans organisations, so it lives outside <App /> (which needs one) and checks access itself.
       { path: "platform", element: <PlatformPage /> },
+      // The owner's first-run wizard is full-screen too (it needs the organisation, not the app shell).
+      { path: "setup", element: <SetupWizard /> },
+      { path: "setup/:step", element: <SetupWizard /> },
       {
         element: <App />, // App contains the Navbar/Header + <Outlet />
         children: [

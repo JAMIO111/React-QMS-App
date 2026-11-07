@@ -29,6 +29,8 @@ import { NcrAttachmentsController, NcrChildRecordsController, NcrCostsController
 import { NcrRecordsService } from './ncr/ncr-records.service';
 import { NcrDashboardController, NcrDashboardService } from './ncr/ncr-dashboard';
 import { MeController } from './me/me.controller';
+import { OnboardingController } from './onboarding/onboarding.controller';
+import { OnboardingService } from './onboarding/onboarding.service';
 import { PlatformController } from './platform/platform.controller';
 import { PlatformService } from './platform/platform.service';
 import { MeService } from './me/me.service';
@@ -96,6 +98,7 @@ export class AppModule implements NestModule {
         HealthController,
         MeController,
         PlatformController,
+        OnboardingController,
         OrganisationsController,
         SitesController,
         DepartmentsController,
@@ -152,6 +155,7 @@ export class AppModule implements NestModule {
         JwtVerifier,
         MeService,
         PlatformService,
+        OnboardingService,
         MasterDataService,
         NcrService,
         NcrRecordsService,

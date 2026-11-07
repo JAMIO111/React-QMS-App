@@ -169,7 +169,7 @@ describe('recent non-conformances', () => {
     const res = (await api().get(`/api/v1/jobs/${ctx.job}/recent-ncrs`).set(await as(ids.inspectorA)).expect(200)).body;
     expect(res).toMatchObject({ canRead: true, days: 90 });
     expect(res.data.map((n: { title: string }) => n.title)).toEqual(['Rod burr']);
-    expect(res.data[0]).toMatchObject({ id: ctx.ncSame, matched: ['part'], open: true, severity: 'minor', part: { partNumber: 'ROD-1' } });
+    expect(res.data[0]).toMatchObject({ id: ctx.ncSame, source: 'internal', matched: ['part'], open: true, severity: 'minor', part: { partNumber: 'ROD-1' } });
     expect(res.data.map((n: { id: string }) => n.id)).not.toContain(ctx.ncDraft);
   });
 

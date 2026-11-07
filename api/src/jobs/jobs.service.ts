@@ -87,7 +87,7 @@ export class JobsService {
       const can = await db.execute<{ ok: boolean }>(sql`select app.has_permission(${orgOf(ctx)}::uuid, 'ncr.read', ${job.site_id}::uuid) as ok`);
       if (!can.rows[0].ok) return { canRead: false, days: q.days, data: [] };
       const rows = await db.execute<Row>(sql`
-        select n.id, n.reference, n.stage, n.severity, n.title, to_char(n.detected_at, 'YYYY-MM-DD') as detected_at, n.quantity_affected, n.part_id, p.part_number,
+        select n.id, n.reference, n.stage, n.source, n.severity, n.title, to_char(n.detected_at, 'YYYY-MM-DD') as detected_at, n.quantity_affected, n.part_id, p.part_number,
                (n.part_id = ${job.part_id}::uuid) as m_part,
                (n.part_id <> ${job.part_id}::uuid and p.part_family_id is not null and p.part_family_id = (select part_family_id from public.parts where id = ${job.part_id}::uuid)) as m_family,
                exists (select 1 from public.inspection_ncr_links l join public.inspection_records i on i.id = l.inspection_record_id
@@ -115,6 +115,7 @@ export class JobsService {
           id: r.id as string,
           reference: r.reference as string,
           stage: r.stage as string,
+          source: r.source as string,
           severity: (r.severity as JobNcrs['data'][number]['severity']) ?? null,
           title: r.title as string,
           detectedAt: r.detected_at as string,

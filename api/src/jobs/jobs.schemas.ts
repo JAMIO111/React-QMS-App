@@ -58,6 +58,8 @@ export const JobNcr = z.object({
   id: z.string().uuid(),
   reference: z.string(),
   stage: z.string(),
+  /** internal | customer | supplier (for the link to the NC page). */
+  source: z.string(),
   severity: z.enum(['critical', 'major', 'minor']).nullable(),
   title: z.string(),
   detectedAt: z.string(),

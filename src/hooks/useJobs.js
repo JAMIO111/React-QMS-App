@@ -59,3 +59,27 @@ export const useJobMutation = () => {
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };
+
+/** Recent non-conformances relevant to a job: { canRead, days, data }. Nothing for people who may not read them. */
+export const useJobNcrs = (id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "ncrs", id),
+    queryFn: () => apiFetch(`/jobs/${id}/recent-ncrs`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+};
+
+/** Recent part and control plan revisions of a job's part: { days, partRevisionSuperseded, planRevisionSuperseded, data }. */
+export const useJobRevisions = (id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "revisions", id),
+    queryFn: () => apiFetch(`/jobs/${id}/revisions`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+};

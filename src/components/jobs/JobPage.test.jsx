@@ -91,6 +91,7 @@ beforeEach(() => {
       return job;
     }
     if (path === "/inspections/j1/samples") return job;
+    if (path === "/jobs/j1/revisions") return { days: 30, partRevisionSuperseded: false, planRevisionSuperseded: false, data: [] };
     throw new Error(`unexpected ${opts.method ?? "GET"} ${path}`);
   });
 });

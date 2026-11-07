@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { applyOrder, moveColumn } from "../lib/columnOrder";
 import { flexRender } from "@tanstack/react-table";
 import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon } from "@/components/icons";
@@ -87,9 +87,25 @@ const Table = ({
   // Keep the resize cursor and stop text selection while dragging, even off the handle.
   const resizing = !!table.getState().columnSizingInfo?.isResizingColumn;
 
+  // The header is sticky inside the scrolling box, so the vertical scrollbar would run up beside it. Its height is
+  // published as --table-head-h and the scrollbar track starts below it (.table-scroll in index.css).
+  const headRef = useRef(null);
+  const [headHeight, setHeadHeight] = useState(0);
+  useLayoutEffect(() => {
+    const el = headRef.current;
+    if (!el) return undefined;
+    const measure = () => setHeadHeight(el.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div
-      className={`relative h-full w-full overflow-auto ${resizing ? "cursor-col-resize select-none" : ""}`}
+      style={{ "--table-head-h": `${headHeight}px` }}
+      className={`table-scroll relative h-full w-full overflow-auto ${resizing ? "cursor-col-resize select-none" : ""}`}
       role="region"
       aria-label={ariaLabel}
       tabIndex={0}>
@@ -107,7 +123,7 @@ const Table = ({
           ))}
         </colgroup>
 
-        <thead className="sticky top-0 z-10 bg-primary-bg">
+        <thead ref={headRef} className="sticky top-0 z-10 bg-primary-bg">
           {table.getHeaderGroups().map((headerGroup) => {
             const byId = headerById(headerGroup);
             const renderHeader = (header) => {

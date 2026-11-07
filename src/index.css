@@ -401,6 +401,10 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(128, 128, 128, 0.7);
 }
+/* Tables: the sticky header is inside the scrolling box, so keep the vertical scrollbar below it. */
+.table-scroll::-webkit-scrollbar-track {
+  margin-top: var(--table-head-h, 0px);
+}
 ::-webkit-scrollbar-corner {
   background: transparent;
 }

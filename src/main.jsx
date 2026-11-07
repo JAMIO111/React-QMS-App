@@ -33,6 +33,7 @@ const SettingsAccount = lazy(() =>
   import("./components/Settings/SettingsAccount.jsx")
 );
 const Employees = lazy(() => import("./components/master-data/EmployeesPage.jsx"));
+const MasterDataDashboard = lazy(() => import("./components/master-data/MasterDataDashboard.jsx"));
 const PartsPage = lazy(() => import("./components/master-data/PartsPage.jsx"));
 const NcrPage = lazy(() => import("./components/ncr/NcrPage.jsx"));
 const NcDashboard = lazy(() => import("./components/ncr/NcDashboard.jsx"));
@@ -186,6 +187,7 @@ const router = createBrowserRouter([
           { path: "Employees", element: <Employees /> },
           // The old Human Resources page now lives under Master Data.
           { path: "Human-Resources", element: <Navigate to="/Employees" replace /> },
+          { path: "Master-Data", element: <MasterDataDashboard /> },
           { path: "Parts", element: <PartsPage /> },
           { path: "Parts/:id", element: <PartDetailPage /> },
           { path: "Customers", element: <PartiesPage key="customers" kind="customers" /> },

@@ -81,8 +81,9 @@ export const menuStructure = [
     name: "Master Data",
     icon: BoxesIcon,
     permission: "master_data.read",
-    path: "/Parts",
+    path: "/Master-Data",
     subMenu: [
+      { name: "Overview", path: "/Master-Data" },
       { name: "Parts", path: "/Parts" },
       { name: "Part Families", path: "/Part-Families" },
       { name: "Machines", path: "/Machines" },

@@ -191,6 +191,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   if (linkedRow.n !== 1) throw new Error('the sign-in was not linked');
 
   await jobHub({ page, stack, APP, orgName, see, shot, step, log, owner });
+  await masterDataOverview({ page, stack, APP, orgName, see, shot, step, log });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -294,4 +295,25 @@ async function jobHub({ page, stack, APP, orgName, see, shot, step, log, owner }
   const done = (await stack.admin.query(`select status, result from public.inspection_records where organisation_id = $1`, [org.id])).rows[0];
   log(`job ended: ${JSON.stringify(done)}`);
   if (done.status !== 'completed' || done.result !== 'pass') throw new Error('the job did not complete with a pass');
+}
+
+/** The master data overview, over what the journey has created by now (a part and its family, a machine, an employee, a released revision). */
+async function masterDataOverview({ page, stack, APP, orgName, see, shot, step, log }) {
+  step('the owner opens the master data overview');
+  await page.goto(`${APP}/Master-Data`);
+  await see(page.getByRole('heading', { level: 1, name: 'Master data overview' }));
+  const totals = page.getByLabel('Totals');
+  await see(totals.getByRole('link', { name: /Parts/ }));
+  await see(page.getByRole('list', { name: 'Data quality checks' }));
+  await see(page.getByText(/No connectors, imports or sync runs are set up yet/));
+  await see(page.getByRole('list', { name: 'Latest events' }));
+  await page.waitForTimeout(600); // charts animate in
+  await shot(page, '28-master-data-overview');
+  await page.getByRole('heading', { level: 1, name: 'Master data overview' }).evaluate((h) => { let el = h.parentElement; while (el && el.scrollHeight <= el.clientHeight) el = el.parentElement; el?.scrollTo(0, el.scrollHeight); });
+  await page.waitForTimeout(400);
+  await shot(page, '29-master-data-overview-lower');
+  const { rows: [counts] } = await stack.admin.query(`select (select count(*) from public.parts p join public.organisations o on o.id = p.organisation_id where o.name = $1)::int as parts`, [orgName]);
+  const shown = await totals.getByRole('link', { name: /Parts/ }).innerText();
+  log(`parts in the database: ${counts.parts}; tile says: ${shown.replace(/\s+/g, ' ')}`);
+  if (!new RegExp(`\\b${counts.parts}\\b`).test(shown)) throw new Error('the Parts tile does not match the database');
 }

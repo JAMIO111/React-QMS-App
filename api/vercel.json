@@ -1,4 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nestjs"
+  "framework": "nestjs",
+  "crons": [
+    {
+      "path": "/api/v1/internal/cron/reconcile",
+      "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/v1/internal/cron/abandoned-setups?dryRun=false",
+      "schedule": "30 3 * * *"
+    }
+  ]
 }

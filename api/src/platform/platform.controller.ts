@@ -2,7 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse } from '../common/validation';
-import { Overview, OverviewQuery, PlatformMe } from './platform.schemas';
+import { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformMe, PlatformOrganisations, PlatformPayments, PlatformRevenue, PlatformWebhooks } from './platform.schemas';
 import { PlatformService } from './platform.service';
 
 /**
@@ -26,5 +26,35 @@ export class PlatformController {
   @ApiOkResponse({ description: 'The sign-up funnel for the period and the latest sign-ups (404 for non-operators, 403 mfa_required without MFA)', schema: openApiSchema(Overview) })
   overview(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.overview(ctx, parse(OverviewQuery, query));
+  }
+
+  @Get('organisations')
+  @ApiOkResponse({ description: 'Every organisation with its billing state, owners and counts (no business data). Search by name or owner email. 404 for non-operators, 403 mfa_required without MFA.', schema: openApiSchema(PlatformOrganisations) })
+  organisations(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.organisations(ctx, parse(OrganisationsQuery, query));
+  }
+
+  @Get('revenue')
+  @ApiOkResponse({ description: 'MRR, ARR, trial MRR, subscriptions by status, seats by package, trials ending, past due, cancelling (Stripe-billed, pence, excluding VAT)', schema: openApiSchema(PlatformRevenue) })
+  revenue(@Ctx() ctx: RequestContext) {
+    return this.service.revenue(ctx);
+  }
+
+  @Get('payments')
+  @ApiOkResponse({ description: 'Latest invoices across organisations, failed payments and 30-day totals', schema: openApiSchema(PlatformPayments) })
+  payments(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.payments(ctx, parse(LimitQuery, query));
+  }
+
+  @Get('webhooks')
+  @ApiOkResponse({ description: 'Webhook health: last received, events by status, stuck and failed events', schema: openApiSchema(PlatformWebhooks) })
+  webhooks(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.webhooks(ctx, parse(HoursQuery, query));
+  }
+
+  @Get('activity')
+  @ApiOkResponse({ description: 'Billing events and organisation milestones, newest first', schema: openApiSchema(PlatformActivity) })
+  activity(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.activity(ctx, parse(LimitQuery, query));
   }
 }

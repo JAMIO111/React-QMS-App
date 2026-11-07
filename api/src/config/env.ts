@@ -22,6 +22,8 @@ const EnvSchema = z
     STRIPE_WEBHOOK_SECRET: z.string().regex(/^whsec_[A-Za-z0-9]{10,}$/, 'must be a Stripe webhook signing secret').optional(),
     /** The web app's address, for Stripe's return links (Checkout success/cancel, Customer Portal). */
     APP_BASE_URL: z.string().url().optional(),
+    /** Protects the scheduled jobs (/internal/cron/*): sent by Vercel Cron as `Authorization: Bearer <CRON_SECRET>`. Unset: the jobs answer 503. Server-side only. */
+    CRON_SECRET: z.string().min(20, 'must be at least 20 characters').optional(),
     JWT_AUDIENCE: z.string().default('authenticated'),
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),

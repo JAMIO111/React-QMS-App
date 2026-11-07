@@ -68,6 +68,9 @@ import { CapaService } from './capa/capa.service';
 import { SpcController } from './spc/spc.controller';
 import { SpcService } from './spc/spc.service';
 import { ControlPlanContentService } from './process-control/control-plan-content.service';
+import { CronController } from './cron/cron.controller';
+import { CronGuard } from './cron/cron.guard';
+import { CronService } from './cron/cron.service';
 import { OrganisationGuard } from './tenancy/organisation.guard';
 
 @Module({})
@@ -100,6 +103,7 @@ export class AppModule implements NestModule {
         HealthController,
         MeController,
         PlatformController,
+        CronController,
         OnboardingController,
         OrganisationsController,
         SitesController,
@@ -158,6 +162,8 @@ export class AppModule implements NestModule {
         JwtVerifier,
         MeService,
         PlatformService,
+        CronService,
+        CronGuard,
         OnboardingService,
         MasterDataService,
         NcrService,

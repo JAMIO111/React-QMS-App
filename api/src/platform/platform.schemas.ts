@@ -33,3 +33,52 @@ export const RecentSignup = z.object({
 
 export const Overview = z.object({ funnel: Funnel, recentSignups: z.array(RecentSignup) });
 export type Overview = z.infer<typeof Overview>;
+
+export const OrganisationsQuery = z.object({
+  search: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+export type OrganisationsQuery = z.infer<typeof OrganisationsQuery>;
+
+export const LimitQuery = z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) });
+export type LimitQuery = z.infer<typeof LimitQuery>;
+
+export const HoursQuery = z.object({ hours: z.coerce.number().int().min(1).max(720).default(24) });
+export type HoursQuery = z.infer<typeof HoursQuery>;
+
+export const PlatformOrganisation = z.object({
+  organisationId: z.string().uuid(),
+  name: z.string(),
+  /** active | suspended | archived */
+  status: z.string(),
+  createdAt: Iso,
+  country: z.string().nullable(),
+  billingRequired: z.boolean(),
+  setupFinishedAt: Iso.nullable(),
+  ownerEmails: z.array(z.string()),
+  members: z.number().int(),
+  subscriptionStatus: z.string().nullable(),
+  billingProvider: z.string().nullable(),
+  billingInterval: z.string().nullable(),
+  trialEnd: Iso.nullable(),
+  currentPeriodEnd: Iso.nullable(),
+  cancelAtPeriodEnd: z.boolean().nullable(),
+  pastDueSince: Iso.nullable(),
+  seatsPurchased: z.number().int(),
+  seatsAssigned: z.number().int(),
+  /** Monthly equivalent in pence, excluding VAT. */
+  mrrPence: z.number().int(),
+  lastSyncedAt: Iso.nullable(),
+});
+export const PlatformOrganisations = z.object({ data: z.array(PlatformOrganisation), total: z.number().int() });
+export type PlatformOrganisations = z.infer<typeof PlatformOrganisations>;
+
+/** Shapes below are passed through from the database functions as they are (they are already the public contract). */
+export const PlatformRevenue = z.record(z.unknown());
+export const PlatformPayments = z.record(z.unknown());
+export const PlatformWebhooks = z.record(z.unknown());
+export const PlatformActivity = z.object({
+  data: z.array(z.object({ at: Iso, kind: z.string(), event: z.string(), organisationId: z.string().uuid(), organisation: z.string(), details: z.record(z.unknown()) })),
+});
+export type PlatformActivity = z.infer<typeof PlatformActivity>;

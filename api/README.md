@@ -58,6 +58,7 @@ Copy `api/.env.example` and set values as environment secrets (never commit them
 | `CORS_ORIGINS` | Comma-separated frontend origins |
 | `SUPABASE_SERVICE_ROLE_KEY`, `INVITE_REDIRECT_URL` | Optional: send invitation emails via Supabase Auth (server-side only) |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `APP_BASE_URL` | Optional: Stripe billing (`docs/stripe-setup.md`). Without them billing routes answer `503 billing_unavailable` |
+| `CRON_SECRET` | Optional, 20+ characters: protects `/internal/cron/*` (Vercel Cron sends it as a Bearer token). Unset: the jobs answer 503 |
 | `PORT`, `RATE_LIMIT_PER_MINUTE`, `LOG_LEVEL`, `DATABASE_POOL_MAX` | Optional |
 
 Start-up fails with a clear message (without secret values) if configuration is invalid. Logs are

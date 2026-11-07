@@ -32,6 +32,7 @@ For local work: `stripe listen --forward-to localhost:3001/api/v1/stripe/webhook
 | `STRIPE_SECRET_KEY` | the secret key from step 1 |
 | `STRIPE_WEBHOOK_SECRET` | the signing secret from step 3 |
 | `APP_BASE_URL` | the web app's address, e.g. `https://qms-web-dev.vercel.app` (Stripe's return links) |
+| `CRON_SECRET` | any long random string (20+ characters): protects the scheduled jobs below |
 
 Never put these in the web app (`VITE_…`) or in source control. The API refuses a key that does not look like a Stripe secret key and never prints it.
 
@@ -43,3 +44,12 @@ The operator can switch the billing gate on for new organisations only after thi
 - Stripe is the source of truth for status, quantities and invoices; the app re-reads from Stripe on every event and on the success page, so a lost or late webhook is repaired by the next event or by opening Subscription & billing. Every event id is recorded once in `stripe_events` (status, attempts, error).
 - A trial lasts 14 days with a card on file. Payment failure → `past_due`, access continues for the grace period (7 days), then the organisation is locked to billing until it is paid. Cancellation (Portal) takes effect at the end of the paid period.
 - An owner must always hold a Controller seat while the subscription is valid; the database refuses changes that would break that.
+
+## Scheduled jobs
+`api/vercel.json` runs two jobs daily, **on the production deployment only** (Vercel does not run crons on previews). On the dev API, call them yourself:
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" "https://<api>/api/v1/internal/cron/reconcile"                  # re-reads Stripe subscriptions not synced for an hour
+curl -H "Authorization: Bearer $CRON_SECRET" "https://<api>/api/v1/internal/cron/abandoned-setups"           # DRY RUN: lists what would be archived
+curl -H "Authorization: Bearer $CRON_SECRET" "https://<api>/api/v1/internal/cron/abandoned-setups?dryRun=false"   # really archives
+```
+Archiving only ever touches organisations that must have a subscription and never got one within 14 days, or whose subscription ended over 90 days ago. To undo: `update public.organisations set status = 'active', archived_at = null, archived_reason = null where id = '<id>';`

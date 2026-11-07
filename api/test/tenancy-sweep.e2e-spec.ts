@@ -28,6 +28,12 @@ const UNSCOPED = new Set([
   'GET /api/v1/units', // global catalogue of measurement units
   'GET /api/v1/platform/me', // the operator area spans organisations; admin-only in the database (allow-list + MFA)
   'GET /api/v1/platform/overview',
+  'GET /api/v1/platform/organisations', // operator monitor: admin-only in the database (allow-list + MFA); counts and billing, never business data
+  'GET /api/v1/platform/revenue',
+  'GET /api/v1/platform/payments',
+  'GET /api/v1/platform/webhooks',
+  'GET /api/v1/platform/activity',
+  // /internal/cron/* (scheduled jobs: CRON_SECRET, only database functions made for them) is left out of the OpenAPI document, so it is not seen here; platform-monitor.e2e-spec covers it.
   'POST /api/v1/stripe/webhook', // authenticated by Stripe's signature over the raw body; applies state only through app.stripe_* functions
 ]);
 

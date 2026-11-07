@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
-import type { Overview, OverviewQuery } from './platform.schemas';
+import type { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformOrganisations } from './platform.schemas';
 
 type Status = 'none' | 'needs_mfa' | 'ok';
 
@@ -16,12 +16,85 @@ export class PlatformService {
     return this.database.asUser(ctx, async (db) => ({ status: await this.status(db) }));
   }
 
+  /** Someone who is not an operator is told nothing about the area; an operator without MFA is told what to do. */
+  private async requireOperator(db: Db): Promise<void> {
+    const status = await this.status(db);
+    if (status === 'none') throw ApiError.notFound('not_found', 'Not found');
+    if (status === 'needs_mfa') throw new ApiError(403, 'mfa_required', 'Platform administration needs a session that has passed two-factor authentication');
+  }
+
+  organisations(ctx: RequestContext, q: OrganisationsQuery): Promise<PlatformOrganisations> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.requireOperator(db);
+      const res = await db.execute<Record<string, unknown>>(sql`select * from app.platform_organisations(${q.search ?? null}, ${q.limit}::int, ${q.offset}::int)`);
+      const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
+      return {
+        total: res.rows.length ? Number(res.rows[0].total_rows) : 0,
+        data: res.rows.map((r) => ({
+          organisationId: r.organisation_id as string,
+          name: r.name as string,
+          status: r.status as string,
+          createdAt: iso(r.created_at)!,
+          country: (r.country as string) ?? null,
+          billingRequired: r.billing_required as boolean,
+          setupFinishedAt: iso(r.onboarding_completed_at),
+          ownerEmails: (r.owner_emails as string[]) ?? [],
+          members: Number(r.members),
+          subscriptionStatus: (r.subscription_status as string) ?? null,
+          billingProvider: (r.billing_provider as string) ?? null,
+          billingInterval: (r.billing_interval as string) ?? null,
+          trialEnd: iso(r.trial_end),
+          currentPeriodEnd: iso(r.current_period_end),
+          cancelAtPeriodEnd: (r.cancel_at_period_end as boolean) ?? null,
+          pastDueSince: iso(r.past_due_since),
+          seatsPurchased: Number(r.seats_purchased),
+          seatsAssigned: Number(r.seats_assigned),
+          mrrPence: Number(r.mrr_pence),
+          lastSyncedAt: iso(r.last_synced_at),
+        })),
+      };
+    });
+  }
+
+  revenue(ctx: RequestContext): Promise<Record<string, unknown>> {
+    return this.json(ctx, (db) => db.execute<{ r: Record<string, unknown> }>(sql`select app.platform_revenue() as r`));
+  }
+
+  payments(ctx: RequestContext, q: LimitQuery): Promise<Record<string, unknown>> {
+    return this.json(ctx, (db) => db.execute<{ r: Record<string, unknown> }>(sql`select app.platform_payments(${q.limit}::int) as r`));
+  }
+
+  webhooks(ctx: RequestContext, q: HoursQuery): Promise<Record<string, unknown>> {
+    return this.json(ctx, (db) => db.execute<{ r: Record<string, unknown> }>(sql`select app.platform_webhooks(${q.hours}::int) as r`));
+  }
+
+  activity(ctx: RequestContext, q: LimitQuery): Promise<PlatformActivity> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.requireOperator(db);
+      const res = await db.execute<Record<string, unknown>>(sql`select * from app.platform_activity(${q.limit}::int)`);
+      return {
+        data: res.rows.map((r) => ({
+          at: new Date(r.occurred_at as string).toISOString(),
+          kind: r.kind as string,
+          event: r.event as string,
+          organisationId: r.organisation_id as string,
+          organisation: r.organisation_name as string,
+          details: (r.details as Record<string, unknown>) ?? {},
+        })),
+      };
+    });
+  }
+
+  private json(ctx: RequestContext, query: (db: Db) => Promise<{ rows: { r: Record<string, unknown> }[] }>): Promise<Record<string, unknown>> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.requireOperator(db);
+      return (await query(db)).rows[0].r;
+    });
+  }
+
   overview(ctx: RequestContext, q: OverviewQuery): Promise<Overview> {
     return this.database.asUser(ctx, async (db) => {
-      const status = await this.status(db);
-      // Someone who is not an operator is told nothing about the area; an operator without MFA is told what to do.
-      if (status === 'none') throw ApiError.notFound('not_found', 'Not found');
-      if (status === 'needs_mfa') throw new ApiError(403, 'mfa_required', 'Platform administration needs a session that has passed two-factor authentication');
+      await this.requireOperator(db);
       const funnel = await db.execute<{ f: Record<string, unknown> }>(sql`select app.platform_funnel(${q.days}::int) as f`);
       const rows = await db.execute<Record<string, unknown>>(sql`select * from app.platform_recent_signups(25)`);
       const f = funnel.rows[0].f;

@@ -36,4 +36,16 @@ describe('loadEnv', () => {
     expect(pattern.test('https://qms-web-a.b.vercel.app')).toBe(false);
     expect(pattern.test('https://qms-web-xvercel.app')).toBe(false);
   });
+
+  it('takes an optional CRON_SECRET of at least 20 characters, and never echoes it', () => {
+    const base = { DATABASE_URL: 'x', SUPABASE_URL: 'https://p.supabase.co' };
+    expect(loadEnv(base).CRON_SECRET).toBeUndefined();
+    expect(loadEnv({ ...base, CRON_SECRET: 'a'.repeat(24) }).CRON_SECRET).toBe('a'.repeat(24));
+    expect(() => loadEnv({ ...base, CRON_SECRET: 'short-secret' })).toThrow(/CRON_SECRET/);
+    try {
+      loadEnv({ ...base, CRON_SECRET: 'short-secret' });
+    } catch (e) {
+      expect((e as Error).message).not.toContain('short-secret');
+    }
+  });
 });

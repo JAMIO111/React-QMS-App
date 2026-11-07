@@ -196,7 +196,7 @@ describe('non-conformances', () => {
 
   it('lists personnel for the responsible-operator picker', async () => {
     await admin.query(`insert into public."Employees" (organisation_id, first_name, surname) values ($1, 'Sam', 'Operator')`, [ids.orgA]);
-    const res = await api().get('/api/v1/employees').set(await as(ids.inspectorA)).expect(200);
+    const res = await api().get('/api/v1/employees/lookup').set(await as(ids.inspectorA)).expect(200);
     expect(res.body.data.map((e: { name: string }) => e.name)).toContain('Sam Operator');
   });
 });

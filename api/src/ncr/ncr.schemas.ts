@@ -220,8 +220,6 @@ export const UpdateClassificationBody = z
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
 
-export const Employee = z.object({ id: z.string().uuid(), name: z.string(), jobTitle: z.string().nullable(), active: z.boolean() });
-
 export const NcrRangesQuery = z.object({ source: NcrSource.optional() });
 /** Highest values in the register, to size the cost and quantity sliders. */
 export const NcrRanges = z.object({

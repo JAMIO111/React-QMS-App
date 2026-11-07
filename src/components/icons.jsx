@@ -80,12 +80,15 @@ import {
   Undo2 as LucideUndo2,
   Upload as LucideUpload,
   UserCog as LucideUserCog,
+  User as LucideUser,
   Users as LucideUsers,
   X as LucideX,
   ArrowRightLeft as LucideArrowRightLeft,
   ClipboardList as LucideClipboardList,
   Factory as LucideFactory,
   Globe as LucideGlobe,
+  KeyRound as LucideKeyRound,
+  Power as LucidePower,
   FileText as LucideFileText,
   Hash as LucideHash,
   History as LucideHistory,
@@ -209,6 +212,9 @@ export const ArrowRightLeftIcon = withDefaults(LucideArrowRightLeft);
 export const ClipboardListIcon = withDefaults(LucideClipboardList);
 export const FactoryIcon = withDefaults(LucideFactory);
 export const GlobeIcon = withDefaults(LucideGlobe);
+export const KeyRoundIcon = withDefaults(LucideKeyRound);
+export const UserIcon = withDefaults(LucideUser);
+export const PowerIcon = withDefaults(LucidePower);
 export const FileTextIcon = withDefaults(LucideFileText);
 export const HashIcon = withDefaults(LucideHash);
 export const HistoryIcon = withDefaults(LucideHistory);

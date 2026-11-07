@@ -49,7 +49,7 @@ const routeApi = (routes) =>
     calls.push({ k, path, body: opts.body });
     const all = {
       "GET /ncr-classifications": { data: classifications },
-      "GET /employees": { data: [{ id: "e1", name: "Sam Operator", jobTitle: null, active: true }] },
+      "GET /employees/lookup": { data: [{ id: "e1", name: "Sam Operator", jobTitle: null, active: true }] },
       "GET /parts": page([{ id: "p1", partNumber: "BRK-100", name: "Bracket" }]),
       "GET /parts/p1": { id: "p1", revisions: [{ id: "r1", revision: "A", status: "released" }] },
       "GET /customers": page([{ id: "c1", code: "ACME", name: "Acme Fabrication", displayName: "Acme" }]),

@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { optimisticHandlers, settle } from "../lib/optimistic";
 import { useOrganisation } from "../contexts/OrganisationProvider";
@@ -64,5 +64,17 @@ export const useMasterDataMutation = () => {
     mutationFn: ({ path, method = "POST", body, reason }) => apiFetch(path, { method, body, organisationId, reason }),
     ...optimisticHandlers(queryClient, key(organisationId)),
     onSuccess: (_data, _request, context) => settle(queryClient, organisationId, context),
+  });
+};
+
+/** The employees register page: { data, page, pageSize, total }. Search, filters, sort and page numbers are the server's. */
+export const useEmployeeRegister = (params = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "employees", params),
+    queryFn: () => apiFetch(`/employees${queryString(params)}`, { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+    placeholderData: keepPreviousData,
   });
 };

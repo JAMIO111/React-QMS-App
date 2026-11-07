@@ -108,6 +108,7 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/calibration-attachments/{id}/delete': { reason: 'Hijacked' },
     'POST /api/v1/calibration-attachments/{id}/restore': undefined,
     'PATCH /api/v1/machines/{id}': { name: 'Hijacked' },
+    'PATCH /api/v1/employees/{id}': { jobTitle: 'Hijacked' },
     'GET /api/v1/part-families/{id}': undefined,
     'PATCH /api/v1/part-families/{id}': { name: 'Hijacked' },
     'GET /api/v1/part-revisions/{id}/characteristics': undefined,
@@ -254,6 +255,8 @@ const hasSample = (op: Op) =>
     'POST /api/v1/calibration-attachments/{id}/delete',
     'POST /api/v1/calibration-attachments/{id}/restore',
     'PATCH /api/v1/machines/{id}',
+    'GET /api/v1/employees/{id}',
+    'PATCH /api/v1/employees/{id}',
     'GET /api/v1/part-families/{id}',
     'PATCH /api/v1/part-families/{id}',
     'GET /api/v1/part-revisions/{id}/characteristics',
@@ -375,6 +378,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/capa-root-causes/')) return a.capaRootCause;
   if (path.startsWith('/api/v1/inspection-measurements/')) return a.measurement;
   if (path.startsWith('/api/v1/machines/')) return a.machine;
+  if (path.startsWith('/api/v1/employees/')) return a.employee;
   if (path.startsWith('/api/v1/part-families/')) return a.family;
   if (path.startsWith('/api/v1/part-revision-characteristics/')) return a.specValue;
   if (path.startsWith('/api/v1/control-plans/')) return a.plan;
@@ -431,6 +435,7 @@ beforeAll(async () => {
   a.calibration = (await one(`insert into public.calibrations (organisation_id, gauge_id, reference, outcome) values ($1, $2, 'A-CAL-1', 'fail') returning id`, [ids.orgA, a.gauge])).id;
   a.calibrationAttachment = (await one(`insert into public.calibration_attachments (organisation_id, calibration_id, storage_path, file_name, size_bytes) values ($1::uuid, $2::uuid, $1::text || '/calibration/' || $2::text || '/a.pdf', 'a.pdf', 1) returning id`, [ids.orgA, a.calibration])).id;
   a.partCustomer = (await one(`insert into public.part_customers (organisation_id, part_id, customer_id, customer_part_number) values ($1, $2, $3, 'A-CPN') returning id`, [ids.orgA, a.part, a.customer])).id;
+  a.employee = (await one(`insert into public."Employees" (organisation_id, first_name, surname, job_title) values ($1, 'Alpha', 'Employee', 'Operator') returning id`, [ids.orgA])).id;
   a.machine = (await one(`insert into public.machines (organisation_id, code, name) values ($1, 'A-M1', 'Alpha machine') returning id`, [ids.orgA])).id;
   a.family = (await one(`insert into public.part_families (organisation_id, code, name) values ($1, 'A-FAM', 'Alpha family') returning id`, [ids.orgA])).id;
   a.specValue = (await one(`insert into public.part_revision_characteristics (organisation_id, part_revision_id, characteristic_key, nominal, unit_code) values ($1, $2, 'LENGTH', 10, 'mm') returning id`, [ids.orgA, a.draftRevision])).id;
@@ -551,7 +556,7 @@ describe('tenancy sweep over every API route', () => {
     );
     expect(cal.rows[0]).toEqual({ gauge: 'Alpha gauge/true', characteristics: 1, calibration: '/true/true', calibrations: 1, type: 'Alpha caliper', template: 1 });
     const pc = await admin.query(
-      `select (select name from public.machines where id = $1) machine, (select name from public.part_families where id = $2) family,
+      `select (select name from public.machines where id = $1) machine, (select job_title from public."Employees" where id = $6) employee, (select name from public.part_families where id = $2) family,
               (select nominal::text from public.part_revision_characteristics where id = $3) spec,
               (select title from public.control_plans where id = $4) plan,
               (select count(*)::int from public.control_plan_applicability where control_plan_id = $4) scope,
@@ -559,10 +564,10 @@ describe('tenancy sweep over every API route', () => {
               (select string_agg(operation_code || '/' || name, ',') from public.control_plan_operations where control_plan_revision_id = $5) operations,
               (select string_agg(characteristic_key || '/' || name, ',') from public.control_plan_characteristics where control_plan_revision_id = $5) characteristics,
               (select count(*)::int from public.reaction_plans where control_plan_revision_id = $5) reactions`,
-      [a.machine, a.family, a.specValue, a.plan, a.planRevision],
+      [a.machine, a.family, a.specValue, a.plan, a.planRevision, a.employee],
     );
     expect(pc.rows[0]).toEqual({
-      machine: 'Alpha machine', family: 'Alpha family', spec: '10', plan: 'Alpha plan', scope: 1, revisions: 'draft/',
+      machine: 'Alpha machine', employee: 'Operator', family: 'Alpha family', spec: '10', plan: 'Alpha plan', scope: 1, revisions: 'draft/',
       operations: 'OP-10/Alpha op', characteristics: 'OD/Alpha OD', reactions: 0,
     });
     const md = await admin.query(

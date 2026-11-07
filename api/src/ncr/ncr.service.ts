@@ -10,7 +10,6 @@ import {
   ClassificationQuery,
   CreateClassificationBody,
   CreateNcrBody,
-  Employee,
   HistoryEntry,
   NcrDetail,
   NcrListQuery,
@@ -366,16 +365,6 @@ export class NcrService {
         .returning();
       if (!row) throw ApiError.notFound('classification_not_found', 'Classification not found');
       return toClassification(row);
-    });
-  }
-
-  listEmployees(ctx: RequestContext): Promise<z.infer<typeof Employee>[]> {
-    return this.database.asUser(ctx, async (db) => {
-      const result = await db.execute<Row>(sql`
-        select id, ${sql.raw(personName('e'))} as name, job_title, coalesce(active, true) as active
-        from public."Employees" e where e.organisation_id = ${ctx.organisationId!}::uuid
-        order by lower(e.surname), lower(e.first_name)`);
-      return result.rows.map((r) => ({ id: r.id as string, name: (r.name as string) ?? 'Unnamed', jobTitle: (r.job_title as string) ?? null, active: r.active as boolean }));
     });
   }
 

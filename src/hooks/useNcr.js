@@ -67,7 +67,7 @@ export const useEmployees = () => {
   const { organisationId } = useOrganisation();
   return useQuery({
     queryKey: key(organisationId, "employees"),
-    queryFn: () => apiFetch("/employees", { organisationId }).then((r) => r.data),
+    queryFn: () => apiFetch("/employees/lookup", { organisationId }).then((r) => r.data),
     enabled: !!organisationId,
     staleTime: 60_000,
     retry: false,

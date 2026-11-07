@@ -156,4 +156,23 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await see(page.getByText(/payment is overdue/i));
   if ((await page.getByRole('alert').filter({ hasText: /last payment failed/i }).count()) !== 0) throw new Error('the banner should not repeat on the billing page');
   await shot(page, '17-billing-page');
+
+  step('the owner keeps the employees register (Master Data)');
+  await stack.admin.query(`update public.organisation_subscriptions set status = 'active', past_due_since = null where organisation_id = (select id from public.organisations where name = $1)`, [orgName]);
+  await page.goto(`${APP}/Employees`);
+  await see(page.getByRole('button', { name: 'New employee' }));
+  await page.getByRole('button', { name: 'New employee' }).click();
+  const employeeDialog = page.getByRole('dialog', { name: 'New employee' });
+  await employeeDialog.getByLabel('First name').fill('Ada');
+  await employeeDialog.getByLabel('Surname').fill('Lovelace');
+  await employeeDialog.getByLabel('Job title').fill('Inspector');
+  await employeeDialog.getByLabel('Employee number').fill('E-001');
+  await shot(page, '18-new-employee');
+  await employeeDialog.getByRole('button', { name: 'Add employee' }).click();
+  const register = page.getByRole('region', { name: 'Employees' });
+  await see(register.getByText('Ada Lovelace'));
+  await shot(page, '19-employees-register');
+  const saved = (await stack.admin.query(`select e.first_name, e.employee_number, e.active from public."Employees" e join public.organisations o on o.id = e.organisation_id where o.name = $1`, [orgName])).rows;
+  log(`employees: ${JSON.stringify(saved)}`);
+  if (saved.length !== 1 || saved[0].employee_number !== 'E-001') throw new Error('the employee was not saved');
 };

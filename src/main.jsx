@@ -32,7 +32,7 @@ const SettingsUsers = lazy(() => import("./components/Settings/SettingsUsers.jsx
 const SettingsAccount = lazy(() =>
   import("./components/Settings/SettingsAccount.jsx")
 );
-const Employees = lazy(() => import("./components/Employees.jsx"));
+const Employees = lazy(() => import("./components/master-data/EmployeesPage.jsx"));
 const PartsPage = lazy(() => import("./components/master-data/PartsPage.jsx"));
 const NcrPage = lazy(() => import("./components/ncr/NcrPage.jsx"));
 const NcDashboard = lazy(() => import("./components/ncr/NcDashboard.jsx"));

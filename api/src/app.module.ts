@@ -23,7 +23,9 @@ import { CalibrationService } from './calibration/calibration.service';
 import { HealthController } from './health/health.controller';
 import { CustomersController, PartCustomersController, PartRevisionsController, PartsController, SuppliersController, UnitsController } from './master-data/master-data.controller';
 import { MasterDataService } from './master-data/master-data.service';
-import { EmployeesController, NcrClassificationsController, NcrController } from './ncr/ncr.controller';
+import { EmployeesController } from './employees/employees.controller';
+import { EmployeesService } from './employees/employees.service';
+import { NcrClassificationsController, NcrController } from './ncr/ncr.controller';
 import { NcrService } from './ncr/ncr.service';
 import { NcrAttachmentsController, NcrChildRecordsController, NcrCostsController } from './ncr/ncr-records.controller';
 import { NcrRecordsService } from './ncr/ncr-records.service';
@@ -167,6 +169,7 @@ export class AppModule implements NestModule {
         OnboardingService,
         MasterDataService,
         NcrService,
+        EmployeesService,
         NcrRecordsService,
         NcrDashboardService,
         CalibrationService,

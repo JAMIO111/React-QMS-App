@@ -10,7 +10,6 @@ import {
   CreateClassificationBody,
   CreateNcrBody,
   DeleteBody,
-  Employee,
   HistoryEntry,
   NcrDetail,
   NcrListQuery,
@@ -159,20 +158,5 @@ export class NcrClassificationsController {
   @ApiOkResponse({ schema: openApiSchema(Classification) })
   update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.updateClassification(ctx, parse(Uuid, id), parse(UpdateClassificationBody, body));
-  }
-}
-
-@ApiTags('master data')
-@ApiBearerAuth()
-@Controller('employees')
-export class EmployeesController {
-  constructor(private readonly service: NcrService) {}
-
-  /** Personnel (e.g. responsible operator on an NCR); not necessarily system users. */
-  @Get()
-  @OrganisationScoped()
-  @ApiOkResponse({ schema: openApiSchema(z.object({ data: z.array(Employee) })) })
-  async list(@Ctx() ctx: RequestContext) {
-    return { data: await this.service.listEmployees(ctx) };
   }
 }

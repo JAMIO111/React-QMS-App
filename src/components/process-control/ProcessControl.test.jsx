@@ -980,7 +980,7 @@ describe("Part customers, family membership and single-part scope", () => {
     const dialog = screen.getByRole("dialog");
     // Customers already linked are not offered again.
     expect(
-      within(dialog).queryByRole("option", { name: "ACME · Acme" }),
+      screen.queryByRole("option", { name: "ACME · Acme" }),
     ).toBeNull();
     await userEvent.selectOptions(
       await within(dialog).findByLabelText("Customer"),
@@ -1086,7 +1086,7 @@ describe("Part customers, family membership and single-part scope", () => {
       within(dialog).getByRole("combobox", { name: /Part/ }),
     );
     await userEvent.click(
-      await within(dialog).findByRole("option", { name: /SPECIAL-1/ }),
+      await screen.findByRole("option", { name: /SPECIAL-1/ }),
     );
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Add scope" }),

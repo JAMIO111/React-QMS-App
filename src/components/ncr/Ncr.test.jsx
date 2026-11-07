@@ -150,7 +150,7 @@ describe("NC registers", () => {
     const pane = screen.getByRole("dialog", { name: "Filter non-conformances" });
     await userEvent.click(within(pane).getByText("Investigating"));
     await userEvent.click(within(pane).getByRole("combobox", { name: "Deleted records" }));
-    await userEvent.click(within(pane).getByRole("option", { name: "Only deleted" }));
+    await userEvent.click(screen.getByRole("option", { name: "Only deleted" }));
     await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
     await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("stage=investigating"));
     expect(lastCall("GET /ncrs").path).toContain("deleted=only");
@@ -164,12 +164,12 @@ describe("NC registers", () => {
     const pane = screen.getByRole("dialog", { name: "Filter non-conformances" });
     // Before a failure mode is chosen, each sub-failure mode shows its failure mode.
     await userEvent.click(within(pane).getByRole("combobox", { name: "Sub-failure mode" }));
-    expect(within(pane).getByRole("option", { name: /Oversize/ })).toHaveTextContent("Dimensional");
+    expect(screen.getByRole("option", { name: /Oversize/ })).toHaveTextContent("Dimensional");
     await userEvent.keyboard("{Escape}");
     await userEvent.click(within(pane).getByRole("combobox", { name: "Failure mode" }));
-    await userEvent.click(within(pane).getByRole("option", { name: "DIM – Dimensional" }));
+    await userEvent.click(screen.getByRole("option", { name: "DIM – Dimensional" }));
     await userEvent.click(within(pane).getByRole("combobox", { name: "Sub-failure mode" }));
-    await userEvent.click(within(pane).getByRole("option", { name: "Oversize" }));
+    await userEvent.click(screen.getByRole("option", { name: "Oversize" }));
     await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
     await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("failureModeId=fm1&subFailureModeId=sf1"));
     expect(lastCall("GET /ncrs").path).toContain("page=1");
@@ -199,9 +199,9 @@ describe("NC registers", () => {
     await userEvent.click(within(pane).getByText("Critical"));
     await userEvent.click(within(pane).getByText("Major"));
     await userEvent.click(within(pane).getByRole("combobox", { name: "Part number" }));
-    await userEvent.click(await within(pane).findByRole("option", { name: "BRK-100 · Bracket" }));
+    await userEvent.click(await screen.findByRole("option", { name: "BRK-100 · Bracket" }));
     await userEvent.click(within(pane).getByRole("combobox", { name: "Customer" }));
-    await userEvent.click(await within(pane).findByRole("option", { name: /^Acme/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /^Acme/ }));
 
     // Sliders run from 0 to the register's highest value, rounded up (£873 → £900, 48 → 50).
     const costMin = within(pane).getByRole("slider", { name: "Total cost minimum" });
@@ -460,9 +460,9 @@ describe("NC page layout, costs and files", () => {
     await userEvent.click(screen.getByRole("button", { name: "New item" }));
     const dialog = screen.getByRole("dialog", { name: "New cost item" });
     await userEvent.click(within(dialog).getByRole("combobox", { name: /Cost type/ }));
-    await userEvent.click(await within(dialog).findByRole("option", { name: "Labour" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Labour" }));
     await userEvent.click(within(dialog).getByRole("combobox", { name: "VAT option" }));
-    await userEvent.click(within(dialog).getByRole("option", { name: "VAT exclusive" }));
+    await userEvent.click(screen.getByRole("option", { name: "VAT exclusive" }));
     await userEvent.type(within(dialog).getByLabelText(/Amount \(ex\. VAT\)/), "50");
     const preview = within(dialog).getByLabelText("Cost preview");
     expect(preview).toHaveTextContent("£50.00");
@@ -478,11 +478,11 @@ describe("NC page layout, costs and files", () => {
     await userEvent.click(await screen.findByRole("button", { name: "New item" }));
     const dialog = screen.getByRole("dialog", { name: "New cost item" });
     await userEvent.click(within(dialog).getByRole("combobox", { name: /Cost type/ }));
-    await userEvent.click(await within(dialog).findByRole("option", { name: "Transport" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Transport" }));
     const currency = within(dialog).getByRole("combobox", { name: /Currency/ });
     await userEvent.click(currency);
     await userEvent.type(currency, "EUR");
-    await userEvent.click(within(dialog).getByRole("option", { name: /^EUR/ }));
+    await userEvent.click(screen.getByRole("option", { name: /^EUR/ }));
     await userEvent.type(within(dialog).getByLabelText(/^Amount/), "100");
     await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
     expect(await within(dialog).findByText("Enter the exchange rate")).toBeInTheDocument();
@@ -547,7 +547,7 @@ describe("dialogs inside the NC form", () => {
     await userEvent.click(screen.getByRole("button", { name: "New item" }));
     const dialog = screen.getByRole("dialog", { name: "New cost item" });
     await userEvent.click(within(dialog).getByRole("combobox", { name: /Cost type/ }));
-    await userEvent.click(await within(dialog).findByRole("option", { name: "Rework" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Rework" }));
     await userEvent.type(within(dialog).getByLabelText(/^Amount/), "10");
     await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
     await waitFor(() => expect(lastCall("POST /ncrs/n1/costs")).toBeTruthy());

@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { useFloatingList } from "./useFloatingList";
 import { ChevronDownIcon, XIcon } from "@/components/icons";
 
 const ComboBox = ({
@@ -14,11 +16,10 @@ const ComboBox = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isOpen, setIsOpen] = useState(false);
-  const [dropUp, setDropUp] = useState(false);
-  const [alignRight, setAlignRight] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
 
   const dropdownRef = useRef(null);
+  const { popRef, floating } = useFloatingList(isOpen, dropdownRef);
   const inputRef = useRef(null);
 
   const filteredOptions = options
@@ -79,7 +80,7 @@ const ComboBox = ({
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target) && !popRef.current?.contains(e.target)) {
         setIsOpen(false);
         if (!selected) {
           setSearchTerm("");
@@ -89,25 +90,11 @@ const ComboBox = ({
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [selected]);
+  }, [selected, popRef]);
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
       inputRef.current.focus();
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (isOpen && dropdownRef.current) {
-      const dropdown = dropdownRef.current;
-      const rect = dropdown.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      const dropdownHeight = 240;
-      setDropUp(spaceBelow < dropdownHeight && spaceAbove > dropdownHeight);
-      const spaceRight = window.innerWidth - rect.left;
-      const dropdownWidth = rect.width;
-      setAlignRight(spaceRight < dropdownWidth);
     }
   }, [isOpen]);
 
@@ -180,10 +167,12 @@ const ComboBox = ({
           </div>
 
           {isOpen && (
+            createPortal(
             <ul
-              className={`absolute z-10 w-full border border-border-color rounded-lg shadow-md max-h-60 overflow-y-auto py-1 bg-secondary-bg
-              ${dropUp ? "bottom-full mb-1" : "mt-1"}
-              ${alignRight ? "right-0" : "left-0"}`}>
+              ref={popRef}
+              data-popover
+              style={floating}
+              className={`fixed z-[9500] border border-border-color rounded-lg shadow-md max-h-60 overflow-y-auto py-1 bg-secondary-bg`}>
               {filteredOptions.length > 0 ? (
                 filteredOptions.map((option, index) => (
                   <li key={option.id} className="px-2 py-1">
@@ -201,7 +190,9 @@ const ComboBox = ({
               ) : (
                 <li className="px-4 py-2 text-primary-text">No results</li>
               )}
-            </ul>
+            </ul>,
+            document.body,
+          )
           )}
         </div>
       </div>

@@ -112,6 +112,11 @@ export const partRevisions = pgTable('part_revisions', {
   status: text('status').notNull().default('draft'),
   releasedAt: timestamp('released_at', { withTimezone: true }),
   releasedBy: uuid('released_by'),
+  /** A correction keeps the drawing's letter and counts up the version (supabase/migrations/20251208100000_part_revision_corrections.sql). */
+  version: integer('version').notNull().default(1),
+  correctsId: uuid('corrects_id'),
+  correctionReason: text('correction_reason'),
+  correctedAt: timestamp('corrected_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

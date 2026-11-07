@@ -52,7 +52,7 @@ export const UpdatePartyBody = z
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
 export const PartyListQuery = ListQuery.extend({ q: Search, includeInactive: booleanFlag });
 
-export const RevisionStatus = z.enum(['draft', 'released', 'superseded', 'obsolete']);
+export const RevisionStatus = z.enum(['draft', 'released', 'superseded', 'obsolete', 'corrected']);
 export const PartRevision = z.object({
   id: z.string().uuid(),
   partId: z.string().uuid(),
@@ -62,6 +62,13 @@ export const PartRevision = z.object({
   status: RevisionStatus,
   releasedAt: z.string().datetime({ offset: true }).nullable(),
   createdAt: z.string().datetime({ offset: true }),
+  /** 1 for a revision as first released; a correction of it is version 2 of the same letter, and so on. */
+  version: z.number().int(),
+  /** The version this one corrects (a correction), else null. */
+  correctsId: z.string().uuid().nullable(),
+  correctionReason: z.string().nullable(),
+  /** When this version was replaced by its correction (status `corrected`). */
+  correctedAt: z.string().datetime({ offset: true }).nullable(),
 });
 export type PartRevision = z.infer<typeof PartRevision>;
 
@@ -76,6 +83,8 @@ export const PartSummary = z.object({
   active: z.boolean(),
   /** The released revision, if any. */
   currentRevision: z.string().nullable(),
+  /** Its version (2 or more once it has been corrected). */
+  currentVersion: z.number().int().nullable(),
 });
 export type PartSummary = z.infer<typeof PartSummary>;
 export const PartCustomer = z.object({
@@ -146,3 +155,24 @@ export const UpdatePartCustomerBody = z
   .object({ customerPartNumber: CustomerPartNumber, isPrimary: z.literal(true).optional() })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
+
+export const CorrectionBody = z
+  .object({ reason: z.string().trim().min(1, 'Give the reason for the correction').max(1000) })
+  .strict();
+
+/** What ran on a version that has been, or is being, replaced by a correction: information and a prompt to review, nothing is changed. */
+export const CorrectionImpact = z.object({
+  /** The version that was (or would be) replaced. */
+  corrected: z.object({ id: z.string().uuid(), revision: z.string(), version: z.number().int(), status: RevisionStatus }),
+  /** The correction, when asked for one. */
+  correction: z.object({ id: z.string().uuid(), version: z.number().int(), status: RevisionStatus, reason: z.string().nullable() }).nullable(),
+  canReadInspections: z.boolean(),
+  canReadNcrs: z.boolean(),
+  inspectionsTotal: z.number().int(),
+  inspections: z.array(
+    z.object({ id: z.string().uuid(), reference: z.string(), status: z.string(), result: z.string().nullable(), startedAt: z.string(), startedBy: z.string().nullable(), operationCode: z.string().nullable() }),
+  ),
+  ncrsTotal: z.number().int(),
+  ncrs: z.array(z.object({ id: z.string().uuid(), reference: z.string(), stage: z.string(), source: z.string(), title: z.string(), detectedAt: z.string() })),
+});
+export type CorrectionImpact = z.infer<typeof CorrectionImpact>;

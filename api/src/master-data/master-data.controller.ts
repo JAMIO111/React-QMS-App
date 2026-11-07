@@ -9,6 +9,8 @@ import {
   AddPartCustomerBody,
   CreatePartBody,
   CreatePartyBody,
+  CorrectionBody,
+  CorrectionImpact,
   CreateRevisionBody,
   Party,
   PartDetail,
@@ -164,13 +166,37 @@ export class PartRevisionsController {
     return this.service.updateRevision(ctx, parse(Uuid, id), parse(UpdateRevisionBody, body));
   }
 
-  /** Release a draft; the previously released revision becomes superseded. */
+  /**
+   * Release a draft; the previously released revision becomes superseded. A draft that is a correction needs approval rights (`process_control.approve`);
+   * its wrong version becomes `corrected` in the same step.
+   */
   @Post(':id/release')
   @HttpCode(200)
   @OrganisationScoped(MANAGE)
   @ApiOkResponse({ schema: openApiSchema(PartRevision) })
   release(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.transitionRevision(ctx, parse(Uuid, id), 'released');
+  }
+
+  /**
+   * Correct the current released revision: the drawing's letter stays and the version counts up (Rev B v2). Answers with the new draft,
+   * which is edited like any draft and released with `release` by someone with approval rights.
+   */
+  @Post(':id/correction')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(CorrectionBody) })
+  @ApiCreatedResponse({ schema: openApiSchema(PartRevision) })
+  correct(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.startCorrection(ctx, parse(Uuid, id), parse(CorrectionBody, body));
+  }
+
+  /** The inspections and non-conformances that used the version a correction replaces (ask with the correction or the corrected version). */
+  @Get(':id/correction-impact')
+  @OrganisationScoped('master_data.read')
+  @ApiOkResponse({ schema: openApiSchema(CorrectionImpact) })
+  correctionImpact(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.correctionImpact(ctx, parse(Uuid, id));
   }
 
   /** Retire a revision (draft, released or superseded). */

@@ -16,6 +16,17 @@ export const useOnboarding = ({ enabled = true } = {}) => {
   });
 };
 
+/** The go-live checklist (needs organisation.manage): { items: [{ key, required, done }], requiredDone }. */
+export const useGoLiveChecklist = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: [...key(organisationId), "checklist"],
+    queryFn: () => apiFetch("/onboarding/checklist", { organisationId }),
+    enabled: !!organisationId && enabled,
+    retry: false,
+  });
+};
+
 /**
  * mutate({ action: "setStep", body: { step, status } }) or mutate({ action: "complete" }). Answers with the new state, which is put in the cache; then
  * everything in the organisation is refreshed, including who the person is (the access state and the wizard flag come from /me).

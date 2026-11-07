@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger'
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { OnboardingState, SetStepBody } from './onboarding.schemas';
+import { GoLiveChecklist, OnboardingState, SetStepBody } from './onboarding.schemas';
 import { OnboardingService } from './onboarding.service';
 
 const MANAGE = 'organisation.manage';
@@ -20,6 +20,13 @@ export class OnboardingController {
   @ApiOkResponse({ description: 'Where the wizard is: each step, what is required, whether it can be finished', schema: openApiSchema(OnboardingState) })
   state(@Ctx() ctx: RequestContext) {
     return this.service.state(ctx);
+  }
+
+  @Get('checklist')
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'The go-live checklist: what is in place, what is still needed (required) and what is recommended', schema: openApiSchema(GoLiveChecklist) })
+  checklist(@Ctx() ctx: RequestContext) {
+    return this.service.checklist(ctx);
   }
 
   @Put('step')

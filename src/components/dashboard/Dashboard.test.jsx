@@ -16,7 +16,11 @@ vi.mock("../../hooks/useQmsApi", () => ({
   useOrganisationAccess: () => access,
   usePermissions: () => ({ can: (p) => permissions.includes(p) }),
 }));
-vi.mock("../../hooks/useOnboarding", () => ({ useOnboarding: ({ enabled }) => ({ data: enabled ? wizard : undefined }) }));
+let checklist;
+vi.mock("../../hooks/useOnboarding", () => ({
+  useOnboarding: ({ enabled }) => ({ data: enabled ? wizard : undefined }),
+  useGoLiveChecklist: ({ enabled }) => ({ data: enabled ? checklist : undefined }),
+}));
 
 import Dashboard from "./Dashboard";
 import { deferSetup, setupDeferred } from "../../lib/onboarding";
@@ -100,5 +104,49 @@ describe("the set-up progress card", () => {
     permissions = ["ncr.read"];
     renderIt();
     expect(screen.queryByRole("region", { name: "Set-up progress" })).toBeNull();
+  });
+});
+
+describe("the go-live checklist card", () => {
+  const items = (done = []) =>
+    ["subscription", "site", "departments", "invited", "details", "logo", "security", "joined", "first_ncr"].map((key) => ({
+      key,
+      required: ["subscription", "site", "departments", "invited"].includes(key),
+      done: done.includes(key),
+    }));
+
+  beforeEach(() => {
+    access = { accessState: "open", onboarding: "complete" };
+    checklist = { items: items(["subscription", "site"]), requiredDone: false };
+  });
+
+  it("lists the essentials still to do and the recommended extras, each linking to where it is done", () => {
+    renderIt();
+    const card = screen.getByRole("region", { name: "Go-live checklist" });
+    expect(card).toHaveTextContent("2 of 4 essentials still to do");
+    const essentials = within(screen.getByRole("list", { name: "Essentials" }));
+    expect(essentials.getByRole("link", { name: /add a department/i })).toHaveAttribute("href", "/Settings/Organisation");
+    expect(essentials.getByRole("link", { name: /invite someone else/i })).toHaveAttribute("href", "/Settings/Users");
+    expect(essentials.getByRole("link", { name: /start your subscription \(done\)/i })).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Recommended" })).getAllByRole("link")).toHaveLength(5);
+    expect(screen.queryByRole("region", { name: "Set-up progress" })).toBeNull();
+  });
+
+  it("goes once every required item is done, even with recommended ones left", () => {
+    checklist = { items: items(["subscription", "site", "departments", "invited"]), requiredDone: true };
+    renderIt();
+    expect(screen.queryByRole("region", { name: "Go-live checklist" })).toBeNull();
+  });
+
+  it("is not shown while the wizard is unfinished, nor to people who cannot set the organisation up", () => {
+    access = { accessState: "open", onboarding: "in_progress" };
+    renderIt();
+    expect(screen.queryByRole("region", { name: "Go-live checklist" })).toBeNull();
+  });
+
+  it("is not shown to people without organisation.manage", () => {
+    permissions = [];
+    renderIt();
+    expect(screen.queryByRole("region", { name: "Go-live checklist" })).toBeNull();
   });
 });

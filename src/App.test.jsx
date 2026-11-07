@@ -12,6 +12,7 @@ vi.mock("./components/NotificationPane", () => ({ default: () => null }));
 vi.mock("./components/ThemeColourSync", () => ({ default: () => null }));
 vi.mock("./components/NoOrganisation", () => ({ default: () => <p>no organisation</p> }));
 vi.mock("./components/onboarding/SubscriptionNeeded", () => ({ default: () => <p>subscription needed</p> }));
+vi.mock("./components/SubscriptionBanner", () => ({ default: () => <div data-testid="subscription-banner" /> }));
 vi.mock("./contexts/SearchProvider.jsx", () => ({ SearchProvider: ({ children }) => children }));
 vi.mock("./contexts/NotificationProvider", () => ({ NotificationProvider: ({ children }) => children }));
 vi.mock("./contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisation: org, error: null }) }));
@@ -73,6 +74,17 @@ describe("the app shell", () => {
     access = { accessState: "open", onboarding: "in_progress", isLoading: true };
     renderAt("/Dashboard");
     expect(screen.getByText("dashboard page")).toBeInTheDocument();
+  });
+
+  it("shows the subscription warning strip above the page when the app is open, never in place of the lock screen", () => {
+    renderAt("/Dashboard");
+    expect(screen.getByTestId("subscription-banner")).toBeInTheDocument();
+  });
+
+  it("does not show the warning strip on the lock screen", () => {
+    access = { accessState: "needs_subscription", onboarding: "complete", isLoading: false };
+    renderAt("/Dashboard");
+    expect(screen.queryByTestId("subscription-banner")).toBeNull();
   });
 
   it("without a valid subscription, shows the subscription page instead of the app, but still lets Settings open", () => {

@@ -87,6 +87,19 @@ describe('the set-up wizard', () => {
     await api().post('/api/v1/onboarding/complete').set(await asUser(ids.ownerB, ctx.org)).expect(404);
   });
 
+  it('gives the go-live checklist: what is in place, what is required, who may see it', async () => {
+    const h = await asUser(ids.outsider, ctx.org);
+    const c = (await api().get('/api/v1/onboarding/checklist').set(h).expect(200)).body;
+    const by = (k: string) => c.items.find((i: { key: string }) => i.key === k);
+    expect(c.items.map((i: { key: string }) => i.key)).toEqual(['subscription', 'site', 'departments', 'invited', 'details', 'logo', 'security', 'joined', 'first_ncr']);
+    expect(by('site')).toMatchObject({ required: true, done: true });
+    expect(by('invited')).toMatchObject({ required: true, done: false });
+    expect(by('logo')).toMatchObject({ required: false, done: false });
+    expect(by('security')).toMatchObject({ done: true }); // marked skipped in the test above
+    expect(c.requiredDone).toBe(false);
+    await api().get('/api/v1/onboarding/checklist').set(await asUser(ids.ownerB, ctx.org)).expect(404);
+  });
+
   it('is finished once, and the organisation then shows it complete', async () => {
     const h = await asUser(ids.outsider, ctx.org);
     const done = (await api().post('/api/v1/onboarding/complete').set(h).expect(200)).body;

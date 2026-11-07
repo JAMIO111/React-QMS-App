@@ -9,6 +9,7 @@ import NoOrganisation from "./components/NoOrganisation";
 import LoadingScreen from "./components/ui/LoadingScreen";
 import { useOrganisation } from "./contexts/OrganisationProvider";
 import { useOrganisationAccess, usePermissions } from "./hooks/useQmsApi";
+import SubscriptionBanner from "./components/SubscriptionBanner";
 import SubscriptionNeeded from "./components/onboarding/SubscriptionNeeded";
 import { setupDeferred } from "./lib/onboarding";
 import ThemeColourSync from "./components/ThemeColourSync";
@@ -55,6 +56,7 @@ function App() {
           <main className="flex flex-col flex-1 h-full min-w-0 min-h-0">
             <Header />
             <div className="relative flex flex-col flex-1 overflow-clip min-w-0 min-h-0">
+              {!gated && <SubscriptionBanner />}
               {gated && !settingsRoute ? <SubscriptionNeeded /> : <Outlet />}
             </div>
           </main>

@@ -1,5 +1,6 @@
 import { useUser } from "@/contexts/UserProvider";
 import { getGreeting } from "@/lib/HelperFunctions";
+import GoLiveCard from "./GoLiveCard";
 import OnboardingCard from "./OnboardingCard";
 
 const Dashboard = () => {
@@ -12,6 +13,7 @@ const Dashboard = () => {
         {profile?.first_name ? `, ${profile.first_name}` : ""}
       </h1>
       <OnboardingCard />
+      <GoLiveCard />
     </div>
   );
 };

@@ -21,3 +21,16 @@ export const OnboardingState = z.object({
   sites: z.number().int(),
 });
 export type OnboardingState = z.infer<typeof OnboardingState>;
+
+export const GoLiveChecklist = z.object({
+  items: z.array(
+    z.object({
+      key: z.enum(['subscription', 'site', 'departments', 'invited', 'details', 'logo', 'security', 'joined', 'first_ncr']),
+      required: z.boolean(),
+      done: z.boolean(),
+    }),
+  ),
+  /** Every required item is done: the dashboard card can go. */
+  requiredDone: z.boolean(),
+});
+export type GoLiveChecklist = z.infer<typeof GoLiveChecklist>;

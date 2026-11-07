@@ -23,9 +23,9 @@ vi.mock("../ncr/Pickers", () => ({
 import StartJobCard from "./StartJobCard";
 
 const preview = (over = {}) => ({
-  machine: { id: "m1", code: "CNC-1", name: "Lathe 1" },
+  machine: null,
   part: { id: "p1", partNumber: "ROD-1", name: "Rod" },
-  site: { id: "s1", name: "Plant A" },
+  site: null,
   siteProblem: null,
   status: "ok",
   problems: [],
@@ -53,11 +53,13 @@ const renderIt = () =>
     </QueryClientProvider>
   );
 
-const choose = async (user) => {
+const pickPart = async (user) => {
   await user.click(screen.getByRole("button", { name: "Start new job" }));
+  await user.click(screen.getByRole("button", { name: /pick part/i }));
+};
+const pickMachine = async (user) => {
   await user.click(screen.getByRole("combobox", { name: /machine/i }));
   await user.click(await screen.findByText("CNC-1 · Lathe 1"));
-  await user.click(screen.getByRole("button", { name: /pick part/i }));
 };
 
 beforeEach(() => {
@@ -67,7 +69,10 @@ beforeEach(() => {
   mine = { data: [], total: 0 };
   apiFetch.mockReset();
   apiFetch.mockImplementation(async (path, opts = {}) => {
-    if (path.startsWith("/jobs/preview")) return previewResult;
+    if (path.startsWith("/jobs/preview")) {
+      const machine = new URL(path, "http://x").searchParams.get("machineId");
+      return machine ? { ...previewResult, machine: { id: "m1", code: "CNC-1", name: "Lathe 1" }, site: { id: "s1", name: "Plant A" } } : previewResult;
+    }
     if (path === "/jobs/mine") return mine;
     if (path === "/jobs" && opts.method === "POST") return { id: "job-1", ...opts.body };
     throw new Error(`unexpected ${path}`);
@@ -91,47 +96,62 @@ describe("the dashboard job card", () => {
 });
 
 describe("the start pop-up", () => {
-  it("asks only for the machine and the part, shows what was worked out, and starts with the machine and part", async () => {
+  it("starts with the part, shows a green message for the control plan, then the operation and the machine", async () => {
     const user = userEvent.setup();
     renderIt();
-    await choose(user);
-    expect(await screen.findByText(/Plant A · CP-ROD rev A · part rev A/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Start new job" }));
     expect(screen.queryByLabelText(/operation/i)).toBeNull();
+    expect(screen.queryByRole("combobox", { name: /machine/i })).toBeNull();
+    await user.click(screen.getByRole("button", { name: /pick part/i }));
+    const ok = await screen.findByRole("status");
+    expect(ok).toHaveTextContent("Control plan CP-ROD rev A is in force");
+    expect(ok.className).toMatch(/success/);
+    expect(screen.getByLabelText(/operation/i)).toHaveValue("OP-10"); // a single operation is chosen for them
+    await pickMachine(user);
+    expect(await screen.findByText(/Plant A/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/quantity/i)).toBeNull();
     await user.click(screen.getByRole("button", { name: "Start job" }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/jobs", expect.objectContaining({ method: "POST", body: { machineId: "m1", partId: "p1", operationCode: "OP-10" } })));
     expect(JSON.parse(localStorage.getItem("fortress.lastMachine"))["org-1"]).toEqual({ id: "m1", name: "Lathe 1" });
   });
 
-  it("asks for the operation only when the plan has several, and for the quantity only when checks are sampled every N parts", async () => {
+  it("offers only the operations on the control plan, and needs one chosen; asks for the quantity only when checks are sampled every N parts", async () => {
     previewResult = preview({ needsOperation: true, operationCode: null, needsLotSize: true, operations: [{ code: "OP-10", name: "Turning" }, { code: "OP-20", name: "Milling" }] });
     const user = userEvent.setup();
     renderIt();
-    await choose(user);
-    const start = await screen.findByRole("button", { name: "Start job" });
+    await pickPart(user);
+    const op = await screen.findByLabelText(/operation/i);
+    expect(op).toHaveValue("");
+    expect(Array.from(op.querySelectorAll("option")).map((o) => o.value).filter(Boolean)).toEqual(["OP-10", "OP-20"]);
+    await pickMachine(user);
+    const start = screen.getByRole("button", { name: "Start job" });
     expect(start).toBeDisabled();
-    await user.selectOptions(screen.getByLabelText(/operation/i), "OP-20");
-    expect(start).toBeDisabled(); // still needs the quantity
-    await user.type(screen.getByLabelText(/quantity/i), "250");
+    await user.selectOptions(op, "OP-20");
+    await user.type(await screen.findByLabelText(/quantity/i), "250");
     await waitFor(() => expect(start).toBeEnabled());
     await user.click(start);
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/jobs", expect.objectContaining({ body: { machineId: "m1", partId: "p1", operationCode: "OP-20", lotSize: 250 } })));
   });
 
-  it("explains in the resolver's words why the job cannot start, and keeps Start off", async () => {
-    previewResult = preview({ status: "blocked", problems: [{ code: "no_plan", message: "No effective revision of CP-ROD." }] });
+  it("shows a red message with the resolver's reasons when the part has no valid control plan, and offers nothing further", async () => {
+    previewResult = preview({ status: "blocked", plan: null, operations: [], problems: [{ code: "no_plan", message: "No effective revision of CP-ROD." }] });
     const user = userEvent.setup();
     renderIt();
-    await choose(user);
-    expect(await screen.findByText("No effective revision of CP-ROD.")).toBeInTheDocument();
+    await pickPart(user);
+    const red = await screen.findByRole("alert");
+    expect(red).toHaveTextContent("No valid control plan for this part");
+    expect(red).toHaveTextContent("No effective revision of CP-ROD.");
+    expect(red.className).toMatch(/error/);
+    expect(screen.queryByLabelText(/operation/i)).toBeNull();
+    expect(screen.queryByRole("combobox", { name: /machine/i })).toBeNull();
     expect(screen.getByRole("button", { name: "Start job" })).toBeDisabled();
   });
 
-  it("opens on the machine used last on this device", async () => {
+  it("opens on the machine used last on this device once the plan is chosen", async () => {
     localStorage.setItem("fortress.lastMachine", JSON.stringify({ "org-1": { id: "m1", name: "Lathe 1" } }));
     const user = userEvent.setup();
     renderIt();
-    await user.click(screen.getByRole("button", { name: "Start new job" }));
-    expect(screen.getByRole("combobox", { name: /machine/i })).toHaveValue("CNC-1 · Lathe 1");
+    await pickPart(user);
+    expect(await screen.findByRole("combobox", { name: /machine/i })).toHaveValue("CNC-1 · Lathe 1");
   });
 });

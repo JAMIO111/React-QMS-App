@@ -14,7 +14,7 @@ const text = (max: number) =>
 
 /** What the operator chooses to start a job. */
 export const JobQuery = z
-  .object({ machineId: z.string().uuid(), partId: z.string().uuid(), operationCode: code.optional() })
+  .object({ machineId: z.string().uuid().optional(), partId: z.string().uuid(), operationCode: code.optional() })
   .strict();
 export type JobQuery = z.infer<typeof JobQuery>;
 
@@ -30,7 +30,8 @@ export type JobDetailsBody = z.infer<typeof JobDetailsBody>;
 
 /** What starting a job with this machine and part would do: the site and operation that would be used, and whether anything blocks it. */
 export const JobPreview = z.object({
-  machine: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }),
+  /** Null while only the part is known (the control plan can be resolved before a machine is chosen). */
+  machine: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }).nullable(),
   part: z.object({ id: z.string().uuid(), partNumber: z.string(), name: z.string() }),
   /** The machine's site (else the organisation's only site). */
   site: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),

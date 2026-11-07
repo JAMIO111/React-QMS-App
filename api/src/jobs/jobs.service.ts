@@ -195,20 +195,22 @@ export class JobsService {
 
   /** The machine, the part, the site and operation that would be used, and the resolver's verdict. */
   private async work(db: Db, ctx: RequestContext, q: JobQuery): Promise<{ preview: JobPreview; resolver: Resolver }> {
-    const machine = (await db.execute<Row>(sql`select id, code, name, site_id from public.machines where id = ${q.machineId}::uuid and organisation_id = ${orgOf(ctx)}::uuid and active`)).rows[0];
-    if (!machine) throw ApiError.notFound('machine_not_found', 'Machine not found');
+    const machine = q.machineId
+      ? (await db.execute<Row>(sql`select id, code, name, site_id from public.machines where id = ${q.machineId}::uuid and organisation_id = ${orgOf(ctx)}::uuid and active`)).rows[0]
+      : null;
+    if (q.machineId && !machine) throw ApiError.notFound('machine_not_found', 'Machine not found');
     const part = (await db.execute<Row>(sql`select id, part_number, name from public.parts where id = ${q.partId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`)).rows[0];
     if (!part) throw ApiError.notFound('part_not_found', 'Part not found');
 
     let site: { id: string; name: string } | null = null;
     let siteProblem: string | null = null;
-    if (machine.site_id) {
+    if (machine?.site_id) {
       const s = (await db.execute<Row>(sql`select id, name from public.sites where id = ${machine.site_id as string}::uuid and organisation_id = ${orgOf(ctx)}::uuid`)).rows[0];
       site = s ? { id: s.id as string, name: s.name as string } : null;
     } else {
       const only = (await db.execute<Row>(sql`select id, name from public.sites where organisation_id = ${orgOf(ctx)}::uuid and active`)).rows;
       if (only.length === 1) site = { id: only[0].id as string, name: only[0].name as string };
-      else siteProblem = `${machine.code} has no site. Ask a manager to set the machine's site.`;
+      else if (machine) siteProblem = `${machine.code} has no site. Ask a manager to set the machine's site.`;
     }
 
     const resolve = async (op: string | null) =>
@@ -227,7 +229,7 @@ export class JobsService {
     return {
       resolver,
       preview: {
-        machine: { id: machine.id as string, code: machine.code as string, name: machine.name as string },
+        machine: machine ? { id: machine.id as string, code: machine.code as string, name: machine.name as string } : null,
         part: { id: part.id as string, partNumber: part.part_number as string, name: part.name as string },
         site,
         siteProblem,

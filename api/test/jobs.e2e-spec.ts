@@ -82,6 +82,15 @@ describe('preview and start', () => {
     expect(chosen).toMatchObject({ needsOperation: false, operationCode: 'OP-20' });
   });
 
+  it('resolves the control plan from the part alone, before any machine is chosen', async () => {
+    const h = await as(ids.ownerA);
+    const p = (await api().get(`/api/v1/jobs/preview?partId=${ctx.p2}`).set(h).expect(200)).body;
+    expect(p).toMatchObject({ machine: null, status: 'ok', plan: { planCode: 'CP-PIN', revisionCode: 'A' }, needsOperation: true });
+    expect(p.operations.map((o: { code: string }) => o.code)).toEqual(['OP-10', 'OP-20']);
+    await api().get(`/api/v1/jobs/preview?partId=${ctx.p1}&machineId=${ids.orgB}`).set(h).expect(404);
+    await api().post('/api/v1/jobs').set(h).send({ partId: ctx.p2, operationCode: 'OP-10' }).expect(400); // starting still needs a machine
+  });
+
   it('asks for the quantity only when a check is sampled every N parts, and for the operation only when there are several', async () => {
     const h = await as(ids.ownerA);
     expect((await api().post('/api/v1/jobs').set(h).send({ machineId: ctx.machine, partId: ctx.p1 }).expect(400)).body.error.code).toBe('lot_size_required');

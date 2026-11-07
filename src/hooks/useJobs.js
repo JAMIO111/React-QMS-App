@@ -6,14 +6,14 @@ import { refreshOrganisation } from "../lib/refresh";
 /** Operator jobs (docs/operator-hub-plan.md): a job is an in-progress inspection record, so detail and cache live under the "inspection" key. */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "inspection", "jobs", ...rest];
 
-/** What starting a job on this machine with this part would do: site, operation, what must still be asked, what blocks it. */
+/** What starting a job with this part (and, once chosen, this machine) would do: the control plan, its operations, the site, what must still be asked, what blocks it. */
 export const useJobPreview = ({ machineId, partId, operationCode }) => {
   const { organisationId } = useOrganisation();
-  const qs = new URLSearchParams({ machineId: machineId ?? "", partId: partId ?? "", ...(operationCode ? { operationCode } : {}) });
+  const qs = new URLSearchParams({ partId: partId ?? "", ...(machineId ? { machineId } : {}), ...(operationCode ? { operationCode } : {}) });
   return useQuery({
-    queryKey: key(organisationId, "preview", machineId, partId, operationCode ?? ""),
+    queryKey: key(organisationId, "preview", machineId ?? "", partId, operationCode ?? ""),
     queryFn: () => apiFetch(`/jobs/preview?${qs}`, { organisationId }),
-    enabled: !!organisationId && !!machineId && !!partId,
+    enabled: !!organisationId && !!partId,
     retry: false,
     placeholderData: keepPreviousData,
     staleTime: 0,

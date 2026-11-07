@@ -116,6 +116,16 @@ BEGIN
   INSERT INTO public.reaction_plans (organisation_id, control_plan_revision_id, trigger_type, action, instruction)
     SELECT a, id, 'out_of_spec', 'hold', 'Quarantine the batch' FROM public.control_plan_revisions WHERE organisation_id = a;
 
+  -- Manufacturing traceability (TR1): an order with an operation, a lot and a serial number.
+  INSERT INTO public.production_orders (organisation_id, order_number, part_id, site_id, quantity_planned)
+    SELECT a, 'SW-WO-1', id, site, 10 FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1';
+  INSERT INTO public.production_operations (organisation_id, production_order_id, sequence, operation_code)
+    SELECT a, id, 10, 'OP-10' FROM public.production_orders WHERE organisation_id = a;
+  INSERT INTO public.lots (organisation_id, lot_number, part_id, origin, production_order_id)
+    SELECT a, 'SW-LOT-1', part_id, 'produced', id FROM public.production_orders WHERE organisation_id = a;
+  INSERT INTO public.serial_numbers (organisation_id, serial_number, part_id, lot_id)
+    SELECT a, 'SW-SN-1', part_id, id FROM public.lots WHERE organisation_id = a;
+
   -- In-process inspection (PC4): make the sweep plan effective with one check, then inspect SW-P1.
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
   UPDATE public.control_plan_revisions SET change_reason = 'Sweep' WHERE organisation_id = a;

@@ -1,6 +1,6 @@
 # Phase 3 — Manufacturing traceability — plan
 
-**Status:** agreed (decisions D1–D6 in §6, agreed); not started · **Brief:** `docs/design-brief.md` §6.1, Phase 3 (line 882) · **Builds on:** master data (parts, revisions, machines, customers, suppliers), inspections and the job hub, NCs with containment and disposition, calibration, CAPA
+**Status:** agreed (decisions D1–D6 in §6); **TR1 built** (migration `20251210100000_production_traceability.sql`, **not applied live yet**); TR2–TR6 not started · **Brief:** `docs/design-brief.md` §6.1, Phase 3 (line 882) · **Builds on:** master data (parts, revisions, machines, customers, suppliers), inspections and the job hub, NCs with containment and disposition, calibration, CAPA
 
 **Exit criteria (brief):** a quality record can be traced to the relevant manufacturing context without relying on free-text references alone.
 
@@ -42,6 +42,12 @@ Consequences: the same lot is spelt three ways, "which NCs and inspections touch
 
 - **TR0 — decisions and plan** (this document).
 - **TR1 — database.** Migration: permissions `production.read` / `.manage`; `production_orders`, `production_operations`, `lots`, `serial_numbers`; link columns on `inspection_records` and `nonconformances` (FKs, same-part/same-organisation checks by trigger); lifecycle functions; audit; RLS; SQL tests; guardrails + sweeps.
+- **TR1 — built.** Migration, SQL tests (`production_traceability.test.sql`, 12 mutation checks each fail the test), guardrails and tenancy sweep seeds. Notes: an order is created `planned` whatever the caller sends and
+  cannot complete while an operation is pending or in progress; its part, number and site never change; a closed or cancelled order (and a closed lot, a scrapped serial) is frozen. A lot is `open` → `on_hold` (reason) /
+  `released` → `closed`; a serial `in_production` → `completed` → `scrapped` (reason). Part, lot and order must agree: picking a **serial** fills its lot, order and part, picking a **lot** its order and part, and any
+  two links that are both given must match (`QM017` → `409 production_rule`, to map in TR2). Inspections get `production_order_id` / `lot_id` / `serial_id`, set only by `app.set_job_links(inspection, jsonb)` while the job runs
+  (keys `productionOrderId`, `lotId`, `serialId`: present-with-null clears, absent keeps; needs `inspection.record` and `production.read`); NCs get the same columns through their ordinary UPDATE grant. In both, picking fills
+  the typed `work_order` / `lot` / `serial` text. Permissions `production.read` (all six roles) and `production.manage` (owner, admin, quality manager, quality engineer). No backfill yet (TR3), no outbox events yet.
 - **TR2 — API and registers.** `api/src/production/`: `/production-orders`, `/lots`, `/serial-numbers` (page-based lists with filters, get, create, patch, status actions, range create for serials, `lookup` endpoints for pickers). Master Data–style registers and detail pages (`/Production/Orders`, `/Production/Lots`, `/Production/Serials`), menu group "Production", e2e + sweep.
 - **TR3 — link the quality records.** Order / lot / serial pickers (`PartPicker` style, create inline) on Start job, the job hub, the inspection page, and the NC form; text columns filled from the picked record; banner for held lot / closed order; backfill of existing text (decision D1).
 - **TR4 — affected lots on NCs.** `ncr_affected_lots` (NC, lot, optional serials, quantity); dispositions and containment actions can name the lot(s) they apply to; the "quantity affected" and disposition quantity rules extend per lot. Raise-from-inspection pre-fills the lot.

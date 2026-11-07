@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatDate } from "../../../lib/processControl";
+import { revisionLabel } from "../../../lib/partRevisions";
 import { Pager } from "./SidePanes";
 
 const KIND = { part_revision: "Part revision", plan_revision: "Control plan revision" };
@@ -17,14 +18,14 @@ const RevisionsPane = ({ revisions }) => {
   return (
     <>
       <Pager index={index} count={list.length} onChange={setIndex} label="revision" />
-      <article aria-label={`${r.subject} rev ${r.revision}`} className="flex flex-col gap-3">
+      <article aria-label={`${r.subject} rev ${revisionLabel(r)}`} className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {r.isNew && <span className="rounded-full bg-error-color px-2 py-0.5 text-xs font-semibold text-white">New</span>}
           <span className="text-xs text-secondary-text">{KIND[r.kind]}</span>
           <span className={`rounded-full px-2 py-0.5 text-xs ${r.current ? "bg-success-color/15 text-success-color" : "bg-primary-text/10 text-secondary-text"}`}>{r.current ? "In force" : "Replaced"}</span>
         </div>
         <h3 className="text-base font-semibold text-primary-text">
-          {r.subject} · rev {r.revision}
+          {r.subject} · rev {revisionLabel(r)}
         </h3>
         <p className="text-sm text-primary-text">{r.changeSummary ?? "No change summary was given."}</p>
         <p className="text-xs text-secondary-text">

@@ -139,7 +139,7 @@ export class JobsService {
       const isNew = (at: string) => (previous === null ? new Date(at).getTime() >= weekAgo : new Date(at).getTime() > previous);
 
       const parts = await db.execute<Row>(sql`
-        select r.id, r.revision, r.change_summary, r.released_at as at, r.status, ${sql.raw(personName('pr'))} as by_name, p.part_number
+        select r.id, r.revision, r.version, r.corrects_id, r.correction_reason, r.change_summary, r.released_at as at, r.status, ${sql.raw(personName('pr'))} as by_name, p.part_number
           from public.part_revisions r join public.parts p on p.id = r.part_id left join public.profiles pr on pr.id = r.released_by
          where r.organisation_id = ${orgOf(ctx)}::uuid and r.part_id = ${job.part_id}::uuid and r.status in ('released', 'superseded')
            and (r.status = 'released' or r.released_at >= now() - make_interval(days => ${q.days}::integer))
@@ -155,8 +155,9 @@ export class JobsService {
           kind: 'part_revision' as const,
           id: r.id as string,
           revision: r.revision as string,
+          version: Number(r.version),
           subject: r.part_number as string,
-          changeSummary: (r.change_summary as string) ?? null,
+          changeSummary: r.corrects_id ? `Correction: ${r.correction_reason as string}` : ((r.change_summary as string) ?? null),
           at: iso(r.at)!,
           by: (r.by_name as string) ?? null,
           isNew: isNew(iso(r.at)!),
@@ -167,6 +168,7 @@ export class JobsService {
           kind: 'plan_revision' as const,
           id: r.id as string,
           revision: r.revision_code as string,
+          version: 1,
           subject: r.plan_code as string,
           changeSummary: (r.change_reason as string) ?? null,
           at: iso(r.at)!,

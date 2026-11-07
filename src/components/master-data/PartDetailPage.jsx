@@ -15,6 +15,8 @@ import SpecValues from "./SpecValues";
 import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
 
 import PartCustomers from "./PartCustomers";
+import { CorrectDialog, CorrectionImpactCard, ReleaseCorrectionDialog } from "./RevisionCorrection";
+import { currentRevisionLabel, revisionLabel } from "../../lib/partRevisions";
 import RequirementPreview from "../process-control/RequirementPreview";
 import LoadingScreen from "../ui/LoadingScreen";
 
@@ -23,6 +25,7 @@ const STATUS_STYLE = {
   released: "bg-success-color/15 text-success-color",
   superseded: "bg-border-color text-secondary-text",
   obsolete: "bg-border-color text-secondary-text line-through",
+  corrected: "bg-border-color text-secondary-text",
 };
 const StatusPill = ({ status }) => (
   <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${STATUS_STYLE[status]}`}>{status}</span>
@@ -153,17 +156,24 @@ const Revisions = ({ part, canManage }) => {
   const mutation = useMasterDataMutation();
   const confirm = useConfirm();
   const { showToast } = useToast();
+  const { can } = usePermissions();
+  const canApprove = can("process_control.approve");
   const [editing, setEditing] = useState(null); // null | "new" | revision
+  const [correcting, setCorrecting] = useState(null); // the released revision being corrected
+  const [approving, setApproving] = useState(null); // the correction draft being approved
   const current = part.revisions.find((r) => r.status === "released");
+  const openCorrection = current && part.revisions.find((r) => r.status === "draft" && r.correctsId === current.id);
 
   const transition = async (rev, action) => {
     const releasing = action === "release";
     const ok = await confirm({
-      title: releasing ? `Release revision ${rev.revision}?` : `Make revision ${rev.revision} obsolete?`,
+      title: releasing ? `Release revision ${rev.revision}?` : rev.correctsId && rev.status === "draft" ? `Discard the correction ${revisionLabel(rev)}?` : `Make revision ${rev.revision} obsolete?`,
       message: releasing
         ? `It becomes the current revision and can no longer be edited.${current ? ` Revision ${current.revision} will be superseded.` : ""}`
-        : "It will no longer be used for new inspections or records. This cannot be undone.",
-      confirmText: releasing ? "Release" : "Make obsolete",
+        : rev.correctsId && rev.status === "draft"
+          ? `The draft is dropped. Revision ${rev.revision} v${rev.version - 1} stays the released version.`
+          : "It will no longer be used for new inspections or records. This cannot be undone.",
+      confirmText: releasing ? "Release" : rev.correctsId && rev.status === "draft" ? "Discard" : "Make obsolete",
       cancelText: "Cancel",
       type: "warning",
     });
@@ -171,7 +181,7 @@ const Revisions = ({ part, canManage }) => {
     mutation.mutate(
       { path: `/part-revisions/${rev.id}/${action}` },
       {
-        onSuccess: () => showToast({ type: "success", title: "Saved", message: releasing ? `Revision ${rev.revision} released.` : `Revision ${rev.revision} is obsolete.` }),
+        onSuccess: () => showToast({ type: "success", title: "Saved", message: releasing ? `Revision ${rev.revision} released.` : rev.correctsId && rev.status === "draft" ? `Correction ${revisionLabel(rev)} discarded.` : `Revision ${rev.revision} is obsolete.` }),
         onError: (error) => showToast({ type: "error", title: "Not changed", message: describeApiError(error) }),
       }
     );
@@ -207,27 +217,46 @@ const Revisions = ({ part, canManage }) => {
             <tbody>
               {part.revisions.map((r) => (
                 <tr key={r.id}>
-                  <td className="border-b border-border-color px-2 py-2 font-mono">{r.revision}</td>
+                  <td className="border-b border-border-color px-2 py-2 font-mono">{revisionLabel(r)}</td>
                   <td className="border-b border-border-color px-2 py-2"><StatusPill status={r.status} /></td>
                   <td className="border-b border-border-color px-2 py-2">{r.drawingRef ?? "—"}</td>
-                  <td className="border-b border-border-color px-2 py-2">{r.changeSummary ?? "—"}</td>
+                  <td className="border-b border-border-color px-2 py-2">
+                    {r.changeSummary ?? "—"}
+                    {r.correctsId && <span className="mt-0.5 block text-xs text-secondary-text">Correction of {r.revision} v{r.version - 1}: {r.correctionReason}</span>}
+                    {r.status === "corrected" && <span className="mt-0.5 block text-xs text-secondary-text">Replaced {formatDate(r.correctedAt)} by a correction</span>}
+                  </td>
                   <td className="border-b border-border-color px-2 py-2">{formatDate(r.releasedAt)}</td>
                   {canManage && (
                     <td className="border-b border-border-color px-2 py-2">
                       <div className="flex justify-end gap-2">
                         {r.status === "draft" && (
                           <>
-                            <button type="button" className={buttonClass.neutral} onClick={() => setEditing(r)} aria-label={`Edit revision ${r.revision}`}>
+                            <button type="button" className={buttonClass.neutral} onClick={() => setEditing(r)} aria-label={`Edit revision ${revisionLabel(r)}`}>
                               Edit
                             </button>
-                            <button type="button" className={buttonClass.primary} onClick={() => transition(r, "release")} disabled={mutation.isPending}>
-                              Release
-                            </button>
+                            {r.correctsId ? (
+                              canApprove ? (
+                                <button type="button" className={buttonClass.primary} onClick={() => setApproving(r)} disabled={mutation.isPending}>
+                                  Approve and release
+                                </button>
+                              ) : (
+                                <span className="self-center text-xs text-secondary-text">Needs approval</span>
+                              )
+                            ) : (
+                              <button type="button" className={buttonClass.primary} onClick={() => transition(r, "release")} disabled={mutation.isPending}>
+                                Release
+                              </button>
+                            )}
                           </>
                         )}
-                        {r.status !== "obsolete" && (
-                          <button type="button" className={buttonClass.danger} onClick={() => transition(r, "obsolete")} disabled={mutation.isPending} aria-label={`Make revision ${r.revision} obsolete`}>
-                            Obsolete
+                        {r.status === "released" && !openCorrection && (
+                          <button type="button" className={buttonClass.secondary} onClick={() => setCorrecting(r)} aria-label={`Correct revision ${revisionLabel(r)}`}>
+                            Correct
+                          </button>
+                        )}
+                        {r.status !== "obsolete" && r.status !== "corrected" && (
+                          <button type="button" className={buttonClass.danger} onClick={() => transition(r, "obsolete")} disabled={mutation.isPending} aria-label={`${r.correctsId && r.status === "draft" ? "Discard correction" : "Make revision"} ${revisionLabel(r)}${r.correctsId && r.status === "draft" ? "" : " obsolete"}`}>
+                            {r.correctsId && r.status === "draft" ? "Discard" : "Obsolete"}
                           </button>
                         )}
                       </div>
@@ -239,6 +268,8 @@ const Revisions = ({ part, canManage }) => {
           </table>
         </div>
       )}
+      {correcting && <CorrectDialog revision={correcting} onClose={() => setCorrecting(null)} />}
+      {approving && <ReleaseCorrectionDialog revision={approving} onClose={() => setApproving(null)} />}
       {editing && (
         <Dialog title={editing === "new" ? "Add revision" : `Edit draft revision ${editing.revision}`} onClose={() => setEditing(null)}>
           <RevisionForm part={part} revision={editing === "new" ? null : editing} onDone={() => setEditing(null)} />
@@ -269,13 +300,14 @@ const PartDetailPage = () => {
             </h1>
             <ActiveBadge active={part.active} />
             <span className="text-sm text-secondary-text">
-              Current revision: <strong className="font-mono text-primary-text">{part.currentRevision ?? "none released"}</strong>
+              Current revision: <strong className="font-mono text-primary-text">{currentRevisionLabel(part) ?? "none released"}</strong>
             </span>
           </div>
           <ActiveAlertsBanner partId={part.id} />
           <PartDetails part={part} canManage={canManage} />
           <PartCustomers part={part} canManage={canManage} />
           <Revisions part={part} canManage={canManage} />
+          <CorrectionImpactCard part={part} />
           <SpecValues part={part} canManage={canManage} />
           {can("process_control.read") && (
             <RequirementPreview

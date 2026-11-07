@@ -215,6 +215,23 @@ describe("the revisions pane and the newer-revision banner", () => {
     expect(screen.getByRole("button", { name: "Complete inspection" })).toBeInTheDocument(); // nothing is blocked
   });
 
+  it("calls a corrected part revision a correction, not a newer revision, and labels it with its version", async () => {
+    revisions = {
+      days: 30,
+      partRevisionSuperseded: true,
+      planRevisionSuperseded: false,
+      data: [{ kind: "part_revision", id: "r9", revision: "A", version: 2, subject: "ROD-1", changeSummary: "Correction: Upper limit is 100.2", at: "2026-11-06T09:00:00Z", by: "Quinn Quality", isNew: true, current: true, runningOnIt: false }],
+    };
+    const user = userEvent.setup();
+    renderIt();
+    const banner = await screen.findByText(/Our record of revision A has been corrected \(now v2\); the drawing's revision is unchanged/);
+    expect(banner.closest("[role=status]")).not.toHaveTextContent("A newer part revision");
+    await user.click(await launcher("Revisions"));
+    const pane = screen.getByRole("complementary", { name: "Revisions pane" });
+    expect(within(pane).getByText("ROD-1 · rev A v2")).toBeInTheDocument();
+    expect(within(pane).getByText("Correction: Upper limit is 100.2")).toBeInTheDocument();
+  });
+
   it("shows no banner when the job is on the revisions in force", async () => {
     revisions = { ...revisions, planRevisionSuperseded: false };
     renderIt();

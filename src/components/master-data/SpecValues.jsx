@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { revisionLabel } from "../../lib/partRevisions";
 import { PencilIcon, PlusIcon, Trash2Icon } from "@/components/icons";
 import Field from "../ui/Field";
 import Dialog from "../ui/Dialog";
@@ -45,7 +46,7 @@ const SpecValueForm = ({ revision, value, onDone }) => {
         : { path: `/part-revisions/${revision.id}/characteristics`, body: { characteristicKey: form.characteristicKey.trim(), ...body } },
       {
         onSuccess: (saved) => {
-          showToast({ type: "success", title: "Saved", message: `${saved.characteristicKey} saved on revision ${revision.revision}.` });
+          showToast({ type: "success", title: "Saved", message: `${saved.characteristicKey} saved on revision ${revisionLabel(revision)}.` });
           onDone();
         },
       }
@@ -123,7 +124,7 @@ const SpecValues = ({ part, canManage }) => {
   const remove = async (v) => {
     const ok = await confirm({
       title: `Remove ${v.characteristicKey}?`,
-      message: `It is removed from draft revision ${revision.revision} only.`,
+      message: `It is removed from draft revision ${revisionLabel(revision)} only.`,
       confirmText: "Remove",
       cancelText: "Cancel",
       type: "warning",
@@ -157,12 +158,12 @@ const SpecValues = ({ part, canManage }) => {
               required
               value={revisionId}
               onChange={setRevisionId}
-              options={revisions.map((r) => ({ value: r.id, label: `${r.revision} · ${r.status}` }))}
+              options={revisions.map((r) => ({ value: r.id, label: `${revisionLabel(r)} · ${r.status}` }))}
               className="w-48"
             />
             {revision && revision.status !== "draft" && (
               <p className="pb-2 text-xs text-secondary-text">
-                Revision {revision.revision} is {revision.status}; its values are locked. Add a new revision to change them.
+                Revision {revisionLabel(revision)} is {revision.status}; its values are locked. {revision.status === "corrected" ? "It was replaced by a correction." : "Add a new revision, or correct the released one, to change them."}
               </p>
             )}
           </div>
@@ -213,7 +214,7 @@ const SpecValues = ({ part, canManage }) => {
         </>
       )}
       {editing && revision && (
-        <Dialog title={editing === "new" ? `Add value to revision ${revision.revision}` : `Edit ${editing.characteristicKey}`} onClose={() => setEditing(null)}>
+        <Dialog title={editing === "new" ? `Add value to revision ${revisionLabel(revision)}` : `Edit ${editing.characteristicKey}`} onClose={() => setEditing(null)}>
           <SpecValueForm revision={revision} value={editing === "new" ? null : editing} onDone={() => setEditing(null)} />
         </Dialog>
       )}

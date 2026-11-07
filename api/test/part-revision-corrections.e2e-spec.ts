@@ -142,7 +142,9 @@ describe('releasing the correction', () => {
   it('flags a job still running on the replaced version', async () => {
     const res = (await api().get(`/api/v1/jobs/${ctx.insp1}/revisions`).set(await as(ids.ownerA)).expect(200)).body;
     expect(res.partRevisionSuperseded).toBe(true);
-    expect(res.data.find((r: { kind: string; current: boolean }) => r.kind === 'part_revision' && r.current)).toMatchObject({ revision: 'A', runningOnIt: false });
+    expect(res.data.find((r: { kind: string; current: boolean }) => r.kind === 'part_revision' && r.current)).toMatchObject({
+      revision: 'A', version: 2, runningOnIt: false, changeSummary: 'Correction: Upper limit is 100.2 on the drawing',
+    });
   });
 });
 

@@ -192,6 +192,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
 
   await jobHub({ page, stack, APP, orgName, see, shot, step, log, owner });
   await masterDataOverview({ page, stack, APP, orgName, see, shot, step, log });
+  await correctRevision({ page, stack, APP, orgName, see, shot, step, log });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -316,4 +317,36 @@ async function masterDataOverview({ page, stack, APP, orgName, see, shot, step, 
   const shown = await totals.getByRole('link', { name: /Parts/ }).innerText();
   log(`parts in the database: ${counts.parts}; tile says: ${shown.replace(/\s+/g, ' ')}`);
   if (!new RegExp(`\\b${counts.parts}\\b`).test(shown)) throw new Error('the Parts tile does not match the database');
+}
+
+/** A drawing revision that does not match the system: correct it (same letter, next version), approve it, and see what ran on the earlier version. */
+async function correctRevision({ page, stack, APP, orgName, see, shot, step, log }) {
+  step('the owner corrects the released revision of JRN-100 without changing its letter');
+  const { rows: [part] } = await stack.admin.query(`select p.id from public.parts p join public.organisations o on o.id = p.organisation_id where o.name = $1 and p.part_number = 'JRN-100'`, [orgName]);
+  await page.goto(`${APP}/Parts/${part.id}`);
+  await see(page.getByRole('heading', { level: 1, name: /JRN-100/ }));
+  await shot(page, '30-part-before-correction');
+  await page.getByRole('button', { name: 'Correct revision A' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Correct revision A' });
+  await dialog.getByLabel(/What is wrong in the system/).fill('The drawing allows 100.2 at most; our record said 100.1');
+  await shot(page, '31-correct-dialog');
+  await dialog.getByRole('button', { name: 'Start correction' }).click();
+  const table = page.getByRole('table', { name: 'Revisions' });
+  await see(table.getByText('A v2'));
+  await see(table.getByText(/Correction of A v1: The drawing allows 100.2/));
+  await page.getByRole('button', { name: 'Approve and release' }).click();
+  const approve = page.getByRole('dialog', { name: 'Approve and release A v2' });
+  await see(approve.getByText(/1 inspection used it/));
+  await shot(page, '32-approve-correction');
+  await approve.getByRole('button', { name: 'Approve and release' }).click();
+  await see(page.getByText('Current revision:').filter({ hasText: 'A v2' }));
+  await see(page.getByRole('region', { name: 'Revision A was corrected' }));
+  await see(page.getByRole('table', { name: 'Inspections that used the earlier version' }));
+  await page.waitForTimeout(400);
+  await shot(page, '33-after-correction');
+  const { rows } = await stack.admin.query(`select version, status, corrects_id is not null as is_correction from public.part_revisions where part_id = $1 order by version`, [part.id]);
+  log(`revisions: ${JSON.stringify(rows)}`);
+  if (rows.length !== 2 || rows[0].status !== 'corrected' || rows[1].status !== 'released' || !rows[1].is_correction) throw new Error('the correction was not released as expected');
+  const { rows: [used] } = await stack.admin.query(`select count(*)::int as n from public.inspection_records i join public.part_revisions r on r.id = i.part_revision_id where r.part_id = $1 and r.version = 1`, [part.id]);
+  if (used.n !== 1) throw new Error('the earlier inspection should still be on version 1');
 }

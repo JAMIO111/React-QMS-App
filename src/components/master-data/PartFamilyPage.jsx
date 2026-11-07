@@ -14,6 +14,7 @@ import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
 
 import { ActiveBadge, buttonClass, ErrorNotice, FormError, SearchBox } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
+import { currentRevisionLabel } from "../../lib/partRevisions";
 
 /** Choose parts to add to the family; parts in another family are moved (shown with their family). */
 const AddPartsForm = ({ family, onDone }) => {
@@ -159,7 +160,7 @@ const PartFamilyPage = () => {
                         </Link>
                       </td>
                       <td className={td}>{p.name}</td>
-                      <td className={`${td} font-mono`}>{p.currentRevision ?? "—"}</td>
+                      <td className={`${td} font-mono`}>{currentRevisionLabel(p) ?? "—"}</td>
                       <td className={td}>
                         <ActiveBadge active={p.active} />
                       </td>

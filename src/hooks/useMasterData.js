@@ -100,3 +100,14 @@ export const useMasterDataDashboard = () => {
     retry: false,
   });
 };
+
+/** What ran on the part revision version that a correction replaces (inspections and non-conformances). Ask with the correction or the corrected version. */
+export const useCorrectionImpact = (revisionId, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "correction-impact", revisionId),
+    queryFn: () => apiFetch(`/part-revisions/${revisionId}/correction-impact`, { organisationId }),
+    enabled: !!organisationId && !!revisionId && enabled,
+    retry: false,
+  });
+};

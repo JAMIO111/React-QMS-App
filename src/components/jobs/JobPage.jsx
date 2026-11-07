@@ -150,23 +150,40 @@ const SupersededBanner = ({ inspection, revisions }) => {
   const now = (kind) =>
     revisions.data.find((r) => r.kind === kind && r.current);
   const parts = [];
-  if (revisions.partRevisionSuperseded && now("part_revision"))
+  const part = now("part_revision");
+  // A correction keeps the drawing's letter: say so, rather than calling it a newer revision.
+  const corrected =
+    revisions.partRevisionSuperseded &&
+    part &&
+    part.version > 1 &&
+    part.revision === inspection.partRevision;
+  if (revisions.partRevisionSuperseded && part && !corrected)
     parts.push(
-      `part revision ${now("part_revision").revision} (this job runs on ${inspection.partRevision})`,
+      `part revision ${part.revision} (this job runs on ${inspection.partRevision})`,
     );
   if (revisions.planRevisionSuperseded && now("plan_revision"))
     parts.push(
       `control plan revision ${now("plan_revision").revision} (this job runs on ${inspection.plan.revisionCode})`,
     );
-  if (parts.length === 0) return null;
+  if (parts.length === 0 && !corrected) return null;
   return (
     <p
       role="status"
       className="rounded-lg border border-warning-color bg-warning-color/15 p-3 text-sm text-primary-text"
     >
-      A newer {parts.join(" and a newer ")} is now in force. This job keeps the
-      checks it started with. Open the Revisions pane to see what changed, or
-      abandon this job and start it again to use the new one.
+      {corrected && (
+        <>
+          Our record of revision {part.revision} has been corrected (now v
+          {part.version}); the drawing's revision is unchanged. This job keeps
+          the values it started with.{" "}
+        </>
+      )}
+      {parts.length > 0 && (
+        <>A newer {parts.join(" and a newer ")} is now in force. </>
+      )}
+      {parts.length > 0 && "This job keeps the checks it started with. "}
+      Open the Revisions pane to see what changed, or abandon this job and
+      start it again to use the new one.
     </p>
   );
 };

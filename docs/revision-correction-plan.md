@@ -1,6 +1,6 @@
 # Correcting a released part revision — plan
 
-**Status:** design agreed (§3), building · **Builds on:** master data part revisions (2.1), process control resolver (PC3), inspections (PC4), operator hub
+**Status:** built (RC1 database, RC2 API, RC3 UI); migration `20251208100000_part_revision_corrections.sql` **not applied live yet** · **Builds on:** master data part revisions (2.1), process control resolver (PC3), inspections (PC4), operator hub
 
 ## 1. The problem
 
@@ -46,3 +46,14 @@ A revision letter belongs to the drawing. A **correction** keeps the letter and 
 Correcting a revision that is already superseded by a later letter (the drawing's older revision), edit-in-place, automatic re-inspection or NC raising, uploading the drawing
 file itself, a separate "drawing revision" field.
 
+
+## 7. Built, and how it was checked
+
+- **RC1** `supabase/migrations/20251208100000_part_revision_corrections.sql`, `supabase/tests/part_revision_correction.test.sql` (in `npm run db:check`, all 51 files pass). Mutation checks: the ordinary release path,
+  the approval right, marking corrected directly, correcting a non-released revision and a stale correction each make the test fail.
+- **RC2** `POST /part-revisions/{id}/correction`, `GET /part-revisions/{id}/correction-impact`, release routed to `app.release_part_revision_correction` for a correction, version fields on revisions, `currentVersion` on parts,
+  `version` on the job hub's revisions; `api/test/part-revision-corrections.e2e-spec.ts` (13 tests), tenancy sweep; all 436 e2e tests pass.
+- **RC3** part page (revision table with versions, Correct, Approve and release, Discard, impact card), spec values picker, parts registers, job hub banner and Revisions pane; 13 new unit tests; browser journey step (screenshots `30`–`33`).
+- The browser showed two flaws, both fixed: a released correction still offered "Discard", and the specification values picker did not show the version.
+- **Limits:** the impact card lists the latest corrected version only; lists are capped at 50 with the total shown; the impact is read from the records' revision links, so inspections created before this change are on v1 (as they should be);
+  customer-facing documents (certificates, reports) that print a revision show the letter only; no email or notification is sent when a correction is released.

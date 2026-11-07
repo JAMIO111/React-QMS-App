@@ -7,6 +7,7 @@ import Dialog from "../ui/Dialog";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useMasterDataMutation, useParties, useParts } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
+import { currentRevisionLabel } from "../../lib/partRevisions";
 import { ActiveBadge, buttonClass, DataList, SearchBox } from "./shared";
 
 /** Customer picker (active customers). */
@@ -117,7 +118,7 @@ const PartsPage = () => {
         headerString: "Current revision",
         size: 140,
         meta: { align: "center" },
-        cell: (i) => (i.getValue() ? <span className="table-row-item font-mono">{i.getValue()}</span> : <span className="table-row-item text-secondary-text">None released</span>),
+        cell: (i) => (i.getValue() ? <span className="table-row-item font-mono">{currentRevisionLabel(i.row.original)}</span> : <span className="table-row-item text-secondary-text">None released</span>),
       },
       {
         id: "customer",

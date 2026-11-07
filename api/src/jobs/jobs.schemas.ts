@@ -80,6 +80,8 @@ export const JobRevision = z.object({
   id: z.string().uuid(),
   /** "Rev B" of a part, or of a control plan. */
   revision: z.string(),
+  /** 2 or more for a part revision that has been corrected (Rev B v2); 1 otherwise. */
+  version: z.number().int(),
   subject: z.string(),
   changeSummary: z.string().nullable(),
   at: Iso,

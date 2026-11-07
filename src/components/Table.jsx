@@ -38,7 +38,14 @@ const isInteractive = (target) => target instanceof Element && !!target.closest(
 const SortIndicator = ({ direction }) => {
   if (direction === "asc") return <ArrowUpIcon className="h-4 w-4 shrink-0 text-cta-color" aria-hidden="true" />;
   if (direction === "desc") return <ArrowDownIcon className="h-4 w-4 shrink-0 text-cta-color" aria-hidden="true" />;
-  return <ChevronsUpDownIcon className="h-4 w-4 shrink-0 opacity-0 group-hover:opacity-60 group-focus-visible:opacity-60" aria-hidden="true" />;
+  // Unsorted: the hint takes no room (it would clip the title all the time) and only appears on hover or focus, over a fade that masks the text under it.
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-y-0 right-0 hidden items-center bg-linear-to-r from-transparent via-hover-menu-color via-40% to-hover-menu-color pl-4 pr-2 group-hover:flex group-focus-visible:flex">
+      <ChevronsUpDownIcon className="h-4 w-4 opacity-60" />
+    </span>
+  );
 };
 
 /** The selected-row tint (10%, 15% on hover) as a layer over a pinned cell's opaque background. */
@@ -182,7 +189,7 @@ const Table = ({
                         type="button"
                         onClick={column.getToggleSortingHandler()}
                         title={`Sort by ${columnLabel(column)}`}
-                        className={`group flex h-full w-full min-w-0 items-center gap-1 px-2 py-1 cursor-pointer select-none hover:bg-hover-menu-color focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cta-color ${alignClass(column)}`}>
+                        className={`group relative flex h-full w-full min-w-0 items-center gap-1 px-2 py-1 cursor-pointer select-none hover:bg-hover-menu-color focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cta-color ${alignClass(column)}`}>
                         <span className="min-w-0 truncate">{content}</span>
                         <SortIndicator direction={sorted} />
                       </button>

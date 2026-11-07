@@ -23,7 +23,8 @@ const NoOrganisation = ({ error }) => {
   const queryClient = useQueryClient();
   const firstName = profile?.first_name;
   return (
-    <main className="flex min-h-screen w-full items-center justify-center bg-primary-bg p-4">
+    <main className="h-dvh w-full overflow-y-auto bg-primary-bg">
+      <div className="flex min-h-full items-center justify-center p-4">
       <div className="flex w-full max-w-2xl flex-col gap-6 rounded-2xl border border-border-color bg-secondary-bg p-6 text-primary-text">
         {error ? (
           <div role="alert">
@@ -67,6 +68,7 @@ const NoOrganisation = ({ error }) => {
           Sign out
         </button>
       </div>
+    </div>
     </main>
   );
 };

@@ -11,6 +11,7 @@ import Logout from "./Logout";
 import { menuStructure } from "../MenuStructure";
 import { useCanSee, useOrganisationLogo } from "../hooks/useQmsApi";
 import { useMyAlertCount } from "../hooks/useDocumentation";
+import { useMyCapaActions } from "../hooks/useCapa";
 import { useModuleAccess } from "../hooks/useSubscription";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import SubMenuItem from "./SubMenuItem";
@@ -20,7 +21,8 @@ const Navbar = () => {
   const [isMenuExpanded, setIsMenuExpanded] = useState(false);
   const canSee = useCanSee();
   const myAlerts = useMyAlertCount({ enabled: canSee("documentation.read") });
-  const badges = { "my-alerts": myAlerts.data?.unacknowledged ?? 0 };
+  const myActions = useMyCapaActions("open", { enabled: canSee("capa.read") });
+  const badges = { "my-alerts": myAlerts.data?.unacknowledged ?? 0, "my-actions": myActions.data?.openCount ?? 0 };
   const hasModule = useModuleAccess();
   const { organisation } = useOrganisation();
   const { data: logoUrl } = useOrganisationLogo();

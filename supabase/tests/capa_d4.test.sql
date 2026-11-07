@@ -1,5 +1,5 @@
 -- CAPA3: D4 root causes (occurrence, escape, systemic), verification stamped by the database, changing a verified cause withdraws it, causes from
--- analyses (Ishikawa and 5 Whys kinds), removal marks, the D4 checklist, nothing locks, permissions and isolation.
+-- analyses (Ishikawa and 5 Whys kinds), removal marks, the D4 checklist, the lock once complete, permissions and isolation.
 \set ON_ERROR_STOP 1
 BEGIN;
 \ir helpers.sql
@@ -87,10 +87,13 @@ BEGIN
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.capa_root_causes SET deleted_at = NULL WHERE id = %L$q$, rc3), 'it stays removed');
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.capa_root_causes SET description = 'Edited after removal' WHERE id = %L$q$, rc3), 'and cannot be edited');
 
-  -- Nothing locks when D4 is complete (earlier steps are not required first).
+  -- When D4 is complete the causes and analyses are read-only until it is reopened (earlier steps are not required first).
   PERFORM app.capa_complete_step(c, 'd4');
-  PERFORM pg_temp.assert_ok(format($q$UPDATE public.capa_root_causes SET description = 'Edited after D4 was completed' WHERE id = %L$q$, rc2), 'a cause can be edited after D4 is complete');
-  PERFORM pg_temp.assert_ok(format($q$INSERT INTO public.capa_root_causes (organisation_id, capa_id, kind, description) VALUES (%L, %L, 'systemic', 'Added after D4 was completed')$q$, org, c), 'and added');
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.capa_root_causes SET description = 'Edited after D4 was completed' WHERE id = %L$q$, rc2), 'a cause cannot be edited after D4 is complete');
+  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.capa_root_causes (organisation_id, capa_id, kind, description) VALUES (%L, %L, 'systemic', 'Added after D4 was completed')$q$, org, c), 'nor added');
+  PERFORM app.capa_reopen_step(c, 'd4', 'A new cause came up');
+  PERFORM pg_temp.assert_ok(format($q$UPDATE public.capa_root_causes SET description = 'Edited after D4 was reopened' WHERE id = %L$q$, rc2), 'reopened: a cause can be edited');
+  PERFORM pg_temp.assert_ok(format($q$INSERT INTO public.capa_root_causes (organisation_id, capa_id, kind, description) VALUES (%L, %L, 'systemic', 'Added after D4 was reopened')$q$, org, c), 'and added');
   PERFORM pg_temp.logout();
 
   -- A viewer reads but changes nothing.

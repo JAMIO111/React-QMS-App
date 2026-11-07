@@ -1,6 +1,6 @@
 -- CAPA2: D2 (5W2H on the 8D, Is / Is-Not analyses) and D3 (interim containment actions): prefill from an NC, the "still needed" lists,
 -- analyses (structured data, removal marks), actions (owner on the team, status stamps, cancel reason, reopening), a team member owning
--- open actions cannot leave, nothing locks after a step is completed, permissions and isolation.
+-- open actions cannot leave, a completed step is read-only until reopened, permissions and isolation.
 \set ON_ERROR_STOP 1
 BEGIN;
 \ir helpers.sql
@@ -115,11 +115,19 @@ BEGIN
   PERFORM pg_temp.assert_eq(app.capa_step_problems(c, 'd3'), ARRAY['Finish or cancel the 1 open containment action'], 'a new open action blocks again');
   UPDATE public.capa_actions SET status = 'cancelled', cancel_reason = 'Not needed' WHERE id = act3;
   PERFORM app.capa_complete_step(c, 'd3');
-  PERFORM pg_temp.assert_ok(format($q$UPDATE public.capa_actions SET description = 'Edited after D3 was completed' WHERE id = %L$q$, act2), 'nothing locks: an action can still be edited after D3 is complete');
-  PERFORM pg_temp.assert_ok(format($q$INSERT INTO public.capa_actions (organisation_id, capa_id, phase, description) VALUES (%L, %L, 'interim', 'Added after D3 was completed')$q$, org, c), 'or added');
+  -- A completed step is read-only until it is reopened.
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.capa_actions SET description = 'Edited after D3 was completed' WHERE id = %L$q$, act2), 'locked: an action cannot be edited after D3 is complete');
+  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.capa_actions (organisation_id, capa_id, phase, description) VALUES (%L, %L, 'interim', 'Added after D3 was completed')$q$, org, c), 'or added');
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.capas SET d3_no_containment_reason = 'Edited after D3 was completed' WHERE id = %L$q$, c), 'nor the no-containment reason');
+  PERFORM app.capa_reopen_step(c, 'd3', 'More containment needed');
+  PERFORM pg_temp.assert_ok(format($q$UPDATE public.capa_actions SET description = 'Edited after D3 was reopened' WHERE id = %L$q$, act2), 'reopened: the action can be edited');
+  PERFORM app.capa_complete_step(c, 'd3');
   PERFORM app.capa_complete_step(c, 'd2');
-  PERFORM pg_temp.assert_ok(format($q$UPDATE public.capas SET d2_why = 'Edited after D2 was completed' WHERE id = %L$q$, c), 'and D2 can still be edited after it is complete');
-  PERFORM pg_temp.assert_ok(format($q$UPDATE public.capa_analyses SET title = 'Edited after D2 was completed' WHERE id = %L$q$, an), 'and so can its analyses');
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.capas SET d2_why = 'Edited after D2 was completed' WHERE id = %L$q$, c), 'D2 cannot be edited after it is complete');
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.capa_analyses SET title = 'Edited after D2 was completed' WHERE id = %L$q$, an), 'nor its analyses');
+  PERFORM app.capa_reopen_step(c, 'd2', 'The description changed');
+  PERFORM pg_temp.assert_ok(format($q$UPDATE public.capas SET d2_why = 'Edited after D2 was reopened' WHERE id = %L$q$, c), 'reopened: D2 can be edited');
+  PERFORM pg_temp.assert_ok(format($q$UPDATE public.capa_analyses SET title = 'Edited after D2 was reopened' WHERE id = %L$q$, an), 'and its analyses');
 
   -- No containment needed: a reason instead of actions.
   PERFORM pg_temp.assert_eq(app.capa_step_problems(c2, 'd3'), ARRAY['Add an interim containment action, or say why none is needed'], 'nothing yet');

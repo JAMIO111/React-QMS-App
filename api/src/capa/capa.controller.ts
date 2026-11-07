@@ -5,7 +5,7 @@ import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import { Attachment, CreateAttachmentBody, DeleteBody, DeletedQuery } from '../calibration/calibration.schemas';
 import { z } from 'zod';
-import { AddTeamBody, CapaDetail, CapaList, CloseCapaBody, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, CreateRootCauseBody, CreateVerificationBody, LinkNcrBody, UpdateRootCauseBody, UpdateActionBody, UpdateAnalysisBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, UpdateCapaBody, UpdateTeamBody } from './capa.schemas';
+import { AddTeamBody, CapaDetail, CapaList, CloseCapaBody, MyActionList, MyActionsQuery, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, CreateRootCauseBody, CreateVerificationBody, LinkNcrBody, UpdateRootCauseBody, UpdateActionBody, UpdateAnalysisBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, UpdateCapaBody, UpdateTeamBody } from './capa.schemas';
 import { CapaService } from './capa.service';
 
 const READ = 'capa.read';
@@ -251,8 +251,19 @@ export class CapaAnalysesController {
 export class CapaActionsController {
   constructor(private readonly service: CapaService) {}
 
+  /** The caller's own actions across running 8Ds. */
+  @Get('mine')
+  @OrganisationScoped(READ)
+  @ApiQuery({ name: 'status', required: false, schema: { type: 'string', enum: ['open', 'done', 'all'] } })
+  @ApiOkResponse({ schema: openApiSchema(MyActionList) })
+  mine(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.myActions(ctx, parse(MyActionsQuery, query));
+  }
+
+  // The actionee (capa.read) may update the findings and close or reopen their own action; the database refuses anything else to anyone who is neither
+  // the actionee nor able to manage 8Ds, and refuses a non-manager any change to what the action is, who has it or when it is due.
   @Patch(':id')
-  @OrganisationScoped(MANAGE)
+  @OrganisationScoped(READ)
   @ApiBody({ schema: openApiSchema(UpdateActionBody) })
   @ApiOkResponse({ schema: openApiSchema(CapaDetail) })
   update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
@@ -261,9 +272,9 @@ export class CapaActionsController {
 
   @Post(':id/complete')
   @HttpCode(200)
-  @OrganisationScoped(MANAGE)
+  @OrganisationScoped(READ)
   @ApiBody({ schema: openApiSchema(CompleteActionBody) })
-  @ApiOkResponse({ description: 'Marks the action done (stamped by the database), with an optional evidence note', schema: openApiSchema(CapaDetail) })
+  @ApiOkResponse({ description: 'Marks the action done (stamped by the database). The findings must be written, now or before', schema: openApiSchema(CapaDetail) })
   complete(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.completeAction(ctx, parse(Uuid, id), parse(CompleteActionBody, body ?? {}));
   }
@@ -279,8 +290,8 @@ export class CapaActionsController {
 
   @Post(':id/reopen')
   @HttpCode(200)
-  @OrganisationScoped(MANAGE)
-  @ApiOkResponse({ description: 'Puts a done or cancelled action back to open', schema: openApiSchema(CapaDetail) })
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'Puts a done action back to open (the actionee), or a cancelled one (managers)', schema: openApiSchema(CapaDetail) })
   reopen(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.reopenAction(ctx, parse(Uuid, id));
   }

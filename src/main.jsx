@@ -64,6 +64,7 @@ const QualityAlertForm = lazy(() => import("./components/documentation/QualityAl
 const CapaRegisterPage = lazy(() => import("./components/capa/CapaRegisterPage.jsx"));
 const CapaPage = lazy(() => import("./components/capa/CapaPage.jsx"));
 const CapaReportPage = lazy(() => import("./components/capa/CapaReportPage.jsx"));
+const MyActionsPage = lazy(() => import("./components/capa/MyActionsPage.jsx"));
 const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
 const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
 const InspectionPage = lazy(() => import("./components/inspection/InspectionPage.jsx"));
@@ -188,6 +189,7 @@ const router = createBrowserRouter([
             { path: "Process-Control/Analysis", element: <AnalysisPage /> },
             { path: "Process-Control/Alerts", element: <AlertsPage /> },
             { path: "CAPA", element: <CapaRegisterPage /> },
+            { path: "CAPA/My-Actions", element: <MyActionsPage /> },
             { path: "CAPA/:id", element: <CapaPage /> },
             { path: "CAPA/:id/report", element: <CapaReportPage /> },
             { path: "CAPA/:id/:step", element: <CapaPage /> },

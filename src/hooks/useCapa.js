@@ -32,6 +32,19 @@ export const useCapa = (id) => {
   });
 };
 
+/** The signed-in person's own actions across running 8Ds ({ data, openCount }); status open | done | all. */
+export const useMyCapaActions = (status = "open", { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "my-actions", status),
+    queryFn: () => apiFetch(`/capa-actions/mine?status=${status}`, { organisationId }),
+    enabled: !!organisationId && enabled,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+    retry: false,
+  });
+};
+
 /** Evidence files on an 8D (removed ones included, so they can be restored). */
 export const useCapaAttachments = (id) => {
   const { organisationId } = useOrganisation();

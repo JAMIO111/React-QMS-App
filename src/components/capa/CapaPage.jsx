@@ -40,7 +40,10 @@ const CapaPage = () => {
   if (!step || !STEPS.some((s) => s.key === step)) return <Navigate to={`/CAPA/${capa.id}/${capa.currentStep}`} replace />;
 
   const running = isRunning(capa.stage);
-  const editable = can("capa.manage") && running;
+  const canEdit = can("capa.manage") && running;
+  const stepDone = !!capa.steps.find((s) => s.step === step)?.completed;
+  // A complete step is read-only until it is reopened (the database enforces it too).
+  const editable = canEdit && !stepDone;
   const def = stepOf(step);
   const Page = STEP_PAGES[step];
   const source = SOURCES.find((s) => s.id === capa.source)?.name ?? capa.source;
@@ -93,8 +96,9 @@ const CapaPage = () => {
             <p className="mt-1 max-w-3xl text-sm text-secondary-text">{def.help}</p>
           </div>
           {!running && <p role="status" className="rounded-lg border border-border-color bg-primary-bg p-3 text-sm text-primary-text">This 8D is {capa.stage}. Reopen it to make changes.</p>}
+          {running && stepDone && step !== "d8" && <p role="status" className="rounded-lg border border-border-color bg-primary-bg p-3 text-sm text-primary-text">{def.code} is complete, so it is read-only. Reopen it (at the bottom of this page) to make changes.</p>}
           {Page && <Page capa={capa} editable={editable} />}
-          <StepFooter capa={capa} step={step} editable={editable} />
+          <StepFooter capa={capa} step={step} editable={canEdit} />
         </section>
         </div>
       </div>

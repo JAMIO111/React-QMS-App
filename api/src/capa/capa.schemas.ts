@@ -309,10 +309,33 @@ export const Action = z.object({
   status: z.enum(['open', 'done', 'cancelled']),
   doneAt: Iso.nullable(),
   doneBy: Person,
+  /** The findings: what was done and found, written by whoever the action is assigned to. */
   evidenceNote: z.string().nullable(),
   cancelReason: z.string().nullable(),
+  /** True when the caller is the person the action is assigned to (they may update the findings and close it). */
+  isAssignee: z.boolean(),
   createdAt: Iso,
 });
+
+/** One of the caller's own actions, across all running 8Ds (GET /capa-actions/mine). */
+export const MyAction = z.object({
+  id: z.string().uuid(),
+  capaId: z.string().uuid(),
+  capaReference: z.string(),
+  capaTitle: z.string(),
+  phase: z.enum(['interim', 'corrective', 'preventive']),
+  description: z.string(),
+  dueDate: DateOnly.nullable(),
+  overdue: z.boolean(),
+  status: z.enum(['open', 'done', 'cancelled']),
+  evidenceNote: z.string().nullable(),
+  doneAt: Iso.nullable(),
+  /** True while the step the action is worked in is complete: reopen it to change the action. */
+  locked: z.boolean(),
+  assignedAt: Iso,
+});
+export const MyActionList = z.object({ data: z.array(MyAction), openCount: z.number().int() });
+export const MyActionsQuery = z.object({ status: z.enum(['open', 'done', 'all']).default('open') });
 
 export const CapaDetail = CapaSummary.extend({
   problemStatement: z.string().nullable(),

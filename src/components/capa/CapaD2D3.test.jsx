@@ -31,7 +31,7 @@ const base = () => ({
   problem: { who: null, what: "Cracked bar stock", where: "Plant A", when: null, why: null, how: null, howMany: "3 of 10 inspected" },
   d3NoContainmentReason: null, analyses: [], actions: [], steps: steps({ d2: ["Say when it was found (the When of 5W2H)"], d3: ["Add an interim containment action, or say why none is needed"] }), team, ncrs: [],
 });
-const action = (over = {}) => ({ id: "a1", phase: "interim", description: "Quarantine lot 77", rootCauseId: null, owner: { teamMemberId: "t2", name: "Eve Engineer" }, dueDate: "2026-11-09", overdue: false, status: "open", doneAt: null, doneBy: null, evidenceNote: null, cancelReason: null, createdAt: "2026-11-05T09:30:00Z", ...over });
+const action = (over = {}) => ({ id: "a1", phase: "interim", description: "Quarantine lot 77", rootCauseId: null, owner: { teamMemberId: "t2", name: "Eve Engineer" }, dueDate: "2026-11-09", overdue: false, status: "open", doneAt: null, doneBy: null, evidenceNote: null, cancelReason: null, isAssignee: false, createdAt: "2026-11-05T09:30:00Z", ...over });
 const people = { data: [{ membershipId: "m1", userId: "u1", name: "Ada Owner" }] };
 
 const renderAt = (url) =>
@@ -124,12 +124,14 @@ describe("D2: describe the problem", () => {
     expect(screen.getByRole("button", { name: "View Is / Is-Not" })).toBeInTheDocument();
   });
 
-  it("a completed D2 can still be edited: nothing locks", async () => {
+  it("a completed D2 is read-only until it is reopened", async () => {
     apiFetch.mockImplementation(respond(() => ({ ...base(), steps: steps().map((s) => (s.step === "d2" ? { ...s, completed: true, completedAt: "2026-11-05T10:00:00Z", completedBy: { id: "u1", name: "Ada Owner" } } : s)) })));
     renderAt("/CAPA/c1/d2");
     expect(await screen.findByText(/D2 was completed by Ada Owner/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open 5W2H" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "New Is / Is-Not comparison" })).toBeEnabled();
+    expect(screen.getByText(/D2 is complete, so it is read-only/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open 5W2H" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "New Is / Is-Not comparison" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Reopen D2" })).toBeEnabled();
   });
 });
 
@@ -143,8 +145,8 @@ describe("D3: interim containment", () => {
     renderAt("/CAPA/c1/d3");
     const list = await screen.findByRole("list", { name: "Containment actions" });
     expect(screen.getByText("1 of 2 done")).toBeInTheDocument();
-    expect(within(list).getByText(/Owner: Eve Engineer · Due 9 Nov 2026/)).toBeInTheDocument();
-    expect(within(list).getByText(/Done by Ada Owner on 5 Nov 2026/)).toBeInTheDocument();
+    expect(within(list).getByText(/Assigned to: Eve Engineer · Due 9 Nov 2026/)).toBeInTheDocument();
+    expect(within(list).getByText(/Closed by Ada Owner on 5 Nov 2026/)).toBeInTheDocument();
     expect(within(list).getByText("1,200 sorted")).toBeInTheDocument();
     expect(within(list).getByText("No stock")).toBeInTheDocument();
     expect(within(list).getByText("Cancelled")).toBeInTheDocument();
@@ -159,7 +161,7 @@ describe("D3: interim containment", () => {
     const dialog = screen.getByRole("dialog", { name: "Add an action" });
     expect(within(dialog).getByRole("button", { name: "Add action" })).toBeDisabled();
     await userEvent.type(within(dialog).getByLabelText("What will be done"), "Quarantine lot 77");
-    await userEvent.click(within(dialog).getByRole("combobox", { name: "Owner" }));
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Assigned to" }));
     expect(screen.queryByRole("option", { name: /Lee Left/ })).toBeNull();
     expect(screen.getByRole("option", { name: /Sam Supplier/ })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("option", { name: /Eve Engineer/ }));
@@ -171,10 +173,11 @@ describe("D3: interim containment", () => {
     const calls = [];
     apiFetch.mockImplementation(respond((path, opts = {}) => (opts.method ? (calls.push([opts.method, path, opts.body]), base()) : { ...base(), actions: [action(), action({ id: "a3", description: "Old action", status: "cancelled", cancelReason: "No need" })] })));
     renderAt("/CAPA/c1/d3");
-    await userEvent.click(await screen.findByRole("button", { name: "Mark done: Quarantine lot 77" }));
-    const done = screen.getByRole("dialog", { name: "Mark the action done" });
-    await userEvent.type(within(done).getByLabelText(/What was done, and the evidence/), "In the cage");
-    await userEvent.click(within(done).getByRole("button", { name: "Mark done" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Close action: Quarantine lot 77" }));
+    const done = screen.getByRole("dialog", { name: "Close the action" });
+    expect(within(done).getByRole("button", { name: "Close action" })).toBeDisabled(); // the findings are needed
+    await userEvent.type(within(done).getByLabelText(/Findings/), "In the cage");
+    await userEvent.click(within(done).getByRole("button", { name: "Close action" }));
     await waitFor(() => expect(calls).toContainEqual(["POST", "/capa-actions/a1/complete", { evidenceNote: "In the cage" }]));
 
     await userEvent.click(screen.getByRole("button", { name: "Edit: Quarantine lot 77" }));

@@ -1,5 +1,5 @@
 -- CAPA4: D5 corrective actions (one per occurrence cause, owner and due date), D6 implement and validate (verification needs capa.verify, immutable, stale after
--- a change, a failed one reopens D5 and D6), D7 prevent recurrence, the automatic stage, nothing locks, permissions and isolation.
+-- a change, a failed one reopens D5 and D6), D7 prevent recurrence, the automatic stage, the lock once a step is complete, permissions and isolation.
 \set ON_ERROR_STOP 1
 BEGIN;
 \ir helpers.sql
@@ -69,7 +69,7 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT stage FROM public.capas WHERE id = c), 'actions_in_progress', 'D4 complete: actions in progress');
   UPDATE public.capa_actions SET status = 'done', evidence_note = 'Limit set' WHERE id = a1;
   PERFORM pg_temp.assert_eq((SELECT stage FROM public.capas WHERE id = c), 'actions_in_progress', 'one action is still open');
-  UPDATE public.capa_actions SET status = 'done' WHERE id = a2;
+  UPDATE public.capa_actions SET status = 'done', evidence_note = 'Fixture re-torqued' WHERE id = a2;
   PERFORM pg_temp.assert_eq((SELECT stage FROM public.capas WHERE id = c), 'awaiting_verification', 'all done: awaiting verification');
   PERFORM pg_temp.assert_eq(app.capa_step_problems(c, 'd6'), ARRAY['Verify that the corrective actions worked (needs someone who can verify)'], 'D6 needs a verification');
 
@@ -96,23 +96,33 @@ BEGIN
   PERFORM app.capa_complete_step(c, 'd5');
   PERFORM app.capa_complete_step(c, 'd6');
 
-  -- Nothing locks, but a change makes the verification stale: the stage and D6 notice.
-  PERFORM pg_temp.assert_ok(format($q$UPDATE public.capa_actions SET description = 'Set a tool life limit of 400 parts' WHERE id = %L$q$, a1), 'an action can be edited after D5 and D6 are complete');
+  -- D5 and D6 are complete, so the corrective actions are read-only until they are reopened.
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.capa_actions SET description = 'Set a tool life limit of 400 parts' WHERE id = %L$q$, a1), 'an action cannot be edited while D5 is complete');
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.capa_actions SET status = 'open' WHERE id = %L$q$, a1), 'nor reopened while D6 is complete');
+  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.capa_actions (organisation_id, capa_id, phase, description) VALUES (%L, %L, 'corrective', 'Added while D5 is complete')$q$, org, c), 'nor added');
+  PERFORM pg_temp.assert_fails(format($q$SELECT app.record_capa_verification(%L, true, 'Another audit', NULL)$q$, c), 'and no verification is recorded while D6 is complete');
+  PERFORM app.capa_reopen_step(c, 'd5', 'The plan changes');
+  PERFORM pg_temp.assert_ok(format($q$UPDATE public.capa_actions SET description = 'Set a tool life limit of 400 parts' WHERE id = %L$q$, a1), 'D5 reopened: the plan can be edited');
   PERFORM pg_temp.assert_eq((SELECT stage FROM public.capas WHERE id = c), 'verified_effective', 'editing the words does not undo a verification');
+  PERFORM app.capa_reopen_step(c, 'd6', 'The fix is being redone');
+  -- A change to the corrective actions makes the verification stale: the stage and D6 notice.
   UPDATE public.capa_actions SET status = 'open' WHERE id = a1;
   PERFORM pg_temp.assert_eq((SELECT stage FROM public.capas WHERE id = c), 'actions_in_progress', 'reopening an action puts the 8D back to actions in progress');
   UPDATE public.capa_actions SET status = 'done' WHERE id = a1;
   PERFORM pg_temp.assert_eq((SELECT stage FROM public.capas WHERE id = c), 'awaiting_verification', 'done again: the earlier verification is stale, so awaiting verification');
   PERFORM pg_temp.assert_eq(app.capa_step_problems(c, 'd6'), ARRAY['The corrective actions changed after the last verification: verify again'], 'D6 says so');
 
-  -- A failed verification returns the 8D to actions in progress and reopens D5 and D6.
+  -- A failed verification returns the 8D to actions in progress and reopens D5 and D6 (put back to complete first, as the database owner).
+  PERFORM pg_temp.logout();
+  UPDATE public.capa_steps SET completed_at = now() WHERE capa_id = c AND step IN ('d5', 'd6');
+  PERFORM pg_temp.login('3f000000-0000-0000-0000-000000000601');
   PERFORM app.record_capa_verification(c, false, 'Audit of 5 lots', 'Burrs again on lot 12');
   PERFORM pg_temp.assert_eq((SELECT stage FROM public.capas WHERE id = c), 'actions_in_progress', 'failed: back to actions in progress');
   PERFORM pg_temp.assert_eq((SELECT array_agg(step ORDER BY step) FROM public.capa_steps WHERE capa_id = c AND completed_at IS NOT NULL), ARRAY['d4'], 'D5 and D6 were reopened (only D4 stays complete)');
   PERFORM pg_temp.assert_eq((SELECT reopen_reason FROM public.capa_steps WHERE capa_id = c AND step = 'd6'), 'Verification failed: Burrs again on lot 12', 'with the reason');
   PERFORM pg_temp.assert_eq(app.capa_step_problems(c, 'd6'), ARRAY['The last verification failed: put it right and verify again'], 'D6 says the last one failed');
   INSERT INTO public.capa_actions (organisation_id, capa_id, phase, description, root_cause_id, owner_team_member_id, due_date) VALUES (org, c, 'corrective', 'Add a second inspection', rc1, t_eng, current_date + 3) RETURNING id INTO a3;
-  UPDATE public.capa_actions SET status = 'done' WHERE id = a3;
+  UPDATE public.capa_actions SET status = 'done', evidence_note = 'Second inspection in place' WHERE id = a3;
   PERFORM pg_temp.assert_eq((SELECT stage FROM public.capas WHERE id = c), 'awaiting_verification', 'a new action done: awaiting verification again');
   PERFORM app.record_capa_verification(c, true, 'Audit of 5 more lots', 'Clean');
   PERFORM pg_temp.assert_eq((SELECT stage FROM public.capas WHERE id = c), 'verified_effective', 'verified effective again');
@@ -128,13 +138,16 @@ BEGIN
   UPDATE public.capas SET d7_lessons_learned = 'Tool life must be in every control plan' WHERE id = c;
   INSERT INTO public.capa_actions (organisation_id, capa_id, phase, description, root_cause_id) VALUES (org, c, 'preventive', 'Add tool life to the control plan template', rc3) RETURNING id INTO p1;
   PERFORM pg_temp.assert_eq(app.capa_step_problems(c, 'd7'), ARRAY['Finish or cancel the 1 open preventive action', 'Add a preventive action, or say why none is needed'], 'an open preventive action blocks');
-  UPDATE public.capa_actions SET status = 'done' WHERE id = p1;
+  UPDATE public.capa_actions SET status = 'done', evidence_note = 'Template updated' WHERE id = p1;
   PERFORM pg_temp.assert_eq(app.capa_step_problems(c, 'd7'), ARRAY[]::text[], 'D7 is ready');
   PERFORM pg_temp.assert_eq((SELECT stage FROM public.capas WHERE id = c), 'verified_effective', 'preventive actions do not move the stage');
   UPDATE public.capas SET d7_no_preventive_reason = 'Nothing else is exposed' WHERE id = c2;
   PERFORM pg_temp.assert_eq(app.capa_step_problems(c2, 'd7'), ARRAY['Write the lessons learned'], 'a reason replaces preventive actions');
   PERFORM app.capa_complete_step(c, 'd7');
-  PERFORM pg_temp.assert_ok(format($q$UPDATE public.capas SET d7_lessons_learned = 'Edited after D7 was completed' WHERE id = %L$q$, c), 'D7 can still be edited after it is complete');
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.capas SET d7_lessons_learned = 'Edited after D7 was completed' WHERE id = %L$q$, c), 'D7 cannot be edited after it is complete');
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.capa_actions SET status = 'open' WHERE id = %L$q$, p1), 'nor its preventive actions');
+  PERFORM app.capa_reopen_step(c, 'd7', 'More lessons');
+  PERFORM pg_temp.assert_ok(format($q$UPDATE public.capas SET d7_lessons_learned = 'Edited after D7 was reopened' WHERE id = %L$q$, c), 'reopened: D7 can be edited');
   PERFORM pg_temp.logout();
 
   -- A viewer reads but changes nothing.

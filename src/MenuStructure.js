@@ -25,7 +25,12 @@ export const menuStructure = [
     icon: ListChecksIcon,
     permission: "capa.read",
     path: "/CAPA",
-    subMenu: [],
+    // badge: "my-actions" = how many 8D actions assigned to the signed-in person are still open (see Navbar)
+    badge: "my-actions",
+    subMenu: [
+      { name: "All 8Ds", path: "/CAPA", end: true },
+      { name: "My actions", path: "/CAPA/My-Actions", badge: "my-actions" },
+    ],
   },
   {
     name: "In-Process Inspection",

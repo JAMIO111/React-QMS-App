@@ -172,7 +172,7 @@ BEGIN
   -- CAPA4: a corrective action carried out and verified.
   INSERT INTO public.capa_actions (organisation_id, capa_id, phase, description)
     SELECT a, id, 'corrective', 'Sweep corrective action' FROM public.capas WHERE organisation_id = a LIMIT 1;
-  UPDATE public.capa_actions SET status = 'done' WHERE organisation_id = a AND phase = 'corrective';
+  UPDATE public.capa_actions SET status = 'done', evidence_note = 'Sweep findings' WHERE organisation_id = a AND phase = 'corrective';
   PERFORM app.record_capa_verification((SELECT id FROM public.capas WHERE organisation_id = a LIMIT 1), true, 'Sweep check', NULL);
   -- CAPA5: an evidence file.
   PERFORM app.add_capa_attachment((SELECT id FROM public.capas WHERE organisation_id = a LIMIT 1), a::text || '/capa/' || (SELECT id FROM public.capas WHERE organisation_id = a LIMIT 1)::text || '/sweep.pdf', 'sweep.pdf', 'application/pdf', 10, 'Sweep file');

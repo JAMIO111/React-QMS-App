@@ -4,7 +4,7 @@ import ReasonCard from "../ReasonCard";
 /** D7: stop it happening elsewhere (preventive actions, similar parts and processes) and write down what was learned. */
 const D7Prevent = ({ capa, editable }) => (
   <div className="flex flex-col gap-4">
-    <ActionList capa={capa} phase="preventive" editable={editable} withCause title="Preventive actions" addLabel="Add preventive action"
+    <ActionList capa={capa} phase="preventive" planStep="d7" doingStep="d7" withCause title="Preventive actions" addLabel="Add preventive action"
       emptyText="No preventive action yet. Check similar parts, machines and processes, and fix procedures, plans or training." />
     <ReasonCard key={`n${capa.updatedAt}`} capa={capa} editable={editable} field="d7NoPreventiveReason" value={capa.d7NoPreventiveReason} title="No preventive action needed?"
       subtitle="If nothing else is exposed, say why instead of adding an action" ariaLabel="No preventive action" label="Why no preventive action is needed" saveLabel="Save reason" />

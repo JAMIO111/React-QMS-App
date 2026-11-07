@@ -116,12 +116,14 @@ describe("D4: root causes", () => {
     expect(screen.getByRole("button", { name: "View 5 Whys: occurrence" })).toBeInTheDocument();
   });
 
-  it("a completed D4 can still be worked on: nothing locks", async () => {
+  it("a completed D4 is read-only until it is reopened", async () => {
     apiFetch.mockImplementation(respond(() => ({ ...base(), rootCauses: [cause()], steps: steps().map((s) => (s.step === "d4" ? { ...s, completed: true, completedAt: "2026-11-05T10:00:00Z", completedBy: { id: "u1", name: "Ada Owner" } } : s)) })));
     renderAt("/CAPA/c1/d4");
     expect(await screen.findByText(/D4 was completed by Ada Owner/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add a root cause" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "New Ishikawa diagram" })).toBeEnabled();
+    expect(screen.getByText(/D4 is complete, so it is read-only/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add a root cause" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "New Ishikawa diagram" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Reopen D4" })).toBeEnabled();
   });
 });
 

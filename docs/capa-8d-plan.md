@@ -25,6 +25,7 @@ keeping the legacy interaction: **start a new 8D from an NC, or assign the NC to
 | C3 | A **print-friendly report view** of the whole 8D (save as PDF from the browser) is in this build. A generated customer-format PDF is a later slice. |
 | C4 | NCs link **many-to-many**: an 8D has many NCs, and an NC can be in more than one 8D. Links are never deleted, only ended with a reason. |
 | C5 | Each step has **content, a checklist of what is still needed to complete it** (worked out by the database, shown in the UI) and a completion action. **An 8D is a fluid document: nothing locks.** Steps can be completed in any order and every step's content stays editable after it is complete (and while the 8D is running); completing a step marks it done once what it needs is in place, and reopening one needs a reason and touches no other step. Only a closed or cancelled 8D is read-only until it is reopened. |
+| C5a | **Amends C5 (CAPA6, 2026-11-07):** a completed step is **read-only until it is reopened** (a reason is needed; only that step is reopened). Enforced in the database for every step's content; see §10. |
 | C6 | The **stage is worked out by the steps** (never set by hand): `open → actions_in_progress → awaiting_verification → verified_effective → closed`, `cancelled` from any stage before closed. A failed effectiveness verification returns to `actions_in_progress` and reopens D5 and D6. |
 | C7 | **Closing an NC is refused while a linked 8D is still running** (not verified effective, closed or cancelled). Nothing forces an NC to have an 8D (the Phase 2 rule "linked CAPA or a reason" is left for the NC workflow slice). |
 | C8 | Analysis tools open as **modals** from the step pages: 5W2H and Is / Is-Not (D2), Ishikawa and 5 Whys (D4, 5 Whys also for the escape point). Their content is saved with the 8D as structured data. |
@@ -96,3 +97,11 @@ Pickers use `RHFComboBox`, dates `RHFDatePickerPopout`, files `AttachmentDrop`; 
 
 Email or push notices for owners and due dates (no worker), a customer-format PDF, dashboards and KPIs for CAPA, 8Ds that are not method 8D (simple CAPA), a pareto or fault-tree tool,
 making an NC require an 8D, importing the legacy `"8D"` rows.
+
+## 10. CAPA6: step locks and actionable actions (2026-11-07)
+
+- **Locks.** While a step is complete its content cannot change: D0 initiation and NC links, D1 team, D2 5W2H and Is / Is-Not, D3 containment actions and reason, D4 causes and analyses, D5 the corrective plan, D6 carrying out corrective actions and effective verifications, D7 preventive actions, reason and lessons learned.
+  Reopen the step to change it. A failed verification is always accepted and reopens D5 and D6. Who and when on an action may move while the plan or the doing step is open.
+- **Actionee.** An action is written by a manager and assigned to a team member. That person (capa.read is enough) writes the findings and closes the action; the findings are required to close; the assigner is not notified of their own assignment, the actionee is.
+- **My actions** (`/CAPA/My-Actions`): the open (or closed) actions assigned to me across running 8Ds, with the same findings and close dialogs.
+- Not done: reminders for due or overdue actions (no worker), email or push, an actionee who is an external contact cannot log in so a manager updates their action.

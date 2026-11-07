@@ -53,7 +53,7 @@ const D6Implement = ({ capa, editable }) => {
   const state = STATE_TEXT[capa.verificationState];
   return (
     <div className="flex flex-col gap-4">
-      <ActionList capa={capa} phase="corrective" editable={editable} withCause title="Corrective actions" addLabel="Add corrective action"
+      <ActionList capa={capa} phase="corrective" planStep={null} doingStep="d6" withCause title="Corrective actions"
         emptyText="No corrective action yet. Plan them in D5, then mark each one done here with its evidence." />
       <MenuCard title="Effectiveness verification" subtitle="Did the fix work? Needs the verify permission"
         action={editable && can("capa.verify") ? <button type="button" className={buttonClass.primary} onClick={() => setOpen(true)}>Verify effectiveness</button> : undefined}>

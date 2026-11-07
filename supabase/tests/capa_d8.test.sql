@@ -31,11 +31,11 @@ BEGIN
   INSERT INTO public.capa_root_causes (organisation_id, capa_id, kind, description, verified, verification_method) VALUES (org, c, 'occurrence', 'No tool life limit', true, 'Trial') RETURNING id INTO rc;
   PERFORM pg_temp.logout();
   -- Steps are written by functions only; the test marks D0 to D7 done directly (as the database owner), leaving D3 open.
-  UPDATE public.capa_steps SET completed_at = now() WHERE capa_id = c AND step IN ('d0', 'd1', 'd2', 'd4', 'd5', 'd6', 'd7');
+  UPDATE public.capa_steps SET completed_at = now() WHERE capa_id = c AND step IN ('d0', 'd1', 'd2', 'd4', 'd7');
 
   -- D8 says what is missing.
   PERFORM pg_temp.login('3f000000-0000-0000-0000-000000000701');
-  PERFORM pg_temp.assert_eq(app.capa_step_problems(c, 'd8'), ARRAY['Complete D3 first', 'The corrective actions must be verified as effective before the 8D can be closed'], 'D8 lists what is missing');
+  PERFORM pg_temp.assert_eq(app.capa_step_problems(c, 'd8'), ARRAY['Complete D3 first', 'Complete D5 first', 'Complete D6 first', 'The corrective actions must be verified as effective before the 8D can be closed'], 'D8 lists what is missing');
   PERFORM pg_temp.assert_fails(format($q$SELECT app.close_capa(%L, 'Well done')$q$, c), 'cannot close an 8D that is not ready');
   PERFORM pg_temp.assert_fails(format($q$SELECT app.capa_complete_step(%L, 'd8')$q$, c), 'D8 cannot be completed on its own');
   PERFORM pg_temp.logout();
@@ -43,9 +43,12 @@ BEGIN
   UPDATE public.capa_steps SET completed_at = now() WHERE capa_id = c AND step = 'd3';
   PERFORM pg_temp.login('3f000000-0000-0000-0000-000000000701');
   INSERT INTO public.capa_actions (organisation_id, capa_id, phase, description, root_cause_id) VALUES (org, c, 'corrective', 'Set a limit', rc) RETURNING id INTO a1;
-  UPDATE public.capa_actions SET status = 'done' WHERE id = a1;
+  UPDATE public.capa_actions SET status = 'done', evidence_note = 'Limit set' WHERE id = a1;
   PERFORM app.record_capa_verification(c, true, 'Audit of 5 lots', NULL);
   PERFORM pg_temp.assert_eq((SELECT stage FROM public.capas WHERE id = c), 'verified_effective', 'ready: verified effective');
+  PERFORM pg_temp.logout();
+  UPDATE public.capa_steps SET completed_at = now() WHERE capa_id = c AND step IN ('d5', 'd6');
+  PERFORM pg_temp.login('3f000000-0000-0000-0000-000000000701');
   PERFORM pg_temp.assert_eq(app.capa_step_problems(c, 'd8'), ARRAY[]::text[], 'D8 has nothing missing');
   PERFORM pg_temp.logout();
 

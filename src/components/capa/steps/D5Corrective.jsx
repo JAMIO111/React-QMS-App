@@ -3,7 +3,7 @@ import { ROOT_CAUSE_KINDS } from "../../../lib/capa";
 import ActionList from "../ActionList";
 
 /** D5: a permanent corrective action for every occurrence cause (and for the others where it makes sense). */
-const D5Corrective = ({ capa, editable }) => {
+const D5Corrective = ({ capa }) => {
   const corrective = capa.actions.filter((a) => a.phase === "corrective" && a.status !== "cancelled");
   return (
     <div className="flex flex-col gap-4">
@@ -24,7 +24,7 @@ const D5Corrective = ({ capa, editable }) => {
           </ul>
         )}
       </MenuCard>
-      <ActionList capa={capa} phase="corrective" editable={editable} withCause title="Corrective actions" addLabel="Add corrective action"
+      <ActionList capa={capa} phase="corrective" planStep="d5" doingStep={null} withCause title="Corrective actions" addLabel="Add corrective action"
         emptyText="No corrective action yet. Plan a permanent fix for each root cause, with an owner and a due date." />
     </div>
   );

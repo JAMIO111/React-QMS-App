@@ -6,7 +6,7 @@ import type { RequestContext } from '../common/request-context';
 import { iso, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
 import { Attachment, CreateAttachmentBody, DeletedQuery } from '../calibration/calibration.schemas';
-import { AddTeamBody, ANALYSIS_DATA, CapaDetail, CapaSummary, CloseCapaBody, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, CreateRootCauseBody, CreateVerificationBody, LinkNcrBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, STEPS, UpdateActionBody, UpdateAnalysisBody, UpdateCapaBody, UpdateRootCauseBody, UpdateTeamBody } from './capa.schemas';
+import { AddTeamBody, ANALYSIS_DATA, CapaDetail, CapaSummary, CloseCapaBody, CompleteActionBody, CompleteStepBody, CreateActionBody, CreateAnalysisBody, CreateCapaBody, CreateRootCauseBody, CreateVerificationBody, LinkNcrBody, ListQuery, NcrCapaList, PeopleList, PeopleQuery, ReasonBody, ReopenStepBody, STEPS, MyActionList, MyActionsQuery, UpdateActionBody, UpdateAnalysisBody, UpdateCapaBody, UpdateRootCauseBody, UpdateTeamBody } from './capa.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown' } : null);
@@ -321,6 +321,48 @@ export class CapaService {
     });
   }
 
+  /** The caller's own actions in running 8Ds (assigned to them as a team member), newest first, with whether the step they are worked in is complete. */
+  myActions(ctx: RequestContext, q: z.infer<typeof MyActionsQuery>): Promise<z.infer<typeof MyActionList>> {
+    return this.database.asUser(ctx, async (db) => {
+      const filter = q.status === 'all' ? sql`true` : q.status === 'done' ? sql`x.status = 'done'` : sql`x.status = 'open'`;
+      const rows = await db.execute<Row>(sql`
+        select x.id, x.capa_id, c.reference, c.title, x.phase, x.description, x.due_date::text as due_date, x.status, x.evidence_note, x.done_at, x.created_at,
+               (x.status = 'open' and x.due_date is not null and x.due_date < current_date) as overdue,
+               exists (select 1 from public.capa_steps s where s.capa_id = x.capa_id and s.completed_at is not null and s.step = case x.phase when 'interim' then 'd3' when 'corrective' then 'd6' else 'd7' end) as locked
+          from public.capa_actions x
+          join public.capas c on c.id = x.capa_id
+          join public.capa_team_members t on t.id = x.owner_team_member_id and t.ended_at is null
+          join public.organisation_users m on m.id = t.membership_id
+         where x.organisation_id = ${orgOf(ctx)}::uuid and m.user_id = auth.uid() and x.status <> 'cancelled'
+           and c.stage not in ('closed', 'cancelled') and ${filter}
+         order by (x.status = 'open') desc, x.due_date nulls last, x.created_at desc`);
+      const open = await db.execute<{ n: number }>(sql`
+        select count(*)::int as n from public.capa_actions x
+          join public.capas c on c.id = x.capa_id
+          join public.capa_team_members t on t.id = x.owner_team_member_id and t.ended_at is null
+          join public.organisation_users m on m.id = t.membership_id
+         where x.organisation_id = ${orgOf(ctx)}::uuid and m.user_id = auth.uid() and x.status = 'open' and c.stage not in ('closed', 'cancelled')`);
+      return {
+        data: rows.rows.map((r) => ({
+          id: r.id as string,
+          capaId: r.capa_id as string,
+          capaReference: r.reference as string,
+          capaTitle: r.title as string,
+          phase: r.phase as 'interim' | 'corrective' | 'preventive',
+          description: r.description as string,
+          dueDate: (r.due_date as string) ?? null,
+          overdue: !!r.overdue,
+          status: r.status as 'open' | 'done' | 'cancelled',
+          evidenceNote: (r.evidence_note as string) ?? null,
+          doneAt: iso(r.done_at),
+          locked: !!r.locked,
+          assignedAt: iso(r.created_at)!,
+        })),
+        openCount: open.rows[0]?.n ?? 0,
+      };
+    });
+  }
+
   updateAction(ctx: RequestContext, actionId: string, body: UpdateActionBody): Promise<CapaDetail> {
     const sets: SQL[] = [];
     if (body.description !== undefined) sets.push(sql`description = ${body.description}`);
@@ -448,7 +490,8 @@ export class CapaService {
       db.execute<Row>(sql`select x.id, x.phase, x.description, x.root_cause_id, x.owner_team_member_id, x.due_date::text as due_date, x.status, x.done_at, x.done_by,
           x.evidence_note, x.cancel_reason, x.created_at, ${sql.raw(personName('pd'))} as done_by_name,
           coalesce(${sql.raw(personName('po'))}, t.external_name, om.invited_email) as owner_name,
-          (x.status = 'open' and x.due_date is not null and x.due_date < current_date) as overdue
+          (x.status = 'open' and x.due_date is not null and x.due_date < current_date) as overdue,
+          app.is_capa_action_assignee(x.id) as is_assignee
         from public.capa_actions x
         left join public.capa_team_members t on t.id = x.owner_team_member_id
         left join public.organisation_users om on om.id = t.membership_id
@@ -525,6 +568,7 @@ export class CapaService {
         doneBy: person(x.done_by, x.done_by_name),
         evidenceNote: (x.evidence_note as string) ?? null,
         cancelReason: (x.cancel_reason as string) ?? null,
+        isAssignee: !!x.is_assignee,
         createdAt: iso(x.created_at)!,
       })),
       createdBy: person(r.created_by, r.created_by_name),

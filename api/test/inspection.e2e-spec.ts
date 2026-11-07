@@ -181,6 +181,26 @@ describe('recording', () => {
     expect(all.map((r: { status: string }) => r.status)).toEqual(['abandoned', 'completed']);
     expect((await api().get('/api/v1/inspections?result=fail').set(h).expect(200)).body.data).toHaveLength(1);
     expect((await api().get('/api/v1/inspections?q=WO-77').set(h).expect(200)).body.data[0].reference).toMatch(/0001$/);
+    // Page numbers, totals, several values per filter, dates, sort and order.
+    const body = (await api().get('/api/v1/inspections?pageSize=1').set(h).expect(200)).body;
+    expect(body).toMatchObject({ page: 1, pageSize: 1, total: 2 });
+    expect(body.data).toHaveLength(1);
+    expect((await api().get('/api/v1/inspections?pageSize=1&page=2&sort=reference&order=asc').set(h).expect(200)).body.data[0].reference).toMatch(/0002$/);
+    expect((await api().get('/api/v1/inspections?sort=reference&order=desc').set(h).expect(200)).body.data[0].reference).toMatch(/0002$/);
+    const two = (await api().get('/api/v1/inspections?status=completed,abandoned').set(h).expect(200)).body;
+    expect(two.total).toBe(2);
+    expect((await api().get('/api/v1/inspections?status=completed').set(h).expect(200)).body.total).toBe(1);
+    expect((await api().get('/api/v1/inspections?status=completed&result=pass').set(h).expect(200)).body.total).toBe(0);
+    const today = new Date().toISOString().slice(0, 10);
+    expect((await api().get(`/api/v1/inspections?from=${today}&to=${today}`).set(h).expect(200)).body.total).toBe(2);
+    expect((await api().get('/api/v1/inspections?to=2000-01-01').set(h).expect(200)).body.total).toBe(0);
+    expect((await api().get(`/api/v1/inspections?siteId=${ids.siteA}`).set(h).expect(200)).body.total).toBe(2);
+    expect((await api().get(`/api/v1/inspections?siteId=${ids.siteB}`).set(h).expect(200)).body.total).toBe(0);
+    await api().get('/api/v1/inspections?sort=nonsense').set(h).expect(400);
+    await api().get('/api/v1/inspections?status=bogus').set(h).expect(400);
+    for (const sort of ['part', 'operation', 'plan', 'context', 'trigger', 'status', 'result', 'startedAt', 'operator', 'site', 'machine', 'failures']) {
+      await api().get(`/api/v1/inspections?sort=${sort}`).set(h).expect(200);
+    }
 
     const insp = await as(ids.inspectorA);
     const rec = (await api().post('/api/v1/inspections').set(insp).send({ siteId: ids.siteA, partId: ctx.part }).expect(201)).body;

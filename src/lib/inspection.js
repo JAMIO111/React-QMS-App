@@ -1,8 +1,8 @@
 import { SAMPLING_TRIGGERS } from "./processControl";
 
 export const STATUS = {
-  in_progress: { label: "In progress", className: "bg-brand-primary/15 text-primary-text" },
-  completed: { label: "Completed", className: "bg-border-color text-primary-text" },
+  in_progress: { label: "In progress", className: "bg-warning-color/15 text-warning-color font-medium" },
+  completed: { label: "Completed", className: "bg-success-color/15 text-success-color font-medium" },
   abandoned: { label: "Abandoned", className: "bg-border-color text-secondary-text line-through" },
 };
 

@@ -1,6 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { pageSchema } from '../common/pagination';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
@@ -13,7 +12,9 @@ import {
   DraftQuery,
   GaugeUsage,
   InspectionDetail,
+  INSPECTION_SORTABLE,
   InspectionListQuery,
+  InspectionPage,
   InspectionSummary,
   NcDraft,
   NcrInspectionSource,
@@ -34,13 +35,20 @@ export class InspectionsController {
 
   @Get()
   @OrganisationScoped(READ)
-  @ApiQuery({ name: 'limit', required: false, schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } })
-  @ApiQuery({ name: 'cursor', required: false, schema: { type: 'string' } })
   @ApiQuery({ name: 'q', required: false, schema: { type: 'string' }, description: 'Reference, part number, work order, lot or serial' })
-  @ApiQuery({ name: 'status', required: false, schema: { type: 'string', enum: ['in_progress', 'completed', 'abandoned'] } })
-  @ApiQuery({ name: 'result', required: false, schema: { type: 'string', enum: ['pass', 'fail'] } })
+  @ApiQuery({ name: 'status', required: false, schema: { type: 'string' }, description: 'Comma-separated: in_progress, completed, abandoned' })
+  @ApiQuery({ name: 'result', required: false, schema: { type: 'string' }, description: 'Comma-separated: pass, fail' })
+  @ApiQuery({ name: 'trigger', required: false, schema: { type: 'string' }, description: 'Comma-separated sampling triggers' })
   @ApiQuery({ name: 'partId', required: false, schema: { type: 'string', format: 'uuid' } })
-  @ApiOkResponse({ schema: openApiSchema(pageSchema(InspectionSummary)) })
+  @ApiQuery({ name: 'siteId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'machineId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'from', required: false, schema: { type: 'string' }, description: 'Started on or after (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'to', required: false, schema: { type: 'string' }, description: 'Started on or before (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'sort', required: false, schema: { type: 'string', enum: [...INSPECTION_SORTABLE], default: 'startedAt' } })
+  @ApiQuery({ name: 'order', required: false, schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' } })
+  @ApiQuery({ name: 'page', required: false, schema: { type: 'integer', minimum: 1, default: 1 } })
+  @ApiQuery({ name: 'pageSize', required: false, schema: { type: 'integer', minimum: 1, maximum: 200, default: 25 } })
+  @ApiOkResponse({ schema: openApiSchema(InspectionPage) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.list(ctx, parse(InspectionListQuery, query));
   }

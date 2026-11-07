@@ -37,3 +37,7 @@ export function useUrlFilters(keys) {
 /** Gauge register filters. */
 export const GAUGE_FILTER_KEYS = ["search", "status", "due", "outcome", "type", "site", "supplier", "supplierLabel", "source", "from", "to", "deleted"];
 export const useGaugeFilters = () => useUrlFilters(GAUGE_FILTER_KEYS);
+
+/** In-process inspection register filters. */
+export const INSPECTION_FILTER_KEYS = ["search", "status", "result", "trigger", "part", "partLabel", "site", "machine", "machineLabel", "from", "to"];
+export const useInspectionFilters = () => useUrlFilters(INSPECTION_FILTER_KEYS);

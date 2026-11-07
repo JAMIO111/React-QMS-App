@@ -1,13 +1,31 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
-import { usePagedList } from "./useMasterData";
 
 /** In-process inspections (PC4). Query keys under ["api", "org", id, "master", …] via usePagedList, and "inspection". */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "inspection", ...rest];
 
-export const useInspections = ({ q = "", status, result, partId } = {}) => usePagedList("inspections", { q, status, result, partId });
+const toQuery = (params) => {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0)) return;
+    qs.set(k, Array.isArray(v) ? v.join(",") : String(v));
+  });
+  return qs.toString();
+};
+
+/** The register page: { data, page, pageSize, total }. Filters, sort and page numbers are the server's. */
+export const useInspections = (params = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "list", params),
+    queryFn: () => apiFetch(`/inspections?${toQuery(params)}`, { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+    placeholderData: keepPreviousData,
+  });
+};
 
 export const useInspection = (id) => {
   const { organisationId } = useOrganisation();

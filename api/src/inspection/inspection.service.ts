@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
-import { decodeCursor, Page, toPage } from '../common/pagination';
 import type { RequestContext } from '../common/request-context';
 import { iso, num, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
@@ -48,6 +47,23 @@ const SUMMARY_SELECT = `
   left join public.profiles pc on pc.id = r.created_by
   left join public.profiles pd on pd.id = r.completed_by`;
 
+/** Sort expressions over the summary select (outer alias r exposes the joined columns). */
+const SORT_SQL: Record<InspectionListQuery['sort'], string> = {
+  reference: 'r.reference',
+  part: 'lower(r.part_number)',
+  operation: 'r.operation_code',
+  plan: `lower(r.plan_code || ' ' || r.revision_code)`,
+  context: `lower(coalesce(r.work_order, '') || coalesce(r.lot, '') || coalesce(r.serial, ''))`,
+  trigger: 'r.trigger_type',
+  status: `array_position(array['in_progress','completed','abandoned'], r.status)`,
+  result: `array_position(array['pass','fail'], r.result)`,
+  startedAt: 'r.started_at',
+  operator: 'lower(r.started_by_name)',
+  site: 'lower(r.site_name)',
+  machine: 'lower(r.machine_code)',
+  failures: 'r.failures',
+};
+
 const toSummary = (r: Row): InspectionSummary => ({
   id: r.id as string,
   reference: r.reference as string,
@@ -83,21 +99,28 @@ export class InspectionService {
     private readonly spc: SpcService,
   ) {}
 
-  list(ctx: RequestContext, q: z.infer<typeof InspectionListQuery>): Promise<Page<InspectionSummary>> {
-    const cursor = decodeCursor(q.cursor);
+  list(ctx: RequestContext, q: InspectionListQuery): Promise<{ data: InspectionSummary[]; page: number; pageSize: number; total: number }> {
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`r.organisation_id = ${orgOf(ctx)}::uuid`];
-      if (q.status) where.push(sql`r.status = ${q.status}`);
-      if (q.result) where.push(sql`r.result = ${q.result}`);
+      // Lists go in as one comma-separated text value (an array parameter would be sent as a row).
+      if (q.status.length) where.push(sql`r.status = any(string_to_array(${q.status.join(',')}, ','))`);
+      if (q.result.length) where.push(sql`r.result = any(string_to_array(${q.result.join(',')}, ','))`);
+      if (q.trigger.length) where.push(sql`r.trigger_type = any(string_to_array(${q.trigger.join(',')}, ','))`);
       if (q.partId) where.push(sql`r.part_id = ${q.partId}::uuid`);
+      if (q.siteId) where.push(sql`r.site_id = ${q.siteId}::uuid`);
+      if (q.machineId) where.push(sql`r.machine_id = ${q.machineId}::uuid`);
+      if (q.from) where.push(sql`r.started_at >= ${q.from}::date`);
+      if (q.to) where.push(sql`r.started_at < (${q.to}::date + 1)`);
       if (q.q) {
         const like = likePattern(q.q);
         where.push(sql`(r.reference ilike ${like} or p.part_number ilike ${like} or r.work_order ilike ${like} or r.lot ilike ${like} or r.serial ilike ${like})`);
       }
-      if (cursor) where.push(sql`(r.started_at, r.id) < (${cursor.k}::timestamptz, ${cursor.id}::uuid)`);
-      const result = await db.execute<Row>(sql`${sql.raw(SUMMARY_SELECT)} where ${sql.join(where, sql` and `)}
-        order by r.started_at desc, r.id desc limit ${q.limit + 1}`);
-      return toPage(result.rows.map(toSummary), q.limit, (r) => ({ k: r.startedAt, id: r.id }));
+      const order = sql.raw(`${SORT_SQL[q.sort]} ${q.order} nulls last, r.started_at ${q.order}, r.id ${q.order}`);
+      const result = await db.execute<Row>(sql`select * from (${sql.raw(SUMMARY_SELECT)} where ${sql.join(where, sql` and `)}) r
+        order by ${order} limit ${q.pageSize} offset ${(q.page - 1) * q.pageSize}`);
+      const count = await db.execute<{ n: string }>(sql`select count(*) as n from public.inspection_records r
+        join public.parts p on p.id = r.part_id where ${sql.join(where, sql` and `)}`);
+      return { data: result.rows.map(toSummary), page: q.page, pageSize: q.pageSize, total: Number(count.rows[0].n) };
     });
   }
 

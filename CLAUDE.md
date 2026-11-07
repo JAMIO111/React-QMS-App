@@ -134,6 +134,7 @@ Summary of the brief:
     `20251113100000`): raising or adding refuses a reading already on one (`QM008`), a cancelled/deleted NC frees its readings (unhandled again
     for completion and the dashboard), and the UI offers no checkbox for covered readings. The NC history shows readings linked
     (`action: readings_linked`, from `app.ncr_link_history`): "raised this from inspection…" / "added readings from inspection…".
+  - **Inspection register** (`/Inspections`, `InspectionsPage.jsx`): same pattern as the NC and gauge registers — `TableWrapper` with server sort/paging, column config (`inspectionColumns.jsx`, `useTablePreferences("inspection-register")`), header search box, filter drawer (`InspectionFilterPane.jsx`: status, result, trigger, started from/to, part, site, machine; URL keys in `useInspectionFilters`) with active-filter chips. `GET /inspections` is page-based now (`page`, `pageSize`, `sort`, `order`, comma-separated `status|result|trigger`, `partId|siteId|machineId`, `from|to`; answers `{ data, page, pageSize, total }`, no cursor). Status pills: completed = success green, in progress = warning colour.
   - **PC6 done:** SPC control charts (I-MR, X-bar/R), `docs/process-control-plan.md` §15. `inspection_samples.subgroup_number`
     (assigned by `app.inspection_sample_rules`; API `newSubgroup`), `spc_baselines` (saved limits with the measurement ids used;
     frozen; a new baseline supersedes the old via trigger; `spc.manage` inserts, `spc.read` reads). Statistics are pure functions in

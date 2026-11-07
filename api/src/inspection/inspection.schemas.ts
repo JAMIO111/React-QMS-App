@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { ListQuery } from '../common/pagination';
 
 const Iso = z.string().datetime({ offset: true });
 const Ref = z.object({ id: z.string().uuid(), name: z.string() });
@@ -22,12 +21,36 @@ export const DecimalInput = z
   .transform((v) => String(v))
   .pipe(z.string().regex(/^-?\d{1,12}(\.\d{1,12})?$/, 'Enter a number, e.g. 25.05'));
 
-export const InspectionListQuery = ListQuery.extend({
+const csvOf = <T extends z.ZodTypeAny>(item: T) =>
+  z
+    .string()
+    .optional()
+    .transform((v) => (v ? v.split(',').filter(Boolean) : []))
+    .pipe(z.array(item).max(20));
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
+
+export const INSPECTION_SORTABLE = [
+  'reference', 'part', 'operation', 'plan', 'context', 'trigger', 'status', 'result', 'startedAt', 'operator', 'site', 'machine', 'failures',
+] as const;
+
+/** The register: filters (lists are comma-separated), server-side sort and page numbers. */
+export const InspectionListQuery = z.object({
   q: z.string().trim().max(100).optional(),
-  status: z.enum(['in_progress', 'completed', 'abandoned']).optional(),
-  result: z.enum(['pass', 'fail']).optional(),
+  status: csvOf(z.enum(['in_progress', 'completed', 'abandoned'])),
+  result: csvOf(z.enum(['pass', 'fail'])),
+  trigger: csvOf(Trigger),
   partId: z.string().uuid().optional(),
+  siteId: z.string().uuid().optional(),
+  machineId: z.string().uuid().optional(),
+  /** Started on or after / before (YYYY-MM-DD, UTC days). */
+  from: isoDay.optional(),
+  to: isoDay.optional(),
+  sort: z.enum(INSPECTION_SORTABLE).default('startedAt'),
+  order: z.enum(['asc', 'desc']).default('desc'),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(25),
 });
+export type InspectionListQuery = z.infer<typeof InspectionListQuery>;
 
 export const InspectionSummary = z.object({
   id: z.string().uuid(),
@@ -51,6 +74,8 @@ export const InspectionSummary = z.object({
   failures: z.number().int(),
 });
 export type InspectionSummary = z.infer<typeof InspectionSummary>;
+
+export const InspectionPage = z.object({ data: z.array(InspectionSummary), page: z.number().int(), pageSize: z.number().int(), total: z.number().int() });
 
 export const NcrRef = z.object({
   id: z.string().uuid(),

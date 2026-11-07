@@ -31,15 +31,31 @@ export const useMyJobs = ({ enabled = true } = {}) => {
   });
 };
 
-/** Start a job ({ machineId, partId, operationCode?, lotSize? }) or fill in its details ({ id, workOrder, lot, lotSize, serial }); both answer with the inspection. */
+const FIELDS = ["workOrder", "lot", "lotSize", "serial"];
+
+/**
+ * Start a job ({ machineId, partId, operationCode?, lotSize? }) or fill in its details ({ id, workOrder, lot, lotSize, serial }); both answer with the
+ * inspection. Details are a quick edit, so they show on screen at once and are put back if the save fails.
+ */
 export const useJobMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const detail = (id) => ["api", "org", organisationId, "inspection", id];
   return useMutation({
     mutationFn: ({ id, ...body }) => (id ? apiFetch(`/jobs/${id}`, { method: "PATCH", body, organisationId }) : apiFetch("/jobs", { method: "POST", body, organisationId })),
-    onSuccess: (inspection) => {
-      if (inspection?.id) queryClient.setQueryData(["api", "org", organisationId, "inspection", inspection.id], inspection);
-      refreshOrganisation(queryClient, organisationId);
+    onMutate: async ({ id, ...body }) => {
+      if (!id) return undefined;
+      await queryClient.cancelQueries({ queryKey: detail(id) });
+      const previous = queryClient.getQueryData(detail(id));
+      if (previous) queryClient.setQueryData(detail(id), { ...previous, ...Object.fromEntries(FIELDS.filter((f) => f in body).map((f) => [f, body[f] === "" ? null : body[f]])) });
+      return { previous, id };
     },
+    onError: (_error, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(detail(context.id), context.previous);
+    },
+    onSuccess: (inspection) => {
+      if (inspection?.id) queryClient.setQueryData(detail(inspection.id), inspection);
+    },
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };

@@ -68,7 +68,7 @@ const MyActionsPage = lazy(() => import("./components/capa/MyActionsPage.jsx"));
 const PlatformPage = lazy(() => import("./components/platform/PlatformPage.jsx"));
 const SetupWizard = lazy(() => import("./components/onboarding/SetupWizard.jsx"));
 const AcceptInvite = lazy(() => import("./components/onboarding/AcceptInvite.jsx"));
-const JobRedirect = lazy(() => import("./components/jobs/JobRedirect.jsx"));
+const JobPage = lazy(() => import("./components/jobs/JobPage.jsx"));
 const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
 const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
 const InspectionPage = lazy(() => import("./components/inspection/InspectionPage.jsx"));
@@ -221,8 +221,7 @@ const router = createBrowserRouter([
             { path: "Inspections", element: <InspectionsPage /> },
             { path: "Inspections/new", element: <StartInspectionPage /> },
             { path: "Inspections/:id", element: <InspectionPage /> },
-            // The operator hub (OH3) replaces this redirect with its own screen.
-            { path: "Jobs/:id", element: <JobRedirect /> },
+            { path: "Jobs/:id", element: <JobPage /> },
             ],
           },
         ],

@@ -136,14 +136,14 @@ const Tracking = ({ alert, canAdd }) => {
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-sm font-medium text-secondary-text">
             Show
-            <select aria-label="Show" className="rounded-lg border border-border-color bg-text-input-color px-2 py-2 text-primary-text" value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <select aria-label="Show" className="h-9.5 rounded-lg border border-border-color bg-text-input-color px-2 py-2 text-sm text-primary-text" value={filter} onChange={(e) => setFilter(e.target.value)}>
               {RECIPIENT_FILTERS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
             </select>
           </label>
           {departments.length > 0 && (
             <label className="flex flex-col gap-1 text-sm font-medium text-secondary-text">
               Department
-              <select aria-label="Department" className="rounded-lg border border-border-color bg-text-input-color px-2 py-2 text-primary-text" value={department} onChange={(e) => setDepartment(e.target.value)}>
+              <select aria-label="Department" className="h-9.5 rounded-lg border border-border-color bg-text-input-color px-2 py-2 text-sm text-primary-text" value={department} onChange={(e) => setDepartment(e.target.value)}>
                 <option value="">All</option>
                 {departments.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
@@ -157,7 +157,7 @@ const Tracking = ({ alert, canAdd }) => {
                 e.preventDefault();
                 if (person) mutation.mutate({ action: "addRecipient", id: alert.id, body: { membershipId: person } }, { onSuccess: () => setPerson("") });
               }}>
-              <select aria-label="Person to add" className="rounded-lg border border-border-color bg-text-input-color px-2 py-2 text-primary-text" value={person} onChange={(e) => setPerson(e.target.value)}>
+              <select aria-label="Person to add" className="h-9.5 rounded-lg border border-border-color bg-text-input-color px-2 py-2 text-sm text-primary-text" value={person} onChange={(e) => setPerson(e.target.value)}>
                 <option value="">Add a person…</option>
                 {candidates.map((m) => <option key={m.membershipId} value={m.membershipId}>{[m.firstName, m.surname].filter(Boolean).join(" ") || m.email}</option>)}
               </select>

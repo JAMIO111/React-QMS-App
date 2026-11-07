@@ -184,7 +184,7 @@ const RHFUserComboBox = ({
                 className={`text-primary-text w-full h-full outline-none bg-transparent truncate placeholder:text-sm placeholder:text-muted ${
                   !selectedUser && !searchTerm
                     ? "text-sm text-muted"
-                    : "text-base text-primary-text"
+                    : "text-sm text-primary-text"
                 }`}
               />
             </div>

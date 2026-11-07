@@ -39,7 +39,7 @@ const EMAIL_NOTES = {
 const button =
   "rounded-lg border border-border-color px-2 py-1 text-sm text-primary-text hover:border-border-dark-color disabled:opacity-50 cursor-pointer";
 const select =
-  "rounded-lg border border-border-color bg-text-input-color px-2 py-2 text-primary-text shadow-s disabled:opacity-60";
+  "h-9.5 rounded-lg border border-border-color bg-text-input-color px-2 py-2 text-sm text-primary-text shadow-s disabled:opacity-60";
 
 const displayName = (m) =>
   [m.firstName, m.surname].filter(Boolean).join(" ") || m.email || "Unknown";
@@ -204,7 +204,7 @@ const InviteForm = ({ roles, sites, departments }) => {
         )}
         <label className="flex min-w-56 flex-1 flex-col gap-1 text-sm font-medium text-primary-text">
           Message (optional)
-          <textarea aria-label="Message" className={`${select} min-h-10`} maxLength={500} value={message} onChange={(e) => setMessage(e.target.value)} />
+          <textarea aria-label="Message" className={`${select} h-auto min-h-10`} maxLength={500} value={message} onChange={(e) => setMessage(e.target.value)} />
         </label>
       </div>
       {mutation.error && (
@@ -343,7 +343,7 @@ const MemberRow = ({ member, roles, sites, departments, canManage, isSelf }) => 
             }}>
             <select
               aria-label={`Role to add for ${displayName(member)}`}
-              className={`${select} py-1 text-sm`}
+              className={`${select} h-auto py-1 text-sm`}
               value={roleToAdd}
               onChange={(e) => setRoleToAdd(e.target.value)}>
               <option value="">Add role…</option>
@@ -417,7 +417,7 @@ const MemberRow = ({ member, roles, sites, departments, canManage, isSelf }) => 
             }}>
             <select
               aria-label={`Department to add for ${displayName(member)}`}
-              className={`${select} py-1 text-sm`}
+              className={`${select} h-auto py-1 text-sm`}
               value={deptToAdd}
               onChange={(e) => setDeptToAdd(e.target.value)}>
               <option value="">Add department…</option>

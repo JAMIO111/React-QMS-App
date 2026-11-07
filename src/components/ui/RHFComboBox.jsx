@@ -288,7 +288,7 @@ const RHFComboBox = ({
                 className={`w-full h-full text-sm outline-none bg-transparent truncate placeholder:text-sm placeholder:text-muted disabled:cursor-not-allowed ${
                   !selectedOption && !searchTerm
                     ? "text-sm text-muted"
-                    : "text-base text-primary-text"
+                    : "text-sm text-primary-text"
                 }`}
               />
             </div>

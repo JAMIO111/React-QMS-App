@@ -18,7 +18,7 @@ export const TextAreaField = ({ label, value, onChange, disabled, rows = 3, maxL
         disabled={disabled}
         rows={rows}
         maxLength={maxLength}
-        className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-primary-text outline-none transition-all duration-150 placeholder:text-sm placeholder:text-muted hover:border-border-dark-color focus:border-brand-primary focus:ring-3 focus:ring-brand-primary/20 disabled:opacity-60"
+        className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm text-primary-text outline-none transition-all duration-150 placeholder:text-sm placeholder:text-muted hover:border-border-dark-color focus:border-brand-primary focus:ring-3 focus:ring-brand-primary/20 disabled:opacity-60"
       />
       {hint && <p className="text-xs text-secondary-text">{hint}</p>}
     </div>

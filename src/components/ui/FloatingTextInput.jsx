@@ -13,7 +13,7 @@ const FloatingTextInput = ({ label, type = "text", value, onChange, id }) => {
         onChange={onChange}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
-        className="peer w-full bg-text-input-color border border-border-color rounded-lg h-10 text-primary-text hover:border-border-dark-color placeholder-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="peer w-full bg-text-input-color border border-border-color rounded-lg h-9.5 text-sm text-primary-text hover:border-border-dark-color placeholder-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
         placeholder={label}
       />
       <label

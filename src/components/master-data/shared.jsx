@@ -104,7 +104,7 @@ export const ActiveBadge = ({ active }) =>
   );
 
 const selectClass =
-  "rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-primary-text hover:border-border-dark-color focus:outline-none focus:border-brand-primary disabled:opacity-60";
+  "h-9.5 rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm text-primary-text hover:border-border-dark-color focus:outline-none focus:border-brand-primary disabled:opacity-60";
 
 /** Labelled native select. options: [{ value, label }]; an empty value means "none". */
 export const SelectField = ({ label, value, onChange, options, placeholder = "— None —", required = false, disabled = false, hint, className = "" }) => {
@@ -159,7 +159,7 @@ export const TextAreaField = ({ label, hint, className = "", rows = 3, required,
         rows={rows}
         aria-required={required || undefined}
         aria-describedby={hint ? `${id}-help` : undefined}
-        className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-primary-text hover:border-border-dark-color focus:outline-none focus:border-brand-primary disabled:opacity-60"
+        className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm text-primary-text hover:border-border-dark-color focus:outline-none focus:border-brand-primary disabled:opacity-60"
         {...props}
       />
       {hint && (

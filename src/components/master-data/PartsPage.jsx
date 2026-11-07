@@ -17,7 +17,7 @@ export const CustomerSelect = ({ value, onChange, id }) => {
       id={id}
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value || null)}
-      className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-primary-text focus:outline-none focus:border-brand-primary">
+      className="h-9.5 rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm text-primary-text focus:outline-none focus:border-brand-primary">
       <option value="">— None —</option>
       {(customers.data?.items ?? []).map((c) => (
         <option key={c.id} value={c.id}>

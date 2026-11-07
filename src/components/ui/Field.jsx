@@ -13,7 +13,7 @@ const Field = ({ label, hint, error, className = "", inputClassName = "", requir
         aria-required={required || undefined}
         aria-invalid={error ? true : undefined}
         aria-describedby={hint || error ? `${id}-help` : undefined}
-        className={`rounded-lg border px-3 py-2 bg-text-input-color text-primary-text outline-none transition-all duration-150 placeholder:text-sm placeholder:text-muted disabled:opacity-60 ${
+        className={`rounded-lg border px-3 py-2 bg-text-input-color text-sm text-primary-text outline-none transition-all duration-150 placeholder:text-sm placeholder:text-muted disabled:opacity-60 ${
           error ? "border-error-color focus:ring-3 focus:ring-error-color/20" : "border-border-color hover:border-border-dark-color focus:border-brand-primary focus:ring-3 focus:ring-brand-primary/20"
         } ${inputClassName}`}
         {...inputProps}

@@ -128,7 +128,7 @@ const RHFDatePickerPopout = ({
               : open
                 ? "border-brand-primary ring-3 ring-brand-primary/20"
                 : "border-border-color hover:border-border-dark-color focus-visible:border-brand-primary focus-visible:ring-3 focus-visible:ring-brand-primary/20"
-          } h-10.5 w-full flex items-center border bg-text-input-color rounded-lg px-2 py-2 text-left outline-none transition-all duration-150 ${
+          } h-9.5 w-full flex items-center border bg-text-input-color rounded-lg px-2 py-2 text-left outline-none transition-all duration-150 ${
             disabled ? "opacity-60 cursor-not-allowed hover:border-border-color" : "cursor-pointer"
           } ${clearable && date && !disabled ? "pr-9" : ""}`}>
           {!error ? (
@@ -136,7 +136,7 @@ const RHFDatePickerPopout = ({
           ) : (
             <CircleAlertIcon title={errorMessage} className="w-5 h-5 text-error-color mr-3 flex-shrink-0" />
           )}
-          <span className={`truncate ${date ? "text-primary-text" : "text-sm text-muted"}`}>
+          <span className={`truncate ${date ? "text-sm text-primary-text" : "text-sm text-muted"}`}>
             {date ? format(date, "EEE d MMMM yyyy") : placeholder}
           </span>
         </button>

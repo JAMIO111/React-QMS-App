@@ -19,7 +19,7 @@ const SEVERITIES = [
   { value: "minor", label: "Minor" },
 ];
 const inputClass =
-  "rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-primary-text hover:border-border-dark-color focus:outline-none focus:border-brand-primary disabled:opacity-60";
+  "rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm text-primary-text hover:border-border-dark-color focus:outline-none focus:border-brand-primary disabled:opacity-60";
 
 const readingText = (m, requirement) =>
   requirement.dataType === "attribute"

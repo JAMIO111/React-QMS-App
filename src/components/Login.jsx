@@ -69,7 +69,7 @@ const Login = () => {
               type="email"
               autoComplete="username"
               placeholder="you@company.com"
-              className="border pl-10 w-full text-primary-text placeholder:text-secondary-text border-border-color hover:border-border-dark-color p-2 bg-text-input-color rounded-lg focus-within:border-brand-primary focus-within:hover:border-brand-primary"
+              className="border pl-10 w-full text-primary-text placeholder:text-secondary-text border-border-color hover:border-border-dark-color p-2 text-sm bg-text-input-color rounded-lg focus-within:border-brand-primary focus-within:hover:border-brand-primary"
             />
           </div>
           {errors.email && (
@@ -90,7 +90,7 @@ const Login = () => {
               type={showPassword ? "text" : "password"}
               autoComplete="current-password"
               placeholder="Enter your password"
-              className="pl-10 pr-10 w-full border border-border-color text-primary-text placeholder:text-secondary-text hover:border-border-dark-color p-2 bg-text-input-color rounded-lg focus-within:border-brand-primary focus-within:hover:border-brand-primary"
+              className="pl-10 pr-10 w-full border border-border-color text-primary-text placeholder:text-secondary-text hover:border-border-dark-color p-2 text-sm bg-text-input-color rounded-lg focus-within:border-brand-primary focus-within:hover:border-brand-primary"
             />
             <button
               type="button"

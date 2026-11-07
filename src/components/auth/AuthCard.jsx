@@ -10,7 +10,7 @@ export const AuthCard = ({ title, subtitle, children }) => (
 );
 
 export const authInputClass =
-  "border w-full text-primary-text placeholder:text-secondary-text border-border-color hover:border-border-dark-color p-2 bg-text-input-color rounded-lg focus:outline-none focus:border-brand-primary";
+  "border w-full text-primary-text placeholder:text-secondary-text border-border-color hover:border-border-dark-color p-2 text-sm bg-text-input-color rounded-lg focus:outline-none focus:border-brand-primary";
 
 /** Primary action on the sign-in pages: Fortress QMS blue, whatever an organisation's theme colour. */
 export const authButtonClass =

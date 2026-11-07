@@ -33,14 +33,14 @@ const DatePickerPopout = ({
       <span className="text-primary-text">{label}</span>
       <div
         ref={triggerRef}
-        className={`h-10.5 ${
+        className={`h-9.5 ${
           open && "border-brand-primary hover:border-brand-primary"
         } flex items-center border border-border-color bg-text-input-color rounded-lg px-2 py-2 cursor-pointer hover:border-border-dark-color`}
         onClick={() => setOpen((prev) => !prev)}>
         <CalendarIcon className="w-5 h-5 text-primary-text mr-2" />
         <span
           className={`${
-            currentDate ? "text-primary-text" : "text-sm text-muted"
+            currentDate ? "text-sm text-primary-text" : "text-sm text-muted"
           }`}>
           {currentDate
             ? currentDate.toLocaleDateString("en-GB", {

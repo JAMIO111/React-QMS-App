@@ -227,7 +227,7 @@ const SampleEntry = ({ inspection, gauges, canOverride }) => {
                               placeholder="Reason to use it anyway"
                               value={r.override}
                               onChange={(e) => setRow(q.id, { override: e.target.value })}
-                              className="rounded-md border border-error-color/50 bg-text-input-color px-2 py-1 text-primary-text"
+                              className="rounded-md border border-error-color/50 bg-text-input-color px-2 py-1 text-sm text-primary-text"
                             />
                           ) : (
                             <span>Choose another gauge or ask a supervisor.</span>

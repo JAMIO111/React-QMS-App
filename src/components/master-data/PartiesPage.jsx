@@ -61,7 +61,7 @@ const PartyForm = ({ kind, party, onDone }) => {
           onChange={set("notes")}
           maxLength={2000}
           rows={3}
-          className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 font-normal text-primary-text focus:outline-none focus:border-brand-primary"
+          className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm font-normal text-primary-text focus:outline-none focus:border-brand-primary"
         />
       </label>
       {party && (

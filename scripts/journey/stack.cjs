@@ -170,7 +170,7 @@ async function startStack({ appUrl, log = console.log }) {
   await api.listen(PORTS.api, '127.0.0.1');
   const fake = await startFakeSupabase(admin, stripe, log);
   return {
-    admin, api, stripe, passwords: fake.passwords, ports: PORTS,
+    admin, api, stripe, passwords: fake.passwords, ports: PORTS, sign,
     stop: async () => { await new Promise((r) => fake.server.close(r)); await api.close(); await admin.end(); },
   };
 }

@@ -90,7 +90,7 @@ const StartJobDialog = ({ onClose }) => {
         {planned &&
           (planOk ? (
             <p role="status" className="rounded-lg border border-success-color/40 bg-success-color/10 p-3 text-sm text-primary-text">
-              Control plan {planned.plan.planCode} rev {planned.plan.revisionCode} is in force · part revision {planned.partRevision ?? "—"} · {planned.requirementCount} checks
+              Control plan {planned.plan.planCode} rev {planned.plan.revisionCode} is in force · part revision {planned.partRevision ?? "—"} · {planned.requirementCount} {planned.requirementCount === 1 ? "check" : "checks"}
             </p>
           ) : (
             <div role="alert" className="rounded-lg border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">

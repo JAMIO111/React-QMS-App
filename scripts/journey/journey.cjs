@@ -189,4 +189,109 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await see(accountLink.getByText(/Linked to Colin Colleague/));
   const linkedRow = (await stack.admin.query(`select count(*)::int n from public."Employees" e join auth.users u on u.id = e.auth_id where lower(u.email) = lower($1)`, [colleague.email])).rows[0];
   if (linkedRow.n !== 1) throw new Error('the sign-in was not linked');
+
+  await jobHub({ page, stack, APP, orgName, see, shot, step, log, owner });
 };
+
+/** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
+const apiAs = (stack, userId, email, organisationId) => async (method, path, body) => {
+  const res = await fetch(`http://127.0.0.1:${stack.ports.api}/api/v1${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${await stack.sign({ id: userId, email })}`, 'X-Organisation-Id': organisationId, 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`${method} ${path} -> ${res.status} ${text.slice(0, 300)}`);
+  return text ? JSON.parse(text) : null;
+};
+
+/** The operator job hub (docs/operator-hub-plan.md): start a job from the dashboard, fill in the work order, open each pane, record a check, complete. */
+async function jobHub({ page, stack, APP, orgName, see, shot, step, log, owner }) {
+  step('set-up for the operator hub: a part with an effective control plan, an alert, a non-conformance');
+  const { rows: [org] } = await stack.admin.query(`select o.id, (select id from public.sites where organisation_id = o.id limit 1) as site from public.organisations o where o.name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const { rows: [role] } = await stack.admin.query(`select id from public.roles where organisation_id = $1 and key = 'owner'`, [org.id]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  const family = await api('POST', '/part-families', { code: 'JRN', name: 'Journey rods' });
+  const part = await api('POST', '/parts', { partNumber: 'JRN-100', name: 'Journey rod', partFamilyId: family.id, initialRevision: { revision: 'A' } });
+  await api('POST', '/machines', { code: 'CNC-J1', name: 'Journey lathe', siteId: org.site });
+  const plan = await api('POST', '/control-plans', { planCode: 'CP-JRN', title: 'Journey rods', partFamilyId: family.id });
+  const planRev = plan.revisions[0].id;
+  const rev = await api('POST', `/control-plan-revisions/${planRev}/operations`, { operationCode: 'OP-10', name: 'Turning' });
+  await api('POST', `/control-plan-revisions/${planRev}/characteristics`, {
+    operationId: rev.operations[0].id, characteristicKey: 'VISUAL', name: 'No chatter marks', dataType: 'attribute', sampling: [{ triggerType: 'first_off', sampleSize: 1 }],
+  });
+  await api('PATCH', `/control-plan-revisions/${planRev}`, { changeReason: 'First release' });
+  await api('POST', `/part-revisions/${part.revisions[0].id}/release`);
+  await api('POST', `/control-plan-revisions/${planRev}/transitions`, { action: 'submit' });
+  await api('POST', `/control-plan-revisions/${planRev}/transitions`, { action: 'approve' });
+  const today = new Date().toISOString().slice(0, 10);
+  const alert = await api('POST', '/quality-alerts', { title: 'Burr on the bore', category: 'product', severity: 'high' });
+  await api('PATCH', `/quality-alerts/${alert.id}`, {
+    description: 'A sharp edge is being left inside the bore.', requiredAction: 'Deburr every part before it leaves the machine.', effectiveDate: today, acknowledgeBy: new Date(Date.now() + 86400_000).toISOString().slice(0, 10),
+    scope: { parts: [{ partId: part.id }], machines: [], operations: [], departments: [], targets: [{ roleId: role.id }] },
+  });
+  await api('POST', `/quality-alerts/${alert.id}/issue`);
+  const ncr = await api('POST', '/ncrs', { source: 'internal', title: 'Rod bore burr', partId: part.id, siteId: org.site });
+  await api('PATCH', `/ncrs/${ncr.id}`, { severity: 'minor', quantityAffected: 2, description: 'Burr found at final check' });
+  await api('POST', `/ncrs/${ncr.id}/transitions`, { to: 'open' });
+
+  step('the operator starts a job from the dashboard with a part, then its control plan, operation and machine');
+  await page.goto(`${APP}/Dashboard`);
+  await see(page.getByRole('region', { name: 'Jobs' }));
+  await shot(page, '21-dashboard-start-job-card');
+  await page.getByRole('button', { name: 'Start new job' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Start a new job' });
+  await dialog.getByRole('combobox', { name: /Part number/ }).click();
+  await dialog.getByRole('combobox', { name: /Part number/ }).fill('JRN-100');
+  await page.getByRole('option', { name: /JRN-100/ }).click();
+  await see(dialog.getByText(/Control plan CP-JRN rev A is in force/));
+  await dialog.getByRole('combobox', { name: /Machine/ }).click();
+  await page.getByRole('option', { name: /CNC-J1/ }).click();
+  await see(dialog.getByRole('button', { name: 'Start job' }));
+  await shot(page, '22-start-job-popup');
+  await dialog.getByRole('button', { name: 'Start job' }).click();
+  await page.waitForURL(/\/Jobs\//);
+  await see(page.getByRole('heading', { level: 1, name: 'JRN-100 · CNC-J1' }));
+  await shot(page, '23-job-hub');
+  const started = (await stack.admin.query(`select status, operation_code, machine_id is not null as has_machine, work_order from public.inspection_records where organisation_id = $1`, [org.id])).rows;
+  log(`jobs: ${JSON.stringify(started)}`);
+  if (started.length !== 1 || started[0].status !== 'in_progress' || started[0].operation_code !== 'OP-10' || !started[0].has_machine) throw new Error('the job was not started as expected');
+
+  step('the operator types the work order, and opens each pane');
+  await page.getByLabel('Work order').fill('WO-J-1001');
+  await page.getByLabel('Work order').press('Tab');
+  await page.waitForFunction(() => true);
+  for (let i = 0; i < 20; i++) {
+    const wo = (await stack.admin.query(`select work_order from public.inspection_records where organisation_id = $1`, [org.id])).rows[0].work_order;
+    if (wo === 'WO-J-1001') break;
+    if (i === 19) throw new Error('the work order was not saved');
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  await page.getByRole('button', { name: /^Alerts, 1/ }).click();
+  const pane = page.locator('#job-pane');
+  await see(pane.getByText('Burr on the bore'));
+  await see(pane.getByText('Deburr every part before it leaves the machine.'));
+  await page.waitForTimeout(500); // the pane slides in over 300 ms
+  await shot(page, '24-alerts-pane');
+  await page.getByRole('button', { name: /^NCs, 1/ }).click();
+  await see(pane.getByText(/Rod bore burr/));
+  await page.waitForTimeout(500); // the pane slides in over 300 ms
+  await shot(page, '25-ncs-pane');
+  await page.getByRole('button', { name: /^Revisions, / }).click();
+  await see(pane.getByText('New').first());
+  await page.waitForTimeout(500); // the pane slides in over 300 ms
+  await shot(page, '26-revisions-pane');
+  await pane.getByRole('button', { name: 'Close pane' }).click();
+
+  step('the operator records the check and completes the job');
+  await page.getByRole('radiogroup', { name: /No chatter marks reading/ }).getByRole('radio', { name: 'Pass' }).click();
+  await page.getByRole('button', { name: 'Save sample' }).click();
+  await see(page.getByRole('table', { name: 'Readings' }));
+  await page.getByRole('button', { name: 'Complete inspection' }).click();
+  await see(page.getByText('Pass').first());
+  await shot(page, '27-job-completed');
+  const done = (await stack.admin.query(`select status, result from public.inspection_records where organisation_id = $1`, [org.id])).rows[0];
+  log(`job ended: ${JSON.stringify(done)}`);
+  if (done.status !== 'completed' || done.result !== 'pass') throw new Error('the job did not complete with a pass');
+}

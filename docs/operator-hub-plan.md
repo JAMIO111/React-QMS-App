@@ -1,6 +1,6 @@
 # Operator job hub — plan
 
-**Status:** decisions agreed (§3), building · **Branch:** `Dev` · **Builds on:** in-process inspection (PC4/PC5), SPC alerts (PC11), quality alerts (DOC1–DOC3), NC register, master data
+**Status:** built (OH1–OH5; exit report `docs/operator-hub-exit-report.md`) · **Branch:** `Dev` · **Builds on:** in-process inspection (PC4/PC5), SPC alerts (PC11), quality alerts (DOC1–DOC3), NC register, master data
 
 ## 1. What it is
 

@@ -70,6 +70,10 @@ BEGIN
     SELECT a, id, 'scrap', 'GBP', 10 FROM public.nonconformances WHERE organisation_id = a AND reference = 'SW-NCR-1';
   INSERT INTO public.ncr_attachments (organisation_id, nonconformance_id, storage_path, file_name, size_bytes)
     SELECT a, id, a || '/ncr/' || id || '/sweep.txt', 'sweep.txt', 5 FROM public.nonconformances WHERE organisation_id = a AND reference = 'SW-NCR-1';
+  INSERT INTO public.ncr_containment_actions (organisation_id, nonconformance_id, kind, description)
+    SELECT a, id, 'quarantine', 'Sweep containment' FROM public.nonconformances WHERE organisation_id = a AND reference = 'SW-NCR-1';
+  INSERT INTO public.ncr_dispositions (organisation_id, nonconformance_id, decision, quantity, instructions)
+    SELECT a, id, 'scrap', 1, 'Sweep disposition' FROM public.nonconformances WHERE organisation_id = a AND reference = 'SW-NCR-1';
   -- Calibration.
   INSERT INTO public.gauge_types (organisation_id, name) VALUES (a, 'Sweep caliper');
   INSERT INTO public.gauge_type_characteristics (organisation_id, gauge_type_id, name, nominal, tolerance_minus, tolerance_plus, unit_code)

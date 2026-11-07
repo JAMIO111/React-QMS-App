@@ -141,6 +141,8 @@ BEGIN
   PERFORM pg_temp.login('3f000000-0000-0000-0000-000000000301');
   UPDATE public.nonconformances SET stage = 'open' WHERE id = nc;
   UPDATE public.nonconformances SET stage = 'open' WHERE id = nc2;
+  PERFORM pg_temp.settle_ncr(nc);
+  PERFORM pg_temp.settle_ncr(nc2);
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET stage = 'closed' WHERE id = %L$q$, nc), 'a running 8D blocks closing the NC');
   PERFORM app.cancel_capa(c, 'Raised in error');
   PERFORM pg_temp.assert_ok(format($q$UPDATE public.nonconformances SET stage = 'closed' WHERE id = %L$q$, nc), 'a cancelled 8D no longer blocks closing');

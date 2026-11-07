@@ -64,3 +64,22 @@ BEGIN
   GET DIAGNOSTICS n = ROW_COUNT;
   RETURN n;
 END $$;
+
+-- What an NC needs before it can reach Dispositioned and beyond: containment resolved (not needed) and approved dispositions over the whole quantity affected.
+-- Run as a person who may edit and approve (the test owner).
+CREATE FUNCTION pg_temp.settle_ncr(p_ncr uuid) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE
+  v_affected numeric; v_disposed numeric; v_id uuid;
+BEGIN
+  SELECT quantity_affected INTO v_affected FROM public.nonconformances WHERE id = p_ncr;
+  UPDATE public.nonconformances SET containment_not_needed_reason = 'Not needed (test)' WHERE id = p_ncr AND containment_not_needed_reason IS NULL;
+  SELECT coalesce(sum(quantity), 0) INTO v_disposed FROM public.ncr_dispositions WHERE nonconformance_id = p_ncr AND status IN ('proposed', 'approved');
+  IF v_disposed < v_affected THEN
+    INSERT INTO public.ncr_dispositions (organisation_id, nonconformance_id, decision, quantity, instructions)
+    SELECT organisation_id, id, 'scrap', v_affected - v_disposed, 'Scrap the affected items (test)' FROM public.nonconformances WHERE id = p_ncr RETURNING id INTO v_id;
+    PERFORM app.approve_ncr_disposition(v_id);
+  END IF;
+  FOR v_id IN SELECT id FROM public.ncr_dispositions WHERE nonconformance_id = p_ncr AND status = 'proposed' LOOP
+    PERFORM app.approve_ncr_disposition(v_id);
+  END LOOP;
+END $$;

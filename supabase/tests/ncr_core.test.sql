@@ -80,6 +80,7 @@ BEGIN
   PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.nonconformances (organisation_id, source, title, stage) VALUES (%L, 'internal', 'Straight to closed', 'closed')$q$, org), 'cannot create closed');
 
   -- Stage machine.
+  PERFORM pg_temp.settle_ncr(ncr);
   UPDATE public.nonconformances SET stage = 'investigating' WHERE id = ncr;
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET stage = 'open' WHERE id = %L$q$, ncr), 'cannot move backwards');
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET stage = 'draft' WHERE id = %L$q$, ncr), 'cannot return to draft');
@@ -92,7 +93,7 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT stage || '|' || (closed_at IS NULL) FROM public.nonconformances WHERE id = ncr), 'open|true', 'reopened and close stamp cleared');
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET stage = 'cancelled' WHERE id = %L$q$, cncr), 'cancelling needs a reason');
   UPDATE public.nonconformances SET stage = 'cancelled', stage_reason = 'Duplicate of an earlier complaint' WHERE id = cncr;
-  PERFORM pg_temp.assert_eq((SELECT array_agg(event_type ORDER BY id)::text FROM public.outbox_events WHERE entity_id = ncr),
+  PERFORM pg_temp.assert_eq((SELECT array_agg(event_type ORDER BY id)::text FROM public.outbox_events WHERE entity_id = ncr AND event_type <> 'ncr.disposition.approved'),
     '{ncr.created,ncr.stage_changed,ncr.stage_changed,ncr.stage_changed,ncr.closed,ncr.stage_changed}', 'stage events written');
   PERFORM pg_temp.assert_fails(format($q$DELETE FROM public.nonconformances WHERE id = %L$q$, ncr), 'NCRs are never hard-deleted');
 

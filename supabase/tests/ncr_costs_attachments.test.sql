@@ -110,6 +110,7 @@ BEGIN
 
   -- Closed NCRs lock their costs and files.
   PERFORM pg_temp.login('21000000-0000-0000-0000-000000000101');
+  PERFORM pg_temp.settle_ncr(ncr);
   UPDATE public.nonconformances SET stage = 'closed' WHERE id = ncr;
   PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.ncr_costs (organisation_id, nonconformance_id, cost_type, currency, amount) VALUES (%L, %L, 'scrap', 'GBP', 1)$q$, org, ncr), 'no new costs on a closed NCR');
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.ncr_costs SET amount = 1 WHERE nonconformance_id = %L$q$, ncr), 'costs of a closed NCR are locked');

@@ -57,7 +57,7 @@ const Navbar = () => {
             isMenuExpanded ? "flex-row mx-3" : "flex-col gap-3"
           }`}>
           {/* The organisation's own logo; Fortress QMS's mark until one is uploaded. */}
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[10px] border border-border-color bg-white">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[10px] border border-border-color bg-white">
             <img
               className="h-full w-full object-contain"
               src={logoUrl || FortressMark}
@@ -67,7 +67,7 @@ const Navbar = () => {
           {isMenuExpanded && (
             <div className="ml-3 flex min-w-0 flex-1 flex-col justify-between items-start animate-in fade-in duration-300 motion-reduce:animate-none">
               <h1
-                className="w-full truncate text-sm font-semibold text-primary-text"
+                className="w-full truncate text-xs font-semibold text-primary-text"
                 title={orgName}>
                 {orgName || "Fortress QMS"}
               </h1>

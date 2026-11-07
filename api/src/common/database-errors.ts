@@ -102,6 +102,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'capa_rule', pg.message ?? 'That change is not allowed for this 8D');
     case 'QM014': // onboarding and set-up rules (messages are written for users)
       return new ApiError(409, 'onboarding_rule', pg.message ?? 'That set-up change is not allowed');
+    case 'QM015': // invitation rules: expired, sent too often, no seat to give (messages are written for users)
+      return new ApiError(409, 'invitation_rule', pg.message ?? 'That invitation change is not allowed');
     case 'QM010': // notification type the caller cannot choose
       return new ApiError(404, 'notification_type_not_found', 'That notification type does not exist');
     case 'P0002': // no_data_found raised by app functions

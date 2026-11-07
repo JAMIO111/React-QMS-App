@@ -2,12 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
+import { apiErrorFromDatabase } from '../common/database-errors';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { InvitationMailer } from './invitation-mailer.service';
 import {
   AddDepartmentBody,
   AssignRoleBody,
+  BulkInviteBody,
   Invitation,
   InviteBody,
   Member,
@@ -33,6 +35,7 @@ interface MemberRow {
   joined_at: Date | null;
   roles: z.infer<typeof RoleAssignment>[];
   departments: Member['departments'];
+  invite: Member['invite'];
 }
 
 const toMember = (r: MemberRow): Member => ({
@@ -47,6 +50,7 @@ const toMember = (r: MemberRow): Member => ({
   joinedAt: r.joined_at ? new Date(r.joined_at).toISOString() : null,
   roles: r.roles,
   departments: r.departments ?? [],
+  invite: r.invite ?? null,
 });
 
 /**
@@ -104,12 +108,68 @@ export class MembersService {
         insert into public.user_role_assignments (organisation_id, membership_id, role_id, site_id, department_id)
         values (${ctx.organisationId}::uuid, ${membershipId}::uuid, ${body.roleId}::uuid,
                 ${body.siteId ?? null}::uuid, ${body.departmentId ?? null}::uuid)`);
+      // Message, expiry, send counters and the reserved seat (QM015 / QM009 roll the whole invitation back).
+      await db.execute(sql`select app.set_invitation_details(${membershipId}::uuid, ${body.message ?? null}, ${body.packageSlug ?? null})`);
       const org = await db.execute<{ name: string }>(sql`select name from public.organisations where id = ${ctx.organisationId}::uuid`);
       return { member: await this.one(db, ctx.organisationId!, membershipId), organisationName: org.rows[0].name };
     });
     // Email after the invitation is committed; a failed email never loses the invitation.
     const email = await this.mailer.send(body.email, organisationName);
     return { member, email };
+  }
+
+  /**
+   * Up to 50 invitations, each independent: one that cannot be sent (already a member, no free seat, a missing department...) never stops the rest.
+   * The answer has one result per row, in the order sent.
+   */
+  async inviteMany(ctx: RequestContext, body: BulkInviteBody) {
+    const results: {
+      email: string;
+      ok: boolean;
+      member?: Member;
+      emailOutcome?: Awaited<ReturnType<InvitationMailer['send']>>;
+      error?: { code: string; message: string };
+    }[] = [];
+    const seen = new Set<string>();
+    for (const row of body.invitations) {
+      if (seen.has(row.email)) {
+        results.push({ email: row.email, ok: false, error: { code: 'duplicate_in_request', message: 'This address appears twice in the list' } });
+        continue;
+      }
+      seen.add(row.email);
+      try {
+        const { member, email } = await this.invite(ctx, row);
+        results.push({ email: row.email, ok: true, member, emailOutcome: email });
+      } catch (error) {
+        const api = error instanceof ApiError ? error : apiErrorFromDatabase(error);
+        if (!api) throw error;
+        const response = api.getResponse();
+        results.push({ email: row.email, ok: false, error: { code: api.code, message: typeof response === 'string' ? response : api.message } });
+      }
+    }
+    const invited = results.filter((r) => r.ok).length;
+    return { results, invited, failed: results.length - invited };
+  }
+
+  /** Sends a pending invitation again (not within a minute, at most ten times) and gives it another 14 days. */
+  async resendInvitation(ctx: RequestContext, membershipId: string) {
+    const { member, organisationName } = await this.database.asUser(ctx, async (db) => {
+      await this.one(db, ctx.organisationId!, membershipId); // 404 for anything outside this organisation
+      await db.execute(sql`select app.resend_invitation(${membershipId}::uuid)`);
+      const org = await db.execute<{ name: string }>(sql`select name from public.organisations where id = ${ctx.organisationId}::uuid`);
+      return { member: await this.one(db, ctx.organisationId!, membershipId), organisationName: org.rows[0].name };
+    });
+    const email = member.email ? await this.mailer.send(member.email, organisationName) : ({ sent: false, reason: 'send_failed' } as const);
+    return { member, email };
+  }
+
+  /** Withdraws a pending invitation and frees the seat reserved for it. */
+  revokeInvitation(ctx: RequestContext, membershipId: string): Promise<Member> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.one(db, ctx.organisationId!, membershipId);
+      await db.execute(sql`select app.revoke_invitation(${membershipId}::uuid)`);
+      return this.one(db, ctx.organisationId!, membershipId);
+    });
   }
 
   updateStatus(ctx: RequestContext, membershipId: string, body: UpdateMemberBody): Promise<Member> {
@@ -121,6 +181,11 @@ export class MembersService {
       if (current.status === body.status) return current;
       if (!TRANSITIONS[current.status].includes(body.status)) {
         throw new ApiError(409, 'invalid_transition', `A ${current.status} membership cannot become ${body.status}`);
+      }
+      if (current.status === 'invited') {
+        // Revoking an invitation also frees the seat reserved for it.
+        await db.execute(sql`select app.revoke_invitation(${membershipId}::uuid)`);
+        return this.one(db, ctx.organisationId!, membershipId);
       }
       const updated = await db.execute(sql`
         update public.organisation_users set status = ${body.status}
@@ -228,15 +293,24 @@ export class MembersService {
 
   myInvitations(ctx: RequestContext): Promise<z.infer<typeof Invitation>[]> {
     return this.database.asUser(ctx, async (db) => {
-      const res = await db.execute<{ membership_id: string; organisation_id: string; organisation_name: string; invited_at: Date | null; invited_by_name: string | null }>(
-        sql`select * from app.my_invitations()`,
-      );
+      const res = await db.execute<{
+        membership_id: string; organisation_id: string; organisation_name: string; invited_at: Date | null; invited_by_name: string | null;
+        message: string | null; expires_at: Date | null; expired: boolean; roles: { key: string; name: string }[]; departments: string[];
+        package_slug: string | null; package_name: string | null;
+      }>(sql`select * from app.my_invitations()`);
       return res.rows.map((r) => ({
         membershipId: r.membership_id,
         organisationId: r.organisation_id,
         organisationName: r.organisation_name,
         invitedAt: r.invited_at ? new Date(r.invited_at).toISOString() : null,
         invitedByName: r.invited_by_name,
+        message: r.message,
+        expiresAt: r.expires_at ? new Date(r.expires_at).toISOString() : null,
+        expired: r.expired,
+        roles: r.roles,
+        departments: r.departments,
+        packageSlug: r.package_slug,
+        packageName: r.package_name,
       }));
     });
   }

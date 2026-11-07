@@ -39,5 +39,29 @@ describe('InvitationMailer', () => {
         reason: 'send_failed',
       });
     });
+
+    it('sends an existing account a sign-in link that lands on /accept-invite', async () => {
+      const fetchImpl = jest.fn().mockResolvedValueOnce(new Response('{}', { status: 422 })).mockResolvedValueOnce(new Response('{}', { status: 200 }));
+      await expect(mailer.send('a@example.test', 'Acme', fetchImpl)).resolves.toEqual({ sent: true, kind: 'sign_in_link' });
+      const [url, init] = fetchImpl.mock.calls[1];
+      expect(String(url)).toBe('https://p.supabase.co/auth/v1/otp?redirect_to=https%3A%2F%2Fapp.example%2Faccept-invite');
+      expect(init.headers).toMatchObject({ apikey: 'service-role-key-value' });
+      expect(JSON.parse(init.body)).toEqual({ email: 'a@example.test', create_user: false });
+    });
+
+    it('uses APP_BASE_URL for the landing page when it is set', () => {
+      const withBase = new InvitationMailer(loadEnv({ ...base, SUPABASE_URL: 'https://p.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'service-role-key-value', APP_BASE_URL: 'https://web.example/' }));
+      expect(withBase.acceptUrl()).toBe('https://web.example/accept-invite');
+      expect(new InvitationMailer(loadEnv(base)).acceptUrl()).toBeUndefined();
+    });
+
+    it('says the account exists when there is nowhere to send the link or the link fails', async () => {
+      const noWhere = new InvitationMailer(loadEnv({ ...base, SUPABASE_URL: 'https://p.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'service-role-key-value' }));
+      const only422 = jest.fn().mockResolvedValue(new Response('{}', { status: 422 }));
+      await expect(noWhere.send('a@example.test', 'Acme', only422)).resolves.toEqual({ sent: false, reason: 'existing_account' });
+      expect(only422).toHaveBeenCalledTimes(1);
+      const linkFails = jest.fn().mockResolvedValueOnce(new Response('{}', { status: 422 })).mockRejectedValueOnce(new Error('network'));
+      await expect(mailer.send('a@example.test', 'Acme', linkFails)).resolves.toEqual({ sent: false, reason: 'existing_account' });
+    });
   });
 });

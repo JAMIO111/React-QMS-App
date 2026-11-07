@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { AddDepartmentBody, AssignRoleBody, Invitation, InviteBody, InviteResponse, Member, Permission, Role, UpdateDepartmentMembershipBody, UpdateMemberBody } from './members.schemas';
+import { AddDepartmentBody, AssignRoleBody, BulkInviteBody, BulkInviteResponse, Invitation, InviteBody, InviteResponse, Member, Permission, Role, UpdateDepartmentMembershipBody, UpdateMemberBody } from './members.schemas';
 import { MembersService } from './members.service';
 
 @ApiTags('members')
@@ -30,6 +30,34 @@ export class MembersController {
   })
   invite(@Ctx() ctx: RequestContext, @Body() body: unknown) {
     return this.members.invite(ctx, parse(InviteBody, body));
+  }
+
+  @Post('members/invitations/bulk')
+  @HttpCode(200)
+  @OrganisationScoped('members.manage')
+  @ApiBody({ schema: openApiSchema(BulkInviteBody) })
+  @ApiOkResponse({
+    description: 'Up to 50 invitations, each independent. One result per row (in order): invited with the email outcome, or the reason it was not.',
+    schema: openApiSchema(BulkInviteResponse),
+  })
+  inviteMany(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.members.inviteMany(ctx, parse(BulkInviteBody, body));
+  }
+
+  @Post('members/:id/invitation/resend')
+  @HttpCode(200)
+  @OrganisationScoped('members.manage')
+  @ApiOkResponse({ description: 'Sends a pending invitation again (not within a minute, at most 10 times) and extends it to 14 days from now. 409 invitation_rule otherwise.', schema: openApiSchema(InviteResponse) })
+  resend(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.members.resendInvitation(ctx, parse(Uuid, id));
+  }
+
+  @Post('members/:id/invitation/revoke')
+  @HttpCode(200)
+  @OrganisationScoped('members.manage')
+  @ApiOkResponse({ description: 'Withdraws a pending invitation and frees the seat reserved for it.', schema: openApiSchema(Member) })
+  revoke(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.members.revokeInvitation(ctx, parse(Uuid, id));
   }
 
   @Patch('members/:id')

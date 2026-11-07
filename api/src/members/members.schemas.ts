@@ -26,6 +26,18 @@ export const DepartmentMembership = z.object({
 /** Roles that cover the whole organisation: a person who only holds these needs no department (docs/documentation-plan.md D7). */
 export const ORGANISATION_WIDE_ROLE_KEYS = ['owner', 'admin', 'quality_manager'];
 
+export const InviteDetail = z.object({
+  message: z.string().nullable(),
+  expiresAt: z.string().nullable(),
+  lastSentAt: z.string().nullable(),
+  sendCount: z.number().int(),
+  expired: z.boolean(),
+  /** The package whose seat is reserved for them, if one was chosen. */
+  packageSlug: z.string().nullable(),
+  packageName: z.string().nullable(),
+});
+export type InviteDetail = z.infer<typeof InviteDetail>;
+
 export const Member = z.object({
   membershipId: z.string().uuid(),
   userId: z.string().uuid().nullable(),
@@ -39,6 +51,8 @@ export const Member = z.object({
   roles: z.array(RoleAssignment),
   /** Departments the person belongs to now (primary first). */
   departments: z.array(DepartmentMembership),
+  /** Only for a pending invitation. */
+  invite: InviteDetail.nullable(),
 });
 export type Member = z.infer<typeof Member>;
 
@@ -53,13 +67,35 @@ export const InviteBody = z
     departmentIds: z.array(z.string().uuid()).max(20).default([]),
     /** Which of them is primary (default: the first). */
     primaryDepartmentId: z.string().uuid().optional(),
+    /** A personal note shown to the invitee (max 500 characters). */
+    message: z.string().trim().max(500).optional(),
+    /** The package (seat) to reserve for them, e.g. contributor. Needs subscription.seats and a free seat. */
+    packageSlug: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/).optional(),
   })
   .strict();
 export type InviteBody = z.infer<typeof InviteBody>;
 
+export const BulkInviteBody = z.object({ invitations: z.array(InviteBody).min(1).max(50) }).strict();
+export type BulkInviteBody = z.infer<typeof BulkInviteBody>;
+
+const EmailOutcome = z.object({ sent: z.boolean(), reason: z.string().optional(), kind: z.string().optional() });
+export const BulkInviteResponse = z.object({
+  results: z.array(
+    z.object({
+      email: z.string(),
+      ok: z.boolean(),
+      member: z.lazy(() => Member).optional(),
+      emailOutcome: EmailOutcome.optional(),
+      error: z.object({ code: z.string(), message: z.string() }).optional(),
+    }),
+  ),
+  invited: z.number().int(),
+  failed: z.number().int(),
+});
+
 export const InviteResponse = z.object({
   member: Member,
-  email: z.object({ sent: z.boolean(), reason: z.string().optional() }),
+  email: EmailOutcome,
 });
 
 export const UpdateMemberBody = z.object({ status: z.enum(['active', 'suspended', 'removed']) }).strict();
@@ -100,4 +136,11 @@ export const Invitation = z.object({
   organisationName: z.string(),
   invitedAt: z.string().nullable(),
   invitedByName: z.string().nullable(),
+  message: z.string().nullable(),
+  expiresAt: z.string().nullable(),
+  expired: z.boolean(),
+  roles: z.array(z.object({ key: z.string(), name: z.string() })),
+  departments: z.array(z.string()),
+  packageSlug: z.string().nullable(),
+  packageName: z.string().nullable(),
 });

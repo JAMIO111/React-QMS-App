@@ -109,6 +109,7 @@ export class InspectionService {
       if (q.partId) where.push(sql`r.part_id = ${q.partId}::uuid`);
       if (q.siteId) where.push(sql`r.site_id = ${q.siteId}::uuid`);
       if (q.machineId) where.push(sql`r.machine_id = ${q.machineId}::uuid`);
+      if (q.mine) where.push(sql`r.created_by = ${ctx.user.id}::uuid`);
       if (q.from) where.push(sql`r.started_at >= ${q.from}::date`);
       if (q.to) where.push(sql`r.started_at < (${q.to}::date + 1)`);
       if (q.q) {

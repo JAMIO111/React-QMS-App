@@ -132,6 +132,9 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/inspections/{id}/raise-ncr': { title: 'Hijacked' },
     'POST /api/v1/inspections/{id}/add-to-ncr': { ncrId: a.ncr, measurementIds: [a.measurement] },
     'POST /api/v1/inspection-measurements/{id}/acknowledge': { note: 'Hijacked' },
+    'PATCH /api/v1/jobs/{id}': { workOrder: 'HIJACK' },
+    'GET /api/v1/jobs/{id}/recent-ncrs': undefined,
+    'GET /api/v1/jobs/{id}/revisions': undefined,
     'POST /api/v1/spc/alerts/{id}/acknowledge': { note: 'Hijacked' },
     'GET /api/v1/quality-alerts/{id}': undefined,
     'PATCH /api/v1/quality-alerts/{id}': { title: 'Hijacked' },
@@ -281,6 +284,9 @@ const hasSample = (op: Op) =>
     'POST /api/v1/inspections/{id}/raise-ncr',
     'POST /api/v1/inspections/{id}/add-to-ncr',
     'POST /api/v1/inspection-measurements/{id}/acknowledge',
+    'PATCH /api/v1/jobs/{id}',
+    'GET /api/v1/jobs/{id}/recent-ncrs',
+    'GET /api/v1/jobs/{id}/revisions',
     'POST /api/v1/spc/alerts/{id}/acknowledge',
     'GET /api/v1/quality-alerts/{id}',
     'PATCH /api/v1/quality-alerts/{id}',
@@ -368,6 +374,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/calibration-attachments/')) return a.calibrationAttachment;
   if (path.startsWith('/api/v1/part-customers/')) return a.partCustomer;
   if (path.startsWith('/api/v1/inspections/')) return a.inspection;
+  if (path.startsWith('/api/v1/jobs/')) return a.inspection;
   if (path.startsWith('/api/v1/spc/alerts/')) return a.alert;
   if (path.startsWith('/api/v1/quality-alerts/')) return a.qualityAlert;
   if (path.startsWith('/api/v1/quality-alert-attachments/')) return a.qualityAlertAttachment;
@@ -485,6 +492,7 @@ beforeAll(async () => {
   b.org = ids.orgB;
   b.viewerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'viewer'`, [ids.orgB])).id;
   b.part = (await one(`insert into public.parts (organisation_id, part_number, name) values ($1, 'B-PART', 'Beta part') returning id`, [ids.orgB])).id;
+  b.machine = (await one(`insert into public.machines (organisation_id, code, name) values ($1, 'B-M1', 'Beta machine') returning id`, [ids.orgB])).id;
   await admin.query(`insert into public.departments (organisation_id, site_id, code, name) values ($1, $2, 'QA', 'Quality B')`, [ids.orgB, ids.siteB]);
 });
 
@@ -605,6 +613,7 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/calibration-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/control-plan-resolution': `?partId=${b.part}`,
+      '/api/v1/jobs/preview': `?machineId=${b.machine}&partId=${b.part}`,
       '/api/v1/subscription/check': '?module=inspections',
       '/api/v1/spc/characteristics': `?partId=${b.part}`,
       '/api/v1/process-control-dashboard': '?from=2025-01-01&to=2027-12-31',

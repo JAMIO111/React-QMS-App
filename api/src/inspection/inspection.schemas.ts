@@ -42,6 +42,8 @@ export const InspectionListQuery = z.object({
   partId: z.string().uuid().optional(),
   siteId: z.string().uuid().optional(),
   machineId: z.string().uuid().optional(),
+  /** Only inspections the caller started. */
+  mine: z.enum(['true', 'false']).optional().transform((v) => v === 'true'),
   /** Started on or after / before (YYYY-MM-DD, UTC days). */
   from: isoDay.optional(),
   to: isoDay.optional(),

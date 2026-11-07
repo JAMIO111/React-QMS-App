@@ -11,7 +11,7 @@ export const API_PREFIX = 'api/v1';
 
 /** Builds the configured application (used by the e2e tests; main.ts does the same steps). */
 export async function createApp(env: Env): Promise<INestApplication> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule.forRoot(env), { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule.forRoot(env), { bufferLogs: true, rawBody: true });
   return configureApp(app, env);
 }
 

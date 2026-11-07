@@ -2,7 +2,7 @@
   "name": "@qms/api",
   "version": "0.1.0",
   "private": true,
-  "description": "QMS platform API (NestJS). See docs/phase-1-plan.md \u00a74.",
+  "description": "QMS platform API (NestJS). See docs/phase-1-plan.md §4.",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "start": "node --env-file-if-exists=.env dist/main.js",
@@ -24,6 +24,7 @@
     "pino-http": "10.5.0",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
+    "stripe": "^23.1.0",
     "zod": "3.25.76",
     "zod-to-json-schema": "3.25.2"
   },

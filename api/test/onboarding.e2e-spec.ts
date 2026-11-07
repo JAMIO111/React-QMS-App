@@ -139,7 +139,16 @@ describe('the billing gate', () => {
 
   it('opens when seats are bought and the owner takes a Controller seat', async () => {
     const h = await asUser(ids.outsider, ctx.gated);
-    await api().put('/api/v1/subscription/seats').set(h).send({ planSlug: 'controller', quantity: 1 }).expect(200);
+    // An organisation that must have a subscription cannot give itself seats by hand: they come from Stripe (here written as the payment provider's sync would).
+    const refused = await api().put('/api/v1/subscription/seats').set(h).send({ planSlug: 'controller', quantity: 1 }).expect(409);
+    expect(refused.body.error.code).toBe('subscription_rule');
+    const { rows: sub } = await admin.query(`insert into public.organisation_subscriptions (organisation_id, current_period_end) values ($1, now() + interval '1 month') returning id`, [ctx.gated]);
+    await admin.query(
+      `insert into public.organisation_subscription_items (organisation_id, organisation_subscription_id, subscription_plan_id, subscription_price_id, quantity, unit_amount_snapshot, currency)
+       select $1, $2, p.id, pr.id, 1, pr.unit_amount, 'GBP' from public.subscription_plans p
+         join public.subscription_prices pr on pr.subscription_plan_id = p.id and pr.billing_interval = 'month' and pr.currency = 'GBP' and pr.active and pr.effective_to is null where p.slug = 'controller'`,
+      [ctx.gated, sub[0].id],
+    );
     expect((await me(ids.outsider)).memberships.find((x: { organisation: { id: string } }) => x.organisation.id === ctx.gated).accessState).toBe('lapsed'); // a subscription, but no seat for the owner yet
     const membership = (await me(ids.outsider)).memberships.find((x: { organisation: { id: string } }) => x.organisation.id === ctx.gated).membershipId;
     await api().put(`/api/v1/subscription/assignments/${membership}`).set(h).send({ planSlug: 'controller' }).expect(200);

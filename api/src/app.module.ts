@@ -49,7 +49,9 @@ import {
   PartFamiliesController,
   SpecValuesController,
 } from './process-control/process-control.controller';
-import { BillingController } from './billing/billing.controller';
+import { BillingController, StripeWebhookController } from './billing/billing.controller';
+import { StripeBillingService } from './billing/stripe-billing.service';
+import { StripeGateway, StripeSdkGateway } from './billing/stripe.gateway';
 import { BillingService } from './billing/billing.service';
 import { NotificationsController } from './notifications/notifications.controller';
 import { NotificationsService } from './notifications/notifications.service';
@@ -131,6 +133,7 @@ export class AppModule implements NestModule {
         ControlPlanContentController,
         CharacteristicTemplatesController,
         BillingController,
+        StripeWebhookController,
         NotificationsController,
         InspectionsController,
         InspectionMeasurementsController,
@@ -167,6 +170,8 @@ export class AppModule implements NestModule {
         ControlPlanContentService,
         CharacteristicTemplatesService,
         BillingService,
+        StripeBillingService,
+        { provide: StripeGateway, useClass: StripeSdkGateway },
         NotificationsService,
         InspectionService,
         SpcService,

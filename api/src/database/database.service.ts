@@ -52,6 +52,26 @@ export class DatabaseService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * For system work with no signed-in person (Stripe webhook, Checkout confirmation): one transaction on the API's own login, which can run only the
+   * app.stripe_* functions (granted to it by name; it has no table privileges). Callers must have verified who is asking (signature, or the person's token).
+   */
+  async asApi<T>(work: (client: PoolClient) => Promise<T>, correlationId = ''): Promise<T> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`select set_config('app.source', 'stripe', true), set_config('app.correlation_id', $1, true)`, [correlationId]);
+      const result = await work(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async onModuleDestroy(): Promise<void> {
     await this.pool.end();
   }

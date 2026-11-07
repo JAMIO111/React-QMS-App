@@ -17,6 +17,11 @@ const EnvSchema = z
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
     /** Where invitation emails send people (the frontend's sign-in page). */
     INVITE_REDIRECT_URL: z.string().url().optional(),
+    /** Stripe (billing). Optional: without them billing routes answer 503 billing_unavailable and nothing else changes. Server-side only. */
+    STRIPE_SECRET_KEY: z.string().regex(/^(sk|rk)_(test|live)_[A-Za-z0-9]{10,}$/, 'must be a Stripe secret or restricted key').optional(),
+    STRIPE_WEBHOOK_SECRET: z.string().regex(/^whsec_[A-Za-z0-9]{10,}$/, 'must be a Stripe webhook signing secret').optional(),
+    /** The web app's address, for Stripe's return links (Checkout success/cancel, Customer Portal). */
+    APP_BASE_URL: z.string().url().optional(),
     JWT_AUDIENCE: z.string().default('authenticated'),
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),

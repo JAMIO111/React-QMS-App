@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ApiError } from '../common/api-error';
 import { iso, num, Row } from '../calibration/calibration.service';
 import type { RequestContext } from '../common/request-context';
+import { ENV, Env, corsOrigins } from '../config/env';
 import { DatabaseService } from '../database/database.service';
+import { StripeGateway } from './stripe.gateway';
 import {
   AccessLevel,
   AssignPackageBody,
@@ -26,7 +28,11 @@ const RANK: Record<AccessLevel, number> = { none: 0, view: 1, operational: 2, fu
  */
 @Injectable()
 export class BillingService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly gateway: StripeGateway,
+    @Inject(ENV) private readonly env: Env,
+  ) {}
 
   catalogue(ctx: RequestContext): Promise<PlanCatalogue> {
     return this.database.asUser(ctx, async (db) => {
@@ -88,7 +94,9 @@ export class BillingService {
     return this.database.asUser(ctx, async (db) => {
       const org = ctx.organisationId;
       const sub = (await db.execute<Row>(sql`
-        select s.*, o.entitlements_enforced, o.grace_period_days, o.vat_rate
+        select s.*, o.entitlements_enforced, o.grace_period_days, o.vat_rate,
+               (select g.billing_required from public.organisations g where g.id = o.organisation_id) as billing_required,
+               exists (select 1 from public.subscription_prices pr where pr.provider_price_id is not null and pr.active) as prices_ready
         from public.organisation_settings o left join public.organisation_subscriptions s on s.organisation_id = o.organisation_id
         where o.organisation_id = ${org}::uuid`)).rows[0];
       const items = (await db.execute<Row>(sql`
@@ -118,10 +126,13 @@ export class BillingService {
               currentPeriodEnd: iso(sub.current_period_end),
               cancelAtPeriodEnd: sub.cancel_at_period_end as boolean,
               pastDueSince: iso(sub.past_due_since),
+              trialEnd: iso(sub.trial_end),
               entitlementsEnforced: sub.entitlements_enforced as boolean,
               gracePeriodDays: Number(sub.grace_period_days),
             }
           : null,
+        checkoutAvailable: this.gateway.enabled && !!(sub?.prices_ready) && !!(this.env.APP_BASE_URL ?? corsOrigins(this.env).find((o) => typeof o === 'string')),
+        providerManaged: !!sub?.billing_required || sub?.billing_provider === 'stripe',
         items: rows,
         totals: {
           seatsPurchased: rows.reduce((t, r) => t + r.purchased, 0),

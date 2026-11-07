@@ -8,6 +8,41 @@ export const PlanSlug = z.string().regex(/^[a-z][a-z0-9_]{1,39}$/);
 export const SetSeatsBody = z.object({ planSlug: PlanSlug, quantity: z.number().int().min(0).max(10000) }).strict();
 export type SetSeatsBody = z.infer<typeof SetSeatsBody>;
 
+const SeatQuantity = z.number().int().min(0).max(10000);
+
+/** Seats per package, by package slug. */
+export const SeatCounts = z.record(PlanSlug, SeatQuantity).refine((v) => Object.keys(v).length > 0, 'Choose at least one package');
+export type SeatCounts = z.infer<typeof SeatCounts>;
+
+export const CheckoutBody = z
+  .object({
+    interval: z.enum(['month', 'year']),
+    seats: SeatCounts.refine((v) => (v.controller ?? 0) >= 1, 'At least one Controller seat is needed: an owner must hold one'),
+    returnTo: z.enum(['setup', 'settings']).default('setup'),
+  })
+  .strict();
+export type CheckoutBody = z.infer<typeof CheckoutBody>;
+
+export const ConfirmCheckoutBody = z.object({ sessionId: z.string().regex(/^cs_[A-Za-z0-9_]{4,200}$/) }).strict();
+export type ConfirmCheckoutBody = z.infer<typeof ConfirmCheckoutBody>;
+
+export const SeatChangeBody = z.object({ seats: SeatCounts }).strict();
+export type SeatChangeBody = z.infer<typeof SeatChangeBody>;
+
+export const CheckoutResponse = z.object({ url: z.string().url(), sessionId: z.string() });
+export const PortalResponse = z.object({ url: z.string().url() });
+
+export const SeatPreviewResponse = z.object({
+  currency: z.string(),
+  subtotal: z.number().int(),
+  tax: z.number().int(),
+  total: z.number().int(),
+  amountDue: z.number().int(),
+  lines: z.array(z.object({ description: z.string(), amount: z.number().int() })),
+  changes: z.array(z.object({ planSlug: z.string(), from: z.number().int(), to: z.number().int() })),
+});
+export type SeatPreviewResponse = z.infer<typeof SeatPreviewResponse>;
+
 export const AssignPackageBody = z.object({ planSlug: PlanSlug }).strict();
 export type AssignPackageBody = z.infer<typeof AssignPackageBody>;
 
@@ -55,10 +90,15 @@ export const SubscriptionOverview = z.object({
       currentPeriodEnd: z.string().nullable(),
       cancelAtPeriodEnd: z.boolean(),
       pastDueSince: z.string().nullable(),
+      trialEnd: z.string().nullable(),
       entitlementsEnforced: z.boolean(),
       gracePeriodDays: z.number().int(),
     })
     .nullable(),
+  /** Stripe can take a purchase on this server (keys and prices are set up). */
+  checkoutAvailable: z.boolean(),
+  /** Seats are bought and changed through the payment provider (Stripe-billed, or an organisation that must have a subscription). */
+  providerManaged: z.boolean(),
   items: z.array(
     z.object({
       planSlug: z.string(),

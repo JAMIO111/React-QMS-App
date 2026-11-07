@@ -28,6 +28,7 @@ const UNSCOPED = new Set([
   'GET /api/v1/units', // global catalogue of measurement units
   'GET /api/v1/platform/me', // the operator area spans organisations; admin-only in the database (allow-list + MFA)
   'GET /api/v1/platform/overview',
+  'POST /api/v1/stripe/webhook', // authenticated by Stripe's signature over the raw body; applies state only through app.stripe_* functions
 ]);
 
 interface Op {

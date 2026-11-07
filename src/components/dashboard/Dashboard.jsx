@@ -2,6 +2,7 @@ import { useUser } from "@/contexts/UserProvider";
 import { getGreeting } from "@/lib/HelperFunctions";
 import GoLiveCard from "./GoLiveCard";
 import OnboardingCard from "./OnboardingCard";
+import StartJobCard from "../jobs/StartJobCard";
 
 const Dashboard = () => {
   const { profile } = useUser();
@@ -12,6 +13,7 @@ const Dashboard = () => {
         {getGreeting()}
         {profile?.first_name ? `, ${profile.first_name}` : ""}
       </h1>
+      <StartJobCard />
       <OnboardingCard />
       <GoLiveCard />
     </div>

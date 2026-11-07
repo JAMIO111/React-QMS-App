@@ -12,6 +12,7 @@ import {
   ArrowDownUp as LucideArrowDownUp,
   ArrowDownWideNarrow as LucideArrowDownWideNarrow,
   ArrowLeft as LucideArrowLeft,
+  Play as LucidePlay,
   ArrowUp as LucideArrowUp,
   ArrowUp01 as LucideArrowUp01,
   ArrowUp10 as LucideArrowUp10,
@@ -138,6 +139,7 @@ export const ArrowDownAZIcon = withDefaults(LucideArrowDownAZ);
 export const ArrowDownUpIcon = withDefaults(LucideArrowDownUp);
 export const ArrowDownWideNarrowIcon = withDefaults(LucideArrowDownWideNarrow);
 export const ArrowLeftIcon = withDefaults(LucideArrowLeft);
+export const PlayIcon = withDefaults(LucidePlay);
 export const ArrowUpIcon = withDefaults(LucideArrowUp);
 export const ArrowUp01Icon = withDefaults(LucideArrowUp01);
 export const ArrowUp10Icon = withDefaults(LucideArrowUp10);

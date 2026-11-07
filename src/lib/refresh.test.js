@@ -21,6 +21,7 @@ import { useAlertMutation } from "../hooks/useDocumentation";
 import { useMarkNotificationsRead } from "../hooks/useNotifications";
 import { useCapaMutation } from "../hooks/useCapa";
 import { useOnboardingMutation } from "../hooks/useOnboarding";
+import { useJobMutation } from "../hooks/useJobs";
 
 /** What other modules have on screen: each must be marked stale by an action in any module. */
 const watched = [
@@ -99,6 +100,8 @@ describe("every action refreshes every module's data", () => {
     ["seat change", useChangeSeats, { seats: { controller: 2 } }],
     ["set-up wizard step", useOnboardingMutation, { action: "setStep", body: { step: "details", status: "done" } }],
     ["set-up wizard finish", useOnboardingMutation, { action: "complete" }],
+    ["start a job", useJobMutation, { machineId: "m1", partId: "p1" }],
+    ["job details", useJobMutation, { id: "11111111-1111-1111-1111-111111111111", workOrder: "WO-1" }],
     ["CAPA / 8D action", useCapaMutation, { action: "completeAction", id: "a1", body: {} }],
   ];
 

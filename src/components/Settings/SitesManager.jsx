@@ -2,7 +2,11 @@ import { useState } from "react";
 import Field from "../ui/Field";
 import { describeApiError } from "../../lib/api-client";
 import MenuCard from "../ui/MenuCard";
-import { useDepartments, useSites, useStructureMutation } from "../../hooks/useQmsApi";
+import {
+  useDepartments,
+  useSites,
+  useStructureMutation,
+} from "../../hooks/useQmsApi";
 import LoadingScreen from "../ui/LoadingScreen";
 
 const codeProps = {
@@ -31,10 +35,26 @@ const AddForm = ({ label, onSubmit, pending, error, extra }) => {
         });
       }}>
       <div className="flex flex-wrap items-end gap-2">
-        <Field label="Code" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} className="w-28" {...codeProps} />
-        <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} className="flex-1 min-w-40" required maxLength={100} />
+        <Field
+          label="Code"
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          className="w-28"
+          {...codeProps}
+        />
+        <Field
+          label="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="flex-1 min-w-40"
+          required
+          maxLength={100}
+        />
         {extra}
-        <button type="submit" disabled={pending} className={`${smallButton} h-10`}>
+        <button
+          type="submit"
+          disabled={pending}
+          className={`${smallButton} h-10`}>
           {pending ? "Adding…" : label}
         </button>
       </div>
@@ -48,18 +68,26 @@ const AddForm = ({ label, onSubmit, pending, error, extra }) => {
 };
 
 const Departments = ({ site, canManage }) => {
-  const { data, isLoading, error } = useDepartments(site.id, { includeInactive: true });
+  const { data, isLoading, error } = useDepartments(site.id, {
+    includeInactive: true,
+  });
   const mutation = useStructureMutation();
   const departments = data?.data ?? [];
 
   return (
     <div className="flex flex-col gap-2 pl-4 border-l border-border-color">
       {isLoading && <LoadingScreen size="sm" />}
-      {error && <p className="text-sm text-error-color">{describeApiError(error)}</p>}
-      {!isLoading && departments.length === 0 && <p className="text-sm text-secondary-text">No departments yet.</p>}
+      {error && (
+        <p className="text-sm text-error-color">{describeApiError(error)}</p>
+      )}
+      {!isLoading && departments.length === 0 && (
+        <p className="text-sm text-secondary-text">No departments yet.</p>
+      )}
       <ul className="flex flex-col gap-1">
         {departments.map((d) => (
-          <li key={d.id} className={`flex items-center justify-between gap-2 text-sm ${d.active ? "text-primary-text" : "text-secondary-text line-through"}`}>
+          <li
+            key={d.id}
+            className={`flex items-center justify-between gap-2 text-sm ${d.active ? "text-primary-text" : "text-secondary-text line-through"}`}>
             <span>
               <span className="font-mono">{d.code}</span> — {d.name}
             </span>
@@ -68,7 +96,13 @@ const Departments = ({ site, canManage }) => {
                 type="button"
                 className={smallButton}
                 disabled={mutation.isPending}
-                onClick={() => mutation.mutate({ resource: "departments", id: d.id, body: { active: !d.active } })}>
+                onClick={() =>
+                  mutation.mutate({
+                    resource: "departments",
+                    id: d.id,
+                    body: { active: !d.active },
+                  })
+                }>
                 {d.active ? "Deactivate" : "Reactivate"}
               </button>
             )}
@@ -81,7 +115,10 @@ const Departments = ({ site, canManage }) => {
           pending={mutation.isPending}
           error={mutation.error}
           onSubmit={(fields, reset) =>
-            mutation.mutate({ resource: "departments", body: { ...fields, siteId: site.id } }, { onSuccess: reset })
+            mutation.mutate(
+              { resource: "departments", body: { ...fields, siteId: site.id } },
+              { onSuccess: reset },
+            )
           }
         />
       )}
@@ -99,42 +136,79 @@ const SiteRow = ({ site, canManage }) => {
   const save = (e) => {
     e.preventDefault();
     mutation.mutate(
-      { resource: "sites", id: site.id, body: { name: name.trim(), timezone: timezone.trim() } },
-      { onSuccess: () => setEditing(false) }
+      {
+        resource: "sites",
+        id: site.id,
+        body: { name: name.trim(), timezone: timezone.trim() },
+      },
+      { onSuccess: () => setEditing(false) },
     );
   };
 
   return (
-    <li className="rounded-xl border border-border-color p-3 flex flex-col gap-3">
+    <li className="rounded-xl border bg-primary-bg border-border-color p-3 flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
           className={`text-left cursor-pointer ${site.active ? "text-primary-text" : "text-secondary-text line-through"}`}>
-          <span className="font-mono font-semibold">{site.code}</span> — {site.name}
-          <span className="text-secondary-text text-sm"> · {site.timezone}</span>
+          <span className="font-mono font-semibold">{site.code}</span> —{" "}
+          {site.name}
+          <span className="text-secondary-text text-sm">
+            {" "}
+            · {site.timezone}
+          </span>
         </button>
         {canManage && (
           <div className="flex gap-2">
-            <button type="button" className={smallButton} onClick={() => setEditing((v) => !v)}>
+            <button
+              type="button"
+              className={smallButton}
+              onClick={() => setEditing((v) => !v)}>
               {editing ? "Cancel" : "Edit"}
             </button>
             <button
               type="button"
               className={smallButton}
               disabled={mutation.isPending}
-              onClick={() => mutation.mutate({ resource: "sites", id: site.id, body: { active: !site.active } })}>
+              onClick={() =>
+                mutation.mutate({
+                  resource: "sites",
+                  id: site.id,
+                  body: { active: !site.active },
+                })
+              }>
               {site.active ? "Deactivate" : "Reactivate"}
             </button>
           </div>
         )}
       </div>
       {editing && (
-        <form onSubmit={save} aria-label={`Edit site ${site.code}`} className="flex flex-wrap items-end gap-2">
-          <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} className="flex-1 min-w-40" required maxLength={100} />
-          <Field label="Time zone" value={timezone} onChange={(e) => setTimezone(e.target.value)} className="w-56" required hint="IANA name, e.g. Europe/London" />
-          <button type="submit" disabled={mutation.isPending} className={`${smallButton} h-10`}>
+        <form
+          onSubmit={save}
+          aria-label={`Edit site ${site.code}`}
+          className="flex flex-wrap items-end gap-2">
+          <Field
+            label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="flex-1 min-w-40"
+            required
+            maxLength={100}
+          />
+          <Field
+            label="Time zone"
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            className="w-56"
+            required
+            hint="IANA name, e.g. Europe/London"
+          />
+          <button
+            type="submit"
+            disabled={mutation.isPending}
+            className={`${smallButton} h-10`}>
             Save
           </button>
         </form>
@@ -156,7 +230,11 @@ const SitesManager = ({ canManage }) => {
   const sites = data?.data ?? [];
 
   return (
-    <MenuCard aria-label="Sites" title="Sites and departments" subtitle="Select a site to see its departments." bodyClassName="flex flex-col gap-4">
+    <MenuCard
+      aria-label="Sites"
+      title="Sites and departments"
+      subtitle="Select a site to see its departments."
+      bodyClassName="flex flex-col gap-4">
       {isLoading && <LoadingScreen size="sm" />}
       {error && <p className="text-error-color">{describeApiError(error)}</p>}
       <ul className="flex flex-col gap-2">
@@ -169,7 +247,12 @@ const SitesManager = ({ canManage }) => {
           label="Add site"
           pending={mutation.isPending}
           error={mutation.error}
-          onSubmit={(fields, reset) => mutation.mutate({ resource: "sites", body: fields }, { onSuccess: reset })}
+          onSubmit={(fields, reset) =>
+            mutation.mutate(
+              { resource: "sites", body: fields },
+              { onSuccess: reset },
+            )
+          }
         />
       )}
     </MenuCard>

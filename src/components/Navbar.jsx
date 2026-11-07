@@ -22,7 +22,10 @@ const Navbar = () => {
   const canSee = useCanSee();
   const myAlerts = useMyAlertCount({ enabled: canSee("documentation.read") });
   const myActions = useMyCapaActions("open", { enabled: canSee("capa.read") });
-  const badges = { "my-alerts": myAlerts.data?.unacknowledged ?? 0, "my-actions": myActions.data?.openCount ?? 0 };
+  const badges = {
+    "my-alerts": myAlerts.data?.unacknowledged ?? 0,
+    "my-actions": myActions.data?.openCount ?? 0,
+  };
   const hasModule = useModuleAccess();
   const { organisation } = useOrganisation();
   const { data: logoUrl } = useOrganisationLogo();
@@ -86,7 +89,9 @@ const Navbar = () => {
           {/* Only the modules scroll; the scrollbar is hidden so it never narrows the menu. */}
           <ul className="no-scrollbar flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pt-3">
             {menuStructure
-              .filter((item) => canSee(item.permission) && hasModule(item.module))
+              .filter(
+                (item) => canSee(item.permission) && hasModule(item.module),
+              )
               .map((item) => (
                 <li key={item.name}>
                   <NavItem
@@ -108,19 +113,19 @@ const Navbar = () => {
                       {item.subMenu
                         ?.filter((subItem) => canSee(subItem.permission))
                         .map((subItem, index, visible) => (
-                        <li key={subItem.name}>
-                          <SubMenuItem
-                            title={subItem.name}
-                            label={subItem.name}
-                            path={subItem.path}
-                            end={!!subItem.end}
-                            isFirst={index === 0}
-                            isLast={index === visible.length - 1}
-                            closeMenu={closeMenu}
-                            badge={badges[subItem.badge] ?? 0}
-                          />
-                        </li>
-                      ))}
+                          <li key={subItem.name}>
+                            <SubMenuItem
+                              title={subItem.name}
+                              label={subItem.name}
+                              path={subItem.path}
+                              end={!!subItem.end}
+                              isFirst={index === 0}
+                              isLast={index === visible.length - 1}
+                              closeMenu={closeMenu}
+                              badge={badges[subItem.badge] ?? 0}
+                            />
+                          </li>
+                        ))}
                     </ul>
                   )}
                 </li>

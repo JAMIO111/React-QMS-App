@@ -19,12 +19,11 @@ const NavItem = ({
       <div
         className={`${
           match ? "bg-cta-color" : "bg-transparent"
-        } w-1 h-9 rounded-r-md`}
-      ></div>
+        } w-1 rounded-r-md`}></div>
       <NavLink
         title={label}
         className={({ isActive }) =>
-          `flex gap-3 w-full rounded-lg ml-2 p-2 h-9 items-center border border-transparent
+          `flex gap-3 w-full rounded-lg ml-2 p-1.5 items-center border border-transparent
   ${
     isActive
       ? "text-white border-cta-color hover:bg-cta-color/80 bg-cta-color/50"
@@ -32,12 +31,16 @@ const NavItem = ({
   }`
         }
         onClick={closeMenu}
-        to={path}
-      >
+        to={path}>
         {Icon && (
           <span className="relative">
-            <Icon className="h-6 w-6" />
-            {badge > 0 && !isExpanded && <span aria-hidden="true" className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-error-color" />}
+            <Icon className="h-5 w-5" />
+            {badge > 0 && !isExpanded && (
+              <span
+                aria-hidden="true"
+                className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-error-color"
+              />
+            )}
           </span>
         )}
         {isExpanded && (
@@ -46,7 +49,9 @@ const NavItem = ({
           </span>
         )}
         {isExpanded && badge > 0 && (
-          <span aria-label={`${badge} need your attention`} className="rounded-full bg-error-color px-1.5 text-xs font-medium text-white">
+          <span
+            aria-label={`${badge} need your attention`}
+            className="rounded-full bg-error-color px-1.5 text-xs font-medium text-white">
             {badge}
           </span>
         )}

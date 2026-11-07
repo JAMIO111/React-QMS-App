@@ -1,4 +1,14 @@
-import { BellIcon, CreditCardIcon, ClipboardListIcon, DatabaseIcon, GaugeIcon, MonitorCogIcon, SettingsIcon, ShieldUserIcon, UserCogIcon } from "@/components/icons";
+import {
+  BellIcon,
+  CreditCardIcon,
+  ClipboardListIcon,
+  DatabaseIcon,
+  GaugeIcon,
+  MonitorCogIcon,
+  SettingsIcon,
+  ShieldUserIcon,
+  UserCogIcon,
+} from "@/components/icons";
 
 const SettingMenuStructure = [
   {
@@ -8,23 +18,16 @@ const SettingMenuStructure = [
     subMenu: [],
   },
   {
+    name: "Account",
+    path: "Account",
+    icon: UserCogIcon,
+    subMenu: [],
+  },
+  {
     name: "Users & permissions",
     path: "Users",
     icon: ShieldUserIcon,
     permission: "members.read",
-    subMenu: [],
-  },
-  {
-    name: "Subscription & billing",
-    path: "Subscription",
-    icon: CreditCardIcon,
-    permission: "subscription.read",
-    subMenu: [],
-  },
-  {
-    name: "Account",
-    path: "Account",
-    icon: UserCogIcon,
     subMenu: [],
   },
   {
@@ -58,6 +61,13 @@ const SettingMenuStructure = [
     name: "Notifications",
     path: "Notifications",
     icon: BellIcon,
+    subMenu: [],
+  },
+  {
+    name: "Subscription & billing",
+    path: "Subscription",
+    icon: CreditCardIcon,
+    permission: "subscription.read",
     subMenu: [],
   },
   {

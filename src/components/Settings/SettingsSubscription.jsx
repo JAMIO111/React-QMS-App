@@ -27,7 +27,9 @@ import {
 } from "../../hooks/useSubscription";
 
 const button =
-  "rounded-lg border border-border-color px-2 py-1 text-sm text-primary-text hover:border-border-dark-color disabled:opacity-50 cursor-pointer";
+  "rounded-lg border border-border-color px-2 py-1 text-sm text-primary-text active:scale-95 hover:border-theme/50 bg-text-input-color disabled:opacity-50 cursor-pointer";
+const plusminusbutton =
+  "rounded-lg border border-border-color w-8 px-2 py-1 text-sm text-primary-text active:scale-95 hover:border-theme/50 bg-text-input-color disabled:opacity-50 cursor-pointer";
 const select =
   "rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-sm text-primary-text disabled:opacity-60";
 
@@ -40,14 +42,21 @@ const STATUS_STYLES = {
   cancelled: "bg-gray-500/15 text-secondary-text",
   incomplete: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
 };
-const LEVEL_LABELS = { none: "—", view: "View", operational: "Operational", full: "Full" };
+const LEVEL_LABELS = {
+  none: "—",
+  view: "View",
+  operational: "Operational",
+  full: "Full",
+};
 
 const date = formatDate;
-const displayName = (m) => [m.firstName, m.surname].filter(Boolean).join(" ") || m.email || "Unknown";
+const displayName = (m) =>
+  [m.firstName, m.surname].filter(Boolean).join(" ") || m.email || "Unknown";
 const unit = (interval) => (interval === "year" ? "year" : "month");
 
 const StatusBadge = ({ status }) => (
-  <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLES[status] ?? STATUS_STYLES.paused}`}>
+  <span
+    className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLES[status] ?? STATUS_STYLES.paused}`}>
     {status.replace("_", " ")}
   </span>
 );
@@ -71,7 +80,12 @@ const ManageBillingButton = ({ className = button }) => {
       onClick={() =>
         portal.mutate(undefined, {
           onSuccess: ({ url }) => window.location.assign(url),
-          onError: (e) => showToast({ type: "error", title: "Could not open billing", message: describeApiError(e) }),
+          onError: (e) =>
+            showToast({
+              type: "error",
+              title: "Could not open billing",
+              message: describeApiError(e),
+            }),
         })
       }>
       {portal.isPending ? "Opening…" : "Manage billing"}
@@ -95,29 +109,61 @@ const Overview = ({ overview, canManage }) => {
       }>
       {sub?.status === "trialing" && (
         <p role="status" className="mb-3 text-sm text-primary-text">
-          Free trial until {date(sub.trialEnd)}. Your card is charged from then{sub.cancelAtPeriodEnd ? ", unless you cancel, which you have" : ", unless you cancel before"}.
+          Free trial until {date(sub.trialEnd)}. Your card is charged from then
+          {sub.cancelAtPeriodEnd
+            ? ", unless you cancel, which you have"
+            : ", unless you cancel before"}
+          .
         </p>
       )}
       {sub?.cancelAtPeriodEnd && sub.status !== "cancelled" && (
-        <p role="alert" className="mb-3 text-sm text-amber-700 dark:text-amber-300">
-          This subscription is set to end on {date(sub.currentPeriodEnd)}. After that the organisation is locked to billing until it is renewed.
+        <p
+          role="alert"
+          className="mb-3 text-sm text-amber-700 dark:text-amber-300">
+          This subscription is set to end on {date(sub.currentPeriodEnd)}. After
+          that the organisation is locked to billing until it is renewed.
         </p>
       )}
       {sub?.status === "cancelled" && (
-        <p role="alert" className="mb-3 text-sm text-amber-700 dark:text-amber-300">
-          This subscription has been cancelled{sub.currentPeriodEnd ? `; access continues until ${date(sub.currentPeriodEnd)}` : ""}.
+        <p
+          role="alert"
+          className="mb-3 text-sm text-amber-700 dark:text-amber-300">
+          This subscription has been cancelled
+          {sub.currentPeriodEnd
+            ? `; access continues until ${date(sub.currentPeriodEnd)}`
+            : ""}
+          .
         </p>
       )}
       {!sub && (
         <p className="text-sm text-secondary-text">
-          No subscription yet. {overview.checkoutAvailable ? "Choose your seats below to start one." : "Buy seats below to create one."}
+          No subscription yet.{" "}
+          {overview.checkoutAvailable
+            ? "Choose your seats below to start one."
+            : "Buy seats below to create one."}
         </p>
       )}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Stat label="Estimated monthly cost" value={money(totals.monthlyEquivalent, currency)} hint={sub ? `Billed ${sub.billingInterval === "year" ? "annually" : "monthly"}` : undefined} />
+        <Stat
+          label="Estimated monthly cost"
+          value={money(totals.monthlyEquivalent, currency)}
+          hint={
+            sub
+              ? `Billed ${sub.billingInterval === "year" ? "annually" : "monthly"}`
+              : undefined
+          }
+        />
         <Stat label="Annual cost" value={money(totals.annual, currency)} />
-        <Stat label="Next billing date" value={sub?.currentPeriodEnd ? date(sub.currentPeriodEnd) : "—"} hint={sub?.cancelAtPeriodEnd ? "Cancels at period end" : undefined} />
-        <Stat label="Seats assigned" value={`${totals.seatsAssigned} / ${totals.seatsPurchased}`} hint={`${totals.seatsAvailable} available`} />
+        <Stat
+          label="Next billing date"
+          value={sub?.currentPeriodEnd ? date(sub.currentPeriodEnd) : "—"}
+          hint={sub?.cancelAtPeriodEnd ? "Cancels at period end" : undefined}
+        />
+        <Stat
+          label="Seats assigned"
+          value={`${totals.seatsAssigned} / ${totals.seatsPurchased}`}
+          hint={`${totals.seatsAvailable} available`}
+        />
       </div>
       {items.length > 0 && (
         <table className="mt-4 w-full text-sm">
@@ -132,20 +178,28 @@ const Overview = ({ overview, canManage }) => {
           </thead>
           <tbody>
             {items.map((i) => (
-              <tr key={i.planSlug} className="border-t border-border-color text-primary-text">
+              <tr
+                key={i.planSlug}
+                className="border-t border-border-color text-primary-text">
                 <td className="py-2 pr-3">{i.planName}</td>
                 <td className="py-2 pr-3">{i.purchased}</td>
                 <td className="py-2 pr-3">{i.assigned}</td>
                 <td className="py-2 pr-3">{i.available}</td>
-                <td className="py-2">{money(i.unitAmount, currency)}/user/{unit(sub?.billingInterval)}</td>
+                <td className="py-2">
+                  {money(i.unitAmount, currency)}/user/
+                  {unit(sub?.billingInterval)}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
       {sub?.status === "past_due" && (
-        <p role="alert" className="mt-3 text-sm text-amber-700 dark:text-amber-300">
-          Payment is overdue. Access continues for {sub.gracePeriodDays} days from {date(sub.pastDueSince)}.
+        <p
+          role="alert"
+          className="mt-3 text-sm text-amber-700 dark:text-amber-300">
+          Payment is overdue. Access continues for {sub.gracePeriodDays} days
+          from {date(sub.pastDueSince)}.
         </p>
       )}
     </MenuCard>
@@ -153,9 +207,13 @@ const Overview = ({ overview, canManage }) => {
 };
 
 const PricingCards = ({ catalogue, overview, canManage }) => {
-  const managed = overview.providerManaged && overview.subscription?.billingProvider === "stripe";
+  const managed =
+    overview.providerManaged &&
+    overview.subscription?.billingProvider === "stripe";
   // With Stripe the billing interval is fixed by the subscription; it can be changed in the billing portal only.
-  const [annual, setAnnual] = useState(overview.subscription?.billingInterval === "year");
+  const [annual, setAnnual] = useState(
+    overview.subscription?.billingInterval === "year",
+  );
   const [draft, setDraft] = useState({});
   const manual = useSubscriptionMutation();
   const preview = useSeatPreview();
@@ -166,10 +224,15 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
   const seatsOf = (slug) => overview.items.find((i) => i.planSlug === slug);
   const purchased = (slug) => seatsOf(slug)?.purchased ?? 0;
   const wanted = (slug) => draft[slug] ?? purchased(slug);
-  const changes = catalogue.plans.filter((p) => wanted(p.slug) !== purchased(p.slug));
+  const changes = catalogue.plans.filter(
+    (p) => wanted(p.slug) !== purchased(p.slug),
+  );
 
   const step = (plan, delta) => {
-    const min = Math.max(seatsOf(plan.slug)?.assigned ?? 0, managed && plan.slug === "controller" ? 1 : 0);
+    const min = Math.max(
+      seatsOf(plan.slug)?.assigned ?? 0,
+      managed && plan.slug === "controller" ? 1 : 0,
+    );
     const next = Math.max(min, wanted(plan.slug) + delta);
     setDraft((d) => ({ ...d, [plan.slug]: next }));
   };
@@ -180,8 +243,12 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
   }, 0);
 
   const applyManaged = async () => {
-    const lines = changes.map((p) => `${p.name}: ${purchased(p.slug)} → ${wanted(p.slug)}`).join("; ");
-    const seats = Object.fromEntries(changes.map((p) => [p.slug, wanted(p.slug)]));
+    const lines = changes
+      .map((p) => `${p.name}: ${purchased(p.slug)} → ${wanted(p.slug)}`)
+      .join("; ");
+    const seats = Object.fromEntries(
+      changes.map((p) => [p.slug, wanted(p.slug)]),
+    );
     try {
       const quote = await preview.mutateAsync({ seats });
       const due = quote.amountDue;
@@ -197,13 +264,19 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
       setDraft({});
       showToast({ type: "success", title: "Seats updated", message: lines });
     } catch (error) {
-      showToast({ type: "error", title: "Not changed", message: describeApiError(error) });
+      showToast({
+        type: "error",
+        title: "Not changed",
+        message: describeApiError(error),
+      });
     }
   };
 
   const apply = async () => {
     if (managed) return applyManaged();
-    const lines = changes.map((p) => `${p.name}: ${purchased(p.slug)} → ${wanted(p.slug)}`).join("; ");
+    const lines = changes
+      .map((p) => `${p.name}: ${purchased(p.slug)} → ${wanted(p.slug)}`)
+      .join("; ");
     const ok = await confirm({
       title: "Apply seat changes?",
       message: `${lines}. Recurring cost changes by ${costChange < 0 ? "-" : ""}${money(Math.abs(costChange))} per ${annual ? "year" : "month"} (excluding VAT).`,
@@ -214,12 +287,20 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
     if (!ok) return;
     try {
       for (const p of changes) {
-        await mutation.mutateAsync({ action: "seats", planSlug: p.slug, quantity: wanted(p.slug) });
+        await mutation.mutateAsync({
+          action: "seats",
+          planSlug: p.slug,
+          quantity: wanted(p.slug),
+        });
       }
       setDraft({});
       showToast({ type: "success", title: "Seats updated", message: lines });
     } catch (error) {
-      showToast({ type: "error", title: "Not changed", message: describeApiError(error) });
+      showToast({
+        type: "error",
+        title: "Not changed",
+        message: describeApiError(error),
+      });
     }
   };
 
@@ -229,9 +310,14 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
       subtitle="Packages control what the product offers; company roles still control who may approve or release"
       action={
         managed ? (
-          <span className="text-sm text-secondary-text">Billed {annual ? "annually" : "monthly"}</span>
+          <span className="text-sm text-secondary-text">
+            Billed {annual ? "annually" : "monthly"}
+          </span>
         ) : (
-          <Switch checked={annual} onChange={(e) => setAnnual(e.target.checked)} aria-label="Annual billing">
+          <Switch
+            checked={annual}
+            onChange={(e) => setAnnual(e.target.checked)}
+            aria-label="Annual billing">
             Annual billing
           </Switch>
         )
@@ -242,24 +328,68 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
           const owned = seatsOf(plan.slug);
           const qty = wanted(plan.slug);
           return (
-            <div key={plan.slug} aria-label={`${plan.name} package`} role="group" className="flex flex-col gap-2 rounded-xl border border-border-color p-4">
-              <h3 className="text-base font-semibold text-primary-text">{plan.name}</h3>
+            <div
+              key={plan.slug}
+              aria-label={`${plan.name} package`}
+              role="group"
+              className="flex flex-col gap-2 rounded-xl bg-primary-bg border border-border-color p-4">
+              <h3 className="text-base font-semibold text-primary-text">
+                {plan.name}
+              </h3>
               <p className="text-sm text-secondary-text">{plan.description}</p>
               <p className="text-2xl font-semibold text-primary-text">
-                {money(annual ? plan.annualMonthlyEquivalent : plan.monthly?.unitAmount, price?.currency)}
-                <span className="text-sm font-normal text-secondary-text"> /user/month</span>
+                {money(
+                  annual
+                    ? plan.annualMonthlyEquivalent
+                    : plan.monthly?.unitAmount,
+                  price?.currency,
+                )}
+                <span className="text-sm font-normal text-secondary-text">
+                  {" "}
+                  /user/month
+                </span>
               </p>
               {annual && plan.annualSaving > 0 && (
                 <p className="text-xs text-green-700 dark:text-green-300">
-                  Billed {money(plan.annual.unitAmount, plan.annual.currency)}/user/year — saves {money(plan.annualSaving, plan.annual.currency)}
+                  Billed {money(plan.annual.unitAmount, plan.annual.currency)}
+                  /user/year — saves{" "}
+                  {money(plan.annualSaving, plan.annual.currency)}
                 </p>
               )}
-              <p className="text-sm text-secondary-text">{owned?.assigned ?? 0} assigned</p>
+              <p className="text-sm text-secondary-text">
+                {owned?.assigned ?? 0} assigned
+              </p>
               {canManage && (
                 <div className="mt-auto flex items-center gap-3">
-                  <button type="button" aria-label={`Remove ${plan.name} seat`} className={button} disabled={mutation.isPending || preview.isPending || qty <= Math.max(owned?.assigned ?? 0, managed && plan.slug === "controller" ? 1 : 0)} onClick={() => step(plan, -1)}>−</button>
-                  <span aria-label={`${plan.name} seats`} className="min-w-6 text-center text-primary-text">{qty}</span>
-                  <button type="button" aria-label={`Add ${plan.name} seat`} className={button} disabled={mutation.isPending} onClick={() => step(plan, 1)}>+</button>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${plan.name} seat`}
+                    className={plusminusbutton}
+                    disabled={
+                      mutation.isPending ||
+                      preview.isPending ||
+                      qty <=
+                        Math.max(
+                          owned?.assigned ?? 0,
+                          managed && plan.slug === "controller" ? 1 : 0,
+                        )
+                    }
+                    onClick={() => step(plan, -1)}>
+                    −
+                  </button>
+                  <span
+                    aria-label={`${plan.name} seats`}
+                    className="min-w-6 text-center text-primary-text">
+                    {qty}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`Add ${plan.name} seat`}
+                    className={plusminusbutton}
+                    disabled={mutation.isPending}
+                    onClick={() => step(plan, 1)}>
+                    +
+                  </button>
                 </div>
               )}
             </div>
@@ -268,8 +398,18 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
       </div>
       {canManage && changes.length > 0 && (
         <div className="mt-4 flex items-center justify-end gap-2">
-          <button type="button" className={button} disabled={mutation.isPending} onClick={() => setDraft({})}>Discard</button>
-          <LoadingButton className={`${button} bg-cta-color text-white`} loading={mutation.isPending || preview.isPending} loadingText={managed ? "Checking the price…" : "Applying…"} onClick={apply}>
+          <button
+            type="button"
+            className={button}
+            disabled={mutation.isPending}
+            onClick={() => setDraft({})}>
+            Discard
+          </button>
+          <LoadingButton
+            className={`${button} bg-cta-color text-white`}
+            loading={mutation.isPending || preview.isPending}
+            loadingText={managed ? "Checking the price…" : "Applying…"}
+            onClick={apply}>
             Apply changes
           </LoadingButton>
         </div>
@@ -290,17 +430,39 @@ const StartSubscription = ({ catalogue }) => {
   };
   const go = () =>
     start.mutate(
-      { interval: choice.interval, seats: Object.fromEntries(Object.entries(choice.seats).filter(([, q]) => q > 0)), returnTo: "settings" },
+      {
+        interval: choice.interval,
+        seats: Object.fromEntries(
+          Object.entries(choice.seats).filter(([, q]) => q > 0),
+        ),
+        returnTo: "settings",
+      },
       {
         onSuccess: ({ url }) => window.location.assign(url),
-        onError: (e) => showToast({ type: "error", title: "Could not start checkout", message: describeApiError(e) }),
+        onError: (e) =>
+          showToast({
+            type: "error",
+            title: "Could not start checkout",
+            message: describeApiError(e),
+          }),
       },
     );
   return (
-    <MenuCard title="Start your subscription" subtitle="14-day free trial, card required, cancel any time before it ends">
-      <SeatPicker plans={catalogue.plans} value={choice} onChange={update} disabled={start.isPending} />
+    <MenuCard
+      title="Start your subscription"
+      subtitle="14-day free trial, card required, cancel any time before it ends">
+      <SeatPicker
+        plans={catalogue.plans}
+        value={choice}
+        onChange={update}
+        disabled={start.isPending}
+      />
       <div className="mt-4 flex justify-end">
-        <LoadingButton className={`${button} bg-cta-color text-white`} loading={start.isPending} loadingText="Opening checkout…" onClick={go}>
+        <LoadingButton
+          className={`${button} bg-cta-color text-white`}
+          loading={start.isPending}
+          loadingText="Opening checkout…"
+          onClick={go}>
           Continue to secure checkout
         </LoadingButton>
       </div>
@@ -309,14 +471,18 @@ const StartSubscription = ({ catalogue }) => {
 };
 
 const Comparison = ({ catalogue }) => (
-  <MenuCard title="Package comparison" subtitle="Maximum functionality each package unlocks; company permissions still apply">
+  <MenuCard
+    title="Package comparison"
+    subtitle="Maximum functionality each package unlocks; company permissions still apply">
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-secondary-text">
             <th className="py-1 pr-3 font-medium">Module / feature</th>
             {catalogue.plans.map((p) => (
-              <th key={p.slug} className="py-1 pr-3 font-medium">{p.name}</th>
+              <th key={p.slug} className="py-1 pr-3 font-medium">
+                {p.name}
+              </th>
             ))}
           </tr>
         </thead>
@@ -335,10 +501,14 @@ const ModuleRows = ({ module: m, plans }) => (
     <tr className="border-t border-border-color bg-primary-bg/40 text-primary-text">
       <td className="py-2 pr-3 font-medium">
         {m.name}
-        {m.status === "planned" && <span className="ml-2 text-xs text-tertiary-text">planned</span>}
+        {m.status === "planned" && (
+          <span className="ml-2 text-xs text-tertiary-text">planned</span>
+        )}
       </td>
       {plans.map((p) => (
-        <td key={p.slug} className="py-2 pr-3">{LEVEL_LABELS[p.levels[m.slug]] ?? "—"}</td>
+        <td key={p.slug} className="py-2 pr-3">
+          {LEVEL_LABELS[p.levels[m.slug]] ?? "—"}
+        </td>
       ))}
     </tr>
     {m.features.map((f) => (
@@ -369,30 +539,47 @@ const Seats = ({ catalogue, overview, canAssign }) => {
   if (isLoading) return <LoadingScreen />;
   if (error) return <ApiUnavailable error={error} />;
 
-  const priceOf = (slug) => overview.items.find((i) => i.planSlug === slug)?.unitAmount ?? null;
-  const freeOf = (slug) => overview.items.find((i) => i.planSlug === slug)?.available ?? 0;
+  const priceOf = (slug) =>
+    overview.items.find((i) => i.planSlug === slug)?.unitAmount ?? null;
+  const freeOf = (slug) =>
+    overview.items.find((i) => i.planSlug === slug)?.available ?? 0;
 
   const run = (vars, message) =>
     mutation.mutate(vars, {
-      onSuccess: () => showToast({ type: "success", title: "Updated", message }),
-      onError: (e) => showToast({ type: "error", title: "Not changed", message: describeApiError(e) }),
+      onSuccess: () =>
+        showToast({ type: "success", title: "Updated", message }),
+      onError: (e) =>
+        showToast({
+          type: "error",
+          title: "Not changed",
+          message: describeApiError(e),
+        }),
     });
 
   const change = async (member, planSlug) => {
     if (planSlug === "") {
       const ok = await confirm({
         title: `Remove ${displayName(member)}'s package?`,
-        message: "They keep their membership and company roles but lose access to subscription features. Records are kept.",
+        message:
+          "They keep their membership and company roles but lose access to subscription features. Records are kept.",
         confirmText: "Remove package",
         cancelText: "Cancel",
         type: "warning",
       });
-      if (ok) run({ action: "remove", membershipId: member.membershipId }, `${displayName(member)} no longer has a package.`);
+      if (ok)
+        run(
+          { action: "remove", membershipId: member.membershipId },
+          `${displayName(member)} no longer has a package.`,
+        );
       return;
     }
     const plan = catalogue.plans.find((p) => p.slug === planSlug);
     if (freeOf(planSlug) < 1) {
-      showToast({ type: "error", title: "No free seat", message: `All ${plan.name} seats are in use. Buy another seat first.` });
+      showToast({
+        type: "error",
+        title: "No free seat",
+        message: `All ${plan.name} seats are in use. Buy another seat first.`,
+      });
       return;
     }
     const ok = await confirm({
@@ -402,11 +589,17 @@ const Seats = ({ catalogue, overview, canAssign }) => {
       cancelText: "Cancel",
       type: "info",
     });
-    if (ok) run({ action: "assign", membershipId: member.membershipId, planSlug }, `${displayName(member)} now has ${plan.name}.`);
+    if (ok)
+      run(
+        { action: "assign", membershipId: member.membershipId, planSlug },
+        `${displayName(member)} now has ${plan.name}.`,
+      );
   };
 
   return (
-    <MenuCard title="Seat allocation" subtitle="Company role and subscription package are separate">
+    <MenuCard
+      title="Seat allocation"
+      subtitle="Company role and subscription package are separate">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-secondary-text">
@@ -418,12 +611,22 @@ const Seats = ({ catalogue, overview, canAssign }) => {
         </thead>
         <tbody>
           {members.map((m) => (
-            <tr key={m.membershipId} className="border-t border-border-color align-top text-primary-text">
+            <tr
+              key={m.membershipId}
+              className="border-t border-border-color align-top text-primary-text">
               <td className="py-2 pr-3">
                 <div className="font-medium">{displayName(m)}</div>
-                {m.email && <div className="text-xs text-secondary-text">{m.email}</div>}
+                {m.email && (
+                  <div className="text-xs text-secondary-text">{m.email}</div>
+                )}
               </td>
-              <td className="py-2 pr-3">{m.roles.length ? m.roles.join(", ") : <span className="text-tertiary-text">No role</span>}</td>
+              <td className="py-2 pr-3">
+                {m.roles.length ? (
+                  m.roles.join(", ")
+                ) : (
+                  <span className="text-tertiary-text">No role</span>
+                )}
+              </td>
               <td className="py-2 pr-3">
                 {canAssign ? (
                   <select
@@ -434,14 +637,22 @@ const Seats = ({ catalogue, overview, canAssign }) => {
                     onChange={(e) => change(m, e.target.value)}>
                     <option value="">No package</option>
                     {catalogue.plans.map((p) => (
-                      <option key={p.slug} value={p.slug}>{p.name}</option>
+                      <option key={p.slug} value={p.slug}>
+                        {p.name}
+                      </option>
                     ))}
                   </select>
                 ) : (
-                  m.plan?.name ?? <span className="text-tertiary-text">No package</span>
+                  (m.plan?.name ?? (
+                    <span className="text-tertiary-text">No package</span>
+                  ))
                 )}
               </td>
-              <td className="py-2">{m.unitAmount === null ? "—" : `${money(m.unitAmount, currency)}/${unit(interval)}`}</td>
+              <td className="py-2">
+                {m.unitAmount === null
+                  ? "—"
+                  : `${money(m.unitAmount, currency)}/${unit(interval)}`}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -450,18 +661,32 @@ const Seats = ({ catalogue, overview, canAssign }) => {
   );
 };
 
-const INVOICE_STYLES = { paid: STATUS_STYLES.active, open: STATUS_STYLES.past_due, uncollectible: STATUS_STYLES.unpaid };
+const INVOICE_STYLES = {
+  paid: STATUS_STYLES.active,
+  open: STATUS_STYLES.past_due,
+  uncollectible: STATUS_STYLES.unpaid,
+};
 
 const Invoices = ({ managed, canManage }) => {
   const { data: invoices, isLoading, error } = useInvoices();
   return (
     <MenuCard
       title="Billing history"
-      subtitle={managed ? "Payment method, billing details and tax number are managed in Stripe's secure portal" : "Payment methods and billing details are managed through the payment provider"}
+      subtitle={
+        managed
+          ? "Payment method, billing details and tax number are managed in Stripe's secure portal"
+          : "Payment methods and billing details are managed through the payment provider"
+      }
       action={managed && canManage && <ManageBillingButton />}>
       {isLoading && <LoadingScreen />}
-      {error && <p role="alert" className="text-sm text-error-color">{describeApiError(error)}</p>}
-      {invoices && invoices.length === 0 && <p className="text-sm text-secondary-text">No invoices yet.</p>}
+      {error && (
+        <p role="alert" className="text-sm text-error-color">
+          {describeApiError(error)}
+        </p>
+      )}
+      {invoices && invoices.length === 0 && (
+        <p className="text-sm text-secondary-text">No invoices yet.</p>
+      )}
       {invoices && invoices.length > 0 && (
         <table className="w-full text-sm">
           <thead>
@@ -477,18 +702,35 @@ const Invoices = ({ managed, canManage }) => {
           </thead>
           <tbody>
             {invoices.map((i) => (
-              <tr key={i.id} className="border-t border-border-color text-primary-text">
+              <tr
+                key={i.id}
+                className="border-t border-border-color text-primary-text">
                 <td className="py-2 pr-3">{i.invoiceNumber ?? "—"}</td>
                 <td className="py-2 pr-3">{date(i.invoiceDate)}</td>
-                <td className="py-2 pr-3">{i.periodStart ? `${date(i.periodStart)} – ${date(i.periodEnd)}` : "—"}</td>
-                <td className="py-2 pr-3">{money(i.taxAmount, i.currency)}</td>
-                <td className="py-2 pr-3">{money(i.totalAmount, i.currency)}</td>
                 <td className="py-2 pr-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${INVOICE_STYLES[i.status] ?? STATUS_STYLES.paused}`}>{i.status}</span>
+                  {i.periodStart
+                    ? `${date(i.periodStart)} – ${date(i.periodEnd)}`
+                    : "—"}
+                </td>
+                <td className="py-2 pr-3">{money(i.taxAmount, i.currency)}</td>
+                <td className="py-2 pr-3">
+                  {money(i.totalAmount, i.currency)}
+                </td>
+                <td className="py-2 pr-3">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${INVOICE_STYLES[i.status] ?? STATUS_STYLES.paused}`}>
+                    {i.status}
+                  </span>
                 </td>
                 <td className="py-2">
                   {i.invoicePdfUrl && (
-                    <a className="text-brand-primary underline" href={i.invoicePdfUrl} target="_blank" rel="noreferrer">Download</a>
+                    <a
+                      className="text-brand-primary underline"
+                      href={i.invoicePdfUrl}
+                      target="_blank"
+                      rel="noreferrer">
+                      Download
+                    </a>
                   )}
                 </td>
               </tr>
@@ -507,7 +749,8 @@ const SettingsSubscription = () => {
   const checkout = useCheckoutReturn();
 
   if (overview.isLoading || catalogue.isLoading) return <LoadingScreen />;
-  if (overview.error || catalogue.error) return <ApiUnavailable error={overview.error ?? catalogue.error} />;
+  if (overview.error || catalogue.error)
+    return <ApiUnavailable error={overview.error ?? catalogue.error} />;
   const canManage = can("subscription.manage");
   const data = overview.data;
   const starting = !data.subscription && data.checkoutAvailable && canManage;
@@ -516,10 +759,27 @@ const SettingsSubscription = () => {
     <div className="flex max-w-5xl flex-col gap-4">
       <CheckoutNotice checkout={checkout} />
       <Overview overview={data} canManage={canManage} />
-      {starting ? <StartSubscription catalogue={catalogue.data} /> : <PricingCards catalogue={catalogue.data} overview={data} canManage={canManage} />}
-      <Seats catalogue={catalogue.data} overview={overview.data} canAssign={can("subscription.seats")} />
+      {starting ? (
+        <StartSubscription catalogue={catalogue.data} />
+      ) : (
+        <PricingCards
+          catalogue={catalogue.data}
+          overview={data}
+          canManage={canManage}
+        />
+      )}
+      <Seats
+        catalogue={catalogue.data}
+        overview={overview.data}
+        canAssign={can("subscription.seats")}
+      />
       <Comparison catalogue={catalogue.data} />
-      {can("invoices.read") && <Invoices managed={data.subscription?.billingProvider === "stripe"} canManage={canManage} />}
+      {can("invoices.read") && (
+        <Invoices
+          managed={data.subscription?.billingProvider === "stripe"}
+          canManage={canManage}
+        />
+      )}
     </div>
   );
 };

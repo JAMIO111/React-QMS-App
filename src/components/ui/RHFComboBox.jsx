@@ -58,15 +58,28 @@ const RHFComboBox = ({
   const listRef = useRef(null);
   const itemRefs = useRef([]);
 
-  const waitingForParent = !!dependentKey && (dependentValue === undefined || dependentValue === null);
+  const waitingForParent =
+    !!dependentKey && (dependentValue === undefined || dependentValue === null);
   const inactive = disabled || waitingForParent;
 
   const term = searchTerm.trim().toLowerCase();
-  let filteredOptions = options.filter((opt) => (dependentKey && !waitingForParent ? opt[dependentKey] === dependentValue : true));
-  if (sort) filteredOptions = [...filteredOptions].sort((a, b) => a.name.localeCompare(b.name));
-  if (filterLocally && term) filteredOptions = filteredOptions.filter((opt) => opt.name.toLowerCase().includes(term));
+  let filteredOptions = options.filter((opt) =>
+    dependentKey && !waitingForParent
+      ? opt[dependentKey] === dependentValue
+      : true,
+  );
+  if (sort)
+    filteredOptions = [...filteredOptions].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  if (filterLocally && term)
+    filteredOptions = filteredOptions.filter((opt) =>
+      opt.name.toLowerCase().includes(term),
+    );
 
-  const selectedOption = options.find((opt) => opt.id === value) ?? (selectedOptionProp?.id === value ? selectedOptionProp : undefined);
+  const selectedOption =
+    options.find((opt) => opt.id === value) ??
+    (selectedOptionProp?.id === value ? selectedOptionProp : undefined);
 
   const setTerm = (next) => {
     setSearchTerm(next);
@@ -104,7 +117,9 @@ const RHFComboBox = ({
 
   const move = (step) => {
     if (!filteredOptions.length) return;
-    setHighlightedIndex((prev) => (prev + step + filteredOptions.length) % filteredOptions.length);
+    setHighlightedIndex(
+      (prev) => (prev + step + filteredOptions.length) % filteredOptions.length,
+    );
   };
 
   const handleKeyDown = (e) => {
@@ -124,7 +139,8 @@ const RHFComboBox = ({
       move(-1);
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (filteredOptions[highlightedIndex]) handleSelect(filteredOptions[highlightedIndex]);
+      if (filteredOptions[highlightedIndex])
+        handleSelect(filteredOptions[highlightedIndex]);
     } else if (e.key === "Escape") {
       e.preventDefault();
       close();
@@ -142,7 +158,8 @@ const RHFComboBox = ({
       const listScrollTop = listRef.current.scrollTop;
       const listHeight = listRef.current.offsetHeight;
       if (elTop < listScrollTop) listRef.current.scrollTop = elTop;
-      else if (elBottom > listScrollTop + listHeight) listRef.current.scrollTop = elBottom - listHeight;
+      else if (elBottom > listScrollTop + listHeight)
+        listRef.current.scrollTop = elBottom - listHeight;
     }
   }, [highlightedIndex, isOpen]);
 
@@ -179,9 +196,17 @@ const RHFComboBox = ({
   }, [inactive]);
 
   const optionText = (option) => {
-    if (secondaryField && option[secondaryField]) return `${option[secondaryField]} - ${option.name}`;
-    if (!waitingForParent && dependentKey && secondaryFieldOptions && secondaryField) {
-      const parent = secondaryFieldOptions.find((item) => item.id === dependentValue);
+    if (secondaryField && option[secondaryField])
+      return `${option[secondaryField]} - ${option.name}`;
+    if (
+      !waitingForParent &&
+      dependentKey &&
+      secondaryFieldOptions &&
+      secondaryField
+    ) {
+      const parent = secondaryFieldOptions.find(
+        (item) => item.id === dependentValue,
+      );
       if (parent) return `${parent[secondaryField]} - ${option.name}`;
     }
     return option.name;
@@ -189,22 +214,28 @@ const RHFComboBox = ({
 
   const showClear = clearable && !inactive && (value || searchTerm);
   const errorMessage = typeof error === "string" ? error : error?.message;
-  const activeId = isOpen && filteredOptions[highlightedIndex] ? `${id}-opt-${highlightedIndex}` : undefined;
+  const activeId =
+    isOpen && filteredOptions[highlightedIndex]
+      ? `${id}-opt-${highlightedIndex}`
+      : undefined;
 
   return (
     <div className={`w-full min-w-0 ${className}`}>
       <div className="flex gap-1 flex-col">
         {label && (
-          <label htmlFor={id} className="text-sm font-medium text-secondary-text" data-required={required || undefined}>
+          <label
+            htmlFor={id}
+            className="text-sm font-medium text-secondary-text"
+            data-required={required || undefined}>
             {label}
-            </label>
+          </label>
         )}
 
         <div ref={dropdownRef} className="relative">
           <div
             onClick={() => (isOpen ? close() : open())}
             // Same frame as TextInput: border, darker on hover, brand border + soft ring when focused or open.
-            className={`flex items-center justify-between rounded-lg border bg-text-input-color py-2 pl-2 pr-2 transition-all duration-150 ${
+            className={`flex items-center justify-between rounded-lg border bg-text-input-color py-1.5 pl-2 pr-2 transition-all duration-150 ${
               error
                 ? "border-error-color hover:border-error-color focus-within:ring-3 focus-within:ring-error-color/20"
                 : isOpen
@@ -212,12 +243,15 @@ const RHFComboBox = ({
                   : "border-border-color hover:border-border-dark-color focus-within:border-brand-primary focus-within:ring-3 focus-within:ring-brand-primary/20"
             } ${isOpen && error ? "ring-3 ring-error-color/20" : ""} ${inactive ? "opacity-60 cursor-not-allowed hover:border-border-color" : "cursor-pointer"}`}>
             {error ? (
-              <CircleAlertIcon title={errorMessage} className="w-5 h-5 text-error-color mr-3 flex-shrink-0" />
+              <CircleAlertIcon
+                title={errorMessage}
+                className="w-5 h-5 text-error-color mr-3 flex-shrink-0"
+              />
             ) : Icon ? (
               <Icon className="w-5 h-5 text-primary-text mr-3 flex-shrink-0 pointer-events-none" />
             ) : null}
 
-            <div className="flex flex-grow min-w-0 h-6 mr-2">
+            <div className="flex flex-grow min-w-0 mr-2">
               <input
                 ref={(el) => {
                   inputRef.current = el;
@@ -247,11 +281,14 @@ const RHFComboBox = ({
                 onKeyDown={handleKeyDown}
                 placeholder={
                   waitingForParent
-                    ? dependentPlaceholder ?? `Please select a ${dependentKey.replace(/_/g, " ")} first`
+                    ? (dependentPlaceholder ??
+                      `Please select a ${dependentKey.replace(/_/g, " ")} first`)
                     : selectedOption?.name || placeholder
                 }
-                className={`w-full h-full outline-none bg-transparent truncate placeholder:text-sm placeholder:text-muted disabled:cursor-not-allowed ${
-                  !selectedOption && !searchTerm ? "text-sm text-muted" : "text-base text-primary-text"
+                className={`w-full h-full text-sm outline-none bg-transparent truncate placeholder:text-sm placeholder:text-muted disabled:cursor-not-allowed ${
+                  !selectedOption && !searchTerm
+                    ? "text-sm text-muted"
+                    : "text-base text-primary-text"
                 }`}
               />
             </div>
@@ -267,7 +304,9 @@ const RHFComboBox = ({
               </button>
             )}
 
-            <div className="hover:bg-secondary-bg p-0.5 rounded-sm ml-1" aria-hidden="true">
+            <div
+              className="hover:bg-secondary-bg p-0.5 rounded-sm ml-1"
+              aria-hidden="true">
               <ChevronDownIcon
                 className={`stroke-primary-text w-5 h-5 transform transition-transform duration-300 ${isOpen ? "-rotate-180" : ""}`}
               />
@@ -297,12 +336,15 @@ const RHFComboBox = ({
                     onClick={() => handleSelect(option)}
                     className="px-2 py-1">
                     <div
-                      className={`rounded-md px-4 py-2 ${option.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${
-                        highlightedIndex === index ? "bg-brand-primary text-white" : "text-primary-text hover:bg-brand-primary/10"
+                      className={`rounded-md px-4 py-1 ${option.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${
+                        highlightedIndex === index
+                          ? "bg-brand-primary text-white"
+                          : "text-primary-text hover:bg-brand-primary/10"
                       }`}>
                       {optionText(option)}
                       {option.hint && (
-                        <span className={`block text-xs ${highlightedIndex === index ? "text-white/80" : "text-secondary-text"}`}>
+                        <span
+                          className={`block text-xs ${highlightedIndex === index ? "text-white/80" : "text-secondary-text"}`}>
                           {option.hint}
                         </span>
                       )}
@@ -310,13 +352,17 @@ const RHFComboBox = ({
                   </li>
                 ))
               ) : (
-                <li className="px-4 py-2 text-sm text-secondary-text">{emptyMessage}</li>
+                <li className="px-4 py-2 text-sm text-secondary-text">
+                  {emptyMessage}
+                </li>
               )}
             </ul>
           )}
         </div>
         {(errorMessage || hint) && (
-          <p id={helpId} className={`text-xs ${errorMessage ? "text-error-color" : "text-secondary-text"}`}>
+          <p
+            id={helpId}
+            className={`text-xs ${errorMessage ? "text-error-color" : "text-secondary-text"}`}>
             {errorMessage || hint}
           </p>
         )}

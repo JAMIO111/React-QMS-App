@@ -12,7 +12,7 @@ const TextAreaInput = forwardRef(
       rows = 5,
       max = 500,
     },
-    ref
+    ref,
   ) => {
     return (
       <div className="w-full h-full">
@@ -31,7 +31,7 @@ const TextAreaInput = forwardRef(
             onChange={onChange}
             placeholder={placeholder}
             rows={rows}
-            className="flex-grow w-full bg-transparent outline-none text-primary-text placeholder:text-sm placeholder:text-muted resize-none pr-6"
+            className="flex-grow text-sm w-full bg-transparent outline-none text-primary-text placeholder:text-sm placeholder:text-muted resize-none pr-6"
           />
 
           {value && (
@@ -46,7 +46,7 @@ const TextAreaInput = forwardRef(
         </div>
       </div>
     );
-  }
+  },
 );
 
 export default TextAreaInput;

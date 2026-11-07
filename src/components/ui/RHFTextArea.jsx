@@ -18,16 +18,19 @@ const RHFTextAreaInput = forwardRef(
       name,
       onBlur,
     },
-    ref
+    ref,
   ) => {
     const id = useId();
     const errorMessage = typeof error === "string" ? error : error?.message;
     return (
       <div className="w-full min-w-0">
         {label && (
-          <label htmlFor={id} className="block mb-1 text-sm font-medium text-secondary-text" data-required={required || undefined}>
+          <label
+            htmlFor={id}
+            className="block mb-1 text-sm font-medium text-secondary-text"
+            data-required={required || undefined}>
             {label}
-            </label>
+          </label>
         )}
         {/* Same frame as TextInput: border, darker on hover, brand border + soft ring when focused. */}
         <div
@@ -42,7 +45,9 @@ const RHFTextAreaInput = forwardRef(
               className="w-5 h-5 text-error-color mr-3 flex-shrink-0"
             />
           ) : (
-            Icon && <Icon className="w-5 h-5 text-primary-text mr-3 flex-shrink-0 pointer-events-none" />
+            Icon && (
+              <Icon className="w-5 h-5 text-primary-text mr-3 flex-shrink-0 pointer-events-none" />
+            )
           )}
 
           <textarea
@@ -58,7 +63,7 @@ const RHFTextAreaInput = forwardRef(
             onChange={onChange}
             placeholder={placeholder}
             rows={rows}
-            className="flex-grow w-full bg-transparent outline-none text-primary-text placeholder:text-sm placeholder:text-muted resize-none pr-6 disabled:cursor-not-allowed"
+            className="flex-grow w-full text-sm bg-transparent outline-none text-primary-text placeholder:text-sm placeholder:text-muted resize-none pr-6 disabled:cursor-not-allowed"
           />
 
           {value && !disabled && (
@@ -72,13 +77,15 @@ const RHFTextAreaInput = forwardRef(
           )}
         </div>
         {(errorMessage || hint) && (
-          <p id={`${id}-help`} className={`mt-1 text-xs ${errorMessage ? "text-error-color" : "text-secondary-text"}`}>
+          <p
+            id={`${id}-help`}
+            className={`mt-1 text-xs ${errorMessage ? "text-error-color" : "text-secondary-text"}`}>
             {errorMessage || hint}
           </p>
         )}
       </div>
     );
-  }
+  },
 );
 
 export default RHFTextAreaInput;

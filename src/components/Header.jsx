@@ -35,13 +35,15 @@ const Header = () => {
           />
         </button>
         <div className="flex flex-col ml-3">
-          <span className="text-primary-text text-right font-semibold">
+          <span className="text-primary-text text-sm text-right font-semibold">
             {userName}
           </span>
-          <span className="text-right text-secondary-text">{jobTitle}</span>
+          <span className="text-right text-sm text-secondary-text">
+            {jobTitle}
+          </span>
         </div>
         <img
-          className="rounded-xl border-1 border-border-color w-12 h-12 object-cover"
+          className="rounded-lg border-1 border-border-color w-10 h-10 object-cover"
           src={avatarUrl || "/fortress-qms.png"}
           alt="Profile Pic"
         />

@@ -75,12 +75,15 @@ const TextInput = forwardRef(
     return (
       <div className="flex flex-col gap-1 min-h-17 min-w-0">
         {label && (
-          <label htmlFor={id} className="block text-sm font-medium text-secondary-text" data-required={required || undefined}>
+          <label
+            htmlFor={id}
+            className="block text-sm font-medium text-secondary-text"
+            data-required={required || undefined}>
             {label}
-            </label>
+          </label>
         )}
         <div
-          className={`group flex border flex-row relative items-center rounded-lg pl-2 pr-10 py-2 bg-text-input-color
+          className={`group flex border flex-row relative items-center rounded-lg pl-2 pr-10 bg-text-input-color
   border-border-color
   hover:border-border-dark-color
   focus-within:border-brand-primary
@@ -121,7 +124,7 @@ const TextInput = forwardRef(
             value={current}
             onChange={handleChange}
             placeholder={placeholder}
-            className={`placeholder:normal-case input-no-arrows flex-grow w-full min-w-0 bg-transparent outline-none text-primary-text placeholder:text-sm placeholder:text-muted disabled:cursor-not-allowed
+            className={`placeholder:normal-case py-2 input-no-arrows flex-grow w-full min-w-0 bg-transparent outline-none text-primary-text placeholder:text-sm text-sm placeholder:text-muted disabled:cursor-not-allowed
               ${prefix ? "pl-5" : ""}
               ${suffix ? "pr-4 text-right" : ""}
               ${textTransform !== "none" ? `capitalize-${textTransform}` : ""}
@@ -149,7 +152,9 @@ const TextInput = forwardRef(
           )}
         </div>
         {(errorMessage || hint) && (
-          <p id={`${id}-help`} className={`text-xs ${errorMessage ? "text-error-color" : "text-secondary-text"}`}>
+          <p
+            id={`${id}-help`}
+            className={`text-xs ${errorMessage ? "text-error-color" : "text-secondary-text"}`}>
             {errorMessage || hint}
           </p>
         )}

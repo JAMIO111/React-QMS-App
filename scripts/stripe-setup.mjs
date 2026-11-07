@@ -15,7 +15,11 @@ if (!key || !/^(sk|rk)_(test|live)_/.test(key)) {
   process.exit(1);
 }
 const dryRun = process.argv.includes('--dry-run');
-const stripe = new Stripe(key, { appInfo: { name: 'Fortress QMS setup' } });
+// STRIPE_USE_FETCH=1 makes the client use fetch instead of Node's http module: needed behind an HTTP(S) proxy (run with NODE_USE_ENV_PROXY=1).
+const stripe = new Stripe(key, {
+  appInfo: { name: 'Fortress QMS setup' },
+  ...(process.env.STRIPE_USE_FETCH ? { httpClient: Stripe.createFetchHttpClient() } : {}),
+});
 
 const PLANS = [
   { slug: 'observer', name: 'Fortress QMS Observer', description: 'Read-only access to company quality information.', monthly: 500 },

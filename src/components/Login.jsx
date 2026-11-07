@@ -3,15 +3,15 @@ import { Link, useNavigate } from "react-router-dom";
 import { signIn } from "../authService";
 import { AtSignIcon, EyeIcon, EyeOffIcon, LockIcon } from "@/components/icons";
 import { useForm } from "react-hook-form";
-import { useToast } from "@/contexts/ToastProvider";
-import { authButtonClass } from "./auth/AuthCard";
+import { AuthNotice, authButtonClass } from "./auth/AuthCard";
+import VerifyEmail from "./auth/VerifyEmail";
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
+  const [unverifiedEmail, setUnverifiedEmail] = useState(null);
   const navigate = useNavigate(null);
   const [loading, setLoading] = useState(false);
-  const { showToast } = useToast();
 
   const {
     register,
@@ -21,16 +21,21 @@ const Login = () => {
 
   const handleLogin = async (data) => {
     setLoading(true);
+    setMessage("");
+    setUnverifiedEmail(null);
     const { email, password } = data;
     try {
-      await signIn(email, password, showToast);
+      await signIn(email, password);
       navigate("/Dashboard"); // Redirect to Dashboard on successful login
     } catch (error) {
       if (error.message.includes("Invalid login credentials")) {
         setMessage("Invalid email or password. Please try again.");
+      } else if (/email not confirmed/i.test(error.message) || error.code === "email_not_confirmed") {
+        setUnverifiedEmail(email.trim());
+      } else if (error.status === 429 || /rate limit|too many/i.test(error.message)) {
+        setMessage("Too many attempts. Please wait a few minutes and try again.");
       } else {
-        alert(error.message);
-        console.error("Login failed:", error.message);
+        setMessage("We couldn't sign you in. Please try again.");
       }
     } finally {
       setLoading(false); // Always stop loading
@@ -125,6 +130,12 @@ const Login = () => {
           <p role="alert" className="text-error-color text-sm">
             {message}
           </p>
+        )}
+        {unverifiedEmail && (
+          <div className="flex flex-col gap-3">
+            <AuthNotice tone="error">Your email address has not been verified yet. Open the link we sent you, then sign in.</AuthNotice>
+            <VerifyEmail email={unverifiedEmail} startCooldown={false} />
+          </div>
         )}
         <div className="flex flex-row gap-2 text-sm">
           <p className="text-secondary-text">New to Fortress QMS?</p>

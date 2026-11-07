@@ -122,7 +122,7 @@ Every route is `@OrganisationScoped` or on the reviewed allowlist (webhook, cron
 
 | Slice | Content | Done when |
 |---|---|---|
-| **ON1 Sign-up and account states** | New sign-up + verification, "Start your organisation", `signup_events`, `platform_admins` + `/platform` shell | A stranger can sign up, verify, and reach "Start your organisation"; nothing else; funnel events recorded |
+| **ON1 Sign-up and account states** (done 2026-11-07) | New sign-up + verification, "Start your organisation", `signup_events`, `platform_admins` + `/platform` shell | A stranger can sign up, verify, and reach "Start your organisation"; nothing else; funnel events recorded |
 | **ON2 Organisation in a locked state + wizard shell** | `start_organisation`, `status`/`billing_required`, `organisation_onboarding`, wizard steps 1, 3, 4, 5 (details, sites & departments, security) with saved progress | Org exists but is unusable until subscribed; refresh/resume works; DB refuses business calls while locked |
 | **ON3 Stripe subscription** | Checkout + trial, server-side confirm, webhooks + `stripe_events`, Customer Portal, `subscription_valid` gate, lock page, Controller invariant, seat change with proration preview, billing UI | Test-mode purchase end to end; payment failure and recovery; lock/unlock; replayed and out-of-order webhooks safe; reductions and last-owner rules tested |
 | **ON4 Team and roles** | Invitation upgrades, bulk invite, wizard step 6, `AcceptInvite` + member welcome, seat-aware invites with "buy more" | Invitee path works for new and existing accounts; seat and role rules enforced and explained |
@@ -136,10 +136,25 @@ Every route is `@OrganisationScoped` or on the reviewed allowlist (webhook, cron
 3. Env vars on the Vercel Dev project: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `CRON_SECRET`, plus `APP_BASE_URL` for Checkout return links.
 4. Terms of service and privacy policy URLs for the sign-up page (placeholders until you have them).
 
-## 10. Open questions
+## 10. Answers (2026-11-07)
 
-1. **Currency and prices:** keep GBP, £5 / £10 / £25 per seat per month and annual = 10 × monthly? (Stripe Prices are created from these.)
-2. **VAT / tax:** use **Stripe Tax** (automatic, needs your tax registration set up in Stripe) or add tax later and show "VAT added at invoice" for now?
-3. **Minimum purchase:** is 1 Controller seat the only minimum, or do you want a minimum number of seats in total?
-4. **Cancellation:** cancel at period end only (default), or also let owners cancel immediately with a pro-rata refund?
-5. **Archived organisations:** after how many days of an unpaid set-up do we archive it (default 14), and after a subscription is cancelled how long do we keep the data before archiving (default 90)?
+| # | Decision |
+|---|---|
+| O11 | **Prices unchanged:** GBP, £5 / £10 / £25 per seat per month, annual = 10 × monthly. |
+| O12 | **VAT:** the most common SaaS approach: prices are shown **excluding VAT**; **Stripe Tax** calculates and adds VAT (and collects the customer's tax id) at checkout and on invoices, based on the billing address. Needs your tax registration set up in Stripe before live mode; in test mode it works with Stripe's test settings. |
+| O13 | **Minimum purchase = 1 Controller seat.** An owner cannot have access to the app without it (O2). |
+| O14 | **Cancellation at period end only** (Customer Portal); access continues until the period ends, then the lock (O5) applies. |
+| O15 | **Retention defaults:** an unpaid set-up is archived after **14 days**; a cancelled/lapsed organisation's data is kept **90 days** before archiving. |
+
+## 11. ON1 in detail: sign-up and account states
+
+**Goal:** a stranger can sign up, verify their email, sign in, and reach "Start your organisation"; the operator can see that funnel. (The organisation is still created unlocked in ON1; the locked state and the gate arrive in ON2/ON3.)
+
+- **Migration `20251128100000_onboarding_accounts.sql`:** `profiles.terms_accepted_at/terms_version` (from sign-up metadata, set by `handle_new_user`); `signup_events` (platform-owned; `signed_up | verified | org_started`, `kind` self|invited,
+  written only by triggers on `auth.users` and `organisations`, backfilled from existing data); `platform_admins` (allow-list, seeded by SQL); `app.is_platform_admin()` (allow-list **and** an `aal2` session);
+  `app.platform_funnel(days)` and `app.platform_recent_signups(limit)` (admin only). Both tables are reviewed global tables in the guardrails.
+- **API:** `GET /platform/me`, `GET /platform/overview?days=` (unscoped, reviewed allowlist; `403 mfa_required` for an admin on a non-MFA session; `403` for everyone else).
+- **Frontend:** new sign-up (name, work email, password with live rules, terms acceptance, inline errors, no enumeration), "check your email" screen with resend and cooldown, sign-in that explains an unverified account and resends,
+  the first-run page rebuilt as **Start your organisation** (progress rail, pending invitations, organisation form), and `/platform` (funnel cards, period selector, recent sign-ups) visible only to platform admins.
+- **Tests:** SQL (events by trigger, invited users excluded from the owner funnel, admin and MFA gating, no access for others), API e2e (admin, non-admin, no-MFA), Vitest for every new screen, mutation checks, guardrails and sweeps.
+- **Needs from you later (not for ON1):** Stripe account and keys (ON3). Terms/privacy URLs come from `VITE_TERMS_URL` / `VITE_PRIVACY_URL` (placeholders until you have them).

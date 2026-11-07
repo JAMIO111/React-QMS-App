@@ -40,7 +40,9 @@ global_tables(relname, why) AS (VALUES
   ('subscription_prices',       'global commercial catalogue, read-only'),
   ('modules',                   'global module catalogue, read-only'),
   ('features',                  'global feature catalogue, read-only'),
-  ('subscription_entitlements', 'global package-to-feature mapping, read-only')
+  ('subscription_entitlements', 'global package-to-feature mapping, read-only'),
+  ('platform_admins',            'operator allow-list, read only by platform admins with an MFA session'),
+  ('signup_events',              'sign-up funnel written by triggers, read only by platform admins with an MFA session')
 ),
 audited(relname) AS (VALUES
   ('organisations'), ('organisation_settings'), ('sites'), ('departments'), ('organisation_users'),

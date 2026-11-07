@@ -26,6 +26,8 @@ const UNSCOPED = new Set([
   'GET /api/v1/invitations',
   'POST /api/v1/invitations/{id}/accept',
   'GET /api/v1/units', // global catalogue of measurement units
+  'GET /api/v1/platform/me', // the operator area spans organisations; admin-only in the database (allow-list + MFA)
+  'GET /api/v1/platform/overview',
 ]);
 
 interface Op {

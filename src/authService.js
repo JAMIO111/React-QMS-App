@@ -1,63 +1,26 @@
 import supabase from "./supabase-client";
 
-// ✅ Now accepts a showToast callback (optional)
-export const signUp = async (email, password, showToast) => {
+/**
+ * Creates an account. The name and the accepted terms travel as sign-up metadata (the database keeps them on the profile).
+ * Resolves `{ confirmationSent, user }`. An address that already has an account looks the same as a new one (Supabase answers with a user that has
+ * no identities), so the screen never reveals whether an email is registered.
+ */
+export const signUp = async (email, password, { firstName, surname, termsVersion } = {}) => {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       emailRedirectTo: `${window.location.origin}/login`,
+      data: { first_name: firstName, surname, terms_version: termsVersion },
     },
   });
-
-  if (error) {
-    if (showToast) {
-      if (error.message.includes("already registered")) {
-        showToast({
-          type: "error",
-          title: "Email Already Registered",
-          message:
-            "This email is already registered. Please log in or use a different email.",
-        });
-      } else {
-        showToast({
-          type: "error",
-          title: "Unexpected Error",
-          message: error.message,
-        });
-      }
-    }
-    throw new Error(error.message);
-  }
-
-  return data;
+  if (error) throw error;
+  return { user: data.user, session: data.session, confirmationSent: !data.session };
 };
 
-export const signIn = async (email, password, showToast) => {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  if (error) {
-    if (showToast) {
-      if (error.message.includes("Invalid login credentials")) {
-        showToast({
-          type: "error",
-          title: "Login Failed",
-          message: "Invalid email or password. Please try again.",
-        });
-      } else {
-        showToast({
-          type: "error",
-          title: "Unexpected Error",
-          message: error.message,
-        });
-      }
-    }
-    throw new Error(error.message);
-  }
-
+export const signIn = async (email, password) => {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
   return data;
 };
 
@@ -72,26 +35,14 @@ export const getUser = async () => {
   return data.user;
 };
 
-export const resendVerification = async (email, showToast) => {
+/** Sends the verification email again. Throws Supabase's error (with `status`, so a rate limit can be told apart). */
+export const resendVerification = async (email) => {
   const { error } = await supabase.auth.resend({
     type: "signup",
     email,
-    options: {
-      emailRedirectTo: `${window.location.origin}/login`,
-    },
+    options: { emailRedirectTo: `${window.location.origin}/login` },
   });
-
-  if (error) {
-    if (showToast) {
-      showToast({
-        type: "error",
-        title: "Verification Failed",
-        message: error.message,
-      });
-    }
-    throw new Error(error.message);
-  }
-
+  if (error) throw error;
   return true;
 };
 

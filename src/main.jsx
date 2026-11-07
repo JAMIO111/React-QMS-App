@@ -65,6 +65,7 @@ const CapaRegisterPage = lazy(() => import("./components/capa/CapaRegisterPage.j
 const CapaPage = lazy(() => import("./components/capa/CapaPage.jsx"));
 const CapaReportPage = lazy(() => import("./components/capa/CapaReportPage.jsx"));
 const MyActionsPage = lazy(() => import("./components/capa/MyActionsPage.jsx"));
+const PlatformPage = lazy(() => import("./components/platform/PlatformPage.jsx"));
 const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
 const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
 const InspectionPage = lazy(() => import("./components/inspection/InspectionPage.jsx"));
@@ -115,6 +116,8 @@ const router = createBrowserRouter([
     element: <ProtectedRoute />, // MUST render <Outlet /> inside!
     errorElement: <NotFound />,
     children: [
+      // The operator area spans organisations, so it lives outside <App /> (which needs one) and checks access itself.
+      { path: "platform", element: <PlatformPage /> },
       {
         element: <App />, // App contains the Navbar/Header + <Outlet />
         children: [

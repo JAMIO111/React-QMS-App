@@ -7,7 +7,8 @@ DO $$ BEGIN
 END $$;
 
 CREATE SCHEMA IF NOT EXISTS auth;
-CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), email text, raw_user_meta_data jsonb DEFAULT '{}'::jsonb);
+CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), email text, raw_user_meta_data jsonb DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now(), email_confirmed_at timestamptz, invited_at timestamptz);
 
 -- Mirrors Supabase (an empty or missing claims setting yields NULL): reads claims set via `set local request.jwt.claims = '{"sub": "...", "role": "..."}'`
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS

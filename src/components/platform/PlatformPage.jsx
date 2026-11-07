@@ -1,9 +1,14 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { usePlatformMe, usePlatformOverview } from "../../hooks/usePlatform";
 import MenuCard from "../ui/MenuCard";
 import NotFound from "../NotFound";
 import { ErrorNotice } from "../master-data/shared";
+import ActivityPanel from "./ActivityPanel";
+import OrganisationsPanel from "./OrganisationsPanel";
+import PaymentsPanel from "./PaymentsPanel";
+import RevenuePanel from "./RevenuePanel";
+import WebhooksPanel from "./WebhooksPanel";
 
 const PERIODS = [
   { days: 7, label: "7 days" },
@@ -106,14 +111,52 @@ const Monitor = () => {
   );
 };
 
+const TABS = [
+  { key: "overview", label: "Overview", Panel: Monitor },
+  { key: "revenue", label: "Revenue", Panel: RevenuePanel },
+  { key: "organisations", label: "Organisations", Panel: OrganisationsPanel },
+  { key: "payments", label: "Payments", Panel: PaymentsPanel },
+  { key: "webhooks", label: "Webhooks", Panel: WebhooksPanel },
+  { key: "activity", label: "Activity", Panel: ActivityPanel },
+];
+
+/** The tabs of the operator area; the chosen one lives in the address (?tab=) so a page can be shared or reloaded. */
+const Tabs = () => {
+  const [params, setParams] = useSearchParams();
+  const active = TABS.find((t) => t.key === params.get("tab")) ?? TABS[0];
+  const Active = active.Panel;
+  return (
+    <div className="flex flex-col gap-4">
+      <div role="tablist" aria-label="Platform" className="flex flex-wrap gap-1 border-b border-border-color">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            id={`tab-${t.key}`}
+            aria-selected={t.key === active.key}
+            aria-controls="platform-panel"
+            onClick={() => setParams(t.key === "overview" ? {} : { tab: t.key }, { replace: true })}
+            className={`-mb-px cursor-pointer rounded-t-lg border-b-2 px-4 py-2 text-sm ${t.key === active.key ? "border-brand-primary font-semibold text-primary-text" : "border-transparent text-secondary-text hover:text-primary-text"}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" id="platform-panel" aria-labelledby={`tab-${active.key}`}>
+        <Active />
+      </div>
+    </div>
+  );
+};
+
 /** The operator's area (/platform): for accounts on the platform allow-list whose session has passed two-factor authentication. Everyone else sees "not found". */
 const PlatformPage = () => {
   const me = usePlatformMe();
   if (me.isLoading) return <p className="p-6 text-sm text-secondary-text">Loading…</p>;
   if (me.error || me.data?.status === "none") return <NotFound />;
   return (
-    <main className="min-h-screen w-full overflow-y-auto bg-primary-bg p-4 sm:p-6">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+    <main className="h-dvh w-full overflow-y-auto bg-primary-bg p-4 sm:p-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold text-primary-text">Fortress QMS · Platform</h1>
           <Link to="/Dashboard" className="text-sm text-link-color hover:underline">
@@ -130,7 +173,7 @@ const PlatformPage = () => {
             </p>
           </MenuCard>
         ) : (
-          <Monitor />
+          <Tabs />
         )}
       </div>
     </main>

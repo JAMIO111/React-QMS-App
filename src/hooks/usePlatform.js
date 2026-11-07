@@ -23,3 +23,17 @@ export const usePlatformOverview = (days = 30, { enabled = true } = {}) =>
     retry: false,
     refetchInterval: 60_000,
   });
+
+const useMonitor = (key, path, { refetch = 60_000 } = {}) =>
+  useQuery({ queryKey: ["api", "platform", ...key], queryFn: () => apiFetch(path), retry: false, refetchInterval: refetch });
+
+/** Every organisation with its billing state (search by name or owner email, paged). Counts and billing only: no business data. */
+export const usePlatformOrganisations = ({ search = "", limit = 25, offset = 0 } = {}) => {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (search.trim()) params.set("search", search.trim());
+  return useMonitor(["organisations", search.trim(), limit, offset], `/platform/organisations?${params}`, { refetch: false });
+};
+export const usePlatformRevenue = () => useMonitor(["revenue"], "/platform/revenue");
+export const usePlatformPayments = (limit = 50) => useMonitor(["payments", limit], `/platform/payments?limit=${limit}`);
+export const usePlatformWebhooks = (hours = 24) => useMonitor(["webhooks", hours], `/platform/webhooks?hours=${hours}`, { refetch: 30_000 });
+export const usePlatformActivity = (limit = 100) => useMonitor(["activity", limit], `/platform/activity?limit=${limit}`);

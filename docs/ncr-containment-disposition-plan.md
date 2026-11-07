@@ -1,6 +1,6 @@
 # NC containment and disposition — plan
 
-**Status:** built (NC1 database, NC2 API, NC3 UI); migration `20251209100000_ncr_containment_disposition.sql` **not applied live yet** · **Closes:** Phase 2 slice 2.5 (`docs/phase-2-plan.md` §2.3, §3) for containment and disposition · **Builds on:** NC core (2.4), costs and files, CAPA / 8D, inspections raising NCs
+**Status:** built and live (NC1 database, NC2 API, NC3 UI); migration `20251209100000_ncr_containment_disposition.sql` applied live · **Closes:** Phase 2 slice 2.5 (`docs/phase-2-plan.md` §2.3, §3) for containment and disposition · **Builds on:** NC core (2.4), costs and files, CAPA / 8D, inspections raising NCs
 
 ## 1. The gap
 

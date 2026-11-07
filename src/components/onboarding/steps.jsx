@@ -186,7 +186,10 @@ export const DetailsStep = () => {
   const update = useUpdateOrganisation();
   const [legalName, setLegalName] = useState(org?.legalName ?? "");
   const [country, setCountry] = useState(org?.country ?? null);
-  useEffect(() => { setLegalName(org?.legalName ?? ""); setCountry(org?.country ?? null); }, [org?.legalName, org?.country]);
+  // Follow the saved values, but not the moment they first load as "nothing": that would wipe what the person has already started typing.
+  const savedLegalName = org?.legalName ?? "";
+  const savedCountry = org?.country ?? null;
+  useEffect(() => { setLegalName(savedLegalName); setCountry(savedCountry); }, [savedLegalName, savedCountry]);
   const dirty = org && (legalName.trim() !== (org.legalName ?? "") || (country ?? null) !== (org.country ?? null));
   return (
     <div className="flex flex-col gap-4">

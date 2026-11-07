@@ -6,11 +6,13 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 let permissions;
 let state;
 let queryError = null;
+const loadedDetails = { name: "Acme Ltd", legalName: null, country: null, settings: { logoPath: null, themeColour: "purple", requireMfa: false } };
+let details = loadedDetails;
 const mutate = vi.fn();
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisation: { id: "org-1", name: "Acme Ltd" }, organisationId: "org-1" }) }));
 vi.mock("../../hooks/useQmsApi", () => ({
   usePermissions: () => ({ can: (p) => permissions.includes(p), isLoading: false }),
-  useOrganisationDetails: () => ({ data: { name: "Acme Ltd", legalName: null, country: null, settings: { logoPath: null, themeColour: "purple", requireMfa: false } } }),
+  useOrganisationDetails: () => ({ data: details }),
   useSites: () => ({ data: { data: [{ id: "s1", name: "Plant A", code: "PA", timezone: "Europe/London" }] } }),
   useUpdateOrganisation: () => ({ mutate: vi.fn(), isPending: false }),
 }));
@@ -53,16 +55,16 @@ const makeState = (over = {}, statuses = {}) => ({
   ...over,
 });
 const Where = () => <p>at {useLocation().pathname}</p>;
-const renderAt = (url) =>
-  render(
-    <MemoryRouter initialEntries={[url]}>
-      <Routes>
-        <Route path="/setup" element={<SetupWizard />} />
-        <Route path="/setup/:step" element={<SetupWizard />} />
-        <Route path="/Dashboard" element={<Where />} />
-      </Routes>
-    </MemoryRouter>,
-  );
+const tree = (url) => (
+  <MemoryRouter initialEntries={[url]}>
+    <Routes>
+      <Route path="/setup" element={<SetupWizard />} />
+      <Route path="/setup/:step" element={<SetupWizard />} />
+      <Route path="/Dashboard" element={<Where />} />
+    </Routes>
+  </MemoryRouter>
+);
+const renderAt = (url) => render(tree(url));
 
 beforeEach(() => {
   mutate.mockReset();
@@ -74,7 +76,19 @@ beforeEach(() => {
   permissions = ["organisation.manage", "subscription.manage"];
   state = makeState();
   queryError = null;
+  details = loadedDetails;
   resumeSetup();
+});
+
+describe("the details step", () => {
+  it("keeps what is typed when the organisation's details arrive afterwards", async () => {
+    details = undefined; // still loading
+    const view = renderAt("/setup/details");
+    await userEvent.type(screen.getByLabelText("Legal name"), "Acme Fabrication Limited");
+    details = loadedDetails; // the saved values arrive: nothing saved yet
+    view.rerender(tree("/setup/details"));
+    expect(screen.getByLabelText("Legal name")).toHaveValue("Acme Fabrication Limited");
+  });
 });
 
 describe("the set-up wizard", () => {

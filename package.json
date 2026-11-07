@@ -14,7 +14,8 @@
     "api:build": "npm --workspace api run build",
     "api:test": "npm --workspace api run test",
     "api:test:e2e": "DB_CHECK_SKIP_TESTS=1 DB_CHECK_COMMAND=\"npm --workspace api run test:e2e\" bash scripts/db-check.sh",
-    "api:dev": "npm --workspace api run dev"
+    "api:dev": "npm --workspace api run dev",
+    "journey": "npm run api:build && DB_CHECK_SKIP_TESTS=1 DB_CHECK_COMMAND=\"node scripts/journey/run.cjs\" bash scripts/db-check.sh"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

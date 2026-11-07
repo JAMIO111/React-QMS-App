@@ -1,6 +1,6 @@
 # Correcting a released part revision — plan
 
-**Status:** design agreed (§3), not built · **Builds on:** master data part revisions (2.1), process control resolver (PC3), inspections (PC4), operator hub
+**Status:** design agreed (§3), building · **Builds on:** master data part revisions (2.1), process control resolver (PC3), inspections (PC4), operator hub
 
 ## 1. The problem
 
@@ -32,6 +32,8 @@ A revision letter belongs to the drawing. A **correction** keeps the letter and 
 
 1. **Correction versions** (not edit-in-place, not a separate drawing-revision field).
 2. **Approvers only** release a correction, and the **impact list** is shown after release.
+3. **The same person may prepare and approve** a correction (small teams); the audit trail records who did each.
+4. **Older, already-replaced revisions are not correctable** in this version.
 
 ## 4. Slices
 
@@ -44,7 +46,3 @@ A revision letter belongs to the drawing. A **correction** keeps the letter and 
 Correcting a revision that is already superseded by a later letter (the drawing's older revision), edit-in-place, automatic re-inspection or NC raising, uploading the drawing
 file itself, a separate "drawing revision" field.
 
-## 6. Open points to confirm before building
-
-1. Should the person who prepared a correction be allowed to approve it themselves (smaller teams), or must a second approver do it?
-2. Correcting an older, superseded revision is left out. Say if you need it in the first version.

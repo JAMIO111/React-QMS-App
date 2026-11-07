@@ -14,19 +14,26 @@ const isTimeZone = (tz: string) => {
 const Name = z.string().trim().min(1).max(100);
 const TimeZone = z.string().trim().max(64).refine(isTimeZone, 'Unknown IANA time zone');
 const Code = SiteCode;
+const Currency = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z]{3}$/, 'Use a 3-letter ISO currency code')
+  .transform((v) => v.toUpperCase());
 
 export const Site = z.object({
   id: z.string().uuid(),
   code: z.string(),
   name: z.string(),
   timezone: z.string(),
+  /** Default currency for money entered at this site. */
+  currency: z.string(),
   active: z.boolean(),
 });
 export type Site = z.infer<typeof Site>;
 
-export const CreateSiteBody = z.object({ code: Code, name: Name, timezone: TimeZone.optional() }).strict();
+export const CreateSiteBody = z.object({ code: Code, name: Name, timezone: TimeZone.optional(), currency: Currency.optional() }).strict();
 export const UpdateSiteBody = z
-  .object({ code: Code.optional(), name: Name.optional(), timezone: TimeZone.optional(), active: z.boolean().optional() })
+  .object({ code: Code.optional(), name: Name.optional(), timezone: TimeZone.optional(), currency: Currency.optional(), active: z.boolean().optional() })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
 

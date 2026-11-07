@@ -48,6 +48,8 @@ export const sites = pgTable('sites', {
   code: text('code').notNull(),
   name: text('name').notNull(),
   timezone: text('timezone').notNull().default('Europe/London'),
+  /** Default currency for money entered at this site; a new site starts with the organisation's (set by a database trigger when omitted). */
+  currency: text('currency').notNull(),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

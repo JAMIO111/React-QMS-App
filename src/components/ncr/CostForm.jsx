@@ -28,7 +28,7 @@ const schema = z
   .refine((v) => v.currency === v.baseCurrency || v.exchangeRate, { path: ["exchangeRate"], message: "Enter the exchange rate" });
 
 /** Form values for a cost (new: organisation defaults). */
-const initialValues = (cost, { baseCurrency, vatRate }) =>
+const initialValues = (cost, { baseCurrency, defaultCurrency, vatRate }) =>
   cost
     ? {
         costType: cost.costType,
@@ -45,7 +45,7 @@ const initialValues = (cost, { baseCurrency, vatRate }) =>
         costType: null,
         description: "",
         incurredOn: format(new Date(), "yyyy-MM-dd"),
-        currency: baseCurrency,
+        currency: defaultCurrency || baseCurrency,
         vatTreatment: "none",
         vatRatePercent: round(vatRate * 100),
         amount: "",
@@ -56,13 +56,13 @@ const round = (n) => Math.round(n * 10000) / 10000;
 
 /**
  * Add or edit a cost line (ported from the original CostInputForm): cost type, VAT option and
- * rate, currency (with exchange rate to the organisation's base currency) and amount, with a live
+ * rate, currency (starts as `defaultCurrency`, the NC's site currency; exchange rate to the organisation's base currency) and amount, with a live
  * net / VAT / gross preview. The server works out the stored totals the same way.
  */
-const CostForm = ({ cost, baseCurrency = "GBP", vatRate = 0.2, onSubmit, onCancel, pending, error }) => {
+const CostForm = ({ cost, baseCurrency = "GBP", defaultCurrency, vatRate = 0.2, onSubmit, onCancel, pending, error }) => {
   const { control, handleSubmit, watch } = useForm({
     resolver: zodResolver(schema),
-    defaultValues: initialValues(cost, { baseCurrency, vatRate }),
+    defaultValues: initialValues(cost, { baseCurrency, defaultCurrency, vatRate }),
   });
   const v = watch();
   const foreign = v.currency && v.currency !== baseCurrency;

@@ -76,6 +76,7 @@ Summary of the brief:
   DEFINER triggers only. New tenant tables: table-level INSERT + `app.stamp_created()`,
   column-level UPDATE, no DELETE, `audit_changes`, add to guardrails + both sweeps.
 - Buttons: `CTAButton` types and `buttonClass` (`master-data/shared.jsx`): `main`/`primary` (theme colour), `secondary` (dark in light mode, light in dark mode; tokens `--secondary-btn-*` in `index.css`), `neutral` (grey), `danger`/`cancel`. Use secondary for a calm but definite action beside or instead of the main one (e.g. print, go to the dashboard).
+- Sites: `sites.currency` (migration `20251204100000_site_currency.sql`; a new site starts with `organisation_settings.base_currency` via trigger `app.site_default_currency`; changing the organisation currency leaves existing sites alone) is the **default currency for money entered at that site** — a new NC cost line starts in the NC's site currency (`CostForm defaultCurrency`); totals stay in the organisation's base currency. Settings → Organisation → Sites and departments (`SitesManager.jsx`): **Add / Edit site open a pop-up** (`SiteDialog`: code (fixed once created), name, time zone (`TimeZoneCombo`, `lib/timeZones.js`), currency and the site's departments — saved as added for an existing site, created with the site for a new one).
 - Form pickers: dropdowns use `src/components/ui/RHFComboBox.jsx` and dates use
   `RHFDatePickerPopout.jsx` (value/onChange, so wrap in react-hook-form `Controller`; both take
   `label`, `required`, `disabled`, `hint`, `error`). Options are `{ id, name, hint?, disabled? }`;

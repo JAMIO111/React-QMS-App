@@ -6,7 +6,7 @@ import Dialog from "../ui/Dialog";
 import CostForm from "./CostForm";
 import ReasonDialog from "./ReasonDialog";
 import { useNcrCosts, useNcrMutation } from "../../hooks/useNcr";
-import { useOrganisationDetails } from "../../hooks/useQmsApi";
+import { useOrganisationDetails, useSites } from "../../hooks/useQmsApi";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
 import { costTypeName, formatMoney } from "../../lib/costs";
@@ -15,13 +15,14 @@ import LoadingScreen from "../ui/LoadingScreen";
 
 /**
  * Cost lines of an NCR (ported from the original CostData): table with totals in the
- * organisation's base currency, add / edit in a dialog, delete with a reason, show and restore
+ * organisation's base currency, add / edit in a dialog (a new line starts in the NC's site currency), delete with a reason, show and restore
  * deleted lines.
  */
-const NcrCosts = ({ ncrId, canEdit }) => {
+const NcrCosts = ({ ncrId, siteId, canEdit }) => {
   const [showDeleted, setShowDeleted] = useState(false);
   const costs = useNcrCosts(ncrId, { deleted: showDeleted ? "include" : "exclude" });
   const org = useOrganisationDetails();
+  const sites = useSites({ includeInactive: true });
   const mutation = useNcrMutation();
   const { showToast } = useToast();
   const [editing, setEditing] = useState(null); // "new" | cost
@@ -29,6 +30,8 @@ const NcrCosts = ({ ncrId, canEdit }) => {
 
   const settings = org.data?.settings ?? {};
   const baseCurrency = costs.data?.totals.baseCurrency ?? settings.baseCurrency ?? "GBP";
+  // A new cost line starts in the currency of the site the NC was raised at (its own currency, else the organisation's).
+  const siteCurrency = (sites.data?.data ?? []).find((s) => s.id === siteId)?.currency;
   const rows = costs.data?.data ?? [];
   const totals = costs.data?.totals;
 
@@ -165,6 +168,7 @@ const NcrCosts = ({ ncrId, canEdit }) => {
           <CostForm
             cost={editing === "new" ? null : editing}
             baseCurrency={baseCurrency}
+            defaultCurrency={siteCurrency}
             vatRate={settings.vatRate ?? 0.2}
             pending={mutation.isPending}
             error={mutation.error}

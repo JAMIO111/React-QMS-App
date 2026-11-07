@@ -145,6 +145,17 @@ describe('sites', () => {
     const created = await api().post('/api/v1/sites').set(h).send({ code: 'lds', name: 'Leeds', timezone: 'Europe/London' }).expect(201);
     expect(created.body).toMatchObject({ code: 'LDS', name: 'Leeds', timezone: 'Europe/London', active: true });
 
+    // Currency: a new site starts with the organisation's (whatever its settings say), an explicit one is kept (upper-cased), anything but three letters is refused.
+    const orgCurrency = (await api().get('/api/v1/organisations/current').set(h).expect(200)).body.settings.baseCurrency;
+    expect(created.body.currency).toBe(orgCurrency);
+    const usd = await api().post('/api/v1/sites').set(h).send({ code: 'NYC', name: 'New York', currency: 'usd' }).expect(201);
+    expect(usd.body.currency).toBe('USD');
+    const changed = await api().patch(`/api/v1/sites/${usd.body.id}`).set(h).send({ currency: 'eur' }).expect(200);
+    expect(changed.body.currency).toBe('EUR');
+    await api().post('/api/v1/sites').set(h).send({ code: 'BAD', name: 'Bad', currency: 'POUNDS' }).expect(400);
+    await api().patch(`/api/v1/sites/${usd.body.id}`).set(h).send({ currency: '' }).expect(400);
+    expect((await api().get('/api/v1/sites').set(h).expect(200)).body.data.every((x: { currency: string }) => /^[A-Z]{3}$/.test(x.currency))).toBe(true);
+
     const dup = await api().post('/api/v1/sites').set(h).send({ code: 'LDS', name: 'Leeds again' }).expect(409);
     expect(dup.body.error).toMatchObject({ code: 'conflict', message: 'A site with this code already exists' });
 

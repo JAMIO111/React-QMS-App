@@ -75,6 +75,13 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await addDepartment.getByRole('button', { name: 'Add department' }).click();
   await see(page.getByText('Quality', { exact: false }).filter({ hasText: 'QA' }));
   await shot(page, '07-sites');
+  // The site pop-up: code, name, time zone, currency (the organisation's by default) and departments.
+  await page.getByRole('button', { name: 'Edit' }).first().click();
+  const siteDialog = page.getByRole('dialog', { name: /Edit site/ });
+  await see(siteDialog.getByRole('combobox', { name: 'Currency' }));
+  await see(siteDialog.getByRole('region', { name: 'Departments' }).getByText('Quality'));
+  await shot(page, '07b-site-dialog');
+  await siteDialog.getByRole('button', { name: 'Close', exact: true }).last().click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await see(page.getByRole('heading', { name: /^security$/i }));
   await shot(page, '08-security');

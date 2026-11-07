@@ -17,7 +17,7 @@ import {
   UpdateSiteBody,
 } from './structure.schemas';
 
-const siteColumns = { id: sites.id, code: sites.code, name: sites.name, timezone: sites.timezone, active: sites.active };
+const siteColumns = { id: sites.id, code: sites.code, name: sites.name, timezone: sites.timezone, currency: sites.currency, active: sites.active };
 const departmentColumns = {
   id: departments.id,
   siteId: departments.siteId,
@@ -50,7 +50,7 @@ export class StructureService {
     return this.database.asUser(ctx, async (db) => {
       const [row] = await db
         .insert(sites)
-        .values({ organisationId: ctx.organisationId!, code: body.code, name: body.name, ...(body.timezone ? { timezone: body.timezone } : {}) })
+        .values({ organisationId: ctx.organisationId!, code: body.code, name: body.name, ...(body.timezone ? { timezone: body.timezone } : {}), currency: body.currency ?? sql`null` })
         .returning(siteColumns);
       return row;
     });

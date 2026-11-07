@@ -348,7 +348,7 @@ const NcrPage = () => {
               <>
                 <SectionHeading id="ncr-cost" title="Cost" sectionRef={refs.cost} />
                 <Card>
-                  <NcrCosts ncrId={ncr.id} canEdit={can("ncr.update") && !locked} />
+                  <NcrCosts ncrId={ncr.id} siteId={ncr.site?.id} canEdit={can("ncr.update") && !locked} />
                 </Card>
               </>
             )}

@@ -20,4 +20,11 @@ describe("menuStructure", () => {
       expect(paths.some((p) => p.startsWith(removed))).toBe(false);
     }
   });
+
+  it("has no Human Resources area: employees are part of Master Data", () => {
+    expect(menuStructure.some((m) => m.name === "Human Resources" || m.path === "/Human-Resources")).toBe(false);
+    const master = menuStructure.find((m) => m.name === "Master Data");
+    expect(master.subMenu.map((s) => s.path)).toContain("/Employees");
+    expect(master.permission).toBe("master_data.read");
+  });
 });

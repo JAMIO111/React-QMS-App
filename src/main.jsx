@@ -182,7 +182,9 @@ const router = createBrowserRouter([
               { path: "Admin", element: <div>Admin Settings</div> },
             ],
           },
-          { path: "Human-Resources", element: <Employees /> },
+          { path: "Employees", element: <Employees /> },
+          // The old Human Resources page now lives under Master Data.
+          { path: "Human-Resources", element: <Navigate to="/Employees" replace /> },
           { path: "Parts", element: <PartsPage /> },
           { path: "Parts/:id", element: <PartDetailPage /> },
           { path: "Customers", element: <PartiesPage key="customers" kind="customers" /> },

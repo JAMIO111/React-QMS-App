@@ -1,4 +1,4 @@
-import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, FileTextIcon, GaugeIcon, LayoutDashboardIcon, ListChecksIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, FileTextIcon, GaugeIcon, LayoutDashboardIcon, ListChecksIcon, TriangleAlertIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
@@ -88,13 +88,7 @@ export const menuStructure = [
       { name: "Machines", path: "/Machines" },
       { name: "Customers", path: "/Customers" },
       { name: "Suppliers", path: "/Suppliers" },
+      { name: "Employees", path: "/Employees" },
     ],
-  },
-  {
-    name: "Human Resources",
-    icon: UsersIcon,
-    permission: "master_data.read",
-    path: "/Human-Resources",
-    subMenu: [],
   },
 ];

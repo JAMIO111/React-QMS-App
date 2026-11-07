@@ -5,7 +5,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { makeIds, requireDb, seed, startApp, token } from './helpers';
+import { makeIds, requireDb, seed, settleNcr, startApp, token } from './helpers';
 
 const ids = makeIds(7);
 let app: INestApplication;
@@ -134,6 +134,7 @@ describe('non-conformances', () => {
 
   it('moves through stages, cancels and reopens with reasons, and locks closed records', async () => {
     const h = await as(ids.ownerA);
+    await settleNcr(app.getHttpServer(), h, internal);
     await api().post(`/api/v1/ncrs/${internal}/transitions`).set(h).send({ to: 'investigating' }).expect(200);
     const back = await api().post(`/api/v1/ncrs/${internal}/transitions`).set(h).send({ to: 'open' }).expect(409);
     expect(back.body.error.message).toBe('A investigating non-conformance cannot move to open');

@@ -48,6 +48,8 @@ describe('the platform area', () => {
   it('shows an operator with MFA the funnel and the latest sign-ups', async () => {
     const mfa = await as(ids.outsider, { aal: 'aal2' });
     expect((await api().get('/api/v1/platform/me').set(mfa).expect(200)).body).toEqual({ status: 'ok' });
+    // Every suite adds people to one shared database, so "the latest 25" is only deterministic if this suite's person is the latest.
+    await admin.query(`update public.signup_events set occurred_at = now() + interval '1 minute' where user_id = $1 and event = 'signed_up'`, [ids.ownerA]);
     const { body } = await api().get('/api/v1/platform/overview').set(mfa).expect(200);
     expect(body.funnel).toMatchObject({ days: 30, signedUp: expect.any(Number), verified: expect.any(Number), orgStarted: expect.any(Number), totalAccounts: expect.any(Number), totalOrganisations: expect.any(Number) });
     expect(body.funnel.signedUp).toBeGreaterThanOrEqual(6); // the seeded people signed themselves up (self)

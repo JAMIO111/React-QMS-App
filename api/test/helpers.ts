@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import request from 'supertest';
 import { SignJWT } from 'jose';
 import { Pool } from 'pg';
 import { createApp } from '../src/app.factory';
@@ -128,4 +129,19 @@ export async function seed(admin: Pool, ids: Ids = makeIds(1), slugSuffix = ''):
     [ids.ncrA, ids.orgA, ids.ncrB, ids.orgB],
   );
   await admin.query('commit');
+}
+
+/**
+ * What a non-conformance needs before it can reach Dispositioned and beyond: containment resolved (not needed) and approved dispositions over the whole
+ * quantity affected. For tests that move NCs through the stages; `h` must be someone who may edit and approve (the owner).
+ */
+export async function settleNcr(server: unknown, h: Record<string, string>, id: string): Promise<void> {
+  const api = () => request(server as never);
+  await api().put(`/api/v1/ncrs/${id}/containment-reason`).set(h).send({ reason: 'Not needed (test)' }).expect(200);
+  const d = (await api().get(`/api/v1/ncrs/${id}/dispositions`).set(h).expect(200)).body;
+  if (d.remaining > 0) {
+    await api().post(`/api/v1/ncrs/${id}/dispositions`).set(h).send({ decision: 'scrap', quantity: d.remaining, instructions: 'Scrap the affected items (test)' }).expect(201);
+  }
+  const all = (await api().get(`/api/v1/ncrs/${id}/dispositions`).set(h).expect(200)).body.data as { id: string; status: string }[];
+  for (const x of all.filter((y) => y.status === 'proposed')) await api().post(`/api/v1/ncr-dispositions/${x.id}/approve`).set(h).send({}).expect(200);
 }

@@ -137,6 +137,19 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/jobs/{id}': { workOrder: 'HIJACK' },
     'GET /api/v1/jobs/{id}/recent-ncrs': undefined,
     'GET /api/v1/jobs/{id}/revisions': undefined,
+    'GET /api/v1/ncrs/{id}/containment': undefined,
+    'POST /api/v1/ncrs/{id}/containment-actions': { kind: 'sort', description: 'Hijacked' },
+    'PUT /api/v1/ncrs/{id}/containment-reason': { reason: 'Hijacked' },
+    'GET /api/v1/ncrs/{id}/dispositions': undefined,
+    'POST /api/v1/ncrs/{id}/dispositions': { decision: 'scrap', quantity: 1, instructions: 'Hijacked' },
+    'GET /api/v1/ncrs/{id}/gates': undefined,
+    'PATCH /api/v1/ncr-containment-actions/{id}': { description: 'Hijacked' },
+    'POST /api/v1/ncr-containment-actions/{id}/complete': { note: 'Hijacked' },
+    'POST /api/v1/ncr-containment-actions/{id}/reopen': undefined,
+    'POST /api/v1/ncr-containment-actions/{id}/cancel': { reason: 'Hijacked' },
+    'PATCH /api/v1/ncr-dispositions/{id}': { quantity: 1 },
+    'POST /api/v1/ncr-dispositions/{id}/approve': {},
+    'POST /api/v1/ncr-dispositions/{id}/cancel': { reason: 'Hijacked' },
     'POST /api/v1/spc/alerts/{id}/acknowledge': { note: 'Hijacked' },
     'GET /api/v1/quality-alerts/{id}': undefined,
     'PATCH /api/v1/quality-alerts/{id}': { title: 'Hijacked' },
@@ -291,6 +304,19 @@ const hasSample = (op: Op) =>
     'PATCH /api/v1/jobs/{id}',
     'GET /api/v1/jobs/{id}/recent-ncrs',
     'GET /api/v1/jobs/{id}/revisions',
+    'GET /api/v1/ncrs/{id}/containment',
+    'POST /api/v1/ncrs/{id}/containment-actions',
+    'PUT /api/v1/ncrs/{id}/containment-reason',
+    'GET /api/v1/ncrs/{id}/dispositions',
+    'POST /api/v1/ncrs/{id}/dispositions',
+    'GET /api/v1/ncrs/{id}/gates',
+    'PATCH /api/v1/ncr-containment-actions/{id}',
+    'POST /api/v1/ncr-containment-actions/{id}/complete',
+    'POST /api/v1/ncr-containment-actions/{id}/reopen',
+    'POST /api/v1/ncr-containment-actions/{id}/cancel',
+    'PATCH /api/v1/ncr-dispositions/{id}',
+    'POST /api/v1/ncr-dispositions/{id}/approve',
+    'POST /api/v1/ncr-dispositions/{id}/cancel',
     'POST /api/v1/spc/alerts/{id}/acknowledge',
     'GET /api/v1/quality-alerts/{id}',
     'PATCH /api/v1/quality-alerts/{id}',
@@ -369,6 +395,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/ncrs/')) return a.ncr;
   if (path.startsWith('/api/v1/ncr-classifications/')) return a.classification;
   if (path.startsWith('/api/v1/ncr-costs/')) return a.cost;
+  if (path.startsWith('/api/v1/ncr-containment-actions/')) return a.containmentAction;
+  if (path.startsWith('/api/v1/ncr-dispositions/')) return a.disposition;
   if (path.startsWith('/api/v1/ncr-attachments/')) return a.attachment;
   if (path.startsWith('/api/v1/gauges/')) return a.gauge;
   if (path.startsWith('/api/v1/gauge-characteristics/')) return a.gaugeCharacteristic;
@@ -440,6 +468,8 @@ beforeAll(async () => {
   a.classification = (await one(`insert into public.ncr_classifications (organisation_id, kind, name) values ($1, 'failure_mode', 'Alpha failure') returning id`, [ids.orgA])).id;
   a.ncr = (await one(`insert into public.nonconformances (organisation_id, reference, source, title) values ($1, 'A-NCR-1', 'internal', 'Alpha NCR') returning id`, [ids.orgA])).id;
   a.cost = (await one(`insert into public.ncr_costs (organisation_id, nonconformance_id, cost_type, currency, amount) values ($1, $2, 'scrap', 'GBP', 10) returning id`, [ids.orgA, a.ncr])).id;
+  a.containmentAction = (await one(`insert into public.ncr_containment_actions (organisation_id, nonconformance_id, kind, description) values ($1, $2, 'quarantine', 'Alpha containment') returning id`, [ids.orgA, a.ncr])).id;
+  a.disposition = (await one(`insert into public.ncr_dispositions (organisation_id, nonconformance_id, decision, quantity, instructions) values ($1, $2, 'scrap', 1, 'Alpha disposition') returning id`, [ids.orgA, a.ncr])).id;
   a.attachment = (await one(`insert into public.ncr_attachments (organisation_id, nonconformance_id, storage_path, file_name, size_bytes) values ($1::uuid, $2::uuid, $1::text || '/ncr/' || $2::text || '/a.txt', 'a.txt', 1) returning id`, [ids.orgA, a.ncr])).id;
   a.gaugeType = (await one(`insert into public.gauge_types (organisation_id, name) values ($1, 'Alpha caliper') returning id`, [ids.orgA])).id;
   a.typeCharacteristic = (await one(`insert into public.gauge_type_characteristics (organisation_id, gauge_type_id, name, nominal, tolerance_minus, tolerance_plus, unit_code) values ($1, $2, 'Alpha check', 25, 0.02, 0.02, 'mm') returning id`, [ids.orgA, a.gaugeType])).id;

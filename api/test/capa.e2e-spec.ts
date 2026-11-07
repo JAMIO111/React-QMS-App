@@ -6,7 +6,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { makeIds, requireDb, seed, startApp, token } from './helpers';
+import { makeIds, requireDb, seed, settleNcr, startApp, token } from './helpers';
 
 const ids = makeIds('b2');
 let app: INestApplication;
@@ -182,6 +182,7 @@ describe('non-conformance links', () => {
     // nc2 is in CAPA-000002 only now. Take it to open, then try to close it.
     await api().patch(`/api/v1/ncrs/${ctx.nc2}`).set(h).send({ severity: 'minor', quantityAffected: 1, description: 'Second problem' }).expect(200);
     await api().post(`/api/v1/ncrs/${ctx.nc2}/transitions`).set(h).send({ to: 'open' }).expect(200);
+    await settleNcr(app.getHttpServer(), h, ctx.nc2);
     const refused = await api().post(`/api/v1/ncrs/${ctx.nc2}/transitions`).set(h).send({ to: 'closed' });
     expect(refused.status).toBe(409);
     expect(refused.body.error.code).toBe('ncr_rule');

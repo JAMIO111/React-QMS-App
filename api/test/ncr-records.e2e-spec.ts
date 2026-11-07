@@ -5,7 +5,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { makeIds, requireDb, seed, startApp, token } from './helpers';
+import { makeIds, requireDb, seed, settleNcr, startApp, token } from './helpers';
 
 const ids = makeIds(8);
 let app: INestApplication;
@@ -173,6 +173,7 @@ describe('attachments', () => {
     const h = await as(ids.ownerA);
     await api().patch(`/api/v1/ncrs/${ncr}`).set(h).send({ severity: 'minor', quantityAffected: 1, description: 'x' }).expect(200);
     await api().post(`/api/v1/ncrs/${ncr}/transitions`).set(h).send({ to: 'open' }).expect(200);
+    await settleNcr(app.getHttpServer(), h, ncr);
     await api().post(`/api/v1/ncrs/${ncr}/transitions`).set(h).send({ to: 'closed' }).expect(200);
     const res = await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h).send({ costType: 'scrap', currency: 'GBP', amount: 1 }).expect(409);
     expect(res.body.error.message).toBe('This non-conformance is closed; reopen it to make changes');

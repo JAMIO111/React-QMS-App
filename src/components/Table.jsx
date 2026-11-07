@@ -41,6 +41,10 @@ const SortIndicator = ({ direction }) => {
   return <ChevronsUpDownIcon className="h-4 w-4 shrink-0 opacity-0 group-hover:opacity-60 group-focus-visible:opacity-60" aria-hidden="true" />;
 };
 
+/** The selected-row tint (10%, 15% on hover) as a layer over a pinned cell's opaque background. */
+const PINNED_SELECTED =
+  "[background-image:linear-gradient(color-mix(in_srgb,var(--brand-primary)_10%,transparent),color-mix(in_srgb,var(--brand-primary)_10%,transparent))] group-hover/row:[background-image:linear-gradient(color-mix(in_srgb,var(--brand-primary)_15%,transparent),color-mix(in_srgb,var(--brand-primary)_15%,transparent))]";
+
 const Table = ({
   table,
   isLoading = false,
@@ -233,12 +237,13 @@ const Table = ({
                         key={cell.id}
                         data-column-id={cell.column.id}
                         style={offset[cell.column.id]}
-                        className={`border-b border-r p-0 align-middle ${cell.column.getIsResizing() ? "border-r-cta-color" : "border-border-color"} ${pinClass(cell.column, "bg-secondary-bg")}`}>
+                        className={`border-b border-r p-0 align-middle ${cell.column.getIsResizing() ? "border-r-cta-color" : "border-border-color"} ${pinClass(cell.column, "bg-secondary-bg")} ${
+                          // A pinned cell is opaque, so it repeats the row's highlight itself. It goes on the whole cell (a tint layered over the opaque
+                          // colour), not on the inner box, which is shorter than the cell and left a strip unhighlighted.
+                          pinned ? (highlighted ? PINNED_SELECTED : "group-hover/row:bg-hover-menu-color") : ""
+                        }`}>
                         <div
-                          className={`flex min-w-0 items-center overflow-hidden whitespace-nowrap px-2 py-1 ${alignClass(cell.column)} ${
-                            // A pinned cell is opaque, so it repeats the row's highlight itself.
-                            pinned ? (highlighted ? "bg-brand-primary/10 group-hover/row:bg-brand-primary/15" : "group-hover/row:bg-hover-menu-color") : ""
-                          }`}>
+                          className={`flex min-w-0 items-center overflow-hidden whitespace-nowrap px-2 py-1 ${alignClass(cell.column)}`}>
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </div>
                       </td>

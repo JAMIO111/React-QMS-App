@@ -43,7 +43,8 @@ global_tables(relname, why) AS (VALUES
   ('subscription_entitlements', 'global package-to-feature mapping, read-only'),
   ('platform_admins',            'operator allow-list, read only by platform admins with an MFA session'),
   ('signup_events',              'sign-up funnel written by triggers, read only by platform admins with an MFA session'),
-  ('platform_settings',          'operator switches (billing gate), changed by SQL, read only by platform admins with an MFA session')
+  ('platform_settings',          'operator switches (billing gate), changed by SQL, read only by platform admins with an MFA session'),
+  ('stripe_events',              'webhook log written by functions for the API login only, read only by platform admins with an MFA session (organisation_id is for the operator, not for tenants)')
 ),
 audited(relname) AS (VALUES
   ('organisations'), ('organisation_settings'), ('sites'), ('departments'), ('organisation_users'),
@@ -62,7 +63,7 @@ audited(relname) AS (VALUES
   ('billing_invoices'), ('billing_payments'),
   ('inspection_ncr_links'), ('inspection_failure_acknowledgements'), ('spc_baselines'), ('spc_alerts'), ('department_members'),
   ('quality_alerts'), ('quality_alert_parts'), ('quality_alert_machines'), ('quality_alert_operations'), ('quality_alert_departments'), ('quality_alert_targets'), ('quality_alert_recipients'), ('quality_alert_attachments'), ('quality_alert_links'),
-  ('capas'), ('capa_steps'), ('capa_team_members'), ('capa_ncr_links'), ('capa_analyses'), ('capa_actions'), ('capa_root_causes'), ('capa_verifications'), ('capa_attachments'), ('organisation_onboarding')
+  ('capas'), ('capa_steps'), ('capa_team_members'), ('capa_ncr_links'), ('capa_analyses'), ('capa_actions'), ('capa_root_causes'), ('capa_verifications'), ('capa_attachments'), ('organisation_onboarding'), ('billing_customers'), ('stripe_checkout_sessions')
 )
 SELECT rule, object FROM (
   SELECT '1 rls disabled' AS rule, format('%I.%I', nspname, relname) AS object

@@ -10,6 +10,21 @@ INSERT INTO auth.users (id, email) VALUES
   ('3f000000-0000-0000-0000-000000000a03', 'other@on2.test'),
   ('3f000000-0000-0000-0000-000000000a04', 'legacy@on2.test');
 
+-- Seats for a gated organisation come from Stripe in real life; here they are written directly (as the superuser), without a payment provider.
+CREATE FUNCTION pg_temp.seed_seats(p_org uuid, p_plan text, p_qty integer) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE v_sub uuid; v_price public.subscription_prices%ROWTYPE; v_plan uuid;
+BEGIN
+  SELECT id INTO v_sub FROM public.organisation_subscriptions WHERE organisation_id = p_org;
+  IF v_sub IS NULL THEN
+    INSERT INTO public.organisation_subscriptions (organisation_id, current_period_end) VALUES (p_org, now() + interval '1 month') RETURNING id INTO v_sub;
+  END IF;
+  SELECT id INTO v_plan FROM public.subscription_plans WHERE slug = p_plan;
+  SELECT * INTO v_price FROM public.subscription_prices WHERE subscription_plan_id = v_plan AND billing_interval = 'month' AND currency = 'GBP' AND active AND effective_to IS NULL;
+  INSERT INTO public.organisation_subscription_items (organisation_id, organisation_subscription_id, subscription_plan_id, subscription_price_id, quantity, unit_amount_snapshot, currency)
+  VALUES (p_org, v_sub, v_plan, v_price.id, p_qty, v_price.unit_amount, 'GBP')
+  ON CONFLICT (organisation_subscription_id, subscription_plan_id) DO UPDATE SET quantity = EXCLUDED.quantity;
+END $$;
+
 DO $$
 DECLARE
   u_owner uuid := '3f000000-0000-0000-0000-000000000a01'; u_view uuid := '3f000000-0000-0000-0000-000000000a02';
@@ -92,10 +107,12 @@ BEGIN
   PERFORM pg_temp.logout();
 
   -- The subscription rule. Buying seats and taking a Controller seat are allowed while locked.
+  PERFORM pg_temp.seed_seats(org, 'controller', 2);
   PERFORM pg_temp.login(u_owner);
-  PERFORM app.set_subscription_seats(org, 'controller', 2);
   PERFORM pg_temp.assert_eq(app.organisation_access_state(org), 'lapsed', 'seats bought but nobody holds a Controller seat: not valid (and a subscription exists)');
-  PERFORM app.set_subscription_seats(org, 'contributor', 1);
+  PERFORM pg_temp.logout();
+  PERFORM pg_temp.seed_seats(org, 'contributor', 1);
+  PERFORM pg_temp.login(u_owner);
   PERFORM app.assign_subscription_package(m_owner, 'contributor');
   PERFORM pg_temp.assert_eq(app.organisation_access_state(org), 'lapsed', 'the owner on another package is not enough');
   PERFORM app.assign_subscription_package(m_owner, 'controller');

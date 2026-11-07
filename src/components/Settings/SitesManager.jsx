@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Field from "../ui/Field";
+import TimeZoneCombo from "../ui/TimeZoneCombo";
 import { describeApiError } from "../../lib/api-client";
 import MenuCard from "../ui/MenuCard";
 import {
@@ -139,7 +140,7 @@ const SiteRow = ({ site, canManage }) => {
       {
         resource: "sites",
         id: site.id,
-        body: { name: name.trim(), timezone: timezone.trim() },
+        body: { name: name.trim(), timezone },
       },
       { onSuccess: () => setEditing(false) },
     );
@@ -197,18 +198,11 @@ const SiteRow = ({ site, canManage }) => {
             required
             maxLength={100}
           />
-          <Field
-            label="Time zone"
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
-            className="w-56"
-            required
-            hint="IANA name, e.g. Europe/London"
-          />
+          <TimeZoneCombo label="Time zone" value={timezone} onChange={(zone) => setTimezone(zone ?? "")} className="w-64" required />
           <button
             type="submit"
-            disabled={mutation.isPending}
-            className={`${smallButton} h-10`}>
+            disabled={mutation.isPending || !timezone}
+            className={`${smallButton} h-9.5`}>
             Save
           </button>
         </form>

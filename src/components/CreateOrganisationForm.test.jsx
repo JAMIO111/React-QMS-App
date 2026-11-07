@@ -45,18 +45,19 @@ describe("CreateOrganisationForm", () => {
     expect(selectOrganisation).toHaveBeenCalledWith("org-new");
   });
 
-  it("sends the time zone it is given, and leaves it out when it is cleared", async () => {
+  it("offers every time zone in a list, sends the one chosen and leaves it out when cleared", async () => {
     apiFetch.mockResolvedValue({ id: "org-new", name: "Acme Ltd" });
     renderForm();
     await userEvent.type(screen.getByLabelText("Organisation name"), "Acme Ltd");
-    const zone = screen.getByLabelText("Time zone");
-    await userEvent.clear(zone);
+    const zone = screen.getByRole("combobox", { name: "Time zone" });
+    await userEvent.click(zone);
     await userEvent.type(zone, "Europe/Paris");
+    await userEvent.click(await screen.findByRole("option", { name: "Europe/Paris" }));
     await userEvent.click(screen.getByRole("button", { name: "Create organisation" }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     expect(apiFetch.mock.calls[0][1].body.timeZone).toBe("Europe/Paris");
     apiFetch.mockClear();
-    await userEvent.clear(zone);
+    await userEvent.click(screen.getByRole("button", { name: "Clear Time zone" }));
     await userEvent.click(screen.getByRole("button", { name: "Create organisation" }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     expect(apiFetch.mock.calls[0][1].body).not.toHaveProperty("timeZone");

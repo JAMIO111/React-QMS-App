@@ -16,7 +16,9 @@ import {
   useSites,
 } from "../../hooks/useQmsApi";
 import LoadingScreen from "../ui/LoadingScreen";
+import { useSubscriptionOverview } from "../../hooks/useSubscription";
 import { ORGANISATION_WIDE_ROLE_KEYS, isUnassigned } from "../../lib/departments";
+import { expiresIn } from "../../lib/onboarding";
 
 const STATUS_STYLES = {
   active: "bg-green-500/15 text-green-700 dark:text-green-300",
@@ -51,7 +53,13 @@ const InviteForm = ({ roles, sites, departments }) => {
   const [deptIds, setDeptIds] = useState([]);
   const [primaryId, setPrimaryId] = useState("");
   const [note, setNote] = useState(null);
+  const [message, setMessage] = useState("");
+  const [packageSlug, setPackageSlug] = useState("");
   const mutation = useMemberMutation();
+  const { can } = usePermissions();
+  const seatOverview = useSubscriptionOverview();
+  const seatItems = seatOverview.data?.items ?? [];
+  const canGivePackages = can("subscription.seats") && seatItems.length > 0;
 
   const roleKey = roles.find((r) => r.id === roleId)?.key;
   const needsDepartment = !!roleId && !ORGANISATION_WIDE_ROLE_KEYS.includes(roleKey);
@@ -73,6 +81,8 @@ const InviteForm = ({ roles, sites, departments }) => {
           roleId,
           ...(siteId ? { siteId } : {}),
           ...(deptIds.length ? { departmentIds: deptIds, primaryDepartmentId: primary } : {}),
+          ...(message.trim() ? { message: message.trim() } : {}),
+          ...(packageSlug ? { packageSlug } : {}),
         },
       },
       {
@@ -83,6 +93,8 @@ const InviteForm = ({ roles, sites, departments }) => {
               : EMAIL_NOTES[res.email.reason],
           );
           setEmail("");
+          setMessage("");
+          setPackageSlug("");
           setDeptIds([]);
           setPrimaryId("");
         },
@@ -176,6 +188,25 @@ const InviteForm = ({ roles, sites, departments }) => {
           </ul>
         )}
       </fieldset>
+      <div className="flex flex-wrap items-end gap-3">
+        {canGivePackages && (
+          <label className="flex flex-col gap-1 text-sm font-medium text-primary-text">
+            Package
+            <select aria-label="Package" className={select} value={packageSlug} onChange={(e) => setPackageSlug(e.target.value)}>
+              <option value="">No package yet</option>
+              {seatItems.map((i) => (
+                <option key={i.planSlug} value={i.planSlug} disabled={i.available < 1}>
+                  {i.planName} ({i.available} left)
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="flex min-w-56 flex-1 flex-col gap-1 text-sm font-medium text-primary-text">
+          Message (optional)
+          <textarea aria-label="Message" className={`${select} min-h-10`} maxLength={500} value={message} onChange={(e) => setMessage(e.target.value)} />
+        </label>
+      </div>
       {mutation.error && (
         <p role="alert" className="text-sm text-error-color">
           {describeApiError(mutation.error)}
@@ -250,6 +281,13 @@ const MemberRow = ({ member, roles, sites, departments, canManage, isSelf }) => 
           className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLES[member.status]}`}>
           {member.status}
         </span>
+        {member.status === "invited" && member.invite && (
+          <div className="mt-1 text-xs text-secondary-text" aria-label={`Invitation to ${member.email}`}>
+            {member.invite.expired ? "Expired" : member.invite.expiresAt ? `Expires in ${expiresIn(member.invite.expiresAt)}` : ""}
+            {member.invite.packageName ? ` · ${member.invite.packageName} seat reserved` : ""}
+            {member.invite.sendCount > 1 ? ` · sent ${member.invite.sendCount} times` : ""}
+          </div>
+        )}
       </td>
       <td className="py-3 pr-3">
         <ul
@@ -416,6 +454,16 @@ const MemberRow = ({ member, roles, sites, departments, canManage, isSelf }) => 
                 disabled={mutation.isPending}
                 onClick={() => setStatus("active", "reactivated")}>
                 Reactivate
+              </button>
+            )}
+            {member.status === "invited" && (
+              <button
+                type="button"
+                className={button}
+                disabled={mutation.isPending}
+                aria-label={`Resend invitation to ${member.email}`}
+                onClick={() => run({ action: "resend", membershipId: member.membershipId }, "Invitation sent again.")}>
+                Resend
               </button>
             )}
             <button

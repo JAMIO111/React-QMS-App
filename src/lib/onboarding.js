@@ -51,3 +51,26 @@ export const countryName = (code) => {
   }
 };
 export const countryOptions = () => COUNTRY_CODES.map((code) => ({ id: code, name: countryName(code), hint: code })).sort((a, b) => a.name.localeCompare(b.name));
+
+/** Pulls email addresses out of pasted text (separated by commas, semicolons, spaces or new lines; "Name <a@b.com>" works). Lower-cased, de-duplicated, in order. */
+export const parseEmails = (text) => {
+  const found = String(text ?? "").match(/[^\s,;<>"']+@[^\s,;<>"']+\.[^\s,;<>"']+/g) ?? [];
+  const seen = new Set();
+  const emails = [];
+  for (const raw of found) {
+    const email = raw.toLowerCase().replace(/[.)]+$/, "");
+    if (!seen.has(email)) {
+      seen.add(email);
+      emails.push(email);
+    }
+  }
+  return emails;
+};
+
+/** How long until an invitation expires, in words ("12 days", "today") or null when it has no expiry. */
+export const expiresIn = (iso, now = Date.now()) => {
+  if (!iso) return null;
+  const days = Math.ceil((new Date(iso).getTime() - now) / 864e5);
+  if (days <= 0) return "today";
+  return days === 1 ? "1 day" : `${days} days`;
+};

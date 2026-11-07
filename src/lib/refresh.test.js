@@ -10,7 +10,7 @@ vi.mock("../contexts/AuthProvider", () => ({ useAuth: () => ({ user: { id: "u1" 
 
 import { orgRoot, refreshOrganisation } from "./refresh";
 import { useInspectionMutation } from "../hooks/useInspection";
-import { useMemberMutation, useStructureMutation } from "../hooks/useQmsApi";
+import { useMemberMutation, useStructureMutation, useUpdateProfile } from "../hooks/useQmsApi";
 import { useAcknowledgeAlert, useCreateBaseline } from "../hooks/useSpc";
 import { useNcrMutation } from "../hooks/useNcr";
 import { useMasterDataMutation } from "../hooks/useMasterData";
@@ -82,6 +82,10 @@ describe("every action refreshes every module's data", () => {
     ["calibration", useCalibrationMutation, { path: "/gauges", body: { assetNumber: "x" } }],
     ["quality alert", useAlertMutation, { action: "issue", id: "a1" }],
     ["members and departments", useMemberMutation, { action: "status", membershipId: "m1", body: { status: "active" } }],
+    ["invite many", useMemberMutation, { action: "inviteMany", body: { invitations: [] } }],
+    ["resend invitation", useMemberMutation, { action: "resend", membershipId: "m1" }],
+    ["revoke invitation", useMemberMutation, { action: "revoke", membershipId: "m1" }],
+    ["own profile", useUpdateProfile, { firstName: "Ada" }],
     ["sites and departments", useStructureMutation, { resource: "departments", body: { name: "x" } }],
     ["SPC alert", useAcknowledgeAlert, { id: "a1", note: "seen" }],
     ["SPC baseline", useCreateBaseline, { partId: "p1" }],

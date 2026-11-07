@@ -74,7 +74,8 @@ const SetPassword = ({ linkError = initialAuthLinkError }) => {
     try {
       await updatePassword(password);
       showToast?.({ type: "success", title: "Password saved", message: "You're signed in." });
-      navigate("/Dashboard", { replace: true });
+      // An invited person goes on to see and accept their invitation; everyone else to the app.
+      navigate(invited ? "/accept-invite" : "/Dashboard", { replace: true });
     } catch (error) {
       if (error?.code === "insufficient_aal") {
         // The account uses two-factor authentication: confirm the code first, then come back.

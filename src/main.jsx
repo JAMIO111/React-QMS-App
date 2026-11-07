@@ -67,6 +67,7 @@ const CapaReportPage = lazy(() => import("./components/capa/CapaReportPage.jsx")
 const MyActionsPage = lazy(() => import("./components/capa/MyActionsPage.jsx"));
 const PlatformPage = lazy(() => import("./components/platform/PlatformPage.jsx"));
 const SetupWizard = lazy(() => import("./components/onboarding/SetupWizard.jsx"));
+const AcceptInvite = lazy(() => import("./components/onboarding/AcceptInvite.jsx"));
 const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
 const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
 const InspectionPage = lazy(() => import("./components/inspection/InspectionPage.jsx"));
@@ -122,6 +123,8 @@ const router = createBrowserRouter([
       // The owner's first-run wizard is full-screen too (it needs the organisation, not the app shell).
       { path: "setup", element: <SetupWizard /> },
       { path: "setup/:step", element: <SetupWizard /> },
+      // The invitee's page: they may belong to no organisation yet.
+      { path: "accept-invite", element: <AcceptInvite /> },
       {
         element: <App />, // App contains the Navbar/Header + <Outlet />
         children: [

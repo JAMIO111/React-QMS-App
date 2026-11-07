@@ -214,6 +214,12 @@ export const useMemberMutation = () => {
       switch (action) {
         case "invite":
           return apiFetch("/members/invitations", { method: "POST", body, organisationId });
+        case "inviteMany":
+          return apiFetch("/members/invitations/bulk", { method: "POST", body, organisationId });
+        case "resend":
+          return apiFetch(`/members/${membershipId}/invitation/resend`, { method: "POST", organisationId });
+        case "revoke":
+          return apiFetch(`/members/${membershipId}/invitation/revoke`, { method: "POST", organisationId });
         case "status":
           return apiFetch(`/members/${membershipId}`, { method: "PATCH", body, organisationId });
         case "assign":
@@ -234,6 +240,17 @@ export const useMemberMutation = () => {
       // Departments and roles decide who an alert reaches and what people may do.
       refreshOrganisation(queryClient, organisationId, { me: true });
     },
+  });
+};
+
+/** PATCH /me: the signed-in person's own name and job title. */
+export const useUpdateProfile = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => apiFetch("/me", { method: "PATCH", body }),
+    // Names show on every screen of the organisation.
+    onSettled: () => refreshOrganisation(queryClient, organisationId, { me: true }),
   });
 };
 

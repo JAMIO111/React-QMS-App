@@ -18,6 +18,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { clearChoice, formatDate, loadChoice, money, saveChoice } from "../../lib/billing";
 import CheckoutNotice from "../billing/CheckoutNotice";
 import SeatPicker from "../billing/SeatPicker";
+import TeamInvite from "./TeamInvite";
 import { ErrorNotice, FormError, buttonClass } from "../master-data/shared";
 
 /** Step 1: the organisation's name, and where the first site is. */
@@ -218,17 +219,8 @@ export const SecurityStep = () => {
   );
 };
 
-/** Step 6: the team. The guided invitation step arrives in the next release; Settings → Users already does it. */
-export const TeamStep = () => (
-  <MenuCard title="Invite your team" subtitle="People you invite get an email, accept, and see only what their role allows">
-    <div className="flex flex-col gap-2 text-sm text-primary-text">
-      <p>Add people, choose their roles and departments, and give each a package (seat). You can do it now or at any time later.</p>
-      <p>
-        <Link to="/Settings/Users" className="text-link-color underline">Open Users &amp; permissions</Link>
-      </p>
-    </div>
-  </MenuCard>
-);
+/** Step 6: the team. Paste addresses, choose role, departments and package for each, see the seats left, send; the same tool as Settings → Users. */
+export const TeamStep = () => <TeamInvite />;
 
 const STATUS_TEXT = { done: "Done", skipped: "Skipped", pending: "Not done" };
 

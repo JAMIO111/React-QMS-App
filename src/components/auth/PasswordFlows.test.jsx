@@ -25,6 +25,7 @@ const renderAt = (url, element) =>
         <Route path="/forgot-password" element={element} />
         <Route path="/set-password" element={element} />
         <Route path="/Dashboard" element={<p>dashboard</p>} />
+        <Route path="/accept-invite" element={<p>accept invite page</p>} />
         <Route path="/mfa" element={<p>mfa step</p>} />
       </Routes>
     </MemoryRouter>
@@ -100,6 +101,17 @@ describe("SetPassword", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save new password" }));
     expect(updateFn).toHaveBeenCalledWith("correct horse 42");
     expect(screen.getByText("dashboard")).toBeInTheDocument();
+  });
+
+  it("takes an invited person on to see and accept their invitation, not to the app", async () => {
+    authUser = { email: "jamie@example.com" };
+    updateFn.mockResolvedValue();
+    renderAt("/set-password?mode=invite", <SetPassword linkError={null} />);
+    await userEvent.type(screen.getByLabelText(/New password/), "correct horse 42");
+    await userEvent.type(screen.getByLabelText(/Confirm password/), "correct horse 42");
+    await userEvent.click(screen.getByRole("button", { name: "Set password and continue" }));
+    expect(await screen.findByText("accept invite page")).toBeInTheDocument();
+    expect(screen.queryByText("dashboard")).toBeNull();
   });
 
   it("sends two-factor users to confirm their code first", async () => {

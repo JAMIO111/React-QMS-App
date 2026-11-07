@@ -17,10 +17,12 @@ const PendingInvitations = () => {
             <div>
               <div className="font-medium">{inv.organisationName}</div>
               {inv.invitedByName && <div className="text-sm text-secondary-text">Invited by {inv.invitedByName}</div>}
+              {inv.roles?.length > 0 && <div className="text-sm text-secondary-text">As {inv.roles.map((r) => r.name).join(", ")}{inv.packageName ? ` · ${inv.packageName} seat` : ""}</div>}
+              {inv.expired && <div className="text-sm text-error-color">Expired: ask for a new invitation</div>}
             </div>
             <button
               type="button"
-              disabled={accept.isPending}
+              disabled={accept.isPending || inv.expired}
               onClick={() => accept.mutate(inv.membershipId)}
               className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
               Accept

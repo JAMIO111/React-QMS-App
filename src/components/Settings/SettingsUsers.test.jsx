@@ -19,6 +19,7 @@ const members = [
 
 let permissions;
 let membersState;
+let seatOverview;
 const mutate = vi.fn();
 const confirm = vi.fn();
 
@@ -30,6 +31,7 @@ vi.mock("../../hooks/useQmsApi", () => ({
   usePermissions: () => ({ can: (p) => permissions.includes(p) }),
   useMemberMutation: () => ({ mutate, isPending: false, error: null }),
 }));
+vi.mock("../../hooks/useSubscription", () => ({ useSubscriptionOverview: () => ({ data: seatOverview }) }));
 vi.mock("../../contexts/AuthProvider", () => ({ useAuth: () => ({ user: { id: "u-me" } }) }));
 vi.mock("../../contexts/ConfirmationModalProvider", () => ({ useConfirm: () => confirm }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
@@ -44,6 +46,7 @@ describe("SettingsUsers", () => {
     mutate.mockReset();
     confirm.mockReset();
     membersState = { data: { data: members }, isLoading: false, error: null };
+    seatOverview = { items: [{ planSlug: "contributor", planName: "Contributor", available: 1 }, { planSlug: "observer", planName: "Observer", available: 0 }] };
   });
 
   it("lets a manager invite with a role and departments, one of them primary", async () => {
@@ -143,5 +146,56 @@ describe("SettingsUsers", () => {
     membersState = { isLoading: false, error: { status: 403, code: "forbidden" } };
     render(<SettingsUsers />);
     expect(screen.getByText(/members\.read permission/)).toBeInTheDocument();
+  });
+
+  it("sends a message and a package with the invitation, offering only packages with a seat left", async () => {
+    permissions = ["members.read", "members.manage", "subscription.seats"];
+    render(<SettingsUsers />);
+    const form = screen.getByRole("form", { name: "Invite member" });
+    await userEvent.type(within(form).getByLabelText("Email address"), "boss@example.test");
+    await userEvent.selectOptions(within(form).getByLabelText("Role"), "r-owner");
+    const pkg = within(form).getByLabelText("Package");
+    expect(within(pkg).getByRole("option", { name: "Contributor (1 left)" })).toBeEnabled();
+    expect(within(pkg).getByRole("option", { name: "Observer (0 left)" })).toBeDisabled();
+    await userEvent.selectOptions(pkg, "contributor");
+    await userEvent.type(within(form).getByLabelText("Message (optional)"), "Welcome aboard");
+    await userEvent.click(within(form).getByRole("button", { name: "Send invitation" }));
+    expect(mutate).toHaveBeenCalledWith(
+      { action: "invite", body: { email: "boss@example.test", roleId: "r-owner", message: "Welcome aboard", packageSlug: "contributor" } },
+      expect.any(Object),
+    );
+  });
+
+  it("offers no package to someone who cannot manage seats", () => {
+    permissions = ["members.read", "members.manage"];
+    render(<SettingsUsers />);
+    expect(within(screen.getByRole("form", { name: "Invite member" })).queryByLabelText("Package")).toBeNull();
+  });
+
+  it("shows when an invitation expires and which seat is reserved, and resends or revokes it", async () => {
+    permissions = ["members.read", "members.manage"];
+    membersState = {
+      data: { data: members.map((m) => (m.membershipId === "m-inv" ? { ...m, invite: { message: null, expiresAt: new Date(Date.now() + 5 * 864e5).toISOString(), lastSentAt: null, sendCount: 3, expired: false, packageSlug: "contributor", packageName: "Contributor" } } : m)) },
+      isLoading: false,
+      error: null,
+    };
+    render(<SettingsUsers />);
+    const detail = screen.getByLabelText("Invitation to new@example.test");
+    expect(detail).toHaveTextContent(/Expires in [45] days/);
+    expect(detail).toHaveTextContent("Contributor seat reserved");
+    expect(detail).toHaveTextContent("sent 3 times");
+    await userEvent.click(screen.getByRole("button", { name: "Resend invitation to new@example.test" }));
+    expect(mutate).toHaveBeenLastCalledWith({ action: "resend", membershipId: "m-inv" }, expect.any(Object));
+  });
+
+  it("says an invitation has expired", () => {
+    permissions = ["members.read", "members.manage"];
+    membersState = {
+      data: { data: members.map((m) => (m.membershipId === "m-inv" ? { ...m, invite: { message: null, expiresAt: "2026-01-01T00:00:00Z", lastSentAt: null, sendCount: 1, expired: true, packageSlug: null, packageName: null } } : m)) },
+      isLoading: false,
+      error: null,
+    };
+    render(<SettingsUsers />);
+    expect(screen.getByLabelText("Invitation to new@example.test")).toHaveTextContent("Expired");
   });
 });

@@ -5,6 +5,7 @@ import {
   AlignCenterIcon,
   ArrowLeftIcon,
   BoxIcon,
+  ClipboardCheckIcon,
   ClipboardListIcon,
   FactoryIcon,
   FileTextIcon,
@@ -18,6 +19,7 @@ import {
   ReceiptIcon,
   RotateCcwIcon,
   SaveIcon,
+  ShieldCheckIcon,
   TagIcon,
   TagsIcon,
   Trash2Icon,
@@ -49,6 +51,9 @@ import { useNcrInspectionSource } from "../../hooks/useInspection";
 import { EMPTY, changedFields, toBody, toForm } from "./formModel";
 import LoadingScreen from "../ui/LoadingScreen";
 import NcrCapaCard from "../capa/NcrCapaCard";
+import NcrContainment from "./NcrContainment";
+import NcrDispositions from "./NcrDispositions";
+import { useNcrGates } from "../../hooks/useNcr";
 
 /** Section title with a rule, as in the original NC entry form. */
 const SectionHeading = ({ id, title, sectionRef }) => (
@@ -82,6 +87,7 @@ const NcrPage = () => {
   const { can } = usePermissions();
   const { showToast } = useToast();
   const { data: ncr, isLoading, error } = useNcr(isNew ? null : routeId);
+  const gates = useNcrGates(isNew ? null : routeId);
   const { data: inspectionSource } = useNcrInspectionSource(isNew ? null : routeId, can("inspection.read"));
   const { data: lists } = useClassifications();
   const { data: employees } = useEmployees();
@@ -91,7 +97,7 @@ const NcrPage = () => {
   const form = watch();
   const [dialog, setDialog] = useState(null); // "cancel" | "reopen" | "delete"
   const scrollRef = useRef(null);
-  const refs = { details: useRef(null), cost: useRef(null), investigation: useRef(null), info: useRef(null), history: useRef(null) };
+  const refs = { details: useRef(null), cost: useRef(null), containment: useRef(null), investigation: useRef(null), disposition: useRef(null), info: useRef(null), history: useRef(null) };
 
   const original = useMemo(() => (ncr ? toForm(ncr) : EMPTY), [ncr]);
   useEffect(() => reset(original), [original, reset]);
@@ -179,7 +185,9 @@ const NcrPage = () => {
   const sections = [
     { key: "details", title: "NC Details", subtitle: "Log NC information", icon: ClipboardListIcon },
     { key: "cost", title: "Cost", subtitle: "Track NC expenses", icon: PoundSterlingIcon, needsRecord: true },
+    { key: "containment", title: "Containment", subtitle: "Stop suspect product", icon: ShieldCheckIcon, needsRecord: true },
     { key: "investigation", title: "Investigation", subtitle: "Classify the cause", icon: WrenchIcon },
+    { key: "disposition", title: "Disposition", subtitle: "What happens to the items", icon: ClipboardCheckIcon, needsRecord: true },
     { key: "info", title: "Additional Info", subtitle: "Files and attachments", icon: InboxIcon, needsRecord: true },
     { key: "history", title: "History", subtitle: "Who changed what", icon: HistoryIcon, needsRecord: true },
   ];
@@ -284,6 +292,7 @@ const NcrPage = () => {
             <SectionHeading id="ncr-details" title="NC Details" sectionRef={refs.details} />
             {!isNew && (
               <StageBar
+                gates={gates.data}
                 ncr={ncr}
                 canUpdate={can("ncr.update")}
                 dirty={dirty}
@@ -353,6 +362,16 @@ const NcrPage = () => {
               </>
             )}
 
+            {!isNew && (
+              // Dialogs in these sections are portals whose submit events would otherwise bubble to this form.
+              <div onSubmit={(e) => e.stopPropagation()} className="flex flex-col gap-5">
+                <SectionHeading id="ncr-containment" title="Containment" sectionRef={refs.containment} />
+                <Card>
+                  <NcrContainment ncrId={ncr.id} canEdit={can("ncr.update") && !locked} />
+                </Card>
+              </div>
+            )}
+
             <SectionHeading id="ncr-investigation" title="Investigation" sectionRef={refs.investigation} />
             <Card>
               <div className="grid w-full grid-cols-1 items-start gap-x-8 gap-y-4 lg:grid-cols-2">
@@ -376,6 +395,15 @@ const NcrPage = () => {
               </div>
               {!isNew && ncr && <NcrCapaCard ncr={ncr} />}
             </Card>
+
+            {!isNew && (
+              <div onSubmit={(e) => e.stopPropagation()} className="flex flex-col gap-5">
+                <SectionHeading id="ncr-disposition" title="Disposition" sectionRef={refs.disposition} />
+                <Card>
+                  <NcrDispositions ncrId={ncr.id} canEdit={can("ncr.update") && !locked} />
+                </Card>
+              </div>
+            )}
           </form>
 
           {!isNew && (

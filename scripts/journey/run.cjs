@@ -35,7 +35,13 @@ async function waitFor(url, ms = 60000) {
 }
 
 function watch(page, who) {
-  page.on('console', (m) => { if (m.type() === 'error') problems.push(`[${who}] console error: ${m.text().slice(0, 300)}`); });
+  page.on('console', (m) => {
+    if (m.type() !== 'error') return;
+    // The browser logs every failed request as a console error; the ones we expect (see ALLOWED) are not problems.
+    const status = /status of (\d+)/.exec(m.text());
+    if (status && ALLOWED.some((a) => a(Number(status[1]), m.location().url ?? ''))) return;
+    problems.push(`[${who}] console error: ${m.text().slice(0, 300)}`);
+  });
   page.on('pageerror', (e) => problems.push(`[${who}] page error: ${String(e).slice(0, 300)}`));
   page.on('response', async (r) => {
     const u = r.url();
@@ -48,6 +54,7 @@ function watch(page, who) {
 // Answers the app is expected to get during the journey (each is the app's own, handled, behaviour).
 const ALLOWED = [
   (s, u) => u.includes('/storage/v1/'), // nothing is stored in the stand-in
+  (s, u) => s === 409 && /\/api\/v1\/ncrs\/[^/]+\/transitions$/.test(u), // the stage gates refuse a move and say what is missing (the journey provokes it once)
   (s, u) => s === 403 && u.includes('/api/v1/') && /subscription_required|mfa_required/.test(u) === false && false,
 ];
 

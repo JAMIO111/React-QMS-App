@@ -193,6 +193,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await jobHub({ page, stack, APP, orgName, see, shot, step, log, owner });
   await masterDataOverview({ page, stack, APP, orgName, see, shot, step, log });
   await correctRevision({ page, stack, APP, orgName, see, shot, step, log });
+  await containAndDispose({ page, stack, APP, orgName, see, shot, step, log });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -291,7 +292,7 @@ async function jobHub({ page, stack, APP, orgName, see, shot, step, log, owner }
   await page.getByRole('button', { name: 'Save sample' }).click();
   await see(page.getByRole('table', { name: 'Readings' }));
   await page.getByRole('button', { name: 'Complete inspection' }).click();
-  await see(page.getByText('Pass').first());
+  await see(page.getByText('Completed', { exact: true })); // the status pill ("Pass" also labels the radio button)
   await shot(page, '27-job-completed');
   const done = (await stack.admin.query(`select status, result from public.inspection_records where organisation_id = $1`, [org.id])).rows[0];
   log(`job ended: ${JSON.stringify(done)}`);
@@ -349,4 +350,49 @@ async function correctRevision({ page, stack, APP, orgName, see, shot, step, log
   if (rows.length !== 2 || rows[0].status !== 'corrected' || rows[1].status !== 'released' || !rows[1].is_correction) throw new Error('the correction was not released as expected');
   const { rows: [used] } = await stack.admin.query(`select count(*)::int as n from public.inspection_records i join public.part_revisions r on r.id = i.part_revision_id where r.part_id = $1 and r.version = 1`, [part.id]);
   if (used.n !== 1) throw new Error('the earlier inspection should still be on version 1');
+}
+
+/** An NC through containment and disposition: the gates say what is missing, the records are made, an approver approves, and the NC skips ahead. */
+async function containAndDispose({ page, stack, APP, orgName, see, shot, step, log }) {
+  step('the owner contains and dispositions the non-conformance raised earlier');
+  const { rows: [nc] } = await stack.admin.query(`select n.id, n.reference from public.nonconformances n join public.organisations o on o.id = n.organisation_id where o.name = $1 and n.title = 'Rod bore burr'`, [orgName]);
+  await page.goto(`${APP}/Non-Conformance/Internal/${nc.id}`);
+  await see(page.getByRole('heading', { name: 'Containment' }));
+  const needed = page.getByLabel('Needed for the next stage');
+  await see(needed.getByText(/record a containment action, or say why none is needed/));
+  await page.getByRole('button', { name: 'Move to Contained' }).click();
+  await see(page.getByRole('alert').filter({ hasText: /Before this can move to contained/ }));
+  await shot(page, '34-gate-refuses-contained');
+
+  await page.getByRole('button', { name: 'Add containment action' }).click();
+  const add = page.getByRole('dialog', { name: 'Add a containment action' });
+  await add.getByLabel(/What is being done/).fill('Quarantine lot 77 and tell the supervisor');
+  await add.getByRole('button', { name: 'Add action' }).click();
+  await see(page.getByRole('list', { name: 'Containment actions' }).getByText('Quarantine lot 77 and tell the supervisor'));
+  await page.getByRole('button', { name: 'Done…' }).click();
+  const done = page.getByRole('dialog', { name: 'Mark the action done' });
+  await done.getByLabel(/What was done and what was found/).fill('2 pieces quarantined, none shipped');
+  await done.getByRole('button', { name: 'Mark done' }).click();
+  await see(page.getByText(/2 pieces quarantined, none shipped/));
+  await see(page.getByRole('status').filter({ hasText: 'Containment is resolved.' }));
+  await shot(page, '35-containment-done');
+
+  await page.getByRole('button', { name: 'Propose a disposition' }).click();
+  const propose = page.getByRole('dialog', { name: 'Propose a disposition' });
+  await propose.getByLabel(/Instructions/).fill('Scrap both and record the lot numbers');
+  await propose.getByRole('button', { name: 'Propose' }).click();
+  await see(page.getByRole('list', { name: 'Dispositions' }).getByText('Scrap both and record the lot numbers'));
+  await page.getByRole('button', { name: 'Approve…' }).click();
+  await page.getByRole('dialog', { name: 'Approve this disposition' }).getByRole('button', { name: 'Approve' }).click();
+  await see(page.getByRole('status').filter({ hasText: 'Approved dispositions cover everything affected.' }));
+  await page.waitForTimeout(400);
+  await shot(page, '36-disposition-approved');
+
+  // Everything is settled, so the NC can skip ahead past Contained and Investigating.
+  await page.getByLabel('Move to a later stage').selectOption('dispositioned');
+  await page.locator('section[aria-label="Stage"] li[aria-current="step"]').filter({ hasText: 'Dispositioned' }).waitFor({ state: 'visible' });
+  const { rows: [after] } = await stack.admin.query(`select n.stage, (select count(*)::int from public.ncr_containment_actions where nonconformance_id = n.id and status = 'done') as done,
+      (select count(*)::int from public.ncr_dispositions where nonconformance_id = n.id and status = 'approved') as approved from public.nonconformances n where n.id = $1`, [nc.id]);
+  log(`NC ${nc.reference}: ${JSON.stringify(after)}`);
+  if (after.stage !== 'dispositioned' || after.done !== 1 || after.approved !== 1) throw new Error('the NC was not dispositioned with its containment and disposition recorded');
 }

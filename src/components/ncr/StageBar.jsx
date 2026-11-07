@@ -1,12 +1,16 @@
 import { RotateCcwIcon } from "@/components/icons";
 import { STAGES, nextStages, stageOf } from "../../lib/ncr";
+import { gateKey } from "../../lib/ncrWorkflow";
 
 /** Stage track with the moves allowed from the current stage. */
-const StageBar = ({ ncr, canUpdate, dirty, onMove, onCancel, onReopen, pending }) => {
+const StageBar = ({ ncr, gates, canUpdate, dirty, onMove, onCancel, onReopen, pending }) => {
   const options = nextStages(ncr.stage);
   const shown = STAGES.filter((s) => s.key !== "cancelled" || ncr.stage === "cancelled");
   const current = STAGES.findIndex((s) => s.key === ncr.stage);
   const blocked = !canUpdate || !!ncr.deletedAt;
+  // What is still needed for the next stage (and so for skipping past it): the rules are cumulative.
+  const next = options.forward[0];
+  const needed = next && next !== "open" ? (gates?.[gateKey(next)] ?? []) : [];
   return (
     <section aria-label="Stage" className="flex flex-col gap-3 rounded-2xl border border-border-color bg-secondary-bg p-4">
       <ol className="flex flex-wrap items-center gap-1 text-xs">
@@ -21,6 +25,16 @@ const StageBar = ({ ncr, canUpdate, dirty, onMove, onCancel, onReopen, pending }
         <p className="text-sm text-secondary-text">
           Last stage change: <span className="text-primary-text">{ncr.stageReason}</span>
         </p>
+      )}
+      {needed.length > 0 && (
+        <div role="status" aria-label="Needed for the next stage" className="rounded-lg border border-warning-color/40 bg-warning-color/10 p-3 text-sm text-primary-text">
+          Before this can move to {stageOf(next).label}:
+          <ul className="mt-1 list-disc pl-5">
+            {needed.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        </div>
       )}
       {!blocked && (
         <div className="flex flex-wrap items-center gap-2">

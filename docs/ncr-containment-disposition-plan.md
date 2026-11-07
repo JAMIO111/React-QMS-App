@@ -1,6 +1,6 @@
 # NC containment and disposition — plan
 
-**Status:** design agreed (§3), building · **Closes:** Phase 2 slice 2.5 (`docs/phase-2-plan.md` §2.3, §3) for containment and disposition · **Builds on:** NC core (2.4), costs and files, CAPA / 8D, inspections raising NCs
+**Status:** built (NC1 database, NC2 API, NC3 UI); migration `20251209100000_ncr_containment_disposition.sql` **not applied live yet** · **Closes:** Phase 2 slice 2.5 (`docs/phase-2-plan.md` §2.3, §3) for containment and disposition · **Builds on:** NC core (2.4), costs and files, CAPA / 8D, inspections raising NCs
 
 ## 1. The gap
 
@@ -34,3 +34,13 @@ what happens to the affected items. A forward move can even skip stages (Open st
 - **NC1 — database.** Migration, permission, functions, triggers, SQL tests, guardrails and sweeps; existing tests that move NCs forward get the records they now need.
 - **NC2 — API.** Containment and disposition endpoints, `containment`, `dispositions` and `gates` on the NC detail, history, e2e, tenancy sweep, mutation checks.
 - **NC3 — UI.** Containment and Disposition cards on the NC page with the "still needed" list for the next stage, approve / cancel dialogs, side-menu entries, unit tests, journey step with screenshots, docs, CLAUDE.md.
+
+## 5. Built, and how it was checked
+
+- **NC1** `supabase/migrations/20251209100000_ncr_containment_disposition.sql`, `supabase/tests/ncr_containment_disposition.test.sql` (all 52 test files pass). Nine mutation checks (each gate, the approval right, the quantity cap, frozen
+  approved dispositions, the quantity-affected floor, the concession reference, the done note, cancelling an approved disposition) each make the test fail. The existing tests that move NCs forward now settle them first (`pg_temp.settle_ncr`).
+- **NC2** `api/src/ncr/ncr-workflow.*`; `api/test/ncr-workflow.e2e-spec.ts` (14 tests), tenancy sweep; all 450 e2e tests pass (`settleNcr` test helper).
+- **NC3** NC page: Containment and Disposition sections (with side-menu entries), "Needed for the next stage" on the stage bar; 16 new unit tests with mutation checks; browser journey step (screenshots `34`–`36`).
+- The browser found a real bug (a `<form>` inside the NC page's form, fixed: the card now has no form of its own and a test guards it) and two journey races/false positives (now fixed).
+- **Limits:** the NC History section still shows only changes to the NC itself, not containment or disposition events (they are on the audit trail and each record shows who and when); no notification to approvers when a
+  disposition is proposed; a disposition does not track completion; dispositions name a quantity, not lots (Phase 3); investigation records and a "linked CAPA or none needed" gate before closure are still to do.

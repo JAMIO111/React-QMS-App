@@ -133,3 +133,36 @@ export const useNcrMutation = () => {
     onSuccess: (_data, _request, context) => settle(queryClient, organisationId, context),
   });
 };
+
+/** Containment of an NC: { actions, notNeededReason, resolved, problems }. */
+export const useNcrContainment = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "containment", id),
+    queryFn: () => apiFetch(`/ncrs/${id}/containment`, { organisationId }),
+    enabled: !!organisationId && !!id,
+    retry: false,
+  });
+};
+
+/** Dispositions of an NC: { data, affected, approvedQuantity, proposedQuantity, remaining, canApprove, settled, problems }. */
+export const useNcrDispositions = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "dispositions", id),
+    queryFn: () => apiFetch(`/ncrs/${id}/dispositions`, { organisationId }),
+    enabled: !!organisationId && !!id,
+    retry: false,
+  });
+};
+
+/** What is still needed to reach each later stage: { contained, investigating, dispositioned, awaitingClosure, closed } (lists of sentences). */
+export const useNcrGates = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "gates", id),
+    queryFn: () => apiFetch(`/ncrs/${id}/gates`, { organisationId }),
+    enabled: !!organisationId && !!id,
+    retry: false,
+  });
+};

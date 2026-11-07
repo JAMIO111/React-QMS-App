@@ -59,6 +59,10 @@ const routeApi = (routes) =>
     // Every NCR page also loads its costs, files and history.
     if (!(k in all) && /^GET \/ncrs\/[^/]+\/costs$/.test(k)) return { data: [], totals: { baseCurrency: "GBP", net: 0, gross: 0, count: 0 } };
     if (!(k in all) && /^GET \/ncrs\/[^/]+\/(attachments|history)$/.test(k)) return { data: [] };
+    // ... and its containment, dispositions and what is still needed for each stage.
+    if (!(k in all) && /^GET \/ncrs\/[^/]+\/containment$/.test(k)) return { actions: [], notNeededReason: null, resolved: false, problems: ["record a containment action, or say why none is needed"] };
+    if (!(k in all) && /^GET \/ncrs\/[^/]+\/dispositions$/.test(k)) return { data: [], affected: 5, approvedQuantity: 0, proposedQuantity: 0, remaining: 5, canApprove: true, settled: false, problems: ["approved dispositions cover 0 of the 5 affected"] };
+    if (!(k in all) && /^GET \/ncrs\/[^/]+\/gates$/.test(k)) return { contained: [], investigating: [], dispositioned: [], awaitingClosure: [], closed: [] };
     if (!(k in all)) throw new Error(`unexpected ${k}`);
     return typeof all[k] === "function" ? all[k](path, opts) : all[k];
   });

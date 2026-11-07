@@ -14,7 +14,25 @@ vi.mock("../../hooks/useQmsApi", () => ({
   useSites: () => ({ data: { data: [{ id: "s1", name: "Plant A", code: "PA", timezone: "Europe/London" }] } }),
   useUpdateOrganisation: () => ({ mutate: vi.fn(), isPending: false }),
 }));
-vi.mock("../../hooks/useSubscription", () => ({ useSubscriptionOverview: () => ({ data: { subscription: { status: "trialing" } } }) }));
+let overview;
+const startMutate = vi.fn();
+const portalMutate = vi.fn();
+const checkoutReturn = { phase: "idle", error: null, retry: vi.fn(), dismiss: vi.fn() };
+const planCatalogue = {
+  plans: [
+    { slug: "observer", name: "Observer", description: "Read only", monthly: { unitAmount: 500, currency: "GBP" }, annual: { unitAmount: 5000, currency: "GBP" }, annualSaving: 1000 },
+    { slug: "contributor", name: "Contributor", description: "Record work", monthly: { unitAmount: 1000, currency: "GBP" }, annual: { unitAmount: 10000, currency: "GBP" }, annualSaving: 2000 },
+    { slug: "controller", name: "Controller", description: "Everything", monthly: { unitAmount: 2500, currency: "GBP" }, annual: { unitAmount: 25000, currency: "GBP" }, annualSaving: 5000 },
+  ],
+};
+vi.mock("../../hooks/useSubscription", () => ({
+  useSubscriptionOverview: () => ({ data: overview }),
+  usePlanCatalogue: () => ({ data: planCatalogue }),
+  useStartCheckout: () => ({ mutate: startMutate, isPending: false, error: null }),
+  usePortalSession: () => ({ mutate: portalMutate, isPending: false }),
+}));
+vi.mock("../../hooks/useCheckoutReturn", () => ({ useCheckoutReturn: () => checkoutReturn }));
+vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock("../../hooks/useOnboarding", () => ({
   useOnboarding: () => ({ data: state, isLoading: false, error: queryError }),
   useOnboardingMutation: () => ({ mutate, isPending: false, error: null }),
@@ -48,7 +66,12 @@ const renderAt = (url) =>
 
 beforeEach(() => {
   mutate.mockReset();
-  permissions = ["organisation.manage"];
+  startMutate.mockReset();
+  portalMutate.mockReset();
+  checkoutReturn.phase = "idle";
+  sessionStorage.clear();
+  overview = { checkoutAvailable: true, providerManaged: false, subscription: null, items: [] };
+  permissions = ["organisation.manage", "subscription.manage"];
   state = makeState();
   queryError = null;
   resumeSetup();
@@ -102,16 +125,96 @@ describe("the set-up wizard", () => {
     expect(within(rail).getAllByRole("link")).toHaveLength(2); // organisation and plan
     expect(rail.querySelectorAll('[aria-disabled="true"]')).toHaveLength(5);
     expect(screen.getByText(/subscription must be active/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Continue/ })).toBeDisabled();
-    expect(screen.getByRole("link", { name: /Open Subscription & billing/ })).toHaveAttribute("href", "/Settings/Subscription");
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Continue to secure checkout" })).toBeEnabled();
   });
 
-  it("with a valid subscription everything opens and the plan says so", () => {
+  it("with a valid subscription everything opens and the plan shows it", () => {
     state = makeState({ billingRequired: true, accessState: "open" }, { plan: "done" });
+    overview = {
+      checkoutAvailable: true,
+      providerManaged: true,
+      subscription: { status: "trialing", billingProvider: "stripe", billingInterval: "month", currency: "GBP", trialEnd: "2026-01-15T00:00:00Z", currentPeriodEnd: "2026-01-15T00:00:00Z", cancelAtPeriodEnd: false },
+      items: [{ planSlug: "controller", planName: "Controller", purchased: 2, assigned: 1, available: 1, unitAmount: 2500 }],
+    };
     renderAt("/setup/plan");
-    expect(screen.getByText(/valid subscription/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Continue/ })).toBeEnabled();
+    expect(screen.getByText(/Free trial until 15 Jan 2026/)).toBeInTheDocument();
+    expect(screen.getByText(/2 × Controller/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
     expect(within(screen.getByRole("navigation", { name: "Set-up steps" })).getAllByRole("link")).toHaveLength(7);
+    expect(screen.queryByRole("button", { name: "Continue to secure checkout" })).toBeNull();
+  });
+
+  describe("buying the plan", () => {
+    beforeEach(() => {
+      state = makeState({ billingRequired: true, accessState: "needs_subscription", canFinish: false });
+    });
+
+    it("chooses seats and goes to Stripe's checkout with the owner's Controller seat included", async () => {
+      renderAt("/setup/plan");
+      expect(screen.getByRole("group", { name: "Controller package" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Remove Controller seat" })).toBeDisabled(); // at least one
+      await userEvent.click(screen.getByRole("button", { name: "Add Controller seat" }));
+      await userEvent.click(screen.getByRole("button", { name: "Add Contributor seat" }));
+      await userEvent.click(screen.getByRole("radio", { name: /Annual/ }));
+      expect(screen.getByText(/14-day free trial/)).toBeInTheDocument();
+      expect(screen.getByText(/£600\.00/)).toBeInTheDocument(); // 2 x 250 + 1 x 100 a year, excluding VAT
+      await userEvent.click(screen.getByRole("button", { name: "Continue to secure checkout" }));
+      expect(startMutate).toHaveBeenCalledWith({ interval: "year", seats: { controller: 2, contributor: 1 }, returnTo: "setup" }, expect.any(Object));
+      const assign = vi.fn();
+      Object.defineProperty(window, "location", { value: { assign }, writable: true });
+      startMutate.mock.calls[0][1].onSuccess({ url: "https://checkout.stripe.test/c/cs_1", sessionId: "cs_1" });
+      expect(assign).toHaveBeenCalledWith("https://checkout.stripe.test/c/cs_1");
+    });
+
+    it("remembers the choice for a cancelled checkout", async () => {
+      const first = renderAt("/setup/plan");
+      await userEvent.click(screen.getByRole("button", { name: "Add Observer seat" }));
+      first.unmount();
+      renderAt("/setup/plan");
+      expect(screen.getByLabelText("Observer seats")).toHaveTextContent("1");
+    });
+
+    it("explains how the return from Stripe went", () => {
+      checkoutReturn.phase = "cancelled";
+      renderAt("/setup/plan");
+      expect(screen.getByText(/Checkout was cancelled and nothing was charged/)).toBeInTheDocument();
+    });
+
+    it("says it is waiting while Stripe confirms, and offers to check again if it takes too long", async () => {
+      checkoutReturn.phase = "waiting";
+      const first = renderAt("/setup/plan");
+      expect(screen.getByText(/Waiting for Stripe to confirm/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Check again" })).toBeNull();
+      first.unmount();
+      checkoutReturn.phase = "timeout";
+      renderAt("/setup/plan");
+      await userEvent.click(screen.getByRole("button", { name: "Check again" }));
+      expect(checkoutReturn.retry).toHaveBeenCalled();
+    });
+
+    it("is not available to people who cannot manage the subscription", () => {
+      permissions = ["organisation.manage"];
+      renderAt("/setup/plan");
+      expect(screen.getByText(/Only an owner or administrator can start the subscription/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Continue to secure checkout" })).toBeNull();
+    });
+
+    it("says so when Stripe is not set up on this server, without a dead end", () => {
+      overview = { ...overview, checkoutAvailable: false };
+      renderAt("/setup/plan");
+      expect(screen.getByText(/Online payment is not switched on for this server yet/)).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /Open Subscription & billing/ })).toHaveAttribute("href", "/Settings/Subscription");
+    });
+
+    it("sends someone whose payment lapsed to Stripe's billing portal", async () => {
+      state = makeState({ billingRequired: true, accessState: "lapsed", canFinish: false });
+      overview = { checkoutAvailable: true, providerManaged: true, subscription: { status: "past_due", billingProvider: "stripe", billingInterval: "month", currency: "GBP" }, items: [] };
+      renderAt("/setup/plan");
+      expect(screen.getByText(/needs attention/)).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Manage billing" }));
+      expect(portalMutate).toHaveBeenCalled();
+    });
   });
 
   it("the review lists what is done and what is not, and cannot finish while a required step is open", () => {

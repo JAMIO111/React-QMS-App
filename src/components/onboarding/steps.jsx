@@ -10,9 +10,15 @@ import ThemeColourPicker from "../Settings/ThemeColourPicker";
 import TwoFactorCard from "../Settings/TwoFactorCard";
 import { describeApiError } from "../../lib/api-client";
 import { countryOptions } from "../../lib/onboarding";
-import { useOrganisationDetails, useSites, useUpdateOrganisation } from "../../hooks/useQmsApi";
-import { useSubscriptionOverview } from "../../hooks/useSubscription";
-import { FormError, buttonClass } from "../master-data/shared";
+import { useOrganisationDetails, usePermissions, useSites, useUpdateOrganisation } from "../../hooks/useQmsApi";
+import { useStartCheckout, usePlanCatalogue, usePortalSession, useSubscriptionOverview } from "../../hooks/useSubscription";
+import { useCheckoutReturn } from "../../hooks/useCheckoutReturn";
+import { useOrganisation } from "../../contexts/OrganisationProvider";
+import { useToast } from "../../contexts/ToastProvider";
+import { clearChoice, formatDate, loadChoice, money, saveChoice } from "../../lib/billing";
+import CheckoutNotice from "../billing/CheckoutNotice";
+import SeatPicker from "../billing/SeatPicker";
+import { ErrorNotice, FormError, buttonClass } from "../master-data/shared";
 
 /** Step 1: the organisation's name, and where the first site is. */
 export const OrganisationStep = () => {
@@ -42,30 +48,133 @@ export const OrganisationStep = () => {
   );
 };
 
-/** Step 2: the plan. In this build it explains the rule and shows the current subscription; buying arrives with the payment provider. */
+/** The current subscription in one card, with the way to Stripe's portal. */
+export const SubscriptionSummary = ({ overview, canManage }) => {
+  const sub = overview.subscription;
+  const portal = usePortalSession();
+  const { showToast } = useToast();
+  const openPortal = () =>
+    portal.mutate(undefined, {
+      onSuccess: ({ url }) => window.location.assign(url),
+      onError: (e) => showToast({ type: "error", title: "Could not open billing", message: describeApiError(e) }),
+    });
+  return (
+    <MenuCard title="Your subscription" subtitle={sub.status === "trialing" ? `Free trial until ${formatDate(sub.trialEnd)}` : `Status: ${sub.status.replace("_", " ")}`}>
+      <div className="flex flex-col gap-3 text-sm text-primary-text">
+        <ul className="flex flex-col gap-1">
+          {overview.items.filter((i) => i.purchased > 0).map((i) => (
+            <li key={i.planSlug}>{i.purchased} × {i.planName} ({money(i.unitAmount, sub.currency)} per user per {sub.billingInterval === "year" ? "year" : "month"})</li>
+          ))}
+        </ul>
+        <p className="text-secondary-text">
+          {sub.status === "trialing" ? `Your card is charged from ${formatDate(sub.trialEnd)}` : sub.currentPeriodEnd ? `Next billing date ${formatDate(sub.currentPeriodEnd)}` : ""}
+          {sub.cancelAtPeriodEnd ? ". It is set to end then and not renew." : "."} Prices exclude VAT.
+        </p>
+        <p>The owner holds a Controller seat, so everything is available.</p>
+        {canManage && sub.billingProvider === "stripe" && (
+          <div>
+            <button type="button" className={buttonClass.neutral} disabled={portal.isPending} onClick={openPortal}>
+              {portal.isPending ? "Opening…" : "Manage billing"}
+            </button>
+          </div>
+        )}
+      </div>
+    </MenuCard>
+  );
+};
+
+/** Step 2: the plan. Choose seats, go to Stripe's checkout (14-day trial, card required), come back and the app opens. */
 export const PlanStep = ({ state }) => {
+  const { organisationId } = useOrganisation();
+  const { can } = usePermissions();
   const overview = useSubscriptionOverview();
-  const sub = overview.data?.subscription;
+  const catalogue = usePlanCatalogue();
+  const checkout = useCheckoutReturn();
+  const start = useStartCheckout();
+  const portal = usePortalSession();
+  const { showToast } = useToast();
+  const [choice, setChoice] = useState(() => loadChoice(organisationId));
+  const update = (next) => {
+    setChoice(next);
+    saveChoice(organisationId, next);
+  };
+  const canManage = can("subscription.manage");
   const open = state.accessState === "open";
+  const sub = overview.data?.subscription;
+  // The saved choice has done its job once the subscription exists.
+  useEffect(() => {
+    if (checkout.phase === "done") clearChoice(organisationId);
+  }, [checkout.phase, organisationId]);
+
+  if (overview.isLoading || catalogue.isLoading) return <p className="text-sm text-secondary-text">Loading…</p>;
+  if (overview.error || catalogue.error) return <ErrorNotice error={overview.error ?? catalogue.error} />;
+  const data = overview.data;
+  const hasSubscription = !!sub && (open || sub.billingProvider === "stripe" || sub.status !== "cancelled");
+
+  const checkoutNow = () =>
+    start.mutate(
+      { interval: choice.interval, seats: Object.fromEntries(Object.entries(choice.seats).filter(([, q]) => q > 0)), returnTo: "setup" },
+      { onSuccess: ({ url }) => window.location.assign(url) },
+    );
+  const openPortal = () =>
+    portal.mutate(undefined, {
+      onSuccess: ({ url }) => window.location.assign(url),
+      onError: (e) => showToast({ type: "error", title: "Could not open billing", message: describeApiError(e) }),
+    });
+
   return (
     <div className="flex flex-col gap-4">
-      <MenuCard title="Subscription" subtitle={open ? "Your subscription is active" : state.billingRequired ? "A subscription is needed before you can use Fortress QMS" : "Choose your plan when you are ready"}>
-        <div className="flex flex-col gap-2 text-sm text-primary-text">
-          {open ? (
-            <p>
-              Your organisation has a valid subscription{sub?.status ? ` (${sub.status.replace("_", " ")})` : ""}, and the owner holds a Controller seat.
-            </p>
-          ) : (
-            <>
-              <p>Fortress QMS is priced per seat: Observer (read only), Contributor (record and complete work) and Controller (full functionality). You need at least one <strong>Controller</strong> seat, and the owner takes it.</p>
-              <p className="text-secondary-text">{state.billingRequired ? "Everything except billing and set-up stays locked until the subscription is active." : "Nothing is locked yet, but you can set up your plan now."}</p>
-            </>
-          )}
-          <p>
-            <Link to="/Settings/Subscription" className="text-link-color underline">Open Subscription &amp; billing</Link>
-          </p>
-        </div>
-      </MenuCard>
+      <CheckoutNotice checkout={checkout} />
+      {open && sub ? (
+        <SubscriptionSummary overview={data} canManage={canManage} />
+      ) : (
+        <MenuCard
+          title={hasSubscription ? "Your subscription needs attention" : "Choose your seats"}
+          subtitle={state.billingRequired ? "A subscription is needed before you can use Fortress QMS" : "Choose your plan when you are ready"}>
+          <div className="flex flex-col gap-4 text-sm text-primary-text">
+            {hasSubscription ? (
+              <>
+                <p>
+                  Your subscription is {sub.status.replace("_", " ")}, or no owner holds a Controller seat. Fix the payment in Stripe's billing portal and everything comes back at once.
+                </p>
+                {canManage && sub.billingProvider === "stripe" && (
+                  <div>
+                    <button type="button" className={buttonClass.primary} disabled={portal.isPending} onClick={openPortal}>
+                      {portal.isPending ? "Opening…" : "Manage billing"}
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : !data.checkoutAvailable ? (
+              <>
+                <p>Online payment is not switched on for this server yet, so a subscription cannot be started here. {state.billingRequired ? "Everything except billing and set-up stays locked until it can." : ""}</p>
+                <p>
+                  <Link to="/Settings/Subscription" className="text-link-color underline">Open Subscription &amp; billing</Link>
+                </p>
+              </>
+            ) : (
+              <>
+                <p>
+                  Fortress QMS is priced per seat: Observer (read only), Contributor (record and complete work) and Controller (full functionality). You need at least one <strong>Controller</strong> seat, and you, the owner, take it.
+                </p>
+                {canManage ? (
+                  <>
+                    <SeatPicker plans={catalogue.data.plans} value={choice} onChange={update} disabled={start.isPending} />
+                    <FormError error={start.error} />
+                    <div className="flex justify-end">
+                      <button type="button" className={buttonClass.primary} disabled={start.isPending} onClick={checkoutNow}>
+                        {start.isPending ? "Opening checkout…" : "Continue to secure checkout"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-secondary-text">Only an owner or administrator can start the subscription.</p>
+                )}
+              </>
+            )}
+          </div>
+        </MenuCard>
+      )}
     </div>
   );
 };

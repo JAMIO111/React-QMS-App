@@ -16,7 +16,7 @@ import { useNcrMutation } from "../hooks/useNcr";
 import { useMasterDataMutation } from "../hooks/useMasterData";
 import { useProcessControlMutation } from "../hooks/useProcessControl";
 import { useCalibrationMutation } from "../hooks/useCalibration";
-import { useSubscriptionMutation } from "../hooks/useSubscription";
+import { useChangeSeats, useConfirmCheckout, usePortalSession, useSeatPreview, useStartCheckout, useSubscriptionMutation } from "../hooks/useSubscription";
 import { useAlertMutation } from "../hooks/useDocumentation";
 import { useMarkNotificationsRead } from "../hooks/useNotifications";
 import { useCapaMutation } from "../hooks/useCapa";
@@ -88,6 +88,11 @@ describe("every action refreshes every module's data", () => {
     ["subscription", useSubscriptionMutation, { action: "seats", planSlug: "controller", quantity: 2 }],
     ["notifications read", useMarkNotificationsRead, { all: true }],
     ["CAPA / 8D", useCapaMutation, { action: "update", id: "c1", body: { title: "x" } }],
+    ["start checkout", useStartCheckout, { interval: "month", seats: { controller: 1 } }],
+    ["confirm checkout", useConfirmCheckout, { sessionId: "cs_test_1" }],
+    ["billing portal", usePortalSession, undefined],
+    ["seat preview", useSeatPreview, { seats: { controller: 2 } }],
+    ["seat change", useChangeSeats, { seats: { controller: 2 } }],
     ["set-up wizard step", useOnboardingMutation, { action: "setStep", body: { step: "details", status: "done" } }],
     ["set-up wizard finish", useOnboardingMutation, { action: "complete" }],
     ["CAPA / 8D action", useCapaMutation, { action: "completeAction", id: "a1", body: {} }],

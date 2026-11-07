@@ -64,3 +64,57 @@ export const useSubscriptionMutation = () => {
     onSettled: () => refreshOrganisation(queryClient, organisationId, { me: true }),
   });
 };
+
+/** Starts Stripe Checkout (14-day trial, card required). Resolves with { url, sessionId }: send the browser to url. */
+export const useStartCheckout = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ interval, seats, returnTo = "setup" }) =>
+      apiFetch("/billing/checkout-session", { method: "POST", body: { interval, seats, returnTo }, organisationId }),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/**
+ * After Stripe sends the person back: asks the server to check the Checkout with Stripe and apply the subscription.
+ * Resolves with { status: "open" | "complete" | "expired", subscription }. Access and permissions change, so they are refreshed too.
+ */
+export const useConfirmCheckout = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId }) => apiFetch("/billing/checkout-session/confirm", { method: "POST", body: { sessionId }, organisationId }),
+    onSettled: () => refreshOrganisation(queryClient, organisationId, { me: true }),
+  });
+};
+
+/** Stripe's Customer Portal address (card, invoices, tax details, cancellation at period end). */
+export const usePortalSession = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch("/billing/portal-session", { method: "POST", organisationId }),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** What a seat change would cost now (proration from Stripe); changes nothing. `seats` = { planSlug: quantity } for the packages to change. */
+export const useSeatPreview = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ seats }) => apiFetch("/billing/seats/preview", { method: "POST", body: { seats }, organisationId }),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** Changes seats on the Stripe subscription (prorated). Seats decide what people may use, so permissions are refreshed too. */
+export const useChangeSeats = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ seats }) => apiFetch("/billing/seats", { method: "PUT", body: { seats }, organisationId }),
+    onSettled: () => refreshOrganisation(queryClient, organisationId, { me: true }),
+  });
+};

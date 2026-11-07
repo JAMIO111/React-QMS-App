@@ -1,4 +1,6 @@
 import { useState } from "react";
+import CheckoutNotice from "../billing/CheckoutNotice";
+import SeatPicker from "../billing/SeatPicker";
 import MenuCard from "../ui/MenuCard";
 import LoadingScreen from "../ui/LoadingScreen";
 import LoadingButton from "../ui/LoadingButton";
@@ -8,11 +10,18 @@ import { CheckIcon, XIcon } from "@/components/icons";
 import { describeApiError } from "../../lib/api-client";
 import { useConfirm } from "../../contexts/ConfirmationModalProvider";
 import { useToast } from "../../contexts/ToastProvider";
+import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
+import { useCheckoutReturn } from "../../hooks/useCheckoutReturn";
+import { formatDate, loadChoice, money, saveChoice } from "../../lib/billing";
 import {
+  useChangeSeats,
   useInvoices,
   usePlanCatalogue,
+  usePortalSession,
   useSeatAssignments,
+  useSeatPreview,
+  useStartCheckout,
   useSubscriptionMutation,
   useSubscriptionOverview,
 } from "../../hooks/useSubscription";
@@ -33,13 +42,7 @@ const STATUS_STYLES = {
 };
 const LEVEL_LABELS = { none: "—", view: "View", operational: "Operational", full: "Full" };
 
-/** Prices arrive as integer pence. */
-const money = (pence, currency = "GBP") =>
-  pence === null || pence === undefined
-    ? "—"
-    : new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(pence / 100);
-
-const date = (iso) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—");
+const date = formatDate;
 const displayName = (m) => [m.firstName, m.surname].filter(Boolean).join(" ") || m.email || "Unknown";
 const unit = (interval) => (interval === "year" ? "year" : "month");
 
@@ -57,14 +60,57 @@ const Stat = ({ label, value, hint }) => (
   </div>
 );
 
-const Overview = ({ overview }) => {
+const ManageBillingButton = ({ className = button }) => {
+  const portal = usePortalSession();
+  const { showToast } = useToast();
+  return (
+    <button
+      type="button"
+      className={className}
+      disabled={portal.isPending}
+      onClick={() =>
+        portal.mutate(undefined, {
+          onSuccess: ({ url }) => window.location.assign(url),
+          onError: (e) => showToast({ type: "error", title: "Could not open billing", message: describeApiError(e) }),
+        })
+      }>
+      {portal.isPending ? "Opening…" : "Manage billing"}
+    </button>
+  );
+};
+
+const Overview = ({ overview, canManage }) => {
   const { subscription: sub, items, totals } = overview;
   const currency = sub?.currency ?? "GBP";
+  const stripe = sub?.billingProvider === "stripe";
   return (
-    <MenuCard title="Subscription" subtitle="One subscription for the whole organisation; prices exclude VAT" action={sub && <StatusBadge status={sub.status} />}>
+    <MenuCard
+      title="Subscription"
+      subtitle="One subscription for the whole organisation; prices exclude VAT"
+      action={
+        <div className="flex items-center gap-2">
+          {canManage && stripe && <ManageBillingButton />}
+          {sub && <StatusBadge status={sub.status} />}
+        </div>
+      }>
+      {sub?.status === "trialing" && (
+        <p role="status" className="mb-3 text-sm text-primary-text">
+          Free trial until {date(sub.trialEnd)}. Your card is charged from then{sub.cancelAtPeriodEnd ? ", unless you cancel, which you have" : ", unless you cancel before"}.
+        </p>
+      )}
+      {sub?.cancelAtPeriodEnd && sub.status !== "cancelled" && (
+        <p role="alert" className="mb-3 text-sm text-amber-700 dark:text-amber-300">
+          This subscription is set to end on {date(sub.currentPeriodEnd)}. After that the organisation is locked to billing until it is renewed.
+        </p>
+      )}
+      {sub?.status === "cancelled" && (
+        <p role="alert" className="mb-3 text-sm text-amber-700 dark:text-amber-300">
+          This subscription has been cancelled{sub.currentPeriodEnd ? `; access continues until ${date(sub.currentPeriodEnd)}` : ""}.
+        </p>
+      )}
       {!sub && (
         <p className="text-sm text-secondary-text">
-          No subscription yet. Buy seats below to create one.
+          No subscription yet. {overview.checkoutAvailable ? "Choose your seats below to start one." : "Buy seats below to create one."}
         </p>
       )}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -107,9 +153,14 @@ const Overview = ({ overview }) => {
 };
 
 const PricingCards = ({ catalogue, overview, canManage }) => {
+  const managed = overview.providerManaged && overview.subscription?.billingProvider === "stripe";
+  // With Stripe the billing interval is fixed by the subscription; it can be changed in the billing portal only.
   const [annual, setAnnual] = useState(overview.subscription?.billingInterval === "year");
   const [draft, setDraft] = useState({});
-  const mutation = useSubscriptionMutation();
+  const manual = useSubscriptionMutation();
+  const preview = useSeatPreview();
+  const change = useChangeSeats();
+  const mutation = managed ? change : manual;
   const confirm = useConfirm();
   const { showToast } = useToast();
   const seatsOf = (slug) => overview.items.find((i) => i.planSlug === slug);
@@ -118,7 +169,7 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
   const changes = catalogue.plans.filter((p) => wanted(p.slug) !== purchased(p.slug));
 
   const step = (plan, delta) => {
-    const min = seatsOf(plan.slug)?.assigned ?? 0;
+    const min = Math.max(seatsOf(plan.slug)?.assigned ?? 0, managed && plan.slug === "controller" ? 1 : 0);
     const next = Math.max(min, wanted(plan.slug) + delta);
     setDraft((d) => ({ ...d, [plan.slug]: next }));
   };
@@ -128,7 +179,30 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
     return t + (wanted(p.slug) - purchased(p.slug)) * (price?.unitAmount ?? 0);
   }, 0);
 
+  const applyManaged = async () => {
+    const lines = changes.map((p) => `${p.name}: ${purchased(p.slug)} → ${wanted(p.slug)}`).join("; ");
+    const seats = Object.fromEntries(changes.map((p) => [p.slug, wanted(p.slug)]));
+    try {
+      const quote = await preview.mutateAsync({ seats });
+      const due = quote.amountDue;
+      const ok = await confirm({
+        title: "Apply seat changes?",
+        message: `${lines}. ${due > 0 ? `Stripe charges ${money(due, quote.currency.toUpperCase())} now for the rest of this period (prorated, ${money(quote.tax, quote.currency.toUpperCase())} of it VAT)` : due < 0 ? `Stripe credits ${money(-due, quote.currency.toUpperCase())} to your next invoice` : "Nothing is charged now"}. From the next billing date the recurring cost changes by ${costChange < 0 ? "-" : ""}${money(Math.abs(costChange))} per ${annual ? "year" : "month"} (excluding VAT).`,
+        confirmText: "Apply",
+        cancelText: "Cancel",
+        type: "info",
+      });
+      if (!ok) return;
+      await change.mutateAsync({ seats });
+      setDraft({});
+      showToast({ type: "success", title: "Seats updated", message: lines });
+    } catch (error) {
+      showToast({ type: "error", title: "Not changed", message: describeApiError(error) });
+    }
+  };
+
   const apply = async () => {
+    if (managed) return applyManaged();
     const lines = changes.map((p) => `${p.name}: ${purchased(p.slug)} → ${wanted(p.slug)}`).join("; ");
     const ok = await confirm({
       title: "Apply seat changes?",
@@ -154,9 +228,13 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
       title="Packages"
       subtitle="Packages control what the product offers; company roles still control who may approve or release"
       action={
-        <Switch checked={annual} onChange={(e) => setAnnual(e.target.checked)} aria-label="Annual billing">
-          Annual billing
-        </Switch>
+        managed ? (
+          <span className="text-sm text-secondary-text">Billed {annual ? "annually" : "monthly"}</span>
+        ) : (
+          <Switch checked={annual} onChange={(e) => setAnnual(e.target.checked)} aria-label="Annual billing">
+            Annual billing
+          </Switch>
+        )
       }>
       <div className="grid gap-4 md:grid-cols-3">
         {catalogue.plans.map((plan) => {
@@ -179,7 +257,7 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
               <p className="text-sm text-secondary-text">{owned?.assigned ?? 0} assigned</p>
               {canManage && (
                 <div className="mt-auto flex items-center gap-3">
-                  <button type="button" aria-label={`Remove ${plan.name} seat`} className={button} disabled={mutation.isPending || qty <= (owned?.assigned ?? 0)} onClick={() => step(plan, -1)}>−</button>
+                  <button type="button" aria-label={`Remove ${plan.name} seat`} className={button} disabled={mutation.isPending || preview.isPending || qty <= Math.max(owned?.assigned ?? 0, managed && plan.slug === "controller" ? 1 : 0)} onClick={() => step(plan, -1)}>−</button>
                   <span aria-label={`${plan.name} seats`} className="min-w-6 text-center text-primary-text">{qty}</span>
                   <button type="button" aria-label={`Add ${plan.name} seat`} className={button} disabled={mutation.isPending} onClick={() => step(plan, 1)}>+</button>
                 </div>
@@ -191,11 +269,41 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
       {canManage && changes.length > 0 && (
         <div className="mt-4 flex items-center justify-end gap-2">
           <button type="button" className={button} disabled={mutation.isPending} onClick={() => setDraft({})}>Discard</button>
-          <LoadingButton className={`${button} bg-cta-color text-white`} loading={mutation.isPending} loadingText="Applying…" onClick={apply}>
+          <LoadingButton className={`${button} bg-cta-color text-white`} loading={mutation.isPending || preview.isPending} loadingText={managed ? "Checking the price…" : "Applying…"} onClick={apply}>
             Apply changes
           </LoadingButton>
         </div>
       )}
+    </MenuCard>
+  );
+};
+
+/** For an organisation with no subscription yet, when Stripe is set up: choose seats and go to the secure checkout. */
+const StartSubscription = ({ catalogue }) => {
+  const { organisationId } = useOrganisation();
+  const [choice, setChoice] = useState(() => loadChoice(organisationId));
+  const start = useStartCheckout();
+  const { showToast } = useToast();
+  const update = (next) => {
+    setChoice(next);
+    saveChoice(organisationId, next);
+  };
+  const go = () =>
+    start.mutate(
+      { interval: choice.interval, seats: Object.fromEntries(Object.entries(choice.seats).filter(([, q]) => q > 0)), returnTo: "settings" },
+      {
+        onSuccess: ({ url }) => window.location.assign(url),
+        onError: (e) => showToast({ type: "error", title: "Could not start checkout", message: describeApiError(e) }),
+      },
+    );
+  return (
+    <MenuCard title="Start your subscription" subtitle="14-day free trial, card required, cancel any time before it ends">
+      <SeatPicker plans={catalogue.plans} value={choice} onChange={update} disabled={start.isPending} />
+      <div className="mt-4 flex justify-end">
+        <LoadingButton className={`${button} bg-cta-color text-white`} loading={start.isPending} loadingText="Opening checkout…" onClick={go}>
+          Continue to secure checkout
+        </LoadingButton>
+      </div>
     </MenuCard>
   );
 };
@@ -344,10 +452,13 @@ const Seats = ({ catalogue, overview, canAssign }) => {
 
 const INVOICE_STYLES = { paid: STATUS_STYLES.active, open: STATUS_STYLES.past_due, uncollectible: STATUS_STYLES.unpaid };
 
-const Invoices = () => {
+const Invoices = ({ managed, canManage }) => {
   const { data: invoices, isLoading, error } = useInvoices();
   return (
-    <MenuCard title="Billing history" subtitle="Payment methods and billing details will be managed through the payment provider once it is connected">
+    <MenuCard
+      title="Billing history"
+      subtitle={managed ? "Payment method, billing details and tax number are managed in Stripe's secure portal" : "Payment methods and billing details are managed through the payment provider"}
+      action={managed && canManage && <ManageBillingButton />}>
       {isLoading && <LoadingScreen />}
       {error && <p role="alert" className="text-sm text-error-color">{describeApiError(error)}</p>}
       {invoices && invoices.length === 0 && <p className="text-sm text-secondary-text">No invoices yet.</p>}
@@ -393,17 +504,22 @@ const SettingsSubscription = () => {
   const { can } = usePermissions();
   const overview = useSubscriptionOverview();
   const catalogue = usePlanCatalogue();
+  const checkout = useCheckoutReturn();
 
   if (overview.isLoading || catalogue.isLoading) return <LoadingScreen />;
   if (overview.error || catalogue.error) return <ApiUnavailable error={overview.error ?? catalogue.error} />;
+  const canManage = can("subscription.manage");
+  const data = overview.data;
+  const starting = !data.subscription && data.checkoutAvailable && canManage;
 
   return (
     <div className="flex max-w-5xl flex-col gap-4">
-      <Overview overview={overview.data} />
-      <PricingCards catalogue={catalogue.data} overview={overview.data} canManage={can("subscription.manage")} />
+      <CheckoutNotice checkout={checkout} />
+      <Overview overview={data} canManage={canManage} />
+      {starting ? <StartSubscription catalogue={catalogue.data} /> : <PricingCards catalogue={catalogue.data} overview={data} canManage={canManage} />}
       <Seats catalogue={catalogue.data} overview={overview.data} canAssign={can("subscription.seats")} />
       <Comparison catalogue={catalogue.data} />
-      {can("invoices.read") && <Invoices />}
+      {can("invoices.read") && <Invoices managed={data.subscription?.billingProvider === "stripe"} canManage={canManage} />}
     </div>
   );
 };

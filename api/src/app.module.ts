@@ -64,6 +64,7 @@ import { CharacteristicTemplatesService } from './process-control/characteristic
 import { ProcessControlService } from './process-control/process-control.service';
 import { GaugeUsageController, InspectionMeasurementsController, InspectionsController, NcrInspectionSourceController } from './inspection/inspection.controller';
 import { InspectionService } from './inspection/inspection.service';
+import { MasterDataDashboardController, MasterDataDashboardService } from './master-data/master-data-dashboard';
 import { ProcessControlDashboardController, ProcessControlDashboardService } from './process-control/process-control-dashboard';
 import { QualityAlertAttachmentsController, QualityAlertsController } from './documentation/documentation.controller';
 import { DocumentationService } from './documentation/documentation.service';
@@ -159,6 +160,7 @@ export class AppModule implements NestModule {
         CapaRootCausesController,
         CapaAttachmentsController,
         ProcessControlDashboardController,
+        MasterDataDashboardController,
         GaugeUsageController,
       ],
       providers: [
@@ -191,6 +193,7 @@ export class AppModule implements NestModule {
         DocumentationService,
         CapaService,
         ProcessControlDashboardService,
+        MasterDataDashboardService,
         OrganisationsService,
         StructureService,
         MembersService,

@@ -26,7 +26,7 @@ const CTAButton = ({
       "border border-error-btn-border bg-error-btn-bg text-primary-text hover:bg-error-btn-bg-hover hover:border-error-btn-border-hover",
     main: "border border-cta-btn-border bg-cta-btn-bg text-primary-text hover:bg-cta-btn-bg-hover hover:border-cta-btn-border-hover",
     secondary:
-      "border border-border-color text-primary-text hover:border-border-dark-color",
+      "border border-secondary-btn-border bg-secondary-btn-bg text-secondary-btn-text hover:bg-secondary-btn-bg-hover hover:border-secondary-btn-border-hover",
     success:
       "border border-success-btn-border bg-success-btn-bg text-primary-text hover:bg-success-btn-bg-hover hover:border-success-btn-border-hover",
     neutral:

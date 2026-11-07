@@ -9,6 +9,8 @@ import { describeApiError } from "../../lib/api-client";
 export const buttonClass = {
   primary:
     "rounded-lg border border-cta-btn-border bg-cta-btn-bg px-4 py-2 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
+  secondary:
+    "rounded-lg border border-secondary-btn-border bg-secondary-btn-bg px-3 py-1.5 text-sm text-secondary-btn-text hover:bg-secondary-btn-bg-hover hover:border-secondary-btn-border-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
   neutral:
     "rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
   danger:

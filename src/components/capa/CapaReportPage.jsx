@@ -56,7 +56,7 @@ const CapaReportPage = () => {
       <style>{"@media print { body * { visibility: hidden !important; } #capa-report, #capa-report * { visibility: visible !important; } #capa-report { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; box-shadow: none; } }"}</style>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link to={`/CAPA/${capa.id}/d8`} className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline"><ArrowLeftIcon className="h-4 w-4" /> Back to the 8D</Link>
-        <button type="button" className={buttonClass.primary} onClick={() => window.print()}>Print or save as PDF</button>
+        <button type="button" className={buttonClass.secondary} onClick={() => window.print()}>Print or save as PDF</button>
       </div>
 
       <article id="capa-report" className="mx-auto flex w-full max-w-4xl flex-col gap-3 bg-white p-8 text-sm text-gray-900 shadow">

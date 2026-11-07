@@ -103,7 +103,7 @@ const Welcome = ({ invitation: inv, mfaRequired }) => {
         </ul>
       </section>
       <div className="flex justify-end">
-        <button type="button" className={buttonClass.primary} onClick={() => navigate("/Dashboard", { replace: true })}>Go to the dashboard</button>
+        <button type="button" className={buttonClass.secondary} onClick={() => navigate("/Dashboard", { replace: true })}>Go to the dashboard</button>
       </div>
     </>
   );

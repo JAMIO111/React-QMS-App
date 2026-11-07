@@ -75,6 +75,7 @@ Summary of the brief:
   outbox events are enforced by DB triggers; emit new events with `app.emit_event` from SECURITY
   DEFINER triggers only. New tenant tables: table-level INSERT + `app.stamp_created()`,
   column-level UPDATE, no DELETE, `audit_changes`, add to guardrails + both sweeps.
+- Buttons: `CTAButton` types and `buttonClass` (`master-data/shared.jsx`): `main`/`primary` (theme colour), `secondary` (dark in light mode, light in dark mode; tokens `--secondary-btn-*` in `index.css`), `neutral` (grey), `danger`/`cancel`. Use secondary for a calm but definite action beside or instead of the main one (e.g. print, go to the dashboard).
 - Form pickers: dropdowns use `src/components/ui/RHFComboBox.jsx` and dates use
   `RHFDatePickerPopout.jsx` (value/onChange, so wrap in react-hook-form `Controller`; both take
   `label`, `required`, `disabled`, `hint`, `error`). Options are `{ id, name, hint?, disabled? }`;

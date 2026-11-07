@@ -37,6 +37,11 @@
   --color-cta-btn-bg-hover: var(--cta-btn-bg-hover);
   --color-cta-btn-border: var(--cta-btn-border);
   --color-cta-btn-border-hover: var(--cta-btn-border-hover);
+  --color-secondary-btn-bg: rgba(var(--secondary-btn-bg));
+  --color-secondary-btn-bg-hover: rgba(var(--secondary-btn-bg-hover));
+  --color-secondary-btn-border: rgba(var(--secondary-btn-border));
+  --color-secondary-btn-border-hover: rgba(var(--secondary-btn-border-hover));
+  --color-secondary-btn-text: rgba(var(--secondary-btn-text));
   --color-neutral-btn-bg: rgba(var(--neutral-btn-bg));
   --color-neutral-btn-bg-hover: rgba(var(--neutral-btn-bg-hover));
   --color-neutral-btn-border: rgba(var(--neutral-btn-border));
@@ -204,6 +209,12 @@
   --neutral-btn-bg-hover: 230, 230, 230;
   --neutral-btn-border: 200, 200, 200;
   --neutral-btn-border-hover: 160, 160, 160;
+  /* Secondary button: dark in light mode, light in dark mode */
+  --secondary-btn-bg: 40, 51, 60;
+  --secondary-btn-bg-hover: 62, 75, 86;
+  --secondary-btn-border: 40, 51, 60;
+  --secondary-btn-border-hover: 90, 105, 118;
+  --secondary-btn-text: 250, 250, 250;
   --error-btn-bg: var(--color-red-300);
   --error-btn-bg-hover: var(--color-red-400);
   --error-btn-border: var(--color-red-500);
@@ -272,6 +283,11 @@
   --neutral-btn-bg-hover: 31, 31, 31;
   --neutral-btn-border: 60, 60, 60;
   --neutral-btn-border-hover: 80, 80, 80;
+  --secondary-btn-bg: 235, 235, 240;
+  --secondary-btn-bg-hover: 255, 255, 255;
+  --secondary-btn-border: 235, 235, 240;
+  --secondary-btn-border-hover: 255, 255, 255;
+  --secondary-btn-text: 28, 30, 34;
   --error-btn-bg: var(--color-red-900);
   --error-btn-bg-hover: var(--color-red-800);
   --error-btn-border: var(--color-red-700);

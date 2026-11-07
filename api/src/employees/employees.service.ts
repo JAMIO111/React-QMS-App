@@ -4,7 +4,7 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { iso, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
-import { CreateEmployeeBody, Employee, EmployeeListQuery, UpdateEmployeeBody } from './employees.schemas';
+import { CreateEmployeeBody, Employee, EmployeeListQuery, LinkLoginBody, UpdateEmployeeBody } from './employees.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const likePattern = (term: string) => `%${term.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
@@ -12,10 +12,12 @@ const likePattern = (term: string) => `%${term.replace(/[\\%_]/g, (ch) => `\\${c
 const SELECT = `
   select e.id, e.first_name, e.surname, e.job_title, e.employee_number, e.email, coalesce(e.active, true) as active, e.auth_id,
          e.created_at, e.updated_at, ${personName('e')} as full_name,
+         ${personName('lp')} as login_name,
          s.id as site_id, s.code as site_code, s.name as site_name, d.id as department_id, d.code as department_code, d.name as department_name
   from public."Employees" e
   left join public.sites s on s.id = e.site_id
-  left join public.departments d on d.id = e.department_id`;
+  left join public.departments d on d.id = e.department_id
+  left join public.profiles lp on lp.id = e.auth_id`;
 
 /** Sort expressions (the direction applies to each). */
 const SORT_SQL: Record<EmployeeListQuery['sort'], string[]> = {
@@ -41,6 +43,7 @@ const toEmployee = (r: Row): Employee => ({
   department: r.department_id ? { id: r.department_id as string, code: r.department_code as string, name: r.department_name as string } : null,
   active: r.active as boolean,
   hasLogin: !!r.auth_id,
+  login: r.auth_id ? { userId: r.auth_id as string, name: (r.login_name as string) ?? 'Unknown user' } : null,
   createdAt: iso(r.created_at)!,
   updatedAt: iso(r.updated_at)!,
 });
@@ -114,6 +117,31 @@ export class EmployeesService {
       if (body.departmentId !== undefined) add('department_id', body.departmentId, '::uuid');
       const result = await db.execute(sql`update public."Employees" set ${sql.join(set, sql`, `)} where id = ${id}::uuid and organisation_id = ${orgOf(ctx)}::uuid returning id`);
       if (!result.rows.length) throw ApiError.forbidden();
+      return this.load(db, ctx, id);
+    });
+  }
+
+  /** Members that could be linked to an employee; `canLink` is whether the caller holds a Controller seat (the database enforces it again). */
+  loginCandidates(ctx: RequestContext) {
+    return this.database.asUser(ctx, async (db) => {
+      const seat = await db.execute<{ ok: boolean }>(sql`select app.holds_controller_seat(${orgOf(ctx)}::uuid) as ok`);
+      const rows = await db.execute<Row>(sql`select user_id, first_name, surname, email, employee_id from app.employee_login_candidates(${orgOf(ctx)}::uuid)`);
+      return {
+        canLink: seat.rows[0].ok,
+        data: rows.rows.map((r) => ({
+          userId: r.user_id as string,
+          name: ([r.first_name, r.surname].filter(Boolean).join(' ') as string) || (r.email as string) || 'Unknown user',
+          email: (r.email as string) ?? null,
+          employeeId: (r.employee_id as string) ?? null,
+        })),
+      };
+    });
+  }
+
+  linkLogin(ctx: RequestContext, id: string, body: LinkLoginBody): Promise<Employee> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id); // 404 outside this organisation
+      await db.execute(sql`select app.link_employee_login(${id}::uuid, ${body.userId}::uuid)`);
       return this.load(db, ctx, id);
     });
   }

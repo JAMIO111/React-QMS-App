@@ -78,3 +78,14 @@ export const useEmployeeRegister = (params = {}) => {
     placeholderData: keepPreviousData,
   });
 };
+
+/** Members an employee could be linked to, and whether the caller may link at all (a Controller seat): { canLink, data }. */
+export const useEmployeeLoginCandidates = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "employees", "login-candidates"),
+    queryFn: () => apiFetch("/employees/login-candidates", { organisationId }),
+    enabled: !!organisationId && enabled,
+    retry: false,
+  });
+};

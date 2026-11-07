@@ -175,4 +175,18 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   const saved = (await stack.admin.query(`select e.first_name, e.employee_number, e.active from public."Employees" e join public.organisations o on o.id = e.organisation_id where o.name = $1`, [orgName])).rows;
   log(`employees: ${JSON.stringify(saved)}`);
   if (saved.length !== 1 || saved[0].employee_number !== 'E-001') throw new Error('the employee was not saved');
+
+  // The owner holds the Controller seat, so they can link Ada to the colleague's sign-in.
+  await register.getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit' }).click();
+  const editDialog = page.getByRole('dialog', { name: 'Edit Ada Lovelace' });
+  const accountLink = editDialog.getByRole('region', { name: 'Sign-in account' });
+  await see(accountLink.getByRole('combobox', { name: 'Member' }));
+  await accountLink.getByRole('combobox', { name: 'Member' }).click();
+  await page.getByRole('option', { name: /Colin Colleague/ }).click();
+  await shot(page, '20-link-sign-in');
+  await accountLink.getByRole('button', { name: 'Link sign-in' }).click();
+  await see(accountLink.getByText(/Linked to Colin Colleague/));
+  const linkedRow = (await stack.admin.query(`select count(*)::int n from public."Employees" e join auth.users u on u.id = e.auth_id where lower(u.email) = lower($1)`, [colleague.email])).rows[0];
+  if (linkedRow.n !== 1) throw new Error('the sign-in was not linked');
 };

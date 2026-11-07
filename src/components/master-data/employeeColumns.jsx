@@ -44,7 +44,7 @@ export const employeeColumns = [
   col("site", "Site", head(HouseIcon, "Site"), plain((r) => r.site?.name), { size: 150, sortKey: "site", accessor: (r) => r.site?.name }),
   col("department", "Department", head(FactoryIcon, "Department"), plain((r) => r.department?.name), { size: 160, sortKey: "department", accessor: (r) => r.department?.name }),
   col("status", "Status", head(CircleCheckIcon, "Status", "table-header-number"), (i) => <ActiveBadge active={i.row.original.active} />, { size: 110, sortKey: "status", align: "center", accessor: (r) => r.active }),
-  col("hasLogin", "Sign-in", head(KeyRoundIcon, "Sign-in", "table-header-number"), (i) => <div className="table-row-item">{i.row.original.hasLogin ? "Yes" : "No"}</div>, { size: 100, align: "center", accessor: (r) => r.hasLogin }),
+  col("hasLogin", "Sign-in", head(KeyRoundIcon, "Sign-in"), plain((r) => r.login?.name), { size: 170, accessor: (r) => r.login?.name }),
   col("createdAt", "Added", head(CalendarIcon, "Added"), (i) => <div className="table-row-item">{formatDate(i.getValue())}</div>, { size: 130, sortKey: "createdAt" }),
 ];
 

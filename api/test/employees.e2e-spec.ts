@@ -139,3 +139,70 @@ describe('who may', () => {
     await api().get('/api/v1/employees/not-a-uuid').set(await as(ids.ownerA)).expect(400);
   });
 });
+
+describe('linking an employee to a sign-in (Controller seat holders only)', () => {
+  beforeAll(async () => {
+    // The owner holds the only Controller seat; the other manager (an admin) holds a Contributor seat.
+    const price = async (slug: string) =>
+      (await admin.query(`select p.id plan, pr.id price, pr.unit_amount from public.subscription_plans p join public.subscription_prices pr on pr.subscription_plan_id = p.id
+                           where p.slug = $1 and pr.billing_interval = 'month' and pr.currency = 'GBP' and pr.active and pr.effective_to is null`, [slug])).rows[0];
+    const sub = (await admin.query(`insert into public.organisation_subscriptions (organisation_id, current_period_end) values ($1, now() + interval '1 month') on conflict (organisation_id) do update set status = 'active' returning id`, [ids.orgA])).rows[0].id;
+    const items: Record<string, string> = {};
+    for (const [slug, qty] of [['controller', 1], ['contributor', 1]] as const) {
+      const p = await price(slug);
+      items[slug] = (await admin.query(
+        `insert into public.organisation_subscription_items (organisation_id, organisation_subscription_id, subscription_plan_id, subscription_price_id, quantity, unit_amount_snapshot, currency)
+         values ($1, $2, $3, $4, $5, $6, 'GBP') on conflict (organisation_subscription_id, subscription_plan_id) do update set quantity = excluded.quantity returning id`,
+        [ids.orgA, sub, p.plan, p.price, qty, p.unit_amount],
+      )).rows[0].id;
+    }
+    for (const [user, slug] of [[ids.ownerA, 'controller'], [ids.inspectorA, 'contributor']] as const) {
+      await admin.query(
+        `insert into public.user_subscription_assignments (organisation_id, organisation_membership_id, subscription_plan_id, subscription_item_id)
+         select $1, m.id, (select id from public.subscription_plans where slug = $3), $4 from public.organisation_users m where m.organisation_id = $1 and m.user_id = $2`,
+        [ids.orgA, user, slug, items[slug]],
+      );
+    }
+    // A second manager who is not a Controller: give the inspector master_data.manage through a role.
+    await admin.query(
+      `insert into public.user_role_assignments (organisation_id, membership_id, role_id)
+       select $1, m.id, r.id from public.organisation_users m join public.roles r on r.organisation_id = $1 and r.key = 'admin' where m.organisation_id = $1 and m.user_id = $2`,
+      [ids.orgA, ids.inspectorA],
+    );
+  });
+
+  it('lets a Controller seat holder link a member and unlink them, and shows who on the employee', async () => {
+    const h = await as(ids.ownerA);
+    const cands = (await api().get('/api/v1/employees/login-candidates').set(h).expect(200)).body;
+    expect(cands.canLink).toBe(true);
+    const target = cands.data.find((c: { userId: string }) => c.userId === ids.inspectorA);
+    expect(target).toMatchObject({ employeeId: null });
+    const linked = (await api().put(`/api/v1/employees/${ctx.ada}/login`).set(h).send({ userId: ids.inspectorA }).expect(200)).body;
+    expect(linked).toMatchObject({ hasLogin: true, login: { userId: ids.inspectorA } });
+    expect((await api().get('/api/v1/employees/login-candidates').set(h).expect(200)).body.data.find((c: { userId: string }) => c.userId === ids.inspectorA).employeeId).toBe(ctx.ada);
+    // One sign-in, one employee.
+    const twice = await api().put(`/api/v1/employees/${ctx.grace}/login`).set(h).send({ userId: ids.inspectorA }).expect(409);
+    expect(twice.body.error.code).toBe('employee_rule');
+    // Only members of this organisation.
+    await api().put(`/api/v1/employees/${ctx.grace}/login`).set(h).send({ userId: ids.ownerB }).expect(409);
+    expect((await api().put(`/api/v1/employees/${ctx.ada}/login`).set(h).send({ userId: null }).expect(200)).body).toMatchObject({ hasLogin: false, login: null });
+    await api().put(`/api/v1/employees/${ctx.ada}/login`).set(h).send({ userId: ids.inspectorA }).expect(200);
+    await api().put(`/api/v1/employees/${ctx.ada}/login`).set(h).send({ userId: 'nope' }).expect(400);
+    await api().put(`/api/v1/employees/${ctx.ada}/login`).set(h).send({}).expect(400);
+  });
+
+  it('refuses a manager who holds no Controller seat, and says so to the form', async () => {
+    const h = await as(ids.inspectorA);
+    expect((await api().get('/api/v1/employees/login-candidates').set(h).expect(200)).body.canLink).toBe(false);
+    const res = await api().put(`/api/v1/employees/${ctx.grace}/login`).set(h).send({ userId: ids.inspectorA }).expect(409);
+    expect(res.body.error).toMatchObject({ code: 'employee_rule', message: expect.stringContaining('Controller seat') });
+    await api().put(`/api/v1/employees/${ctx.ada}/login`).set(h).send({ userId: null }).expect(409);
+    expect((await api().get(`/api/v1/employees/${ctx.ada}`).set(h).expect(200)).body.login.userId).toBe(ids.inspectorA); // unchanged
+  });
+
+  it('keeps it away from people who cannot manage master data and from other organisations', async () => {
+    await api().get('/api/v1/employees/login-candidates').set(await as(ids.dual)).expect(403);
+    await api().put(`/api/v1/employees/${ctx.ada}/login`).set(await as(ids.dual)).send({ userId: null }).expect(403);
+    await api().put(`/api/v1/employees/${ctx.ada}/login`).set(await as(ids.ownerB, ids.orgB)).send({ userId: null }).expect(404);
+  });
+});

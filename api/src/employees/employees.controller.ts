@@ -1,10 +1,10 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { CreateEmployeeBody, Employee, EMPLOYEE_SORTABLE, EmployeeListQuery, EmployeeOption, EmployeePage, UpdateEmployeeBody } from './employees.schemas';
+import { CreateEmployeeBody, Employee, EMPLOYEE_SORTABLE, EmployeeListQuery, EmployeeOption, EmployeePage, LinkLoginBody, LoginCandidates, UpdateEmployeeBody } from './employees.schemas';
 import { EmployeesService } from './employees.service';
 
 const READ = 'master_data.read';
@@ -40,6 +40,14 @@ export class EmployeesController {
     return { data: await this.service.lookup(ctx) };
   }
 
+  /** Members who could be linked to an employee, and whether the caller may link (a Controller seat). Declared before `:id`. */
+  @Get('login-candidates')
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ schema: openApiSchema(LoginCandidates) })
+  loginCandidates(@Ctx() ctx: RequestContext) {
+    return this.service.loginCandidates(ctx);
+  }
+
   @Post()
   @HttpCode(201)
   @OrganisationScoped(MANAGE)
@@ -63,5 +71,14 @@ export class EmployeesController {
   @ApiOkResponse({ schema: openApiSchema(Employee) })
   update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.update(ctx, parse(Uuid, id), parse(UpdateEmployeeBody, body));
+  }
+
+  /** Link the employee to a member's sign-in, or remove the link (`userId: null`). Needs master_data.manage **and** a Controller seat (409 employee_rule otherwise). */
+  @Put(':id/login')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(LinkLoginBody) })
+  @ApiOkResponse({ schema: openApiSchema(Employee) })
+  linkLogin(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.linkLogin(ctx, parse(Uuid, id), parse(LinkLoginBody, body));
   }
 }

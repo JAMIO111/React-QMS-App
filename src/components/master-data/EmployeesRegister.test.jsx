@@ -22,22 +22,24 @@ import EmployeesPage from "./EmployeesPage";
 
 const employee = (over = {}) => ({
   id: "e1", name: "Ada Lovelace", firstName: "Ada", surname: "Lovelace", jobTitle: "Inspector", employeeNumber: "E-001", email: "ada@example.test",
-  site: { id: "s1", code: "MAIN", name: "Main site" }, department: { id: "d1", code: "QA", name: "Quality" }, active: true, hasLogin: false,
+  site: { id: "s1", code: "MAIN", name: "Main site" }, department: { id: "d1", code: "QA", name: "Quality" }, active: true, hasLogin: false, login: null,
   createdAt: "2026-11-01T09:00:00Z", updatedAt: "2026-11-01T09:00:00Z", ...over,
 });
 
+let candidates;
 const calls = [];
 const routeApi = (list, extra = {}) =>
   apiFetch.mockImplementation(async (path, opts = {}) => {
     const k = `${opts.method ?? "GET"} ${path.split("?")[0]}`;
     calls.push({ k, path, body: opts.body });
     if (k === "GET /employees") return list;
+    if (k === "GET /employees/login-candidates") return candidates;
     if (extra[k]) return extra[k];
     if (k === "POST /employees" || k.startsWith("PATCH /employees/")) return employee();
     throw new Error(`unexpected ${k}`);
   });
 const lastList = () => calls.filter((c) => c.k === "GET /employees").at(-1);
-const lastWrite = () => calls.filter((c) => c.k !== "GET /employees").at(-1);
+const lastWrite = () => calls.filter((c) => !c.k.startsWith("GET ")).at(-1);
 
 const renderAt = (url = "/Employees") =>
   render(
@@ -53,6 +55,13 @@ const renderAt = (url = "/Employees") =>
 
 beforeEach(() => {
   permissions = ["master_data.read", "master_data.manage"];
+  candidates = {
+    canLink: true,
+    data: [
+      { userId: "u1", name: "Olivia Owner", email: "olivia@example.test", employeeId: null },
+      { userId: "u2", name: "Sam Taken", email: "sam@example.test", employeeId: "e9" },
+    ],
+  };
   calls.length = 0;
   apiFetch.mockReset();
 });
@@ -189,5 +198,65 @@ describe("adding and editing", () => {
     const dialog = await screen.findByRole("dialog", { name: "Ada Lovelace" });
     expect(within(dialog).getByLabelText("First name")).toBeDisabled();
     expect(within(dialog).queryByRole("button", { name: "Save changes" })).toBeNull();
+  });
+});
+
+describe("linking a sign-in account", () => {
+  const open = async () => {
+    routeApi({ data: [employee()], page: 1, pageSize: 25, total: 1 }, { "PUT /employees/e1/login": employee({ hasLogin: true, login: { userId: "u1", name: "Olivia Owner" } }) });
+    renderAt();
+    const table = await screen.findByRole("region", { name: "Employees" });
+    await within(table).findByText("Ada Lovelace");
+    await userEvent.click(within(table).getByRole("button", { name: "Actions" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    return within(await screen.findByRole("dialog", { name: "Edit Ada Lovelace" })).getByRole("region", { name: "Sign-in account" });
+  };
+
+  it("lets a Controller seat holder pick a member and link, offering nobody already linked elsewhere", async () => {
+    const section = await open();
+    expect(section).toHaveTextContent("Not linked to a sign-in account.");
+    await userEvent.click(await within(section).findByRole("combobox", { name: "Member" }));
+    expect(await screen.findByRole("option", { name: /Sam Taken/ })).toHaveAttribute("aria-disabled", "true");
+    await userEvent.click(screen.getByRole("option", { name: /Olivia Owner/ }));
+    await userEvent.click(within(section).getByRole("button", { name: "Link sign-in" }));
+    await waitFor(() => expect(lastWrite()?.k).toBe("PUT /employees/e1/login"));
+    expect(lastWrite().body).toEqual({ userId: "u1" });
+    await waitFor(() => expect(section).toHaveTextContent("Linked to Olivia Owner."));
+    expect(within(section).getByRole("button", { name: "Unlink sign-in" })).toBeInTheDocument();
+  });
+
+  it("unlinks an employee that is linked", async () => {
+    routeApi({ data: [employee({ hasLogin: true, login: { userId: "u1", name: "Olivia Owner" } })], page: 1, pageSize: 25, total: 1 }, { "PUT /employees/e1/login": employee() });
+    renderAt();
+    const table = await screen.findByRole("region", { name: "Employees" });
+    await within(table).findByText("Ada Lovelace");
+    await userEvent.click(within(table).getByRole("button", { name: "Actions" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    const section = within(await screen.findByRole("dialog", { name: "Edit Ada Lovelace" })).getByRole("region", { name: "Sign-in account" });
+    expect(section).toHaveTextContent("Linked to Olivia Owner.");
+    await userEvent.click(await within(section).findByRole("button", { name: "Unlink sign-in" }));
+    await waitFor(() => expect(lastWrite()?.body).toEqual({ userId: null }));
+  });
+
+  it("offers nothing to a manager without a Controller seat, and says why", async () => {
+    candidates = { canLink: false, data: [] };
+    const section = await open();
+    expect(await within(section).findByText(/Only people with a Controller seat/)).toBeInTheDocument();
+    expect(within(section).queryByRole("combobox", { name: "Member" })).toBeNull();
+    expect(within(section).queryByRole("button", { name: /Link sign-in|Unlink sign-in/ })).toBeNull();
+  });
+
+  it("only reads the sign-in for people who cannot manage employees, and does not ask for the member list", async () => {
+    permissions = ["master_data.read"];
+    routeApi({ data: [employee({ hasLogin: true, login: { userId: "u1", name: "Olivia Owner" } })], page: 1, pageSize: 25, total: 1 });
+    renderAt();
+    const table = await screen.findByRole("region", { name: "Employees" });
+    await within(table).findByText("Ada Lovelace");
+    await userEvent.click(within(table).getByRole("button", { name: "Actions" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "View" }));
+    const section = within(await screen.findByRole("dialog", { name: "Ada Lovelace" })).getByRole("region", { name: "Sign-in account" });
+    expect(section).toHaveTextContent("Linked to Olivia Owner.");
+    expect(within(section).queryByRole("button", { name: /sign-in/i })).toBeNull();
+    expect(calls.some((c) => c.k === "GET /employees/login-candidates")).toBe(false);
   });
 });

@@ -1,13 +1,70 @@
 import { useState } from "react";
-import { FactoryIcon, HouseIcon } from "@/components/icons";
+import { FactoryIcon, HouseIcon, KeyRoundIcon } from "@/components/icons";
 import Switch from "@/components/ui/Switch";
 import { useToast } from "../../contexts/ToastProvider";
-import { useMasterDataMutation } from "../../hooks/useMasterData";
+import { useEmployeeLoginCandidates, useMasterDataMutation } from "../../hooks/useMasterData";
 import { useAllDepartments, useSites } from "../../hooks/useQmsApi";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFComboBox from "../ui/RHFComboBox";
-import { FormError } from "./shared";
+import { FormError, buttonClass } from "./shared";
+
+/**
+ * The employee's sign-in account: who they are linked to, and (for people with a Controller seat only) link or unlink. The database enforces
+ * the seat rule as well; the form just does not offer what it would refuse.
+ */
+const SignInLink = ({ employee, readOnly }) => {
+  const [login, setLogin] = useState(employee.login ?? null);
+  const [userId, setUserId] = useState(null);
+  const candidates = useEmployeeLoginCandidates({ enabled: !readOnly });
+  const mutation = useMasterDataMutation();
+  const { showToast } = useToast();
+  const canLink = !readOnly && !!candidates.data?.canLink;
+  const people = (candidates.data?.data ?? []).map((c) => ({
+    id: c.userId,
+    name: c.email && c.email !== c.name ? `${c.name} · ${c.email}` : c.name,
+    hint: c.employeeId && c.employeeId !== employee.id ? "Already linked to another employee" : undefined,
+    disabled: !!c.employeeId && c.employeeId !== employee.id,
+  }));
+  const change = (nextUserId) =>
+    mutation.mutate(
+      { path: `/employees/${employee.id}/login`, method: "PUT", body: { userId: nextUserId } },
+      {
+        onSuccess: (data) => {
+          setLogin(data.login);
+          setUserId(null);
+          showToast({ type: "success", title: nextUserId ? "Linked" : "Unlinked", message: nextUserId ? `${employee.name} is linked to ${data.login?.name}.` : `${employee.name} is no longer linked to a sign-in.` });
+        },
+      }
+    );
+  return (
+    <section aria-label="Sign-in account" className="flex flex-col gap-2 rounded-xl border border-border-color p-3">
+      <h4 className="flex items-center gap-2 text-sm font-semibold text-primary-text">
+        <KeyRoundIcon /> Sign-in account
+      </h4>
+      <p className="text-sm text-primary-text">{login ? `Linked to ${login.name}.` : "Not linked to a sign-in account."}</p>
+      {canLink && login && (
+        <div>
+          <button type="button" className={buttonClass.neutral} disabled={mutation.isPending} onClick={() => change(null)}>
+            Unlink sign-in
+          </button>
+        </div>
+      )}
+      {canLink && !login && (
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-56 flex-1">
+            <RHFComboBox label="Member" icon={KeyRoundIcon} placeholder="Choose a member" options={people} value={userId} onChange={setUserId} />
+          </div>
+          <button type="button" className={buttonClass.secondary} disabled={!userId || mutation.isPending} onClick={() => change(userId)}>
+            Link sign-in
+          </button>
+        </div>
+      )}
+      {!canLink && !readOnly && candidates.data && <p className="text-xs text-secondary-text">Only people with a Controller seat can link or unlink a sign-in account.</p>}
+      <FormError error={mutation.error} />
+    </section>
+  );
+};
 
 /**
  * Add or edit an employee in a pop-up. A department belongs to one site: choosing a department fills in its site, and
@@ -84,6 +141,7 @@ const EmployeeDialog = ({ employee, onClose, readOnly = false }) => {
           <RHFComboBox label="Department" icon={FactoryIcon} placeholder="No department" options={departmentOptions} value={form.departmentId} onChange={chooseDepartment} />
         </div>
         </fieldset>
+        {!creating && <SignInLink employee={employee} readOnly={readOnly} />}
         {!creating && (
           <Switch className="text-sm text-primary-text" disabled={readOnly} checked={form.active} onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}>
             Active (inactive people are kept, and stay on past records, but are not offered for new ones)

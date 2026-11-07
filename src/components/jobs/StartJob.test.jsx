@@ -103,7 +103,7 @@ describe("the start pop-up", () => {
     expect(screen.queryByLabelText(/operation/i)).toBeNull();
     expect(screen.queryByRole("combobox", { name: /machine/i })).toBeNull();
     await user.click(screen.getByRole("button", { name: /pick part/i }));
-    const ok = await screen.findByRole("status");
+    const ok = (await screen.findByText(/Control plan CP-ROD rev A is in force/)).closest("[role=status]");
     expect(ok).toHaveTextContent("Control plan CP-ROD rev A is in force");
     expect(ok.className).toMatch(/success/);
     expect(screen.getByLabelText(/operation/i)).toHaveValue("OP-10"); // a single operation is chosen for them
@@ -113,6 +113,28 @@ describe("the start pop-up", () => {
     await user.click(screen.getByRole("button", { name: "Start job" }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/jobs", expect.objectContaining({ method: "POST", body: { machineId: "m1", partId: "p1", operationCode: "OP-10" } })));
     expect(JSON.parse(localStorage.getItem("fortress.lastMachine"))["org-1"]).toEqual({ id: "m1", name: "Lathe 1" });
+  });
+
+  it("shows a loading card while the control plan is resolving, then replaces it with the result", async () => {
+    let release;
+    apiFetch.mockImplementation(async (path) => {
+      if (path.startsWith("/jobs/preview")) {
+        await new Promise((r) => (release = r));
+        return previewResult;
+      }
+      if (path === "/jobs/mine") return mine;
+      throw new Error(`unexpected ${path}`);
+    });
+    const user = userEvent.setup();
+    renderIt();
+    await user.click(screen.getByRole("button", { name: "Start new job" }));
+    expect(screen.queryByLabelText("Checking the control plan")).toBeNull(); // nothing chosen yet
+    await user.click(screen.getByRole("button", { name: /pick part/i }));
+    expect(await screen.findByLabelText("Checking the control plan")).toHaveAttribute("aria-busy", "true");
+    expect(screen.queryByLabelText(/operation/i)).toBeNull();
+    release();
+    await screen.findByText(/is in force/);
+    expect(screen.queryByLabelText("Checking the control plan")).toBeNull();
   });
 
   it("offers only the operations on the control plan, and needs one chosen; asks for the quantity only when checks are sampled every N parts", async () => {

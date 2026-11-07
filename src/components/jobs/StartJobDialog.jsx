@@ -77,6 +77,16 @@ const StartJobDialog = ({ onClose }) => {
             setQuantity("");
           }}
         />
+        {part.id && !planned && !single.error && (
+          <div role="status" aria-busy="true" aria-label="Checking the control plan" className="flex items-center gap-3 rounded-lg border border-border-color bg-secondary-bg p-3">
+            <div className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-border-dark-color border-t-brand-primary" aria-hidden="true" />
+            <div className="flex flex-1 flex-col gap-1.5" aria-hidden="true">
+              <div className="h-3 w-3/4 rounded shimmer" />
+              <div className="h-3 w-1/2 rounded shimmer" />
+            </div>
+            <span className="sr-only">Checking the control plan…</span>
+          </div>
+        )}
         {planned &&
           (planOk ? (
             <p role="status" className="rounded-lg border border-success-color/40 bg-success-color/10 p-3 text-sm text-primary-text">

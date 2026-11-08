@@ -125,6 +125,11 @@ BEGIN
     SELECT a, 'SW-LOT-1', part_id, 'produced', id FROM public.production_orders WHERE organisation_id = a;
   INSERT INTO public.serial_numbers (organisation_id, serial_number, part_id, lot_id)
     SELECT a, 'SW-SN-1', part_id, id FROM public.lots WHERE organisation_id = a;
+  -- Affected lots (TR4): an NC of the lot's part naming the lot.
+  INSERT INTO public.nonconformances (organisation_id, reference, source, title, severity, quantity_affected, part_id)
+    SELECT a, 'SW-NCR-LOT', 'internal', 'Sweep lot NCR', 'minor', 1, part_id FROM public.lots WHERE organisation_id = a;
+  INSERT INTO public.ncr_affected_lots (organisation_id, nonconformance_id, lot_id, quantity)
+    SELECT a, n.id, l.id, 1 FROM public.nonconformances n JOIN public.lots l ON l.organisation_id = a WHERE n.organisation_id = a AND n.reference = 'SW-NCR-LOT';
 
   -- In-process inspection (PC4): make the sweep plan effective with one check, then inspect SW-P1.
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');

@@ -51,7 +51,7 @@ audited(relname) AS (VALUES
   ('roles'), ('role_permissions'), ('user_role_assignments'),
   ('NCM'), ('8D'), ('Costs'), ('NC Files'), ('Part'), ('Status'), ('Failure Mode'), ('Sub-Failure Mode'), ('Process'),
   ('customers'), ('suppliers'), ('parts'), ('part_revisions'), ('ncr_classifications'), ('nonconformances'),
-  ('ncr_costs'), ('ncr_attachments'), ('ncr_containment_actions'), ('ncr_dispositions'),
+  ('ncr_costs'), ('ncr_attachments'), ('ncr_containment_actions'), ('ncr_dispositions'), ('ncr_affected_lots'),
   ('gauge_types'), ('gauge_type_characteristics'), ('gauges'), ('gauge_characteristics'), ('calibrations'),
   ('calibration_readings'), ('calibration_attachments'),
   ('machines'), ('part_families'), ('part_revision_characteristics'), ('control_plans'),

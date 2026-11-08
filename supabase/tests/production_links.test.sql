@@ -15,7 +15,7 @@ DECLARE
   u_owner uuid := '38000000-0000-0000-0000-000000000201'; u_insp uuid := '38000000-0000-0000-0000-000000000202';
   u_view uuid := '38000000-0000-0000-0000-000000000203'; u_other uuid := '38000000-0000-0000-0000-000000000204';
   org uuid; org2 uuid; site uuid; machine uuid; p1 uuid; p2 uuid; part_other uuid; supplier uuid; plan uuid; prev uuid; op uuid;
-  i1 uuid; i2 uuid; i3 uuid; i4 uuid; i5 uuid; i6 uuid; ncr6 uuid; ncr1 uuid; ncr2 uuid; ncr3 uuid; ncr4 uuid; ncr5 uuid; wo300 uuid; order_id uuid; rep jsonb; r text; before_orders int;
+  i1 uuid; i2 uuid; i3 uuid; i4 uuid; i5 uuid; i6 uuid; ncr6 uuid; ncr1 uuid; ncr2 uuid; ncr3 uuid; ncr4 uuid; ncr5 uuid; wo300 uuid; order_id uuid; lot_raise uuid; ncr_raise uuid; rep jsonb; r text; before_orders int;
 BEGIN
   PERFORM pg_temp.login(u_owner);
   org := app.create_organisation('Links Works', 'Plant A', 'PA', NULL);
@@ -90,6 +90,12 @@ BEGIN
   r := pg_temp.fails(format('UPDATE public.inspection_records SET status = ''completed'' WHERE id = %L', i1));
   PERFORM pg_temp.assert_eq(r LIKE 'QM008:%production order%', true, 'a job cannot complete without an order when one is required');
   PERFORM app.set_job_links(i1, jsonb_build_object('productionOrderId', order_id));
+  -- TR4: an NC raised from the job carries its order and lot links (not only the typed text).
+  INSERT INTO public.lots (organisation_id, lot_number, part_id, origin, production_order_id) VALUES (org, 'LOT-RAISE', p1, 'produced', order_id) RETURNING id INTO lot_raise;
+  PERFORM app.set_job_links(i1, jsonb_build_object('productionOrderId', order_id, 'lotId', lot_raise));
+  ncr_raise := app.raise_ncr_from_inspection(i1, ARRAY[]::uuid[], 'Raised with links', NULL, 'minor', 3);
+  PERFORM pg_temp.assert_eq((SELECT production_order_id = order_id AND lot_id = lot_raise FROM public.nonconformances WHERE id = ncr_raise), true, 'the NC raised from a job carries the order and lot links');
+  PERFORM pg_temp.assert_eq((SELECT lot_number FROM public.nonconformances WHERE id = ncr_raise), 'LOT-RAISE', 'and the typed lot follows the picked record');
   r := pg_temp.fails(format('UPDATE public.inspection_records SET status = ''completed'' WHERE id = %L', i1));
   PERFORM pg_temp.assert_eq(r LIKE 'QM008:%Measure every check%', true, 'with an order the job gets on to the next rule');
   UPDATE public.inspection_records SET status = 'abandoned', abandon_reason = 'Test' WHERE id = i1;

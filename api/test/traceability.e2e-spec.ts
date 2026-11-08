@@ -177,8 +177,10 @@ describe('search', () => {
     const h = await as(ids.ownerA);
     const all = (await api().get('/api/v1/traceability/search?q=T1').set(h).expect(200)).body.data;
     expect(all.map((r: { type: string; number: string }) => `${r.type}:${r.number}`).sort()).toEqual(['lot:LOT-T1', 'order:WO-T1', 'serial:SN-T1']);
+    // 'AWO-T2' also contains the text and sorts first, yet the exact match comes first.
+    await api().post('/api/v1/production-orders').set(h).send({ orderNumber: 'AWO-T2', partId: ctx.rod, quantityPlanned: 1, siteId: ids.siteA }).expect(201);
     const exact = (await api().get('/api/v1/traceability/search?q=wo-t2').set(h).expect(200)).body.data;
-    expect(exact).toMatchObject([{ type: 'order', number: 'WO-T2', part: { partNumber: 'ROD-1' } }]);
+    expect(exact).toMatchObject([{ type: 'order', number: 'WO-T2', part: { partNumber: 'ROD-1' } }, { type: 'order', number: 'AWO-T2' }]);
     expect((await api().get('/api/v1/traceability/search?q=100%25').set(h).expect(200)).body.data).toEqual([]);
     await api().get('/api/v1/traceability/search').set(h).expect(400);
     await api().get('/api/v1/traceability/search?q=T1').set(await as(ids.ownerB, ids.orgB)).expect(200).expect((r) => expect(r.body.data).toEqual([]));

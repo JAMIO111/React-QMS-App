@@ -455,6 +455,17 @@ async function affectedLots({ page, stack, APP, orgName, see, shot, step, log })
   await see(ncs.getByText('1 approved (5)'));
   await page.waitForTimeout(400);
   await shot(page, '53-trace-order-with-lots');
+
+  step('the owner follows the lot link and sees the same non-conformance from the lot, with its order above it');
+  await page.getByRole('table', { name: 'Lots' }).getByRole('link', { name: 'LOT-9001' }).click();
+  await see(page.getByRole('heading', { name: 'LOT-9001' }));
+  await see(page.getByText('Traceability report · Lot'));
+  await see(page.getByRole('link', { name: 'WO-9001' }));
+  const lotNcs = page.getByRole('table', { name: 'Non-conformances' });
+  await see(lotNcs.getByText('Names an affected lot'));
+  await see(lotNcs.getByText('1 approved (5)'));
+  await page.waitForTimeout(400);
+  await shot(page, '55-trace-lot');
 }
 
 /** A production order with an operation, a lot made for it and a numbered range of serial numbers, then a hold and a refused completion. */

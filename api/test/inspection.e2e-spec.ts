@@ -143,6 +143,9 @@ describe('recording', () => {
 
   it('records a failure and its retest, then completes with result fail', async () => {
     const h = await as(ids.ownerA);
+    // Linked to an order so that the traceability report can be checked against what was recorded (the gauges, and the failure).
+    ctx.order = (await api().post('/api/v1/production-orders').set(h).send({ orderNumber: 'WO-77', partId: ctx.part, quantityPlanned: 10, siteId: ids.siteA }).expect(201)).body.id;
+    await api().put(`/api/v1/jobs/${ctx.rec}/production-links`).set(h).send({ productionOrderId: ctx.order }).expect(200);
     let rec = (await api().post(`/api/v1/inspections/${ctx.rec}/samples`).set(h).send({ readings: [{ requirementId: ctx.od, valueNumeric: '25.06', gaugeId: ctx.mic }] }).expect(201)).body;
     const failed = rec.measurements.find((m: { valueNumeric: string }) => m.valueNumeric === '25.06');
     expect(failed.result).toBe('fail');
@@ -163,6 +166,14 @@ describe('recording', () => {
     expect(rec).toMatchObject({ status: 'completed', result: 'fail', completedBy: { id: ids.ownerA } });
     const late = await api().post(`/api/v1/inspections/${ctx.rec}/samples`).set(h).send({ readings: [{ requirementId: ctx.vis, valuePass: true }] }).expect(409);
     expect(late.body.error.message).toMatch(/is completed; no more samples or readings can be added/);
+
+    // The traceability report of the order names the gauges used and flags the reading taken with the overdue one, and counts the failure still standing.
+    const trace = (await api().get(`/api/v1/traceability?type=order&id=${ctx.order}`).set(h).expect(200)).body;
+    expect(trace.inspections).toMatchObject({ total: 1, failed: 1, data: [{ id: ctx.rec, status: 'completed', result: 'fail', failures: 1 }] });
+    const gauge = (assetNumber: string) => trace.equipment.gauges.find((g: { assetNumber: string }) => g.assetNumber === assetNumber);
+    expect(gauge('MIC-2')).toMatchObject({ id: ctx.oldMic, readings: 1, outOfCalibration: 1 });
+    expect(gauge('MIC-1')).toMatchObject({ id: ctx.mic, outOfCalibration: 0 });
+    expect(gauge('MIC-1').readings).toBeGreaterThan(1);
   });
 
   it('refuses to complete with unmeasured checks, abandons with a reason', async () => {

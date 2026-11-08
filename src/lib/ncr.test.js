@@ -18,8 +18,16 @@ describe("non-conformance sources", () => {
     expect(need).toEqual({ customer: "customer", supplier: "supplier", goods_receiving: "supplier?" });
   });
 
-  it("have quick tabs: All, Customer, and Supplier which includes goods receiving", () => {
-    expect(NC_TABS.map((t) => [t.key, t.source])).toEqual([["all", ""], ["customer", "customer"], ["supplier", "supplier,goods_receiving"]]);
+  it("have quick tabs: All, Internal, Customer, and Supplier which includes goods receiving", () => {
+    expect(NC_TABS.map((t) => t.key)).toEqual(["all", "internal", "customer", "supplier"]);
+    expect(NC_TABS.find((t) => t.key === "customer").source).toBe("customer");
+    expect(NC_TABS.find((t) => t.key === "supplier").source).toBe("supplier,goods_receiving");
+  });
+
+  it("have Internal, Customer and Supplier tabs that cover every source exactly once", () => {
+    const covered = NC_TABS.filter((t) => t.source).flatMap((t) => t.source.split(","));
+    expect([...covered].sort()).toEqual(NC_SOURCES.map((s) => s.key).sort());
+    expect(new Set(covered).size).toBe(covered.length);
   });
 });
 

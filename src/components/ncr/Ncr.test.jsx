@@ -133,7 +133,7 @@ describe("NC registers", () => {
     expect(screen.queryByRole("columnheader", { name: /Purchase order/ })).toBeNull();
   });
 
-  it("has All / Customer / Supplier quick tabs that are source filters kept in the URL", async () => {
+  it("has All / Internal / Customer / Supplier quick tabs that are source filters kept in the URL", async () => {
     routeApi({ "GET /ncrs": { data: [ncr()], page: 1, pageSize: 25, total: 1 } });
     renderAt("/Non-Conformance/Register");
     await screen.findByText("NCM-26-001");
@@ -146,6 +146,11 @@ describe("NC registers", () => {
     expect(screen.queryByLabelText("Active filters")).toBeNull();
     await userEvent.click(screen.getByRole("tab", { name: "Supplier" }));
     await waitFor(() => expect(decodeURIComponent(lastCall("GET /ncrs").path)).toContain("source=supplier,goods_receiving"));
+    expect(screen.getByRole("tab", { name: "Supplier" })).toHaveAttribute("aria-selected", "true");
+    await userEvent.click(screen.getByRole("tab", { name: "Internal" }));
+    await waitFor(() => expect(decodeURIComponent(lastCall("GET /ncrs").path)).toContain("source=internal,internal_audit,external_audit,production_inspection,final_inspection,calibration,engineering,management_review"));
+    expect(screen.getByRole("tab", { name: "Internal" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByLabelText("Active filters")).toBeNull();
     await userEvent.click(screen.getByRole("tab", { name: "All" }));
     await waitFor(() => expect(lastCall("GET /ncrs").path).not.toContain("source="));
   });

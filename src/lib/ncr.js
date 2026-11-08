@@ -21,9 +21,14 @@ export const sourceOf = (key) => NC_SOURCES.find((s) => s.key === key) ?? null;
 export const sourceLabel = (key) => sourceOf(key)?.label ?? (key ? String(key) : "—");
 export const SOURCE_OPTIONS = NC_SOURCES.map((s) => ({ id: s.key, name: s.label, hint: s.hint }));
 
-/** Quick tabs above the register and the dashboard: a tab is a source filter. "Supplier" also covers goods receiving. */
+/**
+ * Quick tabs above the register and the dashboard: a tab is a source filter, and the three tabs together cover every source exactly once.
+ * "Customer" is customer; "Supplier" is supplier and goods receiving; "Internal" is everything found inside the business (employees, audits,
+ * inspections, calibration, engineering, management review).
+ */
 export const NC_TABS = [
   { key: "all", label: "All", source: "" },
+  { key: "internal", label: "Internal", source: "internal,internal_audit,external_audit,production_inspection,final_inspection,calibration,engineering,management_review" },
   { key: "customer", label: "Customer", source: "customer" },
   { key: "supplier", label: "Supplier", source: "supplier,goods_receiving" },
 ];

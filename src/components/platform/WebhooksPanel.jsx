@@ -2,6 +2,7 @@ import { useState } from "react";
 import { usePlatformWebhooks } from "../../hooks/usePlatform";
 import { Card, Panel, Table, Tile, Tiles } from "./Panels";
 import { ago, when } from "./format";
+import SlidingToggle from "../ui/SlidingToggle";
 
 const WINDOWS = [
   { hours: 24, label: "24 hours" },
@@ -16,13 +17,7 @@ const WebhooksPanel = () => {
   const query = usePlatformWebhooks(hours);
   return (
     <div className="flex flex-col gap-4">
-      <div role="group" aria-label="Window" className="flex gap-1">
-        {WINDOWS.map((w) => (
-          <button key={w.hours} type="button" aria-pressed={hours === w.hours} onClick={() => setHours(w.hours)} className={`rounded-lg border px-3 py-1.5 text-sm cursor-pointer ${hours === w.hours ? "border-brand-primary bg-brand-primary/10 text-primary-text" : "border-border-color text-secondary-text hover:text-primary-text"}`}>
-            {w.label}
-          </button>
-        ))}
-      </div>
+      <SlidingToggle ariaLabel="Window" options={WINDOWS.map((w) => ({ value: w.hours, label: w.label }))} value={hours} onChange={setHours} />
       <Panel query={query}>
         {(w) => {
           const silent = !w.lastReceivedAt || Date.now() - new Date(w.lastReceivedAt).getTime() > STALE_AFTER_HOURS * 3600 * 1000;

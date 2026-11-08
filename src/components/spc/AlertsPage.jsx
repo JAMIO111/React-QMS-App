@@ -9,6 +9,7 @@ import { formatDateTime } from "../../lib/processControl";
 import { CHART_NAME } from "../../lib/spc";
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
+import SlidingToggle from "../ui/SlidingToggle";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
@@ -74,19 +75,13 @@ const AlertsPage = () => {
         title={status === "open" ? "Open alerts" : status === "acknowledged" ? "Acknowledged alerts" : "All alerts"}
         subtitle={query.data ? `${query.data.openCount} open` : undefined}
         action={
-          <div role="tablist" aria-label="Alert status" className="flex gap-1">
-            {TABS.map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                role="tab"
-                aria-selected={status === t.value}
-                onClick={() => setParams(t.value === "open" ? {} : { status: t.value })}
-                className={`rounded-lg border px-3 py-1 text-sm ${status === t.value ? "border-brand-primary bg-brand-primary/10 text-primary-text" : "border-border-color text-secondary-text"}`}>
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <SlidingToggle
+            ariaLabel="Alert status"
+            mode="tabs"
+            options={TABS.map((t) => ({ value: t.value, label: t.label }))}
+            value={status}
+            onChange={(v) => setParams(v === "open" ? {} : { status: v })}
+          />
         }>
         {query.isLoading && <p className="text-secondary-text">Loading alerts…</p>}
         {query.error && <ErrorNotice error={query.error} />}

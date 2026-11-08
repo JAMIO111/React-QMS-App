@@ -6,6 +6,7 @@ import { ACTION_STATUS } from "../../lib/capa";
 import { ErrorNotice, FormError } from "../master-data/shared";
 import { FindingsDialog } from "./ActionList";
 import CTAButton from "@/components/CTAButton";
+import SlidingToggle from "../ui/SlidingToggle";
 
 const PHASES = { interim: "Containment", corrective: "Corrective action", preventive: "Preventive action" };
 const STEP_OF = { interim: "d3", corrective: "d6", preventive: "d7" };
@@ -30,11 +31,7 @@ const MyActionsPage = () => {
           <h1 className="text-2xl font-semibold text-primary-text">My 8D actions</h1>
           <p className="text-sm text-secondary-text">Actions in running 8Ds that are assigned to you. Write what you did and found, then close the action.</p>
         </div>
-        <div role="group" aria-label="Show" className="flex gap-1">
-          {FILTERS.map((f) => (
-            <CTAButton key={f.id} type="neutral" size="md" aria-pressed={status === f.id} className={status === f.id ? "ring-2 ring-brand-primary" : undefined} onClick={() => setStatus(f.id)}>{f.label}</CTAButton>
-          ))}
-        </div>
+        <SlidingToggle ariaLabel="Show" options={FILTERS.map((f) => ({ value: f.id, label: f.label }))} value={status} onChange={setStatus} />
       </header>
       {query.error && <ErrorNotice error={query.error} />}
       <FormError error={dialog ? null : mutation.error} />

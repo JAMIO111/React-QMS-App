@@ -1,34 +1,14 @@
 import { LayoutGridIcon, ListIcon } from "@/components/icons";
+import SlidingToggle from "./ui/SlidingToggle";
 
-const ViewToggle = ({ viewGrid, setViewGrid }) => {
-  return (
-    <button
-      title="Switch View"
-      onClick={() => setViewGrid((prev) => !prev)}
-      className="group relative flex flex-row justify-between items-center border border-border-color rounded-[7px] text-primary-text w-18 py-2 overflow-hidden cursor-pointer">
-      {/* Sliding indicator */}
-      <div
-        className={`absolute w-1/2 h-full bg-cta-btn-bg border rounded-md border-cta-btn-border transition-transform duration-300 ease-in-out z-0
-      group-hover:border-cta-btn-border-hover group-hover:bg-cta-btn-bg-hover
-      ${viewGrid ? "translate-x-full" : "translate-x-0"}
-    `}
-      />
+const VIEWS = [
+  { value: "list", icon: ListIcon, title: "List view" },
+  { value: "grid", icon: LayoutGridIcon, title: "Card view" },
+];
 
-      {/* Icon wrapper */}
-      <div className="flex w-full justify-between items-center relative z-10 px-2">
-        <ListIcon
-          className={`h-4 w-4 ${
-            "text-primary-text"
-          }`}
-        />
-        <LayoutGridIcon
-          className={`h-4 w-4 ${
-            "text-primary-text"
-          }`}
-        />
-      </div>
-    </button>
-  );
-};
+/** The table / card switch of a register: a SlidingToggle with two icons. `viewGrid` is true for cards; `setViewGrid(true|false)` picks one. */
+const ViewToggle = ({ viewGrid, setViewGrid }) => (
+  <SlidingToggle ariaLabel="Switch view" options={VIEWS} value={viewGrid ? "grid" : "list"} onChange={(v) => setViewGrid(v === "grid")} />
+);
 
 export default ViewToggle;

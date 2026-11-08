@@ -9,6 +9,7 @@ import { FormError } from "../master-data/shared";
 import { LotPicker, OrderPicker } from "./pickers";
 import { StatusBadge, StatusMoves } from "./shared";
 import CTAButton from "@/components/CTAButton";
+import SlidingToggle from "../ui/SlidingToggle";
 
 const MODES = [
   { id: "single", label: "One" },
@@ -94,19 +95,7 @@ const SerialDialog = ({ serial, onClose, readOnly = false }) => {
           </div>
           {creating && (
             <div className="flex flex-col gap-3 rounded-xl border border-border-color p-3">
-              <div role="tablist" aria-label="How many" className="flex gap-1">
-                {MODES.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={mode === m.id}
-                    onClick={() => setMode(m.id)}
-                    className={`rounded-lg border px-3 py-1 text-sm cursor-pointer ${mode === m.id ? "border-brand-primary bg-brand-primary/15 text-primary-text" : "border-border-color text-secondary-text hover:border-border-dark-color"}`}>
-                    {m.label}
-                  </button>
-                ))}
-              </div>
+              <SlidingToggle ariaLabel="How many" mode="tabs" options={MODES.map((m) => ({ value: m.id, label: m.label }))} value={mode} onChange={setMode} />
               {mode === "single" && <Field label="Serial number" required value={form.serialNumber} onChange={set("serialNumber")} maxLength={60} hint="Unique for the part" />}
               {mode === "list" && <TextAreaField label="Serial numbers" required value={form.list} onChange={(v) => setForm((f) => ({ ...f, list: v }))} rows={4} hint="One per line, or separated by commas or spaces" />}
               {mode === "range" && (

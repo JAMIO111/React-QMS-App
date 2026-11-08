@@ -130,8 +130,8 @@ describe("button styling", () => {
     }
   };
   walk(join(process.cwd(), "src")); // tests run from the repository root
-  // Not buttons: a selected-date marker and the sliding highlight of the grid / list switch.
-  const NOT_BUTTONS = ["CTAButton.jsx", "DateRangePicker.jsx", "ViewToggle.jsx"];
+  // Not buttons: a selected-date marker and the sliding highlight of SlidingToggle.
+  const NOT_BUTTONS = ["CTAButton.jsx", "DateRangePicker.jsx", "SlidingToggle.jsx"];
 
   it("no file styles a button by hand with the button colours", () => {
     const offenders = files.filter(
@@ -142,6 +142,12 @@ describe("button styling", () => {
 
   it("buttonClass is gone", () => {
     const offenders = files.filter((f) => /\bbuttonClass\b/.test(readFileSync(f, "utf8")));
+    expect(offenders).toEqual([]);
+  });
+
+  it("every tab bar is a SlidingToggle (nobody builds one by hand)", () => {
+    const ALLOWED = ["SlidingToggle.jsx"];
+    const offenders = files.filter((f) => !ALLOWED.some((n) => f.endsWith(n)) && /role="(tablist|tab)"/.test(readFileSync(f, "utf8")));
     expect(offenders).toEqual([]);
   });
 });

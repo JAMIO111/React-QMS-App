@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useNotification } from "../contexts/NotificationProvider";
 import { XIcon } from "@/components/icons";
-import SlidingSelectorGeneric from "./ui/SlidingSelectorGeneric";
+import SlidingToggle from "./ui/SlidingToggle";
 import NotificationCard from "./NotificationCard";
 import {
   useMarkNotificationsRead,
@@ -72,11 +72,7 @@ const Drawer = ({ onClose }) => {
           </button>
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
-          <SlidingSelectorGeneric
-            options={["All", "New", "Read"]}
-            value={typeFilter}
-            onChange={setTypeFilter}
-          />
+          <SlidingToggle ariaLabel="Show notifications" options={["All", "New", "Read"]} value={typeFilter} onChange={setTypeFilter} className="w-full [&>button]:flex-1" />
           <div className="flex items-center justify-between text-sm">
             <Link
               to="/Settings/Notifications"

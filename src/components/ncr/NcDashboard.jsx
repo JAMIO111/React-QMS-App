@@ -20,6 +20,7 @@ import { useNcDashboard } from "../../hooks/useNcr";
 import { describeApiError } from "../../lib/api-client";
 import { formatMoney } from "../../lib/costs";
 import { NCR_REGISTER, NC_TABS, formatDate } from "../../lib/ncr";
+import SlidingToggle from "../ui/SlidingToggle";
 
 const PERIODS = [
   { id: "30d", name: "Last 30 days", from: (t) => subDays(t, 29) },
@@ -160,19 +161,13 @@ const NcDashboard = () => {
         </div>
         {/* Filters: one row above the charts. */}
         <div className="flex flex-wrap items-end gap-3">
-          <div role="radiogroup" aria-label="NC source" className="flex rounded-lg border border-border-color bg-secondary-bg p-0.5">
-            {NC_TABS.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                role="radio"
-                aria-checked={t.key === tabKey}
-                onClick={() => set("tab", t.key === "all" ? "" : t.key)}
-                className={`rounded-md px-3 py-1.5 text-sm cursor-pointer ${t.key === tabKey ? "bg-brand-primary text-white" : "text-primary-text hover:bg-border-color/50"}`}>
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <SlidingToggle
+            ariaLabel="NC source"
+            mode="radio"
+            options={NC_TABS.map((t) => ({ value: t.key, label: t.label }))}
+            value={tabKey}
+            onChange={(key) => set("tab", key === "all" ? "" : key)}
+          />
           <div className="w-48">
             <RHFComboBox label="Period" icon={CalendarIcon} options={PERIODS} value={periodId} onChange={(v) => set("period", v === "12m" ? "" : v)} sort={false} clearable={false} />
           </div>

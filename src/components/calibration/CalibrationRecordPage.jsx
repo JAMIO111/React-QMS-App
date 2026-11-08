@@ -37,6 +37,7 @@ import PeoplePicker from "./PeoplePicker";
 import { GaugeStatusPill, OutcomePill } from "./Pills";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
+import SlidingToggle from "../ui/SlidingToggle";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const str = (v) => (v === null || v === undefined ? "" : String(v));
@@ -418,14 +419,7 @@ const CalibrationRecordPage = () => {
                 </span>
               </>
             ) : (
-              <div role="radiogroup" aria-label="Outcome" className="flex rounded-lg border border-border-color bg-primary-bg p-0.5">
-                {OUTCOMES.map((o) => (
-                  <button key={o.key} type="button" role="radio" aria-checked={form.outcome === o.key} disabled={!canEdit} onClick={() => set("outcome")(o.key)} title={o.help}
-                    className={`rounded-md px-3 py-1 text-sm cursor-pointer disabled:cursor-default ${form.outcome === o.key ? "bg-brand-primary text-white" : "text-primary-text hover:bg-border-color/50"}`}>
-                    {o.label}
-                  </button>
-                ))}
-              </div>
+              <SlidingToggle ariaLabel="Outcome" mode="radio" options={OUTCOMES.map((o) => ({ value: o.key, label: o.label, title: o.help, disabled: !canEdit }))} value={form.outcome} onChange={set("outcome")} />
             )}
             {outcome === "fail" && isNew && <span className="text-error-color">Saving quarantines {g.assetNumber}.</span>}
           </div>

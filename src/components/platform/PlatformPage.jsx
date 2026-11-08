@@ -9,6 +9,7 @@ import OrganisationsPanel from "./OrganisationsPanel";
 import PaymentsPanel from "./PaymentsPanel";
 import RevenuePanel from "./RevenuePanel";
 import WebhooksPanel from "./WebhooksPanel";
+import SlidingToggle from "../ui/SlidingToggle";
 
 const PERIODS = [
   { days: 7, label: "7 days" },
@@ -46,13 +47,7 @@ const Monitor = () => {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-secondary-text">Read-only. What is happening to sign-ups; no organisation&apos;s business data is shown here.</p>
-        <div role="group" aria-label="Period" className="flex gap-1">
-          {PERIODS.map((p) => (
-            <button key={p.days} type="button" aria-pressed={days === p.days} onClick={() => setDays(p.days)} className={`rounded-lg border px-3 py-1.5 text-sm cursor-pointer ${days === p.days ? "border-brand-primary bg-brand-primary/10 text-primary-text" : "border-border-color text-secondary-text hover:text-primary-text"}`}>
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <SlidingToggle ariaLabel="Period" options={PERIODS.map((p) => ({ value: p.days, label: p.label }))} value={days} onChange={setDays} />
       </div>
       {query.error && <ErrorNotice error={query.error} />}
       {query.isLoading && <p className="text-sm text-secondary-text">Loading…</p>}
@@ -127,21 +122,13 @@ const Tabs = () => {
   const Active = active.Panel;
   return (
     <div className="flex flex-col gap-4">
-      <div role="tablist" aria-label="Platform" className="flex flex-wrap gap-1 border-b border-border-color">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            id={`tab-${t.key}`}
-            aria-selected={t.key === active.key}
-            aria-controls="platform-panel"
-            onClick={() => setParams(t.key === "overview" ? {} : { tab: t.key }, { replace: true })}
-            className={`-mb-px cursor-pointer rounded-t-lg border-b-2 px-4 py-2 text-sm ${t.key === active.key ? "border-brand-primary font-semibold text-primary-text" : "border-transparent text-secondary-text hover:text-primary-text"}`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <SlidingToggle
+        ariaLabel="Platform"
+        mode="tabs"
+        options={TABS.map((t) => ({ value: t.key, label: t.label, id: `tab-${t.key}`, controls: "platform-panel" }))}
+        value={active.key}
+        onChange={(key) => setParams(key === "overview" ? {} : { tab: key }, { replace: true })}
+      />
       <div role="tabpanel" id="platform-panel" aria-labelledby={`tab-${active.key}`}>
         <Active />
       </div>

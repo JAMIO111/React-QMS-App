@@ -24,6 +24,7 @@ import Breadcrumb from "./Breadcrumb";
 import CTAButton from "./CTAButton";
 import ViewToggle from "./ViewToggle";
 import IconButton from "./IconButton";
+import SlidingToggle from "./ui/SlidingToggle";
 
 /** Flat rows for CSV export. */
 const toCsvRow = (n) => ({
@@ -141,8 +142,8 @@ const NonConformance = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearchTerm]);
 
-  const handleToggleView = () => {
-    setViewGrid((prev) => !prev);
+  const handleSetView = (grid) => {
+    setViewGrid(grid);
     setActiveModalType(null);
   };
   const handleActiveModalType = (t) => setActiveModalType((prev) => (prev === t ? null : t));
@@ -210,7 +211,7 @@ const NonConformance = () => {
               {!viewGrid && (
                 <ColumnVisibilityMenu columns={allColumns} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} columnOrder={columnOrder} onColumnOrderChange={setColumnOrder} onReset={resetColumns} />
               )}
-              <ViewToggle viewGrid={viewGrid} setViewGrid={handleToggleView} />
+              <ViewToggle viewGrid={viewGrid} setViewGrid={handleSetView} />
               {can("ncr.create") && (
                 <CTAButton
                   callbackFn={() => setChoosingSource(true)}
@@ -235,21 +236,14 @@ const NonConformance = () => {
           </Suspense>
         </div>
       </div>
-      <div role="tablist" aria-label="Quick filter by source" className="flex flex-wrap gap-1 px-1">
-        {NC_TABS.map((t) => {
-          const on = t.source === "" ? !filters.source : activeTab?.key === t.key;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => updateFilters({ source: t.source })}
-              className={`rounded-full border px-3 py-1 text-sm cursor-pointer ${on ? "border-brand-primary bg-brand-primary text-white" : "border-border-color text-primary-text hover:bg-border-color/40"}`}>
-              {t.label}
-            </button>
-          );
-        })}
+      <div className="px-1">
+        <SlidingToggle
+          ariaLabel="Quick filter by source"
+          mode="tabs"
+          options={NC_TABS.map((t) => ({ value: t.key, label: t.label }))}
+          value={filters.source ? activeTab?.key : "all"}
+          onChange={(key) => updateFilters({ source: NC_TABS.find((t) => t.key === key).source })}
+        />
       </div>
       {activeFilters.length > 0 && (
         <div aria-label="Active filters" className="flex flex-wrap items-center gap-2 px-1 text-sm">

@@ -14,6 +14,7 @@ import ReasonDialog from "../ncr/ReasonDialog";
 import Dialog from "../ui/Dialog";
 import { ErrorNotice, SelectField } from "../master-data/shared";
 import StartAuditDialog from "./StartAuditDialog";
+import SlidingToggle from "../ui/SlidingToggle";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -234,13 +235,12 @@ const AuditSchedulePage = () => {
           </p>
         </div>
         <div className="flex flex-row flex-wrap items-center justify-end gap-3">
-          <div role="group" aria-label="View" className="inline-flex overflow-hidden rounded-lg border border-border-color">
-            {[["list", "List", ListIcon], ["calendar", "Calendar", CalendarIcon]].map(([v, label, Icon]) => (
-              <button key={v} type="button" aria-pressed={view === v} onClick={() => updateFilters({ view: v === "list" ? "" : v })} className={`flex items-center gap-1 px-3 py-1.5 text-sm cursor-pointer ${view === v ? "bg-brand-primary/15 font-medium text-primary-text" : "bg-text-input-color text-secondary-text hover:text-primary-text"}`}>
-                <Icon aria-hidden="true" /> {label}
-              </button>
-            ))}
-          </div>
+          <SlidingToggle
+            ariaLabel="View"
+            options={[{ value: "list", label: "List", icon: ListIcon }, { value: "calendar", label: "Calendar", icon: CalendarIcon }]}
+            value={view}
+            onChange={(v) => updateFilters({ view: v === "list" ? "" : v })}
+          />
           {canPerform && <CTAButton callbackFn={() => setStarting(true)} text="Start an unscheduled audit" type="main" icon={PlayIcon} iconSize="h-6 w-6" title="Carry out an audit now, without a scheduled slot" />}
         </div>
       </div>

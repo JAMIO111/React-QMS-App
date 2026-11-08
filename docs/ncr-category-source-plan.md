@@ -1,6 +1,6 @@
 # Non-conformance: category and source as separate things — plan
 
-**Status:** NS1 (database), NS2 (API) and NS3 (UI) are built and committed locally; NS4 (exit check) next. The migration `20251218100000_ncr_category_source.sql` is **not applied live yet**. Decisions D1–D4 were chosen by the product owner; the product owner then confirmed: source labels stay fixed (not renameable), the final-inspection and external-audit sources are chosen by hand for now, the backfill of factual origins (D7) is wanted, and **D9 (finding owner → NC responsible employee) is dropped**.
+**Status:** NS1 (database), NS2 (API) and NS3 (UI) are built and committed locally; NS4 (exit check) is done. The migration `20251218100000_ncr_category_source.sql` is **applied live** (live guardrails: 0 violations). Decisions D1–D4 were chosen by the product owner; the product owner then confirmed: source labels stay fixed (not renameable), the final-inspection and external-audit sources are chosen by hand for now, the backfill of factual origins (D7) is wanted, and **D9 (finding owner → NC responsible employee) is dropped**.
 
 ## 1. What is wrong today
 

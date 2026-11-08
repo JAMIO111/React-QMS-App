@@ -8,6 +8,7 @@ import { formatDate } from "../../lib/ncr";
 import { answerTypeLabel, auditTypeLabel, auditorLabel, frequencyLabel, questionRule, resultLabel } from "../../lib/audits";
 import { ErrorNotice, buttonClass } from "../master-data/shared";
 import MenuCard from "../ui/MenuCard";
+import { VersionHistory } from "./AuditVersions";
 import ReasonDialog from "../ncr/ReasonDialog";
 
 const Fact = ({ label, children }) => (
@@ -44,6 +45,7 @@ const AuditPage = () => {
             <h1 className="text-xl font-semibold text-primary-text">
               {a.reference} · {a.title}
             </h1>
+            {a.version && <span className="rounded-full bg-brand-primary/15 px-2 py-0.5 text-xs font-medium text-brand-primary">{`Version ${a.version}`}</span>}
             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${a.status === "active" ? "bg-success-color/15 text-success-color" : "bg-border-color text-secondary-text"}`}>{a.status === "active" ? "Active" : "Retired"}</span>
           </div>
           {a.retired && (
@@ -162,6 +164,8 @@ const AuditPage = () => {
           </ol>
         )}
       </MenuCard>
+
+      <VersionHistory audit={a} />
 
       {retiring && (
         <ReasonDialog

@@ -69,6 +69,8 @@ const record = (over = {}) => ({
   criticalFailedCount: null,
   naCount: null,
   audit: { id: "a1", reference: "AUD-001", title: "Cell audit", auditType: "layered_process" },
+  version: 3,
+  currentVersion: 3,
   carriedOutOn: [],
   scheduledFor: "2026-11-02",
   performedOn: "2026-11-08",
@@ -438,6 +440,30 @@ describe("a completed audit", () => {
   });
 });
 
+describe("the version a record was done against", () => {
+  it("is said on the record, with the version the audit is at now when it has moved on, and a link to the history", async () => {
+    routeApi({ "GET /audit-records/r1": record({ version: 3, currentVersion: 4 }), "GET /ncrs": { data: [], nextCursor: null } });
+    renderAt("/Documentation/Audit-Records/r1");
+    const line = await screen.findByTestId("record-version");
+    expect(line).toHaveTextContent("Done against version 3 of the audit (the audit is now at version 4)");
+    expect(within(line).getByRole("link", { name: "Version history" })).toHaveAttribute("href", "/Documentation/Audits/a1");
+  });
+
+  it("does not mention a newer version when the record is on the current one", async () => {
+    routeApi({ "GET /audit-records/r1": record({ version: 3, currentVersion: 3 }), "GET /ncrs": { data: [], nextCursor: null } });
+    renderAt("/Documentation/Audit-Records/r1");
+    expect(await screen.findByTestId("record-version")).toHaveTextContent(/^Done against version 3 of the audit · Version history$/);
+  });
+
+  it("says when a record was made before versions were kept, without inventing one", async () => {
+    routeApi({ "GET /audit-records/r1": record({ version: null, currentVersion: null }), "GET /ncrs": { data: [], nextCursor: null } });
+    renderAt("/Documentation/Audit-Records/r1");
+    const line = await screen.findByTestId("record-version");
+    expect(line).toHaveTextContent("Made before versions of audits were kept");
+    expect(within(line).queryByRole("link")).toBeNull();
+  });
+});
+
 describe("audit records register", () => {
   const row = (over = {}) => ({
     id: "r1",
@@ -450,6 +476,8 @@ describe("audit records register", () => {
     failedCount: 1,
     criticalFailedCount: 1,
     audit: { id: "a1", reference: "AUD-001", title: "Cell audit", auditType: "layered_process" },
+    version: 3,
+    currentVersion: 4,
     carriedOutOn: ["CNC-1 · Lathe", "OP-10"],
     scheduledFor: "2026-11-02",
     performedOn: "2026-11-08",
@@ -457,6 +485,29 @@ describe("audit records register", () => {
     completedAt: "2026-11-08T10:00:00Z",
     startedAt: "2026-11-08T09:00:00Z",
     ...over,
+  });
+
+  it("shows the version of each record, and that the audit has moved on", async () => {
+    routeApi({ "GET /audit-records": { data: [row(), row({ id: "r2", reference: "AR-26-0002", version: 4, currentVersion: 4 }), row({ id: "r3", reference: "AR-26-0003", version: null, currentVersion: null })], page: 1, pageSize: 25, total: 3 } });
+    renderAt("/Documentation/Audit-Records");
+    const table = await screen.findByRole("region", { name: "Audit records" });
+    const rows = await within(table).findAllByRole("row");
+    expect(within(rows[1]).getByText("v3")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("(now v4)")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("v4")).toBeInTheDocument();
+    expect(within(rows[2]).queryByText(/now v/)).toBeNull();
+    expect(within(rows[3]).queryByText(/^v\d/)).toBeNull();
+  });
+
+  it("filters by the version from a link in the audit's history, as a chip that can be taken off", async () => {
+    routeApi({ "GET /audit-records": { data: [row()], page: 1, pageSize: 25, total: 1 } });
+    renderAt("/Documentation/Audit-Records?audit=a1&version=3");
+    await screen.findByRole("region", { name: "Audit records" });
+    await waitFor(() => expect(last("GET /audit-records").path).toContain("version=3"));
+    const chips = screen.getByLabelText("Active filters");
+    expect(chips).toHaveTextContent("Version 3");
+    await userEvent.click(within(chips).getByRole("button", { name: /Remove filter Version 3/ }));
+    await waitFor(() => expect(last("GET /audit-records").path).not.toContain("version="));
   });
 
   it("lists the records with what each was carried out on, who did it, the result and score", async () => {

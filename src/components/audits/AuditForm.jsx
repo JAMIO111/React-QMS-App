@@ -55,6 +55,9 @@ const toBody = (f) => ({
   ],
 });
 
+/** What a version holds: the parts of the body that, when different, make a new version and need a reason (the schedule and the expected auditor do not). */
+const contentOf = (b) => JSON.stringify({ title: b.title, auditType: b.auditType, purpose: b.purpose, procedure: b.procedure, passMark: b.passMark, questions: b.questions, targets: [...b.targets].map((t) => JSON.stringify(t)).sort() });
+
 const RATING_SCALES = [3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({ value: String(n), label: `1 to ${n}` }));
 const PASS_ANSWERS = [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }];
 
@@ -205,7 +208,10 @@ const AuditFormBody = ({ audit }) => {
   const roles = useRoles();
   const [f, setF] = useState(() => fromAudit(audit));
   const [triedSave, setTriedSave] = useState(false);
+  const [reason, setReason] = useState("");
   const set = (patch) => setF((x) => ({ ...x, ...patch }));
+  // A change to what the audit says (not to the schedule or the expected auditor) is saved as a new version and needs a reason.
+  const changed = !!audit && contentOf(toBody(f)) !== contentOf(toBody(fromAudit(audit)));
 
   const scheduled = f.frequencyKind !== "on_demand";
   const problems = [
@@ -213,6 +219,7 @@ const AuditFormBody = ({ audit }) => {
     scheduled && !f.firstDueOn && "Give the first due date",
     f.frequencyKind === "every_n_days" && !(Number(f.interval) >= 1) && "Say how many days apart",
     f.auditorKind !== "none" && !f.auditorId && "Choose who is expected to do it",
+    changed && reason.trim().length < 3 && "Say why the audit is changing",
     ...f.questions.flatMap((q, i) => questionProblems(q, i + 1)),
   ].filter(Boolean);
   const uniqueProblems = [...new Set(problems)];
@@ -240,10 +247,10 @@ const AuditFormBody = ({ audit }) => {
     e.preventDefault();
     setTriedSave(true);
     if (uniqueProblems.length) return;
-    const body = toBody(f);
+    const body = { ...toBody(f), ...(changed ? { changeReason: reason.trim() } : {}) };
     mutation.mutate(audit ? { path: `/audits/${audit.id}`, method: "PATCH", body } : { path: "/audits", body }, {
       onSuccess: (saved) => {
-        showToast({ type: "success", title: "Saved", message: audit ? `${saved.reference} updated.` : `${saved.reference} defined.` });
+        showToast({ type: "success", title: "Saved", message: audit ? `${saved.reference} updated${saved.version !== audit.version ? `, now version ${saved.version}` : ""}.` : `${saved.reference} defined.` });
         navigate(`/Documentation/Audits/${saved.id}`);
       },
       onError: (error) => showToast({ type: "error", title: "Not saved", message: describeApiError(error) }),
@@ -258,7 +265,11 @@ const AuditFormBody = ({ audit }) => {
             <ArrowLeftIcon /> {audit ? audit.reference : "Audits"}
           </Link>
           <h1 className="text-xl font-semibold text-primary-text">{audit ? `Edit ${audit.reference}` : "Define an audit"}</h1>
-          {audit && <p className="text-sm text-secondary-text">Audits already done keep the questions they were done against.</p>}
+          {audit && (
+            <p className="text-sm text-secondary-text">
+              {audit.version ? `Version ${audit.version}. ` : ""}A change to what the audit says is saved as a new version, with a reason. Audits already done keep the questions and the version they were done against.
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Link to={audit ? `/Documentation/Audits/${audit.id}` : "/Documentation/Audits"} className={buttonClass.neutral}>
@@ -361,6 +372,20 @@ const AuditFormBody = ({ audit }) => {
           </ol>
         )}
       </MenuCard>
+
+      {audit && (
+        <MenuCard title="Reason for the change" subtitle={changed ? `Saved as version ${(audit.version ?? 0) + 1}, with this reason, in the version history` : "Needed when the title, type, purpose, procedure, pass mark, checklist or what it is relevant to changes"}>
+          <TextAreaField
+            label="Why is this changing?"
+            required={changed}
+            value={reason}
+            onChange={setReason}
+            rows={2}
+            maxLength={1000}
+            hint={changed ? undefined : "Nothing about what the audit says has changed yet. A change to the schedule or the expected auditor needs no reason."}
+          />
+        </MenuCard>
+      )}
     </form>
   );
 };

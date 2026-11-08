@@ -329,3 +329,22 @@ export const ncrPreview = (finding) => ({
   title: finding.title,
   description: `Raised from audit ${finding.record.reference}, finding ${finding.reference}.`,
 });
+
+// ---- versions of an audit ---------------------------------------------------------------------------------------------------------------
+
+/** "Version 3"; a record made before versions were kept has none. */
+export const versionLabel = (n) => (n ? `Version ${n}` : "Before versions were kept");
+export const HEADER_FIELD_LABELS = { title: "Title", auditType: "Type", purpose: "Purpose", procedure: "Procedure", passMark: "Pass mark" };
+export const QUESTION_FIELD_LABELS = {
+  question: "Wording", guidance: "Guidance", answerType: "Answered with", passAnswer: "Passes with", unit: "Unit", lowerLimit: "Lower limit", upperLimit: "Upper limit",
+  nominal: "Nominal", options: "Options", ratingMax: "Rating scale", passRating: "Lowest acceptable rating", critical: "Critical",
+};
+/** One field of a question as a short piece of text, for "before → after". */
+export const questionFieldText = (field, q) => {
+  const v = q[field];
+  if (v === null || v === undefined || v === "") return "none";
+  if (field === "answerType") return answerTypeLabel(v);
+  if (field === "critical") return v ? "yes" : "no";
+  if (field === "options") return v.map((o) => `${o.label}${o.passes ? "" : " (not acceptable)"}`).join(", ");
+  return String(v);
+};

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { CalendarIcon, CircleCheckIcon, ClipboardListIcon, FactoryIcon, HashIcon, ListChecksIcon, TagIcon, UsersIcon } from "@/components/icons";
+import { CalendarIcon, CircleCheckIcon, ClipboardListIcon, FactoryIcon, HashIcon, HistoryIcon, ListChecksIcon, TagIcon, UsersIcon } from "@/components/icons";
 import { formatDate } from "../../lib/ncr";
 import { auditTypeLabel, auditorLabel, frequencyLabel, RESULT_PILL, resultLabel } from "../../lib/audits";
 
@@ -44,6 +44,7 @@ export const auditColumns = [
     { size: 110, sortKey: "reference" }
   ),
   col("title", "Title", head(ClipboardListIcon, "Title"), plain((r) => r.title), { size: 280, minSize: 120, sortKey: "title" }),
+  col("version", "Version", head(HistoryIcon, "Version", "table-header-number"), (i) => <div className="table-row-item justify-end tabular-nums">{i.row.original.version ? `v${i.row.original.version}` : "—"}</div>, { size: 90, align: "right", accessor: (r) => r.version ?? 0 }),
   col("auditType", "Type", head(TagIcon, "Type"), plain((r) => auditTypeLabel(r.auditType)), { size: 170, sortKey: "type" }),
   col("targets", "Relevant to", head(FactoryIcon, "Relevant to"), plain((r) => relevant(r.targets)), { size: 280, minSize: 120, accessor: (r) => relevant(r.targets) }),
   col("frequency", "Frequency", head(CalendarIcon, "Frequency"), plain((r) => frequencyLabel(r.frequency)), { size: 150, sortKey: "frequency", accessor: (r) => frequencyLabel(r.frequency) }),

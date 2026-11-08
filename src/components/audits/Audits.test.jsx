@@ -268,6 +268,103 @@ const fillFirstDue = async () => {
 };
 const saved = () => sent("POST /audits")[0].body;
 
+const versionList = [
+  { version: 3, reason: "Added the floor, loosened the coolant limit and covered OP-20", createdAt: "2026-11-05T10:00:00Z", createdBy: { id: "u1", name: "Ada Owner" }, current: true, title: "Weekly LPA, CNC", passMark: 95, questionCount: 3, criticalCount: 1, targetCount: 2, recordCount: 1, summary: ["1 question added", "2 questions changed", "Now relevant to OP-20"] },
+  { version: 2, reason: "Raised the pass mark after the January audit", createdAt: "2026-11-03T10:00:00Z", createdBy: { id: "u1", name: "Ada Owner" }, current: false, title: "Weekly LPA, CNC", passMark: 95, questionCount: 2, criticalCount: 1, targetCount: 1, recordCount: 2, summary: ["Title changed", "Pass mark 90 → 95"] },
+  { version: 1, reason: "First version", createdAt: "2026-11-01T09:00:00Z", createdBy: null, current: false, title: "Layered process audit", passMark: 90, questionCount: 2, criticalCount: 1, targetCount: 1, recordCount: 0, summary: [] },
+];
+const versionThree = {
+  ...versionList[0], auditType: "layered_process", purpose: null, procedure: "Walk the cell.",
+  questions: [
+    { sequence: 1, question: "Is the cell clean?", guidance: null, answerType: "pass_fail", passAnswer: null, unit: null, lowerLimit: null, upperLimit: null, nominal: null, options: null, ratingMax: null, passRating: null, critical: false },
+    { sequence: 2, question: "Coolant concentration", guidance: null, answerType: "numeric", passAnswer: null, unit: "%", lowerLimit: 6, upperLimit: 9.5, nominal: null, options: null, ratingMax: null, passRating: null, critical: false },
+    { sequence: 3, question: "Is the floor clear?", guidance: null, answerType: "pass_fail", passAnswer: null, unit: null, lowerLimit: null, upperLimit: null, nominal: null, options: null, ratingMax: null, passRating: null, critical: false },
+  ],
+  targets: [{ kind: "operation", label: "OP-10" }, { kind: "operation", label: "OP-20" }],
+  records: [{ id: "r1", reference: "AR-26-0001", status: "completed", result: "fail", performedOn: "2026-11-05" }],
+  changes: {
+    header: [{ field: "passMark", before: 90, after: 95 }, { field: "procedure", before: "Walk.", after: "Walk the cell." }],
+    questions: {
+      added: [{ sequence: 3, question: "Is the floor clear?", guidance: null, answerType: "pass_fail", passAnswer: null, unit: null, lowerLimit: null, upperLimit: null, nominal: null, options: null, ratingMax: null, passRating: null, critical: false }],
+      removed: [{ sequence: 4, question: "Guards fitted?", guidance: null, answerType: "pass_fail", passAnswer: null, unit: null, lowerLimit: null, upperLimit: null, nominal: null, options: null, ratingMax: null, passRating: null, critical: false }],
+      changed: [
+        { before: { sequence: 1, question: "Is the cell clean?", critical: true, answerType: "pass_fail" }, after: { sequence: 1, question: "Is the cell clean?", critical: false, answerType: "pass_fail" }, fields: ["critical"] },
+        { before: { sequence: 2, question: "Coolant concentration", upperLimit: 9, answerType: "numeric" }, after: { sequence: 2, question: "Coolant concentration", upperLimit: 9.5, answerType: "numeric" }, fields: ["upperLimit"] },
+      ],
+      moved: [{ question: "Is the floor clear?", from: 4, to: 3 }],
+    },
+    targets: { added: [{ kind: "operation", label: "OP-20" }], removed: [{ kind: "machine", label: "CNC-1 · Lathe" }] },
+  },
+};
+
+describe("version history of an audit", () => {
+  it("shows the version beside the title, and each version with its reason, who, when, what changed and how many records were done against it", async () => {
+    routeApi({ "GET /audits/a1": detail({ version: 3 }), "GET /audits/a1/versions": { data: versionList } });
+    renderAt("/Documentation/Audits/a1");
+    expect(await screen.findByText("Version 3")).toBeInTheDocument();
+    const table = await screen.findByRole("table", { name: "Versions" });
+    const rows = within(table).getAllByRole("row");
+    expect(rows).toHaveLength(4);
+    expect(within(rows[1]).getByText("Current")).toBeInTheDocument();
+    expect(within(rows[2]).queryByText("Current")).toBeNull();
+    expect(within(rows[3]).queryByText("Current")).toBeNull();
+    expect(rows[1]).toHaveTextContent("Added the floor, loosened the coolant limit and covered OP-20");
+    expect(rows[1]).toHaveTextContent("1 question added; 2 questions changed; Now relevant to OP-20");
+    expect(rows[1]).toHaveTextContent("Ada Owner");
+    expect(rows[2]).toHaveTextContent("Title changed; Pass mark 90 → 95");
+    expect(rows[3]).toHaveTextContent("First version");
+    expect(rows[3]).toHaveTextContent("Unknown user");
+    expect(within(rows[2]).getByRole("link", { name: "2" })).toHaveAttribute("href", "/Documentation/Audit-Records?audit=a1&version=2");
+    expect(within(rows[3]).queryByRole("link")).toBeNull();
+  });
+
+  it("opens a version with what it changed from the one before, the audit as it was and the records done against it", async () => {
+    routeApi({ "GET /audits/a1": detail({ version: 3 }), "GET /audits/a1/versions": { data: versionList }, "GET /audits/a1/versions/3": versionThree });
+    renderAt("/Documentation/Audits/a1");
+    await userEvent.click(await screen.findByRole("button", { name: "View version 3" }));
+    const dialog = await screen.findByRole("dialog", { name: "AUD-001 · version 3" });
+    expect(await within(dialog).findByText("Added the floor, loosened the coolant limit and covered OP-20")).toBeInTheDocument();
+    expect(within(dialog).getByText("Current")).toBeInTheDocument();
+    const changes = within(dialog).getByRole("region", { name: "Changes from version 2" });
+    expect(changes).toHaveTextContent("Pass mark: 90% → 95%");
+    expect(changes).toHaveTextContent("Procedure changed.");
+    expect(changes).toHaveTextContent("Added question 3: “Is the floor clear?”");
+    expect(changes).toHaveTextContent("Removed “Guards fitted?”");
+    expect(changes).toHaveTextContent("Changed question 1, “Is the cell clean?”: Critical yes → no");
+    expect(changes).toHaveTextContent("Changed question 2, “Coolant concentration”: Upper limit 9 → 9.5");
+    expect(changes).toHaveTextContent("Moved “Is the floor clear?” from 4 to 3");
+    expect(changes).toHaveTextContent("Now relevant to OP-20");
+    expect(changes).toHaveTextContent("No longer relevant to CNC-1 · Lathe");
+    const content = within(dialog).getByRole("region", { name: "The audit in version 3" });
+    expect(within(content).getByRole("list", { name: "Checklist of version 3" })).toHaveTextContent("Coolant concentration");
+    expect(content).toHaveTextContent("OP-10, OP-20");
+    const records = within(dialog).getByRole("region", { name: "Records done against this version" });
+    expect(within(records).getByRole("link", { name: "AR-26-0001" })).toHaveAttribute("href", "/Documentation/Audit-Records/r1");
+    expect(records).toHaveTextContent("Fail");
+  });
+
+  it("says so for the first version, which changed nothing, and when an audit has no history yet", async () => {
+    routeApi({
+      "GET /audits/a1": detail({ version: 1 }),
+      "GET /audits/a1/versions": { data: [versionList[2]] },
+      "GET /audits/a1/versions/1": { ...versionList[2], auditType: "layered_process", purpose: null, procedure: null, questions: [], targets: [], records: [], changes: null },
+    });
+    renderAt("/Documentation/Audits/a1");
+    await userEvent.click(await screen.findByRole("button", { name: "View version 1" }));
+    const dialog = await screen.findByRole("dialog", { name: "AUD-001 · version 1" });
+    expect(await within(dialog).findByText("First version")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("region", { name: /Changes from version/ })).toBeNull();
+    expect(within(dialog).getByRole("region", { name: "Records done against this version" })).toHaveTextContent("None.");
+  });
+
+  it("explains an audit with no versions yet", async () => {
+    routeApi({ "GET /audits/a1": detail({ version: null }), "GET /audits/a1/versions": { data: [] } });
+    renderAt("/Documentation/Audits/a1");
+    expect(await screen.findByText(/No versions yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Version \d/)).toBeNull();
+  });
+});
+
 describe("audit form", () => {
   it("lists what is still needed and sends nothing until it is there", async () => {
     routeApi();
@@ -556,8 +653,10 @@ describe("audit form", () => {
     expect(within(within(list).getByRole("listitem", { name: "Question 1" })).getByLabelText(/^Question/)).toHaveValue("Coolant concentration");
     await userEvent.click(screen.getByRole("button", { name: "Remove question 1" }));
     expect(within(screen.getByRole("list", { name: "Checklist" })).getAllByRole("listitem")).toHaveLength(1);
+    await userEvent.type(screen.getByLabelText(/^Why is this changing/), "Dropped the coolant question");
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(sent("PATCH /audits/a1")).toHaveLength(1));
+    expect(sent("PATCH /audits/a1")[0].body.changeReason).toBe("Dropped the coolant question");
     expect(sent("PATCH /audits/a1")[0].body.questions).toEqual([{ question: "Is the cell clean?", guidance: "Floor, bench, machine", answerType: "pass_fail", critical: true }]);
     expect(sent("PATCH /audits/a1")[0].body.targets).toEqual([{ kind: "machine", machineId: "m1" }, { kind: "operation", operationCode: "OP-20" }]);
   });
@@ -579,6 +678,69 @@ describe("audit form", () => {
     expect(q.getByLabelText(/^Tolerance −/)).toHaveValue("0.05");
     expect(q.getByLabelText(/^Tolerance \+/)).toHaveValue("0.1");
     expect(q.getByLabelText(/Critical/)).toBeChecked();
-    expect(screen.getByText(/Audits already done keep the questions they were done against/)).toBeInTheDocument();
+    expect(screen.getByText(/Audits already done keep the questions and the version they were done against/)).toBeInTheDocument();
+  });
+
+  describe("versions", () => {
+    it("asks why when what the audit says changes, says which version it will become, and sends nothing without a reason", async () => {
+      routeApi({ "GET /audits/a1": detail({ version: 2 }), "PATCH /audits/a1": () => detail({ version: 3 }) });
+      renderAt("/Documentation/Audits/a1/edit");
+      await screen.findByRole("heading", { name: "Edit AUD-001" });
+      expect(screen.getByText(/^Version 2\. A change to what the audit says is saved as a new version/)).toBeInTheDocument();
+      expect(screen.getByText(/Nothing about what the audit says has changed yet/)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Why is this changing/)).not.toHaveAttribute("aria-required");
+      await userEvent.clear(screen.getByLabelText(/^Title/));
+      await userEvent.type(screen.getByLabelText(/^Title/), "Weekly LPA, CNC");
+      expect(screen.getByText("Saved as version 3, with this reason, in the version history")).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Why is this changing/)).toHaveAttribute("aria-required", "true");
+      await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      expect(await screen.findByRole("alert", { name: "Still needed" })).toHaveTextContent("Say why the audit is changing");
+      expect(sent("PATCH /audits/a1")).toHaveLength(0);
+      await userEvent.type(screen.getByLabelText(/^Why is this changing/), "ok");
+      await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      expect(sent("PATCH /audits/a1")).toHaveLength(0); // two characters are not a reason
+      await userEvent.type(screen.getByLabelText(/^Why is this changing/), "ay, clearer name");
+      await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      await waitFor(() => expect(sent("PATCH /audits/a1")).toHaveLength(1));
+      expect(sent("PATCH /audits/a1")[0].body).toMatchObject({ title: "Weekly LPA, CNC", changeReason: "okay, clearer name" });
+    });
+
+    it("counts the pass mark, the type, the purpose and the procedure as content", async () => {
+      routeApi({ "GET /audits/a1": detail({ version: 2 }) });
+      renderAt("/Documentation/Audits/a1/edit");
+      await screen.findByRole("heading", { name: "Edit AUD-001" });
+      const nothing = () => screen.getByText(/Nothing about what the audit says has changed yet/);
+      await userEvent.clear(screen.getByLabelText(/^Pass mark/));
+      await userEvent.type(screen.getByLabelText(/^Pass mark/), "90");
+      expect(screen.getByText("Saved as version 3, with this reason, in the version history")).toBeInTheDocument();
+      await userEvent.clear(screen.getByLabelText(/^Pass mark/));
+      await userEvent.type(screen.getByLabelText(/^Pass mark/), "95");
+      expect(nothing()).toBeInTheDocument();
+      await userEvent.type(screen.getByLabelText(/^Purpose/), " more");
+      expect(screen.getByText("Saved as version 3, with this reason, in the version history")).toBeInTheDocument();
+    });
+
+    it("needs no reason for a change to the schedule or the expected auditor, and sends none", async () => {
+      routeApi({ "GET /audits/a1": detail({ version: 2 }), "PATCH /audits/a1": () => detail({ version: 2 }) });
+      renderAt("/Documentation/Audits/a1/edit");
+      await screen.findByRole("heading", { name: "Edit AUD-001" });
+      await userEvent.clear(screen.getByLabelText(/^Grace period/));
+      await userEvent.type(screen.getByLabelText(/^Grace period/), "5");
+      expect(screen.getByText(/Nothing about what the audit says has changed yet/)).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      await waitFor(() => expect(sent("PATCH /audits/a1")).toHaveLength(1));
+      expect(sent("PATCH /audits/a1")[0].body).toMatchObject({ graceDays: 5 });
+      expect(sent("PATCH /audits/a1")[0].body).not.toHaveProperty("changeReason");
+    });
+
+    it("counts what it is relevant to and the order of the questions as content, but not the order things were added in", async () => {
+      routeApi({ "GET /audits/a1": detail({ version: 1 }), "PATCH /audits/a1": () => detail({ version: 2 }) });
+      renderAt("/Documentation/Audits/a1/edit");
+      await screen.findByRole("heading", { name: "Edit AUD-001" });
+      await userEvent.click(screen.getByRole("button", { name: "Move question 1 down" }));
+      expect(screen.getByText("Saved as version 2, with this reason, in the version history")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Move question 1 down" }));
+      expect(screen.getByText(/Nothing about what the audit says has changed yet/)).toBeInTheDocument();
+    });
   });
 });

@@ -336,6 +336,16 @@ const AuditRecordPage = () => {
           <Link to={`/Documentation/Audits/${r.audit.id}`} className="w-fit text-sm text-link-color hover:underline">
             {r.audit.reference} · {auditTypeLabel(r.audit.auditType)}
           </Link>
+          <p className="text-sm text-secondary-text" data-testid="record-version">
+            {r.version ? `Done against version ${r.version} of the audit` : "Made before versions of audits were kept"}
+            {r.version && r.currentVersion && r.currentVersion !== r.version ? ` (the audit is now at version ${r.currentVersion})` : ""}
+            {r.version || r.currentVersion ? (
+              <>
+                {" · "}
+                <Link to={`/Documentation/Audits/${r.audit.id}`} className="text-link-color hover:underline">Version history</Link>
+              </>
+            ) : null}
+          </p>
         </div>
       </div>
 

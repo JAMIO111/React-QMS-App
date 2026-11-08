@@ -51,7 +51,7 @@ export const AUDIT_FILTER_KEYS = ["search", "status", "type", "machine", "machin
 export const useAuditFilters = () => useUrlFilters(AUDIT_FILTER_KEYS);
 
 /** Audit records register filters. */
-export const AUDIT_RECORD_FILTER_KEYS = ["search", "status", "result", "audit", "auditLabel", "machine", "machineLabel", "mine", "from", "to"];
+export const AUDIT_RECORD_FILTER_KEYS = ["search", "status", "result", "audit", "auditLabel", "machine", "machineLabel", "version", "mine", "from", "to"];
 export const useAuditRecordFilters = () => useUrlFilters(AUDIT_RECORD_FILTER_KEYS);
 
 /** Audit findings register filters. */

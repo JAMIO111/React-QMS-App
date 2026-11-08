@@ -34,6 +34,28 @@ export const useAudit = (id) => {
   });
 };
 
+/** The history of an audit: every version, newest first. */
+export const useAuditVersions = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "versions", id),
+    queryFn: () => apiFetch(`/audits/${id}/versions`, { organisationId }).then((r) => r.data),
+    enabled: !!organisationId && !!id,
+    retry: false,
+  });
+};
+
+/** One version, whole, with what it changed from the one before. */
+export const useAuditVersion = (id, version) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "versions", id, version),
+    queryFn: () => apiFetch(`/audits/${id}/versions/${version}`, { organisationId }),
+    enabled: !!organisationId && !!id && !!version,
+    retry: false,
+  });
+};
+
 /** Create, change, retire or reactivate an audit: { path, method, body }. */
 export const useAuditMutation = () => {
   const { organisationId } = useOrganisation();

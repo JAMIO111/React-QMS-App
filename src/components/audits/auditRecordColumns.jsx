@@ -37,6 +37,21 @@ export const auditRecordColumns = [
     { size: 120, sortKey: "reference" }
   ),
   col("audit", "Audit", head(ClipboardListIcon, "Audit"), plain((r) => `${r.audit.reference} · ${r.audit.title}`), { size: 280, minSize: 120, sortKey: "audit", accessor: (r) => `${r.audit.reference} ${r.audit.title}` }),
+  col(
+    "version",
+    "Version",
+    head(null, "Version", "table-header-number"),
+    (i) => {
+      const r = i.row.original;
+      return (
+        <div className="table-row-item justify-end tabular-nums">
+          {r.version ? `v${r.version}` : "—"}
+          {r.version && r.currentVersion && r.currentVersion !== r.version ? <span className="ml-1 text-xs text-secondary-text">(now v{r.currentVersion})</span> : null}
+        </div>
+      );
+    },
+    { size: 130, align: "right", accessor: (r) => r.version ?? 0 }
+  ),
   col("carriedOutOn", "Carried out on", head(FactoryIcon, "Carried out on"), plain((r) => r.carriedOutOn.join(", ") || null), { size: 260, minSize: 120, accessor: (r) => r.carriedOutOn.join(", ") }),
   col("auditor", "Auditor", head(UsersIcon, "Auditor"), plain((r) => r.auditor?.name), { size: 170, accessor: (r) => r.auditor?.name ?? "" }),
   col("scheduledFor", "Scheduled for", head(CalendarIcon, "Scheduled for"), plain((r) => (r.scheduledFor ? formatDate(r.scheduledFor) : "Unscheduled")), { size: 140, accessor: (r) => r.scheduledFor ?? "" }),

@@ -1,4 +1,5 @@
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
+import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import RHFComboBox from "../ui/RHFComboBox";
 import { useParts, usePart, useParties } from "../../hooks/useMasterData";
 import { useNcrs } from "../../hooks/useNcr";
@@ -23,17 +24,6 @@ export const TextAreaField = ({ label, value, onChange, disabled, rows = 3, maxL
       {hint && <p className="text-xs text-secondary-text">{hint}</p>}
     </div>
   );
-};
-
-/** Search term typed into a combo box, debounced for the server. */
-const useDebouncedSearch = (delay = 300) => {
-  const [term, setTerm] = useState("");
-  const [q, setQ] = useState("");
-  useEffect(() => {
-    const t = setTimeout(() => setQ(term.trim()), delay);
-    return () => clearTimeout(t);
-  }, [term, delay]);
-  return [q, setTerm];
 };
 
 /**

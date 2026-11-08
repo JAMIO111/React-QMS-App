@@ -194,6 +194,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await masterDataOverview({ page, stack, APP, orgName, see, shot, step, log });
   await correctRevision({ page, stack, APP, orgName, see, shot, step, log });
   await containAndDispose({ page, stack, APP, orgName, see, shot, step, log });
+  await productionTraceability({ page, stack, APP, orgName, see, shot, step, log });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -395,4 +396,94 @@ async function containAndDispose({ page, stack, APP, orgName, see, shot, step, l
       (select count(*)::int from public.ncr_dispositions where nonconformance_id = n.id and status = 'approved') as approved from public.nonconformances n where n.id = $1`, [nc.id]);
   log(`NC ${nc.reference}: ${JSON.stringify(after)}`);
   if (after.stage !== 'dispositioned' || after.done !== 1 || after.approved !== 1) throw new Error('the NC was not dispositioned with its containment and disposition recorded');
+}
+
+/** A production order with an operation, a lot made for it and a numbered range of serial numbers, then a hold and a refused completion. */
+async function productionTraceability({ page, stack, APP, orgName, see, shot, step, log }) {
+  step('the owner makes a production order, a lot for it and five serial numbers');
+  const pickPart = async (scope) => {
+    await scope.getByRole('combobox', { name: /^Part/ }).click();
+    await scope.getByRole('combobox', { name: /^Part/ }).fill('JRN-100');
+    await page.getByRole('option', { name: /JRN-100/ }).click();
+  };
+  await page.goto(`${APP}/Production/Orders`);
+  await see(page.getByRole('button', { name: 'New order' }));
+  await shot(page, '37-production-orders-empty');
+  await page.getByRole('button', { name: 'New order' }).click();
+  const orderDialog = page.getByRole('dialog', { name: 'New production order' });
+  await orderDialog.getByLabel('Order number').fill('WO-9001');
+  await orderDialog.getByLabel('Quantity planned').fill('250');
+  await pickPart(orderDialog);
+  await shot(page, '38-new-order');
+  await orderDialog.getByRole('button', { name: 'Create order' }).click();
+  await see(page.getByRole('heading', { level: 1, name: 'Order WO-9001' }));
+  const form = page.getByRole('form', { name: 'Add an operation' });
+  await form.getByLabel('Operation code').fill('OP-10');
+  await form.getByLabel('Description').fill('Turning');
+  await form.getByRole('button', { name: 'Add operation' }).click();
+  await see(page.getByRole('table', { name: 'Operations' }).getByText('OP-10'));
+  await page.getByRole('group', { name: 'Change Order status' }).getByRole('button', { name: 'Release' }).click();
+  await see(page.getByRole('group', { name: 'Change Order status' }).getByRole('button', { name: 'Start' }));
+  await page.getByRole('group', { name: 'Change Order status' }).getByRole('button', { name: 'Start' }).click();
+  await see(page.getByRole('group', { name: 'Change Order status' }).getByRole('button', { name: 'Complete' }));
+  await shot(page, '39-order-page');
+
+  step('the database refuses to complete the order while an operation is open');
+  await page.getByRole('group', { name: 'Change Order status' }).getByRole('button', { name: 'Complete' }).click();
+  await see(page.getByText(/Complete or skip every operation first; still open: OP-10/));
+  await shot(page, '40-completion-refused');
+  await page.getByRole('table', { name: 'Operations' }).getByRole('button', { name: 'Start' }).click();
+  await page.getByRole('table', { name: 'Operations' }).getByRole('button', { name: 'Complete' }).click();
+  await see(page.getByRole('table', { name: 'Operations' }).getByText('Completed'));
+
+  await page.goto(`${APP}/Production/Lots`);
+  await page.getByRole('button', { name: 'New lot' }).click();
+  const lotDialog = page.getByRole('dialog', { name: 'New lot' });
+  await lotDialog.getByLabel('Lot number').fill('LOT-9001');
+  await pickPart(lotDialog);
+  await lotDialog.getByRole('combobox', { name: 'Production order' }).click();
+  await page.getByRole('option', { name: /WO-9001/ }).click();
+  await lotDialog.getByLabel('Quantity').fill('250');
+  await lotDialog.getByRole('button', { name: 'Create lot' }).click();
+  const lots = page.getByRole('region', { name: 'Lots' });
+  await see(lots.getByText('LOT-9001'));
+  await see(lots.getByText('WO-9001'));
+
+  await page.goto(`${APP}/Production/Serials`);
+  await page.getByRole('button', { name: 'New serial numbers' }).click();
+  const serialDialog = page.getByRole('dialog', { name: 'New serial numbers' });
+  await pickPart(serialDialog);
+  await serialDialog.getByRole('combobox', { name: 'Lot' }).click();
+  await page.getByRole('option', { name: /LOT-9001/ }).click();
+  await serialDialog.getByRole('tab', { name: 'A range' }).click();
+  await serialDialog.getByLabel('Prefix').fill('SN-');
+  await serialDialog.getByLabel('To').fill('5');
+  await see(serialDialog.getByText(/5 serial numbers: SN-0001 … SN-0005/));
+  await shot(page, '41-new-serial-range');
+  await serialDialog.getByRole('button', { name: 'Add 5 serial numbers' }).click();
+  const serials = page.getByRole('region', { name: 'Serial numbers' });
+  await see(serials.getByText('SN-0005'));
+  await page.waitForTimeout(400);
+  await shot(page, '42-serial-numbers');
+
+  step('the lot is put on hold with a reason, and an order is never lost to a typo in a number');
+  await page.goto(`${APP}/Production/Lots`);
+  await page.getByRole('region', { name: 'Lots' }).getByText('LOT-9001').dblclick();
+  const lotView = page.getByRole('dialog', { name: 'Lot LOT-9001' });
+  await lotView.getByRole('button', { name: 'Put on hold' }).click();
+  const ask = page.getByRole('dialog', { name: 'Put on hold' });
+  await ask.getByLabel('Why is the lot on hold?').fill('Supplier certificate missing');
+  await ask.getByRole('button', { name: 'Put on hold' }).click();
+  await see(lotView.getByText('Supplier certificate missing'));
+  await shot(page, '43-lot-on-hold');
+
+  const { rows: [r] } = await stack.admin.query(
+    `select (select po.status from public.production_orders po join public.organisations o on o.id = po.organisation_id where o.name = $1 and po.order_number = 'WO-9001') as order_status,
+            (select l.status::text || '/' || (l.production_order_id is not null)::text from public.lots l join public.organisations o on o.id = l.organisation_id where o.name = $1 and l.lot_number = 'LOT-9001') as lot,
+            (select count(*)::int from public.serial_numbers n join public.lots l on l.id = n.lot_id join public.organisations o on o.id = n.organisation_id
+               where o.name = $1 and l.lot_number = 'LOT-9001' and n.production_order_id = l.production_order_id) as serials_with_order`,
+    [orgName],
+  );
+  log(`production: ${JSON.stringify(r)}`);
+  if (r.order_status !== 'in_progress' || r.lot !== 'on_hold/true' || r.serials_with_order !== 5) throw new Error('the production records are not as expected');
 }

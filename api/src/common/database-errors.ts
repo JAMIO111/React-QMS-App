@@ -52,6 +52,11 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   capa_team_members_one_leader: 'The team already has a leader; change their role first',
   capa_team_members_one_champion: 'The team already has a champion; change their role first',
   capa_ncr_links_live_key: 'That non-conformance is already linked to this 8D',
+  production_orders_org_number_key: 'A production order with this number already exists',
+  production_orders_external_key: 'An order imported from that system with this id already exists',
+  lots_org_part_number_key: 'This part already has a lot with that number',
+  serial_numbers_org_part_serial_key: 'This part already has a serial number like that',
+  production_operations_order_sequence_key: 'This order already has an operation with that sequence number',
 };
 
 /**
@@ -106,6 +111,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'invitation_rule', pg.message ?? 'That invitation change is not allowed');
     case 'QM016': // employee register rules: sign-in links (messages are written for users)
       return new ApiError(409, 'employee_rule', pg.message ?? 'That employee change is not allowed');
+    case 'QM017': // production traceability rules: orders, lots, serial numbers and their links (messages are written for users)
+      return new ApiError(409, 'production_rule', pg.message ?? 'That production change is not allowed');
     case 'QM010': // notification type the caller cannot choose
       return new ApiError(404, 'notification_type_not_found', 'That notification type does not exist');
     case 'P0002': // no_data_found raised by app functions

@@ -212,6 +212,14 @@ const sampleBody = (op: Op): object | undefined =>
     'PUT /api/v1/subscription/assignments/{id}': { planSlug: 'controller' },
     'DELETE /api/v1/subscription/assignments/{id}': undefined,
     'DELETE /api/v1/control-plan-characteristics/{id}': undefined,
+    'GET /api/v1/production-orders/{id}': undefined,
+    'PATCH /api/v1/production-orders/{id}': { notes: 'Hijacked' },
+    'POST /api/v1/production-orders/{id}/operations': { operationCode: 'OP-99' },
+    'PATCH /api/v1/production-operations/{id}': { description: 'Hijacked' },
+    'GET /api/v1/lots/{id}': undefined,
+    'PATCH /api/v1/lots/{id}': { notes: 'Hijacked' },
+    'GET /api/v1/serial-numbers/{id}': undefined,
+    'PATCH /api/v1/serial-numbers/{id}': { notes: 'Hijacked' },
   })[`${op.method} ${op.path}`];
 
 const hasSample = (op: Op) =>
@@ -379,6 +387,14 @@ const hasSample = (op: Op) =>
     'PUT /api/v1/subscription/assignments/{id}',
     'DELETE /api/v1/subscription/assignments/{id}',
     'DELETE /api/v1/control-plan-characteristics/{id}',
+    'GET /api/v1/production-orders/{id}',
+    'PATCH /api/v1/production-orders/{id}',
+    'POST /api/v1/production-orders/{id}/operations',
+    'PATCH /api/v1/production-operations/{id}',
+    'GET /api/v1/lots/{id}',
+    'PATCH /api/v1/lots/{id}',
+    'GET /api/v1/serial-numbers/{id}',
+    'PATCH /api/v1/serial-numbers/{id}',
   ].includes(`${op.method} ${op.path}`);
 
 /** Organisation A's record id for the resource a path refers to. */
@@ -418,6 +434,10 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/capa-actions/')) return a.capaAction;
   if (path.startsWith('/api/v1/capa-root-causes/')) return a.capaRootCause;
   if (path.startsWith('/api/v1/inspection-measurements/')) return a.measurement;
+  if (path.startsWith('/api/v1/production-orders/')) return a.productionOrder;
+  if (path.startsWith('/api/v1/production-operations/')) return a.productionOperation;
+  if (path.startsWith('/api/v1/lots/')) return a.lot;
+  if (path.startsWith('/api/v1/serial-numbers/')) return a.serial;
   if (path.startsWith('/api/v1/machines/')) return a.machine;
   if (path.startsWith('/api/v1/employees/')) return a.employee;
   if (path.startsWith('/api/v1/part-families/')) return a.family;
@@ -478,6 +498,10 @@ beforeAll(async () => {
   a.calibration = (await one(`insert into public.calibrations (organisation_id, gauge_id, reference, outcome) values ($1, $2, 'A-CAL-1', 'fail') returning id`, [ids.orgA, a.gauge])).id;
   a.calibrationAttachment = (await one(`insert into public.calibration_attachments (organisation_id, calibration_id, storage_path, file_name, size_bytes) values ($1::uuid, $2::uuid, $1::text || '/calibration/' || $2::text || '/a.pdf', 'a.pdf', 1) returning id`, [ids.orgA, a.calibration])).id;
   a.partCustomer = (await one(`insert into public.part_customers (organisation_id, part_id, customer_id, customer_part_number) values ($1, $2, $3, 'A-CPN') returning id`, [ids.orgA, a.part, a.customer])).id;
+  a.productionOrder = (await one(`insert into public.production_orders (organisation_id, order_number, part_id, site_id, quantity_planned) values ($1, 'A-WO-1', $2, $3, 10) returning id`, [ids.orgA, a.part, ids.siteA])).id;
+  a.productionOperation = (await one(`insert into public.production_operations (organisation_id, production_order_id, sequence, operation_code) values ($1, $2, 10, 'OP-10') returning id`, [ids.orgA, a.productionOrder])).id;
+  a.lot = (await one(`insert into public.lots (organisation_id, lot_number, part_id, origin, production_order_id) values ($1, 'A-LOT-1', $2, 'produced', $3) returning id`, [ids.orgA, a.part, a.productionOrder])).id;
+  a.serial = (await one(`insert into public.serial_numbers (organisation_id, serial_number, part_id, lot_id) values ($1, 'A-SN-1', $2, $3) returning id`, [ids.orgA, a.part, a.lot])).id;
   a.employee = (await one(`insert into public."Employees" (organisation_id, first_name, surname, job_title) values ($1, 'Alpha', 'Employee', 'Operator') returning id`, [ids.orgA])).id;
   a.machine = (await one(`insert into public.machines (organisation_id, code, name) values ($1, 'A-M1', 'Alpha machine') returning id`, [ids.orgA])).id;
   a.family = (await one(`insert into public.part_families (organisation_id, code, name) values ($1, 'A-FAM', 'Alpha family') returning id`, [ids.orgA])).id;

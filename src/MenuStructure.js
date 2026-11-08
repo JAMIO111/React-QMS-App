@@ -1,4 +1,4 @@
-import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, FileTextIcon, GaugeIcon, LayoutDashboardIcon, ListChecksIcon, TriangleAlertIcon } from "@/components/icons";
+import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, LayoutDashboardIcon, ListChecksIcon, TriangleAlertIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
@@ -75,6 +75,17 @@ export const menuStructure = [
     subMenu: [
       { name: "My alerts", path: "/Documentation/My-Alerts", badge: "my-alerts" },
       { name: "Quality alerts", path: "/Documentation/Quality-Alerts" },
+    ],
+  },
+  {
+    name: "Production",
+    icon: FactoryIcon,
+    permission: "production.read",
+    path: "/Production",
+    subMenu: [
+      { name: "Orders", path: "/Production/Orders" },
+      { name: "Lots", path: "/Production/Lots" },
+      { name: "Serial numbers", path: "/Production/Serials" },
     ],
   },
   {

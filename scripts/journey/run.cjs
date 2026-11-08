@@ -55,6 +55,7 @@ function watch(page, who) {
 const ALLOWED = [
   (s, u) => u.includes('/storage/v1/'), // nothing is stored in the stand-in
   (s, u) => s === 409 && /\/api\/v1\/ncrs\/[^/]+\/transitions$/.test(u), // the stage gates refuse a move and say what is missing (the journey provokes it once)
+  (s, u) => s === 409 && /\/api\/v1\/production-orders\/[^/]+$/.test(u), // the database refuses to complete an order with an open operation and says which (provoked once)
   (s, u) => s === 403 && u.includes('/api/v1/') && /subscription_required|mfa_required/.test(u) === false && false,
 ];
 

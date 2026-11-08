@@ -41,8 +41,8 @@ export const ChartQuery = z.object({
   lot: z.string().trim().min(1).max(60).optional(),
   /** Comma-separated Western Electric rules to apply (absent: all; empty: none). */
   rules: z.string().optional(),
-  /** P charts only: what one point is — one inspection (default), one day or one lot. */
-  subgroup: z.enum(['inspection', 'day', 'lot']).optional(),
+  /** P charts only: what one point is — one inspection (default), one day, one lot or one production order. */
+  subgroup: z.enum(['inspection', 'day', 'lot', 'order']).optional(),
   /** Pass/fail characteristics: show the P chart (default) or the NP chart (counts of failures in subgroups of one size). */
   display: z.enum(['p', 'np']).optional(),
   /** NP chart subgroup size: a number of checks, or 'auto' (default) for the most common size. */
@@ -66,7 +66,7 @@ export const CreateBaselineBody = z
     firstN: z.number().int().min(5).max(5000).optional(),
     rules: z.array(Rule).default([...RULES]),
     /** P charts only: what one point is. */
-    subgroup: z.enum(['inspection', 'day', 'lot']).default('inspection'),
+    subgroup: z.enum(['inspection', 'day', 'lot', 'order']).default('inspection'),
     /** Pass/fail characteristics: limits from subgroups of this size only (what an NP chart shows); absent: every subgroup (P chart). */
     size: z.union([z.literal('auto'), z.number().int().min(1).max(9999)]).optional(),
     notes: optionalText(2000),
@@ -92,7 +92,7 @@ export const Baseline = z.object({
   chartType: z.enum(['imr', 'xbar_r', 'p', 'defects']),
   /** Null for a P chart (the size of each subgroup is whatever was checked). */
   subgroupSize: z.number().int().nullable(),
-  subgroupBasis: z.enum(['inspection', 'day', 'lot']).nullable(),
+  subgroupBasis: z.enum(['inspection', 'day', 'lot', 'order']).nullable(),
   meanSubgroupSize: z.number().nullable(),
   unitCode: z.string().nullable(),
   windowFrom: Iso,
@@ -163,6 +163,8 @@ export const Chart = z.object({
       readings: z.array(z.object({ id: z.string().uuid(), value: z.string(), sampleNumber: z.number().int() })),
       inspections: z.array(z.object({ id: z.string().uuid(), reference: z.string() })),
       lot: z.string().nullable(),
+      /** The production order (linked, else the work order as typed). */
+      order: z.string().nullable().optional(),
       machineId: z.string().uuid().nullable(),
       gaugeOverride: z.boolean(),
       /** P, NP, C and U chart points: checks (units), failures (defects for C and U), and this subgroup's own limits (null when none can be shown yet). */
@@ -188,7 +190,7 @@ export const Chart = z.object({
   /** P charts: how subgroups were formed and whether the limits can be trusted. */
   subgroup: z
     .object({
-      basis: z.enum(['inspection', 'day', 'lot']),
+      basis: z.enum(['inspection', 'day', 'lot', 'order']),
       meanSize: z.number(),
       /** Expected failures (P, NP) or defects (C, U) per subgroup. */
       expectedFailures: z.number(),

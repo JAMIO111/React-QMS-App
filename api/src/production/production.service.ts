@@ -9,6 +9,9 @@ import {
   CreateOperationBody,
   CreateOrderBody,
   CreateSerialsBody,
+  BackfillBody,
+  BackfillReport,
+  InlineOrderBody,
   Lot,
   LotListQuery,
   LotOption,
@@ -248,6 +251,25 @@ export class ProductionService {
       if (!result.rows.length) throw ApiError.forbidden();
       return this.loadOrder(db, ctx, found.rows[0].production_order_id);
     });
+  }
+
+  /** An order made from a job's order picker. The database decides who may (production.manage, or inspection.record when the organisation allows it). */
+  createInlineOrder(ctx: RequestContext, body: InlineOrderBody): Promise<ProductionOrderDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      const siteId = body.siteId === undefined ? await this.onlySite(db, ctx) : body.siteId;
+      const made = await db.execute<{ id: string }>(sql`select app.create_order_inline(${body.orderNumber}, ${body.partId}::uuid, ${body.quantityPlanned}::numeric, ${siteId ?? null}::uuid,
+        ${body.customerId ?? null}::uuid, ${body.partRevisionId ?? null}::uuid, ${body.dueDate ?? null}::date, ${body.notes ?? null}) as id`);
+      return this.loadOrder(db, ctx, made.rows[0].id);
+    });
+  }
+
+  /** The backfill of typed work orders, lots and serial numbers. System work on the API login (the person is checked by the route); a dry run unless asked otherwise. */
+  backfill(ctx: RequestContext, body: BackfillBody, correlationId: string): Promise<BackfillReport> {
+    return this.database.asApi(
+      async (client) => (await client.query(`select app.system_backfill_production_links($1::uuid, $2::boolean) as report`, [orgOf(ctx), body.dryRun])).rows[0].report as BackfillReport,
+      correlationId,
+      'backfill',
+    );
   }
 
   // ---------------------------------------------------------------------------------------------------------------------------- Lots

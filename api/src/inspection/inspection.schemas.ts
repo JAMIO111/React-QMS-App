@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ProductionLinks } from '../production/production-links';
 
 const Iso = z.string().datetime({ offset: true });
 const Ref = z.object({ id: z.string().uuid(), name: z.string() });
@@ -42,6 +43,9 @@ export const InspectionListQuery = z.object({
   partId: z.string().uuid().optional(),
   siteId: z.string().uuid().optional(),
   machineId: z.string().uuid().optional(),
+  productionOrderId: z.string().uuid().optional(),
+  lotId: z.string().uuid().optional(),
+  serialId: z.string().uuid().optional(),
   /** Only inspections the caller started. */
   mine: z.enum(['true', 'false']).optional().transform((v) => v === 'true'),
   /** Started on or after / before (YYYY-MM-DD, UTC days). */
@@ -69,6 +73,8 @@ export const InspectionSummary = z.object({
   lot: z.string().nullable(),
   lotSize: z.number().int().nullable(),
   serial: z.string().nullable(),
+  /** The production order, lot and serial number this is linked to (the typed fields above are what was written; these are the records). */
+  links: ProductionLinks,
   triggerType: Trigger,
   startedAt: Iso,
   startedBy: Ref.nullable(),

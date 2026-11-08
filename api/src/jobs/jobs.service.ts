@@ -5,7 +5,7 @@ import type { RequestContext } from '../common/request-context';
 import { iso, num, personName, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
 import { InspectionService } from '../inspection/inspection.service';
-import { JobDetailsBody, JobNcrs, JobPreview, JobQuery, JobRevisions, RecentQuery, StartJobBody } from './jobs.schemas';
+import { JobDetailsBody, JobNcrs, JobPreview, JobQuery, JobRevisions, RecentQuery, StartJobBody, JobLinksBody } from './jobs.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 
@@ -62,6 +62,7 @@ export class JobsService {
       const result = await db.execute<{ id: string }>(sql`select app.start_inspection(
         ${p.site.id}::uuid, ${body.partId}::uuid, ${p.operationCode}, ${body.machineId}::uuid, NULL, NULL, NULL, ${startTrigger(w.resolver.requirements)},
         NULL, NULL, ${body.lotSize ?? null}::integer) as id`);
+      if (body.productionOrderId) await db.execute(sql`select app.set_job_links(${result.rows[0].id}::uuid, ${JSON.stringify({ productionOrderId: body.productionOrderId })}::jsonb)`);
       return result.rows[0].id;
     }).then((id) => this.inspections.get(ctx, id));
   }
@@ -77,6 +78,15 @@ export class JobsService {
       await this.job(db, ctx, id);
       await db.execute(sql`select app.set_job_details(${id}::uuid, ${body.workOrder === undefined ? null : (body.workOrder ?? '')}, ${body.lot === undefined ? null : (body.lot ?? '')},
         ${body.lotSize ?? null}::integer, ${body.serial === undefined ? null : (body.serial ?? '')})`);
+    });
+    return this.inspections.get(ctx, id);
+  }
+
+  /** The production order, lot and serial number of a running job (needs production.read for what is linked). */
+  async links(ctx: RequestContext, id: string, body: JobLinksBody) {
+    await this.database.asUser(ctx, async (db) => {
+      await this.job(db, ctx, id);
+      await db.execute(sql`select app.set_job_links(${id}::uuid, ${JSON.stringify(body)}::jsonb)`);
     });
     return this.inspections.get(ctx, id);
   }

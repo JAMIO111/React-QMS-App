@@ -144,6 +144,13 @@ describe('P chart data', () => {
     expect(d.excluded).toEqual([expect.objectContaining({ reason: 'no_lot', count: 3 })]);
   });
 
+  it('groups by production order (any case), leaving out checks of inspections without one (counted)', () => {
+    const rows = [...checks('a', 4, 1, { order: 'WO-1' }), ...checks('b', 4, 2, { order: 'wo-1' }), ...checks('c', 6, 0, { order: 'WO-2' }), ...checks('d', 3, 3, { order: null }), ...checks('e', 2, 0)];
+    const d = assembleP(rows, 'order');
+    expect(d.groups.map((g) => [g.order?.toUpperCase(), g.n, g.d])).toEqual([['WO-1', 8, 3], ['WO-2', 6, 0]]);
+    expect(d.excluded).toEqual([expect.objectContaining({ reason: 'no_order', count: 5 })]);
+  });
+
   it('leaves out retests, abandoned inspections and readings not taken under a P chart, and ignores measured readings', () => {
     const rows = [
       ...checks('a', 10, 1),

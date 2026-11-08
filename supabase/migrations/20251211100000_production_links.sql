@@ -2,6 +2,7 @@
 --  * organisation_settings gains use_lots_and_serials (default on: nothing changes for anyone), allow_inline_orders (default off) and require_production_order (default off).
 --  * app.create_order_inline: an order made from a job's order picker, by people with production.manage, or by people who may record inspections when the organisation allows it. Orders only, never lots or serials.
 --  * require_production_order is enforced where it matters: a job cannot be completed without a production order.
+--  * spc_baselines may keep a baseline whose subgroups are production orders.
 --  * app.system_backfill_production_links (API login only; dry run unless asked): turns the work orders, lots and serial numbers typed on existing inspections and non-conformances into production records and links
 --    the records to them. It never rewrites typed text, never guesses (a work order typed against several parts is skipped and reported), reuses what exists, and can be run again.
 
@@ -13,6 +14,12 @@ ALTER TABLE public.organisation_settings
   ADD COLUMN allow_inline_orders boolean NOT NULL DEFAULT false,
   ADD COLUMN require_production_order boolean NOT NULL DEFAULT false;
 GRANT UPDATE (use_lots_and_serials, allow_inline_orders, require_production_order) ON public.organisation_settings TO authenticated;
+
+-- ---------------------------------------------------------------------------
+-- SPC: a subgroup can be one production order (for shops that work to work orders and have no lots).
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.spc_baselines DROP CONSTRAINT spc_baselines_subgroup_basis_check;
+ALTER TABLE public.spc_baselines ADD CONSTRAINT spc_baselines_subgroup_basis_check CHECK (subgroup_basis IN ('inspection', 'day', 'lot', 'order'));
 
 -- ---------------------------------------------------------------------------
 -- An order made from the job's order picker

@@ -221,6 +221,34 @@ export const UpdateSerialBody = z
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
 export type UpdateSerialBody = z.infer<typeof UpdateSerialBody>;
 
+// ---------------------------------------------------------------------------------------------------------------------------------- Inline orders and the backfill
+/** An order made from a job's order picker: by people with production.manage, or by people who may record inspections when the organisation allows it (`allowInlineOrders`). */
+export const InlineOrderBody = z
+  .object({ orderNumber: number60, partId: z.string().uuid(), quantityPlanned: positive, siteId: id, customerId: id, partRevisionId: id, dueDate: DateOnly.nullable().optional(), notes: text(2000) })
+  .strict();
+export type InlineOrderBody = z.infer<typeof InlineOrderBody>;
+
+/** Link the work orders, lots and serial numbers typed on existing inspections and NCs to production records. A dry run (the default) only reports what it would do. */
+export const BackfillBody = z.object({ dryRun: z.boolean().default(true) }).strict();
+export type BackfillBody = z.infer<typeof BackfillBody>;
+
+export const BackfillReport = z.object({
+  dryRun: z.boolean(),
+  orders: z.object({ new: z.number().int(), matched: z.number().int(), skipped: z.array(z.object({ number: z.string(), reason: z.string() })) }),
+  lots: z.object({ new: z.number().int(), matched: z.number().int() }),
+  serialNumbers: z.object({ new: z.number().int(), matched: z.number().int() }),
+  /** Inspections and non-conformances that have something to link. */
+  recordsToLink: z.number().int(),
+  /** Records with typed text but no part, and records whose text is not a usable number (blank or over 60 characters). */
+  noPart: z.number().int(),
+  unusableText: z.number().int(),
+  /** Records whose links disagree with a production record that already exists (left alone). */
+  conflicts: z.number().int(),
+  inspectionsLinked: z.number().int(),
+  ncrsLinked: z.number().int(),
+});
+export type BackfillReport = z.infer<typeof BackfillReport>;
+
 // ---------------------------------------------------------------------------------------------------------------------------------- Pickers
 const LookupBase = z.object({ q: z.string().trim().max(100).optional(), partId: z.string().uuid().optional(), includeClosed: z.enum(['true', 'false']).optional().transform((v) => v === 'true') });
 export const OrderLookupQuery = LookupBase;

@@ -24,6 +24,7 @@ import {
   StartInspectionBody,
 } from './inspection.schemas';
 import { SpcService } from '../spc/spc.service';
+import { LINK_COLUMNS, linkJoins, toLinks } from '../production/production-links';
 import { buildNcDraft, isCurrent, limitsText } from './ncr-draft';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -33,7 +34,7 @@ const likePattern = (term: string) => `%${term.replace(/[\\%_]/g, (ch) => `\\${c
 const SUMMARY_SELECT = `
   select r.*, p.part_number, p.name as part_name, pr.revision as part_revision, cp.plan_code, cr.revision_code,
          s.name as site_name, m.code as machine_code, m.name as machine_name, ${personName('pc')} as started_by_name,
-         ${personName('pd')} as completed_by_name,
+         ${personName('pd')} as completed_by_name, ${LINK_COLUMNS},
          (select count(*) from public.inspection_measurements x
            where x.inspection_record_id = r.id and x.result = 'fail'
              and not exists (select 1 from public.inspection_measurements c where c.supersedes_id = x.id)) as failures
@@ -45,7 +46,7 @@ const SUMMARY_SELECT = `
   join public.sites s on s.id = r.site_id
   left join public.machines m on m.id = r.machine_id
   left join public.profiles pc on pc.id = r.created_by
-  left join public.profiles pd on pd.id = r.completed_by`;
+  left join public.profiles pd on pd.id = r.completed_by${linkJoins('r')}`;
 
 /** Sort expressions over the summary select (outer alias r exposes the joined columns). */
 const SORT_SQL: Record<InspectionListQuery['sort'], string> = {
@@ -79,6 +80,7 @@ const toSummary = (r: Row): InspectionSummary => ({
   lot: (r.lot as string) ?? null,
   lotSize: r.lot_size == null ? null : Number(r.lot_size),
   serial: (r.serial as string) ?? null,
+  links: toLinks(r),
   triggerType: r.trigger_type as InspectionSummary['triggerType'],
   startedAt: iso(r.started_at)!,
   startedBy: person(r.created_by, r.started_by_name),
@@ -109,6 +111,9 @@ export class InspectionService {
       if (q.partId) where.push(sql`r.part_id = ${q.partId}::uuid`);
       if (q.siteId) where.push(sql`r.site_id = ${q.siteId}::uuid`);
       if (q.machineId) where.push(sql`r.machine_id = ${q.machineId}::uuid`);
+      if (q.productionOrderId) where.push(sql`r.production_order_id = ${q.productionOrderId}::uuid`);
+      if (q.lotId) where.push(sql`r.lot_id = ${q.lotId}::uuid`);
+      if (q.serialId) where.push(sql`r.serial_id = ${q.serialId}::uuid`);
       if (q.mine) where.push(sql`r.created_by = ${ctx.user.id}::uuid`);
       if (q.from) where.push(sql`r.started_at >= ${q.from}::date`);
       if (q.to) where.push(sql`r.started_at < (${q.to}::date + 1)`);

@@ -9,7 +9,7 @@ import { AcknowledgeAlertBody, AlertOut, AlertsQuery, Analysis, AnalysisQuery, B
 import { controlLimits, countRate, defectsKind, isProvisional, Limits, MINIMUM_POINTS, pBar, PROVISIONAL_BELOW, Rule, RULE_TEXT } from './spc';
 import { AnalysisReading, compareGroups, groupStats, Kind } from './analysis';
 import { capability } from './capability';
-import { applySubgroupSize, assemble, assembleDefects, assembleP, BASIS_TEXT, ChartPoint, evaluate, evaluateCount, evaluateP, parseRules, ReadingRow, SubgroupBasis } from './spc-data';
+import { applySubgroupSize, assemble, assembleDefects, assembleP, BASIS_TEXT, ChartPoint, evaluate, evaluateCount, evaluateP, parseRules, ReadingRow, SubgroupBasis, subgroupKey } from './spc-data';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const numOrNull = (v: unknown) => (v === null || v === undefined ? null : Number(v));
@@ -516,6 +516,7 @@ export class SpcService {
         readings: [],
         inspections: pt.inspections,
         lot: pt.lot,
+        order: pt.order,
         machineId: null,
         gaugeOverride: false,
         n: pt.n,
@@ -570,11 +571,11 @@ export class SpcService {
   }
 
   /** The ids of the checks that fall in the chosen subgroups (same grouping as the chart). */
-  private windowIds(rows: ReadingRow[], basis: SubgroupBasis, groups: { at: string; inspections: { id: string }[]; lot: string | null }[]): string[] {
-    const keys = new Set(groups.map((g) => (basis === 'inspection' ? g.inspections[0]?.id : basis === 'day' ? g.at.slice(0, 10) : g.lot)));
+  private windowIds(rows: ReadingRow[], basis: SubgroupBasis, groups: { at: string; inspections: { id: string }[]; lot: string | null; order?: string | null }[]): string[] {
+    const keys = new Set(groups.map((g) => (basis === 'inspection' ? g.inspections[0]?.id : basis === 'day' ? g.at.slice(0, 10) : basis === 'lot' ? g.lot : (g.order?.toUpperCase() ?? null))));
     return rows
       .filter((r) => (r.valuePass !== null || (r.valueCount ?? null) !== null) && (r.chartType === 'p' || r.chartType === 'defects') && r.inspectionStatus !== 'abandoned' && !r.isRetest)
-      .filter((r) => keys.has(basis === 'inspection' ? r.inspectionId : basis === 'day' ? r.measuredAt.slice(0, 10) : r.lot))
+      .filter((r) => keys.has(subgroupKey(basis, r)))
       .map((r) => r.id);
   }
 
@@ -647,6 +648,7 @@ export class SpcService {
         readings: [],
         inspections: pt.inspections,
         lot: pt.lot,
+        order: pt.order,
         machineId: null,
         gaugeOverride: false,
         n: pt.n,
@@ -754,13 +756,14 @@ export class SpcService {
     if (f.lot) where.push(sql`r.lot = ${f.lot}`);
     const result = await db.execute<Row>(sql`
       select m.id, coalesce(m.value_numeric::text, '') as value, m.value_pass, m.value_count, m.measured_at, s.sample_number, s.subgroup_number, s.is_retest,
-             r.id as inspection_id, r.reference, r.status, r.machine_id, r.lot,
+             r.id as inspection_id, r.reference, r.status, r.machine_id, r.lot, coalesce(po.order_number, nullif(btrim(r.work_order), '')) as order_number,
              q.unit_code, q.chart_type, q.subgroup_size, q.nominal::float8 as nominal, q.lower_limit::float8 as lower_limit, q.upper_limit::float8 as upper_limit,
              (m.gauge_override_reason is not null) as gauge_override
       from public.inspection_measurements m
       join public.inspection_samples s on s.id = m.sample_id
       join public.inspection_records r on r.id = m.inspection_record_id
       join public.resolved_inspection_requirements q on q.id = m.requirement_id
+      left join public.production_orders po on po.id = r.production_order_id
       where ${sql.join(where, sql` and `)} order by m.measured_at, s.sample_number limit ${MAX_READINGS}`);
     return result.rows.map((x) => ({
       id: x.id as string,
@@ -782,6 +785,7 @@ export class SpcService {
       upper: numOrNull(x.upper_limit),
       machineId: (x.machine_id as string) ?? null,
       lot: (x.lot as string) ?? null,
+      order: (x.order_number as string) ?? null,
       gaugeOverride: x.gauge_override as boolean,
     }));
   }

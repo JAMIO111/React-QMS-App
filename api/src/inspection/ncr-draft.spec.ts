@@ -71,6 +71,7 @@ const inspection = (over: Partial<InspectionDetail> = {}): InspectionDetail => (
   workOrder: 'WO-9',
   lot: 'LOT-3',
   serial: null,
+  links: { productionOrder: null, lot: null, serial: null },
   triggerType: 'first_off',
   startedAt: '2026-11-05T08:00:00.000Z',
   startedBy: { id: U(1000), name: 'Ada Owner' },

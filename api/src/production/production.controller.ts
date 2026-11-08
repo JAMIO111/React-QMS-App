@@ -9,6 +9,9 @@ import {
   CreateOperationBody,
   CreateOrderBody,
   CreateSerialsBody,
+  BackfillBody,
+  BackfillReport,
+  InlineOrderBody,
   Lot,
   LOT_SORTABLE,
   LotListQuery,
@@ -79,6 +82,32 @@ export class ProductionController {
   @ApiCreatedResponse({ schema: openApiSchema(ProductionOrderDetail) })
   createOrder(@Ctx() ctx: RequestContext, @Body() body: unknown) {
     return this.service.createOrder(ctx, parse(CreateOrderBody, body));
+  }
+
+  /**
+   * Make an order from a job's order picker (an operator who types the work order at the machine). Needs production.manage, or inspection.record when the organisation
+   * allows it (`allowInlineOrders`); the database answers 403 otherwise. Orders only: lots and serial numbers are never made this way.
+   */
+  @Post('production-orders/inline')
+  @HttpCode(201)
+  @OrganisationScoped(READ)
+  @ApiBody({ schema: openApiSchema(InlineOrderBody) })
+  @ApiCreatedResponse({ schema: openApiSchema(ProductionOrderDetail) })
+  createInlineOrder(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.createInlineOrder(ctx, parse(InlineOrderBody, body));
+  }
+
+  /**
+   * Turn the work orders, lots and serial numbers typed on existing inspections and non-conformances into production records and link the records to them, leaving the typed text
+   * as it was. A dry run (the default) reports what it would do; send `dryRun: false` to do it. Needs organisation.manage.
+   */
+  @Post('production/backfill')
+  @HttpCode(200)
+  @OrganisationScoped('organisation.manage')
+  @ApiBody({ schema: openApiSchema(BackfillBody) })
+  @ApiOkResponse({ schema: openApiSchema(BackfillReport) })
+  backfill(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.backfill(ctx, parse(BackfillBody, body ?? {}), ctx.correlationId ?? '');
   }
 
   @Get('production-orders/:id')

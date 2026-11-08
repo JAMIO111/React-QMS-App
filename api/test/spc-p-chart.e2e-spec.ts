@@ -15,6 +15,7 @@ const as = async (user: string, org = ids.orgA) => ({ Authorization: `Bearer ${a
 const ctx: Record<string, string> = {};
 const FAILS = [1, 2, 1, 0, 2, 9]; // failures per inspection of 20 checks
 const LOTS = ['LOT-A', 'LOT-A', 'LOT-A', 'LOT-B', 'LOT-B', undefined];
+const ORDERS = ['WO-A', 'wo-a', 'WO-A', 'WO-B', 'WO-B', undefined]; // typed: a work-order-only shop has no lots; "wo-a" is the same order in another case
 
 beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });
@@ -57,7 +58,7 @@ describe('P chart data', () => {
   it('records pass/fail inspections', async () => {
     const h = await as(ids.ownerA);
     for (let i = 0; i < FAILS.length; i++) {
-      const rec = (await api().post('/api/v1/inspections').set(h).send({ siteId: ids.siteA, partId: ctx.part, lot: LOTS[i], workOrder: `WO-${i}`, triggerType: 'first_off' }).expect(201)).body;
+      const rec = (await api().post('/api/v1/inspections').set(h).send({ siteId: ids.siteA, partId: ctx.part, lot: LOTS[i], workOrder: ORDERS[i], triggerType: 'first_off' }).expect(201)).body;
       const req = rec.requirements[0].id;
       for (let s = 0; s < 20; s++) {
         await api().post(`/api/v1/inspections/${rec.id}/samples`).set(h).send({ readings: [{ requirementId: req, valuePass: s >= FAILS[i] }] }).expect(201);
@@ -101,6 +102,14 @@ describe('P chart data', () => {
     const c = await chart('&subgroup=lot');
     expect(c.points.map((p: { n: number; failed: number; lot: string }) => [p.lot, p.n, p.failed])).toEqual([['LOT-A', 60, 4], ['LOT-B', 40, 2]]);
     expect(c.excluded).toEqual([expect.objectContaining({ reason: 'no_lot', count: 20 })]);
+  });
+
+  it('by order: pools the inspections of a production order (any case), and counts the checks without one as left out', async () => {
+    const c = await chart('&subgroup=order');
+    expect(c.points.map((p: { n: number; failed: number; order: string }) => [p.order.toUpperCase(), p.n, p.failed])).toEqual([['WO-A', 60, 4], ['WO-B', 40, 2]]);
+    expect(c.excluded).toEqual([expect.objectContaining({ reason: 'no_order', count: 20 })]);
+    const few = await api().post('/api/v1/spc/baselines').set(await as(ids.ownerA)).send({ partId: ctx.part, characteristicKey: 'VISUAL', operationCode: 'OP-020', subgroup: 'order' }).expect(409);
+    expect(few.body.error.message).toMatch(/at least 5 subgroups \(one production order each\); the chosen window has 2/);
   });
 
   it('refuses a baseline with too few subgroups, then saves one from the first five inspections', async () => {

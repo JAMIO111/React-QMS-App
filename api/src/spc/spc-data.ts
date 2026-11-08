@@ -48,10 +48,12 @@ export interface ReadingRow {
   upper: number | null;
   machineId: string | null;
   lot: string | null;
+  /** The production order: the linked order's number, else the work order as typed. */
+  order?: string | null;
   gaugeOverride: boolean;
 }
 
-export type ExclusionReason = 'retest' | 'abandoned' | 'unit' | 'chart_type' | 'specification' | 'no_subgroup' | 'incomplete_subgroup' | 'no_lot' | 'size';
+export type ExclusionReason = 'retest' | 'abandoned' | 'unit' | 'chart_type' | 'specification' | 'no_subgroup' | 'incomplete_subgroup' | 'no_lot' | 'no_order' | 'size';
 export const EXCLUSION_TEXT: Record<ExclusionReason, string> = {
   retest: 'Retests (they re-measure a failed reading)',
   abandoned: 'Abandoned inspections',
@@ -61,6 +63,7 @@ export const EXCLUSION_TEXT: Record<ExclusionReason, string> = {
   no_subgroup: 'No subgroup recorded (taken before subgroups existed)',
   incomplete_subgroup: 'Incomplete subgroup (fewer readings than the subgroup size)',
   no_lot: 'Checks of an inspection without a lot number (subgroups by lot)',
+  no_order: 'Checks of an inspection without a production order or work order (subgroups by order)',
   size: 'Subgroups of a different size than the NP chart uses',
 };
 
@@ -74,6 +77,7 @@ export interface ChartPoint {
   readings: { id: string; value: string; sampleNumber: number }[];
   inspections: { id: string; reference: string }[];
   lot: string | null;
+  order?: string | null;
   machineId: string | null;
   gaugeOverride: boolean;
 }
@@ -156,6 +160,7 @@ export function assemble(rows: ReadingRow[]): Dataset {
     readings: g.map((r) => ({ id: r.id, value: r.value, sampleNumber: r.sampleNumber })),
     inspections: [...new Map(g.map((r) => [r.inspectionId, { id: r.inspectionId, reference: r.inspectionReference }])).values()],
     lot: g[g.length - 1].lot,
+    order: g[g.length - 1].order ?? null,
     machineId: g[g.length - 1].machineId,
     gaugeOverride: g.some((r) => r.gaugeOverride),
   }));
@@ -236,9 +241,13 @@ export const parseRules = (v: string | undefined): Rule[] =>
 
 // ---- P chart ---------------------------------------------------------------------------------------
 
-export type SubgroupBasis = 'inspection' | 'day' | 'lot';
-export const SUBGROUP_BASES: readonly SubgroupBasis[] = ['inspection', 'day', 'lot'];
-export const BASIS_TEXT: Record<SubgroupBasis, string> = { inspection: 'one inspection', day: 'one day', lot: 'one lot' };
+export type SubgroupBasis = 'inspection' | 'day' | 'lot' | 'order';
+export const SUBGROUP_BASES: readonly SubgroupBasis[] = ['inspection', 'day', 'lot', 'order'];
+export const BASIS_TEXT: Record<SubgroupBasis, string> = { inspection: 'one inspection', day: 'one day', lot: 'one lot', order: 'one production order' };
+
+/** Which subgroup a reading belongs to, or null when the basis needs something it does not have (a lot number, an order). Orders match in any case. */
+export const subgroupKey = (basis: SubgroupBasis, r: ReadingRow): string | null =>
+  basis === 'inspection' ? r.inspectionId : basis === 'day' ? r.measuredAt.slice(0, 10) : basis === 'lot' ? (r.lot ?? null) : r.order ? r.order.toUpperCase() : null;
 
 export interface PGroupRow {
   at: string;
@@ -246,6 +255,8 @@ export interface PGroupRow {
   d: number;
   inspections: { id: string; reference: string }[];
   lot: string | null;
+  /** The order (the first one named, whatever its case). */
+  order?: string | null;
 }
 
 export interface PDataset {
@@ -268,8 +279,9 @@ export function assembleP(rows: ReadingRow[], basis: SubgroupBasis): PDataset {
     else if (r.isRetest) skip('retest');
     else if (r.chartType !== 'p') skip('chart_type');
     else if (basis === 'lot' && !r.lot) skip('no_lot');
+    else if (basis === 'order' && !r.order) skip('no_order');
     else {
-      const key = basis === 'inspection' ? r.inspectionId : basis === 'day' ? r.measuredAt.slice(0, 10) : (r.lot as string);
+      const key = subgroupKey(basis, r) as string;
       buckets.set(key, [...(buckets.get(key) ?? []), r]);
     }
   }
@@ -280,6 +292,7 @@ export function assembleP(rows: ReadingRow[], basis: SubgroupBasis): PDataset {
       d: g.filter((r) => r.valuePass === false).length,
       inspections: [...new Map(g.map((r) => [r.inspectionId, { id: r.inspectionId, reference: r.inspectionReference }])).values()],
       lot: [...new Set(g.map((r) => r.lot).filter(Boolean))].join(', ') || null,
+      order: g.map((r) => r.order).find(Boolean) ?? null,
     }))
     .sort((a, b) => a.at.localeCompare(b.at));
   const order = Object.keys(EXCLUSION_TEXT) as ExclusionReason[];
@@ -357,8 +370,9 @@ export function assembleDefects(rows: ReadingRow[], basis: SubgroupBasis): PData
     else if (r.isRetest) skip('retest');
     else if (r.chartType !== 'defects') skip('chart_type');
     else if (basis === 'lot' && !r.lot) skip('no_lot');
+    else if (basis === 'order' && !r.order) skip('no_order');
     else {
-      const key = basis === 'inspection' ? r.inspectionId : basis === 'day' ? r.measuredAt.slice(0, 10) : (r.lot as string);
+      const key = subgroupKey(basis, r) as string;
       buckets.set(key, [...(buckets.get(key) ?? []), r]);
     }
   }
@@ -369,6 +383,7 @@ export function assembleDefects(rows: ReadingRow[], basis: SubgroupBasis): PData
       d: g.reduce((t, r) => t + (r.valueCount as number), 0),
       inspections: [...new Map(g.map((r) => [r.inspectionId, { id: r.inspectionId, reference: r.inspectionReference }])).values()],
       lot: [...new Set(g.map((r) => r.lot).filter(Boolean))].join(', ') || null,
+      order: g.map((r) => r.order).find(Boolean) ?? null,
     }))
     .sort((a, b) => a.at.localeCompare(b.at));
   const order = Object.keys(EXCLUSION_TEXT) as ExclusionReason[];

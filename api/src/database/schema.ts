@@ -32,6 +32,9 @@ export const organisationSettings = pgTable('organisation_settings', {
   themeColour: text('theme_colour').notNull(),
   requireMfa: boolean('require_mfa').notNull(),
   logoPath: text('logo_path'),
+  useLotsAndSerials: boolean('use_lots_and_serials').notNull(),
+  allowInlineOrders: boolean('allow_inline_orders').notNull(),
+  requireProductionOrder: boolean('require_production_order').notNull(),
 });
 
 export const organisationUsers = pgTable('organisation_users', {
@@ -158,6 +161,9 @@ export const nonconformances = pgTable('nonconformances', {
   customerReference: text('customer_reference'),
   lotNumber: text('lot_number'),
   serialNumber: text('serial_number'),
+  productionOrderId: uuid('production_order_id'),
+  lotId: uuid('lot_id'),
+  serialId: uuid('serial_id'),
   quantityAffected: numeric('quantity_affected'),
   quantityInspected: numeric('quantity_inspected'),
   detectedAt: text('detected_at'),

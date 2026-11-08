@@ -18,7 +18,8 @@ export const JobQuery = z
   .strict();
 export type JobQuery = z.infer<typeof JobQuery>;
 
-export const StartJobBody = z.object({ machineId: z.string().uuid(), partId: z.string().uuid(), operationCode: code.optional(), lotSize: lotSize.optional() }).strict();
+/** `productionOrderId` links the job to its production order as it starts (optional; an organisation may require one before the job is completed). */
+export const StartJobBody = z.object({ machineId: z.string().uuid(), partId: z.string().uuid(), operationCode: code.optional(), lotSize: lotSize.optional(), productionOrderId: z.string().uuid().optional() }).strict();
 export type StartJobBody = z.infer<typeof StartJobBody>;
 
 /** Filled in (or corrected) while the job runs. A missing field is kept; an empty text clears it. */
@@ -27,6 +28,13 @@ export const JobDetailsBody = z
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
 export type JobDetailsBody = z.infer<typeof JobDetailsBody>;
+
+/** Link a running job to its production order, lot and serial number. A field left out is kept; `null` clears it. Picking a serial number fills its lot and order, a lot its order. */
+export const JobLinksBody = z
+  .object({ productionOrderId: z.string().uuid().nullable().optional(), lotId: z.string().uuid().nullable().optional(), serialId: z.string().uuid().nullable().optional() })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one link' });
+export type JobLinksBody = z.infer<typeof JobLinksBody>;
 
 /** What starting a job with this machine and part would do: the site and operation that would be used, and whether anything blocks it. */
 export const JobPreview = z.object({

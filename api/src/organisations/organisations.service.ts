@@ -56,6 +56,9 @@ export class OrganisationsService {
             ...(s.ncrReferencePrefix !== undefined ? { ncrReferencePrefix: s.ncrReferencePrefix } : {}),
             ...(s.themeColour !== undefined ? { themeColour: s.themeColour } : {}),
             ...(s.requireMfa !== undefined ? { requireMfa: s.requireMfa } : {}),
+            ...(s.useLotsAndSerials !== undefined ? { useLotsAndSerials: s.useLotsAndSerials } : {}),
+            ...(s.allowInlineOrders !== undefined ? { allowInlineOrders: s.allowInlineOrders } : {}),
+            ...(s.requireProductionOrder !== undefined ? { requireProductionOrder: s.requireProductionOrder } : {}),
             ...(s.logoPath !== undefined ? { logoPath: s.logoPath } : {}),
           })
           .where(eq(organisationSettings.organisationId, organisationId))
@@ -86,6 +89,9 @@ export class OrganisationsService {
         ncrReferencePrefix: row.settings.ncrReferencePrefix,
         themeColour: row.settings.themeColour as OrganisationResponse['settings']['themeColour'],
         requireMfa: row.settings.requireMfa,
+        useLotsAndSerials: row.settings.useLotsAndSerials,
+        allowInlineOrders: row.settings.allowInlineOrders,
+        requireProductionOrder: row.settings.requireProductionOrder,
         logoPath: row.settings.logoPath ?? null,
       },
     };

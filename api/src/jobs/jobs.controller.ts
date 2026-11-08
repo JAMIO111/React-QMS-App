@@ -1,10 +1,10 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { InspectionDetail, InspectionPage } from '../inspection/inspection.schemas';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { JobDetailsBody, JobNcrs, JobPreview, JobQuery, JobRevisions, RecentQuery, StartJobBody } from './jobs.schemas';
+import { JobDetailsBody, JobNcrs, JobPreview, JobQuery, JobRevisions, RecentQuery, StartJobBody, JobLinksBody } from './jobs.schemas';
 import { JobsService } from './jobs.service';
 
 const RECORD = 'inspection.record';
@@ -52,6 +52,15 @@ export class JobsController {
   @ApiOkResponse({ schema: openApiSchema(InspectionDetail) })
   details(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.details(ctx, parse(Uuid, id), parse(JobDetailsBody, body));
+  }
+
+  /** Link the running job to its production order, lot and serial number (`null` clears one). Fills the typed work order, lot and serial from the records picked. */
+  @Put(':id/production-links')
+  @OrganisationScoped(RECORD)
+  @ApiBody({ schema: openApiSchema(JobLinksBody) })
+  @ApiOkResponse({ schema: openApiSchema(InspectionDetail) })
+  links(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.links(ctx, parse(Uuid, id), parse(JobLinksBody, body));
   }
 
   @Get(':id/recent-ncrs')

@@ -24,6 +24,12 @@ export const OrganisationResponse = z.object({
     ncrReferencePrefix: z.string(),
     themeColour: ThemeColour,
     requireMfa: z.boolean(),
+    /** Lots and serial numbers are used (Production menu, pickers). Off for shops that work to work orders only. */
+    useLotsAndSerials: z.boolean(),
+    /** People who only record inspections may create a production order from a job. */
+    allowInlineOrders: z.boolean(),
+    /** A job cannot be completed without a production order. */
+    requireProductionOrder: z.boolean(),
     /** Path of the logo in the private org-logos bucket (<organisation id>/logo/...), or null. */
     logoPath: z.string().nullable(),
   }),
@@ -62,6 +68,9 @@ export const UpdateOrganisationBody = z
         ncrReferencePrefix: z.string().trim().regex(/^[A-Za-z0-9]{1,10}$/, 'Use 1–10 letters or digits').transform((v) => v.toUpperCase()).optional(),
         themeColour: ThemeColour.optional(),
         requireMfa: z.boolean().optional(),
+        useLotsAndSerials: z.boolean().optional(),
+        allowInlineOrders: z.boolean().optional(),
+        requireProductionOrder: z.boolean().optional(),
         /** Set after uploading to org-logos at <organisation id>/logo/...; null removes the logo. */
         logoPath: z.string().trim().max(300).nullable().optional(),
       })

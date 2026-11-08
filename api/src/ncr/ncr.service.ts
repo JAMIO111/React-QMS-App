@@ -3,6 +3,7 @@ import { and, asc, eq, SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
+import { LINK_COLUMNS, linkJoins, toLinks } from '../production/production-links';
 import { DatabaseService, Db } from '../database/database.service';
 import { ncrClassifications, nonconformances } from '../database/schema';
 import {
@@ -390,7 +391,7 @@ export class NcrService {
     const result = await db.execute<Row>(sql`
       select ${sql.raw(SELECT_SUMMARY)},
              n.stage_reason, n.description, n.requirement, n.actual_result, n.part_revision_id, n.lot_number, n.serial_number,
-             n.quantity_inspected, n.closed_at, n.delete_reason, n.updated_at,
+             n.quantity_inspected, n.closed_at, n.delete_reason, n.updated_at, ${sql.raw(LINK_COLUMNS)},
              site.id as site_id, site.code as site_code, site.name as site_name,
              dp.id as dp_id, dp.name as dp_name,
              e.id as employee_id, ${sql.raw(personName('e'))} as employee_name,
@@ -408,6 +409,7 @@ export class NcrService {
       left join public.profiles pc on pc.id = n.created_by
       left join public.profiles pcl on pcl.id = n.closed_by
       left join public.profiles pdl on pdl.id = n.deleted_by
+      ${sql.raw(linkJoins('n'))}
       where n.organisation_id = ${ctx.organisationId!}::uuid and n.id = ${id}::uuid`);
     const r = result.rows[0];
     if (!r) throw ApiError.notFound('ncr_not_found', 'Non-conformance not found');
@@ -422,6 +424,7 @@ export class NcrService {
       partRevisionId: (r.part_revision_id as string) ?? null,
       lotNumber: (r.lot_number as string) ?? null,
       serialNumber: (r.serial_number as string) ?? null,
+      links: toLinks(r),
       quantityInspected: num(r.quantity_inspected),
       detectionProcess: ref(r.dp_id, r.dp_name),
       responsibleEmployee: ref(r.employee_id, r.employee_name),

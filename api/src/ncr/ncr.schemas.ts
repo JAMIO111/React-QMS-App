@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ProductionLinks } from '../production/production-links';
 
 export const NcrSource = z.enum(['internal', 'customer', 'supplier']);
 export const NcrStage = z.enum(['draft', 'open', 'contained', 'investigating', 'dispositioned', 'awaiting_closure', 'closed', 'cancelled']);
@@ -44,6 +45,8 @@ export const NcrDetail = NcrSummary.extend({
   partRevisionId: z.string().uuid().nullable(),
   lotNumber: z.string().nullable(),
   serialNumber: z.string().nullable(),
+  /** The production order, lot and serial number this is linked to (the typed fields are what was written; these are the records). */
+  links: ProductionLinks,
   quantityInspected: z.number().nullable(),
   detectionProcess: Ref,
   responsibleEmployee: Ref,
@@ -124,6 +127,9 @@ const fields = {
   customerReference: text(60),
   lotNumber: text(60),
   serialNumber: text(60),
+  productionOrderId: id,
+  lotId: id,
+  serialId: id,
   quantityAffected: quantity,
   quantityInspected: quantity,
   detectedAt: isoDate.optional(),

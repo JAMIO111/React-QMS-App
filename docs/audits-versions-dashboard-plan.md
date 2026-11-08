@@ -1,6 +1,6 @@
 # Audits — versioned audit templates and the audits dashboard (plan)
 
-**Status:** built and committed locally (AV1–AV3, AD1–AD2); the migration is **not applied live yet**. Requested 2026-11-08 ("make an audits dashboard. introduce versioned audit templates and record which version records were done against. require a reason and keep a history"). Decisions V1–V8 and D1–D4 are mine, taken as sensible defaults so the work could start; each is listed so it can be changed. Builds on `docs/audits-plan.md` (A5: "no revision workflow now") and the gap analysis phases C (templates and versions) and E (dashboard), taking only what was asked.
+**Status:** built (AV1–AV3, AD1–AD2); the migration is **applied live** (2026-11-08). Requested 2026-11-08 ("make an audits dashboard. introduce versioned audit templates and record which version records were done against. require a reason and keep a history"). Decisions V1–V8 and D1–D4 are mine, taken as sensible defaults so the work could start; each is listed so it can be changed. Builds on `docs/audits-plan.md` (A5: "no revision workflow now") and the gap analysis phases C (templates and versions) and E (dashboard), taking only what was asked.
 
 ## 1. Today
 
@@ -65,10 +65,12 @@ Draft / publish / archive of versions and approval of a change (needs the audit 
 
 ## 6. Built and checked (2026-11-08)
 
-- **Database** `supabase/migrations/20251219100000_audit_versions.sql` (**not applied live yet**; apply it before the API that uses it is deployed): the three version tables, `audit_records.audit_version_id/audit_version`, the functions and the deferred enforcement. `supabase/tests/audit_versions.test.sql` (with the fixture that gives an existing audit and three records to the backfill) passes; 24 mutants of the migration were tried and all are caught except one equivalent (the question order inside the fingerprint, which the sequence numbers already carry). Guardrails and both tenancy sweeps include the new tables.
+- **Database** `supabase/migrations/20251219100000_audit_versions.sql` (**applied live 2026-11-08**): the three version tables, `audit_records.audit_version_id/audit_version`, the functions and the deferred enforcement. `supabase/tests/audit_versions.test.sql` (with the fixture that gives an existing audit and three records to the backfill) passes; 24 mutants of the migration were tried and all are caught except one equivalent (the question order inside the fingerprint, which the sequence numbers already carry). Guardrails and both tenancy sweeps include the new tables.
 - **API** `api/src/audits/audit-versions.*`, `audits-dashboard.ts`: unit tests of the comparison (10), e2e `audit-versions` (14) and `audits-dashboard` (16), the sweep covers the new routes; 36 API mutants were tried and all are caught (one build-failure catch counted).
 - **UI**: `AuditVersions.jsx`, reason on `AuditForm.jsx`, version on the record page and both registers, `AuditsDashboard.jsx`; component tests for each, mutation-checked (all caught after three tests were added for survivors).
 - **Browser journey** (`npm run journey`, throwaway database, fake Supabase and Stripe): the audit is changed, the form asks why, the history shows version 2 with the reason and the comparison, the record shows "version 1 (the audit is now at version 2)", and the dashboard shows the figures, coverage and the change. Screenshots 64–66 were looked at.
 - **Whole suite**: lint 0 errors, 902 frontend tests, 165 API unit tests, 62 SQL test files (`npm run db:check`), 596 API end-to-end tests, build.
 
-Not checked: the live project (the migration has not been applied, so the live guardrails check and advisors were not run for it), a non-throwaway database with real data, and the dashboard on a phone-width screen.
+Live check after applying: 1 audit backfilled to version 1; the one live record is not linked (its frozen copy differs) and shows as "before versions were kept"; 4 enforcement triggers, RLS on, no anon or signed-in write or internal-function access on the new tables; whole-schema guardrails 0 violations; advisors unchanged (GraphQL exposure notice, leaked password protection off).
+
+Not checked: a non-throwaway database with real data, and the dashboard on a phone-width screen.

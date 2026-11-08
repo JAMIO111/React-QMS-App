@@ -34,6 +34,18 @@ export const useAudit = (id) => {
   });
 };
 
+/** Audits dashboard figures for a period ({ from, to } — YYYY-MM-DD). */
+export const useAuditsDashboard = ({ from, to }) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "dashboard", from, to),
+    queryFn: () => apiFetch(`/audits-dashboard?from=${from}&to=${to}`, { organisationId }),
+    enabled: !!organisationId && !!from && !!to,
+    retry: false,
+    placeholderData: keepPreviousData,
+  });
+};
+
 /** The history of an audit: every version, newest first. */
 export const useAuditVersions = (id) => {
   const { organisationId } = useOrganisation();

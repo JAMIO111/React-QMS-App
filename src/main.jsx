@@ -57,6 +57,7 @@ const TraceabilityPage = lazy(() => import("./components/production/Traceability
 const AuditsPage = lazy(() => import("./components/audits/AuditsPage.jsx"));
 const AuditPage = lazy(() => import("./components/audits/AuditPage.jsx"));
 const AuditForm = lazy(() => import("./components/audits/AuditForm.jsx"));
+const AuditsDashboard = lazy(() => import("./components/audits/AuditsDashboard.jsx"));
 const AuditSchedulePage = lazy(() => import("./components/audits/AuditSchedulePage.jsx"));
 const AuditRecordsPage = lazy(() => import("./components/audits/AuditRecordsPage.jsx"));
 const AuditRecordPage = lazy(() => import("./components/audits/AuditRecordPage.jsx"));
@@ -222,6 +223,7 @@ const router = createBrowserRouter([
           { path: "Documentation/Audits/new", element: <AuditForm /> },
           { path: "Documentation/Audits/:id", element: <AuditPage /> },
           { path: "Documentation/Audits/:id/edit", element: <AuditForm /> },
+          { path: "Documentation/Audit-Dashboard", element: <AuditsDashboard /> },
           { path: "Documentation/Audit-Schedule", element: <AuditSchedulePage /> },
           { path: "Documentation/Audit-Records", element: <AuditRecordsPage /> },
           { path: "Documentation/Audit-Records/:id", element: <AuditRecordPage /> },

@@ -12,6 +12,13 @@ describe("menuStructure", () => {
     ]);
   });
 
+  it("offers the audits dashboard first among the audit pages, to people who may read audits", () => {
+    const docs = menuStructure.find((m) => m.name === "Documentation");
+    const audits = docs.subMenu.filter((s) => s.permission === "audits.read").map((s) => [s.name, s.path]);
+    expect(audits[0]).toEqual(["Audit dashboard", "/Documentation/Audit-Dashboard"]);
+    expect(audits.map((a) => a[0])).toEqual(["Audit dashboard", "Audits", "Audit schedule", "Audit records", "Audit findings"]);
+  });
+
   it("no longer links to removed holiday-let areas", () => {
     const paths = menuStructure.flatMap((m) => [m.path, ...(m.subMenu ?? []).map((s) => s.path)]);
     for (const removed of ["/Bookings", "/Client-Management", "/Calendar"]) {

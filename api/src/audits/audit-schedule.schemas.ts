@@ -3,7 +3,7 @@ import { AUDIT_TYPES } from './audits.schemas';
 
 const Id = z.string().uuid();
 const DateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
-export const SCHEDULE_STATES = ['upcoming', 'overdue', 'missed', 'skipped'] as const;
+export const SCHEDULE_STATES = ['upcoming', 'in_progress', 'overdue', 'missed', 'done', 'skipped'] as const;
 
 const csv = <T extends z.ZodTypeAny>(item: T) =>
   z
@@ -36,6 +36,8 @@ export const ScheduleItem = z.object({
   daysFromToday: z.number(),
   graceDays: z.number(),
   skippedReason: z.string().nullable(),
+  /** The audit carried out for this slot (in progress or completed); abandoned ones do not count. */
+  record: z.object({ id: Id, reference: z.string(), status: z.enum(['in_progress', 'completed']), result: z.enum(['pass', 'fail']).nullable(), score: z.number().nullable(), performedOn: DateOnly }).nullable(),
   audit: z.object({
     id: Id,
     reference: z.string(),
@@ -55,9 +57,17 @@ export const Schedule = z.object({
     total: z.number(),
     upcoming: z.number(),
     dueNext7Days: z.number(),
+    inProgress: z.number(),
     overdue: z.number(),
     missed: z.number(),
+    done: z.number(),
+    donePassed: z.number(),
+    doneFailed: z.number(),
     skipped: z.number(),
+    /** Done audits that passed, as a share of done audits; null when none are done. */
+    passRate: z.number().nullable(),
+    /** Of the slots decided in the window (done or missed), the share carried out by the due date plus the grace period; null when none are decided. */
+    onTimeRate: z.number().nullable(),
   }),
   data: z.array(ScheduleItem),
   /** More slots than are shown (the list is cut at 500); narrow the window or the filters. */

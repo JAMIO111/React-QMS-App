@@ -139,6 +139,17 @@ BEGIN
   INSERT INTO public.audit_targets (organisation_id, audit_definition_id, kind, machine_id)
     SELECT a, d.id, 'machine', m.id FROM public.audit_definitions d JOIN public.machines m ON m.organisation_id = a WHERE d.organisation_id = a LIMIT 1;
   INSERT INTO public.audit_occurrences (organisation_id, audit_definition_id, due_on) SELECT a, id, current_date FROM public.audit_definitions WHERE organisation_id = a;
+  -- Audit records (AU3): a record with its frozen question, target, answer and a link to the lot NC.
+  INSERT INTO public.audit_records (organisation_id, reference, audit_definition_id, audit_reference, audit_title, audit_type, pass_mark)
+    SELECT a, 'SW-AR-1', id, reference, title, audit_type, pass_mark FROM public.audit_definitions WHERE organisation_id = a;
+  INSERT INTO public.audit_record_questions (organisation_id, audit_record_id, sequence, question, answer_type)
+    SELECT a, id, 1, 'Is the area clean?', 'pass_fail' FROM public.audit_records WHERE organisation_id = a;
+  INSERT INTO public.audit_record_targets (organisation_id, audit_record_id, kind, machine_id, label)
+    SELECT a, r.id, 'machine', m.id, m.code FROM public.audit_records r JOIN public.machines m ON m.organisation_id = a WHERE r.organisation_id = a LIMIT 1;
+  INSERT INTO public.audit_responses (organisation_id, audit_record_id, record_question_id, answer, result)
+    SELECT a, audit_record_id, id, 'fail', 'fail' FROM public.audit_record_questions WHERE organisation_id = a;
+  INSERT INTO public.audit_ncr_links (organisation_id, audit_record_id, response_id, nonconformance_id)
+    SELECT a, s.audit_record_id, s.id, n.id FROM public.audit_responses s JOIN public.nonconformances n ON n.organisation_id = a AND n.reference = 'SW-NCR-LOT' WHERE s.organisation_id = a;
 
   -- In-process inspection (PC4): make the sweep plan effective with one check, then inspect SW-P1.
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');

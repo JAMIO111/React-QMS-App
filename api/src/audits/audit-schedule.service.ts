@@ -9,8 +9,11 @@ import { Schedule, ScheduleItem, ScheduleQuery } from './audit-schedule.schemas'
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const LIMIT = 500;
 
-/** The state of a slot is worked out here from the dates and the grace period (and, with the audit records, from what was done), never stored: only "skipped" is. */
+/** The state of a slot is worked out here from its audit record (if any), the dates and the grace period, never stored: only "skipped" is. */
+const REC_JOIN = `left join lateral (select r.id, r.reference, r.status, r.result, r.score, r.performed_on from public.audit_records r where r.occurrence_id = o.id and r.status <> 'abandoned' order by r.started_at desc limit 1) rec on true`;
 const STATE_SQL = `case when o.status = 'skipped' then 'skipped'
+                        when rec.status = 'completed' then 'done'
+                        when rec.status = 'in_progress' then 'in_progress'
                         when o.due_on >= current_date then 'upcoming'
                         when current_date <= o.due_on + d.grace_days then 'overdue'
                         else 'missed' end`;
@@ -37,14 +40,19 @@ export class AuditScheduleService {
       if (q.machineId) where.push(sql`exists (select 1 from public.audit_targets t where t.audit_definition_id = d.id and t.machine_id = ${q.machineId}::uuid)`);
       if (q.operationCode) where.push(sql`exists (select 1 from public.audit_targets t where t.audit_definition_id = d.id and upper(t.operation_code) = upper(${q.operationCode}))`);
       if (q.departmentId) where.push(sql`exists (select 1 from public.audit_targets t where t.audit_definition_id = d.id and t.department_id = ${q.departmentId}::uuid)`);
-      const base = sql`from public.audit_occurrences o join public.audit_definitions d on d.id = o.audit_definition_id where ${sql.join(where, sql` and `)}`;
+      const base = sql`from public.audit_occurrences o join public.audit_definitions d on d.id = o.audit_definition_id ${sql.raw(REC_JOIN)} where ${sql.join(where, sql` and `)}`;
 
       const counts = await db.execute<Row>(sql`
         select count(*) as total,
                count(*) filter (where ${sql.raw(STATE_SQL)} = 'upcoming') as upcoming,
                count(*) filter (where ${sql.raw(STATE_SQL)} = 'upcoming' and o.due_on <= current_date + 7) as next7,
+               count(*) filter (where ${sql.raw(STATE_SQL)} = 'in_progress') as in_progress,
                count(*) filter (where ${sql.raw(STATE_SQL)} = 'overdue') as overdue,
                count(*) filter (where ${sql.raw(STATE_SQL)} = 'missed') as missed,
+               count(*) filter (where ${sql.raw(STATE_SQL)} = 'done') as done,
+               count(*) filter (where ${sql.raw(STATE_SQL)} = 'done' and rec.result = 'pass') as done_passed,
+               count(*) filter (where ${sql.raw(STATE_SQL)} = 'done' and rec.result = 'fail') as done_failed,
+               count(*) filter (where ${sql.raw(STATE_SQL)} = 'done' and rec.performed_on <= o.due_on + d.grace_days) as done_on_time,
                count(*) filter (where ${sql.raw(STATE_SQL)} = 'skipped') as skipped
           ${base}`);
 
@@ -80,6 +88,16 @@ export class AuditScheduleService {
       daysFromToday: Number(r.days_from_today),
       graceDays: Number(r.grace_days),
       skippedReason: (r.skipped_reason as string) ?? null,
+      record: r.record_id
+        ? {
+            id: r.record_id as string,
+            reference: r.record_reference as string,
+            status: r.record_status as 'in_progress' | 'completed',
+            result: (r.record_result as 'pass' | 'fail') ?? null,
+            score: r.record_score == null ? null : Number(r.record_score),
+            performedOn: r.record_performed_on as string,
+          }
+        : null,
       audit: {
         id: r.audit_id as string,
         reference: r.reference as string,
@@ -103,7 +121,20 @@ export class AuditScheduleService {
     return {
       today,
       window: { from, to },
-      counts: { total: Number(c.total), upcoming: Number(c.upcoming), dueNext7Days: Number(c.next7), overdue: Number(c.overdue), missed: Number(c.missed), skipped: Number(c.skipped) },
+      counts: {
+        total: Number(c.total),
+        upcoming: Number(c.upcoming),
+        dueNext7Days: Number(c.next7),
+        inProgress: Number(c.in_progress),
+        overdue: Number(c.overdue),
+        missed: Number(c.missed),
+        done: Number(c.done),
+        donePassed: Number(c.done_passed),
+        doneFailed: Number(c.done_failed),
+        skipped: Number(c.skipped),
+        passRate: Number(c.done) === 0 ? null : Math.round((1000 * Number(c.done_passed)) / Number(c.done)) / 10,
+        onTimeRate: Number(c.done) + Number(c.missed) === 0 ? null : Math.round((1000 * Number(c.done_on_time)) / (Number(c.done) + Number(c.missed))) / 10,
+      },
       data: rows.rows.slice(0, LIMIT).map((r) => this.item(r)),
       truncated: rows.rows.length > LIMIT,
     };
@@ -112,6 +143,8 @@ export class AuditScheduleService {
 
 const ITEM_SELECT = `
   select o.id, to_char(o.due_on, 'YYYY-MM-DD') as due_on, (${STATE_SQL}) as state, (o.due_on - current_date) as days_from_today, d.grace_days, o.skipped_reason,
+         rec.id as record_id, rec.reference as record_reference, rec.status as record_status, rec.result as record_result, rec.score as record_score,
+         to_char(rec.performed_on, 'YYYY-MM-DD') as record_performed_on,
          d.id as audit_id, d.reference, d.title, d.audit_type, d.pass_mark, d.auditor_kind,
          case d.auditor_kind when 'person' then coalesce(${personName('ap')}, 'Unnamed person') when 'role' then ar.name when 'department' then ad.name end as auditor_name,
          (select coalesce(array_agg(x.label order by x.label), '{}') from (
@@ -120,6 +153,7 @@ const ITEM_SELECT = `
               where t.audit_definition_id = d.id order by 1 limit 6) x) as relevant_to
     from public.audit_occurrences o
     join public.audit_definitions d on d.id = o.audit_definition_id
+    ${REC_JOIN}
     left join public.profiles ap on ap.id = d.auditor_user_id
     left join public.roles ar on ar.id = d.auditor_role_id
     left join public.departments ad on ad.id = d.auditor_department_id`;

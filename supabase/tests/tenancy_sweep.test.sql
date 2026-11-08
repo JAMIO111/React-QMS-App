@@ -139,6 +139,8 @@ BEGIN
   INSERT INTO public.audit_targets (organisation_id, audit_definition_id, kind, machine_id)
     SELECT a, d.id, 'machine', m.id FROM public.audit_definitions d JOIN public.machines m ON m.organisation_id = a WHERE d.organisation_id = a LIMIT 1;
   INSERT INTO public.audit_occurrences (organisation_id, audit_definition_id, due_on) SELECT a, id, current_date FROM public.audit_definitions WHERE organisation_id = a;
+  -- Audit versions (AV1): the audit's first version, with its question and machine copied.
+  PERFORM app.snapshot_audit_version(id, 1, 'First version') FROM public.audit_definitions WHERE organisation_id = a;
   -- Audit records (AU3): a record with its frozen question, target, answer and a link to the lot NC.
   INSERT INTO public.audit_records (organisation_id, reference, audit_definition_id, audit_reference, audit_title, audit_type, pass_mark)
     SELECT a, 'SW-AR-1', id, reference, title, audit_type, pass_mark FROM public.audit_definitions WHERE organisation_id = a;

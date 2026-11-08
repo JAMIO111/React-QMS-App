@@ -13,7 +13,8 @@ const num = (v: unknown) => (v == null ? null : Number(v));
 
 const SELECT = `
   select d.id, d.reference, d.title, d.audit_type, d.purpose, d.procedure, d.frequency_kind, d.frequency_interval, to_char(d.first_due_on, 'YYYY-MM-DD') as first_due_on,
-         d.grace_days, d.weekdays_only, d.auditor_kind, d.pass_mark, d.status, d.retired_at, d.retired_by, d.retired_reason, d.created_at, d.updated_at, d.created_by,
+         d.grace_days, d.weekdays_only, d.auditor_kind, d.pass_mark, d.status,
+         (select max(v.version) from public.audit_versions v where v.audit_definition_id = d.id) as version, d.retired_at, d.retired_by, d.retired_reason, d.created_at, d.updated_at, d.created_by,
          case d.auditor_kind when 'person' then d.auditor_user_id when 'role' then d.auditor_role_id when 'department' then d.auditor_department_id end as auditor_id,
          case d.auditor_kind when 'person' then coalesce(${personName('ap')}, 'Unnamed person') when 'role' then ar.name when 'department' then ad.name end as auditor_name,
          lr.id as last_id, lr.reference as last_reference, lr.performed_on as last_performed_on, lr.result as last_result, nd.due_on as next_due_on,
@@ -60,6 +61,7 @@ const toBase = (r: Row) => ({
   auditor: { kind: r.auditor_kind as AuditSummary['auditor']['kind'], id: (r.auditor_id as string) ?? null, name: (r.auditor_name as string) ?? null },
   passMark: Number(r.pass_mark),
   status: r.status as AuditSummary['status'],
+  version: num(r.version),
   questionCount: Number(r.question_count),
   criticalCount: Number(r.critical_count),
   lastRecord: r.last_id ? { id: r.last_id as string, reference: r.last_reference as string, performedOn: r.last_performed_on as string, result: r.last_result as 'pass' | 'fail' } : null,
@@ -128,6 +130,8 @@ export class AuditsService {
         returning id`);
       const id = result.rows[0].id;
       await this.replaceLists(db, id, body.questions, body.targets);
+      // Version 1: the audit as first written.
+      await db.execute(sql`select app.save_audit_version(${id}::uuid, null)`);
       return this.load(db, ctx, id);
     });
   }
@@ -160,6 +164,9 @@ export class AuditsService {
         if (!r.rows.length) throw ApiError.forbidden('Changing audits needs the audits.manage permission');
       }
       await this.replaceLists(db, id, body.questions, body.targets);
+      // A change to what the audit says is a new version and needs a reason (the database refuses the change otherwise); a change to the schedule or the expected auditor is not.
+      const changed = await db.execute<{ changed: boolean }>(sql`select app.audit_content_changed(${id}::uuid) as changed`);
+      if (changed.rows[0].changed) await db.execute(sql`select app.save_audit_version(${id}::uuid, ${body.changeReason ?? null})`);
       return this.load(db, ctx, id);
     });
   }

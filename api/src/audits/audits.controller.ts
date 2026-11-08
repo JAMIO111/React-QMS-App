@@ -1,10 +1,14 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
+import { z } from 'zod';
 import { openApiSchema, parse, Uuid } from '../common/validation';
+
+const VersionNumber = z.coerce.number().int().min(1).max(100000);
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { Audit, AUDIT_SORTABLE, OperationCodes, AUDIT_TYPES, AuditListQuery, AuditPage, CreateAuditBody, ReasonBody, UpdateAuditBody } from './audits.schemas';
+import { Audit, AUDIT_SORTABLE, AuditVersion, OperationCodes, AUDIT_TYPES, AuditListQuery, AuditPage, CreateAuditBody, ReasonBody, UpdateAuditBody, VersionList } from './audits.schemas';
 import { AuditsService } from './audits.service';
+import { AuditVersionsService } from './audit-versions.service';
 
 const READ = 'audits.read';
 const MANAGE = 'audits.manage';
@@ -14,7 +18,10 @@ const MANAGE = 'audits.manage';
 @ApiBearerAuth()
 @Controller('audits')
 export class AuditsController {
-  constructor(private readonly service: AuditsService) {}
+  constructor(
+    private readonly service: AuditsService,
+    private readonly versions: AuditVersionsService,
+  ) {}
 
   @Get()
   @OrganisationScoped(READ)
@@ -57,7 +64,27 @@ export class AuditsController {
     return this.service.get(ctx, parse(Uuid, id));
   }
 
-  /** Change any part of the audit; `frequency`, `auditor`, `questions` and `targets` replace the whole of that part. Records already made keep the questions they were done against. */
+  /** The history of the audit: every version, newest first, with the reason, what changed from the one before and how many records were done against it. */
+  @Get(':id/versions')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ schema: openApiSchema(VersionList) })
+  versionHistory(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.versions.list(ctx, parse(Uuid, id));
+  }
+
+  /** One version, whole, with what it changed from the version before. */
+  @Get(':id/versions/:version')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ schema: openApiSchema(AuditVersion) })
+  oneVersion(@Ctx() ctx: RequestContext, @Param('id') id: string, @Param('version') version: string) {
+    return this.versions.get(ctx, parse(Uuid, id), parse(VersionNumber, version));
+  }
+
+  /**
+   * Change any part of the audit; `frequency`, `auditor`, `questions` and `targets` replace the whole of that part. A change to what the audit says (title, type, purpose, procedure,
+   * pass mark, checklist, what it is relevant to) is saved as a new version and needs `changeReason`; a change to the schedule or the expected auditor does not. Records already made keep the
+   * questions they were done against, and the version.
+   */
   @Patch(':id')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateAuditBody) })

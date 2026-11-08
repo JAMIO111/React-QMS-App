@@ -105,6 +105,9 @@ const Header = {
   passMark: z.number().int().min(0).max(100),
 };
 
+/** Why the audit is changing: needed whenever the content (title, type, purpose, procedure, pass mark, checklist, what it is relevant to) is different; it becomes the reason of the new version. */
+const ChangeReason = z.string().trim().min(3, 'Say why the audit is changing').max(1000);
+
 export const CreateAuditBody = z
   .object({
     ...Header,
@@ -120,10 +123,10 @@ export type CreateAuditBody = z.infer<typeof CreateAuditBody>;
 
 /** Any of the fields; `frequency` and `auditor` replace the whole group, `questions` and `targets` replace the whole list. */
 export const UpdateAuditBody = z
-  .object({ ...Header, questions: z.array(QuestionInput).max(100), targets: z.array(TargetInput).max(200) })
+  .object({ ...Header, questions: z.array(QuestionInput).max(100), targets: z.array(TargetInput).max(200), changeReason: ChangeReason })
   .partial()
   .strict()
-  .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
+  .refine((b) => Object.keys(b).filter((k) => k !== 'changeReason').length > 0, { message: 'Provide at least one field to update' });
 export type UpdateAuditBody = z.infer<typeof UpdateAuditBody>;
 
 export const ReasonBody = z.object({ reason: text(1000) }).strict();
@@ -184,6 +187,8 @@ export const AuditSummary = z.object({
   auditor: Auditor,
   passMark: z.number(),
   status: z.enum(['active', 'retired']),
+  /** The current version of the audit's content (see the version history); null for an audit not yet started or saved with versions. */
+  version: z.number().nullable(),
   questionCount: z.number(),
   criticalCount: z.number(),
   /** The latest completed record of this audit. */
@@ -212,3 +217,65 @@ export type Audit = z.infer<typeof Audit>;
 
 /** Operation codes to choose from for "relevant to": those of the control plans plus any already on an audit. */
 export const OperationCodes = z.object({ data: z.array(z.object({ code: z.string(), name: z.string().nullable() })) });
+
+const Who = z.object({ id: Id, name: z.string() }).nullable();
+const VersionQuestion = z.object({
+  sequence: z.number(),
+  question: z.string(),
+  guidance: z.string().nullable(),
+  answerType: z.enum(ANSWER_TYPES),
+  passAnswer: z.enum(['yes', 'no']).nullable(),
+  unit: z.string().nullable(),
+  lowerLimit: z.number().nullable(),
+  upperLimit: z.number().nullable(),
+  nominal: z.number().nullable(),
+  options: z.array(z.object({ label: z.string(), passes: z.boolean() })).nullable(),
+  ratingMax: z.number().nullable(),
+  passRating: z.number().nullable(),
+  critical: z.boolean(),
+});
+
+/** One entry of the history of an audit: what it was changed to, why, by whom, and how many records were done against it. */
+export const VersionSummary = z.object({
+  version: z.number(),
+  reason: z.string(),
+  createdAt: dateTime,
+  createdBy: Who,
+  /** The version in force now: new records are done against it. */
+  current: z.boolean(),
+  title: z.string(),
+  passMark: z.number(),
+  questionCount: z.number(),
+  criticalCount: z.number(),
+  targetCount: z.number(),
+  /** Records started against this version. */
+  recordCount: z.number(),
+  /** What changed from the version before, in a few sentences (empty for the first version). */
+  summary: z.array(z.string()),
+});
+export type VersionSummary = z.infer<typeof VersionSummary>;
+export const VersionList = z.object({ data: z.array(VersionSummary) });
+
+export const AuditVersion = VersionSummary.extend({
+  auditType: z.enum(AUDIT_TYPES),
+  purpose: z.string().nullable(),
+  procedure: z.string().nullable(),
+  questions: z.array(VersionQuestion),
+  targets: z.array(z.object({ kind: z.enum(['machine', 'operation', 'department']), label: z.string() })),
+  /** The first records started against it (at most 25), newest first. */
+  records: z.array(z.object({ id: Id, reference: z.string(), status: z.enum(['in_progress', 'completed', 'abandoned']), result: z.enum(['pass', 'fail']).nullable(), performedOn: DateOnly })),
+  /** What this version changed from the one before; null for the first. */
+  changes: z
+    .object({
+      header: z.array(z.object({ field: z.enum(['title', 'auditType', 'purpose', 'procedure', 'passMark']), before: z.union([z.string(), z.number()]).nullable(), after: z.union([z.string(), z.number()]).nullable() })),
+      questions: z.object({
+        added: z.array(VersionQuestion),
+        removed: z.array(VersionQuestion),
+        changed: z.array(z.object({ before: VersionQuestion, after: VersionQuestion, fields: z.array(z.string()) })),
+        moved: z.array(z.object({ question: z.string(), from: z.number(), to: z.number() })),
+      }),
+      targets: z.object({ added: z.array(z.object({ kind: z.enum(['machine', 'operation', 'department']), label: z.string() })), removed: z.array(z.object({ kind: z.enum(['machine', 'operation', 'department']), label: z.string() })) }),
+    })
+    .nullable(),
+});
+export type AuditVersion = z.infer<typeof AuditVersion>;

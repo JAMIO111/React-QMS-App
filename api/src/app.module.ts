@@ -37,6 +37,7 @@ import { AuditScheduleController } from './audits/audit-schedule.controller';
 import { AuditScheduleService } from './audits/audit-schedule.service';
 import { AuditsController } from './audits/audits.controller';
 import { AuditsService } from './audits/audits.service';
+import { AuditVersionsService } from './audits/audit-versions.service';
 import { EmployeesController } from './employees/employees.controller';
 import { ProductionController } from './production/production.controller';
 import { ProductionService } from './production/production.service';
@@ -211,6 +212,7 @@ export class AppModule implements NestModule {
         NcrService,
         EmployeesService,
         AuditsService,
+        AuditVersionsService,
         AuditScheduleService,
         AuditRecordsService,
         AuditFindingsService,

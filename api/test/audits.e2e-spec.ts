@@ -164,14 +164,15 @@ describe('editing, retiring and reactivating', () => {
       frequency: { kind: 'every_n_days', interval: 10, firstDueOn: '2026-11-16' },
       questions: [question({ question: 'Guards in place?' })],
       targets: [{ kind: 'machine', machineId: ctx.machine2 }],
+      changeReason: 'Rewritten for the CNC cell',
     }).expect(200)).body;
     expect(a).toMatchObject({ title: 'Weekly LPA, CNC', passMark: 100, frequency: { kind: 'every_n_days', interval: 10, firstDueOn: '2026-11-16' }, questionCount: 1 });
     expect(a.questions.map((q: { question: string }) => q.question)).toEqual(['Guards in place?']);
     expect(a.targets).toEqual([{ kind: 'machine', id: ctx.machine2, label: 'CNC-2 · Mill' }]);
     // Leaving a list out leaves it alone; an empty list empties it.
-    const kept = (await api().patch(`/api/v1/audits/${ctx.a1}`).set(h).send({ purpose: null }).expect(200)).body;
+    const kept = (await api().patch(`/api/v1/audits/${ctx.a1}`).set(h).send({ purpose: null, changeReason: 'No purpose needed' }).expect(200)).body;
     expect(kept).toMatchObject({ purpose: null, questionCount: 1 });
-    expect((await api().patch(`/api/v1/audits/${ctx.a1}`).set(h).send({ targets: [] }).expect(200)).body.targets).toEqual([]);
+    expect((await api().patch(`/api/v1/audits/${ctx.a1}`).set(h).send({ targets: [], changeReason: 'Not tied to a machine' }).expect(200)).body.targets).toEqual([]);
     await api().patch(`/api/v1/audits/${ctx.a1}`).set(h).send({ frequency: { kind: 'weekly' } }).expect(400);
     // A refused change to the checklist leaves the old one.
     await api().patch(`/api/v1/audits/${ctx.a1}`).set(h).send({ questions: [{ question: 'x', answerType: 'multiple_choice', options: [{ label: 'Only one' }] }] }).expect(400);

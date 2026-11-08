@@ -147,7 +147,9 @@ const sampleBody = (op: Op): object | undefined =>
     'GET /api/v1/ncrs/{id}/gates': undefined,
     'GET /api/v1/ncrs/{id}/affected-lots': undefined,
     'GET /api/v1/audits/{id}': undefined,
-    'PATCH /api/v1/audits/{id}': { title: 'Hijacked' },
+    'GET /api/v1/audits/{id}/versions': undefined,
+    'GET /api/v1/audits/{id}/versions/{version}': undefined,
+    'PATCH /api/v1/audits/{id}': { title: 'Hijacked', changeReason: 'Hijacked' },
     'POST /api/v1/audits/{id}/retire': { reason: 'Hijacked' },
     'POST /api/v1/audits/{id}/reactivate': undefined,
     'POST /api/v1/audit-occurrences/{id}/skip': { reason: 'Hijacked' },
@@ -359,6 +361,8 @@ const hasSample = (op: Op) =>
     'GET /api/v1/ncrs/{id}/gates',
     'GET /api/v1/ncrs/{id}/affected-lots',
     'GET /api/v1/audits/{id}',
+    'GET /api/v1/audits/{id}/versions',
+    'GET /api/v1/audits/{id}/versions/{version}',
     'PATCH /api/v1/audits/{id}',
     'POST /api/v1/audits/{id}/retire',
     'POST /api/v1/audits/{id}/reactivate',
@@ -667,7 +671,7 @@ describe('tenancy sweep over every API route', () => {
     const auth = { Authorization: `Bearer ${await token(ids.ownerB)}`, 'X-Organisation-Id': ids.orgA };
     const results: string[] = [];
     for (const op of ops.filter((o) => o.scoped)) {
-      const path = op.path.replace('{id}', foreignIdFor(op.path) ?? '00000000-0000-0000-0000-000000000000');
+      const path = op.path.replace('{id}', foreignIdFor(op.path) ?? '00000000-0000-0000-0000-000000000000').replace('{version}', '1');
       const res = await call(op, path, auth, op.method === 'GET' || op.method === 'DELETE' ? undefined : {});
       if (res.status !== 404 || res.body?.error?.code !== 'organisation_not_found') results.push(`${op.method} ${op.path} -> ${res.status}`);
     }
@@ -681,7 +685,7 @@ describe('tenancy sweep over every API route', () => {
 
     const results: string[] = [];
     for (const op of idOps) {
-      const res = await call(op, op.path.replace('{id}', foreignIdFor(op.path)!), auth, sampleBody(op));
+      const res = await call(op, op.path.replace('{id}', foreignIdFor(op.path)!).replace('{version}', '1'), auth, sampleBody(op));
       if (res.status !== 404) results.push(`${op.method} ${op.path} -> ${res.status} ${JSON.stringify(res.body)}`);
     }
     expect(results).toEqual([]);

@@ -59,6 +59,8 @@ export const RecordListQuery = z.object({
   operationCode: z.string().trim().max(40).optional(),
   departmentId: Id.optional(),
   performedBy: Id.optional(),
+  /** Only records done against this version of their audit. */
+  version: z.coerce.number().int().min(1).optional(),
   from: DateOnly.optional(),
   to: DateOnly.optional(),
   /** `true`: only records started by the caller. */
@@ -83,6 +85,9 @@ export const RecordSummary = z.object({
   failedCount: z.number().nullable(),
   criticalFailedCount: z.number().nullable(),
   audit: z.object({ id: Id, reference: z.string(), title: z.string(), auditType: z.enum(AUDIT_TYPES) }),
+  /** The version of the audit this record was started against, and the version in force now; null for a record made before versions were kept. */
+  version: z.number().nullable(),
+  currentVersion: z.number().nullable(),
   carriedOutOn: z.array(z.string()),
   scheduledFor: DateOnly.nullable(),
   performedOn: DateOnly,

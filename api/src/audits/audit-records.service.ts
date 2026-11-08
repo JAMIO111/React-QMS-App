@@ -28,6 +28,7 @@ const AUDITOR = 'coalesce(r.completed_by, r.started_by)';
 
 const SELECT = `
   select r.id, r.reference, r.status, r.result, r.score, r.pass_mark, r.passed_count, r.failed_count, r.na_count, r.critical_failed_count,
+         r.audit_version, (select max(v.version) from public.audit_versions v where v.audit_definition_id = r.audit_definition_id) as current_version,
          r.audit_definition_id, r.audit_reference, r.audit_title, r.audit_type, r.procedure, r.notes, r.abandon_reason, r.completed_at, r.completed_by, r.started_at,
          to_char(r.performed_on, 'YYYY-MM-DD') as performed_on, to_char(o.due_on, 'YYYY-MM-DD') as scheduled_for,
          ${AUDITOR} as auditor_id, ${personName('ap')} as auditor_name, ${personName('cp')} as completed_name,
@@ -75,6 +76,8 @@ const toSummary = (r: Row): RecordSummary => ({
   failedCount: num(r.failed_count),
   criticalFailedCount: num(r.critical_failed_count),
   audit: { id: r.audit_definition_id as string, reference: r.audit_reference as string, title: r.audit_title as string, auditType: r.audit_type as RecordSummary['audit']['auditType'] },
+  version: num(r.audit_version),
+  currentVersion: num(r.current_version),
   carriedOutOn: (r.carried_out_on as string[]) ?? [],
   scheduledFor: (r.scheduled_for as string) ?? null,
   performedOn: r.performed_on as string,
@@ -101,6 +104,7 @@ export class AuditRecordsService {
       if (q.machineId) where.push(sql`exists (select 1 from public.audit_record_targets t where t.audit_record_id = r.id and t.machine_id = ${q.machineId}::uuid)`);
       if (q.operationCode) where.push(sql`exists (select 1 from public.audit_record_targets t where t.audit_record_id = r.id and upper(t.operation_code) = upper(${q.operationCode}))`);
       if (q.departmentId) where.push(sql`exists (select 1 from public.audit_record_targets t where t.audit_record_id = r.id and t.department_id = ${q.departmentId}::uuid)`);
+      if (q.version) where.push(sql`r.audit_version = ${q.version}::int`);
       if (q.performedBy) where.push(sql`${sql.raw(AUDITOR)} = ${q.performedBy}::uuid`);
       if (q.mine === 'true') where.push(sql`${sql.raw(AUDITOR)} = ${ctx.user.id}::uuid`);
       if (q.from) where.push(sql`r.performed_on >= ${q.from}::date`);

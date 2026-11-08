@@ -138,6 +138,7 @@ BEGIN
     SELECT a, id, 1, 'Is the area clean?', 'pass_fail' FROM public.audit_definitions WHERE organisation_id = a;
   INSERT INTO public.audit_targets (organisation_id, audit_definition_id, kind, machine_id)
     SELECT a, d.id, 'machine', m.id FROM public.audit_definitions d JOIN public.machines m ON m.organisation_id = a WHERE d.organisation_id = a LIMIT 1;
+  INSERT INTO public.audit_occurrences (organisation_id, audit_definition_id, due_on) SELECT a, id, current_date FROM public.audit_definitions WHERE organisation_id = a;
 
   -- In-process inspection (PC4): make the sweep plan effective with one check, then inspect SW-P1.
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');

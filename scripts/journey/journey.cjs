@@ -459,7 +459,9 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
   await shot(page, '59-audit-schedule');
   await page.getByRole('button', { name: /^Start AUD-001/ }).first().click();
   await see(page.getByRole('heading', { name: /^AR-\d\d-0001 · Weekly layered process audit/ }));
-  await page.getByRole('checkbox', { name: 'OP-10' }).check();
+  // The tick is saved as it is made and shown a moment later, so wait for it rather than asking for it at once.
+  await page.getByRole('checkbox', { name: 'OP-10' }).click();
+  await page.getByRole('checkbox', { name: 'OP-10' }).and(page.locator(':checked')).waitFor();
   const q1 = page.getByRole('listitem', { name: 'Question 1' });
   await q1.getByRole('radio', { name: 'Fail' }).click();
   await q1.getByLabel(/^What was found/).fill('Oil under the bench at the lathe');

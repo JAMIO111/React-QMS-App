@@ -7,7 +7,6 @@ import {
   SettingsIcon,
 } from "@/components/icons";
 import NavItem from "./NavItem";
-import Logout from "./Logout";
 import { menuStructure } from "../MenuStructure";
 import { useCanSee, useOrganisationLogo } from "../hooks/useQmsApi";
 import { useMyAlertCount } from "../hooks/useDocumentation";
@@ -17,7 +16,6 @@ import { useProductionSettings } from "../hooks/useProduction";
 import { subMenuVisible } from "../lib/production";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import SubMenuItem from "./SubMenuItem";
-import ThemeToggle from "./ThemeToggle";
 
 const Navbar = () => {
   const [isMenuExpanded, setIsMenuExpanded] = useState(false);
@@ -149,11 +147,6 @@ const Navbar = () => {
               isExpanded={isMenuExpanded}
               path="/Help"
             />
-            <div className="border-t-1 mx-3 border-border-color"></div>
-            <div className="flex flex-col justify-between items-start gap-2 pt-2">
-              <ThemeToggle menuExpanded={isMenuExpanded} />
-              <Logout isExpanded={isMenuExpanded} />
-            </div>
           </ul>
         </div>
       </nav>

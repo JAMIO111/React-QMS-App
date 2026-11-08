@@ -235,6 +235,7 @@ const NcrPage = () => {
           </Link>
           <h1 className="text-xl font-semibold text-primary-text">{isNew ? "New non-conformance" : ncr.reference}</h1>
           {!isNew && <SeverityPill severity={ncr.severity} />}
+          {isNew ? <span className="text-sm text-secondary-text">Not saved yet</span> : <StagePill stage={ncr.stage} />}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isNew && canEdit && (
@@ -269,10 +270,7 @@ const NcrPage = () => {
 
       <div className="flex min-h-0 flex-1 overflow-clip">
         {/* Side menu of sections, as in the original form. */}
-        <nav aria-label="Sections" className="hidden h-full w-70 shrink-0 flex-col overflow-y-auto border-r border-border-color bg-primary-bg px-3 md:flex">
-          <div className="mb-2 flex flex-col gap-2 border-b border-border-dark-color pb-3 pt-4">
-            {isNew ? <span className="text-sm text-secondary-text">Not saved yet</span> : <StagePill stage={ncr.stage} />}
-          </div>
+        <nav aria-label="Sections" className="hidden h-full w-70 shrink-0 flex-col overflow-y-auto border-r border-border-color bg-primary-bg px-3 pt-4 md:flex">
           {sections.map((s, i, arr) => {
             const disabled = isNew && !!s.needsRecord;
             return (

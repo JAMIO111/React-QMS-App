@@ -5,7 +5,8 @@ import MenuCard from "../../ui/MenuCard";
 import RHFComboBox from "../../ui/RHFComboBox";
 import { useCapaMutation, useCapaPeople } from "../../../hooks/useCapa";
 import { TEAM_ROLES, roleLabel } from "../../../lib/capa";
-import { FormError, buttonClass } from "../../master-data/shared";
+import { FormError } from "../../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 const roleOptions = (keys) => keys.map((k) => ({ id: k, name: TEAM_ROLES[k].label, hint: TEAM_ROLES[k].hint }));
 const MEMBER_ROLES = roleOptions(["leader", "champion", "member"]);
@@ -37,8 +38,8 @@ const ExternalDialog = ({ capa, onClose }) => {
         <RHFComboBox label="Role" value={form.role} onChange={(v) => setForm((f) => ({ ...f, role: v ?? "member" }))} options={ALL_ROLES} sort={false} clearable={false} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !form.externalName.trim()}>{mutation.isPending ? "Adding…" : "Add contact"}</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !form.externalName.trim()}>{mutation.isPending ? "Adding…" : "Add contact"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -58,7 +59,7 @@ const D1Team = ({ capa, editable }) => {
 
   return (
     <MenuCard title="The team" subtitle={`${active.length} ${active.length === 1 ? "person" : "people"}`}
-      action={editable ? <button type="button" className={buttonClass.neutral} onClick={() => { mutation.reset(); setExternal(true); }}>Add an external contact</button> : undefined}
+      action={editable ? <CTAButton buttonType="button" type="neutral" size="md" onClick={() => { mutation.reset(); setExternal(true); }}>Add an external contact</CTAButton> : undefined}
       bodyClassName="flex flex-col gap-4">
       <ul className="flex flex-col divide-y divide-border-color" aria-label="Team members">
         {active.map((t) => (
@@ -83,7 +84,7 @@ const D1Team = ({ capa, editable }) => {
                 <span className="rounded-full bg-secondary-bg px-2 py-0.5 text-xs text-primary-text">{roleLabel(t.role)}</span>
               )}
               {editable && (
-                <button type="button" className={buttonClass.neutral} aria-label={`Remove ${t.name} from the team`} onClick={() => mutation.mutate({ action: "updateTeam", id: t.id, body: { ended: true } })}>Remove</button>
+                <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Remove ${t.name} from the team`} onClick={() => mutation.mutate({ action: "updateTeam", id: t.id, body: { ended: true } })}>Remove</CTAButton>
               )}
             </div>
           </li>
@@ -100,7 +101,7 @@ const D1Team = ({ capa, editable }) => {
           }}>
           <RHFComboBox label="Add a member of the organisation" required value={adding.membershipId} onChange={(v) => setAdding((a) => ({ ...a, membershipId: v }))} options={choices} placeholder="Choose a person" />
           <RHFComboBox label="Role" value={adding.role} onChange={(v) => setAdding((a) => ({ ...a, role: v ?? "member" }))} options={MEMBER_ROLES} sort={false} clearable={false} />
-          <button type="submit" className={buttonClass.primary} disabled={!adding.membershipId || mutation.isPending}>Add</button>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!adding.membershipId || mutation.isPending}>Add</CTAButton>
         </form>
       )}
       {left.length > 0 && (

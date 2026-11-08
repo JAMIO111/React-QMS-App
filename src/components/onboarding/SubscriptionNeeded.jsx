@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { LockIcon } from "@/components/icons";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useOrganisationAccess, usePermissions } from "../../hooks/useQmsApi";
+import CTAButton from "@/components/CTAButton";
 
 const TEXT = {
   needs_subscription: { title: "Choose a plan to get started", body: "This organisation does not have a subscription yet. A subscription with at least one Controller seat, held by an owner, is needed to use Fortress QMS." },
@@ -23,7 +24,7 @@ const SubscriptionNeeded = () => {
       {billing ? (
         <div className="flex flex-wrap justify-center gap-2">
           {onboarding === "in_progress" && can("organisation.manage") && (
-            <Link to="/setup/plan" className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-4 py-2 text-sm font-medium text-primary-text hover:bg-cta-btn-bg-hover">Continue set-up</Link>
+            <CTAButton to="/setup/plan" type="main" size="lg" className="font-medium">Continue set-up</CTAButton>
           )}
           <Link to="/Settings/Subscription" className="rounded-lg border border-border-color px-4 py-2 text-sm text-primary-text hover:border-border-dark-color">Subscription &amp; billing</Link>
         </div>

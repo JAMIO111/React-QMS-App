@@ -3,8 +3,9 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import { useCapaMutation } from "../../hooks/useCapa";
 import { ISHIKAWA_CATEGORIES } from "../../lib/capa";
-import { FormError, buttonClass } from "../master-data/shared";
+import { FormError } from "../master-data/shared";
 import IshikawaDiagram from "./IshikawaDiagram";
+import CTAButton from "@/components/CTAButton";
 
 const initial = (analysis) => Object.fromEntries(ISHIKAWA_CATEGORIES.map((c) => [c.key, analysis?.data?.categories?.find((x) => x.key === c.key)?.causes ?? []]));
 let counter = 0;
@@ -40,7 +41,7 @@ const Category = ({ cat, causes, canRecord, recorded, busy, onChange, onRecord }
         <input aria-label={`Add a cause under ${cat.label}`} value={draft} maxLength={300} placeholder="A possible cause…" onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
           className="min-w-0 flex-1 rounded-lg border border-border-color bg-text-input-color px-2 py-1.5 text-sm text-primary-text focus:border-brand-primary focus:outline-none" />
-        <button type="button" className={buttonClass.neutral} onClick={add} disabled={!draft.trim()} aria-label={`Add to ${cat.label}`}>Add</button>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={add} disabled={!draft.trim()} aria-label={`Add to ${cat.label}`}>Add</CTAButton>
       </div>
     </section>
   );
@@ -80,8 +81,8 @@ const IshikawaDialog = ({ capa, analysis, onClose }) => {
         </div>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Close</button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !title.trim()}>{mutation.isPending ? "Saving…" : "Save diagram"}</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Close</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !title.trim()}>{mutation.isPending ? "Saving…" : "Save diagram"}</CTAButton>
         </div>
       </form>
     </Dialog>

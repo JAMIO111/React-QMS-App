@@ -5,7 +5,8 @@ import Field from "../ui/Field";
 import RHFComboBox from "../ui/RHFComboBox";
 import { useCapaMutation } from "../../hooks/useCapa";
 import { SEVERITIES, SOURCES } from "../../lib/capa";
-import { FormError, TextAreaField, buttonClass } from "../master-data/shared";
+import { FormError, TextAreaField } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 /** Starts an 8D that is not tied to a non-conformance (to start one from an NC, use the button on the NC page). */
 const StartCapaDialog = ({ onClose }) => {
@@ -33,8 +34,8 @@ const StartCapaDialog = ({ onClose }) => {
         </div>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !form.title.trim()}>{mutation.isPending ? "Starting…" : "Start 8D"}</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !form.title.trim()}>{mutation.isPending ? "Starting…" : "Start 8D"}</CTAButton>
         </div>
       </form>
     </Dialog>

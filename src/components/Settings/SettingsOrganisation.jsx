@@ -14,6 +14,7 @@ import {
 import MenuCard from "../ui/MenuCard";
 import { useToast } from "../../contexts/ToastProvider";
 import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
 
 /** Shown instead of a section when the API cannot be reached. */
 export const ApiUnavailable = ({ error }) => (
@@ -197,12 +198,12 @@ const SettingsOrganisation = () => {
           </p>
         )}
         {canManage && (
-          <button
-            type="submit"
+          <CTAButton
+            buttonType="submit"
             disabled={update.isPending}
-            className="self-start rounded-lg border border-cta-btn-border bg-cta-btn-bg px-4 py-2 text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
+            type="main" size="lg" className="self-start">
             {update.isPending ? "Saving…" : "Save changes"}
-          </button>
+          </CTAButton>
         )}
       </MenuCard>
 

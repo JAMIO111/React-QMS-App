@@ -4,7 +4,8 @@ import Field from "../ui/Field";
 import RHFComboBox from "../ui/RHFComboBox";
 import { useCapaMutation } from "../../hooks/useCapa";
 import { ROOT_CAUSE_KINDS, ROOT_CAUSE_OPTIONS } from "../../lib/capa";
-import { FormError, TextAreaField, buttonClass } from "../master-data/shared";
+import { FormError, TextAreaField } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 const MIN_ROWS = 3;
 const MAX_ROWS = 8;
@@ -137,20 +138,20 @@ const FiveWhysDialog = ({ capa, analysis, onClose }) => {
           ))}
         </ol>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className={buttonClass.neutral}
+          <CTAButton
+            buttonType="button"
+            type="neutral" size="md"
             disabled={whys.length >= MAX_ROWS}
             onClick={() => setWhys((ws) => [...ws, ""])}>
             Add another why
-          </button>
-          <button
-            type="button"
-            className={buttonClass.neutral}
+          </CTAButton>
+          <CTAButton
+            buttonType="button"
+            type="neutral" size="md"
             disabled={whys.length <= MIN_ROWS}
             onClick={() => setWhys((ws) => ws.slice(0, -1))}>
             Remove the last why
-          </button>
+          </CTAButton>
         </div>
         <TextAreaField
           label="The root cause"
@@ -162,21 +163,21 @@ const FiveWhysDialog = ({ capa, analysis, onClose }) => {
         />
         <FormError error={mutation.error} />
         <div className="flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            className={buttonClass.neutral}
+          <CTAButton
+            buttonType="button"
+            type="neutral" size="md"
             onClick={onClose}>
             Close
-          </button>
-          <button
-            type="submit"
-            className={buttonClass.neutral}
+          </CTAButton>
+          <CTAButton
+            buttonType="submit"
+            type="neutral" size="md"
             disabled={mutation.isPending || !title.trim()}>
             Save analysis
-          </button>
-          <button
-            type="button"
-            className={buttonClass.primary}
+          </CTAButton>
+          <CTAButton
+            buttonType="button"
+            type="main" size="lg"
             disabled={
               mutation.isPending ||
               !title.trim() ||
@@ -187,7 +188,7 @@ const FiveWhysDialog = ({ capa, analysis, onClose }) => {
             {alreadyRecorded
               ? "Already a root cause"
               : "Save and record as root cause"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>

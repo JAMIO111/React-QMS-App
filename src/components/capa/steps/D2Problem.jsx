@@ -5,7 +5,8 @@ import MenuCard from "../../ui/MenuCard";
 import ReasonDialog from "../../ncr/ReasonDialog";
 import { useCapaMutation } from "../../../hooks/useCapa";
 import { DIMENSIONS, FIVE_W2H, IS_IS_NOT_ROWS } from "../../../lib/capa";
-import { FormError, TextAreaField, buttonClass } from "../../master-data/shared";
+import { FormError, TextAreaField } from "../../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 const FiveW2HDialog = ({ capa, onClose }) => {
   const mutation = useCapaMutation();
@@ -28,8 +29,8 @@ const FiveW2HDialog = ({ capa, onClose }) => {
         </div>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save 5W2H"}</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save 5W2H"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -92,8 +93,8 @@ const IsIsNotDialog = ({ capa, analysis, onClose }) => {
         </div>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !title.trim()}>{mutation.isPending ? "Saving…" : "Save comparison"}</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !title.trim()}>{mutation.isPending ? "Saving…" : "Save comparison"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -117,7 +118,7 @@ const D2Problem = ({ capa, editable }) => {
         </p>
       )}
       <MenuCard title="5W2H" subtitle="What, where, when, who, why it matters, how and how many"
-        action={editable ? <button type="button" className={buttonClass.neutral} onClick={() => setDialog("5w2h")}>Open 5W2H</button> : undefined}>
+        action={editable ? <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setDialog("5w2h")}>Open 5W2H</CTAButton> : undefined}>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm md:grid-cols-2" aria-label="5W2H answers">
           {FIVE_W2H.map((q) => (
             <div key={q.key}>
@@ -128,7 +129,7 @@ const D2Problem = ({ capa, editable }) => {
         </dl>
       </MenuCard>
       <MenuCard title="Is / Is-Not" subtitle="Where the problem is, and where it could be but is not"
-        action={editable ? <button type="button" className={buttonClass.neutral} onClick={() => setDialog("new")}>New Is / Is-Not comparison</button> : undefined}>
+        action={editable ? <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setDialog("new")}>New Is / Is-Not comparison</CTAButton> : undefined}>
         {isIsNots.length === 0 ? (
           <p className="text-sm text-secondary-text">No comparison yet. It helps to narrow the cause when the problem happens on some parts, machines or shifts and not others.</p>
         ) : (
@@ -140,8 +141,8 @@ const D2Problem = ({ capa, editable }) => {
                   <span className="text-xs text-secondary-text">{answered(a)} of {IS_IS_NOT_ROWS.length} questions answered{a.createdBy ? ` · by ${a.createdBy.name}` : ""}</span>
                 </div>
                 <div className="flex gap-2">
-                  <button type="button" className={buttonClass.neutral} aria-label={`${editable ? "Open" : "View"} ${a.title}`} onClick={() => setDialog({ analysis: a })}>{editable ? "Open" : "View"}</button>
-                  {editable && <button type="button" className={buttonClass.neutral} aria-label={`Remove ${a.title}`} onClick={() => { mutation.reset(); setDialog({ remove: a }); }}>Remove</button>}
+                  <CTAButton buttonType="button" type="neutral" size="md" aria-label={`${editable ? "Open" : "View"} ${a.title}`} onClick={() => setDialog({ analysis: a })}>{editable ? "Open" : "View"}</CTAButton>
+                  {editable && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Remove ${a.title}`} onClick={() => { mutation.reset(); setDialog({ remove: a }); }}>Remove</CTAButton>}
                 </div>
               </li>
             ))}

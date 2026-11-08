@@ -3,7 +3,7 @@ import { PencilIcon, PlusIcon, RotateCcwIcon } from "@/components/icons";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import LoadingScreen from "../ui/LoadingScreen";
-import { buttonClass, ErrorNotice, FormError } from "../master-data/shared";
+import { ErrorNotice, FormError } from "../master-data/shared";
 import { LotPicker } from "../production/pickers";
 import { TextAreaField } from "./Pickers";
 import ReasonDialog from "./ReasonDialog";
@@ -11,6 +11,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useNcrAffectedLots, useNcrMutation } from "../../hooks/useNcr";
 import { useSerialLookup } from "../../hooks/useProduction";
 import { formatDate } from "../../lib/ncr";
+import CTAButton from "@/components/CTAButton";
 
 /** Add or change an affected lot: the lot (fixed once added), how many of its items, which serial numbers and a note. */
 const LotDialog = ({ ncrId, partId, row, lot, remaining, onClose }) => {
@@ -70,12 +71,12 @@ const LotDialog = ({ ncrId, partId, row, lot, remaining, onClose }) => {
         <TextAreaField label="Note" value={note} onChange={setNote} maxLength={1000} rows={2} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !qtyOk || !picked}>
+          </CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !qtyOk || !picked}>
             {mutation.isPending ? "Saving…" : row ? "Save" : "Add lot"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>
@@ -119,9 +120,9 @@ const NcrAffectedLots = ({ ncrId, partId, canEdit }) => {
           <span>
             This non-conformance is linked to lot <strong>{d.suggestedLot.lotNumber}</strong>, which is not listed here yet.
           </span>
-          <button type="button" className={`${buttonClass.neutral} ml-auto`} onClick={() => setEditing({ suggested: d.suggestedLot })}>
+          <CTAButton buttonType="button" type="neutral" size="md" className="ml-auto" onClick={() => setEditing({ suggested: d.suggestedLot })}>
             Add lot {d.suggestedLot.lotNumber}…
-          </button>
+          </CTAButton>
         </div>
       )}
 
@@ -141,13 +142,13 @@ const NcrAffectedLots = ({ ncrId, partId, canEdit }) => {
                 </span>
                 {canEdit && (
                   <span className="ml-auto flex flex-wrap gap-2">
-                    <button type="button" className={buttonClass.neutral} onClick={() => setEditing(a)} aria-label={`Edit lot ${a.lot.lotNumber}`}>
+                    <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setEditing(a)} aria-label={`Edit lot ${a.lot.lotNumber}`}>
                       <PencilIcon className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
                       Edit
-                    </button>
-                    <button type="button" className={buttonClass.neutral} onClick={() => setRemoving(a)} aria-label={`Remove lot ${a.lot.lotNumber}`}>
+                    </CTAButton>
+                    <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setRemoving(a)} aria-label={`Remove lot ${a.lot.lotNumber}`}>
                       Remove
-                    </button>
+                    </CTAButton>
                   </span>
                 )}
               </div>
@@ -171,10 +172,10 @@ const NcrAffectedLots = ({ ncrId, partId, canEdit }) => {
                   removed {formatDate(a.removedAt)} by {a.removedBy?.name ?? "—"}: {a.removedReason}
                 </span>
                 {canEdit && (
-                  <button type="button" className={`${buttonClass.neutral} ml-auto`} onClick={() => mutation.mutate({ path: `/ncr-affected-lots/${a.id}/restore` })} disabled={mutation.isPending} aria-label={`Restore lot ${a.lot.lotNumber}`}>
+                  <CTAButton buttonType="button" type="neutral" size="md" className="ml-auto" onClick={() => mutation.mutate({ path: `/ncr-affected-lots/${a.id}/restore` })} disabled={mutation.isPending} aria-label={`Restore lot ${a.lot.lotNumber}`}>
                     <RotateCcwIcon className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
                     Restore
-                  </button>
+                  </CTAButton>
                 )}
               </li>
             ))}
@@ -184,9 +185,9 @@ const NcrAffectedLots = ({ ncrId, partId, canEdit }) => {
 
       {canEdit && (
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => setEditing("new")} disabled={d.remaining <= 0}>
+          <CTAButton buttonType="button" type="neutral" size="md" className="flex items-center gap-1" onClick={() => setEditing("new")} disabled={d.remaining <= 0}>
             <PlusIcon className="h-4 w-4" aria-hidden="true" /> Add a lot
-          </button>
+          </CTAButton>
           {d.remaining <= 0 && <span className="text-xs text-secondary-text">Every affected item is already placed in a lot.</span>}
         </div>
       )}

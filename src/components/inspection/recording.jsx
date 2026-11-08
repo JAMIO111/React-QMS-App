@@ -7,8 +7,9 @@ import RHFComboBox from "../ui/RHFComboBox";
 import { useInspectionMutation } from "../../hooks/useInspection";
 import { describeLimits, eventTriggers, isDecimal, nextSample, previewResult, TRIGGER_LABEL } from "../../lib/inspection";
 import { formatDate, formatDateTime } from "../../lib/processControl";
-import { buttonClass, FormError, SelectField, TextAreaField } from "../master-data/shared";
+import { FormError, SelectField, TextAreaField } from "../master-data/shared";
 import { ResultBadge } from "./shared";
+import CTAButton from "@/components/CTAButton";
 
 /**
  * The recording pieces of an in-process inspection, shared by the inspection page (/Inspections/:id) and the operator job hub (/Jobs/:id) so the two
@@ -253,9 +254,9 @@ export const SampleEntry = ({ inspection, gauges, canOverride }) => {
         </p>
       )}
       <FormError error={mutation.error} />
-      <button type="submit" className={`${buttonClass.primary} min-h-11 self-start`} disabled={mutation.isPending || nothingToDo}>
+      <CTAButton buttonType="submit" type="main" size="lg" className="min-h-11 self-start" disabled={mutation.isPending || nothingToDo}>
         {mutation.isPending ? "Saving…" : "Save sample"}
-      </button>
+      </CTAButton>
     </MenuCard>
   );
 };
@@ -335,14 +336,14 @@ export const ReadingDialog = ({ inspection, requirement, reading, gauges, canCor
         {!mode && (
           <div className="flex flex-wrap gap-2">
             {canCorrect && inspection.status !== "abandoned" && (
-              <button type="button" className={buttonClass.neutral} onClick={() => setMode("correct")}>
+              <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setMode("correct")}>
                 Correct this reading
-              </button>
+              </CTAButton>
             )}
             {canRecord && open && reading.result === "fail" && (
-              <button type="button" className={buttonClass.primary} onClick={() => setMode("retest")}>
+              <CTAButton buttonType="button" type="main" size="lg" onClick={() => setMode("retest")}>
                 Record a retest
-              </button>
+              </CTAButton>
             )}
           </div>
         )}
@@ -367,15 +368,15 @@ export const ReadingDialog = ({ inspection, requirement, reading, gauges, canCor
             {mode === "correct" && <TextAreaField label="Reason for the correction" value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={1000} rows={2} />}
             <FormError error={mutation.error} />
             <div className="flex justify-end gap-2">
-              <button type="button" className={buttonClass.neutral} onClick={() => setMode(null)}>
+              <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setMode(null)}>
                 Cancel
-              </button>
-              <button
-                type="submit"
-                className={buttonClass.primary}
+              </CTAButton>
+              <CTAButton
+                buttonType="submit"
+                type="main" size="lg"
                 disabled={mutation.isPending || value === null || value === "" || (mode === "correct" && !reason.trim())}>
                 {mutation.isPending ? "Saving…" : mode === "correct" ? "Save correction" : "Save retest"}
-              </button>
+              </CTAButton>
             </div>
           </form>
         )}
@@ -479,13 +480,13 @@ export const RunControls = ({ inspection }) => {
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        <button type="button" className={`${buttonClass.primary} min-h-11`} disabled={mutation.isPending || plannedLeft > 0} onClick={() => mutation.mutate({ path: `/inspections/${inspection.id}/complete` })}>
+        <CTAButton buttonType="button" type="main" size="lg" className="min-h-11" disabled={mutation.isPending || plannedLeft > 0} onClick={() => mutation.mutate({ path: `/inspections/${inspection.id}/complete` })}>
           Complete inspection
-        </button>
+        </CTAButton>
         {plannedLeft > 0 && <p className="self-center text-sm text-secondary-text">{plannedLeft} planned {plannedLeft === 1 ? "sample" : "samples"} still to record. Abandon the inspection to stop early.</p>}
-        <button type="button" className={`${buttonClass.neutral} min-h-11`} onClick={() => setAbandoning(true)}>
+        <CTAButton buttonType="button" type="neutral" size="md" className="min-h-11" onClick={() => setAbandoning(true)}>
           Abandon
-        </button>
+        </CTAButton>
       </div>
       {!abandoning && <FormError error={mutation.error} />}
       {abandoning && (
@@ -500,12 +501,12 @@ export const RunControls = ({ inspection }) => {
             <TextAreaField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={2000} rows={2} />
             <FormError error={mutation.error} />
             <div className="flex justify-end gap-2">
-              <button type="button" className={buttonClass.neutral} onClick={() => setAbandoning(false)}>
+              <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setAbandoning(false)}>
                 Cancel
-              </button>
-              <button type="submit" className={buttonClass.danger} disabled={!reason.trim() || mutation.isPending}>
+              </CTAButton>
+              <CTAButton buttonType="submit" type="danger" size="md" disabled={!reason.trim() || mutation.isPending}>
                 Abandon inspection
-              </button>
+              </CTAButton>
             </div>
           </form>
         </Dialog>

@@ -5,6 +5,7 @@ import { useResolution } from "../../hooks/useProcessControl";
 import { FormError, SelectField } from "../master-data/shared";
 import ResolutionView from "./ResolutionView";
 import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
 
 /**
  * What an operator would get for a part (and optionally one operation): the plan revision that
@@ -39,9 +40,9 @@ const RequirementPreview = ({ parts = [], partId: fixedPartId, title = "Preview 
           />
         )}
         <Field label="Operation" value={operation} onChange={(e) => setOperation(e.target.value)} maxLength={30} hint="Optional, e.g. OP-020" className="w-48" />
-        <button type="submit" className="mb-5 rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-2 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
+        <CTAButton buttonType="submit" type="neutral" size="md" className="mb-5 px-3 py-2">
           Apply
-        </button>
+        </CTAButton>
       </form>
       {!fixedPartId && !partId && <p className="text-sm text-secondary-text">{parts.length ? "Choose a part to preview." : "The plan's scope has no active parts."}</p>}
       {query.isLoading && (fixedPartId || partId) && <LoadingScreen size="sm" />}

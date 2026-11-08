@@ -7,7 +7,8 @@ import { useConfirm } from "../../contexts/ConfirmationModalProvider";
 import { useToast } from "../../contexts/ToastProvider";
 import { useMasterDataMutation, useParties } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
-import { buttonClass, FormError, SelectField } from "./shared";
+import { FormError, SelectField } from "./shared";
+import CTAButton from "@/components/CTAButton";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2";
@@ -55,12 +56,12 @@ const CustomerLinkForm = ({ part, link, onDone }) => {
       />
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
-        </button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || (!link && !customerId)}>
+        </CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || (!link && !customerId)}>
           {mutation.isPending ? "Saving…" : link ? "Save" : "Add customer"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -95,9 +96,9 @@ const PartCustomers = ({ part, canManage }) => {
       bodyClassName="overflow-x-auto"
       action={
         canManage && (
-          <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => setEditing("new")}>
+          <CTAButton buttonType="button" type="neutral" size="md" className="flex items-center gap-1" onClick={() => setEditing("new")}>
             <PlusIcon className="h-4 w-4" /> Add customer
-          </button>
+          </CTAButton>
         )
       }>
       {part.customers.length === 0 ? (
@@ -137,12 +138,12 @@ const PartCustomers = ({ part, canManage }) => {
                 {canManage && (
                   <td className={td}>
                     <div className="flex justify-end gap-2">
-                      <button type="button" className={buttonClass.neutral} onClick={() => setEditing(link)} aria-label={`Edit ${link.customer.code}`}>
+                      <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setEditing(link)} aria-label={`Edit ${link.customer.code}`}>
                         <PencilIcon className="h-4 w-4" />
-                      </button>
-                      <button type="button" className={buttonClass.danger} disabled={mutation.isPending} onClick={() => remove(link)} aria-label={`Remove ${link.customer.code}`}>
+                      </CTAButton>
+                      <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} onClick={() => remove(link)} aria-label={`Remove ${link.customer.code}`}>
                         <Trash2Icon className="h-4 w-4" />
-                      </button>
+                      </CTAButton>
                     </div>
                   </td>
                 )}

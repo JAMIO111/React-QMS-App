@@ -47,11 +47,9 @@ const SettingsNotifications = () => {
         subtitle="Choose which changes appear in your notification bell. Defaults follow your role and your subscription package, and you only see events you have access to. Your own changes never notify you."
         action={
           <LoadingButton
-            type="button"
             loading={reset.isPending}
             disabled={!anyOverride}
-            onClick={() => reset.mutate(undefined, { onError: fail })}
-            className="rounded-lg border border-border-color px-3 py-1.5 text-sm text-primary-text hover:border-border-dark-color cursor-pointer">
+            onClick={() => reset.mutate(undefined, { onError: fail })}>
             Reset to defaults
           </LoadingButton>
         }

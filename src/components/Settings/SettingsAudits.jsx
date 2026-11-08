@@ -10,7 +10,8 @@ import Dialog from "../ui/Dialog";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import Switch from "../ui/Switch";
-import { FormError, buttonClass } from "../master-data/shared";
+import { FormError } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm font-normal text-primary-text focus:outline-none focus:border-brand-primary";
 
@@ -68,12 +69,12 @@ const ClassificationDialog = ({ existing, onClose }) => {
         {isNc && <ComboField label="Default severity of a non-conformance raised from it" value={severity} onChange={setSeverity} options={SEVERITIES} placeholder="None (choose each time)" />}
         <FormError error={mutation.error ?? update.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={buttonClass.neutral}>
+          <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             Cancel
-          </button>
-          <button type="submit" disabled={!ok || mutation.isPending || update.isPending} className={buttonClass.primary}>
+          </CTAButton>
+          <CTAButton buttonType="submit" disabled={!ok || mutation.isPending || update.isPending} type="main" size="lg">
             {existing ? "Save" : "Add classification"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>
@@ -100,11 +101,11 @@ const SettingsAudits = () => {
         subtitle="How an audit finding is classified. Switch one off to stop it being chosen; findings already using it keep it."
         action={
           canManage && (
-            <button type="button" className={buttonClass.primary} onClick={() => setDialog({})}>
+            <CTAButton buttonType="button" type="main" size="lg" onClick={() => setDialog({})}>
               <span className="flex items-center gap-1">
                 <PlusIcon /> Add classification
               </span>
-            </button>
+            </CTAButton>
           )
         }>
         <ul aria-label="Finding classifications" className="flex flex-col divide-y divide-border-color">

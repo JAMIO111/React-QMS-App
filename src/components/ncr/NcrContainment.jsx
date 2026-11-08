@@ -4,13 +4,14 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import LoadingScreen from "../ui/LoadingScreen";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
-import { buttonClass, ErrorNotice, FormError, SelectField } from "../master-data/shared";
+import { ErrorNotice, FormError, SelectField } from "../master-data/shared";
 import { TextAreaField } from "./Pickers";
 import ReasonDialog from "./ReasonDialog";
 import { useToast } from "../../contexts/ToastProvider";
 import { useEmployees, useNcrAffectedLots, useNcrContainment, useNcrMutation } from "../../hooks/useNcr";
 import { CONTAINMENT_KINDS, containmentKindLabel } from "../../lib/ncrWorkflow";
 import { formatDate } from "../../lib/ncr";
+import CTAButton from "@/components/CTAButton";
 
 const STATUS = {
   open: { label: "Open", tone: "bg-warning-color/15 text-primary-text" },
@@ -71,12 +72,12 @@ const ActionDialog = ({ ncrId, action, lots, onClose }) => {
         </div>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !form.description.trim() || !qtyValid}>
+          </CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !form.description.trim() || !qtyValid}>
             {mutation.isPending ? "Saving…" : action ? "Save" : "Add action"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>
@@ -110,12 +111,12 @@ const DoneDialog = ({ action, onClose }) => {
         <Field label="Quantity contained" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} error={!qtyValid ? "Enter a number" : undefined} hint="Optional" />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !note.trim() || !qtyValid}>
+          </CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !note.trim() || !qtyValid}>
             {mutation.isPending ? "Saving…" : "Mark done"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>
@@ -176,23 +177,23 @@ const NcrContainment = ({ ncrId, canEdit }) => {
                 <span className="ml-auto flex flex-wrap gap-2">
                   {canEdit && a.status === "open" && (
                     <>
-                      <button type="button" className={buttonClass.neutral} onClick={() => setEditing(a)} aria-label={`Edit containment action: ${a.description}`}>
+                      <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setEditing(a)} aria-label={`Edit containment action: ${a.description}`}>
                         <PencilIcon className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
                         Edit
-                      </button>
-                      <button type="button" className={buttonClass.primary} onClick={() => setCompleting(a)}>
+                      </CTAButton>
+                      <CTAButton buttonType="button" type="main" size="lg" onClick={() => setCompleting(a)}>
                         Done…
-                      </button>
-                      <button type="button" className={buttonClass.neutral} onClick={() => setCancelling(a)}>
+                      </CTAButton>
+                      <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setCancelling(a)}>
                         Cancel
-                      </button>
+                      </CTAButton>
                     </>
                   )}
                   {canEdit && a.status !== "open" && (
-                    <button type="button" className={buttonClass.neutral} onClick={() => run({ path: `/ncr-containment-actions/${a.id}/reopen` })} disabled={mutation.isPending}>
+                    <CTAButton buttonType="button" type="neutral" size="md" onClick={() => run({ path: `/ncr-containment-actions/${a.id}/reopen` })} disabled={mutation.isPending}>
                       <RotateCcwIcon className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
                       Reopen
-                    </button>
+                    </CTAButton>
                   )}
                 </span>
               </div>
@@ -218,9 +219,9 @@ const NcrContainment = ({ ncrId, canEdit }) => {
 
       {canEdit && (
         <div className="flex flex-wrap gap-2">
-          <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => setEditing("new")}>
+          <CTAButton buttonType="button" type="neutral" size="md" className="flex items-center gap-1" onClick={() => setEditing("new")}>
             <PlusIcon className="h-4 w-4" aria-hidden="true" /> Add containment action
-          </button>
+          </CTAButton>
         </div>
       )}
 
@@ -233,9 +234,9 @@ const NcrContainment = ({ ncrId, canEdit }) => {
                 {c.notNeededReason}
               </p>
               {canEdit && (
-                <button type="button" className={buttonClass.neutral} onClick={() => saveReason(null)} disabled={mutation.isPending}>
+                <CTAButton buttonType="button" type="neutral" size="md" onClick={() => saveReason(null)} disabled={mutation.isPending}>
                   Clear
-                </button>
+                </CTAButton>
               )}
             </div>
           ) : (
@@ -254,9 +255,9 @@ const NcrContainment = ({ ncrId, canEdit }) => {
                 maxLength={500}
                 className="min-w-64 flex-1"
               />
-              <button type="button" className={buttonClass.neutral} onClick={submitReason} disabled={!reason.trim() || mutation.isPending}>
+              <CTAButton buttonType="button" type="neutral" size="md" onClick={submitReason} disabled={!reason.trim() || mutation.isPending}>
                 Save reason
-              </button>
+              </CTAButton>
             </div>
           )}
         </div>

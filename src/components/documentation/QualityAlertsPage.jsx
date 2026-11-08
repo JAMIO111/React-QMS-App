@@ -5,8 +5,9 @@ import MenuCard from "../ui/MenuCard";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useQualityAlerts } from "../../hooks/useDocumentation";
 import { CATEGORIES, SEVERITIES, categoryLabel, formatDay, referenceText } from "../../lib/qualityAlerts";
-import { ErrorNotice, SelectField, buttonClass } from "../master-data/shared";
+import { ErrorNotice, SelectField } from "../master-data/shared";
 import { SeverityBadge, StatusPill } from "./shared";
+import CTAButton from "@/components/CTAButton";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
@@ -45,9 +46,9 @@ const QualityAlertsPage = () => {
           <p className="text-sm text-secondary-text">Communications that need immediate attention. Each is numbered, dated, kept in revisions and addressed to the people who must act on it.</p>
         </div>
         {manage && (
-          <button type="button" className={`${buttonClass.primary} inline-flex items-center gap-1`} onClick={() => navigate("/Documentation/Quality-Alerts/new")}>
+          <CTAButton buttonType="button" type="main" size="lg" className="inline-flex items-center gap-1" onClick={() => navigate("/Documentation/Quality-Alerts/new")}>
             <PlusIcon className="h-4 w-4" /> New quality alert
-          </button>
+          </CTAButton>
         )}
       </div>
 

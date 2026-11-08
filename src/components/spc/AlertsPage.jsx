@@ -7,7 +7,8 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useAcknowledgeAlert, useSpcAlerts } from "../../hooks/useSpc";
 import { formatDateTime } from "../../lib/processControl";
 import { CHART_NAME } from "../../lib/spc";
-import { ErrorNotice, FormError, TextAreaField, buttonClass } from "../master-data/shared";
+import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
@@ -34,12 +35,12 @@ const AcknowledgeDialog = ({ alert, onClose }) => {
         <TextAreaField label="What was done" value={note} onChange={(e) => setNote(e.target.value)} required maxLength={2000} rows={3} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className={buttonClass.primary} disabled={!note.trim() || mutation.isPending}>
+          </CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!note.trim() || mutation.isPending}>
             {mutation.isPending ? "Saving…" : "Acknowledge"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>
@@ -152,9 +153,9 @@ const AlertsPage = () => {
                     </td>
                     <td className={td}>
                       {a.status === "open" && canManage && (
-                        <button type="button" className={buttonClass.neutral} onClick={() => setAcknowledging(a)}>
+                        <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setAcknowledging(a)}>
                           Acknowledge
-                        </button>
+                        </CTAButton>
                       )}
                     </td>
                   </tr>

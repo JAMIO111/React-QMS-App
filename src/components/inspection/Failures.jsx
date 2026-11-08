@@ -8,12 +8,12 @@ import { describeLimits } from "../../lib/inspection";
 import { ncrPath } from "../../lib/ncr";
 import { useClassifications } from "../../hooks/useNcr";
 import {
-  buttonClass,
   ErrorNotice,
   FormError,
   SelectField,
   TextAreaField,
 } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 const SEVERITIES = [
   { value: "critical", label: "Critical" },
@@ -84,20 +84,20 @@ const AcknowledgeDialog = ({ reading, requirement, onClose }) => {
         />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            className={buttonClass.neutral}
+          <CTAButton
+            buttonType="button"
+            type="neutral" size="md"
             onClick={onClose}
           >
             Cancel
-          </button>
-          <button
-            type="submit"
-            className={buttonClass.primary}
+          </CTAButton>
+          <CTAButton
+            buttonType="submit"
+            type="main" size="lg"
             disabled={!note.trim() || mutation.isPending}
           >
             Acknowledge
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>
@@ -264,16 +264,16 @@ const NcFields = ({ inspection, draft, measurementIds, onClose }) => {
       </label>
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onClose}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
           Cancel
-        </button>
-        <button
-          type="submit"
-          className={buttonClass.primary}
+        </CTAButton>
+        <CTAButton
+          buttonType="submit"
+          type="main" size="lg"
           disabled={!title.trim() || mutation.isPending}
         >
           Raise non-conformance
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -444,20 +444,20 @@ const AddToNcrDialog = ({
         </p>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            className={buttonClass.neutral}
+          <CTAButton
+            buttonType="button"
+            type="neutral" size="md"
             onClick={onClose}
           >
             Cancel
-          </button>
-          <button
-            type="submit"
-            className={buttonClass.primary}
+          </CTAButton>
+          <CTAButton
+            buttonType="submit"
+            type="main" size="lg"
             disabled={mutation.isPending}
           >
             Add to {ncr.reference}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>
@@ -509,13 +509,13 @@ const Failures = ({
       }
       action={
         canRaise && (open || inspection.status === "completed") ? (
-          <button
-            type="button"
-            className={buttonClass.neutral}
+          <CTAButton
+            buttonType="button"
+            type="neutral" size="md"
             onClick={() => setRaising([])}
           >
             Raise NC without a reading
-          </button>
+          </CTAButton>
         ) : null
       }
     >
@@ -610,13 +610,13 @@ const Failures = ({
                     </span>
                   )}
                   {open && canRecord && !m.acknowledgement && (
-                    <button
-                      type="button"
-                      className={buttonClass.neutral}
+                    <CTAButton
+                      buttonType="button"
+                      type="neutral" size="md"
                       onClick={() => setAck(m)}
                     >
                       Acknowledge
-                    </button>
+                    </CTAButton>
                   )}
                 </div>
                 {canUpdateNcr &&
@@ -631,15 +631,15 @@ const Failures = ({
                             {q.name} already has {live.reference} ({live.stage}
                             ).
                           </span>
-                          <button
-                            type="button"
-                            className={buttonClass.neutral}
+                          <CTAButton
+                            buttonType="button"
+                            type="neutral" size="md"
                             onClick={() =>
                               setAdding({ ids: [m.id], preferredId: live.id })
                             }
                           >
                             Add to {live.reference}
-                          </button>
+                          </CTAButton>
                         </p>
                       );
                     if (earlier.length)
@@ -660,19 +660,19 @@ const Failures = ({
       {(canRaise || canUpdateNcr) && picked.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
           {canRaise && (
-            <button
-              type="button"
-              className={buttonClass.primary}
+            <CTAButton
+              buttonType="button"
+              type="main" size="lg"
               onClick={() => setRaising(picked)}
             >
               Raise NC for {picked.length} selected reading
               {picked.length > 1 ? "s" : ""}
-            </button>
+            </CTAButton>
           )}
           {canUpdateNcr && openNcrs.length > 0 && (
-            <button
-              type="button"
-              className={buttonClass.neutral}
+            <CTAButton
+              buttonType="button"
+              type="neutral" size="md"
               onClick={() =>
                 setAdding({
                   ids: picked,
@@ -684,7 +684,7 @@ const Failures = ({
               }
             >
               Add {picked.length} selected to an existing NC
-            </button>
+            </CTAButton>
           )}
         </div>
       )}

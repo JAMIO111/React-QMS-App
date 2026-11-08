@@ -3,8 +3,9 @@ import { Link } from "react-router-dom";
 import { useCapaMutation, useMyCapaActions } from "../../hooks/useCapa";
 import { formatDay } from "../../lib/qualityAlerts";
 import { ACTION_STATUS } from "../../lib/capa";
-import { ErrorNotice, FormError, buttonClass } from "../master-data/shared";
+import { ErrorNotice, FormError } from "../master-data/shared";
 import { FindingsDialog } from "./ActionList";
+import CTAButton from "@/components/CTAButton";
 
 const PHASES = { interim: "Containment", corrective: "Corrective action", preventive: "Preventive action" };
 const STEP_OF = { interim: "d3", corrective: "d6", preventive: "d7" };
@@ -31,7 +32,7 @@ const MyActionsPage = () => {
         </div>
         <div role="group" aria-label="Show" className="flex gap-1">
           {FILTERS.map((f) => (
-            <button key={f.id} type="button" aria-pressed={status === f.id} className={`${buttonClass.neutral} ${status === f.id ? "ring-2 ring-brand-primary" : ""}`} onClick={() => setStatus(f.id)}>{f.label}</button>
+            <CTAButton key={f.id} type="neutral" size="md" aria-pressed={status === f.id} className={status === f.id ? "ring-2 ring-brand-primary" : undefined} onClick={() => setStatus(f.id)}>{f.label}</CTAButton>
           ))}
         </div>
       </header>
@@ -60,9 +61,9 @@ const MyActionsPage = () => {
                 <p className="text-xs text-secondary-text">The step this is worked in is complete, so it is read-only. Ask the 8D team to reopen it.</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  {a.status === "open" && <button type="button" className={buttonClass.neutral} aria-label={`Update findings: ${a.description}`} onClick={() => { mutation.reset(); setDialog({ action: a, closing: false }); }}>Update findings</button>}
-                  {a.status === "open" && <button type="button" className={buttonClass.primary} aria-label={`Close action: ${a.description}`} onClick={() => { mutation.reset(); setDialog({ action: a, closing: true }); }}>Close action</button>}
-                  {a.status === "done" && <button type="button" className={buttonClass.neutral} aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</button>}
+                  {a.status === "open" && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Update findings: ${a.description}`} onClick={() => { mutation.reset(); setDialog({ action: a, closing: false }); }}>Update findings</CTAButton>}
+                  {a.status === "open" && <CTAButton buttonType="button" type="main" size="lg" aria-label={`Close action: ${a.description}`} onClick={() => { mutation.reset(); setDialog({ action: a, closing: true }); }}>Close action</CTAButton>}
+                  {a.status === "done" && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
                 </div>
               )}
             </li>

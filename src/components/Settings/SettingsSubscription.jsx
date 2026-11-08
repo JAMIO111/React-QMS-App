@@ -25,11 +25,8 @@ import {
   useSubscriptionMutation,
   useSubscriptionOverview,
 } from "../../hooks/useSubscription";
+import CTAButton from "@/components/CTAButton";
 
-const button =
-  "rounded-lg border border-border-color px-2 py-1 text-sm text-primary-text active:scale-95 hover:border-theme/50 bg-text-input-color disabled:opacity-50 cursor-pointer";
-const plusminusbutton =
-  "rounded-lg border border-border-color w-8 px-2 py-1 text-sm text-primary-text active:scale-95 hover:border-theme/50 bg-text-input-color disabled:opacity-50 cursor-pointer";
 const select =
   "rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-sm text-primary-text disabled:opacity-60";
 
@@ -69,12 +66,13 @@ const Stat = ({ label, value, hint }) => (
   </div>
 );
 
-const ManageBillingButton = ({ className = button }) => {
+const ManageBillingButton = ({ className = "px-2 py-1" }) => {
   const portal = usePortalSession();
   const { showToast } = useToast();
   return (
-    <button
-      type="button"
+    <CTAButton
+      type="neutral"
+      size="md"
       className={className}
       disabled={portal.isPending}
       onClick={() =>
@@ -89,7 +87,7 @@ const ManageBillingButton = ({ className = button }) => {
         })
       }>
       {portal.isPending ? "Opening…" : "Manage billing"}
-    </button>
+    </CTAButton>
   );
 };
 
@@ -361,10 +359,10 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
               </p>
               {canManage && (
                 <div className="mt-auto flex items-center gap-3">
-                  <button
-                    type="button"
+                  <CTAButton
+                    buttonType="button"
                     aria-label={`Remove ${plan.name} seat`}
-                    className={plusminusbutton}
+                    type="neutral" size="md" className="w-8 px-2 py-1"
                     disabled={
                       mutation.isPending ||
                       preview.isPending ||
@@ -376,20 +374,20 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
                     }
                     onClick={() => step(plan, -1)}>
                     −
-                  </button>
+                  </CTAButton>
                   <span
                     aria-label={`${plan.name} seats`}
                     className="min-w-6 text-center text-primary-text">
                     {qty}
                   </span>
-                  <button
-                    type="button"
+                  <CTAButton
+                    buttonType="button"
                     aria-label={`Add ${plan.name} seat`}
-                    className={plusminusbutton}
+                    type="neutral" size="md" className="w-8 px-2 py-1"
                     disabled={mutation.isPending}
                     onClick={() => step(plan, 1)}>
                     +
-                  </button>
+                  </CTAButton>
                 </div>
               )}
             </div>
@@ -398,15 +396,16 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
       </div>
       {canManage && changes.length > 0 && (
         <div className="mt-4 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            className={button}
+          <CTAButton
+            buttonType="button"
+            type="neutral" size="md" className="px-2 py-1"
             disabled={mutation.isPending}
             onClick={() => setDraft({})}>
             Discard
-          </button>
+          </CTAButton>
           <LoadingButton
-            className={`${button} bg-cta-color text-white`}
+            variant="main"
+          className="px-2 py-1"
             loading={mutation.isPending || preview.isPending}
             loadingText={managed ? "Checking the price…" : "Applying…"}
             onClick={apply}>
@@ -459,7 +458,8 @@ const StartSubscription = ({ catalogue }) => {
       />
       <div className="mt-4 flex justify-end">
         <LoadingButton
-          className={`${button} bg-cta-color text-white`}
+          variant="main"
+          className="px-2 py-1"
           loading={start.isPending}
           loadingText="Opening checkout…"
           onClick={go}>

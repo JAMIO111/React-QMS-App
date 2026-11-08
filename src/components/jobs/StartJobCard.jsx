@@ -4,8 +4,8 @@ import { PlayIcon } from "@/components/icons";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useMyJobs } from "../../hooks/useJobs";
 import { elapsed } from "../../lib/jobs";
-import { buttonClass } from "../master-data/shared";
 import StartJobDialog from "./StartJobDialog";
+import CTAButton from "@/components/CTAButton";
 
 const Card = () => {
   const [open, setOpen] = useState(false);
@@ -18,10 +18,10 @@ const Card = () => {
           <h2 className="text-lg font-semibold text-primary-text">Start new job</h2>
           <p className="text-sm text-secondary-text">Choose your machine and the part. Everything else is filled in for you.</p>
         </div>
-        <button type="button" className={buttonClass.primary} onClick={() => setOpen(true)}>
+        <CTAButton buttonType="button" type="main" size="lg" onClick={() => setOpen(true)}>
           <PlayIcon className="mr-1.5 inline h-4 w-4" aria-hidden="true" />
           Start new job
-        </button>
+        </CTAButton>
       </div>
       {running.length > 0 && (
         <div className="flex flex-col gap-1.5">

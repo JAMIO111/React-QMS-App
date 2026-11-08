@@ -8,6 +8,7 @@ import Field from "../ui/Field";
 import { FormError } from "../master-data/shared";
 import { LotPicker, OrderPicker } from "./pickers";
 import { StatusBadge, StatusMoves } from "./shared";
+import CTAButton from "@/components/CTAButton";
 
 const MODES = [
   { id: "single", label: "One" },
@@ -125,13 +126,13 @@ const SerialDialog = ({ serial, onClose, readOnly = false }) => {
         </fieldset>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
+          <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             {disabled ? "Close" : "Cancel"}
-          </button>
+          </CTAButton>
           {!disabled && (
-            <button type="submit" disabled={mutation.isPending || !valid} className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
+            <CTAButton buttonType="submit" disabled={mutation.isPending || !valid} type="main" size="md">
               {mutation.isPending ? "Saving…" : creating ? `Add ${numbers.length || ""} serial number${numbers.length === 1 ? "" : "s"}`.replace("  ", " ") : "Save changes"}
-            </button>
+            </CTAButton>
           )}
         </div>
       </form>

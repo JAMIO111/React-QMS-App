@@ -1,20 +1,16 @@
 import { LoaderCircleIcon } from "@/components/icons";
+import CTAButton from "../CTAButton";
 
 /**
- * A button that shows a spinner and ignores clicks while `loading` (a mutation or submit in
- * progress). Styling comes from `className`, as with a plain button; `loadingText` replaces the
- * label while busy. Defaults to type="button".
+ * A CTAButton that shows a spinner and ignores clicks while `loading` (a mutation or submit in progress).
+ * `variant` is the button style (main, secondary, neutral, danger, success; default neutral); `size`, `className`
+ * and every other CTAButton prop work as usual. `loadingText` replaces the label while busy.
  */
-const LoadingButton = ({ loading = false, loadingText, disabled, type = "button", className = "", children, ...props }) => (
-  <button
-    type={type}
-    disabled={disabled || loading}
-    aria-busy={loading || undefined}
-    className={`${className} inline-flex items-center justify-center gap-1.5 disabled:cursor-not-allowed`}
-    {...props}>
+const LoadingButton = ({ loading = false, loadingText, disabled, variant = "neutral", size = "md", children, ...props }) => (
+  <CTAButton type={variant} size={size} disabled={disabled || loading} aria-busy={loading || undefined} {...props}>
     {loading && <LoaderCircleIcon className="animate-spin" aria-hidden="true" />}
     {loading && loadingText ? loadingText : children}
-  </button>
+  </CTAButton>
 );
 
 export default LoadingButton;

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { usePlatformOrganisations } from "../../hooks/usePlatform";
-import { buttonClass } from "../master-data/shared";
 import { Card, Panel, Pill, Table } from "./Panels";
 import { day, pounds, statusTone } from "./format";
+import CTAButton from "@/components/CTAButton";
 
 const PAGE = 25;
 
@@ -68,8 +68,8 @@ const OrganisationsPanel = () => {
               <div className="mt-3 flex items-center justify-between gap-2 text-sm text-secondary-text">
                 <span>{offset + 1}–{Math.min(offset + PAGE, res.total)} of {res.total}</span>
                 <span className="flex gap-2">
-                  <button type="button" className={buttonClass.neutral} disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>Previous</button>
-                  <button type="button" className={buttonClass.neutral} disabled={offset + PAGE >= res.total} onClick={() => setOffset(offset + PAGE)}>Next</button>
+                  <CTAButton buttonType="button" type="neutral" size="md" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>Previous</CTAButton>
+                  <CTAButton buttonType="button" type="neutral" size="md" disabled={offset + PAGE >= res.total} onClick={() => setOffset(offset + PAGE)}>Next</CTAButton>
                 </span>
               </div>
             )}

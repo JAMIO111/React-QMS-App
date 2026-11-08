@@ -1,6 +1,7 @@
 import { RotateCcwIcon } from "@/components/icons";
 import { STAGES, nextStages, stageOf } from "../../lib/ncr";
 import { gateKey } from "../../lib/ncrWorkflow";
+import CTAButton from "@/components/CTAButton";
 
 /** Stage track with the moves allowed from the current stage. */
 const StageBar = ({ ncr, gates, canUpdate, dirty, onMove, onCancel, onReopen, pending }) => {
@@ -39,10 +40,10 @@ const StageBar = ({ ncr, gates, canUpdate, dirty, onMove, onCancel, onReopen, pe
       {!blocked && (
         <div className="flex flex-wrap items-center gap-2">
           {options.forward.slice(0, 1).map((to) => (
-            <button key={to} type="button" disabled={pending || dirty} onClick={() => onMove(to)}
-              className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
+            <CTAButton key={to} buttonType="button" disabled={pending || dirty} onClick={() => onMove(to)}
+              type="main" size="md">
               {to === "open" ? "Open this NC" : `Move to ${stageOf(to).label}`}
-            </button>
+            </CTAButton>
           ))}
           {options.forward.length > 1 && (
             <select aria-label="Move to a later stage" disabled={pending || dirty} value="" onChange={(e) => e.target.value && onMove(e.target.value)}
@@ -56,14 +57,14 @@ const StageBar = ({ ncr, gates, canUpdate, dirty, onMove, onCancel, onReopen, pe
             </select>
           )}
           {options.cancel && (
-            <button type="button" disabled={pending || dirty} onClick={onCancel} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover disabled:opacity-50 cursor-pointer">
+            <CTAButton buttonType="button" disabled={pending || dirty} onClick={onCancel} type="neutral" size="md">
               Cancel NC
-            </button>
+            </CTAButton>
           )}
           {options.reopen && (
-            <button type="button" disabled={pending} onClick={onReopen} className="flex items-center gap-1 rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover disabled:opacity-50 cursor-pointer">
+            <CTAButton buttonType="button" disabled={pending} onClick={onReopen} type="neutral" size="md" className="flex items-center gap-1">
               <RotateCcwIcon className="h-4 w-4" /> Reopen
-            </button>
+            </CTAButton>
           )}
           {dirty && <span className="text-sm text-secondary-text">Save your changes before changing the stage.</span>}
         </div>

@@ -33,10 +33,10 @@ import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import RHFTextArea from "../ui/RHFTextArea";
 import TextInput from "../ui/TextInput";
-import { btn } from "./buttons";
 import PeoplePicker from "./PeoplePicker";
 import { GaugeStatusPill, OutcomePill } from "./Pills";
 import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const str = (v) => (v === null || v === undefined ? "" : String(v));
@@ -290,29 +290,29 @@ const CalibrationRecordPage = () => {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!isNew && outOfTolerance && !c.nonconformance && !c.deletedAt && can("ncr.create") && can("calibration.record") && (
-            <button type="button" onClick={raiseNcr} disabled={mutation.isPending || dirty} className={btn.danger} title={dirty ? "Save your changes first" : "Raise a draft internal NC for this calibration"}>
+            <CTAButton buttonType="button" onClick={raiseNcr} disabled={mutation.isPending || dirty} type="danger" size="default" className="px-3" title={dirty ? "Save your changes first" : "Raise a draft internal NC for this calibration"}>
               <TriangleAlertIcon className="h-4 w-4" /> Raise NC
-            </button>
+            </CTAButton>
           )}
           {!isNew && c.nonconformance && (
-            <Link to={ncrPath(c.nonconformance.id)} className={btn.neutral}>
+            <CTAButton to={ncrPath(c.nonconformance.id)} type="neutral" size="default" className="px-3">
               <TriangleAlertIcon className="h-4 w-4" /> {c.nonconformance.reference}
-            </Link>
+            </CTAButton>
           )}
           {canEdit && dirty && (
-            <button type="button" onClick={() => { setForm(original); setReadings(originalReadings); }} className={btn.neutral}>
+            <CTAButton buttonType="button" onClick={() => { setForm(original); setReadings(originalReadings); }} type="neutral" size="default" className="px-3">
               <Undo2Icon className="h-4 w-4" /> Discard changes
-            </button>
+            </CTAButton>
           )}
           {canEdit && (
-            <button type="button" onClick={save} disabled={mutation.isPending || !valid || (!isNew && !dirty)} className={btn.save}>
+            <CTAButton buttonType="button" onClick={save} disabled={mutation.isPending || !valid || (!isNew && !dirty)} type="success" size="default" className="px-3">
               <SaveIcon className="h-4 w-4" /> {mutation.isPending ? "Saving…" : isNew ? "Save calibration" : "Save changes"}
-            </button>
+            </CTAButton>
           )}
           {!isNew && can("calibration.record") && !c.deletedAt && !g.deletedAt && (
-            <button type="button" onClick={() => { mutation.reset(); setDialog("delete"); }} className={btn.danger}>
+            <CTAButton buttonType="button" onClick={() => { mutation.reset(); setDialog("delete"); }} type="danger" size="default" className="px-3">
               <Trash2Icon className="h-4 w-4" /> Delete
-            </button>
+            </CTAButton>
           )}
         </div>
       </div>
@@ -329,9 +329,9 @@ const CalibrationRecordPage = () => {
           <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
             Deleted {formatDate(c.deletedAt)} by {c.deletedBy?.name ?? "—"}: “{c.deleteReason}”. It no longer counts towards the gauge's dates.
             {can("calibration.record") && !g.deletedAt && (
-              <button type="button" onClick={restore} disabled={mutation.isPending} className={btn.neutral}>
+              <CTAButton buttonType="button" onClick={restore} disabled={mutation.isPending} type="neutral" size="default" className="px-3">
                 <RotateCcwIcon className="h-4 w-4" /> Restore
-              </button>
+              </CTAButton>
             )}
           </div>
         )}

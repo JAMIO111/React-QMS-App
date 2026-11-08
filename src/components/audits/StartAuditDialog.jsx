@@ -4,7 +4,8 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useAudits, useAuditMutation } from "../../hooks/useAudits";
 import { auditTypeLabel } from "../../lib/audits";
 import Dialog from "../ui/Dialog";
-import { FormError, SelectField, buttonClass } from "../master-data/shared";
+import { FormError, SelectField } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 /** Start an audit that is not tied to a scheduled slot: choose which audit, and the record opens ready to be answered. */
 const StartAuditDialog = ({ onClose }) => {
@@ -42,12 +43,12 @@ const StartAuditDialog = ({ onClose }) => {
         )}
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={buttonClass.neutral}>
+          <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             Cancel
-          </button>
-          <button type="submit" disabled={!auditId || mutation.isPending} className={buttonClass.primary}>
+          </CTAButton>
+          <CTAButton buttonType="submit" disabled={!auditId || mutation.isPending} type="main" size="lg">
             {mutation.isPending ? "Starting…" : "Start audit"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>

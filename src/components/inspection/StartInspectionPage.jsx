@@ -8,10 +8,11 @@ import { useSites } from "../../hooks/useQmsApi";
 import { useMachines, useResolution } from "../../hooks/useProcessControl";
 import { useInspectionMutation } from "../../hooks/useInspection";
 import { needsLotSize, startTrigger } from "../../lib/inspection";
-import { buttonClass, FormError, SelectField } from "../master-data/shared";
+import { FormError, SelectField } from "../master-data/shared";
 import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
 import ResolutionView from "../process-control/ResolutionView";
 import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
 
 /**
  * Start an in-process inspection: production context (site, part, operation, machine, work order,
@@ -113,9 +114,9 @@ const StartInspectionPage = () => {
           />
         </div>
         <FormError error={mutation.error} />
-        <button type="submit" className={`${buttonClass.primary} self-start`} disabled={!ready || mutation.isPending}>
+        <CTAButton buttonType="submit" type="main" size="lg" className="self-start" disabled={!ready || mutation.isPending}>
           {mutation.isPending ? "Starting…" : "Start inspection"}
-        </button>
+        </CTAButton>
       </MenuCard>
       {form.partId && (
         <MenuCard title="Requirements" subtitle="Frozen with the inspection when it starts.">

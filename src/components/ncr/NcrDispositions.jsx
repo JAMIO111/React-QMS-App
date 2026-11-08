@@ -3,13 +3,14 @@ import { CheckIcon, PencilIcon, PlusIcon } from "@/components/icons";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import LoadingScreen from "../ui/LoadingScreen";
-import { buttonClass, ErrorNotice, FormError, SelectField } from "../master-data/shared";
+import { ErrorNotice, FormError, SelectField } from "../master-data/shared";
 import { TextAreaField } from "./Pickers";
 import ReasonDialog from "./ReasonDialog";
 import { useToast } from "../../contexts/ToastProvider";
 import { useNcrAffectedLots, useNcrDispositions, useNcrMutation } from "../../hooks/useNcr";
 import { DISPOSITION_DECISIONS, decisionLabel } from "../../lib/ncrWorkflow";
 import { formatDate } from "../../lib/ncr";
+import CTAButton from "@/components/CTAButton";
 
 const STATUS = {
   proposed: { label: "Proposed", tone: "bg-warning-color/15 text-primary-text" },
@@ -78,12 +79,12 @@ const DispositionDialog = ({ ncrId, disposition, remaining, lots, onClose }) => 
         />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !qtyOk || !form.instructions.trim()}>
+          </CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !qtyOk || !form.instructions.trim()}>
             {mutation.isPending ? "Saving…" : disposition ? "Save" : "Propose"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>
@@ -120,12 +121,12 @@ const ApproveDialog = ({ disposition, onClose }) => {
         <TextAreaField label="Note (optional)" value={note} onChange={setNote} maxLength={1000} rows={2} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>
+          </CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
             {mutation.isPending ? "Approving…" : "Approve"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>
@@ -184,21 +185,21 @@ const NcrDispositions = ({ ncrId, canEdit }) => {
                 {x.lot && <span className="rounded-full border border-border-color px-2 py-0.5 text-xs text-secondary-text">Lot {x.lot.lotNumber}</span>}
                 <span className="ml-auto flex flex-wrap gap-2">
                   {x.status === "proposed" && d.canApprove && (
-                    <button type="button" className={buttonClass.primary} onClick={() => setApproving(x)}>
+                    <CTAButton buttonType="button" type="main" size="lg" onClick={() => setApproving(x)}>
                       <CheckIcon className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
                       Approve…
-                    </button>
+                    </CTAButton>
                   )}
                   {x.status === "proposed" && canEdit && (
-                    <button type="button" className={buttonClass.neutral} onClick={() => setEditing(x)} aria-label={`Edit ${decisionLabel(x.decision)} of ${x.quantity}`}>
+                    <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setEditing(x)} aria-label={`Edit ${decisionLabel(x.decision)} of ${x.quantity}`}>
                       <PencilIcon className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
                       Edit
-                    </button>
+                    </CTAButton>
                   )}
                   {((x.status === "proposed" && canEdit) || (x.status === "approved" && canEdit && d.canApprove)) && (
-                    <button type="button" className={buttonClass.neutral} onClick={() => setCancelling(x)} aria-label={`Cancel ${decisionLabel(x.decision)} of ${x.quantity}`}>
+                    <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setCancelling(x)} aria-label={`Cancel ${decisionLabel(x.decision)} of ${x.quantity}`}>
                       Cancel
-                    </button>
+                    </CTAButton>
                   )}
                 </span>
               </div>
@@ -216,9 +217,9 @@ const NcrDispositions = ({ ncrId, canEdit }) => {
 
       {canEdit && (
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => setEditing("new")} disabled={d.remaining <= 0}>
+          <CTAButton buttonType="button" type="neutral" size="md" className="flex items-center gap-1" onClick={() => setEditing("new")} disabled={d.remaining <= 0}>
             <PlusIcon className="h-4 w-4" aria-hidden="true" /> Propose a disposition
-          </button>
+          </CTAButton>
           {d.remaining <= 0 && live.length > 0 && <span className="text-xs text-secondary-text">Everything affected already has a disposition.</span>}
         </div>
       )}

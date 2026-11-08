@@ -11,6 +11,7 @@ import RangeSlider from "./ui/RangeSlider";
 import { PartPicker, PartyPicker } from "./ncr/Pickers";
 import { LotPicker, OrderPicker } from "./production/pickers";
 import { useProductionSettings } from "../hooks/useProduction";
+import CTAButton from "@/components/CTAButton";
 
 const DELETED_OPTIONS = [
   { id: "exclude", name: "Hide deleted" },
@@ -236,12 +237,12 @@ const FilterPane = ({ onClose }) => {
         <RHFComboBox label="Deleted records" icon={Trash2Icon} options={DELETED_OPTIONS} value={deleted} onChange={(v) => setDeleted(v ?? "exclude")} sort={false} clearable={false} />
       </div>
       <div className="flex shrink-0 justify-between gap-2 border-t border-border-color bg-secondary-bg px-4 py-3">
-        <button type="button" className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm hover:bg-neutral-btn-bg-hover cursor-pointer" onClick={resetAll}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={resetAll}>
           Reset all
-        </button>
-        <button type="button" className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm hover:bg-cta-btn-bg-hover cursor-pointer" onClick={applyAll}>
+        </CTAButton>
+        <CTAButton buttonType="button" type="main" size="md" onClick={applyAll}>
           Apply
-        </button>
+        </CTAButton>
       </div>
       </aside>
     </div>,

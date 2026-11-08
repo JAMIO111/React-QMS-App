@@ -7,10 +7,11 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { STAGES, formatDate, ncrPath } from "../../lib/ncr";
 import { LOT_STATUS, ORDER_STATUS, SERIAL_STATUS, TRACE_TYPE, partLabel, tracePath } from "../../lib/production";
 import { formatDateTime } from "../../lib/processControl";
-import { ErrorNotice, buttonClass } from "../master-data/shared";
+import { ErrorNotice } from "../master-data/shared";
 import { ResultBadge, StatusPill } from "../inspection/shared";
 import MenuCard from "../ui/MenuCard";
 import { StatusBadge } from "./shared";
+import CTAButton from "@/components/CTAButton";
 
 const STATUS_MAP = { order: ORDER_STATUS, lot: LOT_STATUS, serial: SERIAL_STATUS };
 const STAGE = Object.fromEntries(STAGES.map((s) => [s.key, { label: s.label, className: s.tone }]));
@@ -295,9 +296,9 @@ const TraceabilityPage = () => {
           <p className="text-sm text-secondary-text">Where an order, lot or serial number was made, measured, found wrong and dealt with.</p>
         </div>
         {valid && (
-          <button type="button" className={buttonClass.secondary} onClick={() => window.print()}>
+          <CTAButton buttonType="button" type="secondary" size="md" onClick={() => window.print()}>
             <PrinterIcon className="mr-1 inline" aria-hidden="true" /> Print or save as PDF
-          </button>
+          </CTAButton>
         )}
       </div>
       <Search onPick={(r) => setParams({ type: r.type, id: r.id })} />

@@ -12,6 +12,7 @@ import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { FormError, SelectField } from "../master-data/shared";
 import { OrderPicker } from "./pickers";
 import { StatusBadge, StatusMoves } from "./shared";
+import CTAButton from "@/components/CTAButton";
 
 /**
  * Add or edit a lot. A lot is *produced* (optionally from a production order) or *received* from a supplier. Its number, part, origin and order are fixed once it exists;
@@ -106,13 +107,13 @@ const LotDialog = ({ lot, onClose, readOnly = false }) => {
         </fieldset>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
+          <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             {disabled ? "Close" : "Cancel"}
-          </button>
+          </CTAButton>
           {!disabled && (
-            <button type="submit" disabled={mutation.isPending || !valid} className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
+            <CTAButton buttonType="submit" disabled={mutation.isPending || !valid} type="main" size="md">
               {mutation.isPending ? "Saving…" : creating ? "Create lot" : "Save changes"}
-            </button>
+            </CTAButton>
           )}
         </div>
       </form>

@@ -15,11 +15,11 @@ import {
   SAMPLING_TRIGGERS,
 } from "../../lib/processControl";
 import {
-  buttonClass,
   FormError,
   SelectField,
   TextAreaField,
 } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 const toNumber = (v) =>
   v === "" || v === null || v === undefined ? null : Number(v);
@@ -630,19 +630,19 @@ const CharacteristicForm = ({
                 updateRow("sampling", i, { sampleSize: e.target.value })
               }
             />
-            <button
-              type="button"
-              className={buttonClass.danger}
+            <CTAButton
+              buttonType="button"
+              type="danger" size="md"
               onClick={() => removeRow("sampling", i)}
               aria-label={`Remove sampling rule ${i + 1}`}
             >
               <Trash2Icon className="h-4 w-4" />
-            </button>
+            </CTAButton>
           </div>
         ))}
-        <button
-          type="button"
-          className={`${buttonClass.neutral} flex w-fit items-center gap-1`}
+        <CTAButton
+          buttonType="button"
+          type="neutral" size="md" className="flex w-fit items-center gap-1"
           onClick={() =>
             setForm((f) => ({
               ...f,
@@ -658,7 +658,7 @@ const CharacteristicForm = ({
           }
         >
           <PlusIcon className="h-4 w-4" /> Add sampling rule
-        </button>
+        </CTAButton>
       </Fieldset>
 
       <Fieldset legend="Reaction plan">
@@ -700,19 +700,19 @@ const CharacteristicForm = ({
                 updateRow("reactions", i, { instruction: e.target.value })
               }
             />
-            <button
-              type="button"
-              className={buttonClass.danger}
+            <CTAButton
+              buttonType="button"
+              type="danger" size="md"
               onClick={() => removeRow("reactions", i)}
               aria-label={`Remove reaction ${i + 1}`}
             >
               <Trash2Icon className="h-4 w-4" />
-            </button>
+            </CTAButton>
           </div>
         ))}
-        <button
-          type="button"
-          className={`${buttonClass.neutral} flex w-fit items-center gap-1`}
+        <CTAButton
+          buttonType="button"
+          type="neutral" size="md" className="flex w-fit items-center gap-1"
           onClick={() =>
             setForm((f) => ({
               ...f,
@@ -724,7 +724,7 @@ const CharacteristicForm = ({
           }
         >
           <PlusIcon className="h-4 w-4" /> Add reaction
-        </button>
+        </CTAButton>
       </Fieldset>
 
       {form.kind === "attribute" && (
@@ -820,12 +820,12 @@ const CharacteristicForm = ({
       )}
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
-        </button>
-        <button
-          type="submit"
-          className={buttonClass.primary}
+        </CTAButton>
+        <CTAButton
+          buttonType="submit"
+          type="main" size="lg"
           disabled={mutation.isPending}
         >
           {mutation.isPending
@@ -833,7 +833,7 @@ const CharacteristicForm = ({
             : asTemplate
               ? "Save template"
               : "Save characteristic"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );

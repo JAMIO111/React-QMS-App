@@ -12,7 +12,7 @@ import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import ReasonDialog from "../ncr/ReasonDialog";
 import Dialog from "../ui/Dialog";
-import { ErrorNotice, SelectField, buttonClass } from "../master-data/shared";
+import { ErrorNotice, SelectField } from "../master-data/shared";
 import StartAuditDialog from "./StartAuditDialog";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -56,14 +56,14 @@ const SlotActions = ({ item, canPerform, canManage, onSkip, onChanged }) => {
   return (
     <div className="flex flex-wrap items-center gap-2">
       {open && canPerform && (
-        <button type="button" className={buttonClass.secondary} disabled={mutation.isPending} onClick={start} aria-label={`Start ${item.audit.reference} due ${item.dueOn}`}>
+        <CTAButton buttonType="button" type="secondary" size="md" disabled={mutation.isPending} onClick={start} aria-label={`Start ${item.audit.reference} due ${item.dueOn}`}>
           <PlayIcon className="mr-1 inline" aria-hidden="true" /> Start audit
-        </button>
+        </CTAButton>
       )}
       {open && canManage && (
-        <button type="button" className={buttonClass.neutral} onClick={() => onSkip(item)} aria-label={`Skip ${item.audit.reference} due ${item.dueOn}`}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={() => onSkip(item)} aria-label={`Skip ${item.audit.reference} due ${item.dueOn}`}>
           Skip
-        </button>
+        </CTAButton>
       )}
       {item.record && (
         <Link to={`/Documentation/Audit-Records/${item.record.id}`} className="text-sm font-medium text-link-color hover:underline" onClick={onChanged}>
@@ -71,14 +71,14 @@ const SlotActions = ({ item, canPerform, canManage, onSkip, onChanged }) => {
         </Link>
       )}
       {item.state === "skipped" && canManage && (
-        <button
-          type="button"
-          className={buttonClass.neutral}
+        <CTAButton
+          buttonType="button"
+          type="neutral" size="md"
           disabled={mutation.isPending}
           onClick={() => mutation.mutate({ path: `/audit-occurrences/${item.id}/unskip` }, { onSuccess: onChanged })}
           aria-label={`Put back ${item.audit.reference} due ${item.dueOn}`}>
           Put back
-        </button>
+        </CTAButton>
       )}
     </div>
   );
@@ -262,15 +262,15 @@ const AuditSchedulePage = () => {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" aria-label="Previous month" className={buttonClass.neutral} onClick={() => move(-1)}>
+        <CTAButton buttonType="button" aria-label="Previous month" type="neutral" size="md" onClick={() => move(-1)}>
           <ChevronLeftIcon aria-hidden="true" />
-        </button>
-        <button type="button" aria-label="Next month" className={buttonClass.neutral} onClick={() => move(1)}>
+        </CTAButton>
+        <CTAButton buttonType="button" aria-label="Next month" type="neutral" size="md" onClick={() => move(1)}>
           <ChevronRightIcon aria-hidden="true" />
-        </button>
-        <button type="button" className={buttonClass.neutral} onClick={() => updateFilters({ month: "" })} disabled={!filters.month}>
+        </CTAButton>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={() => updateFilters({ month: "" })} disabled={!filters.month}>
           {view === "calendar" ? "This month" : "Around today"}
-        </button>
+        </CTAButton>
       </div>
 
       {error && <ErrorNotice error={error} />}

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDownIcon, ChevronUpIcon, Columns3Icon, GripVerticalIcon, RotateCcwIcon } from "@/components/icons";
 import { applyOrder, moveColumn, shiftColumn } from "../../lib/columnOrder";
+import CTAButton from "@/components/CTAButton";
 
 const label = (col) => col.headerString ?? (typeof col.header === "string" ? col.header : col.id);
 
@@ -66,15 +67,15 @@ const ColumnVisibilityMenu = ({ columns, columnVisibility, onColumnVisibilityCha
 
   return (
     <>
-      <button
+      <CTAButton
         ref={buttonRef}
-        type="button"
+        buttonType="button"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         title={canReorder ? "Show, hide or reorder columns" : "Show or hide columns"}
         onClick={() => (open ? setOpen(false) : openMenu())}
-        className="relative flex h-8.5 items-center gap-1.5 rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-2 text-sm text-primary-text hover:border-neutral-btn-border-hover hover:bg-neutral-btn-bg-hover cursor-pointer">
+        type="neutral" size="md" className="relative flex h-8.5 items-center gap-1.5 px-2">
         <Columns3Icon className="h-5 w-5" />
         <span className="sr-only">Columns</span>
         {hiddenCount > 0 && (
@@ -82,7 +83,7 @@ const ColumnVisibilityMenu = ({ columns, columnVisibility, onColumnVisibilityCha
             {hiddenCount}
           </span>
         )}
-      </button>
+      </CTAButton>
 
       {open &&
         createPortal(

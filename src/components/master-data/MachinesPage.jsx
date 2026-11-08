@@ -7,7 +7,8 @@ import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions, useSites } from "../../hooks/useQmsApi";
 import { useMachines, useProcessControlMutation } from "../../hooks/useProcessControl";
 import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
-import { ActiveBadge, buttonClass, DataList, FormError, SearchBox, SelectField } from "./shared";
+import { ActiveBadge, DataList, FormError, SearchBox, SelectField } from "./shared";
+import CTAButton from "@/components/CTAButton";
 
 const MachineForm = ({ machine, onDone }) => {
   const mutation = useProcessControlMutation();
@@ -66,12 +67,12 @@ const MachineForm = ({ machine, onDone }) => {
       )}
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
-        </button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>
+        </CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
           {mutation.isPending ? "Saving…" : machine ? "Save changes" : "Add machine"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -119,9 +120,9 @@ const MachinesPage = () => {
           <p className="text-sm text-secondary-text">Machines and work centres. Control plans, inspections and SPC charts refer to them.</p>
         </div>
         {canManage && (
-          <button type="button" className={`${buttonClass.primary} flex items-center gap-1`} onClick={() => setEditing("new")}>
+          <CTAButton buttonType="button" type="main" size="lg" className="flex items-center gap-1" onClick={() => setEditing("new")}>
             <PlusIcon className="h-4 w-4" /> Add machine
-          </button>
+          </CTAButton>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-3">

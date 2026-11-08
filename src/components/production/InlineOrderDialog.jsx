@@ -2,9 +2,10 @@ import { useState } from "react";
 import { useToast } from "../../contexts/ToastProvider";
 import { useCreateInlineOrder } from "../../hooks/useProduction";
 import { partLabel } from "../../lib/production";
-import { buttonClass, FormError } from "../master-data/shared";
+import { FormError } from "../master-data/shared";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
+import CTAButton from "@/components/CTAButton";
 
 /**
  * Make a production order from a job or non-conformance, for the part it is about: just the number and the quantity (24 on WO-154789). Everything else can be added on the order's own page
@@ -40,12 +41,12 @@ const InlineOrderDialog = ({ part, siteId, initialNumber = "", onClose, onCreate
         <Field label="Quantity ordered" required type="number" min="1" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="24" />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !valid}>
+          </CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !valid}>
             {mutation.isPending ? "Making…" : "Make order"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>

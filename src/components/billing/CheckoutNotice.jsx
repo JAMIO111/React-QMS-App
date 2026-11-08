@@ -1,5 +1,5 @@
 import { describeApiError } from "../../lib/api-client";
-import { buttonClass } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 /** Shows how the return from Stripe Checkout went (confirming, waiting, done, cancelled...) with the way forward from each state. */
 const CheckoutNotice = ({ checkout }) => {
@@ -20,10 +20,10 @@ const CheckoutNotice = ({ checkout }) => {
       <span>{text}</span>
       <span className="flex gap-2">
         {(phase === "timeout" || phase === "failed") && (
-          <button type="button" className={buttonClass.neutral} onClick={retry}>Check again</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={retry}>Check again</CTAButton>
         )}
         {!wait && (
-          <button type="button" className={buttonClass.neutral} onClick={dismiss}>Dismiss</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={dismiss}>Dismiss</CTAButton>
         )}
       </span>
     </div>

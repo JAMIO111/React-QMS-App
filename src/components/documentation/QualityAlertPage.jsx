@@ -8,11 +8,12 @@ import { useMembers } from "../../hooks/useQmsApi";
 import { useAlertMutation, useQualityAlert, useRecipients, useRecipientsPreview } from "../../hooks/useDocumentation";
 import { formatDateTime } from "../../lib/processControl";
 import { categoryLabel, formatDay, referenceText, statusOf } from "../../lib/qualityAlerts";
-import { ErrorNotice, FormError, TextAreaField, buttonClass } from "../master-data/shared";
+import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import { AcknowledgeDialog } from "./Acknowledge";
 import { SeverityBadge, StatusPill } from "./shared";
 import AlertFiles from "./AlertFiles";
 import { LinkList } from "./AlertLinks";
+import CTAButton from "@/components/CTAButton";
 
 const Facts = ({ items }) => (
   <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
@@ -54,10 +55,10 @@ const ReasonDialog = ({ title, intro, confirmText, action, alert, onClose, onDon
         <TextAreaField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={2000} rows={3} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary} disabled={!reason.trim() || mutation.isPending}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!reason.trim() || mutation.isPending}>
             {mutation.isPending ? "Saving…" : confirmText}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>
@@ -161,7 +162,7 @@ const Tracking = ({ alert, canAdd }) => {
                 <option value="">Add a person…</option>
                 {candidates.map((m) => <option key={m.membershipId} value={m.membershipId}>{[m.firstName, m.surname].filter(Boolean).join(" ") || m.email}</option>)}
               </select>
-              <button type="submit" className={buttonClass.neutral} disabled={!person || mutation.isPending}>Add</button>
+              <CTAButton buttonType="submit" type="neutral" size="md" disabled={!person || mutation.isPending}>Add</CTAButton>
             </form>
           )}
         </div>
@@ -256,17 +257,17 @@ const QualityAlertPage = () => {
         <div className="flex flex-wrap gap-2">
           {isDraft && manage && (
             <>
-              <button type="button" className={buttonClass.neutral} onClick={() => navigate(`/Documentation/Quality-Alerts/${a.id}/edit`)}>Edit</button>
-              <button type="button" className={buttonClass.neutral} disabled={mutation.isPending} onClick={doDiscard}>Discard</button>
+              <CTAButton buttonType="button" type="neutral" size="md" onClick={() => navigate(`/Documentation/Quality-Alerts/${a.id}/edit`)}>Edit</CTAButton>
+              <CTAButton buttonType="button" type="neutral" size="md" disabled={mutation.isPending} onClick={doDiscard}>Discard</CTAButton>
             </>
           )}
           {isDraft && issue && (
-            <button type="button" className={buttonClass.primary} disabled={mutation.isPending} onClick={doIssue}>Issue alert</button>
+            <CTAButton buttonType="button" type="main" size="lg" disabled={mutation.isPending} onClick={doIssue}>Issue alert</CTAButton>
           )}
           {current && issue && (
             <>
-              <button type="button" className={buttonClass.neutral} onClick={() => setDialog("revise")}>Issue a revision</button>
-              <button type="button" className={buttonClass.danger} onClick={() => setDialog("withdraw")}>Withdraw</button>
+              <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setDialog("revise")}>Issue a revision</CTAButton>
+              <CTAButton buttonType="button" type="danger" size="md" onClick={() => setDialog("withdraw")}>Withdraw</CTAButton>
             </>
           )}
         </div>
@@ -278,7 +279,7 @@ const QualityAlertPage = () => {
           <span>
             {a.me.overdue ? "Overdue: this" : "This"} alert is addressed to you{a.acknowledgeBy ? ` — please acknowledge it by ${formatDay(a.acknowledgeBy)}` : ""}. Read it, then confirm.
           </span>
-          <button type="button" className={buttonClass.primary} onClick={() => setDialog("acknowledge")}>Acknowledge</button>
+          <CTAButton buttonType="button" type="main" size="lg" onClick={() => setDialog("acknowledge")}>Acknowledge</CTAButton>
         </div>
       )}
       {a.me && a.me.acknowledgedAt && (

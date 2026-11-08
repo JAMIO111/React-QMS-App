@@ -10,6 +10,7 @@ import Field from "../ui/Field";
 import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { FormError } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 
 /**
@@ -80,13 +81,13 @@ const OrderDialog = ({ order, onClose, readOnly = false, onSaved }) => {
         </fieldset>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
+          <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             {disabled ? "Close" : "Cancel"}
-          </button>
+          </CTAButton>
           {!disabled && (
-            <button type="submit" disabled={mutation.isPending || !valid} className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
+            <CTAButton buttonType="submit" disabled={mutation.isPending || !valid} type="main" size="md">
               {mutation.isPending ? "Saving…" : creating ? "Create order" : "Save changes"}
-            </button>
+            </CTAButton>
           )}
         </div>
       </form>

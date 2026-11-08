@@ -14,11 +14,10 @@ import Switch from "../ui/Switch";
 import StatTile from "../ui/StatTile";
 import CharacteristicsEditor from "../calibration/CharacteristicsEditor";
 import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
 
 const input =
   "rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary";
-const button =
-  "rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm font-medium text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer";
 
 /** Name, description and default interval of a gauge type. */
 const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
@@ -90,9 +89,9 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
           placeholder="Optional"
         />
       </label>
-      <button type="submit" disabled={!ok || pending} className={button}>
+      <CTAButton type="main" size="md" buttonType="submit" disabled={!ok || pending}>
         {submitText}
-      </button>
+      </CTAButton>
       {onCancel && (
         <button
           type="button"
@@ -293,12 +292,12 @@ const SettingsCalibration = () => {
         action={
           canManage &&
           !adding && (
-            <button
-              type="button"
+            <CTAButton
+              buttonType="button"
               onClick={() => setAdding(true)}
-              className="flex items-center gap-1 rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
+              type="neutral" size="md" className="flex items-center gap-1 px-3 py-1">
               <PlusIcon /> Add gauge type
-            </button>
+            </CTAButton>
           )
         }>
         {canManage && adding && (

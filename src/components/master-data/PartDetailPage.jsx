@@ -9,7 +9,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useMasterDataMutation, usePart } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
-import { ActiveBadge, buttonClass, ErrorNotice, SelectField } from "./shared";
+import { ActiveBadge, ErrorNotice, SelectField } from "./shared";
 import { usePartFamilies } from "../../hooks/useProcessControl";
 import SpecValues from "./SpecValues";
 import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
@@ -19,6 +19,7 @@ import { CorrectDialog, CorrectionImpactCard, ReleaseCorrectionDialog } from "./
 import { currentRevisionLabel, revisionLabel } from "../../lib/partRevisions";
 import RequirementPreview from "../process-control/RequirementPreview";
 import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
 
 const STATUS_STYLE = {
   draft: "bg-warning-color/15 text-primary-text",
@@ -100,9 +101,9 @@ const PartDetails = ({ part, canManage }) => {
         </p>
       )}
       {canManage && (
-        <button type="submit" className={`${buttonClass.primary} self-start`} disabled={mutation.isPending}>
+        <CTAButton buttonType="submit" type="main" size="lg" className="self-start" disabled={mutation.isPending}>
           {mutation.isPending ? "Saving…" : "Save changes"}
-        </button>
+        </CTAButton>
       )}
     </form>
   );
@@ -141,12 +142,12 @@ const RevisionForm = ({ part, revision, onDone }) => {
         </p>
       )}
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
-        </button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>
+        </CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
           {mutation.isPending ? "Saving…" : revision ? "Save draft" : "Add draft revision"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -194,9 +195,9 @@ const Revisions = ({ part, canManage }) => {
           Revisions
         </h2>
         {canManage && (
-          <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => setEditing("new")}>
+          <CTAButton buttonType="button" type="neutral" size="md" className="flex items-center gap-1" onClick={() => setEditing("new")}>
             <PlusIcon className="h-4 w-4" /> Add revision
-          </button>
+          </CTAButton>
         )}
       </div>
       {part.revisions.length === 0 ? (
@@ -231,33 +232,33 @@ const Revisions = ({ part, canManage }) => {
                       <div className="flex justify-end gap-2">
                         {r.status === "draft" && (
                           <>
-                            <button type="button" className={buttonClass.neutral} onClick={() => setEditing(r)} aria-label={`Edit revision ${revisionLabel(r)}`}>
+                            <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setEditing(r)} aria-label={`Edit revision ${revisionLabel(r)}`}>
                               Edit
-                            </button>
+                            </CTAButton>
                             {r.correctsId ? (
                               canApprove ? (
-                                <button type="button" className={buttonClass.primary} onClick={() => setApproving(r)} disabled={mutation.isPending}>
+                                <CTAButton buttonType="button" type="main" size="lg" onClick={() => setApproving(r)} disabled={mutation.isPending}>
                                   Approve and release
-                                </button>
+                                </CTAButton>
                               ) : (
                                 <span className="self-center text-xs text-secondary-text">Needs approval</span>
                               )
                             ) : (
-                              <button type="button" className={buttonClass.primary} onClick={() => transition(r, "release")} disabled={mutation.isPending}>
+                              <CTAButton buttonType="button" type="main" size="lg" onClick={() => transition(r, "release")} disabled={mutation.isPending}>
                                 Release
-                              </button>
+                              </CTAButton>
                             )}
                           </>
                         )}
                         {r.status === "released" && !openCorrection && (
-                          <button type="button" className={buttonClass.secondary} onClick={() => setCorrecting(r)} aria-label={`Correct revision ${revisionLabel(r)}`}>
+                          <CTAButton buttonType="button" type="secondary" size="md" onClick={() => setCorrecting(r)} aria-label={`Correct revision ${revisionLabel(r)}`}>
                             Correct
-                          </button>
+                          </CTAButton>
                         )}
                         {r.status !== "obsolete" && r.status !== "corrected" && (
-                          <button type="button" className={buttonClass.danger} onClick={() => transition(r, "obsolete")} disabled={mutation.isPending} aria-label={`${r.correctsId && r.status === "draft" ? "Discard correction" : "Make revision"} ${revisionLabel(r)}${r.correctsId && r.status === "draft" ? "" : " obsolete"}`}>
+                          <CTAButton buttonType="button" type="danger" size="md" onClick={() => transition(r, "obsolete")} disabled={mutation.isPending} aria-label={`${r.correctsId && r.status === "draft" ? "Discard correction" : "Make revision"} ${revisionLabel(r)}${r.correctsId && r.status === "draft" ? "" : " obsolete"}`}>
                             {r.correctsId && r.status === "draft" ? "Discard" : "Obsolete"}
-                          </button>
+                          </CTAButton>
                         )}
                       </div>
                     </td>

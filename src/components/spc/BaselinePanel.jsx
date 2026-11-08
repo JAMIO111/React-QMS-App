@@ -14,7 +14,8 @@ import {
   formatPercent,
   formatValue,
 } from "../../lib/spc";
-import { buttonClass, FormError } from "../master-data/shared";
+import { FormError } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 const limitText = (b, v, decimals) =>
   b.chartType === "p" ? formatPercent(v, 2) : b.chartType === "defects" ? formatCount(v) : formatValue(v, decimals);
@@ -230,15 +231,15 @@ const BaselinePanel = ({ chart, params, rules, decimals }) => {
               </p>
             )}
             <div>
-              <button
-                type="submit"
-                className={buttonClass.primary}
+              <CTAButton
+                buttonType="submit"
+                type="main" size="lg"
                 disabled={create.isPending}
               >
                 {active
                   ? "Calculate and replace baseline"
                   : "Calculate and save baseline"}
-              </button>
+              </CTAButton>
             </div>
           </form>
         )}

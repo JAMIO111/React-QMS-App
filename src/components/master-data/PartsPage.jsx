@@ -8,7 +8,8 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useMasterDataMutation, useParties, useParts } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
 import { currentRevisionLabel } from "../../lib/partRevisions";
-import { ActiveBadge, buttonClass, DataList, SearchBox } from "./shared";
+import { ActiveBadge, DataList, SearchBox } from "./shared";
+import CTAButton from "@/components/CTAButton";
 
 /** Customer picker (active customers). */
 export const CustomerSelect = ({ value, onChange, id }) => {
@@ -76,12 +77,12 @@ const NewPartForm = ({ onDone }) => {
         </p>
       )}
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
-        </button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>
+        </CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
           {mutation.isPending ? "Adding…" : "Add part"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -140,9 +141,9 @@ const PartsPage = () => {
           <p className="text-sm text-secondary-text">Parts and their drawing revisions. Inspection plans and NCRs refer to a revision.</p>
         </div>
         {canManage && (
-          <button type="button" className={`${buttonClass.primary} flex items-center gap-1`} onClick={() => setAdding(true)}>
+          <CTAButton buttonType="button" type="main" size="lg" className="flex items-center gap-1" onClick={() => setAdding(true)}>
             <PlusIcon className="h-4 w-4" /> Add part
-          </button>
+          </CTAButton>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-3">

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Dialog from "../ui/Dialog";
 import { NC_SOURCES } from "../../lib/ncr";
+import CTAButton from "@/components/CTAButton";
 
 /**
  * "New NC" asks where the problem came from first (the source), because it decides which party fields the form shows; the category
@@ -31,12 +32,12 @@ const NewNcDialog = ({ initial = "internal", onChoose, onClose }) => {
           </div>
         </fieldset>
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
+          <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             Cancel
-          </button>
-          <button type="submit" className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-cta-btn-bg-hover cursor-pointer">
+          </CTAButton>
+          <CTAButton buttonType="submit" type="main" size="md">
             Continue
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>

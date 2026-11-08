@@ -4,6 +4,7 @@ import { FactoryIcon, HouseIcon, XIcon } from "@/components/icons";
 import { useAllDepartments, useSites } from "../../hooks/useQmsApi";
 import { EMPLOYEE_FILTER_KEYS, useEmployeeFilters } from "../../hooks/useUrlFilters";
 import RHFComboBox from "../ui/RHFComboBox";
+import CTAButton from "@/components/CTAButton";
 
 const STATUS_OPTIONS = [
   { key: "active", label: "Active" },
@@ -96,18 +97,18 @@ const EmployeeFilterPane = ({ onClose }) => {
           <RHFComboBox label="Department" icon={FactoryIcon} placeholder="All departments" options={departmentOptions} value={department} onChange={setDepartment} />
         </div>
         <div className="flex shrink-0 justify-between gap-2 border-t border-border-color bg-secondary-bg px-4 py-3">
-          <button
-            type="button"
-            className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm hover:bg-neutral-btn-bg-hover cursor-pointer"
+          <CTAButton
+            buttonType="button"
+            type="neutral" size="md"
             onClick={() => apply(Object.fromEntries(EMPLOYEE_FILTER_KEYS.filter((k) => k !== "search").map((k) => [k, ""])))}>
             Reset all
-          </button>
-          <button
-            type="button"
-            className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm hover:bg-cta-btn-bg-hover cursor-pointer"
+          </CTAButton>
+          <CTAButton
+            buttonType="button"
+            type="main" size="md"
             onClick={() => apply({ status: statuses.join(","), site: site ?? "", department: department ?? "" })}>
             Apply
-          </button>
+          </CTAButton>
         </div>
       </aside>
     </div>,

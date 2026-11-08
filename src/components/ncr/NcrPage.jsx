@@ -64,6 +64,7 @@ import NcrAffectedLots from "./NcrAffectedLots";
 import NcrContainment from "./NcrContainment";
 import NcrDispositions from "./NcrDispositions";
 import { useNcrGates } from "../../hooks/useNcr";
+import CTAButton from "@/components/CTAButton";
 
 /** Section title with a rule, as in the original NC entry form. */
 const SectionHeading = ({ id, title, sectionRef }) => (
@@ -75,13 +76,6 @@ const SectionHeading = ({ id, title, sectionRef }) => (
 const Card = ({ children, className = "" }) => (
   <div className={`flex flex-col gap-4 rounded-2xl bg-secondary-bg p-6 shadow-lg shadow-shadow-color ${className}`}>{children}</div>
 );
-
-const btn = {
-  save: "flex items-center gap-2 rounded-lg border border-success-btn-border bg-success-btn-bg px-3 py-1 text-primary-text hover:bg-success-btn-bg-hover disabled:opacity-50 cursor-pointer",
-  main: "flex items-center gap-2 rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1 text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer",
-  neutral: "flex items-center gap-2 rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1 text-primary-text hover:bg-neutral-btn-bg-hover disabled:opacity-50 cursor-pointer",
-  danger: "flex items-center gap-2 rounded-lg border border-error-btn-border bg-error-btn-bg px-3 py-1 text-primary-text hover:bg-error-btn-bg-hover disabled:opacity-50 cursor-pointer",
-};
 
 /**
  * Create or view/edit an NCR (/Non-Conformance/Register/new?source= and /Register/:id), laid out like the
@@ -245,30 +239,30 @@ const NcrPage = () => {
         <div className="flex flex-wrap items-center gap-2">
           {isNew && canEdit && (
             <>
-              <button type="submit" form="ncr-form" disabled={mutation.isPending || !form.title.trim()} className={btn.neutral}>
+              <CTAButton type="neutral" size="default" className="px-3" buttonType="submit" form="ncr-form" disabled={mutation.isPending || !form.title.trim()}>
                 Save as draft
-              </button>
-              <button type="button" onClick={() => save(true)} disabled={mutation.isPending || !form.title.trim()} className={btn.save}>
+              </CTAButton>
+              <CTAButton buttonType="button" onClick={() => save(true)} disabled={mutation.isPending || !form.title.trim()} type="success" size="default" className="px-3">
                 <SaveIcon className="h-4 w-4" /> {mutation.isPending ? "Saving…" : "Raise NC"}
-              </button>
+              </CTAButton>
             </>
           )}
           {!isNew && canEdit && (
             <>
               {dirty && (
-                <button type="button" onClick={() => reset(original)} className={btn.neutral}>
+                <CTAButton buttonType="button" onClick={() => reset(original)} type="neutral" size="default" className="px-3">
                   <Undo2Icon className="h-4 w-4" /> Discard changes
-                </button>
+                </CTAButton>
               )}
-              <button type="submit" form="ncr-form" disabled={mutation.isPending || !dirty || !form.title.trim()} className={btn.save}>
+              <CTAButton type="success" size="default" className="px-3" buttonType="submit" form="ncr-form" disabled={mutation.isPending || !dirty || !form.title.trim()}>
                 <SaveIcon className="h-4 w-4" /> {mutation.isPending ? "Saving…" : "Save changes"}
-              </button>
+              </CTAButton>
             </>
           )}
           {!isNew && can("ncr.delete") && !ncr.deletedAt && (
-            <button type="button" onClick={() => setDialog("delete")} className={btn.danger}>
+            <CTAButton buttonType="button" onClick={() => setDialog("delete")} type="danger" size="default" className="px-3">
               <Trash2Icon className="h-4 w-4" /> Delete
-            </button>
+            </CTAButton>
           )}
         </div>
       </div>
@@ -294,9 +288,9 @@ const NcrPage = () => {
             <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
               Deleted {formatDate(ncr.deletedAt)} by {ncr.deletedBy?.name ?? "—"}: “{ncr.deleteReason}”.
               {can("ncr.delete") && (
-                <button type="button" onClick={restore} disabled={mutation.isPending} className={btn.neutral}>
+                <CTAButton type="neutral" size="default" className="px-3" buttonType="button" onClick={restore} disabled={mutation.isPending}>
                   <RotateCcwIcon className="h-4 w-4" /> Restore
-                </button>
+                </CTAButton>
               )}
             </div>
           )}

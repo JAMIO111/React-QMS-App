@@ -8,7 +8,8 @@ import { useCapaMutation } from "../../hooks/useCapa";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { ACTION_STATUS, ROOT_CAUSE_KINDS, isRunning, roleLabel } from "../../lib/capa";
 import { formatDay } from "../../lib/qualityAlerts";
-import { FormError, TextAreaField, buttonClass } from "../master-data/shared";
+import { FormError, TextAreaField } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 /** The people an action can be assigned to: everyone still on the team. */
 const ownerOptions = (capa) => capa.team.filter((t) => !t.endedAt).map((t) => ({ id: t.id, name: t.name, hint: roleLabel(t.role) }));
@@ -47,8 +48,8 @@ export const ActionDialog = ({ capa, phase, action, withCause, limited = false, 
         </div>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || (!limited && !form.description.trim())}>{mutation.isPending ? "Saving…" : action ? "Save" : "Add action"}</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || (!limited && !form.description.trim())}>{mutation.isPending ? "Saving…" : action ? "Save" : "Add action"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -77,8 +78,8 @@ export const FindingsDialog = ({ action, closing = false, onClose }) => {
           hint={closing ? "Needed to close the action: it is the evidence that the work was done." : "Progress so far. The action stays open until you close it."} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || (closing && !text)}>{mutation.isPending ? "Saving…" : closing ? "Close action" : "Save findings"}</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || (closing && !text)}>{mutation.isPending ? "Saving…" : closing ? "Close action" : "Save findings"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -107,13 +108,13 @@ export const ActionButtons = ({ action: a, rights, setDialog, mutation }) => {
   const open = (type) => () => { mutation.reset(); setDialog({ type, action: a }); };
   return (
     <div className="flex flex-wrap gap-2">
-      {a.status === "open" && canWork && <button type="button" className={buttonClass.neutral} aria-label={`Update findings: ${a.description}`} onClick={open("findings")}>Update findings</button>}
-      {a.status === "open" && canWork && <button type="button" className={buttonClass.primary} aria-label={`Close action: ${a.description}`} onClick={open("close")}>Close action</button>}
-      {rights.plan && <button type="button" className={buttonClass.neutral} aria-label={`Edit: ${a.description}`} onClick={open("edit")}>Edit</button>}
-      {!rights.plan && rights.manage && rights.work && a.status === "open" && <button type="button" className={buttonClass.neutral} aria-label={`Reassign: ${a.description}`} onClick={open("reassign")}>Reassign</button>}
-      {a.status === "open" && rights.manage && rights.work && <button type="button" className={buttonClass.neutral} aria-label={`Cancel: ${a.description}`} onClick={open("cancel")}>Cancel action</button>}
-      {a.status === "done" && canWork && <button type="button" className={buttonClass.neutral} aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</button>}
-      {a.status === "cancelled" && rights.manage && rights.work && <button type="button" className={buttonClass.neutral} aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</button>}
+      {a.status === "open" && canWork && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Update findings: ${a.description}`} onClick={open("findings")}>Update findings</CTAButton>}
+      {a.status === "open" && canWork && <CTAButton buttonType="button" type="main" size="lg" aria-label={`Close action: ${a.description}`} onClick={open("close")}>Close action</CTAButton>}
+      {rights.plan && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Edit: ${a.description}`} onClick={open("edit")}>Edit</CTAButton>}
+      {!rights.plan && rights.manage && rights.work && a.status === "open" && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reassign: ${a.description}`} onClick={open("reassign")}>Reassign</CTAButton>}
+      {a.status === "open" && rights.manage && rights.work && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Cancel: ${a.description}`} onClick={open("cancel")}>Cancel action</CTAButton>}
+      {a.status === "done" && canWork && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
+      {a.status === "cancelled" && rights.manage && rights.work && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
     </div>
   );
 };
@@ -149,7 +150,7 @@ const ActionList = ({ capa, phase, planStep, doingStep, title, subtitle, addLabe
 
   return (
     <MenuCard title={title} subtitle={subtitle ?? `${actions.filter((a) => a.status === "done").length} of ${actions.filter((a) => a.status !== "cancelled").length} done`}
-      action={rights.plan && addLabel ? <button type="button" className={buttonClass.neutral} onClick={() => { mutation.reset(); setDialog({ type: "add" }); }}>{addLabel}</button> : undefined}>
+      action={rights.plan && addLabel ? <CTAButton buttonType="button" type="neutral" size="md" onClick={() => { mutation.reset(); setDialog({ type: "add" }); }}>{addLabel}</CTAButton> : undefined}>
       {locked && rights.running && <p className="mb-2 text-xs text-secondary-text">{[planStep, doingStep].filter((k, i, all) => k && all.indexOf(k) === i && capa.steps.find((s) => s.step === k)?.completed).map((k) => k.toUpperCase()).join(" and ")} is complete, so these actions are read-only. Reopen it to change them.</p>}
       {actions.length === 0 ? (
         <p className="text-sm text-secondary-text">{emptyText}</p>

@@ -7,7 +7,8 @@ import { useCorrectionImpact, useMasterDataMutation } from "../../hooks/useMaste
 import { describeApiError } from "../../lib/api-client";
 import { ncrPath } from "../../lib/ncr";
 import { revisionLabel } from "../../lib/partRevisions";
-import { buttonClass, ErrorNotice, FormError, TextAreaField } from "./shared";
+import { ErrorNotice, FormError, TextAreaField } from "./shared";
+import CTAButton from "@/components/CTAButton";
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—");
 
@@ -39,12 +40,12 @@ export const CorrectDialog = ({ revision, onClose }) => {
         <TextAreaField label="What is wrong in the system, compared with the drawing?" required rows={3} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className={buttonClass.primary} disabled={!reason.trim() || mutation.isPending}>
+          </CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!reason.trim() || mutation.isPending}>
             {mutation.isPending ? "Starting…" : "Start correction"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>
@@ -99,12 +100,12 @@ export const ReleaseCorrectionDialog = ({ revision, onClose }) => {
           </div>
         )}
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
-          </button>
-          <button type="button" className={buttonClass.primary} onClick={approve} disabled={mutation.isPending || impact.isLoading}>
+          </CTAButton>
+          <CTAButton buttonType="button" type="main" size="lg" onClick={approve} disabled={mutation.isPending || impact.isLoading}>
             {mutation.isPending ? "Releasing…" : "Approve and release"}
-          </button>
+          </CTAButton>
         </div>
       </div>
     </Dialog>

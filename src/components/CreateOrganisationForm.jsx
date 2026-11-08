@@ -4,6 +4,7 @@ import TimeZoneCombo from "./ui/TimeZoneCombo";
 import { browserTimeZone } from "../lib/timeZones";
 import { describeApiError, newIdempotencyKey } from "../lib/api-client";
 import { useCreateOrganisation } from "../hooks/useQmsApi";
+import CTAButton from "@/components/CTAButton";
 
 /**
  * Creates an organisation through the API (the creator becomes its Owner). One idempotency key per
@@ -65,12 +66,12 @@ const CreateOrganisationForm = ({ onCreated }) => {
           {describeApiError(create.error)}
         </p>
       )}
-      <button
-        type="submit"
+      <CTAButton
+        buttonType="submit"
         disabled={create.isPending || name.trim().length < 2}
-        className="self-start rounded-lg border border-cta-btn-border bg-cta-btn-bg px-4 py-2 text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+        type="main" size="lg" className="self-start">
         {create.isPending ? "Creating…" : "Create organisation"}
-      </button>
+      </CTAButton>
     </form>
   );
 };

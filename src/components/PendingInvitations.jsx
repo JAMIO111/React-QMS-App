@@ -1,5 +1,6 @@
 import { describeApiError } from "../lib/api-client";
 import { useAcceptInvitation, useMyInvitations } from "../hooks/useQmsApi";
+import CTAButton from "@/components/CTAButton";
 
 /** Invitations addressed to the signed-in person, with an Accept button each. Renders nothing if none. */
 const PendingInvitations = () => {
@@ -20,13 +21,13 @@ const PendingInvitations = () => {
               {inv.roles?.length > 0 && <div className="text-sm text-secondary-text">As {inv.roles.map((r) => r.name).join(", ")}{inv.packageName ? ` · ${inv.packageName} seat` : ""}</div>}
               {inv.expired && <div className="text-sm text-error-color">Expired: ask for a new invitation</div>}
             </div>
-            <button
-              type="button"
+            <CTAButton
+              buttonType="button"
               disabled={accept.isPending || inv.expired}
               onClick={() => accept.mutate(inv.membershipId)}
-              className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
+              type="main" size="md">
               Accept
-            </button>
+            </CTAButton>
           </li>
         ))}
       </ul>

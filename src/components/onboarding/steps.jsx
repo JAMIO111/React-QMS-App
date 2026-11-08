@@ -19,7 +19,8 @@ import { clearChoice, formatDate, loadChoice, money, saveChoice } from "../../li
 import CheckoutNotice from "../billing/CheckoutNotice";
 import SeatPicker from "../billing/SeatPicker";
 import TeamInvite from "./TeamInvite";
-import { ErrorNotice, FormError, buttonClass } from "../master-data/shared";
+import { ErrorNotice, FormError } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 /** Step 1: the organisation's name, and where the first site is. */
 export const OrganisationStep = () => {
@@ -37,7 +38,7 @@ export const OrganisationStep = () => {
         <Field label="Organisation name" required minLength={2} maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
         <FormError error={update.error} />
         <div className="flex justify-end">
-          <button type="submit" className={buttonClass.neutral} disabled={!dirty || update.isPending}>{update.isPending ? "Saving…" : "Save name"}</button>
+          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty || update.isPending}>{update.isPending ? "Saving…" : "Save name"}</CTAButton>
         </div>
       </MenuCard>
       {first && (
@@ -74,9 +75,9 @@ export const SubscriptionSummary = ({ overview, canManage }) => {
         <p>The owner holds a Controller seat, so everything is available.</p>
         {canManage && sub.billingProvider === "stripe" && (
           <div>
-            <button type="button" className={buttonClass.neutral} disabled={portal.isPending} onClick={openPortal}>
+            <CTAButton buttonType="button" type="neutral" size="md" disabled={portal.isPending} onClick={openPortal}>
               {portal.isPending ? "Opening…" : "Manage billing"}
-            </button>
+            </CTAButton>
           </div>
         )}
       </div>
@@ -140,9 +141,9 @@ export const PlanStep = ({ state }) => {
                 </p>
                 {canManage && sub.billingProvider === "stripe" && (
                   <div>
-                    <button type="button" className={buttonClass.primary} disabled={portal.isPending} onClick={openPortal}>
+                    <CTAButton buttonType="button" type="main" size="lg" disabled={portal.isPending} onClick={openPortal}>
                       {portal.isPending ? "Opening…" : "Manage billing"}
-                    </button>
+                    </CTAButton>
                   </div>
                 )}
               </>
@@ -163,9 +164,9 @@ export const PlanStep = ({ state }) => {
                     <SeatPicker plans={catalogue.data.plans} value={choice} onChange={update} disabled={start.isPending} />
                     <FormError error={start.error} />
                     <div className="flex justify-end">
-                      <button type="button" className={buttonClass.primary} disabled={start.isPending} onClick={checkoutNow}>
+                      <CTAButton buttonType="button" type="main" size="lg" disabled={start.isPending} onClick={checkoutNow}>
                         {start.isPending ? "Opening checkout…" : "Continue to secure checkout"}
-                      </button>
+                      </CTAButton>
                     </div>
                   </>
                 ) : (
@@ -199,7 +200,7 @@ export const DetailsStep = () => {
         <RHFComboBox label="Country" value={country} onChange={(v) => setCountry(v ?? null)} options={countryOptions()} placeholder="Choose a country" clearable />
         <FormError error={update.error} />
         <div className="flex justify-end">
-          <button type="submit" className={buttonClass.neutral} disabled={!dirty || update.isPending}>{update.isPending ? "Saving…" : "Save details"}</button>
+          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty || update.isPending}>{update.isPending ? "Saving…" : "Save details"}</CTAButton>
         </div>
       </MenuCard>
       <OrganisationLogo logoPath={org?.settings.logoPath ?? null} canManage />

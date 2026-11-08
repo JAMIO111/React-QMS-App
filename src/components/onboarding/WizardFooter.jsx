@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
-import { buttonClass } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 /**
  * Under every step: Back, and the ways forward. `mark` steps (details, security, team) offer "Skip for now" and "Done, continue"; the others just continue.
@@ -11,21 +11,21 @@ const WizardFooter = ({ prev, onBack, onSkip, onContinue, continueLabel = "Conti
     {blocked && <p role="status" className="rounded-lg border border-border-color bg-secondary-bg p-3 text-sm text-primary-text">{blocked}</p>}
     <div className="flex flex-wrap items-center justify-between gap-2">
       {prev ? (
-        <Link to={`/setup/${prev.key}`} onClick={onBack} className={`${buttonClass.neutral} inline-flex items-center gap-1`}>
+        <CTAButton to={`/setup/${prev.key}`} onClick={onBack} type="neutral" size="md" className="inline-flex items-center gap-1">
           <ChevronLeftIcon className="h-4 w-4" /> {prev.label}
-        </Link>
+        </CTAButton>
       ) : (
         <span />
       )}
       <div className="flex flex-wrap items-center gap-2">
         {canSkip && (
-          <button type="button" className={buttonClass.neutral} disabled={pending} onClick={onSkip}>
+          <CTAButton buttonType="button" type="neutral" size="md" disabled={pending} onClick={onSkip}>
             Skip for now
-          </button>
+          </CTAButton>
         )}
-        <button type="button" className={`${buttonClass.primary} inline-flex items-center gap-1`} disabled={pending || !!blocked} onClick={onContinue}>
+        <CTAButton buttonType="button" type="main" size="lg" className="inline-flex items-center gap-1" disabled={pending || !!blocked} onClick={onContinue}>
           {pending ? "Saving…" : continueLabel} <ChevronRightIcon className="h-4 w-4" />
-        </button>
+        </CTAButton>
       </div>
     </div>
   </div>

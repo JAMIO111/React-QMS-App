@@ -6,10 +6,11 @@ import { useAudit, useAuditMutation } from "../../hooks/useAudits";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { formatDate } from "../../lib/ncr";
 import { answerTypeLabel, auditTypeLabel, auditorLabel, frequencyLabel, questionRule, resultLabel } from "../../lib/audits";
-import { ErrorNotice, buttonClass } from "../master-data/shared";
+import { ErrorNotice } from "../master-data/shared";
 import MenuCard from "../ui/MenuCard";
 import { VersionHistory } from "./AuditVersions";
 import ReasonDialog from "../ncr/ReasonDialog";
+import CTAButton from "@/components/CTAButton";
 
 const Fact = ({ label, children }) => (
   <div className="flex min-w-0 flex-col gap-0.5">
@@ -55,16 +56,16 @@ const AuditPage = () => {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link to={`/Documentation/Audit-Records?audit=${a.id}`} className={buttonClass.neutral}>
+          <CTAButton to={`/Documentation/Audit-Records?audit=${a.id}`} type="neutral" size="md">
             Audit records
-          </Link>
-          <Link to={`/Documentation/Audit-Schedule?audit=${a.id}`} className={buttonClass.neutral}>
+          </CTAButton>
+          <CTAButton to={`/Documentation/Audit-Schedule?audit=${a.id}`} type="neutral" size="md">
             Schedule
-          </Link>
+          </CTAButton>
           {canPerform && a.status === "active" && (
-            <button
-              type="button"
-              className={buttonClass.secondary}
+            <CTAButton
+              buttonType="button"
+              type="secondary" size="md"
               disabled={mutation.isPending}
               onClick={() =>
                 mutation.mutate(
@@ -73,28 +74,28 @@ const AuditPage = () => {
                 )
               }>
               <PlayIcon className="mr-1 inline" aria-hidden="true" /> Start audit
-            </button>
+            </CTAButton>
           )}
         </div>
         {canManage && (
           <div className="flex flex-wrap items-center gap-2">
-            <Link to={`/Documentation/Audits/${a.id}/edit`} className={buttonClass.secondary}>
+            <CTAButton to={`/Documentation/Audits/${a.id}/edit`} type="secondary" size="md">
               <PencilIcon className="mr-1 inline" aria-hidden="true" /> Edit
-            </Link>
+            </CTAButton>
             {a.status === "active" ? (
-              <button type="button" className={buttonClass.neutral} onClick={() => setRetiring(true)}>
+              <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setRetiring(true)}>
                 Retire
-              </button>
+              </CTAButton>
             ) : (
-              <button
-                type="button"
-                className={buttonClass.neutral}
+              <CTAButton
+                buttonType="button"
+                type="neutral" size="md"
                 disabled={mutation.isPending}
                 onClick={() =>
                   mutation.mutate({ path: `/audits/${a.id}/reactivate` }, { onSuccess: () => showToast({ type: "success", title: "Reactivated", message: `${a.reference} is active again.` }) })
                 }>
                 Reactivate
-              </button>
+              </CTAButton>
             )}
           </div>
         )}

@@ -9,8 +9,9 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useUnits } from "../../hooks/useMasterData";
 import { useProcessControlMutation, useSpecValues } from "../../hooks/useProcessControl";
 import { describeApiError } from "../../lib/api-client";
-import { buttonClass, FormError, SelectField } from "./shared";
+import { FormError, SelectField } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2";
@@ -85,12 +86,12 @@ const SpecValueForm = ({ revision, value, onDone }) => {
       )}
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
-        </button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>
+        </CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
           {mutation.isPending ? "Saving…" : "Save value"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -143,9 +144,9 @@ const SpecValues = ({ part, canManage }) => {
       bodyClassName="flex flex-col gap-3"
       action={
         editable && (
-          <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => setEditing("new")}>
+          <CTAButton buttonType="button" type="neutral" size="md" className="flex items-center gap-1" onClick={() => setEditing("new")}>
             <PlusIcon className="h-4 w-4" /> Add value
-          </button>
+          </CTAButton>
         )
       }>
       {revisions.length === 0 ? (
@@ -196,12 +197,12 @@ const SpecValues = ({ part, canManage }) => {
                       {editable && (
                         <td className={td}>
                           <div className="flex justify-end gap-2">
-                            <button type="button" className={buttonClass.neutral} onClick={() => setEditing(v)} aria-label={`Edit ${v.characteristicKey}`}>
+                            <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setEditing(v)} aria-label={`Edit ${v.characteristicKey}`}>
                               <PencilIcon className="h-4 w-4" />
-                            </button>
-                            <button type="button" className={buttonClass.danger} disabled={mutation.isPending} onClick={() => remove(v)} aria-label={`Remove ${v.characteristicKey}`}>
+                            </CTAButton>
+                            <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} onClick={() => remove(v)} aria-label={`Remove ${v.characteristicKey}`}>
                               <Trash2Icon className="h-4 w-4" />
-                            </button>
+                            </CTAButton>
                           </div>
                         </td>
                       )}

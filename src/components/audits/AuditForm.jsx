@@ -11,8 +11,9 @@ import ComboField from "../ui/ComboField";
 import Field from "../ui/Field";
 import MenuCard from "../ui/MenuCard";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
-import { ErrorNotice, FormError, buttonClass } from "../master-data/shared";
+import { ErrorNotice, FormError } from "../master-data/shared";
 import { TextAreaField } from "../ncr/Pickers";
+import CTAButton from "@/components/CTAButton";
 
 const fromAudit = (a) => ({
   title: a?.title ?? "",
@@ -100,9 +101,9 @@ const OptionsEditor = ({ q, index, set }) => {
           </li>
         ))}
       </ul>
-      <button type="button" className={`${buttonClass.neutral} w-fit`} disabled={q.options.length >= 20} onClick={() => set({ options: [...q.options, emptyOption()] })}>
+      <CTAButton buttonType="button" type="neutral" size="md" className="w-fit" disabled={q.options.length >= 20} onClick={() => set({ options: [...q.options, emptyOption()] })}>
         Add an option
-      </button>
+      </CTAButton>
     </fieldset>
   );
 };
@@ -272,12 +273,12 @@ const AuditFormBody = ({ audit }) => {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Link to={audit ? `/Documentation/Audits/${audit.id}` : "/Documentation/Audits"} className={buttonClass.neutral}>
+          <CTAButton to={audit ? `/Documentation/Audits/${audit.id}` : "/Documentation/Audits"} type="neutral" size="md">
             Cancel
-          </Link>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>
+          </CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
             {mutation.isPending ? "Saving…" : audit ? "Save changes" : "Define audit"}
-          </button>
+          </CTAButton>
         </div>
       </div>
       {triedSave && uniqueProblems.length > 0 && (
@@ -350,9 +351,9 @@ const AuditFormBody = ({ audit }) => {
         title="Checklist"
         subtitle="Asked in this order. How each question is answered here is what the audit record shows."
         action={
-          <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => set({ questions: [...f.questions, emptyQuestion()] })}>
+          <CTAButton buttonType="button" type="neutral" size="md" className="flex items-center gap-1" onClick={() => set({ questions: [...f.questions, emptyQuestion()] })}>
             <PlusIcon className="h-4 w-4" aria-hidden="true" /> Add a question
-          </button>
+          </CTAButton>
         }>
         {f.questions.length === 0 ? (
           <p className="text-sm text-secondary-text">No questions yet.</p>

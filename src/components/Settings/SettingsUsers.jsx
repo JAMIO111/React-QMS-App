@@ -19,6 +19,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import { useSubscriptionOverview } from "../../hooks/useSubscription";
 import { ORGANISATION_WIDE_ROLE_KEYS, isUnassigned } from "../../lib/departments";
 import { expiresIn } from "../../lib/onboarding";
+import CTAButton from "@/components/CTAButton";
 
 const STATUS_STYLES = {
   active: "bg-green-500/15 text-green-700 dark:text-green-300",
@@ -36,8 +37,6 @@ const EMAIL_NOTES = {
     "The invitation was created but the email could not be sent. Ask them to sign in with this address.",
 };
 
-const button =
-  "rounded-lg border border-border-color px-2 py-1 text-sm text-primary-text hover:border-border-dark-color disabled:opacity-50 cursor-pointer";
 const select =
   "h-9.5 rounded-lg border border-border-color bg-text-input-color px-2 py-2 text-sm text-primary-text shadow-s disabled:opacity-60";
 
@@ -152,12 +151,12 @@ const InviteForm = ({ roles, sites, departments }) => {
             ))}
           </select>
         </label>
-        <button
-          type="submit"
+        <CTAButton
+          buttonType="submit"
           disabled={mutation.isPending}
-          className={`${button} h-10`}>
+          type="neutral" size="md" className="px-2 py-1 h-10">
           {mutation.isPending ? "Inviting…" : "Send invitation"}
-        </button>
+        </CTAButton>
       </div>
       <fieldset className="flex flex-col gap-1" aria-label="Departments">
         <legend className="text-sm font-medium text-primary-text" data-required={needsDepartment || undefined}>
@@ -358,12 +357,12 @@ const MemberRow = ({ member, roles, sites, departments, canManage, isSelf }) => 
                   </option>
                 ))}
             </select>
-            <button
-              type="submit"
-              className={button}
+            <CTAButton
+              buttonType="submit"
+              type="neutral" size="md" className="px-2 py-1"
               disabled={!roleToAdd || mutation.isPending}>
               Add
-            </button>
+            </CTAButton>
           </form>
         )}
       </td>
@@ -429,9 +428,9 @@ const MemberRow = ({ member, roles, sites, departments, canManage, isSelf }) => 
                   </option>
                 ))}
             </select>
-            <button type="submit" className={button} disabled={!deptToAdd || mutation.isPending}>
+            <CTAButton buttonType="submit" type="neutral" size="md" className="px-2 py-1" disabled={!deptToAdd || mutation.isPending}>
               Add
-            </button>
+            </CTAButton>
           </form>
         )}
       </td>
@@ -439,36 +438,36 @@ const MemberRow = ({ member, roles, sites, departments, canManage, isSelf }) => 
         {manageable && (
           <div className="flex justify-end gap-2">
             {member.status === "active" && (
-              <button
-                type="button"
-                className={button}
+              <CTAButton
+                buttonType="button"
+                type="neutral" size="md" className="px-2 py-1"
                 disabled={mutation.isPending}
                 onClick={() => setStatus("suspended", "suspended")}>
                 Suspend
-              </button>
+              </CTAButton>
             )}
             {member.status === "suspended" && (
-              <button
-                type="button"
-                className={button}
+              <CTAButton
+                buttonType="button"
+                type="neutral" size="md" className="px-2 py-1"
                 disabled={mutation.isPending}
                 onClick={() => setStatus("active", "reactivated")}>
                 Reactivate
-              </button>
+              </CTAButton>
             )}
             {member.status === "invited" && (
-              <button
-                type="button"
-                className={button}
+              <CTAButton
+                buttonType="button"
+                type="neutral" size="md" className="px-2 py-1"
                 disabled={mutation.isPending}
                 aria-label={`Resend invitation to ${member.email}`}
                 onClick={() => run({ action: "resend", membershipId: member.membershipId }, "Invitation sent again.")}>
                 Resend
-              </button>
+              </CTAButton>
             )}
-            <button
-              type="button"
-              className={button}
+            <CTAButton
+              buttonType="button"
+              type="neutral" size="md" className="px-2 py-1"
               disabled={mutation.isPending}
               onClick={() =>
                 setStatus(
@@ -479,7 +478,7 @@ const MemberRow = ({ member, roles, sites, departments, canManage, isSelf }) => 
                 )
               }>
               {member.status === "invited" ? "Revoke" : "Remove"}
-            </button>
+            </CTAButton>
           </div>
         )}
       </td>

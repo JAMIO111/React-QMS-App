@@ -12,8 +12,9 @@ import { AttachmentDrop } from "../ui/FileDrop";
 import Dialog from "../ui/Dialog";
 import MenuCard from "../ui/MenuCard";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
-import { ErrorNotice, FormError, TextAreaField, buttonClass } from "../master-data/shared";
+import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import FindingDialog from "./FindingDialog";
+import CTAButton from "@/components/CTAButton";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -221,9 +222,9 @@ const Question = ({ q, recordId, editable, save, canFinding, onFinding }) => {
         </p>
       ) : failed && canFinding ? (
         <div className="flex flex-wrap items-center gap-3">
-          <button type="button" className={buttonClass.secondary} onClick={() => onFinding(q)}>
+          <CTAButton buttonType="button" type="secondary" size="md" onClick={() => onFinding(q)}>
             Create finding
-          </button>
+          </CTAButton>
           {q.critical && <span className="text-sm text-secondary-text">A failed critical question needs a finding before the audit can be completed.</span>}
         </div>
       ) : null}
@@ -410,9 +411,9 @@ const AuditRecordPage = () => {
           subtitle="What this audit found: classified, owned and followed up. A finding classified as a non-conformity can be raised as a non-conformance from its page."
           action={
             canFinding && (
-              <button type="button" className={buttonClass.secondary} onClick={() => setFinding({ question: null })}>
+              <CTAButton buttonType="button" type="secondary" size="md" onClick={() => setFinding({ question: null })}>
                 Add finding
-              </button>
+              </CTAButton>
             )
           }>
           <Findings findings={findings} />
@@ -439,16 +440,16 @@ const AuditRecordPage = () => {
           )}
           {can("audits.perform") && (
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className={buttonClass.primary}
+              <CTAButton
+                buttonType="button"
+                type="main" size="lg"
                 disabled={r.problems.length > 0 || mutation.isPending}
                 onClick={() => mutation.mutate({ path: `/audit-records/${r.id}/complete` }, { onSuccess: (done) => showToast({ type: done.result === "pass" ? "success" : "warning", title: `Audit ${done.result === "pass" ? "passed" : "failed"}`, message: `${done.reference}: ${formatScore(done.score)}` }) })}>
                 {mutation.isPending ? "Completing…" : "Complete audit"}
-              </button>
-              <button type="button" className={buttonClass.neutral} onClick={() => setAbandoning(true)}>
+              </CTAButton>
+              <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setAbandoning(true)}>
                 Abandon
-              </button>
+              </CTAButton>
             </div>
           )}
           <FormError error={mutation.error} />

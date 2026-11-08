@@ -2,7 +2,8 @@ import { useState } from "react";
 import Dialog from "../ui/Dialog";
 import { useAlertMutation } from "../../hooks/useDocumentation";
 import { referenceText } from "../../lib/qualityAlerts";
-import { FormError, TextAreaField, buttonClass } from "../master-data/shared";
+import { FormError, TextAreaField } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 /** "I have read and understood": recorded with the person's name and the time. The alert's own words are shown first. */
 export const AcknowledgeDialog = ({ alert, onClose }) => {
@@ -25,10 +26,10 @@ export const AcknowledgeDialog = ({ alert, onClose }) => {
         <TextAreaField label="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={2} hint="e.g. what you have done about it" />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
             {mutation.isPending ? "Saving…" : "I have read and understood"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>

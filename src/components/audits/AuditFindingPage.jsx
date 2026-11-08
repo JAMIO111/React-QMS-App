@@ -12,8 +12,9 @@ import Dialog from "../ui/Dialog";
 import ComboField from "../ui/ComboField";
 import { AttachmentDrop } from "../ui/FileDrop";
 import MenuCard from "../ui/MenuCard";
-import { ErrorNotice, FormError, TextAreaField, buttonClass } from "../master-data/shared";
+import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import FindingDialog from "./FindingDialog";
+import CTAButton from "@/components/CTAButton";
 
 const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm font-normal text-primary-text focus:outline-none focus:border-brand-primary";
 
@@ -60,12 +61,12 @@ const CreateNcrDialog = ({ finding, onClose }) => {
         <p className="text-sm text-secondary-text">It is created as a draft internal non-conformance. Nothing else happens until someone opens it.</p>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={buttonClass.neutral}>
+          <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             Cancel
-          </button>
-          <button type="submit" disabled={!title.trim() || mutation.isPending} className={buttonClass.primary}>
+          </CTAButton>
+          <CTAButton buttonType="submit" disabled={!title.trim() || mutation.isPending} type="main" size="lg">
             {mutation.isPending ? "Raising…" : "Raise non-conformance"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>
@@ -133,29 +134,29 @@ const AuditFindingPage = () => {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {canRaise && (
-            <button type="button" className={buttonClass.secondary} onClick={() => setDialog("ncr")}>
+            <CTAButton buttonType="button" type="secondary" size="md" onClick={() => setDialog("ncr")}>
               Create non-conformance
-            </button>
+            </CTAButton>
           )}
           {open && canPerform && (
-            <button type="button" className={buttonClass.neutral} onClick={() => setDialog("edit")}>
+            <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setDialog("edit")}>
               Edit
-            </button>
+            </CTAButton>
           )}
           {open && canManage && (
-            <button type="button" className={buttonClass.primary} onClick={() => setDialog("close")}>
+            <CTAButton buttonType="button" type="main" size="lg" onClick={() => setDialog("close")}>
               Close finding
-            </button>
+            </CTAButton>
           )}
           {open && canPerform && !f.ncr && (
-            <button type="button" className={buttonClass.danger} onClick={() => setDialog("withdraw")}>
+            <CTAButton buttonType="button" type="danger" size="md" onClick={() => setDialog("withdraw")}>
               Withdraw
-            </button>
+            </CTAButton>
           )}
           {f.status === "closed" && canManage && (
-            <button type="button" className={buttonClass.neutral} onClick={() => setDialog("reopen")}>
+            <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setDialog("reopen")}>
               Reopen
-            </button>
+            </CTAButton>
           )}
         </div>
       </div>

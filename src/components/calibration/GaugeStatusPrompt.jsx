@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Dialog from "../ui/Dialog";
 import { GAUGE_STATUSES, outcomeOf, statusAfterCalibration, statusOf } from "../../lib/calibration";
+import CTAButton from "@/components/CTAButton";
 
 const CHOICES = GAUGE_STATUSES.filter((s) => s.key !== "in_calibration");
 const HELP = {
@@ -71,12 +72,12 @@ const GaugeStatusPrompt = ({ gauge, calibration, onApply, onSkip }) => {
           </label>
         )}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onSkip} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
+          <CTAButton buttonType="button" onClick={onSkip} type="neutral" size="md">
             Keep {statusOf(current).label.toLowerCase()}
-          </button>
-          <button type="submit" disabled={!changed} className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm font-medium text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
+          </CTAButton>
+          <CTAButton buttonType="submit" disabled={!changed} type="main" size="md" className="font-medium">
             Update status
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>

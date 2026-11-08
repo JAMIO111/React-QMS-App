@@ -4,15 +4,10 @@ import supabase from "../supabase-client";
 import Dialog from "./ui/Dialog";
 import ImageCropper from "./ui/ImageCropper";
 import { cropToBlob } from "../lib/cropImage";
+import CTAButton from "@/components/CTAButton";
 
 /** Pictures bigger than this are refused before cropping (they are shrunk to 512 px anyway). */
 const MAX_SOURCE_MB = 25;
-const btn = {
-  neutral: "flex items-center gap-2 rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover disabled:opacity-50 cursor-pointer",
-  save: "flex items-center gap-2 rounded-lg border border-success-btn-border bg-success-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-success-btn-bg-hover disabled:opacity-50 cursor-pointer",
-  danger: "flex items-center gap-2 rounded-lg border border-error-btn-border bg-error-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-error-btn-bg-hover disabled:opacity-50 cursor-pointer",
-};
-
 /**
  * Uploads, replaces or removes a single square image in a (private) storage bucket. A chosen
  * picture is cropped to a square in the browser and saved as a 512 × 512 WebP, so large photos
@@ -150,20 +145,20 @@ const ModalImageUploader = ({
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
           <div className="flex gap-2">
             {(source || existingUrl) && (
-              <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} className={btn.neutral}>
+              <CTAButton buttonType="button" onClick={() => inputRef.current?.click()} disabled={busy} type="neutral" size="md">
                 <ImageIcon className="h-4 w-4" /> {source ? "Choose another" : "Replace"}
-              </button>
+              </CTAButton>
             )}
             {!source && existingPath && (
-              <button type="button" onClick={remove} disabled={busy} className={btn.danger}>
+              <CTAButton type="danger" size="md" buttonType="button" onClick={remove} disabled={busy}>
                 <Trash2Icon className="h-4 w-4" /> Remove
-              </button>
+              </CTAButton>
             )}
           </div>
           {source && (
-            <button type="button" onClick={save} disabled={busy || !crop} className={btn.save}>
+            <CTAButton type="success" size="md" buttonType="button" onClick={save} disabled={busy || !crop}>
               <SaveIcon className="h-4 w-4" /> {busy ? "Saving…" : "Save"}
-            </button>
+            </CTAButton>
           )}
         </div>
       </div>

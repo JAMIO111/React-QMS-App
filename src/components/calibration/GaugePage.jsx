@@ -40,8 +40,8 @@ import CharacteristicsEditor from "./CharacteristicsEditor";
 import GaugeHistory from "./GaugeHistory";
 import PeoplePicker from "./PeoplePicker";
 import { DuePill, GaugeStatusPill, OutcomePill } from "./Pills";
-import { btn } from "./buttons";
 import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
 
 const EMPTY = {
   assetNumber: "", description: "", gaugeTypeId: null, manufacturer: "", model: "", serialNumber: "",
@@ -98,9 +98,9 @@ const CalibrationList = ({ gaugeId, canRecord }) => {
             Show deleted
           </Switch>
           {canRecord && (
-            <Link to={`/Calibration/Gauges/${gaugeId}/calibrations/new`} className={btn.main}>
+            <CTAButton to={`/Calibration/Gauges/${gaugeId}/calibrations/new`} type="main" size="default" className="px-3">
               <ClipboardCheckIcon className="h-4 w-4" /> Record calibration
-            </Link>
+            </CTAButton>
           )}
         </div>
       </div>
@@ -259,24 +259,24 @@ const GaugePage = () => {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!isNew && can("calibration.record") && !deleted && (
-            <Link to={`/Calibration/Gauges/${gauge.id}/calibrations/new`} className={btn.main}>
+            <CTAButton to={`/Calibration/Gauges/${gauge.id}/calibrations/new`} type="main" size="default" className="px-3">
               <ClipboardCheckIcon className="h-4 w-4" /> Record calibration
-            </Link>
+            </CTAButton>
           )}
           {canEdit && dirty && (
-            <button type="button" onClick={() => reset(original)} className={btn.neutral}>
+            <CTAButton buttonType="button" onClick={() => reset(original)} type="neutral" size="default" className="px-3">
               <Undo2Icon className="h-4 w-4" /> Discard changes
-            </button>
+            </CTAButton>
           )}
           {canEdit && (
-            <button type="submit" form="gauge-form" disabled={mutation.isPending || !valid || (!isNew && !dirty)} className={btn.save}>
+            <CTAButton buttonType="submit" form="gauge-form" disabled={mutation.isPending || !valid || (!isNew && !dirty)} type="success" size="default" className="px-3">
               <SaveIcon className="h-4 w-4" /> {mutation.isPending ? "Saving…" : isNew ? "Add gauge" : "Save changes"}
-            </button>
+            </CTAButton>
           )}
           {!isNew && can("calibration.manage") && !deleted && (
-            <button type="button" onClick={() => { mutation.reset(); setDialog("delete"); }} className={btn.danger}>
+            <CTAButton buttonType="button" onClick={() => { mutation.reset(); setDialog("delete"); }} type="danger" size="default" className="px-3">
               <Trash2Icon className="h-4 w-4" /> Delete
-            </button>
+            </CTAButton>
           )}
         </div>
       </div>
@@ -310,9 +310,9 @@ const GaugePage = () => {
             <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
               Deleted {formatDate(gauge.deletedAt)} by {gauge.deletedBy?.name ?? "—"}: “{gauge.deleteReason}”. Deleted gauges are read-only.
               {can("calibration.manage") && (
-                <button type="button" onClick={restore} disabled={mutation.isPending} className={btn.neutral}>
+                <CTAButton buttonType="button" onClick={restore} disabled={mutation.isPending} type="neutral" size="default" className="px-3">
                   <RotateCcwIcon className="h-4 w-4" /> Restore
-                </button>
+                </CTAButton>
               )}
             </div>
           )}

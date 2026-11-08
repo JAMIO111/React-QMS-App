@@ -6,8 +6,9 @@ import ReasonDialog from "../ncr/ReasonDialog";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useCapaMutation, useCapas, useNcrCapas } from "../../hooks/useCapa";
 import { capaHref, stepOf } from "../../lib/capa";
-import { FormError, buttonClass } from "../master-data/shared";
+import { FormError } from "../master-data/shared";
 import { StagePill, StepProgress } from "./shared";
+import CTAButton from "@/components/CTAButton";
 
 const LinkExistingDialog = ({ ncr, linkedIds, onClose }) => {
   const mutation = useCapaMutation();
@@ -23,8 +24,8 @@ const LinkExistingDialog = ({ ncr, linkedIds, onClose }) => {
           emptyMessage={running.isFetching ? "Searching…" : "No running 8D matches"} sort={false} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary} disabled={!picked || mutation.isPending}>{mutation.isPending ? "Linking…" : "Link"}</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!picked || mutation.isPending}>{mutation.isPending ? "Linking…" : "Link"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -48,8 +49,8 @@ const NcrCapaCard = ({ ncr }) => {
   const start = () => mutation.mutate({ action: "create", body: { fromNcrId: ncr.id } }, { onSuccess: (capa) => navigate(`/CAPA/${capa.id}/d0`) });
   const buttons = (
     <div className="flex flex-wrap gap-3">
-      <button type="button" className={buttonClass.primary} disabled={mutation.isPending} onClick={start}>{list.length ? "Start another 8D" : "Start a new 8D"}</button>
-      <button type="button" className={buttonClass.neutral} onClick={() => { mutation.reset(); setLinking(true); }}>Link to an existing 8D</button>
+      <CTAButton buttonType="button" type="main" size="lg" disabled={mutation.isPending} onClick={start}>{list.length ? "Start another 8D" : "Start a new 8D"}</CTAButton>
+      <CTAButton buttonType="button" type="neutral" size="md" onClick={() => { mutation.reset(); setLinking(true); }}>Link to an existing 8D</CTAButton>
     </div>
   );
 
@@ -75,7 +76,7 @@ const NcrCapaCard = ({ ncr }) => {
                 <div className="flex items-center gap-3">
                   <StagePill stage={c.stage} />
                   <StepProgress done={c.stepsDone} current={c.stage === "closed" || c.stage === "cancelled" ? null : c.currentStep} />
-                  {manage && <button type="button" className={buttonClass.neutral} aria-label={`Unlink ${c.reference}`} onClick={() => { mutation.reset(); setUnlinking(c); }}>Unlink</button>}
+                  {manage && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Unlink ${c.reference}`} onClick={() => { mutation.reset(); setUnlinking(c); }}>Unlink</CTAButton>}
                 </div>
               </li>
             ))}

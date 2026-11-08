@@ -7,11 +7,12 @@ import { PartPicker } from "../ncr/Pickers";
 import { OrderPickerWithCreate } from "../production/pickers";
 import { useProductionSettings } from "../../hooks/useProduction";
 import { usePermissions } from "../../hooks/useQmsApi";
-import { buttonClass, FormError, SelectField } from "../master-data/shared";
+import { FormError, SelectField } from "../master-data/shared";
 import { useMachines } from "../../hooks/useProcessControl";
 import { useJobMutation, useJobPreview } from "../../hooks/useJobs";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { lastMachine, rememberMachine } from "../../lib/jobs";
+import CTAButton from "@/components/CTAButton";
 
 const useDebounced = (value, delay = 300) => {
   const [v, setV] = useState(value);
@@ -169,12 +170,12 @@ const StartJobDialog = ({ onClose }) => {
         {preview.error && <FormError error={preview.error} />}
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className={buttonClass.primary} disabled={!ready || mutation.isPending}>
+          </CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!ready || mutation.isPending}>
             {mutation.isPending ? "Starting…" : "Start job"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>

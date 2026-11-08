@@ -4,11 +4,10 @@ import Switch from "@/components/ui/Switch";
 import { useToast } from "../../contexts/ToastProvider";
 import { useNcrMutation } from "../../hooks/useNcr";
 import { describeApiError } from "../../lib/api-client";
+import CTAButton from "@/components/CTAButton";
 
 const inputClass =
   "rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text placeholder:text-tertiary-text focus:outline-none focus:border-brand-primary";
-const primaryButton =
-  "rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm font-medium cursor-pointer disabled:opacity-50";
 
 const CodeBadge = ({ children }) => (
   <span className="rounded-md bg-border-color/60 px-1.5 py-0.5 font-mono text-xs text-secondary-text">{children}</span>
@@ -46,9 +45,9 @@ const Row = ({ item, canManage, meta, children }) => {
             }}>
             <input aria-label="Code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={20} placeholder="Code" className={`${inputClass} w-24`} />
             <input aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required className={`${inputClass} w-64 max-w-full`} />
-            <button type="submit" disabled={mutation.isPending} className={primaryButton}>
+            <CTAButton buttonType="submit" disabled={mutation.isPending} type="main" size="md">
               Save
-            </button>
+            </CTAButton>
             <button
               type="button"
               onClick={() => {
@@ -118,9 +117,9 @@ const AddForm = ({ kind, parentId, label }) => {
       }}>
       {!parentId && <input aria-label={`${label} code`} value={code} onChange={(e) => setCode(e.target.value)} maxLength={20} placeholder="Code" className={`${inputClass} w-24`} />}
       <input aria-label={`New ${label.toLowerCase()}`} value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder={`Add ${label.toLowerCase()}…`} className={`${inputClass} w-64 max-w-full`} />
-      <button type="submit" disabled={!name.trim() || mutation.isPending} className={`${primaryButton} flex items-center gap-1`}>
+      <CTAButton buttonType="submit" disabled={!name.trim() || mutation.isPending} type="main" size="md" className="gap-1">
         <PlusIcon /> Add
-      </button>
+      </CTAButton>
     </form>
   );
 };

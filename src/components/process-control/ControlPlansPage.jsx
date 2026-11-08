@@ -6,8 +6,9 @@ import Field from "../ui/Field";
 import Dialog from "../ui/Dialog";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useControlPlans, usePartFamilies, useProcessControlMutation } from "../../hooks/useProcessControl";
-import { ActiveBadge, buttonClass, DataList, FormError, SearchBox, SelectField } from "../master-data/shared";
+import { ActiveBadge, DataList, FormError, SearchBox, SelectField } from "../master-data/shared";
 import { RevisionStatusPill } from "./shared";
+import CTAButton from "@/components/CTAButton";
 
 const STATUS_FILTERS = [
   { value: "effective", label: "With an effective revision" },
@@ -56,12 +57,12 @@ const NewPlanForm = ({ onDone }) => {
       />
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
-        </button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>
+        </CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
           {mutation.isPending ? "Creating…" : "Create plan"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -149,9 +150,9 @@ const ControlPlansPage = () => {
           </p>
         </div>
         {canManage && (
-          <button type="button" className={`${buttonClass.primary} flex items-center gap-1`} onClick={() => setAdding(true)}>
+          <CTAButton buttonType="button" type="main" size="lg" className="flex items-center gap-1" onClick={() => setAdding(true)}>
             <PlusIcon className="h-4 w-4" /> New plan
-          </button>
+          </CTAButton>
         )}
       </div>
       <div className="flex flex-wrap items-end gap-3">

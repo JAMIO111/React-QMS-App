@@ -6,7 +6,8 @@ import { findingFromAnswer, findingKindLabel, suggestClassification } from "../.
 import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
-import { FormError, TextAreaField, buttonClass } from "../master-data/shared";
+import { FormError, TextAreaField } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm font-normal text-primary-text placeholder:text-tertiary-text focus:outline-none focus:border-brand-primary";
 
@@ -77,12 +78,12 @@ const FindingDialog = ({ record, question, finding, onClose, onSaved }) => {
         </div>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={buttonClass.neutral}>
+          <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             Cancel
-          </button>
-          <button type="submit" disabled={!ok || mutation.isPending} className={buttonClass.primary}>
+          </CTAButton>
+          <CTAButton buttonType="submit" disabled={!ok || mutation.isPending} type="main" size="lg">
             {mutation.isPending ? "Saving…" : editing ? "Save finding" : "Raise finding"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>

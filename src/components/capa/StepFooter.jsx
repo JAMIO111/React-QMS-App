@@ -5,7 +5,8 @@ import ReasonDialog from "../ncr/ReasonDialog";
 import { useCapaMutation } from "../../hooks/useCapa";
 import { STEPS, stepIndex } from "../../lib/capa";
 import { formatDateTime } from "../../lib/processControl";
-import { FormError, buttonClass } from "../master-data/shared";
+import { FormError } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 /**
  * Under every step: what is still needed (worked out by the database), Back, and Complete step and continue. A complete step shows who
@@ -47,27 +48,27 @@ const StepFooter = ({ capa, step, editable }) => {
       <FormError error={mutation.error} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         {prev ? (
-          <Link to={`/CAPA/${capa.id}/${prev.key}`} className={`${buttonClass.neutral} inline-flex items-center gap-1`}>
+          <CTAButton to={`/CAPA/${capa.id}/${prev.key}`} type="neutral" size="md" className="inline-flex items-center gap-1">
             <ChevronLeftIcon className="h-4 w-4" /> {prev.code} {prev.label}
-          </Link>
+          </CTAButton>
         ) : <span />}
         <div className="flex flex-wrap items-center gap-2">
           {editable && s.completed && step !== "d8" && (
-            <button type="button" className={buttonClass.neutral} onClick={() => { mutation.reset(); setReopening(true); }}>Reopen {code}</button>
+            <CTAButton buttonType="button" type="neutral" size="md" onClick={() => { mutation.reset(); setReopening(true); }}>Reopen {code}</CTAButton>
           )}
           {editable && !s.completed && step !== "d8" && (
-            <button
-              type="button"
-              className={buttonClass.primary}
+            <CTAButton
+              buttonType="button"
+              type="main" size="lg"
               disabled={!ready || mutation.isPending}
               onClick={() => mutation.mutate({ action: "completeStep", id: capa.id, body: { step } }, { onSuccess: () => next && navigate(`/CAPA/${capa.id}/${next.key}`) })}>
               {mutation.isPending ? "Saving…" : next ? `Complete ${code} and continue` : `Complete ${code}`}
-            </button>
+            </CTAButton>
           )}
           {next && (s.completed || !editable) && (
-            <Link to={`/CAPA/${capa.id}/${next.key}`} className={`${buttonClass.neutral} inline-flex items-center gap-1`}>
+            <CTAButton to={`/CAPA/${capa.id}/${next.key}`} type="neutral" size="md" className="inline-flex items-center gap-1">
               {next.code} {next.label} <ChevronRightIcon className="h-4 w-4" />
-            </Link>
+            </CTAButton>
           )}
         </div>
       </div>

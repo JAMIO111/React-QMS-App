@@ -7,6 +7,7 @@ import { useNcrMutation } from "../../hooks/useNcr";
 import { describeApiError } from "../../lib/api-client";
 import { SOURCE_OPTIONS, sourceLabel } from "../../lib/ncr";
 import { TextAreaField } from "./Pickers";
+import CTAButton from "@/components/CTAButton";
 
 /**
  * Change where a non-conformance came from. A reason is needed and is kept in the history. The database refuses the move when
@@ -59,12 +60,12 @@ const ChangeSourceDialog = ({ ncr, onClose }) => {
           </p>
         )}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
+          <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             Back
-          </button>
-          <button type="submit" disabled={mutation.isPending || !ready} className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
+          </CTAButton>
+          <CTAButton buttonType="submit" disabled={mutation.isPending || !ready} type="main" size="md">
             {mutation.isPending ? "Saving…" : "Change source"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>

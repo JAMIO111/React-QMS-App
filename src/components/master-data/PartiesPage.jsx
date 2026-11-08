@@ -7,7 +7,8 @@ import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useMasterDataMutation, useParties } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
-import { ActiveBadge, buttonClass, DataList, SearchBox } from "./shared";
+import { ActiveBadge, DataList, SearchBox } from "./shared";
+import CTAButton from "@/components/CTAButton";
 
 const LABELS = {
   customers: { title: "Customers", one: "customer", intro: "Organisations you supply. Parts and customer complaints link to them." },
@@ -75,12 +76,12 @@ const PartyForm = ({ kind, party, onDone }) => {
         </p>
       )}
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
-        </button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>
+        </CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
           {mutation.isPending ? "Saving…" : party ? "Save changes" : `Add ${label}`}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -129,9 +130,9 @@ const PartiesPage = ({ kind }) => {
           <p className="text-sm text-secondary-text">{label.intro}</p>
         </div>
         {canManage && (
-          <button type="button" className={`${buttonClass.primary} flex items-center gap-1`} onClick={() => setEditing("new")}>
+          <CTAButton buttonType="button" type="main" size="lg" className="flex items-center gap-1" onClick={() => setEditing("new")}>
             <PlusIcon className="h-4 w-4" /> Add {label.one}
-          </button>
+          </CTAButton>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-3">

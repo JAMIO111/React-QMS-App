@@ -6,7 +6,7 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useCapa, useCapaMutation } from "../../hooks/useCapa";
 import { SOURCES, STEPS, isRunning, ncrHref, stepOf } from "../../lib/capa";
 import { formatDay } from "../../lib/qualityAlerts";
-import { ErrorNotice, buttonClass } from "../master-data/shared";
+import { ErrorNotice } from "../master-data/shared";
 import { StagePill } from "./shared";
 import Stepper from "./Stepper";
 import StepFooter from "./StepFooter";
@@ -19,6 +19,7 @@ import D5Corrective from "./steps/D5Corrective";
 import D6Implement from "./steps/D6Implement";
 import D7Prevent from "./steps/D7Prevent";
 import D8Close from "./steps/D8Close";
+import CTAButton from "@/components/CTAButton";
 
 const STEP_PAGES = { d0: D0Initiate, d1: D1Team, d2: D2Problem, d3: D3Containment, d4: D4RootCause, d5: D5Corrective, d6: D6Implement, d7: D7Prevent, d8: D8Close };
 
@@ -80,9 +81,9 @@ const CapaPage = () => {
           {capa.stageReason && <p className="mt-1 text-sm text-secondary-text">{capa.stage === "cancelled" ? "Cancelled" : "Reopened"}: {capa.stageReason}</p>}
         </div>
         <div className="flex gap-2">
-          <Link to={`/CAPA/${capa.id}/report`} className={buttonClass.neutral}>Report</Link>
-          {can("capa.manage") && running && <button type="button" className={buttonClass.danger} onClick={() => { mutation.reset(); setDialog("cancel"); }}>Cancel 8D</button>}
-          {can("capa.manage") && !running && <button type="button" className={buttonClass.neutral} onClick={() => { mutation.reset(); setDialog("reopen"); }}>Reopen 8D</button>}
+          <CTAButton to={`/CAPA/${capa.id}/report`} type="neutral" size="md">Report</CTAButton>
+          {can("capa.manage") && running && <CTAButton buttonType="button" type="danger" size="md" onClick={() => { mutation.reset(); setDialog("cancel"); }}>Cancel 8D</CTAButton>}
+          {can("capa.manage") && !running && <CTAButton buttonType="button" type="neutral" size="md" onClick={() => { mutation.reset(); setDialog("reopen"); }}>Reopen 8D</CTAButton>}
         </div>
       </header>
       </div>

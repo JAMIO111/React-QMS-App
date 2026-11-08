@@ -10,6 +10,7 @@ import Switch from "../ui/Switch";
 import StatTile from "../ui/StatTile";
 import CharacteristicForm from "../process-control/CharacteristicForm";
 import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
 
 const inputClass =
   "rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text placeholder:text-tertiary-text focus:outline-none focus:border-brand-primary";
@@ -93,12 +94,12 @@ const SettingsProcessControl = () => {
         bodyClassName="flex flex-col gap-3"
         action={
           canManage && (
-            <button
-              type="button"
+            <CTAButton
+              buttonType="button"
               onClick={() => setEditing({})}
-              className="flex items-center gap-1 rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm font-medium cursor-pointer">
+              type="main" size="md" className="flex items-center gap-1 font-medium">
               <PlusIcon /> Add template
-            </button>
+            </CTAButton>
           )
         }>
         <div className="flex flex-wrap items-center gap-3">

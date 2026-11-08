@@ -7,7 +7,8 @@ import { useAllDepartments, useSites } from "../../hooks/useQmsApi";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFComboBox from "../ui/RHFComboBox";
-import { FormError, buttonClass } from "./shared";
+import { FormError } from "./shared";
+import CTAButton from "@/components/CTAButton";
 
 /**
  * The employee's sign-in account: who they are linked to, and (for people with a Controller seat only) link or unlink. The database enforces
@@ -45,9 +46,9 @@ const SignInLink = ({ employee, readOnly }) => {
       <p className="text-sm text-primary-text">{login ? `Linked to ${login.name}.` : "Not linked to a sign-in account."}</p>
       {canLink && login && (
         <div>
-          <button type="button" className={buttonClass.neutral} disabled={mutation.isPending} onClick={() => change(null)}>
+          <CTAButton buttonType="button" type="neutral" size="md" disabled={mutation.isPending} onClick={() => change(null)}>
             Unlink sign-in
-          </button>
+          </CTAButton>
         </div>
       )}
       {canLink && !login && (
@@ -55,9 +56,9 @@ const SignInLink = ({ employee, readOnly }) => {
           <div className="min-w-56 flex-1">
             <RHFComboBox label="Member" icon={KeyRoundIcon} placeholder="Choose a member" options={people} value={userId} onChange={setUserId} />
           </div>
-          <button type="button" className={buttonClass.secondary} disabled={!userId || mutation.isPending} onClick={() => change(userId)}>
+          <CTAButton buttonType="button" type="secondary" size="md" disabled={!userId || mutation.isPending} onClick={() => change(userId)}>
             Link sign-in
-          </button>
+          </CTAButton>
         </div>
       )}
       {!canLink && !readOnly && candidates.data && <p className="text-xs text-secondary-text">Only people with a Controller seat can link or unlink a sign-in account.</p>}
@@ -149,16 +150,16 @@ const EmployeeDialog = ({ employee, onClose, readOnly = false }) => {
         )}
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
+          <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             {readOnly ? "Close" : "Cancel"}
-          </button>
+          </CTAButton>
           {!readOnly && (
-          <button
-            type="submit"
+          <CTAButton
+            buttonType="submit"
             disabled={mutation.isPending || form.firstName.trim().length === 0 || form.surname.trim().length === 0}
-            className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
+            type="main" size="md">
             {mutation.isPending ? "Saving…" : creating ? "Add employee" : "Save changes"}
-          </button>
+          </CTAButton>
           )}
         </div>
       </form>

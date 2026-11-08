@@ -7,7 +7,7 @@ import { expiresIn, parseEmails } from "../../lib/onboarding";
 import { useToast } from "../../contexts/ToastProvider";
 import { useAllDepartments, useMemberMutation, useMembers, usePermissions, useRoles, useSites } from "../../hooks/useQmsApi";
 import { useSubscriptionOverview } from "../../hooks/useSubscription";
-import { buttonClass } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 const field =
   "rounded-lg border border-border-color bg-text-input-color px-2 py-1.5 text-sm text-primary-text disabled:opacity-60";
@@ -126,9 +126,9 @@ const TeamInvite = () => {
           <textarea aria-label="Email addresses" className={`${field} min-h-20`} value={paste} placeholder="ann@example.com, bob@example.com" onChange={(e) => setPaste(e.target.value)} />
         </label>
         <div className="flex justify-end">
-          <button type="button" className={buttonClass.neutral} disabled={parseEmails(paste).length === 0} onClick={add}>
+          <CTAButton buttonType="button" type="neutral" size="md" disabled={parseEmails(paste).length === 0} onClick={add}>
             Add to the list
-          </button>
+          </CTAButton>
         </div>
       </MenuCard>
 
@@ -228,9 +228,9 @@ const TeamInvite = () => {
             </ul>
           )}
           <div className="flex justify-end">
-            <button type="button" className={buttonClass.primary} disabled={mutation.isPending || problems.length > 0} onClick={send}>
+            <CTAButton buttonType="button" type="main" size="lg" disabled={mutation.isPending || problems.length > 0} onClick={send}>
               {mutation.isPending ? "Sending…" : `Send ${rows.length} invitation${rows.length === 1 ? "" : "s"}`}
-            </button>
+            </CTAButton>
           </div>
         </MenuCard>
       )}
@@ -281,12 +281,12 @@ export const PendingInvitations = () => {
             </div>
             {can("members.manage") && (
               <div className="flex gap-2">
-                <button type="button" className={buttonClass.neutral} disabled={mutation.isPending} aria-label={`Resend to ${m.email}`} onClick={() => run({ action: "resend", membershipId: m.membershipId }, "Invitation sent again")}>
+                <CTAButton buttonType="button" type="neutral" size="md" disabled={mutation.isPending} aria-label={`Resend to ${m.email}`} onClick={() => run({ action: "resend", membershipId: m.membershipId }, "Invitation sent again")}>
                   Resend
-                </button>
-                <button type="button" className={buttonClass.neutral} disabled={mutation.isPending} aria-label={`Revoke ${m.email}`} onClick={() => run({ action: "revoke", membershipId: m.membershipId }, "Invitation revoked")}>
+                </CTAButton>
+                <CTAButton buttonType="button" type="neutral" size="md" disabled={mutation.isPending} aria-label={`Revoke ${m.email}`} onClick={() => run({ action: "revoke", membershipId: m.membershipId }, "Invitation revoked")}>
                   Revoke
-                </button>
+                </CTAButton>
               </div>
             )}
           </li>

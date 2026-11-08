@@ -4,8 +4,9 @@ import MenuCard from "../../ui/MenuCard";
 import { useCapaMutation } from "../../../hooks/useCapa";
 import { usePermissions } from "../../../hooks/useQmsApi";
 import { formatDay } from "../../../lib/qualityAlerts";
-import { FormError, TextAreaField, buttonClass } from "../../master-data/shared";
+import { FormError, TextAreaField } from "../../master-data/shared";
 import ActionList from "../ActionList";
+import CTAButton from "@/components/CTAButton";
 
 const STATE_TEXT = {
   none: { label: "Not verified yet", tone: "text-secondary-text" },
@@ -38,8 +39,8 @@ const VerifyDialog = ({ capa, onClose }) => {
         {!effective && <p className="text-sm text-warning-color">A failed verification reopens D5 and D6 so the actions can be put right.</p>}
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !method.trim() || (!effective && !notes.trim())}>{mutation.isPending ? "Saving…" : "Record verification"}</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !method.trim() || (!effective && !notes.trim())}>{mutation.isPending ? "Saving…" : "Record verification"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -56,7 +57,7 @@ const D6Implement = ({ capa, editable }) => {
       <ActionList capa={capa} phase="corrective" planStep={null} doingStep="d6" withCause title="Corrective actions"
         emptyText="No corrective action yet. Plan them in D5, then mark each one done here with its evidence." />
       <MenuCard title="Effectiveness verification" subtitle="Did the fix work? Needs the verify permission"
-        action={editable && can("capa.verify") ? <button type="button" className={buttonClass.primary} onClick={() => setOpen(true)}>Verify effectiveness</button> : undefined}>
+        action={editable && can("capa.verify") ? <CTAButton buttonType="button" type="main" size="lg" onClick={() => setOpen(true)}>Verify effectiveness</CTAButton> : undefined}>
         <p className={`text-sm font-medium ${state.tone}`}>{state.label}</p>
         {capa.verifications.length > 0 && (
           <ul className="mt-2 flex flex-col divide-y divide-border-color" aria-label="Verifications">

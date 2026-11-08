@@ -7,6 +7,7 @@ import { useUnits } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
 import { CHARACTERISTIC_KINDS, formatNumber, formatTolerance } from "../../lib/calibration";
 import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
 
 const input = "w-full rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-sm text-primary-text focus:outline-none focus:border-brand-primary disabled:opacity-60";
 const EMPTY = { kind: "variable", name: "", nominal: "", toleranceMinus: "", tolerancePlus: "", unitCode: "mm", method: "" };
@@ -146,8 +147,8 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
                     <Fields form={editForm} setForm={setEditForm} units={units.data} idPrefix={c.id} />
                     <td className="p-1">
                       <div className="flex gap-1">
-                        <button type="button" disabled={!valid(editForm) || mutation.isPending} onClick={() => patch(c.id, toBody(editForm), () => setEditing(null))}
-                          className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-2 py-1 text-sm disabled:opacity-50 cursor-pointer">Save</button>
+                        <CTAButton buttonType="button" disabled={!valid(editForm) || mutation.isPending} onClick={() => patch(c.id, toBody(editForm), () => setEditing(null))}
+                          type="main" size="md" className="px-2 py-1">Save</CTAButton>
                         <button type="button" onClick={() => setEditing(null)} className="px-1 text-sm text-secondary-text hover:underline cursor-pointer">Cancel</button>
                       </div>
                     </td>
@@ -201,8 +202,8 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
                   <Fields form={newForm} setForm={setNewForm} units={units.data} idPrefix="new" />
                   <td className="p-1">
                     <div className="flex gap-1">
-                      <button type="button" disabled={!valid(newForm) || mutation.isPending} onClick={create}
-                        className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-2 py-1 text-sm disabled:opacity-50 cursor-pointer">Add</button>
+                      <CTAButton buttonType="button" disabled={!valid(newForm) || mutation.isPending} onClick={create}
+                        type="main" size="md" className="px-2 py-1">Add</CTAButton>
                       <button type="button" onClick={() => setAdding(false)} className="px-1 text-sm text-secondary-text hover:underline cursor-pointer">Cancel</button>
                     </div>
                   </td>
@@ -213,9 +214,9 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
         </div>
       )}
       {canEdit && !adding && (
-        <button type="button" onClick={() => setAdding(true)} className="flex items-center gap-1 self-start rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
+        <CTAButton buttonType="button" onClick={() => setAdding(true)} type="neutral" size="md" className="flex items-center gap-1 self-start px-3 py-1">
           <PlusIcon /> Add characteristic
-        </button>
+        </CTAButton>
       )}
     </div>
   );

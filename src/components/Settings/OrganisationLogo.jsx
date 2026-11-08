@@ -13,6 +13,7 @@ import {
   useOrganisationLogo,
   useUpdateOrganisation,
 } from "../../hooks/useQmsApi";
+import CTAButton from "@/components/CTAButton";
 
 /**
  * Settings → Organisation → Logo. Shown in the side menu for every member. Members with
@@ -93,22 +94,22 @@ const OrganisationLogo = ({ logoPath, canManage }) => {
         {canManage ? (
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
+              <CTAButton
+                buttonType="button"
                 disabled={busy}
                 onClick={() => inputRef.current?.click()}
-                className="flex items-center gap-2 rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
+                type="main" size="md" className="flex items-center gap-2">
                 <CloudUploadIcon className="h-4 w-4" />{" "}
                 {busy ? "Saving…" : logoPath ? "Replace logo" : "Upload logo"}
-              </button>
+              </CTAButton>
               {logoPath && (
-                <button
-                  type="button"
+                <CTAButton
+                  buttonType="button"
                   disabled={busy}
                   onClick={remove}
-                  className="flex items-center gap-2 rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover disabled:opacity-50 cursor-pointer">
+                  type="neutral" size="md" className="flex items-center gap-2">
                   <Trash2Icon className="h-4 w-4" /> Remove
-                </button>
+                </CTAButton>
               )}
             </div>
             <p className="text-xs text-secondary-text">

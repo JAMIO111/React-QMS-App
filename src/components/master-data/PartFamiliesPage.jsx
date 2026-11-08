@@ -7,7 +7,8 @@ import Dialog from "../ui/Dialog";
 import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { usePartFamilies, useProcessControlMutation } from "../../hooks/useProcessControl";
-import { ActiveBadge, buttonClass, DataList, FormError, SearchBox } from "./shared";
+import { ActiveBadge, DataList, FormError, SearchBox } from "./shared";
+import CTAButton from "@/components/CTAButton";
 
 /** Add or edit a part family (code, name, description, active). */
 export const PartFamilyForm = ({ family, onDone, onCreated }) => {
@@ -51,12 +52,12 @@ export const PartFamilyForm = ({ family, onDone, onCreated }) => {
       )}
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
-        </button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>
+        </CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
           {mutation.isPending ? "Saving…" : family ? "Save changes" : "Add family"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -102,9 +103,9 @@ const PartFamiliesPage = () => {
           <p className="text-sm text-secondary-text">Related part numbers that share a process route and inspection strategy, so one control plan can cover them.</p>
         </div>
         {canManage && (
-          <button type="button" className={`${buttonClass.primary} flex items-center gap-1`} onClick={() => setAdding(true)}>
+          <CTAButton buttonType="button" type="main" size="lg" className="flex items-center gap-1" onClick={() => setAdding(true)}>
             <PlusIcon className="h-4 w-4" /> Add family
-          </button>
+          </CTAButton>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-3">

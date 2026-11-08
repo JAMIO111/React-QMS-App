@@ -3,6 +3,7 @@ import Dialog from "../ui/Dialog";
 import { useToast } from "../../contexts/ToastProvider";
 import { useNcrMutation } from "../../hooks/useNcr";
 import { describeApiError } from "../../lib/api-client";
+import CTAButton from "@/components/CTAButton";
 
 /** Soft delete with a reason: the record is kept (and can be restored) but hidden from registers. */
 const DeleteNcrDialog = ({ ncr, onClose, onDeleted }) => {
@@ -48,15 +49,15 @@ const DeleteNcrDialog = ({ ncr, onClose, onDeleted }) => {
           </p>
         )}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
+          <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             Cancel
-          </button>
-          <button
-            type="submit"
+          </CTAButton>
+          <CTAButton
+            buttonType="submit"
             disabled={mutation.isPending || reason.trim().length < 3}
-            className="rounded-lg border border-error-btn-border bg-error-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-error-btn-bg-hover disabled:opacity-50 cursor-pointer">
+            type="danger" size="md">
             {mutation.isPending ? "Deleting…" : "Delete"}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>

@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useToast } from "../../contexts/ToastProvider";
 import { useMasterDataMutation } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
-import { buttonClass } from "../master-data/shared";
 import ReasonDialog from "../ncr/ReasonDialog";
+import CTAButton from "@/components/CTAButton";
 
 export const StatusBadge = ({ map, status }) => {
   const s = map[status] ?? { label: status, className: "bg-border-color text-secondary-text" };
@@ -37,9 +37,9 @@ export const StatusMoves = ({ moves = [], path, noun, onDone, disabled }) => {
     <>
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label={`Change ${noun} status`}>
         {moves.map((m) => (
-          <button key={m.to} type="button" disabled={disabled || mutation.isPending} className={m.danger ? buttonClass.danger : buttonClass.secondary} onClick={() => (m.reason ? setAsking(m) : run(m))}>
+          <CTAButton key={m.to} type={m.danger ? "danger" : "secondary"} size="md" disabled={disabled || mutation.isPending} onClick={() => (m.reason ? setAsking(m) : run(m))}>
             {m.label}
-          </button>
+          </CTAButton>
         ))}
       </div>
       {asking && <ReasonDialog title={asking.label} label={asking.reason} confirmText={asking.label} pending={mutation.isPending} error={mutation.error} onClose={() => { setAsking(null); mutation.reset(); }} onConfirm={(reason) => run(asking, reason)} />}

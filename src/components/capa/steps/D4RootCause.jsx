@@ -6,9 +6,10 @@ import RHFComboBox from "../../ui/RHFComboBox";
 import { useCapaMutation } from "../../../hooks/useCapa";
 import { ROOT_CAUSE_KINDS, ROOT_CAUSE_OPTIONS } from "../../../lib/capa";
 import { formatDay } from "../../../lib/qualityAlerts";
-import { FormError, TextAreaField, buttonClass } from "../../master-data/shared";
+import { FormError, TextAreaField } from "../../master-data/shared";
 import FiveWhysDialog from "../FiveWhysDialog";
 import IshikawaDialog from "../IshikawaDialog";
+import CTAButton from "@/components/CTAButton";
 
 const CauseDialog = ({ capa, cause, onClose }) => {
   const mutation = useCapaMutation();
@@ -28,8 +29,8 @@ const CauseDialog = ({ capa, cause, onClose }) => {
         {cause?.verified && <p className="text-sm text-warning-color">Changing the words or the kind withdraws its verification, so it has to be verified again.</p>}
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !form.description.trim()}>{mutation.isPending ? "Saving…" : cause ? "Save" : "Add root cause"}</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !form.description.trim()}>{mutation.isPending ? "Saving…" : cause ? "Save" : "Add root cause"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -55,8 +56,8 @@ const VerifyDialog = ({ cause, onClose }) => {
         <TextAreaField label="What was found (optional)" value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={2000} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !method.trim()}>{mutation.isPending ? "Saving…" : cause.verified ? "Save verification" : "Mark as verified"}</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !method.trim()}>{mutation.isPending ? "Saving…" : cause.verified ? "Save verification" : "Mark as verified"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -69,8 +70,8 @@ const ConfirmRemove = ({ title, text, pending, error, onConfirm, onClose }) => (
       <p className="text-sm text-primary-text">{text}</p>
       <FormError error={error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onClose}>Keep it</button>
-        <button type="button" className={buttonClass.danger} disabled={pending} onClick={onConfirm}>{pending ? "Removing…" : "Remove"}</button>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Keep it</CTAButton>
+        <CTAButton buttonType="button" type="danger" size="md" disabled={pending} onClick={onConfirm}>{pending ? "Removing…" : "Remove"}</CTAButton>
       </div>
     </div>
   </Dialog>
@@ -100,7 +101,7 @@ const D4RootCause = ({ capa, editable }) => {
   return (
     <div className="flex flex-col gap-4">
       <MenuCard title="Root causes" subtitle={`${capa.rootCauses.filter((c) => c.verified).length} of ${capa.rootCauses.length} verified`}
-        action={editable ? <button type="button" className={buttonClass.neutral} onClick={() => { mutation.reset(); setDialog({ type: "cause" }); }}>Add a root cause</button> : undefined}>
+        action={editable ? <CTAButton buttonType="button" type="neutral" size="md" onClick={() => { mutation.reset(); setDialog({ type: "cause" }); }}>Add a root cause</CTAButton> : undefined}>
         {capa.rootCauses.length === 0 ? (
           <p className="text-sm text-secondary-text">No root cause yet. Use the Ishikawa diagram or 5 Whys below to find it, then record it here and verify it.</p>
         ) : (
@@ -122,10 +123,10 @@ const D4RootCause = ({ capa, editable }) => {
                 )}
                 {editable && (
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" className={c.verified ? buttonClass.neutral : buttonClass.primary} aria-label={`${c.verified ? "Edit verification of" : "Verify"}: ${c.description}`} onClick={() => { mutation.reset(); setDialog({ type: "verify", cause: c }); }}>{c.verified ? "Edit verification" : "Verify"}</button>
-                    <button type="button" className={buttonClass.neutral} aria-label={`Edit: ${c.description}`} onClick={() => { mutation.reset(); setDialog({ type: "cause", cause: c }); }}>Edit</button>
-                    {c.verified && <button type="button" className={buttonClass.neutral} aria-label={`Withdraw verification of: ${c.description}`} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "updateRootCause", id: c.id, body: { verified: false } })}>Withdraw verification</button>}
-                    <button type="button" className={buttonClass.neutral} aria-label={`Remove: ${c.description}`} onClick={() => { mutation.reset(); setDialog({ type: "remove-cause", cause: c }); }}>Remove</button>
+                    <CTAButton type={c.verified ? "neutral" : "main"} size={c.verified ? "md" : "lg"} aria-label={`${c.verified ? "Edit verification of" : "Verify"}: ${c.description}`} onClick={() => { mutation.reset(); setDialog({ type: "verify", cause: c }); }}>{c.verified ? "Edit verification" : "Verify"}</CTAButton>
+                    <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Edit: ${c.description}`} onClick={() => { mutation.reset(); setDialog({ type: "cause", cause: c }); }}>Edit</CTAButton>
+                    {c.verified && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Withdraw verification of: ${c.description}`} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "updateRootCause", id: c.id, body: { verified: false } })}>Withdraw verification</CTAButton>}
+                    <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Remove: ${c.description}`} onClick={() => { mutation.reset(); setDialog({ type: "remove-cause", cause: c }); }}>Remove</CTAButton>
                   </div>
                 )}
               </li>
@@ -139,8 +140,8 @@ const D4RootCause = ({ capa, editable }) => {
       <MenuCard title="Analysis tools" subtitle="Find the causes, then record and verify them above"
         action={editable ? (
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={buttonClass.neutral} onClick={() => setDialog({ type: "fishbone" })}>New Ishikawa diagram</button>
-            <button type="button" className={buttonClass.neutral} onClick={() => setDialog({ type: "whys" })}>New 5 Whys</button>
+            <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setDialog({ type: "fishbone" })}>New Ishikawa diagram</CTAButton>
+            <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setDialog({ type: "whys" })}>New 5 Whys</CTAButton>
           </div>
         ) : undefined}>
         {tools.length === 0 ? (
@@ -154,8 +155,8 @@ const D4RootCause = ({ capa, editable }) => {
                   <span className="truncate text-xs text-secondary-text">{summary(a)}</span>
                 </div>
                 <div className="flex gap-2">
-                  <button type="button" className={buttonClass.neutral} aria-label={`${editable ? "Open" : "View"} ${a.title}`} onClick={() => setDialog({ type: a.kind === "ishikawa" ? "fishbone" : "whys", analysis: a })}>{editable ? "Open" : "View"}</button>
-                  {editable && <button type="button" className={buttonClass.neutral} aria-label={`Remove ${a.title}`} onClick={() => { mutation.reset(); setDialog({ type: "remove-analysis", analysis: a }); }}>Remove</button>}
+                  <CTAButton buttonType="button" type="neutral" size="md" aria-label={`${editable ? "Open" : "View"} ${a.title}`} onClick={() => setDialog({ type: a.kind === "ishikawa" ? "fishbone" : "whys", analysis: a })}>{editable ? "Open" : "View"}</CTAButton>
+                  {editable && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Remove ${a.title}`} onClick={() => { mutation.reset(); setDialog({ type: "remove-analysis", analysis: a }); }}>Remove</CTAButton>}
                 </div>
               </li>
             ))}

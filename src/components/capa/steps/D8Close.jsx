@@ -5,8 +5,9 @@ import MenuCard from "../../ui/MenuCard";
 import { useCapaMutation } from "../../../hooks/useCapa";
 import { usePermissions } from "../../../hooks/useQmsApi";
 import { formatDay } from "../../../lib/qualityAlerts";
-import { FormError, TextAreaField, buttonClass } from "../../master-data/shared";
+import { FormError, TextAreaField } from "../../master-data/shared";
 import CapaFiles from "../CapaFiles";
+import CTAButton from "@/components/CTAButton";
 
 const CloseDialog = ({ capa, onClose }) => {
   const mutation = useCapaMutation();
@@ -24,8 +25,8 @@ const CloseDialog = ({ capa, onClose }) => {
         <TextAreaField label="Recognition of the team (optional)" value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={2000} hint="Who did what, and what the organisation should thank them for" />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>{mutation.isPending ? "Closing…" : "Close 8D"}</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>{mutation.isPending ? "Closing…" : "Close 8D"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -41,7 +42,7 @@ const D8Close = ({ capa, editable }) => {
   return (
     <div className="flex flex-col gap-4">
       <MenuCard title={closed ? "Closed" : "Close the 8D"} subtitle={closed ? undefined : "Needs the verify permission, every step done and the corrective actions verified as effective"}
-        action={editable && can("capa.verify") && !closed ? <button type="button" className={buttonClass.primary} disabled={!ready} onClick={() => setOpen(true)}>Close 8D</button> : undefined}>
+        action={editable && can("capa.verify") && !closed ? <CTAButton buttonType="button" type="main" size="lg" disabled={!ready} onClick={() => setOpen(true)}>Close 8D</CTAButton> : undefined}>
         {closed ? (
           <div className="flex flex-col gap-2 text-sm text-primary-text">
             <p>Closed by {capa.closedBy?.name ?? "someone"} on {formatDay(capa.closedAt.slice(0, 10))}.</p>

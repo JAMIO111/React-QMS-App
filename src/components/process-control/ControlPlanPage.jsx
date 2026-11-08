@@ -13,13 +13,14 @@ import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions, useSites } from "../../hooks/useQmsApi";
 import { useControlPlan, usePartFamilies, useProcessControlMutation } from "../../hooks/useProcessControl";
 import { describeApiError } from "../../lib/api-client";
-import { ActiveBadge, buttonClass, ErrorNotice, FormError, SelectField, TextAreaField } from "../master-data/shared";
+import { ActiveBadge, ErrorNotice, FormError, SelectField, TextAreaField } from "../master-data/shared";
 import ControlPlanHistory from "./ControlPlanHistory";
 import { PartPicker } from "../ncr/Pickers";
 import RequirementPreview from "./RequirementPreview";
 import { formatDate, formatDateTime } from "../../lib/processControl";
 import { RevisionStatusPill } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
@@ -67,9 +68,9 @@ const PlanDetails = ({ plan, canManage }) => {
       </div>
       <FormError error={mutation.error} />
       {canManage && (
-        <button type="submit" className={`${buttonClass.primary} self-start`} disabled={mutation.isPending}>
+        <CTAButton buttonType="submit" type="main" size="lg" className="self-start" disabled={mutation.isPending}>
           {mutation.isPending ? "Saving…" : "Save changes"}
-        </button>
+        </CTAButton>
       )}
     </MenuCard>
   );
@@ -139,12 +140,12 @@ const AddScopeForm = ({ plan, onDone }) => {
       </div>
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
-        </button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || !ready}>
+        </CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !ready}>
           {mutation.isPending ? "Adding…" : "Add scope"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -178,9 +179,9 @@ const Scope = ({ plan, canManage }) => {
       bodyClassName="overflow-x-auto"
       action={
         canManage && (
-          <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => setAdding(true)}>
+          <CTAButton buttonType="button" type="neutral" size="md" className="flex items-center gap-1" onClick={() => setAdding(true)}>
             <PlusIcon className="h-4 w-4" /> Add scope
-          </button>
+          </CTAButton>
         )
       }>
       {plan.applicability.length === 0 ? (
@@ -228,9 +229,9 @@ const Scope = ({ plan, canManage }) => {
                 {canManage && (
                   <td className={td}>
                     <div className="flex justify-end">
-                      <button type="button" className={buttonClass.danger} disabled={mutation.isPending} onClick={() => remove(a)} aria-label="Remove scope entry">
+                      <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} onClick={() => remove(a)} aria-label="Remove scope entry">
                         <Trash2Icon className="h-4 w-4" />
-                      </button>
+                      </CTAButton>
                     </div>
                   </td>
                 )}
@@ -289,12 +290,12 @@ const RevisionForm = ({ plan, revision, onDone }) => {
       <TextAreaField label="Reason for change" required value={form.changeReason} onChange={set("changeReason")} maxLength={2000} hint="Required before submitting for approval" />
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
-        </button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>
+        </CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
           {mutation.isPending ? "Saving…" : revision ? "Save draft" : "Create draft"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -353,12 +354,12 @@ const ActionDialog = ({ plan, revision, action, onDone }) => {
         )}
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onDone}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
             Cancel
-          </button>
-          <button type="submit" className={buttonClass[a.style]} disabled={mutation.isPending || (a.required && !text.trim())}>
+          </CTAButton>
+          <CTAButton buttonType="submit" type={a.style} size="md" disabled={mutation.isPending || (a.required && !text.trim())}>
             {mutation.isPending ? "Saving…" : a.label}
-          </button>
+          </CTAButton>
         </div>
       </form>
     </Dialog>
@@ -396,9 +397,9 @@ const Revisions = ({ plan, canManage, canApprove }) => {
         canManage &&
         !hasOpen &&
         plan.active && (
-          <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => setEditing("new")}>
+          <CTAButton buttonType="button" type="neutral" size="md" className="flex items-center gap-1" onClick={() => setEditing("new")}>
             <PlusIcon className="h-4 w-4" /> New revision
-          </button>
+          </CTAButton>
         )
       }>
       {plan.revisions.length === 0 ? (
@@ -456,17 +457,17 @@ const Revisions = ({ plan, canManage, canApprove }) => {
                       {actions.map((a) =>
                         a === "edit" ? (
                           <span key={a} className="flex gap-2">
-                            <Link to={`/Process-Control/Plans/${plan.id}/revisions/${r.id}`} className={buttonClass.primary}>
+                            <CTAButton to={`/Process-Control/Plans/${plan.id}/revisions/${r.id}`} type="main" size="lg">
                               Edit checks
-                            </Link>
-                            <button type="button" className={buttonClass.neutral} onClick={() => setEditing(r)} aria-label={`Edit revision ${r.revisionCode}`}>
+                            </CTAButton>
+                            <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setEditing(r)} aria-label={`Edit revision ${r.revisionCode}`}>
                               Details
-                            </button>
+                            </CTAButton>
                           </span>
                         ) : (
-                          <button key={a} type="button" className={buttonClass[ACTIONS[a].style]} onClick={() => setActing({ revision: r, action: a })}>
+                          <CTAButton key={a} type={ACTIONS[a].style} size="md" onClick={() => setActing({ revision: r, action: a })}>
                             {a === "obsolete" && r.status === "draft" ? "Discard" : ACTIONS[a].label}
-                          </button>
+                          </CTAButton>
                         )
                       )}
                     </div>

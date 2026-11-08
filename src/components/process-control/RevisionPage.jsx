@@ -10,10 +10,11 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useControlPlanRevision, useMachines, useProcessControlMutation, useRevisionComparison } from "../../hooks/useProcessControl";
 import { describeApiError } from "../../lib/api-client";
 import { CRITICALITY, REACTION_ACTIONS, REACTION_TRIGGERS, describeRequirement, describeSampling, describeSpc } from "../../lib/processControl";
-import { buttonClass, ErrorNotice, FormError, SelectField } from "../master-data/shared";
+import { ErrorNotice, FormError, SelectField } from "../master-data/shared";
 import CharacteristicForm from "./CharacteristicForm";
 import { RevisionStatusPill } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
@@ -65,12 +66,12 @@ const OperationForm = ({ revision, operation, onDone }) => {
       </div>
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
-        </button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>
+        </CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
           {mutation.isPending ? "Saving…" : operation ? "Save operation" : "Add operation"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -108,25 +109,25 @@ const RevisionReactionsForm = ({ revision, onDone }) => {
             options={Object.entries(REACTION_ACTIONS).map(([value, label]) => ({ value, label }))}
           />
           <Field label="Instruction" value={r.instruction} required maxLength={2000} onChange={(e) => update(i, { instruction: e.target.value })} />
-          <button type="button" className={buttonClass.danger} onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} aria-label={`Remove reaction ${i + 1}`}>
+          <CTAButton buttonType="button" type="danger" size="md" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} aria-label={`Remove reaction ${i + 1}`}>
             <Trash2Icon className="h-4 w-4" />
-          </button>
+          </CTAButton>
         </div>
       ))}
-      <button
-        type="button"
-        className={`${buttonClass.neutral} flex w-fit items-center gap-1`}
+      <CTAButton
+        buttonType="button"
+        type="neutral" size="md" className="flex w-fit items-center gap-1"
         onClick={() => setRows((rs) => [...rs, { triggerType: "gauge_invalid", action: "stop", instruction: "" }])}>
         <PlusIcon className="h-4 w-4" /> Add reaction
-      </button>
+      </CTAButton>
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
-        </button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>
+        </CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
           {mutation.isPending ? "Saving…" : "Save reactions"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -160,15 +161,15 @@ const Operation = ({ operation, editable, onEdit, onAddCharacteristic, onEditCha
       action={
         editable && (
           <div className="flex gap-2">
-            <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => onAddCharacteristic(operation)}>
+            <CTAButton buttonType="button" type="neutral" size="md" className="flex items-center gap-1" onClick={() => onAddCharacteristic(operation)}>
               <PlusIcon className="h-4 w-4" /> Characteristic
-            </button>
-            <button type="button" className={buttonClass.neutral} onClick={() => onEdit(operation)} aria-label={`Edit ${operation.operationCode}`}>
+            </CTAButton>
+            <CTAButton buttonType="button" type="neutral" size="md" onClick={() => onEdit(operation)} aria-label={`Edit ${operation.operationCode}`}>
               <PencilIcon className="h-4 w-4" />
-            </button>
-            <button type="button" className={buttonClass.danger} disabled={mutation.isPending} onClick={removeOperation} aria-label={`Remove ${operation.operationCode}`}>
+            </CTAButton>
+            <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} onClick={removeOperation} aria-label={`Remove ${operation.operationCode}`}>
               <Trash2Icon className="h-4 w-4" />
-            </button>
+            </CTAButton>
           </div>
         )
       }>
@@ -215,12 +216,12 @@ const Operation = ({ operation, editable, onEdit, onAddCharacteristic, onEditCha
                 {editable && (
                   <td className={td}>
                     <div className="flex justify-end gap-2">
-                      <button type="button" className={buttonClass.neutral} onClick={() => onEditCharacteristic(ch)} aria-label={`Edit ${ch.characteristicKey}`}>
+                      <CTAButton buttonType="button" type="neutral" size="md" onClick={() => onEditCharacteristic(ch)} aria-label={`Edit ${ch.characteristicKey}`}>
                         <PencilIcon className="h-4 w-4" />
-                      </button>
-                      <button type="button" className={buttonClass.danger} disabled={mutation.isPending} onClick={() => removeCharacteristic(ch)} aria-label={`Remove ${ch.characteristicKey}`}>
+                      </CTAButton>
+                      <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} onClick={() => removeCharacteristic(ch)} aria-label={`Remove ${ch.characteristicKey}`}>
                         <Trash2Icon className="h-4 w-4" />
-                      </button>
+                      </CTAButton>
                     </div>
                   </td>
                 )}
@@ -345,9 +346,9 @@ const RevisionPage = () => {
             />
           ))}
           {editable && (
-            <button type="button" className={`${buttonClass.neutral} flex w-fit items-center gap-1`} onClick={() => setEditingOperation("new")}>
+            <CTAButton buttonType="button" type="neutral" size="md" className="flex w-fit items-center gap-1" onClick={() => setEditingOperation("new")}>
               <PlusIcon className="h-4 w-4" /> Add operation
-            </button>
+            </CTAButton>
           )}
 
           <MenuCard
@@ -355,9 +356,9 @@ const RevisionPage = () => {
             subtitle="Apply to every characteristic of this revision, in addition to its own reactions."
             action={
               editable && (
-                <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => setEditingReactions(true)}>
+                <CTAButton buttonType="button" type="neutral" size="md" className="flex items-center gap-1" onClick={() => setEditingReactions(true)}>
                   <PencilIcon className="h-4 w-4" /> Edit
-                </button>
+                </CTAButton>
               )
             }>
             {revision.reactions.length === 0 ? (

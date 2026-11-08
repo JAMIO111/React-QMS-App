@@ -5,9 +5,10 @@ import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useOnboarding, useOnboardingMutation } from "../../hooks/useOnboarding";
 import { MARKABLE_STEPS, SETUP_STEPS, deferSetup, resumeSetup, setupStepIndex, setupStepOf } from "../../lib/onboarding";
-import { ErrorNotice, buttonClass } from "../master-data/shared";
+import { ErrorNotice } from "../master-data/shared";
 import WizardFooter from "./WizardFooter";
 import { DetailsStep, OrganisationStep, PlanStep, ReviewStep, SecurityStep, SitesStep, TeamStep } from "./steps";
+import CTAButton from "@/components/CTAButton";
 
 const PAGES = { organisation: OrganisationStep, plan: PlanStep, details: DetailsStep, sites: SitesStep, security: SecurityStep, team: TeamStep, review: ReviewStep };
 
@@ -83,9 +84,9 @@ const SetupWizard = () => {
             <p className="text-xs text-secondary-text">Your progress is saved. Come back to any step at any time.</p>
           </div>
         </div>
-        <button type="button" className={buttonClass.neutral} onClick={() => { deferSetup(); navigate("/Dashboard"); }}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={() => { deferSetup(); navigate("/Dashboard"); }}>
           Finish later
-        </button>
+        </CTAButton>
       </header>
       <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[16rem_minmax(0,1fr)] lg:grid-rows-1">
         <div className="overflow-y-auto border-border-color p-3 lg:border-r"><Rail state={state} active={active} lockedFrom={lockedFrom} /></div>

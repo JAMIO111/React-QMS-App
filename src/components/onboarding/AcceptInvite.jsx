@@ -7,7 +7,7 @@ import { describeApiError } from "../../lib/api-client";
 import { expiresIn } from "../../lib/onboarding";
 import { useAuth } from "../../contexts/AuthProvider";
 import { useAcceptInvitation, useMe, useMyInvitations, usePermissions, useUpdateProfile } from "../../hooks/useQmsApi";
-import { buttonClass } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 const Shell = ({ children }) => (
   <main className="h-dvh w-full overflow-y-auto bg-primary-bg">
@@ -52,9 +52,9 @@ const InvitationCard = ({ invitation: inv, onAccept, pending, disabled }) => (
     ) : (
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-secondary-text">{inv.expiresAt ? `Expires in ${expiresIn(inv.expiresAt)}` : ""}</span>
-        <button type="button" className={buttonClass.primary} disabled={pending || disabled} onClick={() => onAccept(inv)}>
+        <CTAButton buttonType="button" type="main" size="lg" disabled={pending || disabled} onClick={() => onAccept(inv)}>
           {pending ? "Joining…" : `Join ${inv.organisationName}`}
-        </button>
+        </CTAButton>
       </div>
     )}
   </li>
@@ -103,7 +103,7 @@ const Welcome = ({ invitation: inv, mfaRequired }) => {
         </ul>
       </section>
       <div className="flex justify-end">
-        <button type="button" className={buttonClass.secondary} onClick={() => navigate("/Dashboard", { replace: true })}>Go to the dashboard</button>
+        <CTAButton buttonType="button" type="secondary" size="md" onClick={() => navigate("/Dashboard", { replace: true })}>Go to the dashboard</CTAButton>
       </div>
     </>
   );
@@ -149,7 +149,7 @@ const AcceptInvite = () => {
         <h1 className="text-xl font-semibold">No invitations for {user?.email ?? "this address"}</h1>
         <p className="text-sm text-secondary-text">If you were expecting one, check that you signed in with the address it was sent to, or ask the person who invited you to send it again.</p>
         <div className="flex gap-2">
-          <Link to="/" className={buttonClass.neutral}>Continue</Link>
+          <CTAButton to="/" type="neutral" size="md">Continue</CTAButton>
         </div>
       </Shell>
     );

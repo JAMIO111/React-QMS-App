@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import CTAButton from "@/components/CTAButton";
 
 /** One 6-digit authenticator code with a submit button. `onSubmit(code)` may throw to show an error. */
 const CodeForm = ({ onSubmit, submitLabel = "Verify", describeError, autoFocus = true }) => {
@@ -45,12 +46,12 @@ const CodeForm = ({ onSubmit, submitLabel = "Verify", describeError, autoFocus =
           {error}
         </p>
       )}
-      <button
-        type="submit"
+      <CTAButton
+        buttonType="submit"
         disabled={!ready || busy}
-        className="self-start rounded-lg border border-cta-btn-border bg-cta-btn-bg px-4 py-2 text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+        type="main" size="lg" className="self-start">
         {busy ? "Checking…" : submitLabel}
-      </button>
+      </CTAButton>
     </form>
   );
 };

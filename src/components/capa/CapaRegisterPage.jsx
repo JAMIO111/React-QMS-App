@@ -8,9 +8,10 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useCapas } from "../../hooks/useCapa";
 import { STAGES, capaHref, stepOf } from "../../lib/capa";
 import { formatDay } from "../../lib/qualityAlerts";
-import { ErrorNotice, buttonClass } from "../master-data/shared";
+import { ErrorNotice } from "../master-data/shared";
 import { StagePill, StepProgress } from "./shared";
 import StartCapaDialog from "./StartCapaDialog";
+import CTAButton from "@/components/CTAButton";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
@@ -44,9 +45,9 @@ const CapaRegisterPage = () => {
           <p className="text-sm text-secondary-text">Find the root cause, fix it for good and prove it worked. One 8D can address many non-conformances.</p>
         </div>
         {manage && (
-          <button type="button" className={`${buttonClass.primary} inline-flex items-center gap-1`} onClick={() => setStarting(true)}>
+          <CTAButton buttonType="button" type="main" size="lg" className="inline-flex items-center gap-1" onClick={() => setStarting(true)}>
             <PlusIcon className="h-4 w-4" /> Start an 8D
-          </button>
+          </CTAButton>
         )}
       </div>
 

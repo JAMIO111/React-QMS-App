@@ -15,6 +15,7 @@ import {
 import { CURRENCY_OPTIONS } from "../../lib/costs";
 import { browserTimeZone } from "../../lib/timeZones";
 import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
 
 const codeProps = {
   required: true,
@@ -224,16 +225,16 @@ const SiteDialog = ({ site, onClose }) => {
           </p>
         )}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover cursor-pointer">
+          <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             {creating ? "Cancel" : "Close"}
-          </button>
-          <button
-            type="submit"
+          </CTAButton>
+          <CTAButton
+            buttonType="submit"
             form={formId}
             disabled={mutation.isPending || !timezone || !currency || name.trim().length === 0 || (creating && code.trim().length === 0)}
-            className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 cursor-pointer">
+            type="main" size="md">
             {mutation.isPending ? "Saving…" : creating ? "Add site" : "Save changes"}
-          </button>
+          </CTAButton>
         </div>
       </div>
     </Dialog>

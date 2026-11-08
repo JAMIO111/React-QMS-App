@@ -11,7 +11,8 @@ import { useAlertMutation, useQualityAlert } from "../../hooks/useDocumentation"
 import AlertFiles from "./AlertFiles";
 import { LinksEditor } from "./AlertLinks";
 import { CATEGORIES, SEVERITIES, linkBody, referenceText } from "../../lib/qualityAlerts";
-import { ErrorNotice, FormError, SelectField, TextAreaField, buttonClass } from "../master-data/shared";
+import { ErrorNotice, FormError, SelectField, TextAreaField } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 const empty = {
   title: "", category: "product", severity: "medium", description: "", requiredAction: "", effectiveDate: "", expiryDate: "", acknowledgeBy: "",
@@ -204,7 +205,7 @@ const QualityAlertForm = () => {
           <Chips label="Operations" items={form.operations.map((o) => ({ key: o, label: o }))} onRemove={(k) => setForm((f) => ({ ...f, operations: f.operations.filter((o) => o !== k) }))} />
           <div className="flex items-end gap-2">
             <Field label="Add an operation code" value={operation} onChange={(e) => setOperation(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addOperation())} maxLength={40} placeholder="e.g. OP-020" className="sm:w-1/2" />
-            <button type="button" className={buttonClass.neutral} onClick={addOperation} disabled={!operation.trim()}>Add</button>
+            <CTAButton buttonType="button" type="neutral" size="md" onClick={addOperation} disabled={!operation.trim()}>Add</CTAButton>
           </div>
         </div>
         <Checks legend="Departments affected" options={deptOptions} selected={form.departments} onToggle={toggle("departments")} />
@@ -235,8 +236,8 @@ const QualityAlertForm = () => {
       {problem && <p role="alert" className="text-sm text-error-color">{problem}</p>}
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={() => navigate(id ? `/Documentation/Quality-Alerts/${id}` : "/Documentation/Quality-Alerts")}>Cancel</button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save draft"}</button>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={() => navigate(id ? `/Documentation/Quality-Alerts/${id}` : "/Documentation/Quality-Alerts")}>Cancel</CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save draft"}</CTAButton>
       </div>
     </form>
   );

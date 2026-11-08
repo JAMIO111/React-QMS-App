@@ -4,7 +4,7 @@ import { useCapa, useCapaAttachments } from "../../hooks/useCapa";
 import { ACTION_STATUS, FIVE_W2H, ROOT_CAUSE_KINDS, SOURCES, STEPS, roleLabel, stageOf } from "../../lib/capa";
 import { formatDay } from "../../lib/qualityAlerts";
 import { formatDateTime } from "../../lib/processControl";
-import { buttonClass } from "../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 const Section = ({ code, title, children }) => (
   <section className="break-inside-avoid-page flex flex-col gap-2 border-t border-gray-300 pt-3" aria-label={`${code} ${title}`}>
@@ -56,7 +56,7 @@ const CapaReportPage = () => {
       <style>{"@media print { body * { visibility: hidden !important; } #capa-report, #capa-report * { visibility: visible !important; } #capa-report { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; box-shadow: none; } }"}</style>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link to={`/CAPA/${capa.id}/d8`} className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline"><ArrowLeftIcon className="h-4 w-4" /> Back to the 8D</Link>
-        <button type="button" className={buttonClass.secondary} onClick={() => window.print()}>Print or save as PDF</button>
+        <CTAButton buttonType="button" type="secondary" size="md" onClick={() => window.print()}>Print or save as PDF</CTAButton>
       </div>
 
       <article id="capa-report" className="mx-auto flex w-full max-w-4xl flex-col gap-3 bg-white p-8 text-sm text-gray-900 shadow">

@@ -1,21 +1,11 @@
 import { useEffect, useId, useState } from "react";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import Table from "../Table";
+import CTAButton from "../CTAButton";
 import { SearchIcon } from "@/components/icons";
 import { useTablePreferences } from "../../hooks/useTablePreferences";
 import { useColumnSizingInfo } from "../../hooks/useColumnSizingInfo";
 import { describeApiError } from "../../lib/api-client";
-
-export const buttonClass = {
-  primary:
-    "rounded-lg border border-cta-btn-border bg-cta-btn-bg px-4 py-2 text-sm text-primary-text hover:bg-cta-btn-bg-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
-  secondary:
-    "rounded-lg border border-secondary-btn-border bg-secondary-btn-bg px-3 py-1.5 text-sm text-secondary-btn-text hover:bg-secondary-btn-bg-hover hover:border-secondary-btn-border-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
-  neutral:
-    "rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-neutral-btn-bg-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
-  danger:
-    "rounded-lg border border-error-btn-border bg-error-btn-bg px-3 py-1.5 text-sm text-primary-text hover:bg-error-btn-bg-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
-};
 
 /** Search box whose value is passed on after typing pauses. */
 export const SearchBox = ({ label, onSearch, delay = 300 }) => {
@@ -87,9 +77,9 @@ export const DataList = ({ storageKey, columns, query, onOpen, emptyMessage, ari
       </div>
       {query.hasNextPage && (
         <div className="border-t border-border-color p-2">
-          <button type="button" className={buttonClass.neutral} disabled={query.isFetchingNextPage} onClick={() => query.fetchNextPage()}>
+          <CTAButton type="neutral" size="md" disabled={query.isFetchingNextPage} onClick={() => query.fetchNextPage()}>
             {query.isFetchingNextPage ? "Loading…" : "Load more"}
-          </button>
+          </CTAButton>
         </div>
       )}
     </div>

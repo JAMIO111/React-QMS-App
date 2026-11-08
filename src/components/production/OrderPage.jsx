@@ -8,12 +8,13 @@ import { useMachines } from "../../hooks/useProcessControl";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { formatDate } from "../../lib/ncr";
 import { OPERATION_MOVES, OPERATION_STATUS, ORDER_MOVES, ORDER_STATUS, orderEditable, orderOperationsEditable, partLabel } from "../../lib/production";
-import { ErrorNotice, FormError, SelectField, buttonClass } from "../master-data/shared";
+import { ErrorNotice, FormError, SelectField } from "../master-data/shared";
 import Field from "../ui/Field";
 import MenuCard from "../ui/MenuCard";
 import OrderDialog from "./OrderDialog";
 import { StatusBadge, StatusMoves } from "./shared";
 import { tracePath } from "../../lib/production";
+import CTAButton from "@/components/CTAButton";
 
 const Fact = ({ label, children }) => (
   <div className="flex min-w-0 flex-col gap-0.5">
@@ -48,9 +49,9 @@ const AddOperation = ({ orderId }) => {
       </div>
       <FormError error={mutation.error} />
       <div>
-        <button type="submit" className={buttonClass.secondary} disabled={mutation.isPending || !form.operationCode.trim()}>
+        <CTAButton buttonType="submit" type="secondary" size="md" disabled={mutation.isPending || !form.operationCode.trim()}>
           {mutation.isPending ? "Adding…" : "Add operation"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -83,12 +84,12 @@ const OrderPage = () => {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {canManage && <StatusMoves moves={ORDER_MOVES[o.status]} path={`/production-orders/${o.id}`} noun="Order" />}
-          <Link to={tracePath("order", o.id)} className={buttonClass.secondary}>
+          <CTAButton to={tracePath("order", o.id)} type="secondary" size="md">
             Everything on this order
-          </Link>
-          <button type="button" className={buttonClass.neutral} onClick={() => setEditing(true)}>
+          </CTAButton>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setEditing(true)}>
             <PencilIcon className="mr-1 inline" /> {canManage && orderEditable(o) ? "Edit" : "View"}
-          </button>
+          </CTAButton>
         </div>
       </div>
 

@@ -9,6 +9,7 @@ import MenuCard from "../ui/MenuCard";
 import LoadingButton from "../ui/LoadingButton";
 import EnrolAuthenticator from "../mfa/EnrolAuthenticator";
 import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
 
 /** Settings → Account: turn two-factor authentication on or off for your own account. */
 const TwoFactorCard = () => {
@@ -74,12 +75,12 @@ const TwoFactorCard = () => {
       )}
       {factors === undefined && !error && <LoadingScreen size="sm" />}
       {factors !== undefined && !enabled && !enrolling && (
-        <button
-          type="button"
+        <CTAButton
+          buttonType="button"
           onClick={() => setEnrolling(true)}
-          className="self-start rounded-lg border border-cta-btn-border bg-cta-btn-bg px-4 py-2 text-primary-text hover:bg-cta-btn-bg-hover cursor-pointer">
+          type="main" size="lg" className="self-start">
           Set up two-factor
-        </button>
+        </CTAButton>
       )}
       {enrolling && (
         <EnrolAuthenticator
@@ -98,7 +99,9 @@ const TwoFactorCard = () => {
           loading={removing}
           loadingText="Turning off…"
           onClick={remove}
-          className="self-start rounded-lg border border-error-btn-border bg-error-btn-bg px-4 py-2 text-primary-text hover:bg-error-btn-bg-hover cursor-pointer disabled:opacity-50">
+          variant="danger"
+          size="lg"
+          className="self-start">
           Turn off two-factor
         </LoadingButton>
       )}

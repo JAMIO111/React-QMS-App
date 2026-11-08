@@ -11,7 +11,8 @@ import { useCapaMutation, useCapaPeople } from "../../../hooks/useCapa";
 import { SEVERITIES, SOURCES, ncrHref } from "../../../lib/capa";
 import { formatDay } from "../../../lib/qualityAlerts";
 import { stageOf as ncrStageOf } from "../../../lib/ncr";
-import { FormError, TextAreaField, buttonClass } from "../../master-data/shared";
+import { FormError, TextAreaField } from "../../master-data/shared";
+import CTAButton from "@/components/CTAButton";
 
 const HeaderForm = ({ capa, editable }) => {
   const mutation = useCapaMutation();
@@ -52,7 +53,7 @@ const HeaderForm = ({ capa, editable }) => {
       <FormError error={mutation.error} />
       {editable && (
         <div className="flex justify-end">
-          <button type="submit" className={buttonClass.primary} disabled={!dirty || mutation.isPending || !form.title.trim()}>{mutation.isPending ? "Saving…" : "Save changes"}</button>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!dirty || mutation.isPending || !form.title.trim()}>{mutation.isPending ? "Saving…" : "Save changes"}</CTAButton>
         </div>
       )}
     </MenuCard>
@@ -69,8 +70,8 @@ const LinkNcrDialog = ({ capa, onClose }) => {
         <NcrPicker label="Non-conformance" required value={picked} onChange={(id) => setPicked(id)} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={buttonClass.neutral} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary} disabled={!picked || mutation.isPending}>{mutation.isPending ? "Linking…" : "Link"}</button>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!picked || mutation.isPending}>{mutation.isPending ? "Linking…" : "Link"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -85,7 +86,7 @@ const NcrLinks = ({ capa, editable }) => {
   const ended = capa.ncrs.filter((n) => n.endedAt);
   return (
     <MenuCard title="Non-conformances addressed" subtitle={`${live.length} linked`}
-      action={editable ? <button type="button" className={buttonClass.neutral} onClick={() => setLinking(true)}>Link a non-conformance</button> : undefined}>
+      action={editable ? <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setLinking(true)}>Link a non-conformance</CTAButton> : undefined}>
       {live.length === 0 ? (
         <p className="text-sm text-secondary-text">No non-conformance is linked. An 8D can stand alone, or be started from a non-conformance.</p>
       ) : (
@@ -99,7 +100,7 @@ const NcrLinks = ({ capa, editable }) => {
               <div className="flex items-center gap-3">
                 {n.stage && <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ncrStageOf(n.stage).tone}`}>{ncrStageOf(n.stage).label}</span>}
                 <span className="text-xs text-secondary-text">Linked {formatDay(n.linkedAt.slice(0, 10))}</span>
-                {editable && <button type="button" className={buttonClass.neutral} aria-label={`End link to ${n.reference ?? "non-conformance"}`} onClick={() => { mutation.reset(); setEnding(n); }}>End link</button>}
+                {editable && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`End link to ${n.reference ?? "non-conformance"}`} onClick={() => { mutation.reset(); setEnding(n); }}>End link</CTAButton>}
               </div>
             </li>
           ))}

@@ -4,8 +4,8 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useBackfillProduction } from "../../hooks/useProduction";
 import { useUpdateOrganisation } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
-import { buttonClass } from "../master-data/shared";
 import MenuCard from "../ui/MenuCard";
+import CTAButton from "@/components/CTAButton";
 
 const Switch = ({ id, checked, disabled, onClick }) => (
   <button
@@ -128,13 +128,13 @@ const ProductionSettings = ({ settings, canManage }) => {
             they show up in the order, lot and serial number registers. Preview it first.
           </p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={buttonClass.secondary} disabled={backfill.isPending} onClick={() => run(true)}>
+            <CTAButton buttonType="button" type="secondary" size="md" disabled={backfill.isPending} onClick={() => run(true)}>
               {backfill.isPending ? "Working…" : "Preview"}
-            </button>
+            </CTAButton>
             {report?.dryRun && (
-              <button type="button" className={buttonClass.primary} disabled={backfill.isPending || report.recordsToLink === 0} onClick={() => run(false)}>
+              <CTAButton buttonType="button" type="main" size="lg" disabled={backfill.isPending || report.recordsToLink === 0} onClick={() => run(false)}>
                 Link them
-              </button>
+              </CTAButton>
             )}
           </div>
           {report && <Report report={report} />}

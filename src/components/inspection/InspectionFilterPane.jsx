@@ -9,6 +9,7 @@ import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { PartPicker } from "../ncr/Pickers";
 import { OrderPicker } from "../production/pickers";
+import CTAButton from "@/components/CTAButton";
 
 const STATUS_OPTIONS = Object.entries(STATUS).map(([key, v]) => ({ key, label: v.label }));
 const RESULT_OPTIONS = [
@@ -132,12 +133,12 @@ const InspectionFilterPane = ({ onClose }) => {
           <RHFComboBox label="Machine" icon={FactoryIcon} placeholder="All machines" options={machineItems.map((m) => ({ id: m.id, name: `${m.code} · ${m.name}` }))} value={machine} onChange={setMachine} />
         </div>
         <div className="flex shrink-0 justify-between gap-2 border-t border-border-color bg-secondary-bg px-4 py-3">
-          <button type="button" className="rounded-lg border border-neutral-btn-border bg-neutral-btn-bg px-3 py-1.5 text-sm hover:bg-neutral-btn-bg-hover cursor-pointer" onClick={resetAll}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={resetAll}>
             Reset all
-          </button>
-          <button type="button" className="rounded-lg border border-cta-btn-border bg-cta-btn-bg px-3 py-1.5 text-sm hover:bg-cta-btn-bg-hover cursor-pointer" onClick={applyAll}>
+          </CTAButton>
+          <CTAButton buttonType="button" type="main" size="md" onClick={applyAll}>
             Apply
-          </button>
+          </CTAButton>
         </div>
       </aside>
     </div>,

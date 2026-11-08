@@ -12,9 +12,10 @@ import { describeApiError } from "../../lib/api-client";
 import { PartFamilyForm } from "./PartFamiliesPage";
 import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
 
-import { ActiveBadge, buttonClass, ErrorNotice, FormError, SearchBox } from "./shared";
+import { ActiveBadge, ErrorNotice, FormError, SearchBox } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
 import { currentRevisionLabel } from "../../lib/partRevisions";
+import CTAButton from "@/components/CTAButton";
 
 /** Choose parts to add to the family; parts in another family are moved (shown with their family). */
 const AddPartsForm = ({ family, onDone }) => {
@@ -50,9 +51,9 @@ const AddPartsForm = ({ family, onDone }) => {
           </label>
         ))}
         {parts.hasNextPage && (
-          <button type="button" className={`${buttonClass.neutral} mt-2`} onClick={() => parts.fetchNextPage()}>
+          <CTAButton buttonType="button" type="neutral" size="md" className="mt-2" onClick={() => parts.fetchNextPage()}>
             Load more
-          </button>
+          </CTAButton>
         )}
       </div>
       {moving.length > 0 && (
@@ -63,12 +64,12 @@ const AddPartsForm = ({ family, onDone }) => {
       )}
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass.neutral} onClick={onDone}>
+        <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
-        </button>
-        <button type="submit" className={buttonClass.primary} disabled={mutation.isPending || chosen.length === 0}>
+        </CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || chosen.length === 0}>
           {mutation.isPending ? "Adding…" : chosen.length ? `Add ${chosen.length} part${chosen.length === 1 ? "" : "s"}` : "Add parts"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );
@@ -119,9 +120,9 @@ const PartFamilyPage = () => {
             </h1>
             <ActiveBadge active={family.active} />
             {canManage && (
-              <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => setEditing(true)}>
+              <CTAButton buttonType="button" type="neutral" size="md" className="flex items-center gap-1" onClick={() => setEditing(true)}>
                 <PencilIcon className="h-4 w-4" /> Edit
-              </button>
+              </CTAButton>
             )}
           </div>
           {family.description && <p className="max-w-3xl text-sm text-primary-text">{family.description}</p>}
@@ -133,9 +134,9 @@ const PartFamilyPage = () => {
             bodyClassName="overflow-x-auto"
             action={
               canManage && (
-                <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => setAdding(true)}>
+                <CTAButton buttonType="button" type="neutral" size="md" className="flex items-center gap-1" onClick={() => setAdding(true)}>
                   <PlusIcon className="h-4 w-4" /> Add parts
-                </button>
+                </CTAButton>
               )
             }>
             {family.parts.length === 0 ? (
@@ -167,9 +168,9 @@ const PartFamilyPage = () => {
                       {canManage && (
                         <td className={td}>
                           <div className="flex justify-end">
-                            <button type="button" className={buttonClass.danger} disabled={membership.isPending} onClick={() => removePart(p)} aria-label={`Remove ${p.partNumber} from the family`}>
+                            <CTAButton buttonType="button" type="danger" size="md" disabled={membership.isPending} onClick={() => removePart(p)} aria-label={`Remove ${p.partNumber} from the family`}>
                               <Trash2Icon className="h-4 w-4" />
-                            </button>
+                            </CTAButton>
                           </div>
                         </td>
                       )}

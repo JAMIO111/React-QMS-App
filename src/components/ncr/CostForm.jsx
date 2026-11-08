@@ -130,12 +130,12 @@ const CostForm = ({ cost, baseCurrency = "GBP", defaultCurrency, vatRate = 0.2, 
       )}
       <div className="flex justify-end gap-2">
         <CTAButton type="neutral" text="Cancel" callbackFn={onCancel} />
-        <button
-          type="submit"
+        <CTAButton
+          buttonType="submit"
           disabled={pending}
-          className="flex items-center gap-2 rounded-lg border border-success-btn-border bg-success-btn-bg px-3 py-1 text-primary-text hover:bg-success-btn-bg-hover disabled:opacity-50 cursor-pointer">
+          type="success" size="md" className="flex items-center gap-2 px-3 py-1">
           <SaveIcon className="h-4 w-4" /> {pending ? "Saving…" : cost ? "Save cost" : "Add cost"}
-        </button>
+        </CTAButton>
       </div>
     </form>
   );

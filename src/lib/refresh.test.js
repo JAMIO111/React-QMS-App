@@ -23,6 +23,7 @@ import { useCapaMutation } from "../hooks/useCapa";
 import { useOnboardingMutation } from "../hooks/useOnboarding";
 import { useJobLinks, useJobMutation } from "../hooks/useJobs";
 import { useBackfillProduction, useCreateInlineOrder } from "../hooks/useProduction";
+import { useSavedFilterMutation } from "../hooks/useSavedFilters";
 import { useAnswerAudit, useAuditMutation, useSetAuditTargets, useUpdateClassification } from "../hooks/useAudits";
 
 /** What other modules have on screen: each must be marked stale by an action in any module. */
@@ -112,6 +113,9 @@ describe("every action refreshes every module's data", () => {
     ["choose what an audit was carried out on", useSetAuditTargets, []],
     ["create or change an audit finding", useAuditMutation, { path: "/audit-findings/f1/close", body: { note: "Done" } }],
     ["change a finding classification", useUpdateClassification, { id: "c1", body: { active: false } }],
+    ["save a filter", () => useSavedFilterMutation("ncr_register"), { action: "create", body: { name: "Open", filters: { stage: "open" } } }],
+    ["rename a saved filter", () => useSavedFilterMutation("ncr_register"), { action: "update", id: "f1", body: { name: "New name" } }],
+    ["delete a saved filter", () => useSavedFilterMutation("ncr_register"), { action: "delete", id: "f1" }],
     ["CAPA / 8D action", useCapaMutation, { action: "completeAction", id: "a1", body: {} }],
   ];
 

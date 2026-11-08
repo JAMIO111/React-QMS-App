@@ -56,6 +56,7 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   production_orders_external_key: 'An order imported from that system with this id already exists',
   lots_org_part_number_key: 'This part already has a lot with that number',
   serial_numbers_org_part_serial_key: 'This part already has a serial number like that',
+  saved_filters_name_key: 'You already have a saved filter with that name',
   production_operations_order_sequence_key: 'This order already has an operation with that sequence number',
 };
 
@@ -115,6 +116,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'production_rule', pg.message ?? 'That production change is not allowed');
     case 'QM018': // audit rules: definitions, schedule, records (messages are written for users)
       return new ApiError(409, 'audit_rule', pg.message ?? 'That change is not allowed for this audit');
+    case 'QM019': // saved filters: the limit of five (message is written for users)
+      return new ApiError(409, 'saved_filter_rule', pg.message ?? 'You cannot save more filters here');
     case 'QM010': // notification type the caller cannot choose
       return new ApiError(404, 'notification_type_not_found', 'That notification type does not exist');
     case 'P0002': // no_data_found raised by app functions

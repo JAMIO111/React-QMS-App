@@ -7,7 +7,7 @@ import { usePermissions } from "../hooks/useQmsApi";
 import { useGlobalSearch } from "../contexts/SearchProvider";
 import { exportCSV } from "../lib/csvHelper";
 import { formatMoney } from "../lib/costs";
-import { NC_TABS, formatDate, ncrPath, sourceLabel, stageOf } from "../lib/ncr";
+import { formatDate, ncrPath, sourceLabel, stageOf } from "../lib/ncr";
 import { useClassifications } from "../hooks/useNcr";
 import { XIcon } from "@/components/icons";
 import { SkeletonCard2, SkeletonTable } from "./Skeleton";
@@ -24,7 +24,8 @@ import Breadcrumb from "./Breadcrumb";
 import CTAButton from "./CTAButton";
 import ViewToggle from "./ViewToggle";
 import IconButton from "./IconButton";
-import SlidingToggle from "./ui/SlidingToggle";
+import SavedFilterBar from "./ncr/SavedFilterBar";
+import { NC_SCOPE } from "../lib/savedFilters";
 
 /** Flat rows for CSV export. */
 const toCsvRow = (n) => ({
@@ -156,8 +157,6 @@ const NonConformance = () => {
   ].filter((k) => filters[k]).length + (filters.from || filters.to ? 1 : 0) + (filters.costMin || filters.costMax ? 1 : 0) + (filters.qtyMin || filters.qtyMax ? 1 : 0);
   const between = (lo, hi, fmt = (v) => v) => (lo && hi ? `${fmt(lo)} – ${fmt(hi)}` : lo ? `from ${fmt(lo)}` : `up to ${fmt(hi)}`);
   const nameOf = (id) => (lists?.all ?? []).find((c) => c.id === id)?.name ?? "…";
-  // A quick tab is a source filter; it shows as the highlighted tab, not as a chip.
-  const activeTab = NC_TABS.find((t) => t.source && t.source === filters.source);
   // What the register is currently filtered by, each removable on its own.
   const activeFilters = [
     ...(filters.search ? [{ key: "search", label: `Search: “${filters.search}”`, clear: { search: "" } }] : []),
@@ -169,7 +168,7 @@ const NonConformance = () => {
     ...(filters.part ? [{ key: "part", label: `Part: ${filters.partLabel || "selected part"}`, clear: { part: "", partLabel: "" } }] : []),
     ...(filters.customer ? [{ key: "customer", label: `Customer: ${filters.customerLabel || "selected"}`, clear: { customer: "", customerLabel: "" } }] : []),
     ...(filters.supplier ? [{ key: "supplier", label: `Supplier: ${filters.supplierLabel || "selected"}`, clear: { supplier: "", supplierLabel: "" } }] : []),
-    ...(filters.source && !activeTab ? [{ key: "source", label: `Source: ${filters.source.split(",").map(sourceLabel).join(", ")}`, clear: { source: "" } }] : []),
+    ...(filters.source ? [{ key: "source", label: `Source: ${filters.source.split(",").map(sourceLabel).join(", ")}`, clear: { source: "" } }] : []),
     ...(filters.category ? [{ key: "category", label: `Category: ${filters.categoryLabel || nameOf(filters.category)}`, clear: { category: "", categoryLabel: "" } }] : []),
     ...(filters.uncategorised ? [{ key: "uncategorised", label: "Uncategorised", clear: { uncategorised: "" } }] : []),
     ...(filters.costMin || filters.costMax ? [{ key: "cost", label: `Total cost ${between(filters.costMin, filters.costMax, (v) => formatMoney(Number(v), rows[0]?.costCurrency ?? "GBP").replace(/\.00$/, ""))}`, clear: { costMin: "", costMax: "" } }] : []),
@@ -236,15 +235,17 @@ const NonConformance = () => {
           </Suspense>
         </div>
       </div>
-      <div className="px-1">
-        <SlidingToggle
-          ariaLabel="Quick filter by source"
-          mode="tabs"
-          options={NC_TABS.map((t) => ({ value: t.key, label: t.label }))}
-          value={filters.source ? activeTab?.key : "all"}
-          onChange={(key) => updateFilters({ source: NC_TABS.find((t) => t.key === key).source })}
-        />
-      </div>
+      <SavedFilterBar
+        scope={NC_SCOPE}
+        keys={FILTER_KEYS}
+        values={filters}
+        summary={activeFilters.map((f) => f.label)}
+        onApply={(values) => {
+          updateFilters(values);
+          setSearchTerm?.(values.search ?? "");
+        }}
+        onClearAll={() => clearFilters(Object.fromEntries(FILTER_KEYS.map((k) => [k, ""])))}
+      />
       {activeFilters.length > 0 && (
         <div aria-label="Active filters" className="flex flex-wrap items-center gap-2 px-1 text-sm">
           {activeFilters.map((f) => (
@@ -313,7 +314,7 @@ const NonConformance = () => {
 
       {choosingSource && (
         <NewNcDialog
-          initial={activeTab?.source.split(",")[0] ?? (filters.source && !filters.source.includes(",") ? filters.source : "internal")}
+          initial={filters.source && !filters.source.includes(",") ? filters.source : "internal"}
           onClose={() => setChoosingSource(false)}
           onChoose={(source) => navigate(ncrPath("new", source))}
         />

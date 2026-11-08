@@ -384,9 +384,10 @@ async function containAndDispose({ page, stack, APP, orgName, see, shot, step, l
   await see(page.getByRole('columnheader', { name: /Source/ }));
   await see(page.getByRole('cell', { name: 'Final inspection' }).first());
   await see(page.getByRole('cell', { name: 'Product' }).first());
-  await page.getByRole('tab', { name: 'Customer' }).click();
+  await page.goto(`${APP}/Non-Conformance/Register?source=customer`);
   await see(page.getByText('No records found.'));
   await page.getByRole('tab', { name: 'All' }).click();
+  await see(page.getByRole('cell', { name: 'Final inspection' }).first());
   await shot(page, '33b-nc-register-source-category');
   await page.goto(`${APP}/Non-Conformance/Register/${nc.id}`);
   await see(page.getByRole('heading', { name: 'Containment' }));
@@ -904,4 +905,25 @@ async function workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, l
   await ncRow.getByRole('button', { name: 'Actions' }).click();
   await page.getByRole('menu').getByRole('menuitem', { name: 'Open' }).click();
   await page.waitForURL(/\/Non-Conformance\/Register\/[0-9a-f-]{36}/);
+
+  step('a person saves the filters they chose under a name, and finds it again');
+  await page.goto(`${APP}/Non-Conformance/Register?stage=open`);
+  await see(page.getByRole('tablist', { name: 'Saved filters' }));
+  await page.getByRole('button', { name: 'Save filter' }).click();
+  const saveDialog = page.getByRole('dialog', { name: 'Save filter' });
+  await saveDialog.getByLabel(/Name/).fill('Open ones');
+  await shot(page, '70-save-filter-dialog');
+  await saveDialog.getByRole('button', { name: 'Save' }).click();
+  await see(page.getByRole('tab', { name: 'Open ones' }));
+  await page.waitForTimeout(500);
+  await shot(page, '71-saved-filter');
+  const { rows: stored } = await stack.admin.query(`select name, filters from public.saved_filters where name = 'Open ones'`);
+  if (stored.length !== 1 || stored[0].filters.stage !== 'open') throw new Error('the saved filter was not stored with its filters');
+  await page.goto(`${APP}/Non-Conformance/Register`);
+  await see(page.getByRole('tab', { name: 'Open ones' }));
+  await page.getByRole('tab', { name: 'Open ones' }).click();
+  await page.waitForURL(/stage=open/);
+  await page.locator('[role="tab"][aria-selected="true"]', { hasText: 'Open ones' }).waitFor({ timeout: 5000 }); // highlighted once chosen
+  await page.getByRole('tab', { name: 'All' }).click();
+  await page.waitForFunction(() => !location.search.includes('stage='));
 }

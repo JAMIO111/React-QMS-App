@@ -47,6 +47,9 @@ const ncr = (over = {}) => ({
 const page = (data) => ({ data, nextCursor: null });
 
 const calls = [];
+/** The person's saved filters, kept by the fake API between calls (the API enforces five and unique names). */
+let savedFilters = [];
+const savedItem = (f, i) => ({ id: f.id, scope: "ncr_register", name: f.name, filters: f.filters, position: i, createdAt: "2026-11-01T09:00:00Z", updatedAt: "2026-11-01T09:00:00Z" });
 const routeApi = (routes) =>
   apiFetch.mockImplementation(async (path, opts = {}) => {
     const k = `${opts.method ?? "GET"} ${path.split("?")[0]}`;
@@ -58,8 +61,24 @@ const routeApi = (routes) =>
       "GET /parts/p1": { id: "p1", revisions: [{ id: "r1", revision: "A", status: "released" }] },
       "GET /customers": page([{ id: "c1", code: "ACME", name: "Acme Fabrication", displayName: "Acme" }]),
       "GET /suppliers": page([{ id: "sp1", code: "STEEL", name: "Steel Supplies", displayName: null }]),
+      "GET /saved-filters": () => ({ data: savedFilters.map(savedItem), limit: 5 }),
+      "POST /saved-filters": (_path, o) => {
+        if (savedFilters.length >= 5) throw Object.assign(new Error("You can save up to 5 filters here."), { status: 409 });
+        const item = { id: `f${savedFilters.length + 10}`, name: o.body.name, filters: o.body.filters };
+        savedFilters = [...savedFilters, item];
+        return savedItem(item, savedFilters.length - 1);
+      },
       ...routes,
     };
+    if (!(k in all) && /^PATCH \/saved-filters\/[^/]+$/.test(k)) {
+      const id = path.split("/").pop();
+      savedFilters = savedFilters.map((f) => (f.id === id ? { ...f, ...opts.body } : f));
+      return savedItem(savedFilters.find((f) => f.id === id), 0);
+    }
+    if (!(k in all) && /^DELETE \/saved-filters\/[^/]+$/.test(k)) {
+      savedFilters = savedFilters.filter((f) => f.id !== path.split("/").pop());
+      return undefined;
+    }
     // Every NCR page also loads its costs, files and history.
     if (!(k in all) && /^GET \/ncrs\/[^/]+\/costs$/.test(k)) return { data: [], totals: { baseCurrency: "GBP", net: 0, gross: 0, count: 0 } };
     if (!(k in all) && /^GET \/ncrs\/[^/]+\/(attachments|history)$/.test(k)) return { data: [] };
@@ -133,37 +152,159 @@ describe("NC registers", () => {
     expect(screen.queryByRole("columnheader", { name: /Purchase order/ })).toBeNull();
   });
 
-  it("has All / Internal / Customer / Supplier quick tabs that are source filters kept in the URL", async () => {
-    routeApi({ "GET /ncrs": { data: [ncr()], page: 1, pageSize: 25, total: 1 } });
-    renderAt("/Non-Conformance/Register");
-    await screen.findByText("NCM-26-001");
-    expect(screen.getByRole("tab", { name: "All" })).toHaveAttribute("aria-selected", "true");
-    await userEvent.click(screen.getByRole("tab", { name: "Customer" }));
-    await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("source=customer"));
-    expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Register?source=customer");
-    expect(screen.getByRole("tab", { name: "Customer" })).toHaveAttribute("aria-selected", "true");
-    // The tab is the filter, so it is not repeated as a chip.
-    expect(screen.queryByLabelText("Active filters")).toBeNull();
-    await userEvent.click(screen.getByRole("tab", { name: "Supplier" }));
-    await waitFor(() => expect(decodeURIComponent(lastCall("GET /ncrs").path)).toContain("source=supplier,goods_receiving"));
-    expect(screen.getByRole("tab", { name: "Supplier" })).toHaveAttribute("aria-selected", "true");
-    await userEvent.click(screen.getByRole("tab", { name: "Internal" }));
-    await waitFor(() => expect(decodeURIComponent(lastCall("GET /ncrs").path)).toContain("source=internal,internal_audit,external_audit,production_inspection,final_inspection,calibration,engineering,management_review"));
-    expect(screen.getByRole("tab", { name: "Internal" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.queryByLabelText("Active filters")).toBeNull();
-    await userEvent.click(screen.getByRole("tab", { name: "All" }));
-    await waitFor(() => expect(lastCall("GET /ncrs").path).not.toContain("source="));
-  });
+  describe("saved filters", () => {
+    const OPEN_MAJORS = { id: "f1", name: "Open majors", filters: { stage: "open", severity: "major" } };
+    const CUSTOMER = { id: "f2", name: "Customer complaints", filters: { source: "customer" } };
+    const list = () => routeApi({ "GET /ncrs": { data: [ncr()], page: 1, pageSize: 25, total: 1 } });
+    const ready = async (url = "/Non-Conformance/Register") => {
+      list();
+      renderAt(url);
+      await screen.findByText("NCM-26-001");
+    };
+    const filterOf = () => decodeURIComponent(lastCall("GET /ncrs").path);
 
-  it("shows a source that is not a tab as a removable chip", async () => {
-    routeApi({ "GET /ncrs": { data: [ncr()], page: 1, pageSize: 25, total: 1 } });
-    renderAt("/Non-Conformance/Register?source=calibration,engineering");
-    await screen.findByText("NCM-26-001");
-    expect(decodeURIComponent(lastCall("GET /ncrs").path)).toContain("source=calibration,engineering");
-    const chips = screen.getByLabelText("Active filters");
-    expect(chips).toHaveTextContent("Source: Calibration, Engineering");
-    await userEvent.click(within(chips).getByRole("button", { name: /Remove filter Source/ }));
-    await waitFor(() => expect(lastCall("GET /ncrs").path).not.toContain("source="));
+    beforeEach(() => {
+      savedFilters = [];
+    });
+
+    it("replace the old Customer / Internal / Supplier tabs: with none saved there is only All", async () => {
+      await ready();
+      const bar = screen.getByRole("tablist", { name: "Saved filters" });
+      expect(within(bar).getAllByRole("tab").map((t) => t.textContent)).toEqual(["All"]);
+      expect(within(bar).getByRole("tab", { name: "All" })).toHaveAttribute("aria-selected", "true");
+      expect(screen.queryByRole("button", { name: "Save filter" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Manage saved filters" })).toBeNull();
+    });
+
+    it("show the person's own filters after All, and one click applies it to the URL and the list", async () => {
+      savedFilters = [OPEN_MAJORS, CUSTOMER];
+      await ready();
+      expect(within(screen.getByRole("tablist", { name: "Saved filters" })).getAllByRole("tab").map((t) => t.textContent)).toEqual(["All", "Open majors", "Customer complaints"]);
+      await userEvent.click(screen.getByRole("tab", { name: "Open majors" }));
+      await waitFor(() => expect(filterOf()).toContain("stage=open"));
+      expect(filterOf()).toContain("severity=major");
+      expect(screen.getByRole("tab", { name: "Open majors" })).toHaveAttribute("aria-selected", "true");
+      expect(screen.getByRole("tab", { name: "All" })).toHaveAttribute("aria-selected", "false");
+      // Choosing another replaces what the first had chosen.
+      await userEvent.click(screen.getByRole("tab", { name: "Customer complaints" }));
+      await waitFor(() => expect(filterOf()).toContain("source=customer"));
+      expect(filterOf()).not.toContain("stage=");
+      expect(filterOf()).not.toContain("severity=");
+      await userEvent.click(screen.getByRole("tab", { name: "All" }));
+      await waitFor(() => expect(lastCall("GET /ncrs").path).not.toContain("source="));
+      expect(screen.getByTestId("where")).toHaveTextContent(/^\/Non-Conformance\/Register$/);
+    });
+
+    it("highlight the saved filter the page is showing, whatever the order of a list in it", async () => {
+      savedFilters = [{ id: "f3", name: "Closed or cancelled", filters: { stage: "closed,cancelled" } }];
+      await ready("/Non-Conformance/Register?stage=cancelled%2Cclosed");
+      expect(screen.getByRole("tab", { name: "Closed or cancelled" })).toHaveAttribute("aria-selected", "true");
+      expect(screen.queryByRole("button", { name: "Save filter" })).toBeNull();
+    });
+
+    it("highlight nothing for filters that are not saved, and offer to save them", async () => {
+      savedFilters = [OPEN_MAJORS];
+      await ready("/Non-Conformance/Register?source=calibration,engineering");
+      for (const name of ["All", "Open majors"]) expect(screen.getByRole("tab", { name })).toHaveAttribute("aria-selected", "false");
+      expect(screen.getByLabelText("Active filters")).toHaveTextContent("Source: Calibration, Engineering");
+      expect(screen.getByRole("button", { name: "Save filter" })).toBeInTheDocument();
+      await userEvent.click(within(screen.getByLabelText("Active filters")).getByRole("button", { name: /Remove filter Source/ }));
+      await waitFor(() => expect(lastCall("GET /ncrs").path).not.toContain("source="));
+    });
+
+    it("are saved from the filters chosen, under a name, and appear at once", async () => {
+      await ready("/Non-Conformance/Register?stage=open&severity=major&partLabel=BRK-100&part=p1");
+      await userEvent.click(screen.getByRole("button", { name: "Save filter" }));
+      const dialog = await screen.findByRole("dialog", { name: "Save filter" });
+      expect(dialog).toHaveTextContent("Saves:");
+      expect(dialog).toHaveTextContent("Stage: Open");
+      const save = within(dialog).getByRole("button", { name: "Save" });
+      expect(save).toBeDisabled(); // a name is needed
+      await userEvent.type(within(dialog).getByLabelText(/Name/), "  Open majors  ");
+      await userEvent.click(save);
+      await waitFor(() => expect(lastCall("POST /saved-filters")).toBeTruthy());
+      expect(lastCall("POST /saved-filters").body).toEqual({ scope: "ncr_register", name: "Open majors", filters: { stage: "open", severity: "major", part: "p1", partLabel: "BRK-100" } });
+      // It is the page's own filters, so it is the highlighted one and there is nothing left to save.
+      expect(await screen.findByRole("tab", { name: "Open majors" })).toHaveAttribute("aria-selected", "true");
+      expect(screen.queryByRole("button", { name: "Save filter" })).toBeNull();
+    });
+
+    it("replace a filter of the same name, whatever its case, instead of adding another", async () => {
+      savedFilters = [OPEN_MAJORS];
+      await ready("/Non-Conformance/Register?stage=closed");
+      await userEvent.click(screen.getByRole("button", { name: "Save filter" }));
+      const dialog = await screen.findByRole("dialog", { name: "Save filter" });
+      await userEvent.type(within(dialog).getByLabelText(/Name/), "open MAJORS");
+      expect(dialog).toHaveTextContent("Saving replaces it");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Replace" }));
+      await waitFor(() => expect(lastCall("PATCH /saved-filters/f1")).toBeTruthy());
+      expect(lastCall("PATCH /saved-filters/f1").body).toEqual({ filters: { stage: "closed" } });
+      expect(calls.filter((c) => c.k === "POST /saved-filters")).toHaveLength(0);
+    });
+
+    it("stop at five: the dialog says so and will not save a new name, but a name in use can still be replaced", async () => {
+      savedFilters = ["One", "Two", "Three", "Four", "Five"].map((name, i) => ({ id: `f${i + 1}`, name, filters: { stage: "closed", severity: ["minor", "major", "critical"][i % 3], from: `2026-0${i + 1}-01` } }));
+      await ready("/Non-Conformance/Register?stage=draft");
+      await userEvent.click(screen.getByRole("button", { name: "Save filter" }));
+      const dialog = await screen.findByRole("dialog", { name: "Save filter" });
+      await userEvent.type(within(dialog).getByLabelText(/Name/), "Six");
+      expect(dialog).toHaveTextContent("You have 5 saved filters");
+      expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+      await userEvent.clear(within(dialog).getByLabelText(/Name/));
+      await userEvent.type(within(dialog).getByLabelText(/Name/), "Three");
+      expect(within(dialog).getByRole("button", { name: "Replace" })).toBeEnabled();
+    });
+
+    it("show a refusal from the server and put the list back", async () => {
+      savedFilters = [];
+      await ready("/Non-Conformance/Register?stage=open");
+      routeApi({
+        "GET /ncrs": { data: [ncr()], page: 1, pageSize: 25, total: 1 },
+        "POST /saved-filters": () => {
+          throw Object.assign(new Error("You can save up to 5 filters here. Delete one to save another."), { status: 409 });
+        },
+      });
+      await userEvent.click(screen.getByRole("button", { name: "Save filter" }));
+      const dialog = await screen.findByRole("dialog", { name: "Save filter" });
+      await userEvent.type(within(dialog).getByLabelText(/Name/), "Mine");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(lastCall("POST /saved-filters")).toBeTruthy());
+      await waitFor(() => expect(screen.queryByRole("tab", { name: "Mine" })).toBeNull());
+    });
+
+    it("are renamed and deleted from the menu next to the bar", async () => {
+      savedFilters = [OPEN_MAJORS, CUSTOMER];
+      await ready();
+      await userEvent.click(screen.getByRole("button", { name: "Manage saved filters" }));
+      await userEvent.click(screen.getByRole("menuitem", { name: "Rename “Open majors”" }));
+      const dialog = await screen.findByRole("dialog", { name: "Rename filter" });
+      const name = within(dialog).getByLabelText(/Name/);
+      expect(name).toHaveValue("Open majors");
+      await userEvent.clear(name);
+      await userEvent.type(name, "Customer complaints");
+      expect(dialog).toHaveTextContent("You already have a filter called");
+      expect(within(dialog).getByRole("button", { name: "Rename" })).toBeDisabled();
+      await userEvent.clear(name);
+      await userEvent.type(name, "Majors to chase");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Rename" }));
+      await waitFor(() => expect(lastCall("PATCH /saved-filters/f1")).toBeTruthy());
+      expect(lastCall("PATCH /saved-filters/f1").body).toEqual({ name: "Majors to chase" });
+      expect(await screen.findByRole("tab", { name: "Majors to chase" })).toBeInTheDocument();
+      expect(screen.queryByRole("tab", { name: "Open majors" })).toBeNull();
+
+      await userEvent.click(screen.getByRole("button", { name: "Manage saved filters" }));
+      await userEvent.click(screen.getByRole("menuitem", { name: "Delete “Customer complaints”" }));
+      await waitFor(() => expect(lastCall("DELETE /saved-filters/f2")).toBeTruthy());
+      await waitFor(() => expect(screen.queryByRole("tab", { name: "Customer complaints" })).toBeNull());
+    });
+
+    it("carry a search saved in the filter back to the page", async () => {
+      savedFilters = [{ id: "f4", name: "Bores", filters: { search: "bore" } }];
+      await ready();
+      await userEvent.click(screen.getByRole("tab", { name: "Bores" }));
+      await waitFor(() => expect(filterOf()).toContain("q=bore"));
+      expect(screen.getByTestId("where")).toHaveTextContent("search=bore");
+    });
   });
 
   it.each([
@@ -179,7 +320,7 @@ describe("NC registers", () => {
     await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent(to));
   });
 
-  it("asks where it came from before a new non-conformance, defaulting to the tab", async () => {
+  it("asks where it came from before a new non-conformance, defaulting to the source filter", async () => {
     routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 } });
     renderAt("/Non-Conformance/Register?source=customer");
     await screen.findByText("No records found.");

@@ -246,6 +246,7 @@ BEGIN
   INSERT INTO public.stripe_events (event_id, event_type, organisation_id, status) VALUES ('evt_sweep_1', 'invoice.paid', a, 'processed');
   INSERT INTO public.notification_preferences (organisation_id, user_id, event_type_id, enabled)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id, false FROM public.notification_event_types WHERE key = 'parts.created';
+  INSERT INTO public.saved_filters (organisation_id, user_id, scope, name, filters) VALUES (a, '50000000-0000-0000-0000-0000000000a1', 'ncr_register', 'Sweep filter', '{"stage":"open"}');
   INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id FROM public.notifications WHERE organisation_id = a LIMIT 1;
   INSERT INTO sweep VALUES ('pc_part', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'));

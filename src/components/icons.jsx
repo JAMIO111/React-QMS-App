@@ -37,6 +37,7 @@ import {
   Columns3 as LucideColumns3,
   Database as LucideDatabase,
   Download as LucideDownload,
+  BookmarkPlus as LucideBookmarkPlus,
   Ellipsis as LucideEllipsis,
   EllipsisVertical as LucideEllipsisVertical,
   Eye as LucideEye,
@@ -166,6 +167,7 @@ export const CloudUploadIcon = withDefaults(LucideCloudUpload);
 export const Columns3Icon = withDefaults(LucideColumns3);
 export const DatabaseIcon = withDefaults(LucideDatabase);
 export const DownloadIcon = withDefaults(LucideDownload);
+export const BookmarkPlusIcon = withDefaults(LucideBookmarkPlus);
 export const EllipsisIcon = withDefaults(LucideEllipsis);
 export const EllipsisVerticalIcon = withDefaults(LucideEllipsisVertical);
 export const EyeIcon = withDefaults(LucideEye);

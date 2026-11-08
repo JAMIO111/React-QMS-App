@@ -60,6 +60,8 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/department-memberships/{id}': { primary: true },
     'DELETE /api/v1/department-memberships/{id}': undefined,
     'DELETE /api/v1/role-assignments/{id}': undefined,
+    'PATCH /api/v1/saved-filters/{id}': { name: 'Hijacked' },
+    'DELETE /api/v1/saved-filters/{id}': undefined,
     'PATCH /api/v1/customers/{id}': { name: 'Hijacked' },
     'PATCH /api/v1/suppliers/{id}': { name: 'Hijacked' },
     'GET /api/v1/parts/{id}': undefined,
@@ -273,6 +275,8 @@ const hasSample = (op: Op) =>
     'PATCH /api/v1/department-memberships/{id}',
     'DELETE /api/v1/department-memberships/{id}',
     'DELETE /api/v1/role-assignments/{id}',
+    'PATCH /api/v1/saved-filters/{id}',
+    'DELETE /api/v1/saved-filters/{id}',
     'PATCH /api/v1/customers/{id}',
     'PATCH /api/v1/suppliers/{id}',
     'GET /api/v1/parts/{id}',
@@ -512,6 +516,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/spc/alerts/')) return a.alert;
   if (path.startsWith('/api/v1/quality-alerts/')) return a.qualityAlert;
   if (path.startsWith('/api/v1/quality-alert-attachments/')) return a.qualityAlertAttachment;
+  if (path.startsWith('/api/v1/saved-filters/')) return a.savedFilter;
   if (path.startsWith('/api/v1/capas/')) return a.capa;
   if (path.startsWith('/api/v1/capa-team/')) return a.capaTeam;
   if (path.startsWith('/api/v1/capa-attachments/')) return a.capaAttachment;
@@ -640,6 +645,7 @@ beforeAll(async () => {
     a.capaAttachment = (await q1(`select app.add_capa_attachment($2::uuid, $1::text || '/capa/' || $2::text || '/a.pdf', 'a.pdf', 'application/pdf', 1) as id`, [ids.orgA, a.capa])).id;
     a.capaRootCause = (await q1(`insert into public.capa_root_causes (organisation_id, capa_id, kind, description) values ($1, $2, 'occurrence', 'Alpha root cause') returning id`, [ids.orgA, a.capa])).id;
     a.capaAction = (await q1(`insert into public.capa_actions (organisation_id, capa_id, phase, description) values ($1, $2, 'interim', 'Alpha containment') returning id`, [ids.orgA, a.capa])).id;
+    a.savedFilter = (await q1(`insert into public.saved_filters (organisation_id, user_id, scope, name, filters) values ($1, $2, 'ncr_register', 'Alpha filter', '{"stage":"open"}') returning id`, [ids.orgA, ids.ownerA])).id;
     await client.query('commit');
   } finally {
     client.release();
@@ -776,6 +782,7 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/audits-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/traceability': `?type=order&id=${b.productionOrder}`,
       '/api/v1/traceability/search': '?q=WO',
+      '/api/v1/saved-filters': '?scope=ncr_register',
     };
     for (const op of lists) {
       const res = await call(op, op.path + (listQuery[op.path] ?? ''), auth);

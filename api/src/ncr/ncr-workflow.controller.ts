@@ -4,6 +4,9 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
+  AddAffectedLotBody,
+  AffectedLot,
+  AffectedLots,
   ApproveBody,
   CompleteContainmentBody,
   Containment,
@@ -15,6 +18,7 @@ import {
   Dispositions,
   Gates,
   ReasonBody,
+  UpdateAffectedLotBody,
   UpdateContainmentBody,
   UpdateDispositionBody,
 } from './ncr-workflow.schemas';
@@ -70,6 +74,23 @@ export class NcrWorkflowController {
   @ApiCreatedResponse({ schema: openApiSchema(Disposition) })
   createDisposition(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.createDisposition(ctx, parse(Uuid, id), parse(CreateDispositionBody, body));
+  }
+
+  @Get(':id/affected-lots')
+  @OrganisationScoped('ncr.read', SITE_SCOPED)
+  @ApiOkResponse({ schema: openApiSchema(AffectedLots) })
+  affectedLots(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.affectedLots(ctx, parse(Uuid, id));
+  }
+
+  /** Name a lot of the NC's part that the non-conformance touches, and how many of its items. */
+  @Post(':id/affected-lots')
+  @HttpCode(201)
+  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @ApiBody({ schema: openApiSchema(AddAffectedLotBody) })
+  @ApiCreatedResponse({ schema: openApiSchema(AffectedLot) })
+  addAffectedLot(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addAffectedLot(ctx, parse(Uuid, id), parse(AddAffectedLotBody, body));
   }
 
   /** What is still needed to reach each later stage. */
@@ -156,5 +177,38 @@ export class NcrDispositionsController {
   @ApiOkResponse({ schema: openApiSchema(Disposition) })
   cancel(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.cancelDisposition(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
+  }
+}
+
+@ApiTags('ncrs')
+@ApiBearerAuth()
+@Controller('ncr-affected-lots')
+export class NcrAffectedLotsController {
+  constructor(private readonly service: NcrWorkflowService) {}
+
+  @Patch(':id')
+  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @ApiBody({ schema: openApiSchema(UpdateAffectedLotBody) })
+  @ApiOkResponse({ schema: openApiSchema(AffectedLot) })
+  update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.updateAffectedLot(ctx, parse(Uuid, id), parse(UpdateAffectedLotBody, body));
+  }
+
+  /** Take the lot off the NC, with a reason (nothing is deleted); refused while a disposition or containment action still names it. */
+  @Post(':id/remove')
+  @HttpCode(200)
+  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ schema: openApiSchema(AffectedLot) })
+  remove(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.removeAffectedLot(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
+  }
+
+  @Post(':id/restore')
+  @HttpCode(200)
+  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @ApiOkResponse({ schema: openApiSchema(AffectedLot) })
+  restore(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.restoreAffectedLot(ctx, parse(Uuid, id));
   }
 }

@@ -6,7 +6,7 @@ import { formatDateTime } from "../../lib/processControl";
 import { HEADER_FIELD_LABELS, QUESTION_FIELD_LABELS, answerTypeLabel, auditTypeLabel, questionFieldText, questionRule, recordStatusLabel, resultLabel } from "../../lib/audits";
 import Dialog from "../ui/Dialog";
 import MenuCard from "../ui/MenuCard";
-import { ErrorNotice, buttonClass } from "../master-data/shared";
+import { ErrorNotice } from "../master-data/shared";
 
 const Pill = ({ children, tone = "bg-brand-primary/15 text-brand-primary" }) => <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>{children}</span>;
 
@@ -137,9 +137,6 @@ export const VersionDialog = ({ audit, version, onClose }) => {
           </section>
         </div>
       )}
-      <div className="mt-4 flex justify-end">
-        <button type="button" onClick={onClose} className={buttonClass.neutral}>Close</button>
-      </div>
     </Dialog>
   );
 };

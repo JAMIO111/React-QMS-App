@@ -566,6 +566,50 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
   );
   log(`audit record: ${JSON.stringify(r)}`);
   if (!r || r.status !== 'completed' || r.result !== 'fail' || r.critical_failed_count !== 1 || !r.scheduled || r.links !== 1 || r.findings !== 1 || r.targets !== 2) throw new Error('the audit was not carried out as expected');
+
+  step('the quality team changes the audit and is asked why; the history shows the version, the reason and what changed, and the record keeps the version it was done against');
+  await page.goto(`${APP}/Documentation/Audits`);
+  await page.getByRole('region', { name: 'Audits' }).getByRole('link', { name: 'AUD-001' }).click();
+  await see(page.getByText('Version 1', { exact: true }).first());
+  await page.getByRole('link', { name: 'Edit' }).click();
+  await see(page.getByRole('heading', { name: 'Edit AUD-001' }));
+  await page.getByLabel(/^Pass mark/).fill('90');
+  await see(page.getByText('Saved as version 2, with this reason, in the version history'));
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await see(page.getByRole('alert', { name: 'Still needed' }).getByText('Say why the audit is changing'));
+  await shot(page, '64-audit-change-needs-a-reason');
+  await page.getByLabel(/^Why is this changing/).fill('Lowered the pass mark while the cell is being retrained');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await see(page.getByText('Version 2', { exact: true }).first());
+  const versions = page.getByRole('table', { name: 'Versions' });
+  await see(versions.getByText('Lowered the pass mark while the cell is being retrained'));
+  await see(versions.getByText('First version'));
+  await page.getByRole('button', { name: 'View version 2' }).click();
+  const versionDialog = page.getByRole('dialog', { name: 'AUD-001 · version 2' });
+  await see(versionDialog.getByRole('region', { name: 'Changes from version 1' }).getByText(/Pass mark: 100% → 90%/));
+  await shot(page, '65-audit-version');
+  await versionDialog.getByRole('button', { name: 'Close' }).click();
+  await page.goto(`${APP}/Documentation/Audit-Records`);
+  await page.getByRole('region', { name: 'Audit records' }).getByRole('link', { name: /^AR-\d\d-0001$/ }).click();
+  await see(page.getByTestId('record-version').getByText(/Done against version 1 of the audit \(the audit is now at version 2\)/));
+  const { rows: [v] } = await stack.admin.query(
+    `select (select count(*)::int from public.audit_versions x where x.audit_definition_id = d.id) as versions,
+            (select audit_version from public.audit_records r where r.audit_definition_id = d.id order by r.created_at limit 1) as record_version,
+            (select reason from public.audit_versions x where x.audit_definition_id = d.id and x.version = 2) as reason
+       from public.audit_definitions d join public.organisations o on o.id = d.organisation_id where o.name = $1`, [orgName]);
+  log(`audit versions: ${JSON.stringify(v)}`);
+  if (!v || v.versions !== 2 || v.record_version !== 1 || v.reason !== 'Lowered the pass mark while the cell is being retrained') throw new Error('the audit change was not versioned as expected');
+
+  step('the audits dashboard shows planned against done, findings, coverage and the change just made');
+  await page.goto(`${APP}/Documentation/Audit-Dashboard`);
+  await see(page.getByRole('heading', { name: 'Audits dashboard' }));
+  await see(page.getByRole('link', { name: /Audits completed/ }).getByText('1', { exact: true }));
+  await see(page.getByRole('link', { name: /Open findings/ }));
+  await see(page.getByRole('table', { name: 'Coverage' }));
+  await see(page.getByRole('list', { name: 'Recent changes to audits' }).getByText(/Lowered the pass mark while the cell is being retrained/));
+  await see(page.getByRole('table', { name: 'Questions that fail most often' }).getByText(/Is the cell clean and free of oil\?/));
+  await page.waitForTimeout(500);
+  await shot(page, '66-audits-dashboard');
 }
 
 /** A non-conformance names the lot it touches; the lot gate then asks for a disposition that covers that lot. */

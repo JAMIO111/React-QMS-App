@@ -49,7 +49,7 @@ const CTAButton = ({
   width = "w-fit",
   height = "h-fit",
   iconSize = "h-5 w-5",
-  textSize,
+  textSize = "text-sm",
   borderRadius = "rounded-lg",
   disabled = false,
   buttonType = "button",
@@ -62,11 +62,13 @@ const CTAButton = ({
     SIZES[size] ?? SIZES.default,
     textSize,
     VARIANTS[ALIASES[type] ?? type] ?? VARIANTS.main,
-    disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer active:scale-97",
+    disabled
+      ? "opacity-50 cursor-not-allowed"
+      : "cursor-pointer active:scale-97",
     width,
     height,
     borderRadius,
-    className
+    className,
   );
   const inner = (
     <>
@@ -77,7 +79,12 @@ const CTAButton = ({
 
   if (to && !disabled) {
     return (
-      <Link to={to} title={title} onClick={onClick ?? callbackFn} className={classes} {...rest}>
+      <Link
+        to={to}
+        title={title}
+        onClick={onClick ?? callbackFn}
+        className={classes}
+        {...rest}>
         {inner}
       </Link>
     );

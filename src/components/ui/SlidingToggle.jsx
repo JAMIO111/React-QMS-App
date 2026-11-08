@@ -16,21 +16,33 @@ import clsx from "clsx";
  * the tab's id and aria-controls), `"radio"` radiogroup / radio, and `"buttons"` a group of buttons with `aria-pressed`.
  * A `value` that matches no option shows no highlight. The left and right arrow keys move the choice. `className` goes on the box.
  */
-const SlidingToggle = ({ options = [], value, onChange, ariaLabel, mode = "buttons", className = "" }) => {
-  const items = options.map((o) => (typeof o === "object" && o !== null ? o : { value: o, label: String(o) }));
+const SlidingToggle = ({
+  options = [],
+  value,
+  onChange,
+  ariaLabel,
+  mode = "buttons",
+  className = "",
+}) => {
+  const items = options.map((o) =>
+    typeof o === "object" && o !== null ? o : { value: o, label: String(o) },
+  );
   const boxRef = useRef(null);
   const [bar, setBar] = useState(null);
   const selected = items.findIndex((o) => o.value === value);
 
   // Put the highlight under the chosen option, and keep it there when the box is resized or the labels change.
-  const labels = items.map((o) => `${o.value}|${o.label ?? ""}|${o.count ?? ""}`).join(",");
+  const labels = items
+    .map((o) => `${o.value}|${o.label ?? ""}|${o.count ?? ""}`)
+    .join(",");
   useLayoutEffect(() => {
     const place = () => {
       const el = boxRef.current?.querySelector('[data-selected="true"]');
       setBar(el ? { left: el.offsetLeft, width: el.offsetWidth } : null);
     };
     place();
-    if (typeof ResizeObserver === "undefined" || !boxRef.current) return undefined;
+    if (typeof ResizeObserver === "undefined" || !boxRef.current)
+      return undefined;
     const observer = new ResizeObserver(place);
     observer.observe(boxRef.current);
     return () => observer.disconnect();
@@ -44,16 +56,23 @@ const SlidingToggle = ({ options = [], value, onChange, ariaLabel, mode = "butto
   const onKeyDown = (e) => {
     const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
     if (!step) return;
-    const enabled = items.map((o, i) => ({ o, i })).filter(({ o }) => !o.disabled);
+    const enabled = items
+      .map((o, i) => ({ o, i }))
+      .filter(({ o }) => !o.disabled);
     if (enabled.length === 0) return;
     const at = enabled.findIndex(({ i }) => i === selected);
-    const next = enabled[(Math.max(at, 0) + step + enabled.length) % enabled.length];
+    const next =
+      enabled[(Math.max(at, 0) + step + enabled.length) % enabled.length];
     e.preventDefault();
     choose(next.o);
     boxRef.current?.querySelectorAll("button")[next.i]?.focus();
   };
 
-  const group = { buttons: { role: "group" }, tabs: { role: "tablist" }, radio: { role: "radiogroup" } }[mode];
+  const group = {
+    buttons: { role: "group" },
+    tabs: { role: "tablist" },
+    radio: { role: "radiogroup" },
+  }[mode];
   const itemRole = (isOn) =>
     ({
       buttons: { "aria-pressed": isOn },
@@ -67,12 +86,19 @@ const SlidingToggle = ({ options = [], value, onChange, ariaLabel, mode = "butto
       aria-label={ariaLabel}
       onKeyDown={onKeyDown}
       {...group}
-      className={clsx("group relative inline-flex w-fit max-w-full items-stretch overflow-hidden rounded-[7px] border border-border-color", className)}>
+      className={clsx(
+        "group bg-secondary-bg relative inline-flex w-fit max-w-full items-stretch overflow-hidden rounded-lg gap-0.5 p-0.5 min-h-[34px] border border-border-color",
+        className,
+      )}>
       {/* Sliding highlight */}
       <div
         aria-hidden="true"
-        className="absolute top-0 bottom-0 z-0 rounded-md border border-cta-btn-border bg-cta-btn-bg transition-[left,width] duration-300 ease-in-out group-hover:border-cta-btn-border-hover group-hover:bg-cta-btn-bg-hover"
-        style={{ left: bar?.left ?? 0, width: bar?.width ?? 0, opacity: bar ? 1 : 0 }}
+        className="absolute my-0.5 top-0 bottom-0 z-0 rounded-md border border-cta-btn-border bg-cta-btn-bg transition-[left,width] duration-300 ease-in-out hover:border-cta-btn-border-hover hover:bg-cta-btn-bg-hover"
+        style={{
+          left: bar?.left ?? 0,
+          width: bar?.width ?? 0,
+          opacity: bar ? 1 : 0,
+        }}
       />
       {items.map((o) => {
         const isOn = o.value === value;
@@ -92,15 +118,21 @@ const SlidingToggle = ({ options = [], value, onChange, ariaLabel, mode = "butto
             onClick={() => choose(o)}
             {...itemRole(isOn)}
             className={clsx(
-              "relative z-10 flex items-center justify-center gap-1.5 whitespace-nowrap py-1.5 text-sm transition-transform duration-200 outline-none focus-visible:ring-2 focus-visible:ring-brand-primary",
+              "relative z-10 rounded-[6px] flex items-center justify-center gap-1.5 whitespace-nowrap py-1.5 text-sm transition-transform duration-200 outline-none focus-visible:ring-2 focus-visible:ring-brand-primary",
               o.label ? "px-3" : "px-2.5",
-              o.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer active:scale-97",
-              isOn ? "text-primary-text" : "text-secondary-text hover:text-primary-text"
+              o.disabled
+                ? "cursor-not-allowed opacity-50"
+                : "cursor-pointer active:scale-97",
+              isOn
+                ? "text-primary-text"
+                : "text-secondary-text hover:text-primary-text hover:bg-border-color/40",
             )}>
             {Icon && <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />}
             {o.label}
             {o.count !== undefined && o.count !== null && (
-              <span className="rounded-full bg-border-color px-1.5 text-xs text-primary-text">{o.count}</span>
+              <span className="rounded-full bg-border-color px-1.5 text-xs text-primary-text">
+                {o.count}
+              </span>
             )}
           </button>
         );

@@ -27,3 +27,15 @@ describe("saved filters helpers", () => {
     expect(toFilterValues(undefined, ["a", "b"])).toEqual({ a: "", b: "" });
   });
 });
+
+import { describeFilter } from "./savedFilters";
+describe("describeFilter", () => {
+  it("names what a saved filter contains, using saved record names and labels", () => {
+    const rows = describeFilter({ source: "customer,supplier", part: "p1", partLabel: "Bracket", costMin: "100", empty: "x" }, (k, v) => (k === "source" ? v.toUpperCase() : null));
+    expect(rows).toEqual([
+      { key: "source", title: "Source", value: "CUSTOMER, SUPPLIER" },
+      { key: "part", title: "Part", value: "Bracket" },
+      { key: "costMin", title: "Cost from", value: "100" },
+    ]);
+  });
+});

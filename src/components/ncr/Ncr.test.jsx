@@ -276,11 +276,15 @@ describe("NC registers", () => {
       await waitFor(() => expect(screen.queryByRole("tab", { name: "Mine" })).toBeNull());
     });
 
-    it("are renamed and deleted from the menu next to the bar", async () => {
+    it("are listed with what they contain, then renamed and deleted from a row menu", async () => {
       savedFilters = [OPEN_MAJORS, CUSTOMER];
       await ready();
       await userEvent.click(screen.getByRole("button", { name: "Manage saved filters" }));
-      await userEvent.click(screen.getByRole("menuitem", { name: "Rename “Open majors”" }));
+      const list = await screen.findByRole("dialog", { name: "Saved filters" });
+      expect(within(list).getByText("Open majors")).toBeInTheDocument();
+      expect(within(list).getByText("Customer complaints")).toBeInTheDocument();
+      await userEvent.click(within(list).getByRole("button", { name: "Actions for Open majors" }));
+      await userEvent.click(screen.getByRole("menuitem", { name: "Rename" }));
       const dialog = await screen.findByRole("dialog", { name: "Rename filter" });
       const name = within(dialog).getByLabelText(/Name/);
       expect(name).toHaveValue("Open majors");
@@ -296,8 +300,9 @@ describe("NC registers", () => {
       expect(await screen.findByRole("tab", { name: "Majors to chase" })).toBeInTheDocument();
       expect(screen.queryByRole("tab", { name: "Open majors" })).toBeNull();
 
-      await userEvent.click(screen.getByRole("button", { name: "Manage saved filters" }));
-      await userEvent.click(screen.getByRole("menuitem", { name: "Delete “Customer complaints”" }));
+      const again = await screen.findByRole("dialog", { name: "Saved filters" });
+      await userEvent.click(within(again).getByRole("button", { name: "Actions for Customer complaints" }));
+      await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
       await waitFor(() => expect(lastCall("DELETE /saved-filters/f2")).toBeTruthy());
       await waitFor(() => expect(screen.queryByRole("tab", { name: "Customer complaints" })).toBeNull());
     });

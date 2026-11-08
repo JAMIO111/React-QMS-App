@@ -27,3 +27,24 @@ export const hasFilters = (values, keys) => decisive(keys).some((k) => norm(valu
 
 /** Every filter key set to its saved value, or to empty: applying a saved filter replaces what was chosen. */
 export const toFilterValues = (saved, keys) => Object.fromEntries(keys.map((k) => [k, saved?.filters?.[k] ?? ""]));
+
+const TITLES = {
+  search: "Search", source: "Source", category: "Category", uncategorised: "Uncategorised", stage: "Stage", severity: "Severity",
+  failureMode: "Failure mode", subFailureMode: "Sub-failure mode", deleted: "Deleted", part: "Part", customer: "Customer", supplier: "Supplier",
+  order: "Order", lot: "Lot", costMin: "Cost from", costMax: "Cost up to", qtyMin: "Quantity from", qtyMax: "Quantity up to", from: "Detected from", to: "Detected to",
+};
+const words = (v) => String(v).replace(/(^|,)\s*([a-z])/g, (_, s, c) => s + (s ? " " : "") + c.toUpperCase()).replace(/_/g, " ");
+
+/**
+ * What a saved filter contains, as readable `{ key, title, value }` rows. Linked records show the name saved beside their id; lists of fixed
+ * choices (source, stage, severity) are shown with their labels via `labelFor(key, value)` when given.
+ */
+export const describeFilter = (filters = {}, labelFor = () => null) =>
+  Object.keys(TITLES)
+    .filter((k) => filters[k] !== undefined && String(filters[k]) !== "")
+    .map((k) => {
+      const raw = String(filters[k]);
+      const named = filters[`${k}Label`];
+      const value = named || (k === "uncategorised" ? "Yes" : raw.split(",").map((v) => labelFor(k, v) ?? words(v)).join(", "));
+      return { key: k, title: TITLES[k], value };
+    });

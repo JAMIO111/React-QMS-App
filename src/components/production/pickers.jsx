@@ -1,7 +1,10 @@
-import { partLabel } from "../../lib/production";
-import { useOrderLookup, useLotLookup, useSerialLookup } from "../../hooks/useProduction";
+import { useState } from "react";
+import { usePermissions } from "../../hooks/useQmsApi";
+import { useOrderLookup, useLotLookup, useProductionSettings, useSerialLookup } from "../../hooks/useProduction";
+import { canCreateOrder, partLabel } from "../../lib/production";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { RemoteComboBox } from "../ncr/Pickers";
+import InlineOrderDialog from "./InlineOrderDialog";
 
 /**
  * Server-searched pickers over open production records. `current` is the saved record ({ id, orderNumber | lotNumber | serialNumber }) so its name shows even when the search does
@@ -62,5 +65,38 @@ export const SerialPicker = ({ partId, lotId, current, label = "Serial number", 
       onSearch={setSearch}
       current={current ? { id: current.id, name: current.serialNumber } : undefined}
     />
+  );
+};
+
+/**
+ * The order picker with "make a new order" beside it, for people who may (production.manage, or inspection.record when the organisation allows it). Needs the part, because an order is for one
+ * part. The new order is chosen at once: `onChange(id, order)`, with `order` the whole record.
+ */
+export const OrderPickerWithCreate = ({ part, siteId, value, current, onChange, label, required, disabled }) => {
+  const { can } = usePermissions();
+  const settings = useProductionSettings();
+  const [making, setMaking] = useState(false);
+  const [made, setMade] = useState(null);
+  const shown = made && made.id === value ? made : current;
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <OrderPicker partId={part?.id} value={value} current={shown} label={label} required={required} disabled={disabled} onChange={onChange} />
+      {!disabled && part && canCreateOrder(can, settings) && (
+        <button type="button" onClick={() => setMaking(true)} className="w-fit text-sm text-link-color hover:underline cursor-pointer">
+          Not listed? Make a new order
+        </button>
+      )}
+      {making && (
+        <InlineOrderDialog
+          part={part}
+          siteId={siteId}
+          onClose={() => setMaking(false)}
+          onCreated={(order) => {
+            setMade(order);
+            onChange(order.id, { id: order.id, name: order.orderNumber, part: order.part, status: order.status });
+          }}
+        />
+      )}
+    </div>
   );
 };

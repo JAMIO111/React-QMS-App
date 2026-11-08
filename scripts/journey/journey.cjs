@@ -195,6 +195,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await correctRevision({ page, stack, APP, orgName, see, shot, step, log });
   await containAndDispose({ page, stack, APP, orgName, see, shot, step, log });
   await productionTraceability({ page, stack, APP, orgName, see, shot, step, log });
+  await workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, log });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -486,4 +487,92 @@ async function productionTraceability({ page, stack, APP, orgName, see, shot, st
   );
   log(`production: ${JSON.stringify(r)}`);
   if (r.order_status !== 'in_progress' || r.lot !== 'on_hold/true' || r.serials_with_order !== 5) throw new Error('the production records are not as expected');
+}
+
+/**
+ * A shop that works to work orders only (WO-154789 x 24, no lots, no serial numbers): switch lots and serial numbers off, make the order from the job's own picker, run the job and an NC on it,
+ * then link the work order typed on an old, finished inspection to a real order with the backfill.
+ */
+async function workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, log }) {
+  step('a shop with no lots or serial numbers switches them off');
+  await page.goto(`${APP}/Settings/Organisation`);
+  const production = page.getByRole('region', { name: 'Production settings' });
+  await production.getByRole('switch', { name: 'Track lots and serial numbers', checked: true }).click();
+  await production.getByRole('switch', { name: 'Track lots and serial numbers', checked: false }).waitFor();
+  await shot(page, '44-production-settings');
+  const { rows: [flag] } = await stack.admin.query(`select s.use_lots_and_serials from public.organisation_settings s join public.organisations o on o.id = s.organisation_id where o.name = $1`, [orgName]);
+  if (flag.use_lots_and_serials !== false) throw new Error('the setting was not saved');
+
+  step('the Production menu now offers only orders');
+  await page.goto(`${APP}/Dashboard`);
+  await page.getByRole('button', { name: /^Production/ }).click().catch(() => page.getByTitle('Production').first().click());
+  await see(page.getByRole('link', { name: 'Orders', exact: true }));
+  if ((await page.getByRole('link', { name: 'Lots', exact: true }).count()) !== 0 || (await page.getByRole('link', { name: 'Serial numbers', exact: true }).count()) !== 0) throw new Error('lots and serial numbers are still in the menu');
+  await shot(page, '45-menu-orders-only');
+
+  step('the operator starts a job and makes the work order from the job itself');
+  await page.goto(`${APP}/Dashboard`);
+  await page.getByRole('button', { name: 'Start new job' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Start a new job' });
+  await dialog.getByRole('combobox', { name: /Part number/ }).click();
+  await dialog.getByRole('combobox', { name: /Part number/ }).fill('JRN-100');
+  await page.getByRole('option', { name: /JRN-100/ }).click();
+  await see(dialog.getByText(/Control plan CP-JRN rev A is in force/));
+  await dialog.getByRole('combobox', { name: /Machine/ }).click();
+  await page.getByRole('option', { name: /CNC-J1/ }).click();
+  await dialog.getByRole('button', { name: 'Not listed? Make a new order' }).click();
+  const make = page.getByRole('dialog', { name: 'Make a production order' });
+  await make.getByLabel('Order number').fill('WO-154789');
+  await make.getByLabel('Quantity ordered').fill('24');
+  await shot(page, '46-make-order');
+  await make.getByRole('button', { name: 'Make order' }).click();
+  await see(dialog.getByRole('combobox', { name: /Production order/ }));
+  await dialog.getByRole('button', { name: 'Start job' }).click();
+  await page.waitForURL(/\/Jobs\//);
+  const records = page.getByLabel('Production records');
+  await see(records.getByRole('combobox', { name: 'Production order' }));
+  if ((await records.getByRole('combobox', { name: 'Lot' }).count()) !== 0) throw new Error('the lot picker is offered to a shop that does not use lots');
+  await see(page.getByLabel('Work order').and(page.locator(':disabled')));
+  const workOrder = await page.getByLabel('Work order').inputValue();
+  if (workOrder !== 'WO-154789') throw new Error(`the work order text is "${workOrder}", not the order's number`);
+  await shot(page, '47-job-on-the-order');
+  const { rows: [job] } = await stack.admin.query(
+    `select i.work_order, po.order_number, po.quantity_planned::int as qty, i.lot_id is null as no_lot from public.inspection_records i join public.production_orders po on po.id = i.production_order_id
+      join public.organisations o on o.id = i.organisation_id where o.name = $1 and i.status = 'in_progress'`, [orgName]);
+  log(`job on the order: ${JSON.stringify(job)}`);
+  if (!job || job.order_number !== 'WO-154789' || job.qty !== 24 || !job.no_lot) throw new Error('the job is not linked to the order as expected');
+
+  step('the non-conformance raised earlier is linked to the same order');
+  const { rows: [nc] } = await stack.admin.query(`select n.id from public.nonconformances n join public.organisations o on o.id = n.organisation_id where o.name = $1 and n.title = 'Rod bore burr'`, [orgName]);
+  await page.goto(`${APP}/Non-Conformance/Internal/${nc.id}`);
+  await see(page.getByRole('heading', { name: 'Containment' }));
+  const orderPicker = page.getByRole('combobox', { name: 'Production order' });
+  await orderPicker.click();
+  await page.getByRole('option', { name: /WO-154789/ }).click();
+  if ((await page.getByLabel('Work order').inputValue()) !== 'WO-154789') throw new Error('the NC work order text was not filled in');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await see(page.getByText('Changes saved.'));
+  await shot(page, '48-nc-on-the-order');
+  const { rows: [linked] } = await stack.admin.query(`select n.work_order, po.order_number from public.nonconformances n join public.production_orders po on po.id = n.production_order_id where n.id = $1`, [nc.id]);
+  if (!linked || linked.order_number !== 'WO-154789' || linked.work_order !== 'WO-154789') throw new Error('the NC was not linked to the order');
+
+  step('the work order typed on an old, finished inspection is linked to a real order');
+  await page.goto(`${APP}/Settings/Organisation`);
+  const settings = page.getByRole('region', { name: 'Production settings' });
+  await settings.getByRole('button', { name: 'Preview' }).click();
+  const report = settings.getByLabel('Backfill report');
+  await see(report.getByText(/would be made/));
+  await see(report.getByText('This is what would happen (nothing has changed):'));
+  await shot(page, '49-backfill-preview');
+  const before = (await stack.admin.query(`select count(*)::int n from public.production_orders po join public.organisations o on o.id = po.organisation_id where o.name = $1`, [orgName])).rows[0].n;
+  await settings.getByRole('button', { name: 'Link them' }).click();
+  await page.getByRole('button', { name: 'Link them' }).last().click(); // the confirmation
+  await see(settings.getByLabel('Backfill report').getByText('Done:'));
+  await shot(page, '50-backfill-done');
+  const { rows: [after] } = await stack.admin.query(
+    `select (select count(*)::int from public.production_orders po join public.organisations o on o.id = po.organisation_id where o.name = $1) as orders,
+            (select i.work_order || '/' || (i.production_order_id is not null)::text from public.inspection_records i join public.organisations o on o.id = i.organisation_id
+              where o.name = $1 and i.work_order = 'WO-J-1001') as job`, [orgName]);
+  log(`orders before ${before}, after ${after.orders}; the old job: ${after.job}`);
+  if (after.orders <= before || after.job !== 'WO-J-1001/true') throw new Error('the old inspection was not linked to a production order with its text left alone');
 }

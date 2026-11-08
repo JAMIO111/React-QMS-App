@@ -84,8 +84,9 @@ export const menuStructure = [
     path: "/Production",
     subMenu: [
       { name: "Orders", path: "/Production/Orders" },
-      { name: "Lots", path: "/Production/Lots" },
-      { name: "Serial numbers", path: "/Production/Serials" },
+      // `setting`: shown only while that organisation setting is not switched off
+      { name: "Lots", path: "/Production/Lots", setting: "useLotsAndSerials" },
+      { name: "Serial numbers", path: "/Production/Serials", setting: "useLotsAndSerials" },
     ],
   },
   {

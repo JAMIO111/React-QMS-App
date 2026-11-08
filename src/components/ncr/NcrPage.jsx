@@ -49,6 +49,9 @@ import NcrCosts from "./NcrCosts";
 import NcrInspectionSource from "../inspection/NcrInspectionSource";
 import { useNcrInspectionSource } from "../../hooks/useInspection";
 import { EMPTY, changedFields, toBody, toForm } from "./formModel";
+import { useProductionSettings } from "../../hooks/useProduction";
+import { LotPicker, OrderPicker, SerialPicker } from "../production/pickers";
+import LinkNotices from "../production/LinkNotices";
 import LoadingScreen from "../ui/LoadingScreen";
 import NcrCapaCard from "../capa/NcrCapaCard";
 import NcrContainment from "./NcrContainment";
@@ -93,6 +96,8 @@ const NcrPage = () => {
   const { data: employees } = useEmployees();
   const { data: sites } = useSites();
   const mutation = useNcrMutation();
+  const settings = useProductionSettings();
+  const canLinkProduction = can("production.read");
   const { control, reset, watch, setValue } = useForm({ defaultValues: EMPTY });
   const form = watch();
   const [dialog, setDialog] = useState(null); // "cancel" | "reopen" | "delete"
@@ -111,6 +116,16 @@ const NcrPage = () => {
   const changes = isNew ? body : changedFields(body, toBody(original, source));
   const dirty = !isNew && Object.keys(changes).length > 0;
   const set = (k) => (v) => setValue(k, v?.target ? v.target.value : v, { shouldDirty: true });
+  // Picking a production record fills in what it implies (the typed text, the part when there is none, the order a lot or serial number belongs to), as the server will.
+  const pickedProduction = ({ orderNumber, lotNumber, serialNumber, partId, orderId, lotId }) => {
+    const put = (k, v) => v && setValue(k, v, { shouldDirty: true });
+    put("workOrder", orderNumber);
+    put("lotNumber", lotNumber);
+    put("serialNumber", serialNumber);
+    if (!form.partId) put("partId", partId);
+    if (!form.productionOrderId) put("productionOrderId", orderId);
+    if (!form.lotId) put("lotId", lotId);
+  };
 
   const save = (open) => {
     if (isNew) {
@@ -168,9 +183,9 @@ const NcrPage = () => {
       render={({ field, fieldState }) =>
         render({
           ...field,
-          onChange: (v) => {
+          onChange: (v, ...rest) => {
             field.onChange(v);
-            then?.(v);
+            then?.(v, ...rest);
           },
           error: fieldState.error,
           disabled: !canEdit,
@@ -303,6 +318,7 @@ const NcrPage = () => {
               />
             )}
             <Card>
+              {ncr?.links && <LinkNotices links={ncr.links} />}
               <div className="grid w-full grid-cols-1 items-start gap-x-8 gap-y-4 lg:grid-cols-2">
                 <div className="lg:col-span-2">{text("title", "Title", { required: true, maxLength: 200, icon: FileTextIcon, placeholder: "Short summary of the problem" })}</div>
                 {controlled("detectedAt", (f) => <RHFDatePickerPopout {...f} label="Detected on" required valueFormat="iso" maxDate={new Date()} />)}
@@ -321,11 +337,20 @@ const NcrPage = () => {
                     {text("purchaseOrder", "Purchase order", { maxLength: 60, icon: ReceiptIcon })}
                   </>
                 )}
-                {source !== "supplier" && text("workOrder", "Work order", { maxLength: 60, icon: BoxIcon })}
+                {source !== "supplier" && text("workOrder", "Work order", { maxLength: 60, icon: BoxIcon, disabled: !canEdit || !!form.productionOrderId, hint: form.productionOrderId ? "From the production order" : undefined })}
                 {controlled("partId", (f) => <PartPicker {...f} icon={QrCodeIcon} current={ncr?.part} />, () => setValue("partRevisionId", null, { shouldDirty: true }))}
+                {canLinkProduction && source !== "supplier" && controlled("productionOrderId", (f) => (
+                  <OrderPicker {...f} partId={form.partId} current={ncr?.links?.productionOrder} label="Production order" />
+                ), (id, item) => pickedProduction({ orderNumber: item?.name, partId: item?.part?.id }))}
                 {controlled("partRevisionId", (f) => <RevisionPicker {...f} icon={LayersIcon} partId={form.partId} />)}
-                {text("lotNumber", "Lot / batch", { maxLength: 60, icon: HashIcon })}
-                {text("serialNumber", "Serial number", { maxLength: 60, icon: HashIcon })}
+                {settings.useLotsAndSerials && canLinkProduction && controlled("lotId", (f) => (
+                  <LotPicker {...f} partId={form.partId} productionOrderId={form.productionOrderId} current={ncr?.links?.lot} />
+                ), (id, item) => pickedProduction({ lotNumber: item?.name, partId: item?.part?.id, orderId: item?.productionOrder?.id, orderNumber: item?.productionOrder?.orderNumber }))}
+                {text("lotNumber", "Lot / batch", { maxLength: 60, icon: HashIcon, disabled: !canEdit || !!form.lotId, hint: form.lotId ? "From the lot" : undefined })}
+                {settings.useLotsAndSerials && canLinkProduction && controlled("serialId", (f) => (
+                  <SerialPicker {...f} partId={form.partId} lotId={form.lotId} current={ncr?.links?.serial} />
+                ), (id, item) => pickedProduction({ serialNumber: item?.name, partId: item?.part?.id, lotId: item?.lot?.id, lotNumber: item?.lot?.lotNumber, orderId: item?.productionOrder?.id, orderNumber: item?.productionOrder?.orderNumber }))}
+                {text("serialNumber", "Serial number", { maxLength: 60, icon: HashIcon, disabled: !canEdit || !!form.serialId, hint: form.serialId ? "From the serial number" : undefined })}
                 <div className="flex w-full items-start gap-5">
                   {text("quantityInspected", "Quantity inspected", { dataType: "number", icon: LayersIcon, placeholder: "Enter qty" })}
                   {text("quantityAffected", "Quantity affected", { required: true, dataType: "number", icon: LayersIcon, placeholder: "Enter qty", hint: "Needed to open" })}

@@ -10,7 +10,7 @@ let revisions;
 const apiFetch = vi.fn();
 vi.mock("../../lib/api-client", async (importOriginal) => ({ ...(await importOriginal()), apiFetch: (...a) => apiFetch(...a) }));
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "org-1" }) }));
-vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }), useSites: () => ({ data: { data: [] } }) }));
+vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }), useSites: () => ({ data: { data: [] } }), useOrganisationDetails: () => ({ data: undefined }) }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock("../../api/supabaseApi", () => ({ generateSignedUrl: vi.fn(async (_b, path) => `https://files.test/${path}`) }));
 

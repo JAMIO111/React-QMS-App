@@ -25,8 +25,9 @@ export const SUBGROUP_BASIS = [
   { value: "inspection", label: "One inspection" },
   { value: "day", label: "One day" },
   { value: "lot", label: "One lot" },
+  { value: "order", label: "One production order" },
 ];
-export const BASIS_LABEL = { inspection: "one inspection", day: "one day", lot: "one lot" };
+export const BASIS_LABEL = { inspection: "one inspection", day: "one day", lot: "one lot", order: "one production order" };
 export const formatPercent = (v, digits = 1) => (v === null || v === undefined || Number.isNaN(v) ? "—" : `${(v * 100).toFixed(digits)}%`);
 
 /** Decimal places to show: those of the recorded readings plus one (means and limits need a little more), at most 5. */

@@ -1,7 +1,9 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
+import { refreshOrganisation } from "../lib/refresh";
 import { key, queryString } from "./useMasterData";
+import { useOrganisationDetails } from "./useQmsApi";
 
 /**
  * Production orders, lots and serial numbers (Phase 3). Reads live under the master-data query key so useMasterDataMutation (which refreshes the whole organisation) keeps them current.
@@ -45,3 +47,33 @@ const useLookup = (resource, params, enabled) => {
 export const useOrderLookup = (params = {}, { enabled = true } = {}) => useLookup("production-orders", params, enabled);
 export const useLotLookup = (params = {}, { enabled = true } = {}) => useLookup("lots", params, enabled);
 export const useSerialLookup = (params = {}, { enabled = true } = {}) => useLookup("serial-numbers", params, enabled);
+
+/**
+ * The organisation's production settings (Settings → Organisation → Production): whether lots and serial numbers are used, whether people who only record inspections may make an
+ * order from a job, and whether a job needs a production order to be completed. Until they load, the defaults an organisation starts with.
+ */
+export const useProductionSettings = () => {
+  const { data } = useOrganisationDetails();
+  const s = data?.settings ?? {};
+  return { useLotsAndSerials: s.useLotsAndSerials ?? true, allowInlineOrders: s.allowInlineOrders ?? false, requireProductionOrder: s.requireProductionOrder ?? false };
+};
+
+/** Make an order from a job's order picker: { orderNumber, partId, quantityPlanned, siteId? } → the order. The database says who may. */
+export const useCreateInlineOrder = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => apiFetch("/production-orders/inline", { method: "POST", body, organisationId }),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** Link the typed work orders, lots and serial numbers of existing records to production records: { dryRun } → the report. A dry run changes nothing. */
+export const useBackfillProduction = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dryRun }) => apiFetch("/production/backfill", { method: "POST", body: { dryRun }, organisationId }),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};

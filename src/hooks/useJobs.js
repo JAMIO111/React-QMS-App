@@ -60,6 +60,22 @@ export const useJobMutation = () => {
   });
 };
 
+/**
+ * Link a running job to its production order, lot and serial number: { id, productionOrderId?, lotId?, serialId? } (null clears one). The answer is the inspection, with the
+ * typed work order, lot and serial filled in from what was picked.
+ */
+export const useJobLinks = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }) => apiFetch(`/jobs/${id}/production-links`, { method: "PUT", body, organisationId }),
+    onSuccess: (inspection) => {
+      if (inspection?.id) queryClient.setQueryData(["api", "org", organisationId, "inspection", inspection.id], inspection);
+    },
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
 /** Recent non-conformances relevant to a job: { canRead, days, data }. Nothing for people who may not read them. */
 export const useJobNcrs = (id, { enabled = true } = {}) => {
   const { organisationId } = useOrganisation();

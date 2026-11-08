@@ -23,10 +23,14 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useGauges } from "../../hooks/useCalibration";
 import { useInspection } from "../../hooks/useInspection";
 import {
+  useJobLinks,
   useJobMutation,
   useJobNcrs,
   useJobRevisions,
 } from "../../hooks/useJobs";
+import { useProductionSettings } from "../../hooks/useProduction";
+import LinkNotices from "../production/LinkNotices";
+import { LotPicker, OrderPickerWithCreate, SerialPicker } from "../production/pickers";
 import { useActiveAlerts } from "../../hooks/useDocumentation";
 import SidePanes from "./panes/SidePanes";
 import AlertsPane from "./panes/AlertsPane";
@@ -51,6 +55,12 @@ const text = (v) => v ?? "";
 /** Work order, lot, quantity and serial: typed in on the hub once they are known, and saved as the field is left. */
 const JobInfo = ({ inspection, editable }) => {
   const mutation = useJobMutation();
+  const { can } = usePermissions();
+  const settings = useProductionSettings();
+  const linkMutation = useJobLinks();
+  const links = inspection.links ?? { productionOrder: null, lot: null, serial: null };
+  const canLink = can("production.read");
+  const link = (patch) => linkMutation.mutate({ id: inspection.id, ...patch });
   const server = {
     workOrder: text(inspection.workOrder),
     lot: text(inspection.lot),
@@ -99,8 +109,31 @@ const JobInfo = ({ inspection, editable }) => {
       }
       aria-label="Job information"
     >
+      {canLink && (
+        <div className="mb-3 flex flex-col gap-2" aria-label="Production records">
+          <div className={`grid grid-cols-1 gap-3 ${settings.useLotsAndSerials ? "md:grid-cols-3" : "md:grid-cols-1"}`}>
+            <OrderPickerWithCreate
+              label="Production order"
+              part={inspection.part}
+              siteId={inspection.site.id}
+              value={links.productionOrder?.id ?? null}
+              current={links.productionOrder}
+              disabled={!editable}
+              onChange={(id) => link({ productionOrderId: id ?? null })}
+            />
+            {settings.useLotsAndSerials && (
+              <LotPicker partId={inspection.part.id} productionOrderId={links.productionOrder?.id} value={links.lot?.id ?? null} current={links.lot} disabled={!editable} onChange={(id) => link({ lotId: id ?? null })} />
+            )}
+            {settings.useLotsAndSerials && (
+              <SerialPicker partId={inspection.part.id} lotId={links.lot?.id} value={links.serial?.id ?? null} current={links.serial} disabled={!editable} onChange={(id) => link({ serialId: id ?? null })} />
+            )}
+          </div>
+          <LinkNotices links={links} />
+          <FormError error={linkMutation.error} />
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Field label="Work order" maxLength={60} {...bind("workOrder")} />
+        <Field label="Work order" maxLength={60} {...bind("workOrder")} disabled={!editable || !!links.productionOrder} hint={links.productionOrder ? "From the production order" : undefined} />
         <Field
           label="Quantity (parts)"
           inputMode="numeric"
@@ -108,8 +141,8 @@ const JobInfo = ({ inspection, editable }) => {
           {...bind("lotSize")}
           error={!qtyValid ? "Enter a whole number of parts" : undefined}
         />
-        <Field label="Lot / batch" maxLength={60} {...bind("lot")} />
-        <Field label="Serial" maxLength={60} {...bind("serial")} />
+        <Field label="Lot / batch" maxLength={60} {...bind("lot")} disabled={!editable || !!links.lot} hint={links.lot ? "From the lot" : undefined} />
+        <Field label="Serial" maxLength={60} {...bind("serial")} disabled={!editable || !!links.serial} hint={links.serial ? "From the serial number" : undefined} />
       </div>
       <FormError error={mutation.error} />
       <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">

@@ -82,6 +82,7 @@ const PointTooltip = ({
       )}
       <p>{p.inspections.map((i) => i.reference).join(", ")}</p>
       {p.lot && <p>Lot {p.lot}</p>}
+      {p.order && <p>Order {p.order}</p>}
       {p.gaugeOverride && <p>Gauge override used</p>}
       {row.rules.length > 0 && (
         <p className="font-medium text-error-color">
@@ -392,6 +393,7 @@ const ProportionTooltip = ({ active, payload, variant = "p" }) => {
         <p>{p.inspections.map((i) => i.reference).join(", ")}</p>
       )}
       {p.lot && <p>Lot {p.lot}</p>}
+      {p.order && <p>Order {p.order}</p>}
       {row.rules.length > 0 && (
         <p className="font-medium text-error-color">
           {row.rules.map((r) => RULE_LABEL[r].short).join(", ")}

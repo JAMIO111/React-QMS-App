@@ -13,6 +13,8 @@ import { useCanSee, useOrganisationLogo } from "../hooks/useQmsApi";
 import { useMyAlertCount } from "../hooks/useDocumentation";
 import { useMyCapaActions } from "../hooks/useCapa";
 import { useModuleAccess } from "../hooks/useSubscription";
+import { useProductionSettings } from "../hooks/useProduction";
+import { subMenuVisible } from "../lib/production";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import SubMenuItem from "./SubMenuItem";
 import ThemeToggle from "./ThemeToggle";
@@ -20,6 +22,7 @@ import ThemeToggle from "./ThemeToggle";
 const Navbar = () => {
   const [isMenuExpanded, setIsMenuExpanded] = useState(false);
   const canSee = useCanSee();
+  const productionSettings = useProductionSettings();
   const myAlerts = useMyAlertCount({ enabled: canSee("documentation.read") });
   const myActions = useMyCapaActions("open", { enabled: canSee("capa.read") });
   const badges = {
@@ -111,7 +114,7 @@ const Navbar = () => {
                   {item.subMenu && isSubMenuOpen === item.name && (
                     <ul className="ml-4 flex flex-col animate-in fade-in slide-in-from-top-1 duration-200 motion-reduce:animate-none">
                       {item.subMenu
-                        ?.filter((subItem) => canSee(subItem.permission))
+                        ?.filter((subItem) => subMenuVisible(subItem, canSee, productionSettings))
                         .map((subItem, index, visible) => (
                           <li key={subItem.name}>
                             <SubMenuItem

@@ -3,6 +3,7 @@ import Field from "../ui/Field";
 import SitesManager from "./SitesManager";
 import ThemeColourPicker from "./ThemeColourPicker";
 import OrganisationLogo from "./OrganisationLogo";
+import ProductionSettings from "./ProductionSettings";
 import RequireMfaSetting from "./RequireMfaSetting";
 import { describeApiError, API_URL } from "../../lib/api-client";
 import {
@@ -217,6 +218,15 @@ const SettingsOrganisation = () => {
 
       <RequireMfaSetting
         value={!!org.settings.requireMfa}
+        canManage={canManage}
+      />
+
+      <ProductionSettings
+        settings={{
+          useLotsAndSerials: org.settings.useLotsAndSerials ?? true,
+          allowInlineOrders: !!org.settings.allowInlineOrders,
+          requireProductionOrder: !!org.settings.requireProductionOrder,
+        }}
         canManage={canManage}
       />
 

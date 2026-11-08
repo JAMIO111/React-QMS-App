@@ -93,5 +93,24 @@ export const parseSerialList = (text) =>
     .map((s) => s.trim())
     .filter(Boolean);
 
+/** Who may make an order from a job's order picker: people who manage production, or inspectors when the organisation allows it. The database decides again. */
+export const canCreateOrder = (can, settings) => can("production.manage") || (can("inspection.record") && !!settings?.allowInlineOrders);
+
+/** Whether a side-menu entry is shown: the person may see it, and the organisation setting it depends on (if any) is not switched off. */
+export const subMenuVisible = (subItem, canSee, settings) => canSee(subItem.permission) && (!subItem.setting || settings?.[subItem.setting] !== false);
+
+/**
+ * Plain-words notices about the production records a job or non-conformance is linked to: a lot on hold, an order that is closed or cancelled, a scrapped serial number.
+ * Information only: nothing is blocked.
+ */
+export const linkNotices = (links) => {
+  const out = [];
+  if (links?.lot?.status === "on_hold") out.push({ key: "lot", text: `Lot ${links.lot.lotNumber} is on hold${links.lot.statusReason ? `: ${links.lot.statusReason}` : ""}.` });
+  if (links?.lot?.status === "closed") out.push({ key: "lot", text: `Lot ${links.lot.lotNumber} is closed.` });
+  if (links?.productionOrder && ["closed", "cancelled"].includes(links.productionOrder.status)) out.push({ key: "order", text: `Order ${links.productionOrder.orderNumber} is ${links.productionOrder.status}.` });
+  if (links?.serial?.status === "scrapped") out.push({ key: "serial", text: `Serial number ${links.serial.serialNumber} was scrapped.` });
+  return out;
+};
+
 /** "ROD-100 · Rod" for a part reference { partNumber, name }. */
 export const partLabel = (p) => (p ? (p.name && p.name !== p.partNumber ? `${p.partNumber} · ${p.name}` : p.partNumber) : "");

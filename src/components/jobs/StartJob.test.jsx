@@ -6,9 +6,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const apiFetch = vi.fn();
 let permissions;
+let orgSettings;
 vi.mock("../../lib/api-client", async (importOriginal) => ({ ...(await importOriginal()), apiFetch: (...a) => apiFetch(...a) }));
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "org-1" }) }));
-vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }) }));
+vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }), useOrganisationDetails: () => ({ data: orgSettings ? { settings: orgSettings } : undefined }) }));
 vi.mock("../../hooks/useProcessControl", () => ({
   useMachines: () => ({ data: { items: [{ id: "m1", code: "CNC-1", name: "Lathe 1" }, { id: "m2", code: "CNC-2", name: "Lathe 2" }] }, isFetching: false }),
 }));
@@ -16,6 +17,15 @@ vi.mock("../ncr/Pickers", () => ({
   PartPicker: ({ label, onChange }) => (
     <button type="button" onClick={() => onChange("p1", { id: "p1", name: "ROD-1" })}>
       pick part ({label})
+    </button>
+  ),
+}));
+
+vi.mock("../production/pickers", () => ({
+  OrderPickerWithCreate: ({ label, required, part, onChange }) => (
+    <button type="button" onClick={() => onChange("o1", { id: "o1", name: "WO-154789" })}>
+      pick order ({label}) for {part.partNumber}
+      {required ? " [required]" : ""}
     </button>
   ),
 }));
@@ -64,6 +74,7 @@ const pickMachine = async (user) => {
 
 beforeEach(() => {
   localStorage.clear();
+  orgSettings = undefined;
   permissions = ["inspection.record"];
   previewResult = preview();
   mine = { data: [], total: 0 };
@@ -175,5 +186,53 @@ describe("the start pop-up", () => {
     renderIt();
     await pickPart(user);
     expect(await screen.findByRole("combobox", { name: /machine/i })).toHaveValue("CNC-1 · Lathe 1");
+  });
+});
+
+describe("the production order in the start pop-up", () => {
+  const startable = async (user) => {
+    await pickPart(user);
+    await screen.findByText(/Control plan CP-ROD rev A is in force/);
+    await pickMachine(user);
+    await screen.findByText(/Plant A/);
+  };
+
+  it("is not offered to someone who may not read production records", async () => {
+    const user = userEvent.setup();
+    renderIt();
+    await startable(user);
+    expect(screen.queryByRole("button", { name: /pick order/ })).toBeNull();
+  });
+
+  it("is optional by default: the job can start without one, or on the order picked", async () => {
+    permissions = ["inspection.record", "production.read"];
+    const user = userEvent.setup();
+    renderIt();
+    await startable(user);
+    expect(screen.getByRole("button", { name: /pick order \(Production order\) for ROD-1$/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start job" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: /pick order/ }));
+    await user.click(screen.getByRole("button", { name: "Start job" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/jobs", expect.objectContaining({ method: "POST", body: { machineId: "m1", partId: "p1", operationCode: "OP-10", productionOrderId: "o1" } })));
+  });
+
+  it("is needed to start when the organisation requires one", async () => {
+    permissions = ["inspection.record", "production.read"];
+    orgSettings = { useLotsAndSerials: true, allowInlineOrders: false, requireProductionOrder: true };
+    const user = userEvent.setup();
+    renderIt();
+    await startable(user);
+    expect(screen.getByRole("button", { name: /pick order .*\[required\]/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start job" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /pick order/ }));
+    expect(screen.getByRole("button", { name: "Start job" })).toBeEnabled();
+  });
+
+  it("does not hold back someone who cannot pick one, even when the organisation requires them", async () => {
+    orgSettings = { useLotsAndSerials: true, allowInlineOrders: false, requireProductionOrder: true };
+    const user = userEvent.setup();
+    renderIt();
+    await startable(user);
+    expect(screen.getByRole("button", { name: "Start job" })).toBeEnabled();
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { LOT_MOVES, ORDER_MOVES, SERIAL_MOVES, lotEditable, orderEditable, orderOperationsEditable, parseSerialList, partLabel, rangeNumbers, serialEditable } from "./production";
+import { LOT_MOVES, ORDER_MOVES, SERIAL_MOVES, canCreateOrder, linkNotices, lotEditable, orderEditable, orderOperationsEditable, parseSerialList, partLabel, rangeNumbers, serialEditable, subMenuVisible } from "./production";
+import { menuStructure } from "../MenuStructure";
 
 describe("rangeNumbers", () => {
   it("pads, prefixes and includes both ends", () => {
@@ -62,5 +63,46 @@ describe("partLabel", () => {
     expect(partLabel({ partNumber: "ROD-100", name: "Rod" })).toBe("ROD-100 · Rod");
     expect(partLabel({ partNumber: "ROD-100", name: "ROD-100" })).toBe("ROD-100");
     expect(partLabel(null)).toBe("");
+  });
+});
+
+describe("canCreateOrder", () => {
+  const can = (...p) => (x) => p.includes(x);
+  it("is for people who manage production, or for people who record inspections when the organisation allows it", () => {
+    expect(canCreateOrder(can("production.manage"), {})).toBe(true);
+    expect(canCreateOrder(can("inspection.record"), { allowInlineOrders: true })).toBe(true);
+    expect(canCreateOrder(can("inspection.record"), { allowInlineOrders: false })).toBe(false);
+    expect(canCreateOrder(can("inspection.record"), undefined)).toBe(false);
+    expect(canCreateOrder(can("production.read"), { allowInlineOrders: true })).toBe(false);
+  });
+});
+
+describe("linkNotices", () => {
+  it("says in words when a lot is on hold or closed, an order is closed or cancelled, or a serial number was scrapped", () => {
+    const text = (links) => linkNotices(links).map((n) => n.text);
+    expect(text({ lot: { lotNumber: "L1", status: "on_hold", statusReason: "Suspect" } })).toEqual(["Lot L1 is on hold: Suspect."]);
+    expect(text({ lot: { lotNumber: "L1", status: "on_hold", statusReason: null } })).toEqual(["Lot L1 is on hold."]);
+    expect(text({ lot: { lotNumber: "L1", status: "closed" } })).toEqual(["Lot L1 is closed."]);
+    expect(text({ productionOrder: { orderNumber: "WO-1", status: "cancelled" } })).toEqual(["Order WO-1 is cancelled."]);
+    expect(text({ serial: { serialNumber: "S1", status: "scrapped" } })).toEqual(["Serial number S1 was scrapped."]);
+  });
+  it("says nothing about records in good standing, or when nothing is linked", () => {
+    expect(linkNotices({ lot: { lotNumber: "L1", status: "released" }, productionOrder: { orderNumber: "WO-1", status: "in_progress" }, serial: { serialNumber: "S1", status: "completed" } })).toEqual([]);
+    expect(linkNotices(null)).toEqual([]);
+    expect(linkNotices({ productionOrder: null, lot: null, serial: null })).toEqual([]);
+  });
+});
+
+describe("the Production menu", () => {
+  const production = menuStructure.find((m) => m.name === "Production");
+  const names = (settings, canSee = () => true) => production.subMenu.filter((i) => subMenuVisible(i, canSee, settings)).map((i) => i.name);
+  it("shows Orders, Lots and Serial numbers by default, and only Orders to a shop that does not use lots and serial numbers", () => {
+    expect(names({})).toEqual(["Orders", "Lots", "Serial numbers"]);
+    expect(names(undefined)).toEqual(["Orders", "Lots", "Serial numbers"]);
+    expect(names({ useLotsAndSerials: true })).toEqual(["Orders", "Lots", "Serial numbers"]);
+    expect(names({ useLotsAndSerials: false })).toEqual(["Orders"]);
+  });
+  it("still follows what the person may see", () => {
+    expect(names({}, () => false)).toEqual([]);
   });
 });

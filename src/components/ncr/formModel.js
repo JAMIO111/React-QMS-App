@@ -5,6 +5,7 @@ export const EMPTY = {
   title: "", severity: null, description: "", requirement: "", actualResult: "", siteId: null, detectedAt: format(new Date(), "yyyy-MM-dd"),
   detectionProcessId: null, partId: null, partRevisionId: null, lotNumber: "", serialNumber: "", quantityAffected: "", quantityInspected: "",
   customerId: null, customerReference: "", supplierId: null, purchaseOrder: "", workOrder: "",
+  productionOrderId: null, lotId: null, serialId: null,
   failureModeId: null, subFailureModeId: null, causalProcessId: null, responsibleEmployeeId: null,
 };
 
@@ -16,6 +17,7 @@ export const toForm = (n) => ({
   quantityAffected: n.quantityAffected ?? "", quantityInspected: n.quantityInspected ?? "",
   customerId: n.customer?.id ?? null, customerReference: n.customerReference ?? "", supplierId: n.supplier?.id ?? null,
   purchaseOrder: n.purchaseOrder ?? "", workOrder: n.workOrder ?? "",
+  productionOrderId: n.links?.productionOrder?.id ?? null, lotId: n.links?.lot?.id ?? null, serialId: n.links?.serial?.id ?? null,
   failureModeId: n.failureMode?.id ?? null, subFailureModeId: n.subFailureMode?.id ?? null, causalProcessId: n.causalProcess?.id ?? null,
   responsibleEmployeeId: n.responsibleEmployee?.id ?? null,
 });

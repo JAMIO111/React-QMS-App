@@ -6,13 +6,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { format } from "date-fns";
 
 let permissions;
+let orgProduction = {};
 const apiFetch = vi.fn();
 vi.mock("../../lib/api-client", async (importOriginal) => ({ ...(await importOriginal()), apiFetch: (...a) => apiFetch(...a) }));
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "org-1" }) }));
 vi.mock("../../hooks/useQmsApi", () => ({
   usePermissions: () => ({ can: (p) => permissions.includes(p) }),
   useSites: () => ({ data: { data: [{ id: "s1", code: "MAIN", name: "Main site" }] } }),
-  useOrganisationDetails: () => ({ data: { settings: { baseCurrency: "GBP", vatRate: 0.2 } } }),
+  useOrganisationDetails: () => ({ data: { settings: { baseCurrency: "GBP", vatRate: 0.2, ...orgProduction } } }),
 }));
 const upload = vi.fn();
 vi.mock("@/api/supabaseApi", () => ({ uploadFileToSupabase: (...a) => upload(...a), generateSignedUrl: vi.fn() }));
@@ -95,6 +96,7 @@ beforeEach(() => {
   apiFetch.mockReset();
   calls.length = 0;
   permissions = [...ALL];
+  orgProduction = {};
   document.body.innerHTML = '<div id="modal-root"></div>';
 });
 
@@ -556,5 +558,80 @@ describe("dialogs inside the NC form", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
     await waitFor(() => expect(lastCall("POST /ncrs/n1/costs")).toBeTruthy());
     expect(lastCall("PATCH /ncrs/n1")).toBeUndefined();
+  });
+});
+
+describe("NC form: production records", () => {
+  const links = (over = {}) => ({ productionOrder: null, lot: null, serial: null, ...over });
+  const order = { id: "o1", orderNumber: "WO-154789", status: "released" };
+  const lookups = {
+    "GET /production-orders/lookup": { data: [{ id: "o1", orderNumber: "WO-154789", part: { id: "p1", partNumber: "BRK-100", name: "Bracket" }, status: "released", quantityPlanned: 24 }] },
+    "GET /lots/lookup": { data: [{ id: "l1", lotNumber: "LOT-7", part: { id: "p1", partNumber: "BRK-100", name: "Bracket" }, origin: "produced", productionOrder: { id: "o1", orderNumber: "WO-154789" }, status: "released", statusReason: null }] },
+    "GET /serial-numbers/lookup": { data: [] },
+  };
+
+  it("offers the production order, lot and serial number to people who may read them, and nothing to people who may not", async () => {
+    routeApi({ "GET /ncrs/n1": ncr({ links: links() }), ...lookups });
+    permissions = [...ALL, "production.read"];
+    const { unmount } = renderAt("/Non-Conformance/Internal/n1");
+    await screen.findByLabelText("Title");
+    for (const name of ["Production order", "Lot", "Serial number"]) expect(screen.getByRole("combobox", { name })).toBeInTheDocument();
+    unmount();
+    permissions = [...ALL];
+    renderAt("/Non-Conformance/Internal/n1");
+    await screen.findByLabelText("Title");
+    expect(screen.queryByRole("combobox", { name: "Production order" })).toBeNull();
+    expect(screen.getByLabelText("Work order")).toBeEnabled();
+  });
+
+  it("links the NC to an order: the work order text is filled in and locked, and the link is saved with it", async () => {
+    routeApi({ "GET /ncrs/n1": ncr({ workOrder: null, links: links() }), "PATCH /ncrs/n1": (_p, o) => ncr({ ...o.body, links: links({ productionOrder: order }) }), ...lookups });
+    permissions = [...ALL, "production.read"];
+    renderAt("/Non-Conformance/Internal/n1");
+    await screen.findByLabelText("Title");
+    await pick("Production order", /WO-154789/);
+    expect(screen.getByLabelText("Work order")).toHaveValue("WO-154789");
+    expect(screen.getByLabelText("Work order")).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(lastCall("PATCH /ncrs/n1")).toBeTruthy());
+    expect(lastCall("PATCH /ncrs/n1").body).toEqual({ productionOrderId: "o1", workOrder: "WO-154789" });
+  });
+
+  it("picking a lot brings its order and lot number with it", async () => {
+    routeApi({ "GET /ncrs/n1": ncr({ workOrder: null, links: links() }), "PATCH /ncrs/n1": (_p, o) => ncr({ ...o.body, links: links() }), ...lookups });
+    permissions = [...ALL, "production.read"];
+    renderAt("/Non-Conformance/Internal/n1");
+    await screen.findByLabelText("Title");
+    await pick("Lot", /LOT-7/);
+    expect(screen.getByLabelText("Lot / batch")).toHaveValue("LOT-7");
+    expect(screen.getByLabelText("Lot / batch")).toBeDisabled();
+    expect(screen.getByLabelText("Work order")).toHaveValue("WO-154789");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(lastCall("PATCH /ncrs/n1")).toBeTruthy());
+    expect(lastCall("PATCH /ncrs/n1").body).toEqual({ lotId: "l1", productionOrderId: "o1", lotNumber: "LOT-7", workOrder: "WO-154789" });
+  });
+
+  it("says when the lot it is on is on hold, and leaves a supplier NC without an order picker", async () => {
+    routeApi({
+      "GET /ncrs/n1": ncr({ source: "supplier", links: links({ lot: { id: "l1", lotNumber: "LOT-7", status: "on_hold", statusReason: "Suspect material" } }), lotNumber: "LOT-7" }),
+      ...lookups,
+    });
+    permissions = [...ALL, "production.read"];
+    renderAt("/Non-Conformance/Supplier/n1");
+    await screen.findByLabelText("Title");
+    expect(screen.getByText("Lot LOT-7 is on hold: Suspect material.")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Production order" })).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Lot" })).toBeInTheDocument();
+  });
+
+  it("offers only the order to an organisation that does not use lots and serial numbers", async () => {
+    orgProduction = { useLotsAndSerials: false };
+    routeApi({ "GET /ncrs/n1": ncr({ links: links() }), ...lookups });
+    permissions = [...ALL, "production.read"];
+    renderAt("/Non-Conformance/Internal/n1");
+    await screen.findByLabelText("Title");
+    expect(screen.getByRole("combobox", { name: "Production order" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Lot" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Serial number" })).toBeNull();
   });
 });

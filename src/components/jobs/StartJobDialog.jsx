@@ -4,6 +4,9 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFComboBox from "../ui/RHFComboBox";
 import { PartPicker } from "../ncr/Pickers";
+import { OrderPickerWithCreate } from "../production/pickers";
+import { useProductionSettings } from "../../hooks/useProduction";
+import { usePermissions } from "../../hooks/useQmsApi";
 import { buttonClass, FormError, SelectField } from "../master-data/shared";
 import { useMachines } from "../../hooks/useProcessControl";
 import { useJobMutation, useJobPreview } from "../../hooks/useJobs";
@@ -33,6 +36,11 @@ const StartJobDialog = ({ onClose }) => {
   const [machineId, setMachineId] = useState(remembered?.id ?? null);
   const [search, setSearch] = useState("");
   const [quantity, setQuantity] = useState("");
+  const [order, setOrder] = useState({ id: null, item: null });
+  const { can } = usePermissions();
+  const settings = useProductionSettings();
+  const canPickOrder = can("production.read");
+  const orderRequired = canPickOrder && settings.requireProductionOrder;
   const machines = useMachines({ q: useDebounced(search) });
   const mutation = useJobMutation();
 
@@ -47,13 +55,13 @@ const StartJobDialog = ({ onClose }) => {
   const planOk = planned?.status === "ok";
   const qtyValid = /^[1-9]\d{0,8}$/.test(quantity.trim());
   const needsQty = !!p?.needsLotSize;
-  const ready = !!p && planOk && p.status === "ok" && !!machineId && !!chosen && !!p.site && (!needsQty || qtyValid) && (!quantity.trim() || qtyValid);
+  const ready = !!p && planOk && p.status === "ok" && !!machineId && !!chosen && !!p.site && (!needsQty || qtyValid) && (!quantity.trim() || qtyValid) && (!orderRequired || !!order.id);
 
   const start = (e) => {
     e.preventDefault();
     const machine = options.find((o) => o.id === machineId) ?? current;
     mutation.mutate(
-      { machineId, partId: part.id, operationCode: chosen, ...(quantity.trim() ? { lotSize: Number(quantity) } : {}) },
+      { machineId, partId: part.id, operationCode: chosen, ...(quantity.trim() ? { lotSize: Number(quantity) } : {}), ...(order.id ? { productionOrderId: order.id } : {}) },
       {
         onSuccess: (job) => {
           if (machine) rememberMachine(organisationId, { id: machineId, name: machine.name.replace(/^.*? · /, "") });
@@ -75,6 +83,7 @@ const StartJobDialog = ({ onClose }) => {
             setPart({ id: id ?? null, item: item ?? null });
             setOperation(null);
             setQuantity("");
+            setOrder({ id: null, item: null });
           }}
         />
         {part.id && !planned && !single.error && (
@@ -125,6 +134,17 @@ const StartJobDialog = ({ onClose }) => {
             filterLocally={false}
             onSearchChange={setSearch}
             emptyMessage={machines.isFetching ? "Searching…" : "No machines"}
+          />
+        )}
+        {planOk && canPickOrder && planned && (
+          <OrderPickerWithCreate
+            label="Production order"
+            required={orderRequired}
+            part={planned.part}
+            siteId={planned.site?.id}
+            value={order.id}
+            current={order.item ? { id: order.id, orderNumber: order.item.name } : undefined}
+            onChange={(id, item) => setOrder({ id: id ?? null, item: item ?? null })}
           />
         )}
         {planOk && needsQty && (

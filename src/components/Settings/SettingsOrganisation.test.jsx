@@ -20,6 +20,7 @@ vi.mock("../../hooks/useQmsApi", () => ({
 }));
 vi.mock("./SitesManager", () => ({ default: ({ canManage }) => <div>sites manager {String(canManage)}</div> }));
 vi.mock("./RequireMfaSetting", () => ({ default: () => <div>require mfa</div> }));
+vi.mock("./ProductionSettings", () => ({ default: () => <div>production settings</div> }));
 vi.mock("./OrganisationLogo", () => ({ default: () => <div>organisation logo</div> }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import LinkNotices from "../production/LinkNotices";
 import { ArrowLeftIcon, CircleAlertIcon, HistoryIcon } from "@/components/icons";
 import Field from "../ui/Field";
 import Dialog from "../ui/Dialog";
@@ -42,6 +43,7 @@ const InspectionPage = () => {
             {inspection.result && <ResultBadge result={inspection.result} size="lg" />}
             {open && inspection.failures > 0 && <span className="text-sm text-error-color">{inspection.failures} failed reading{inspection.failures > 1 ? "s" : ""} so far</span>}
           </div>
+          <LinkNotices links={inspection.links} />
           <MenuCard title="Context" subtitle="Frozen when the inspection started; later plan or part changes do not alter it.">
             <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
               {[
@@ -51,7 +53,7 @@ const InspectionPage = () => {
                 ["Operation", inspection.operationCode ?? "All"],
                 ["Site", inspection.site.name],
                 ["Machine", inspection.machine ? `${inspection.machine.code} · ${inspection.machine.name}` : "—"],
-                ["Work order", inspection.workOrder ?? "—"],
+                ["Work order", inspection.links?.productionOrder ? <Link key="wo" to={`/Production/Orders/${inspection.links.productionOrder.id}`} className="text-link-color hover:underline">{inspection.links.productionOrder.orderNumber}</Link> : (inspection.workOrder ?? "—")],
                 ["Lot / serial", [inspection.lot, inspection.serial].filter(Boolean).join(" · ") || "—"],
                 ["Lot size", inspection.lotSize ?? "—"],
                 ["Operator", inspection.startedBy?.name ?? "—"],

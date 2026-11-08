@@ -16,6 +16,7 @@ const SELECT = `
          d.grace_days, d.weekdays_only, d.auditor_kind, d.pass_mark, d.status, d.retired_at, d.retired_by, d.retired_reason, d.created_at, d.updated_at, d.created_by,
          case d.auditor_kind when 'person' then d.auditor_user_id when 'role' then d.auditor_role_id when 'department' then d.auditor_department_id end as auditor_id,
          case d.auditor_kind when 'person' then coalesce(${personName('ap')}, 'Unnamed person') when 'role' then ar.name when 'department' then ad.name end as auditor_name,
+         lr.id as last_id, lr.reference as last_reference, lr.performed_on as last_performed_on, lr.result as last_result, nd.due_on as next_due_on,
          ${personName('cp')} as created_name, ${personName('rp')} as retired_name,
          (select count(*) from public.audit_questions q where q.audit_definition_id = d.id) as question_count,
          (select count(*) from public.audit_questions q where q.audit_definition_id = d.id and q.critical) as critical_count,
@@ -27,6 +28,14 @@ const SELECT = `
                from public.audit_targets t left join public.machines m on m.id = t.machine_id left join public.departments dp on dp.id = t.department_id
               where t.audit_definition_id = d.id order by 1 limit 4) x) as target_preview
     from public.audit_definitions d
+    left join lateral (select r.id, r.reference, to_char(r.performed_on, 'YYYY-MM-DD') as performed_on, r.result
+                         from public.audit_records r
+                        where r.audit_definition_id = d.id and r.status = 'completed'
+                        order by r.performed_on desc, r.completed_at desc limit 1) lr on true
+    left join lateral (select to_char(min(o.due_on), 'YYYY-MM-DD') as due_on
+                         from public.audit_occurrences o
+                        where o.audit_definition_id = d.id and o.status = 'scheduled' and o.due_on + d.grace_days >= current_date
+                          and not exists (select 1 from public.audit_records r where r.occurrence_id = o.id and r.status <> 'abandoned')) nd on true
     left join public.profiles ap on ap.id = d.auditor_user_id
     left join public.roles ar on ar.id = d.auditor_role_id
     left join public.departments ad on ad.id = d.auditor_department_id
@@ -53,6 +62,8 @@ const toBase = (r: Row) => ({
   status: r.status as AuditSummary['status'],
   questionCount: Number(r.question_count),
   criticalCount: Number(r.critical_count),
+  lastRecord: r.last_id ? { id: r.last_id as string, reference: r.last_reference as string, performedOn: r.last_performed_on as string, result: r.last_result as 'pass' | 'fail' } : null,
+  nextDueOn: (r.next_due_on as string) ?? null,
   createdAt: iso(r.created_at)!,
 });
 const toSummary = (r: Row): AuditSummary => ({
@@ -70,6 +81,8 @@ export class AuditsService {
 
   list(ctx: RequestContext, q: AuditListQuery): Promise<{ data: AuditSummary[]; page: number; pageSize: number; total: number }> {
     return this.database.asUser(ctx, async (db) => {
+      // "Next due" comes from the schedule, which is made when someone looks (no worker): make sure it is there.
+      await db.execute(sql`select app.generate_audit_occurrences(${orgOf(ctx)}::uuid, current_date + 62)`);
       const where: SQL[] = [sql`d.organisation_id = ${orgOf(ctx)}::uuid`];
       if (q.status.length) where.push(sql`d.status = any (string_to_array(${q.status.join(',')}, ','))`);
       if (q.type.length) where.push(sql`d.audit_type = any (string_to_array(${q.type.join(',')}, ','))`);

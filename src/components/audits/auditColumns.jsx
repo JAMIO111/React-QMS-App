@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { CalendarIcon, CircleCheckIcon, ClipboardListIcon, FactoryIcon, HashIcon, ListChecksIcon, TagIcon, UsersIcon } from "@/components/icons";
-import { auditTypeLabel, auditorLabel, frequencyLabel } from "../../lib/audits";
+import { formatDate } from "../../lib/ncr";
+import { auditTypeLabel, auditorLabel, frequencyLabel, RESULT_PILL, resultLabel } from "../../lib/audits";
 
 /** Audits register columns. `meta.sortKey` is the API sort field; columns without one cannot be sorted (the register is sorted and paged on the server). */
 const head = (Icon, label, cls = "table-header") => (
@@ -46,6 +47,36 @@ export const auditColumns = [
   col("auditType", "Type", head(TagIcon, "Type"), plain((r) => auditTypeLabel(r.auditType)), { size: 170, sortKey: "type" }),
   col("targets", "Relevant to", head(FactoryIcon, "Relevant to"), plain((r) => relevant(r.targets)), { size: 280, minSize: 120, accessor: (r) => relevant(r.targets) }),
   col("frequency", "Frequency", head(CalendarIcon, "Frequency"), plain((r) => frequencyLabel(r.frequency)), { size: 150, sortKey: "frequency", accessor: (r) => frequencyLabel(r.frequency) }),
+  col(
+    "lastRecord",
+    "Last done",
+    head(CircleCheckIcon, "Last done"),
+    (i) => {
+      const last = i.row.original.lastRecord;
+      if (!last) return <div className="table-row-item text-secondary-text">Never</div>;
+      return (
+        <div className="table-row-item gap-2">
+          <Link to={`/Documentation/Audit-Records/${last.id}`} className="text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
+            {formatDate(last.performedOn)}
+          </Link>
+          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${RESULT_PILL[last.result]}`}>{resultLabel(last.result)}</span>
+        </div>
+      );
+    },
+    { size: 190, accessor: (r) => (r.lastRecord ? `${r.lastRecord.performedOn} ${r.lastRecord.result}` : "") }
+  ),
+  col(
+    "nextDueOn",
+    "Next due",
+    head(CalendarIcon, "Next due"),
+    (i) => {
+      const due = i.row.original.nextDueOn;
+      if (!due) return <div className="table-row-item text-secondary-text">—</div>;
+      const late = due < new Date().toISOString().slice(0, 10);
+      return <div className={`table-row-item ${late ? "font-medium text-warning-color" : ""}`}>{formatDate(due)}{late ? " (overdue)" : ""}</div>;
+    },
+    { size: 150, accessor: (r) => r.nextDueOn ?? "" }
+  ),
   col("auditor", "Expected auditor", head(UsersIcon, "Expected auditor"), plain((r) => (r.auditor.kind === "none" ? null : r.auditor.name)), { size: 190, accessor: (r) => auditorLabel(r.auditor) }),
   col("questionCount", "Questions", head(ListChecksIcon, "Questions", "table-header-number"), (i) => <div className="table-row-item justify-end tabular-nums">{i.row.original.questionCount}{i.row.original.criticalCount ? <span className="ml-1 text-xs text-secondary-text">({i.row.original.criticalCount} critical)</span> : null}</div>, { size: 150, align: "right" }),
   col(

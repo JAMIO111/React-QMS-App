@@ -197,6 +197,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await productionTraceability({ page, stack, APP, orgName, see, shot, step, log });
   await affectedLots({ page, stack, APP, orgName, see, shot, step, log });
   await defineAudit({ page, stack, APP, orgName, see, shot, step, log });
+  await carryOutAudit({ page, stack, APP, orgName, see, shot, step, log });
   await workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, log });
 };
 
@@ -443,6 +444,57 @@ async function defineAudit({ page, stack, APP, orgName, see, shot, step, log }) 
       (select count(*)::int from public.audit_targets t where t.audit_definition_id = d.id) as targets from public.audit_definitions d join public.organisations o on o.id = d.organisation_id where o.name = $1`, [orgName]);
   log(`audit: ${JSON.stringify(d)}`);
   if (!d || d.frequency_kind !== 'weekly' || d.questions !== 2 || d.targets !== 1) throw new Error('the audit was not saved as defined');
+}
+
+/** The audit comes due on the schedule, someone carries it out, a critical question fails, and the failure becomes a draft non-conformance. */
+async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }) {
+  step('the audit is carried out from the schedule, fails on a critical question, and the failure is raised as a non-conformance');
+  // Defined a month ago, so the schedule has had slots to miss.
+  await stack.admin.query(
+    `update public.audit_definitions d set created_at = now() - interval '30 days' from public.organisations o where o.id = d.organisation_id and o.name = $1`,
+    [orgName]
+  );
+  await page.goto(`${APP}/Documentation/Audit-Schedule`);
+  await see(page.getByRole('table', { name: 'Scheduled audits' }));
+  await shot(page, '59-audit-schedule');
+  await page.getByRole('button', { name: /^Start AUD-001/ }).first().click();
+  await see(page.getByRole('heading', { name: /^AR-\d\d-0001 · Weekly layered process audit/ }));
+  await page.getByRole('checkbox', { name: 'OP-10' }).check();
+  const q1 = page.getByRole('listitem', { name: 'Question 1' });
+  await q1.getByRole('radio', { name: 'Fail' }).click();
+  await q1.getByLabel(/^What was found/).fill('Oil under the bench at the lathe');
+  await q1.getByLabel(/^What was found/).press('Tab');
+  const q2 = page.getByRole('listitem', { name: 'Question 2' });
+  await q2.getByLabel('Answer to question 2').fill('7.5');
+  await q2.getByLabel('Answer to question 2').press('Tab');
+  await shot(page, '60-audit-record-answered');
+  await page.getByRole('button', { name: 'Complete audit' }).click();
+  await see(page.getByRole('status').filter({ hasText: /Failed with/ }));
+  await see(page.getByText(/1 critical question failed/));
+  await shot(page, '61-audit-record-failed');
+  await page.getByRole('button', { name: 'Raise non-conformance' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Raise a non-conformance' });
+  await see(dialog.getByRole('checkbox', { name: /Is the cell clean and free of oil\?/ }));
+  await dialog.getByRole('button', { name: 'Raise non-conformance' }).click();
+  await page.waitForURL(/\/Non-Conformance\/Internal\//);
+  await page.waitForTimeout(400);
+  await shot(page, '62-ncr-from-audit');
+
+  await page.goto(`${APP}/Documentation/Audit-Records`);
+  await see(page.getByRole('region', { name: 'Audit records' }).getByRole('link', { name: /^AR-\d\d-0001$/ }));
+  await see(page.getByRole('region', { name: 'Audit records' }).getByText('Fail'));
+  await shot(page, '63-audit-records');
+  await page.goto(`${APP}/Documentation/Audits`);
+  await see(page.getByRole('region', { name: 'Audits' }).getByText('Fail'));
+  const { rows: [r] } = await stack.admin.query(
+    `select r.status, r.result, r.critical_failed_count, r.occurrence_id is not null as scheduled,
+            (select count(*)::int from public.audit_ncr_links l where l.audit_record_id = r.id) as links,
+            (select count(*)::int from public.audit_record_targets t where t.audit_record_id = r.id) as targets
+       from public.audit_records r join public.organisations o on o.id = r.organisation_id where o.name = $1`,
+    [orgName]
+  );
+  log(`audit record: ${JSON.stringify(r)}`);
+  if (!r || r.status !== 'completed' || r.result !== 'fail' || r.critical_failed_count !== 1 || !r.scheduled || r.links !== 1 || r.targets !== 1) throw new Error('the audit was not carried out as expected');
 }
 
 /** A non-conformance names the lot it touches; the lot gate then asks for a disposition that covers that lot. */

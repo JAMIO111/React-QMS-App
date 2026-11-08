@@ -32,6 +32,8 @@ const summary = (over = {}) => ({
   status: "active",
   questionCount: 2,
   criticalCount: 1,
+  lastRecord: null,
+  nextDueOn: null,
   targets: { machines: 1, operations: 1, departments: 0, preview: ["CNC-1", "OP-20"] },
   createdAt: "2026-11-01T09:00:00Z",
   ...over,
@@ -87,6 +89,7 @@ const renderAt = (url) =>
           <Route path="/Documentation/Audits/new" element={<><AuditForm /><Where /></>} />
           <Route path="/Documentation/Audits/:id" element={<><AuditPage /><Where /></>} />
           <Route path="/Documentation/Audits/:id/edit" element={<><AuditForm /><Where /></>} />
+          <Route path="/Documentation/Audit-Records/:id" element={<Where />} />
         </Routes>
         <div id="modal-root" />
       </MemoryRouter>
@@ -112,6 +115,32 @@ describe("audits register", () => {
     expect(within(table).getByText("Retired")).toBeInTheDocument();
     expect(screen.getByText("2 audits")).toBeInTheDocument();
     expect(lastList().path).toContain("sort=reference&order=asc");
+  });
+
+  it("shows when each audit was last done, with its result, and when it is next due, marking one that is overdue", async () => {
+    routeApi({
+      "GET /audits": {
+        data: [
+          summary({ lastRecord: { id: "r1", reference: "AR-26-0001", performedOn: "2026-11-02", result: "fail" }, nextDueOn: "2099-01-05" }),
+          summary({ id: "a2", reference: "AUD-002", title: "Monthly 5S", lastRecord: null, nextDueOn: "2020-01-06" }),
+          summary({ id: "a3", reference: "AUD-003", title: "On demand", lastRecord: { id: "r3", reference: "AR-26-0003", performedOn: "2026-10-01", result: "pass" }, nextDueOn: null }),
+        ],
+        page: 1,
+        pageSize: 25,
+        total: 3,
+      },
+    });
+    renderAt("/Documentation/Audits");
+    const table = await screen.findByRole("region", { name: "Audits" });
+    const rows = await within(table).findAllByRole("row");
+    const body = rows.slice(1);
+    expect(within(body[0]).getByRole("link", { name: /Nov 2026/ })).toHaveAttribute("href", "/Documentation/Audit-Records/r1");
+    expect(within(body[0]).getByText("Fail")).toBeInTheDocument();
+    expect(within(body[0]).getByText(/Jan 2099$/)).toBeInTheDocument();
+    expect(within(body[0]).queryByText(/overdue/)).toBeNull();
+    expect(within(body[1]).getByText("Never")).toBeInTheDocument();
+    expect(within(body[1]).getByText(/Jan 2020 \(overdue\)/)).toBeInTheDocument();
+    expect(within(body[2]).getByText("Pass")).toBeInTheDocument();
   });
 
   it("offers New audit only to people who manage audits", async () => {
@@ -163,6 +192,33 @@ describe("audit page", () => {
     expect(within(list).getByText("Critical")).toBeInTheDocument();
     expect(within(list).getByText(/passes 6 to 9 %/)).toBeInTheDocument();
     expect(within(list).getByText("Floor, bench, machine")).toBeInTheDocument();
+  });
+
+  it("shows when it was last done and is next due, and starts an audit for people who may perform audits", async () => {
+    routeApi({
+      "GET /audits/a1": detail({ lastRecord: { id: "r1", reference: "AR-26-0001", performedOn: "2026-11-02", result: "pass" }, nextDueOn: "2026-11-16" }),
+      "POST /audit-records": { id: "r7", reference: "AR-26-0007" },
+    });
+    const { unmount } = renderAt("/Documentation/Audits/a1");
+    expect(await screen.findByRole("link", { name: /Nov 2026: Pass/ })).toHaveAttribute("href", "/Documentation/Audit-Records/r1");
+    expect(screen.getByText(/16 Nov 2026/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Audit records" })).toHaveAttribute("href", "/Documentation/Audit-Records?audit=a1");
+    expect(screen.getByRole("link", { name: "Schedule" })).toHaveAttribute("href", "/Documentation/Audit-Schedule?audit=a1");
+    await userEvent.click(screen.getByRole("button", { name: /Start audit/ }));
+    await waitFor(() => expect(sent("POST /audit-records")[0]?.body).toEqual({ auditId: "a1" }));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Documentation/Audit-Records/r7"));
+    unmount();
+    permissions = ["audits.read", "audits.manage"];
+    renderAt("/Documentation/Audits/a1");
+    await screen.findByRole("heading", { name: /AUD-001/ });
+    expect(screen.queryByRole("button", { name: /Start audit/ })).toBeNull();
+  });
+
+  it("does not offer to start a retired audit", async () => {
+    routeApi({ "GET /audits/a1": detail({ status: "retired", retired: { at: "2026-11-03T09:00:00Z", by: null, reason: "Replaced" } }) });
+    renderAt("/Documentation/Audits/a1");
+    await screen.findByRole("heading", { name: /AUD-001/ });
+    expect(screen.queryByRole("button", { name: /Start audit/ })).toBeNull();
   });
 
   it("lets managers edit and retire with a reason, and shows the retirement afterwards", async () => {

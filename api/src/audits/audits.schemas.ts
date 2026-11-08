@@ -148,6 +148,10 @@ export const AuditSummary = z.object({
   status: z.enum(['active', 'retired']),
   questionCount: z.number(),
   criticalCount: z.number(),
+  /** The latest completed record of this audit. */
+  lastRecord: z.object({ id: Id, reference: z.string(), performedOn: DateOnly, result: z.enum(['pass', 'fail']) }).nullable(),
+  /** The next slot still to be done: due today or later, or past due but inside the grace period, with no audit started for it and not skipped. */
+  nextDueOn: DateOnly.nullable(),
   targets: z.object({ machines: z.number(), operations: z.number(), departments: z.number(), preview: z.array(z.string()) }),
   createdAt: dateTime,
 });

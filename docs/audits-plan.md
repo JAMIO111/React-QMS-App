@@ -76,8 +76,8 @@ Lifecycle steps are SECURITY DEFINER functions (`app.start_audit`, `app.complete
 ## 5. Slices
 
 - **AU1 — definitions (built; migration `20251213100000_audit_definitions.sql`, not applied live yet):** migration (definitions, questions, targets, permissions), API, **Audits register** and the definition form (procedure, checklist builder, covers, frequency, who, pass mark). Menu group "Audits" under Documentation.
-- **AU2 — schedule:** occurrences and generation, skip, API, **Schedule page** (upcoming, overdue, missed, done, counts, calendar, filters).
-- **AU3 — carrying out and records:** start, frozen checklist, responses, complete with the computed result, evidence files, **Audit records register**, record page; Raise NC from a failed question.
+- **AU2 — schedule (built; migration `20251214100000_audit_schedule.sql`, not applied live yet):** occurrences and generation, skip, API, **Schedule page** (upcoming, overdue, missed, done, counts, calendar, filters).
+- **AU3 — carrying out and records (built; migration `20251215100000_audit_records.sql`, not applied live yet):** start, frozen checklist, responses, complete with the computed result, **Audit records register**, record page; Raise NC from failed answers. Evidence files: **not built** (see §9).
 - **AU4 — exit check:** live guardrails and advisors, browser journey (define → schedule → miss one → do one → fail one → NC), exit report, CLAUDE.md. Notification for "assigned to you" only if time allows; reminders by email are a later phase.
 
 ## 6. Decisions to confirm
@@ -101,3 +101,29 @@ Error `QM018` → `409 audit_rule`. SQL tests `supabase/tests/audit_definitions.
 `frequency`, `auditor`, `questions` and `targets` replace the whole of that part). UI `src/components/audits/` (`AuditsPage` register with server sort/paging and URL filters for type, status and machine, `AuditPage`, `AuditForm`),
 hooks `useAudits.js`, `lib/audits.js`, menu "Audits" under Documentation. Not in AU1: the schedule (AU2), records (AU3), procedure files (AU3), "last done / next due / last result" columns on the register (AU2/AU3).
 Accepted equivalent mutants: the service's own forbidden check and organisation filter on load (the guard and row-level security already answer), and the form clearing "critical" twice when a question becomes a note.
+
+## 8. AU2 built (schedule)
+
+Migration `20251214100000_audit_schedule.sql`: `audit_occurrences` (one slot per audit per due date, `scheduled` | `skipped` only; **done, overdue and missed are worked out, never stored**; read-only for everyone, audited), `app.generate_audit_occurrences(org, until)` (idempotent, run by the API
+when the schedule or the audits register is read, **no worker**; never before the audit existed, at most 120 days back and a year ahead; weekdays-only moves a weekend slot to the Monday; month-end clamping is worked out from the *first* due date, so 31 January → 28 February → 31 March;
+a changed rhythm, a retired audit or an on-demand audit removes only future *scheduled* slots that have no record, past and skipped slots are history), `app.skip_audit_occurrence(id, reason)` / `unskip_audit_occurrence` (`audits.manage`; a slot with a record cannot be skipped).
+API `GET /audit-schedule?from&to&state&auditId&machineId&operationCode&departmentId` (default window 30 days either side; slots, counts, `truncated` at 500), `POST /audit-occurrences/{id}/skip|unskip`.
+State order: skipped, done (completed record), in progress (record started), else by date: upcoming (due today or later), overdue (past due, inside the grace period, last day included), missed (after it).
+Counts: due in 7 days, in progress, overdue, missed, done (passed / failed), skipped; **pass rate** = done audits that passed ÷ done; **on-time rate** = of the slots decided in the window (done or missed), the share done by the due date plus grace (skipped, upcoming, in progress and overdue slots are left out).
+UI: **Documentation → Audit schedule** (`/Documentation/Audit-Schedule`, `AuditSchedulePage.jsx`): the figures are buttons that filter the list by state, list and **month calendar** (Monday first, a slot opens a dialog with its actions), month navigation, audit and machine filters, URL `view|month|state|audit|machine`,
+**Start audit** (`audits.perform`), **Skip** with a reason and **Put back** (`audits.manage`), **Start an unscheduled audit**.
+
+## 9. AU3 built (records)
+
+Migration `20251215100000_audit_records.sql`: `audit_records` (`AR-YY-NNNN` per organisation and year; a **frozen copy** of the audit's title, procedure and pass mark; one non-abandoned record per slot; in progress | completed | abandoned), `audit_record_questions` (the checklist as it was when started),
+`audit_record_targets` (**which of the audit's machines, operations and departments it was carried out on, one or several**; a label is kept), `audit_responses` (one per question; the database works out pass / fail / not applicable), `audit_ncr_links`. **No INSERT, UPDATE or DELETE grant on any of them:**
+every write is a SECURITY DEFINER function — `app.start_audit(audit, slot?, targets?)`, `set_audit_record_targets`, `record_audit_response` (yes/no by the passing answer, a number by its limits, both ends passing; clearing an answer is allowed while in progress), `update_audit_record` (notes, date not in the future),
+`complete_audit`, `abandon_audit(reason)`, `raise_ncr_from_audit` — all needing `audits.perform` (the last needs `ncr.create` instead) and refusing a record that is no longer in progress. `app.audit_record_problems` is the "still needed" list: every scored question answered (a note question is not required), a note on every failure,
+and the "carried out on" chosen when the audit lists anything. **Result:** score = passes ÷ (passes + fails), not applicable left out (no scored answers: no score, a pass); **fail if any critical question failed or the score is below the pass mark**, else pass. A completed record is frozen. A failed answer can be raised as a **draft internal non-conformance** (site from the machine, one live NC per
+failed answer; a deleted or cancelled NC frees it), never silently. Errors `QM018` → `409 audit_rule`.
+API `api/src/audits/audit-records.*`: `GET /audit-records` (page-based: `q`, `auditId`, `status`, `result`, `type`, `machineId`, `operationCode`, `departmentId`, `performedBy` (who completed it, else who started it), `mine`, `from`, `to`, `sort`, `order`, `page`, `pageSize`), `POST /audit-records {auditId, occurrenceId?, targets?}`, `GET|PATCH /audit-records/{id}`,
+`PUT …/targets`, `PUT …/responses {questionId, answer?, value?, note?}`, `POST …/complete|abandon|raise-ncr`. The audits register and page now also carry `lastRecord` and `nextDueOn` (the next slot that is due today or later, or past due but inside its grace period, with no audit started and not skipped).
+UI: **Audit records register** (`/Documentation/Audit-Records`, `AuditRecordsPage.jsx`, same table pattern as the other registers; filters audit, result, status, machine, dates, "only audits I did"), **record page** (`/Documentation/Audit-Records/:id`, `AuditRecordPage.jsx`: answers saved as they are given and shown at once, put back if the save fails;
+what it was carried out on; what is still needed; Complete; Abandon; the result banner; Raise non-conformance), **Last done / Next due** columns on the Audits register and facts plus a **Start audit** button on the audit page.
+
+**Not built (agreed to leave out of this slice):** evidence files on a record and files on the procedure (`audit_attachments`, an `audit-files` bucket), email or push reminders, a menu count of overdue audits (A7 named it; the schedule shows overdue and missed instead), corrections to a completed record (a new record is the correction), per-question weighting.

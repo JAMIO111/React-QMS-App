@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeftIcon, PencilIcon } from "@/components/icons";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeftIcon, PencilIcon, PlayIcon } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
 import { useAudit, useAuditMutation } from "../../hooks/useAudits";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { formatDate } from "../../lib/ncr";
-import { answerTypeLabel, auditTypeLabel, auditorLabel, frequencyLabel, limitsLabel } from "../../lib/audits";
+import { answerTypeLabel, auditTypeLabel, auditorLabel, frequencyLabel, limitsLabel, resultLabel } from "../../lib/audits";
 import { ErrorNotice, buttonClass } from "../master-data/shared";
 import MenuCard from "../ui/MenuCard";
 import ReasonDialog from "../ncr/ReasonDialog";
@@ -22,6 +22,8 @@ const AuditPage = () => {
   const { id } = useParams();
   const { can } = usePermissions();
   const canManage = can("audits.manage");
+  const canPerform = can("audits.perform");
+  const navigate = useNavigate();
   const query = useAudit(id);
   const mutation = useAuditMutation();
   const { showToast } = useToast();
@@ -48,6 +50,28 @@ const AuditPage = () => {
             <p className="text-sm text-secondary-text">
               Retired {formatDate(a.retired.at)}{a.retired.by ? ` by ${a.retired.by.name}` : ""}: {a.retired.reason}
             </p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to={`/Documentation/Audit-Records?audit=${a.id}`} className={buttonClass.neutral}>
+            Audit records
+          </Link>
+          <Link to={`/Documentation/Audit-Schedule?audit=${a.id}`} className={buttonClass.neutral}>
+            Schedule
+          </Link>
+          {canPerform && a.status === "active" && (
+            <button
+              type="button"
+              className={buttonClass.secondary}
+              disabled={mutation.isPending}
+              onClick={() =>
+                mutation.mutate(
+                  { path: "/audit-records", body: { auditId: a.id } },
+                  { onSuccess: (record) => { showToast({ type: "success", title: "Audit started", message: `${record.reference} is open.` }); navigate(`/Documentation/Audit-Records/${record.id}`); } }
+                )
+              }>
+              <PlayIcon className="mr-1 inline" aria-hidden="true" /> Start audit
+            </button>
           )}
         </div>
         {canManage && (
@@ -83,6 +107,16 @@ const AuditPage = () => {
           <Fact label="Expected auditor">{auditorLabel(a.auditor)}</Fact>
           <Fact label="Pass mark">{`${a.passMark}% and every critical question`}</Fact>
           <Fact label="Questions">{`${a.questionCount} (${a.criticalCount} critical)`}</Fact>
+          <Fact label="Last done">
+            {a.lastRecord ? (
+              <Link to={`/Documentation/Audit-Records/${a.lastRecord.id}`} className="text-link-color hover:underline">
+                {formatDate(a.lastRecord.performedOn)}: {resultLabel(a.lastRecord.result)}
+              </Link>
+            ) : (
+              "Never"
+            )}
+          </Fact>
+          <Fact label="Next due">{a.nextDueOn ? formatDate(a.nextDueOn) : null}</Fact>
           <Fact label="Defined by">{a.createdBy?.name}</Fact>
         </dl>
         {a.purpose && <p className="mt-4 whitespace-pre-wrap text-sm text-primary-text">{a.purpose}</p>}

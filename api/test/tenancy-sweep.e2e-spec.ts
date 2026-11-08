@@ -150,6 +150,13 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/audits/{id}/retire': { reason: 'Hijacked' },
     'POST /api/v1/audits/{id}/reactivate': undefined,
     'POST /api/v1/audit-occurrences/{id}/skip': { reason: 'Hijacked' },
+    'GET /api/v1/audit-records/{id}': undefined,
+    'PATCH /api/v1/audit-records/{id}': { notes: 'Hijacked' },
+    'PUT /api/v1/audit-records/{id}/targets': { targets: [] },
+    'PUT /api/v1/audit-records/{id}/responses': { questionId: a.auditQuestion, answer: 'pass' },
+    'POST /api/v1/audit-records/{id}/complete': undefined,
+    'POST /api/v1/audit-records/{id}/abandon': { reason: 'Hijacked' },
+    'POST /api/v1/audit-records/{id}/raise-ncr': { responseIds: [a.auditResponse], title: 'Hijacked' },
     'POST /api/v1/audit-occurrences/{id}/unskip': undefined,
     'POST /api/v1/ncrs/{id}/affected-lots': { lotId: '00000000-0000-4000-8000-000000000001', quantity: 1 },
     'PATCH /api/v1/ncr-affected-lots/{id}': { quantity: 1 },
@@ -337,6 +344,13 @@ const hasSample = (op: Op) =>
     'POST /api/v1/audits/{id}/retire',
     'POST /api/v1/audits/{id}/reactivate',
     'POST /api/v1/audit-occurrences/{id}/skip',
+    'GET /api/v1/audit-records/{id}',
+    'PATCH /api/v1/audit-records/{id}',
+    'PUT /api/v1/audit-records/{id}/targets',
+    'PUT /api/v1/audit-records/{id}/responses',
+    'POST /api/v1/audit-records/{id}/complete',
+    'POST /api/v1/audit-records/{id}/abandon',
+    'POST /api/v1/audit-records/{id}/raise-ncr',
     'POST /api/v1/audit-occurrences/{id}/unskip',
     'POST /api/v1/ncrs/{id}/affected-lots',
     'PATCH /api/v1/ncr-affected-lots/{id}',
@@ -440,6 +454,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/ncr-affected-lots/')) return a.affectedLot;
   if (path.startsWith('/api/v1/audits/')) return a.audit;
   if (path.startsWith('/api/v1/audit-occurrences/')) return a.occurrence;
+  if (path.startsWith('/api/v1/audit-records/')) return a.auditRecord;
   if (path.startsWith('/api/v1/ncr-attachments/')) return a.attachment;
   if (path.startsWith('/api/v1/gauges/')) return a.gauge;
   if (path.startsWith('/api/v1/gauge-characteristics/')) return a.gaugeCharacteristic;

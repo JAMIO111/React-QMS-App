@@ -61,12 +61,14 @@ BEGIN
   PERFORM pg_temp.assert_eq(n, (SELECT count(*)::int FROM public.audit_occurrences WHERE organisation_id = org), 'generation says how many it added');
   PERFORM pg_temp.assert_eq(app.generate_audit_occurrences(org, current_date + 28), 0, 'generating again adds nothing');
 
-  -- Retiring stops new slots and keeps the old ones.
+  -- Retiring ends the future and keeps the past; so does making an audit on demand.
   PERFORM app.retire_audit_definition(rt, 'No longer needed');
-  PERFORM pg_temp.assert_eq(array_length(pg_temp.due(rt), 1) > 0, true, 'a retired audit keeps its slots');
   n := app.generate_audit_occurrences(org, current_date + 70);
-  PERFORM pg_temp.assert_eq((pg_temp.due(rt))[array_length(pg_temp.due(rt), 1)] <= current_date + 28, true, 'but gets no new ones');
+  PERFORM pg_temp.assert_eq(pg_temp.due(rt), ARRAY[current_date], 'a retired audit keeps what is past or today and has no future slots');
   PERFORM pg_temp.assert_eq((pg_temp.due(w2))[array_length(pg_temp.due(w2), 1)] > current_date + 63, true, 'while the others reach further as the horizon moves');
+  UPDATE public.audit_definitions SET frequency_kind = 'on_demand', first_due_on = NULL, frequency_interval = NULL WHERE id = w1;
+  PERFORM app.generate_audit_occurrences(org, current_date + 70);
+  PERFORM pg_temp.assert_eq(pg_temp.due(w1), ARRAY(SELECT current_date - 21 + 7 * g FROM generate_series(0, 3) g), 'an audit made on demand keeps its past slots and loses the future ones');
 
   -- A changed rhythm removes future slots only.
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.audit_occurrences WHERE audit_definition_id = ch AND due_on <= current_date), 3::bigint, 'two weeks of past slots and today');

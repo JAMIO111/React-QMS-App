@@ -51,7 +51,7 @@ LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
   END
 $$;
 
--- Adds the missing slots up to p_until (never more than a year ahead) for every active audit of the organisation; returns how many it added.
+-- Adds the missing slots up to p_until (never more than a year ahead) for every active audit of the organisation and removes the future of retired and on-demand ones; returns how many it added.
 CREATE FUNCTION app.generate_audit_occurrences(p_organisation_id uuid, p_until date) RETURNS integer
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE
@@ -69,6 +69,9 @@ BEGIN
   IF NOT app.has_permission(p_organisation_id, 'audits.read') THEN
     RAISE EXCEPTION 'Audits not found' USING ERRCODE = 'P0002';
   END IF;
+  -- An audit that was retired, or made on demand, has no future: its scheduled slots after today go; what is past stays as history.
+  DELETE FROM public.audit_occurrences o USING public.audit_definitions x
+   WHERE o.audit_definition_id = x.id AND x.organisation_id = p_organisation_id AND (x.status = 'retired' OR x.frequency_kind = 'on_demand') AND o.due_on > current_date AND o.status = 'scheduled';
   FOR d IN SELECT * FROM public.audit_definitions WHERE organisation_id = p_organisation_id AND status = 'active' AND frequency_kind <> 'on_demand' LOOP
     -- A slot is never created for a day before the audit was defined, nor more than 120 days back.
     v_start := greatest(d.first_due_on, d.created_at::date, current_date - 120);

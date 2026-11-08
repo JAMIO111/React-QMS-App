@@ -117,6 +117,12 @@ describe("NC dashboard", () => {
     expect(byCategory).toHaveTextContent("Uncategorised");
   });
 
+  it("the Internal tab covers every internal kind of source", async () => {
+    renderAt("/Non-Conformance?tab=internal");
+    await waitFor(() => expect(decodeURIComponent(apiFetch.mock.calls.at(-1)[0])).toContain("source=internal,internal_audit,external_audit,production_inspection,final_inspection,calibration,engineering,management_review"));
+    expect(screen.getByRole("radio", { name: "Internal" })).toBeChecked();
+  });
+
   it("the Supplier tab covers supplier and goods receiving", async () => {
     renderAt("/Non-Conformance?tab=supplier");
     await screen.findByRole("link", { name: /NCs raised/ });

@@ -129,6 +129,25 @@ describe('the register', () => {
     expect((await api().get('/api/v1/ncrs?source=customer,bogus').set(await as(ids.ownerA))).status).toBe(400);
   });
 
+  it('takes the exact lists the register and dashboard quick tabs send (Internal, Customer, Supplier with goods receiving)', async () => {
+    const h = await as(ids.ownerA);
+    const today = new Date().toISOString().slice(0, 10);
+    const tabs = [
+      'internal,internal_audit,external_audit,production_inspection,final_inspection,calibration,engineering,management_review',
+      'customer',
+      'supplier,goods_receiving',
+    ];
+    for (const t of tabs) {
+      expect((await api().get(`/api/v1/ncrs?source=${t}`).set(h)).status).toBe(200);
+      expect((await api().get(`/api/v1/ncrs/ranges?source=${t}`).set(h)).status).toBe(200);
+      expect((await api().get(`/api/v1/ncr-dashboard?source=${t}&from=2026-01-01&to=${today}`).set(h)).status).toBe(200);
+    }
+    // Together the three tabs hold every non-conformance exactly once.
+    const all = (await list('?pageSize=100')).total;
+    const sum = (await Promise.all(tabs.map(async (t) => (await list(`?source=${t}&pageSize=100`)).total))).reduce((a, b) => a + b, 0);
+    expect(sum).toBe(all);
+  });
+
   it('shows source and category on every row, and sorts by them', async () => {
     const res = await list('?pageSize=100');
     const row = res.data.find((n: { title: string }) => n.title === 'Gauge failed');

@@ -26,6 +26,8 @@ import { MasterDataService } from './master-data/master-data.service';
 import { EmployeesController } from './employees/employees.controller';
 import { ProductionController } from './production/production.controller';
 import { ProductionService } from './production/production.service';
+import { TraceabilityController } from './production/traceability.controller';
+import { TraceabilityService } from './production/traceability.service';
 import { JobsController } from './jobs/jobs.controller';
 import { JobsService } from './jobs/jobs.service';
 import { EmployeesService } from './employees/employees.service';
@@ -132,6 +134,7 @@ export class AppModule implements NestModule {
         NcrClassificationsController,
         EmployeesController,
         ProductionController,
+        TraceabilityController,
         JobsController,
         GaugesController,
         GaugeCharacteristicsController,
@@ -185,6 +188,7 @@ export class AppModule implements NestModule {
         NcrService,
         EmployeesService,
         ProductionService,
+        TraceabilityService,
         JobsService,
         NcrRecordsService,
         NcrDashboardService,

@@ -565,6 +565,7 @@ beforeAll(async () => {
   b.org = ids.orgB;
   b.viewerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'viewer'`, [ids.orgB])).id;
   b.part = (await one(`insert into public.parts (organisation_id, part_number, name) values ($1, 'B-PART', 'Beta part') returning id`, [ids.orgB])).id;
+  b.productionOrder = (await one(`insert into public.production_orders (organisation_id, order_number, part_id, quantity_planned) values ($1, 'B-WO-1', $2, 5) returning id`, [ids.orgB, b.part])).id;
   b.machine = (await one(`insert into public.machines (organisation_id, code, name) values ($1, 'B-M1', 'Beta machine') returning id`, [ids.orgB])).id;
   await admin.query(`insert into public.departments (organisation_id, site_id, code, name) values ($1, $2, 'QA', 'Quality B')`, [ids.orgB, ids.siteB]);
 });
@@ -690,6 +691,8 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/subscription/check': '?module=inspections',
       '/api/v1/spc/characteristics': `?partId=${b.part}`,
       '/api/v1/process-control-dashboard': '?from=2025-01-01&to=2027-12-31',
+      '/api/v1/traceability': `?type=order&id=${b.productionOrder}`,
+      '/api/v1/traceability/search': '?q=WO',
     };
     for (const op of lists) {
       const res = await call(op, op.path + (listQuery[op.path] ?? ''), auth);

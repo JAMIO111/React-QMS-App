@@ -68,10 +68,27 @@ export const inspectionColumns = [
     ),
     { size: 160, sortKey: "plan", accessor: (r) => r.plan.planCode }
   ),
-  col("context", "Work order / lot", head(TagIcon, "Work order / lot"), plain((r) => [r.workOrder, r.lot, r.serial].filter(Boolean).join(" · ")), {
-    size: 180,
+  col(
+    "order",
+    "Production order",
+    head(TagIcon, "Production order"),
+    (i) => {
+      const r = i.row.original;
+      const o = r.links?.productionOrder;
+      if (o)
+        return (
+          <Link to={`/Production/Orders/${o.id}`} className="table-row-item text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
+            {o.orderNumber}
+          </Link>
+        );
+      return <div className="table-row-item">{r.workOrder || "—"}</div>;
+    },
+    { size: 160, sortKey: "order", accessor: (r) => r.links?.productionOrder?.orderNumber ?? r.workOrder }
+  ),
+  col("context", "Lot / serial", head(TagIcon, "Lot / serial"), plain((r) => [r.lot, r.serial].filter(Boolean).join(" · ")), {
+    size: 160,
     sortKey: "context",
-    accessor: (r) => r.workOrder,
+    accessor: (r) => r.lot,
   }),
   col("trigger", "Trigger", head(WrenchIcon, "Trigger"), plain((r) => TRIGGER_LABEL[r.triggerType]), { size: 140, sortKey: "trigger", accessor: (r) => r.triggerType }),
   col("status", "Status", head(CircleCheckIcon, "Status", "table-header-number"), (i) => <StatusPill status={i.row.original.status} />, { size: 130, sortKey: "status", align: "center" }),

@@ -39,7 +39,7 @@ export const GAUGE_FILTER_KEYS = ["search", "status", "due", "outcome", "type", 
 export const useGaugeFilters = () => useUrlFilters(GAUGE_FILTER_KEYS);
 
 /** In-process inspection register filters. */
-export const INSPECTION_FILTER_KEYS = ["search", "status", "result", "trigger", "part", "partLabel", "site", "machine", "machineLabel", "from", "to"];
+export const INSPECTION_FILTER_KEYS = ["search", "status", "result", "trigger", "part", "partLabel", "site", "machine", "machineLabel", "order", "orderLabel", "from", "to"];
 export const useInspectionFilters = () => useUrlFilters(INSPECTION_FILTER_KEYS);
 
 /** Employees register filters. */

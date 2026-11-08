@@ -5,11 +5,13 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 let permissions;
+let orgSettings = {};
 const apiFetch = vi.fn();
 vi.mock("../../lib/api-client", async (importOriginal) => ({ ...(await importOriginal()), apiFetch: (...a) => apiFetch(...a) }));
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "org-1" }) }));
 vi.mock("../../hooks/useQmsApi", () => ({
   usePermissions: () => ({ can: (p) => permissions.includes(p) }),
+  useOrganisationDetails: () => ({ data: { settings: orgSettings } }),
   useSites: () => ({ data: { data: [{ id: "s1", code: "MAIN", name: "Main site" }] } }),
 }));
 vi.mock("../../contexts/SearchProvider", () => ({ useGlobalSearch: () => ({ debouncedSearchTerm: "" }) }));
@@ -46,6 +48,7 @@ const routeApi = (list) =>
     calls.push({ k, path });
     if (k === "GET /inspections") return list;
     if (k === "GET /machines") return { data: [{ id: "m1", code: "LATHE-1", name: "Lathe", siteId: "s1" }], nextCursor: null };
+    if (k === "GET /production-orders/lookup") return { data: [{ id: "po1", orderNumber: "WO-154789", status: "released", part: { id: "p1", partNumber: "HCR-100", name: "Rod" } }] };
     if (k === "GET /parts") return { data: [], nextCursor: null };
     throw new Error(`unexpected ${k}`);
   });
@@ -70,6 +73,7 @@ const renderAt = (url = "/Inspections") =>
   );
 
 beforeEach(() => {
+  orgSettings = {};
   permissions = ["inspection.read", "inspection.record"];
   calls.length = 0;
   apiFetch.mockReset();
@@ -101,6 +105,39 @@ describe("inspection register", () => {
     expect(screen.queryByLabelText(/Search reference, part/)).toBeNull();
     expect(screen.getByRole("button", { name: "Filter" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start inspection" })).toBeInTheDocument();
+  });
+
+  it("shows the linked production order as a link, else the typed work order, and sorts by it", async () => {
+    routeApi({
+      data: [row({ links: { productionOrder: { id: "po1", orderNumber: "WO-154789", status: "released" }, lot: null, serial: null } }), row({ id: "i2", reference: "IPI-26-0002", workOrder: "WO-TYPED", links: { productionOrder: null, lot: null, serial: null } })],
+      page: 1, pageSize: 25, total: 2,
+    });
+    renderAt();
+    const table = await screen.findByRole("region", { name: "Inspections" });
+    const link = await within(table).findByRole("link", { name: "WO-154789" });
+    expect(link).toHaveAttribute("href", "/Production/Orders/po1");
+    expect(within(table).getByText("WO-TYPED")).toBeInTheDocument();
+    await userEvent.click(within(table).getByText("Production order"));
+    await waitFor(() => expect(lastList().path).toContain("sort=order"));
+  });
+
+  it("hides the Lot / serial column when lots and serial numbers are switched off", async () => {
+    orgSettings = { useLotsAndSerials: false };
+    routeApi({ data: [row()], page: 1, pageSize: 25, total: 1 });
+    renderAt();
+    const table = await screen.findByRole("region", { name: "Inspections" });
+    await within(table).findByText("IPI-26-0001");
+    expect(within(table).queryByText("Lot / serial")).toBeNull();
+    expect(within(table).getByText("Production order")).toBeInTheDocument();
+  });
+
+  it("filters by production order from the URL and shows a chip that clears it", async () => {
+    routeApi({ data: [row()], page: 1, pageSize: 25, total: 1 });
+    renderAt("/Inspections?order=po1&orderLabel=WO-154789");
+    await screen.findByText("Order: WO-154789");
+    expect(lastList().path).toContain("productionOrderId=po1");
+    await userEvent.click(screen.getByRole("button", { name: /Order: WO-154789/ }));
+    await waitFor(() => expect(lastList().path).not.toContain("productionOrderId"));
   });
 
   it("sorts by a column header on the server and keeps columns configurable", async () => {

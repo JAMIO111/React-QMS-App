@@ -7,6 +7,7 @@ import MenuCard from "../ui/MenuCard";
 import { PartPicker } from "../ncr/Pickers";
 import { usePart } from "../../hooks/useMasterData";
 import { useMachines } from "../../hooks/useProcessControl";
+import { useProductionSettings } from "../../hooks/useProduction";
 import { useSpcCharacteristics, useSpcChart } from "../../hooks/useSpc";
 import { describeApiError } from "../../lib/api-client";
 import { formatDateTime } from "../../lib/processControl";
@@ -59,6 +60,7 @@ const SpcPage = () => {
   const machineId = params.get("machine") || "";
   const showSpec = params.get("spec") !== "0";
   const rulesParam = params.get("rules"); // null: the baseline's rules (or all)
+  const { useLotsAndSerials } = useProductionSettings();
   const basis = params.get("basis") || "inspection"; // P, NP, C and U charts: what one point is
   const display = params.get("display") === "np" ? "np" : "p"; // pass/fail checks: P chart or NP chart
   const sizeParam = params.get("size") || ""; // NP chart subgroup size; empty = calculated
@@ -164,7 +166,7 @@ const SpcPage = () => {
               required
               value={basis}
               onChange={(v) => set({ basis: v && v !== "inspection" ? v : "" })}
-              options={SUBGROUP_BASIS}
+              options={SUBGROUP_BASIS.filter((o) => useLotsAndSerials || o.value !== "lot" || basis === "lot")}
               hint="Larger subgroups (a day, a lot) give steadier limits"
             />
           )}

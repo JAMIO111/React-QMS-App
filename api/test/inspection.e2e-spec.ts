@@ -198,7 +198,7 @@ describe('recording', () => {
     expect((await api().get(`/api/v1/inspections?siteId=${ids.siteB}`).set(h).expect(200)).body.total).toBe(0);
     await api().get('/api/v1/inspections?sort=nonsense').set(h).expect(400);
     await api().get('/api/v1/inspections?status=bogus').set(h).expect(400);
-    for (const sort of ['part', 'operation', 'plan', 'context', 'trigger', 'status', 'result', 'startedAt', 'operator', 'site', 'machine', 'failures']) {
+    for (const sort of ['part', 'operation', 'plan', 'order', 'context', 'trigger', 'status', 'result', 'startedAt', 'operator', 'site', 'machine', 'failures']) {
       await api().get(`/api/v1/inspections?sort=${sort}`).set(h).expect(200);
     }
 

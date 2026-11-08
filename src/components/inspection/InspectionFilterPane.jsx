@@ -8,6 +8,7 @@ import { STATUS, TRIGGER_LABEL } from "../../lib/inspection";
 import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { PartPicker } from "../ncr/Pickers";
+import { OrderPicker } from "../production/pickers";
 
 const STATUS_OPTIONS = Object.entries(STATUS).map(([key, v]) => ({ key, label: v.label }));
 const RESULT_OPTIONS = [
@@ -51,6 +52,7 @@ const InspectionFilterPane = ({ onClose }) => {
   const [from, setFrom] = useState(filters.from || null);
   const [to, setTo] = useState(filters.to || null);
   const [part, setPart] = useState(filters.part ? { id: filters.part, name: filters.partLabel } : null);
+  const [order, setOrder] = useState(filters.order ? { id: filters.order, name: filters.orderLabel } : null);
   const [site, setSite] = useState(filters.site || null);
   const [machine, setMachine] = useState(filters.machine || null);
   const paneRef = useRef(null);
@@ -87,6 +89,8 @@ const InspectionFilterPane = ({ onClose }) => {
       to: to ?? "",
       part: part?.id ?? "",
       partLabel: part?.id ? part.name ?? "" : "",
+      order: order?.id ?? "",
+      orderLabel: order?.id ? order.name ?? "" : "",
       site: site ?? "",
       machine: machine ?? "",
       machineLabel: machine ? (picked ? `${picked.code} · ${picked.name}` : filters.machineLabel) : "",
@@ -122,6 +126,8 @@ const InspectionFilterPane = ({ onClose }) => {
           </div>
           <PartPicker label="Part number" icon={QrCodeIcon} value={part?.id ?? null} current={part?.id ? { id: part.id, partNumber: part.name ?? "" } : undefined}
             onChange={(id, item) => setPart(id ? { id, name: item?.name ?? part?.name } : null)} />
+          <OrderPicker label="Production order" value={order?.id ?? null} current={order?.id ? { id: order.id, orderNumber: order.name ?? "" } : undefined}
+            onChange={(id, item) => setOrder(id ? { id, name: item?.name ?? order?.name } : null)} />
           <RHFComboBox label="Site" icon={HouseIcon} placeholder="All sites" options={(sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))} value={site} onChange={setSite} />
           <RHFComboBox label="Machine" icon={FactoryIcon} placeholder="All machines" options={machineItems.map((m) => ({ id: m.id, name: `${m.code} · ${m.name}` }))} value={machine} onChange={setMachine} />
         </div>

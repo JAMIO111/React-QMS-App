@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { chartRows, decimalsOf, yDomain } from "../../lib/spc";
 
 let permissions;
+let orgSettings = {};
 const apiFetch = vi.fn();
 vi.mock("../../lib/api-client", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -16,6 +17,7 @@ vi.mock("../../contexts/OrganisationProvider", () => ({
 }));
 vi.mock("../../hooks/useQmsApi", () => ({
   usePermissions: () => ({ can: (p) => permissions.includes(p) }),
+  useOrganisationDetails: () => ({ data: { settings: orgSettings } }),
   useSites: () => ({ data: { data: [] } }),
 }));
 // Recharts measures its container, which jsdom cannot do; the chart's content is tested through its data and labels.
@@ -161,6 +163,7 @@ const renderAt = (url) => {
 const URL = "/Process-Control/SPC?part=p1";
 
 beforeEach(() => {
+  orgSettings = {};
   apiFetch.mockReset();
   permissions = ["spc.read", "spc.manage", "inspection.read"];
 });
@@ -545,6 +548,30 @@ describe("P chart", () => {
       "0.00% to 17.00%",
       "Rule 1",
     ]);
+  });
+
+  it("offers One lot as a subgroup only while lots are in use, but keeps it when the chart already uses it", async () => {
+    routeApi(pBase());
+    renderAt(`${URL}&c=VISUAL%7COP-020`);
+    const select = await screen.findByLabelText(/Subgroup \(one point is/);
+    expect(within(select).getByRole("option", { name: "One lot" })).toBeInTheDocument();
+  });
+
+  it("hides One lot when lots and serial numbers are switched off", async () => {
+    orgSettings = { useLotsAndSerials: false };
+    routeApi(pBase());
+    renderAt(`${URL}&c=VISUAL%7COP-020`);
+    const select = await screen.findByLabelText(/Subgroup \(one point is/);
+    expect(within(select).queryByRole("option", { name: "One lot" })).toBeNull();
+    expect(within(select).getByRole("option", { name: "One production order" })).toBeInTheDocument();
+  });
+
+  it("still shows One lot when switched off but the chart is already by lot", async () => {
+    orgSettings = { useLotsAndSerials: false };
+    routeApi(pBase());
+    renderAt(`${URL}&c=VISUAL%7COP-020&basis=lot`);
+    const select = await screen.findByLabelText(/Subgroup \(one point is/);
+    expect(within(select).getByRole("option", { name: "One lot" })).toBeInTheDocument();
   });
 
   it("asks the API for the chosen subgroup and keeps it in the URL", async () => {

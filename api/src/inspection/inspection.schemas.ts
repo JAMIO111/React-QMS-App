@@ -31,7 +31,7 @@ const csvOf = <T extends z.ZodTypeAny>(item: T) =>
 const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
 
 export const INSPECTION_SORTABLE = [
-  'reference', 'part', 'operation', 'plan', 'context', 'trigger', 'status', 'result', 'startedAt', 'operator', 'site', 'machine', 'failures',
+  'reference', 'part', 'operation', 'plan', 'order', 'context', 'trigger', 'status', 'result', 'startedAt', 'operator', 'site', 'machine', 'failures',
 ] as const;
 
 /** The register: filters (lists are comma-separated), server-side sort and page numbers. */

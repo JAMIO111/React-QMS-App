@@ -5,6 +5,7 @@ import { FolderOpenIcon, PlusIcon, ShareIcon, SlidersHorizontalIcon, XIcon } fro
 import { useGlobalSearch } from "../../contexts/SearchProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useInspections } from "../../hooks/useInspection";
+import { useProductionSettings } from "../../hooks/useProduction";
 import { useTablePreferences } from "../../hooks/useTablePreferences";
 import { INSPECTION_FILTER_KEYS, useInspectionFilters } from "../../hooks/useUrlFilters";
 import { exportCSV } from "../../lib/csvHelper";
@@ -28,6 +29,7 @@ const toCsvRow = (r) => ({
   part_revision: r.partRevision,
   operation: r.operationCode ?? "All",
   control_plan: `${r.plan.planCode} rev ${r.plan.revisionCode}`,
+  production_order: r.links?.productionOrder?.orderNumber ?? r.workOrder ?? "",
   work_order: r.workOrder ?? "",
   lot: r.lot ?? "",
   serial: r.serial ?? "",
@@ -82,7 +84,10 @@ const InspectionsPage = () => {
   const [activeModalType, setActiveModalType] = useState(null);
   const headerRef = useRef(null);
   const prefs = useTablePreferences("inspection-register");
-  const columnVisibility = { ...DEFAULT_HIDDEN, ...prefs.columnVisibility };
+  const { useLotsAndSerials } = useProductionSettings();
+  // With lots and serial numbers switched off the lot column has nothing to show.
+  const columnVisibility = { ...DEFAULT_HIDDEN, ...prefs.columnVisibility, ...(useLotsAndSerials ? {} : { context: false }) };
+  const columns = useLotsAndSerials ? inspectionColumns : inspectionColumns.filter((c) => c.id !== "context");
 
   const setPage = useCallback(
     (p) =>
@@ -108,6 +113,7 @@ const InspectionsPage = () => {
     partId: filters.part,
     siteId: filters.site,
     machineId: filters.machine,
+    productionOrderId: filters.order,
     from: filters.from,
     to: filters.to,
     sort: sortColumn,
@@ -159,6 +165,7 @@ const InspectionsPage = () => {
     ...(filters.from || filters.to ? [{ key: "date", label: `Started ${between(filters.from, filters.to)}`, clear: { from: "", to: "" } }] : []),
     ...(filters.part ? [{ key: "part", label: `Part: ${filters.partLabel || "selected part"}`, clear: { part: "", partLabel: "" } }] : []),
     ...(filters.site ? [{ key: "site", label: "Site", clear: { site: "" } }] : []),
+    ...(filters.order ? [{ key: "order", label: `Order: ${filters.orderLabel || "selected"}`, clear: { order: "", orderLabel: "" } }] : []),
     ...(filters.machine ? [{ key: "machine", label: `Machine: ${filters.machineLabel || "selected"}`, clear: { machine: "", machineLabel: "" } }] : []),
   ];
   const filterCount = activeFilters.filter((f) => f.key !== "search").length;
@@ -183,7 +190,7 @@ const InspectionsPage = () => {
             <CTAButton callbackFn={() => exportCSV(selectedRows.map(toCsvRow), "inspections.csv")} text="Export CSV" type="success" title="Export the selected inspections to a CSV file" icon={ShareIcon} iconSize="h-6 w-6" />
           )}
           <ColumnVisibilityMenu
-            columns={inspectionColumns}
+            columns={columns}
             columnVisibility={columnVisibility}
             onColumnVisibilityChange={prefs.setColumnVisibility}
             columnOrder={prefs.columnOrder}
@@ -229,7 +236,7 @@ const InspectionsPage = () => {
           onRefresh={refetch}
           sorting={sorting}
           setSorting={setSorting}
-          columns={inspectionColumns}
+          columns={columns}
           columnVisibility={columnVisibility}
           onColumnVisibilityChange={prefs.setColumnVisibility}
           columnSizing={prefs.columnSizing}

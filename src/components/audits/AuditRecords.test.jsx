@@ -11,16 +11,18 @@ vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => (
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock("../../contexts/SearchProvider", () => ({ useGlobalSearch: () => ({ debouncedSearchTerm: "", setSearchTerm: vi.fn() }) }));
 vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }) }));
+const upload = vi.fn();
+vi.mock("@/api/supabaseApi", () => ({ uploadFileToSupabase: (...a) => upload(...a), generateSignedUrl: vi.fn() }));
 
 import AuditRecordPage from "./AuditRecordPage";
 import AuditRecordsPage from "./AuditRecordsPage";
 import AuditSchedulePage from "./AuditSchedulePage";
 
-const question = (over) => ({ id: "q1", sequence: 1, question: "Is the work instruction at the machine?", guidance: "On the board", answerType: "yes_no", passAnswer: "yes", unit: null, lowerLimit: null, upperLimit: null, critical: true, response: null, ...over });
+const question = (over) => ({ id: "q1", sequence: 1, question: "Is the work instruction at the machine?", guidance: "On the board", answerType: "yes_no", passAnswer: "yes", unit: null, lowerLimit: null, upperLimit: null, nominal: null, options: null, ratingMax: null, passRating: null, critical: true, fileCount: 0, response: null, ...over });
 const questions = () => [
   question(),
   question({ id: "q2", sequence: 2, question: "Is the floor clear?", guidance: null, answerType: "pass_fail", passAnswer: null, critical: false }),
-  question({ id: "q3", sequence: 3, question: "Coolant concentration", guidance: null, answerType: "number", passAnswer: null, unit: "%", lowerLimit: 6, upperLimit: 10, critical: false }),
+  question({ id: "q3", sequence: 3, question: "Coolant concentration", guidance: null, answerType: "numeric", passAnswer: null, unit: "%", lowerLimit: 6, upperLimit: 10, critical: false }),
   question({ id: "q4", sequence: 4, question: "Anything else seen", guidance: null, answerType: "text", passAnswer: null, critical: false }),
 ];
 const answered = (q, response) => ({ ...q, response: { id: `s-${q.id}`, answer: null, value: null, note: null, result: null, ncrs: [], ...response } });
@@ -143,7 +145,7 @@ describe("answering an audit", () => {
     await userEvent.click(within(group[0]).getByRole("radio", { name: "Fail" }));
     expect(within(group[0]).getByRole("radio", { name: "Fail" })).toHaveAttribute("aria-checked", "true");
     await waitFor(() => expect(sent("PUT /audit-records/r1/responses")).toHaveLength(1));
-    expect(last("PUT /audit-records/r1/responses").body).toEqual({ questionId: "q2", answer: "fail", value: null, note: null });
+    expect(last("PUT /audit-records/r1/responses").body).toEqual({ questionId: "q2", answer: "fail", value: null, choice: null, note: null });
     // A failure asks what was found.
     expect(await screen.findByLabelText("What was found, question 2")).toBeInTheDocument();
     await userEvent.click(within(screen.getByRole("radiogroup", { name: "Answer to question 1" })).getByRole("radio", { name: "No" }));
@@ -165,16 +167,14 @@ describe("answering an audit", () => {
     await waitFor(() => expect(fail).toHaveAttribute("aria-checked", "false"));
   });
 
-  it("saves a number when the box is left, and not applicable instead of it", async () => {
+  it("saves a number when the box is left", async () => {
     routeApi({ "GET /audit-records/r1": record(), "PUT /audit-records/r1/responses": record() });
     renderAt("/Documentation/Audit-Records/r1");
     const box = await screen.findByLabelText("Answer to question 3");
     await userEvent.type(box, "8.5");
     expect(sent("PUT /audit-records/r1/responses")).toHaveLength(0);
     await userEvent.tab();
-    await waitFor(() => expect(last("PUT /audit-records/r1/responses")?.body).toEqual({ questionId: "q3", answer: null, value: 8.5, note: null }));
-    await userEvent.click(within(screen.getByRole("radiogroup", { name: "Not applicable, question 3" })).getByRole("radio", { name: "N/A" }));
-    await waitFor(() => expect(last("PUT /audit-records/r1/responses").body).toMatchObject({ questionId: "q3", answer: "na", value: null }));
+    await waitFor(() => expect(last("PUT /audit-records/r1/responses")?.body).toEqual({ questionId: "q3", answer: null, value: 8.5, choice: null, note: null }));
   });
 
   it("saves what was found for a failed answer when the note is left, and a text question's note", async () => {
@@ -185,10 +185,10 @@ describe("answering an audit", () => {
     expect(found).toHaveAttribute("aria-required", "true");
     await userEvent.type(found, "Swarf under the bench");
     await userEvent.tab();
-    await waitFor(() => expect(last("PUT /audit-records/r1/responses")?.body).toEqual({ questionId: "q2", answer: "fail", value: null, note: "Swarf under the bench" }));
+    await waitFor(() => expect(last("PUT /audit-records/r1/responses")?.body).toEqual({ questionId: "q2", answer: "fail", value: null, choice: null, note: "Swarf under the bench" }));
     await userEvent.type(screen.getByLabelText("Note for question 4"), "Tidy otherwise");
     await userEvent.tab();
-    await waitFor(() => expect(last("PUT /audit-records/r1/responses").body).toEqual({ questionId: "q4", answer: null, value: null, note: "Tidy otherwise" }));
+    await waitFor(() => expect(last("PUT /audit-records/r1/responses").body).toEqual({ questionId: "q4", answer: null, value: null, choice: null, note: "Tidy otherwise" }));
   });
 
   it("lets the auditor tick what the audit was carried out on, one or several", async () => {
@@ -525,5 +525,133 @@ describe("audit schedule", () => {
     await userEvent.selectOptions(await within(dialog).findByLabelText(/Audit/), "a1");
     await userEvent.click(within(dialog).getByRole("button", { name: "Start audit" }));
     await waitFor(() => expect(last("POST /audit-records")?.body).toEqual({ auditId: "a1" }));
+  });
+});
+
+describe("the form follows the template: each response type shows its own control", () => {
+  const ALL = () => [
+    question({ id: "t1", sequence: 1, question: "Procedure followed?", answerType: "yes_no", passAnswer: "yes" }),
+    question({ id: "t2", sequence: 2, question: "Process meets requirements?", answerType: "compliant", passAnswer: null, critical: false }),
+    question({ id: "t3", sequence: 3, question: "Product meets specification?", answerType: "pass_fail", passAnswer: null, critical: false }),
+    question({ id: "t4", sequence: 4, question: "Requirement applicable?", answerType: "yes_no_na", passAnswer: "yes", critical: false }),
+    question({ id: "t5", sequence: 5, question: "Measured temperature", answerType: "numeric", passAnswer: null, unit: "C", critical: false }),
+    question({ id: "t6", sequence: 6, question: "Describe the observation", answerType: "text", passAnswer: null, critical: false }),
+    question({ id: "t7", sequence: 7, question: "Select applicable condition", answerType: "multiple_choice", passAnswer: null, options: [{ label: "Clean", passes: true }, { label: "Oily", passes: false }], critical: false }),
+    question({ id: "t8", sequence: 8, question: "Actual diameter", answerType: "measurement", passAnswer: null, unit: "mm", nominal: 10, lowerLimit: 9.95, upperLimit: 10.05, critical: true }),
+    question({ id: "t9", sequence: 9, question: "Upload photograph", answerType: "evidence", passAnswer: null, critical: false }),
+    question({ id: "t10", sequence: 10, question: "Housekeeping score", answerType: "rating", passAnswer: null, ratingMax: 7, passRating: 3, critical: false }),
+  ];
+  const typed = (over = {}) => record({ questions: ALL(), problems: [], ...over });
+  const withAnswer = (r, id, response) => ({ ...r, questions: r.questions.map((q) => (q.id === id ? answered(q, response) : q)) });
+  const bodyOf = () => last("PUT /audit-records/r1/responses").body;
+  const buttons = (name) => within(screen.getByRole("radiogroup", { name })).getAllByRole("radio").map((r) => r.textContent);
+
+  beforeEach(() => upload.mockReset());
+
+  it("shows the words each type answers with, and the rule from the template", async () => {
+    routeApi({ "GET /audit-records/r1": typed(), "GET /audit-records/r1/attachments": { data: [] } });
+    renderAt("/Documentation/Audit-Records/r1");
+    await screen.findByRole("heading", { name: /AR-26-0001/ });
+    expect(buttons("Answer to question 1")).toEqual(["Yes", "No"]);
+    expect(buttons("Answer to question 2")).toEqual(["Compliant", "Non-compliant"]);
+    expect(buttons("Answer to question 3")).toEqual(["Pass", "Fail"]);
+    expect(buttons("Answer to question 4")).toEqual(["Yes", "No", "N/A"]);
+    expect(screen.getByLabelText("Answer to question 5")).toHaveAttribute("type", "number");
+    expect(screen.getByLabelText("Note for question 6")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Answer to question 7" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Answer to question 8")).toHaveAttribute("type", "number");
+    expect(screen.getByRole("button", { name: /Add files/ })).toBeInTheDocument();
+    expect(buttons("Answer to question 10")).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
+    const rule = (n) => within(screen.getByRole("listitem", { name: `Question ${n}` }));
+    expect(rule(2).getByText(/Compliant passes/)).toBeInTheDocument();
+    expect(rule(5).getByText(/Numeric; recorded, not scored/)).toBeInTheDocument();
+    expect(rule(7).getByText(/acceptable: Clean/)).toBeInTheDocument();
+    expect(rule(8).getByText(/nominal 10 mm; passes 9.95 to 10.05 mm/)).toBeInTheDocument();
+    expect(rule(9).getByText(/at least one photograph or document is needed/)).toBeInTheDocument();
+    expect(rule(10).getByText(/1 to 7; 3 or more passes/)).toBeInTheDocument();
+  });
+
+  it("saves compliant / non-compliant, a rating and a choice as they are given", async () => {
+    routeApi({ "GET /audit-records/r1": typed(), "GET /audit-records/r1/attachments": { data: [] }, "PUT /audit-records/r1/responses": typed() });
+    renderAt("/Documentation/Audit-Records/r1");
+    await screen.findByRole("heading", { name: /AR-26-0001/ });
+    await userEvent.click(within(screen.getByRole("radiogroup", { name: "Answer to question 2" })).getByRole("radio", { name: "Non-compliant" }));
+    await waitFor(() => expect(sent("PUT /audit-records/r1/responses")).toHaveLength(1));
+    expect(bodyOf()).toEqual({ questionId: "t2", answer: "non_compliant", value: null, choice: null, note: null });
+    await userEvent.click(within(screen.getByRole("radiogroup", { name: "Answer to question 10" })).getByRole("radio", { name: "3" }));
+    await waitFor(() => expect(sent("PUT /audit-records/r1/responses")).toHaveLength(2));
+    expect(bodyOf()).toEqual({ questionId: "t10", answer: null, value: 3, choice: null, note: null });
+    await userEvent.click(screen.getByRole("combobox", { name: "Answer to question 7" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Oily" }));
+    await waitFor(() => expect(sent("PUT /audit-records/r1/responses")).toHaveLength(3));
+    expect(bodyOf()).toEqual({ questionId: "t7", answer: null, value: null, choice: "Oily", note: null });
+    await userEvent.click(within(screen.getByRole("radiogroup", { name: "Answer to question 4" })).getByRole("radio", { name: "N/A" }));
+    await waitFor(() => expect(sent("PUT /audit-records/r1/responses")).toHaveLength(4));
+    expect(bodyOf()).toMatchObject({ questionId: "t4", answer: "na" });
+  });
+
+  it("clearing a choice clears the note that went with it", async () => {
+    const r = withAnswer(typed(), "t7", { choice: "Oily", result: "fail", note: "Because it was oily" });
+    routeApi({ "GET /audit-records/r1": r, "GET /audit-records/r1/attachments": { data: [] }, "PUT /audit-records/r1/responses": r });
+    renderAt("/Documentation/Audit-Records/r1");
+    await screen.findByRole("heading", { name: /AR-26-0001/ });
+    await userEvent.click(screen.getByRole("button", { name: "Clear Answer to question 7" }));
+    await waitFor(() => expect(sent("PUT /audit-records/r1/responses")).toHaveLength(1));
+    expect(bodyOf()).toEqual({ questionId: "t7", answer: null, value: null, choice: null, note: null });
+  });
+
+  it("shows the result of a choice, a rating and a measurement, and asks what was found for a failure", async () => {
+    let r = withAnswer(typed(), "t7", { choice: "Oily", result: "fail" });
+    r = withAnswer(r, "t8", { value: 10.06, result: "fail" });
+    r = withAnswer(r, "t10", { value: 5, result: "pass" });
+    r = withAnswer(r, "t5", { value: 212, result: null });
+    routeApi({ "GET /audit-records/r1": r, "GET /audit-records/r1/attachments": { data: [] } });
+    renderAt("/Documentation/Audit-Records/r1");
+    await screen.findByRole("heading", { name: /AR-26-0001/ });
+    expect(screen.getByRole("combobox", { name: "Answer to question 7" })).toHaveValue("Oily");
+    expect(screen.getByLabelText("What was found, question 7")).toHaveAttribute("aria-required", "true");
+    expect(screen.getByLabelText("What was found, question 8")).toBeInTheDocument();
+    expect(screen.getByLabelText("Answer to question 8")).toHaveValue(10.06);
+    expect(within(screen.getByRole("radiogroup", { name: "Answer to question 10" })).getByRole("radio", { name: "5" })).toHaveAttribute("aria-checked", "true");
+    // The unscored number has no result, so no pill and no note box.
+    const q5 = within(screen.getByRole("listitem", { name: "Question 5" }));
+    expect(q5.queryByText("Pass")).toBeNull();
+    expect(q5.queryByText("Fail")).toBeNull();
+    expect(q5.getByLabelText("Answer to question 5")).toHaveValue(212);
+  });
+
+  it("takes evidence as files: lists them and saves a new one against its question", async () => {
+    upload.mockResolvedValue({ path: "org-1/audit/r1/u1-photo.jpg" });
+    URL.createObjectURL = vi.fn(() => "blob:preview");
+    URL.revokeObjectURL = vi.fn();
+    const file = { id: "f1", questionId: "t9", fileName: "earlier.jpg", contentType: "image/jpeg", sizeBytes: 2048, storagePath: "org-1/audit/r1/u0-earlier.jpg", createdAt: "2026-11-08T10:00:00Z", createdBy: { id: "u1", name: "Ines Inspector" }, deletedAt: null, deleteReason: null };
+    routeApi({
+      "GET /audit-records/r1": typed({ problems: ["add a photograph or document to question 9"] }),
+      "GET /audit-records/r1/attachments": { data: [file] },
+      "POST /audit-records/r1/attachments": { ...file, id: "f2", fileName: "photo.jpg" },
+    });
+    const { container } = renderAt("/Documentation/Audit-Records/r1");
+    await screen.findByRole("heading", { name: /AR-26-0001/ });
+    expect(await screen.findByText("earlier.jpg")).toBeInTheDocument();
+    expect(calls.some((c) => c.path === "/audit-records/r1/attachments?deleted=include&questionId=t9")).toBe(true);
+    await userEvent.upload(container.querySelector("input[type=file]"), new File(["x"], "photo.jpg", { type: "image/jpeg" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Save upload/ }));
+    await waitFor(() => expect(sent("POST /audit-records/r1/attachments")).toHaveLength(1));
+    expect(last("POST /audit-records/r1/attachments").body).toEqual({ questionId: "t9", storagePath: "org-1/audit/r1/u1-photo.jpg", fileName: "photo.jpg", contentType: "image/jpeg", sizeBytes: 1 });
+    expect(upload).toHaveBeenCalledWith(expect.any(File), "audit-files", "org-1", "r1", "audit");
+  });
+
+  it("lists the evidence of a completed record without a way to add or remove any, and shows every answer read-only", async () => {
+    const file = { id: "f1", questionId: "t9", fileName: "earlier.jpg", contentType: "image/jpeg", sizeBytes: 2048, storagePath: "org-1/audit/r1/u0-earlier.jpg", createdAt: "2026-11-08T10:00:00Z", createdBy: null, deletedAt: null, deleteReason: null };
+    let r = typed({ status: "completed", result: "pass", score: 100, passedCount: 1, failedCount: 0, naCount: 0, criticalFailedCount: 0, completedAt: "2026-11-08T11:00:00Z", availableTargets: [], targetsRequired: false });
+    r = withAnswer(r, "t7", { choice: "Clean", result: "pass" });
+    routeApi({ "GET /audit-records/r1": r, "GET /audit-records/r1/attachments": { data: [file] } });
+    renderAt("/Documentation/Audit-Records/r1");
+    expect(await screen.findByText("earlier.jpg")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Add files/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove earlier.jpg" })).toBeNull();
+    expect(screen.getAllByRole("radio").every((x) => x.disabled)).toBe(true);
+    expect(screen.getByRole("combobox", { name: "Answer to question 7" })).toBeDisabled();
+    expect(screen.getByLabelText("Answer to question 5")).toBeDisabled();
   });
 });

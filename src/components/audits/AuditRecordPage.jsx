@@ -2,11 +2,13 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeftIcon, CircleCheckIcon, TriangleAlertIcon } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
-import { useAnswerAudit, useAuditMutation, useAuditRecord, useSetAuditTargets } from "../../hooks/useAudits";
+import { useAnswerAudit, useAuditAttachments, useAuditMutation, useAuditRecord, useSetAuditTargets } from "../../hooks/useAudits";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { formatDate } from "../../lib/ncr";
-import { answerTypeLabel, auditTypeLabel, formatScore, limitsLabel, RESULT_PILL, recordStatusLabel, resultLabel, STATUS_PILL, targetKey } from "../../lib/audits";
+import { answerTypeLabel, auditTypeLabel, formatScore, questionRule, RESULT_PILL, recordStatusLabel, resultLabel, STATUS_PILL, targetKey } from "../../lib/audits";
 import ReasonDialog from "../ncr/ReasonDialog";
+import ComboField from "../ui/ComboField";
+import { AttachmentDrop } from "../ui/FileDrop";
 import Dialog from "../ui/Dialog";
 import MenuCard from "../ui/MenuCard";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
@@ -26,10 +28,13 @@ const TONE = {
   fail: "border-error-color bg-error-color/15 text-error-color",
   yes: "border-success-color bg-success-color/15 text-success-color",
   no: "border-error-color bg-error-color/15 text-error-color",
+  compliant: "border-success-color bg-success-color/15 text-success-color",
+  non_compliant: "border-error-color bg-error-color/15 text-error-color",
   na: "border-border-dark-color bg-border-color text-primary-text",
 };
+const SELECTED = "border-brand-primary bg-brand-primary/15 text-primary-text";
 
-/** A small set of exclusive buttons (a radio group) for pass / fail / not applicable and yes / no / not applicable. */
+/** A small set of exclusive buttons (a radio group): pass / fail, yes / no, compliant / non-compliant, or the numbers of a rating scale. */
 const Choice = ({ label, options, value, onChange, disabled }) => (
   <div role="radiogroup" aria-label={label} className="inline-flex flex-wrap gap-1">
     {options.map((o) => {
@@ -42,7 +47,7 @@ const Choice = ({ label, options, value, onChange, disabled }) => (
           aria-checked={on}
           disabled={disabled}
           onClick={() => onChange(on ? null : o.value)}
-          className={`rounded-lg border px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${on ? TONE[o.value] : "border-border-color bg-text-input-color text-primary-text hover:border-border-dark-color"} ${disabled ? "" : "cursor-pointer"}`}>
+          className={`rounded-lg border px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${on ? (TONE[o.value] ?? SELECTED) : "border-border-color bg-text-input-color text-primary-text hover:border-border-dark-color"} ${disabled ? "" : "cursor-pointer"}`}>
           {o.label}
         </button>
       );
@@ -50,14 +55,40 @@ const Choice = ({ label, options, value, onChange, disabled }) => (
   </div>
 );
 
-const PASS_FAIL = [{ value: "pass", label: "Pass" }, { value: "fail", label: "Fail" }, { value: "na", label: "N/A" }];
-const YES_NO = [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }, { value: "na", label: "N/A" }];
+/** The buttons each type of question shows (the answer's value and its words). */
+const BUTTONS = {
+  yes_no: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }],
+  yes_no_na: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }, { value: "na", label: "N/A" }],
+  compliant: [{ value: "compliant", label: "Compliant" }, { value: "non_compliant", label: "Non-compliant" }],
+  pass_fail: [{ value: "pass", label: "Pass" }, { value: "fail", label: "Fail" }],
+};
 
 const inputClass =
   "h-9.5 w-40 rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm text-primary-text hover:border-border-dark-color focus:border-brand-primary focus:outline-none disabled:opacity-60";
 
-/** One question: how to answer it, what was found, the non-conformances raised from it. */
-const Question = ({ q, editable, save }) => {
+/** The photographs and documents that answer an evidence question. */
+const Evidence = ({ recordId, q, editable }) => {
+  const attachments = useAuditAttachments(recordId, q.id);
+  const mutation = useAuditMutation();
+  return (
+    <AttachmentDrop
+      recordId={recordId}
+      bucket="audit-files"
+      folder="audit"
+      attachments={attachments}
+      mutation={mutation}
+      attachUrl={`/audit-records/${recordId}/attachments`}
+      extraBody={{ questionId: q.id }}
+      itemBase="/audit-attachments"
+      title="Photographs and documents"
+      subtitle={editable ? "At least one is needed to complete the audit." : undefined}
+      canEdit={editable}
+    />
+  );
+};
+
+/** One question, with the control its type asks for, what was found, the files, and the non-conformances raised from it. */
+const Question = ({ q, recordId, editable, save }) => {
   const r = q.response;
   const [value, setValue] = useState(r?.value ?? "");
   const [note, setNote] = useState(r?.note ?? "");
@@ -68,9 +99,12 @@ const Question = ({ q, editable, save }) => {
     setValue(r?.value ?? "");
     setNote(r?.note ?? "");
   }
-  const send = (patch) => save({ questionId: q.id, answer: r?.answer ?? null, value: r?.value ?? null, note: r?.note ?? null, ...patch });
+  const send = (patch) => save({ questionId: q.id, answer: r?.answer ?? null, value: r?.value ?? null, choice: r?.choice ?? null, note: r?.note ?? null, ...patch });
+  const t = q.answerType;
   const failed = r?.result === "fail";
-  const limits = limitsLabel(q);
+  const aria = `Answer to question ${q.sequence}`;
+  const buttons = BUTTONS[t];
+  const scaleOptions = t === "rating" ? Array.from({ length: q.ratingMax }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })) : [];
 
   return (
     <li className={`flex flex-col gap-3 rounded-xl border bg-primary-bg p-3 ${failed ? "border-error-color/60" : "border-border-color"}`} aria-label={`Question ${q.sequence}`}>
@@ -83,22 +117,19 @@ const Question = ({ q, editable, save }) => {
       </div>
       {q.guidance && <p className="text-sm text-secondary-text">{q.guidance}</p>}
       <p className="text-xs text-secondary-text">
-        {answerTypeLabel(q.answerType)}
-        {q.answerType === "yes_no" ? `; "${q.passAnswer}" passes` : ""}
-        {limits ? `; passes ${limits}` : ""}
+        {answerTypeLabel(t)}; {questionRule(q)}
       </p>
 
-      {q.answerType === "pass_fail" && <Choice label={`Answer to question ${q.sequence}`} options={PASS_FAIL} value={r?.answer ?? null} disabled={!editable} onChange={(answer) => send({ answer, note: answer ? (r?.note ?? null) : null })} />}
-      {q.answerType === "yes_no" && <Choice label={`Answer to question ${q.sequence}`} options={YES_NO} value={r?.answer ?? null} disabled={!editable} onChange={(answer) => send({ answer, note: answer ? (r?.note ?? null) : null })} />}
-      {q.answerType === "number" && (
+      {buttons && <Choice label={aria} options={buttons} value={r?.answer ?? null} disabled={!editable} onChange={(answer) => send({ answer, note: answer ? (r?.note ?? null) : null })} />}
+      {(t === "numeric" || t === "measurement") && (
         <div className="flex flex-wrap items-center gap-2">
           <input
             type="number"
             step="any"
-            aria-label={`Answer to question ${q.sequence}`}
+            aria-label={aria}
             className={inputClass}
-            value={r?.answer === "na" ? "" : value}
-            disabled={!editable || r?.answer === "na"}
+            value={value}
+            disabled={!editable}
             onChange={(e) => setValue(e.target.value)}
             onBlur={() => {
               const n = value === "" ? null : Number(value);
@@ -106,10 +137,23 @@ const Question = ({ q, editable, save }) => {
             }}
           />
           {q.unit && <span className="text-sm text-secondary-text">{q.unit}</span>}
-          <Choice label={`Not applicable, question ${q.sequence}`} options={[{ value: "na", label: "N/A" }]} value={r?.answer ?? null} disabled={!editable} onChange={(answer) => send({ answer, value: null, note: answer ? (r?.note ?? null) : null })} />
         </div>
       )}
-      {q.answerType === "text" && (
+      {t === "multiple_choice" && (
+        <ComboField
+          label={aria}
+          value={r?.choice ?? null}
+          disabled={!editable}
+          options={(q.options ?? []).map((o) => ({ value: o.label, label: o.label }))}
+          placeholder="Choose one"
+          onChange={(choice) => send({ answer: null, value: null, choice, note: choice ? (r?.note ?? null) : null })}
+          className="max-w-sm"
+        />
+      )}
+      {t === "rating" && (
+        <Choice label={aria} options={scaleOptions} value={r?.value == null ? null : String(r.value)} disabled={!editable} onChange={(v) => send({ answer: null, value: v == null ? null : Number(v), note: v == null ? null : (r?.note ?? null) })} />
+      )}
+      {t === "text" && (
         <TextAreaField
           label={`Note for question ${q.sequence}`}
           rows={2}
@@ -118,11 +162,29 @@ const Question = ({ q, editable, save }) => {
           maxLength={2000}
           onChange={(e) => setNote(e.target.value)}
           onBlur={() => {
-            if (note.trim() !== (r?.note ?? "")) send({ answer: null, value: null, note: note.trim() || null });
+            if (note.trim() !== (r?.note ?? "")) send({ answer: null, value: null, choice: null, note: note.trim() || null });
           }}
         />
       )}
-      {q.answerType !== "text" && r && r.result !== "na" && (
+      {t === "evidence" && (
+        <>
+          <Evidence recordId={recordId} q={q} editable={editable} />
+          {(editable || r?.note) && (
+            <TextAreaField
+              label={`Note on question ${q.sequence} (optional)`}
+              rows={2}
+              value={note}
+              readOnly={!editable}
+              maxLength={2000}
+              onChange={(e) => setNote(e.target.value)}
+              onBlur={() => {
+                if (editable && note.trim() !== (r?.note ?? "")) send({ answer: null, value: null, choice: null, note: note.trim() || null });
+              }}
+            />
+          )}
+        </>
+      )}
+      {t !== "text" && t !== "evidence" && r && r.result !== "na" && (
         <TextAreaField
           label={failed ? `What was found, question ${q.sequence}` : `Note on question ${q.sequence}`}
           required={failed}
@@ -360,7 +422,7 @@ const AuditRecordPage = () => {
       <MenuCard title="Checklist" subtitle={editable ? "Answers are saved as you go" : "The questions as they were when this audit was started"}>
         <ol aria-label="Checklist" className="flex flex-col gap-3">
           {r.questions.map((q) => (
-            <Question key={q.id} q={q} editable={editable} save={(body) => answer.mutate(body)} />
+            <Question key={q.id} q={q} recordId={r.id} editable={editable} save={(body) => answer.mutate(body)} />
           ))}
         </ol>
         {answer.error && <div className="mt-3"><FormError error={answer.error} /></div>}

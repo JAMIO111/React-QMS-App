@@ -43,9 +43,9 @@ const FileIcon = ({ name, type }) => {
  * listed as unsaved until "Save uploads": each is uploaded to a private bucket at
  * <org>/<folder>/<record id>/… and then recorded through the API (POST `attachUrl`). Removing a
  * saved file asks for a reason and keeps the stored file as evidence (it can be restored through
- * `${itemBase}/<id>/delete|restore`).
+ * `${itemBase}/<id>/delete|restore`). `extraBody` is added to what is sent to `attachUrl` (e.g. the question a file answers).
  */
-export const AttachmentDrop = ({ recordId, bucket, folder, attachments, mutation, attachUrl, itemBase, title = "File upload", subtitle, canEdit = true }) => {
+export const AttachmentDrop = ({ recordId, bucket, folder, attachments, mutation, attachUrl, itemBase, title = "File upload", subtitle, canEdit = true, extraBody }) => {
   const [dragActive, setDragActive] = useState(false);
   const [newFiles, setNewFiles] = useState([]); // [{ file, previewUrl }]
   const [isSaving, setIsSaving] = useState(false);
@@ -87,7 +87,7 @@ export const AttachmentDrop = ({ recordId, bucket, folder, attachments, mutation
         await apiFetch(attachUrl, {
           method: "POST",
           organisationId,
-          body: { storagePath: path, fileName: entry.file.name, contentType: entry.file.type || null, sizeBytes: entry.file.size },
+          body: { ...extraBody, storagePath: path, fileName: entry.file.name, contentType: entry.file.type || null, sizeBytes: entry.file.size },
         });
         uploaded++;
       } catch (err) {

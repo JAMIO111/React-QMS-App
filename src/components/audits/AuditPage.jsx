@@ -5,7 +5,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useAudit, useAuditMutation } from "../../hooks/useAudits";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { formatDate } from "../../lib/ncr";
-import { answerTypeLabel, auditTypeLabel, auditorLabel, frequencyLabel, limitsLabel, resultLabel } from "../../lib/audits";
+import { answerTypeLabel, auditTypeLabel, auditorLabel, frequencyLabel, questionRule, resultLabel } from "../../lib/audits";
 import { ErrorNotice, buttonClass } from "../master-data/shared";
 import MenuCard from "../ui/MenuCard";
 import ReasonDialog from "../ncr/ReasonDialog";
@@ -154,9 +154,7 @@ const AuditPage = () => {
                   {q.critical && <span className="rounded-full bg-error-color/15 px-2 py-0.5 text-xs font-medium text-error-color">Critical</span>}
                 </div>
                 <p className="text-xs text-secondary-text">
-                  {answerTypeLabel(q.answerType)}
-                  {q.answerType === "yes_no" ? `; "${q.passAnswer}" passes` : ""}
-                  {limitsLabel(q) ? `; passes ${limitsLabel(q)}` : ""}
+                  {answerTypeLabel(q.answerType)}; {questionRule(q)}
                 </p>
                 {q.guidance && <p className="text-sm text-primary-text">{q.guidance}</p>}
               </li>

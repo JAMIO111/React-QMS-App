@@ -108,9 +108,9 @@ export const useAnswerAudit = (recordId) =>
       ...record,
       questions: record.questions.map((q) => {
         if (q.id !== body.questionId) return q;
-        const empty = body.answer == null && body.value == null && !body.note;
+        const empty = body.answer == null && body.value == null && !body.note && !body.choice;
         if (empty) return { ...q, response: null };
-        return { ...q, response: { id: q.response?.id ?? "pending", ncrs: q.response?.ncrs ?? [], answer: body.answer ?? null, value: body.value ?? null, note: body.note ?? null, result: provisionalResult(q, body) } };
+        return { ...q, response: { id: q.response?.id ?? "pending", ncrs: q.response?.ncrs ?? [], answer: body.answer ?? null, value: body.value ?? null, choice: body.choice ?? null, note: body.note ?? null, result: provisionalResult(q, body) } };
       }),
     }),
   );
@@ -126,3 +126,28 @@ export const useSetAuditTargets = (recordId) =>
     }),
     (record, chosen) => ({ ...record, targets: chosen.map(({ kind, id, label }) => ({ kind, id, label })) }),
   );
+
+/** The operation codes to choose from when saying what an audit is relevant to (control plan operations plus those already on an audit). */
+export const useOperationCodes = () => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "operation-codes"),
+    queryFn: () => apiFetch("/audits/operation-codes", { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+    staleTime: 60_000,
+    select: (r) => r.data,
+  });
+};
+
+/** The evidence files of a record (the ones removed too, so they can be put back), optionally for one question. */
+export const useAuditAttachments = (recordId, questionId) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "records", "files", recordId, questionId ?? "all"),
+    queryFn: () => apiFetch(`/audit-records/${recordId}/attachments?deleted=include${questionId ? `&questionId=${questionId}` : ""}`, { organisationId }),
+    enabled: !!organisationId && !!recordId,
+    retry: false,
+    select: (r) => r.data,
+  });
+};

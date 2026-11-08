@@ -2,15 +2,16 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeftIcon, ArrowDownIcon, ArrowUpIcon, PlusIcon, Trash2Icon, XIcon } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
-import { useAudit, useAuditMutation } from "../../hooks/useAudits";
+import { useAudit, useAuditMutation, useOperationCodes } from "../../hooks/useAudits";
 import { useMachines } from "../../hooks/useProcessControl";
 import { useAllDepartments, useMembers, useRoles } from "../../hooks/useQmsApi";
-import { ANSWER_TYPES, AUDIT_TYPES, AUDITOR_KINDS, FREQUENCIES, emptyQuestion, questionsBody } from "../../lib/audits";
+import { ANSWER_TYPES, AUDIT_TYPES, AUDITOR_KINDS, FREQUENCIES, emptyOption, emptyQuestion, isScoredType, measurementLimits, questionProblems, questionToForm, questionsBody } from "../../lib/audits";
 import { describeApiError } from "../../lib/api-client";
+import ComboField from "../ui/ComboField";
 import Field from "../ui/Field";
 import MenuCard from "../ui/MenuCard";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
-import { ErrorNotice, FormError, SelectField, buttonClass } from "../master-data/shared";
+import { ErrorNotice, FormError, buttonClass } from "../master-data/shared";
 import { TextAreaField } from "../ncr/Pickers";
 
 const fromAudit = (a) => ({
@@ -26,7 +27,7 @@ const fromAudit = (a) => ({
   auditorKind: a?.auditor.kind ?? "none",
   auditorId: a?.auditor.id ?? null,
   passMark: a?.passMark ?? 100,
-  questions: (a?.questions ?? []).map((q) => ({ key: q.id, question: q.question, guidance: q.guidance ?? "", answerType: q.answerType, passAnswer: q.passAnswer ?? "yes", unit: q.unit ?? "", lowerLimit: q.lowerLimit ?? "", upperLimit: q.upperLimit ?? "", critical: q.critical })),
+  questions: (a?.questions ?? []).map(questionToForm),
   machineIds: (a?.targets ?? []).filter((t) => t.kind === "machine").map((t) => t.id),
   operations: (a?.targets ?? []).filter((t) => t.kind === "operation").map((t) => t.id),
   departmentIds: (a?.targets ?? []).filter((t) => t.kind === "department").map((t) => t.id),
@@ -54,34 +55,73 @@ const toBody = (f) => ({
   ],
 });
 
-/** Tick boxes for choosing several of a list. */
-const Checks = ({ legend, items, selected, onChange, empty }) => (
-  <fieldset className="flex flex-col gap-1">
-    <legend className="text-sm font-medium text-secondary-text">{legend}</legend>
-    {items.length === 0 ? (
-      <p className="text-sm text-secondary-text">{empty}</p>
-    ) : (
-      <div className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg border border-border-color p-2">
-        {items.map((i) => (
-          <label key={i.id} className="flex items-center gap-2 text-sm text-primary-text">
-            <input type="checkbox" checked={selected.includes(i.id)} onChange={() => onChange(selected.includes(i.id) ? selected.filter((x) => x !== i.id) : [...selected, i.id])} />
-            {i.label}
-          </label>
-        ))}
-      </div>
-    )}
+const RATING_SCALES = [3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({ value: String(n), label: `1 to ${n}` }));
+const PASS_ANSWERS = [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }];
+
+/** One of the "Relevant to" lists: a drop-down that adds to a list of chips, each with a button to take it off again. */
+const RelevantList = ({ legend, addLabel, options, chosen, labelOf, onAdd, onRemove, empty }) => (
+  <fieldset className="flex flex-col gap-2">
+    <legend className="mb-1 text-sm font-medium text-secondary-text">{legend}</legend>
+    <ComboField label={addLabel} value={null} onChange={(v) => v && onAdd(v)} options={options.filter((o) => !chosen.includes(o.value))} placeholder={options.length ? "Choose to add…" : empty} disabled={options.length === 0} />
+    <ul aria-label={legend} className="flex flex-wrap gap-1">
+      {chosen.map((id) => (
+        <li key={id} className="flex items-center gap-1 rounded-full border border-border-color py-0.5 pl-2 pr-1 text-xs text-primary-text">
+          {labelOf(id)}
+          <button type="button" aria-label={`Remove ${legend.toLowerCase().replace(/s$/, "")} ${labelOf(id)}`} onClick={() => onRemove(id)} className="rounded-full p-0.5 hover:bg-border-color/60 cursor-pointer">
+            <XIcon className="h-3 w-3" />
+          </button>
+        </li>
+      ))}
+    </ul>
   </fieldset>
 );
 
+/** The options of a multiple choice question: its words, and whether choosing it counts as acceptable. */
+const OptionsEditor = ({ q, index, set }) => {
+  const change = (k, patch) => set({ options: q.options.map((o) => (o.key === k ? { ...o, ...patch } : o)) });
+  return (
+    <fieldset className="flex flex-col gap-2 md:col-span-4">
+      <legend className="text-sm font-medium text-secondary-text" data-required>
+        Options
+      </legend>
+      <ul aria-label={`Options of question ${index + 1}`} className="flex flex-col gap-2">
+        {q.options.map((o, i) => (
+          <li key={o.key} className="flex flex-wrap items-end gap-2">
+            <Field label={`Option ${i + 1}`} value={o.label} onChange={(e) => change(o.key, { label: e.target.value })} maxLength={100} className="min-w-48 flex-1" />
+            <label className="flex items-center gap-2 pb-2 text-sm text-primary-text">
+              <input type="checkbox" aria-label={`Option ${i + 1} is acceptable`} checked={o.passes} onChange={(e) => change(o.key, { passes: e.target.checked })} /> Acceptable
+            </label>
+            <button type="button" aria-label={`Remove option ${i + 1}`} disabled={q.options.length <= 2} onClick={() => set({ options: q.options.filter((x) => x.key !== o.key) })} className="mb-1 rounded p-1 text-error-color hover:bg-error-color/10 disabled:opacity-30 cursor-pointer">
+              <Trash2Icon />
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button type="button" className={`${buttonClass.neutral} w-fit`} disabled={q.options.length >= 20} onClick={() => set({ options: [...q.options, emptyOption()] })}>
+        Add an option
+      </button>
+    </fieldset>
+  );
+};
+
 const QuestionRow = ({ q, index, count, onChange, onMove, onRemove }) => {
   const set = (patch) => onChange({ ...q, ...patch });
+  const t = q.answerType;
+  const scored = isScoredType(q);
+  const type = ANSWER_TYPES.find((x) => x.value === t);
+  const limits = t === "measurement" ? measurementLimits(q) : null;
+  const rating = Number(q.ratingMax) || 5;
+  const changeType = (v) => {
+    const next = { ...q, answerType: v };
+    set({ answerType: v, critical: isScoredType(next) ? q.critical : false });
+  };
   return (
     <li className="flex flex-col gap-2 rounded-xl border border-border-color bg-primary-bg p-3" aria-label={`Question ${index + 1}`}>
       <div className="flex items-start gap-2">
         <span className="mt-2 w-6 shrink-0 text-xs tabular-nums text-secondary-text">{index + 1}.</span>
         <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 md:grid-cols-3">
           <Field label="Question" required value={q.question} onChange={(e) => set({ question: e.target.value })} maxLength={500} className="md:col-span-2" />
-          <SelectField label="Answered with" required value={q.answerType} onChange={(v) => set({ answerType: v, critical: v === "text" ? false : q.critical })} options={ANSWER_TYPES} />
+          <ComboField label="Answered with" required value={t} onChange={changeType} options={ANSWER_TYPES} hint={type ? `For example: ${type.hint}` : undefined} />
         </div>
         <div className="flex shrink-0 flex-col">
           <button type="button" aria-label={`Move question ${index + 1} up`} disabled={index === 0} onClick={() => onMove(-1)} className="rounded p-1 hover:bg-border-color/40 disabled:opacity-30 cursor-pointer">
@@ -97,17 +137,44 @@ const QuestionRow = ({ q, index, count, onChange, onMove, onRemove }) => {
       </div>
       <div className="grid grid-cols-1 gap-2 pl-8 md:grid-cols-4">
         <TextAreaField label="Guidance for the auditor" value={q.guidance} onChange={(v) => set({ guidance: v })} rows={2} maxLength={2000} className="md:col-span-2" />
-        {q.answerType === "yes_no" && (
-          <SelectField label="Passes with" value={q.passAnswer} onChange={(v) => set({ passAnswer: v })} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} />
-        )}
-        {q.answerType === "number" && (
+        {(t === "yes_no" || t === "yes_no_na") && <ComboField label="Passes with" required value={q.passAnswer} onChange={(v) => set({ passAnswer: v ?? "yes" })} options={PASS_ANSWERS} />}
+        {t === "numeric" && (
           <>
-            <Field label="Lower limit" inputMode="decimal" value={q.lowerLimit} onChange={(e) => set({ lowerLimit: e.target.value })} />
+            <Field label="Lower limit" inputMode="decimal" value={q.lowerLimit} onChange={(e) => set({ lowerLimit: e.target.value })} hint="Scored only when a limit is given" />
             <Field label="Upper limit" inputMode="decimal" value={q.upperLimit} onChange={(e) => set({ upperLimit: e.target.value })} />
             <Field label="Unit" value={q.unit} onChange={(e) => set({ unit: e.target.value })} maxLength={20} />
           </>
         )}
-        {q.answerType !== "text" && (
+        {t === "measurement" && (
+          <>
+            <Field label="Nominal" required inputMode="decimal" value={q.nominal} onChange={(e) => set({ nominal: e.target.value })} />
+            <Field label="Tolerance −" required inputMode="decimal" value={q.tolMinus} onChange={(e) => set({ tolMinus: e.target.value })} hint="Below the nominal" />
+            <Field label="Tolerance +" required inputMode="decimal" value={q.tolPlus} onChange={(e) => set({ tolPlus: e.target.value })} hint="Above the nominal" />
+            <Field label="Unit" required value={q.unit} onChange={(e) => set({ unit: e.target.value })} maxLength={20} />
+            {limits && (
+              <p className="text-sm text-secondary-text md:col-span-3">
+                Passes from {limits.lower} to {limits.upper} {q.unit}
+              </p>
+            )}
+          </>
+        )}
+        {t === "multiple_choice" && <OptionsEditor q={q} index={index} set={set} />}
+        {t === "rating" && (
+          <>
+            <ComboField label="Scale" required value={String(rating)} onChange={(v) => set({ ratingMax: v ?? "5", passRating: q.passRating && Number(q.passRating) > Number(v) ? "" : q.passRating })} options={RATING_SCALES} />
+            <ComboField
+              label="Lowest acceptable rating"
+              value={q.passRating || null}
+              onChange={(v) => set({ passRating: v ?? "" })}
+              options={Array.from({ length: rating }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
+              placeholder="Not scored"
+              hint="Leave empty to record the rating without scoring it"
+            />
+          </>
+        )}
+        {t === "evidence" && <p className="text-sm text-secondary-text md:col-span-2">The auditor must add at least one photograph or document. It is not scored.</p>}
+        {t === "text" && <p className="text-sm text-secondary-text md:col-span-2">The auditor writes a note. It is not scored.</p>}
+        {scored && (
           <label className="flex items-center gap-2 self-end pb-2 text-sm text-primary-text">
             <input type="checkbox" checked={q.critical} onChange={(e) => set({ critical: e.target.checked })} /> Critical: the audit fails if this fails
           </label>
@@ -133,10 +200,10 @@ const AuditFormBody = ({ audit }) => {
   const mutation = useAuditMutation();
   const machines = useMachines({ includeInactive: false });
   const departments = useAllDepartments();
+  const operationCodes = useOperationCodes();
   const members = useMembers();
   const roles = useRoles();
   const [f, setF] = useState(() => fromAudit(audit));
-  const [op, setOp] = useState("");
   const [triedSave, setTriedSave] = useState(false);
   const set = (patch) => setF((x) => ({ ...x, ...patch }));
 
@@ -146,9 +213,9 @@ const AuditFormBody = ({ audit }) => {
     scheduled && !f.firstDueOn && "Give the first due date",
     f.frequencyKind === "every_n_days" && !(Number(f.interval) >= 1) && "Say how many days apart",
     f.auditorKind !== "none" && !f.auditorId && "Choose who is expected to do it",
-    f.questions.some((q) => !q.question.trim()) && "Every question needs its words",
-    f.questions.some((q) => q.answerType === "number" && q.lowerLimit === "" && q.upperLimit === "") && "A number question needs a lower or an upper limit",
+    ...f.questions.flatMap((q, i) => questionProblems(q, i + 1)),
   ].filter(Boolean);
+  const uniqueProblems = [...new Set(problems)];
 
   const auditorOptions =
     f.auditorKind === "person"
@@ -157,20 +224,22 @@ const AuditFormBody = ({ audit }) => {
         ? (roles.data?.data ?? []).map((r) => ({ value: r.id, label: r.name }))
         : (departments.data?.data ?? []).map((d) => ({ value: d.id, label: `${d.code} · ${d.name}` }));
 
+  const machineOptions = (machines.data?.items ?? []).map((m) => ({ value: m.id, label: `${m.code} · ${m.name}` }));
+  const departmentOptions = (departments.data?.data ?? []).map((d) => ({ value: d.id, label: `${d.code} · ${d.name}` }));
+  const operationOptions = (operationCodes.data ?? []).map((o) => ({ value: o.code, label: o.code, hint: o.name ?? undefined }));
+  // An operation already on the audit stays choosable by its own spelling, whatever the plans say.
+  const operationList = [...operationOptions, ...f.operations.filter((c) => !operationOptions.some((o) => o.value.toLowerCase() === c.toLowerCase())).map((c) => ({ value: c, label: c }))];
+  const labelIn = (options) => (id) => options.find((o) => o.value === id)?.label ?? id;
+
   const move = (i, d) =>
     set({
       questions: f.questions.map((q, j, all) => (j === i ? all[i + d] : j === i + d ? all[i] : q)),
     });
-  const addOperation = () => {
-    const code = op.trim();
-    if (code && !f.operations.some((x) => x.toLowerCase() === code.toLowerCase())) set({ operations: [...f.operations, code] });
-    setOp("");
-  };
 
   const submit = (e) => {
     e.preventDefault();
     setTriedSave(true);
-    if (problems.length) return;
+    if (uniqueProblems.length) return;
     const body = toBody(f);
     mutation.mutate(audit ? { path: `/audits/${audit.id}`, method: "PATCH", body } : { path: "/audits", body }, {
       onSuccess: (saved) => {
@@ -200,9 +269,9 @@ const AuditFormBody = ({ audit }) => {
           </button>
         </div>
       </div>
-      {triedSave && problems.length > 0 && (
+      {triedSave && uniqueProblems.length > 0 && (
         <ul role="alert" aria-label="Still needed" className="list-disc rounded-lg border border-error-color/40 bg-error-color/10 py-2 pl-8 pr-3 text-sm text-primary-text">
-          {problems.map((p) => <li key={p}>{p}</li>)}
+          {uniqueProblems.map((p) => <li key={p}>{p}</li>)}
         </ul>
       )}
       <FormError error={mutation.error} />
@@ -210,10 +279,10 @@ const AuditFormBody = ({ audit }) => {
       <MenuCard title="About this audit" subtitle="What it is and how often it is done">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Title" required value={f.title} onChange={(e) => set({ title: e.target.value })} maxLength={200} className="md:col-span-2" />
-          <SelectField label="Type" required value={f.auditType} onChange={(v) => set({ auditType: v })} options={AUDIT_TYPES} />
+          <ComboField label="Type" required value={f.auditType} onChange={(v) => set({ auditType: v ?? "process" })} options={AUDIT_TYPES} />
           <Field label="Pass mark (%)" required inputMode="numeric" value={f.passMark} onChange={(e) => set({ passMark: e.target.value })} hint="Every critical question must pass, and the score must reach this" />
           <TextAreaField label="Purpose" value={f.purpose} onChange={(v) => set({ purpose: v })} rows={2} maxLength={2000} className="md:col-span-2" />
-          <SelectField label="How often" required value={f.frequencyKind} onChange={(v) => set({ frequencyKind: v, ...(v === "on_demand" ? { firstDueOn: null } : {}) })} options={FREQUENCIES} />
+          <ComboField label="How often" required value={f.frequencyKind} onChange={(v) => set({ frequencyKind: v ?? "monthly", ...(v === "on_demand" ? { firstDueOn: null } : {}) })} options={FREQUENCIES} />
           {f.frequencyKind === "every_n_days" && <Field label="Number of days" required inputMode="numeric" value={f.interval} onChange={(e) => set({ interval: e.target.value })} />}
           {scheduled && <RHFDatePickerPopout label="First due" required valueFormat="iso" value={f.firstDueOn} onChange={(v) => set({ firstDueOn: v })} />}
           {scheduled && <Field label="Grace period (days)" inputMode="numeric" value={f.graceDays} onChange={(e) => set({ graceDays: e.target.value })} hint="Days after the due date before it counts as missed" />}
@@ -222,47 +291,43 @@ const AuditFormBody = ({ audit }) => {
               <input type="checkbox" checked={f.weekdaysOnly} onChange={(e) => set({ weekdaysOnly: e.target.checked })} /> Weekdays only
             </label>
           )}
-          <SelectField label="Expected auditor" value={f.auditorKind} onChange={(v) => set({ auditorKind: v ?? "none", auditorId: null })} options={AUDITOR_KINDS} />
-          {f.auditorKind !== "none" && <SelectField label={f.auditorKind === "person" ? "Person" : f.auditorKind === "role" ? "Role" : "Department"} required value={f.auditorId} onChange={(v) => set({ auditorId: v })} options={auditorOptions} placeholder="Choose…" />}
+          <ComboField label="Expected auditor" value={f.auditorKind} onChange={(v) => set({ auditorKind: v ?? "none", auditorId: null })} options={AUDITOR_KINDS} clearable={false} />
+          {f.auditorKind !== "none" && <ComboField label={f.auditorKind === "person" ? "Person" : f.auditorKind === "role" ? "Role" : "Department"} required value={f.auditorId} onChange={(v) => set({ auditorId: v })} options={auditorOptions} placeholder="Choose…" />}
         </div>
       </MenuCard>
 
       <MenuCard title="Relevant to" subtitle="Whoever does the audit chooses which of these it was carried out on">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Checks legend="Machines" items={(machines.data?.items ?? []).map((m) => ({ id: m.id, label: `${m.code} · ${m.name}` }))} selected={f.machineIds} onChange={(v) => set({ machineIds: v })} empty="No machines yet." />
-          <fieldset className="flex flex-col gap-1">
-            <legend className="text-sm font-medium text-secondary-text">Operations</legend>
-            <div className="flex gap-2">
-              <input
-                aria-label="Operation code"
-                value={op}
-                onChange={(e) => setOp(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addOperation();
-                  }
-                }}
-                placeholder="OP-20"
-                maxLength={40}
-                className="min-w-0 flex-1 rounded-lg border border-border-color bg-primary-bg px-3 py-2 text-sm text-primary-text"
-              />
-              <button type="button" className={buttonClass.neutral} onClick={addOperation} disabled={!op.trim()}>
-                Add
-              </button>
-            </div>
-            <ul aria-label="Operations" className="flex flex-wrap gap-1">
-              {f.operations.map((code) => (
-                <li key={code} className="flex items-center gap-1 rounded-full border border-border-color py-0.5 pl-2 pr-1 text-xs text-primary-text">
-                  {code}
-                  <button type="button" aria-label={`Remove operation ${code}`} onClick={() => set({ operations: f.operations.filter((x) => x !== code) })} className="rounded-full p-0.5 hover:bg-border-color/60 cursor-pointer">
-                    <XIcon className="h-3 w-3" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </fieldset>
-          <Checks legend="Departments" items={(departments.data?.data ?? []).map((d) => ({ id: d.id, label: `${d.code} · ${d.name}` }))} selected={f.departmentIds} onChange={(v) => set({ departmentIds: v })} empty="No departments yet." />
+          <RelevantList
+            legend="Machines"
+            addLabel="Add a machine"
+            options={machineOptions}
+            chosen={f.machineIds}
+            labelOf={labelIn(machineOptions)}
+            onAdd={(id) => set({ machineIds: [...f.machineIds, id] })}
+            onRemove={(id) => set({ machineIds: f.machineIds.filter((x) => x !== id) })}
+            empty="No machines yet"
+          />
+          <RelevantList
+            legend="Operations"
+            addLabel="Add an operation"
+            options={operationList}
+            chosen={f.operations}
+            labelOf={(c) => c}
+            onAdd={(code) => set({ operations: [...f.operations, code] })}
+            onRemove={(code) => set({ operations: f.operations.filter((x) => x !== code) })}
+            empty="No operations yet"
+          />
+          <RelevantList
+            legend="Departments"
+            addLabel="Add a department"
+            options={departmentOptions}
+            chosen={f.departmentIds}
+            labelOf={labelIn(departmentOptions)}
+            onAdd={(id) => set({ departmentIds: [...f.departmentIds, id] })}
+            onRemove={(id) => set({ departmentIds: f.departmentIds.filter((x) => x !== id) })}
+            empty="No departments yet"
+          />
         </div>
       </MenuCard>
 
@@ -272,7 +337,7 @@ const AuditFormBody = ({ audit }) => {
 
       <MenuCard
         title="Checklist"
-        subtitle="Asked in this order"
+        subtitle="Asked in this order. How each question is answered here is what the audit record shows."
         action={
           <button type="button" className={`${buttonClass.neutral} flex items-center gap-1`} onClick={() => set({ questions: [...f.questions, emptyQuestion()] })}>
             <PlusIcon className="h-4 w-4" aria-hidden="true" /> Add a question

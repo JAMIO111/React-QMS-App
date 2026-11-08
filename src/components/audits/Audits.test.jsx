@@ -48,8 +48,8 @@ const detail = (over = {}) => {
     weekdaysOnly: true,
     retired: null,
     questions: [
-      { id: "q1", sequence: 1, question: "Is the cell clean?", guidance: "Floor, bench, machine", answerType: "pass_fail", passAnswer: null, unit: null, lowerLimit: null, upperLimit: null, critical: true },
-      { id: "q2", sequence: 2, question: "Coolant concentration", guidance: null, answerType: "number", passAnswer: null, unit: "%", lowerLimit: 6, upperLimit: 9, critical: false },
+      { id: "q1", sequence: 1, question: "Is the cell clean?", guidance: "Floor, bench, machine", answerType: "pass_fail", passAnswer: null, unit: null, lowerLimit: null, upperLimit: null, nominal: null, options: null, ratingMax: null, passRating: null, critical: true },
+      { id: "q2", sequence: 2, question: "Coolant concentration", guidance: null, answerType: "numeric", passAnswer: null, unit: "%", lowerLimit: 6, upperLimit: 9, nominal: null, options: null, ratingMax: null, passRating: null, critical: false },
     ],
     targets: [{ kind: "machine", id: "m1", label: "CNC-1 · Lathe" }, { kind: "operation", id: "OP-20", label: "OP-20" }],
     createdBy: { id: "u9", name: "Ada Owner" },
@@ -63,6 +63,7 @@ let routes;
 const routeApi = (extra = {}) => {
   routes = {
     "GET /machines": { data: [{ id: "m1", code: "CNC-1", name: "Lathe" }, { id: "m2", code: "CNC-2", name: "Mill" }], nextCursor: null },
+    "GET /audits/operation-codes": { data: [{ code: "OP-20", name: "Rough turn" }, { code: "OP-30", name: null }] },
     ...extra,
   };
   apiFetch.mockImplementation(async (path, opts = {}) => {
@@ -249,6 +250,24 @@ describe("audit page", () => {
   });
 });
 
+const pick = async (name, option, scope = screen) => {
+  await userEvent.click(scope.getByRole("combobox", { name }));
+  await userEvent.click(await screen.findByRole("option", { name: new RegExp(`^${option.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?! /)`) }));
+};
+const addQuestion = async (text, type) => {
+  await userEvent.click(screen.getByRole("button", { name: /Add a question/ }));
+  const items = screen.getAllByRole("listitem").filter((li) => /^Question \d+$/.test(li.getAttribute("aria-label") ?? ""));
+  const q = within(items.at(-1));
+  await userEvent.type(q.getByLabelText(/^Question/), text);
+  if (type) await pick("Answered with", type, q);
+  return q;
+};
+const fillFirstDue = async () => {
+  await userEvent.click(screen.getByRole("button", { name: /^First due/ }));
+  await userEvent.click(within(await screen.findByRole("dialog", { name: "Choose first due" })).getAllByRole("button", { name: /\d{4}$/ })[0]);
+};
+const saved = () => sent("POST /audits")[0].body;
+
 describe("audit form", () => {
   it("lists what is still needed and sends nothing until it is there", async () => {
     routeApi();
@@ -261,49 +280,81 @@ describe("audit form", () => {
     expect(sent("POST /audits")).toHaveLength(0);
   });
 
-  it("defines an audit: the procedure, a checklist with every answer type, what it is relevant to, who is expected and the schedule", async () => {
+  it("uses the custom combo box for every drop-down: there is no native select in the form", async () => {
+    routeApi();
+    const { container } = renderAt("/Documentation/Audits/new");
+    await screen.findByRole("heading", { name: "Define an audit" });
+    await addQuestion("Q", "Rating");
+    expect(container.querySelectorAll("select")).toHaveLength(0);
+    for (const name of ["Type", "How often", "Expected auditor", "Add a machine", "Add an operation", "Add a department", "Answered with", "Scale", "Lowest acceptable rating"]) {
+      expect(screen.getByRole("combobox", { name })).toBeInTheDocument();
+    }
+  });
+
+  it("offers the ten response types, each with an example of the question it suits", async () => {
+    routeApi();
+    renderAt("/Documentation/Audits/new");
+    await screen.findByRole("heading", { name: "Define an audit" });
+    await userEvent.click(screen.getByRole("button", { name: /Add a question/ }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Answered with" }));
+    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    expect(options).toEqual([
+      "Yes / NoIs the procedure being followed?",
+      "Compliant / Non-compliantDoes the process meet requirements?",
+      "Pass / FailDoes the product meet specifications?",
+      "Yes / No / N/AIs the requirement applicable?",
+      "NumericWhat was the measured temperature?",
+      "TextDescribe the observation",
+      "Multiple choiceSelect applicable condition",
+      "MeasurementEnter actual dimensional measurement",
+      "Evidence requiredUpload photograph/document",
+      "RatingScore from 1–5",
+    ]);
+  });
+
+  it("defines an audit: the procedure, what it is relevant to chosen from drop-downs, who is expected, the schedule and a checklist", async () => {
     routeApi({ "POST /audits": () => ({ ...detail(), id: "new1", reference: "AUD-003" }), "GET /audits/new1": detail() });
     renderAt("/Documentation/Audits/new");
     await screen.findByRole("heading", { name: "Define an audit" });
     await userEvent.type(screen.getByLabelText(/^Title/), "Weekly LPA");
-    await userEvent.selectOptions(screen.getByLabelText(/^Type/), "layered_process");
+    await pick("Type", "Layered process audit");
     await userEvent.clear(screen.getByLabelText(/^Pass mark/));
     await userEvent.type(screen.getByLabelText(/^Pass mark/), "90");
-    await userEvent.selectOptions(screen.getByLabelText(/^How often/), "every_n_days");
+    await pick("How often", "Every N days");
     await userEvent.type(screen.getByLabelText(/^Number of days/), "10");
     await userEvent.type(screen.getByRole("textbox", { name: /^Procedure/ }), "Walk the cell");
-    await userEvent.click(await screen.findByLabelText("CNC-1 · Lathe"));
-    await userEvent.type(screen.getByLabelText("Operation code"), "OP-20{Enter}");
-    await userEvent.click(screen.getByLabelText("MACH · Machining"));
-    await userEvent.selectOptions(screen.getByLabelText("Expected auditor"), "person");
-    await userEvent.selectOptions(screen.getByLabelText(/^Person/), "u1");
+    await pick("Add a machine", "CNC-1 · Lathe");
+    await pick("Add a machine", "CNC-2 · Mill");
+    await pick("Add an operation", "OP-20");
+    await pick("Add a department", "MACH · Machining");
+    expect(within(screen.getByRole("list", { name: "Machines" })).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["CNC-1 · Lathe", "CNC-2 · Mill"]);
+    expect(within(screen.getByRole("list", { name: "Operations" })).getByText("OP-20")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Remove machine CNC-2 · Mill" }));
+    expect(within(screen.getByRole("list", { name: "Machines" })).queryByText("CNC-2 · Mill")).toBeNull();
+    // A chosen one is not offered again.
+    await userEvent.click(screen.getByRole("combobox", { name: "Add a machine" }));
+    expect(await screen.findByRole("option", { name: "CNC-2 · Mill" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "CNC-1 · Lathe" })).toBeNull();
+    await userEvent.keyboard("{Escape}");
+    await pick("Expected auditor", "A named person");
+    await pick("Person", "Ines Inspector");
 
-    await userEvent.click(screen.getByRole("button", { name: /Add a question/ }));
-    await userEvent.type(within(screen.getByRole("listitem", { name: "Question 1" })).getByLabelText(/^Question/), "Is the cell clean?");
-    await userEvent.click(within(screen.getByRole("listitem", { name: "Question 1" })).getByLabelText(/Critical/));
-    await userEvent.click(screen.getByRole("button", { name: /Add a question/ }));
-    const q2 = screen.getByRole("listitem", { name: "Question 2" });
-    await userEvent.type(within(q2).getByLabelText(/^Question/), "Coolant concentration");
-    await userEvent.selectOptions(within(q2).getByLabelText(/Answered with/), "number");
-    await userEvent.type(within(q2).getByLabelText("Lower limit"), "6");
-    await userEvent.type(within(q2).getByLabelText("Upper limit"), "9");
-    await userEvent.type(within(q2).getByLabelText("Unit"), "%");
-    await userEvent.click(screen.getByRole("button", { name: /Add a question/ }));
-    const q3 = screen.getByRole("listitem", { name: "Question 3" });
-    await userEvent.type(within(q3).getByLabelText(/^Question/), "Sheet signed?");
-    await userEvent.selectOptions(within(q3).getByLabelText(/Answered with/), "yes_no");
-    await userEvent.selectOptions(within(q3).getByLabelText("Passes with"), "no");
+    const q1 = await addQuestion("Is the cell clean?");
+    await userEvent.click(q1.getByLabelText(/Critical/));
+    const q2 = await addQuestion("Coolant concentration", "Numeric");
+    await userEvent.type(q2.getByLabelText("Lower limit"), "6");
+    await userEvent.type(q2.getByLabelText("Upper limit"), "9");
+    await userEvent.type(q2.getByLabelText("Unit"), "%");
+    const q3 = await addQuestion("Sheet signed?", "Yes / No");
+    await pick("Passes with", "No", q3);
 
-    // First due date: needed while scheduled.
     await userEvent.click(screen.getByRole("button", { name: "Define audit" }));
     expect(await screen.findByText("Give the first due date")).toBeInTheDocument();
     expect(sent("POST /audits")).toHaveLength(0);
-    await userEvent.click(screen.getByRole("button", { name: /^First due/ }));
-    await userEvent.click(within(await screen.findByRole("dialog", { name: "Choose first due" })).getAllByRole("button", { name: /\d{4}$/ })[0]);
+    await fillFirstDue();
     await userEvent.click(screen.getByRole("button", { name: "Define audit" }));
     await waitFor(() => expect(sent("POST /audits")).toHaveLength(1));
-    const body = sent("POST /audits")[0].body;
-    expect(body).toMatchObject({
+    expect(saved()).toMatchObject({
       title: "Weekly LPA",
       auditType: "layered_process",
       passMark: 90,
@@ -314,12 +365,12 @@ describe("audit form", () => {
       frequency: { kind: "every_n_days", interval: 10, firstDueOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
       auditor: { kind: "person", userId: "u1" },
     });
-    expect(body.questions).toEqual([
+    expect(saved().questions).toEqual([
       { question: "Is the cell clean?", guidance: null, answerType: "pass_fail", critical: true },
-      { question: "Coolant concentration", guidance: null, answerType: "number", unit: "%", lowerLimit: 6, upperLimit: 9, critical: false },
+      { question: "Coolant concentration", guidance: null, answerType: "numeric", unit: "%", lowerLimit: 6, upperLimit: 9, critical: false },
       { question: "Sheet signed?", guidance: null, answerType: "yes_no", passAnswer: "no", critical: false },
     ]);
-    expect(body.targets).toEqual([{ kind: "machine", machineId: "m1" }, { kind: "operation", operationCode: "OP-20" }, { kind: "department", departmentId: "d1" }]);
+    expect(saved().targets).toEqual([{ kind: "machine", machineId: "m1" }, { kind: "operation", operationCode: "OP-20" }, { kind: "department", departmentId: "d1" }]);
     await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Documentation/Audits/new1"));
   });
 
@@ -327,52 +378,207 @@ describe("audit form", () => {
     routeApi({ "POST /audits": () => ({ ...detail(), id: "new1" }), "GET /audits/new1": detail() });
     renderAt("/Documentation/Audits/new");
     await userEvent.type(await screen.findByLabelText(/^Title/), "On request");
-    await userEvent.selectOptions(screen.getByLabelText(/^How often/), "on_demand");
+    await pick("How often", "On demand");
     expect(screen.queryByLabelText(/^First due/)).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Define audit" }));
     await waitFor(() => expect(sent("POST /audits")).toHaveLength(1));
-    expect(sent("POST /audits")[0].body.frequency).toEqual({ kind: "on_demand" });
+    expect(saved().frequency).toEqual({ kind: "on_demand" });
   });
 
-  it("asks for limits on a number question and for words on every question", async () => {
+  describe("what each response type asks the template for", () => {
+    const start = async () => {
+      routeApi({ "POST /audits": () => ({ ...detail(), id: "new1" }), "GET /audits/new1": detail() });
+      renderAt("/Documentation/Audits/new");
+      await userEvent.type(await screen.findByLabelText(/^Title/), "Types");
+      await pick("How often", "On demand");
+    };
+    const save = async () => {
+      await userEvent.click(screen.getByRole("button", { name: "Define audit" }));
+      await waitFor(() => expect(sent("POST /audits")).toHaveLength(1));
+      return saved().questions;
+    };
+
+    it("yes / no and yes / no / N/A: which answer passes", async () => {
+      await start();
+      const a = await addQuestion("Followed?", "Yes / No");
+      expect(a.getByRole("combobox", { name: "Passes with" })).toBeInTheDocument();
+      const b = await addQuestion("Applicable?", "Yes / No / N/A");
+      await pick("Passes with", "No", b);
+      expect(await save()).toEqual([
+        { question: "Followed?", guidance: null, answerType: "yes_no", passAnswer: "yes", critical: false },
+        { question: "Applicable?", guidance: null, answerType: "yes_no_na", passAnswer: "no", critical: false },
+      ]);
+    });
+
+    it("compliant / non-compliant and pass / fail need nothing more", async () => {
+      await start();
+      const a = await addQuestion("Meets requirements?", "Compliant / Non-compliant");
+      expect(a.queryByRole("combobox", { name: "Passes with" })).toBeNull();
+      await userEvent.click(a.getByLabelText(/Critical/));
+      await addQuestion("Meets spec?", "Pass / Fail");
+      expect(await save()).toEqual([
+        { question: "Meets requirements?", guidance: null, answerType: "compliant", critical: true },
+        { question: "Meets spec?", guidance: null, answerType: "pass_fail", critical: false },
+      ]);
+    });
+
+    it("numeric: a unit and optional limits; it can be critical only once a limit makes it able to fail", async () => {
+      await start();
+      const q = await addQuestion("Temperature", "Numeric");
+      expect(q.queryByLabelText(/Critical/)).toBeNull();
+      await userEvent.type(q.getByLabelText("Unit"), "C");
+      await userEvent.type(q.getByLabelText("Upper limit"), "80");
+      await userEvent.click(q.getByLabelText(/Critical/));
+      expect(await save()).toEqual([{ question: "Temperature", guidance: null, answerType: "numeric", unit: "C", lowerLimit: null, upperLimit: 80, critical: true }]);
+    });
+
+    it("text and evidence: nothing to set, never critical", async () => {
+      await start();
+      const t = await addQuestion("Describe", "Text");
+      expect(t.queryByLabelText(/Critical/)).toBeNull();
+      const e = await addQuestion("Photograph", "Evidence required");
+      expect(e.queryByLabelText(/Critical/)).toBeNull();
+      expect(e.getByText(/must add at least one photograph or document/)).toBeInTheDocument();
+      expect(await save()).toEqual([
+        { question: "Describe", guidance: null, answerType: "text", critical: false },
+        { question: "Photograph", guidance: null, answerType: "evidence", critical: false },
+      ]);
+    });
+
+    it("measurement: nominal, tolerance both ways and a unit, with the limits worked out and shown", async () => {
+      await start();
+      const q = await addQuestion("Diameter", "Measurement");
+      await userEvent.type(q.getByLabelText(/^Nominal/), "10");
+      await userEvent.type(q.getByLabelText(/^Tolerance −/), "0.05");
+      await userEvent.type(q.getByLabelText(/^Tolerance \+/), "0.1");
+      await userEvent.type(q.getByLabelText(/^Unit/), "mm");
+      expect(q.getByText("Passes from 9.95 to 10.1 mm")).toBeInTheDocument();
+      await userEvent.click(q.getByLabelText(/Critical/));
+      expect(await save()).toEqual([{ question: "Diameter", guidance: null, answerType: "measurement", unit: "mm", nominal: 10, lowerLimit: 9.95, upperLimit: 10.1, critical: true }]);
+    });
+
+    it("multiple choice: the options, each marked acceptable or not, at least two", async () => {
+      await start();
+      const q = await addQuestion("Condition", "Multiple choice");
+      expect(within(q.getByRole("list", { name: "Options of question 1" })).getAllByRole("listitem")).toHaveLength(2);
+      expect(q.getByRole("button", { name: "Remove option 1" })).toBeDisabled();
+      await userEvent.type(q.getByLabelText("Option 1"), "Clean");
+      await userEvent.type(q.getByLabelText("Option 2"), "Oily");
+      await userEvent.click(q.getByLabelText("Option 2 is acceptable"));
+      await userEvent.click(q.getByRole("button", { name: "Add an option" }));
+      await userEvent.type(q.getByLabelText("Option 3"), "Dusty");
+      expect(await save()).toEqual([
+        {
+          question: "Condition",
+          guidance: null,
+          answerType: "multiple_choice",
+          options: [{ label: "Clean", passes: true }, { label: "Oily", passes: false }, { label: "Dusty", passes: true }],
+          critical: false,
+        },
+      ]);
+    });
+
+    it("rating: a scale of 3 to 10 (5 unless chosen) and an optional lowest acceptable rating", async () => {
+      await start();
+      const q = await addQuestion("Housekeeping", "Rating");
+      expect(q.getByRole("combobox", { name: "Scale" })).toHaveValue("1 to 5");
+      expect(q.queryByLabelText(/Critical/)).toBeNull();
+      await pick("Scale", "1 to 7", q);
+      await pick("Lowest acceptable rating", "3", q);
+      await userEvent.click(q.getByLabelText(/Critical/));
+      expect(await save()).toEqual([{ question: "Housekeeping", guidance: null, answerType: "rating", ratingMax: 7, passRating: 3, critical: true }]);
+    });
+
+    it("a lowest acceptable rating that falls off a narrower scale is dropped, and the question stops being scored", async () => {
+      await start();
+      const q = await addQuestion("Housekeeping", "Rating");
+      await pick("Scale", "1 to 7", q);
+      await pick("Lowest acceptable rating", "5", q);
+      expect(q.getByLabelText(/Critical/)).toBeInTheDocument();
+      await pick("Scale", "1 to 3", q);
+      expect(q.getByRole("combobox", { name: "Lowest acceptable rating" })).toHaveValue("");
+      expect(q.queryByLabelText(/Critical/)).toBeNull();
+      expect(await save()).toEqual([{ question: "Housekeeping", guidance: null, answerType: "rating", ratingMax: 3, passRating: null, critical: false }]);
+    });
+
+    it("a required drop-down cannot be cleared, an optional one can", async () => {
+      await start();
+      expect(screen.queryByRole("button", { name: "Clear Type" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Clear How often" })).toBeNull();
+      const q = await addQuestion("Housekeeping", "Rating");
+      expect(q.queryByRole("button", { name: "Clear Answered with" })).toBeNull();
+      expect(q.queryByRole("button", { name: "Clear Lowest acceptable rating" })).toBeNull();
+      await pick("Lowest acceptable rating", "3", q);
+      await userEvent.click(q.getByRole("button", { name: "Clear Lowest acceptable rating" }));
+      expect(q.getByRole("combobox", { name: "Lowest acceptable rating" })).toHaveValue("");
+    });
+
+    it("changing the type keeps what is still meaningful and drops critical when the question can no longer fail", async () => {
+      await start();
+      const q = await addQuestion("Followed?", "Pass / Fail");
+      await userEvent.click(q.getByLabelText(/Critical/));
+      await pick("Answered with", "Text", q);
+      expect(q.queryByLabelText(/Critical/)).toBeNull();
+      await pick("Answered with", "Pass / Fail", q);
+      expect(q.getByLabelText(/Critical/)).not.toBeChecked();
+    });
+  });
+
+  it("says what is wrong with a question in words: no words, limits the wrong way round, an unfinished measurement, repeated options", async () => {
     routeApi();
     renderAt("/Documentation/Audits/new");
     await userEvent.type(await screen.findByLabelText(/^Title/), "x");
-    await userEvent.selectOptions(screen.getByLabelText(/^How often/), "on_demand");
+    await pick("How often", "On demand");
     await userEvent.click(screen.getByRole("button", { name: /Add a question/ }));
-    await userEvent.selectOptions(within(screen.getByRole("listitem", { name: "Question 1" })).getByLabelText(/Answered with/), "number");
+    const n = await addQuestion("Limits", "Numeric");
+    await userEvent.type(n.getByLabelText("Lower limit"), "9");
+    await userEvent.type(n.getByLabelText("Upper limit"), "1");
+    const m = await addQuestion("Diameter", "Measurement");
+    await userEvent.type(m.getByLabelText(/^Nominal/), "10");
+    const c = await addQuestion("Condition", "Multiple choice");
+    await userEvent.type(c.getByLabelText("Option 1"), "Same");
+    await userEvent.type(c.getByLabelText("Option 2"), " same ");
     await userEvent.click(screen.getByRole("button", { name: "Define audit" }));
     const needed = await screen.findByRole("alert", { name: "Still needed" });
     expect(within(needed).getByText("Every question needs its words")).toBeInTheDocument();
-    expect(within(needed).getByText("A number question needs a lower or an upper limit")).toBeInTheDocument();
+    expect(within(needed).getByText("Question 2: the lower limit is above the upper limit")).toBeInTheDocument();
+    expect(within(needed).getByText("Question 3: a measurement needs a nominal value, its tolerance (− and +) and a unit")).toBeInTheDocument();
+    expect(within(needed).getByText("Question 4: an option is listed twice")).toBeInTheDocument();
+    expect(sent("POST /audits")).toHaveLength(0);
   });
 
-  it("moves and removes questions, and a note cannot be critical", async () => {
+  it("moves and removes questions", async () => {
     routeApi({ "GET /audits/a1": detail(), "PATCH /audits/a1": () => detail() });
     renderAt("/Documentation/Audits/a1/edit");
     await screen.findByRole("heading", { name: "Edit AUD-001" });
     await userEvent.click(screen.getByRole("button", { name: "Move question 1 down" }));
     const list = screen.getByRole("list", { name: "Checklist" });
     expect(within(within(list).getByRole("listitem", { name: "Question 1" })).getByLabelText(/^Question/)).toHaveValue("Coolant concentration");
-    await userEvent.selectOptions(within(within(list).getByRole("listitem", { name: "Question 2" })).getByLabelText(/Answered with/), "text");
-    expect(within(within(list).getByRole("listitem", { name: "Question 2" })).queryByLabelText(/Critical/)).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Remove question 1" }));
     expect(within(screen.getByRole("list", { name: "Checklist" })).getAllByRole("listitem")).toHaveLength(1);
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(sent("PATCH /audits/a1")).toHaveLength(1));
-    expect(sent("PATCH /audits/a1")[0].body.questions).toEqual([{ question: "Is the cell clean?", guidance: "Floor, bench, machine", answerType: "text", critical: false }]);
+    expect(sent("PATCH /audits/a1")[0].body.questions).toEqual([{ question: "Is the cell clean?", guidance: "Floor, bench, machine", answerType: "pass_fail", critical: true }]);
     expect(sent("PATCH /audits/a1")[0].body.targets).toEqual([{ kind: "machine", machineId: "m1" }, { kind: "operation", operationCode: "OP-20" }]);
   });
 
-  it("starts an edit from the audit as it is, and says records keep their own questions", async () => {
-    routeApi({ "GET /audits/a1": detail() });
+  it("starts an edit from the audit as it is: what it is relevant to as chips, and a measurement's tolerance worked back from its limits", async () => {
+    routeApi({
+      "GET /audits/a1": detail({
+        questions: [{ id: "q9", sequence: 1, question: "Diameter", guidance: null, answerType: "measurement", passAnswer: null, unit: "mm", lowerLimit: 9.95, upperLimit: 10.1, nominal: 10, options: null, ratingMax: null, passRating: null, critical: true }],
+      }),
+    });
     renderAt("/Documentation/Audits/a1/edit");
     expect(await screen.findByLabelText(/^Title/)).toHaveValue("Layered process audit, CNC cell");
     expect(screen.getByLabelText(/^Pass mark/)).toHaveValue("95");
-    expect(screen.getByLabelText(/^How often/)).toHaveValue("weekly");
-    expect(await screen.findByLabelText("CNC-1 · Lathe")).toBeChecked();
-    expect(screen.getByLabelText("CNC-2 · Mill")).not.toBeChecked();
+    expect(screen.getByRole("combobox", { name: "How often" })).toHaveValue("Every week");
+    expect(await within(screen.getByRole("list", { name: "Machines" })).findByText("CNC-1 · Lathe")).toBeInTheDocument();
     expect(within(screen.getByRole("list", { name: "Operations" })).getByText("OP-20")).toBeInTheDocument();
+    const q = within(screen.getByRole("listitem", { name: "Question 1" }));
+    expect(q.getByLabelText(/^Nominal/)).toHaveValue("10");
+    expect(q.getByLabelText(/^Tolerance −/)).toHaveValue("0.05");
+    expect(q.getByLabelText(/^Tolerance \+/)).toHaveValue("0.1");
+    expect(q.getByLabelText(/Critical/)).toBeChecked();
     expect(screen.getByText(/Audits already done keep the questions they were done against/)).toBeInTheDocument();
   });
 });

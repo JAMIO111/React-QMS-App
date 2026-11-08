@@ -149,3 +149,6 @@ Decisions: **N/A exists only as its own type** (`yes_no_na`); `pass_fail` no lon
 (multi-select is not built). Evidence files are stored per question (`audit_attachments`, private `audit-files` bucket at `<org>/audit/<record id>/…`, removed with a reason and never deleted, only while the record is in progress). Migration `20251216100000_audit_question_types.sql`.
 
 The **Define an audit form** uses the custom combo box for every drop-down, and **Relevant to** is three combo boxes (machines, operations, departments) that add to a list of chips; the operation list is the operation codes of the control plans plus any already on the audit (`GET /audits/operation-codes`).
+
+**AU5 built (2026-11-08).** Migration `20251216100000_audit_question_types.sql` (SQL tests `supabase/tests/audit_question_types.test.sql`, 23 mutation checks all caught), API (`audits.schemas.ts` `QuestionInput` per type, `audit-records.*` attachments, `GET /audits/operation-codes`), the Define an audit form (custom combo box for every drop-down, Relevant to as three combo boxes that add to chips, a per-type question editor) and the record form (a control per type, evidence file drop).
+Not built: multi-select multiple choice, files on the procedure, reordering options by drag.

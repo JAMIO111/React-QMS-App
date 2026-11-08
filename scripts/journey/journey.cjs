@@ -411,11 +411,19 @@ async function defineAudit({ page, stack, APP, orgName, see, shot, step, log }) 
   await page.getByRole('button', { name: /New audit/ }).click();
   await see(page.getByRole('heading', { name: 'Define an audit' }));
   await page.getByLabel(/^Title/).fill('Weekly layered process audit, CNC cell');
-  await page.getByLabel(/^Type/).selectOption('layered_process');
-  await page.getByLabel(/^How often/).selectOption('weekly');
+  // Every drop-down is the custom combo box.
+  const pick = async (scope, name, option) => {
+    await scope.getByRole('combobox', { name }).click();
+    await page.getByRole('option', { name: option }).click();
+  };
+  await pick(page, 'Type', /^Layered process audit/);
+  await pick(page, 'How often', /^Every week/);
   await page.getByRole('textbox', { name: /^Procedure/ }).fill('1. Walk the cell with the cell leader.\n2. Answer each question from what you see.');
-  await page.getByLabel('Operation code').fill('OP-10');
-  await page.getByLabel('Operation code').press('Enter');
+  // What it is relevant to: drop-downs that add to a list.
+  await pick(page, 'Add a machine', /CNC-J1/);
+  await pick(page, 'Add an operation', /^OP-10/);
+  await see(page.getByRole('list', { name: 'Machines' }).getByText(/CNC-J1/));
+  await see(page.getByRole('list', { name: 'Operations' }).getByText('OP-10'));
   // The calendar closes when the page scrolls, so bring the field into view first.
   await page.getByRole('button', { name: /^First due/ }).scrollIntoViewIfNeeded();
   await page.waitForTimeout(400);
@@ -428,10 +436,23 @@ async function defineAudit({ page, stack, APP, orgName, see, shot, step, log }) 
   await page.getByRole('button', { name: /Add a question/ }).click();
   const q2 = page.getByRole('listitem', { name: 'Question 2' });
   await q2.getByLabel(/^Question/).fill('Coolant concentration');
-  await q2.getByLabel(/Answered with/).selectOption('number');
+  await pick(q2, 'Answered with', /^Numeric/);
   await q2.getByLabel('Lower limit').fill('6');
   await q2.getByLabel('Upper limit').fill('9');
   await q2.getByLabel('Unit').fill('%');
+  await page.getByRole('button', { name: /Add a question/ }).click();
+  const q3 = page.getByRole('listitem', { name: 'Question 3' });
+  await q3.getByLabel(/^Question/).fill('Condition of the floor');
+  await pick(q3, 'Answered with', /^Multiple choice/);
+  await q3.getByLabel('Option 1').fill('Clean');
+  await q3.getByLabel('Option 2').fill('Oily');
+  await q3.getByLabel('Option 2 is acceptable').uncheck();
+  await page.getByRole('button', { name: /Add a question/ }).click();
+  const q4 = page.getByRole('listitem', { name: 'Question 4' });
+  await q4.getByLabel(/^Question/).fill('Housekeeping score');
+  await pick(q4, 'Answered with', /^Rating/);
+  await pick(q4, 'Lowest acceptable rating', /^3/);
+  await q4.scrollIntoViewIfNeeded();
   await shot(page, '57-define-audit');
   await page.getByRole('button', { name: 'Define audit' }).click();
   await see(page.getByRole('heading', { name: /AUD-001 · Weekly layered process audit, CNC cell/ }));
@@ -443,7 +464,7 @@ async function defineAudit({ page, stack, APP, orgName, see, shot, step, log }) 
   const { rows: [d] } = await stack.admin.query(`select d.reference, d.frequency_kind, (select count(*)::int from public.audit_questions q where q.audit_definition_id = d.id) as questions,
       (select count(*)::int from public.audit_targets t where t.audit_definition_id = d.id) as targets from public.audit_definitions d join public.organisations o on o.id = d.organisation_id where o.name = $1`, [orgName]);
   log(`audit: ${JSON.stringify(d)}`);
-  if (!d || d.frequency_kind !== 'weekly' || d.questions !== 2 || d.targets !== 1) throw new Error('the audit was not saved as defined');
+  if (!d || d.frequency_kind !== 'weekly' || d.questions !== 4 || d.targets !== 2) throw new Error('the audit was not saved as defined');
 }
 
 /** The audit comes due on the schedule, someone carries it out, a critical question fails, and the failure becomes a draft non-conformance. */
@@ -462,6 +483,8 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
   // The tick is saved as it is made and shown a moment later, so wait for it rather than asking for it at once.
   await page.getByRole('checkbox', { name: 'OP-10' }).click();
   await page.getByRole('checkbox', { name: 'OP-10' }).and(page.locator(':checked')).waitFor();
+  await page.getByRole('checkbox', { name: /CNC-J1/ }).click();
+  await page.getByRole('checkbox', { name: /CNC-J1/ }).and(page.locator(':checked')).waitFor();
   const q1 = page.getByRole('listitem', { name: 'Question 1' });
   await q1.getByRole('radio', { name: 'Fail' }).click();
   await q1.getByLabel(/^What was found/).fill('Oil under the bench at the lathe');
@@ -469,6 +492,12 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
   const q2 = page.getByRole('listitem', { name: 'Question 2' });
   await q2.getByLabel('Answer to question 2').fill('7.5');
   await q2.getByLabel('Answer to question 2').press('Tab');
+  // Each question shows the control its type asked for: a drop-down of the options, and the rating scale.
+  const q3 = page.getByRole('listitem', { name: 'Question 3' });
+  await q3.getByRole('combobox', { name: 'Answer to question 3' }).click();
+  await page.getByRole('option', { name: 'Clean' }).click();
+  const q4 = page.getByRole('listitem', { name: 'Question 4' });
+  await q4.getByRole('radiogroup', { name: 'Answer to question 4' }).getByRole('radio', { name: '4', exact: true }).click();
   await shot(page, '60-audit-record-answered');
   await page.getByRole('button', { name: 'Complete audit' }).click();
   await see(page.getByRole('status').filter({ hasText: /Failed with/ }));
@@ -496,7 +525,7 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
     [orgName]
   );
   log(`audit record: ${JSON.stringify(r)}`);
-  if (!r || r.status !== 'completed' || r.result !== 'fail' || r.critical_failed_count !== 1 || !r.scheduled || r.links !== 1 || r.targets !== 1) throw new Error('the audit was not carried out as expected');
+  if (!r || r.status !== 'completed' || r.result !== 'fail' || r.critical_failed_count !== 1 || !r.scheduled || r.links !== 1 || r.targets !== 2) throw new Error('the audit was not carried out as expected');
 }
 
 /** A non-conformance names the lot it touches; the lot gate then asks for a disposition that covers that lot. */

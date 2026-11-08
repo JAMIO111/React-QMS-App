@@ -4,8 +4,8 @@ import SearchBar from "./ui/SearchBar";
 import { useUser } from "../contexts/UserProvider";
 import { useNotification } from "../contexts/NotificationProvider";
 import { useNotifications } from "../hooks/useNotifications";
-import useSignedAvatarUrl from "../hooks/useSignedAvatarURL";
 import OrganisationSwitcher from "./OrganisationSwitcher";
+import ProfileMenu from "./ProfileMenu";
 
 const Header = () => {
   const { profile } = useUser();
@@ -14,7 +14,6 @@ const Header = () => {
     profile?.email ||
     "User";
   const jobTitle = profile?.job_title ?? "";
-  const { signedUrl: avatarUrl } = useSignedAvatarUrl(profile?.avatar_path);
   const { openPane } = useNotification();
   const { data: notificationData } = useNotifications();
 
@@ -42,11 +41,7 @@ const Header = () => {
             {jobTitle}
           </span>
         </div>
-        <img
-          className="rounded-lg border-1 border-border-color w-10 h-10 object-cover"
-          src={avatarUrl || "/fortress-qms.png"}
-          alt="Profile Pic"
-        />
+        <ProfileMenu />
       </div>
     </header>
   );

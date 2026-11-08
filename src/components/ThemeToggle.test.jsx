@@ -54,3 +54,18 @@ describe("ThemeToggle", () => {
     expect(container.querySelectorAll("button > div")).toHaveLength(1);
   });
 });
+
+describe("ThemeToggle with another switch on the page", () => {
+  it("follows a change made through useTheme elsewhere (the profile menu)", async () => {
+    localStorage.clear();
+    document.documentElement.classList.remove("dark");
+    const { default: useTheme } = await import("../hooks/useTheme");
+    const { act, renderHook } = await import("@testing-library/react");
+    render(<ThemeToggle menuExpanded />);
+    expect(screen.getByText("Light Mode")).toBeInTheDocument();
+    const other = renderHook(() => useTheme());
+    act(() => other.result.current[1]("dark"));
+    expect(screen.getByText("Dark Mode")).toBeInTheDocument();
+    expect(document.documentElement).toHaveClass("dark");
+  });
+});

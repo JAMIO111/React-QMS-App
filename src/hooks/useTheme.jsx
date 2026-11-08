@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 const STORAGE_KEY = "theme";
+const CHANGE_EVENT = "qms-theme-change";
 const darkQuery = () => window.matchMedia?.("(prefers-color-scheme: dark)");
 
 const readPreference = () => {
@@ -50,8 +51,17 @@ const useTheme = () => {
     return () => query.removeEventListener("change", onChange);
   }, [preference]);
 
+  // Several places can offer the switch (side menu, profile menu): tell the others when one changes it.
+  useEffect(() => {
+    const onChange = (e) => setPreference(e.detail);
+    window.addEventListener(CHANGE_EVENT, onChange);
+    return () => window.removeEventListener(CHANGE_EVENT, onChange);
+  }, []);
+
   const setTheme = useCallback((value) => {
-    setPreference(value === "light" || value === "dark" ? value : "system");
+    const next = value === "light" || value === "dark" ? value : "system";
+    setPreference(next);
+    window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: next }));
   }, []);
 
   return [mode, setTheme, preference];

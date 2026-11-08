@@ -1,27 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import { LoaderCircleIcon, LogOutIcon } from "@/components/icons";
-import { signOut } from "../authService";
-import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import useSignOut from "../hooks/useSignOut";
 
 const Logout = ({ isExpanded }) => {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [busy, setBusy] = useState(false);
-
-  const handleLogout = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await signOut(); // wait for Supabase to complete logout
-      queryClient.clear(); // drop the previous user's cached data
-      navigate("/login");
-    } catch (error) {
-      console.error("Logout failed:", error.message);
-      // Optionally show an alert or toast to the user
-      setBusy(false);
-    }
-  };
+  const [handleLogout, busy] = useSignOut();
 
   return (
     <button

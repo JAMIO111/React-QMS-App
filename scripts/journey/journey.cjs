@@ -867,4 +867,27 @@ async function workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, l
               where o.name = $1 and i.work_order = 'WO-J-1001') as job`, [orgName]);
   log(`orders before ${before}, after ${after.orders}; the old job: ${after.job}`);
   if (after.orders <= before || after.job !== 'WO-J-1001/true') throw new Error('the old inspection was not linked to a production order with its text left alone');
+
+  step('the profile picture opens the account menu: who, Settings, Help, dark mode, Logout');
+  await page.goto(`${APP}/`);
+  await page.getByRole('button', { name: 'Account menu' }).click();
+  const accountMenu = page.getByRole('menu', { name: 'Account menu' });
+  await see(accountMenu);
+  for (const name of ['Settings', 'Help', 'Dark mode', 'Logout']) await see(accountMenu.getByRole(name === 'Dark mode' ? 'menuitemcheckbox' : 'menuitem', { name: new RegExp(name) }));
+  await shot(page, '67-account-menu');
+  await accountMenu.getByRole('menuitemcheckbox', { name: 'Dark mode' }).click();
+  await page.waitForFunction(() => document.documentElement.classList.contains('dark'));
+  await see(accountMenu); // choosing a switch leaves the menu open
+  await page.waitForTimeout(500); // let the colours finish fading
+  if ((await accountMenu.getByRole('menuitemcheckbox', { name: 'Dark mode' }).getAttribute('aria-checked')) !== 'true') throw new Error('the dark mode switch does not show on');
+  await shot(page, '68-account-menu-dark');
+  await page.reload();
+  if (!(await page.evaluate(() => document.documentElement.classList.contains('dark')))) throw new Error('dark mode was not remembered after a reload');
+  await page.getByRole('button', { name: 'Account menu' }).click();
+  await page.getByRole('menu', { name: 'Account menu' }).getByRole('menuitemcheckbox', { name: 'Dark mode' }).click(); // back to light
+  await page.keyboard.press('Escape');
+  if (await page.getByRole('menu', { name: 'Account menu' }).count()) throw new Error('Escape did not close the account menu');
+  await page.getByRole('button', { name: 'Account menu' }).click();
+  await page.getByRole('menu', { name: 'Account menu' }).getByRole('menuitem', { name: 'Settings' }).click();
+  await page.waitForURL(/\/Settings/);
 }

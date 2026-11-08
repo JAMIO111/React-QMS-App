@@ -444,8 +444,8 @@ async function defineAudit({ page, stack, APP, orgName, see, shot, step, log }) 
   const q3 = page.getByRole('listitem', { name: 'Question 3' });
   await q3.getByLabel(/^Question/).fill('Condition of the floor');
   await pick(q3, 'Answered with', /^Multiple choice/);
-  await q3.getByLabel('Option 1').fill('Clean');
-  await q3.getByLabel('Option 2').fill('Oily');
+  await q3.getByLabel('Option 1', { exact: true }).fill('Clean');
+  await q3.getByLabel('Option 2', { exact: true }).fill('Oily');
   await q3.getByLabel('Option 2 is acceptable').uncheck();
   await page.getByRole('button', { name: /Add a question/ }).click();
   const q4 = page.getByRole('listitem', { name: 'Question 4' });

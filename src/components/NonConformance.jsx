@@ -55,7 +55,9 @@ const toCsvRow = (n) => ({
 const NonConformance = () => {
   const navigate = useNavigate();
   const { can } = usePermissions();
-  const [sorting, setSortingState] = useState([{ id: "reference", desc: true }]);
+  const [sorting, setSortingState] = useState([
+    { id: "reference", desc: true },
+  ]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [rowSelection, setRowSelection] = useState({});
   const [activeModalType, setActiveModalType] = useState(null);
@@ -74,13 +76,27 @@ const NonConformance = () => {
 
   const allColumns = useMemo(() => getNcColumns(), []);
   const prefs = useTablePreferences("nc-register");
-  const { columnSizing, setColumnSizing, columnOrder, setColumnOrder, resetColumns } = prefs;
+  const {
+    columnSizing,
+    setColumnSizing,
+    columnOrder,
+    setColumnOrder,
+    resetColumns,
+  } = prefs;
   // Some columns only apply to some sources and start hidden; a saved choice wins.
-  const columnVisibility = useMemo(() => ({ ...NC_DEFAULT_HIDDEN, ...prefs.columnVisibility }), [prefs.columnVisibility]);
+  const columnVisibility = useMemo(
+    () => ({ ...NC_DEFAULT_HIDDEN, ...prefs.columnVisibility }),
+    [prefs.columnVisibility],
+  );
   const setColumnVisibility = useCallback(
-    (updater) => prefs.setColumnVisibility((saved) => (typeof updater === "function" ? updater({ ...NC_DEFAULT_HIDDEN, ...saved }) : updater)),
+    (updater) =>
+      prefs.setColumnVisibility((saved) =>
+        typeof updater === "function"
+          ? updater({ ...NC_DEFAULT_HIDDEN, ...saved })
+          : updater,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [prefs.setColumnVisibility]
+    [prefs.setColumnVisibility],
   );
 
   const setPage = useCallback(
@@ -90,7 +106,7 @@ const NonConformance = () => {
         params.set("page", newPage);
         return params;
       }),
-    [setSearchParams]
+    [setSearchParams],
   );
 
   // A new sort order starts from the first page.
@@ -99,7 +115,9 @@ const NonConformance = () => {
     if (page !== 1) setPage(1);
   };
 
-  const sortColumn = sorting[0] ? allColumns.find((c) => c.id === sorting[0].id)?.meta?.sortKey : undefined;
+  const sortColumn = sorting[0]
+    ? allColumns.find((c) => c.id === sorting[0].id)?.meta?.sortKey
+    : undefined;
   const { data, isLoading, isFetching, error, refetch } = useNcrs({
     source: filters.source,
     categoryId: filters.category,
@@ -137,7 +155,8 @@ const NonConformance = () => {
   // The header search box feeds the register search.
   const currentSearch = filters.search;
   useEffect(() => {
-    if ((debouncedSearchTerm ?? "") !== currentSearch) updateFilters({ search: debouncedSearchTerm });
+    if ((debouncedSearchTerm ?? "") !== currentSearch)
+      updateFilters({ search: debouncedSearchTerm });
     // Only react to the header search box; URL changes elsewhere must not loop back.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearchTerm]);
@@ -146,37 +165,206 @@ const NonConformance = () => {
     setViewGrid(grid);
     setActiveModalType(null);
   };
-  const handleActiveModalType = (t) => setActiveModalType((prev) => (prev === t ? null : t));
+  const handleActiveModalType = (t) =>
+    setActiveModalType((prev) => (prev === t ? null : t));
   const rowActions = useNcrRowActions({ onDelete: setDeleting });
   const openRecord = (record) => navigate(ncrPath(record.id));
 
-  const totalQuantity = selectedRows.reduce((acc, r) => acc + (Number(r.quantityAffected) || 0), 0);
-  const filterCount = [
-    "source", "category", "uncategorised", "stage", "severity", "failureMode", "subFailureMode", "deleted", "part", "customer", "supplier",
-  ].filter((k) => filters[k]).length + (filters.from || filters.to ? 1 : 0) + (filters.costMin || filters.costMax ? 1 : 0) + (filters.qtyMin || filters.qtyMax ? 1 : 0);
-  const between = (lo, hi, fmt = (v) => v) => (lo && hi ? `${fmt(lo)} – ${fmt(hi)}` : lo ? `from ${fmt(lo)}` : `up to ${fmt(hi)}`);
-  const nameOf = (id) => (lists?.all ?? []).find((c) => c.id === id)?.name ?? "…";
+  const totalQuantity = selectedRows.reduce(
+    (acc, r) => acc + (Number(r.quantityAffected) || 0),
+    0,
+  );
+  const filterCount =
+    [
+      "source",
+      "category",
+      "uncategorised",
+      "stage",
+      "severity",
+      "failureMode",
+      "subFailureMode",
+      "deleted",
+      "part",
+      "customer",
+      "supplier",
+    ].filter((k) => filters[k]).length +
+    (filters.from || filters.to ? 1 : 0) +
+    (filters.costMin || filters.costMax ? 1 : 0) +
+    (filters.qtyMin || filters.qtyMax ? 1 : 0);
+  const between = (lo, hi, fmt = (v) => v) =>
+    lo && hi
+      ? `${fmt(lo)} – ${fmt(hi)}`
+      : lo
+        ? `from ${fmt(lo)}`
+        : `up to ${fmt(hi)}`;
+  const nameOf = (id) =>
+    (lists?.all ?? []).find((c) => c.id === id)?.name ?? "…";
   // A quick tab is a source filter; it shows as the highlighted tab, not as a chip.
-  const activeTab = NC_TABS.find((t) => t.source && t.source === filters.source);
+  const activeTab = NC_TABS.find(
+    (t) => t.source && t.source === filters.source,
+  );
   // What the register is currently filtered by, each removable on its own.
   const activeFilters = [
-    ...(filters.search ? [{ key: "search", label: `Search: “${filters.search}”`, clear: { search: "" } }] : []),
-    ...(filters.from || filters.to ? [{ key: "date", label: `Detected ${between(filters.from, filters.to, formatDate)}`, clear: { from: "", to: "" } }] : []),
-    ...(filters.stage ? [{ key: "stage", label: `Stage: ${filters.stage.split(",").map((k) => stageOf(k).label).join(", ")}`, clear: { stage: "" } }] : []),
-    ...(filters.severity ? [{ key: "severity", label: `Severity: ${filters.severity.split(",").map((k) => k[0].toUpperCase() + k.slice(1)).join(", ")}`, clear: { severity: "" } }] : []),
-    ...(filters.order ? [{ key: "order", label: `Order: ${filters.orderLabel || "selected order"}`, clear: { order: "", orderLabel: "" } }] : []),
-    ...(filters.lot ? [{ key: "lot", label: `Lot: ${filters.lotLabel || "selected lot"}`, clear: { lot: "", lotLabel: "" } }] : []),
-    ...(filters.part ? [{ key: "part", label: `Part: ${filters.partLabel || "selected part"}`, clear: { part: "", partLabel: "" } }] : []),
-    ...(filters.customer ? [{ key: "customer", label: `Customer: ${filters.customerLabel || "selected"}`, clear: { customer: "", customerLabel: "" } }] : []),
-    ...(filters.supplier ? [{ key: "supplier", label: `Supplier: ${filters.supplierLabel || "selected"}`, clear: { supplier: "", supplierLabel: "" } }] : []),
-    ...(filters.source && !activeTab ? [{ key: "source", label: `Source: ${filters.source.split(",").map(sourceLabel).join(", ")}`, clear: { source: "" } }] : []),
-    ...(filters.category ? [{ key: "category", label: `Category: ${filters.categoryLabel || nameOf(filters.category)}`, clear: { category: "", categoryLabel: "" } }] : []),
-    ...(filters.uncategorised ? [{ key: "uncategorised", label: "Uncategorised", clear: { uncategorised: "" } }] : []),
-    ...(filters.costMin || filters.costMax ? [{ key: "cost", label: `Total cost ${between(filters.costMin, filters.costMax, (v) => formatMoney(Number(v), rows[0]?.costCurrency ?? "GBP").replace(/\.00$/, ""))}`, clear: { costMin: "", costMax: "" } }] : []),
-    ...(filters.qtyMin || filters.qtyMax ? [{ key: "qty", label: `Quantity ${between(filters.qtyMin, filters.qtyMax)}`, clear: { qtyMin: "", qtyMax: "" } }] : []),
-    ...(filters.failureMode ? [{ key: "failureMode", label: `Failure mode: ${nameOf(filters.failureMode)}`, clear: { failureMode: "", subFailureMode: "" } }] : []),
-    ...(filters.subFailureMode ? [{ key: "subFailureMode", label: `Sub-failure mode: ${nameOf(filters.subFailureMode)}`, clear: { subFailureMode: "" } }] : []),
-    ...(filters.deleted ? [{ key: "deleted", label: filters.deleted === "only" ? "Deleted only" : "Including deleted", clear: { deleted: "" } }] : []),
+    ...(filters.search
+      ? [
+          {
+            key: "search",
+            label: `Search: “${filters.search}”`,
+            clear: { search: "" },
+          },
+        ]
+      : []),
+    ...(filters.from || filters.to
+      ? [
+          {
+            key: "date",
+            label: `Detected ${between(filters.from, filters.to, formatDate)}`,
+            clear: { from: "", to: "" },
+          },
+        ]
+      : []),
+    ...(filters.stage
+      ? [
+          {
+            key: "stage",
+            label: `Stage: ${filters.stage
+              .split(",")
+              .map((k) => stageOf(k).label)
+              .join(", ")}`,
+            clear: { stage: "" },
+          },
+        ]
+      : []),
+    ...(filters.severity
+      ? [
+          {
+            key: "severity",
+            label: `Severity: ${filters.severity
+              .split(",")
+              .map((k) => k[0].toUpperCase() + k.slice(1))
+              .join(", ")}`,
+            clear: { severity: "" },
+          },
+        ]
+      : []),
+    ...(filters.order
+      ? [
+          {
+            key: "order",
+            label: `Order: ${filters.orderLabel || "selected order"}`,
+            clear: { order: "", orderLabel: "" },
+          },
+        ]
+      : []),
+    ...(filters.lot
+      ? [
+          {
+            key: "lot",
+            label: `Lot: ${filters.lotLabel || "selected lot"}`,
+            clear: { lot: "", lotLabel: "" },
+          },
+        ]
+      : []),
+    ...(filters.part
+      ? [
+          {
+            key: "part",
+            label: `Part: ${filters.partLabel || "selected part"}`,
+            clear: { part: "", partLabel: "" },
+          },
+        ]
+      : []),
+    ...(filters.customer
+      ? [
+          {
+            key: "customer",
+            label: `Customer: ${filters.customerLabel || "selected"}`,
+            clear: { customer: "", customerLabel: "" },
+          },
+        ]
+      : []),
+    ...(filters.supplier
+      ? [
+          {
+            key: "supplier",
+            label: `Supplier: ${filters.supplierLabel || "selected"}`,
+            clear: { supplier: "", supplierLabel: "" },
+          },
+        ]
+      : []),
+    ...(filters.source && !activeTab
+      ? [
+          {
+            key: "source",
+            label: `Source: ${filters.source.split(",").map(sourceLabel).join(", ")}`,
+            clear: { source: "" },
+          },
+        ]
+      : []),
+    ...(filters.category
+      ? [
+          {
+            key: "category",
+            label: `Category: ${filters.categoryLabel || nameOf(filters.category)}`,
+            clear: { category: "", categoryLabel: "" },
+          },
+        ]
+      : []),
+    ...(filters.uncategorised
+      ? [
+          {
+            key: "uncategorised",
+            label: "Uncategorised",
+            clear: { uncategorised: "" },
+          },
+        ]
+      : []),
+    ...(filters.costMin || filters.costMax
+      ? [
+          {
+            key: "cost",
+            label: `Total cost ${between(filters.costMin, filters.costMax, (v) => formatMoney(Number(v), rows[0]?.costCurrency ?? "GBP").replace(/\.00$/, ""))}`,
+            clear: { costMin: "", costMax: "" },
+          },
+        ]
+      : []),
+    ...(filters.qtyMin || filters.qtyMax
+      ? [
+          {
+            key: "qty",
+            label: `Quantity ${between(filters.qtyMin, filters.qtyMax)}`,
+            clear: { qtyMin: "", qtyMax: "" },
+          },
+        ]
+      : []),
+    ...(filters.failureMode
+      ? [
+          {
+            key: "failureMode",
+            label: `Failure mode: ${nameOf(filters.failureMode)}`,
+            clear: { failureMode: "", subFailureMode: "" },
+          },
+        ]
+      : []),
+    ...(filters.subFailureMode
+      ? [
+          {
+            key: "subFailureMode",
+            label: `Sub-failure mode: ${nameOf(filters.subFailureMode)}`,
+            clear: { subFailureMode: "" },
+          },
+        ]
+      : []),
+    ...(filters.deleted
+      ? [
+          {
+            key: "deleted",
+            label:
+              filters.deleted === "only" ? "Deleted only" : "Including deleted",
+            clear: { deleted: "" },
+          },
+        ]
+      : []),
   ];
   const clearFilters = (values) => {
     updateFilters(values);
@@ -192,24 +380,39 @@ const NonConformance = () => {
               <Breadcrumb />
             </Suspense>
             <p className="text-sm h-4 text-primary-text" aria-live="polite">
-              {selectedRows.length > 0 && `${selectedRows.length} selected · Qty ${totalQuantity.toLocaleString()}`}
-              {selectedRows.length === 0 && !isLoading && `${totalCount.toLocaleString()} ${totalCount === 1 ? "record" : "records"}${filters.deleted === "only" ? " (deleted)" : ""}`}
+              {selectedRows.length > 0 &&
+                `${selectedRows.length} selected · Qty ${totalQuantity.toLocaleString()}`}
+              {selectedRows.length === 0 &&
+                !isLoading &&
+                `${totalCount.toLocaleString()} ${totalCount === 1 ? "record" : "records"}${filters.deleted === "only" ? " (deleted)" : ""}`}
             </p>
           </div>
           <Suspense fallback={null}>
             <div className="flex flex-row justify-end items-center gap-3">
               {selectedRows.length !== 0 && (
                 <CTAButton
-                  callbackFn={() => exportCSV(selectedRows.map(toCsvRow), "non-conformances.csv")}
+                  callbackFn={() =>
+                    exportCSV(
+                      selectedRows.map(toCsvRow),
+                      "non-conformances.csv",
+                    )
+                  }
                   text="Export CSV"
                   type="success"
                   title="Export the selected records to a CSV file"
                   icon={ShareIcon}
-                  iconSize="h-6 w-6"
+                  iconSize="h-5 w-5"
                 />
               )}
               {!viewGrid && (
-                <ColumnVisibilityMenu columns={allColumns} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} columnOrder={columnOrder} onColumnOrderChange={setColumnOrder} onReset={resetColumns} />
+                <ColumnVisibilityMenu
+                  columns={allColumns}
+                  columnVisibility={columnVisibility}
+                  onColumnVisibilityChange={setColumnVisibility}
+                  columnOrder={columnOrder}
+                  onColumnOrderChange={setColumnOrder}
+                  onReset={resetColumns}
+                />
               )}
               <ViewToggle viewGrid={viewGrid} setViewGrid={handleSetView} />
               {can("ncr.create") && (
@@ -218,7 +421,7 @@ const NonConformance = () => {
                   text="New NC"
                   type="main"
                   icon={PlusIcon}
-                  iconSize="h-6 w-6"
+                  iconSize="h-5 w-5"
                   title="Raise a new non-conformance"
                 />
               )}
@@ -231,7 +434,13 @@ const NonConformance = () => {
                 icon={<SlidersHorizontalIcon className="h-4.5 w-4.5" />}
               />
               {/* The drawer calls onClose after sliding out; by then another menu may be open, so only clear the filter. */}
-              {activeModalType === "Filter" && <FilterPane onClose={() => setActiveModalType((t) => (t === "Filter" ? null : t))} />}
+              {activeModalType === "Filter" && (
+                <FilterPane
+                  onClose={() =>
+                    setActiveModalType((t) => (t === "Filter" ? null : t))
+                  }
+                />
+              )}
             </div>
           </Suspense>
         </div>
@@ -242,20 +451,35 @@ const NonConformance = () => {
           mode="tabs"
           options={NC_TABS.map((t) => ({ value: t.key, label: t.label }))}
           value={filters.source ? activeTab?.key : "all"}
-          onChange={(key) => updateFilters({ source: NC_TABS.find((t) => t.key === key).source })}
+          onChange={(key) =>
+            updateFilters({ source: NC_TABS.find((t) => t.key === key).source })
+          }
         />
       </div>
       {activeFilters.length > 0 && (
-        <div aria-label="Active filters" className="flex flex-wrap items-center gap-2 px-1 text-sm">
+        <div
+          aria-label="Active filters"
+          className="flex flex-wrap items-center gap-2 px-1 text-sm">
           {activeFilters.map((f) => (
-            <span key={f.key} className="flex items-center gap-1 rounded-full border border-brand-primary/50 bg-brand-primary/10 py-0.5 pl-3 pr-1 text-primary-text">
+            <span
+              key={f.key}
+              className="flex items-center gap-1 rounded-full border border-brand-primary/50 bg-brand-primary/10 py-0.5 pl-3 pr-1 text-primary-text">
               {f.label}
-              <button type="button" aria-label={`Remove filter ${f.label}`} onClick={() => clearFilters(f.clear)} className="rounded-full p-0.5 hover:bg-brand-primary/20 cursor-pointer">
+              <button
+                type="button"
+                aria-label={`Remove filter ${f.label}`}
+                onClick={() => clearFilters(f.clear)}
+                className="rounded-full p-0.5 hover:bg-brand-primary/20 cursor-pointer">
                 <XIcon className="h-3.5 w-3.5" />
               </button>
             </span>
           ))}
-          <button type="button" onClick={() => clearFilters(Object.fromEntries(FILTER_KEYS.map((k) => [k, ""])))} className="text-link-color hover:underline cursor-pointer">
+          <button
+            type="button"
+            onClick={() =>
+              clearFilters(Object.fromEntries(FILTER_KEYS.map((k) => [k, ""])))
+            }
+            className="text-link-color hover:underline cursor-pointer">
             Clear all
           </button>
         </div>
@@ -313,12 +537,19 @@ const NonConformance = () => {
 
       {choosingSource && (
         <NewNcDialog
-          initial={activeTab?.source.split(",")[0] ?? (filters.source && !filters.source.includes(",") ? filters.source : "internal")}
+          initial={
+            activeTab?.source.split(",")[0] ??
+            (filters.source && !filters.source.includes(",")
+              ? filters.source
+              : "internal")
+          }
           onClose={() => setChoosingSource(false)}
           onChoose={(source) => navigate(ncrPath("new", source))}
         />
       )}
-      {deleting && <DeleteNcrDialog ncr={deleting} onClose={() => setDeleting(null)} />}
+      {deleting && (
+        <DeleteNcrDialog ncr={deleting} onClose={() => setDeleting(null)} />
+      )}
     </div>
   );
 };

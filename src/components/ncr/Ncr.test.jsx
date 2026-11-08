@@ -333,6 +333,19 @@ describe("NC registers", () => {
     await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Register/new?source=calibration"));
   });
 
+  it("shows the quantity and the total cost of the selected rows", async () => {
+    routeApi({ "GET /ncrs": { data: [ncr(), ncr({ id: "n2", reference: "NCM-26-002", quantityAffected: 6, totalCost: 100.5 }), ncr({ id: "n3", reference: "NCM-26-003", quantityAffected: 9, totalCost: 7 })], page: 1, pageSize: 25, total: 3 } });
+    renderAt("/Non-Conformance/Register");
+    await screen.findByText("NCM-26-001");
+    expect(screen.getByText("3 records")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select NCM-26-001" }));
+    expect(screen.getByText("1 selected · Qty 4 · Cost £292.40")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select NCM-26-002" }));
+    expect(screen.getByText("2 selected · Qty 10 · Cost £392.90")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select NCM-26-001" }));
+    expect(screen.getByText("1 selected · Qty 6 · Cost £100.50")).toBeInTheDocument();
+  });
+
   it("sorts on the server when a header is clicked", async () => {
     routeApi({ "GET /ncrs": { data: [ncr()], page: 1, pageSize: 25, total: 1 } });
     renderAt("/Non-Conformance/Register");

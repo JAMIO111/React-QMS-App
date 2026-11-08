@@ -152,6 +152,8 @@ const NonConformance = () => {
   const openRecord = (record) => navigate(ncrPath(record.id));
 
   const totalQuantity = selectedRows.reduce((acc, r) => acc + (Number(r.quantityAffected) || 0), 0);
+  // Costs are kept in the organisation's base currency, so the rows add up.
+  const totalCost = selectedRows.reduce((acc, r) => acc + (Number(r.totalCost) || 0), 0);
   const filterCount = [
     "source", "category", "uncategorised", "stage", "severity", "failureMode", "subFailureMode", "deleted", "part", "customer", "supplier",
   ].filter((k) => filters[k]).length + (filters.from || filters.to ? 1 : 0) + (filters.costMin || filters.costMax ? 1 : 0) + (filters.qtyMin || filters.qtyMax ? 1 : 0);
@@ -191,7 +193,7 @@ const NonConformance = () => {
               <Breadcrumb />
             </Suspense>
             <p className="text-sm h-4 text-primary-text" aria-live="polite">
-              {selectedRows.length > 0 && `${selectedRows.length} selected · Qty ${totalQuantity.toLocaleString()}`}
+              {selectedRows.length > 0 && `${selectedRows.length} selected · Qty ${totalQuantity.toLocaleString()} · Cost ${formatMoney(totalCost, selectedRows[0]?.costCurrency || "GBP")}`}
               {selectedRows.length === 0 && !isLoading && `${totalCount.toLocaleString()} ${totalCount === 1 ? "record" : "records"}${filters.deleted === "only" ? " (deleted)" : ""}`}
             </p>
           </div>

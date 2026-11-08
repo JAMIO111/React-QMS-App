@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -128,7 +129,7 @@ describe("button styling", () => {
       else if (/\.(jsx?|tsx?)$/.test(name) && !/\.test\./.test(name)) files.push(full);
     }
   };
-  walk(join(__dirname, ".."));
+  walk(join(fileURLToPath(new URL(".", import.meta.url)), ".."));
   // Not buttons: a selected-date marker and the sliding highlight of the grid / list switch.
   const NOT_BUTTONS = ["CTAButton.jsx", "DateRangePicker.jsx", "ViewToggle.jsx"];
 

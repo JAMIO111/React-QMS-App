@@ -63,6 +63,7 @@ const routeApi = (routes) =>
     // ... and its containment, dispositions and what is still needed for each stage.
     if (!(k in all) && /^GET \/ncrs\/[^/]+\/containment$/.test(k)) return { actions: [], notNeededReason: null, resolved: false, problems: ["record a containment action, or say why none is needed"] };
     if (!(k in all) && /^GET \/ncrs\/[^/]+\/dispositions$/.test(k)) return { data: [], affected: 5, approvedQuantity: 0, proposedQuantity: 0, remaining: 5, canApprove: true, settled: false, problems: ["approved dispositions cover 0 of the 5 affected"] };
+    if (!(k in all) && /^GET \/ncrs\/[^/]+\/affected-lots$/.test(k)) return { data: [], affected: 5, assigned: 0, remaining: 5, suggestedLot: null, problems: [] };
     if (!(k in all) && /^GET \/ncrs\/[^/]+\/gates$/.test(k)) return { contained: [], investigating: [], dispositioned: [], awaitingClosure: [], closed: [] };
     if (!(k in all)) throw new Error(`unexpected ${k}`);
     return typeof all[k] === "function" ? all[k](path, opts) : all[k];
@@ -633,5 +634,20 @@ describe("NC form: production records", () => {
     expect(screen.getByRole("combobox", { name: "Production order" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Lot" })).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Serial number" })).toBeNull();
+  });
+
+  it("has an Affected lots section while lots are used, and none when they are switched off or the NC is new", async () => {
+    orgProduction = {};
+    routeApi({ "GET /ncrs/n1": ncr({ links: links() }), "GET /ncrs/n1/affected-lots": { data: [], affected: 4, assigned: 0, remaining: 4, suggestedLot: null, problems: [] }, ...lookups });
+    permissions = [...ALL, "production.read"];
+    const { unmount } = renderAt("/Non-Conformance/Internal/n1");
+    await screen.findByLabelText("Title");
+    expect((await screen.findAllByRole("heading", { name: "Affected lots" })).length).toBeGreaterThan(0);
+    unmount();
+    orgProduction = { useLotsAndSerials: false };
+    renderAt("/Non-Conformance/Internal/n1");
+    await screen.findByLabelText("Title");
+    expect(screen.queryAllByRole("heading", { name: "Affected lots" })).toHaveLength(0);
+    expect(screen.queryByText("Which lots are involved")).toBeNull();
   });
 });

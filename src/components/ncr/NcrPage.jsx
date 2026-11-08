@@ -27,6 +27,7 @@ import {
   Undo2Icon,
   UsersIcon,
   WrenchIcon,
+  BoxesIcon,
 } from "@/components/icons";
 import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
@@ -54,6 +55,7 @@ import { LotPicker, OrderPicker, SerialPicker } from "../production/pickers";
 import LinkNotices from "../production/LinkNotices";
 import LoadingScreen from "../ui/LoadingScreen";
 import NcrCapaCard from "../capa/NcrCapaCard";
+import NcrAffectedLots from "./NcrAffectedLots";
 import NcrContainment from "./NcrContainment";
 import NcrDispositions from "./NcrDispositions";
 import { useNcrGates } from "../../hooks/useNcr";
@@ -102,7 +104,7 @@ const NcrPage = () => {
   const form = watch();
   const [dialog, setDialog] = useState(null); // "cancel" | "reopen" | "delete"
   const scrollRef = useRef(null);
-  const refs = { details: useRef(null), cost: useRef(null), containment: useRef(null), investigation: useRef(null), disposition: useRef(null), info: useRef(null), history: useRef(null) };
+  const refs = { details: useRef(null), cost: useRef(null), lots: useRef(null), containment: useRef(null), investigation: useRef(null), disposition: useRef(null), info: useRef(null), history: useRef(null) };
 
   const original = useMemo(() => (ncr ? toForm(ncr) : EMPTY), [ncr]);
   useEffect(() => reset(original), [original, reset]);
@@ -200,6 +202,7 @@ const NcrPage = () => {
   const sections = [
     { key: "details", title: "NC Details", subtitle: "Log NC information", icon: ClipboardListIcon },
     { key: "cost", title: "Cost", subtitle: "Track NC expenses", icon: PoundSterlingIcon, needsRecord: true },
+    ...(settings.useLotsAndSerials ? [{ key: "lots", title: "Affected lots", subtitle: "Which lots are involved", icon: BoxesIcon, needsRecord: true }] : []),
     { key: "containment", title: "Containment", subtitle: "Stop suspect product", icon: ShieldCheckIcon, needsRecord: true },
     { key: "investigation", title: "Investigation", subtitle: "Classify the cause", icon: WrenchIcon },
     { key: "disposition", title: "Disposition", subtitle: "What happens to the items", icon: ClipboardCheckIcon, needsRecord: true },
@@ -385,6 +388,15 @@ const NcrPage = () => {
                   <NcrCosts ncrId={ncr.id} siteId={ncr.site?.id} canEdit={can("ncr.update") && !locked} />
                 </Card>
               </>
+            )}
+
+            {!isNew && settings.useLotsAndSerials && (
+              <div onSubmit={(e) => e.stopPropagation()} className="flex flex-col gap-5">
+                <SectionHeading id="ncr-lots" title="Affected lots" sectionRef={refs.lots} />
+                <Card>
+                  <NcrAffectedLots ncrId={ncr.id} partId={ncr.part?.id} canEdit={can("ncr.update") && !locked} />
+                </Card>
+              </div>
             )}
 
             {!isNew && (

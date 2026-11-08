@@ -7,7 +7,7 @@ import { buttonClass, ErrorNotice, FormError, SelectField } from "../master-data
 import { TextAreaField } from "./Pickers";
 import ReasonDialog from "./ReasonDialog";
 import { useToast } from "../../contexts/ToastProvider";
-import { useNcrDispositions, useNcrMutation } from "../../hooks/useNcr";
+import { useNcrAffectedLots, useNcrDispositions, useNcrMutation } from "../../hooks/useNcr";
 import { DISPOSITION_DECISIONS, decisionLabel } from "../../lib/ncrWorkflow";
 import { formatDate } from "../../lib/ncr";
 
@@ -18,7 +18,7 @@ const STATUS = {
 };
 
 /** Propose or change a disposition (only a proposed one can be changed). */
-const DispositionDialog = ({ ncrId, disposition, remaining, onClose }) => {
+const DispositionDialog = ({ ncrId, disposition, remaining, lots, onClose }) => {
   const mutation = useNcrMutation();
   const { showToast } = useToast();
   const [form, setForm] = useState({
@@ -26,13 +26,17 @@ const DispositionDialog = ({ ncrId, disposition, remaining, onClose }) => {
     quantity: disposition?.quantity ?? (remaining > 0 ? remaining : ""),
     instructions: disposition?.instructions ?? "",
     reference: disposition?.reference ?? "",
+    lotId: disposition?.lot?.id ?? null,
   });
-  const max = (remaining ?? 0) + (disposition?.quantity ?? 0);
+  // A disposition naming a lot also has to fit what is left of that lot.
+  const lot = lots.find((l) => l.lot.id === form.lotId);
+  const lotLeft = lot ? lot.quantity - lot.approvedQuantity - lot.proposedQuantity + (disposition?.lot?.id === lot.lot.id ? disposition.quantity : 0) : Infinity;
+  const max = Math.min((remaining ?? 0) + (disposition?.quantity ?? 0), lotLeft);
   const qty = Number(form.quantity);
   const qtyOk = String(form.quantity).trim() !== "" && Number.isFinite(qty) && qty > 0 && qty <= max;
   const submit = (e) => {
     e.preventDefault();
-    const body = { decision: form.decision, quantity: qty, instructions: form.instructions.trim(), reference: form.reference.trim() || null };
+    const body = { decision: form.decision, quantity: qty, instructions: form.instructions.trim(), reference: form.reference.trim() || null, lotId: form.lotId };
     mutation.mutate(disposition ? { path: `/ncr-dispositions/${disposition.id}`, method: "PATCH", body } : { path: `/ncrs/${ncrId}/dispositions`, body }, {
       onSuccess: () => {
         showToast({ type: "success", title: "Saved", message: disposition ? "Disposition updated." : "Disposition proposed." });
@@ -44,6 +48,16 @@ const DispositionDialog = ({ ncrId, disposition, remaining, onClose }) => {
     <Dialog title={disposition ? "Edit the proposed disposition" : "Propose a disposition"} onClose={onClose} width="max-w-xl">
       <form onSubmit={submit} noValidate className="flex flex-col gap-3">
         <SelectField label="Decision" required value={form.decision} onChange={(v) => setForm((f) => ({ ...f, decision: v }))} options={DISPOSITION_DECISIONS} placeholder="Choose one" />
+        {lots.length > 0 && (
+          <SelectField
+            label="Lot"
+            value={form.lotId}
+            onChange={(v) => setForm((f) => ({ ...f, lotId: v || null }))}
+            options={lots.map((l) => ({ value: l.lot.id, label: `${l.lot.lotNumber} (${l.quantity} affected)` }))}
+            placeholder="Not for one lot"
+            hint="Each affected lot needs approved dispositions that cover it"
+          />
+        )}
         <Field
           label="Quantity"
           required
@@ -51,7 +65,7 @@ const DispositionDialog = ({ ncrId, disposition, remaining, onClose }) => {
           value={form.quantity}
           onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
           error={String(form.quantity).trim() !== "" && !qtyOk ? `Enter a number above 0 and up to ${max}` : undefined}
-          hint={`Up to ${max} of the affected items are not yet covered`}
+          hint={`Up to ${max} of the affected items ${lot ? "of this lot " : ""}are not yet covered`}
         />
         <TextAreaField label="Instructions" required value={form.instructions} onChange={(v) => setForm((f) => ({ ...f, instructions: v }))} maxLength={2000} rows={3} />
         <Field
@@ -128,6 +142,8 @@ const NcrDispositions = ({ ncrId, canEdit }) => {
   const [editing, setEditing] = useState(null); // "new" | disposition
   const [approving, setApproving] = useState(null);
   const [cancelling, setCancelling] = useState(null);
+  const affectedLots = useNcrAffectedLots(ncrId);
+  const lots = (affectedLots.data?.data ?? []).filter((a) => !a.removedAt);
   const d = dispositions.data;
 
   if (dispositions.isLoading) return <LoadingScreen size="sm" />;
@@ -165,6 +181,7 @@ const NcrDispositions = ({ ncrId, canEdit }) => {
                 <span className="text-sm font-medium text-primary-text">
                   {decisionLabel(x.decision)} · {x.quantity}
                 </span>
+                {x.lot && <span className="rounded-full border border-border-color px-2 py-0.5 text-xs text-secondary-text">Lot {x.lot.lotNumber}</span>}
                 <span className="ml-auto flex flex-wrap gap-2">
                   {x.status === "proposed" && d.canApprove && (
                     <button type="button" className={buttonClass.primary} onClick={() => setApproving(x)}>
@@ -208,7 +225,7 @@ const NcrDispositions = ({ ncrId, canEdit }) => {
       {!d.canApprove && live.some((x) => x.status === "proposed") && <p className="text-sm text-secondary-text">Proposed dispositions are approved by someone with approval rights.</p>}
       {mutation.error && !editing && !approving && !cancelling && <FormError error={mutation.error} />}
 
-      {editing && <DispositionDialog ncrId={ncrId} disposition={editing === "new" ? null : editing} remaining={d.remaining} onClose={() => setEditing(null)} />}
+      {editing && <DispositionDialog ncrId={ncrId} disposition={editing === "new" ? null : editing} remaining={d.remaining} lots={lots} onClose={() => setEditing(null)} />}
       {approving && <ApproveDialog disposition={approving} onClose={() => setApproving(null)} />}
       {cancelling && (
         <ReasonDialog

@@ -156,6 +156,17 @@ export const useNcrDispositions = (id) => {
   });
 };
 
+/** Lots an NC touches: { data (live and removed), affected, assigned, remaining, suggestedLot, problems }. */
+export const useNcrAffectedLots = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "affected-lots", id),
+    queryFn: () => apiFetch(`/ncrs/${id}/affected-lots`, { organisationId }),
+    enabled: !!organisationId && !!id,
+    retry: false,
+  });
+};
+
 /** What is still needed to reach each later stage: { contained, investigating, dispositioned, awaitingClosure, closed } (lists of sentences). */
 export const useNcrGates = (id) => {
   const { organisationId } = useOrganisation();

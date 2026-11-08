@@ -195,6 +195,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await correctRevision({ page, stack, APP, orgName, see, shot, step, log });
   await containAndDispose({ page, stack, APP, orgName, see, shot, step, log });
   await productionTraceability({ page, stack, APP, orgName, see, shot, step, log });
+  await affectedLots({ page, stack, APP, orgName, see, shot, step, log });
   await workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, log });
 };
 
@@ -397,6 +398,50 @@ async function containAndDispose({ page, stack, APP, orgName, see, shot, step, l
       (select count(*)::int from public.ncr_dispositions where nonconformance_id = n.id and status = 'approved') as approved from public.nonconformances n where n.id = $1`, [nc.id]);
   log(`NC ${nc.reference}: ${JSON.stringify(after)}`);
   if (after.stage !== 'dispositioned' || after.done !== 1 || after.approved !== 1) throw new Error('the NC was not dispositioned with its containment and disposition recorded');
+}
+
+/** A non-conformance names the lot it touches; the lot gate then asks for a disposition that covers that lot. */
+async function affectedLots({ page, stack, APP, orgName, see, shot, step, log }) {
+  step('the owner names the affected lot on a non-conformance, and the lot gate asks for it to be covered');
+  const { rows: [nc] } = await stack.admin.query(
+    `insert into public.nonconformances (organisation_id, reference, source, stage, title, severity, quantity_affected, description, site_id, part_id)
+     select o.id, 'pending', 'internal', 'open', 'Lot 9001 bores oversize', 'minor', 5, 'Bores oversize on part of the lot', (select id from public.sites where organisation_id = o.id order by created_at limit 1),
+            (select id from public.parts where organisation_id = o.id and part_number = 'JRN-100')
+       from public.organisations o where o.name = $1 returning id, reference`, [orgName]);
+  await page.goto(`${APP}/Non-Conformance/Internal/${nc.id}`);
+  await see(page.getByRole('heading', { name: 'Affected lots' }).first());
+  await see(page.getByText(/No lots named\. The quantity affected stands against the production order/));
+  await page.getByRole('button', { name: 'Add a lot' }).click();
+  const add = page.getByRole('dialog', { name: 'Add an affected lot' });
+  await add.getByRole('combobox', { name: /^Lot/ }).click();
+  await page.getByRole('option', { name: /LOT-9001/ }).click();
+  await add.getByText('SN-0001').click();
+  await add.getByText('SN-0002').click();
+  await shot(page, '51-add-affected-lot');
+  await add.getByRole('button', { name: 'Add lot' }).click();
+  const list = page.getByRole('list', { name: 'Affected lots' });
+  await see(list.getByText('LOT-9001 · 5'));
+  await see(list.getByText('Serial numbers: SN-0001, SN-0002'));
+
+  await page.getByLabel('Move to a later stage').selectOption('dispositioned');
+  await see(page.getByRole('alert').filter({ hasText: /lot LOT-9001: approved dispositions cover 0 of the 5 affected/ }));
+
+  await page.getByRole('button', { name: 'Propose a disposition' }).click();
+  const propose = page.getByRole('dialog', { name: 'Propose a disposition' });
+  await propose.getByLabel('Lot').selectOption({ label: 'LOT-9001 (5 affected)' });
+  await propose.getByLabel(/Instructions/).fill('Scrap the five oversize pieces from lot 9001');
+  await propose.getByRole('button', { name: 'Propose' }).click();
+  await see(page.getByRole('list', { name: 'Dispositions' }).getByText('Lot LOT-9001'));
+  await page.getByRole('button', { name: 'Approve…' }).click();
+  await page.getByRole('dialog', { name: 'Approve this disposition' }).getByRole('button', { name: 'Approve' }).click();
+  await see(page.getByRole('list', { name: 'Affected lots' }).getByText('5 of 5 approved'));
+  await page.waitForTimeout(400);
+  await shot(page, '52-lot-covered');
+  const { rows: [after] } = await stack.admin.query(
+    `select (select count(*)::int from public.ncr_affected_lots where nonconformance_id = $1 and removed_at is null) as lots,
+            (select count(*)::int from public.ncr_dispositions where nonconformance_id = $1 and status = 'approved' and lot_id is not null) as approved_for_lot`, [nc.id]);
+  log(`NC ${nc.reference}: ${JSON.stringify(after)}`);
+  if (after.lots !== 1 || after.approved_for_lot !== 1) throw new Error('the lot and its disposition were not recorded');
 }
 
 /** A production order with an operation, a lot made for it and a numbered range of serial numbers, then a hold and a refused completion. */

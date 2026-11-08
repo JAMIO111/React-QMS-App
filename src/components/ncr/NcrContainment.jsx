@@ -8,7 +8,7 @@ import { buttonClass, ErrorNotice, FormError, SelectField } from "../master-data
 import { TextAreaField } from "./Pickers";
 import ReasonDialog from "./ReasonDialog";
 import { useToast } from "../../contexts/ToastProvider";
-import { useEmployees, useNcrContainment, useNcrMutation } from "../../hooks/useNcr";
+import { useEmployees, useNcrAffectedLots, useNcrContainment, useNcrMutation } from "../../hooks/useNcr";
 import { CONTAINMENT_KINDS, containmentKindLabel } from "../../lib/ncrWorkflow";
 import { formatDate } from "../../lib/ncr";
 
@@ -21,7 +21,7 @@ const when = (iso) => (iso ? formatDate(iso) : "—");
 const toNumber = (text) => (String(text).trim() === "" ? null : Number(text));
 
 /** Add or change a containment action (only an open one can be changed). */
-const ActionDialog = ({ ncrId, action, onClose }) => {
+const ActionDialog = ({ ncrId, action, lots, onClose }) => {
   const employees = useEmployees();
   const mutation = useNcrMutation();
   const { showToast } = useToast();
@@ -31,11 +31,12 @@ const ActionDialog = ({ ncrId, action, onClose }) => {
     ownerEmployeeId: action?.owner?.id ?? null,
     dueDate: action?.dueDate ?? null,
     quantityContained: action?.quantityContained ?? "",
+    lotId: action?.lot?.id ?? null,
   });
   const qtyValid = String(form.quantityContained).trim() === "" || (Number.isFinite(Number(form.quantityContained)) && Number(form.quantityContained) >= 0);
   const submit = (e) => {
     e.preventDefault();
-    const body = { kind: form.kind, description: form.description.trim(), ownerEmployeeId: form.ownerEmployeeId, dueDate: form.dueDate, quantityContained: toNumber(form.quantityContained) };
+    const body = { kind: form.kind, description: form.description.trim(), ownerEmployeeId: form.ownerEmployeeId, dueDate: form.dueDate, quantityContained: toNumber(form.quantityContained), lotId: form.lotId };
     mutation.mutate(action ? { path: `/ncr-containment-actions/${action.id}`, method: "PATCH", body } : { path: `/ncrs/${ncrId}/containment-actions`, body }, {
       onSuccess: () => {
         showToast({ type: "success", title: "Saved", message: action ? "Containment action updated." : "Containment action added." });
@@ -55,6 +56,15 @@ const ActionDialog = ({ ncrId, action, onClose }) => {
           options={(employees.data ?? []).filter((e) => e.active || e.id === form.ownerEmployeeId).map((e) => ({ value: e.id, label: e.name }))}
           placeholder="Not assigned"
         />
+        {lots.length > 0 && (
+          <SelectField
+            label="Lot"
+            value={form.lotId}
+            onChange={(v) => setForm((f) => ({ ...f, lotId: v || null }))}
+            options={lots.map((l) => ({ value: l.lot.id, label: `${l.lot.lotNumber} (${l.quantity} affected)` }))}
+            placeholder="Not for one lot"
+          />
+        )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <RHFDatePickerPopout label="Due" value={form.dueDate} onChange={(v) => setForm((f) => ({ ...f, dueDate: v }))} valueFormat="iso" clearable />
           <Field label="Quantity contained" inputMode="decimal" value={form.quantityContained} onChange={(e) => setForm((f) => ({ ...f, quantityContained: e.target.value }))} error={!qtyValid ? "Enter a number" : undefined} hint="Optional" />
@@ -118,6 +128,8 @@ const DoneDialog = ({ action, onClose }) => {
  */
 const NcrContainment = ({ ncrId, canEdit }) => {
   const containment = useNcrContainment(ncrId);
+  const affectedLots = useNcrAffectedLots(ncrId);
+  const lots = (affectedLots.data?.data ?? []).filter((a) => !a.removedAt);
   const mutation = useNcrMutation();
   const { showToast } = useToast();
   const [editing, setEditing] = useState(null); // "new" | action
@@ -160,6 +172,7 @@ const NcrContainment = ({ ncrId, canEdit }) => {
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS[a.status].tone}`}>{STATUS[a.status].label}</span>
                 <span className="text-xs text-secondary-text">{containmentKindLabel(a.kind)}</span>
+                {a.lot && <span className="rounded-full border border-border-color px-2 py-0.5 text-xs text-secondary-text">Lot {a.lot.lotNumber}</span>}
                 <span className="ml-auto flex flex-wrap gap-2">
                   {canEdit && a.status === "open" && (
                     <>
@@ -250,7 +263,7 @@ const NcrContainment = ({ ncrId, canEdit }) => {
       )}
       {mutation.error && !editing && !completing && !cancelling && <FormError error={mutation.error} />}
 
-      {editing && <ActionDialog ncrId={ncrId} action={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
+      {editing && <ActionDialog ncrId={ncrId} action={editing === "new" ? null : editing} lots={lots} onClose={() => setEditing(null)} />}
       {completing && <DoneDialog action={completing} onClose={() => setCompleting(null)} />}
       {cancelling && (
         <ReasonDialog

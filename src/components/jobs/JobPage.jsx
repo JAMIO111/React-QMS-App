@@ -30,6 +30,7 @@ import {
 } from "../../hooks/useJobs";
 import { useProductionSettings } from "../../hooks/useProduction";
 import LinkNotices from "../production/LinkNotices";
+import TraceLinks from "../production/TraceLinks";
 import { LotPicker, OrderPickerWithCreate, SerialPicker } from "../production/pickers";
 import { useActiveAlerts } from "../../hooks/useDocumentation";
 import SidePanes from "./panes/SidePanes";
@@ -129,6 +130,7 @@ const JobInfo = ({ inspection, editable }) => {
             )}
           </div>
           <LinkNotices links={links} />
+          <TraceLinks links={links} />
           <FormError error={linkMutation.error} />
         </div>
       )}

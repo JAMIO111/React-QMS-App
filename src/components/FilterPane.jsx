@@ -9,6 +9,8 @@ import RHFComboBox from "./ui/RHFComboBox";
 import RHFDatePickerPopout from "./ui/RHFDatePickerPopout";
 import RangeSlider from "./ui/RangeSlider";
 import { PartPicker, PartyPicker } from "./ncr/Pickers";
+import { LotPicker, OrderPicker } from "./production/pickers";
+import { useProductionSettings } from "../hooks/useProduction";
 
 const DELETED_OPTIONS = [
   { id: "exclude", name: "Hide deleted" },
@@ -59,6 +61,9 @@ const FilterPane = ({ onClose, source }) => {
   const [severities, setSeverities] = useState(list(filters.severity));
   const [from, setFrom] = useState(filters.from || null);
   const [to, setTo] = useState(filters.to || null);
+  const production = useProductionSettings();
+  const [order, setOrder] = useState(filters.order ? { id: filters.order, name: filters.orderLabel } : null);
+  const [lot, setLot] = useState(filters.lot ? { id: filters.lot, name: filters.lotLabel } : null);
   const [part, setPart] = useState(filters.part ? { id: filters.part, name: filters.partLabel } : null);
   const partyKey = source === "supplier" ? "supplier" : "customer";
   const [party, setParty] = useState(filters[partyKey] ? { id: filters[partyKey], name: filters[`${partyKey}Label`] } : null);
@@ -116,6 +121,10 @@ const FilterPane = ({ onClose, source }) => {
       to: to ?? "",
       part: part?.id ?? "",
       partLabel: part?.id ? part.name ?? "" : "",
+      order: order?.id ?? "",
+      orderLabel: order?.id ? order.name ?? "" : "",
+      lot: lot?.id ?? "",
+      lotLabel: lot?.id ? lot.name ?? "" : "",
       [partyKey]: party?.id ?? "",
       [`${partyKey}Label`]: party?.id ? party.name ?? "" : "",
       costMin: costMinV,
@@ -128,7 +137,7 @@ const FilterPane = ({ onClose, source }) => {
     });
   };
   const resetAll = () =>
-    apply(Object.fromEntries(["stage", "severity", "from", "to", "part", "partLabel", "customer", "customerLabel", "supplier", "supplierLabel",
+    apply(Object.fromEntries(["stage", "severity", "from", "to", "part", "partLabel", "customer", "customerLabel", "supplier", "supplierLabel", "order", "orderLabel", "lot", "lotLabel",
       "costMin", "costMax", "qtyMin", "qtyMax", "failureMode", "subFailureMode", "deleted"].map((k) => [k, ""])));
 
   return createPortal(
@@ -163,6 +172,12 @@ const FilterPane = ({ onClose, source }) => {
         <Pills legend="Severity" options={SEVERITIES} selected={severities} onToggle={toggle(setSeverities)} />
         <PartPicker label="Part number" icon={QrCodeIcon} value={part?.id ?? null} current={part?.id ? { id: part.id, partNumber: part.name ?? "" } : undefined}
           onChange={(id, item) => setPart(id ? { id, name: item?.name ?? part?.name } : null)} />
+        <OrderPicker label="Production order" value={order?.id ?? null} current={order?.id ? { id: order.id, orderNumber: order.name ?? "" } : undefined}
+          onChange={(id, item) => setOrder(id ? { id, name: item?.name ?? order?.name } : null)} />
+        {production.useLotsAndSerials && (
+          <LotPicker label="Lot" value={lot?.id ?? null} current={lot?.id ? { id: lot.id, lotNumber: lot.name ?? "" } : undefined}
+            onChange={(id, item) => setLot(id ? { id, name: item?.name ?? lot?.name } : null)} />
+        )}
         <PartyPicker kind={partyKey === "supplier" ? "suppliers" : "customers"} label={partyKey === "supplier" ? "Supplier" : "Customer"} icon={UsersIcon}
           value={party?.id ?? null} current={party?.id ? { id: party.id, name: party.name ?? "" } : undefined}
           onChange={(id, item) => setParty(id ? { id, name: item?.name ?? party?.name } : null)} />

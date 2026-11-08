@@ -87,6 +87,7 @@ export const menuStructure = [
       // `setting`: shown only while that organisation setting is not switched off
       { name: "Lots", path: "/Production/Lots", setting: "useLotsAndSerials" },
       { name: "Serial numbers", path: "/Production/Serials", setting: "useLotsAndSerials" },
+      { name: "Traceability", path: "/Production/Traceability" },
     ],
   },
   {

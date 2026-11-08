@@ -133,6 +133,13 @@ export class NcrService {
       if (q.partId) where.push(sql`n.part_id = ${q.partId}::uuid`);
       if (q.customerId) where.push(sql`n.customer_id = ${q.customerId}::uuid`);
       if (q.supplierId) where.push(sql`n.supplier_id = ${q.supplierId}::uuid`);
+      if (q.productionOrderId) {
+        where.push(sql`(n.production_order_id = ${q.productionOrderId}::uuid or exists (select 1 from public.ncr_affected_lots al join public.lots l on l.id = al.lot_id
+          where al.nonconformance_id = n.id and al.removed_at is null and l.production_order_id = ${q.productionOrderId}::uuid))`);
+      }
+      if (q.lotId) {
+        where.push(sql`(n.lot_id = ${q.lotId}::uuid or exists (select 1 from public.ncr_affected_lots al where al.nonconformance_id = n.id and al.removed_at is null and al.lot_id = ${q.lotId}::uuid))`);
+      }
       if (q.from) where.push(sql`n.detected_at >= ${q.from}::date`);
       if (q.to) where.push(sql`n.detected_at <= ${q.to}::date`);
       if (q.severity.length) where.push(sql`n.severity = any(string_to_array(${q.severity.join(',')}, ','))`);

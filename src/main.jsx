@@ -51,6 +51,7 @@ const PartiesPage = lazy(() => import("./components/master-data/PartiesPage.jsx"
 const MachinesPage = lazy(() => import("./components/master-data/MachinesPage.jsx"));
 const ProductionOrdersPage = lazy(() => import("./components/production/OrdersPage.jsx"));
 const ProductionOrderPage = lazy(() => import("./components/production/OrderPage.jsx"));
+const TraceabilityPage = lazy(() => import("./components/production/TraceabilityPage.jsx"));
 const LotsPage = lazy(() => import("./components/production/LotsPage.jsx"));
 const SerialsPage = lazy(() => import("./components/production/SerialsPage.jsx"));
 const PartFamiliesPage = lazy(() => import("./components/master-data/PartFamiliesPage.jsx"));
@@ -202,6 +203,7 @@ const router = createBrowserRouter([
           { path: "Production/Orders/:id", element: <ProductionOrderPage /> },
           { path: "Production/Lots", element: <LotsPage /> },
           { path: "Production/Serials", element: <SerialsPage /> },
+          { path: "Production/Traceability", element: <TraceabilityPage /> },
           { path: "Part-Families", element: <PartFamiliesPage /> },
           { path: "Part-Families/:id", element: <PartFamilyPage /> },
           {

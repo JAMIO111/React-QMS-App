@@ -96,11 +96,11 @@ describe("linkNotices", () => {
 describe("the Production menu", () => {
   const production = menuStructure.find((m) => m.name === "Production");
   const names = (settings, canSee = () => true) => production.subMenu.filter((i) => subMenuVisible(i, canSee, settings)).map((i) => i.name);
-  it("shows Orders, Lots and Serial numbers by default, and only Orders to a shop that does not use lots and serial numbers", () => {
-    expect(names({})).toEqual(["Orders", "Lots", "Serial numbers"]);
-    expect(names(undefined)).toEqual(["Orders", "Lots", "Serial numbers"]);
-    expect(names({ useLotsAndSerials: true })).toEqual(["Orders", "Lots", "Serial numbers"]);
-    expect(names({ useLotsAndSerials: false })).toEqual(["Orders"]);
+  it("shows Orders, Lots, Serial numbers and Traceability by default, and no Lots or Serial numbers to a shop that does not use them", () => {
+    expect(names({})).toEqual(["Orders", "Lots", "Serial numbers", "Traceability"]);
+    expect(names(undefined)).toEqual(["Orders", "Lots", "Serial numbers", "Traceability"]);
+    expect(names({ useLotsAndSerials: true })).toEqual(["Orders", "Lots", "Serial numbers", "Traceability"]);
+    expect(names({ useLotsAndSerials: false })).toEqual(["Orders", "Traceability"]);
   });
   it("still follows what the person may see", () => {
     expect(names({}, () => false)).toEqual([]);

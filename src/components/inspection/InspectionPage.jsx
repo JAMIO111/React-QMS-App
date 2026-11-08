@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import LinkNotices from "../production/LinkNotices";
+import TraceLinks from "../production/TraceLinks";
 import { ArrowLeftIcon, CircleAlertIcon, HistoryIcon } from "@/components/icons";
 import Field from "../ui/Field";
 import Dialog from "../ui/Dialog";
@@ -44,6 +45,7 @@ const InspectionPage = () => {
             {open && inspection.failures > 0 && <span className="text-sm text-error-color">{inspection.failures} failed reading{inspection.failures > 1 ? "s" : ""} so far</span>}
           </div>
           <LinkNotices links={inspection.links} />
+          <TraceLinks links={inspection.links} />
           <MenuCard title="Context" subtitle="Frozen when the inspection started; later plan or part changes do not alter it.">
             <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
               {[

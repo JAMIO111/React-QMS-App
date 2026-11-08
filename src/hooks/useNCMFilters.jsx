@@ -7,6 +7,7 @@ export const FILTER_KEYS = [
   "from", "to", "costMin", "costMax", "qtyMin", "qtyMax",
   // Linked records keep their display name beside the id, for the active-filter chips.
   "part", "partLabel", "customer", "customerLabel", "supplier", "supplierLabel",
+  "order", "orderLabel", "lot", "lotLabel",
 ];
 const KEYS = FILTER_KEYS;
 

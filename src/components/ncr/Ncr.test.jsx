@@ -236,6 +236,44 @@ describe("NC registers", () => {
     await waitFor(() => expect(lastCall("GET /ncrs").path).not.toContain("costMin"));
   });
 
+  it("filters by production order and lot, kept in the URL with chips, and offers no lot choice when lots are switched off", async () => {
+    const routes = {
+      "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 },
+      "GET /ncrs/ranges": { cost: { max: 0 }, quantity: { max: 0 }, baseCurrency: "GBP" },
+      "GET /production-orders/lookup": { data: [{ id: "o1", orderNumber: "WO-154789", part: { id: "p1", partNumber: "BRK-100", name: "Bracket" }, status: "released", quantityPlanned: 24 }] },
+      "GET /lots/lookup": { data: [{ id: "l1", lotNumber: "LOT-7", part: { id: "p1", partNumber: "BRK-100", name: "Bracket" }, origin: "produced", productionOrder: { id: "o1", orderNumber: "WO-154789" }, status: "released", statusReason: null }] },
+    };
+    orgProduction = {};
+    routeApi(routes);
+    const first = renderAt("/Non-Conformance/Internal");
+    await screen.findByText("No records found.");
+    await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
+    const pane = screen.getByRole("dialog", { name: "Filter non-conformances" });
+    await userEvent.click(within(pane).getByRole("combobox", { name: "Production order" }));
+    await userEvent.click(await screen.findByRole("option", { name: /WO-154789/ }));
+    await userEvent.click(within(pane).getByRole("combobox", { name: "Lot" }));
+    await userEvent.click(await screen.findByRole("option", { name: /LOT-7/ }));
+    await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("productionOrderId=o1"));
+    expect(lastCall("GET /ncrs").path).toContain("lotId=l1");
+    const active = screen.getByLabelText("Active filters");
+    expect(active).toHaveTextContent("Order: WO-154789");
+    expect(active).toHaveTextContent("Lot: LOT-7");
+    await userEvent.click(within(active).getByRole("button", { name: "Remove filter Lot: LOT-7" }));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).not.toContain("lotId"));
+    expect(lastCall("GET /ncrs").path).toContain("productionOrderId=o1");
+    first.unmount();
+
+    orgProduction = { useLotsAndSerials: false };
+    routeApi(routes);
+    renderAt("/Non-Conformance/Internal");
+    await screen.findByText("No records found.");
+    await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
+    const off = screen.getByRole("dialog", { name: "Filter non-conformances" });
+    expect(within(off).getByRole("combobox", { name: "Production order" })).toBeInTheDocument();
+    expect(within(off).queryByRole("combobox", { name: "Lot" })).toBeNull();
+  });
+
   it("offers the supplier filter on the supplier register", async () => {
     routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 }, "GET /ncrs/ranges": { cost: { max: 0 }, quantity: { max: 0 }, baseCurrency: "GBP" } });
     renderAt("/Non-Conformance/Supplier");

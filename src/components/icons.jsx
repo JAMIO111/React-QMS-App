@@ -66,6 +66,8 @@ import {
   RefreshCw as LucideRefreshCw,
   RotateCcw as LucideRotateCcw,
   Save as LucideSave,
+  Printer as LucidePrinter,
+  Route as LucideRoute,
   Search as LucideSearch,
   Settings as LucideSettings,
   Share as LucideShare,
@@ -193,6 +195,8 @@ export const RectangleEllipsisIcon = withDefaults(LucideRectangleEllipsis);
 export const RefreshCwIcon = withDefaults(LucideRefreshCw);
 export const RotateCcwIcon = withDefaults(LucideRotateCcw);
 export const SaveIcon = withDefaults(LucideSave);
+export const PrinterIcon = withDefaults(LucidePrinter);
+export const RouteIcon = withDefaults(LucideRoute);
 export const SearchIcon = withDefaults(LucideSearch);
 export const SettingsIcon = withDefaults(LucideSettings);
 export const ShareIcon = withDefaults(LucideShare);

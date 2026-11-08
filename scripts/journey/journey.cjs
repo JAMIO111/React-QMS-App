@@ -442,6 +442,19 @@ async function affectedLots({ page, stack, APP, orgName, see, shot, step, log })
             (select count(*)::int from public.ncr_dispositions where nonconformance_id = $1 and status = 'approved' and lot_id is not null) as approved_for_lot`, [nc.id]);
   log(`NC ${nc.reference}: ${JSON.stringify(after)}`);
   if (after.lots !== 1 || after.approved_for_lot !== 1) throw new Error('the lot and its disposition were not recorded');
+
+  step('the owner traces the order: its lot, serial numbers and the non-conformance that names the lot');
+  await page.goto(`${APP}/Production/Traceability`);
+  await page.getByLabel('Find an order, lot or serial number').fill('WO-9001');
+  await page.getByRole('list', { name: 'Matches' }).getByRole('button', { name: /WO-9001/ }).click();
+  await see(page.getByRole('heading', { name: 'WO-9001' }));
+  await see(page.getByRole('table', { name: 'Lots' }).getByText('LOT-9001'));
+  await see(page.getByRole('list', { name: 'Serial numbers' }).getByText('SN-0005'));
+  const ncs = page.getByRole('table', { name: 'Non-conformances' });
+  await see(ncs.getByText('Names an affected lot'));
+  await see(ncs.getByText('1 approved (5)'));
+  await page.waitForTimeout(400);
+  await shot(page, '53-trace-order-with-lots');
 }
 
 /** A production order with an operation, a lot made for it and a numbered range of serial numbers, then a hold and a refused completion. */
@@ -600,6 +613,16 @@ async function workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, l
   await shot(page, '48-nc-on-the-order');
   const { rows: [linked] } = await stack.admin.query(`select n.work_order, po.order_number from public.nonconformances n join public.production_orders po on po.id = n.production_order_id where n.id = $1`, [nc.id]);
   if (!linked || linked.order_number !== 'WO-154789' || linked.work_order !== 'WO-154789') throw new Error('the NC was not linked to the order');
+
+  step('the order alone tells the whole story, with no lots or serial numbers');
+  await page.goto(`${APP}/Production/Orders`);
+  await page.getByRole('row', { name: /WO-154789/ }).getByRole('link', { name: 'Trace' }).click();
+  await see(page.getByRole('heading', { name: 'WO-154789' }));
+  await see(page.getByRole('table', { name: 'Inspections' }));
+  await see(page.getByRole('table', { name: 'Non-conformances' }).getByText('Rod bore burr'));
+  if (await page.getByRole('table', { name: 'Lots' }).count()) throw new Error('lots are shown to a shop that does not use them');
+  await page.waitForTimeout(400);
+  await shot(page, '54-trace-order-only');
 
   step('the work order typed on an old, finished inspection is linked to a real order');
   await page.goto(`${APP}/Settings/Organisation`);

@@ -121,6 +121,27 @@ describe('a lot and a serial number', () => {
   });
 });
 
+describe('the NC register', () => {
+  it('filters by order and by lot with the same rule as the report: linked, or naming one of its lots', async () => {
+    const h = await as(ids.ownerA);
+    const titles = async (query: string) => ((await api().get(`/api/v1/ncrs?${query}`).set(h).expect(200)).body.data as { title: string }[]).map((n) => n.title).sort();
+    expect(await titles(`productionOrderId=${ctx.wo1}`)).toEqual(['Bore oversize on lot', 'Found later in part of the lot']);
+    expect(await titles(`lotId=${ctx.lot}`)).toEqual(['Bore oversize on lot', 'Found later in part of the lot']);
+    // The register lists cancelled NCs too (the report does not); deleted ones are hidden by default.
+    expect(await titles(`productionOrderId=${ctx.wo2}`)).toEqual(['Cancelled NC', 'Scrap on the work order']);
+    await api().get('/api/v1/ncrs?productionOrderId=nope').set(h).expect(400);
+    await api().get('/api/v1/ncrs?lotId=nope').set(h).expect(400);
+    // A removed affected lot no longer matches.
+    await admin.query(`update public.ncr_affected_lots set removed_at = now(), removed_reason = 'Test' where nonconformance_id = $1`, [ctx.ncAffected]);
+    try {
+      expect(await titles(`lotId=${ctx.lot}`)).toEqual(['Bore oversize on lot']);
+      expect(await titles(`productionOrderId=${ctx.wo1}`)).toEqual(['Bore oversize on lot']);
+    } finally {
+      await admin.query(`update public.ncr_affected_lots set removed_at = null, removed_reason = null where nonconformance_id = $1`, [ctx.ncAffected]);
+    }
+  });
+});
+
 describe('what people may see', () => {
   it('says a section is unavailable, rather than empty, when the caller may not read it', async () => {
     const role = (await admin.query(`select id from public.roles where organisation_id = $1 and key = 'inspector'`, [ids.orgA])).rows[0].id;

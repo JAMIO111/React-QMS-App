@@ -114,3 +114,7 @@ export const linkNotices = (links) => {
 
 /** "ROD-100 · Rod" for a part reference { partNumber, name }. */
 export const partLabel = (p) => (p ? (p.name && p.name !== p.partNumber ? `${p.partNumber} · ${p.name}` : p.partNumber) : "");
+
+/** The address of the traceability page for an order, a lot or a serial number. */
+export const tracePath = (type, id) => `/Production/Traceability?type=${type}&id=${id}`;
+export const TRACE_TYPE = { order: "Production order", lot: "Lot", serial: "Serial number" };

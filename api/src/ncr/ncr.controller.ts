@@ -42,6 +42,8 @@ export class NcrController {
   @ApiQuery({ name: 'subFailureModeId', required: false })
   @ApiQuery({ name: 'partId', required: false })
   @ApiQuery({ name: 'customerId', required: false })
+  @ApiQuery({ name: 'productionOrderId', required: false })
+  @ApiQuery({ name: 'lotId', required: false })
   @ApiQuery({ name: 'supplierId', required: false })
   @ApiQuery({ name: 'from', required: false, description: 'Detected on or after (YYYY-MM-DD)' })
   @ApiQuery({ name: 'to', required: false, description: 'Detected on or before (YYYY-MM-DD)' })

@@ -53,6 +53,7 @@ import { EMPTY, changedFields, toBody, toForm } from "./formModel";
 import { useProductionSettings } from "../../hooks/useProduction";
 import { LotPicker, OrderPicker, SerialPicker } from "../production/pickers";
 import LinkNotices from "../production/LinkNotices";
+import TraceLinks from "../production/TraceLinks";
 import LoadingScreen from "../ui/LoadingScreen";
 import NcrCapaCard from "../capa/NcrCapaCard";
 import NcrAffectedLots from "./NcrAffectedLots";
@@ -322,6 +323,7 @@ const NcrPage = () => {
             )}
             <Card>
               {ncr?.links && <LinkNotices links={ncr.links} />}
+              {ncr?.links && <TraceLinks links={ncr.links} />}
               <div className="grid w-full grid-cols-1 items-start gap-x-8 gap-y-4 lg:grid-cols-2">
                 <div className="lg:col-span-2">{text("title", "Title", { required: true, maxLength: 200, icon: FileTextIcon, placeholder: "Short summary of the problem" })}</div>
                 {controlled("detectedAt", (f) => <RHFDatePickerPopout {...f} label="Detected on" required valueFormat="iso" maxDate={new Date()} />)}

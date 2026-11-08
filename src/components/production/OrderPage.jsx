@@ -13,6 +13,7 @@ import Field from "../ui/Field";
 import MenuCard from "../ui/MenuCard";
 import OrderDialog from "./OrderDialog";
 import { StatusBadge, StatusMoves } from "./shared";
+import { tracePath } from "../../lib/production";
 
 const Fact = ({ label, children }) => (
   <div className="flex min-w-0 flex-col gap-0.5">
@@ -82,6 +83,9 @@ const OrderPage = () => {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {canManage && <StatusMoves moves={ORDER_MOVES[o.status]} path={`/production-orders/${o.id}`} noun="Order" />}
+          <Link to={tracePath("order", o.id)} className={buttonClass.secondary}>
+            Everything on this order
+          </Link>
           <button type="button" className={buttonClass.neutral} onClick={() => setEditing(true)}>
             <PencilIcon className="mr-1 inline" /> {canManage && orderEditable(o) ? "Edit" : "View"}
           </button>

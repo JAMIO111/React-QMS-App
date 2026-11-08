@@ -1,5 +1,6 @@
 import { CalendarIcon, CircleCheckIcon, FactoryIcon, HashIcon, HouseIcon, LayersIcon, PackageIcon, TagIcon, UserIcon } from "@/components/icons";
-import { LOT_ORIGIN, LOT_STATUS, ORDER_STATUS, SERIAL_STATUS, partLabel } from "../../lib/production";
+import { Link } from "react-router-dom";
+import { LOT_ORIGIN, LOT_STATUS, ORDER_STATUS, SERIAL_STATUS, partLabel, tracePath } from "../../lib/production";
 import { formatDate } from "../../lib/ncr";
 import { StatusBadge } from "./shared";
 
@@ -24,6 +25,11 @@ const plain = (fn) => (info) => <div className="table-row-item">{fn(info.row.ori
 const strong = (fn) => (info) => <div className="table-row-item font-medium">{fn(info.row.original)}</div>;
 const date = (info) => <div className="table-row-item">{info.getValue() ? formatDate(info.getValue()) : "—"}</div>;
 const number = (fn) => (info) => <div className="table-row-item justify-end tabular-nums">{fn(info.row.original)?.toLocaleString() ?? "—"}</div>;
+const trace = (type) => (info) => (
+  <Link to={tracePath(type, info.row.original.id)} className="table-row-item text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
+    Trace
+  </Link>
+);
 const badge = (map) => (info) => <StatusBadge map={map} status={info.getValue()} />;
 
 export const orderColumns = [
@@ -37,6 +43,7 @@ export const orderColumns = [
   col("lotCount", "Lots", head(LayersIcon, "Lots", "table-header-number"), number((r) => r.lotCount), { size: 80, align: "right" }),
   col("serialCount", "Serials", head(TagIcon, "Serials", "table-header-number"), number((r) => r.serialCount), { size: 90, align: "right" }),
   col("createdAt", "Created", head(CalendarIcon, "Created"), date, { size: 130, sortKey: "createdAt" }),
+  col("trace", "Trace", head(null, "Trace"), trace("order"), { size: 80, minSize: 70, maxSize: 120, accessor: () => "" }),
 ];
 export const ORDER_HIDDEN = { site: false, lotCount: false, serialCount: false, createdAt: false };
 
@@ -52,6 +59,7 @@ export const lotColumns = [
   col("site", "Site", head(HouseIcon, "Site"), plain((r) => r.site?.name), { size: 140, accessor: (r) => r.site?.name }),
   col("receivedOn", "Received", head(CalendarIcon, "Received"), date, { size: 130 }),
   col("createdAt", "Created", head(CalendarIcon, "Created"), date, { size: 130, sortKey: "createdAt" }),
+  col("trace", "Trace", head(null, "Trace"), trace("lot"), { size: 80, minSize: 70, maxSize: 120, accessor: () => "" }),
 ];
 export const LOT_HIDDEN = { site: false, receivedOn: false, createdAt: false };
 
@@ -63,5 +71,6 @@ export const serialColumns = [
   col("status", "Status", head(CircleCheckIcon, "Status", "table-header-number"), badge(SERIAL_STATUS), { size: 140, sortKey: "status", align: "center" }),
   col("site", "Site", head(HouseIcon, "Site"), plain((r) => r.site?.name), { size: 140, accessor: (r) => r.site?.name }),
   col("createdAt", "Created", head(CalendarIcon, "Created"), date, { size: 130, sortKey: "createdAt" }),
+  col("trace", "Trace", head(null, "Trace"), trace("serial"), { size: 80, minSize: 70, maxSize: 120, accessor: () => "" }),
 ];
 export const SERIAL_HIDDEN = { site: false };

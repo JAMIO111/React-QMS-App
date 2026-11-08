@@ -48,6 +48,29 @@ export const useOrderLookup = (params = {}, { enabled = true } = {}) => useLooku
 export const useLotLookup = (params = {}, { enabled = true } = {}) => useLookup("lots", params, enabled);
 export const useSerialLookup = (params = {}, { enabled = true } = {}) => useLookup("serial-numbers", params, enabled);
 
+/** Traceability of one order, lot or serial number (read-only): { subject, order, lots, serials, inspections, ncrs, equipment }. */
+export const useTraceability = (type, id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "production", "traceability", type, id),
+    queryFn: () => apiFetch(`/traceability${queryString({ type, id })}`, { organisationId }),
+    enabled: !!organisationId && !!type && !!id,
+    retry: false,
+  });
+};
+
+/** Orders, lots and serial numbers whose number contains the text: [{ type, id, number, status, part }]. */
+export const useTraceSearch = (q) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "production", "traceability", "search", q),
+    queryFn: () => apiFetch(`/traceability/search${queryString({ q })}`, { organisationId }).then((r) => r.data),
+    enabled: !!organisationId && q.length >= 1,
+    retry: false,
+    placeholderData: keepPreviousData,
+  });
+};
+
 /**
  * The organisation's production settings (Settings → Organisation → Production): whether lots and serial numbers are used, whether people who only record inspections may make an
  * order from a job, and whether a job needs a production order to be completed. Until they load, the defaults an organisation starts with.

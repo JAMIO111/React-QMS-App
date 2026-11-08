@@ -79,6 +79,9 @@ export const NcrListQuery = z.object({
   partId: z.string().uuid().optional(),
   customerId: z.string().uuid().optional(),
   supplierId: z.string().uuid().optional(),
+  /** Raised on the order or lot, or naming one of its lots as an affected lot (the same rule as the traceability report). */
+  productionOrderId: z.string().uuid().optional(),
+  lotId: z.string().uuid().optional(),
   from: isoDate.optional(),
   to: isoDate.optional(),
   severity: z

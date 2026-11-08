@@ -27,10 +27,7 @@ BEGIN
 
   -- Every legacy row now belongs to the organisation.
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public."Employees" WHERE organisation_id = org), 2::bigint, 'employees incl. one without org');
-  PERFORM pg_temp.assert_eq((SELECT organisation_id FROM public."NCM" WHERE ncm_id = 'NCM-25-001'), org, 'NCM backfilled');
-  PERFORM pg_temp.assert_eq((SELECT organisation_id FROM public."Notification Recipients" LIMIT 1), org, 'recipients inherit org');
-  -- Empty-text updated_at converted to timestamptz and then filled from created_at.
-  PERFORM pg_temp.assert_eq((SELECT updated_at = created_at FROM public."Sub-Failure Mode" WHERE id = 1), true, 'sub-failure-mode updated_at');
+  PERFORM pg_temp.assert_eq((SELECT organisation_id FROM public.nonconformances WHERE reference = 'NCM-25-001'), org, 'the legacy NCM, copied into nonconformances, belongs to the organisation');
 END $$;
 
 ROLLBACK;

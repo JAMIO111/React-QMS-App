@@ -18,22 +18,22 @@ DECLARE
   legacy uuid;
 BEGIN
   -- Legacy copy: fixture NCR NCM-25-001 (Internal, status Open, part P-100, customer Acme).
-  SELECT id INTO legacy FROM public."NCM" WHERE ncm_id = 'NCM-25-001';
+  SELECT id INTO legacy FROM public.nonconformances WHERE reference = 'NCM-25-001'; -- the copy kept the legacy id
   PERFORM pg_temp.assert_eq((SELECT reference || '|' || source || '|' || stage FROM public.nonconformances WHERE id = legacy), 'NCM-25-001|internal|open', 'legacy NCR copied with id, reference, source and stage');
   PERFORM pg_temp.assert_eq((SELECT p.part_number || '|' || r.revision FROM public.nonconformances n JOIN public.parts p ON p.id = n.part_id JOIN public.part_revisions r ON r.id = n.part_revision_id WHERE n.id = legacy), 'P-100|A', 'linked to the copied part and its revision');
   PERFORM pg_temp.assert_eq((SELECT c.name FROM public.nonconformances n JOIN public.customers c ON c.id = n.customer_id WHERE n.id = legacy), 'Acme', 'linked to the copied customer');
   PERFORM pg_temp.assert_eq((SELECT fm.name || '|' || sfm.name || '|' || cp.name FROM public.nonconformances n
      JOIN public.ncr_classifications fm ON fm.id = n.failure_mode_id JOIN public.ncr_classifications sfm ON sfm.id = n.sub_failure_mode_id
-     JOIN public.ncr_classifications cp ON cp.id = n.causal_process_id WHERE n.id = legacy), 'Dimensional|Oversize|Machining', 'classifications mapped');
+     JOIN public.machines cp ON cp.id = n.causal_process_id WHERE n.id = legacy), 'Dimensional|Oversize|Machining', 'classifications mapped (the causal process became a machine of the same name)');
   PERFORM pg_temp.assert_eq((SELECT quantity_affected FROM public.nonconformances WHERE id = legacy), 3::numeric, 'quantity copied');
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.nonconformances WHERE legacy_ncm_id IS NOT NULL), (SELECT count(*) FROM public."NCM"), 'every legacy NCR copied');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.nonconformances WHERE legacy_ncm_id IS NOT NULL), 1::bigint, 'every legacy NCR copied (the fixture had one)');
   PERFORM pg_temp.assert_eq((SELECT last_value FROM app.ncr_counters WHERE year = 2025), 1, 'numbering continues after the highest legacy reference');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.outbox_events WHERE entity_type = 'nonconformance'), 0::bigint, 'migration wrote no events');
 END $$;
 
 DO $$
 DECLARE
-  org uuid; other uuid; site_a uuid; site_b uuid; fm uuid; sfm uuid; other_fm uuid; proc uuid;
+  org uuid; other uuid; site_a uuid; site_b uuid; fm uuid; sfm uuid; other_fm uuid; proc uuid; machine uuid;
   part uuid; rev uuid; other_part uuid; cust uuid; ncr uuid; cncr uuid; site_ncr uuid; m uuid; failed boolean;
 BEGIN
   PERFORM pg_temp.login('20000000-0000-0000-0000-000000000101');
@@ -44,6 +44,7 @@ BEGIN
   INSERT INTO public.ncr_classifications (organisation_id, kind, parent_id, name) VALUES (org, 'sub_failure_mode', fm, 'Oversize') RETURNING id INTO sfm;
   INSERT INTO public.ncr_classifications (organisation_id, kind, name) VALUES (org, 'failure_mode', 'Cosmetic') RETURNING id INTO other_fm;
   INSERT INTO public.ncr_classifications (organisation_id, kind, name) VALUES (org, 'process', 'Machining') RETURNING id INTO proc;
+  INSERT INTO public.machines (organisation_id, code, name) VALUES (org, 'MACH-1', 'Machining') RETURNING id INTO machine;
   PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.ncr_classifications (organisation_id, kind, name) VALUES (%L, 'sub_failure_mode', 'Orphan')$q$, org), 'sub-failure mode needs a failure mode');
   PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.ncr_classifications (organisation_id, kind, parent_id, name) VALUES (%L, 'sub_failure_mode', %L, 'Under a process')$q$, org, proc), 'parent must be a failure mode');
   PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.ncr_classifications (organisation_id, kind, name) VALUES (%L, 'failure_mode', 'dimensional')$q$, org), 'classification names unique regardless of case');
@@ -69,7 +70,9 @@ BEGIN
   -- Opening needs the minimum content.
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET stage = 'open', category_id = %L WHERE id = %L$q$, pg_temp.cat(org), ncr), 'cannot open without severity and quantity');
   UPDATE public.nonconformances SET part_id = part, part_revision_id = rev, failure_mode_id = fm, sub_failure_mode_id = sfm,
-         causal_process_id = proc, severity = 'major', quantity_affected = 4 WHERE id = ncr;
+         causal_process_id = machine, detection_process_id = machine, severity = 'major', quantity_affected = 4 WHERE id = ncr;
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET detection_process_id = %L WHERE id = %L$q$, proc, ncr), 'where detected is a machine, not a process classification');
+  PERFORM pg_temp.assert_eq((SELECT detection_process_id FROM public.nonconformances WHERE id = ncr), machine, 'where detected names the machine');
   UPDATE public.nonconformances SET stage = 'open', category_id = pg_temp.cat(org) WHERE id = ncr;
   INSERT INTO public.nonconformances (organisation_id, source, title, severity, quantity_affected, description, stage)
     VALUES (org, 'customer', 'Complaint', 'minor', 1, 'Scratched', 'draft') RETURNING id INTO cncr;

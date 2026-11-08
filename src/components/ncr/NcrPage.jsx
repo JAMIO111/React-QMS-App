@@ -43,7 +43,7 @@ import { describeApiError } from "../../lib/api-client";
 import { NCR_REGISTER, NC_SOURCES, SEVERITIES, SOURCE_OPTIONS, formatDate, ncrPath, sourceLabel, stageOf } from "../../lib/ncr";
 import { SeverityPill, StagePill } from "./Pills";
 import DeleteNcrDialog from "./DeleteNcrDialog";
-import { PartPicker, PartyPicker, RevisionPicker } from "./Pickers";
+import { MachinePicker, PartPicker, PartyPicker, RevisionPicker } from "./Pickers";
 import ReasonDialog from "./ReasonDialog";
 import ChangeSourceDialog from "./ChangeSourceDialog";
 import StageBar from "./StageBar";
@@ -389,7 +389,7 @@ const NcrPage = () => {
                   <RHFComboBox {...f} label="Site" icon={HouseIcon} placeholder="Select a site" options={(sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))} />
                 ))}
                 {controlled("detectionProcessId", (f) => (
-                  <RHFComboBox {...f} label="Where detected" icon={FactoryIcon} placeholder="Select a process" options={opt(lists?.processes)} />
+                  <MachinePicker {...f} label="Where detected" icon={FactoryIcon} current={ncr?.detectionProcess} />
                 ))}
                 <div className="lg:col-span-2">
                   <RHFTextArea label="Description" icon={AlignCenterIcon} value={form.description} onChange={set("description")} disabled={!canEdit} max={5000} rows={4} placeholder="Describe the non-conformance" />
@@ -458,7 +458,7 @@ const NcrPage = () => {
                     disabled={f.disabled || !form.failureModeId} placeholder={form.failureModeId ? "Select a sub-failure mode" : "Choose a failure mode first"} />
                 ))}
                 {controlled("causalProcessId", (f) => (
-                  <RHFComboBox {...f} label="Causal process" icon={FactoryIcon} placeholder="Select a process" options={opt(lists?.processes)} />
+                  <MachinePicker {...f} label="Causal process" icon={FactoryIcon} current={ncr?.causalProcess} />
                 ))}
                 {source !== "supplier" &&
                   controlled("responsibleEmployeeId", (f) => (

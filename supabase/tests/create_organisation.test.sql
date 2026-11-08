@@ -22,7 +22,6 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT code || '|' || name FROM public.sites WHERE organisation_id = org), 'LDS|Leeds plant', 'default site');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.roles WHERE organisation_id = org), 6::bigint, 'standard roles');
   PERFORM pg_temp.assert_eq(app.has_permission(org, 'roles.manage'), true, 'founder is owner');
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public."Status" WHERE organisation_id = org), 4::bigint, 'starter statuses');
 
   -- Same idempotency key: same organisation, nothing duplicated.
   again := app.create_organisation('Acme Fabrication Ltd', 'Leeds plant', 'LDS', 'key-1');

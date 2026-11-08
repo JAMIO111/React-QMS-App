@@ -68,7 +68,7 @@ const FROM = `
   left join public.suppliers s on s.id = n.supplier_id
   left join public.ncr_classifications fm on fm.id = n.failure_mode_id
   left join public.ncr_classifications sfm on sfm.id = n.sub_failure_mode_id
-  left join public.ncr_classifications cp on cp.id = n.causal_process_id
+  left join public.machines cp on cp.id = n.causal_process_id
   left join public.ncr_classifications cat on cat.id = n.category_id
   left join public.organisation_settings os on os.organisation_id = n.organisation_id
   -- Total of the NCR's costs that are not deleted, in the organisation's base currency.
@@ -275,6 +275,7 @@ export class NcrService {
         union all select c.id, coalesce(c.display_name, c.name) from public.customers c join ids using (id)
         union all select s.id, coalesce(s.display_name, s.name) from public.suppliers s join ids using (id)
         union all select k.id, k.name from public.ncr_classifications k join ids using (id)
+        union all select mc.id, mc.name from public.machines mc join ids using (id)
         union all select t.id, t.name from public.sites t join ids using (id)
         union all select e.id, ${sql.raw(personName('e'))} from public."Employees" e join ids using (id)
         union all select u.id, ${sql.raw(personName('u'))} from public.profiles u join ids using (id)`);
@@ -425,7 +426,7 @@ export class NcrService {
              n.deleted_by, ${sql.raw(personName('pdl'))} as deleted_by_name
       ${sql.raw(FROM)}
       left join public.sites site on site.id = n.site_id
-      left join public.ncr_classifications dp on dp.id = n.detection_process_id
+      left join public.machines dp on dp.id = n.detection_process_id
       left join public."Employees" e on e.id = n.responsible_employee_id
       left join public.profiles po on po.id = n.owner_id
       left join public.profiles pd on pd.id = n.detected_by

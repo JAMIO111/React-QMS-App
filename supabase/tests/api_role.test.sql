@@ -6,7 +6,7 @@ BEGIN;
 SET SESSION AUTHORIZATION qms_api;
 DO $$
 BEGIN
-  PERFORM pg_temp.assert_fails($q$SELECT 1 FROM public."NCM"$q$, 'qms_api reads a table without switching role');
+  PERFORM pg_temp.assert_fails($q$SELECT 1 FROM public.nonconformances$q$, 'qms_api reads a table without switching role');
   PERFORM pg_temp.assert_fails($q$SELECT 1 FROM audit.events$q$, 'qms_api reads audit without switching role');
   PERFORM pg_temp.assert_fails($q$SET LOCAL ROLE service_role$q$, 'qms_api becomes service_role');
   PERFORM pg_temp.assert_fails($q$SET LOCAL ROLE postgres$q$, 'qms_api becomes postgres');

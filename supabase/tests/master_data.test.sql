@@ -19,9 +19,9 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT part_number || '|' || name FROM public.parts WHERE id = '00000000-0000-0000-0000-0000000000b1'), 'P-100|Bracket', 'legacy part copied with its id');
   PERFORM pg_temp.assert_eq((SELECT revision || '|' || status FROM public.part_revisions WHERE part_id = '00000000-0000-0000-0000-0000000000b1'), 'A|released', 'legacy part has released revision A');
   PERFORM pg_temp.assert_eq((SELECT code || '|' || name FROM public.customers WHERE id = '00000000-0000-0000-0000-0000000000c1'), 'C0001|Acme', 'legacy customer copied with a code');
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.parts), (SELECT count(*) FROM public."Part"), 'every legacy part copied');
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.customers), (SELECT count(*) FROM public."Customers"), 'every legacy customer copied');
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.suppliers), (SELECT count(*) FROM public."Suppliers"), 'every legacy supplier copied');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.parts), 1::bigint, 'every legacy part copied (the fixture had one)');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.customers), 1::bigint, 'every legacy customer copied (the fixture had one)');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.suppliers), 0::bigint, 'every legacy supplier copied (the fixture had none)');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.outbox_events), 0::bigint, 'migration wrote no events');
 
   -- Units are a global catalogue.

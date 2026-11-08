@@ -926,4 +926,20 @@ async function workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, l
   await page.locator('[role="tab"][aria-selected="true"]', { hasText: 'Open ones' }).waitFor({ timeout: 5000 }); // highlighted once chosen
   await page.getByRole('tab', { name: 'All' }).click();
   await page.waitForFunction(() => !location.search.includes('stage='));
+
+  step('where detected and the causal process are picked from the machines');
+  await page.goto(`${APP}/Non-Conformance/Register`);
+  await page.getByRole('row', { name: /Rod bore burr/ }).getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menu').getByRole('menuitem', { name: 'Open' }).click();
+  await see(page.getByLabel('Title'));
+  await page.getByRole('combobox', { name: 'Where detected' }).click();
+  await page.getByRole('option', { name: /CNC-J1/ }).first().click();
+  await page.getByRole('combobox', { name: 'Causal process' }).click();
+  await page.getByRole('option', { name: /CNC-J1/ }).first().click();
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await see(page.getByText('Changes saved.'));
+  const { rows: [placed] } = await stack.admin.query(
+    `select md.code as detected, mc.code as causal from public.nonconformances n join public.machines md on md.id = n.detection_process_id join public.machines mc on mc.id = n.causal_process_id where n.title = 'Rod bore burr'`);
+  if (!placed || placed.detected !== 'CNC-J1' || placed.causal !== 'CNC-J1') throw new Error(`the machines were not saved on the NC: ${JSON.stringify(placed)}`);
+  await shot(page, '72-nc-machines');
 }

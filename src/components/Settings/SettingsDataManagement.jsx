@@ -36,7 +36,6 @@ const SettingsDataManagement = () => {
   const count = (rows) => ({ active: rows.filter((r) => r.active).length, total: rows.length });
   const fm = lists && count(lists.failureModes);
   const sub = lists && count(lists.subFailureModes);
-  const pr = lists && count(lists.processes);
   const cat = lists && count(lists.categories);
 
   return (
@@ -59,7 +58,6 @@ const SettingsDataManagement = () => {
             <Stat label="Categories" {...cat} />
             <Stat label="Failure modes" {...fm} />
             <Stat label="Sub-failure modes" {...sub} />
-            <Stat label="Processes" {...pr} />
           </div>
           <MenuCard title="Categories" subtitle="What kind of problem a non-conformance is (the source says where it came from). Add your own; switch one off to retire it.">
             <ClassificationList kind="category" lists={lists} canManage={canManage} />
@@ -67,8 +65,10 @@ const SettingsDataManagement = () => {
           <MenuCard title="Failure modes" subtitle="Failure modes and their sub-failure modes">
             <ClassificationList kind="failure_mode" lists={lists} canManage={canManage} />
           </MenuCard>
-          <MenuCard title="Processes" subtitle="Processes and work stations (where detected, causal process)">
-            <ClassificationList kind="process" lists={lists} canManage={canManage} />
+          <MenuCard title="Where detected and causal process" subtitle="These two fields on a non-conformance pick a machine. Add or change machines under Master Data.">
+            <Link to="/Machines" className="text-sm text-link-color hover:underline">
+              Open the machines
+            </Link>
           </MenuCard>
         </>
       )}

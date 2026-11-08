@@ -44,19 +44,6 @@ SELECT pg_temp.add_member('00000000-0000-0000-0000-00000000000a', '00000000-0000
 SELECT pg_temp.add_member('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-0000000000d1', 'viewer');
 SELECT pg_temp.add_member('00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-0000000000d1', 'viewer');
 
--- Organisation B business data
-INSERT INTO public."Status" (id, organisation_id, name, type) VALUES (10, '00000000-0000-0000-0000-00000000000b', 'Open', 'initial');
-INSERT INTO public."Failure Mode" (id, organisation_id, code, name) VALUES (10, '00000000-0000-0000-0000-00000000000b', 'VIS', 'Visual');
-INSERT INTO public."Part" (id, organisation_id, part_number) VALUES ('00000000-0000-0000-0000-0000000000b9', '00000000-0000-0000-0000-00000000000b', 'B-1');
-INSERT INTO public."NCM" (id, organisation_id, ncm_id, date, type, status, quantity_defective, total_cost)
-VALUES ('00000000-0000-0000-0000-0000000000bb', '00000000-0000-0000-0000-00000000000b', 'NCM-25-001', now(), 'Internal', 10, 5, 100);
-INSERT INTO public."NC Files" (organisation_id, name, path, id_ref, owner)
-VALUES ('00000000-0000-0000-0000-00000000000b', 'b.pdf', '00000000-0000-0000-0000-00000000000b/ncr/NCM-25-001/b.pdf', 'NCM-25-001', '00000000-0000-0000-0000-0000000000b1');
-INSERT INTO public."Notifications" (id, organisation_id, created_by, title)
-VALUES ('00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-0000000000b1', 'B notice');
-INSERT INTO public."Notification Recipients" (organisation_id, notification_id, recipient_id)
-VALUES ('00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-0000000000b3');
-
 -- NCR files live at <org>/ncr/<nonconformance id>/... (one NCR per organisation here).
 INSERT INTO public.nonconformances (id, organisation_id, reference, source, title) VALUES
   ('00000000-0000-0000-0000-0000000000ac', '00000000-0000-0000-0000-00000000000a', 'A-NCR-1', 'internal', 'A NCR'),
@@ -82,7 +69,6 @@ BEGIN
            WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v') LOOP
     PERFORM pg_temp.assert_fails(format('SELECT 1 FROM public.%I', r.relname), 'anon reads ' || r.relname);
   END LOOP;
-  PERFORM pg_temp.assert_fails($q$SELECT public.get_user_notifications()$q$, 'anon calls rpc');
   PERFORM pg_temp.assert_eq(pg_temp.count_rows('SELECT 1 FROM storage.objects'), 0::bigint, 'anon storage');
   PERFORM pg_temp.logout();
 END $$;
@@ -104,7 +90,7 @@ BEGIN
   PERFORM pg_temp.assert_eq(pg_temp.count_rows('SELECT 1 FROM public.roles WHERE organisation_id IS NOT NULL'), 0::bigint, 'outsider org roles');
   PERFORM pg_temp.assert_eq(pg_temp.count_rows('SELECT 1 FROM public.profiles'), 1::bigint, 'outsider sees own profile only');
   PERFORM pg_temp.assert_eq(pg_temp.count_rows('SELECT 1 FROM storage.objects'), 0::bigint, 'outsider storage');
-  PERFORM pg_temp.assert_fails($q$INSERT INTO public."NCM" (organisation_id, ncm_id) VALUES ('00000000-0000-0000-0000-00000000000a', 'X-1')$q$, 'outsider insert');
+  PERFORM pg_temp.assert_fails($q$INSERT INTO public.nonconformances (organisation_id, source, title) VALUES ('00000000-0000-0000-0000-00000000000a', 'internal', 'X-1')$q$, 'outsider insert');
   PERFORM pg_temp.logout();
 END $$;
 
@@ -115,35 +101,30 @@ DO $$
 BEGIN
   PERFORM pg_temp.login('00000000-0000-0000-0000-0000000000a1');
   PERFORM pg_temp.assert_eq(pg_temp.count_rows('SELECT 1 FROM public.organisations'), 1::bigint, 'A owner sees one org');
-  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public."NCM"$q$), 1::bigint, 'A owner NCM');
-  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public."NCM" WHERE organisation_id = '00000000-0000-0000-0000-00000000000b'$q$), 0::bigint, 'A owner cannot see B NCM by org');
-  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public."NCM" WHERE id = '00000000-0000-0000-0000-0000000000bb'$q$), 0::bigint, 'A owner cannot see B NCM by id');
-  PERFORM pg_temp.assert_eq(pg_temp.count_rows('SELECT 1 FROM public.v_ncm_internal'), 1::bigint, 'view filtered');
-  PERFORM pg_temp.assert_eq(pg_temp.count_rows('SELECT 1 FROM public.v_nc_files'), 1::bigint, 'files view filtered');
-  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public."Status"$q$), 2::bigint, 'A lookups only');
+  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public.nonconformances$q$), pg_temp.count_rows($q$SELECT 1 FROM public.nonconformances WHERE organisation_id = '00000000-0000-0000-0000-00000000000a'$q$), 'A owner sees only A''s non-conformances');
+  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public.nonconformances WHERE title = 'A NCR'$q$), 1::bigint, 'and A''s own one is there');
+  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public.nonconformances WHERE organisation_id = '00000000-0000-0000-0000-00000000000b'$q$), 0::bigint, 'A owner cannot see B non-conformances by org');
+  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public.nonconformances WHERE id = '00000000-0000-0000-0000-0000000000bc'$q$), 0::bigint, 'A owner cannot see B non-conformances by id');
+  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public.ncr_classifications WHERE organisation_id = '00000000-0000-0000-0000-00000000000b'$q$), 0::bigint, 'A owner sees none of B''s lookups');
   PERFORM pg_temp.assert_eq(pg_temp.count_rows('SELECT 1 FROM public.organisation_users'), 4::bigint, 'A members only');
   PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public.profiles WHERE id = '00000000-0000-0000-0000-0000000000b1'$q$), 0::bigint, 'B owner profile hidden');
   PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public.profiles WHERE id = '00000000-0000-0000-0000-0000000000d1'$q$), 1::bigint, 'shared member profile visible');
-  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public."Notifications"$q$), 1::bigint, 'own notification only');
 
   -- Writes into B are impossible: direct insert, update/delete by id, cross-org references.
-  PERFORM pg_temp.assert_fails($q$INSERT INTO public."NCM" (organisation_id, ncm_id) VALUES ('00000000-0000-0000-0000-00000000000b', 'X-1')$q$, 'insert into B');
-  PERFORM pg_temp.assert_eq(pg_temp.affected($q$UPDATE public."NCM" SET description = 'x' WHERE id = '00000000-0000-0000-0000-0000000000bb'$q$), 0::bigint, 'update B row');
-  PERFORM pg_temp.assert_eq(pg_temp.affected($q$DELETE FROM public."NCM" WHERE id = '00000000-0000-0000-0000-0000000000bb'$q$), 0::bigint, 'delete B row');
-  PERFORM pg_temp.assert_fails($q$TRUNCATE public."NCM" CASCADE$q$, 'truncate bypassing RLS');
+  PERFORM pg_temp.assert_fails($q$INSERT INTO public.nonconformances (organisation_id, source, title) VALUES ('00000000-0000-0000-0000-00000000000b', 'internal', 'X-1')$q$, 'insert into B');
+  PERFORM pg_temp.assert_eq(pg_temp.affected($q$UPDATE public.nonconformances SET description = 'x' WHERE id = '00000000-0000-0000-0000-0000000000bc'$q$), 0::bigint, 'update B row');
+  PERFORM pg_temp.assert_fails($q$DELETE FROM public.nonconformances WHERE id = '00000000-0000-0000-0000-0000000000bc'$q$, 'delete B row (nobody can delete a non-conformance)');
+  PERFORM pg_temp.assert_fails($q$TRUNCATE public.nonconformances CASCADE$q$, 'truncate bypassing RLS');
   PERFORM pg_temp.assert_fails($q$DELETE FROM public.organisations WHERE id = '00000000-0000-0000-0000-00000000000a'$q$, 'delete own organisation');
   PERFORM pg_temp.assert_fails($q$DELETE FROM public.permissions$q$, 'delete permission catalogue');
-  PERFORM pg_temp.assert_fails($q$INSERT INTO public."NCM" (organisation_id, ncm_id, status) VALUES ('00000000-0000-0000-0000-00000000000a', 'X-2', 10)$q$, 'A NCM referencing B status');
-  PERFORM pg_temp.assert_fails($q$UPDATE public."NCM" SET organisation_id = '00000000-0000-0000-0000-00000000000b'$q$, 'move row to B');
+  PERFORM pg_temp.assert_fails($q$INSERT INTO public.nonconformances (organisation_id, source, title, site_id) VALUES ('00000000-0000-0000-0000-00000000000a', 'internal', 'X-2', '00000000-0000-0000-0000-0000000005b1')$q$, 'an A non-conformance naming B''s site');
+  PERFORM pg_temp.assert_fails($q$UPDATE public.nonconformances SET organisation_id = '00000000-0000-0000-0000-00000000000b'$q$, 'move row to B');
   PERFORM pg_temp.assert_eq(pg_temp.affected($q$UPDATE public.organisations SET name = 'hijack' WHERE id = '00000000-0000-0000-0000-00000000000b'$q$), 0::bigint, 'rename B');
 
   -- Normal work inside A.
-  PERFORM pg_temp.assert_ok($q$INSERT INTO public."NCM" (organisation_id, ncm_id, status) VALUES ('00000000-0000-0000-0000-00000000000a', 'NCM-25-002', 1)$q$, 'owner creates NCM in A');
+  PERFORM pg_temp.assert_ok($q$INSERT INTO public.nonconformances (organisation_id, source, title) VALUES ('00000000-0000-0000-0000-00000000000a', 'internal', 'NCM-25-002')$q$, 'owner creates a non-conformance in A');
   PERFORM pg_temp.assert_eq(pg_temp.affected($q$UPDATE public.organisations SET name = 'Legacy Org Renamed' WHERE id = '00000000-0000-0000-0000-00000000000a'$q$), 1::bigint, 'owner renames own org');
   PERFORM pg_temp.assert_fails($q$UPDATE public.organisations SET status = 'suspended' WHERE id = '00000000-0000-0000-0000-00000000000a'$q$, 'status column not user-editable');
-
-  -- Reporting functions only aggregate the caller's data even when asked for B.
-  PERFORM pg_temp.assert_eq((public.get_nc_kpi_json('00000000-0000-0000-0000-00000000000b', now() - interval '1 day', now() + interval '1 day', 'Internal')::jsonb -> 'totals' ->> 'record_count')::int, 0, 'kpi for B is empty');
 
   -- Storage: A objects and own/shared avatars only.
   PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM storage.objects WHERE bucket_id = 'nc-files'$q$), 1::bigint, 'A files only');
@@ -163,8 +144,8 @@ DO $$
 BEGIN
   PERFORM pg_temp.login('00000000-0000-0000-0000-0000000000d1');
   PERFORM pg_temp.assert_eq(pg_temp.count_rows('SELECT 1 FROM public.organisations'), 2::bigint, 'dual member sees two orgs');
-  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public."NCM" WHERE organisation_id = '00000000-0000-0000-0000-00000000000b'$q$), 1::bigint, 'dual member B NCM');
-  PERFORM pg_temp.assert_fails($q$INSERT INTO public."NCM" (organisation_id, ncm_id) VALUES ('00000000-0000-0000-0000-00000000000b', 'V-1')$q$, 'viewer cannot create');
+  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public.nonconformances WHERE organisation_id = '00000000-0000-0000-0000-00000000000b'$q$), 1::bigint, 'dual member sees B''s non-conformance');
+  PERFORM pg_temp.assert_fails($q$INSERT INTO public.nonconformances (organisation_id, source, title) VALUES ('00000000-0000-0000-0000-00000000000b', 'internal', 'V-1')$q$, 'viewer cannot create');
   PERFORM pg_temp.assert_eq(pg_temp.count_rows('SELECT 1 FROM public.organisation_users'), 2::bigint, 'viewer sees own memberships only');
   PERFORM pg_temp.logout();
 END $$;
@@ -176,27 +157,19 @@ DO $$
 BEGIN
   -- Inspector: can raise, cannot edit, delete or manage lookups.
   PERFORM pg_temp.login('00000000-0000-0000-0000-0000000000a2');
-  PERFORM pg_temp.assert_ok($q$INSERT INTO public."NCM" (organisation_id, ncm_id) VALUES ('00000000-0000-0000-0000-00000000000a', 'NCM-25-003')$q$, 'inspector raises NCR');
-  PERFORM pg_temp.assert_eq(pg_temp.affected($q$UPDATE public."NCM" SET description = 'x'$q$), 0::bigint, 'inspector cannot edit');
-  PERFORM pg_temp.assert_eq(pg_temp.affected($q$DELETE FROM public."NCM"$q$), 0::bigint, 'inspector cannot delete');
-  PERFORM pg_temp.assert_fails($q$INSERT INTO public."Status" (organisation_id, name) VALUES ('00000000-0000-0000-0000-00000000000a', 'New')$q$, 'inspector cannot add status');
+  PERFORM pg_temp.assert_ok($q$INSERT INTO public.nonconformances (organisation_id, source, title) VALUES ('00000000-0000-0000-0000-00000000000a', 'internal', 'NCM-25-003')$q$, 'inspector raises NCR');
+  PERFORM pg_temp.assert_eq(pg_temp.affected($q$UPDATE public.nonconformances SET description = 'x' WHERE title = 'A NCR'$q$), 0::bigint, 'inspector cannot edit someone else''s');
+  PERFORM pg_temp.assert_fails($q$DELETE FROM public.nonconformances$q$, 'inspector cannot delete');
+  PERFORM pg_temp.assert_fails($q$INSERT INTO public.ncr_classifications (organisation_id, kind, name) VALUES ('00000000-0000-0000-0000-00000000000a', 'failure_mode', 'New')$q$, 'inspector cannot add a lookup');
   PERFORM pg_temp.assert_eq(pg_temp.count_rows('SELECT 1 FROM public.organisation_users'), 1::bigint, 'inspector lacks members.read');
   PERFORM pg_temp.logout();
 
   -- Suspended member: no access at all.
   PERFORM pg_temp.login('00000000-0000-0000-0000-0000000000a3');
-  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public."NCM"$q$), 0::bigint, 'suspended member sees nothing');
+  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public.nonconformances$q$), 0::bigint, 'suspended member sees nothing');
   PERFORM pg_temp.assert_eq(pg_temp.count_rows('SELECT 1 FROM public.organisations'), 0::bigint, 'suspended member org');
   PERFORM pg_temp.logout();
 
-  -- Recipient sees the notification; B owner (creator) too; B admin does not.
-  PERFORM pg_temp.login('00000000-0000-0000-0000-0000000000b3');
-  PERFORM pg_temp.assert_eq(pg_temp.count_rows('SELECT * FROM public.get_user_notifications()'), 1::bigint, 'recipient notification');
-  PERFORM pg_temp.assert_eq(pg_temp.affected($q$UPDATE public."Notification Recipients" SET read = true$q$), 1::bigint, 'recipient marks read');
-  PERFORM pg_temp.logout();
-  PERFORM pg_temp.login('00000000-0000-0000-0000-0000000000b2');
-  PERFORM pg_temp.assert_eq(pg_temp.count_rows($q$SELECT 1 FROM public."Notifications"$q$), 0::bigint, 'non-recipient');
-  PERFORM pg_temp.logout();
 END $$;
 
 -- ---------------------------------------------------------------------------

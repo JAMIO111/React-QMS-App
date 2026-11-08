@@ -3,6 +3,7 @@ import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import RHFComboBox from "../ui/RHFComboBox";
 import { useParts, usePart, useParties } from "../../hooks/useMasterData";
 import { useNcrs } from "../../hooks/useNcr";
+import { useMachines } from "../../hooks/useProcessControl";
 
 export const TextAreaField = ({ label, value, onChange, disabled, rows = 3, maxLength, className = "", required, hint }) => {
   const id = useId();
@@ -49,6 +50,25 @@ export const RemoteComboBox = ({ items, isFetching, onSearch, current, value, on
         setPicked(item);
         onChange(id, item);
       }}
+    />
+  );
+};
+
+const machineOption = (m) => ({ id: m.id, name: m.name, hint: m.code });
+
+/** Machine search (server-side): where a non-conformance was detected or what caused it. `current` is the saved machine ({ id, name }). */
+export const MachinePicker = ({ current, label = "Machine", ...props }) => {
+  const [q, setSearch] = useDebouncedSearch();
+  const machines = useMachines({ q, includeInactive: true });
+  return (
+    <RemoteComboBox
+      {...props}
+      label={label}
+      placeholder="Search a machine…"
+      items={(machines.data?.items ?? []).map(machineOption)}
+      isFetching={machines.isFetching}
+      onSearch={setSearch}
+      current={current ? { id: current.id, name: current.name } : undefined}
     />
   );
 };

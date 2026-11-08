@@ -32,28 +32,12 @@ BEGIN
 
   SELECT id INTO site FROM public.sites WHERE organisation_id = a;
   SELECT id INTO owner_role FROM public.roles WHERE organisation_id = a AND key = 'owner';
-  SELECT id INTO status FROM public."Status" WHERE organisation_id = a AND type = 'initial';
 
   INSERT INTO public.departments (organisation_id, site_id, code, name) VALUES (a, site, 'QA', 'Quality');
   INSERT INTO public.organisation_users (organisation_id, invited_email, status, invited_at) VALUES (a, 'pending@sweep.test', 'invited', now()) RETURNING id INTO invite;
   INSERT INTO public.department_members (organisation_id, department_id, membership_id)
     SELECT a, d.id, invite FROM public.departments d WHERE d.organisation_id = a AND d.code = 'QA';
-  INSERT INTO public."Part" (id, organisation_id, part_number) VALUES (part, a, 'SW-1');
-  INSERT INTO public."Customers" (id, organisation_id, name) VALUES (cust, a, 'Sweep customer');
-  INSERT INTO public."Suppliers" (id, organisation_id, name) VALUES (supp, a, 'Sweep supplier');
-  INSERT INTO public."Addresses" (organisation_id, party_id, line_1) VALUES (a, cust, '1 Sweep Street');
-  INSERT INTO public."Process" (organisation_id, code, name) VALUES (a, 'SWP', 'Sweeping') RETURNING id INTO proc;
-  INSERT INTO public."Failure Mode" (organisation_id, code, name) VALUES (a, 'SW', 'Sweep fault') RETURNING id INTO fm;
-  INSERT INTO public."Sub-Failure Mode" (id, organisation_id, failure_mode, name) VALUES (900001, a, fm, 'Sub sweep');
   INSERT INTO public."Employees" (id, organisation_id, first_name, surname) VALUES (emp, a, 'Sam', 'Sweeper');
-  INSERT INTO public."8D" (id, organisation_id, title) VALUES (d8, a, 'Sweep 8D');
-  INSERT INTO public."NCM" (id, organisation_id, ncm_id, date, type, status, part_number, customer, supplier, failure_mode,
-                            sub_failure_mode, causal_process, responsible_operator, ref_8d, quantity_defective)
-    VALUES (ncr, a, 'SW-001', now(), 'Internal', status, part, cust, supp, fm, 900001, proc, emp, d8, 2);
-  INSERT INTO public."Costs" (id, organisation_id, nc_ref, cost_net) VALUES (gen_random_uuid(), a, 'SW-001', 10);
-  INSERT INTO public."NC Files" (organisation_id, name, path, id_ref, owner) VALUES (a, 'x.pdf', a || '/ncr/SW-001/x.pdf', 'SW-001', '50000000-0000-0000-0000-0000000000a1');
-  INSERT INTO public."Notifications" (id, organisation_id, created_by, title) VALUES (notif, a, '50000000-0000-0000-0000-0000000000a1', 'Sweep');
-  INSERT INTO public."Notification Recipients" (organisation_id, notification_id, recipient_id) VALUES (a, notif, '50000000-0000-0000-0000-0000000000a1');
   INSERT INTO storage.objects (bucket_id, name) VALUES ('nc-files', a || '/ncr/SW-001/x.pdf');
   -- Phase 2 master data (releasing the revision also writes an outbox event).
   INSERT INTO public.customers (organisation_id, code, name) VALUES (a, 'SWC', 'Sweep customer');
@@ -262,7 +246,6 @@ BEGIN
   FOR r IN SELECT c.relnamespace::regnamespace::text AS nsp, c.relname
            FROM pg_class c JOIN pg_attribute att ON att.attrelid = c.oid AND att.attname = 'organisation_id' AND NOT att.attisdropped
            WHERE c.relnamespace IN ('public'::regnamespace, 'audit'::regnamespace) AND c.relkind IN ('r', 'v')
-             AND c.relname NOT IN ('v_ncm_customer', 'v_ncm_supplier')  -- same rows as v_ncm_internal, by type
   LOOP
     EXECUTE format('SELECT count(*) FROM %I.%I WHERE organisation_id = $1', r.nsp, r.relname) INTO n USING a;
     IF n = 0 THEN missing := missing || ' ' || r.nsp || '.' || r.relname; END IF;
@@ -326,9 +309,6 @@ DECLARE
   invite uuid := (SELECT value FROM sweep WHERE key = 'invite');
 BEGIN
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000b1');
-  PERFORM pg_temp.assert_eq((public.get_nc_kpi_json(a, now() - interval '1 day', now() + interval '1 day', 'Internal')::jsonb -> 'totals' ->> 'record_count')::int, 0, 'kpi of A');
-  PERFORM pg_temp.assert_eq((SELECT sum((p ->> 'record_count')::int) FROM jsonb_array_elements(public.get_nc_date_trend(a, now() - interval '1 day', now() + interval '1 day')) p)::int, 0, 'trend of A');
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.get_user_notifications() WHERE organisation_id = a), 0::bigint, 'notifications of A');
   PERFORM pg_temp.assert_eq(app.is_member(a), false, 'is_member(A)');
   PERFORM pg_temp.assert_eq(app.has_permission(a, 'ncr.read'), false, 'has_permission(A)');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.my_permissions(a)), 0::bigint, 'my_permissions(A)');

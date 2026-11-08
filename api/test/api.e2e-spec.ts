@@ -17,6 +17,8 @@ const bearer = async (user: string) => ({ Authorization: `Bearer ${await token(u
 beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });
   await seed(admin);
+  // One record per organisation for the "only sees its own data" and audit-trail checks.
+  await admin.query(`insert into public.customers (id, organisation_id, code, name) values ($1, $2, 'E2E-A', 'A'), ($3, $4, 'E2E-B', 'B')`, [ids.ncrA, ids.orgA, ids.ncrB, ids.orgB]);
   app = await startApp();
 });
 
@@ -186,8 +188,8 @@ describe('database access runs as the caller (RLS + audit context)', () => {
     const db = app.get(DatabaseService);
     const counts = await db.asUser(ctx(ids.ownerA), async (tx) => {
       const r = await tx.execute<{ own: string; other: string }>(sql`
-        select (select count(*) from public."NCM" where id = ${ids.ncrA}::uuid) as own,
-               (select count(*) from public."NCM" where id = ${ids.ncrB}::uuid) as other`);
+        select (select count(*) from public.customers where id = ${ids.ncrA}::uuid) as own,
+               (select count(*) from public.customers where id = ${ids.ncrB}::uuid) as other`);
       return r.rows[0];
     });
     expect(counts).toEqual({ own: '1', other: '0' });
@@ -196,7 +198,7 @@ describe('database access runs as the caller (RLS + audit context)', () => {
   it('records source=api, correlation id and reason in the audit trail', async () => {
     const db = app.get(DatabaseService);
     await db.asUser(ctx(ids.ownerA, { correlationId: 'corr-e2e-1', reason: 'Re-measured' }), (tx) =>
-      tx.execute(sql`update public."NCM" set description = 'A (re-measured)' where id = ${ids.ncrA}::uuid`),
+      tx.execute(sql`update public.customers set name = 'A (re-measured)' where id = ${ids.ncrA}::uuid`),
     );
     const { rows } = await admin.query(
       `select actor_user_id, source, correlation_id, reason, changed_fields from audit.events
@@ -208,7 +210,7 @@ describe('database access runs as the caller (RLS + audit context)', () => {
       source: 'api',
       correlation_id: 'corr-e2e-1',
       reason: 'Re-measured',
-      changed_fields: ['description'],
+      changed_fields: ['name'],
     });
   });
 
@@ -216,12 +218,12 @@ describe('database access runs as the caller (RLS + audit context)', () => {
     const db = app.get(DatabaseService);
     await expect(
       db.asUser(ctx(ids.ownerA), async (tx) => {
-        await tx.execute(sql`update public."NCM" set description = 'should not persist' where id = ${ids.ncrA}::uuid`);
+        await tx.execute(sql`update public.customers set name = 'should not persist' where id = ${ids.ncrA}::uuid`);
         throw new Error('boom');
       }),
     ).rejects.toThrow('boom');
-    const { rows } = await admin.query('select description from public."NCM" where id = $1', [ids.ncrA]);
-    expect(rows[0].description).toBe('A (re-measured)');
+    const { rows } = await admin.query('select name from public.customers where id = $1', [ids.ncrA]);
+    expect(rows[0].name).toBe('A (re-measured)');
   });
 
   it('does not leak role or claims to the next request on the same connection', async () => {

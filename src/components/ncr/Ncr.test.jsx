@@ -61,6 +61,10 @@ const routeApi = (routes) =>
       "GET /parts/p1": { id: "p1", revisions: [{ id: "r1", revision: "A", status: "released" }] },
       "GET /customers": page([{ id: "c1", code: "ACME", name: "Acme Fabrication", displayName: "Acme" }]),
       "GET /suppliers": page([{ id: "sp1", code: "STEEL", name: "Steel Supplies", displayName: null }]),
+      "GET /machines": page([
+        { id: "m1", code: "LATHE-1", name: "CNC lathe 1", active: true },
+        { id: "m2", code: "WELD-1", name: "Port weld", active: true },
+      ]),
       "GET /saved-filters": () => ({ data: savedFilters.map(savedItem), limit: 5 }),
       "POST /saved-filters": (_path, o) => {
         if (savedFilters.length >= 5) throw Object.assign(new Error("You can save up to 5 filters here."), { status: 409 });
@@ -651,6 +655,23 @@ describe("NC form", () => {
     await pick(/^Category/, "Process");
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(lastCall("PATCH /ncrs/n1").body).toEqual({ categoryId: "cat2" });
+  });
+
+  it("picks where it was detected and the causal process from the machines, and shows the saved machine's name", async () => {
+    routeApi({ "GET /ncrs/n1": ncr({ detectionProcess: { id: "m2", name: "Port weld" }, causalProcess: { id: "m1", name: "CNC lathe 1" } }), "PATCH /ncrs/n1": () => ncr() });
+    renderAt("/Non-Conformance/Register/n1");
+    await screen.findByLabelText("Title");
+    expect(screen.getByRole("combobox", { name: "Where detected" })).toHaveValue("Port weld");
+    expect(screen.getByRole("combobox", { name: "Causal process" })).toHaveValue("CNC lathe 1");
+    await userEvent.click(screen.getByRole("combobox", { name: "Causal process" }));
+    const options = within(await screen.findByRole("listbox")).getAllByRole("option").map((o) => o.textContent);
+    expect(options.join(" ")).toContain("CNC lathe 1");
+    expect(options.join(" ")).toContain("Port weld");
+    expect(options.join(" ")).toContain("WELD-1");
+    await userEvent.click(within(screen.getByRole("listbox")).getByRole("option", { name: /Port weld/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(lastCall("PATCH /ncrs/n1").body).toEqual({ causalProcessId: "m2" });
+    expect(calls.some((c) => c.k === "GET /machines")).toBe(true);
   });
 
   it("offers a draft without a category the choice to pick one", async () => {

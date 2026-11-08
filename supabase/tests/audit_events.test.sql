@@ -21,7 +21,7 @@ INSERT INTO public.user_role_assignments (organisation_id, membership_id, role_i
 SELECT m.organisation_id, m.id, r.id FROM m JOIN public.roles r
   ON r.organisation_id = m.organisation_id
  AND r.key = CASE WHEN m.user_id = '00000000-0000-0000-0000-0000000000b1' THEN 'owner' ELSE 'inspector' END;
-INSERT INTO public."NCM" (id, organisation_id, ncm_id) VALUES ('00000000-0000-0000-0000-0000000000bb', '00000000-0000-0000-0000-00000000000b', 'B-1');
+INSERT INTO public.customers (id, organisation_id, code, name) VALUES ('00000000-0000-0000-0000-0000000000bb', '00000000-0000-0000-0000-00000000000b', 'B1', 'B customer');
 
 CREATE TEMP TABLE marker AS SELECT coalesce(max(seq), 0) AS seq FROM audit.events;
 GRANT SELECT ON marker TO authenticated;
@@ -39,29 +39,29 @@ BEGIN
   PERFORM set_config('app.reason', 'Customer complaint', true);
   PERFORM set_config('app.correlation_id', 'req-123', true);
 
-  INSERT INTO public."NCM" (id, organisation_id, ncm_id, description) VALUES (ncr, '00000000-0000-0000-0000-00000000000a', 'NCM-25-900', 'Burr on edge');
-  UPDATE public."NCM" SET description = 'Burr on edge (deburred)', quantity_defective = 4 WHERE id = ncr;
-  UPDATE public."NCM" SET description = description WHERE id = ncr;  -- no-op: no event
-  DELETE FROM public."NCM" WHERE id = ncr;
+  INSERT INTO public.customers (id, organisation_id, code, name, notes) VALUES (ncr, '00000000-0000-0000-0000-00000000000a', 'C900', 'Burr on edge', 'first');
+  UPDATE public.customers SET name = 'Burr on edge (deburred)', notes = 'second' WHERE id = ncr;
+  UPDATE public.customers SET name = name WHERE id = ncr;  -- no-op: no event
 
   PERFORM pg_temp.logout();
+  DELETE FROM public.customers WHERE id = ncr;  -- people cannot delete customers; the owner of the table can
 
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM audit.events WHERE entity_id = ncr::text), 3::bigint, 'insert, update, delete recorded; no-op skipped');
 
   SELECT * INTO e FROM audit.events WHERE entity_id = ncr::text AND action = 'update';
-  PERFORM pg_temp.assert_eq(e.entity_type, 'NCM', 'entity type');
+  PERFORM pg_temp.assert_eq(e.entity_type, 'customers', 'entity type');
   PERFORM pg_temp.assert_eq(e.actor_user_id, '00000000-0000-0000-0000-0000000000a1'::uuid, 'actor');
   PERFORM pg_temp.assert_eq(e.organisation_id, '00000000-0000-0000-0000-00000000000a'::uuid, 'organisation');
-  PERFORM pg_temp.assert_eq(e.changed_fields, ARRAY['description', 'quantity_defective'], 'changed fields (bookkeeping excluded)');
-  PERFORM pg_temp.assert_eq(e.previous_values ->> 'description', 'Burr on edge', 'previous value');
-  PERFORM pg_temp.assert_eq(e.new_values ->> 'description', 'Burr on edge (deburred)', 'new value');
+  PERFORM pg_temp.assert_eq(e.changed_fields, ARRAY['name', 'notes'], 'changed fields (bookkeeping excluded)');
+  PERFORM pg_temp.assert_eq(e.previous_values ->> 'name', 'Burr on edge', 'previous value');
+  PERFORM pg_temp.assert_eq(e.new_values ->> 'name', 'Burr on edge (deburred)', 'new value');
   PERFORM pg_temp.assert_eq(e.new_values ? 'updated_at', false, 'only changed fields stored on update');
   PERFORM pg_temp.assert_eq(e.source, 'api', 'source');
   PERFORM pg_temp.assert_eq(e.reason, 'Customer complaint', 'reason');
   PERFORM pg_temp.assert_eq(e.correlation_id, 'req-123', 'correlation id');
 
   SELECT * INTO e FROM audit.events WHERE entity_id = ncr::text AND action = 'delete';
-  PERFORM pg_temp.assert_eq(e.previous_values ->> 'ncm_id', 'NCM-25-900', 'deleted row kept in full');
+  PERFORM pg_temp.assert_eq(e.previous_values ->> 'code', 'C900', 'deleted row kept in full');
   PERFORM pg_temp.assert_eq(e.new_values, NULL::jsonb, 'delete has no new values');
 
   PERFORM set_config('app.source', '', true);
@@ -100,7 +100,7 @@ END $$;
 DO $$
 BEGIN
   PERFORM pg_temp.login('00000000-0000-0000-0000-0000000000a1');
-  PERFORM pg_temp.assert_fails($q$INSERT INTO audit.events (organisation_id, entity_type, entity_id, action, source) VALUES ('00000000-0000-0000-0000-00000000000a', 'NCM', 'x', 'insert', 'forged')$q$, 'client forges event');
+  PERFORM pg_temp.assert_fails($q$INSERT INTO audit.events (organisation_id, entity_type, entity_id, action, source) VALUES ('00000000-0000-0000-0000-00000000000a', 'customers', 'x', 'insert', 'forged')$q$, 'client forges event');
   PERFORM pg_temp.assert_fails($q$UPDATE audit.events SET reason = 'edited'$q$, 'client edits event');
   PERFORM pg_temp.assert_fails($q$DELETE FROM audit.events$q$, 'client deletes events');
   PERFORM pg_temp.assert_fails($q$TRUNCATE audit.events$q$, 'client truncates events');

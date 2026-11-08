@@ -124,10 +124,6 @@ export async function seed(admin: Pool, ids: Ids = makeIds(1), slugSuffix = ''):
       await admin.query('update public.organisation_users set status = $1 where id = $2', [status, rows[0].id]);
     }
   }
-  await admin.query(
-    `insert into public."NCM" (id, organisation_id, ncm_id, description) values ($1, $2, 'NCM-26-001', 'A'), ($3, $4, 'NCM-26-001', 'B')`,
-    [ids.ncrA, ids.orgA, ids.ncrB, ids.orgB],
-  );
   await admin.query('commit');
 }
 

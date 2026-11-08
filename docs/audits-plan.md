@@ -75,7 +75,7 @@ Lifecycle steps are SECURITY DEFINER functions (`app.start_audit`, `app.complete
 
 ## 5. Slices
 
-- **AU1 — definitions:** migration (definitions, questions, targets, permissions), API, **Audits register** and the definition form (procedure, checklist builder, covers, frequency, who, pass mark). Menu group "Audits" under Documentation.
+- **AU1 — definitions (built; migration `20251213100000_audit_definitions.sql`, not applied live yet):** migration (definitions, questions, targets, permissions), API, **Audits register** and the definition form (procedure, checklist builder, covers, frequency, who, pass mark). Menu group "Audits" under Documentation.
 - **AU2 — schedule:** occurrences and generation, skip, API, **Schedule page** (upcoming, overdue, missed, done, counts, calendar, filters).
 - **AU3 — carrying out and records:** start, frozen checklist, responses, complete with the computed result, evidence files, **Audit records register**, record page; Raise NC from a failed question.
 - **AU4 — exit check:** live guardrails and advisors, browser journey (define → schedule → miss one → do one → fail one → NC), exit report, CLAUDE.md. Notification for "assigned to you" only if time allows; reminders by email are a later phase.
@@ -92,3 +92,12 @@ Lifecycle steps are SECURITY DEFINER functions (`app.start_audit`, `app.complete
 | A6 | Findings | A failed question is the finding. NC on request; **no separate findings or actions register yet** (Phase 4 later). |
 | A7 | Reminders | **Computed, in-app** (the schedule and a menu count of overdue audits); no email or push yet. |
 | A8 | Not in this section | Audit programmes across years, external/customer audits with certificates, scoring weights per question, auditor competence checks. |
+
+## 7. AU1 built
+
+Migration `20251213100000_audit_definitions.sql`: permissions `audits.read` / `.manage` / `.perform` (not `audit.*`, which is the audit-trail permission), `audit_definitions` (AUD-001, frequency, grace, weekdays only, expected auditor,
+pass mark, retire with reason), `audit_questions` and `audit_targets` (readable only; replaced as a whole by `app.set_audit_checklist` / `app.set_audit_targets`), `app.retire_audit_definition` / `reactivate_audit_definition`.
+Error `QM018` → `409 audit_rule`. SQL tests `supabase/tests/audit_definitions.test.sql` (7 mutation checks, all caught). API `api/src/audits/` (`GET|POST /audits`, `GET|PATCH /audits/{id}`, `POST …/retire|reactivate`;
+`frequency`, `auditor`, `questions` and `targets` replace the whole of that part). UI `src/components/audits/` (`AuditsPage` register with server sort/paging and URL filters for type, status and machine, `AuditPage`, `AuditForm`),
+hooks `useAudits.js`, `lib/audits.js`, menu "Audits" under Documentation. Not in AU1: the schedule (AU2), records (AU3), procedure files (AU3), "last done / next due / last result" columns on the register (AU2/AU3).
+Accepted equivalent mutants: the service's own forbidden check and organisation filter on load (the guard and row-level security already answer), and the form clearing "critical" twice when a question becomes a note.

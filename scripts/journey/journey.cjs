@@ -196,6 +196,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await containAndDispose({ page, stack, APP, orgName, see, shot, step, log });
   await productionTraceability({ page, stack, APP, orgName, see, shot, step, log });
   await affectedLots({ page, stack, APP, orgName, see, shot, step, log });
+  await defineAudit({ page, stack, APP, orgName, see, shot, step, log });
   await workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, log });
 };
 
@@ -398,6 +399,50 @@ async function containAndDispose({ page, stack, APP, orgName, see, shot, step, l
       (select count(*)::int from public.ncr_dispositions where nonconformance_id = n.id and status = 'approved') as approved from public.nonconformances n where n.id = $1`, [nc.id]);
   log(`NC ${nc.reference}: ${JSON.stringify(after)}`);
   if (after.stage !== 'dispositioned' || after.done !== 1 || after.approved !== 1) throw new Error('the NC was not dispositioned with its containment and disposition recorded');
+}
+
+/** The quality team defines an audit: checklist, what it is relevant to, frequency and pass mark; it appears in the Audits register. */
+async function defineAudit({ page, stack, APP, orgName, see, shot, step, log }) {
+  step('the quality team defines a weekly layered process audit and finds it in the Audits register');
+  await page.goto(`${APP}/Documentation/Audits`);
+  await see(page.getByRole('button', { name: /New audit/ }));
+  await shot(page, '56-audits-empty');
+  await page.getByRole('button', { name: /New audit/ }).click();
+  await see(page.getByRole('heading', { name: 'Define an audit' }));
+  await page.getByLabel(/^Title/).fill('Weekly layered process audit, CNC cell');
+  await page.getByLabel(/^Type/).selectOption('layered_process');
+  await page.getByLabel(/^How often/).selectOption('weekly');
+  await page.getByRole('textbox', { name: /^Procedure/ }).fill('1. Walk the cell with the cell leader.\n2. Answer each question from what you see.');
+  await page.getByLabel('Operation code').fill('OP-10');
+  await page.getByLabel('Operation code').press('Enter');
+  // The calendar closes when the page scrolls, so bring the field into view first.
+  await page.getByRole('button', { name: /^First due/ }).scrollIntoViewIfNeeded();
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: /^First due/ }).click();
+  await page.getByRole('dialog', { name: 'Choose first due' }).getByRole('button', { name: /\d{4}$/ }).first().click();
+  await page.getByRole('button', { name: /Add a question/ }).click();
+  const q1 = page.getByRole('listitem', { name: 'Question 1' });
+  await q1.getByLabel(/^Question/).fill('Is the cell clean and free of oil?');
+  await q1.getByLabel(/Critical/).check();
+  await page.getByRole('button', { name: /Add a question/ }).click();
+  const q2 = page.getByRole('listitem', { name: 'Question 2' });
+  await q2.getByLabel(/^Question/).fill('Coolant concentration');
+  await q2.getByLabel(/Answered with/).selectOption('number');
+  await q2.getByLabel('Lower limit').fill('6');
+  await q2.getByLabel('Upper limit').fill('9');
+  await q2.getByLabel('Unit').fill('%');
+  await shot(page, '57-define-audit');
+  await page.getByRole('button', { name: 'Define audit' }).click();
+  await see(page.getByRole('heading', { name: /AUD-001 · Weekly layered process audit, CNC cell/ }));
+  await see(page.getByRole('list', { name: 'Checklist' }).getByText('Critical'));
+  await page.waitForTimeout(300);
+  await shot(page, '58-audit-page');
+  await page.goto(`${APP}/Documentation/Audits`);
+  await see(page.getByRole('region', { name: 'Audits' }).getByText('AUD-001'));
+  const { rows: [d] } = await stack.admin.query(`select d.reference, d.frequency_kind, (select count(*)::int from public.audit_questions q where q.audit_definition_id = d.id) as questions,
+      (select count(*)::int from public.audit_targets t where t.audit_definition_id = d.id) as targets from public.audit_definitions d join public.organisations o on o.id = d.organisation_id where o.name = $1`, [orgName]);
+  log(`audit: ${JSON.stringify(d)}`);
+  if (!d || d.frequency_kind !== 'weekly' || d.questions !== 2 || d.targets !== 1) throw new Error('the audit was not saved as defined');
 }
 
 /** A non-conformance names the lot it touches; the lot gate then asks for a disposition that covers that lot. */

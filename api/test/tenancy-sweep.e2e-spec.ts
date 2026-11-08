@@ -145,6 +145,10 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/ncrs/{id}/dispositions': { decision: 'scrap', quantity: 1, instructions: 'Hijacked' },
     'GET /api/v1/ncrs/{id}/gates': undefined,
     'GET /api/v1/ncrs/{id}/affected-lots': undefined,
+    'GET /api/v1/audits/{id}': undefined,
+    'PATCH /api/v1/audits/{id}': { title: 'Hijacked' },
+    'POST /api/v1/audits/{id}/retire': { reason: 'Hijacked' },
+    'POST /api/v1/audits/{id}/reactivate': undefined,
     'POST /api/v1/ncrs/{id}/affected-lots': { lotId: '00000000-0000-4000-8000-000000000001', quantity: 1 },
     'PATCH /api/v1/ncr-affected-lots/{id}': { quantity: 1 },
     'POST /api/v1/ncr-affected-lots/{id}/remove': { reason: 'Hijacked' },
@@ -326,6 +330,10 @@ const hasSample = (op: Op) =>
     'POST /api/v1/ncrs/{id}/dispositions',
     'GET /api/v1/ncrs/{id}/gates',
     'GET /api/v1/ncrs/{id}/affected-lots',
+    'GET /api/v1/audits/{id}',
+    'PATCH /api/v1/audits/{id}',
+    'POST /api/v1/audits/{id}/retire',
+    'POST /api/v1/audits/{id}/reactivate',
     'POST /api/v1/ncrs/{id}/affected-lots',
     'PATCH /api/v1/ncr-affected-lots/{id}',
     'POST /api/v1/ncr-affected-lots/{id}/remove',
@@ -426,6 +434,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/ncr-containment-actions/')) return a.containmentAction;
   if (path.startsWith('/api/v1/ncr-dispositions/')) return a.disposition;
   if (path.startsWith('/api/v1/ncr-affected-lots/')) return a.affectedLot;
+  if (path.startsWith('/api/v1/audits/')) return a.audit;
   if (path.startsWith('/api/v1/ncr-attachments/')) return a.attachment;
   if (path.startsWith('/api/v1/gauges/')) return a.gauge;
   if (path.startsWith('/api/v1/gauge-characteristics/')) return a.gaugeCharacteristic;
@@ -517,6 +526,7 @@ beforeAll(async () => {
   a.serial = (await one(`insert into public.serial_numbers (organisation_id, serial_number, part_id, lot_id) values ($1, 'A-SN-1', $2, $3) returning id`, [ids.orgA, a.part, a.lot])).id;
   a.ncrWithLot = (await one(`insert into public.nonconformances (organisation_id, reference, source, title, part_id, quantity_affected) values ($1, 'A-NCR-LOT', 'internal', 'Alpha lot NCR', $2, 5) returning id`, [ids.orgA, a.part])).id;
   a.affectedLot = (await one(`insert into public.ncr_affected_lots (organisation_id, nonconformance_id, lot_id, quantity) values ($1, $2, $3, 2) returning id`, [ids.orgA, a.ncrWithLot, a.lot])).id;
+  a.audit = (await one(`insert into public.audit_definitions (organisation_id, audit_number, reference, title, audit_type, frequency_kind, first_due_on) values ($1, 1, 'AUD-001', 'Alpha audit', 'process', 'monthly', current_date) returning id`, [ids.orgA])).id;
   a.employee = (await one(`insert into public."Employees" (organisation_id, first_name, surname, job_title) values ($1, 'Alpha', 'Employee', 'Operator') returning id`, [ids.orgA])).id;
   a.machine = (await one(`insert into public.machines (organisation_id, code, name) values ($1, 'A-M1', 'Alpha machine') returning id`, [ids.orgA])).id;
   a.family = (await one(`insert into public.part_families (organisation_id, code, name) values ($1, 'A-FAM', 'Alpha family') returning id`, [ids.orgA])).id;

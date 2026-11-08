@@ -23,6 +23,7 @@ import { useCapaMutation } from "../hooks/useCapa";
 import { useOnboardingMutation } from "../hooks/useOnboarding";
 import { useJobLinks, useJobMutation } from "../hooks/useJobs";
 import { useBackfillProduction, useCreateInlineOrder } from "../hooks/useProduction";
+import { useAuditMutation } from "../hooks/useAudits";
 
 /** What other modules have on screen: each must be marked stale by an action in any module. */
 const watched = [
@@ -106,6 +107,7 @@ describe("every action refreshes every module's data", () => {
     ["job production links", useJobLinks, { id: "11111111-1111-1111-1111-111111111111", productionOrderId: "o1" }],
     ["make an order from a job", useCreateInlineOrder, { orderNumber: "WO-1", partId: "p1", quantityPlanned: 1 }],
     ["link existing records to production records", useBackfillProduction, { dryRun: true }],
+    ["audit", useAuditMutation, { path: "/audits", body: { title: "x" } }],
     ["CAPA / 8D action", useCapaMutation, { action: "completeAction", id: "a1", body: {} }],
   ];
 

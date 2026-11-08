@@ -45,3 +45,7 @@ export const useInspectionFilters = () => useUrlFilters(INSPECTION_FILTER_KEYS);
 /** Employees register filters. */
 export const EMPLOYEE_FILTER_KEYS = ["search", "status", "site", "department"];
 export const useEmployeeFilters = () => useUrlFilters(EMPLOYEE_FILTER_KEYS);
+
+/** Audits register filters. */
+export const AUDIT_FILTER_KEYS = ["search", "status", "type", "machine", "machineLabel"];
+export const useAuditFilters = () => useUrlFilters(AUDIT_FILTER_KEYS);

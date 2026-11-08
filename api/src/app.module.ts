@@ -23,6 +23,8 @@ import { CalibrationService } from './calibration/calibration.service';
 import { HealthController } from './health/health.controller';
 import { CustomersController, PartCustomersController, PartRevisionsController, PartsController, SuppliersController, UnitsController } from './master-data/master-data.controller';
 import { MasterDataService } from './master-data/master-data.service';
+import { AuditsController } from './audits/audits.controller';
+import { AuditsService } from './audits/audits.service';
 import { EmployeesController } from './employees/employees.controller';
 import { ProductionController } from './production/production.controller';
 import { ProductionService } from './production/production.service';
@@ -133,6 +135,7 @@ export class AppModule implements NestModule {
         NcrDashboardController,
         NcrClassificationsController,
         EmployeesController,
+        AuditsController,
         ProductionController,
         TraceabilityController,
         JobsController,
@@ -187,6 +190,7 @@ export class AppModule implements NestModule {
         MasterDataService,
         NcrService,
         EmployeesService,
+        AuditsService,
         ProductionService,
         TraceabilityService,
         JobsService,

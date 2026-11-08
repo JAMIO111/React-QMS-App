@@ -113,6 +113,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'employee_rule', pg.message ?? 'That employee change is not allowed');
     case 'QM017': // production traceability rules: orders, lots, serial numbers and their links (messages are written for users)
       return new ApiError(409, 'production_rule', pg.message ?? 'That production change is not allowed');
+    case 'QM018': // audit rules: definitions, schedule, records (messages are written for users)
+      return new ApiError(409, 'audit_rule', pg.message ?? 'That change is not allowed for this audit');
     case 'QM010': // notification type the caller cannot choose
       return new ApiError(404, 'notification_type_not_found', 'That notification type does not exist');
     case 'P0002': // no_data_found raised by app functions

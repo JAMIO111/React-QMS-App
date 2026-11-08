@@ -75,6 +75,7 @@ export const menuStructure = [
     subMenu: [
       { name: "My alerts", path: "/Documentation/My-Alerts", badge: "my-alerts" },
       { name: "Quality alerts", path: "/Documentation/Quality-Alerts" },
+      { name: "Audits", path: "/Documentation/Audits", permission: "audits.read" },
     ],
   },
   {

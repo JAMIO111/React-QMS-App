@@ -5,7 +5,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import { useToast } from "../../contexts/ToastProvider";
 import { useCorrectionImpact, useMasterDataMutation } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
-import { typeFromSource } from "../../lib/ncr";
+import { ncrPath } from "../../lib/ncr";
 import { revisionLabel } from "../../lib/partRevisions";
 import { buttonClass, ErrorNotice, FormError, TextAreaField } from "./shared";
 
@@ -179,7 +179,7 @@ export const CorrectionImpactCard = ({ part }) => {
               <ul aria-label="Non-conformances that refer to the earlier version" className="flex flex-col gap-1 text-sm">
                 {d.ncrs.map((n) => (
                   <li key={n.id}>
-                    <Link to={`/Non-Conformance/${typeFromSource(n.source)}/${n.id}`} className="text-link-color hover:underline">
+                    <Link to={ncrPath(n.id)} className="text-link-color hover:underline">
                       {n.reference}
                     </Link>{" "}
                     · {n.title} <span className="text-secondary-text">({n.stage.replace("_", " ")}, {formatDate(n.detectedAt)})</span>

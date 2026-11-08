@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useNcrHistory } from "../../hooks/useNcr";
 import { describeApiError } from "../../lib/api-client";
-import { FIELD_LABELS, SEVERITIES, formatDate, stageOf } from "../../lib/ncr";
+import { FIELD_LABELS, SEVERITIES, formatDate, sourceLabel, stageOf } from "../../lib/ncr";
 import LoadingScreen from "../ui/LoadingScreen";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -17,6 +17,7 @@ const LONG_TEXT = new Set([
 const formatValue = (field, value, names) => {
   if (value === null || value === undefined || value === "") return "—";
   if (field === "stage") return stageOf(value).label;
+  if (field === "source") return sourceLabel(value);
   if (field === "severity")
     return SEVERITIES.find((s) => s.key === value)?.label ?? value;
   if (field === "detected_at") return formatDate(String(value).slice(0, 10));

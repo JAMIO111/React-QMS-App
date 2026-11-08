@@ -35,6 +35,7 @@ const SettingsAccount = lazy(() =>
 const Employees = lazy(() => import("./components/master-data/EmployeesPage.jsx"));
 const MasterDataDashboard = lazy(() => import("./components/master-data/MasterDataDashboard.jsx"));
 const PartsPage = lazy(() => import("./components/master-data/PartsPage.jsx"));
+const LegacyNcrRedirect = lazy(() => import("./components/ncr/LegacyNcrRedirect.jsx"));
 const NcrPage = lazy(() => import("./components/ncr/NcrPage.jsx"));
 const NcDashboard = lazy(() => import("./components/ncr/NcDashboard.jsx"));
 const CalibrationDashboard = lazy(() => import("./components/calibration/CalibrationDashboard.jsx"));
@@ -150,8 +151,11 @@ const router = createBrowserRouter([
             element: <RequireModule module="nonconformance" />,
             children: [
             { path: "Non-Conformance", element: <NcDashboard /> },
-            { path: "Non-Conformance/:type", element: <NonConformance /> },
-            { path: "Non-Conformance/:type/:id", element: <NcrPage /> },
+            { path: "Non-Conformance/Register", element: <NonConformance /> },
+            { path: "Non-Conformance/Register/:id", element: <NcrPage /> },
+            // The three old registers became one; bookmarks and old links still work.
+            { path: "Non-Conformance/:type", element: <LegacyNcrRedirect /> },
+            { path: "Non-Conformance/:type/:id", element: <LegacyNcrRedirect /> },
             ],
           },
           {

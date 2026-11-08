@@ -87,7 +87,7 @@ const renderAt = (url) =>
           <Route path="/Documentation/Audit-Findings" element={<><AuditFindingsPage /><Where /></>} />
           <Route path="/Documentation/Audit-Findings/:id" element={<><AuditFindingPage /><Where /></>} />
           <Route path="/Documentation/Audit-Records/:id" element={<Where />} />
-          <Route path="/Non-Conformance/Internal/:id" element={<Where />} />
+          <Route path="/Non-Conformance/Register/:id" element={<Where />} />
           <Route path="/Settings/Audits" element={<SettingsAudits />} />
         </Routes>
         <div id="modal-root" />
@@ -181,7 +181,7 @@ describe("a finding", () => {
     routeApi({ "GET /audit-findings/f1": finding({ ncr: { id: "n9", reference: "NCR-26-0009", stage: "draft" } }) });
     renderAt("/Documentation/Audit-Findings/f1");
     await screen.findByRole("heading", { name: /AF-26-0001/ });
-    expect(screen.getByRole("link", { name: "NCR-26-0009" })).toHaveAttribute("href", "/Non-Conformance/Internal/n9");
+    expect(screen.getByRole("link", { name: "NCR-26-0009" })).toHaveAttribute("href", "/Non-Conformance/Register/n9");
     expect(screen.getByText(/can be closed once that non-conformance is closed/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Create non-conformance" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Withdraw" })).toBeNull();
@@ -237,7 +237,7 @@ describe("a finding", () => {
     await userEvent.click(await screen.findByRole("option", { name: "Critical" }));
     await userEvent.click(within(dialog).getByRole("button", { name: "Raise non-conformance" }));
     await waitFor(() => expect(last("POST /audit-findings/f1/create-ncr")?.body).toEqual({ title: "Work instruction missing", description: "Raised from audit AR-26-0001, finding AF-26-0001.", severity: "critical" }));
-    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Internal/n1"));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Register/n1"));
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft non-conformance raised" }));
   });
 
@@ -246,7 +246,7 @@ describe("a finding", () => {
     renderAt("/Documentation/Audit-Findings/f1");
     await userEvent.click(await screen.findByRole("button", { name: "Create non-conformance" }));
     await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Raise non-conformance" }));
-    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Internal/n7"));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Register/n7"));
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Already raised" }));
     // Nothing was sent that the person did not see: no severity when none was chosen.
     expect(last("POST /audit-findings/f1/create-ncr")?.body).toEqual({ title: "Work instruction missing", description: "Raised from audit AR-26-0001, finding AF-26-0001." });
@@ -335,7 +335,7 @@ describe("the findings register", () => {
     expect(within(table).getByText("Major non-conformity")).toBeInTheDocument();
     expect(within(table).getAllByRole("link", { name: /AR-26-0001 · Cell audit/ })).toHaveLength(2);
     expect(within(table).getByText("Grace Hopper")).toBeInTheDocument();
-    expect(within(table).getByRole("link", { name: "NCR-26-0009" })).toHaveAttribute("href", "/Non-Conformance/Internal/n9");
+    expect(within(table).getByRole("link", { name: "NCR-26-0009" })).toHaveAttribute("href", "/Non-Conformance/Register/n9");
     expect(within(table).getByLabelText("Overdue")).toBeInTheDocument();
     expect(screen.getByText("2 findings")).toBeInTheDocument();
     expect(last("GET /audit-findings").path).toContain("sort=reference&order=desc");

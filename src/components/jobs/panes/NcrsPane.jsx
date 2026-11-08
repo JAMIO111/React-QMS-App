@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { typeFromSource } from "../../../lib/ncr";
+import { ncrPath } from "../../../lib/ncr";
 import { formatDate } from "../../../lib/processControl";
 import { SeverityPill, StagePill } from "../../ncr/Pills";
 import { Pager } from "./SidePanes";
@@ -50,7 +50,7 @@ const NcrsPane = ({ ncrs }) => {
           )}
         </dl>
         <p className="text-xs text-secondary-text">Shown because: {n.matched.map((m) => WHY[m]).join(", ").toLowerCase()}.</p>
-        <Link to={`/Non-Conformance/${typeFromSource(n.source)}/${n.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-link-color hover:underline">
+        <Link to={ncrPath(n.id)} target="_blank" rel="noopener noreferrer" className="text-sm text-link-color hover:underline">
           Open the non-conformance
         </Link>
       </article>

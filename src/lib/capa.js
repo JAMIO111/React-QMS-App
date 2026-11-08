@@ -1,3 +1,4 @@
+import { ncrPath } from "./ncr";
 /** Shared definitions for the CAPA / 8D module (docs/capa-8d-plan.md). */
 
 /** The eight disciplines and D0: what each step is for, in plain words. */
@@ -45,9 +46,8 @@ export const TEAM_ROLES = {
 };
 export const roleLabel = (role) => TEAM_ROLES[role]?.label ?? role;
 
-const NC_TYPE = { internal: "Internal", customer: "Customer", supplier: "Supplier", inspection: "Internal" };
 /** Where a linked non-conformance lives in the app. */
-export const ncrHref = (ncr) => `/Non-Conformance/${NC_TYPE[ncr.source] ?? "Internal"}/${ncr.nonconformanceId ?? ncr.id}`;
+export const ncrHref = (ncr) => ncrPath(ncr.nonconformanceId ?? ncr.id);
 
 /** The step page to open for an 8D: its current step. */
 export const capaHref = (capa, step) => `/CAPA/${capa.id}/${step ?? capa.currentStep ?? "d0"}`;

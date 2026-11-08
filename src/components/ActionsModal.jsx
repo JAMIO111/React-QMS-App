@@ -6,7 +6,7 @@ import { useToast } from "../contexts/ToastProvider";
 import { usePermissions } from "../hooks/useQmsApi";
 import { useNcrMutation } from "../hooks/useNcr";
 import { describeApiError } from "../lib/api-client";
-import { typeFromSource } from "../lib/ncr";
+import { ncrPath } from "../lib/ncr";
 
 /** Row actions for an NCR: open, delete (soft, with a reason — handled by the page) or restore. */
 const ActionsModal = ({ item, position, onClose, onDelete }) => {
@@ -34,7 +34,7 @@ const ActionsModal = ({ item, position, onClose, onDelete }) => {
       aria-label={`Actions for ${item.reference}`}
       className="w-44 h-fit bg-secondary-bg rounded-xl border border-border-color shadow-lg flex flex-col gap-1 p-2"
       style={{ position: "absolute", top: position.top, left: position.left, zIndex: 1000 }}>
-      <ActionsModalItem label="Open" icon={FolderOpenIcon} item={item} callback={() => navigate(`/Non-Conformance/${typeFromSource(item.source)}/${item.id}`)} />
+      <ActionsModalItem label="Open" icon={FolderOpenIcon} item={item} callback={() => navigate(ncrPath(item.id))} />
       {canDelete && !item.deletedAt && <ActionsModalItem label="Delete" icon={Trash2Icon} color="red" item={item} callback={() => onDelete?.(item)} />}
       {canDelete && item.deletedAt && <ActionsModalItem label="Restore" icon={RotateCcwIcon} item={item} callback={restore} />}
     </div>,

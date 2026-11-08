@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { format, startOfYear, subDays, subMonths } from "date-fns";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   CalendarIcon,
   CircleCheckIcon,
@@ -19,7 +19,7 @@ import RHFComboBox from "../ui/RHFComboBox";
 import { useNcDashboard } from "../../hooks/useNcr";
 import { describeApiError } from "../../lib/api-client";
 import { formatMoney } from "../../lib/costs";
-import { NC_TYPES, formatDate } from "../../lib/ncr";
+import { NCR_REGISTER, NC_TABS, formatDate } from "../../lib/ncr";
 
 const PERIODS = [
   { id: "30d", name: "Last 30 days", from: (t) => subDays(t, 29) },
@@ -27,13 +27,6 @@ const PERIODS = [
   { id: "12m", name: "Last 12 months", from: (t) => subDays(subMonths(t, 12), -1) },
   { id: "ytd", name: "Year to date", from: (t) => startOfYear(t) },
   { id: "24m", name: "Last 24 months", from: (t) => subDays(subMonths(t, 24), -1) },
-];
-const TYPES = [{ key: "", label: "All" }, ...Object.entries(NC_TYPES).map(([key, t]) => ({ key, label: key, source: t.source }))];
-// Fixed colour per NC type (never by rank), from the validated chart palette.
-const SERIES = [
-  { key: "internal", label: "Internal", color: "var(--chart-series-1)" },
-  { key: "customer", label: "Customer", color: "var(--chart-series-2)" },
-  { key: "supplier", label: "Supplier", color: "var(--chart-series-3)" },
 ];
 const SEVERITY_COLOR = { critical: "var(--chart-critical)", major: "var(--chart-serious)", minor: "var(--chart-warning)", unset: "var(--chart-neutral)" };
 const SINGLE = "var(--brand-primary)";
@@ -123,18 +116,19 @@ const HBars = ({ data, colorOf = () => SINGLE, name = "NCs", height }) => (
 );
 
 /**
- * Non-conformance dashboard (/Non-Conformance): KPI tiles and charts for a period, for all NC types
- * or one. Period and type live in the URL, so a view can be bookmarked or shared.
+ * Non-conformance dashboard (/Non-Conformance): KPI tiles and charts for a period, for every source or one quick tab
+ * (All / Customer / Supplier). Period and tab live in the URL, so a view can be bookmarked or shared. Source and
+ * category are separate breakdowns: where the non-conformances came from, and what kind of problem they are.
  */
 const NcDashboard = () => {
   const [params, setParams] = useSearchParams();
   const periodId = PERIODS.some((p) => p.id === params.get("period")) ? params.get("period") : "12m";
-  const typeKey = TYPES.some((t) => t.key === params.get("type")) ? params.get("type") : "";
-  const type = TYPES.find((t) => t.key === typeKey);
+  const tabKey = NC_TABS.some((t) => t.key === params.get("tab")) ? params.get("tab") : "all";
+  const tab = NC_TABS.find((t) => t.key === tabKey);
   const today = new Date();
   const from = format(PERIODS.find((p) => p.id === periodId).from(today), "yyyy-MM-dd");
   const to = format(today, "yyyy-MM-dd");
-  const { data, isLoading, isFetching, error } = useNcDashboard({ source: type.source, from, to });
+  const { data, isLoading, isFetching, error } = useNcDashboard({ source: tab.source, from, to });
   const [trendAsTable, setTrendAsTable] = useState(false);
 
   const set = (k, v) =>
@@ -149,8 +143,8 @@ const NcDashboard = () => {
   const money = (v) => formatMoney(v, currency);
   const shortMoney = (v) => (v >= 10000 ? `${formatMoney(v / 1000, currency).replace(/\.\d+$/, "")}k` : formatMoney(v, currency).replace(/\.00$/, ""));
   const bucketLabel = (start) => (data?.period.bucket === "month" ? format(new Date(`${start}T00:00:00`), "MMM yy") : format(new Date(`${start}T00:00:00`), "d MMM"));
-  const series = type.source ? SERIES.filter((s) => s.key === type.source) : SERIES;
-  const register = type.key || "Internal";
+  // Links into the register keep the tab's sources and the period.
+  const registerLink = (extra = "") => `${NCR_REGISTER}?${[tab.source && `source=${tab.source}`, extra].filter(Boolean).join("&")}`;
   const k = data?.kpis;
 
   return (
@@ -166,15 +160,15 @@ const NcDashboard = () => {
         </div>
         {/* Filters: one row above the charts. */}
         <div className="flex flex-wrap items-end gap-3">
-          <div role="radiogroup" aria-label="NC type" className="flex rounded-lg border border-border-color bg-secondary-bg p-0.5">
-            {TYPES.map((t) => (
+          <div role="radiogroup" aria-label="NC source" className="flex rounded-lg border border-border-color bg-secondary-bg p-0.5">
+            {NC_TABS.map((t) => (
               <button
-                key={t.key || "all"}
+                key={t.key}
                 type="button"
                 role="radio"
-                aria-checked={t.key === typeKey}
-                onClick={() => set("type", t.key)}
-                className={`rounded-md px-3 py-1.5 text-sm cursor-pointer ${t.key === typeKey ? "bg-brand-primary text-white" : "text-primary-text hover:bg-border-color/50"}`}>
+                aria-checked={t.key === tabKey}
+                onClick={() => set("tab", t.key === "all" ? "" : t.key)}
+                className={`rounded-md px-3 py-1.5 text-sm cursor-pointer ${t.key === tabKey ? "bg-brand-primary text-white" : "text-primary-text hover:bg-border-color/50"}`}>
                 {t.label}
               </button>
             ))}
@@ -193,10 +187,10 @@ const NcDashboard = () => {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6" aria-busy={isLoading || undefined}>
         <Kpi icon={ClipboardListIcon} label="NCs raised" value={k ? k.raised.toLocaleString("en-GB") : "—"} change={k ? pct(k.raised, k.raisedPrevious) : null}
-          note={k && !k.raisedPrevious ? "None in the previous period" : ""} to={`/Non-Conformance/${register}?from=${from}&to=${to}`} />
+          note={k && !k.raisedPrevious ? "None in the previous period" : ""} to={registerLink(`from=${from}&to=${to}`)} />
         <Kpi icon={TriangleAlertIcon} label="Open now" value={k ? k.open.toLocaleString("en-GB") : "—"}
-          note={k ? `${k.criticalOpen} critical` : ""} to={`/Non-Conformance/${register}?stage=draft,open,contained,investigating,dispositioned,awaiting_closure`} />
-        <Kpi icon={CircleCheckIcon} label="Closed in period" value={k ? k.closed.toLocaleString("en-GB") : "—"} note="By closing date" to={`/Non-Conformance/${register}?stage=closed`} />
+          note={k ? `${k.criticalOpen} critical` : ""} to={registerLink("stage=draft,open,contained,investigating,dispositioned,awaiting_closure")} />
+        <Kpi icon={CircleCheckIcon} label="Closed in period" value={k ? k.closed.toLocaleString("en-GB") : "—"} note="By closing date" to={registerLink("stage=closed")} />
         <Kpi icon={HourglassIcon} label="Average days to close" value={k?.avgDaysToClose !== null && k?.avgDaysToClose !== undefined ? k.avgDaysToClose.toLocaleString("en-GB") : "—"} note="Detected to closed" />
         <Kpi icon={PoundSterlingIcon} label="Cost of non-conformance" value={k ? shortMoney(k.cost) : "—"} change={k ? pct(k.cost, k.costPrevious) : null}
           note={k && !k.costPrevious ? "Nothing in the previous period" : ""} />
@@ -219,7 +213,7 @@ const NcDashboard = () => {
                 <thead className="sticky top-0 bg-secondary-bg text-left text-secondary-text">
                   <tr>
                     <th className="py-1 pr-2 font-medium">{data?.period.bucket === "week" ? "Week of" : "Month"}</th>
-                    {series.map((s) => <th key={s.key} className="py-1 pr-2 text-right font-medium">{s.label}</th>)}
+                    <th className="py-1 pr-2 text-right font-medium">NCs</th>
                     <th className="py-1 text-right font-medium">Cost</th>
                   </tr>
                 </thead>
@@ -227,7 +221,7 @@ const NcDashboard = () => {
                   {(data?.trend ?? []).map((b) => (
                     <tr key={b.start} className="border-t border-border-color">
                       <td className="py-1 pr-2">{bucketLabel(b.start)}</td>
-                      {series.map((s) => <td key={s.key} className="py-1 pr-2 text-right">{b[s.key]}</td>)}
+                      <td className="py-1 pr-2 text-right">{b.total}</td>
                       <td className="py-1 text-right">{money(b.cost)}</td>
                     </tr>
                   ))}
@@ -242,11 +236,7 @@ const NcDashboard = () => {
                   <XAxis dataKey="start" tickFormatter={bucketLabel} tick={tick} axisLine={false} tickLine={false} minTickGap={12} />
                   <YAxis allowDecimals={false} tick={tick} axisLine={false} tickLine={false} />
                   <Tooltip cursor={{ fill: "var(--chart-grid)" }} content={<ChartTooltip labelFormat={bucketLabel} />} />
-                  {series.length > 1 && <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} formatter={(v) => <span className="text-secondary-text">{v}</span>} />}
-                  {series.map((s, i) => (
-                    <Bar key={s.key} dataKey={s.key} name={s.label} stackId="ncs" fill={s.color} stroke="rgb(var(--secondary-bg))" strokeWidth={1}
-                      radius={i === series.length - 1 ? [4, 4, 0, 0] : 0} maxBarSize={36} />
-                  ))}
+                  <Bar dataKey="total" name="NCs raised" fill={SINGLE} radius={[4, 4, 0, 0]} maxBarSize={36} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -265,6 +255,14 @@ const NcDashboard = () => {
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </Card>
+
+        <Card title="By source" subtitle="Where they came from or were detected, raised in the period">
+          {data?.bySource?.some((x) => x.count) ? <HBars data={data.bySource} height={11 * 30 + 20} /> : <p className="py-8 text-center text-sm text-secondary-text">No NCs in this period.</p>}
+        </Card>
+
+        <Card title="By category" subtitle="What kind of problem, raised in the period">
+          {data?.byCategory?.length ? <HBars data={data.byCategory} /> : <p className="py-8 text-center text-sm text-secondary-text">No NCs in this period.</p>}
         </Card>
 
         <Card title="Failure modes" subtitle="NCs raised in the period">
@@ -295,7 +293,7 @@ const NcDashboard = () => {
               {data.topParts.map((p) => (
                 <tr key={p.id} className="border-t border-border-color">
                   <td className="py-1.5 pr-2">
-                    <Link className="text-link-color hover:underline" to={`/Non-Conformance/${register}?part=${p.id}&partLabel=${encodeURIComponent(`${p.partNumber} · ${p.name}`)}&from=${from}&to=${to}`}>
+                    <Link className="text-link-color hover:underline" to={registerLink(`part=${p.id}&partLabel=${encodeURIComponent(`${p.partNumber} · ${p.name}`)}&from=${from}&to=${to}`)}>
                       {p.partNumber}
                     </Link>{" "}
                     <span className="text-secondary-text">{p.name}</span>

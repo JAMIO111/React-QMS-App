@@ -1,9 +1,10 @@
+import { ncrPath } from "./ncr";
 /** Where a notification leads, from its entity type and the ids stored in `details`. */
 export function notificationLink(n) {
   const d = n.details ?? {};
   switch (n.entityType) {
     case "nonconformances":
-      return d.deleted ? null : `/Non-Conformance/${d.source === "customer" ? "Customer" : d.source === "supplier" ? "Supplier" : "Internal"}/${n.entityId}`;
+      return d.deleted ? null : ncrPath(n.entityId);
     case "gauges":
       return `/Calibration/Gauges/${n.entityId}`;
     case "calibrations":

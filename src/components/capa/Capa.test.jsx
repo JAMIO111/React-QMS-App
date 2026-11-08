@@ -116,7 +116,7 @@ describe("8D step page", () => {
     expect(within(within(nav).getByRole("link", { name: /Initiate/ })).getByLabelText("Complete")).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: /Team/ })).toHaveTextContent("In progress");
     expect(screen.getByText("CAPA-000001")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "NC-26-001" })).toHaveAttribute("href", "/Non-Conformance/Supplier/n1");
+    expect(screen.getByRole("link", { name: "NC-26-001" })).toHaveAttribute("href", "/Non-Conformance/Register/n1");
   });
 
   it("D0 saves only what changed, and lists linked non-conformances", async () => {
@@ -132,7 +132,7 @@ describe("8D step page", () => {
     await userEvent.click(save);
     await waitFor(() => expect(body).toEqual({ title: "New title" }));
     const list = screen.getByRole("list", { name: "Linked non-conformances" });
-    expect(within(list).getByRole("link", { name: "NC-26-001" })).toHaveAttribute("href", "/Non-Conformance/Supplier/n1");
+    expect(within(list).getByRole("link", { name: "NC-26-001" })).toHaveAttribute("href", "/Non-Conformance/Register/n1");
   });
 
   it("D0 links another NC and ends a link with a reason", async () => {
@@ -285,7 +285,7 @@ describe("D1 team", () => {
 
 describe("NC page 8D card", () => {
   const ncr = { id: "n1", reference: "NC-26-001", stage: "open", deletedAt: null };
-  const card = (url = "/Non-Conformance/Supplier/n1") => renderAt(url, <NcrCapaCard ncr={ncr} />);
+  const card = (url = "/Non-Conformance/Register/n1") => renderAt(url, <NcrCapaCard ncr={ncr} />);
 
   it("starts a new 8D from the non-conformance and opens D0", async () => {
     let body;

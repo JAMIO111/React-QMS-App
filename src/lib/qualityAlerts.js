@@ -1,3 +1,4 @@
+import { ncrPath } from "./ncr";
 /** Display helpers for quality alerts (docs/documentation-plan.md). Severity and status are always words and icons, never colour alone. */
 export const CATEGORIES = [
   { value: "product", label: "Product" },
@@ -43,13 +44,11 @@ export const LINK_KINDS = {
 /** The API's link body for a link kept in the form. */
 export const linkBody = (l) => ({ [LINK_KINDS[l.kind].field]: l.recordId });
 
-const NC_TYPE = { internal: "Internal", customer: "Customer", supplier: "Supplier" };
-
 /** Where a linked record lives in the app (null when there is no page). */
 export const linkHref = (l) => {
   switch (l.kind) {
     case "nonconformance":
-      return `/Non-Conformance/${NC_TYPE[l.source] ?? "Internal"}/${l.recordId}`;
+      return ncrPath(l.recordId);
     case "supplier":
       return "/Suppliers";
     case "gauge":

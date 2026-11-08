@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Suspense, useMemo, useCallback } from "react";
-import { useNavigate, useSearchParams, useParams, Navigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { PlusIcon, ShareIcon, SlidersHorizontalIcon } from "@/components/icons";
 import { useNcrs } from "../hooks/useNcr";
 import { FILTER_KEYS, useNCMFilters } from "../hooks/useNCMFilters";
@@ -7,14 +7,15 @@ import { usePermissions } from "../hooks/useQmsApi";
 import { useGlobalSearch } from "../contexts/SearchProvider";
 import { exportCSV } from "../lib/csvHelper";
 import { formatMoney } from "../lib/costs";
-import { NC_TYPES, formatDate, stageOf } from "../lib/ncr";
+import { NC_TABS, formatDate, ncrPath, sourceLabel, stageOf } from "../lib/ncr";
 import { useClassifications } from "../hooks/useNcr";
 import { XIcon } from "@/components/icons";
 import { SkeletonCard2, SkeletonTable } from "./Skeleton";
 import ColumnVisibilityMenu from "./ui/ColumnVisibilityMenu";
 import { useTablePreferences } from "../hooks/useTablePreferences";
-import { getColumnsForNcType } from "../lib/ColumnDefs";
+import { NC_DEFAULT_HIDDEN, getNcColumns } from "../lib/ColumnDefs";
 import DeleteNcrDialog from "./ncr/DeleteNcrDialog";
+import NewNcDialog from "./ncr/NewNcDialog";
 import TableWrapper from "./TableWrapper";
 import NonConformanceGrid from "./NonConformanceGrid";
 import FilterPane from "./FilterPane";
@@ -27,7 +28,8 @@ import IconButton from "./IconButton";
 /** Flat rows for CSV export. */
 const toCsvRow = (n) => ({
   reference: n.reference,
-  source: n.source,
+  source: sourceLabel(n.source),
+  category: n.category?.name ?? "Uncategorised",
   stage: stageOf(n.stage).label,
   severity: n.severity ?? "",
   detected: formatDate(n.detectedAt),
@@ -48,10 +50,8 @@ const toCsvRow = (n) => ({
   deleted: n.deletedAt ? "yes" : "",
 });
 
-/** Register of internal, customer or supplier non-conformances (/Non-Conformance/:type). */
+/** The non-conformance register (/Non-Conformance/Register): every source and category, with quick tabs All / Customer / Supplier. */
 const NonConformance = () => {
-  const { type } = useParams();
-  const ncType = NC_TYPES[type];
   const navigate = useNavigate();
   const { can } = usePermissions();
   const [sorting, setSortingState] = useState([{ id: "reference", desc: true }]);
@@ -62,6 +62,7 @@ const NonConformance = () => {
   const [viewGrid, setViewGrid] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [deleting, setDeleting] = useState(null);
+  const [choosingSource, setChoosingSource] = useState(false);
   const modalRef = useRef(null);
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -72,8 +73,16 @@ const NonConformance = () => {
   const { data: lists } = useClassifications();
   const { updateFilters } = filters;
 
-  const allColumns = useMemo(() => getColumnsForNcType(type), [type]);
-  const { columnVisibility, setColumnVisibility, columnSizing, setColumnSizing, columnOrder, setColumnOrder, resetColumns } = useTablePreferences(`nc-register:${type}`);
+  const allColumns = useMemo(() => getNcColumns(), []);
+  const prefs = useTablePreferences("nc-register");
+  const { columnSizing, setColumnSizing, columnOrder, setColumnOrder, resetColumns } = prefs;
+  // Some columns only apply to some sources and start hidden; a saved choice wins.
+  const columnVisibility = useMemo(() => ({ ...NC_DEFAULT_HIDDEN, ...prefs.columnVisibility }), [prefs.columnVisibility]);
+  const setColumnVisibility = useCallback(
+    (updater) => prefs.setColumnVisibility((saved) => (typeof updater === "function" ? updater({ ...NC_DEFAULT_HIDDEN, ...saved }) : updater)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [prefs.setColumnVisibility]
+  );
 
   const setPage = useCallback(
     (newPage) =>
@@ -93,7 +102,9 @@ const NonConformance = () => {
 
   const sortColumn = sorting[0] ? allColumns.find((c) => c.id === sorting[0].id)?.meta?.sortKey : undefined;
   const { data, isLoading, isFetching, error, refetch } = useNcrs({
-    source: ncType?.source,
+    source: filters.source,
+    categoryId: filters.category,
+    uncategorised: filters.uncategorised || undefined,
     q: filters.search,
     stage: filters.stage,
     failureModeId: filters.failureMode,
@@ -105,8 +116,8 @@ const NonConformance = () => {
     partId: filters.part,
     productionOrderId: filters.order,
     lotId: filters.lot,
-    customerId: ncType?.source === "supplier" ? undefined : filters.customer,
-    supplierId: ncType?.source === "supplier" ? filters.supplier : undefined,
+    customerId: filters.customer,
+    supplierId: filters.supplier,
     costMin: filters.costMin,
     costMax: filters.costMax,
     qtyMin: filters.qtyMin,
@@ -122,13 +133,7 @@ const NonConformance = () => {
   useEffect(() => {
     setRowSelection({});
     setSelectedRows([]);
-  }, [page, pageSize, type]);
-
-  useEffect(() => {
-    setSelectedItem(null);
-    setActiveModalType(null);
-    setModalPos(null);
-  }, [type]);
+  }, [page, pageSize]);
 
   // The header search box feeds the register search.
   const currentSearch = filters.search;
@@ -149,7 +154,7 @@ const NonConformance = () => {
     setModalPos(null);
     setActiveModalType(null);
   };
-  const openRecord = (record) => navigate(`/Non-Conformance/${type}/${record.id}`);
+  const openRecord = (record) => navigate(ncrPath(record.id));
 
   useEffect(() => {
     if (modalPos === null) return undefined;
@@ -167,15 +172,14 @@ const NonConformance = () => {
     };
   }, [modalPos]);
 
-  if (!ncType) return <Navigate to="/Non-Conformance/Internal" replace />;
-
   const totalQuantity = selectedRows.reduce((acc, r) => acc + (Number(r.quantityAffected) || 0), 0);
   const filterCount = [
-    "stage", "severity", "failureMode", "subFailureMode", "deleted", "part", ncType.source === "supplier" ? "supplier" : "customer",
+    "source", "category", "uncategorised", "stage", "severity", "failureMode", "subFailureMode", "deleted", "part", "customer", "supplier",
   ].filter((k) => filters[k]).length + (filters.from || filters.to ? 1 : 0) + (filters.costMin || filters.costMax ? 1 : 0) + (filters.qtyMin || filters.qtyMax ? 1 : 0);
   const between = (lo, hi, fmt = (v) => v) => (lo && hi ? `${fmt(lo)} – ${fmt(hi)}` : lo ? `from ${fmt(lo)}` : `up to ${fmt(hi)}`);
-  const partyKey = ncType.source === "supplier" ? "supplier" : "customer";
   const nameOf = (id) => (lists?.all ?? []).find((c) => c.id === id)?.name ?? "…";
+  // A quick tab is a source filter; it shows as the highlighted tab, not as a chip.
+  const activeTab = NC_TABS.find((t) => t.source && t.source === filters.source);
   // What the register is currently filtered by, each removable on its own.
   const activeFilters = [
     ...(filters.search ? [{ key: "search", label: `Search: “${filters.search}”`, clear: { search: "" } }] : []),
@@ -185,7 +189,11 @@ const NonConformance = () => {
     ...(filters.order ? [{ key: "order", label: `Order: ${filters.orderLabel || "selected order"}`, clear: { order: "", orderLabel: "" } }] : []),
     ...(filters.lot ? [{ key: "lot", label: `Lot: ${filters.lotLabel || "selected lot"}`, clear: { lot: "", lotLabel: "" } }] : []),
     ...(filters.part ? [{ key: "part", label: `Part: ${filters.partLabel || "selected part"}`, clear: { part: "", partLabel: "" } }] : []),
-    ...(filters[partyKey] ? [{ key: partyKey, label: `${partyKey === "supplier" ? "Supplier" : "Customer"}: ${filters[`${partyKey}Label`] || "selected"}`, clear: { [partyKey]: "", [`${partyKey}Label`]: "" } }] : []),
+    ...(filters.customer ? [{ key: "customer", label: `Customer: ${filters.customerLabel || "selected"}`, clear: { customer: "", customerLabel: "" } }] : []),
+    ...(filters.supplier ? [{ key: "supplier", label: `Supplier: ${filters.supplierLabel || "selected"}`, clear: { supplier: "", supplierLabel: "" } }] : []),
+    ...(filters.source && !activeTab ? [{ key: "source", label: `Source: ${filters.source.split(",").map(sourceLabel).join(", ")}`, clear: { source: "" } }] : []),
+    ...(filters.category ? [{ key: "category", label: `Category: ${filters.categoryLabel || nameOf(filters.category)}`, clear: { category: "", categoryLabel: "" } }] : []),
+    ...(filters.uncategorised ? [{ key: "uncategorised", label: "Uncategorised", clear: { uncategorised: "" } }] : []),
     ...(filters.costMin || filters.costMax ? [{ key: "cost", label: `Total cost ${between(filters.costMin, filters.costMax, (v) => formatMoney(Number(v), rows[0]?.costCurrency ?? "GBP").replace(/\.00$/, ""))}`, clear: { costMin: "", costMax: "" } }] : []),
     ...(filters.qtyMin || filters.qtyMax ? [{ key: "qty", label: `Quantity ${between(filters.qtyMin, filters.qtyMax)}`, clear: { qtyMin: "", qtyMax: "" } }] : []),
     ...(filters.failureMode ? [{ key: "failureMode", label: `Failure mode: ${nameOf(filters.failureMode)}`, clear: { failureMode: "", subFailureMode: "" } }] : []),
@@ -214,7 +222,7 @@ const NonConformance = () => {
             <div className="flex flex-row justify-end items-center gap-3">
               {selectedRows.length !== 0 && (
                 <CTAButton
-                  callbackFn={() => exportCSV(selectedRows.map(toCsvRow), `${type.toLowerCase()}-non-conformances.csv`)}
+                  callbackFn={() => exportCSV(selectedRows.map(toCsvRow), "non-conformances.csv")}
                   text="Export CSV"
                   type="success"
                   title="Export the selected records to a CSV file"
@@ -228,12 +236,12 @@ const NonConformance = () => {
               <ViewToggle viewGrid={viewGrid} setViewGrid={handleToggleView} />
               {can("ncr.create") && (
                 <CTAButton
-                  callbackFn={() => navigate(`/Non-Conformance/${type}/new`)}
+                  callbackFn={() => setChoosingSource(true)}
                   text="New NC"
                   type="main"
                   icon={PlusIcon}
                   iconSize="h-6 w-6"
-                  title={`Raise a new ${ncType.one}`}
+                  title="Raise a new non-conformance"
                 />
               )}
               <IconButton
@@ -245,10 +253,26 @@ const NonConformance = () => {
                 icon={<SlidersHorizontalIcon className="h-4.5 w-4.5" />}
               />
               {/* The drawer calls onClose after sliding out; by then another menu may be open, so only clear the filter. */}
-              {activeModalType === "Filter" && <FilterPane onClose={() => setActiveModalType((t) => (t === "Filter" ? null : t))} source={ncType.source} />}
+              {activeModalType === "Filter" && <FilterPane onClose={() => setActiveModalType((t) => (t === "Filter" ? null : t))} />}
             </div>
           </Suspense>
         </div>
+      </div>
+      <div role="tablist" aria-label="Quick filter by source" className="flex flex-wrap gap-1 px-1">
+        {NC_TABS.map((t) => {
+          const on = t.source === "" ? !filters.source : activeTab?.key === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => updateFilters({ source: t.source })}
+              className={`rounded-full border px-3 py-1 text-sm cursor-pointer ${on ? "border-brand-primary bg-brand-primary text-white" : "border-border-color text-primary-text hover:bg-border-color/40"}`}>
+              {t.label}
+            </button>
+          );
+        })}
       </div>
       {activeFilters.length > 0 && (
         <div aria-label="Active filters" className="flex flex-wrap items-center gap-2 px-1 text-sm">
@@ -332,6 +356,13 @@ const NonConformance = () => {
             }}
           />
         </Suspense>
+      )}
+      {choosingSource && (
+        <NewNcDialog
+          initial={activeTab?.source.split(",")[0] ?? (filters.source && !filters.source.includes(",") ? filters.source : "internal")}
+          onClose={() => setChoosingSource(false)}
+          onChoose={(source) => navigate(ncrPath("new", source))}
+        />
       )}
       {deleting && <DeleteNcrDialog ncr={deleting} onClose={() => setDeleting(null)} />}
     </div>

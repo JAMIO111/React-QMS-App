@@ -240,7 +240,10 @@ async function jobHub({ page, stack, APP, orgName, see, shot, step, log, owner }
     scope: { parts: [{ partId: part.id }], machines: [], operations: [], departments: [], targets: [{ roleId: role.id }] },
   });
   await api('POST', `/quality-alerts/${alert.id}/issue`);
-  const ncr = await api('POST', '/ncrs', { source: 'internal', title: 'Rod bore burr', partId: part.id, siteId: org.site });
+  const categories = (await api('GET', '/ncr-classifications?kind=category')).data;
+  const product = categories.find((c) => c.code === 'PRODUCT');
+  if (categories.length !== 11 || !product) throw new Error('the organisation did not start with the eleven default categories');
+  const ncr = await api('POST', '/ncrs', { source: 'internal', title: 'Rod bore burr', partId: part.id, siteId: org.site, categoryId: product.id });
   await api('PATCH', `/ncrs/${ncr.id}`, { severity: 'minor', quantityAffected: 2, description: 'Burr found at final check' });
   await api('POST', `/ncrs/${ncr.id}/transitions`, { to: 'open' });
 
@@ -361,7 +364,31 @@ async function correctRevision({ page, stack, APP, orgName, see, shot, step, log
 async function containAndDispose({ page, stack, APP, orgName, see, shot, step, log }) {
   step('the owner contains and dispositions the non-conformance raised earlier');
   const { rows: [nc] } = await stack.admin.query(`select n.id, n.reference from public.nonconformances n join public.organisations o on o.id = n.organisation_id where o.name = $1 and n.title = 'Rod bore burr'`, [orgName]);
-  await page.goto(`${APP}/Non-Conformance/Internal/${nc.id}`);
+  await page.goto(`${APP}/Non-Conformance/Register/${nc.id}`);
+  await see(page.getByRole('heading', { name: 'Containment' }));
+
+  step('source and category are separate: the NC says what kind of problem it is, and the owner corrects where it came from, with a reason');
+  await see(page.getByRole('combobox', { name: /^Category/ }));
+  if ((await page.getByRole('combobox', { name: /^Category/ }).inputValue()) !== 'Product') throw new Error('the category is not shown');
+  await shot(page, '33a-nc-source-and-category');
+  await page.getByRole('button', { name: 'Change source' }).click();
+  const change = page.getByRole('dialog', { name: /^Change the source of / });
+  await change.getByRole('combobox', { name: /^New source/ }).click();
+  await page.getByRole('option', { name: /^Final inspection/ }).click();
+  await change.getByLabel(/^Why is the source changing/).fill('Found when the finished rods were checked');
+  await change.getByRole('button', { name: 'Change source' }).click();
+  await see(page.getByText('Changed: Found when the finished rods were checked'));
+  const { rows: [moved] } = await stack.admin.query(`select source, source_change_reason from public.nonconformances where id = $1`, [nc.id]);
+  if (!moved || moved.source !== 'final_inspection') throw new Error(`the source was not changed: ${JSON.stringify(moved)}`);
+  await page.goto(`${APP}/Non-Conformance/Register`);
+  await see(page.getByRole('columnheader', { name: /Source/ }));
+  await see(page.getByRole('cell', { name: 'Final inspection' }).first());
+  await see(page.getByRole('cell', { name: 'Product' }).first());
+  await page.getByRole('tab', { name: 'Customer' }).click();
+  await see(page.getByText('No records found.'));
+  await page.getByRole('tab', { name: 'All' }).click();
+  await shot(page, '33b-nc-register-source-category');
+  await page.goto(`${APP}/Non-Conformance/Register/${nc.id}`);
   await see(page.getByRole('heading', { name: 'Containment' }));
   const needed = page.getByLabel('Needed for the next stage');
   await see(needed.getByText(/record a containment action, or say why none is needed/));
@@ -518,7 +545,7 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
   await page.getByRole('button', { name: 'Create non-conformance' }).click();
   const dialog = page.getByRole('dialog', { name: 'Raise a non-conformance' });
   await dialog.getByRole('button', { name: 'Raise non-conformance' }).click();
-  await page.waitForURL(/\/Non-Conformance\/Internal\//);
+  await page.waitForURL(/\/Non-Conformance\/Register\//);
   await see(page.getByRole('heading', { name: 'Source audit' }));
   await page.waitForTimeout(400);
   await shot(page, '62-ncr-from-audit');
@@ -545,11 +572,12 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
 async function affectedLots({ page, stack, APP, orgName, see, shot, step, log }) {
   step('the owner names the affected lot on a non-conformance, and the lot gate asks for it to be covered');
   const { rows: [nc] } = await stack.admin.query(
-    `insert into public.nonconformances (organisation_id, reference, source, stage, title, severity, quantity_affected, description, site_id, part_id)
+    `insert into public.nonconformances (organisation_id, reference, source, stage, title, severity, quantity_affected, description, site_id, part_id, category_id)
      select o.id, 'pending', 'internal', 'open', 'Lot 9001 bores oversize', 'minor', 5, 'Bores oversize on part of the lot', (select id from public.sites where organisation_id = o.id order by created_at limit 1),
-            (select id from public.parts where organisation_id = o.id and part_number = 'JRN-100')
+            (select id from public.parts where organisation_id = o.id and part_number = 'JRN-100'),
+            (select id from public.ncr_classifications where organisation_id = o.id and kind = 'category' and code = 'MATERIAL')
        from public.organisations o where o.name = $1 returning id, reference`, [orgName]);
-  await page.goto(`${APP}/Non-Conformance/Internal/${nc.id}`);
+  await page.goto(`${APP}/Non-Conformance/Register/${nc.id}`);
   await see(page.getByRole('heading', { name: 'Affected lots' }).first());
   await see(page.getByText(/No lots named\. The quantity affected stands against the production order/));
   await page.getByRole('button', { name: 'Add a lot' }).click();
@@ -754,7 +782,7 @@ async function workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, l
 
   step('the non-conformance raised earlier is linked to the same order');
   const { rows: [nc] } = await stack.admin.query(`select n.id from public.nonconformances n join public.organisations o on o.id = n.organisation_id where o.name = $1 and n.title = 'Rod bore burr'`, [orgName]);
-  await page.goto(`${APP}/Non-Conformance/Internal/${nc.id}`);
+  await page.goto(`${APP}/Non-Conformance/Register/${nc.id}`);
   await see(page.getByRole('heading', { name: 'Containment' }));
   const orderPicker = page.getByRole('combobox', { name: 'Production order' });
   await orderPicker.click();

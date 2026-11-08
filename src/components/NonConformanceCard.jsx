@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import CTAButton from "./CTAButton";
 import { CalendarIcon, EllipsisVerticalIcon, LayersIcon, QrCodeIcon } from "@/components/icons";
-import { formatDate } from "../lib/ncr";
+import { formatDate, sourceLabel } from "../lib/ncr";
 import { SeverityPill, StagePill } from "./ncr/Pills";
 
 /** One NCR as a card (grid view). Click the reference to open it; Actions opens the row menu. */
@@ -46,6 +46,10 @@ const NonConformanceCard = ({ item, selected, setSelectedItem, onOpenModal, hand
         </div>
       </div>
       <div className="flex flex-col gap-4 p-3">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-primary-text">
+          <span className="rounded-full border border-border-color px-2 py-0.5">{sourceLabel(item.source)}</span>
+          <span className="rounded-full border border-border-color px-2 py-0.5">{item.category?.name ?? "Uncategorised"}</span>
+        </div>
         <div className="flex flex-wrap items-center gap-2 text-secondary-text">
           {[item.failureMode?.name, item.subFailureMode?.name, item.causalProcess?.name].filter(Boolean).join(" · ") || "Not classified"}
         </div>

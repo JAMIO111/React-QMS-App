@@ -1,7 +1,7 @@
-import { AlignCenterIcon, BoxIcon, CalendarIcon, CircleDashedIcon, LayersIcon, PoundSterlingIcon, QrCodeIcon, TagIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { AlignCenterIcon, BoxIcon, InboxIcon, TagsIcon, CalendarIcon, CircleDashedIcon, LayersIcon, PoundSterlingIcon, QrCodeIcon, TagIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
 import { formatMoney } from "./costs";
 import { SeverityPill, StagePill } from "../components/ncr/Pills";
-import { formatDate } from "./ncr";
+import { formatDate, sourceLabel } from "./ncr";
 
 /**
  * Register columns for each NC type. `meta.sortKey` is the API sort field; columns without one
@@ -73,11 +73,19 @@ const customerReference = col("customerReference", "Customer ref.", head(UsersIc
 const supplier = col("supplier", "Supplier", head(UsersIcon, "Supplier"), nameOf, { size: 180, sortKey: "supplier" });
 const purchaseOrder = col("purchaseOrder", "Purchase order", head(BoxIcon, "Purchase order"), text, { size: 150 });
 
-export const getColumnsForNcType = (ncType = "Internal") => {
-  const specific = {
-    Internal: [customer, workOrder],
-    Customer: [customer, customerReference, workOrder],
-    Supplier: [supplier, purchaseOrder],
-  }[ncType] ?? [];
-  return [reference, detectedAt, ...specific, part, title, quantity, totalCost, failureMode, subFailureMode, causalProcess, severity, stage];
-};
+const source = col("source", "Source", head(InboxIcon, "Source"), (i) => <div className="table-row-item">{sourceLabel(i.getValue())}</div>, { size: 170, sortKey: "source" });
+const category = col(
+  "category",
+  "Category",
+  head(TagsIcon, "Category"),
+  (i) => <div className="table-row-item">{i.getValue()?.name ?? <span className="text-secondary-text">Uncategorised</span>}</div>,
+  { size: 160, sortKey: "category" }
+);
+
+/** The one register's columns: where it came from (source) and what the problem is (category) come first. */
+export const getNcColumns = () => [
+  reference, detectedAt, source, category, customer, supplier, workOrder, customerReference, purchaseOrder, part, title, quantity, totalCost,
+  failureMode, subFailureMode, causalProcess, severity, stage,
+];
+/** Columns that start hidden (they only apply to some sources); the column menu shows them. */
+export const NC_DEFAULT_HIDDEN = { workOrder: false, customerReference: false, purchaseOrder: false };

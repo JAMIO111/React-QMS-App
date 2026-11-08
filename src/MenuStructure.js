@@ -15,9 +15,7 @@ export const menuStructure = [
     path: "/Non-Conformance",
     subMenu: [
       { name: "Dashboard", path: "/Non-Conformance", end: true },
-      { name: "Internal", path: "/Non-Conformance/Internal" },
-      { name: "Customer", path: "/Non-Conformance/Customer" },
-      { name: "Supplier", path: "/Non-Conformance/Supplier" },
+      { name: "Register", path: "/Non-Conformance/Register" },
     ],
   },
   {

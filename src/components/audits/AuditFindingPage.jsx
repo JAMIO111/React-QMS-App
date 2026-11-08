@@ -5,7 +5,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useAuditFinding, useAuditMutation, useFindingAttachments } from "../../hooks/useAudits";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { FINDING_KIND_PILL, FINDING_STATUS_PILL, findingKindLabel, findingStatusLabel, SEVERITIES } from "../../lib/audits";
-import { formatDate } from "../../lib/ncr";
+import { formatDate, ncrPath } from "../../lib/ncr";
 import { formatDateTime } from "../../lib/processControl";
 import ReasonDialog from "../ncr/ReasonDialog";
 import Dialog from "../ui/Dialog";
@@ -45,7 +45,7 @@ const CreateNcrDialog = ({ finding, onClose }) => {
               onSuccess: (res) => {
                 showToast(res.created ? { type: "success", title: "Draft non-conformance raised", message: "Review it and open it when it is ready." } : { type: "info", title: "Already raised", message: "This finding already has a non-conformance; here it is." });
                 onClose();
-                navigate(`/Non-Conformance/Internal/${res.nonconformanceId}`);
+                navigate(ncrPath(res.nonconformanceId));
               },
             }
           );
@@ -208,7 +208,7 @@ const AuditFindingPage = () => {
         {f.ncr ? (
           <p className="text-sm text-primary-text">
             Raised as{" "}
-            <Link to={`/Non-Conformance/Internal/${f.ncr.id}`} className="font-medium text-link-color hover:underline">
+            <Link to={ncrPath(f.ncr.id)} className="font-medium text-link-color hover:underline">
               {f.ncr.reference}
             </Link>{" "}
             <span className="text-secondary-text">({f.ncr.stage.replace(/_/g, " ")})</span>

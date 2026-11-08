@@ -21,6 +21,7 @@ vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: v
 vi.mock("../../contexts/SearchProvider", () => ({ useGlobalSearch: () => ({ debouncedSearchTerm: "" }) }));
 
 import NcrPage from "./NcrPage";
+import LegacyNcrRedirect from "./LegacyNcrRedirect";
 import NonConformance from "../NonConformance";
 import SettingsDataManagement from "../Settings/SettingsDataManagement";
 
@@ -29,10 +30,12 @@ const classifications = [
   { id: "fm1", kind: "failure_mode", parentId: null, code: "DIM", name: "Dimensional", description: null, active: true },
   { id: "sf1", kind: "sub_failure_mode", parentId: "fm1", code: null, name: "Oversize", description: null, active: true },
   { id: "fm2", kind: "failure_mode", parentId: null, code: null, name: "Cosmetic", description: null, active: true },
+  { id: "cat1", kind: "category", parentId: null, code: "PRODUCT", name: "Product", description: null, active: true },
+  { id: "cat2", kind: "category", parentId: null, code: "PROCESS", name: "Process", description: null, active: true },
   { id: "pr1", kind: "process", parentId: null, code: "CNC", name: "Machining", description: null, active: true },
 ];
 const ncr = (over = {}) => ({
-  id: "n1", reference: "NCM-26-001", source: "internal", stage: "open", severity: "major", title: "Bore oversize", detectedAt: "2026-11-01",
+  id: "n1", reference: "NCM-26-001", source: "internal", category: { id: "cat1", name: "Product" }, sourceChangeReason: null, stage: "open", severity: "major", title: "Bore oversize", detectedAt: "2026-11-01",
   quantityAffected: 4, totalCost: 292.4, costCurrency: "GBP", part: { id: "p1", partNumber: "BRK-100", name: "Bracket", revision: "A" }, customer: null, supplier: null,
   workOrder: "WO-1", purchaseOrder: null, customerReference: null, failureMode: { id: "fm1", name: "Dimensional" },
   subFailureMode: { id: "sf1", name: "Oversize" }, causalProcess: null, deletedAt: null, createdAt: "2026-11-01T09:00:00Z",
@@ -78,8 +81,10 @@ const renderAt = (url) =>
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[url]}>
         <Routes>
-          <Route path="/Non-Conformance/:type" element={<><NonConformance /><Where /></>} />
-          <Route path="/Non-Conformance/:type/:id" element={<><NcrPage /><Where /></>} />
+          <Route path="/Non-Conformance/Register" element={<><NonConformance /><Where /></>} />
+          <Route path="/Non-Conformance/Register/:id" element={<><NcrPage /><Where /></>} />
+          <Route path="/Non-Conformance/:type" element={<><LegacyNcrRedirect /><Where /></>} />
+          <Route path="/Non-Conformance/:type/:id" element={<><LegacyNcrRedirect /><Where /></>} />
           <Route path="/Settings" element={<SettingsDataManagement />} />
         </Routes>
         <div id="modal-root" />
@@ -102,22 +107,89 @@ beforeEach(() => {
 });
 
 describe("NC registers", () => {
-  it.each([
-    ["Internal", "internal", "Work order"],
-    ["Customer", "customer", "Customer ref."],
-    ["Supplier", "supplier", "Purchase order"],
-  ])("lists %s non-conformances from the API with their own columns", async (type, source, column) => {
-    routeApi({ "GET /ncrs": { data: [ncr({ source })], page: 1, pageSize: 25, total: 1 } });
-    renderAt(`/Non-Conformance/${type}`);
+  it("lists every source and category in one register, with Source and Category columns", async () => {
+    routeApi({
+      "GET /ncrs": {
+        data: [
+          ncr({ source: "calibration", category: { id: "cat2", name: "Process" } }),
+          ncr({ id: "n2", reference: "NCM-26-002", source: "internal_audit", category: null }),
+        ],
+        page: 1, pageSize: 25, total: 2,
+      },
+    });
+    renderAt("/Non-Conformance/Register");
     expect(await screen.findByText("NCM-26-001")).toBeInTheDocument();
-    expect(lastCall("GET /ncrs").path).toContain(`source=${source}`);
-    expect(screen.getByRole("columnheader", { name: new RegExp(column) })).toBeInTheDocument();
-    expect(screen.getByText("1 record")).toBeInTheDocument();
+    expect(lastCall("GET /ncrs").path).not.toContain("source=");
+    expect(screen.getByRole("columnheader", { name: /Source/ })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /Category/ })).toBeInTheDocument();
+    const first = screen.getByText("NCM-26-001").closest("tr");
+    expect(within(first).getByText("Calibration")).toBeInTheDocument();
+    expect(within(first).getByText("Process")).toBeInTheDocument();
+    const second = screen.getByText("NCM-26-002").closest("tr");
+    expect(within(second).getByText("Internal audit")).toBeInTheDocument();
+    expect(within(second).getByText("Uncategorised")).toBeInTheDocument();
+    expect(screen.getByText("2 records")).toBeInTheDocument();
+    // Columns that only some sources use start hidden.
+    expect(screen.queryByRole("columnheader", { name: /Purchase order/ })).toBeNull();
+  });
+
+  it("has All / Customer / Supplier quick tabs that are source filters kept in the URL", async () => {
+    routeApi({ "GET /ncrs": { data: [ncr()], page: 1, pageSize: 25, total: 1 } });
+    renderAt("/Non-Conformance/Register");
+    await screen.findByText("NCM-26-001");
+    expect(screen.getByRole("tab", { name: "All" })).toHaveAttribute("aria-selected", "true");
+    await userEvent.click(screen.getByRole("tab", { name: "Customer" }));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("source=customer"));
+    expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Register?source=customer");
+    expect(screen.getByRole("tab", { name: "Customer" })).toHaveAttribute("aria-selected", "true");
+    // The tab is the filter, so it is not repeated as a chip.
+    expect(screen.queryByLabelText("Active filters")).toBeNull();
+    await userEvent.click(screen.getByRole("tab", { name: "Supplier" }));
+    await waitFor(() => expect(decodeURIComponent(lastCall("GET /ncrs").path)).toContain("source=supplier,goods_receiving"));
+    await userEvent.click(screen.getByRole("tab", { name: "All" }));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).not.toContain("source="));
+  });
+
+  it("shows a source that is not a tab as a removable chip", async () => {
+    routeApi({ "GET /ncrs": { data: [ncr()], page: 1, pageSize: 25, total: 1 } });
+    renderAt("/Non-Conformance/Register?source=calibration,engineering");
+    await screen.findByText("NCM-26-001");
+    expect(decodeURIComponent(lastCall("GET /ncrs").path)).toContain("source=calibration,engineering");
+    const chips = screen.getByLabelText("Active filters");
+    expect(chips).toHaveTextContent("Source: Calibration, Engineering");
+    await userEvent.click(within(chips).getByRole("button", { name: /Remove filter Source/ }));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).not.toContain("source="));
+  });
+
+  it.each([
+    ["/Non-Conformance/Internal", "/Non-Conformance/Register?source=internal"],
+    ["/Non-Conformance/Customer", "/Non-Conformance/Register?source=customer"],
+    ["/Non-Conformance/Supplier", "/Non-Conformance/Register?source=supplier%2Cgoods_receiving"],
+    ["/Non-Conformance/Customer?stage=closed", "/Non-Conformance/Register?stage=closed&source=customer"],
+    ["/Non-Conformance/Supplier/n1", "/Non-Conformance/Register/n1"],
+    ["/Non-Conformance/Internal/new", "/Non-Conformance/Register/new?source=internal"],
+  ])("sends the old address %s to %s", async (from, to) => {
+    routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 }, "GET /ncrs/n1": ncr() });
+    renderAt(from);
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent(to));
+  });
+
+  it("asks where it came from before a new non-conformance, defaulting to the tab", async () => {
+    routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 } });
+    renderAt("/Non-Conformance/Register?source=customer");
+    await screen.findByText("No records found.");
+    await userEvent.click(screen.getByRole("button", { name: /New NC/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Where did this non-conformance come from?" });
+    expect(within(dialog).getByRole("radio", { name: /^Customer/ })).toBeChecked();
+    expect(within(dialog).getAllByRole("radio")).toHaveLength(11);
+    await userEvent.click(within(dialog).getByRole("radio", { name: /^Calibration/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Register/new?source=calibration"));
   });
 
   it("sorts on the server when a header is clicked", async () => {
     routeApi({ "GET /ncrs": { data: [ncr()], page: 1, pageSize: 25, total: 1 } });
-    renderAt("/Non-Conformance/Internal");
+    renderAt("/Non-Conformance/Register");
     await screen.findByText("NCM-26-001");
     await userEvent.click(within(screen.getByRole("columnheader", { name: /Detected/ })).getByRole("button"));
     await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("sort=detectedAt"));
@@ -126,7 +198,7 @@ describe("NC registers", () => {
 
   it("shows each NC's total cost and sorts by it", async () => {
     routeApi({ "GET /ncrs": { data: [ncr(), ncr({ id: "n2", reference: "NCM-26-002", title: "No costs", totalCost: 0 })], page: 1, pageSize: 25, total: 2 } });
-    renderAt("/Non-Conformance/Internal");
+    renderAt("/Non-Conformance/Register");
     await screen.findByText("NCM-26-001");
     const header = screen.getByRole("columnheader", { name: /Total cost/ });
     expect(screen.getByText("£292.40")).toBeInTheDocument();
@@ -136,22 +208,22 @@ describe("NC registers", () => {
 
   it("opens a record on double-click and offers New NC with ncr.create", async () => {
     routeApi({ "GET /ncrs": { data: [ncr()], page: 1, pageSize: 25, total: 1 }, "GET /ncrs/n1": ncr() });
-    renderAt("/Non-Conformance/Internal");
+    renderAt("/Non-Conformance/Register");
     await userEvent.dblClick(await screen.findByText("Bore oversize"));
-    expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Internal/n1");
+    expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Register/n1");
   });
 
   it("hides New NC without ncr.create", async () => {
     permissions = ["ncr.read"];
     routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 } });
-    renderAt("/Non-Conformance/Internal");
+    renderAt("/Non-Conformance/Register");
     expect(await screen.findByText("No records found.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /New NC/ })).toBeNull();
   });
 
   it("filters by stage and shows deleted records on request", async () => {
     routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 } });
-    renderAt("/Non-Conformance/Internal");
+    renderAt("/Non-Conformance/Register");
     await screen.findByText("No records found.");
     await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
     const pane = screen.getByRole("dialog", { name: "Filter non-conformances" });
@@ -165,7 +237,7 @@ describe("NC registers", () => {
 
   it("filters by failure mode and sub-failure mode, shows what is applied and removes filters one by one", async () => {
     routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 } });
-    renderAt("/Non-Conformance/Internal?page=3");
+    renderAt("/Non-Conformance/Register?page=3");
     await screen.findByText("No records found.");
     await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
     const pane = screen.getByRole("dialog", { name: "Filter non-conformances" });
@@ -198,7 +270,7 @@ describe("NC registers", () => {
       "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 },
       "GET /ncrs/ranges": { cost: { max: 873 }, quantity: { max: 48 }, baseCurrency: "GBP" },
     });
-    renderAt("/Non-Conformance/Internal");
+    renderAt("/Non-Conformance/Register");
     await screen.findByText("No records found.");
     await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
     const pane = screen.getByRole("dialog", { name: "Filter non-conformances" });
@@ -245,7 +317,7 @@ describe("NC registers", () => {
     };
     orgProduction = {};
     routeApi(routes);
-    const first = renderAt("/Non-Conformance/Internal");
+    const first = renderAt("/Non-Conformance/Register");
     await screen.findByText("No records found.");
     await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
     const pane = screen.getByRole("dialog", { name: "Filter non-conformances" });
@@ -266,7 +338,7 @@ describe("NC registers", () => {
 
     orgProduction = { useLotsAndSerials: false };
     routeApi(routes);
-    renderAt("/Non-Conformance/Internal");
+    renderAt("/Non-Conformance/Register");
     await screen.findByText("No records found.");
     await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
     const off = screen.getByRole("dialog", { name: "Filter non-conformances" });
@@ -274,21 +346,49 @@ describe("NC registers", () => {
     expect(within(off).queryByRole("combobox", { name: "Lot" })).toBeNull();
   });
 
-  it("offers the supplier filter on the supplier register", async () => {
+  it("offers source, category, customer and supplier filters, and filters by them", async () => {
     routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 }, "GET /ncrs/ranges": { cost: { max: 0 }, quantity: { max: 0 }, baseCurrency: "GBP" } });
-    renderAt("/Non-Conformance/Supplier");
+    renderAt("/Non-Conformance/Register");
     await screen.findByText("No records found.");
     await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
     const pane = screen.getByRole("dialog", { name: "Filter non-conformances" });
     expect(within(pane).getByRole("combobox", { name: "Supplier" })).toBeInTheDocument();
-    expect(within(pane).queryByRole("combobox", { name: "Customer" })).toBeNull();
+    expect(within(pane).getByRole("combobox", { name: "Customer" })).toBeInTheDocument();
     expect(within(pane).getByText("No costs recorded in this register yet.")).toBeInTheDocument();
     expect(within(pane).getByRole("slider", { name: "Total cost minimum" })).toBeDisabled();
+    const sources = within(pane).getByRole("group", { name: "Source" });
+    expect(within(sources).getAllByRole("checkbox")).toHaveLength(11);
+    await userEvent.click(within(sources).getByText("Calibration"));
+    await userEvent.click(within(sources).getByText("Engineering"));
+    await userEvent.click(within(pane).getByRole("combobox", { name: "Category" }));
+    const names = within(screen.getByRole("listbox")).getAllByRole("option").map((o) => o.textContent);
+    expect(names.some((n) => n.startsWith("Uncategorised"))).toBe(true);
+    expect(names).toEqual(expect.arrayContaining(["Product", "Process"]));
+    await userEvent.click(screen.getByRole("option", { name: "Process" }));
+    await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(decodeURIComponent(lastCall("GET /ncrs").path)).toMatch(/source=calibration,engineering.*categoryId=cat2|categoryId=cat2.*source=calibration,engineering/));
+    const chips = await screen.findByLabelText("Active filters");
+    expect(chips).toHaveTextContent("Source: Calibration, Engineering");
+    expect(chips).toHaveTextContent("Category: Process");
+  });
+
+  it("filters to the non-conformances with no category", async () => {
+    routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 }, "GET /ncrs/ranges": { cost: { max: 0 }, quantity: { max: 0 }, baseCurrency: "GBP" } });
+    renderAt("/Non-Conformance/Register");
+    await screen.findByText("No records found.");
+    await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
+    const pane = screen.getByRole("dialog", { name: "Filter non-conformances" });
+    await userEvent.click(within(pane).getByRole("combobox", { name: "Category" }));
+    await userEvent.click(screen.getByRole("option", { name: /^Uncategorised/ }));
+    await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("uncategorised=true"));
+    expect(lastCall("GET /ncrs").path).not.toContain("categoryId=");
+    expect(await screen.findByLabelText("Active filters")).toHaveTextContent("Uncategorised");
   });
 
   it("opens the filters as a full-height drawer that closes from its backdrop", async () => {
     routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 } });
-    renderAt("/Non-Conformance/Internal");
+    renderAt("/Non-Conformance/Register");
     await screen.findByText("No records found.");
     await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
     const drawer = screen.getByRole("dialog", { name: "Filter non-conformances" });
@@ -303,7 +403,7 @@ describe("NC registers", () => {
 
   it("closes the filter pane on Escape without applying", async () => {
     routeApi({ "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 } });
-    renderAt("/Non-Conformance/Internal");
+    renderAt("/Non-Conformance/Register");
     await screen.findByText("No records found.");
     await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
     await userEvent.click(within(screen.getByRole("dialog", { name: "Filter non-conformances" })).getByText("Closed"));
@@ -316,11 +416,13 @@ describe("NC registers", () => {
 describe("NC form", () => {
   it("raises an internal NC with only the internal fields", async () => {
     routeApi({ "POST /ncrs": (_p, o) => ncr({ ...o.body, id: "n9", reference: "NCM-26-002" }), "GET /ncrs/n9": ncr({ id: "n9", reference: "NCM-26-002" }) });
-    renderAt("/Non-Conformance/Internal/new");
-    expect(await screen.findByRole("heading", { name: "New internal non-conformance" })).toBeInTheDocument();
+    renderAt("/Non-Conformance/Register/new");
+    expect(await screen.findByRole("heading", { name: "New non-conformance" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /^Source/ })).toHaveValue("Internal");
     expect(screen.queryByLabelText(/Customer$/)).toBeNull();
     await userEvent.type(screen.getByLabelText("Title"), "Bore oversize");
     await pick(/^Severity/, "Major");
+    await pick(/^Category/, "Process");
     await userEvent.type(screen.getByLabelText("Quantity affected"), "4");
     await userEvent.type(screen.getByLabelText("Work order"), "WO-7");
     expect(screen.getByRole("combobox", { name: "Sub-failure mode" })).toBeDisabled();
@@ -333,15 +435,15 @@ describe("NC form", () => {
     await userEvent.click(screen.getByRole("button", { name: "Raise NC" }));
     const body = lastCall("POST /ncrs").body;
     const iso = format(first, "yyyy-MM-dd");
-    expect(body).toMatchObject({ source: "internal", open: true, title: "Bore oversize", severity: "major", quantityAffected: 4, workOrder: "WO-7", failureModeId: "fm1", subFailureModeId: "sf1", detectedAt: iso });
+    expect(body).toMatchObject({ source: "internal", open: true, title: "Bore oversize", severity: "major", categoryId: "cat2", quantityAffected: 4, workOrder: "WO-7", failureModeId: "fm1", subFailureModeId: "sf1", detectedAt: iso });
     expect(body).not.toHaveProperty("customerId");
     expect(body).not.toHaveProperty("supplierId");
-    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Internal/n9"));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Register/n9"));
   });
 
-  it("asks for the customer on customer NCs and the supplier on supplier NCs", async () => {
+  it("asks for the customer on customer NCs, the supplier on supplier NCs and only offers the supplier on goods receiving", async () => {
     routeApi({ "POST /ncrs": (_p, o) => ncr({ ...o.body, id: "n8" }), "GET /ncrs/n8": ncr({ id: "n8", source: "customer" }) });
-    renderAt("/Non-Conformance/Customer/new");
+    renderAt("/Non-Conformance/Register/new?source=customer");
     await userEvent.type(await screen.findByLabelText("Title"), "Complaint");
     await pick(/^Customer/, /^Acme/);
     await userEvent.type(screen.getByLabelText("Customer reference"), "CLM-9");
@@ -350,9 +452,126 @@ describe("NC form", () => {
     expect(lastCall("POST /ncrs").body).not.toHaveProperty("open");
   });
 
+  it("changes the fields with the source chosen on a new form, and keeps the choice out of the way of the rest", async () => {
+    routeApi({ "POST /ncrs": (_p, o) => ncr({ ...o.body, id: "n8" }), "GET /ncrs/n8": ncr({ id: "n8" }) });
+    renderAt("/Non-Conformance/Register/new?source=supplier");
+    await userEvent.type(await screen.findByLabelText("Title"), "Wrong alloy");
+    expect(screen.getByRole("combobox", { name: /^Source/ })).toHaveValue("Supplier");
+    expect(screen.getByRole("combobox", { name: /^Supplier/ })).toBeInTheDocument();
+    expect(screen.getByLabelText("Purchase order")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Work order")).toBeNull();
+    await pick(/^Supplier/, /Steel Supplies/);
+    await userEvent.type(screen.getByLabelText("Purchase order"), "PO-5");
+    // Goods receiving may name the supplier but does not have to, and has no work order either.
+    await pick(/^Source/, /^Goods receiving/);
+    expect(screen.getByRole("combobox", { name: "Supplier" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Work order")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+    expect(lastCall("POST /ncrs").body).toMatchObject({ source: "goods_receiving", supplierId: "sp1", purchaseOrder: "PO-5", title: "Wrong alloy" });
+  });
+
+  it("needs a category to raise one, and says so", async () => {
+    const { ApiClientError } = await import("../../lib/api-client");
+    routeApi({ "POST /ncrs": () => Promise.reject(new ApiClientError({ status: 409, code: "ncr_rule", message: "To open this non-conformance, fill in: category" })) });
+    renderAt("/Non-Conformance/Register/new");
+    await userEvent.type(await screen.findByLabelText("Title"), "No category yet");
+    expect(screen.getByRole("combobox", { name: /^Category/ })).toBeInTheDocument();
+    expect(screen.getByText("What the problem is. Needed to open")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Raise NC" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("fill in: category");
+    expect(lastCall("POST /ncrs").body).not.toHaveProperty("categoryId", "cat1");
+  });
+
+  it("shows the source and category of a non-conformance; the category can be changed but not cleared once open", async () => {
+    routeApi({ "GET /ncrs/n1": ncr(), "PATCH /ncrs/n1": (_p, o) => ncr({ category: { id: o.body.categoryId, name: "Process" } }) });
+    renderAt("/Non-Conformance/Register/n1");
+    await screen.findByLabelText("Title");
+    expect(screen.getByText("Internal", { selector: "span" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /^Category/ })).toHaveValue("Product");
+    expect(screen.queryByRole("button", { name: "Clear Category" })).toBeNull();
+    await pick(/^Category/, "Process");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(lastCall("PATCH /ncrs/n1").body).toEqual({ categoryId: "cat2" });
+  });
+
+  it("offers a draft without a category the choice to pick one", async () => {
+    routeApi({ "GET /ncrs/n1": ncr({ stage: "draft", category: null }) });
+    renderAt("/Non-Conformance/Register/n1");
+    await screen.findByLabelText("Title");
+    expect(screen.getByRole("combobox", { name: /^Category/ })).toHaveAttribute("placeholder", "Select a category");
+  });
+
+  it("shows a legacy open non-conformance with no category as Uncategorised", async () => {
+    routeApi({ "GET /ncrs/n1": ncr({ category: null }) });
+    renderAt("/Non-Conformance/Register/n1");
+    await screen.findByLabelText("Title");
+    expect(screen.getByRole("combobox", { name: /^Category/ })).toHaveAttribute("placeholder", "Uncategorised");
+  });
+
+  it("changes the source with a reason, and keeps what was entered", async () => {
+    routeApi({ "GET /ncrs/n1": ncr(), "POST /ncrs/n1/source": (_p, o) => ncr({ source: o.body.source, sourceChangeReason: o.body.reason }) });
+    renderAt("/Non-Conformance/Register/n1");
+    await screen.findByLabelText("Title");
+    await userEvent.click(screen.getByRole("button", { name: "Change source" }));
+    const dialog = await screen.findByRole("dialog", { name: "Change the source of NCM-26-001" });
+    expect(within(dialog).getByText(/What was already entered/)).toBeInTheDocument();
+    const confirm = within(dialog).getByRole("button", { name: "Change source" });
+    expect(confirm).toBeDisabled();
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /^New source/ }));
+    // The current source is not offered.
+    const offered = within(screen.getByRole("listbox")).getAllByRole("option").map((o) => o.textContent);
+    expect(offered).toHaveLength(10);
+    expect(offered.some((n) => n.startsWith("Internal") && !n.startsWith("Internal audit"))).toBe(false);
+    await userEvent.click(screen.getByRole("option", { name: /^Calibration/ }));
+    expect(confirm).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText(/^Why is the source changing/), "The bore gauge failed its calibration");
+    await userEvent.click(confirm);
+    expect(lastCall("POST /ncrs/n1/source").body).toEqual({ source: "calibration", reason: "The bore gauge failed its calibration" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /Change the source/ })).toBeNull());
+  });
+
+  it("shows why a source cannot be taken, and stays open", async () => {
+    const { ApiClientError } = await import("../../lib/api-client");
+    routeApi({
+      "GET /ncrs/n1": ncr(),
+      "POST /ncrs/n1/source": () => Promise.reject(new ApiClientError({ status: 409, code: "ncr_rule", message: "Choose the customer first: a customer non-conformance names its customer" })),
+    });
+    renderAt("/Non-Conformance/Register/n1");
+    await screen.findByLabelText("Title");
+    await userEvent.click(screen.getByRole("button", { name: "Change source" }));
+    const dialog = await screen.findByRole("dialog", { name: /Change the source/ });
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /^New source/ }));
+    await userEvent.click(screen.getByRole("option", { name: /^Customer/ }));
+    await userEvent.type(within(dialog).getByLabelText(/^Why is the source changing/), "The customer found it too");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Change source" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Choose the customer first");
+  });
+
+  it("offers no source change without ncr.update or on a closed non-conformance", async () => {
+    permissions = ["ncr.read"];
+    routeApi({ "GET /ncrs/n1": ncr() });
+    const first = renderAt("/Non-Conformance/Register/n1");
+    await screen.findByLabelText("Title");
+    expect(screen.queryByRole("button", { name: "Change source" })).toBeNull();
+    first.unmount();
+    document.body.innerHTML = '<div id="modal-root"></div>';
+    permissions = [...ALL];
+    routeApi({ "GET /ncrs/n1": ncr({ stage: "closed" }) });
+    renderAt("/Non-Conformance/Register/n1");
+    await screen.findByLabelText("Title");
+    expect(screen.queryByRole("button", { name: "Change source" })).toBeNull();
+  });
+
+  it("shows the reason for the last source change", async () => {
+    routeApi({ "GET /ncrs/n1": ncr({ source: "calibration", sourceChangeReason: "The bore gauge failed" }) });
+    renderAt("/Non-Conformance/Register/n1");
+    await screen.findByLabelText("Title");
+    expect(screen.getByText("Changed: The bore gauge failed")).toBeInTheDocument();
+  });
+
   it("sends only the changed fields when editing", async () => {
     routeApi({ "GET /ncrs/n1": ncr(), "PATCH /ncrs/n1": (_p, o) => ncr(o.body) });
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     const title = await screen.findByLabelText("Title");
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
     await userEvent.clear(title);
@@ -363,7 +582,7 @@ describe("NC form", () => {
 
   it("moves the stage forward and asks for a reason to cancel", async () => {
     routeApi({ "GET /ncrs/n1": ncr(), "POST /ncrs/n1/transitions": (_p, o) => ncr({ stage: o.body.to }) });
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     await userEvent.click(await screen.findByRole("button", { name: "Move to Contained" }));
     expect(lastCall("POST /ncrs/n1/transitions").body).toEqual({ to: "contained" });
 
@@ -377,7 +596,7 @@ describe("NC form", () => {
 
   it("locks closed records and offers reopen with a reason", async () => {
     routeApi({ "GET /ncrs/n1": ncr({ stage: "closed", closedAt: "2026-11-02T09:00:00Z", closedBy: { id: "u1", name: "Ada Owner" } }) });
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     expect(await screen.findByText(/This non-conformance is closed; reopen it/)).toBeInTheDocument();
     expect(screen.getByLabelText("Title")).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
@@ -387,18 +606,18 @@ describe("NC form", () => {
 
   it("deletes with a reason and restores a deleted record", async () => {
     routeApi({ "GET /ncrs/n1": ncr(), "POST /ncrs/n1/delete": (_p, o) => ncr({ deletedAt: "2026-11-03T09:00:00Z", deleteReason: o.body.reason }), "GET /ncrs": { data: [], page: 1, pageSize: 25, total: 0 } });
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
     const dialog = screen.getByRole("dialog", { name: "Delete NCM-26-001?" });
     await userEvent.type(within(dialog).getByLabelText("Reason for deleting"), "Raised in error");
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
     expect(lastCall("POST /ncrs/n1/delete").body).toEqual({ reason: "Raised in error" });
-    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Internal"));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Register"));
   });
 
   it("shows deleted records read-only with a restore button", async () => {
     routeApi({ "GET /ncrs/n1": ncr({ deletedAt: "2026-11-03T09:00:00Z", deletedBy: { id: "u1", name: "Ada Owner" }, deleteReason: "Raised in error" }), "POST /ncrs/n1/restore": ncr() });
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     expect(await screen.findByText(/Raised in error/)).toBeInTheDocument();
     expect(screen.getByLabelText("Title")).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Restore" }));
@@ -408,7 +627,7 @@ describe("NC form", () => {
   it("is read-only without ncr.update", async () => {
     permissions = ["ncr.read"];
     routeApi({ "GET /ncrs/n1": ncr() });
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     expect(await screen.findByLabelText("Title")).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Move to Contained" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
@@ -425,7 +644,7 @@ describe("NC form", () => {
         ],
       },
     });
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     await screen.findByRole("heading", { level: 2, name: "History" });
     const items = await screen.findAllByRole("listitem");
     const text = items.map((li) => li.textContent);
@@ -443,7 +662,7 @@ describe("NC form", () => {
       "GET /ncrs/n1": ncr({ stage: "draft", severity: null }),
       "POST /ncrs/n1/transitions": () => Promise.reject(new ApiClientError({ status: 409, code: "ncr_rule", message: "To open this non-conformance, fill in: severity" })),
     });
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     await userEvent.click(await screen.findByRole("button", { name: "Open this NC" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("To open this non-conformance, fill in: severity");
   });
@@ -457,11 +676,29 @@ describe("Settings → Data Management", () => {
     await userEvent.type(screen.getByLabelText("New failure mode"), "Contamination");
     await userEvent.click(within(screen.getByLabelText("New failure mode").closest("form")).getByRole("button", { name: "Add" }));
     expect(lastCall("POST /ncr-classifications").body).toEqual({ kind: "failure_mode", name: "Contamination" });
-    await userEvent.type(screen.getAllByLabelText("New sub-failure mode")[0], "Undersize");
-    await userEvent.click(screen.getAllByRole("button", { name: "Add" })[0]);
+    const subForm = screen.getAllByLabelText("New sub-failure mode")[0].closest("form");
+    await userEvent.type(within(subForm).getByLabelText("New sub-failure mode"), "Undersize");
+    await userEvent.click(within(subForm).getByRole("button", { name: "Add" }));
     expect(lastCall("POST /ncr-classifications").body).toEqual({ kind: "sub_failure_mode", name: "Undersize", parentId: "fm1" });
     await userEvent.click(screen.getByRole("switch", { name: "Cosmetic active" }));
     expect(lastCall("PATCH /ncr-classifications/fm2").body).toEqual({ active: false });
+  });
+
+  it("lists the categories first, adds one and switches one off", async () => {
+    routeApi({ "POST /ncr-classifications": (_p, o) => ({ id: "x", ...o.body }), "PATCH /ncr-classifications/cat2": (_p, o) => ({ id: "cat2", ...o.body }) });
+    renderAt("/Settings");
+    const card = await screen.findByRole("region", { name: "Categories" });
+    expect(within(card).getByText("Product")).toBeInTheDocument();
+    expect(within(card).getByText("Process")).toBeInTheDocument();
+    await userEvent.type(within(card).getByLabelText("New category"), "Software");
+    await userEvent.click(within(card).getByRole("button", { name: "Add" }));
+    expect(lastCall("POST /ncr-classifications").body).toEqual({ kind: "category", name: "Software" });
+    await userEvent.click(within(card).getByRole("switch", { name: "Process active" }));
+    expect(lastCall("PATCH /ncr-classifications/cat2").body).toEqual({ active: false });
+    // The fixed sources are listed with what each needs.
+    const sources = screen.getByRole("region", { name: "Sources" });
+    expect(within(sources).getAllByRole("listitem")).toHaveLength(11);
+    expect(within(sources).getByText(/Needs the customer to open/)).toBeInTheDocument();
   });
 
   it("is read-only without lookups.manage", async () => {
@@ -486,7 +723,7 @@ describe("NC page layout, costs and files", () => {
 
   it("shows the old form's sections; costs and files wait until the NC is saved", async () => {
     routeApi({});
-    renderAt("/Non-Conformance/Internal/new");
+    renderAt("/Non-Conformance/Register/new");
     const nav = await screen.findByRole("navigation", { name: "Sections" });
     expect(within(nav).getByRole("button", { name: "Go to NC Details" })).toBeEnabled();
     expect(within(nav).getByRole("button", { name: "Go to Cost" })).toBeDisabled();
@@ -496,7 +733,7 @@ describe("NC page layout, costs and files", () => {
 
   it("lists costs with base-currency totals and adds a cost with a VAT preview", async () => {
     routeApi({ "GET /ncrs/n1": ncr(), "GET /ncrs/n1/costs": costList, "POST /ncrs/n1/costs": (_p, o) => ({ id: "c2", ...o.body }) });
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     const table = await screen.findByRole("table", { name: "Costs" });
     expect(within(table).getByText("Scrapped bar")).toBeInTheDocument();
     expect(within(table).getByText("Total (1 item)")).toBeInTheDocument();
@@ -519,7 +756,7 @@ describe("NC page layout, costs and files", () => {
 
   it("asks for an exchange rate for a foreign currency", async () => {
     routeApi({ "GET /ncrs/n1": ncr(), "POST /ncrs/n1/costs": (_p, o) => ({ id: "c2", ...o.body }) });
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     await userEvent.click(await screen.findByRole("button", { name: "New item" }));
     const dialog = screen.getByRole("dialog", { name: "New cost item" });
     await userEvent.click(within(dialog).getByRole("combobox", { name: /Cost type/ }));
@@ -539,7 +776,7 @@ describe("NC page layout, costs and files", () => {
 
   it("deletes a cost with a reason", async () => {
     routeApi({ "GET /ncrs/n1": ncr(), "GET /ncrs/n1/costs": costList, "POST /ncr-costs/c1/delete": {} });
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     await userEvent.click(await screen.findByRole("button", { name: "Delete Scrap cost" }));
     const dialog = screen.getByRole("dialog", { name: "Delete scrap cost?" });
     await userEvent.type(within(dialog).getByLabelText("Reason for deleting"), "Duplicate");
@@ -556,7 +793,7 @@ describe("NC page layout, costs and files", () => {
       "POST /ncrs/n1/attachments": (_p, o) => ({ id: "f2", ...o.body }),
       "POST /ncr-attachments/f1/delete": {},
     });
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     expect(await screen.findByText("report.pdf")).toBeInTheDocument();
     const file = new File(["jpeg"], "photo.jpg", { type: "image/jpeg" });
     globalThis.URL.createObjectURL ??= () => "blob:preview";
@@ -576,7 +813,7 @@ describe("NC page layout, costs and files", () => {
 
   it("hides cost and file editing on a closed NC", async () => {
     routeApi({ "GET /ncrs/n1": ncr({ stage: "closed" }), "GET /ncrs/n1/costs": costList });
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     expect(await screen.findByRole("table", { name: "Costs" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "New item" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Add files/ })).toBeNull();
@@ -586,7 +823,7 @@ describe("NC page layout, costs and files", () => {
 describe("dialogs inside the NC form", () => {
   it("saving a cost does not also save the NC", async () => {
     routeApi({ "GET /ncrs/n1": ncr(), "POST /ncrs/n1/costs": (_p, o) => ({ id: "c9", ...o.body }), "PATCH /ncrs/n1": (_p, o) => ncr(o.body) });
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     const title = await screen.findByLabelText("Title");
     await userEvent.type(title, " (edited)");
     await userEvent.click(screen.getByRole("button", { name: "New item" }));
@@ -612,12 +849,12 @@ describe("NC form: production records", () => {
   it("offers the production order, lot and serial number to people who may read them, and nothing to people who may not", async () => {
     routeApi({ "GET /ncrs/n1": ncr({ links: links() }), ...lookups });
     permissions = [...ALL, "production.read"];
-    const { unmount } = renderAt("/Non-Conformance/Internal/n1");
+    const { unmount } = renderAt("/Non-Conformance/Register/n1");
     await screen.findByLabelText("Title");
     for (const name of ["Production order", "Lot", "Serial number"]) expect(screen.getByRole("combobox", { name })).toBeInTheDocument();
     unmount();
     permissions = [...ALL];
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     await screen.findByLabelText("Title");
     expect(screen.queryByRole("combobox", { name: "Production order" })).toBeNull();
     expect(screen.getByLabelText("Work order")).toBeEnabled();
@@ -626,7 +863,7 @@ describe("NC form: production records", () => {
   it("links the NC to an order: the work order text is filled in and locked, and the link is saved with it", async () => {
     routeApi({ "GET /ncrs/n1": ncr({ workOrder: null, links: links() }), "PATCH /ncrs/n1": (_p, o) => ncr({ ...o.body, links: links({ productionOrder: order }) }), ...lookups });
     permissions = [...ALL, "production.read"];
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     await screen.findByLabelText("Title");
     await pick("Production order", /WO-154789/);
     expect(screen.getByLabelText("Work order")).toHaveValue("WO-154789");
@@ -639,7 +876,7 @@ describe("NC form: production records", () => {
   it("picking a lot brings its order and lot number with it", async () => {
     routeApi({ "GET /ncrs/n1": ncr({ workOrder: null, links: links() }), "PATCH /ncrs/n1": (_p, o) => ncr({ ...o.body, links: links() }), ...lookups });
     permissions = [...ALL, "production.read"];
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     await screen.findByLabelText("Title");
     await pick("Lot", /LOT-7/);
     expect(screen.getByLabelText("Lot / batch")).toHaveValue("LOT-7");
@@ -656,7 +893,7 @@ describe("NC form: production records", () => {
       ...lookups,
     });
     permissions = [...ALL, "production.read"];
-    renderAt("/Non-Conformance/Supplier/n1");
+    renderAt("/Non-Conformance/Register/n1");
     await screen.findByLabelText("Title");
     expect(screen.getByText("Lot LOT-7 is on hold: Suspect material.")).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Production order" })).toBeNull();
@@ -667,7 +904,7 @@ describe("NC form: production records", () => {
     orgProduction = { useLotsAndSerials: false };
     routeApi({ "GET /ncrs/n1": ncr({ links: links() }), ...lookups });
     permissions = [...ALL, "production.read"];
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     await screen.findByLabelText("Title");
     expect(screen.getByRole("combobox", { name: "Production order" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Lot" })).toBeNull();
@@ -678,12 +915,12 @@ describe("NC form: production records", () => {
     orgProduction = {};
     routeApi({ "GET /ncrs/n1": ncr({ links: links() }), "GET /ncrs/n1/affected-lots": { data: [], affected: 4, assigned: 0, remaining: 4, suggestedLot: null, problems: [] }, ...lookups });
     permissions = [...ALL, "production.read"];
-    const { unmount } = renderAt("/Non-Conformance/Internal/n1");
+    const { unmount } = renderAt("/Non-Conformance/Register/n1");
     await screen.findByLabelText("Title");
     expect((await screen.findAllByRole("heading", { name: "Affected lots" })).length).toBeGreaterThan(0);
     unmount();
     orgProduction = { useLotsAndSerials: false };
-    renderAt("/Non-Conformance/Internal/n1");
+    renderAt("/Non-Conformance/Register/n1");
     await screen.findByLabelText("Title");
     expect(screen.queryAllByRole("heading", { name: "Affected lots" })).toHaveLength(0);
     expect(screen.queryByText("Which lots are involved")).toBeNull();

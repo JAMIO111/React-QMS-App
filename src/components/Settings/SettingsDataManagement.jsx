@@ -6,13 +6,13 @@ import ClassificationList from "./ClassificationList";
 import { FactoryIcon, PackageIcon, UsersIcon } from "@/components/icons";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useClassifications } from "../../hooks/useNcr";
-import { STAGES } from "../../lib/ncr";
+import { NC_SOURCES, STAGES } from "../../lib/ncr";
 import { StagePill } from "../ncr/Pills";
 import { describeApiError } from "../../lib/api-client";
 
 const STAGE_HELP = {
   draft: "Being written; not yet raised.",
-  open: "Raised: severity, quantity and (for customer/supplier NCs) the customer or supplier are recorded.",
+  open: "Raised: category, severity, quantity and (for customer/supplier sources) the customer or supplier are recorded.",
   contained: "Affected product is secured.",
   investigating: "Root cause is being investigated.",
   dispositioned: "A decision has been made on the affected product.",
@@ -37,6 +37,7 @@ const SettingsDataManagement = () => {
   const fm = lists && count(lists.failureModes);
   const sub = lists && count(lists.subFailureModes);
   const pr = lists && count(lists.processes);
+  const cat = lists && count(lists.categories);
 
   return (
     <div className="flex w-full grow flex-col gap-4 pr-2">
@@ -55,10 +56,14 @@ const SettingsDataManagement = () => {
       {lists && (
         <>
           <div className="flex flex-wrap gap-3">
+            <Stat label="Categories" {...cat} />
             <Stat label="Failure modes" {...fm} />
             <Stat label="Sub-failure modes" {...sub} />
             <Stat label="Processes" {...pr} />
           </div>
+          <MenuCard title="Categories" subtitle="What kind of problem a non-conformance is (the source says where it came from). Add your own; switch one off to retire it.">
+            <ClassificationList kind="category" lists={lists} canManage={canManage} />
+          </MenuCard>
           <MenuCard title="Failure modes" subtitle="Failure modes and their sub-failure modes">
             <ClassificationList kind="failure_mode" lists={lists} canManage={canManage} />
           </MenuCard>
@@ -67,6 +72,21 @@ const SettingsDataManagement = () => {
           </MenuCard>
         </>
       )}
+      <MenuCard title="Sources" subtitle="Where a non-conformance came from or was detected. The list is fixed; each non-conformance has one source and one category.">
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {NC_SOURCES.map((s) => (
+            <li key={s.key} className="rounded-xl border border-border-color px-3 py-2">
+              <p className="font-medium text-primary-text">{s.label}</p>
+              <p className="text-xs text-secondary-text">
+                {s.hint}
+                {s.party === "customer" && ". Needs the customer to open."}
+                {s.party === "supplier" && ". Needs the supplier to open."}
+                {s.party === "supplier?" && ". May name the supplier."}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </MenuCard>
       <MenuCard title="NCR stages" subtitle="How a non-conformance moves from draft to closed">
         <ol className="flex flex-col">
           {STAGES.map((s, i) => (

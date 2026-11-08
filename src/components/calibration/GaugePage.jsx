@@ -28,7 +28,7 @@ import { useUnits } from "../../hooks/useMasterData";
 import { useDepartments, usePermissions, useSites } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { GAUGE_STATUSES, INTERVAL_UNITS, describeDue, formatInterval } from "../../lib/calibration";
-import { formatDate } from "../../lib/ncr";
+import { formatDate, ncrPath } from "../../lib/ncr";
 import SideMenuItem from "../SideMenuItem";
 import { PartyPicker } from "../ncr/Pickers";
 import ReasonDialog from "../ncr/ReasonDialog";
@@ -133,7 +133,7 @@ const CalibrationList = ({ gaugeId, canRecord }) => {
                   <td className="py-1.5 pr-2">{c.performedBy === "external" ? c.supplier?.name ?? "External" : c.technician?.name ?? "In-house"}</td>
                   <td className="py-1.5 pr-2">{c.certificateNumber ?? "—"}{c.attachmentCount > 0 && <span className="ml-1 text-xs text-secondary-text">({c.attachmentCount} file{c.attachmentCount === 1 ? "" : "s"})</span>}</td>
                   <td className="py-1.5 pr-2">{formatDate(c.nextDueOn)}</td>
-                  <td className="py-1.5 pr-2">{c.nonconformance ? <Link to={`/Non-Conformance/Internal/${c.nonconformance.id}`} className="text-link-color hover:underline">{c.nonconformance.reference}</Link> : "—"}</td>
+                  <td className="py-1.5 pr-2">{c.nonconformance ? <Link to={ncrPath(c.nonconformance.id)} className="text-link-color hover:underline">{c.nonconformance.reference}</Link> : "—"}</td>
                 </tr>
               ))}
             </tbody>

@@ -3,7 +3,7 @@ import { useCallback } from "react";
 
 /** Register filters kept in the URL, so a filtered register can be bookmarked or shared. */
 export const FILTER_KEYS = [
-  "search", "stage", "severity", "failureMode", "subFailureMode", "deleted",
+  "search", "source", "category", "categoryLabel", "uncategorised", "stage", "severity", "failureMode", "subFailureMode", "deleted",
   "from", "to", "costMin", "costMax", "qtyMin", "qtyMax",
   // Linked records keep their display name beside the id, for the active-filter chips.
   "part", "partLabel", "customer", "customerLabel", "supplier", "supplierLabel",

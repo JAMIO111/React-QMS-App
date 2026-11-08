@@ -86,7 +86,7 @@ describe("traceability page", () => {
     const insp = screen.getByRole("table", { name: "Inspections" });
     expect(within(insp).getByRole("link", { name: "IPI-26-0002" })).toHaveAttribute("href", "/Inspections/i2");
     const ncs = screen.getByRole("table", { name: "Non-conformances" });
-    expect(within(ncs).getByRole("link", { name: "NCM-26-001" })).toHaveAttribute("href", "/Non-Conformance/Internal/n1");
+    expect(within(ncs).getByRole("link", { name: "NCM-26-001" })).toHaveAttribute("href", "/Non-Conformance/Register/n1");
     expect(within(ncs).getByText("1 done, 0 open")).toBeInTheDocument();
     expect(within(ncs).getByText("1 approved (3)")).toBeInTheDocument();
     expect(within(ncs).getByRole("link", { name: "CAPA-000001" })).toHaveAttribute("href", "/CAPA/c1/D0");

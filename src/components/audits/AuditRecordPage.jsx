@@ -4,7 +4,7 @@ import { ArrowLeftIcon, CircleCheckIcon, TriangleAlertIcon } from "@/components/
 import { useToast } from "../../contexts/ToastProvider";
 import { useAnswerAudit, useAuditAttachments, useAuditMutation, useAuditRecord, useRecordFindings, useSetAuditTargets } from "../../hooks/useAudits";
 import { usePermissions } from "../../hooks/useQmsApi";
-import { formatDate } from "../../lib/ncr";
+import { formatDate, ncrPath } from "../../lib/ncr";
 import { answerTypeLabel, auditTypeLabel, FINDING_KIND_PILL, FINDING_STATUS_PILL, findingStatusLabel, formatScore, questionRule, RESULT_PILL, recordStatusLabel, resultLabel, STATUS_PILL, targetKey } from "../../lib/audits";
 import ReasonDialog from "../ncr/ReasonDialog";
 import ComboField from "../ui/ComboField";
@@ -205,7 +205,7 @@ const Question = ({ q, recordId, editable, save, canFinding, onFinding }) => {
         <p className="flex flex-wrap items-center gap-2 text-sm text-secondary-text">
           Raised as
           {r.ncrs.map((n) => (
-            <Link key={n.id} to={`/Non-Conformance/Internal/${n.id}`} className="font-medium text-link-color hover:underline">
+            <Link key={n.id} to={ncrPath(n.id)} className="font-medium text-link-color hover:underline">
               {n.reference}
             </Link>
           ))}
@@ -289,7 +289,7 @@ const Findings = ({ findings }) =>
           {f.owner && <span className="text-secondary-text">{f.owner.name}</span>}
           {f.answer && <span className="text-secondary-text">Question {f.answer.sequence}</span>}
           {f.ncr && (
-            <Link to={`/Non-Conformance/Internal/${f.ncr.id}`} className="text-link-color hover:underline">
+            <Link to={ncrPath(f.ncr.id)} className="text-link-color hover:underline">
               {f.ncr.reference}
             </Link>
           )}

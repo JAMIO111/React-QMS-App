@@ -8,7 +8,7 @@ export const GO_LIVE_ITEMS = {
   logo: { label: "Upload your logo", link: "/Settings/Organisation" },
   security: { label: "Decide on two-factor authentication", link: "/Settings/Organisation" },
   joined: { label: "Have a colleague join", link: "/Settings/Users" },
-  first_ncr: { label: "Record your first non-conformance", link: "/Non-Conformance/Internal/new" },
+  first_ncr: { label: "Record your first non-conformance", link: "/Non-Conformance/Register/new" },
 };
 
 const DAY = 24 * 60 * 60 * 1000;

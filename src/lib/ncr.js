@@ -1,26 +1,36 @@
 /** Shared definitions for the non-conformance (NCR) module. */
 
-/** URL segment (/Non-Conformance/:type) → API source. */
-export const NC_TYPES = {
-  Internal: {
-    source: "internal",
-    label: "Internal",
-    one: "internal non-conformance",
-  },
-  Customer: {
-    source: "customer",
-    label: "Customer",
-    one: "customer non-conformance",
-  },
-  Supplier: {
-    source: "supplier",
-    label: "Supplier",
-    one: "supplier non-conformance",
-  },
-};
-export const typeFromSource = (source) =>
-  Object.keys(NC_TYPES).find((k) => NC_TYPES[k].source === source) ??
-  "Internal";
+/**
+ * Where a non-conformance came from (the API's `source`). It is independent of the category (what the problem is).
+ * `party` is what the source needs: "customer" (required to open), "supplier" (required) or "supplier?" (optional).
+ */
+export const NC_SOURCES = [
+  { key: "internal", label: "Internal", hint: "An employee identifies a defect" },
+  { key: "customer", label: "Customer", hint: "A customer raises a complaint", party: "customer" },
+  { key: "supplier", label: "Supplier", hint: "A supplier-side problem is found", party: "supplier" },
+  { key: "internal_audit", label: "Internal audit", hint: "An auditor identifies a process failure" },
+  { key: "external_audit", label: "External audit", hint: "A certification auditor raises a finding" },
+  { key: "production_inspection", label: "Production inspection", hint: "An operator finds an out-of-tolerance dimension" },
+  { key: "final_inspection", label: "Final inspection", hint: "Finished product fails inspection" },
+  { key: "calibration", label: "Calibration", hint: "A gauge fails calibration" },
+  { key: "goods_receiving", label: "Goods receiving", hint: "Incoming material is incorrect", party: "supplier?" },
+  { key: "engineering", label: "Engineering", hint: "Engineering finds an incorrect specification" },
+  { key: "management_review", label: "Management review", hint: "Management identifies a system issue" },
+];
+export const sourceOf = (key) => NC_SOURCES.find((s) => s.key === key) ?? null;
+export const sourceLabel = (key) => sourceOf(key)?.label ?? (key ? String(key) : "—");
+export const SOURCE_OPTIONS = NC_SOURCES.map((s) => ({ id: s.key, name: s.label, hint: s.hint }));
+
+/** Quick tabs above the register and the dashboard: a tab is a source filter. "Supplier" also covers goods receiving. */
+export const NC_TABS = [
+  { key: "all", label: "All", source: "" },
+  { key: "customer", label: "Customer", source: "customer" },
+  { key: "supplier", label: "Supplier", source: "supplier,goods_receiving" },
+];
+
+/** Where a non-conformance lives in the app (`new` opens the form for a new one; `source` preselects its source). */
+export const ncrPath = (id, source) => `/Non-Conformance/Register/${id}${source && id === "new" ? `?source=${source}` : ""}`;
+export const NCR_REGISTER = "/Non-Conformance/Register";
 
 /** Fixed stage keys (organisation-editable labels come later, plan decision Q2). */
 export const STAGES = [
@@ -99,9 +109,9 @@ export const severityOf = (key) =>
 
 /** Fields that differ by source. */
 export const SOURCE_FIELDS = {
-  internal: ["workOrder"],
   customer: ["customerId", "customerReference", "workOrder"],
   supplier: ["supplierId", "purchaseOrder"],
+  goods_receiving: ["supplierId", "purchaseOrder"],
 };
 
 /** Readable names for history entries (database column → label). */
@@ -129,6 +139,9 @@ export const FIELD_LABELS = {
   detected_by: "Detected by",
   detection_process_id: "Where detected",
   causal_process_id: "Causal process",
+  category_id: "Category",
+  source: "Source",
+  source_change_reason: "Reason for the source",
   failure_mode_id: "Failure mode",
   sub_failure_mode_id: "Sub-failure mode",
   responsible_employee_id: "Responsible operator",

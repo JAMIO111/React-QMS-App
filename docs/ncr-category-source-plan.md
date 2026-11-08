@@ -1,6 +1,6 @@
 # Non-conformance: category and source as separate things — plan
 
-**Status:** proposal, agreed in outline 2026-11-08, **nothing built yet**. Decisions D1–D4 were chosen by the product owner; D5–D12 are my proposals following from them and need a glance before building.
+**Status:** NS1 (database), NS2 (API) and NS3 (UI) are built and committed locally; NS4 (exit check) next. The migration `20251218100000_ncr_category_source.sql` is **not applied live yet**. Decisions D1–D4 were chosen by the product owner; the product owner then confirmed: source labels stay fixed (not renameable), the final-inspection and external-audit sources are chosen by hand for now, the backfill of factual origins (D7) is wanted, and **D9 (finding owner → NC responsible employee) is dropped**.
 
 ## 1. What is wrong today
 
@@ -58,7 +58,7 @@ Sources are code-defined because they drive behaviour (below). Labels are fixed 
 | D6 | **Integrations set the source** (they no longer all say `internal`): inspection → `production_inspection` (the person can switch to `final_inspection`); calibration → `calibration`; audit finding → `internal_audit`; job hub / manual → as chosen. Integrations pre-select a category only where obvious (calibration → *Calibration*); otherwise they leave it for the person (the open gate asks). This also closes the gap I reported on the audit work ("source type Internal Audit"). | proposed |
 | D7 | **Backfill of factual origins only:** NCs linked in `inspection_ncr_links` → `production_inspection`; in `audit_ncr_links` → `internal_audit`; raised from a calibration (`calibrations.nonconformance_id`) → `calibration`; any stray `inspection` → `production_inspection`. Everything else keeps its source; no category is guessed. | proposed |
 | D8 | **8D (CAPA) source** stays three-valued: `customer`→`customer`; `supplier` and `goods_receiving`→`supplier`; everything else→`internal`. | proposed |
-| D9 | Audit finding → NC also carries the finding's **owner** to the NC's responsible employee (a gap I disclosed earlier). | proposed, optional |
+| D9 | ~~Audit finding → NC also carries the finding's owner to the NC's responsible employee.~~ **Dropped** by the product owner. | dropped |
 | D10 | NC dashboard: the source filter takes any source; add *by source* and *by category* breakdowns. | proposed |
 | D11 | Reference numbering, stage machine, gates, containment/disposition are **unchanged**. | proposed |
 | D12 | Pushing the API before its migration breaks the NC endpoints (new columns), as with earlier slices: migrations are applied live first, only when you say. | standing rule |
@@ -80,3 +80,9 @@ Sources are code-defined because they drive behaviour (below). Labels are fixed 
 3. **Final inspection** has no trigger of its own in the inspection module today (first-off / planned / manual), so an inspection-raised NC defaults to *Production inspection* and a person switches it. A "final inspection" notion would be a separate inspection-module change.
 4. **External audit** has no audit module support (audits are internal), so that source is chosen by hand for now.
 5. D9 (finding owner → NC responsible employee) is a small extra; drop it if you prefer.
+
+## 6. What was built (NS1–NS3)
+
+- **NS1** `supabase/migrations/20251218100000_ncr_category_source.sql`: categories (kind `category`, seeded per organisation and by trigger), `category_id`, `source_change_reason`, eleven sources (a stray `inspection` source is rewritten first), the source writable only through `app.change_ncr_source` (a transaction-local setting the trigger honours), category and party rules in `assert_ncr_openable`, integrations setting their source, 8D mapping, `app.backfill_ncr_sources()`. Test `supabase/tests/ncr_category_source.test.sql`; mutation-checked (one equivalent mutant: the change function's read check is covered by the update check).
+- **NS2** API (`api/src/ncr/`, inspection, calibration): category on read/create/patch, `source`/`categoryId`/`uncategorised` filters and sorts, `POST /ncrs/{id}/source`, multi-source ranges and dashboard, by-source/by-category breakdowns. `api/test/ncr-category-source.e2e-spec.ts` (14 tests); API mutation checks caught all nine mutants.
+- **NS3** UI as listed in `CLAUDE.md`.

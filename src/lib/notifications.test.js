@@ -4,7 +4,7 @@ import { groupPreferences } from "../components/Settings/SettingsNotifications";
 
 describe("notificationLink", () => {
   it("routes records and settings", () => {
-    expect(notificationLink({ entityType: "nonconformances", entityId: "1", details: { source: "supplier" } })).toBe("/Non-Conformance/Supplier/1");
+    expect(notificationLink({ entityType: "nonconformances", entityId: "1", details: { source: "supplier" } })).toBe("/Non-Conformance/Register/1");
     expect(notificationLink({ entityType: "calibrations", entityId: "c", details: { gauge_id: "g" } })).toBe("/Calibration/Gauges/g/calibrations/c");
     expect(notificationLink({ entityType: "billing_invoices", entityId: "i" })).toBe("/Settings/Subscription");
     expect(notificationLink({ entityType: "unknown", entityId: "x" })).toBeNull();

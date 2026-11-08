@@ -23,7 +23,7 @@ import { useCalibration, useCalibrationAttachments, useCalibrationMutation, useG
 import { useMe, usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { OUTCOMES, shouldPromptForStatus, statusAfterCalibration, statusOf, formatInterval, formatNumber, inTolerance, outcomeFromReadings, outcomeOf } from "../../lib/calibration";
-import { formatDate } from "../../lib/ncr";
+import { formatDate, ncrPath } from "../../lib/ncr";
 import GaugeUsage from "../inspection/GaugeUsage";
 import { PartyPicker } from "../ncr/Pickers";
 import ReasonDialog from "../ncr/ReasonDialog";
@@ -255,7 +255,7 @@ const CalibrationRecordPage = () => {
       {
         onSuccess: (ncr) => {
           showToast({ type: "success", title: "NC raised", message: `${ncr.reference} was raised as a draft internal NC.` });
-          navigate(`/Non-Conformance/Internal/${ncr.id}`);
+          navigate(ncrPath(ncr.id));
         },
       }
     );
@@ -295,7 +295,7 @@ const CalibrationRecordPage = () => {
             </button>
           )}
           {!isNew && c.nonconformance && (
-            <Link to={`/Non-Conformance/Internal/${c.nonconformance.id}`} className={btn.neutral}>
+            <Link to={ncrPath(c.nonconformance.id)} className={btn.neutral}>
               <TriangleAlertIcon className="h-4 w-4" /> {c.nonconformance.reference}
             </Link>
           )}

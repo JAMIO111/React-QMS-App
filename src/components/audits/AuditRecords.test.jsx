@@ -141,7 +141,7 @@ const renderAt = (url) =>
           <Route path="/Documentation/Audit-Records/:id" element={<><AuditRecordPage /><Where /></>} />
           <Route path="/Documentation/Audit-Schedule" element={<><AuditSchedulePage /><Where /></>} />
           <Route path="/Documentation/Audits/:id" element={<Where />} />
-          <Route path="/Non-Conformance/Internal/:id" element={<Where />} />
+          <Route path="/Non-Conformance/Register/:id" element={<Where />} />
         </Routes>
         <div id="modal-root" />
       </MemoryRouter>
@@ -379,7 +379,7 @@ describe("a completed audit", () => {
     expect(first).toHaveTextContent("Open");
     expect(first).toHaveTextContent("Grace Hopper");
     expect(first).toHaveTextContent("Question 1");
-    expect(within(first).getByRole("link", { name: "NCR-26-0009" })).toHaveAttribute("href", "/Non-Conformance/Internal/n9");
+    expect(within(first).getByRole("link", { name: "NCR-26-0009" })).toHaveAttribute("href", "/Non-Conformance/Register/n9");
     expect(second).toHaveTextContent("Withdrawn");
     expect(within(second).getByText("Raised in error")).toHaveClass("line-through");
   });
@@ -433,7 +433,7 @@ describe("a completed audit", () => {
     raised.questions[0].response.ncrs = [{ id: "n9", reference: "NCR-26-0009", stage: "draft" }];
     routeApi({ "GET /audit-records/r1": raised });
     renderAt("/Documentation/Audit-Records/r1");
-    expect(await screen.findByRole("link", { name: "NCR-26-0009" })).toHaveAttribute("href", "/Non-Conformance/Internal/n9");
+    expect(await screen.findByRole("link", { name: "NCR-26-0009" })).toHaveAttribute("href", "/Non-Conformance/Register/n9");
     expect(screen.queryByRole("button", { name: "Raise non-conformance" })).toBeNull();
   });
 });

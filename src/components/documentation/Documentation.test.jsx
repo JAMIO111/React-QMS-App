@@ -390,7 +390,7 @@ describe("Related records and files (DOC3)", () => {
     renderAt("/Documentation/Quality-Alerts/a1");
     const card = (await screen.findByText("Related records")).closest("section, div");
     const list = await screen.findByRole("list", { name: "Linked records" });
-    expect(within(list).getByRole("link", { name: "NC-26-001 · Scrapped batch" })).toHaveAttribute("href", "/Non-Conformance/Supplier/n1");
+    expect(within(list).getByRole("link", { name: "NC-26-001 · Scrapped batch" })).toHaveAttribute("href", "/Non-Conformance/Register/n1");
     expect(within(list).getByRole("link", { name: "G-001 · Micrometer" })).toHaveAttribute("href", "/Calibration/Gauges/g1");
     expect(within(list).getByText("Not available to you")).toBeInTheDocument(); // a record the reader cannot read: no label, no link
     expect(within(list).getAllByRole("link")).toHaveLength(2);

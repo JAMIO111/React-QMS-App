@@ -254,7 +254,7 @@ describe("calibration record", () => {
     expect(await screen.findByRole("heading", { name: "Calibration CAL-26-001" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "25 mm block as found" })).toHaveValue("25.05");
     await userEvent.click(screen.getByRole("button", { name: "Raise NC" }));
-    await waitFor(() => expect(screen.getByTestId("where").textContent).toBe("/Non-Conformance/Internal/n7"));
+    await waitFor(() => expect(screen.getByTestId("where").textContent).toBe("/Non-Conformance/Register/n7"));
   });
 
   it("does not offer Raise NC without permission or when already raised", async () => {

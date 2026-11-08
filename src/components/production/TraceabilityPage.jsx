@@ -4,7 +4,7 @@ import { PrinterIcon, SearchIcon, TriangleAlertIcon } from "@/components/icons";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { useProductionSettings, useTraceability, useTraceSearch } from "../../hooks/useProduction";
 import { usePermissions } from "../../hooks/useQmsApi";
-import { STAGES, formatDate } from "../../lib/ncr";
+import { STAGES, formatDate, ncrPath } from "../../lib/ncr";
 import { LOT_STATUS, ORDER_STATUS, SERIAL_STATUS, TRACE_TYPE, partLabel, tracePath } from "../../lib/production";
 import { formatDateTime } from "../../lib/processControl";
 import { ErrorNotice, buttonClass } from "../master-data/shared";
@@ -14,7 +14,6 @@ import { StatusBadge } from "./shared";
 
 const STATUS_MAP = { order: ORDER_STATUS, lot: LOT_STATUS, serial: SERIAL_STATUS };
 const STAGE = Object.fromEntries(STAGES.map((s) => [s.key, { label: s.label, className: s.tone }]));
-const ncrPath = (n) => `/Non-Conformance/${n.source === "customer" ? "Customer" : n.source === "supplier" ? "Supplier" : "Internal"}/${n.id}`;
 
 const Fact = ({ label, children }) => (
   <div className="flex min-w-0 flex-col gap-0.5">
@@ -221,7 +220,7 @@ const Report = ({ type, id }) => {
                 {t.ncrs.data.map((n) => (
                   <tr key={n.id} className="border-t border-border-color">
                     <Td>
-                      <Link className="font-medium text-link-color hover:underline" to={ncrPath(n)}>{n.reference}</Link>
+                      <Link className="font-medium text-link-color hover:underline" to={ncrPath(n.id)}>{n.reference}</Link>
                       <div className="text-xs text-secondary-text">{n.title}</div>
                     </Td>
                     <Td><StatusBadge map={STAGE} status={n.stage} /></Td>

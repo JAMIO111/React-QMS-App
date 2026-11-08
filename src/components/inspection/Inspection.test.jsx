@@ -407,6 +407,53 @@ describe("Failures and non-conformances (PC5)", () => {
     expect(body).toMatchObject({ measurementIds: ["m1"], title: draft.title, severity: "critical", quantityAffected: 1, open: false });
   });
 
+  it("asks for the category before the NC can be opened at once, and sends it", async () => {
+    let body;
+    const f = failing();
+    routeApi({
+      "GET /inspections/i1": f,
+      "GET /gauges": gauges,
+      "GET /inspections/i1/ncr-draft": draft,
+      "GET /ncr-classifications": { data: [{ id: "cat1", kind: "category", name: "Product", active: true }, { id: "cat2", kind: "category", name: "Process", active: true }] },
+      "POST /inspections/i1/raise-ncr": (_p, o) => ((body = o.body), { ncr: { id: "n1", reference: "NC-1", stage: "open", source: "production_inspection" }, inspection: f }),
+      "GET /ncrs/n1": {},
+    });
+    permissions.push("ncr.create");
+    renderAt("/Inspections/i1");
+    await userEvent.click(await screen.findByRole("checkbox", { name: /Select Outer diameter sample 1/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Raise NC for 1 selected reading" }));
+    const dialog = await screen.findByRole("dialog");
+    const openNow = await within(dialog).findByRole("checkbox", { name: /Open the NC now/ });
+    expect(openNow).toBeDisabled(); // severity and quantity are filled in, but there is no category yet
+    expect(within(dialog).getByText(/The source is Production inspection/)).toBeInTheDocument();
+    await userEvent.selectOptions(within(dialog).getByLabelText("Category"), "cat2");
+    expect(openNow).toBeEnabled();
+    await userEvent.click(openNow);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Raise non-conformance" }));
+    expect(body).toMatchObject({ measurementIds: ["m1"], categoryId: "cat2", open: true });
+  });
+
+  it("raises a draft with no category when none is chosen", async () => {
+    let body;
+    const f = failing();
+    routeApi({
+      "GET /inspections/i1": f,
+      "GET /gauges": gauges,
+      "GET /inspections/i1/ncr-draft": draft,
+      "GET /ncr-classifications": { data: [{ id: "cat1", kind: "category", name: "Product", active: true }] },
+      "POST /inspections/i1/raise-ncr": (_p, o) => ((body = o.body), { ncr: { id: "n1", reference: "NC-1", stage: "draft", source: "production_inspection" }, inspection: f }),
+      "GET /ncrs/n1": {},
+    });
+    permissions.push("ncr.create");
+    renderAt("/Inspections/i1");
+    await userEvent.click(await screen.findByRole("checkbox", { name: /Select Outer diameter sample 1/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Raise NC for 1 selected reading" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(await within(dialog).findByRole("button", { name: "Raise non-conformance" }));
+    expect(body).not.toHaveProperty("categoryId");
+    expect(body).toMatchObject({ open: false });
+  });
+
   it("shows which subgroup a sample joins and lets the operator start a new one", async () => {
     let body;
     const f = failing();

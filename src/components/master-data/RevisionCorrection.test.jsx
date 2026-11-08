@@ -196,7 +196,7 @@ describe("after the correction is released", () => {
     const table = await within(card).findByRole("table", { name: "Inspections that used the earlier version" });
     expect(within(table).getByRole("link", { name: "IPI-26-0001" })).toHaveAttribute("href", "/Inspections/i1");
     expect(within(table).getAllByRole("row")).toHaveLength(4);
-    expect(within(card).getByRole("link", { name: "NCM-26-001" })).toHaveAttribute("href", "/Non-Conformance/Supplier/n1");
+    expect(within(card).getByRole("link", { name: "NCM-26-001" })).toHaveAttribute("href", "/Non-Conformance/Register/n1");
   });
 
   it("offers Obsolete, not Discard, on the released correction", async () => {

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { XIcon, TagIcon, TagsIcon, Trash2Icon, QrCodeIcon, UsersIcon } from "@/components/icons";
 import { useNCMFilters } from "../hooks/useNCMFilters";
 import { useClassifications, useNcrRanges } from "../hooks/useNcr";
-import { SEVERITIES, STAGES } from "../lib/ncr";
+import { NC_SOURCES, SEVERITIES, STAGES } from "../lib/ncr";
 import { formatMoney } from "../lib/costs";
 import RHFComboBox from "./ui/RHFComboBox";
 import RHFDatePickerPopout from "./ui/RHFDatePickerPopout";
@@ -24,6 +24,7 @@ const niceMax = (n) => {
   const p = 10 ** Math.floor(Math.log10(n));
   return Math.ceil(n / p) * p;
 };
+const list0 = (v) => (v ? v.split(",") : []);
 const num = (v) => (v === "" || v === null || v === undefined ? undefined : Number(v));
 
 /** Pill multi-select (stages, severities). */
@@ -52,10 +53,11 @@ const Pills = ({ legend, options, selected, onToggle }) => (
  * Apply / Reset stay at the bottom. Choices apply with "Apply"; Escape, the backdrop or the close
  * button slide it away without applying.
  */
-const FilterPane = ({ onClose, source }) => {
+const FilterPane = ({ onClose }) => {
   const filters = useNCMFilters();
-  const { data: lists } = useClassifications();
-  const { data: ranges } = useNcrRanges(source);
+  const { data: lists } = useClassifications({ includeInactive: true });
+  const [sources, setSources] = useState(list0(filters.source));
+  const { data: ranges } = useNcrRanges(sources.join(",") || undefined);
   const list = (v) => (v ? v.split(",") : []);
   const [stages, setStages] = useState(list(filters.stage));
   const [severities, setSeverities] = useState(list(filters.severity));
@@ -65,8 +67,10 @@ const FilterPane = ({ onClose, source }) => {
   const [order, setOrder] = useState(filters.order ? { id: filters.order, name: filters.orderLabel } : null);
   const [lot, setLot] = useState(filters.lot ? { id: filters.lot, name: filters.lotLabel } : null);
   const [part, setPart] = useState(filters.part ? { id: filters.part, name: filters.partLabel } : null);
-  const partyKey = source === "supplier" ? "supplier" : "customer";
-  const [party, setParty] = useState(filters[partyKey] ? { id: filters[partyKey], name: filters[`${partyKey}Label`] } : null);
+  const [customer, setCustomer] = useState(filters.customer ? { id: filters.customer, name: filters.customerLabel } : null);
+  const [supplier, setSupplier] = useState(filters.supplier ? { id: filters.supplier, name: filters.supplierLabel } : null);
+  // "none" stands for the non-conformances that have no category (those raised before categories existed).
+  const [category, setCategory] = useState(filters.uncategorised ? "none" : filters.category || null);
   const [cost, setCost] = useState([num(filters.costMin), num(filters.costMax)]);
   const [qty, setQty] = useState([num(filters.qtyMin), num(filters.qtyMax)]);
   const [failureMode, setFailureMode] = useState(filters.failureMode || null);
@@ -86,6 +90,10 @@ const FilterPane = ({ onClose, source }) => {
   const costMax = Math.max(niceMax(ranges?.cost.max), num(filters.costMax) ?? 0);
   const qtyMax = Math.max(niceMax(ranges?.quantity.max), num(filters.qtyMax) ?? 0);
 
+  const categoryOptions = [
+    ...(lists?.categories ?? []).map((c) => ({ id: c.id, name: c.active ? c.name : `${c.name} (inactive)` })),
+    { id: "none", name: "Uncategorised", hint: "Raised before categories existed" },
+  ];
   const failureModes = (lists?.failureModes ?? []).map((f) => ({ id: f.id, name: f.code ? `${f.code} – ${f.name}` : f.name }));
   const parentName = Object.fromEntries((lists?.failureModes ?? []).map((f) => [f.id, f.name]));
   // Without a failure mode, every sub-failure mode is offered with its failure mode beside it.
@@ -115,6 +123,10 @@ const FilterPane = ({ onClose, source }) => {
     const [costMinV, costMaxV] = bound(cost, costMax);
     const [qtyMinV, qtyMaxV] = bound(qty, qtyMax);
     apply({
+      source: sources.join(","),
+      category: category && category !== "none" ? category : "",
+      categoryLabel: category && category !== "none" ? categoryOptions.find((c) => c.id === category)?.name ?? filters.categoryLabel : "",
+      uncategorised: category === "none" ? "true" : "",
       stage: stages.join(","),
       severity: severities.join(","),
       from: from ?? "",
@@ -125,8 +137,10 @@ const FilterPane = ({ onClose, source }) => {
       orderLabel: order?.id ? order.name ?? "" : "",
       lot: lot?.id ?? "",
       lotLabel: lot?.id ? lot.name ?? "" : "",
-      [partyKey]: party?.id ?? "",
-      [`${partyKey}Label`]: party?.id ? party.name ?? "" : "",
+      customer: customer?.id ?? "",
+      customerLabel: customer?.id ? customer.name ?? "" : "",
+      supplier: supplier?.id ?? "",
+      supplierLabel: supplier?.id ? supplier.name ?? "" : "",
       costMin: costMinV,
       costMax: costMaxV,
       qtyMin: qtyMinV,
@@ -137,7 +151,7 @@ const FilterPane = ({ onClose, source }) => {
     });
   };
   const resetAll = () =>
-    apply(Object.fromEntries(["stage", "severity", "from", "to", "part", "partLabel", "customer", "customerLabel", "supplier", "supplierLabel", "order", "orderLabel", "lot", "lotLabel",
+    apply(Object.fromEntries(["source", "category", "categoryLabel", "uncategorised", "stage", "severity", "from", "to", "part", "partLabel", "customer", "customerLabel", "supplier", "supplierLabel", "order", "orderLabel", "lot", "lotLabel",
       "costMin", "costMax", "qtyMin", "qtyMax", "failureMode", "subFailureMode", "deleted"].map((k) => [k, ""])));
 
   return createPortal(
@@ -168,6 +182,8 @@ const FilterPane = ({ onClose, source }) => {
           <RHFDatePickerPopout label="Detected from" placeholder="Any date" valueFormat="iso" clearable value={from} onChange={setFrom} maxDate={to ?? new Date()} />
           <RHFDatePickerPopout label="Detected to" placeholder="Any date" valueFormat="iso" clearable value={to} onChange={setTo} minDate={from ?? undefined} maxDate={new Date()} />
         </div>
+        <Pills legend="Source" options={NC_SOURCES} selected={sources} onToggle={toggle(setSources)} />
+        <RHFComboBox label="Category" icon={TagsIcon} placeholder="All categories" options={categoryOptions} value={category} onChange={setCategory} sort={false} />
         <Pills legend="Stage" options={STAGES} selected={stages} onToggle={toggle(setStages)} />
         <Pills legend="Severity" options={SEVERITIES} selected={severities} onToggle={toggle(setSeverities)} />
         <PartPicker label="Part number" icon={QrCodeIcon} value={part?.id ?? null} current={part?.id ? { id: part.id, partNumber: part.name ?? "" } : undefined}
@@ -178,9 +194,12 @@ const FilterPane = ({ onClose, source }) => {
           <LotPicker label="Lot" value={lot?.id ?? null} current={lot?.id ? { id: lot.id, lotNumber: lot.name ?? "" } : undefined}
             onChange={(id, item) => setLot(id ? { id, name: item?.name ?? lot?.name } : null)} />
         )}
-        <PartyPicker kind={partyKey === "supplier" ? "suppliers" : "customers"} label={partyKey === "supplier" ? "Supplier" : "Customer"} icon={UsersIcon}
-          value={party?.id ?? null} current={party?.id ? { id: party.id, name: party.name ?? "" } : undefined}
-          onChange={(id, item) => setParty(id ? { id, name: item?.name ?? party?.name } : null)} />
+        <PartyPicker kind="customers" label="Customer" icon={UsersIcon}
+          value={customer?.id ?? null} current={customer?.id ? { id: customer.id, name: customer.name ?? "" } : undefined}
+          onChange={(id, item) => setCustomer(id ? { id, name: item?.name ?? customer?.name } : null)} />
+        <PartyPicker kind="suppliers" label="Supplier" icon={UsersIcon}
+          value={supplier?.id ?? null} current={supplier?.id ? { id: supplier.id, name: supplier.name ?? "" } : undefined}
+          onChange={(id, item) => setSupplier(id ? { id, name: item?.name ?? supplier?.name } : null)} />
         <RangeSlider
           label="Total cost"
           min={0}

@@ -125,12 +125,12 @@ const AddForm = ({ kind, parentId, label }) => {
   );
 };
 
-/** Failure modes (with their sub-failure modes) or processes, with search and an inactive filter. */
+/** Failure modes (with their sub-failure modes), processes or categories, with search and an inactive filter. */
 const ClassificationList = ({ kind, lists, canManage }) => {
   const [query, setQuery] = useState("");
   const [showInactive, setShowInactive] = useState(true);
-  const items = kind === "failure_mode" ? lists.failureModes : lists.processes;
-  const label = kind === "failure_mode" ? "Failure mode" : "Process";
+  const items = kind === "failure_mode" ? lists.failureModes : kind === "category" ? lists.categories : lists.processes;
+  const label = kind === "failure_mode" ? "Failure mode" : kind === "category" ? "Category" : "Process";
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();

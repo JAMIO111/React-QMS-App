@@ -176,11 +176,11 @@ describe("the non-conformances pane", () => {
     expect(within(pane).getByText("NCM-26-001 · Rod burr")).toBeInTheDocument();
     expect(within(pane).getByText("OD")).toBeInTheDocument();
     expect(within(pane).getByText(/same part\./)).toBeInTheDocument();
-    expect(within(pane).getByRole("link", { name: "Open the non-conformance" })).toHaveAttribute("href", "/Non-Conformance/Internal/n1");
+    expect(within(pane).getByRole("link", { name: "Open the non-conformance" })).toHaveAttribute("href", "/Non-Conformance/Register/n1");
     await user.click(within(pane).getByRole("button", { name: "Next non-conformance" }));
     expect(within(pane).getByText("NCM-26-000 · Old chatter")).toBeInTheDocument();
     expect(within(pane).getByText(/same machine, same operation/)).toBeInTheDocument();
-    expect(within(pane).getByRole("link", { name: "Open the non-conformance" })).toHaveAttribute("href", "/Non-Conformance/Supplier/n2");
+    expect(within(pane).getByRole("link", { name: "Open the non-conformance" })).toHaveAttribute("href", "/Non-Conformance/Register/n2");
   });
 
   it("says so when there are none", async () => {

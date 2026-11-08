@@ -5,6 +5,8 @@ import MenuCard from "../ui/MenuCard";
 import { useInspectionMutation, useNcrDraft } from "../../hooks/useInspection";
 import { formatDateTime } from "../../lib/processControl";
 import { describeLimits } from "../../lib/inspection";
+import { ncrPath } from "../../lib/ncr";
+import { useClassifications } from "../../hooks/useNcr";
 import {
   buttonClass,
   ErrorNotice,
@@ -112,6 +114,8 @@ const NcFields = ({ inspection, draft, measurementIds, onClose }) => {
   const [severity, setSeverity] = useState(draft.severity);
   const [quantity, setQuantity] = useState(draft.quantityAffected ?? "");
   const [open, setOpen] = useState(false);
+  const { data: lists } = useClassifications();
+  const [categoryId, setCategoryId] = useState("");
   const linked = draft.readings.filter((r) => r.alreadyLinked.length > 0);
 
   const submit = (e) => {
@@ -125,6 +129,7 @@ const NcFields = ({ inspection, draft, measurementIds, onClose }) => {
           description,
           severity,
           quantityAffected: quantity === "" ? null : Number(quantity),
+          ...(categoryId ? { categoryId } : {}),
           requirement: draft.requirement || undefined,
           actualResult: draft.actualResult || undefined,
           open,
@@ -133,7 +138,7 @@ const NcFields = ({ inspection, draft, measurementIds, onClose }) => {
       {
         onSuccess: (data) => (
           onClose(),
-          navigate(`/Non-Conformance/Internal/${data.ncr.id}`)
+          navigate(ncrPath(data.ncr.id))
         ),
       },
     );
@@ -240,12 +245,20 @@ const NcFields = ({ inspection, draft, measurementIds, onClose }) => {
           />
         </div>
       </div>
+      <SelectField
+        label="Category"
+        required={open}
+        value={categoryId}
+        onChange={setCategoryId}
+        options={(lists?.categories ?? []).map((c) => ({ value: c.id, label: c.name }))}
+        hint="What kind of problem it is. Needed to open. The source is Production inspection; change it on the NC if it is a final inspection"
+      />
       <label className="flex items-center gap-2 text-sm text-primary-text">
         <input
           type="checkbox"
           checked={open}
           onChange={(e) => setOpen(e.target.checked)}
-          disabled={!severity || quantity === ""}
+          disabled={!severity || quantity === "" || !categoryId}
         />
         Open the NC now (otherwise it starts as a draft)
       </label>
@@ -514,7 +527,7 @@ const Failures = ({
               {i > 0 && ", "}
               <Link
                 className="text-link-color hover:underline"
-                to={`/Non-Conformance/Internal/${n.id}`}
+                to={ncrPath(n.id)}
               >
                 {n.reference}
               </Link>{" "}
@@ -577,7 +590,7 @@ const Failures = ({
                     <Link
                       key={n.id}
                       className={`rounded-full bg-border-color px-2 py-0.5 text-xs hover:underline ${isLiveNcr(n) ? "text-primary-text" : "text-secondary-text line-through"}`}
-                      to={`/Non-Conformance/Internal/${n.id}`}
+                      to={ncrPath(n.id)}
                       title={
                         isLiveNcr(n)
                           ? undefined

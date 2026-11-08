@@ -59,6 +59,7 @@ export const useClassifications = ({ includeInactive = false } = {}) => {
       failureModes: all.filter((c) => c.kind === "failure_mode"),
       subFailureModes: all.filter((c) => c.kind === "sub_failure_mode"),
       processes: all.filter((c) => c.kind === "process"),
+      categories: all.filter((c) => c.kind === "category"),
     }),
   });
 };

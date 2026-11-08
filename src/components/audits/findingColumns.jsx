@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { CalendarIcon, CircleCheckIcon, ClipboardListIcon, HashIcon, TagIcon, TriangleAlertIcon, UserIcon } from "@/components/icons";
-import { formatDate } from "../../lib/ncr";
+import { formatDate, ncrPath } from "../../lib/ncr";
 import { FINDING_KIND_PILL, FINDING_STATUS_PILL, findingStatusLabel } from "../../lib/audits";
 
 /** Audit findings register columns. `meta.sortKey` is the API sort field; columns without one cannot be sorted (the register is sorted and paged on the server). */
@@ -72,7 +72,7 @@ export const findingColumns = [
     head(null, "Non-conformance"),
     (i) =>
       i.row.original.ncr ? (
-        <Link to={`/Non-Conformance/Internal/${i.row.original.ncr.id}`} className="table-row-item text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
+        <Link to={ncrPath(i.row.original.ncr.id)} className="table-row-item text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
           {i.row.original.ncr.reference}
         </Link>
       ) : (

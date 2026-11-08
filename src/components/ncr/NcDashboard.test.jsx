@@ -22,9 +22,14 @@ const dashboard = {
   baseCurrency: "GBP",
   kpis: { raised: 24, raisedPrevious: 20, open: 9, criticalOpen: 2, closed: 15, avgDaysToClose: 12.5, cost: 18450.5, costPrevious: 20500, quantity: 310 },
   trend: [
-    { start: "2026-09-01", internal: 3, customer: 1, supplier: 0, cost: 1200 },
-    { start: "2026-10-01", internal: 5, customer: 2, supplier: 1, cost: 4300.5 },
+    { start: "2026-09-01", total: 4, bySource: { internal: 3, customer: 1 }, cost: 1200 },
+    { start: "2026-10-01", total: 8, bySource: { internal: 5, customer: 2, supplier: 1 }, cost: 4300.5 },
   ],
+  bySource: [
+    { key: "internal", label: "Internal", count: 8 }, { key: "customer", label: "Customer", count: 3 }, { key: "supplier", label: "Supplier", count: 1 },
+    { key: "calibration", label: "Calibration", count: 2 },
+  ],
+  byCategory: [{ key: "c1", label: "Process", count: 9 }, { key: "none", label: "Uncategorised", count: 5 }],
   byFailureMode: [{ key: "fm1", label: "Dimensional", count: 11 }, { key: "none", label: "Not classified", count: 4 }],
   byStage: [{ key: "open", label: "Open", count: 6 }, { key: "investigating", label: "Investigating", count: 3 }],
   bySeverity: [{ key: "critical", label: "Critical", count: 2 }, { key: "major", label: "Major", count: 10 }, { key: "minor", label: "Minor", count: 12 }, { key: "unset", label: "Not set", count: 0 }],
@@ -41,7 +46,7 @@ const renderAt = (url) =>
       <MemoryRouter initialEntries={[url]}>
         <Routes>
           <Route path="/Non-Conformance" element={<><NcDashboard /><Where /></>} />
-          <Route path="/Non-Conformance/:type" element={<Where />} />
+          <Route path="/Non-Conformance/Register" element={<Where />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -53,7 +58,7 @@ beforeEach(() => {
 });
 
 describe("NC dashboard", () => {
-  it("shows the KPI tiles for the last 12 months of all NC types", async () => {
+  it("shows the KPI tiles for the last 12 months of every source", async () => {
     renderAt("/Non-Conformance");
     expect(await screen.findByRole("heading", { name: "Non-conformance dashboard" })).toBeInTheDocument();
     const [path] = apiFetch.mock.calls[0];
@@ -71,10 +76,10 @@ describe("NC dashboard", () => {
   it("links tiles and parts to the filtered register", async () => {
     renderAt("/Non-Conformance");
     await userEvent.click(await screen.findByRole("link", { name: /Open now/ }));
-    expect(screen.getByTestId("where").textContent).toBe("/Non-Conformance/Internal?stage=draft,open,contained,investigating,dispositioned,awaiting_closure");
+    expect(screen.getByTestId("where").textContent).toBe("/Non-Conformance/Register?stage=draft,open,contained,investigating,dispositioned,awaiting_closure");
   });
 
-  it("filters by NC type and period, kept in the URL", async () => {
+  it("filters by the Customer / Supplier tab and period, kept in the URL", async () => {
     renderAt("/Non-Conformance");
     await screen.findByRole("link", { name: /NCs raised/ });
     await userEvent.click(screen.getByRole("radio", { name: "Customer" }));
@@ -82,10 +87,10 @@ describe("NC dashboard", () => {
     await userEvent.click(screen.getByRole("combobox", { name: "Period" }));
     await userEvent.click(screen.getByRole("option", { name: "Last 30 days" }));
     await waitFor(() => expect(apiFetch.mock.calls.at(-1)[0]).toContain(`from=${format(subDays(new Date(), 29), "yyyy-MM-dd")}`));
-    expect(screen.getByTestId("where").textContent).toBe("/Non-Conformance?type=Customer&period=30d");
-    // A part link goes to that type's register.
+    expect(screen.getByTestId("where").textContent).toBe("/Non-Conformance?tab=customer&period=30d");
+    // A part link goes to the register with that tab's source.
     await userEvent.click(screen.getByRole("link", { name: "BRK-100" }));
-    expect(screen.getByTestId("where").textContent).toMatch(/^\/Non-Conformance\/Customer\?part=p1&partLabel=BRK-100/);
+    expect(screen.getByTestId("where").textContent).toMatch(/^\/Non-Conformance\/Register\?source=customer&part=p1&partLabel=BRK-100/);
   });
 
   it("offers the trend as a table and lists failure modes, stages, severity and parts", async () => {
@@ -99,6 +104,23 @@ describe("NC dashboard", () => {
     expect(screen.getByRole("region", { name: "Failure modes" })).toHaveTextContent("Dimensional");
     expect(screen.getByRole("region", { name: "Severity" })).toHaveTextContent("Critical");
     expect(within(screen.getByRole("table", { name: "Parts with the most NCs" })).getByText("£5,200.00")).toBeInTheDocument();
+  });
+
+  it("lists where the non-conformances came from and what kind of problem they are, as separate breakdowns", async () => {
+    renderAt("/Non-Conformance");
+    await screen.findByRole("link", { name: /NCs raised/ });
+    const bySource = screen.getByRole("region", { name: "By source" });
+    expect(bySource).toHaveTextContent("Calibration");
+    expect(bySource).toHaveTextContent("Customer");
+    const byCategory = screen.getByRole("region", { name: "By category" });
+    expect(byCategory).toHaveTextContent("Process");
+    expect(byCategory).toHaveTextContent("Uncategorised");
+  });
+
+  it("the Supplier tab covers supplier and goods receiving", async () => {
+    renderAt("/Non-Conformance?tab=supplier");
+    await screen.findByRole("link", { name: /NCs raised/ });
+    await waitFor(() => expect(decodeURIComponent(apiFetch.mock.calls.at(-1)[0])).toContain("source=supplier,goods_receiving"));
   });
 
   it("explains a failed load", async () => {

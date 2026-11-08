@@ -131,6 +131,14 @@ BEGIN
   INSERT INTO public.ncr_affected_lots (organisation_id, nonconformance_id, lot_id, quantity)
     SELECT a, n.id, l.id, 1 FROM public.nonconformances n JOIN public.lots l ON l.organisation_id = a WHERE n.organisation_id = a AND n.reference = 'SW-NCR-LOT';
 
+  -- Audits (AU1): a definition with one question and one machine it is relevant to.
+  INSERT INTO public.audit_definitions (organisation_id, audit_number, reference, title, audit_type, frequency_kind, first_due_on)
+    VALUES (a, 0, 'pending', 'Sweep audit', 'process', 'monthly', current_date);
+  INSERT INTO public.audit_questions (organisation_id, audit_definition_id, sequence, question, answer_type)
+    SELECT a, id, 1, 'Is the area clean?', 'pass_fail' FROM public.audit_definitions WHERE organisation_id = a;
+  INSERT INTO public.audit_targets (organisation_id, audit_definition_id, kind, machine_id)
+    SELECT a, d.id, 'machine', m.id FROM public.audit_definitions d JOIN public.machines m ON m.organisation_id = a WHERE d.organisation_id = a LIMIT 1;
+
   -- In-process inspection (PC4): make the sweep plan effective with one check, then inspect SW-P1.
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
   UPDATE public.control_plan_revisions SET change_reason = 'Sweep' WHERE organisation_id = a;

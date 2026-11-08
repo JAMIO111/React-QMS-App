@@ -110,7 +110,7 @@ export const useAnswerAudit = (recordId) =>
         if (q.id !== body.questionId) return q;
         const empty = body.answer == null && body.value == null && !body.note && !body.choice;
         if (empty) return { ...q, response: null };
-        return { ...q, response: { id: q.response?.id ?? "pending", ncrs: q.response?.ncrs ?? [], answer: body.answer ?? null, value: body.value ?? null, choice: body.choice ?? null, note: body.note ?? null, result: provisionalResult(q, body) } };
+        return { ...q, response: { id: q.response?.id ?? "pending", ncrs: q.response?.ncrs ?? [], finding: q.response?.finding ?? null, answer: body.answer ?? null, value: body.value ?? null, choice: body.choice ?? null, note: body.note ?? null, result: provisionalResult(q, body) } };
       }),
     }),
   );
@@ -149,5 +149,93 @@ export const useAuditAttachments = (recordId, questionId) => {
     enabled: !!organisationId && !!recordId,
     retry: false,
     select: (r) => r.data,
+  });
+};
+
+// ---- findings (Phase A) --------------------------------------------------------------------------
+
+/** The organisation's finding classifications; `all` includes the ones switched off. */
+export const useFindingClassifications = ({ all = false } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "findings", "classifications", all),
+    queryFn: () => apiFetch(`/audit-finding-classifications${all ? "?all=true" : ""}`, { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+    select: (r) => r.data,
+  });
+};
+
+export const useAuditFindings = (params = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "findings", "list", params),
+    queryFn: () => apiFetch(`/audit-findings?${qs(params)}`, { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+    placeholderData: keepPreviousData,
+  });
+};
+
+export const useAuditFinding = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "findings", "detail", id),
+    queryFn: () => apiFetch(`/audit-findings/${id}`, { organisationId }),
+    enabled: !!organisationId && !!id,
+    retry: false,
+  });
+};
+
+/** The findings of one audit record (withdrawn ones included, so the list says what happened). */
+export const useRecordFindings = (recordId) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "findings", "record", recordId),
+    queryFn: () => apiFetch(`/audit-records/${recordId}/findings`, { organisationId }),
+    enabled: !!organisationId && !!recordId,
+    retry: false,
+    select: (r) => r.data,
+  });
+};
+
+/** The evidence files of a finding (the ones removed too, so they can be put back). */
+export const useFindingAttachments = (findingId) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "findings", "files", findingId),
+    queryFn: () => apiFetch(`/audit-findings/${findingId}/attachments?deleted=include`, { organisationId }),
+    enabled: !!organisationId && !!findingId,
+    retry: false,
+    select: (r) => r.data,
+  });
+};
+
+/** The audit, finding and evidence behind a non-conformance: `{ available, items }`. */
+export const useNcrAuditSource = (ncrId, enabled = true) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "findings", "ncr-source", ncrId),
+    queryFn: () => apiFetch(`/ncrs/${ncrId}/audit-source`, { organisationId }),
+    enabled: !!organisationId && !!ncrId && enabled,
+    retry: false,
+  });
+};
+
+/** Rename, reorder, set the default severity of, or switch off a classification; the screen follows at once and goes back if the save fails. */
+export const useUpdateClassification = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  const prefix = key(organisationId, "findings", "classifications");
+  return useMutation({
+    mutationFn: ({ id, body }) => apiFetch(`/audit-finding-classifications/${id}`, { method: "PATCH", body, organisationId }),
+    onMutate: async ({ id, body }) => {
+      await queryClient.cancelQueries({ queryKey: prefix });
+      const previous = queryClient.getQueriesData({ queryKey: prefix });
+      queryClient.setQueriesData({ queryKey: prefix }, (old) => old && { ...old, data: old.data.map((c) => (c.id === id ? { ...c, ...body } : c)) });
+      return { previous };
+    },
+    onError: (_e, _vars, context) => context?.previous.forEach(([k, data]) => queryClient.setQueryData(k, data)),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };

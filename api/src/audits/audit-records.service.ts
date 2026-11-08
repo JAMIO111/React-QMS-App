@@ -12,7 +12,6 @@ import {
   AuditAttachment,
   AuditRecord,
   CreateAuditAttachmentBody,
-  RaiseNcrBody,
   RecordListQuery,
   RecordSummary,
   ResponseBody,
@@ -169,16 +168,6 @@ export class AuditRecordsService {
     });
   }
 
-  raiseNcr(ctx: RequestContext, id: string, body: RaiseNcrBody): Promise<{ nonconformanceId: string; record: AuditRecord }> {
-    return this.database.asUser(ctx, async (db) => {
-      const ids = `{${body.responseIds.join(',')}}`;
-      const r = await db.execute<{ id: string }>(
-        sql`select app.raise_ncr_from_audit(${id}::uuid, ${ids}::uuid[], ${body.title}, ${body.description ?? null}::text, ${body.severity ?? null}::text) as id`,
-      );
-      return { nonconformanceId: r.rows[0].id, record: await this.load(db, ctx, id) };
-    });
-  }
-
   // ---- evidence files ------------------------------------------------------------------------
   async listAttachments(ctx: RequestContext, id: string, q: AttachmentListQuery): Promise<AuditAttachment[]> {
     return this.database.asUser(ctx, async (db) => {
@@ -242,7 +231,10 @@ export class AuditRecordsService {
              s.id as response_id, s.answer, s.value_number, s.choice, s.note, s.result,
              (select coalesce(json_agg(json_build_object('id', n.id, 'reference', n.reference, 'stage', n.stage) order by n.created_at), '[]'::json)
                 from public.audit_ncr_links l join public.nonconformances n on n.id = l.nonconformance_id
-               where l.response_id = s.id and n.deleted_at is null and n.stage <> 'cancelled') as ncrs
+               where l.response_id = s.id and n.deleted_at is null and n.stage <> 'cancelled') as ncrs,
+             (select json_build_object('id', f.id, 'reference', f.reference, 'status', f.status, 'kind', c.kind, 'classification', c.label)
+                from public.audit_findings f join public.audit_finding_classifications c on c.id = f.classification_id
+               where f.response_id = s.id and f.status <> 'withdrawn' limit 1) as finding
         from public.audit_record_questions q
         left join public.audit_responses s on s.record_question_id = q.id
        where q.audit_record_id = ${id}::uuid
@@ -302,6 +294,7 @@ export class AuditRecordsService {
               note: (q.note as string) ?? null,
               result: (q.result as 'pass' | 'fail' | 'na') ?? null,
               ncrs: (q.ncrs as { id: string; reference: string; stage: string }[]) ?? [],
+              finding: (q.finding as { id: string; reference: string; status: 'open' | 'closed'; kind: 'nonconformity' | 'observation' | 'opportunity'; classification: string } | null) ?? null,
             }
           : null,
       })),

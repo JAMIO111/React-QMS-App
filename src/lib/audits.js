@@ -279,3 +279,53 @@ export const monthBounds = (month) => {
   return { from: `${month}-01`, to: new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10) };
 };
 export const monthLabel = (month) => new Date(`${month}-01T12:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+
+// ---- findings (Phase A) -------------------------------------------------------------------------------
+export const FINDING_KINDS = [
+  { value: "nonconformity", label: "Non-conformity" },
+  { value: "observation", label: "Observation" },
+  { value: "opportunity", label: "Opportunity for improvement" },
+];
+export const findingKindLabel = (v) => FINDING_KINDS.find((k) => k.value === v)?.label ?? v;
+export const FINDING_STATUSES = [
+  { value: "open", label: "Open" },
+  { value: "closed", label: "Closed" },
+  { value: "withdrawn", label: "Withdrawn" },
+];
+export const findingStatusLabel = (v) => FINDING_STATUSES.find((s) => s.value === v)?.label ?? v;
+export const FINDING_STATUS_PILL = {
+  open: "bg-warning-color/15 text-warning-color",
+  closed: "bg-success-color/15 text-success-color",
+  withdrawn: "bg-border-color text-secondary-text",
+};
+/** A classification's colour follows its kind, so a renamed or added classification still reads right. */
+export const FINDING_KIND_PILL = {
+  nonconformity: "bg-error-color/15 text-error-color",
+  observation: "bg-brand-primary/15 text-primary-text",
+  opportunity: "bg-success-color/15 text-success-color",
+};
+export const SEVERITIES = [
+  { value: "critical", label: "Critical" },
+  { value: "major", label: "Major" },
+  { value: "minor", label: "Minor" },
+];
+export const severityLabel = (v) => SEVERITIES.find((s) => s.value === v)?.label ?? "—";
+
+/** What a finding raised from a failed answer starts with: the question as its title and the auditor's words as what was found. */
+export const findingFromAnswer = (q) => ({
+  title: q.question.slice(0, 200),
+  description: [q.response?.note, q.response?.choice && `Answered: ${q.response.choice}`].filter(Boolean).join("\n") || q.question,
+});
+
+/** The classification to suggest for a failed answer: major for a critical question, else minor, else the first non-conformity, else the first. */
+export const suggestClassification = (classifications, q) => {
+  const active = classifications.filter((c) => c.active);
+  const byKey = (k) => active.find((c) => c.key === k);
+  return (q?.critical ? byKey("major_nc") : byKey("minor_nc")) ?? active.find((c) => c.kind === "nonconformity") ?? active[0] ?? null;
+};
+
+/** The words of a non-conformance raised from a finding, shown before it is made (the API fills the same ones when none are sent). */
+export const ncrPreview = (finding) => ({
+  title: finding.title,
+  description: `Raised from audit ${finding.record.reference}, finding ${finding.reference}.`,
+});

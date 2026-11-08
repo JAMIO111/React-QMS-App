@@ -1,6 +1,6 @@
 # Audit Management specification — gap analysis and phased plan
 
-**Source:** `fortress_audit_management_implementation_spec.md` (the "spec", supplied 2026-11-08) · **Against:** the audit module as built (AU1–AU3 live, AU5 built; `docs/audits-plan.md`) · **Status:** proposal — **nothing in this document has been built**; the order and the open decisions in §4 need agreeing first.
+**Source:** `fortress_audit_management_implementation_spec.md` (the "spec", supplied 2026-11-08) · **Against:** the audit module as built (AU1–AU3 live, AU5 built; `docs/audits-plan.md`) · **Status:** Phase A (findings and NC promotion) is built — see `docs/audits-plan.md` §11; phases B–F are proposals and need agreeing before they are built.
 
 The spec describes a *configurable, version-controlled audit engine*. What exists today is a smaller, working slice: **audit definitions** (a checklist, a schedule and what the audit is relevant to, all in one record), **a schedule**, **audit records** (one audit carried out, with answers and a computed result) and **ten response types**.
 The spec says to reuse what exists and make the smallest safe adaptation, to implement in phases, and not to build every advanced capability in one pass. This analysis follows that.

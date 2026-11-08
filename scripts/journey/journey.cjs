@@ -469,7 +469,7 @@ async function defineAudit({ page, stack, APP, orgName, see, shot, step, log }) 
 
 /** The audit comes due on the schedule, someone carries it out, a critical question fails, and the failure becomes a draft non-conformance. */
 async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }) {
-  step('the audit is carried out from the schedule, fails on a critical question, and the failure is raised as a non-conformance');
+  step('the audit is carried out from the schedule, fails on a critical question, which needs a finding, and the finding is raised as a non-conformance');
   // Defined a month ago, so the schedule has had slots to miss.
   await stack.admin.query(
     `update public.audit_definitions d set created_at = now() - interval '30 days' from public.organisations o where o.id = d.organisation_id and o.name = $1`,
@@ -499,15 +499,27 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
   const q4 = page.getByRole('listitem', { name: 'Question 4' });
   await q4.getByRole('radiogroup', { name: 'Answer to question 4' }).getByRole('radio', { name: '4', exact: true }).click();
   await shot(page, '60-audit-record-answered');
+  // A failed critical question needs a finding before the audit can be completed.
+  await see(page.getByText(/raise a finding for the failed critical question: 1/));
+  await q1.getByRole('button', { name: 'Create finding' }).click();
+  const create = page.getByRole('dialog', { name: 'Create a finding from question 1' });
+  await see(create.getByLabel('Title'));
+  await shot(page, '60a-audit-finding-dialog');
+  await create.getByRole('button', { name: 'Raise finding' }).click();
+  await see(page.getByRole('list', { name: 'Findings' }).getByRole('link', { name: /^AF-\d\d-0001$/ }));
   await page.getByRole('button', { name: 'Complete audit' }).click();
   await see(page.getByRole('status').filter({ hasText: /Failed with/ }));
   await see(page.getByText(/1 critical question failed/));
   await shot(page, '61-audit-record-failed');
-  await page.getByRole('button', { name: 'Raise non-conformance' }).click();
+  // The finding is raised as a non-conformance from its own page.
+  await page.getByRole('list', { name: 'Findings' }).getByRole('link', { name: /^AF-\d\d-0001$/ }).click();
+  await see(page.getByRole('heading', { name: /^AF-\d\d-0001 · / }));
+  await shot(page, '61a-audit-finding');
+  await page.getByRole('button', { name: 'Create non-conformance' }).click();
   const dialog = page.getByRole('dialog', { name: 'Raise a non-conformance' });
-  await see(dialog.getByRole('checkbox', { name: /Is the cell clean and free of oil\?/ }));
   await dialog.getByRole('button', { name: 'Raise non-conformance' }).click();
   await page.waitForURL(/\/Non-Conformance\/Internal\//);
+  await see(page.getByRole('heading', { name: 'Source audit' }));
   await page.waitForTimeout(400);
   await shot(page, '62-ncr-from-audit');
 
@@ -519,13 +531,14 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
   await see(page.getByRole('region', { name: 'Audits' }).getByText('Fail'));
   const { rows: [r] } = await stack.admin.query(
     `select r.status, r.result, r.critical_failed_count, r.occurrence_id is not null as scheduled,
-            (select count(*)::int from public.audit_ncr_links l where l.audit_record_id = r.id) as links,
+            (select count(*)::int from public.audit_ncr_links l where l.audit_record_id = r.id and l.finding_id is not null) as links,
+            (select count(*)::int from public.audit_findings f where f.audit_record_id = r.id and f.status = 'open') as findings,
             (select count(*)::int from public.audit_record_targets t where t.audit_record_id = r.id) as targets
        from public.audit_records r join public.organisations o on o.id = r.organisation_id where o.name = $1`,
     [orgName]
   );
   log(`audit record: ${JSON.stringify(r)}`);
-  if (!r || r.status !== 'completed' || r.result !== 'fail' || r.critical_failed_count !== 1 || !r.scheduled || r.links !== 1 || r.targets !== 2) throw new Error('the audit was not carried out as expected');
+  if (!r || r.status !== 'completed' || r.result !== 'fail' || r.critical_failed_count !== 1 || !r.scheduled || r.links !== 1 || r.findings !== 1 || r.targets !== 2) throw new Error('the audit was not carried out as expected');
 }
 
 /** A non-conformance names the lot it touches; the lot gate then asks for a disposition that covers that lot. */

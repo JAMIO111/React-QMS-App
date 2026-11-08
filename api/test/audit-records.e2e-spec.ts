@@ -1,7 +1,7 @@
 /**
  * Audit records through the API (AU3): starting an audit (from a slot or on its own) with a frozen copy of the questions, choosing what it was carried out on, answering,
- * what is still needed, completing with the computed score and result, the schedule's done / in-progress states and rates, the register, abandoning, and raising a
- * non-conformance. The rules themselves are in supabase/tests/audit_records.test.sql.
+ * what is still needed, completing with the computed score and result, the schedule's done / in-progress states and rates, the register, abandoning, and the finding a failed critical
+ * answer needs (findings: audit-findings.e2e-spec.ts). The rules themselves are in supabase/tests/audit_records.test.sql.
  */
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
@@ -19,7 +19,7 @@ const day = (n: number) => {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
-type Q = { id: string; sequence: number; question: string; response: null | { id: string; result: string | null; ncrs: unknown[] } };
+type Q = { id: string; sequence: number; question: string; response: null | { id: string; result: string | null; ncrs: unknown[]; finding: unknown } };
 const start = async (body: object, h?: Record<string, string>) => api().post('/api/v1/audit-records').set(h ?? (await as(ids.inspectorA))).send(body);
 const answer = async (record: string, body: object, h?: Record<string, string>) => api().put(`/api/v1/audit-records/${record}/responses`).set(h ?? (await as(ids.inspectorA))).send(body);
 const qid = (record: { questions: Q[] }, seq: number) => record.questions.find((q) => q.sequence === seq)!.id;
@@ -142,9 +142,19 @@ describe('carrying it out', () => {
     await answer(ctx.record, { questionId: qid(rec, 2), answer: 'pass' });
     await answer(ctx.record, { questionId: qid(rec, 4), note: 'Tidy otherwise' });
     const failing = (await api().get(`/api/v1/audit-records/${ctx.record}`).set(await as(ids.inspectorA)).expect(200)).body;
-    expect(failing.problems).toEqual(['say what was found for the failed question: 1']);
+    expect(failing.problems).toEqual(['say what was found for the failed question: 1', 'raise a finding for the failed critical question: 1']);
     const done = await answer(ctx.record, { questionId: qid(rec, 1), answer: 'no', note: 'Instruction missing at the machine' });
-    expect(done.body.problems).toEqual([]);
+    // A failed critical question needs a finding before the audit can be completed.
+    expect(done.body.problems).toEqual(['raise a finding for the failed critical question: 1']);
+    const minor = (await api().get('/api/v1/audit-finding-classifications').set(await as(ids.inspectorA)).expect(200)).body.data.find((c: { key: string }) => c.key === 'minor_nc');
+    const finding = await api()
+      .post(`/api/v1/audit-records/${ctx.record}/findings`)
+      .set(await as(ids.inspectorA))
+      .send({ responseId: done.body.questions.find((q: Q) => q.sequence === 1).response.id, classificationId: minor.id, title: 'Work instruction missing', description: 'No instruction at the machine' })
+      .expect(201);
+    const covered = await api().get(`/api/v1/audit-records/${ctx.record}`).set(await as(ids.inspectorA)).expect(200);
+    expect(covered.body.problems).toEqual([]);
+    expect(covered.body.questions.find((q: Q) => q.sequence === 1).response.finding).toMatchObject({ id: finding.body.id, status: 'open', kind: 'nonconformity' });
   });
 
   it('refuses completion while something is missing, and completes with the score and result', async () => {
@@ -202,33 +212,6 @@ describe('passing, abandoning and unscheduled audits', () => {
     expect((await api().post(`/api/v1/audit-records/${ctx.abandon}/abandon`).set(await as(ids.dual)).send({ reason: 'x' })).status).toBe(403);
     const res = await api().post(`/api/v1/audit-records/${ctx.abandon}/abandon`).set(h).send({ reason: 'Started by mistake' }).expect(200);
     expect(res.body).toMatchObject({ status: 'abandoned', abandonReason: 'Started by mistake', result: null });
-  });
-});
-
-describe('raising a non-conformance', () => {
-  it('turns a failed answer into a draft internal NC, once, and shows it on the answer', async () => {
-    const rec = (await api().get(`/api/v1/audit-records/${ctx.record}`).set(await as(ids.inspectorA)).expect(200)).body;
-    const failed = rec.questions.find((q: Q) => q.sequence === 1).response.id;
-    const passed = rec.questions.find((q: Q) => q.sequence === 2).response.id;
-    const raise = async (body: object, h?: Record<string, string>) => api().post(`/api/v1/audit-records/${ctx.record}/raise-ncr`).set(h ?? (await as(ids.inspectorA))).send(body);
-    expect((await raise({ responseIds: [failed], title: 'x' }, await as(ids.dual))).status).toBe(403);
-    expect((await raise({ responseIds: [], title: 'x' })).status).toBe(400);
-    expect((await raise({ responseIds: [passed], title: 'Not a failure' })).status).toBe(409);
-    const res = await raise({ responseIds: [failed], title: 'Work instruction missing', description: 'Found in the cell audit', severity: 'minor' });
-    expect(res.status).toBe(201);
-    expect(res.body.nonconformanceId).toEqual(expect.any(String));
-    const ncr = (await api().get(`/api/v1/ncrs/${res.body.nonconformanceId}`).set(await as(ids.ownerA)).expect(200)).body;
-    expect(ncr).toMatchObject({ stage: 'draft', source: 'internal', title: 'Work instruction missing' });
-    const answerNow = res.body.record.questions.find((q: Q) => q.sequence === 1).response;
-    expect(answerNow.ncrs).toEqual([{ id: res.body.nonconformanceId, reference: expect.any(String), stage: 'draft' }]);
-    const again = await raise({ responseIds: [failed], title: 'Again' });
-    expect(again.status).toBe(409);
-    expect(again.body.error.message).toContain('already on a non-conformance');
-    // A deleted draft no longer shows on the answer and frees it to be raised again.
-    await admin.query(`update public.nonconformances set deleted_at = now(), delete_reason = 'Raised in error' where id = $1`, [res.body.nonconformanceId]);
-    const after = (await api().get(`/api/v1/audit-records/${ctx.record}`).set(await as(ids.inspectorA)).expect(200)).body;
-    expect(after.questions.find((q: Q) => q.sequence === 1).response.ncrs).toEqual([]);
-    expect((await raise({ responseIds: [failed], title: 'Raised again' })).status).toBe(201);
   });
 });
 
@@ -430,6 +413,18 @@ describe('carrying out every response type', () => {
     await answer(state.rec!, { questionId: qid(rec, 1), answer: 'yes', note: 'Followed the wrong one' }, inspector);
     await answer(state.rec!, { questionId: qid(rec, 8), value: 10.06, note: 'Oversize' }, inspector);
     await answer(state.rec!, { questionId: qid(rec, 10), value: 2, note: 'Poor' }, inspector);
+    // The two failed critical questions (1 and 8) each need a finding; the rule is "a failed critical answer needs a live finding".
+    const answered = (await api().get(`/api/v1/audit-records/${state.rec}`).set(inspector).expect(200)).body;
+    expect(answered.problems.join('|')).toContain('raise a finding for the failed critical questions: 1, 8');
+    expect((await api().post(`/api/v1/audit-records/${state.rec}/complete`).set(inspector)).status).toBe(409);
+    const major = (await api().get('/api/v1/audit-finding-classifications').set(inspector).expect(200)).body.data.find((c: { key: string }) => c.key === 'major_nc');
+    for (const seq of [1, 8]) {
+      await api()
+        .post(`/api/v1/audit-records/${state.rec}/findings`)
+        .set(inspector)
+        .send({ responseId: answered.questions.find((q: Q) => q.sequence === seq).response.id, classificationId: major.id, title: `Critical question ${seq}`, description: 'Found by the audit' })
+        .expect(201);
+    }
     const done = await api().post(`/api/v1/audit-records/${state.rec}/complete`).set(inspector);
     expect(done.status).toBe(200);
     // Scored: 1 fail (critical), 2 pass, 3 pass, 7 pass (clean), 8 fail (critical), 10 fail = 3 pass, 3 fail; N/A (4) left out; numeric without a limit, note, evidence and the unscored rating are not scored.

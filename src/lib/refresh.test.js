@@ -23,7 +23,7 @@ import { useCapaMutation } from "../hooks/useCapa";
 import { useOnboardingMutation } from "../hooks/useOnboarding";
 import { useJobLinks, useJobMutation } from "../hooks/useJobs";
 import { useBackfillProduction, useCreateInlineOrder } from "../hooks/useProduction";
-import { useAnswerAudit, useAuditMutation, useSetAuditTargets } from "../hooks/useAudits";
+import { useAnswerAudit, useAuditMutation, useSetAuditTargets, useUpdateClassification } from "../hooks/useAudits";
 
 /** What other modules have on screen: each must be marked stale by an action in any module. */
 const watched = [
@@ -110,6 +110,8 @@ describe("every action refreshes every module's data", () => {
     ["audit", useAuditMutation, { path: "/audits", body: { title: "x" } }],
     ["answer an audit question", useAnswerAudit, { questionId: "q1", answer: "pass" }],
     ["choose what an audit was carried out on", useSetAuditTargets, []],
+    ["create or change an audit finding", useAuditMutation, { path: "/audit-findings/f1/close", body: { note: "Done" } }],
+    ["change a finding classification", useUpdateClassification, { id: "c1", body: { active: false } }],
     ["CAPA / 8D action", useCapaMutation, { action: "completeAction", id: "a1", body: {} }],
   ];
 

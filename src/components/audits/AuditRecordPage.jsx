@@ -1,18 +1,19 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { ArrowLeftIcon, CircleCheckIcon, TriangleAlertIcon } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
-import { useAnswerAudit, useAuditAttachments, useAuditMutation, useAuditRecord, useSetAuditTargets } from "../../hooks/useAudits";
+import { useAnswerAudit, useAuditAttachments, useAuditMutation, useAuditRecord, useRecordFindings, useSetAuditTargets } from "../../hooks/useAudits";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { formatDate } from "../../lib/ncr";
-import { answerTypeLabel, auditTypeLabel, formatScore, questionRule, RESULT_PILL, recordStatusLabel, resultLabel, STATUS_PILL, targetKey } from "../../lib/audits";
+import { answerTypeLabel, auditTypeLabel, FINDING_KIND_PILL, FINDING_STATUS_PILL, findingStatusLabel, formatScore, questionRule, RESULT_PILL, recordStatusLabel, resultLabel, STATUS_PILL, targetKey } from "../../lib/audits";
 import ReasonDialog from "../ncr/ReasonDialog";
 import ComboField from "../ui/ComboField";
 import { AttachmentDrop } from "../ui/FileDrop";
 import Dialog from "../ui/Dialog";
 import MenuCard from "../ui/MenuCard";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
-import { ErrorNotice, FormError, SelectField, TextAreaField, buttonClass } from "../master-data/shared";
+import { ErrorNotice, FormError, TextAreaField, buttonClass } from "../master-data/shared";
+import FindingDialog from "./FindingDialog";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -88,7 +89,7 @@ const Evidence = ({ recordId, q, editable }) => {
 };
 
 /** One question, with the control its type asks for, what was found, the files, and the non-conformances raised from it. */
-const Question = ({ q, recordId, editable, save }) => {
+const Question = ({ q, recordId, editable, save, canFinding, onFinding }) => {
   const r = q.response;
   const [value, setValue] = useState(r?.value ?? "");
   const [note, setNote] = useState(r?.note ?? "");
@@ -210,6 +211,22 @@ const Question = ({ q, recordId, editable, save }) => {
           ))}
         </p>
       )}
+      {r?.finding ? (
+        <p className="flex flex-wrap items-center gap-2 text-sm text-secondary-text">
+          Finding
+          <Link to={`/Documentation/Audit-Findings/${r.finding.id}`} className="font-medium text-link-color hover:underline">
+            {r.finding.reference}
+          </Link>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${FINDING_KIND_PILL[r.finding.kind]}`}>{r.finding.classification}</span>
+        </p>
+      ) : failed && canFinding ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" className={buttonClass.secondary} onClick={() => onFinding(q)}>
+            Create finding
+          </button>
+          {q.critical && <span className="text-sm text-secondary-text">A failed critical question needs a finding before the audit can be completed.</span>}
+        </div>
+      ) : null}
     </li>
   );
 };
@@ -255,78 +272,31 @@ const Targets = ({ record, editable }) => {
   );
 };
 
-/** Turn failed answers into a draft internal non-conformance, prefilled, on request. */
-const RaiseNcrDialog = ({ record, candidates, onClose }) => {
-  const navigate = useNavigate();
-  const { showToast } = useToast();
-  const mutation = useAuditMutation();
-  const [picked, setPicked] = useState(() => new Set(candidates.map((q) => q.response.id)));
-  const first = candidates[0];
-  const [title, setTitle] = useState(() => `${record.audit.reference}: ${first.question}`.slice(0, 200));
-  const [severity, setSeverity] = useState(null);
-  const [description, setDescription] = useState(
-    () =>
-      `Found in audit ${record.reference} (${record.audit.title})${record.carriedOutOn.length ? `, carried out on ${record.carriedOutOn.join(", ")}` : ""}.\n\n` +
-      candidates.map((q) => `${q.sequence}. ${q.question}${q.response.note ? ` — ${q.response.note}` : ""}`).join("\n")
+/** The findings raised from this audit (withdrawn ones stay in the list so it says what happened). */
+const Findings = ({ findings }) =>
+  findings.length === 0 ? (
+    <p className="text-sm text-secondary-text">No findings have been raised from this audit.</p>
+  ) : (
+    <ul aria-label="Findings" className="flex flex-col divide-y divide-border-color">
+      {findings.map((f) => (
+        <li key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
+          <Link to={`/Documentation/Audit-Findings/${f.id}`} className="font-medium text-link-color hover:underline">
+            {f.reference}
+          </Link>
+          <span className={f.status === "withdrawn" ? "text-secondary-text line-through" : "text-primary-text"}>{f.title}</span>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${FINDING_KIND_PILL[f.classification.kind]}`}>{f.classification.label}</span>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${FINDING_STATUS_PILL[f.status]}`}>{findingStatusLabel(f.status)}</span>
+          {f.owner && <span className="text-secondary-text">{f.owner.name}</span>}
+          {f.answer && <span className="text-secondary-text">Question {f.answer.sequence}</span>}
+          {f.ncr && (
+            <Link to={`/Non-Conformance/Internal/${f.ncr.id}`} className="text-link-color hover:underline">
+              {f.ncr.reference}
+            </Link>
+          )}
+        </li>
+      ))}
+    </ul>
   );
-  const toggle = (id) =>
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  return (
-    <Dialog title="Raise a non-conformance" onClose={onClose} width="max-w-2xl">
-      <form
-        noValidate
-        onSubmit={(e) => {
-          e.preventDefault();
-          mutation.mutate(
-            { path: `/audit-records/${record.id}/raise-ncr`, body: { responseIds: [...picked], title: title.trim(), description: description.trim() || undefined, severity: severity ?? undefined } },
-            {
-              onSuccess: (res) => {
-                showToast({ type: "success", title: "Draft non-conformance raised", message: "Review it and open it when it is ready." });
-                navigate(`/Non-Conformance/Internal/${res.nonconformanceId}`);
-              },
-            }
-          );
-        }}
-        className="flex flex-col gap-3">
-        <fieldset className="flex flex-col gap-1">
-          <legend className="mb-1 text-sm font-medium text-secondary-text" data-required>
-            Failed answers to include
-          </legend>
-          {candidates.map((q) => (
-            <label key={q.id} className="flex cursor-pointer items-start gap-2 text-sm text-primary-text">
-              <input type="checkbox" className="mt-1" checked={picked.has(q.response.id)} onChange={() => toggle(q.response.id)} />
-              <span>
-                {q.sequence}. {q.question}
-                {q.response.note ? <span className="block text-secondary-text">{q.response.note}</span> : null}
-              </span>
-            </label>
-          ))}
-        </fieldset>
-        <label className="flex flex-col gap-1 text-sm font-medium text-secondary-text" data-required>
-          Title
-          <input className={`${inputClass} w-full font-normal`} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} required aria-required="true" />
-        </label>
-        <SelectField label="Severity" value={severity} onChange={setSeverity} options={[{ value: "minor", label: "Minor" }, { value: "major", label: "Major" }, { value: "critical", label: "Critical" }]} placeholder="Decide later" />
-        <TextAreaField label="Description" rows={6} value={description} maxLength={5000} onChange={(e) => setDescription(e.target.value)} />
-        <p className="text-sm text-secondary-text">It is created as a draft internal non-conformance. Nothing else happens until someone opens it.</p>
-        <FormError error={mutation.error} />
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={buttonClass.neutral}>
-            Cancel
-          </button>
-          <button type="submit" disabled={picked.size === 0 || !title.trim() || mutation.isPending} className={buttonClass.primary}>
-            {mutation.isPending ? "Raising…" : "Raise non-conformance"}
-          </button>
-        </div>
-      </form>
-    </Dialog>
-  );
-};
 
 /** One audit carried out (/Documentation/Audit-Records/:id): answer the checklist, say what it was carried out on, complete it. */
 const AuditRecordPage = () => {
@@ -337,15 +307,16 @@ const AuditRecordPage = () => {
   const answer = useAnswerAudit(id);
   const { showToast } = useToast();
   const [abandoning, setAbandoning] = useState(false);
-  const [raising, setRaising] = useState(false);
+  const [finding, setFinding] = useState(null);
+  const findingsQuery = useRecordFindings(id);
   const [notes, setNotes] = useState(null);
 
   if (query.isLoading) return <p className="p-6 text-secondary-text">Loading…</p>;
   if (query.error || !query.data) return <div className="p-6"><ErrorNotice error={query.error ?? new Error("Not found")} /></div>;
   const r = query.data;
   const editable = can("audits.perform") && r.status === "in_progress";
-  const candidates = r.questions.filter((q) => q.response?.result === "fail" && !q.response.ncrs.length);
-  const canRaise = can("ncr.create") && r.status !== "abandoned" && candidates.length > 0;
+  const canFinding = can("audits.perform") && r.status !== "abandoned";
+  const findings = findingsQuery.data ?? [];
   const noteText = notes ?? r.notes ?? "";
 
   return (
@@ -366,11 +337,6 @@ const AuditRecordPage = () => {
             {r.audit.reference} · {auditTypeLabel(r.audit.auditType)}
           </Link>
         </div>
-        {canRaise && (
-          <button type="button" className={buttonClass.secondary} onClick={() => setRaising(true)}>
-            Raise non-conformance
-          </button>
-        )}
       </div>
 
       {r.status === "completed" && (
@@ -422,11 +388,26 @@ const AuditRecordPage = () => {
       <MenuCard title="Checklist" subtitle={editable ? "Answers are saved as you go" : "The questions as they were when this audit was started"}>
         <ol aria-label="Checklist" className="flex flex-col gap-3">
           {r.questions.map((q) => (
-            <Question key={q.id} q={q} recordId={r.id} editable={editable} save={(body) => answer.mutate(body)} />
+            <Question key={q.id} q={q} recordId={r.id} editable={editable} save={(body) => answer.mutate(body)} canFinding={canFinding} onFinding={(question) => setFinding({ question })} />
           ))}
         </ol>
         {answer.error && <div className="mt-3"><FormError error={answer.error} /></div>}
       </MenuCard>
+
+      {(findings.length > 0 || canFinding) && (
+        <MenuCard
+          title="Findings"
+          subtitle="What this audit found: classified, owned and followed up. A finding classified as a non-conformity can be raised as a non-conformance from its page."
+          action={
+            canFinding && (
+              <button type="button" className={buttonClass.secondary} onClick={() => setFinding({ question: null })}>
+                Add finding
+              </button>
+            )
+          }>
+          <Findings findings={findings} />
+        </MenuCard>
+      )}
 
       <MenuCard title="Notes" subtitle="Anything else about this audit">
         <TextAreaField label="Audit notes" rows={3} value={noteText} readOnly={!editable} maxLength={5000} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== null && notes.trim() !== (r.notes ?? "") && mutation.mutate({ path: `/audit-records/${r.id}`, method: "PATCH", body: { notes: notes.trim() || null } })} />
@@ -475,7 +456,7 @@ const AuditRecordPage = () => {
           onConfirm={(reason) => mutation.mutate({ path: `/audit-records/${r.id}/abandon`, body: { reason } }, { onSuccess: () => setAbandoning(false) })}
         />
       )}
-      {raising && <RaiseNcrDialog record={r} candidates={candidates} onClose={() => setRaising(false)} />}
+      {finding && <FindingDialog record={r} question={finding.question} onClose={() => setFinding(null)} />}
     </div>
   );
 };

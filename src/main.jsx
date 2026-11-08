@@ -45,6 +45,7 @@ const SettingsNotifications = lazy(() => import("./components/Settings/SettingsN
 const SettingsSubscription = lazy(() => import("./components/Settings/SettingsSubscription.jsx"));
 const RequireModule = lazy(() => import("./components/RequireModule.jsx"));
 const SettingsCalibration = lazy(() => import("./components/Settings/SettingsCalibration.jsx"));
+const SettingsAudits = lazy(() => import("./components/Settings/SettingsAudits.jsx"));
 const SettingsProcessControl = lazy(() => import("./components/Settings/SettingsProcessControl.jsx"));
 const PartDetailPage = lazy(() => import("./components/master-data/PartDetailPage.jsx"));
 const PartiesPage = lazy(() => import("./components/master-data/PartiesPage.jsx"));
@@ -58,6 +59,8 @@ const AuditForm = lazy(() => import("./components/audits/AuditForm.jsx"));
 const AuditSchedulePage = lazy(() => import("./components/audits/AuditSchedulePage.jsx"));
 const AuditRecordsPage = lazy(() => import("./components/audits/AuditRecordsPage.jsx"));
 const AuditRecordPage = lazy(() => import("./components/audits/AuditRecordPage.jsx"));
+const AuditFindingsPage = lazy(() => import("./components/audits/AuditFindingsPage.jsx"));
+const AuditFindingPage = lazy(() => import("./components/audits/AuditFindingPage.jsx"));
 const LotsPage = lazy(() => import("./components/production/LotsPage.jsx"));
 const SerialsPage = lazy(() => import("./components/production/SerialsPage.jsx"));
 const PartFamiliesPage = lazy(() => import("./components/master-data/PartFamiliesPage.jsx"));
@@ -188,6 +191,7 @@ const router = createBrowserRouter([
               },
               { path: "Calibration", element: <SettingsCalibration /> },
               { path: "Process-Control", element: <SettingsProcessControl /> },
+              { path: "Audits", element: <SettingsAudits /> },
               {
                 path: "Notifications",
                 element: <SettingsNotifications />,
@@ -217,6 +221,8 @@ const router = createBrowserRouter([
           { path: "Documentation/Audit-Schedule", element: <AuditSchedulePage /> },
           { path: "Documentation/Audit-Records", element: <AuditRecordsPage /> },
           { path: "Documentation/Audit-Records/:id", element: <AuditRecordPage /> },
+          { path: "Documentation/Audit-Findings", element: <AuditFindingsPage /> },
+          { path: "Documentation/Audit-Findings/:id", element: <AuditFindingPage /> },
           { path: "Part-Families", element: <PartFamiliesPage /> },
           { path: "Part-Families/:id", element: <PartFamilyPage /> },
           {

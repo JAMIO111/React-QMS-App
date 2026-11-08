@@ -42,16 +42,6 @@ export type UpdateRecordBody = z.infer<typeof UpdateRecordBody>;
 
 export const AbandonBody = z.object({ reason: text(1000) }).strict();
 
-export const RaiseNcrBody = z
-  .object({
-    responseIds: z.array(Id).min(1).max(100),
-    title: text(200),
-    description: z.string().trim().max(5000).optional(),
-    severity: z.enum(['critical', 'major', 'minor']).optional(),
-  })
-  .strict();
-export type RaiseNcrBody = z.infer<typeof RaiseNcrBody>;
-
 const csv = <T extends z.ZodTypeAny>(item: T) =>
   z
     .string()
@@ -132,6 +122,8 @@ export const RecordQuestion = z.object({
       result: z.enum(['pass', 'fail', 'na']).nullable(),
       /** Non-conformances raised from this answer that are still live. */
       ncrs: z.array(z.object({ id: Id, reference: z.string(), stage: z.string() })),
+      /** The live finding raised from this answer, if any. */
+      finding: z.object({ id: Id, reference: z.string(), status: z.enum(['open', 'closed']), kind: z.enum(['nonconformity', 'observation', 'opportunity']), classification: z.string() }).nullable(),
     })
     .nullable(),
 });
@@ -155,7 +147,6 @@ export const AuditRecord = RecordSummary.extend({
 });
 export type AuditRecord = z.infer<typeof AuditRecord>;
 
-export const RaisedNcr = z.object({ nonconformanceId: Id, record: AuditRecord });
 export type AbandonBody = z.infer<typeof AbandonBody>;
 
 export const AUDIT_FILES_BUCKET = 'audit-files';

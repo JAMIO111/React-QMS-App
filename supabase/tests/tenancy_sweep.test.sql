@@ -152,6 +152,13 @@ BEGIN
     SELECT a, s.audit_record_id, s.id, n.id FROM public.audit_responses s JOIN public.nonconformances n ON n.organisation_id = a AND n.reference = 'SW-NCR-LOT' WHERE s.organisation_id = a;
   INSERT INTO public.audit_attachments (organisation_id, audit_record_id, record_question_id, storage_path, file_name, size_bytes)
     SELECT a, q.audit_record_id, q.id, a::text || '/audit/' || q.audit_record_id::text || '/sweep.jpg', 'sweep.jpg', 1 FROM public.audit_record_questions q WHERE q.organisation_id = a;
+  -- Audit findings (Phase A): a finding on the answer (classifications are seeded with the organisation), its evidence, and a link to the lot NC.
+  INSERT INTO public.audit_findings (organisation_id, reference, audit_record_id, response_id, classification_id, title, description)
+    SELECT a, 'SW-AF-1', s.audit_record_id, s.id, c.id, 'Sweep finding', 'Found by the sweep'
+      FROM public.audit_responses s JOIN public.audit_finding_classifications c ON c.organisation_id = a AND c.key = 'major_nc' WHERE s.organisation_id = a;
+  INSERT INTO public.audit_finding_attachments (organisation_id, audit_record_id, finding_id, storage_path, file_name, size_bytes)
+    SELECT a, f.audit_record_id, f.id, a::text || '/audit/' || f.audit_record_id::text || '/findings/' || f.id::text || '/sweep.jpg', 'sweep.jpg', 1 FROM public.audit_findings f WHERE f.organisation_id = a;
+  UPDATE public.audit_ncr_links SET finding_id = (SELECT id FROM public.audit_findings WHERE organisation_id = a) WHERE organisation_id = a;
 
   -- In-process inspection (PC4): make the sweep plan effective with one check, then inspect SW-P1.
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');

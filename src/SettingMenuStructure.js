@@ -58,6 +58,13 @@ const SettingMenuStructure = [
     subMenu: [],
   },
   {
+    name: "Audits",
+    path: "Audits",
+    icon: ClipboardListIcon,
+    permission: "audits.read",
+    subMenu: [],
+  },
+  {
     name: "Notifications",
     path: "Notifications",
     icon: BellIcon,

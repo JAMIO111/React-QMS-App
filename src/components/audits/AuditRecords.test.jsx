@@ -25,7 +25,38 @@ const questions = () => [
   question({ id: "q3", sequence: 3, question: "Coolant concentration", guidance: null, answerType: "numeric", passAnswer: null, unit: "%", lowerLimit: 6, upperLimit: 10, critical: false }),
   question({ id: "q4", sequence: 4, question: "Anything else seen", guidance: null, answerType: "text", passAnswer: null, critical: false }),
 ];
-const answered = (q, response) => ({ ...q, response: { id: `s-${q.id}`, answer: null, value: null, note: null, result: null, ncrs: [], ...response } });
+const answered = (q, response) => ({ ...q, response: { id: `s-${q.id}`, answer: null, value: null, note: null, result: null, ncrs: [], finding: null, ...response } });
+const CLASSES = [
+  { id: "c-major", key: "major_nc", label: "Major non-conformity", kind: "nonconformity", defaultSeverity: "major", sequence: 1, active: true, findingCount: 0 },
+  { id: "c-minor", key: "minor_nc", label: "Minor non-conformity", kind: "nonconformity", defaultSeverity: "minor", sequence: 2, active: true, findingCount: 0 },
+  { id: "c-obs", key: "observation", label: "Observation", kind: "observation", defaultSeverity: null, sequence: 3, active: true, findingCount: 0 },
+  { id: "c-ofi", key: "ofi", label: "Opportunity for improvement", kind: "opportunity", defaultSeverity: null, sequence: 4, active: false, findingCount: 0 },
+];
+const finding = (over = {}) => ({
+  id: "f1",
+  reference: "AF-26-0001",
+  status: "open",
+  title: "Work instruction missing",
+  description: "No instruction at the machine",
+  requirement: null,
+  classification: { id: "c-major", key: "major_nc", label: "Major non-conformity", kind: "nonconformity" },
+  owner: null,
+  dueOn: null,
+  overdue: false,
+  record: { id: "r1", reference: "AR-26-0001", status: "completed", performedOn: "2026-11-08", audit: { id: "a1", reference: "AUD-001", title: "Cell audit" } },
+  answer: { id: "s-q1", sequence: 1, question: "Is the work instruction at the machine?" },
+  ncr: null,
+  fileCount: 0,
+  closedNote: null,
+  closedAt: null,
+  closedBy: null,
+  reopenReason: null,
+  withdrawReason: null,
+  withdrawnAt: null,
+  createdAt: "2026-11-08T10:00:00Z",
+  createdBy: { id: "u1", name: "Ines Inspector" },
+  ...over,
+});
 const record = (over = {}) => ({
   id: "r1",
   reference: "AR-26-0001",
@@ -81,6 +112,9 @@ const routeApi = (extra = {}) => {
   routes = {
     "GET /machines": { data: [{ id: "m1", code: "CNC-1", name: "Lathe" }, { id: "m2", code: "CNC-2", name: "Mill" }], nextCursor: null },
     "GET /audits": { data: [{ id: "a1", reference: "AUD-001", title: "Cell audit", auditType: "layered_process", questionCount: 4, criticalCount: 1, passMark: 80 }], page: 1, pageSize: 200, total: 1 },
+    "GET /audit-records/r1/findings": { data: [] },
+    "GET /audit-finding-classifications": { data: CLASSES },
+    "GET /employees/lookup": { data: [{ id: "e1", name: "Grace Hopper", jobTitle: null, active: true }] },
     ...extra,
   };
   apiFetch.mockImplementation(async (path, opts = {}) => {
@@ -275,40 +309,126 @@ describe("a completed audit", () => {
     expect(screen.getByDisplayValue("Missing at the machine")).toHaveAttribute("readonly");
   });
 
-  it("raises a draft non-conformance from the failed answers, prefilled, and opens it", async () => {
-    routeApi({ "GET /audit-records/r1": done(), "POST /audit-records/r1/raise-ncr": { nonconformanceId: "n1", record: done() } });
+  it("shows a failed critical answer's need for a finding, and creates one prefilled from the answer", async () => {
+    routeApi({ "GET /audit-records/r1": done(), "POST /audit-records/r1/findings": finding() });
     renderAt("/Documentation/Audit-Records/r1");
-    await userEvent.click(await screen.findByRole("button", { name: "Raise non-conformance" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByRole("checkbox", { name: /Is the work instruction at the machine\?/ })).toBeChecked();
-    expect(within(dialog).getByLabelText("Title")).toHaveValue("AUD-001: Is the work instruction at the machine?");
-    expect(within(dialog).getByLabelText("Description").value).toContain("Missing at the machine");
-    await userEvent.selectOptions(within(dialog).getByLabelText("Severity"), "major");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Raise non-conformance" }));
-    await waitFor(() => expect(last("POST /audit-records/r1/raise-ncr")?.body).toMatchObject({ responseIds: ["s-q1"], title: "AUD-001: Is the work instruction at the machine?", severity: "major" }));
-    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Internal/n1"));
+    const q1 = within(await screen.findByRole("listitem", { name: "Question 1" }));
+    expect(q1.getByText(/needs a finding before the audit can be completed/)).toBeInTheDocument();
+    // Only a failed answer offers it: the passed question beside it does not.
+    expect(within(screen.getByRole("listitem", { name: "Question 2" })).queryByRole("button", { name: "Create finding" })).toBeNull();
+    await userEvent.click(q1.getByRole("button", { name: "Create finding" }));
+    const dialog = await screen.findByRole("dialog", { name: "Create a finding from question 1" });
+    // The question is the title, the auditor's words are what was found, and a critical question suggests the major classification.
+    expect(within(dialog).getByLabelText("Title")).toHaveValue("Is the work instruction at the machine?");
+    expect(within(dialog).getByLabelText(/What was found/)).toHaveValue("Missing at the machine");
+    await waitFor(() => expect(within(dialog).getByRole("combobox", { name: /Classification/ })).toHaveValue("Major non-conformity"));
+    await userEvent.type(within(dialog).getByLabelText(/Requirement it was measured against/), "Instructions are at every machine");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Raise finding" }));
+    await waitFor(() =>
+      expect(last("POST /audit-records/r1/findings")?.body).toEqual({
+        responseId: "s-q1",
+        classificationId: "c-major",
+        title: "Is the work instruction at the machine?",
+        description: "Missing at the machine",
+        requirement: "Instructions are at every machine",
+        ownerId: null,
+        dueOn: null,
+      })
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  it("offers only the failed answers that are not already on a non-conformance, and only to people who may raise them", async () => {
+  it("suggests the minor classification for an ordinary question, offers only the ones in use, and needs a classification, a title and what was found", async () => {
     const two = done();
     two.questions[1] = answered(two.questions[1], { answer: "fail", result: "fail", note: "Swarf" });
-    two.questions[0].response.ncrs = [{ id: "n9", reference: "NCR-26-0009", stage: "draft" }];
-    routeApi({ "GET /audit-records/r1": two });
-    const { unmount } = renderAt("/Documentation/Audit-Records/r1");
-    await userEvent.click(await screen.findByRole("button", { name: "Raise non-conformance" }));
-    const dialog = await screen.findByRole("dialog");
-    const boxes = within(dialog).getAllByRole("checkbox");
-    expect(boxes).toHaveLength(1);
-    expect(boxes[0]).toHaveAccessibleName(/Is the floor clear\?/);
-    unmount();
-    permissions = ["audits.read"];
+    routeApi({ "GET /audit-records/r1": two, "POST /audit-records/r1/findings": finding() });
     renderAt("/Documentation/Audit-Records/r1");
-    await screen.findByRole("status");
-    expect(screen.queryByRole("button", { name: "Raise non-conformance" })).toBeNull();
+    const q2 = within(await screen.findByRole("listitem", { name: "Question 2" }));
+    expect(q2.queryByText(/needs a finding/)).toBeNull();
+    await userEvent.click(q2.getByRole("button", { name: "Create finding" }));
+    const dialog = await screen.findByRole("dialog");
+    await waitFor(() => expect(within(dialog).getByRole("combobox", { name: /Classification/ })).toHaveValue("Minor non-conformity"));
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Classification/ }));
+    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual([expect.stringContaining("Major non-conformity"), expect.stringContaining("Minor non-conformity"), expect.stringContaining("Observation")]);
+    await userEvent.click(screen.getByRole("option", { name: /^Minor non-conformity/ }));
+    await userEvent.clear(within(dialog).getByLabelText("Title"));
+    expect(within(dialog).getByRole("button", { name: "Raise finding" })).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Swarf under the lathe");
+    await userEvent.clear(within(dialog).getByLabelText(/What was found/));
+    expect(within(dialog).getByRole("button", { name: "Raise finding" })).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText(/What was found/), "Swarf around the lathe");
+    expect(within(dialog).getByRole("button", { name: "Raise finding" })).toBeEnabled();
   });
 
-  it("offers it only with the right to raise non-conformances, and links the ones already raised", async () => {
+  it("shows the finding on its answer instead of the button, and lists the findings of the record", async () => {
+    const withFinding = done();
+    withFinding.questions[0].response.finding = { id: "f1", reference: "AF-26-0001", status: "open", kind: "nonconformity", classification: "Major non-conformity" };
+    routeApi({
+      "GET /audit-records/r1": withFinding,
+      "GET /audit-records/r1/findings": { data: [finding({ owner: { id: "e1", name: "Grace Hopper" }, ncr: { id: "n9", reference: "NCR-26-0009", stage: "draft" } }), finding({ id: "f2", reference: "AF-26-0002", status: "withdrawn", title: "Raised in error", answer: null, classification: { id: "c-obs", key: "observation", label: "Observation", kind: "observation" } })] },
+    });
+    renderAt("/Documentation/Audit-Records/r1");
+    const q1 = within(await screen.findByRole("listitem", { name: "Question 1" }));
+    expect(q1.queryByRole("button", { name: "Create finding" })).toBeNull();
+    expect(q1.getByRole("link", { name: "AF-26-0001" })).toHaveAttribute("href", "/Documentation/Audit-Findings/f1");
+    const list = within(await screen.findByRole("list", { name: "Findings" }));
+    const [first, second] = list.getAllByRole("listitem");
+    expect(first).toHaveTextContent("AF-26-0001");
+    expect(first).toHaveTextContent("Work instruction missing");
+    expect(first).toHaveTextContent("Major non-conformity");
+    expect(first).toHaveTextContent("Open");
+    expect(first).toHaveTextContent("Grace Hopper");
+    expect(first).toHaveTextContent("Question 1");
+    expect(within(first).getByRole("link", { name: "NCR-26-0009" })).toHaveAttribute("href", "/Non-Conformance/Internal/n9");
+    expect(second).toHaveTextContent("Withdrawn");
+    expect(within(second).getByText("Raised in error")).toHaveClass("line-through");
+  });
+
+  it("cannot raise a finding when no classification is in use", async () => {
+    routeApi({ "GET /audit-records/r1": done(), "GET /audit-finding-classifications": { data: CLASSES.map((c) => ({ ...c, active: false })) } });
+    renderAt("/Documentation/Audit-Records/r1");
+    await userEvent.click(await screen.findByRole("button", { name: "Add finding" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add a finding" });
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Something");
+    await userEvent.type(within(dialog).getByLabelText(/What was found/), "Something found");
+    expect(within(dialog).getByRole("button", { name: "Raise finding" })).toBeDisabled();
+  });
+
+  it("adds a finding that is not tied to a question", async () => {
+    routeApi({ "GET /audit-records/r1": done(), "POST /audit-records/r1/findings": finding({ answer: null }) });
+    renderAt("/Documentation/Audit-Records/r1");
+    await userEvent.click(await screen.findByRole("button", { name: "Add finding" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add a finding" });
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Better lighting");
+    await userEvent.type(within(dialog).getByLabelText(/What was found/), "The bench is dim");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Owner/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /Grace Hopper/ }));
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Classification/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /^Observation/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Raise finding" }));
+    await waitFor(() =>
+      expect(last("POST /audit-records/r1/findings")?.body).toEqual({ classificationId: "c-obs", title: "Better lighting", description: "The bench is dim", requirement: null, ownerId: "e1", dueOn: null })
+    );
+  });
+
+  it("offers no way to raise findings without audits.perform, or on an abandoned record, but still lists them", async () => {
     permissions = ["audits.read"];
+    routeApi({ "GET /audit-records/r1": done(), "GET /audit-records/r1/findings": { data: [finding()] } });
+    const { unmount } = renderAt("/Documentation/Audit-Records/r1");
+    expect(await screen.findByRole("list", { name: "Findings" })).toHaveTextContent("AF-26-0001");
+    expect(screen.queryByRole("button", { name: "Create finding" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add finding" })).toBeNull();
+    unmount();
+    permissions = ["audits.read", "audits.perform"];
+    routeApi({ "GET /audit-records/r1": { ...done(), status: "abandoned", result: null, abandonReason: "Wrong machine" } });
+    renderAt("/Documentation/Audit-Records/r1");
+    await screen.findByText(/Abandoned: Wrong machine/);
+    expect(screen.queryByRole("button", { name: "Create finding" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add finding" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Findings" })).toBeNull();
+  });
+
+  it("no longer offers to raise a non-conformance straight from an answer, and links the ones raised before findings existed", async () => {
     const raised = done();
     raised.questions[0].response.ncrs = [{ id: "n9", reference: "NCR-26-0009", stage: "draft" }];
     routeApi({ "GET /audit-records/r1": raised });

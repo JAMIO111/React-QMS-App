@@ -78,6 +78,7 @@ export const menuStructure = [
       { name: "Audits", path: "/Documentation/Audits", permission: "audits.read" },
       { name: "Audit schedule", path: "/Documentation/Audit-Schedule", permission: "audits.read" },
       { name: "Audit records", path: "/Documentation/Audit-Records", permission: "audits.read" },
+      { name: "Audit findings", path: "/Documentation/Audit-Findings", permission: "audits.read" },
     ],
   },
   {

@@ -156,7 +156,20 @@ const sampleBody = (op: Op): object | undefined =>
     'PUT /api/v1/audit-records/{id}/responses': { questionId: a.auditQuestion, answer: 'pass' },
     'POST /api/v1/audit-records/{id}/complete': undefined,
     'POST /api/v1/audit-records/{id}/abandon': { reason: 'Hijacked' },
-    'POST /api/v1/audit-records/{id}/raise-ncr': { responseIds: [a.auditResponse], title: 'Hijacked' },
+    'GET /api/v1/audit-records/{id}/findings': undefined,
+    'POST /api/v1/audit-records/{id}/findings': { classificationId: a.findingClassification, title: 'Hijacked', description: 'Hijacked' },
+    'GET /api/v1/audit-findings/{id}': undefined,
+    'PATCH /api/v1/audit-findings/{id}': { title: 'Hijacked' },
+    'POST /api/v1/audit-findings/{id}/withdraw': { reason: 'Hijacked' },
+    'POST /api/v1/audit-findings/{id}/close': { note: 'Hijacked' },
+    'POST /api/v1/audit-findings/{id}/reopen': { reason: 'Hijacked' },
+    'POST /api/v1/audit-findings/{id}/create-ncr': {},
+    'GET /api/v1/audit-findings/{id}/attachments': undefined,
+    'POST /api/v1/audit-findings/{id}/attachments': { storagePath: 'x/audit/y/findings/z/a.jpg', fileName: 'a.jpg', sizeBytes: 1 },
+    'POST /api/v1/audit-finding-attachments/{id}/delete': { reason: 'Hijacked' },
+    'POST /api/v1/audit-finding-attachments/{id}/restore': undefined,
+    'PATCH /api/v1/audit-finding-classifications/{id}': { label: 'Hijacked' },
+    'GET /api/v1/ncrs/{id}/audit-source': undefined,
     'GET /api/v1/audit-records/{id}/attachments': undefined,
     'POST /api/v1/audit-records/{id}/attachments': { questionId: a.auditQuestion, storagePath: 'x/audit/y/z.jpg', fileName: 'z.jpg', sizeBytes: 1 },
     'POST /api/v1/audit-attachments/{id}/delete': { reason: 'Hijacked' },
@@ -354,7 +367,20 @@ const hasSample = (op: Op) =>
     'PUT /api/v1/audit-records/{id}/responses',
     'POST /api/v1/audit-records/{id}/complete',
     'POST /api/v1/audit-records/{id}/abandon',
-    'POST /api/v1/audit-records/{id}/raise-ncr',
+    'GET /api/v1/audit-records/{id}/findings',
+    'POST /api/v1/audit-records/{id}/findings',
+    'GET /api/v1/audit-findings/{id}',
+    'PATCH /api/v1/audit-findings/{id}',
+    'POST /api/v1/audit-findings/{id}/withdraw',
+    'POST /api/v1/audit-findings/{id}/close',
+    'POST /api/v1/audit-findings/{id}/reopen',
+    'POST /api/v1/audit-findings/{id}/create-ncr',
+    'GET /api/v1/audit-findings/{id}/attachments',
+    'POST /api/v1/audit-findings/{id}/attachments',
+    'POST /api/v1/audit-finding-attachments/{id}/delete',
+    'POST /api/v1/audit-finding-attachments/{id}/restore',
+    'PATCH /api/v1/audit-finding-classifications/{id}',
+    'GET /api/v1/ncrs/{id}/audit-source',
     'GET /api/v1/audit-records/{id}/attachments',
     'POST /api/v1/audit-records/{id}/attachments',
     'POST /api/v1/audit-attachments/{id}/delete',
@@ -464,6 +490,9 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/audit-occurrences/')) return a.occurrence;
   if (path.startsWith('/api/v1/audit-records/')) return a.auditRecord;
   if (path.startsWith('/api/v1/audit-attachments/')) return a.auditAttachment;
+  if (path.startsWith('/api/v1/audit-findings/')) return a.finding;
+  if (path.startsWith('/api/v1/audit-finding-attachments/')) return a.findingAttachment;
+  if (path.startsWith('/api/v1/audit-finding-classifications/')) return a.findingClassification;
   if (path.startsWith('/api/v1/ncr-attachments/')) return a.attachment;
   if (path.startsWith('/api/v1/gauges/')) return a.gauge;
   if (path.startsWith('/api/v1/gauge-characteristics/')) return a.gaugeCharacteristic;
@@ -561,6 +590,9 @@ beforeAll(async () => {
   a.auditQuestion = (await one(`insert into public.audit_record_questions (organisation_id, audit_record_id, sequence, question, answer_type) values ($1, $2, 1, 'Alpha question', 'pass_fail') returning id`, [ids.orgA, a.auditRecord])).id;
   a.auditResponse = (await one(`insert into public.audit_responses (organisation_id, audit_record_id, record_question_id, answer, result) values ($1, $2, $3, 'fail', 'fail') returning id`, [ids.orgA, a.auditRecord, a.auditQuestion])).id;
   a.auditAttachment = (await one(`insert into public.audit_attachments (organisation_id, audit_record_id, record_question_id, storage_path, file_name, size_bytes) values ($1::uuid, $2::uuid, $3::uuid, $1::text || '/audit/' || $2::text || '/a.jpg', 'a.jpg', 1) returning id`, [ids.orgA, a.auditRecord, a.auditQuestion])).id;
+  a.findingClassification = (await one(`select id from public.audit_finding_classifications where organisation_id = $1 and key = 'major_nc'`, [ids.orgA])).id;
+  a.finding = (await one(`insert into public.audit_findings (organisation_id, reference, audit_record_id, response_id, classification_id, title, description) values ($1, 'A-AF-1', $2, $3, $4, 'Alpha finding', 'Found') returning id`, [ids.orgA, a.auditRecord, a.auditResponse, a.findingClassification])).id;
+  a.findingAttachment = (await one(`insert into public.audit_finding_attachments (organisation_id, audit_record_id, finding_id, storage_path, file_name, size_bytes) values ($1::uuid, $2::uuid, $3::uuid, $1::text || '/audit/' || $2::text || '/findings/' || $3::text || '/a.jpg', 'a.jpg', 1) returning id`, [ids.orgA, a.auditRecord, a.finding])).id;
   a.employee = (await one(`insert into public."Employees" (organisation_id, first_name, surname, job_title) values ($1, 'Alpha', 'Employee', 'Operator') returning id`, [ids.orgA])).id;
   a.machine = (await one(`insert into public.machines (organisation_id, code, name) values ($1, 'A-M1', 'Alpha machine') returning id`, [ids.orgA])).id;
   a.family = (await one(`insert into public.part_families (organisation_id, code, name) values ($1, 'A-FAM', 'Alpha family') returning id`, [ids.orgA])).id;

@@ -11,8 +11,6 @@ import {
   AuditRecord,
   CreateAuditAttachmentBody,
   RemoveAttachmentBody,
-  RaiseNcrBody,
-  RaisedNcr,
   RECORD_RESULTS,
   RECORD_SORTABLE,
   RECORD_STATUSES,
@@ -138,16 +136,6 @@ export class AuditRecordsController {
   @ApiCreatedResponse({ schema: openApiSchema(AuditAttachment) })
   createAttachment(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.createAttachment(ctx, parse(Uuid, id), parse(CreateAuditAttachmentBody, body));
-  }
-
-  /** Turn failed answers into a draft internal non-conformance (needs ncr.create), on request only. */
-  @Post(':id/raise-ncr')
-  @HttpCode(201)
-  @OrganisationScoped(READ)
-  @ApiBody({ schema: openApiSchema(RaiseNcrBody) })
-  @ApiCreatedResponse({ schema: openApiSchema(RaisedNcr) })
-  raiseNcr(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
-    return this.service.raiseNcr(ctx, parse(Uuid, id), parse(RaiseNcrBody, body));
   }
 }
 

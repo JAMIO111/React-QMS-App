@@ -227,6 +227,9 @@ BEGIN
   rec2 := app.start_audit(def);
   PERFORM app.record_audit_response(rec2, pg_temp.qid(rec2, 1), NULL, 10.5, 'Oversize');
   PERFORM app.record_audit_response(rec2, pg_temp.qid(rec2, 2), NULL, 5);
+  PERFORM pg_temp.assert_eq(pg_temp.fails(format('SELECT app.complete_audit(%L)', rec2)) LIKE 'QM018: Before AR-%raise a finding for the failed critical question%', true, 'a failed critical measurement needs a finding before the audit is completed');
+  PERFORM app.create_audit_finding(rec2, (SELECT id FROM public.audit_responses WHERE record_question_id = pg_temp.qid(rec2, 1)),
+    (SELECT id FROM public.audit_finding_classifications WHERE organisation_id = org AND key = 'major_nc'), 'Diameter oversize', 'Measured 10.5 mm against 10 ± 0.05');
   PERFORM app.complete_audit(rec2);
   PERFORM pg_temp.assert_eq((SELECT result || '/' || score || '/' || critical_failed_count FROM public.audit_records WHERE id = rec2), 'fail/50.00/1', 'a failed critical measurement fails an audit whose score reaches the mark');
   PERFORM pg_temp.logout();

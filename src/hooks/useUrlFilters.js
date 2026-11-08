@@ -54,6 +54,10 @@ export const useAuditFilters = () => useUrlFilters(AUDIT_FILTER_KEYS);
 export const AUDIT_RECORD_FILTER_KEYS = ["search", "status", "result", "audit", "auditLabel", "machine", "machineLabel", "mine", "from", "to"];
 export const useAuditRecordFilters = () => useUrlFilters(AUDIT_RECORD_FILTER_KEYS);
 
+/** Audit findings register filters. */
+export const AUDIT_FINDING_FILTER_KEYS = ["search", "status", "classification", "kind", "owner", "ownerLabel", "audit", "auditLabel", "overdue"];
+export const useAuditFindingFilters = () => useUrlFilters(AUDIT_FINDING_FILTER_KEYS);
+
 /** Audit schedule filters: view (list | calendar), month (YYYY-MM; none = about a month either side of today), state, audit and machine. */
 export const AUDIT_SCHEDULE_FILTER_KEYS = ["view", "month", "state", "audit", "auditLabel", "machine", "machineLabel"];
 export const useAuditScheduleFilters = () => useUrlFilters(AUDIT_SCHEDULE_FILTER_KEYS);

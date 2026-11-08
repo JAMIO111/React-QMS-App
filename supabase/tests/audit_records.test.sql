@@ -1,5 +1,5 @@
 -- Audits, AU3: records — started only by app.start_audit with a frozen copy of the audit, answers worked out by the database, completion rules (everything answered, a note on every
--- failure, the "carried out on" chosen), the result (critical questions and the pass mark), one record per slot, frozen once completed, raising a non-conformance, and who may do what.
+-- failure, a finding on every failed critical question, the "carried out on" chosen), the result (critical questions and the pass mark), one record per slot, frozen once completed, and who may do what.
 \set ON_ERROR_STOP 1
 BEGIN;
 \ir helpers.sql
@@ -16,7 +16,7 @@ DO $$
 DECLARE
   u_owner uuid := '38000000-0000-0000-0000-000000000801'; u_insp uuid := '38000000-0000-0000-0000-000000000802'; u_view uuid := '38000000-0000-0000-0000-000000000803'; u_other uuid := '38000000-0000-0000-0000-000000000804';
   org uuid; org2 uuid; m uuid; site uuid; mach uuid; mach_b uuid; mach_other uuid; dept uuid; def uuid; def2 uuid; def3 uuid; def4 uuid; r5 uuid; occ uuid; occ_skipped uuid; r1 uuid; r2 uuid; r3 uuid; r4 uuid; ncr uuid; ncr2 uuid;
-  resp uuid; resp2 uuid; txt text; n int;
+  resp uuid; txt text; n int;
 BEGIN
   PERFORM pg_temp.login(u_owner);
   org := app.create_organisation('Record Works', 'Plant A', 'PA', NULL);
@@ -129,14 +129,18 @@ BEGIN
   PERFORM app.record_audit_response(r1, pg_temp.qid(r1, 2), 'pass');
   PERFORM app.record_audit_response(r1, pg_temp.qid(r1, 1), 'no', NULL, 'Instruction missing at the machine');
   PERFORM app.record_audit_response(r1, pg_temp.qid(r1, 5), NULL, NULL, 'Tidy otherwise');
-  PERFORM pg_temp.assert_eq(array_length(app.audit_record_problems(r1), 1) IS NULL, true, 'nothing left');
+  PERFORM pg_temp.assert_eq(app.audit_record_problems(r1), ARRAY['raise a finding for the failed critical question: 1'], 'only the finding for the critical failure is left');
   PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.update_audit_record(%L, NULL, current_date + 1)$q$, r1)) LIKE 'QM018: An audit cannot have been carried out in the future%', true, 'not in the future');
   PERFORM app.update_audit_record(r1, 'Quiet shift', current_date - 1, true);
   PERFORM pg_temp.assert_eq((SELECT notes || '/' || performed_on FROM public.audit_records WHERE id = r1), 'Quiet shift/' || (current_date - 1), 'notes and date kept');
   PERFORM app.update_audit_record(r1, NULL, NULL, false);
   PERFORM pg_temp.assert_eq((SELECT notes FROM public.audit_records WHERE id = r1), 'Quiet shift', 'leaving the notes alone keeps them');
 
-  -- ---- complete: one critical question failed, so it fails whatever the score ----
+  -- ---- complete: one critical question failed, so it needs a finding first, and then it fails whatever the score ----
+  PERFORM pg_temp.assert_eq(array_to_string(app.audit_record_problems(r1), ' | ') LIKE '%raise a finding for the failed critical question: 1%', true, 'a failed critical question needs a finding');
+  PERFORM pg_temp.assert_eq(pg_temp.fails(format('SELECT app.complete_audit(%L)', r1)) LIKE 'QM018: Before AR-%raise a finding for the failed critical question%', true, 'completing is refused until it has one');
+  SELECT id INTO resp FROM public.audit_responses WHERE record_question_id = pg_temp.qid(r1, 1);
+  PERFORM app.create_audit_finding(r1, resp, (SELECT id FROM public.audit_finding_classifications WHERE organisation_id = org AND key = 'minor_nc'), 'Work instruction missing', 'No instruction at the machine');
   PERFORM app.complete_audit(r1);
   PERFORM pg_temp.assert_eq((SELECT status || '/' || result || '/' || score || '/' || passed_count || '/' || failed_count || '/' || na_count || '/' || critical_failed_count FROM public.audit_records WHERE id = r1),
     'completed/fail/66.67/2/1/1/1', 'passes 2, fails 1, one not applicable: 66.67 %, and a failed critical question');
@@ -175,6 +179,8 @@ BEGIN
   PERFORM app.record_audit_response(r5, pg_temp.qid(r5, 1), 'fail', NULL, 'Guard missing');
   PERFORM app.record_audit_response(r5, pg_temp.qid(r5, 2), 'pass');
   PERFORM app.record_audit_response(r5, pg_temp.qid(r5, 3), 'pass');
+  SELECT id INTO resp FROM public.audit_responses WHERE record_question_id = pg_temp.qid(r5, 1);
+  PERFORM app.create_audit_finding(r5, resp, (SELECT id FROM public.audit_finding_classifications WHERE organisation_id = org AND key = 'major_nc'), 'Guard missing', 'The guard was not fitted');
   PERFORM app.complete_audit(r5);
   PERFORM pg_temp.assert_eq((SELECT result || '/' || score || '/' || critical_failed_count FROM public.audit_records WHERE id = r5), 'fail/66.67/1', 'a failed critical question fails the audit even when the score is above the pass mark');
   INSERT INTO public.audit_definitions (organisation_id, title, audit_type, frequency_kind, pass_mark) VALUES (org, 'All not applicable', 'process', 'on_demand', 50) RETURNING id INTO def4;
@@ -214,28 +220,7 @@ BEGIN
   PERFORM app.abandon_audit(r4, 'Tidy up');
   PERFORM pg_temp.logout();
 
-  -- ---- raise a non-conformance from a failed answer ----
-  PERFORM pg_temp.login(u_view);
-  SELECT id INTO resp FROM public.audit_responses WHERE record_question_id = pg_temp.qid(r1, 1);
-  PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.raise_ncr_from_audit(%L, ARRAY[%L]::uuid[], 'x')$q$, r1, resp)) LIKE '42501:%', true, 'a viewer cannot raise NCs');
-  PERFORM pg_temp.logout();
-  PERFORM pg_temp.login(u_insp);
-  SELECT id INTO resp2 FROM public.audit_responses WHERE record_question_id = pg_temp.qid(r1, 2);
-  PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.raise_ncr_from_audit(%L, ARRAY[%L]::uuid[], 'x')$q$, r1, resp2)) LIKE 'QM018: Only failed answers%', true, 'only a failed answer');
-  PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.raise_ncr_from_audit(%L, ARRAY[]::uuid[], 'x')$q$, r1)) LIKE 'QM018: Choose at least one%', true, 'at least one');
-  PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.raise_ncr_from_audit(%L, ARRAY[%L]::uuid[], ' ')$q$, r1, resp)) LIKE 'QM018: Give the non-conformance a title%', true, 'a title');
-  ncr := app.raise_ncr_from_audit(r1, ARRAY[resp], 'Work instruction missing', 'Found during the cell audit', 'minor');
-  PERFORM pg_temp.assert_eq((SELECT stage || '/' || source || '/' || title || '/' || severity || '/' || (site_id = site)::text FROM public.nonconformances WHERE id = ncr), 'draft/internal/Work instruction missing/minor/true', 'a draft internal NC, at the site of the machine it was found on');
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.audit_ncr_links WHERE nonconformance_id = ncr AND response_id = resp), 1::bigint, 'linked to the answer');
-  PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.raise_ncr_from_audit(%L, ARRAY[%L]::uuid[], 'again')$q$, r1, resp)) LIKE 'QM018: A failed answer is already on a non-conformance%', true, 'one live NC per failed answer');
-  PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.raise_ncr_from_audit(%L, ARRAY[%L]::uuid[], 'again')$q$, r2, resp)) LIKE 'QM018: Only failed answers%', true, 'and only answers of this record');
-  PERFORM pg_temp.logout();
-  PERFORM pg_temp.login(u_owner);
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.outbox_events WHERE organisation_id = org AND event_type = 'audit.ncr_raised'), 1::bigint, 'an event is written');
-  UPDATE public.nonconformances SET deleted_at = now(), delete_reason = 'Raised in error' WHERE id = ncr;
-  ncr2 := app.raise_ncr_from_audit(r1, ARRAY[resp], 'Raised again');
-  PERFORM pg_temp.assert_eq(ncr2 <> ncr, true, 'a deleted draft frees its answer');
-  PERFORM pg_temp.logout();
+  -- Raising a non-conformance is done from a finding (audit_findings.test.sql).
 
   -- ---- reading: viewers read, strangers do not ----
   PERFORM pg_temp.login(u_view);

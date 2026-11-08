@@ -25,6 +25,14 @@ import { CustomersController, PartCustomersController, PartRevisionsController, 
 import { MasterDataService } from './master-data/master-data.service';
 import { AuditAttachmentsController, AuditRecordsController } from './audits/audit-records.controller';
 import { AuditRecordsService } from './audits/audit-records.service';
+import {
+  AuditFindingAttachmentsController,
+  AuditFindingClassificationsController,
+  AuditFindingsController,
+  AuditRecordFindingsController,
+  NcrAuditSourceController,
+} from './audits/audit-findings.controller';
+import { AuditFindingsService } from './audits/audit-findings.service';
 import { AuditScheduleController } from './audits/audit-schedule.controller';
 import { AuditScheduleService } from './audits/audit-schedule.service';
 import { AuditsController } from './audits/audits.controller';
@@ -143,6 +151,11 @@ export class AppModule implements NestModule {
         AuditScheduleController,
         AuditRecordsController,
         AuditAttachmentsController,
+        AuditFindingClassificationsController,
+        AuditRecordFindingsController,
+        AuditFindingsController,
+        AuditFindingAttachmentsController,
+        NcrAuditSourceController,
         ProductionController,
         TraceabilityController,
         JobsController,
@@ -200,6 +213,7 @@ export class AppModule implements NestModule {
         AuditsService,
         AuditScheduleService,
         AuditRecordsService,
+        AuditFindingsService,
         ProductionService,
         TraceabilityService,
         JobsService,

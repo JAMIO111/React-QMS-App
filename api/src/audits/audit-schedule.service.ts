@@ -10,8 +10,8 @@ const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const LIMIT = 500;
 
 /** The state of a slot is worked out here from its audit record (if any), the dates and the grace period, never stored: only "skipped" is. */
-const REC_JOIN = `left join lateral (select r.id, r.reference, r.status, r.result, r.score, r.performed_on from public.audit_records r where r.occurrence_id = o.id and r.status <> 'abandoned' order by r.started_at desc limit 1) rec on true`;
-const STATE_SQL = `case when o.status = 'skipped' then 'skipped'
+export const REC_JOIN = `left join lateral (select r.id, r.reference, r.status, r.result, r.score, r.performed_on from public.audit_records r where r.occurrence_id = o.id and r.status <> 'abandoned' order by r.started_at desc limit 1) rec on true`;
+export const STATE_SQL = `case when o.status = 'skipped' then 'skipped'
                         when rec.status = 'completed' then 'done'
                         when rec.status = 'in_progress' then 'in_progress'
                         when o.due_on >= current_date then 'upcoming'

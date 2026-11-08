@@ -100,6 +100,19 @@ export class AuditsService {
     });
   }
 
+  /** The operation codes to offer: those of the organisation's control plans and any already named by an audit. */
+  operationCodes(ctx: RequestContext): Promise<{ data: { code: string; name: string | null }[] }> {
+    return this.database.asUser(ctx, async (db) => {
+      const org = orgOf(ctx);
+      const r = await db.execute<Row>(sql`
+        select min(code) as code, max(name) as name from (
+          select operation_code as code, name from public.control_plan_operations where organisation_id = ${org}::uuid
+          union all select operation_code, null from public.audit_targets where organisation_id = ${org}::uuid and kind = 'operation'
+        ) x group by upper(code) order by upper(code)`);
+      return { data: r.rows.map((x) => ({ code: x.code as string, name: (x.name as string) ?? null })) };
+    });
+  }
+
   get(ctx: RequestContext, id: string): Promise<Audit> {
     return this.database.asUser(ctx, (db) => this.load(db, ctx, id));
   }
@@ -185,7 +198,7 @@ export class AuditsService {
     const r = await db.execute<Row>(sql`${sql.raw(SELECT)} where d.id = ${id}::uuid and d.organisation_id = ${orgOf(ctx)}::uuid`);
     if (!r.rows.length) throw ApiError.notFound('audit_not_found', 'Audit not found');
     const x = r.rows[0];
-    const questions = await db.execute<Row>(sql`select id, sequence, question, guidance, answer_type, pass_answer, unit, lower_limit, upper_limit, critical
+    const questions = await db.execute<Row>(sql`select id, sequence, question, guidance, answer_type, pass_answer, unit, lower_limit, upper_limit, nominal, options, rating_max, pass_rating, critical
       from public.audit_questions where audit_definition_id = ${id}::uuid order by sequence`);
     const targets = await db.execute<Row>(sql`
       select t.kind, coalesce(t.machine_id::text, t.operation_code, t.department_id::text) as ref,
@@ -211,6 +224,10 @@ export class AuditsService {
         unit: (q.unit as string) ?? null,
         lowerLimit: num(q.lower_limit),
         upperLimit: num(q.upper_limit),
+        nominal: num(q.nominal),
+        options: (q.options as { label: string; passes: boolean }[] | null) ?? null,
+        ratingMax: num(q.rating_max),
+        passRating: num(q.pass_rating),
         critical: q.critical as boolean,
       })),
       targets: targets.rows.map((t) => ({ kind: t.kind as 'machine' | 'operation' | 'department', id: t.ref as string, label: t.label as string })),

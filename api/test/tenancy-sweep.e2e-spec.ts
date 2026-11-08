@@ -157,6 +157,10 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/audit-records/{id}/complete': undefined,
     'POST /api/v1/audit-records/{id}/abandon': { reason: 'Hijacked' },
     'POST /api/v1/audit-records/{id}/raise-ncr': { responseIds: [a.auditResponse], title: 'Hijacked' },
+    'GET /api/v1/audit-records/{id}/attachments': undefined,
+    'POST /api/v1/audit-records/{id}/attachments': { questionId: a.auditQuestion, storagePath: 'x/audit/y/z.jpg', fileName: 'z.jpg', sizeBytes: 1 },
+    'POST /api/v1/audit-attachments/{id}/delete': { reason: 'Hijacked' },
+    'POST /api/v1/audit-attachments/{id}/restore': undefined,
     'POST /api/v1/audit-occurrences/{id}/unskip': undefined,
     'POST /api/v1/ncrs/{id}/affected-lots': { lotId: '00000000-0000-4000-8000-000000000001', quantity: 1 },
     'PATCH /api/v1/ncr-affected-lots/{id}': { quantity: 1 },
@@ -351,6 +355,10 @@ const hasSample = (op: Op) =>
     'POST /api/v1/audit-records/{id}/complete',
     'POST /api/v1/audit-records/{id}/abandon',
     'POST /api/v1/audit-records/{id}/raise-ncr',
+    'GET /api/v1/audit-records/{id}/attachments',
+    'POST /api/v1/audit-records/{id}/attachments',
+    'POST /api/v1/audit-attachments/{id}/delete',
+    'POST /api/v1/audit-attachments/{id}/restore',
     'POST /api/v1/audit-occurrences/{id}/unskip',
     'POST /api/v1/ncrs/{id}/affected-lots',
     'PATCH /api/v1/ncr-affected-lots/{id}',
@@ -455,6 +463,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/audits/')) return a.audit;
   if (path.startsWith('/api/v1/audit-occurrences/')) return a.occurrence;
   if (path.startsWith('/api/v1/audit-records/')) return a.auditRecord;
+  if (path.startsWith('/api/v1/audit-attachments/')) return a.auditAttachment;
   if (path.startsWith('/api/v1/ncr-attachments/')) return a.attachment;
   if (path.startsWith('/api/v1/gauges/')) return a.gauge;
   if (path.startsWith('/api/v1/gauge-characteristics/')) return a.gaugeCharacteristic;
@@ -551,6 +560,7 @@ beforeAll(async () => {
   a.auditRecord = (await one(`insert into public.audit_records (organisation_id, reference, audit_definition_id, audit_reference, audit_title, audit_type, pass_mark) values ($1, 'A-AR-1', $2, 'AUD-001', 'Alpha audit', 'process', 80) returning id`, [ids.orgA, a.audit])).id;
   a.auditQuestion = (await one(`insert into public.audit_record_questions (organisation_id, audit_record_id, sequence, question, answer_type) values ($1, $2, 1, 'Alpha question', 'pass_fail') returning id`, [ids.orgA, a.auditRecord])).id;
   a.auditResponse = (await one(`insert into public.audit_responses (organisation_id, audit_record_id, record_question_id, answer, result) values ($1, $2, $3, 'fail', 'fail') returning id`, [ids.orgA, a.auditRecord, a.auditQuestion])).id;
+  a.auditAttachment = (await one(`insert into public.audit_attachments (organisation_id, audit_record_id, record_question_id, storage_path, file_name, size_bytes) values ($1::uuid, $2::uuid, $3::uuid, $1::text || '/audit/' || $2::text || '/a.jpg', 'a.jpg', 1) returning id`, [ids.orgA, a.auditRecord, a.auditQuestion])).id;
   a.employee = (await one(`insert into public."Employees" (organisation_id, first_name, surname, job_title) values ($1, 'Alpha', 'Employee', 'Operator') returning id`, [ids.orgA])).id;
   a.machine = (await one(`insert into public.machines (organisation_id, code, name) values ($1, 'A-M1', 'Alpha machine') returning id`, [ids.orgA])).id;
   a.family = (await one(`insert into public.part_families (organisation_id, code, name) values ($1, 'A-FAM', 'Alpha family') returning id`, [ids.orgA])).id;

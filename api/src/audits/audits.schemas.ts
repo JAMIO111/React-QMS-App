@@ -8,7 +8,9 @@ const optionalText = (max: number) => z.union([z.string().trim().max(max), z.nul
 
 export const AUDIT_TYPES = ['process', 'product', 'system', 'supplier', 'housekeeping', 'layered_process', 'other'] as const;
 export const FREQUENCY_KINDS = ['daily', 'weekly', 'monthly', 'quarterly', 'six_monthly', 'yearly', 'every_n_days', 'on_demand'] as const;
-export const ANSWER_TYPES = ['pass_fail', 'yes_no', 'number', 'text'] as const;
+export const ANSWER_TYPES = ['yes_no', 'compliant', 'pass_fail', 'yes_no_na', 'numeric', 'text', 'multiple_choice', 'measurement', 'evidence', 'rating'] as const;
+/** Types that can always fail; numeric needs a limit and rating a lowest acceptable rating to be scored. */
+const ALWAYS_SCORED = ['yes_no', 'compliant', 'pass_fail', 'yes_no_na', 'multiple_choice', 'measurement'];
 export const AUDITOR_KINDS = ['none', 'person', 'role', 'department'] as const;
 export const AUDIT_SORTABLE = ['reference', 'title', 'type', 'frequency', 'status', 'createdAt'] as const;
 
@@ -35,6 +37,13 @@ export const AuditorInput = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('department'), departmentId: Id }).strict(),
 ]);
 
+const ChoiceOption = z.object({ label: text(100), passes: z.boolean().default(true) }).strict();
+
+/**
+ * One checklist question as written in the template. What is set depends on the type: yes/no and yes/no/N/A say which answer passes; numeric has an optional unit and limits;
+ * a measurement needs a nominal value, limits and a unit; multiple choice 2–20 options each marked acceptable or not; a rating a scale (3–10, default 5) and an optional lowest acceptable rating.
+ * Fields that do not belong to the type are ignored.
+ */
 export const QuestionInput = z
   .object({
     question: text(500),
@@ -44,13 +53,38 @@ export const QuestionInput = z
     unit: optionalText(20),
     lowerLimit: z.number().nullish(),
     upperLimit: z.number().nullish(),
+    nominal: z.number().nullish(),
+    options: z.array(ChoiceOption).max(20).nullish(),
+    ratingMax: z.number().int().nullish(),
+    passRating: z.number().int().nullish(),
     critical: z.boolean().default(false),
   })
   .strict()
   .superRefine((q, ctx) => {
-    if (q.answerType === 'number' && q.lowerLimit == null && q.upperLimit == null) ctx.addIssue({ code: 'custom', path: ['lowerLimit'], message: 'Give a lower or an upper limit' });
-    if (q.lowerLimit != null && q.upperLimit != null && q.lowerLimit > q.upperLimit) ctx.addIssue({ code: 'custom', path: ['upperLimit'], message: 'The upper limit is below the lower limit' });
-    if (q.answerType === 'text' && q.critical) ctx.addIssue({ code: 'custom', path: ['critical'], message: 'A note is not scored, so it cannot be critical' });
+    const bad = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
+    const t = q.answerType;
+    if (t === 'numeric' && q.lowerLimit != null && q.upperLimit != null && q.lowerLimit > q.upperLimit) bad('upperLimit', 'The upper limit is below the lower limit');
+    if (t === 'measurement') {
+      if (q.nominal == null) bad('nominal', 'Give the nominal value');
+      if (q.lowerLimit == null) bad('lowerLimit', 'Give the lower limit');
+      if (q.upperLimit == null) bad('upperLimit', 'Give the upper limit');
+      if (!q.unit) bad('unit', 'Give the unit');
+      if (q.nominal != null && q.lowerLimit != null && q.upperLimit != null && !(q.lowerLimit <= q.nominal && q.nominal <= q.upperLimit)) bad('nominal', 'The nominal value must lie between the limits');
+    }
+    if (t === 'multiple_choice') {
+      const options = q.options ?? [];
+      if (options.length < 2) bad('options', 'Give at least two options');
+      const labels = options.map((o) => o.label.toLowerCase());
+      if (new Set(labels).size !== labels.length) bad('options', 'An option is listed twice');
+      if (options.length && !options.some((o) => o.passes)) bad('options', 'At least one option must be acceptable');
+    }
+    if (t === 'rating') {
+      const max = q.ratingMax ?? 5;
+      if (max < 3 || max > 10) bad('ratingMax', 'A rating scale runs from 1 to between 3 and 10');
+      if (q.passRating != null && (q.passRating < 1 || q.passRating > max)) bad('passRating', 'The lowest acceptable rating must be on the scale');
+    }
+    const scored = ALWAYS_SCORED.includes(t) || (t === 'numeric' && (q.lowerLimit != null || q.upperLimit != null)) || (t === 'rating' && q.passRating != null);
+    if (q.critical && !scored) bad('critical', 'Only a question that can fail can be critical');
   });
 
 export const TargetInput = z.discriminatedUnion('kind', [
@@ -132,6 +166,10 @@ export const AuditQuestion = z.object({
   unit: z.string().nullable(),
   lowerLimit: z.number().nullable(),
   upperLimit: z.number().nullable(),
+  nominal: z.number().nullable(),
+  options: z.array(z.object({ label: z.string(), passes: z.boolean() })).nullable(),
+  ratingMax: z.number().nullable(),
+  passRating: z.number().nullable(),
   critical: z.boolean(),
 });
 
@@ -171,3 +209,6 @@ export const Audit = AuditSummary.omit({ targets: true }).extend({
   updatedAt: dateTime,
 });
 export type Audit = z.infer<typeof Audit>;
+
+/** Operation codes to choose from for "relevant to": those of the control plans plus any already on an audit. */
+export const OperationCodes = z.object({ data: z.array(z.object({ code: z.string(), name: z.string().nullable() })) });

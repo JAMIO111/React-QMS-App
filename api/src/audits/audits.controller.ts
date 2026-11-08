@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, Ap
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { Audit, AUDIT_SORTABLE, AUDIT_TYPES, AuditListQuery, AuditPage, CreateAuditBody, ReasonBody, UpdateAuditBody } from './audits.schemas';
+import { Audit, AUDIT_SORTABLE, OperationCodes, AUDIT_TYPES, AuditListQuery, AuditPage, CreateAuditBody, ReasonBody, UpdateAuditBody } from './audits.schemas';
 import { AuditsService } from './audits.service';
 
 const READ = 'audits.read';
@@ -31,6 +31,14 @@ export class AuditsController {
   @ApiOkResponse({ schema: openApiSchema(AuditPage) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.list(ctx, parse(AuditListQuery, query));
+  }
+
+  /** Operation codes to choose from (control plan operations plus those already on an audit). Declared before `:id`. */
+  @Get('operation-codes')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ schema: openApiSchema(OperationCodes) })
+  operationCodes(@Ctx() ctx: RequestContext) {
+    return this.service.operationCodes(ctx);
   }
 
   @Post()

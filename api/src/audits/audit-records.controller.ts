@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
@@ -5,7 +6,11 @@ import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
   AbandonBody,
+  AttachmentListQuery,
+  AuditAttachment,
   AuditRecord,
+  CreateAuditAttachmentBody,
+  RemoveAttachmentBody,
   RaiseNcrBody,
   RaisedNcr,
   RECORD_RESULTS,
@@ -116,6 +121,25 @@ export class AuditRecordsController {
     return this.service.abandon(ctx, parse(Uuid, id), parse(AbandonBody, body));
   }
 
+  @Get(':id/attachments')
+  @OrganisationScoped(READ)
+  @ApiQuery({ name: 'questionId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'deleted', required: false, schema: { type: 'string', enum: ['exclude', 'include', 'only'] } })
+  @ApiOkResponse({ schema: openApiSchema(z.object({ data: z.array(AuditAttachment) })) })
+  async attachments(@Ctx() ctx: RequestContext, @Param('id') id: string, @Query() query: unknown) {
+    return { data: await this.service.listAttachments(ctx, parse(Uuid, id), parse(AttachmentListQuery, query)) };
+  }
+
+  /** Records a file already uploaded to the record's folder against an evidence question (in-progress records only). */
+  @Post(':id/attachments')
+  @HttpCode(201)
+  @OrganisationScoped(PERFORM)
+  @ApiBody({ schema: openApiSchema(CreateAuditAttachmentBody) })
+  @ApiCreatedResponse({ schema: openApiSchema(AuditAttachment) })
+  createAttachment(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.createAttachment(ctx, parse(Uuid, id), parse(CreateAuditAttachmentBody, body));
+  }
+
   /** Turn failed answers into a draft internal non-conformance (needs ncr.create), on request only. */
   @Post(':id/raise-ncr')
   @HttpCode(201)
@@ -124,5 +148,30 @@ export class AuditRecordsController {
   @ApiCreatedResponse({ schema: openApiSchema(RaisedNcr) })
   raiseNcr(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.raiseNcr(ctx, parse(Uuid, id), parse(RaiseNcrBody, body));
+  }
+}
+
+/** Evidence files: take one off an in-progress record with a reason (the stored file is kept), or put it back. */
+@ApiTags('audits')
+@ApiBearerAuth()
+@Controller('audit-attachments')
+export class AuditAttachmentsController {
+  constructor(private readonly service: AuditRecordsService) {}
+
+  @Post(':id/delete')
+  @HttpCode(200)
+  @OrganisationScoped(PERFORM)
+  @ApiBody({ schema: openApiSchema(RemoveAttachmentBody) })
+  @ApiOkResponse({ schema: openApiSchema(AuditAttachment) })
+  remove(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.removeAttachment(ctx, parse(Uuid, id), parse(RemoveAttachmentBody, body).reason);
+  }
+
+  @Post(':id/restore')
+  @HttpCode(200)
+  @OrganisationScoped(PERFORM)
+  @ApiOkResponse({ schema: openApiSchema(AuditAttachment) })
+  restore(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.restoreAttachment(ctx, parse(Uuid, id));
   }
 }

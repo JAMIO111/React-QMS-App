@@ -48,7 +48,7 @@ beforeAll(async () => {
         questions: [
           { question: 'Work instruction at the machine?', answerType: 'yes_no', passAnswer: 'yes', critical: true },
           { question: 'Floor clear?', answerType: 'pass_fail' },
-          { question: 'Coolant concentration', answerType: 'number', unit: '%', lowerLimit: 6, upperLimit: 10 },
+          { question: 'Coolant concentration', answerType: 'numeric', unit: '%', lowerLimit: 6, upperLimit: 10 },
           { question: 'Anything else seen', answerType: 'text' },
         ],
         targets: [{ kind: 'machine', machineId: ctx.machine }, { kind: 'machine', machineId: ctx.machine2 }, { kind: 'operation', operationCode: 'OP-10' }],
@@ -321,5 +321,122 @@ describe('the rates and who did the audit', () => {
     const byOwner = (await api().get(`/api/v1/audit-records?auditId=${rate}&performedBy=${ids.ownerA}`).set(await as(ids.dual)).expect(200)).body;
     expect(byOwner.data.map((r: { id: string }) => r.id)).toEqual([late.id]);
     expect(byOwner.data[0].auditor.name).toBe('Ada Owner');
+  });
+});
+
+describe('carrying out every response type', () => {
+  const QUESTIONS = [
+    { question: 'Procedure followed?', answerType: 'yes_no', passAnswer: 'no', critical: true },
+    { question: 'Process meets requirements?', answerType: 'compliant' },
+    { question: 'Product meets specification?', answerType: 'pass_fail' },
+    { question: 'Requirement applicable?', answerType: 'yes_no_na', passAnswer: 'yes' },
+    { question: 'Measured temperature', answerType: 'numeric', unit: 'C' },
+    { question: 'Describe the observation', answerType: 'text' },
+    { question: 'Select applicable condition', answerType: 'multiple_choice', options: [{ label: 'Clean', passes: true }, { label: 'Oily', passes: false }] },
+    { question: 'Actual diameter', answerType: 'measurement', nominal: 10, lowerLimit: 9.95, upperLimit: 10.05, unit: 'mm', critical: true },
+    { question: 'Upload photograph', answerType: 'evidence' },
+    { question: 'Housekeeping score', answerType: 'rating', passRating: 3 },
+    { question: 'Overall impression', answerType: 'rating', ratingMax: 7 },
+  ];
+  const state: { rec?: string; audit?: string; file?: string } = {};
+  const upload = (path: string) => admin.query(`insert into storage.objects (bucket_id, name) values ('audit-files', $1)`, [path]);
+
+  it('shows each type as the template set it', async () => {
+    state.audit = (await api().post('/api/v1/audits').set(await as(ids.ownerA)).send({ title: 'Every type', auditType: 'process', frequency: { kind: 'on_demand' }, passMark: 50, questions: QUESTIONS }).expect(201)).body.id;
+    const res = await start({ auditId: state.audit });
+    expect(res.status).toBe(201);
+    state.rec = res.body.id;
+    const q = (n: number) => res.body.questions[n - 1];
+    expect(res.body.questions.map((x: { answerType: string }) => x.answerType)).toEqual(QUESTIONS.map((x) => x.answerType));
+    expect(q(7).options).toEqual([{ label: 'Clean', passes: true }, { label: 'Oily', passes: false }]);
+    expect(q(8)).toMatchObject({ nominal: 10, lowerLimit: 9.95, upperLimit: 10.05, unit: 'mm' });
+    expect(q(10)).toMatchObject({ ratingMax: 5, passRating: 3 });
+    expect(q(9)).toMatchObject({ fileCount: 0 });
+    // Evidence is needed; everything else that wants an answer is not answered yet.
+    expect(res.body.problems.join('|')).toContain('add a photograph or document to question 9');
+    expect(res.body.problems.join('|')).toContain('9 questions are not answered');
+  });
+
+  it('works out each answer by its type', async () => {
+    const rec = (await api().get(`/api/v1/audit-records/${state.rec}`).set(await as(ids.inspectorA)).expect(200)).body;
+    const put = async (n: number, body: object) => answer(state.rec!, { questionId: qid(rec, n), ...body });
+    const result = (r: { body: { questions: Q[] } }, n: number) => r.body.questions[n - 1].response?.result ?? null;
+    expect(result(await put(1, { answer: 'yes' }), 1)).toBe('fail');
+    expect((await put(1, { answer: 'na' })).status).toBe(409);
+    expect(result(await put(2, { answer: 'compliant' }), 2)).toBe('pass');
+    expect(result(await put(2, { answer: 'non_compliant' }), 2)).toBe('fail');
+    expect(result(await put(2, { answer: 'compliant' }), 2)).toBe('pass');
+    expect((await put(2, { answer: 'pass' })).status).toBe(409);
+    expect(result(await put(3, { answer: 'pass' }), 3)).toBe('pass');
+    expect((await put(3, { answer: 'na' })).status).toBe(409);
+    expect(result(await put(4, { answer: 'na' }), 4)).toBe('na');
+    const numeric = await put(5, { value: 21 });
+    expect(numeric.body.questions[4].response).toMatchObject({ value: 21, result: null });
+    expect((await put(6, { note: 'Tidy' })).status).toBe(200);
+    const choice = await put(7, { choice: ' oily ' });
+    expect(choice.body.questions[6].response).toMatchObject({ choice: 'Oily', result: 'fail' });
+    expect((await put(7, { choice: 'Wet' })).status).toBe(409);
+    expect(result(await put(7, { choice: 'clean' }), 7)).toBe('pass');
+    expect(result(await put(8, { value: 10.05 }), 8)).toBe('pass');
+    expect(result(await put(8, { value: 10.06 }), 8)).toBe('fail');
+    expect((await put(10, { value: 6 })).status).toBe(409);
+    expect((await put(10, { value: 2.5 })).status).toBe(409);
+    expect((await put(11, { value: 8 })).status).toBe(409);
+    expect(result(await put(10, { value: 2 }), 10)).toBe('fail');
+    expect(result(await put(11, { value: 7 }), 11)).toBeNull();
+    expect((await put(9, { answer: 'pass' })).status).toBe(409);
+  });
+
+  it('takes evidence as files, which can be removed with a reason and put back, and which completing needs', async () => {
+    const rec = (await api().get(`/api/v1/audit-records/${state.rec}`).set(await as(ids.inspectorA)).expect(200)).body;
+    const inspector = await as(ids.inspectorA);
+    const folder = `${ids.orgA}/audit/${state.rec}/`;
+    const path = `${folder}u1-photo.jpg`;
+    const post = async (body: object, h?: Record<string, string>) => api().post(`/api/v1/audit-records/${state.rec}/attachments`).set(h ?? inspector).send(body);
+    const body = { questionId: qid(rec, 9), storagePath: path, fileName: 'photo.jpg', contentType: 'image/jpeg', sizeBytes: 1000 };
+    expect((await post(body)).status).toBe(400); // not uploaded yet
+    await upload(path);
+    expect((await post({ ...body, storagePath: `${ids.orgA}/audit/${ids.orgA}/x.jpg` })).status).toBe(400); // another folder
+    expect((await post({ ...body, questionId: qid(rec, 3) })).status).toBe(409); // not an evidence question
+    expect((await post(body, await as(ids.dual))).status).toBe(403);
+    const added = await post(body);
+    expect(added.status).toBe(201);
+    expect(added.body).toMatchObject({ questionId: qid(rec, 9), fileName: 'photo.jpg', sizeBytes: 1000, storagePath: path, deletedAt: null });
+    state.file = added.body.id;
+    const list = (await api().get(`/api/v1/audit-records/${state.rec}/attachments`).set(await as(ids.dual)).expect(200)).body.data;
+    expect(list.map((f: { id: string }) => f.id)).toEqual([state.file]);
+    expect((await api().get(`/api/v1/audit-records/${state.rec}`).set(inspector).expect(200)).body.questions[8].fileCount).toBe(1);
+    expect((await api().get(`/api/v1/audit-records/${state.rec}?x=1`).set(inspector).expect(200)).body.problems.join('|')).not.toContain('photograph');
+
+    await api().post(`/api/v1/audit-attachments/${state.file}/delete`).set(inspector).send({ reason: 'x' }).expect(400);
+    await api().post(`/api/v1/audit-attachments/${state.file}/delete`).set(await as(ids.dual)).send({ reason: 'Wrong photo' }).expect(403);
+    const removed = (await api().post(`/api/v1/audit-attachments/${state.file}/delete`).set(inspector).send({ reason: 'Wrong photo' }).expect(200)).body;
+    expect(removed).toMatchObject({ deleteReason: 'Wrong photo', deletedAt: expect.any(String) });
+    expect((await api().get(`/api/v1/audit-records/${state.rec}/attachments`).set(inspector).expect(200)).body.data).toHaveLength(0);
+    expect((await api().get(`/api/v1/audit-records/${state.rec}/attachments?deleted=include&questionId=${qid(rec, 9)}`).set(inspector).expect(200)).body.data).toHaveLength(1);
+    expect((await api().get(`/api/v1/audit-records/${state.rec}`).set(inspector).expect(200)).body.problems.join('|')).toContain('add a photograph or document to question 9');
+    await api().post(`/api/v1/audit-attachments/${state.file}/delete`).set(inspector).send({ reason: 'again again' }).expect(409);
+    await api().post(`/api/v1/audit-attachments/${state.file}/restore`).set(await as(ids.ownerB, ids.orgB)).expect(404);
+    await api().post(`/api/v1/audit-attachments/${state.file}/restore`).set(inspector).expect(200);
+    expect((await api().get(`/api/v1/audit-records/${state.rec}`).set(inspector).expect(200)).body.problems.join('|')).not.toContain('photograph');
+  });
+
+  it('scores only what can fail, and completes', async () => {
+    const inspector = await as(ids.inspectorA);
+    const rec = (await api().get(`/api/v1/audit-records/${state.rec}`).set(inspector).expect(200)).body;
+    // Failures need their words: questions 1, 7 (an option answers it, so the choice is sent again), 8 and 10.
+    expect(rec.problems.join('|')).toContain('say what was found for the failed questions: 1, 8, 10');
+    expect((await api().post(`/api/v1/audit-records/${state.rec}/complete`).set(inspector)).status).toBe(409);
+    await answer(state.rec!, { questionId: qid(rec, 1), answer: 'yes', note: 'Followed the wrong one' }, inspector);
+    await answer(state.rec!, { questionId: qid(rec, 8), value: 10.06, note: 'Oversize' }, inspector);
+    await answer(state.rec!, { questionId: qid(rec, 10), value: 2, note: 'Poor' }, inspector);
+    const done = await api().post(`/api/v1/audit-records/${state.rec}/complete`).set(inspector);
+    expect(done.status).toBe(200);
+    // Scored: 1 fail (critical), 2 pass, 3 pass, 7 pass (clean), 8 fail (critical), 10 fail = 3 pass, 3 fail; N/A (4) left out; numeric without a limit, note, evidence and the unscored rating are not scored.
+    expect(done.body).toMatchObject({ status: 'completed', result: 'fail', passedCount: 3, failedCount: 3, naCount: 1, criticalFailedCount: 2, score: 50 });
+    await upload(`${ids.orgA}/audit/${state.rec}/late.jpg`);
+    expect((await api().post(`/api/v1/audit-records/${state.rec}/attachments`).set(inspector).send({ questionId: qid(rec, 9), storagePath: `${ids.orgA}/audit/${state.rec}/late.jpg`, fileName: 'late.jpg', sizeBytes: 1 })).status).toBe(409);
+    await api().post(`/api/v1/audit-attachments/${state.file}/delete`).set(inspector).send({ reason: 'Too late now' }).expect(409);
+    expect((await api().get(`/api/v1/audit-records/${state.rec}/attachments`).set(await as(ids.dual)).expect(200)).body.data).toHaveLength(1);
   });
 });

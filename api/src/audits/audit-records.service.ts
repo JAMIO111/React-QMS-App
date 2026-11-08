@@ -5,8 +5,13 @@ import type { RequestContext } from '../common/request-context';
 import { iso, num, personName, ref, Row } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
 import {
+  ANSWERS,
   AbandonBody,
+  AttachmentListQuery,
+  AUDIT_FILES_BUCKET,
+  AuditAttachment,
   AuditRecord,
+  CreateAuditAttachmentBody,
   RaiseNcrBody,
   RecordListQuery,
   RecordSummary,
@@ -42,6 +47,23 @@ const SORT_SQL: Record<RecordListQuery['sort'], string[]> = {
   status: ['r.status'],
   startedAt: ['r.started_at'],
 };
+
+const ATTACHMENT_SELECT = sql.raw(`
+  select a.*, ${personName('pc')} as created_by_name
+    from public.audit_attachments a left join public.profiles pc on pc.id = a.created_by`);
+
+const toAttachment = (r: Row): AuditAttachment => ({
+  id: r.id as string,
+  questionId: r.record_question_id as string,
+  fileName: r.file_name as string,
+  contentType: (r.content_type as string) ?? null,
+  sizeBytes: Number(r.size_bytes),
+  storagePath: r.storage_path as string,
+  createdAt: iso(r.created_at)!,
+  createdBy: r.created_by ? { id: r.created_by as string, name: (r.created_by_name as string) ?? 'Unknown user' } : null,
+  deletedAt: iso(r.deleted_at),
+  deleteReason: (r.delete_reason as string) ?? null,
+});
 
 const toSummary = (r: Row): RecordSummary => ({
   id: r.id as string,
@@ -118,7 +140,7 @@ export class AuditRecordsService {
   respond(ctx: RequestContext, id: string, body: ResponseBody): Promise<AuditRecord> {
     return this.database.asUser(ctx, async (db) => {
       await db.execute(
-        sql`select app.record_audit_response(${id}::uuid, ${body.questionId}::uuid, ${body.answer ?? null}::text, ${body.value ?? null}::numeric, ${body.note ?? null}::text)`,
+        sql`select app.record_audit_response(${id}::uuid, ${body.questionId}::uuid, ${body.answer ?? null}::text, ${body.value ?? null}::numeric, ${body.note ?? null}::text, ${body.choice ?? null}::text)`,
       );
       return this.load(db, ctx, id);
     });
@@ -157,6 +179,56 @@ export class AuditRecordsService {
     });
   }
 
+  // ---- evidence files ------------------------------------------------------------------------
+  async listAttachments(ctx: RequestContext, id: string, q: AttachmentListQuery): Promise<AuditAttachment[]> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      const filter = q.deleted === 'exclude' ? sql`a.deleted_at is null` : q.deleted === 'only' ? sql`a.deleted_at is not null` : sql`true`;
+      const question = q.questionId ? sql`and a.record_question_id = ${q.questionId}::uuid` : sql``;
+      const rows = await db.execute<Row>(sql`${ATTACHMENT_SELECT} where a.audit_record_id = ${id}::uuid and ${filter} ${question} order by a.created_at desc`);
+      return rows.rows.map(toAttachment);
+    });
+  }
+
+  /** Records a file the client has already uploaded to storage at <org>/audit/<record id>/<name>. */
+  createAttachment(ctx: RequestContext, id: string, body: CreateAuditAttachmentBody): Promise<AuditAttachment> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      const folder = `${orgOf(ctx)}/audit/${id}/`;
+      if (!body.storagePath.startsWith(folder) || body.storagePath.includes('..') || body.storagePath.length === folder.length) {
+        throw ApiError.badRequest('invalid_path', `Files for this record must be uploaded to ${folder}`);
+      }
+      const stored = await db.execute(sql`select 1 from storage.objects where bucket_id = ${AUDIT_FILES_BUCKET} and name = ${body.storagePath}`);
+      if (!stored.rows.length) throw ApiError.badRequest('file_not_uploaded', 'Upload the file before attaching it');
+      const res = await db.execute<{ id: string }>(
+        sql`select app.add_audit_attachment(${id}::uuid, ${body.questionId}::uuid, ${body.storagePath}, ${body.fileName}, ${body.contentType ?? null}, ${body.sizeBytes}::bigint) as id`,
+      );
+      return this.loadAttachment(db, ctx, res.rows[0].id);
+    });
+  }
+
+  removeAttachment(ctx: RequestContext, attachmentId: string, reason: string): Promise<AuditAttachment> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.loadAttachment(db, ctx, attachmentId);
+      await db.execute(sql`select app.remove_audit_attachment(${attachmentId}::uuid, ${reason})`);
+      return this.loadAttachment(db, ctx, attachmentId);
+    });
+  }
+
+  restoreAttachment(ctx: RequestContext, attachmentId: string): Promise<AuditAttachment> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.loadAttachment(db, ctx, attachmentId);
+      await db.execute(sql`select app.restore_audit_attachment(${attachmentId}::uuid)`);
+      return this.loadAttachment(db, ctx, attachmentId);
+    });
+  }
+
+  private async loadAttachment(db: Db, ctx: RequestContext, id: string): Promise<AuditAttachment> {
+    const r = await db.execute<Row>(sql`${ATTACHMENT_SELECT} where a.id = ${id}::uuid and a.organisation_id = ${orgOf(ctx)}::uuid`);
+    if (!r.rows.length) throw ApiError.notFound('audit_file_not_found', 'File not found');
+    return toAttachment(r.rows[0]);
+  }
+
   // ---- internals -----------------------------------------------------------------------------
   private async load(db: Db, ctx: RequestContext, id: string): Promise<AuditRecord> {
     const head = await db.execute<Row>(sql`${sql.raw(SELECT)} where r.id = ${id}::uuid and r.organisation_id = ${orgOf(ctx)}::uuid`);
@@ -165,8 +237,9 @@ export class AuditRecordsService {
     const inProgress = r.status === 'in_progress';
 
     const questions = await db.execute<Row>(sql`
-      select q.id, q.sequence, q.question, q.guidance, q.answer_type, q.pass_answer, q.unit, q.lower_limit, q.upper_limit, q.critical,
-             s.id as response_id, s.answer, s.value_number, s.note, s.result,
+      select q.id, q.sequence, q.question, q.guidance, q.answer_type, q.pass_answer, q.unit, q.lower_limit, q.upper_limit, q.nominal, q.options, q.rating_max, q.pass_rating, q.critical,
+             (select count(*) from public.audit_attachments f where f.record_question_id = q.id and f.deleted_at is null) as file_count,
+             s.id as response_id, s.answer, s.value_number, s.choice, s.note, s.result,
              (select coalesce(json_agg(json_build_object('id', n.id, 'reference', n.reference, 'stage', n.stage) order by n.created_at), '[]'::json)
                 from public.audit_ncr_links l join public.nonconformances n on n.id = l.nonconformance_id
                where l.response_id = s.id and n.deleted_at is null and n.stage <> 'cancelled') as ncrs
@@ -214,12 +287,18 @@ export class AuditRecordsService {
         unit: (q.unit as string) ?? null,
         lowerLimit: num(q.lower_limit),
         upperLimit: num(q.upper_limit),
+        nominal: num(q.nominal),
+        options: (q.options as { label: string; passes: boolean }[] | null) ?? null,
+        ratingMax: num(q.rating_max),
+        passRating: num(q.pass_rating),
         critical: q.critical as boolean,
+        fileCount: Number(q.file_count),
         response: q.response_id
           ? {
               id: q.response_id as string,
-              answer: (q.answer as 'pass' | 'fail' | 'yes' | 'no' | 'na' | null) ?? null,
+              answer: (q.answer as (typeof ANSWERS)[number] | null) ?? null,
               value: num(q.value_number),
+              choice: (q.choice as string) ?? null,
               note: (q.note as string) ?? null,
               result: (q.result as 'pass' | 'fail' | 'na') ?? null,
               ncrs: (q.ncrs as { id: string; reference: string; stage: string }[]) ?? [],

@@ -17,13 +17,18 @@ export type StartAuditBody = z.infer<typeof StartAuditBody>;
 export const SetTargetsBody = z.object({ targets: z.array(TargetInput).max(200) }).strict();
 export type SetTargetsBody = z.infer<typeof SetTargetsBody>;
 
-/** One answer. Leave all three out to clear it. pass/fail: answer pass|fail|na; yes/no: yes|no|na; number: `value` (or answer na); text: `note`. */
+/**
+ * One answer. Leave everything out to clear it. By the question's type: yes_no `yes|no`; yes_no_na `yes|no|na`; compliant `compliant|non_compliant`; pass_fail `pass|fail`; numeric and measurement `value`;
+ * multiple_choice `choice` (one of the listed options); rating `value` (a whole number on the scale); text `note`; evidence takes files (see the attachments) and at most a `note`.
+ */
+export const ANSWERS = ['pass', 'fail', 'yes', 'no', 'na', 'compliant', 'non_compliant'] as const;
 export const ResponseBody = z
   .object({
     questionId: Id,
-    answer: z.enum(['pass', 'fail', 'yes', 'no', 'na']).nullish(),
+    answer: z.enum(ANSWERS).nullish(),
     value: z.number().nullish(),
     note: z.string().trim().max(2000).nullish(),
+    choice: z.string().trim().max(100).nullish(),
   })
   .strict();
 export type ResponseBody = z.infer<typeof ResponseBody>;
@@ -110,12 +115,19 @@ export const RecordQuestion = z.object({
   unit: z.string().nullable(),
   lowerLimit: z.number().nullable(),
   upperLimit: z.number().nullable(),
+  nominal: z.number().nullable(),
+  options: z.array(z.object({ label: z.string(), passes: z.boolean() })).nullable(),
+  ratingMax: z.number().nullable(),
+  passRating: z.number().nullable(),
   critical: z.boolean(),
+  /** Live evidence files on this question. */
+  fileCount: z.number(),
   response: z
     .object({
       id: Id,
-      answer: z.enum(['pass', 'fail', 'yes', 'no', 'na']).nullable(),
+      answer: z.enum(ANSWERS).nullable(),
       value: z.number().nullable(),
+      choice: z.string().nullable(),
       note: z.string().nullable(),
       result: z.enum(['pass', 'fail', 'na']).nullable(),
       /** Non-conformances raised from this answer that are still live. */
@@ -145,3 +157,34 @@ export type AuditRecord = z.infer<typeof AuditRecord>;
 
 export const RaisedNcr = z.object({ nonconformanceId: Id, record: AuditRecord });
 export type AbandonBody = z.infer<typeof AbandonBody>;
+
+export const AUDIT_FILES_BUCKET = 'audit-files';
+export const AuditAttachment = z.object({
+  id: Id,
+  questionId: Id,
+  fileName: z.string(),
+  contentType: z.string().nullable(),
+  sizeBytes: z.number(),
+  storagePath: z.string(),
+  createdAt: dateTime,
+  createdBy: Named.nullable(),
+  deletedAt: dateTime.nullable(),
+  deleteReason: z.string().nullable(),
+});
+export type AuditAttachment = z.infer<typeof AuditAttachment>;
+
+/** Records a file already uploaded to the record's folder (`<org>/audit/<record id>/…` in the audit-files bucket) against an evidence question. */
+export const CreateAuditAttachmentBody = z
+  .object({
+    questionId: Id,
+    storagePath: z.string().trim().min(1).max(500),
+    fileName: z.string().trim().min(1).max(255),
+    contentType: z.string().trim().max(200).nullish(),
+    sizeBytes: z.number().int().min(0).max(26214400),
+  })
+  .strict();
+export type CreateAuditAttachmentBody = z.infer<typeof CreateAuditAttachmentBody>;
+
+export const AttachmentListQuery = z.object({ questionId: Id.optional(), deleted: z.enum(['exclude', 'include', 'only']).default('exclude') });
+export type AttachmentListQuery = z.infer<typeof AttachmentListQuery>;
+export const RemoveAttachmentBody = z.object({ reason: z.string().trim().min(3).max(1000) }).strict();

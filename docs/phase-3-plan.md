@@ -1,6 +1,6 @@
 # Phase 3 — Manufacturing traceability — plan
 
-**Status:** agreed (decisions D1–D6 in §6); **TR1 built** (migration `20251210100000_production_traceability.sql`, applied live); **TR2 built**; **TR3 built** (migration `20251211100000_production_links.sql`, **not applied live yet**); **TR4 built** (migration `20251212100000_ncr_affected_lots.sql`, **not applied live yet**); TR5–TR6 not started · **Brief:** `docs/design-brief.md` §6.1, Phase 3 (line 882) · **Builds on:** master data (parts, revisions, machines, customers, suppliers), inspections and the job hub, NCs with containment and disposition, calibration, CAPA
+**Status:** agreed (decisions D1–D6 in §6); **TR1 built** (migration `20251210100000_production_traceability.sql`, applied live); **TR2 built**; **TR3 built** (migration `20251211100000_production_links.sql`, applied live); **TR4 built** (migration `20251212100000_ncr_affected_lots.sql`, applied live); TR5–TR6 not started · **Brief:** `docs/design-brief.md` §6.1, Phase 3 (line 882) · **Builds on:** master data (parts, revisions, machines, customers, suppliers), inspections and the job hub, NCs with containment and disposition, calibration, CAPA
 
 **Exit criteria (brief):** a quality record can be traced to the relevant manufacturing context without relying on free-text references alone.
 

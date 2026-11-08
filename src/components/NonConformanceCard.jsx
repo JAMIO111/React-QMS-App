@@ -1,27 +1,13 @@
-import { useRef } from "react";
 import CTAButton from "./CTAButton";
+import RowActionsMenu from "./ui/RowActionsMenu";
 import { CalendarIcon, EllipsisVerticalIcon, LayersIcon, QrCodeIcon } from "@/components/icons";
 import { formatDate, sourceLabel } from "../lib/ncr";
 import { SeverityPill, StagePill } from "./ncr/Pills";
 
 /** One NCR as a card (grid view). Click the reference to open it; Actions opens the row menu. */
-const NonConformanceCard = ({ item, selected, setSelectedItem, onOpenModal, handleActiveModalType, onOpen }) => {
-  const actionBtnRef = useRef(null);
+const NonConformanceCard = ({ item, selected, setSelectedItem, rowActions, onOpen }) => {
   const party = item.customer?.name ?? item.supplier?.name;
   const partyRef = item.customerReference ?? item.purchaseOrder;
-
-  const openActions = (e) => {
-    e.stopPropagation();
-    setSelectedItem(item);
-    const rect = actionBtnRef.current.getBoundingClientRect();
-    let top = rect.bottom + window.scrollY - 32;
-    let left = rect.left + window.scrollX - 170;
-    if (left + 176 > window.innerWidth) left = window.innerWidth - 186;
-    if (top + 140 > window.innerHeight + window.scrollY) top = window.innerHeight + window.scrollY - 150;
-    if (left < 0) left = 10;
-    handleActiveModalType("Actions");
-    onOpenModal({ top, left });
-  };
 
   return (
     <article
@@ -75,9 +61,11 @@ const NonConformanceCard = ({ item, selected, setSelectedItem, onOpenModal, hand
           <SeverityPill severity={item.severity} />
           {item.deletedAt && <span className="rounded-full bg-error-color/15 px-2 py-0.5 text-xs text-error-color">Deleted</span>}
         </div>
-        <div ref={actionBtnRef}>
-          <CTAButton text="Actions" type="main" icon={EllipsisVerticalIcon} callbackFn={openActions} />
-        </div>
+        <RowActionsMenu
+          items={rowActions?.(item)}
+          label={`Actions for ${item.reference}`}
+          trigger={(props) => <CTAButton {...props} text="Actions" type="main" icon={EllipsisVerticalIcon} aria-label="Actions" />}
+        />
       </div>
     </article>
   );

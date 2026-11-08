@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { PencilIcon, PlusIcon, PowerIcon, ShareIcon, SlidersHorizontalIcon, XIcon } from "@/components/icons";
 import { useGlobalSearch } from "../../contexts/SearchProvider";
@@ -11,7 +10,6 @@ import { EMPLOYEE_FILTER_KEYS, useEmployeeFilters } from "../../hooks/useUrlFilt
 import { describeApiError } from "../../lib/api-client";
 import { exportCSV } from "../../lib/csvHelper";
 import { formatDate } from "../../lib/ncr";
-import ActionsModalItem from "../ActionsModalItem";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import IconButton from "../IconButton";
@@ -37,49 +35,12 @@ const toCsvRow = (r) => ({
   added: formatDate(r.createdAt),
 });
 
-/** Row actions: edit, deactivate or reactivate. */
-const EmployeeActions = ({ item, position, onClose, onEdit, canManage }) => {
-  const mutation = useMasterDataMutation();
-  const { showToast } = useToast();
-  const toggle = () =>
-    mutation.mutate(
-      { path: `/employees/${item.id}`, method: "PATCH", body: { active: !item.active } },
-      {
-        onSuccess: () => showToast({ type: "success", title: item.active ? "Deactivated" : "Reactivated", message: `${item.name} is now ${item.active ? "inactive" : "active"}.` }),
-        onError: (error) => showToast({ type: "error", title: "Not changed", message: describeApiError(error) }),
-      }
-    );
-  return createPortal(
-    <div
-      role="menu"
-      aria-label={`Actions for ${item.name}`}
-      className="flex h-fit w-52 flex-col gap-1 rounded-xl border border-border-color bg-secondary-bg p-2 shadow-lg"
-      style={{ position: "absolute", top: position.top, left: position.left, zIndex: 1000 }}>
-      {canManage ? (
-        <>
-          <ActionsModalItem label="Edit" icon={PencilIcon} item={item} callback={() => onEdit(item)} />
-          <ActionsModalItem
-            label={item.active ? "Deactivate" : "Reactivate"}
-            icon={PowerIcon}
-            item={item}
-            callback={() => {
-              onClose();
-              toggle();
-            }}
-          />
-        </>
-      ) : (
-        <ActionsModalItem label="View" icon={PencilIcon} item={item} callback={() => onEdit(item)} />
-      )}
-    </div>,
-    document.getElementById("modal-root") ?? document.body
-  );
-};
-
 /** The employees register (/Employees, under Master Data): the same server-side table, column set and filter drawer as the other registers. */
 const EmployeesPage = () => {
   const { can } = usePermissions();
   const canManage = can("master_data.manage");
+  const activeMutation = useMasterDataMutation();
+  const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const page = parseInt(searchParams.get("page") || "1", 10);
   const pageSize = parseInt(searchParams.get("pageSize") || "25", 10);
@@ -91,8 +52,6 @@ const EmployeesPage = () => {
   const [sorting, setSortingState] = useState([{ id: "name", desc: false }]);
   const [rowSelection, setRowSelection] = useState({});
   const [selectedRows, setSelectedRows] = useState([]);
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [modalPos, setModalPos] = useState(null);
   const [activeModalType, setActiveModalType] = useState(null);
   const [editing, setEditing] = useState(undefined); // undefined: closed, null: new, employee: edit
   const headerRef = useRef(null);
@@ -140,24 +99,23 @@ const EmployeesPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearchTerm]);
 
-  const closeModal = () => {
-    setModalPos(null);
-    setActiveModalType(null);
-  };
   const toggleModal = (t) => setActiveModalType((prev) => (prev === t ? null : t));
-  useEffect(() => {
-    if (modalPos === null) return undefined;
-    const onClick = (e) => {
-      if (!headerRef.current?.contains(e.target) && !document.getElementById("modal-root")?.contains(e.target)) closeModal();
-    };
-    const onScroll = () => closeModal();
-    document.addEventListener("click", onClick);
-    window.addEventListener("scroll", onScroll, true);
-    return () => {
-      document.removeEventListener("click", onClick);
-      window.removeEventListener("scroll", onScroll, true);
-    };
-  }, [modalPos]);
+
+  const toggleActive = (item) =>
+    activeMutation.mutate(
+      { path: `/employees/${item.id}`, method: "PATCH", body: { active: !item.active } },
+      {
+        onSuccess: () => showToast({ type: "success", title: item.active ? "Deactivated" : "Reactivated", message: `${item.name} is now ${item.active ? "inactive" : "active"}.` }),
+        onError: (error) => showToast({ type: "error", title: "Not changed", message: describeApiError(error) }),
+      }
+    );
+  const rowActions = (item) =>
+    canManage
+      ? [
+          { label: "Edit", icon: PencilIcon, onSelect: () => open(item) },
+          { label: item.active ? "Deactivate" : "Reactivate", icon: PowerIcon, onSelect: () => toggleActive(item) },
+        ]
+      : [{ label: "View", icon: PencilIcon, onSelect: () => open(item) }];
 
   const list = (v) => (v ? v.split(",") : []);
   const activeFilters = [
@@ -174,7 +132,6 @@ const EmployeesPage = () => {
     if ("search" in values) setSearchTerm?.("");
   };
   const open = (r) => {
-    closeModal();
     setEditing(r);
   };
 
@@ -230,10 +187,7 @@ const EmployeesPage = () => {
           page={page}
           pageSize={pageSize}
           setSelectedRows={setSelectedRows}
-          onOpenModal={setModalPos}
-          selectedItem={selectedItem}
-          setSelectedItem={setSelectedItem}
-          handleActiveModalType={toggleModal}
+          rowActions={rowActions}
           onRefresh={refetch}
           sorting={sorting}
           setSorting={setSorting}
@@ -252,7 +206,6 @@ const EmployeesPage = () => {
         />
       </div>
 
-      {activeModalType === "Actions" && selectedItem && modalPos && <EmployeeActions item={selectedItem} position={modalPos} onClose={closeModal} onEdit={open} canManage={canManage} />}
       {editing !== undefined && <EmployeeDialog employee={editing} readOnly={!canManage} onClose={() => setEditing(undefined)} />}
     </div>
   );

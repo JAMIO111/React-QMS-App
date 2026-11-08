@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Suspense, useMemo, useCallback } from "react";
+import { useState, useEffect, Suspense, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PlusIcon, ShareIcon, SlidersHorizontalIcon } from "@/components/icons";
 import { useNcrs } from "../hooks/useNcr";
@@ -19,7 +19,7 @@ import NewNcDialog from "./ncr/NewNcDialog";
 import TableWrapper from "./TableWrapper";
 import NonConformanceGrid from "./NonConformanceGrid";
 import FilterPane from "./FilterPane";
-import ActionsModal from "./ActionsModal";
+import useNcrRowActions from "./ncr/useNcrRowActions";
 import Breadcrumb from "./Breadcrumb";
 import CTAButton from "./CTAButton";
 import ViewToggle from "./ViewToggle";
@@ -56,14 +56,12 @@ const NonConformance = () => {
   const { can } = usePermissions();
   const [sorting, setSortingState] = useState([{ id: "reference", desc: true }]);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [modalPos, setModalPos] = useState(null);
   const [rowSelection, setRowSelection] = useState({});
   const [activeModalType, setActiveModalType] = useState(null);
   const [viewGrid, setViewGrid] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [deleting, setDeleting] = useState(null);
   const [choosingSource, setChoosingSource] = useState(false);
-  const modalRef = useRef(null);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const page = parseInt(searchParams.get("page") || "1", 10);
@@ -146,31 +144,10 @@ const NonConformance = () => {
   const handleToggleView = () => {
     setViewGrid((prev) => !prev);
     setActiveModalType(null);
-    setModalPos(null);
   };
   const handleActiveModalType = (t) => setActiveModalType((prev) => (prev === t ? null : t));
-  const handleOpenModal = (position) => setModalPos(position);
-  const handleCloseModal = () => {
-    setModalPos(null);
-    setActiveModalType(null);
-  };
+  const rowActions = useNcrRowActions({ onDelete: setDeleting });
   const openRecord = (record) => navigate(ncrPath(record.id));
-
-  useEffect(() => {
-    if (modalPos === null) return undefined;
-    const handleClickOutside = (event) => {
-      if (modalRef.current && !modalRef.current.contains(event.target) && !document.getElementById("modal-root")?.contains(event.target)) {
-        handleCloseModal();
-      }
-    };
-    const handleScroll = () => handleCloseModal();
-    document.addEventListener("click", handleClickOutside);
-    window.addEventListener("scroll", handleScroll, true);
-    return () => {
-      document.removeEventListener("click", handleClickOutside);
-      window.removeEventListener("scroll", handleScroll, true);
-    };
-  }, [modalPos]);
 
   const totalQuantity = selectedRows.reduce((acc, r) => acc + (Number(r.quantityAffected) || 0), 0);
   const filterCount = [
@@ -208,7 +185,7 @@ const NonConformance = () => {
   return (
     <div className="p-4 bg-primary-bg flex flex-col gap-3 w-full min-w-0 flex-1 min-h-0">
       <div className="flex flex-row justify-between items-center">
-        <div ref={modalRef} className="pl-1 flex w-full flex-row flex-wrap gap-3 justify-between items-center">
+        <div className="pl-1 flex w-full flex-row flex-wrap gap-3 justify-between items-center">
           <div className="flex flex-col gap-2">
             <Suspense fallback={null}>
               <Breadcrumb />
@@ -304,13 +281,12 @@ const NonConformance = () => {
           }>
           {viewGrid ? (
             <NonConformanceGrid
-              onOpenModal={handleOpenModal}
               selectedItem={selectedItem}
               setSelectedItem={setSelectedItem}
               items={rows}
               isLoading={isLoading}
               error={error}
-              handleActiveModalType={handleActiveModalType}
+              rowActions={rowActions}
               onOpen={openRecord}
             />
           ) : (
@@ -322,10 +298,7 @@ const NonConformance = () => {
               page={page}
               pageSize={pageSize}
               setSelectedRows={setSelectedRows}
-              onOpenModal={handleOpenModal}
-              selectedItem={selectedItem}
-              setSelectedItem={setSelectedItem}
-              handleActiveModalType={handleActiveModalType}
+              rowActions={rowActions}
               onRefresh={refetch}
               sorting={sorting}
               setSorting={setSorting}
@@ -344,19 +317,6 @@ const NonConformance = () => {
         </Suspense>
       </div>
 
-      {activeModalType === "Actions" && selectedItem && modalPos && (
-        <Suspense fallback={null}>
-          <ActionsModal
-            item={selectedItem}
-            position={modalPos}
-            onClose={handleCloseModal}
-            onDelete={(item) => {
-              handleCloseModal();
-              setDeleting(item);
-            }}
-          />
-        </Suspense>
-      )}
       {choosingSource && (
         <NewNcDialog
           initial={activeTab?.source.split(",")[0] ?? (filters.source && !filters.source.includes(",") ? filters.source : "internal")}

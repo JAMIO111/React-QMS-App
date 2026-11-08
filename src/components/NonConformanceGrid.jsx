@@ -2,7 +2,7 @@ import NonConformanceCard from "./NonConformanceCard";
 import { describeApiError } from "../lib/api-client";
 
 /** Card view of the current register page. */
-const NonConformanceGrid = ({ items, isLoading, error, selectedItem, setSelectedItem, onOpenModal, handleActiveModalType, onOpen }) => {
+const NonConformanceGrid = ({ items, isLoading, error, selectedItem, setSelectedItem, rowActions, onOpen }) => {
   if (error) {
     return (
       <p role="alert" className="text-error-color p-4">
@@ -19,8 +19,7 @@ const NonConformanceGrid = ({ items, isLoading, error, selectedItem, setSelected
           item={item}
           selected={selectedItem?.id === item.id}
           setSelectedItem={setSelectedItem}
-          onOpenModal={onOpenModal}
-          handleActiveModalType={handleActiveModalType}
+          rowActions={rowActions}
           onOpen={onOpen}
         />
       ))}

@@ -3,7 +3,7 @@ import { useReactTable, getCoreRowModel } from "@tanstack/react-table";
 import { useSearchParams } from "react-router-dom";
 import Table from "./Table";
 import DataNavBar2 from "./DataNavBar2";
-import { EllipsisIcon } from "@/components/icons";
+import RowActionsMenu from "./ui/RowActionsMenu";
 import { useColumnSizingInfo } from "../hooks/useColumnSizingInfo";
 
 const defaultRowLabel = (row) => row.reference ?? row.id;
@@ -13,7 +13,7 @@ const utilityColumn = { enableSorting: false, enableResizing: false, enableHidin
 
 /**
  * Register table (non-conformances, gauges): selection, row actions and server-side paging/sorting around the
- * generic <Table>. Column visibility and sizing are owned by the page (see useTablePreferences) so
+ * generic <Table>. `rowActions(item)` returns the DropdownMenu items of a row's "…" menu (nothing → no button). Column visibility and sizing are owned by the page (see useTablePreferences) so
  * the column menu can live in the page header.
  */
 const TableWrapper = ({
@@ -25,10 +25,7 @@ const TableWrapper = ({
   pageSize,
   totalCount,
   setSelectedRows,
-  selectedItem,
-  setSelectedItem,
-  handleActiveModalType,
-  onOpenModal,
+  rowActions,
   sorting,
   setSorting,
   columns = [],
@@ -47,25 +44,9 @@ const TableWrapper = ({
   const [, setSearchParams] = useSearchParams();
   const sizingInfo = useColumnSizingInfo();
 
-  const handleEllipsisClick = (item) => (e) => {
-    e.stopPropagation();
-    if (selectedItem?.id !== item.id) setSelectedItem(item);
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    const modalWidth = 158;
-    const modalHeight = 177;
-    let top = rect.bottom + window.scrollY - 25;
-    let left = rect.left + window.scrollX - 160;
-    if (left + modalWidth > window.innerWidth) left = window.innerWidth - modalWidth - 10;
-    if (top + modalHeight > window.innerHeight + window.scrollY) top = window.innerHeight + window.scrollY - modalHeight - 10;
-    if (left < 0) left = 10;
-
-    handleActiveModalType("Actions");
-    onOpenModal({ top, left });
-  };
-  // The columns are memoised; the actions button calls the latest handler through this ref.
-  const ellipsisClick = useRef(handleEllipsisClick);
-  ellipsisClick.current = handleEllipsisClick;
+  // The columns are memoised; the row menu reads the latest items through this ref.
+  const actionsOf = useRef(rowActions);
+  actionsOf.current = rowActions;
   const labelOf = useRef(rowLabel);
   labelOf.current = rowLabel;
 
@@ -110,13 +91,7 @@ const TableWrapper = ({
         headerString: "Actions",
         header: () => <span className="sr-only">Actions</span>,
         cell: ({ row }) => (
-          <button
-            type="button"
-            aria-label="Actions"
-            onClick={(e) => ellipsisClick.current(row.original)(e)}
-            className="p-1 text-secondary-text hover:text-brand-primary cursor-pointer">
-            <EllipsisIcon size={18} />
-          </button>
+          <RowActionsMenu items={actionsOf.current?.(row.original)} label={`Actions for ${labelOf.current(row.original)}`} />
         ),
         size: 50,
         minSize: 50,

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FolderOpenIcon, PlusIcon, ShareIcon, SlidersHorizontalIcon, XIcon } from "@/components/icons";
 import { useGlobalSearch } from "../../contexts/SearchProvider";
@@ -12,7 +11,6 @@ import { exportCSV } from "../../lib/csvHelper";
 import { STATUS, TRIGGER_LABEL } from "../../lib/inspection";
 import { formatDate } from "../../lib/ncr";
 import { formatDateTime } from "../../lib/processControl";
-import ActionsModalItem from "../ActionsModalItem";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import IconButton from "../IconButton";
@@ -43,29 +41,6 @@ const toCsvRow = (r) => ({
   machine: r.machine ? `${r.machine.code} · ${r.machine.name}` : "",
 });
 
-/** Row actions: open the inspection. */
-const InspectionActions = ({ item, position, onClose }) => {
-  const navigate = useNavigate();
-  return createPortal(
-    <div
-      role="menu"
-      aria-label={`Actions for ${item.reference}`}
-      className="flex h-fit w-52 flex-col gap-1 rounded-xl border border-border-color bg-secondary-bg p-2 shadow-lg"
-      style={{ position: "absolute", top: position.top, left: position.left, zIndex: 1000 }}>
-      <ActionsModalItem
-        label="Open"
-        icon={FolderOpenIcon}
-        item={item}
-        callback={() => {
-          onClose();
-          navigate(`/Inspections/${item.id}`);
-        }}
-      />
-    </div>,
-    document.getElementById("modal-root") ?? document.body
-  );
-};
-
 /** Register of in-process inspections (/Inspections): the same server-side table, column set and filter drawer as the NC and gauge registers. */
 const InspectionsPage = () => {
   const navigate = useNavigate();
@@ -79,8 +54,6 @@ const InspectionsPage = () => {
   const [sorting, setSortingState] = useState([{ id: "startedAt", desc: true }]);
   const [rowSelection, setRowSelection] = useState({});
   const [selectedRows, setSelectedRows] = useState([]);
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [modalPos, setModalPos] = useState(null);
   const [activeModalType, setActiveModalType] = useState(null);
   const headerRef = useRef(null);
   const prefs = useTablePreferences("inspection-register");
@@ -136,24 +109,9 @@ const InspectionsPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearchTerm]);
 
-  const closeModal = () => {
-    setModalPos(null);
-    setActiveModalType(null);
-  };
   const toggleModal = (t) => setActiveModalType((prev) => (prev === t ? null : t));
-  useEffect(() => {
-    if (modalPos === null) return undefined;
-    const onClick = (e) => {
-      if (!headerRef.current?.contains(e.target) && !document.getElementById("modal-root")?.contains(e.target)) closeModal();
-    };
-    const onScroll = () => closeModal();
-    document.addEventListener("click", onClick);
-    window.addEventListener("scroll", onScroll, true);
-    return () => {
-      document.removeEventListener("click", onClick);
-      window.removeEventListener("scroll", onScroll, true);
-    };
-  }, [modalPos]);
+
+  const rowActions = (item) => [{ label: "Open", icon: FolderOpenIcon, onSelect: () => navigate(`/Inspections/${item.id}`) }];
 
   const list = (v) => (v ? v.split(",") : []);
   const between = (lo, hi) => (lo && hi ? `${formatDate(lo)} – ${formatDate(hi)}` : lo ? `from ${formatDate(lo)}` : `up to ${formatDate(hi)}`);
@@ -229,10 +187,7 @@ const InspectionsPage = () => {
           page={page}
           pageSize={pageSize}
           setSelectedRows={setSelectedRows}
-          onOpenModal={setModalPos}
-          selectedItem={selectedItem}
-          setSelectedItem={setSelectedItem}
-          handleActiveModalType={toggleModal}
+          rowActions={rowActions}
           onRefresh={refetch}
           sorting={sorting}
           setSorting={setSorting}
@@ -251,7 +206,6 @@ const InspectionsPage = () => {
         />
       </div>
 
-      {activeModalType === "Actions" && selectedItem && modalPos && <InspectionActions item={selectedItem} position={modalPos} onClose={closeModal} />}
     </div>
   );
 };

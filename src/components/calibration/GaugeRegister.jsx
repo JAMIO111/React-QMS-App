@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ClipboardCheckIcon, FolderOpenIcon, PlusIcon, RotateCcwIcon, ShareIcon, SlidersHorizontalIcon, Trash2Icon, XIcon } from "@/components/icons";
 import { useGlobalSearch } from "../../contexts/SearchProvider";
@@ -12,7 +11,6 @@ import { describeApiError } from "../../lib/api-client";
 import { DUE_FILTERS, OUTCOMES, describeDue, formatInterval, outcomeOf, statusOf } from "../../lib/calibration";
 import { exportCSV } from "../../lib/csvHelper";
 import { formatDate } from "../../lib/ncr";
-import ActionsModalItem from "../ActionsModalItem";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import IconButton from "../IconButton";
@@ -49,45 +47,12 @@ const toCsvRow = (g) => ({
   deleted: g.deletedAt ? "yes" : "",
 });
 
-/** Row actions: open, record a calibration, delete (with a reason) or restore. */
-const GaugeActions = ({ item, position, onClose, onDelete }) => {
-  const navigate = useNavigate();
-  const { can } = usePermissions();
-  const mutation = useCalibrationMutation();
-  const { showToast } = useToast();
-  const restore = () =>
-    mutation.mutate(
-      { path: `/gauges/${item.id}/restore` },
-      {
-        onSuccess: () => {
-          showToast({ type: "success", title: "Restored", message: `${item.assetNumber} is back in the register.` });
-          onClose();
-        },
-        onError: (error) => showToast({ type: "error", title: "Not restored", message: describeApiError(error) }),
-      }
-    );
-  return createPortal(
-    <div
-      role="menu"
-      aria-label={`Actions for ${item.assetNumber}`}
-      className="flex h-fit w-52 flex-col gap-1 rounded-xl border border-border-color bg-secondary-bg p-2 shadow-lg"
-      style={{ position: "absolute", top: position.top, left: position.left, zIndex: 1000 }}>
-      <ActionsModalItem label="Open" icon={FolderOpenIcon} item={item} callback={() => navigate(`/Calibration/Gauges/${item.id}`)} />
-      {can("calibration.record") && !item.deletedAt && (
-        <ActionsModalItem label="Record calibration" icon={ClipboardCheckIcon} item={item} callback={() => navigate(`/Calibration/Gauges/${item.id}/calibrations/new`)} />
-      )}
-      {can("calibration.manage") && !item.deletedAt && <ActionsModalItem label="Delete" icon={Trash2Icon} color="red" item={item} callback={() => onDelete(item)} />}
-      {can("calibration.manage") && item.deletedAt && <ActionsModalItem label="Restore" icon={RotateCcwIcon} item={item} callback={restore} />}
-    </div>,
-    document.getElementById("modal-root") ?? document.body
-  );
-};
-
 /** Register of gauges and measuring equipment (/Calibration/Gauges). */
 const GaugeRegister = () => {
   const navigate = useNavigate();
   const { can } = usePermissions();
   const { showToast } = useToast();
+  const restoreMutation = useCalibrationMutation();
   const [searchParams, setSearchParams] = useSearchParams();
   const page = parseInt(searchParams.get("page") || "1", 10);
   const pageSize = parseInt(searchParams.get("pageSize") || "25", 10);
@@ -99,8 +64,6 @@ const GaugeRegister = () => {
   const [sorting, setSortingState] = useState([{ id: "nextDueOn", desc: false }]);
   const [rowSelection, setRowSelection] = useState({});
   const [selectedRows, setSelectedRows] = useState([]);
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [modalPos, setModalPos] = useState(null);
   const [activeModalType, setActiveModalType] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const deleteMutation = useCalibrationMutation();
@@ -155,24 +118,22 @@ const GaugeRegister = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearchTerm]);
 
-  const closeModal = () => {
-    setModalPos(null);
-    setActiveModalType(null);
-  };
   const toggleModal = (t) => setActiveModalType((prev) => (prev === t ? null : t));
-  useEffect(() => {
-    if (modalPos === null) return undefined;
-    const onClick = (e) => {
-      if (!headerRef.current?.contains(e.target) && !document.getElementById("modal-root")?.contains(e.target)) closeModal();
-    };
-    const onScroll = () => closeModal();
-    document.addEventListener("click", onClick);
-    window.addEventListener("scroll", onScroll, true);
-    return () => {
-      document.removeEventListener("click", onClick);
-      window.removeEventListener("scroll", onScroll, true);
-    };
-  }, [modalPos]);
+
+  const restore = (item) =>
+    restoreMutation.mutate(
+      { path: `/gauges/${item.id}/restore` },
+      {
+        onSuccess: () => showToast({ type: "success", title: "Restored", message: `${item.assetNumber} is back in the register.` }),
+        onError: (error) => showToast({ type: "error", title: "Not restored", message: describeApiError(error) }),
+      }
+    );
+  const rowActions = (item) => [
+    { label: "Open", icon: FolderOpenIcon, onSelect: () => navigate(`/Calibration/Gauges/${item.id}`) },
+    can("calibration.record") && !item.deletedAt && { label: "Record calibration", icon: ClipboardCheckIcon, onSelect: () => navigate(`/Calibration/Gauges/${item.id}/calibrations/new`) },
+    can("calibration.manage") && !item.deletedAt && { label: "Delete", icon: Trash2Icon, tone: "danger", onSelect: () => { deleteMutation.reset(); setDeleting(item); } },
+    can("calibration.manage") && item.deletedAt && { label: "Restore", icon: RotateCcwIcon, onSelect: () => restore(item) },
+  ];
 
   const list = (v) => (v ? v.split(",") : []);
   const labelOf = (options, keys) => list(keys).map((k) => options.find((o) => o.key === k)?.label ?? k).join(", ");
@@ -250,10 +211,7 @@ const GaugeRegister = () => {
           page={page}
           pageSize={pageSize}
           setSelectedRows={setSelectedRows}
-          onOpenModal={setModalPos}
-          selectedItem={selectedItem}
-          setSelectedItem={setSelectedItem}
-          handleActiveModalType={toggleModal}
+          rowActions={rowActions}
           onRefresh={refetch}
           sorting={sorting}
           setSorting={setSorting}
@@ -272,18 +230,6 @@ const GaugeRegister = () => {
         />
       </div>
 
-      {activeModalType === "Actions" && selectedItem && modalPos && (
-        <GaugeActions
-          item={selectedItem}
-          position={modalPos}
-          onClose={closeModal}
-          onDelete={(item) => {
-            closeModal();
-            deleteMutation.reset();
-            setDeleting(item);
-          }}
-        />
-      )}
       {deleting && (
         <ReasonDialog
           title={`Delete ${deleting.assetNumber}?`}

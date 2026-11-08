@@ -890,4 +890,18 @@ async function workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, l
   await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('menu', { name: 'Account menu' }).getByRole('menuitem', { name: 'Settings' }).click();
   await page.waitForURL(/\/Settings/);
+
+  step('the "…" at the end of a register row opens the shared dropdown menu');
+  await page.goto(`${APP}/Non-Conformance/Register`);
+  const ncRow = page.getByRole('row', { name: /Rod bore burr/ });
+  await ncRow.getByRole('button', { name: 'Actions' }).click();
+  const rowMenu = page.getByRole('menu', { name: /Actions for NCM-/ });
+  await see(rowMenu.getByRole('menuitem', { name: 'Open' }));
+  await see(rowMenu.getByRole('menuitem', { name: 'Delete' }));
+  await shot(page, '69-row-actions-menu');
+  await page.keyboard.press('Escape');
+  if (await page.getByRole('menu').count()) throw new Error('Escape did not close the row menu');
+  await ncRow.getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menu').getByRole('menuitem', { name: 'Open' }).click();
+  await page.waitForURL(/\/Non-Conformance\/Register\/[0-9a-f-]{36}/);
 }

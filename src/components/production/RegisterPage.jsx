@@ -1,25 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { PencilIcon, PlusIcon, ShareIcon, XIcon } from "@/components/icons";
 import { useGlobalSearch } from "../../contexts/SearchProvider";
 import { useTablePreferences } from "../../hooks/useTablePreferences";
 import { useUrlFilters } from "../../hooks/useUrlFilters";
 import { exportCSV } from "../../lib/csvHelper";
-import ActionsModalItem from "../ActionsModalItem";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import TableWrapper from "../TableWrapper";
 import ColumnVisibilityMenu from "../ui/ColumnVisibilityMenu";
-
-/** Row actions: open (or edit), the same menu on every production register. */
-const RowActions = ({ item, position, label, onOpen, canManage }) =>
-  createPortal(
-    <div role="menu" aria-label={`Actions for ${label(item)}`} className="flex h-fit w-52 flex-col gap-1 rounded-xl border border-border-color bg-secondary-bg p-2 shadow-lg" style={{ position: "absolute", top: position.top, left: position.left, zIndex: 1000 }}>
-      <ActionsModalItem label={canManage ? "Open" : "View"} icon={PencilIcon} item={item} callback={() => onOpen(item)} />
-    </div>,
-    document.getElementById("modal-root") ?? document.body
-  );
 
 /**
  * A server-side register (search, status chips, optional selects, sort, pages) shared by production orders, lots and serial numbers. Filters live in the URL.
@@ -55,11 +44,7 @@ const RegisterPage = ({
   const [sorting, setSortingState] = useState([defaultSort]);
   const [rowSelection, setRowSelection] = useState({});
   const [selectedRows, setSelectedRows] = useState([]);
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [modalPos, setModalPos] = useState(null);
-  const [activeModalType, setActiveModalType] = useState(null);
   const [editing, setEditing] = useState(undefined); // undefined: closed, null: new, record: edit
-  const headerRef = useRef(null);
   const prefs = useTablePreferences(prefsKey);
   const columnVisibility = { ...defaultHidden, ...prefs.columnVisibility };
 
@@ -100,24 +85,7 @@ const RegisterPage = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearchTerm]);
 
-  const closeModal = () => {
-    setModalPos(null);
-    setActiveModalType(null);
-  };
-  const toggleModal = (t) => setActiveModalType((prev) => (prev === t ? null : t));
-  useEffect(() => {
-    if (modalPos === null) return undefined;
-    const onClick = (e) => {
-      if (!headerRef.current?.contains(e.target) && !document.getElementById("modal-root")?.contains(e.target)) closeModal();
-    };
-    const onScroll = () => closeModal();
-    document.addEventListener("click", onClick);
-    window.addEventListener("scroll", onScroll, true);
-    return () => {
-      document.removeEventListener("click", onClick);
-      window.removeEventListener("scroll", onScroll, true);
-    };
-  }, [modalPos]);
+  const rowActions = (item) => [{ label: canManage ? "Open" : "View", icon: PencilIcon, onSelect: () => open(item) }];
 
   const chosen = filters.status ? filters.status.split(",") : [];
   const toggleStatus = (value) => updateFilters({ status: (chosen.includes(value) ? chosen.filter((v) => v !== value) : [...chosen, value]).join(",") });
@@ -130,13 +98,12 @@ const RegisterPage = ({
     setSearchTerm?.("");
   };
   const open = (r) => {
-    closeModal();
     onOpen(r, setEditing);
   };
 
   return (
     <div className="flex w-full min-w-0 flex-1 min-h-0 flex-col gap-3 bg-primary-bg p-4">
-      <div ref={headerRef} className="flex flex-row flex-wrap items-center justify-between gap-3 pl-1">
+      <div className="flex flex-row flex-wrap items-center justify-between gap-3 pl-1">
         <div className="flex flex-col gap-2">
           <Breadcrumb />
           <p className="h-4 text-sm text-primary-text" aria-live="polite">
@@ -205,10 +172,7 @@ const RegisterPage = ({
           page={page}
           pageSize={pageSize}
           setSelectedRows={setSelectedRows}
-          onOpenModal={setModalPos}
-          selectedItem={selectedItem}
-          setSelectedItem={setSelectedItem}
-          handleActiveModalType={toggleModal}
+          rowActions={rowActions}
           onRefresh={refetch}
           sorting={sorting}
           setSorting={setSorting}
@@ -226,7 +190,6 @@ const RegisterPage = ({
           rowLabel={rowLabel}
         />
       </div>
-      {activeModalType === "Actions" && selectedItem && modalPos && <RowActions item={selectedItem} position={modalPos} label={rowLabel} onOpen={open} canManage={canManage} />}
       {editing !== undefined && dialog(editing, () => setEditing(undefined))}
     </div>
   );

@@ -77,18 +77,18 @@ BEGIN
   -- ---- the checklist ----
   PERFORM app.set_audit_checklist(a1, '[
     {"question":"Is the cell clean and free of oil?","answerType":"pass_fail","critical":true,"guidance":"Floor, bench, machine"},
-    {"question":"Is the first-off sheet signed?","answerType":"yes_no","passAnswer":"yes"},
-    {"question":"Coolant concentration","answerType":"number","unit":"%","lowerLimit":6,"upperLimit":9,"critical":false},
+    {"question":"Is the first-off sheet signed?","answerType":"yes_no_na","passAnswer":"yes"},
+    {"question":"Coolant concentration","answerType":"numeric","unit":"%","lowerLimit":6,"upperLimit":9,"critical":false},
     {"question":"Anything else seen?","answerType":"text"}]'::jsonb);
   PERFORM pg_temp.assert_eq((SELECT string_agg(sequence || answer_type || critical::text, ',' ORDER BY sequence) FROM public.audit_questions WHERE audit_definition_id = a1),
-    '1pass_failtrue,2yes_nofalse,3numberfalse,4textfalse', 'the checklist is stored in order');
+    '1pass_failtrue,2yes_no_nafalse,3numericfalse,4textfalse', 'the checklist is stored in order');
   PERFORM pg_temp.assert_eq((SELECT pass_answer FROM public.audit_questions WHERE audit_definition_id = a1 AND sequence = 2), 'yes', 'a yes/no question knows which answer passes');
   PERFORM app.set_audit_checklist(a1, '[{"question":"Only one now","answerType":"pass_fail"}]'::jsonb);
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.audit_questions WHERE audit_definition_id = a1), 1::bigint, 'saving replaces the whole checklist');
-  r := pg_temp.fails(format($q$SELECT app.set_audit_checklist(%L, '[{"question":"x","answerType":"number"}]'::jsonb)$q$, a1));
-  PERFORM pg_temp.assert_eq(r LIKE 'QM018: Question 1: give a lower or an upper limit%', true, 'a number needs a limit: ' || r);
+  r := pg_temp.fails(format($q$SELECT app.set_audit_checklist(%L, '[{"question":"x","answerType":"numeric","critical":true}]'::jsonb)$q$, a1));
+  PERFORM pg_temp.assert_eq(r LIKE 'QM018: Question 1: it cannot be critical unless it can fail%', true, 'a numeric question with no limit cannot be critical: ' || r);
   r := pg_temp.fails(format($q$SELECT app.set_audit_checklist(%L, '[{"question":"x","answerType":"text","critical":true}]'::jsonb)$q$, a1));
-  PERFORM pg_temp.assert_eq(r LIKE 'QM018: Question 1: a note cannot be critical%', true, 'a note is never critical: ' || r);
+  PERFORM pg_temp.assert_eq(r LIKE 'QM018: Question 1: it cannot be critical unless it can fail%', true, 'a note is never critical: ' || r);
   r := pg_temp.fails(format($q$SELECT app.set_audit_checklist(%L, '[{"question":"  ","answerType":"pass_fail"}]'::jsonb)$q$, a1));
   PERFORM pg_temp.assert_eq(r LIKE 'QM018: Question 1: write the question%', true, 'a question needs words: ' || r);
   r := pg_temp.fails(format($q$SELECT app.set_audit_checklist(%L, '[{"question":"x","answerType":"nonsense"}]'::jsonb)$q$, a1));

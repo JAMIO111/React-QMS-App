@@ -127,3 +127,25 @@ UI: **Audit records register** (`/Documentation/Audit-Records`, `AuditRecordsPag
 what it was carried out on; what is still needed; Complete; Abandon; the result banner; Raise non-conformance), **Last done / Next due** columns on the Audits register and facts plus a **Start audit** button on the audit page.
 
 **Not built (agreed to leave out of this slice):** evidence files on a record and files on the procedure (`audit_attachments`, an `audit-files` bucket), email or push reminders, a menu count of overdue audits (A7 named it; the schedule shows overdue and missed instead), corrections to a completed record (a new record is the correction), per-question weighting.
+
+## 10. AU5 — response types set in the template (agreed in chat, 2026-11-08; built after AU3)
+
+The quality team chooses, per checklist question, how it is answered; **the audit record form shows exactly that control**. Ten response types (`answer_type`):
+
+| Type | Template (what is set) | The auditor sees | Scored? |
+|---|---|---|---|
+| `yes_no` Yes / No | which answer passes | Yes, No | yes |
+| `compliant` Compliant / Non-compliant | — (compliant passes) | Compliant, Non-compliant | yes |
+| `pass_fail` Pass / Fail | — | Pass, Fail | yes |
+| `yes_no_na` Yes / No / N/A | which answer passes | Yes, No, N/A | yes (N/A left out) |
+| `numeric` Numeric | optional unit, optional lower / upper limit | a number | only when a limit is set |
+| `text` Text | — | a note | no |
+| `multiple_choice` Multiple choice | 2–20 options, each marked acceptable or not | a drop-down of the options | yes |
+| `measurement` Measurement | **nominal, tolerance − / +, unit (all required)** → limits worked out | a number with the nominal and limits shown | yes |
+| `evidence` Evidence required | — | a file drop; **at least one photograph or document is needed to complete** | no |
+| `rating` Rating | scale 1–N (3 to 10, default 5), optional lowest acceptable rating | the scale as buttons | only when a lowest acceptable rating is set |
+
+Decisions: **N/A exists only as its own type** (`yes_no_na`); `pass_fail` no longer offers it (it did in AU1–AU3: no live audits existed, so the migration only renames `yes_no` → `yes_no_na` and `number` → `numeric`). **Critical** can be set only on a scored question. A failed answer of any type still needs a note and can be raised as an NC. Multiple choice is a single choice
+(multi-select is not built). Evidence files are stored per question (`audit_attachments`, private `audit-files` bucket at `<org>/audit/<record id>/…`, removed with a reason and never deleted, only while the record is in progress). Migration `20251216100000_audit_question_types.sql`.
+
+The **Define an audit form** uses the custom combo box for every drop-down, and **Relevant to** is three combo boxes (machines, operations, departments) that add to a list of chips; the operation list is the operation codes of the control plans plus any already on the audit (`GET /audits/operation-codes`).

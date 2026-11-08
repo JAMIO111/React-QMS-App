@@ -150,6 +150,8 @@ BEGIN
     SELECT a, audit_record_id, id, 'fail', 'fail' FROM public.audit_record_questions WHERE organisation_id = a;
   INSERT INTO public.audit_ncr_links (organisation_id, audit_record_id, response_id, nonconformance_id)
     SELECT a, s.audit_record_id, s.id, n.id FROM public.audit_responses s JOIN public.nonconformances n ON n.organisation_id = a AND n.reference = 'SW-NCR-LOT' WHERE s.organisation_id = a;
+  INSERT INTO public.audit_attachments (organisation_id, audit_record_id, record_question_id, storage_path, file_name, size_bytes)
+    SELECT a, q.audit_record_id, q.id, a::text || '/audit/' || q.audit_record_id::text || '/sweep.jpg', 'sweep.jpg', 1 FROM public.audit_record_questions q WHERE q.organisation_id = a;
 
   -- In-process inspection (PC4): make the sweep plan effective with one check, then inspect SW-P1.
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');

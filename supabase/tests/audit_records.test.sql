@@ -15,7 +15,7 @@ CREATE FUNCTION pg_temp.qid(p_record uuid, p_seq int) RETURNS uuid LANGUAGE sql 
 DO $$
 DECLARE
   u_owner uuid := '38000000-0000-0000-0000-000000000801'; u_insp uuid := '38000000-0000-0000-0000-000000000802'; u_view uuid := '38000000-0000-0000-0000-000000000803'; u_other uuid := '38000000-0000-0000-0000-000000000804';
-  org uuid; org2 uuid; m uuid; site uuid; mach uuid; mach_b uuid; mach_other uuid; dept uuid; def uuid; def2 uuid; def3 uuid; r5 uuid; occ uuid; occ_skipped uuid; r1 uuid; r2 uuid; r3 uuid; r4 uuid; ncr uuid; ncr2 uuid;
+  org uuid; org2 uuid; m uuid; site uuid; mach uuid; mach_b uuid; mach_other uuid; dept uuid; def uuid; def2 uuid; def3 uuid; def4 uuid; r5 uuid; occ uuid; occ_skipped uuid; r1 uuid; r2 uuid; r3 uuid; r4 uuid; ncr uuid; ncr2 uuid;
   resp uuid; resp2 uuid; txt text; n int;
 BEGIN
   PERFORM pg_temp.login(u_owner);
@@ -41,8 +41,8 @@ BEGIN
   PERFORM app.set_audit_checklist(def, '[
     {"question":"Is the work instruction at the machine?","answerType":"yes_no","passAnswer":"yes","critical":true},
     {"question":"Is the floor clear?","answerType":"pass_fail"},
-    {"question":"Coolant concentration","answerType":"number","unit":"%","lowerLimit":6,"upperLimit":10},
-    {"question":"Any damaged guards?","answerType":"yes_no","passAnswer":"no"},
+    {"question":"Coolant concentration","answerType":"numeric","unit":"%","lowerLimit":6,"upperLimit":10},
+    {"question":"Any damaged guards?","answerType":"yes_no_na","passAnswer":"no"},
     {"question":"Anything else seen","answerType":"text"}]'::jsonb);
   PERFORM app.set_audit_targets(def, format('[{"kind":"machine","machineId":"%s"},{"kind":"machine","machineId":"%s"},{"kind":"operation","operationCode":"op10"},{"kind":"department","departmentId":"%s"}]', mach, mach_b, dept)::jsonb);
   PERFORM pg_temp.logout();
@@ -94,9 +94,9 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.audit_record_targets WHERE audit_record_id = r1), 2::bigint, 'the list is replaced as a whole');
 
   -- ---- answers ----
-  PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.record_audit_response(%L, %L, 'maybe')$q$, r1, pg_temp.qid(r1, 1))) LIKE 'QM018: Answer yes, no%', true, 'a yes/no question takes yes, no or not applicable');
-  PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.record_audit_response(%L, %L, 'yes')$q$, r1, pg_temp.qid(r1, 2))) LIKE 'QM018: Answer pass, fail%', true, 'a pass/fail question takes pass, fail or not applicable');
-  PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.record_audit_response(%L, %L, NULL, NULL, 'x')$q$, r1, pg_temp.qid(r1, 3))) LIKE 'QM018: Enter a number%', true, 'a number question needs a number');
+  PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.record_audit_response(%L, %L, 'maybe')$q$, r1, pg_temp.qid(r1, 1))) LIKE 'QM018: Answer yes or no%', true, 'a yes/no question takes yes or no');
+  PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.record_audit_response(%L, %L, 'yes')$q$, r1, pg_temp.qid(r1, 2))) LIKE 'QM018: Answer pass or fail%', true, 'a pass/fail question takes pass or fail');
+  PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.record_audit_response(%L, %L, NULL, NULL, 'x')$q$, r1, pg_temp.qid(r1, 3))) LIKE 'QM018: Enter a number%', true, 'a numeric question needs a number');
   PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.record_audit_response(%L, %L, NULL, NULL, NULL)$q$, r1, pg_temp.qid(r1, 5))) = 'ok', true, 'nothing to say clears an answer');
   PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.record_audit_response(%L, %L, NULL, NULL, '  ')$q$, r1, pg_temp.qid(r1, 5))) = 'ok', true, 'blank is nothing');
 
@@ -112,9 +112,11 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT result FROM public.audit_responses WHERE record_question_id = pg_temp.qid(r1, 3)), 'fail', 'just over it fails');
   PERFORM app.record_audit_response(r1, pg_temp.qid(r1, 3), NULL, 5.99);
   PERFORM pg_temp.assert_eq((SELECT result FROM public.audit_responses WHERE record_question_id = pg_temp.qid(r1, 3)), 'fail', 'and so does under the lower limit');
-  PERFORM app.record_audit_response(r1, pg_temp.qid(r1, 3), 'na');
-  PERFORM pg_temp.assert_eq((SELECT result || '/' || (value_number IS NULL)::text FROM public.audit_responses WHERE record_question_id = pg_temp.qid(r1, 3)), 'na/true', 'not applicable is not scored and keeps no number');
+  PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.record_audit_response(%L, %L, 'na')$q$, r1, pg_temp.qid(r1, 3))) LIKE 'QM018: Enter a number%', true, 'only a yes / no / N/A question can be not applicable');
+  PERFORM app.record_audit_response(r1, pg_temp.qid(r1, 3), NULL, 8);
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.audit_responses WHERE record_question_id = pg_temp.qid(r1, 3)), 1::bigint, 'answering again replaces the answer');
+  PERFORM app.record_audit_response(r1, pg_temp.qid(r1, 4), 'na');
+  PERFORM pg_temp.assert_eq((SELECT result || '/' || (value_number IS NULL)::text FROM public.audit_responses WHERE record_question_id = pg_temp.qid(r1, 4)), 'na/true', 'not applicable is not scored and keeps no number');
 
   -- ---- what is still needed ----
   txt := array_to_string(app.audit_record_problems(r1), ' | ');
@@ -175,7 +177,9 @@ BEGIN
   PERFORM app.record_audit_response(r5, pg_temp.qid(r5, 3), 'pass');
   PERFORM app.complete_audit(r5);
   PERFORM pg_temp.assert_eq((SELECT result || '/' || score || '/' || critical_failed_count FROM public.audit_records WHERE id = r5), 'fail/66.67/1', 'a failed critical question fails the audit even when the score is above the pass mark');
-  r4 := app.start_audit(def2);
+  INSERT INTO public.audit_definitions (organisation_id, title, audit_type, frequency_kind, pass_mark) VALUES (org, 'All not applicable', 'process', 'on_demand', 50) RETURNING id INTO def4;
+  PERFORM app.set_audit_checklist(def4, '[{"question":"a","answerType":"yes_no_na"},{"question":"b","answerType":"yes_no_na"},{"question":"c","answerType":"yes_no_na"},{"question":"d","answerType":"yes_no_na"}]'::jsonb);
+  r4 := app.start_audit(def4);
   FOR n IN 1..4 LOOP PERFORM app.record_audit_response(r4, pg_temp.qid(r4, n), 'na'); END LOOP;
   PERFORM app.complete_audit(r4);
   PERFORM pg_temp.assert_eq((SELECT result || '/' || coalesce(score::text, 'none') FROM public.audit_records WHERE id = r4), 'pass/none', 'when everything is not applicable there is nothing to fail: no score, and a pass');

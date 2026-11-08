@@ -6,7 +6,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { makeIds, requireDb, seed, settleNcr, startApp, token } from './helpers';
+import { categoryId, makeIds, requireDb, seed, settleNcr, startApp, token } from './helpers';
 
 const ids = makeIds('b2');
 let app: INestApplication;
@@ -180,7 +180,7 @@ describe('non-conformance links', () => {
   it('an NC cannot be closed while a linked 8D is running; the message names the 8D', async () => {
     const h = await owner();
     // nc2 is in CAPA-000002 only now. Take it to open, then try to close it.
-    await api().patch(`/api/v1/ncrs/${ctx.nc2}`).set(h).send({ severity: 'minor', quantityAffected: 1, description: 'Second problem' }).expect(200);
+    await api().patch(`/api/v1/ncrs/${ctx.nc2}`).set(h).send({ severity: 'minor', quantityAffected: 1, description: 'Second problem', categoryId: await categoryId(admin, ids.orgA) }).expect(200);
     await api().post(`/api/v1/ncrs/${ctx.nc2}/transitions`).set(h).send({ to: 'open' }).expect(200);
     await settleNcr(app.getHttpServer(), h, ctx.nc2);
     const refused = await api().post(`/api/v1/ncrs/${ctx.nc2}/transitions`).set(h).send({ to: 'closed' });

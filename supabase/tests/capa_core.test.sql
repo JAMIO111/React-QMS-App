@@ -139,8 +139,8 @@ BEGIN
 
   -- Closing an NC is refused while a linked 8D is running, allowed once the 8D is cancelled or the link ends.
   PERFORM pg_temp.login('3f000000-0000-0000-0000-000000000301');
-  UPDATE public.nonconformances SET stage = 'open' WHERE id = nc;
-  UPDATE public.nonconformances SET stage = 'open' WHERE id = nc2;
+  UPDATE public.nonconformances SET stage = 'open', category_id = pg_temp.cat(org) WHERE id = nc;
+  UPDATE public.nonconformances SET stage = 'open', category_id = pg_temp.cat(org) WHERE id = nc2;
   PERFORM pg_temp.settle_ncr(nc);
   PERFORM pg_temp.settle_ncr(nc2);
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET stage = 'closed' WHERE id = %L$q$, nc), 'a running 8D blocks closing the NC');

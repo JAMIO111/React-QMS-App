@@ -145,3 +145,15 @@ export async function settleNcr(server: unknown, h: Record<string, string>, id: 
   const all = (await api().get(`/api/v1/ncrs/${id}/dispositions`).set(h).expect(200)).body.data as { id: string; status: string }[];
   for (const x of all.filter((y) => y.status === 'proposed')) await api().post(`/api/v1/ncr-dispositions/${x.id}/approve`).set(h).send({}).expect(200);
 }
+
+const categories = new Map<string, string>();
+/** The id of one of an organisation's seeded categories (default "Product"): a category is needed to open a non-conformance. */
+export async function categoryId(admin: Pool, organisationId: string, code = 'PRODUCT'): Promise<string> {
+  const key = `${organisationId}/${code}`;
+  if (!categories.has(key)) {
+    const r = await admin.query(`select id from public.ncr_classifications where organisation_id = $1 and kind = 'category' and code = $2`, [organisationId, code]);
+    if (!r.rows[0]) throw new Error(`No ${code} category for ${organisationId}`);
+    categories.set(key, r.rows[0].id);
+  }
+  return categories.get(key)!;
+}

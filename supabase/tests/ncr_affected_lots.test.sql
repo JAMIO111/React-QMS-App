@@ -14,7 +14,7 @@ DECLARE
   u_owner uuid := '38000000-0000-0000-0000-000000000501'; u_eng uuid := '38000000-0000-0000-0000-000000000502'; u_view uuid := '38000000-0000-0000-0000-000000000503';
   org uuid; m uuid; p1 uuid; p2 uuid; lot1 uuid; lot2 uuid; lot_other uuid; s1 uuid; s2 uuid; s_other uuid;
   nc uuid; nc_plain uuid; a1 uuid; a2 uuid; d1 uuid; d2 uuid; d3 uuid; c1 uuid; r text;
-  mk text := $f$INSERT INTO public.nonconformances (organisation_id, source, title, severity, quantity_affected, description, stage, part_id) VALUES (%L, 'internal', %L, 'minor', 10, 'x', 'open', %L) RETURNING id$f$;
+  mk text := $f$INSERT INTO public.nonconformances (organisation_id, source, title, severity, quantity_affected, description, stage, part_id, category_id) VALUES (%L, 'internal', %L, 'minor', 10, 'x', 'open', %L, (SELECT id FROM public.ncr_classifications WHERE organisation_id = %1$L AND kind = 'category' AND code = 'PRODUCT')) RETURNING id$f$;
 BEGIN
   PERFORM pg_temp.login(u_owner);
   org := app.create_organisation('Affected Works', 'Plant A', 'PA', NULL);
@@ -101,8 +101,8 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT stage FROM public.nonconformances WHERE id = nc_plain), 'dispositioned', 'an NC with no lots follows the old rules exactly');
   PERFORM pg_temp.logout();
   PERFORM pg_temp.login(u_eng);
-  INSERT INTO public.nonconformances (organisation_id, source, title, severity, quantity_affected, description, stage, part_id)
-    VALUES (org, 'internal', 'Remove and restore', 'minor', 10, 'x', 'open', p1) RETURNING id INTO nc_plain;
+  INSERT INTO public.nonconformances (organisation_id, source, title, severity, quantity_affected, description, stage, part_id, category_id)
+    VALUES (org, 'internal', 'Remove and restore', 'minor', 10, 'x', 'open', p1, pg_temp.cat(org)) RETURNING id INTO nc_plain;
   INSERT INTO public.ncr_affected_lots (organisation_id, nonconformance_id, lot_id, quantity) VALUES (org, nc_plain, lot1, 3) RETURNING id INTO a1;
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.ncr_affected_lots SET removed_reason = '  ' WHERE id = %L$q$, a1), 'a removal needs a reason');
   UPDATE public.ncr_affected_lots SET removed_reason = 'Entered by mistake' WHERE id = a1;

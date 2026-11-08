@@ -5,7 +5,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { makeIds, requireDb, seed, startApp, token } from './helpers';
+import { categoryId, makeIds, requireDb, seed, startApp, token } from './helpers';
 
 const ids = makeIds('f5');
 let app: INestApplication;
@@ -29,7 +29,7 @@ const makePart = async (h: Record<string, string>, family: string, partNumber: s
   return part.id as string;
 };
 const newNcr = async (h: Record<string, string>, title: string, extra: object) =>
-  (await api().post('/api/v1/ncrs').set(h).send({ source: 'internal', title, severity: 'minor', quantityAffected: 10, description: title, siteId: ids.siteA, open: true, partId: ctx.rod, ...extra }).expect(201)).body.id as string;
+  (await api().post('/api/v1/ncrs').set(h).send({ source: 'internal', title, severity: 'minor', quantityAffected: 10, description: title, siteId: ids.siteA, open: true, categoryId: await categoryId(admin, ids.orgA), partId: ctx.rod, ...extra }).expect(201)).body.id as string;
 
 beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });

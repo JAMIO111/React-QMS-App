@@ -5,6 +5,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
+  ChangeSourceBody,
   Classification,
   ClassificationQuery,
   CreateClassificationBody,
@@ -16,6 +17,7 @@ import {
   NcrRanges,
   NcrRangesQuery,
   NcrPage,
+  NCR_SOURCES,
   SORTABLE,
   TransitionBody,
   UpdateClassificationBody,
@@ -34,7 +36,9 @@ export class NcrController {
 
   @Get()
   @OrganisationScoped('ncr.read', SITE_SCOPED)
-  @ApiQuery({ name: 'source', required: false, enum: ['internal', 'customer', 'supplier'] })
+  @ApiQuery({ name: 'source', required: false, description: `Comma-separated sources: ${NCR_SOURCES.join(', ')}` })
+  @ApiQuery({ name: 'categoryId', required: false })
+  @ApiQuery({ name: 'uncategorised', required: false, enum: ['true', 'false'], description: 'true: only non-conformances with no category (those that existed before categories)' })
   @ApiQuery({ name: 'stage', required: false, description: 'Comma-separated stages' })
   @ApiQuery({ name: 'q', required: false, description: 'Search reference, title, description, orders, part, customer, supplier, failure mode' })
   @ApiQuery({ name: 'deleted', required: false, enum: ['exclude', 'include', 'only'] })
@@ -64,7 +68,7 @@ export class NcrController {
   /** Highest total cost and quantity in the register (for filter sliders). Declared before :id. */
   @Get('ranges')
   @OrganisationScoped('ncr.read', SITE_SCOPED)
-  @ApiQuery({ name: 'source', required: false, enum: ['internal', 'customer', 'supplier'] })
+  @ApiQuery({ name: 'source', required: false, description: 'Comma-separated sources' })
   @ApiOkResponse({ schema: openApiSchema(NcrRanges) })
   ranges(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.ranges(ctx, parse(NcrRangesQuery, query));
@@ -95,6 +99,16 @@ export class NcrController {
   }
 
   /** Move to another stage (open, forward, cancel with reason, reopen with reason). */
+  /** Change the source (ncr.update). A reason is always required; an open non-conformance moving to customer / supplier needs that party first. */
+  @Post(':id/source')
+  @HttpCode(200)
+  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @ApiBody({ schema: openApiSchema(ChangeSourceBody) })
+  @ApiOkResponse({ schema: openApiSchema(NcrDetail) })
+  changeSource(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.changeSource(ctx, parse(Uuid, id), parse(ChangeSourceBody, body));
+  }
+
   @Post(':id/transitions')
   @HttpCode(200)
   @OrganisationScoped('ncr.update', SITE_SCOPED)

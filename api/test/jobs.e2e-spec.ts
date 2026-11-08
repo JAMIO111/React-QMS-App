@@ -6,7 +6,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { makeIds, requireDb, seed, startApp, token } from './helpers';
+import { categoryId, makeIds, requireDb, seed, startApp, token } from './helpers';
 
 const ids = makeIds('f');
 let app: INestApplication;
@@ -158,7 +158,7 @@ describe('recent non-conformances', () => {
     const nc = async (partId: string, title: string, open: boolean) => {
       const id = (await api().post('/api/v1/ncrs').set(h).send({ source: 'internal', title, partId, siteId: ids.siteA }).expect(201)).body.id;
       if (open) {
-        await api().patch(`/api/v1/ncrs/${id}`).set(h).send({ severity: 'minor', quantityAffected: 2, description: title }).expect(200);
+        await api().patch(`/api/v1/ncrs/${id}`).set(h).send({ severity: 'minor', quantityAffected: 2, description: title, categoryId: await categoryId(admin, ids.orgA) }).expect(200);
         await api().post(`/api/v1/ncrs/${id}/transitions`).set(h).send({ to: 'open' }).expect(200);
       }
       return id;
@@ -176,7 +176,7 @@ describe('recent non-conformances', () => {
   it('includes an NC of another part when it was raised from an inspection on the same machine', async () => {
     const h = await as(ids.ownerA);
     const other = (await api().post('/api/v1/ncrs').set(h).send({ source: 'internal', title: 'Pin on the same lathe', partId: ctx.p2, siteId: ids.siteA }).expect(201)).body.id;
-    await api().patch(`/api/v1/ncrs/${other}`).set(h).send({ severity: 'minor', quantityAffected: 1, description: 'x' }).expect(200);
+    await api().patch(`/api/v1/ncrs/${other}`).set(h).send({ severity: 'minor', quantityAffected: 1, description: 'x', categoryId: await categoryId(admin, ids.orgA) }).expect(200);
     await api().post(`/api/v1/ncrs/${other}/transitions`).set(h).send({ to: 'open' }).expect(200);
     // job2 ran on CNC-2 (abandoned); link the NC to the running job's inspection (machine CNC-1) as the raise-from-inspection function would.
     await admin.query(`insert into public.inspection_ncr_links (organisation_id, nonconformance_id, inspection_record_id) values ($1, $2, $3)`, [ids.orgA, other, ctx.job]);

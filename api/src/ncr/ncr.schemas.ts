@@ -1,10 +1,46 @@
 import { z } from 'zod';
 import { ProductionLinks } from '../production/production-links';
 
-export const NcrSource = z.enum(['internal', 'customer', 'supplier']);
+/**
+ * Where a non-conformance originated or was detected (a fixed list; the category says what the problem is). `customer` and `supplier` need that party to open;
+ * `goods_receiving` may name a supplier. Labels are fixed.
+ */
+export const NCR_SOURCES = [
+  'internal',
+  'customer',
+  'supplier',
+  'internal_audit',
+  'external_audit',
+  'production_inspection',
+  'final_inspection',
+  'calibration',
+  'goods_receiving',
+  'engineering',
+  'management_review',
+] as const;
+export const NcrSource = z.enum(NCR_SOURCES);
+export const NCR_SOURCE_LABELS: Record<(typeof NCR_SOURCES)[number], string> = {
+  internal: 'Internal',
+  customer: 'Customer',
+  supplier: 'Supplier',
+  internal_audit: 'Internal audit',
+  external_audit: 'External audit',
+  production_inspection: 'Production inspection',
+  final_inspection: 'Final inspection',
+  calibration: 'Calibration',
+  goods_receiving: 'Goods receiving',
+  engineering: 'Engineering',
+  management_review: 'Management review',
+};
+/** A comma-separated list of sources (a query value). */
+export const sourceList = z
+  .string()
+  .optional()
+  .transform((v) => (v ? v.split(',').filter(Boolean) : []))
+  .pipe(z.array(NcrSource).max(11));
 export const NcrStage = z.enum(['draft', 'open', 'contained', 'investigating', 'dispositioned', 'awaiting_closure', 'closed', 'cancelled']);
 export const Severity = z.enum(['critical', 'major', 'minor']);
-export const ClassificationKind = z.enum(['failure_mode', 'sub_failure_mode', 'process']);
+export const ClassificationKind = z.enum(['failure_mode', 'sub_failure_mode', 'process', 'category']);
 
 const Ref = z.object({ id: z.string().uuid(), name: z.string() }).nullable();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
@@ -20,6 +56,8 @@ export const NcrSummary = z.object({
   detectedAt: isoDate,
   quantityAffected: z.number().nullable(),
   part: z.object({ id: z.string().uuid(), partNumber: z.string(), name: z.string(), revision: z.string().nullable() }).nullable(),
+  /** What the problem is (organisation-managed); empty for non-conformances that existed before categories. */
+  category: Ref,
   customer: Ref,
   supplier: Ref,
   workOrder: z.string().nullable(),
@@ -37,6 +75,8 @@ export const NcrSummary = z.object({
 export type NcrSummary = z.infer<typeof NcrSummary>;
 
 export const NcrDetail = NcrSummary.extend({
+  /** Why the source was last changed (null if it never was). */
+  sourceChangeReason: z.string().nullable(),
   stageReason: z.string().nullable(),
   description: z.string().nullable(),
   requirement: z.string().nullable(),
@@ -63,10 +103,14 @@ export type NcrDetail = z.infer<typeof NcrDetail>;
 
 export const NcrPage = z.object({ data: z.array(NcrSummary), page: z.number(), pageSize: z.number(), total: z.number() });
 
-export const SORTABLE = ['reference', 'detectedAt', 'title', 'stage', 'severity', 'quantityAffected', 'partNumber', 'customer', 'supplier', 'failureMode', 'createdAt', 'totalCost'] as const;
+export const SORTABLE = ['reference', 'detectedAt', 'title', 'stage', 'severity', 'quantityAffected', 'partNumber', 'customer', 'supplier', 'failureMode', 'createdAt', 'totalCost', 'source', 'category'] as const;
 
 export const NcrListQuery = z.object({
-  source: NcrSource.optional(),
+  /** One or several sources, comma-separated. */
+  source: sourceList,
+  categoryId: z.string().uuid().optional(),
+  /** `none`: only those with no category (existing non-conformances). */
+  uncategorised: z.enum(['true', 'false']).optional(),
   stage: z
     .string()
     .optional()
@@ -140,6 +184,7 @@ const fields = {
   causalProcessId: id,
   failureModeId: id,
   subFailureModeId: id,
+  categoryId: id,
   responsibleEmployeeId: id,
   ownerId: id,
 };
@@ -154,6 +199,10 @@ export const UpdateNcrBody = z
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
 export type UpdateNcrBody = z.infer<typeof UpdateNcrBody>;
+
+/** Change the source (needs ncr.update): a reason is always required and is kept with the history. */
+export const ChangeSourceBody = z.object({ source: NcrSource, reason: z.string().trim().min(3).max(1000) }).strict();
+export type ChangeSourceBody = z.infer<typeof ChangeSourceBody>;
 
 export const TransitionBody = z.object({ to: NcrStage.exclude(['draft']), reason: z.string().trim().max(1000).optional() }).strict();
 export const DeleteBody = z.object({ reason: z.string().trim().min(3).max(1000) }).strict();
@@ -229,7 +278,7 @@ export const UpdateClassificationBody = z
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
 
-export const NcrRangesQuery = z.object({ source: NcrSource.optional() });
+export const NcrRangesQuery = z.object({ source: sourceList });
 /** Highest values in the register, to size the cost and quantity sliders. */
 export const NcrRanges = z.object({
   cost: z.object({ max: z.number() }),

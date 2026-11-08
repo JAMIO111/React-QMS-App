@@ -152,7 +152,7 @@ BEGIN
   ncr := (j->>'nonconformanceId')::uuid;
   PERFORM pg_temp.assert_eq((j->>'created')::boolean, true, 'created');
   PERFORM pg_temp.assert_eq((SELECT stage || '/' || source || '/' || severity || '/' || title || '/' || (site_id = site)::text || '/' || requirement || '/' || actual_result FROM public.nonconformances WHERE id = ncr),
-    'draft/internal/major/Guard missing/true/Machine guards are fitted at all times/The guard was not fitted on the lathe', 'a draft internal NC with the finding''s text, the severity of its classification and the site of the machine');
+    'draft/internal_audit/major/Guard missing/true/Machine guards are fitted at all times/The guard was not fitted on the lathe', 'a draft internal NC with the finding''s text, the severity of its classification and the site of the machine');
   PERFORM pg_temp.assert_eq((SELECT description FROM public.nonconformances WHERE id = ncr) LIKE 'Raised from audit AR-%, finding AF-%', true, 'the description says where it came from');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.audit_ncr_links WHERE nonconformance_id = ncr AND finding_id = f1 AND response_id = resp1), 1::bigint, 'linked to the finding and its answer');
   j := app.create_ncr_from_audit_finding(f1, 'A different title');
@@ -176,7 +176,7 @@ BEGIN
   -- a cancelled NC frees the finding as well
   j := app.create_ncr_from_audit_finding(f2);
   PERFORM pg_temp.assert_eq((j->>'created')::boolean, false, 'f2 already has its NC');
-  UPDATE public.nonconformances SET quantity_affected = 3, stage = 'open' WHERE id = (j->>'nonconformanceId')::uuid;
+  UPDATE public.nonconformances SET quantity_affected = 3, stage = 'open', category_id = pg_temp.cat(org) WHERE id = (j->>'nonconformanceId')::uuid;
   UPDATE public.nonconformances SET stage = 'cancelled', stage_reason = 'Duplicate' WHERE id = (j->>'nonconformanceId')::uuid;
   j := app.create_ncr_from_audit_finding(f2);
   PERFORM pg_temp.assert_eq((j->>'created')::boolean, true, 'a cancelled NC frees the finding: a new one is created');
@@ -202,7 +202,7 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT status || '/' || reopen_reason || '/' || (closed_note IS NULL)::text FROM public.audit_findings WHERE id = f3), 'open/Not actually fixed/true', 'reopened with the reason, the closing cleared');
   PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$SELECT app.reopen_audit_finding(%L, 'again')$q$, f3)) LIKE 'QM018: AF-%only a closed finding can be reopened%', true, 'only a closed finding can be reopened');
   -- an NC that is closed lets the finding close
-  UPDATE public.nonconformances SET quantity_affected = 5, stage = 'open' WHERE id = ncr2;
+  UPDATE public.nonconformances SET quantity_affected = 5, stage = 'open', category_id = pg_temp.cat(org) WHERE id = ncr2;
   PERFORM pg_temp.settle_ncr(ncr2);
   UPDATE public.nonconformances SET stage = 'closed' WHERE id = ncr2;
   PERFORM app.close_audit_finding(f1, 'Guard fitted and verified');

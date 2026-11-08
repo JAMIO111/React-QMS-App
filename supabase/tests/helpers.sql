@@ -83,3 +83,8 @@ BEGIN
     PERFORM app.approve_ncr_disposition(v_id);
   END LOOP;
 END $$;
+
+-- A category for fixtures that open a non-conformance (a category is needed to leave draft): the seeded "Product" one of the organisation.
+CREATE FUNCTION pg_temp.cat(p_org uuid) RETURNS uuid LANGUAGE sql AS $$
+  SELECT id FROM public.ncr_classifications WHERE organisation_id = p_org AND kind = 'category' AND code = 'PRODUCT'
+$$;

@@ -6,7 +6,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { makeIds, requireDb, seed, startApp, token } from './helpers';
+import { categoryId, makeIds, requireDb, seed, startApp, token } from './helpers';
 
 const ids = makeIds('c9');
 let app: INestApplication;
@@ -17,7 +17,7 @@ const ctx: Record<string, string> = {};
 
 const newNcr = async (title: string) => {
   const h = await as(ids.ownerA);
-  const id = (await api().post('/api/v1/ncrs').set(h).send({ source: 'internal', title, severity: 'minor', quantityAffected: 10, description: title, siteId: ids.siteA, open: true }).expect(201)).body.id;
+  const id = (await api().post('/api/v1/ncrs').set(h).send({ source: 'internal', title, severity: 'minor', quantityAffected: 10, description: title, siteId: ids.siteA, open: true, categoryId: await categoryId(admin, ids.orgA) }).expect(201)).body.id;
   return id as string;
 };
 

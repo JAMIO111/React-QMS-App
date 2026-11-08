@@ -78,7 +78,7 @@ BEGIN
   PERFORM pg_temp.assert_fails(format('SELECT app.add_readings_to_ncr(%L, ARRAY[%L, %L]::uuid[])', ncr, m_other, m_d), 'readings of two inspections are refused');
 
   -- Stage rules: draft and open take readings; cancelled and closed do not.
-  ncr2 := app.raise_ncr_from_inspection(rec, ARRAY[]::uuid[], 'Second NC', NULL, 'minor', 1, NULL, NULL, true);
+  ncr2 := app.raise_ncr_from_inspection(rec, ARRAY[]::uuid[], 'Second NC', NULL, 'minor', 1, NULL, NULL, true, pg_temp.cat(org));
   PERFORM pg_temp.assert_eq((SELECT stage FROM public.nonconformances WHERE id = ncr2), 'open', 'second NC is open');
   INSERT INTO public.inspection_samples (organisation_id, inspection_record_id) VALUES (org, rec) RETURNING id INTO s5;
   INSERT INTO public.inspection_measurements (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric) VALUES (org, rec, s5, od, 25.3) RETURNING id INTO m_d;
@@ -101,7 +101,7 @@ BEGIN
   EXCEPTION WHEN SQLSTATE 'QM008' THEN
     PERFORM pg_temp.assert_eq(position('Outer diameter (sample 2) is already on ' IN SQLERRM) > 0, true, 'the refusal names the reading and the NC');
   END;
-  ncr3 := app.raise_ncr_from_inspection(rec, ARRAY[]::uuid[], 'Third NC', NULL, 'minor', 1, NULL, NULL, true);
+  ncr3 := app.raise_ncr_from_inspection(rec, ARRAY[]::uuid[], 'Third NC', NULL, 'minor', 1, NULL, NULL, true, pg_temp.cat(org));
   PERFORM pg_temp.assert_fails(format('SELECT app.add_readings_to_ncr(%L, ARRAY[%L]::uuid[])', ncr3, m_a), 'a reading on one NC cannot be added to another');
   -- A cancelled NC frees its readings: m_d (25.4) was never linked; the 25.3 reading is on the cancelled NC and can move.
   PERFORM pg_temp.assert_eq(app.reading_live_ncr(m_d), NULL::text, 'a reading of no live NC is free');

@@ -26,7 +26,7 @@ BEGIN
      JOIN public.ncr_classifications fm ON fm.id = n.failure_mode_id JOIN public.ncr_classifications sfm ON sfm.id = n.sub_failure_mode_id
      JOIN public.ncr_classifications cp ON cp.id = n.causal_process_id WHERE n.id = legacy), 'Dimensional|Oversize|Machining', 'classifications mapped');
   PERFORM pg_temp.assert_eq((SELECT quantity_affected FROM public.nonconformances WHERE id = legacy), 3::numeric, 'quantity copied');
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.nonconformances), (SELECT count(*) FROM public."NCM"), 'every legacy NCR copied');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.nonconformances WHERE legacy_ncm_id IS NOT NULL), (SELECT count(*) FROM public."NCM"), 'every legacy NCR copied');
   PERFORM pg_temp.assert_eq((SELECT last_value FROM app.ncr_counters WHERE year = 2025), 1, 'numbering continues after the highest legacy reference');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.outbox_events WHERE entity_type = 'nonconformance'), 0::bigint, 'migration wrote no events');
 END $$;
@@ -67,15 +67,15 @@ BEGIN
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET source = 'supplier' WHERE id = %L$q$, ncr), 'source cannot change');
 
   -- Opening needs the minimum content.
-  PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET stage = 'open' WHERE id = %L$q$, ncr), 'cannot open without severity and quantity');
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET stage = 'open', category_id = %L WHERE id = %L$q$, pg_temp.cat(org), ncr), 'cannot open without severity and quantity');
   UPDATE public.nonconformances SET part_id = part, part_revision_id = rev, failure_mode_id = fm, sub_failure_mode_id = sfm,
          causal_process_id = proc, severity = 'major', quantity_affected = 4 WHERE id = ncr;
-  UPDATE public.nonconformances SET stage = 'open' WHERE id = ncr;
+  UPDATE public.nonconformances SET stage = 'open', category_id = pg_temp.cat(org) WHERE id = ncr;
   INSERT INTO public.nonconformances (organisation_id, source, title, severity, quantity_affected, description, stage)
     VALUES (org, 'customer', 'Complaint', 'minor', 1, 'Scratched', 'draft') RETURNING id INTO cncr;
-  PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET stage = 'open' WHERE id = %L$q$, cncr), 'customer NCRs need the customer to open');
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET stage = 'open', category_id = %L WHERE id = %L$q$, pg_temp.cat(org), cncr), 'customer NCRs need the customer to open');
   UPDATE public.nonconformances SET customer_id = cust, customer_reference = 'CLM-9' WHERE id = cncr;
-  UPDATE public.nonconformances SET stage = 'open' WHERE id = cncr;
+  UPDATE public.nonconformances SET stage = 'open', category_id = pg_temp.cat(org) WHERE id = cncr;
   PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.nonconformances (organisation_id, source, title, stage) VALUES (%L, 'supplier', 'No supplier', 'open')$q$, org), 'cannot create open without the minimum');
   PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.nonconformances (organisation_id, source, title, stage) VALUES (%L, 'internal', 'Straight to closed', 'closed')$q$, org), 'cannot create closed');
 

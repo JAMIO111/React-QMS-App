@@ -279,7 +279,7 @@ describe('raising a non-conformance', () => {
     expect(res.body).toMatchObject({ created: true, nonconformanceId: expect.any(String), finding: { id: ctx.f1, ncr: { id: res.body.nonconformanceId, stage: 'draft' } } });
     ctx.ncr = res.body.nonconformanceId;
     const ncr = (await api().get(`/api/v1/ncrs/${ctx.ncr}`).set(await as(ids.ownerA)).expect(200)).body;
-    expect(ncr).toMatchObject({ stage: 'draft', source: 'internal', title: 'Guard missing', severity: 'major', requirement: 'Guards are fitted at all times', actualResult: 'The guard was not fitted on the lathe' });
+    expect(ncr).toMatchObject({ stage: 'draft', source: 'internal_audit', title: 'Guard missing', severity: 'major', requirement: 'Guards are fitted at all times', actualResult: 'The guard was not fitted on the lathe' });
     expect(ncr.description).toContain('Raised from audit AR-');
     const again = await raise(ctx.f1, { title: 'A different title' });
     expect(again.status).toBe(200);

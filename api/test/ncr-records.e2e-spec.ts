@@ -5,7 +5,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { makeIds, requireDb, seed, settleNcr, startApp, token } from './helpers';
+import { categoryId, makeIds, requireDb, seed, settleNcr, startApp, token } from './helpers';
 
 const ids = makeIds(8);
 let app: INestApplication;
@@ -171,7 +171,7 @@ describe('attachments', () => {
 
   it('locks costs and files when the NCR is closed', async () => {
     const h = await as(ids.ownerA);
-    await api().patch(`/api/v1/ncrs/${ncr}`).set(h).send({ severity: 'minor', quantityAffected: 1, description: 'x' }).expect(200);
+    await api().patch(`/api/v1/ncrs/${ncr}`).set(h).send({ severity: 'minor', quantityAffected: 1, description: 'x', categoryId: await categoryId(admin, ids.orgA) }).expect(200);
     await api().post(`/api/v1/ncrs/${ncr}/transitions`).set(h).send({ to: 'open' }).expect(200);
     await settleNcr(app.getHttpServer(), h, ncr);
     await api().post(`/api/v1/ncrs/${ncr}/transitions`).set(h).send({ to: 'closed' }).expect(200);
@@ -192,8 +192,14 @@ describe('NC dashboard', () => {
     expect(d.kpis).toMatchObject({ raised: 2, open: 1, criticalOpen: 0, closed: 1, cost: 187.5, quantity: 4, raisedPrevious: 0, costPrevious: 0 });
     expect(d.kpis.avgDaysToClose).toBeGreaterThan(0);
     expect(d.baseCurrency).toBe('GBP');
-    expect(d.trend.reduce((t: number, b: { internal: number }) => t + b.internal, 0)).toBe(2);
-    expect(d.trend.every((b: { customer: number; supplier: number }) => b.customer === 0 && b.supplier === 0)).toBe(true);
+    expect(d.trend.reduce((t: number, b: { total: number }) => t + b.total, 0)).toBe(2);
+    expect(d.trend.reduce((t: number, b: { bySource: Record<string, number> }) => t + (b.bySource.internal ?? 0), 0)).toBe(2);
+    expect(d.trend.every((b: { bySource: Record<string, number> }) => Object.keys(b.bySource).every((k) => k === 'internal'))).toBe(true);
+    // By source: all eleven in the fixed order; by category: the NC with a category, and the one without ("Uncategorised").
+    expect(d.bySource.map((s: { key: string }) => s.key)).toEqual(['internal', 'customer', 'supplier', 'internal_audit', 'external_audit', 'production_inspection', 'final_inspection', 'calibration', 'goods_receiving', 'engineering', 'management_review']);
+    expect(d.bySource.find((s: { key: string }) => s.key === 'internal')).toEqual({ key: 'internal', label: 'Internal', count: 2 });
+    expect(d.bySource.filter((s: { count: number }) => s.count > 0)).toHaveLength(1);
+    expect(d.byCategory).toEqual([{ key: expect.any(String), label: 'Product', count: 1 }, { key: 'none', label: 'Uncategorised', count: 1 }]);
     expect(d.trend.reduce((t: number, b: { cost: number }) => t + b.cost, 0)).toBe(187.5);
     expect(d.byFailureMode).toEqual([{ key: 'none', label: 'Not classified', count: 2 }]);
     expect(d.byStage.find((s: { key: string }) => s.key === 'draft').count).toBe(1);

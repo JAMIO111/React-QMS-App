@@ -10,6 +10,7 @@ import {
   Classification,
   ClassificationQuery,
   CreateClassificationBody,
+  ChangeSourceBody,
   CreateNcrBody,
   HistoryEntry,
   NcrDetail,
@@ -34,6 +35,8 @@ const SORT_SQL: Record<NcrListQuery['sort'], string> = {
   customer: 'lower(coalesce(c.display_name, c.name))',
   supplier: 'lower(coalesce(s.display_name, s.name))',
   failureMode: 'lower(fm.name)',
+  source: 'n.source',
+  category: 'lower(cat.name)',
   totalCost: 'coalesce(tc.total, 0)',
   createdAt: 'n.created_at',
 };
@@ -42,7 +45,7 @@ const likePattern = (term: string) => `%${term.replace(/[\\%_]/g, (ch) => `\\${c
 /** NCR columns that hold ids of other records (named in the history). */
 const HISTORY_ID_FIELDS = [
   'site_id', 'part_id', 'part_revision_id', 'customer_id', 'supplier_id', 'detection_process_id', 'causal_process_id',
-  'failure_mode_id', 'sub_failure_mode_id', 'responsible_employee_id', 'owner_id', 'detected_by', 'closed_by', 'deleted_by',
+  'failure_mode_id', 'sub_failure_mode_id', 'category_id', 'responsible_employee_id', 'owner_id', 'detected_by', 'closed_by', 'deleted_by',
 ] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -55,7 +58,7 @@ const SELECT_SUMMARY = `
   p.id as part_id, p.part_number, p.name as part_name, r.revision,
   c.id as customer_id, coalesce(c.display_name, c.name) as customer_name,
   s.id as supplier_id, coalesce(s.display_name, s.name) as supplier_name,
-  fm.id as fm_id, fm.name as fm_name, sfm.id as sfm_id, sfm.name as sfm_name, cp.id as cp_id, cp.name as cp_name,
+  fm.id as fm_id, fm.name as fm_name, sfm.id as sfm_id, sfm.name as sfm_name, cp.id as cp_id, cp.name as cp_name, cat.id as cat_id, cat.name as cat_name,
   coalesce(tc.total, 0) as total_cost, os.base_currency`;
 const FROM = `
   from public.nonconformances n
@@ -66,6 +69,7 @@ const FROM = `
   left join public.ncr_classifications fm on fm.id = n.failure_mode_id
   left join public.ncr_classifications sfm on sfm.id = n.sub_failure_mode_id
   left join public.ncr_classifications cp on cp.id = n.causal_process_id
+  left join public.ncr_classifications cat on cat.id = n.category_id
   left join public.organisation_settings os on os.organisation_id = n.organisation_id
   -- Total of the NCR's costs that are not deleted, in the organisation's base currency.
   left join lateral (
@@ -87,6 +91,7 @@ const toSummary = (r: Row): NcrSummary => ({
   detectedAt: r.detected_at as string,
   quantityAffected: num(r.quantity_affected),
   part: r.part_id ? { id: r.part_id as string, partNumber: r.part_number as string, name: r.part_name as string, revision: (r.revision as string) ?? null } : null,
+  category: ref(r.cat_id, r.cat_name),
   customer: ref(r.customer_id, r.customer_name),
   supplier: ref(r.supplier_id, r.supplier_name),
   workOrder: (r.work_order as string) ?? null,
@@ -123,7 +128,9 @@ export class NcrService {
   list(ctx: RequestContext, q: NcrListQuery): Promise<{ data: NcrSummary[]; page: number; pageSize: number; total: number }> {
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`n.organisation_id = ${ctx.organisationId!}::uuid`];
-      if (q.source) where.push(sql`n.source = ${q.source}`);
+      if (q.source.length) where.push(sql`n.source = any(string_to_array(${q.source.join(',')}, ','))`);
+      if (q.categoryId) where.push(sql`n.category_id = ${q.categoryId}::uuid`);
+      if (q.uncategorised === 'true') where.push(sql`n.category_id is null`);
       // Lists go in as one comma-separated text value (an array parameter would be sent as a row).
       if (q.stage.length) where.push(sql`n.stage = any(string_to_array(${q.stage.join(',')}, ','))`);
       if (q.deleted === 'exclude') where.push(sql`n.deleted_at is null`);
@@ -177,7 +184,7 @@ export class NcrService {
                (select base_currency from public.organisation_settings where organisation_id = ${ctx.organisationId!}::uuid) as base_currency
         ${sql.raw(FROM)}
         where n.organisation_id = ${ctx.organisationId!}::uuid and n.deleted_at is null
-          ${q.source ? sql`and n.source = ${q.source}` : sql``}`);
+          ${q.source.length ? sql`and n.source = any(string_to_array(${q.source.join(',')}, ','))` : sql``}`);
       const r = result.rows[0] ?? {};
       return { cost: { max: Number(r.cost_max ?? 0) }, quantity: { max: Number(r.qty_max ?? 0) }, baseCurrency: (r.base_currency as string) ?? 'GBP' };
     });
@@ -207,6 +214,15 @@ export class NcrService {
       const current = await this.load(db, ctx, id);
       if (current.stage === body.to) throw new ApiError(409, 'ncr_rule', `This non-conformance is already ${body.to.replace('_', ' ')}`);
       await this.update1(db, ctx, id, { stage: body.to, stageReason: body.reason || null });
+      return this.load(db, ctx, id);
+    });
+  }
+
+  /** Change the source with a reason: the database function checks the permission, the reason and what a customer / supplier needs, and writes the history. */
+  changeSource(ctx: RequestContext, id: string, body: ChangeSourceBody): Promise<NcrDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      await db.execute(sql`select app.change_ncr_source(${id}::uuid, ${body.source}, ${body.reason})`);
       return this.load(db, ctx, id);
     });
   }
@@ -397,7 +413,7 @@ export class NcrService {
   private async load(db: Db, ctx: RequestContext, id: string): Promise<NcrDetail> {
     const result = await db.execute<Row>(sql`
       select ${sql.raw(SELECT_SUMMARY)},
-             n.stage_reason, n.description, n.requirement, n.actual_result, n.part_revision_id, n.lot_number, n.serial_number,
+             n.source_change_reason, n.stage_reason, n.description, n.requirement, n.actual_result, n.part_revision_id, n.lot_number, n.serial_number,
              n.quantity_inspected, n.closed_at, n.delete_reason, n.updated_at, ${sql.raw(LINK_COLUMNS)},
              site.id as site_id, site.code as site_code, site.name as site_name,
              dp.id as dp_id, dp.name as dp_name,
@@ -423,6 +439,7 @@ export class NcrService {
     const person = (idKey: string, nameKey: string) => (r[idKey] ? { id: r[idKey] as string, name: (r[nameKey] as string) ?? 'Unknown user' } : null);
     return {
       ...toSummary(r),
+      sourceChangeReason: (r.source_change_reason as string) ?? null,
       stageReason: (r.stage_reason as string) ?? null,
       description: (r.description as string) ?? null,
       requirement: (r.requirement as string) ?? null,

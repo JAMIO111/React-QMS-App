@@ -7,7 +7,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { makeIds, requireDb, seed, startApp, token } from './helpers';
+import { categoryId, makeIds, requireDb, seed, startApp, token } from './helpers';
 
 const ids = makeIds('a6');
 let app: INestApplication;
@@ -116,13 +116,13 @@ describe('raising an NC', () => {
         .expect(201)
     ).body;
     ctx.ncr = res.ncr.id;
-    expect(res.ncr).toMatchObject({ source: 'internal', stage: 'draft', reference: expect.stringMatching(/^NCM-\d\d-\d+$|^[A-Z]+-\d\d-\d+$/) });
+    expect(res.ncr).toMatchObject({ source: 'production_inspection', stage: 'draft', reference: expect.stringMatching(/^NCM-\d\d-\d+$|^[A-Z]+-\d\d-\d+$/) });
     expect(res.inspection.ncrs).toMatchObject([{ id: ctx.ncr, stage: 'draft' }]);
     expect(res.inspection.measurements.find((m: { id: string }) => m.id === ctx.bad2).ncrs).toMatchObject([{ id: ctx.ncr }]);
     // Pre-filled from the inspection (not overridable), visible through the normal NC API.
     const ncr = (await api().get(`/api/v1/ncrs/${ctx.ncr}`).set(h).expect(200)).body;
     expect(ncr).toMatchObject({
-      source: 'internal',
+      source: 'production_inspection',
       severity: 'critical',
       workOrder: 'WO-9',
       lotNumber: 'LOT-3',
@@ -255,7 +255,7 @@ describe('adding later failures to an existing NC', () => {
     }
     const a = measure(1, rec).id;
     const b = measure(2, rec).id;
-    const raised = (await api().post(`/api/v1/inspections/${started.id}/raise-ncr`).set(owner).send({ measurementIds: [a], title: 'OD above USL', severity: 'critical', quantityAffected: 1, open: true }).expect(201)).body;
+    const raised = (await api().post(`/api/v1/inspections/${started.id}/raise-ncr`).set(owner).send({ measurementIds: [a], title: 'OD above USL', severity: 'critical', quantityAffected: 1, open: true, categoryId: await categoryId(admin, ids.orgA) }).expect(201)).body;
     await api().post(`/api/v1/ncrs/${raised.ncr.id}/transitions`).set(owner).send({ to: 'cancelled', reason: 'Raised in error' }).expect(200);
     const refused = await api().post(`/api/v1/inspections/${started.id}/add-to-ncr`).set(owner).send({ ncrId: raised.ncr.id, measurementIds: [b] }).expect(409);
     expect(refused.body.error.message).toMatch(/cancelled and cannot take more readings; raise a new non-conformance/);

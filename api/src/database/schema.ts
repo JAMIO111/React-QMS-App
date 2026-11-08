@@ -144,6 +144,8 @@ export const nonconformances = pgTable('nonconformances', {
   organisationId: uuid('organisation_id').notNull(),
   reference: text('reference').notNull().default(''),
   source: text('source').notNull(),
+  categoryId: uuid('category_id'),
+  sourceChangeReason: text('source_change_reason'),
   stage: text('stage').notNull().default('draft'),
   stageReason: text('stage_reason'),
   severity: text('severity'),

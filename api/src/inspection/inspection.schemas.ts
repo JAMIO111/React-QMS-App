@@ -286,8 +286,10 @@ export const RaiseNcrBody = z
     quantityAffected: z.number().min(0).max(1_000_000_000).nullable().optional(),
     requirement: optionalText(4000),
     actualResult: optionalText(4000),
-    /** Create straight into "open" (needs severity and quantity). */
+    /** Create straight into "open" (needs severity and quantity and a category). */
     open: z.boolean().optional(),
+    /** What the problem is (one of the organisation's categories); needed to open, so needed here when `open` is set. */
+    categoryId: z.string().uuid().nullable().optional(),
   })
   .strict();
 /** Add failed readings of this inspection to an NC already raised from it (not closed or cancelled). */

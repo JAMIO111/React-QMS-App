@@ -72,7 +72,7 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT (source, stage, severity, part_id = part, work_order, lot_number, serial_number, quantity_affected,
                                        site_id = site, detected_by = '37000000-0000-0000-0000-000000000101')::text
                              FROM public.nonconformances WHERE id = ncr),
-    '(internal,draft,critical,t,WO-9,LOT-3,SN-77,2,t,t)', 'NC pre-filled from the inspection');
+    '(production_inspection,draft,critical,t,WO-9,LOT-3,SN-77,2,t,t)', 'NC pre-filled from the inspection');
   PERFORM pg_temp.assert_eq((SELECT part_revision_id = (SELECT part_revision_id FROM public.inspection_records WHERE id = rec) FROM public.nonconformances WHERE id = ncr), true, 'part revision from the inspection');
   PERFORM pg_temp.assert_eq((SELECT reference FROM public.nonconformances WHERE id = ncr) <> 'pending', true, 'reference generated');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.inspection_ncr_links WHERE nonconformance_id = ncr AND measurement_id IN (m_bad, m_bad2)), 2::bigint, 'both readings linked');
@@ -81,7 +81,7 @@ BEGIN
   PERFORM pg_temp.assert_fails(format($q$DELETE FROM public.inspection_ncr_links WHERE nonconformance_id = %L$q$, ncr), 'links are never deleted');
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.inspection_ncr_links SET measurement_id = NULL WHERE nonconformance_id = %L$q$, ncr), 'links are never changed');
   UPDATE public.nonconformances SET title = 'Renamed', severity = 'major' WHERE id = ncr;
-  UPDATE public.nonconformances SET stage = 'open' WHERE id = ncr;
+  UPDATE public.nonconformances SET stage = 'open', category_id = pg_temp.cat(org) WHERE id = ncr;
   UPDATE public.nonconformances SET stage = 'cancelled', stage_reason = 'Raised in error' WHERE id = ncr;
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.inspection_ncr_links WHERE nonconformance_id = ncr), 2::bigint, 'links survive edits and cancellation');
 
@@ -98,8 +98,8 @@ BEGIN
   ncr2 := app.raise_ncr_from_inspection(rec, ARRAY[]::uuid[], 'Burr found on the groove', 'Seen at final check; no measurement covers it', NULL, NULL, NULL, NULL, false);
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.inspection_ncr_links WHERE nonconformance_id = ncr2 AND measurement_id IS NULL), 1::bigint, 'manual NC linked to the inspection');
   -- Opening needs the usual minimum (severity, quantity).
-  PERFORM pg_temp.assert_fails(format('SELECT app.raise_ncr_from_inspection(%L, ARRAY[]::uuid[], %L, NULL, NULL, NULL, NULL, NULL, true)', rec, 'Open without content'), 'open needs severity and quantity');
-  PERFORM app.raise_ncr_from_inspection(rec, ARRAY[]::uuid[], 'Open with content', NULL, 'minor', 1, NULL, NULL, true);
+  PERFORM pg_temp.assert_fails(format('SELECT app.raise_ncr_from_inspection(%L, ARRAY[]::uuid[], %L, NULL, NULL, NULL, NULL, NULL, true, %L)', rec, 'Open without content', pg_temp.cat(org)), 'open needs severity and quantity');
+  PERFORM app.raise_ncr_from_inspection(rec, ARRAY[]::uuid[], 'Open with content', NULL, 'minor', 1, NULL, NULL, true, pg_temp.cat(org));
   PERFORM pg_temp.assert_eq((SELECT stage FROM public.nonconformances WHERE title = 'Open with content'), 'open', 'raised straight to open');
   -- Acknowledging after completion is allowed for a current failure (none left unhandled here, so test on a second inspection).
 

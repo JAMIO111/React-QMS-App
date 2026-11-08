@@ -145,7 +145,9 @@ describe('calibration records', () => {
     expect((await api().get(`/api/v1/gauges/${gauge}`).set(h).expect(200)).body).toMatchObject({ status: 'quarantined', statusReason: `Failed calibration ${res.body.reference}` });
 
     const ncr = await api().post(`/api/v1/calibrations/${failed}/raise-ncr`).set(h).expect(201);
-    expect(ncr.body).toMatchObject({ source: 'internal' });
+    expect(ncr.body).toMatchObject({ source: 'calibration' });
+    // The organisation's Calibration category is already chosen (a person can change it).
+    expect((await api().get(`/api/v1/ncrs/${ncr.body.id}`).set(h).expect(200)).body.category).toMatchObject({ name: 'Calibration' });
     const nc = (await api().get(`/api/v1/ncrs/${ncr.body.id}`).set(h).expect(200)).body;
     expect(nc).toMatchObject({ stage: 'draft', site: { id: ids.siteA } });
     expect(nc.title).toContain('G-001');

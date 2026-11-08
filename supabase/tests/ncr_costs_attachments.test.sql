@@ -21,8 +21,8 @@ BEGIN
   SELECT id INTO site_a FROM public.sites WHERE organisation_id = org;
   INSERT INTO public.sites (organisation_id, code, name) VALUES (org, 'PB', 'Plant B') RETURNING id INTO site_b;
   UPDATE public.organisation_settings SET base_currency = 'GBP', vat_rate = 0.2 WHERE organisation_id = org;
-  INSERT INTO public.nonconformances (organisation_id, reference, source, stage, title, site_id, severity, quantity_affected, description)
-    VALUES (org, 'x', 'internal', 'open', 'Scrapped batch', site_a, 'major', 10, 'Scrap') RETURNING id INTO ncr;
+  INSERT INTO public.nonconformances (organisation_id, reference, source, stage, title, site_id, severity, quantity_affected, description, category_id)
+    VALUES (org, 'x', 'internal', 'open', 'Scrapped batch', site_a, 'major', 10, 'Scrap', pg_temp.cat(org)) RETURNING id INTO ncr;
   INSERT INTO public.nonconformances (organisation_id, reference, source, title, site_id) VALUES (org, 'x', 'internal', 'At plant B', site_b) RETURNING id INTO ncr_b;
 
   -- Amounts: inclusive / exclusive / no VAT, rounding, base currency.

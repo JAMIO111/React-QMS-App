@@ -15,7 +15,7 @@ DECLARE
   u_owner uuid := '38000000-0000-0000-0000-000000000401'; u_eng uuid := '38000000-0000-0000-0000-000000000402'; u_insp uuid := '38000000-0000-0000-0000-000000000403';
   org uuid; m uuid; emp uuid; nc uuid; nc2 uuid; nc3 uuid; nc4 uuid;
   c1 uuid; c2 uuid; d1 uuid; d2 uuid; d3 uuid; d4 uuid; r text;
-  mk text := $f$INSERT INTO public.nonconformances (organisation_id, source, title, severity, quantity_affected, description, stage) VALUES (%L, 'internal', %L, 'minor', 10, 'x', 'open') RETURNING id$f$;
+  mk text := $f$INSERT INTO public.nonconformances (organisation_id, source, title, severity, quantity_affected, description, stage, category_id) VALUES (%L, 'internal', %L, 'minor', 10, 'x', 'open', (SELECT id FROM public.ncr_classifications WHERE organisation_id = %1$L AND kind = 'category' AND code = 'PRODUCT')) RETURNING id$f$;
 BEGIN
   PERFORM pg_temp.login(u_owner);
   org := app.create_organisation('Containment Works', 'Plant A', 'PA', NULL);

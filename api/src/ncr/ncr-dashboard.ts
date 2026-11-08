@@ -6,11 +6,11 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse } from '../common/validation';
 import { DatabaseService } from '../database/database.service';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { NcrSource } from './ncr.schemas';
+import { NCR_SOURCE_LABELS, NCR_SOURCES, sourceList } from './ncr.schemas';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
 export const DashboardQuery = z
-  .object({ source: NcrSource.optional(), from: isoDate, to: isoDate })
+  .object({ source: sourceList, from: isoDate, to: isoDate })
   .refine((q) => q.from <= q.to, { message: '"from" must be on or before "to"', path: ['from'] })
   .refine((q) => (Date.parse(q.to) - Date.parse(q.from)) / 86_400_000 <= 3 * 366, { message: 'At most three years', path: ['from'] });
 
@@ -29,7 +29,11 @@ export const Dashboard = z.object({
     costPrevious: z.number(),
     quantity: z.number(),
   }),
-  trend: z.array(z.object({ start: isoDate, internal: z.number(), customer: z.number(), supplier: z.number(), cost: z.number() })),
+  /** Per week or month: all raised, how many from each source (sources with none are left out), and the cost. */
+  trend: z.array(z.object({ start: isoDate, total: z.number(), bySource: z.record(z.number()), cost: z.number() })),
+  /** Raised in the period, by source (all eleven, in the fixed order) and by category ("Uncategorised" for those that have none). */
+  bySource: z.array(Count),
+  byCategory: z.array(Count),
   byFailureMode: z.array(Count),
   byStage: z.array(Count),
   bySeverity: z.array(Count),
@@ -62,7 +66,7 @@ export class NcrDashboardService {
     const previousFrom = new Date(previousTo.getTime() - (days - 1) * 86_400_000);
     const bucket = days > 92 ? 'month' : 'week';
     const org = ctx.organisationId!;
-    const src = q.source ? sql`and n.source = ${q.source}` : sql``;
+    const src = q.source.length ? sql`and n.source = any(string_to_array(${q.source.join(',')}, ','))` : sql``;
     // NCRs (not deleted) of this organisation and source, with failure mode, part and live cost total.
     const base = sql`
       from public.nonconformances n
@@ -96,12 +100,20 @@ export class NcrDashboardService {
           ${base} ${inPeriod(q.from, q.to)}
         )
         select to_char(b.start, 'YYYY-MM-DD') as start,
-               count(r.*) filter (where r.source = 'internal') as internal,
-               count(r.*) filter (where r.source = 'customer') as customer,
-               count(r.*) filter (where r.source = 'supplier') as supplier,
+               count(r.*) as total,
+               coalesce(jsonb_object_agg(r.source, r.n) filter (where r.source is not null), '{}'::jsonb) as by_source,
                coalesce(sum(r.cost), 0) as cost
-        from buckets b left join rows r on r.start = b.start
+        from buckets b
+        left join (select start, source, count(*) as n, sum(cost) as cost from rows group by start, source) r on r.start = b.start
         group by b.start order by b.start`);
+
+      const sources = await one(sql`select n.source as key, count(*) as count ${base} ${inPeriod(q.from, q.to)} group by 1`);
+      const categories = await one(sql`
+        select coalesce(cat.id::text, 'none') as key, coalesce(cat.name, 'Uncategorised') as label, count(*) as count
+        from public.nonconformances n
+        left join public.ncr_classifications cat on cat.id = n.category_id
+        where n.organisation_id = ${org}::uuid and n.deleted_at is null ${src} ${inPeriod(q.from, q.to)}
+        group by 1, 2 order by 3 desc, 2`);
 
       const failureModes = await one(sql`
         select coalesce(fm.id::text, 'none') as key, coalesce(fm.name, 'Not classified') as label, count(*) as count
@@ -141,7 +153,9 @@ export class NcrDashboardService {
           costPrevious: Math.round(n(k.cost_previous) * 100) / 100,
           quantity: n(k.quantity),
         },
-        trend: trend.map((r) => ({ start: String(r.start), internal: n(r.internal), customer: n(r.customer), supplier: n(r.supplier), cost: Math.round(n(r.cost) * 100) / 100 })),
+        trend: trend.map((r) => ({ start: String(r.start), total: n(r.total), bySource: Object.fromEntries(Object.entries((r.by_source as Record<string, unknown>) ?? {}).map(([k, v]) => [k, n(v)])), cost: Math.round(n(r.cost) * 100) / 100 })),
+        bySource: NCR_SOURCES.map((s) => ({ key: s, label: NCR_SOURCE_LABELS[s], count: n(sources.find((r) => r.key === s)?.count) })),
+        byCategory: categories.map((r) => ({ key: String(r.key), label: String(r.label), count: n(r.count) })),
         byFailureMode,
         byStage: OPEN_STAGES.map((s) => ({ key: s, label: STAGE_LABEL[s], count: stageCount[s] ?? 0 })),
         bySeverity: [
@@ -165,7 +179,7 @@ export class NcrDashboardController {
   /** KPIs and chart series for the NC dashboard (period from–to, optional source). */
   @Get()
   @OrganisationScoped('ncr.read', { anyScope: true })
-  @ApiQuery({ name: 'source', required: false, enum: ['internal', 'customer', 'supplier'] })
+  @ApiQuery({ name: 'source', required: false, description: 'Comma-separated sources' })
   @ApiQuery({ name: 'from', required: true, description: 'Detected on or after (YYYY-MM-DD)' })
   @ApiQuery({ name: 'to', required: true, description: 'Detected on or before (YYYY-MM-DD)' })
   @ApiOkResponse({ schema: openApiSchema(Dashboard) })

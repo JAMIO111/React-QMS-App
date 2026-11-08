@@ -284,7 +284,7 @@ export class InspectionService {
       const ids = body.measurementIds.length ? body.measurementIds.join(',') : '';
       const result = await db.execute<{ id: string }>(sql`select app.raise_ncr_from_inspection(
         ${id}::uuid, string_to_array(${ids}, ',')::uuid[] , ${body.title}, ${body.description ?? null}, ${body.severity ?? null},
-        ${body.quantityAffected ?? null}::numeric, ${body.requirement ?? null}, ${body.actualResult ?? null}, ${body.open ?? false}) as id`);
+        ${body.quantityAffected ?? null}::numeric, ${body.requirement ?? null}, ${body.actualResult ?? null}, ${body.open ?? false}, ${body.categoryId ?? null}::uuid) as id`);
       const ncr = await db.execute<Row>(sql`select id, reference, stage, source from public.nonconformances where id = ${result.rows[0].id}::uuid`);
       const n = ncr.rows[0];
       return {

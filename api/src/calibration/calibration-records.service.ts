@@ -168,8 +168,8 @@ export class CalibrationRecordsService {
   }
 
   /**
-   * Raises a draft internal NC for a calibration found out of tolerance and links it to the record.
-   * The NC's site and detection date come from the gauge and the calibration.
+   * Raises a draft NC for a calibration found out of tolerance and links it to the record: source Calibration, and the organisation's Calibration category when it has one
+   * (a person can change either). The NC's site and detection date come from the gauge and the calibration.
    */
   raiseNcr(ctx: RequestContext, id: string): Promise<z.infer<typeof RaisedNcr>> {
     return this.database.asUser(ctx, async (db) => {
@@ -196,9 +196,10 @@ export class CalibrationRecordsService {
         .filter(Boolean)
         .join('\n\n');
       const created = await db.execute<Row>(sql`
-        insert into public.nonconformances (organisation_id, reference, source, title, description, site_id, detected_at, detected_by)
-        values (${ctx.organisationId!}::uuid, 'pending', 'internal', ${title}, ${description}, ${(gauge.rows[0]?.site_id as string) ?? null}::uuid,
-                ${cal.calibratedOn}::date, ${ctx.user.id}::uuid)
+        insert into public.nonconformances (organisation_id, reference, source, title, description, site_id, detected_at, detected_by, category_id)
+        values (${ctx.organisationId!}::uuid, 'pending', 'calibration', ${title}, ${description}, ${(gauge.rows[0]?.site_id as string) ?? null}::uuid,
+                ${cal.calibratedOn}::date, ${ctx.user.id}::uuid,
+                (select id from public.ncr_classifications where organisation_id = ${ctx.organisationId!}::uuid and kind = 'category' and code = 'CALIBRATION' and active))
         returning id, reference, source`);
       const ncr = created.rows[0];
       await this.update1(db, ctx, id, sql`nonconformance_id = ${ncr.id as string}::uuid`);

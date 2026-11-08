@@ -5,7 +5,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { makeIds, requireDb, seed, settleNcr, startApp, token } from './helpers';
+import { categoryId, makeIds, requireDb, seed, settleNcr, startApp, token } from './helpers';
 
 const ids = makeIds(7);
 let app: INestApplication;
@@ -20,6 +20,7 @@ let supplierId: string;
 let partId: string;
 let revisionId: string;
 let failureMode: string;
+let catId: string;
 
 beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });
@@ -38,6 +39,7 @@ beforeAll(async () => {
   customerId = (await one(`insert into public.customers (organisation_id, code, name) values ($1, 'ACME', 'Acme Fabrication') returning id`, [ids.orgA])).id;
   supplierId = (await one(`insert into public.suppliers (organisation_id, code, name) values ($1, 'STEEL', 'Steel Supplies') returning id`, [ids.orgA])).id;
   partId = (await one(`insert into public.parts (organisation_id, part_number, name) values ($1, 'BRK-100', 'Bracket') returning id`, [ids.orgA])).id;
+  catId = await categoryId(admin, ids.orgA);
   revisionId = (await one(`insert into public.part_revisions (organisation_id, part_id, revision) values ($1, $2, 'A') returning id`, [ids.orgA, partId])).id;
 });
 
@@ -92,25 +94,25 @@ describe('non-conformances', () => {
   it('explains what is missing before a draft can be opened, then opens it', async () => {
     const h = await as(ids.ownerA);
     const missing = await api().post(`/api/v1/ncrs/${internal}/transitions`).set(h).send({ to: 'open' }).expect(409);
-    expect(missing.body.error).toMatchObject({ code: 'ncr_rule', message: 'To open this non-conformance, fill in: severity, quantity affected' });
-    const edited = await api().patch(`/api/v1/ncrs/${internal}`).set(h).send({ severity: 'major', quantityAffected: 4, description: '0.05 over' }).expect(200);
-    expect(edited.body).toMatchObject({ severity: 'major', quantityAffected: 4, description: '0.05 over' });
+    expect(missing.body.error).toMatchObject({ code: 'ncr_rule', message: 'To open this non-conformance, fill in: severity, quantity affected, category' });
+    const edited = await api().patch(`/api/v1/ncrs/${internal}`).set(h).send({ severity: 'major', quantityAffected: 4, description: '0.05 over', categoryId: catId }).expect(200);
+    expect(edited.body).toMatchObject({ severity: 'major', quantityAffected: 4, description: '0.05 over', category: { id: catId, name: 'Product' } });
     const opened = await api().post(`/api/v1/ncrs/${internal}/transitions`).set(h).send({ to: 'open' }).expect(200);
     expect(opened.body.stage).toBe('open');
   });
 
   it('creates customer and supplier NCs, requiring the party to open', async () => {
     const h = await as(ids.ownerA);
-    const noCustomer = await api().post('/api/v1/ncrs').set(h).send({ source: 'customer', title: 'Complaint', severity: 'minor', quantityAffected: 2, description: 'Scratched', open: true }).expect(409);
+    const noCustomer = await api().post('/api/v1/ncrs').set(h).send({ source: 'customer', title: 'Complaint', severity: 'minor', quantityAffected: 2, description: 'Scratched', categoryId: catId, open: true }).expect(409);
     expect(noCustomer.body.error.message).toBe('To open this non-conformance, fill in: customer');
     customer = (
       await api().post('/api/v1/ncrs').set(h)
-        .send({ source: 'customer', title: 'Complaint', severity: 'minor', quantityAffected: 2, description: 'Scratched', customerId, customerReference: 'CLM-9', open: true })
+        .send({ source: 'customer', title: 'Complaint', severity: 'minor', quantityAffected: 2, description: 'Scratched', customerId, customerReference: 'CLM-9', categoryId: catId, open: true })
         .expect(201)
     ).body.id;
     supplier = (
       await api().post('/api/v1/ncrs').set(h)
-        .send({ source: 'supplier', title: 'Wrong grade', severity: 'critical', quantityAffected: 100, partId, supplierId, purchaseOrder: 'PO-7', open: true })
+        .send({ source: 'supplier', title: 'Wrong grade', severity: 'critical', quantityAffected: 100, partId, supplierId, purchaseOrder: 'PO-7', categoryId: catId, open: true })
         .expect(201)
     ).body.id;
     const got = await api().get(`/api/v1/ncrs/${supplier}`).set(h).expect(200);

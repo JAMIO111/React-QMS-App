@@ -58,20 +58,21 @@ Consequences: the same lot is spelt three ways, "which NCs and inspections touch
   The browser found nothing broken, but the review of its screenshots caught three things now fixed: the raw id in the breadcrumb on the order page, serial numbers made together listed out of order, and a "required" mark on fixed fields.
   Not in TR2: the pickers are not used yet (TR3), production is **not a subscription module** (no `features` row maps `production.*`, so the subscription never restricts it, like master data), no operations reorder/delete (status `skipped` instead).
 
-- **TR3 — link the quality records.** Order / lot / serial pickers (`PartPicker` style, create inline) on Start job, the job hub, the inspection page, and the NC form; text columns filled from the picked record; banner for held lot / closed order; backfill of existing text (decision D1).
-- **TR4 — affected lots on NCs.** `ncr_affected_lots` (NC, lot, optional serials, quantity); dispositions and containment actions can name the lot(s) they apply to; the "quantity affected" and disposition quantity rules extend per lot. Raise-from-inspection pre-fills the lot.
-- **TR5 — traceability.** `GET /traceability?type=order|lot|serial&id=` (and by number search), page `/Traceability` with the relationship view, "where is this lot / serial used" panels, links back from the order, lot, NC and inspection pages; print view for a recall-style report.
+- **TR3 — link the quality records.** **Order first**: the work order is the primary link, lot and serial are optional extras. Order / lot / serial pickers (`PartPicker` style) on Start job, the job hub, the inspection page and the NC form; choosing an order fills the part (and the lot/serial pickers narrow to it); text columns filled from the picked record; banner for held lot / closed order; backfill of existing text (decision D1). The order picker can **create the order inline** for people allowed to (D4, amended §6); the lot and serial pickers appear only when the organisation uses them (D7). Needs a `GET /jobs/{id}` field and `PUT /jobs/{id}/production-links` over `app.set_job_links`.
+- **TR4 — affected lots on NCs.** `ncr_affected_lots` (NC, lot, optional serials, quantity); dispositions and containment actions can name the lot(s) they apply to; the "quantity affected" and disposition quantity rules extend per lot. Raise-from-inspection pre-fills the lot. **The lot is optional**: without lots the NC's quantity affected and its dispositions stand against the production order ("scrap 3 of the 24 on WO-154789"), exactly as today; the per-lot rules apply only to NCs that name lots. Raise-from-inspection also pre-fills the order.
+- **TR5 — traceability.** `GET /traceability?type=order|lot|serial&id=` (and by number search), page `/Traceability` with the relationship view, "where is this lot / serial used" panels, links back from the order, lot, NC and inspection pages; print view for a recall-style report. **It must work from an order alone**: for a shop with no lots or serials the order is the whole story (its jobs and inspection results, NCs and 8Ds raised on it, gauges and machines used, containment and dispositions), and the order page gets the same "everything on this order" view.
+- **TR3b — fit for shops without lots or serials** (small, with TR3). (1) SPC subgroups gain **"by order"** beside inspection / day / lot (`subgroup=order` on `GET /spc/chart` and `POST /spc/baselines`, URL `?basis=order`), using `production_order_id`, falling back to the typed work order. (2) Organisation setting **`organisation_settings.use_lots_and_serials`** (default on, so nothing changes for anyone today; Settings → Organisation): when off, the Lots and Serial numbers menu entries, columns, filters and pickers are hidden and only the order is offered; the data model and API are unchanged (lots and serials simply never exist). (3) The Start job dialog offers the order (optional, or required if the organisation sets `require_production_order`, D5).
 - **TR6 — exit check.** Live guardrails + advisors, browser journey (create order → lot → job → fail → NC naming the lot → disposition per lot → trace from the lot shows all of it), exit report, CLAUDE.md.
 
 Each slice is complete and tested before the next, as in earlier phases.
 
 ## 5. Permissions (proposed)
 
-`production.read` (everyone who can read inspections or NCs), `production.manage` (owner, admin, quality manager, quality engineer). Operators with `inspection.record` may **create a lot/serial/order inline from a job or NC form** only if they also hold `production.manage`; otherwise they pick existing ones (decision D5). Site-scoped through the order/lot's site.
+`production.read` (everyone who can read inspections or NCs), `production.manage` (owner, admin, quality manager, quality engineer). People with `production.manage` may **create an order, lot or serial number inline from a job or NC form**. Operators who hold only `inspection.record` pick existing ones, unless the organisation turns on **`allow_inline_orders`** (D4, amended): then an operator may create an *order* (not a lot or serial) from the job's order picker, because a shop that types its work order at the machine cannot wait for planning to enter it; the order is created `planned`/`released` as normal and the creator is on its audit trail. Until ERP import (Phase 5) orders are entered by hand. Site-scoped through the order/lot's site.
 
 ## 6. Decisions (agreed)
 
-Agreed: D1 backfill and link; D2 produced + received lots; D3 single level, no genealogy; D4 `production.manage` creates, others pick; D5 order optional; D6 as proposed.
+Agreed: D1 backfill and link; D2 produced + received lots; D3 single level, no genealogy; D4 `production.manage` creates, others pick (**amended, see below**); D5 order optional; D6 as proposed. **Added for shops that work to work orders only (proposed, to confirm):** D7 lots and serial numbers are optional everywhere and can be switched off per organisation; D8 operators may create an order inline when the organisation allows it; D9 SPC can group by order.
 
 | # | Question | Proposal |
 |---|---|---|
@@ -79,6 +80,10 @@ Agreed: D1 backfill and link; D2 produced + received lots; D3 single level, no g
 | D2 | Lot scope | **Produced and received lots** (received name a supplier, so a supplier NC can name the incoming lot). Alternative: produced only. |
 | D3 | Genealogy (which component lots went into which assembly lot — `product_bom`) | **Not in Phase 3** (single level: record → order/lot/serial). Say if you need assemblies now. |
 | D4 | Who may create orders/lots/serials inline from a form | Anyone with `production.manage`; others pick only (operators on the shop floor would normally pick an order released by planning). |
+| D4 (amended) | Operators and work-order-only shops | Planners create orders by default; an organisation can switch on `allow_inline_orders` so people with only `inspection.record` can create an **order** (never lots or serials) from the job's picker. **To confirm.** |
+| D7 | Lots and serial numbers for shops that do not use them | Optional in every table, API and form already; new setting `use_lots_and_serials` (default on) hides their menu, columns, filters and pickers. **To confirm.** |
+| D8 | Inline order creation setting | `allow_inline_orders`, default off. **To confirm.** |
+| D9 | Grouping SPC points when there are no lots | Add **by order** as a subgroup basis. **To confirm.** |
 | D5 | Must a job (inspection) be tied to a production order | **Optional**, an organisation setting later (`require_production_order`) if wanted. |
 | D6 | Order status | planned → released → in progress → completed → closed / cancelled, moved by people (no automatic completion). |
 
@@ -87,6 +92,8 @@ Agreed: D1 backfill and link; D2 produced + received lots; D3 single level, no g
 ERP / CSV import and sync (Phase 5, columns reserved), `products` and `product_bom` assemblies and component-lot genealogy, shipments and customer deliveries, scheduling, barcode hardware beyond a text field that accepts scanner input, inventory quantities, unit conversion.
 
 ## 8. Risks
+
+- **A work-order-only shop must never be second-class.** Every slice is checked against a scenario with **no lots and no serials** (a job and an NC on "WO-154789 × 24", traced from the order alone). A browser journey step covers it in TR6.
 
 - **Backfill quality** (D1): free-text variants (`WO-12`, `wo12`) will make separate orders; the backfill matches case-insensitively and trimmed, reports what it created, and is idempotent. A merge tool is out of scope.
 - **Existing tests and the journey** create NCs and inspections with text only; they must keep passing unchanged (principle 1).

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -250,6 +250,17 @@ describe("SPC page", () => {
     expect(apiFetch.mock.calls.some(([p]) => p.startsWith("/spc/chart"))).toBe(
       false,
     );
+  });
+
+  it("chooses the characteristic and the machine from combo boxes, kept in the URL", async () => {
+    routeApi(base({ "GET /machines": { data: [{ id: "m1", code: "LATHE-1", name: "Lathe", siteId: "s1" }], nextCursor: null } }));
+    const where = renderAt(URL);
+    await userEvent.click(await screen.findByRole("combobox", { name: /Characteristic/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /Outer diameter/ }));
+    await waitFor(() => expect(where()).toContain("c=OD%7COP-020"));
+    await userEvent.click(screen.getByRole("combobox", { name: "Machine" }));
+    await userEvent.click(await screen.findByRole("option", { name: /LATHE-1 · Lathe/ }));
+    await waitFor(() => expect(where()).toContain("machine=m1"));
   });
 
   it("sends the chosen rules; switching one off keeps the others", async () => {

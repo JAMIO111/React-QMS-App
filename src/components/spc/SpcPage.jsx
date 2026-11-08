@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { CircleAlertIcon } from "@/components/icons";
+import ComboField from "../ui/ComboField";
 import Field from "../ui/Field";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import MenuCard from "../ui/MenuCard";
@@ -142,7 +143,7 @@ const SpcPage = () => {
             current={part.data}
             onChange={(id) => set({ part: id ?? "", c: "", rules: null })}
           />
-          <SelectField
+          <ComboField
             label="Characteristic"
             value={current ? optionKey(current) : null}
             disabled={!partId || options.length === 0}
@@ -198,7 +199,7 @@ const SpcPage = () => {
               }
             />
           )}
-          <SelectField
+          <ComboField
             label="Machine"
             value={machineId || null}
             onChange={(v) => set({ machine: v ?? "" })}

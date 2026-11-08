@@ -185,14 +185,33 @@ export type CloseCapaBody = z.infer<typeof CloseCapaBody>;
 export const LinkNcrBody = z.object({ ncrId: z.string().uuid() }).strict();
 export type LinkNcrBody = z.infer<typeof LinkNcrBody>;
 
+const csv = (allowed: readonly string[]) =>
+  z.string().refine((v) => v.split(',').every((x) => allowed.includes(x)), 'Use a comma-separated list of known values');
+
+export const CAPA_SORTS = ['reference', 'title', 'stage', 'owner', 'dueDate', 'ncrCount', 'progress', 'severity', 'source', 'createdAt', 'closedAt'] as const;
+
 export const ListQuery = z.object({
-  /** Running (not closed or cancelled) by default; a stage; or all. */
-  stage: z.enum(['running', ...STAGES, 'all']).default('running'),
+  /** Comma-separated: `running` (not closed or cancelled, the default), `all`, or any of the stages. */
+  stage: csv(['running', 'all', ...STAGES]).default('running'),
+  /** Comma-separated sources / severities. */
+  source: csv(SOURCES).optional(),
+  severity: csv(SEVERITIES).optional(),
   /** Only 8Ds linked to this non-conformance. */
   ncrId: z.string().uuid().optional(),
   /** Only 8Ds the signed-in person owns. */
   owner: z.enum(['me']).optional(),
+  /** Only running 8Ds past their due date. */
+  overdue: z.enum(['true']).optional(),
+  /** Started (created) between these dates, inclusive. */
+  from: DateOnly.optional(),
+  to: DateOnly.optional(),
+  /** Reference, title, problem statement, outside reference, owner, who/what/where of the problem, linked non-conformance references. */
   q: z.string().trim().min(1).max(100).optional(),
+  sort: z.enum(CAPA_SORTS).default('createdAt'),
+  order: z.enum(['asc', 'desc']).default('desc'),
+  page: z.coerce.number().int().min(1).default(1),
+  /** `limit` is the older name for the page size. */
+  pageSize: z.coerce.number().int().min(1).max(200).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(100),
 });
 export type ListQuery = z.infer<typeof ListQuery>;
@@ -363,7 +382,7 @@ export const CapaDetail = CapaSummary.extend({
 });
 export type CapaDetail = z.infer<typeof CapaDetail>;
 
-export const CapaList = z.object({ data: z.array(CapaSummary) });
+export const CapaList = z.object({ data: z.array(CapaSummary), page: z.number().int(), pageSize: z.number().int(), total: z.number().int() });
 export const PeopleList = z.object({ data: z.array(z.object({ membershipId: z.string().uuid(), userId: z.string().uuid(), name: z.string() })) });
 export const NcrCapaList = z.object({
   data: z.array(z.object({ linkId: z.string().uuid(), capaId: z.string().uuid(), reference: z.string(), title: z.string(), stage: Stage, currentStep: Step, stepsDone: z.number().int(), linkedAt: Iso })),

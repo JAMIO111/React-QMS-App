@@ -9,6 +9,7 @@ const apiFetch = vi.fn();
 vi.mock("../../lib/api-client", async (importOriginal) => ({ ...(await importOriginal()), apiFetch: (...a) => apiFetch(...a) }));
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "org-1" }) }));
 vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }) }));
+vi.mock("../../contexts/SearchProvider", () => ({ useGlobalSearch: () => ({ debouncedSearchTerm: "" }) }));
 vi.mock("../ncr/Pickers", () => ({
   TextAreaField: ({ label, value, onChange }) => <textarea aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />,
   NcrPicker: ({ label, onChange }) => <button type="button" onClick={() => onChange("n9", { id: "n9", name: "NC-26-009 · Burrs" })}>{label}: pick NC-26-009</button>,
@@ -66,25 +67,56 @@ beforeEach(() => {
 });
 
 describe("8D register", () => {
-  it("lists 8Ds with stage, progress, owner, due date and NC count, and filters through the URL", async () => {
-    apiFetch.mockResolvedValue({ data: [summary(), summary({ id: "c2", reference: "CAPA-000002", title: "Burrs", stage: "actions_in_progress", stepsDone: 4, currentStep: "d4", overdue: true, dueDate: "2026-10-01", ncrCount: 3, externalReference: "SCAR-14" })] });
-    const where = renderAt("/CAPA");
-    const table = await screen.findByRole("table", { name: "8Ds" });
+  const listOf = (rows) => ({ data: rows, page: 1, pageSize: 25, total: rows.length });
+  const lastList = () => apiFetch.mock.calls.filter(([p]) => p.startsWith("/capas?")).at(-1)[0];
+  const rows2 = () => [summary(), summary({ id: "c2", reference: "CAPA-000002", title: "Burrs", stage: "actions_in_progress", stepsDone: 4, currentStep: "d4", overdue: true, dueDate: "2026-10-01", ncrCount: 3, externalReference: "SCAR-14" })];
+
+  it("is a server-side table with stage, progress, owner, due date and NC count, running 8Ds first", async () => {
+    apiFetch.mockResolvedValue(listOf(rows2()));
+    renderAt("/CAPA");
+    const table = await screen.findByRole("region", { name: "8Ds" });
     expect(within(table).getByRole("link", { name: "CAPA-000001" })).toHaveAttribute("href", "/CAPA/c1/d0");
     expect(within(table).getByRole("link", { name: "CAPA-000002" })).toHaveAttribute("href", "/CAPA/c2/d4");
     expect(within(table).getByText("Actions in progress")).toBeInTheDocument();
     expect(within(table).getByText("D4 · 4/9")).toBeInTheDocument();
     expect(within(table).getByText(/Overdue/)).toBeInTheDocument();
     expect(within(table).getByText("SCAR-14")).toBeInTheDocument();
-    expect(apiFetch).toHaveBeenCalledWith("/capas?stage=running", { organisationId: "org-1" });
-    await userEvent.click(screen.getByLabelText("Only 8Ds I own"));
-    await waitFor(() => expect(where()).toBe("/CAPA?owner=me"));
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/capas?stage=running&owner=me", { organisationId: "org-1" }));
+    expect(screen.getByText("2 8Ds running")).toBeInTheDocument();
+    const url = new URL(lastList(), "http://x");
+    expect(Object.fromEntries(url.searchParams)).toMatchObject({ stage: "running", sort: "createdAt", order: "desc", page: "1", pageSize: "25" });
+  });
+
+  it("filters from the drawer (several stages, only mine, overdue), shows chips and clears them", async () => {
+    apiFetch.mockResolvedValue(listOf(rows2()));
+    const where = renderAt("/CAPA");
+    await screen.findByRole("region", { name: "8Ds" });
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
+    const pane = await screen.findByRole("dialog", { name: "Filter 8Ds" });
+    await userEvent.click(within(pane).getByLabelText("Open"));
+    await userEvent.click(within(pane).getByLabelText("Closed"));
+    await userEvent.click(within(pane).getByLabelText("Only 8Ds I own"));
+    await userEvent.click(within(pane).getByLabelText("Overdue only"));
+    await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(where()).toBe("/CAPA?stage=open%2Cclosed&owner=me&overdue=true"));
+    await waitFor(() => expect(Object.fromEntries(new URL(lastList(), "http://x").searchParams)).toMatchObject({ stage: "open,closed", owner: "me", overdue: "true" }));
+    expect(screen.getByRole("button", { name: /Remove filter Stage: Open, Closed/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Remove filter Owned by me/ }));
+    await waitFor(() => expect(where()).toBe("/CAPA?stage=open%2Cclosed&overdue=true"));
+    await userEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    await waitFor(() => expect(where()).toBe("/CAPA"));
+  });
+
+  it("reads filters from the address, so a filtered register can be shared", async () => {
+    apiFetch.mockResolvedValue(listOf([]));
+    renderAt("/CAPA?severity=critical,major&source=supplier&from=2026-11-01");
+    expect(await screen.findByRole("button", { name: /Remove filter Severity: Critical, Major/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Remove filter Source: Supplier/ })).toBeInTheDocument();
+    await waitFor(() => expect(Object.fromEntries(new URL(lastList(), "http://x").searchParams)).toMatchObject({ severity: "critical,major", source: "supplier", from: "2026-11-01", stage: "running" }));
   });
 
   it("starts an 8D from the register and opens D0; there is no button without capa.manage", async () => {
     let body;
-    apiFetch.mockImplementation(respond((path, opts = {}) => (opts.method === "POST" ? ((body = opts.body), detail({ id: "new1" })) : { data: [] })));
+    apiFetch.mockImplementation(respond((path, opts = {}) => (opts.method === "POST" ? ((body = opts.body), detail({ id: "new1" })) : { data: [], page: 1, pageSize: 25, total: 0 })));
     const where = renderAt("/CAPA");
     await userEvent.click(await screen.findByRole("button", { name: "Start an 8D" }));
     const dialog = screen.getByRole("dialog");
@@ -97,9 +129,9 @@ describe("8D register", () => {
 
   it("offers no start button to a reader", async () => {
     permissions = ["capa.read"];
-    apiFetch.mockResolvedValue({ data: [] });
+    apiFetch.mockResolvedValue({ data: [], page: 1, pageSize: 25, total: 0 });
     renderAt("/CAPA");
-    expect(await screen.findByText("No 8Ds match.")).toBeInTheDocument();
+    await screen.findByRole("region", { name: "8Ds" });
     expect(screen.queryByRole("button", { name: "Start an 8D" })).toBeNull();
   });
 });
@@ -289,7 +321,7 @@ describe("NC page 8D card", () => {
 
   it("starts a new 8D from the non-conformance and opens D0", async () => {
     let body;
-    apiFetch.mockImplementation(respond((path, opts = {}) => (opts.method === "POST" ? ((body = opts.body), detail({ id: "new1" })) : { data: [] })));
+    apiFetch.mockImplementation(respond((path, opts = {}) => (opts.method === "POST" ? ((body = opts.body), detail({ id: "new1" })) : { data: [], page: 1, pageSize: 25, total: 0 })));
     const where = card();
     expect(await screen.findByText("No 8D addresses this non-conformance yet.")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Start a new 8D" }));

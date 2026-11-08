@@ -11,6 +11,11 @@ import { AddTeamBody, ANALYSIS_DATA, CapaDetail, CapaSummary, CloseCapaBody, Com
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown' } : null);
 const RUNNING = sql`c.stage not in ('closed', 'cancelled')`;
+/** Sort fields of the register, as SQL (owner and progress use the SELECT's own columns). */
+const SORT_SQL: Record<ListQuery['sort'], string> = {
+  reference: 'c.reference', title: 'lower(c.title)', stage: 'c.stage', owner: `lower(${personName('po')})`, dueDate: 'c.due_date', ncrCount: 'ncr_count',
+  progress: 'steps_done', severity: 'c.severity', source: 'c.source', createdAt: 'c.created_at', closedAt: 'c.closed_at',
+};
 
 const SELECT = sql`
   select c.id, c.reference, c.method, c.title, c.problem_statement, c.stage, c.stage_reason, c.source, c.severity, c.external_reference,
@@ -89,19 +94,41 @@ const HEADER_COLUMNS: Record<string, string> = {
 export class CapaService {
   constructor(private readonly database: DatabaseService) {}
 
-  list(ctx: RequestContext, q: ListQuery): Promise<{ data: CapaSummary[] }> {
+  list(ctx: RequestContext, q: ListQuery): Promise<{ data: CapaSummary[]; page: number; pageSize: number; total: number }> {
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`c.organisation_id = ${orgOf(ctx)}::uuid`];
-      if (q.stage === 'running') where.push(RUNNING);
-      else if (q.stage !== 'all') where.push(sql`c.stage = ${q.stage}`);
+      const stages = q.stage.split(',');
+      if (!stages.includes('all')) {
+        const parts: SQL[] = [];
+        if (stages.includes('running')) parts.push(RUNNING);
+        const named = stages.filter((x) => x !== 'running');
+        if (named.length) parts.push(sql`c.stage = any(string_to_array(${named.join(',')}, ','))`);
+        where.push(sql`(${sql.join(parts, sql` or `)})`);
+      }
+      if (q.source) where.push(sql`c.source = any(string_to_array(${q.source}, ','))`);
+      if (q.severity) where.push(sql`c.severity = any(string_to_array(${q.severity}, ','))`);
       if (q.ncrId) where.push(sql`exists (select 1 from public.capa_ncr_links l where l.capa_id = c.id and l.nonconformance_id = ${q.ncrId}::uuid and l.ended_at is null)`);
       if (q.owner === 'me') where.push(sql`om.user_id = auth.uid()`);
+      if (q.overdue) where.push(sql`c.due_date is not null and c.due_date < current_date and ${RUNNING}`);
+      if (q.from) where.push(sql`c.created_at::date >= ${q.from}::date`);
+      if (q.to) where.push(sql`c.created_at::date <= ${q.to}::date`);
       if (q.q) {
         const like = `%${q.q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
-        where.push(sql`(c.title ilike ${like} or c.reference ilike ${like})`);
+        where.push(sql`(c.title ilike ${like} or c.reference ilike ${like} or c.problem_statement ilike ${like} or c.external_reference ilike ${like}
+          or ${sql.raw(personName('po'))} ilike ${like} or c.d2_who ilike ${like} or c.d2_what ilike ${like} or c.d2_where ilike ${like}
+          or exists (select 1 from public.capa_ncr_links l join public.nonconformances n on n.id = l.nonconformance_id
+                      where l.capa_id = c.id and l.ended_at is null and (n.reference ilike ${like} or n.title ilike ${like})))`);
       }
-      const rows = await db.execute<Row>(sql`${SELECT} where ${sql.join(where, sql` and `)} order by c.created_at desc limit ${q.limit}`);
-      return { data: rows.rows.map(toSummary) };
+      const pageSize = q.pageSize ?? q.limit;
+      const order = sql.raw(`${SORT_SQL[q.sort]} ${q.order} nulls last, c.reference desc`);
+      const clause = sql.join(where, sql` and `);
+      const rows = await db.execute<Row>(sql`${SELECT} where ${clause} order by ${order} limit ${pageSize} offset ${(q.page - 1) * pageSize}`);
+      const count = await db.execute<{ n: number }>(sql`
+        select count(*)::int as n from public.capas c
+        left join public.organisation_users om on om.id = c.owner_membership_id
+        left join public.profiles po on po.id = om.user_id
+        where ${clause}`);
+      return { data: rows.rows.map(toSummary), page: q.page, pageSize, total: Number(count.rows[0].n) };
     });
   }
 

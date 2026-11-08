@@ -61,3 +61,7 @@ export const useAuditFindingFilters = () => useUrlFilters(AUDIT_FINDING_FILTER_K
 /** Audit schedule filters: view (list | calendar), month (YYYY-MM; none = about a month either side of today), state, audit and machine. */
 export const AUDIT_SCHEDULE_FILTER_KEYS = ["view", "month", "state", "audit", "auditLabel", "machine", "machineLabel"];
 export const useAuditScheduleFilters = () => useUrlFilters(AUDIT_SCHEDULE_FILTER_KEYS);
+
+/** 8D (CAPA) register filters. Empty stage = running 8Ds (not closed or cancelled). */
+export const CAPA_FILTER_KEYS = ["search", "stage", "source", "severity", "owner", "overdue", "from", "to"];
+export const useCapaFilters = () => useUrlFilters(CAPA_FILTER_KEYS);

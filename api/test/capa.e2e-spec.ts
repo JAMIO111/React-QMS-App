@@ -80,6 +80,18 @@ describe('the register', () => {
     expect((await api().get('/api/v1/capas?q=capa-000001').set(await owner()).expect(200)).body.data).toHaveLength(1);
     expect((await api().get('/api/v1/capas?stage=cancelled').set(await owner()).expect(200)).body.data).toEqual([]);
     await api().get('/api/v1/capas?stage=bogus').set(await owner()).expect(400);
+    // Paging, sorting, multi-value filters and the wider search.
+    const page = (await api().get('/api/v1/capas?pageSize=1&page=2&sort=reference&order=asc').set(await owner()).expect(200)).body;
+    expect(page).toMatchObject({ page: 2, pageSize: 1, total: 2 });
+    expect(page.data.map((c: { reference: string }) => c.reference)).toEqual(['CAPA-000002']);
+    const sorted = (await api().get('/api/v1/capas?sort=owner&order=desc&stage=running,cancelled').set(await owner()).expect(200)).body.data;
+    expect(sorted).toHaveLength(2);
+    expect((await api().get('/api/v1/capas?stage=all&source=customer,supplier').set(await owner()).expect(200)).body.total).toBeGreaterThanOrEqual(0);
+    expect((await api().get('/api/v1/capas?overdue=true').set(await owner()).expect(200)).body.data).toEqual([]);
+    expect((await api().get('/api/v1/capas?from=2999-01-01').set(await owner()).expect(200)).body.total).toBe(0);
+    expect((await api().get('/api/v1/capas?q=ada').set(await owner()).expect(200)).body.total).toBe(2);
+    await api().get('/api/v1/capas?sort=bogus').set(await owner()).expect(400);
+    await api().get('/api/v1/capas?source=bogus').set(await owner()).expect(400);
   });
 
   it('is readable by anyone with capa.read, not by people from another organisation', async () => {

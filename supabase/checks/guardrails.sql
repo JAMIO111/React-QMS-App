@@ -64,7 +64,7 @@ audited(relname) AS (VALUES
   ('quality_alerts'), ('quality_alert_parts'), ('quality_alert_machines'), ('quality_alert_operations'), ('quality_alert_departments'), ('quality_alert_targets'), ('quality_alert_recipients'), ('quality_alert_attachments'), ('quality_alert_links'), ('quality_alert_actions'), ('quality_alert_events'),
   ('Employees'), ('capas'), ('capa_steps'), ('capa_team_members'), ('capa_ncr_links'), ('capa_analyses'), ('capa_actions'), ('capa_root_causes'), ('capa_verifications'), ('capa_attachments'), ('organisation_onboarding'), ('billing_customers'), ('stripe_checkout_sessions'),
   ('production_orders'), ('production_operations'), ('lots'), ('serial_numbers'), ('audit_definitions'), ('audit_questions'), ('audit_targets'), ('audit_occurrences'), ('audit_records'), ('audit_record_questions'), ('audit_record_targets'), ('audit_responses'), ('audit_ncr_links'), ('audit_attachments'), ('audit_finding_classifications'), ('audit_findings'), ('audit_finding_attachments'), ('audit_versions'), ('audit_version_questions'), ('audit_version_targets'),
-  ('supplier_status_history'), ('supplier_documents'), ('supplier_certifications'), ('supplier_classifications'), ('supplier_classification_links'), ('supplier_contacts'), ('supplier_product_links')
+  ('supplier_status_history'), ('supplier_documents'), ('supplier_certifications'), ('supplier_risk_models'), ('supplier_risk_assessments'), ('supplier_classifications'), ('supplier_classification_links'), ('supplier_contacts'), ('supplier_product_links')
 )
 SELECT rule, object FROM (
   SELECT '1 rls disabled' AS rule, format('%I.%I', nspname, relname) AS object

@@ -245,6 +245,10 @@ BEGIN
     jsonb_build_object('certType', 'iso_9001', 'certificateNumber', 'SWEEP-1', 'issuingBody', 'Sweep Body', 'expiresOn', (current_date + 400)::text));
   PERFORM app.add_supplier_document((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), 'quality_manual', 'Sweep manual', 'A', NULL, NULL, NULL,
     a::text || '/supplier/' || (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1)::text || '/sweep.pdf', 'sweep.pdf', 'application/pdf', 10);
+  -- Supplier quality (SQ2b): a risk assessment against the organisation's default model.
+  PERFORM app.record_supplier_risk_assessment((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1),
+    (SELECT jsonb_agg(jsonb_build_object('key', f ->> 'key', 'score', 2)) FROM public.supplier_risk_models m, jsonb_array_elements(m.factors) f WHERE m.organisation_id = a AND m.version = 1),
+    'Sweep rationale');
   PERFORM pg_temp.logout();
   INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id FROM public.notifications WHERE organisation_id = a LIMIT 1;

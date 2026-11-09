@@ -158,3 +158,45 @@ export const useQualificationMutation = () => {
     onSuccess: () => refreshOrganisation(queryClient, organisationId),
   });
 };
+
+/** The organisation's current risk model and its versions. */
+export const useRiskModel = () => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "risk-model"),
+    queryFn: () => apiFetch("/supplier-quality/risk-model", { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+  });
+};
+
+/** A supplier's risk assessments, the current one first. */
+export const useRiskAssessments = (id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "risk-assessments", id),
+    queryFn: () => apiFetch(`/supplier-quality/suppliers/${id}/risk-assessments`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};
+
+/** What a set of scores would give under the current model; nothing is saved, so nothing is refreshed. */
+export const usePreviewRisk = () => {
+  const { organisationId } = useOrganisation();
+  return useMutation({ mutationFn: ({ id, scores }) => apiFetch(`/supplier-quality/suppliers/${id}/risk-assessments/preview`, { method: "POST", body: { scores }, organisationId }) });
+};
+
+/** Record an assessment (`record`) or save a new version of the model (`saveModel`). */
+export const useRiskMutation = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, id, body }) => {
+      if (action === "record") return apiFetch(`/supplier-quality/suppliers/${id}/risk-assessments`, { method: "POST", body, organisationId });
+      if (action === "saveModel") return apiFetch("/supplier-quality/risk-model", { method: "PUT", body, organisationId });
+      throw new Error(`Unknown action ${action}`);
+    },
+    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+  });
+};

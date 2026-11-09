@@ -74,3 +74,6 @@ export const SCAR_REGISTER = "/Supplier-Quality/SCARs";
 
 /** A new request key, sent with a create so a retried request returns the same SCAR. */
 export const newClientKey = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `key-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+
+/** The requirement breached, in the words of a non-conformance: what it should have been and what was found. */
+export const breachFrom = (n) => [n.requirement && `Requirement: ${n.requirement}`, n.actualResult && `Actual: ${n.actualResult}`].filter(Boolean).join("\n");

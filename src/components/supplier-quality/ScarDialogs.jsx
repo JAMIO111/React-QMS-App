@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useNcrs } from "../../hooks/useNcr";
+import { Trash2Icon } from "@/components/icons";
+import { useNcr, useNcrs } from "../../hooks/useNcr";
 import { useScarMutation, useScarPeople, useSupplier, useSupplierRegister } from "../../hooks/useSupplierQuality";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { formatDate, sourceLabel } from "../../lib/ncr";
-import { ROOT_CAUSE_METHODS, SCAR_SEVERITIES, newClientKey, scarPath } from "../../lib/supplierScars";
+import { ROOT_CAUSE_METHODS, SCAR_SEVERITIES, breachFrom, newClientKey, scarPath } from "../../lib/supplierScars";
 import { OPEN_NC_STAGES } from "../../lib/supplierQuality";
 import CTAButton from "../CTAButton";
 import ComboField from "../ui/ComboField";
@@ -74,6 +75,19 @@ export const CreateScarDialog = ({ supplier: fixedSupplier = null, ncrId = null,
   const people = useScarPeople();
   const rows = supplierId ? (ncrs.data?.data ?? []) : [];
   const toggle = (id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  // The first non-conformance picked fills in the title, the problem and the requirement breached, unless the person has already written their own.
+  const lead = picked[0] ?? null;
+  const leadNcr = useNcr(lead);
+  const touched = useRef(new Set());
+  const edited = (field, set) => (e) => { touched.current.add(field); set(e.target.value); };
+  useEffect(() => {
+    const n = leadNcr.data;
+    if (!lead || !n || n.id !== lead) return;
+    const t = touched.current;
+    if (!t.has("title") && n.title) setTitle(n.title);
+    if (!t.has("description") && n.description) setDescription(n.description);
+    if (!t.has("requirement")) setRequirement(breachFrom(n));
+  }, [lead, leadNcr.data]);
   const ok = !!supplierId && title.trim().length >= 3;
 
   const submit = () =>
@@ -109,9 +123,28 @@ export const CreateScarDialog = ({ supplier: fixedSupplier = null, ncrId = null,
         <ComboField label="Supplier" required value={supplierId} onChange={(v) => { setSupplierId(v); setContactId(null); setPicked([]); }} placeholder="Search suppliers…" filterLocally={false} onSearchChange={setSearch}
           options={(suppliers.data?.data ?? []).map((s) => ({ value: s.id, label: `${s.code} · ${s.displayName || s.name}` }))} />
       )}
-      <Field label="Title" required value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} placeholder="For example: Bent brackets on pallet 4" />
-      <TextAreaField label="The problem" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={4000} rows={3} hint="What the supplier is being asked to look into." />
-      <TextAreaField label="Requirement breached" value={requirement} onChange={(e) => setRequirement(e.target.value)} maxLength={2000} rows={2} hint="The drawing, specification, order or agreement the product did not meet" />
+      <div className="flex flex-col gap-2">
+        <ComboField label="Non-conformance this is about" value={null} onChange={(v) => v && !picked.includes(v) && setPicked((p) => [...p, v])} disabled={!supplierId}
+          placeholder={!supplierId ? "Choose a supplier first" : ncrs.isLoading ? "Loading…" : rows.length === 0 ? "This supplier has no open non-conformances" : "Choose a non-conformance"}
+          hint="The first one fills in the title, the problem and the requirement breached from the non-conformance. You can still change them."
+          options={rows.filter((n) => !picked.includes(n.id)).map((n) => ({ value: n.id, label: `${n.reference} · ${n.title}`, hint: `${sourceLabel(n.source)} · detected ${formatDate(n.detectedAt)}` }))} />
+        {picked.length > 0 && (
+          <ul className="flex flex-wrap gap-1.5" aria-label="Linked non-conformances">
+            {picked.map((id) => {
+              const n = rows.find((x) => x.id === id);
+              return (
+                <li key={id} className="flex items-center gap-1 rounded-full border border-border-color px-2 py-0.5 text-sm text-primary-text">
+                  {n ? `${n.reference} · ${n.title}` : leadNcr.data?.id === id ? `${leadNcr.data.reference} · ${leadNcr.data.title}` : "Non-conformance"}
+                  <button type="button" aria-label={`Remove ${n?.reference ?? "non-conformance"}`} className="text-secondary-text hover:text-error-color" onClick={() => toggle(id)}><Trash2Icon /></button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+      <Field label="Title" required value={title} onChange={edited("title", setTitle)} maxLength={200} placeholder="For example: Bent brackets on pallet 4" />
+      <TextAreaField label="The problem" value={description} onChange={edited("description", setDescription)} maxLength={4000} rows={3} hint="What the supplier is being asked to look into." />
+      <TextAreaField label="Requirement breached" value={requirement} onChange={edited("requirement", setRequirement)} maxLength={2000} rows={2} hint="The drawing, specification, order or agreement the product did not meet" />
       <TextAreaField label="Objective evidence" value={evidence} onChange={(e) => setEvidence(e.target.value)} maxLength={4000} rows={2} hint="What shows it: measurements, photos, inspection references" />
       <TextAreaField label="Containment required" value={containment} onChange={(e) => setContainment(e.target.value)} maxLength={4000} rows={2} hint="What you need the supplier to do now: segregate stock, stop shipments, inspect stock, review earlier deliveries" />
       <div className="flex flex-col gap-1">
@@ -124,30 +157,6 @@ export const CreateScarDialog = ({ supplier: fixedSupplier = null, ncrId = null,
         <ComboField label="Supplier contact" value={contactId} onChange={setContactId} placeholder="Choose later" disabled={!supplierId}
           options={(detail.data?.contacts ?? []).filter((c) => c.active).map((c) => ({ value: c.id, label: c.name, hint: c.email ?? undefined }))} />
       </div>
-      <fieldset className="flex flex-col gap-1">
-        <legend className="text-sm font-medium text-secondary-text">Non-conformances this is about</legend>
-        {!supplierId ? (
-          <p className="text-sm text-secondary-text">Choose a supplier to see its open non-conformances.</p>
-        ) : ncrs.isLoading ? (
-          <p className="text-sm text-secondary-text">Loading…</p>
-        ) : rows.length === 0 ? (
-          <p className="text-sm text-secondary-text">This supplier has no open non-conformances. You can link some before issuing.</p>
-        ) : (
-          <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-lg border border-border-color p-2">
-            {rows.map((n) => (
-              <li key={n.id}>
-                <label className="flex cursor-pointer items-start gap-2 text-sm text-primary-text">
-                  <input type="checkbox" className="mt-1" checked={picked.includes(n.id)} onChange={() => toggle(n.id)} />
-                  <span>
-                    <span className="font-medium">{n.reference}</span> · {n.title}
-                    <span className="block text-xs text-secondary-text">{sourceLabel(n.source)} · detected {formatDate(n.detectedAt)}</span>
-                  </span>
-                </label>
-              </li>
-            ))}
-          </ul>
-        )}
-      </fieldset>
     </CommandDialog>
   );
 };

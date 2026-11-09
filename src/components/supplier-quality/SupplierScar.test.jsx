@@ -228,12 +228,13 @@ describe("the NC page card", () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
-  it("lists the SCARs of this NC and raises one with the supplier and the NC chosen", async () => {
+  it("lists the SCARs of this NC and raises one with the supplier and the NC chosen, filling the form from the NC", async () => {
     routeApi({
       "GET /supplier-quality/scars": { data: [], page: 1, pageSize: 20, total: 0 },
       "GET /supplier-quality/scar-people": { data: [{ userId: "u1", name: "Ada Owner" }] },
       "GET /supplier-quality/suppliers/s1": { contacts: [] },
       "GET /ncrs": { data: [{ id: "n1", reference: "NC-000001", title: "Bent bracket", source: "supplier", detectedAt: "2026-11-01" }], page: 1, pageSize: 50, total: 1 },
+      "GET /ncrs/n1": { id: "n1", reference: "NC-000001", title: "Bent bracket", description: "Brackets arrive bent on every pallet", requirement: "Flat within 0.5 mm", actualResult: "Bent by 2 mm" },
       "POST /supplier-quality/scars": () => detail(),
     });
     renderAt(<NcrScarCard ncr={{ id: "n1", supplier: { id: "s1", name: "Acme Metals" } }} />);
@@ -242,15 +243,21 @@ describe("the NC page card", () => {
     await userEvent.click(screen.getByRole("button", { name: "Raise a SCAR" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Acme Metals")).toBeInTheDocument();
-    await userEvent.type(within(dialog).getByLabelText("Title"), "Bent brackets");
-    await userEvent.type(within(dialog).getByLabelText("Requirement breached"), "Drawing note 4");
+    // the non-conformance is chosen first, as a combo box, and fills the form
+    expect(within(dialog).getByRole("combobox", { name: /Non-conformance this is about/ })).toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).getByLabelText("Title")).toHaveValue("Bent bracket"));
+    expect(within(dialog).getByLabelText("The problem")).toHaveValue("Brackets arrive bent on every pallet");
+    expect(within(dialog).getByLabelText("Requirement breached")).toHaveValue("Requirement: Flat within 0.5 mm\nActual: Bent by 2 mm");
+    expect(within(dialog).getByRole("list", { name: "Linked non-conformances" })).toHaveTextContent("NC-000001");
+    // what the person writes is never overwritten
+    await userEvent.clear(within(dialog).getByLabelText("Title"));
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Bent brackets, pallet 4");
     await userEvent.type(within(dialog).getByLabelText("Objective evidence"), "Photos 1 to 3");
     await userEvent.type(within(dialog).getByLabelText("Containment required"), "Quarantine stock");
-    expect(await within(dialog).findByRole("checkbox")).toBeChecked();
     await userEvent.click(within(dialog).getByRole("button", { name: "Create draft" }));
     await waitFor(() => expect(calls.find((c) => c.k === "POST /supplier-quality/scars")).toBeTruthy());
     const body = calls.find((c) => c.k === "POST /supplier-quality/scars").body;
-    expect(body).toMatchObject({ supplierId: "s1", title: "Bent brackets", ncrIds: ["n1"], requirementBreached: "Drawing note 4", objectiveEvidence: "Photos 1 to 3", containmentRequirements: "Quarantine stock" });
+    expect(body).toMatchObject({ supplierId: "s1", title: "Bent brackets, pallet 4", problemDescription: "Brackets arrive bent on every pallet", ncrIds: ["n1"], requirementBreached: "Requirement: Flat within 0.5 mm\nActual: Bent by 2 mm", objectiveEvidence: "Photos 1 to 3", containmentRequirements: "Quarantine stock" });
     expect(body.clientKey).toHaveLength(36);
   });
 });

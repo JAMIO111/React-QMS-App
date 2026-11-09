@@ -285,6 +285,18 @@ BEGIN
   PERFORM app.record_goods_receipt((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), (SELECT id FROM _sweep_po), NULL, current_date, 'DN-1', NULL,
     jsonb_build_array(jsonb_build_object('poLineId', (SELECT id FROM public.purchase_order_lines WHERE purchase_order_id = (SELECT id FROM _sweep_po) LIMIT 1), 'quantity', 4, 'lotNumber', 'SWEEP-RLOT')), NULL);
   DROP TABLE _sweep_po;
+  -- Supplier quality (SQ4b): an approved inspection requirement, a receipt it applies to, its incoming inspection, a decision and an NC raised from the line.
+  PERFORM pg_temp.logout();
+  INSERT INTO public.supplier_inspection_requirements (organisation_id, name, strategy, level, operation_code, status, approved_at, approved_by)
+    VALUES (a, 'Sweep rule', 'full', 'increased', 'OP-10', 'approved', now(), '50000000-0000-0000-0000-0000000000a1');
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
+  CREATE TEMP TABLE _sweep_gr AS
+    SELECT (app.record_goods_receipt((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), NULL, site, current_date, 'DN-2', NULL,
+      jsonb_build_array(jsonb_build_object('partId', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'), 'quantity', 3, 'lotNumber', 'SWEEP-ILOT')), NULL) ->> 'id')::uuid AS id;
+  PERFORM app.start_incoming_inspection((SELECT id FROM public.goods_receipt_lines WHERE goods_receipt_id = (SELECT id FROM _sweep_gr) LIMIT 1));
+  PERFORM app.disposition_receipt_line((SELECT id FROM public.goods_receipt_lines WHERE goods_receipt_id = (SELECT id FROM _sweep_gr) LIMIT 1), 'held', 'Sweep hold', NULL);
+  PERFORM app.raise_ncr_from_receipt_line((SELECT id FROM public.goods_receipt_lines WHERE goods_receipt_id = (SELECT id FROM _sweep_gr) LIMIT 1), 'Sweep receiving NC', NULL, 'minor', NULL, NULL);
+  DROP TABLE _sweep_gr;
   PERFORM pg_temp.logout();
   INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id FROM public.notifications WHERE organisation_id = a LIMIT 1;

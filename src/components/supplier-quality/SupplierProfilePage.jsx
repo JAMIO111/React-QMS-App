@@ -21,6 +21,7 @@ import { ActivityBadge, ApprovalPill, RiskBadge } from "./SupplierBadges";
 import { CertificationsCard, DocumentsCard } from "./Qualification";
 import { RiskCard } from "./RiskAssessment";
 import { ApprovalCard, AssessmentsCard } from "./Approvals";
+import SupplierAudits from "./SupplierAudits";
 import SupplierNcs from "./SupplierNcs";
 import SupplierPerformance from "./SupplierPerformance";
 import SupplierReceiving from "./SupplierReceiving";
@@ -62,13 +63,6 @@ const Tile = ({ label, value, to }) => {
     body
   );
 };
-
-/** A part of the profile that is built in a later release: said plainly, not hidden. */
-const NotYet = ({ title, text }) => (
-  <MenuCard title={title}>
-    <p className="text-sm text-secondary-text">{text}</p>
-  </MenuCard>
-);
 
 const Overview = ({ supplier, canManage, onEditContact, onAddContact }) => {
   const s = supplier;
@@ -304,7 +298,7 @@ const SupplierProfilePage = () => {
         </>
       )}
       {tab === "incoming" && <SupplierReceiving supplier={s} />}
-      {tab === "audits" && <NotYet title="Audits" text="Supplier audits are not available yet." />}
+      {tab === "audits" && <SupplierAudits supplier={s} />}
       {tab === "documents" && <DocumentsCard supplierId={s.id} canManage={canManage} />}
 
       {dialog?.kind === "edit" && <SupplierDialog supplier={s} onClose={() => setDialog(null)} />}

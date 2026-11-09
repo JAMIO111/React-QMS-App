@@ -225,12 +225,6 @@ describe("supplier profile", () => {
     expect(items[0]).toHaveTextContent("Ada Owner");
     expect(items[1]).toHaveTextContent("Recorded as");
   });
-
-  it("says plainly which sections are not available yet", async () => {
-    profile();
-    renderAt("/Suppliers/s1?tab=audits");
-    expect(await screen.findByText(/not available yet/)).toBeInTheDocument();
-  });
 });
 
 describe("settings: classifications", () => {

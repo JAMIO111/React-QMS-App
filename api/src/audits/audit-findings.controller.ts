@@ -104,6 +104,7 @@ export class AuditFindingsController {
   @OrganisationScoped(READ)
   @ApiQuery({ name: 'q', required: false, schema: { type: 'string' }, description: 'Reference, title, description, audit record or audit title' })
   @ApiQuery({ name: 'recordId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'supplierId', required: false, schema: { type: 'string', format: 'uuid' }, description: 'Only findings from records carried out on this supplier' })
   @ApiQuery({ name: 'auditId', required: false, schema: { type: 'string', format: 'uuid' } })
   @ApiQuery({ name: 'classificationId', required: false, schema: { type: 'string', format: 'uuid' } })
   @ApiQuery({ name: 'kind', required: false, schema: { type: 'string' }, description: `Comma-separated: ${FINDING_KINDS.join(', ')}` })

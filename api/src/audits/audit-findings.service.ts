@@ -179,6 +179,7 @@ export class AuditFindingsService {
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`f.organisation_id = ${orgOf(ctx)}::uuid`];
       if (q.recordId) where.push(sql`f.audit_record_id = ${q.recordId}::uuid`);
+      if (q.supplierId) where.push(sql`exists (select 1 from public.audit_record_targets t where t.audit_record_id = f.audit_record_id and t.supplier_id = ${q.supplierId}::uuid)`);
       if (q.auditId) where.push(sql`r.audit_definition_id = ${q.auditId}::uuid`);
       if (q.classificationId) where.push(sql`f.classification_id = ${q.classificationId}::uuid`);
       if (q.kind.length) where.push(sql`c.kind = any (string_to_array(${q.kind.join(',')}, ','))`);

@@ -76,6 +76,12 @@ describe('suppliers as audit targets', () => {
     expect((await api().get(`/api/v1/audits?supplierId=${ctx.s3}`).set(h).expect(200)).body.data.map((a: { id: string }) => a.id)).toEqual([ctx.audit]);
     expect((await api().get(`/api/v1/audits?supplierId=${ctx.s2}`).set(h).expect(200)).body.data).toEqual([]);
     await api().get('/api/v1/audits?supplierId=nope').set(h).expect(400);
+    // findings from the record are found through the supplier
+    const minor = (await api().get('/api/v1/audit-finding-classifications').set(insp).expect(200)).body.data.find((c: { key: string }) => c.key === 'minor_nc').id;
+    const finding = (await api().post(`/api/v1/audit-records/${ctx.record}/findings`).set(insp).send({ classificationId: minor, title: 'Manual out of date', description: 'Revision B is still in use' }).expect(201)).body;
+    expect((await api().get(`/api/v1/audit-findings?supplierId=${ctx.s1}`).set(h).expect(200)).body.data.map((f: { id: string }) => f.id)).toEqual([finding.id]);
+    expect((await api().get(`/api/v1/audit-findings?supplierId=${ctx.s2}`).set(h).expect(200)).body.data).toEqual([]);
+    await api().get('/api/v1/audit-findings?supplierId=nope').set(h).expect(400);
   });
 
   it('show in the audits dashboard coverage once audited', async () => {

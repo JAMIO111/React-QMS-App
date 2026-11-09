@@ -8,23 +8,23 @@ import { FormError, SelectField } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
 
 /** Start an audit that is not tied to a scheduled slot: choose which audit, and the record opens ready to be answered. */
-const StartAuditDialog = ({ onClose }) => {
+const StartAuditDialog = ({ onClose, supplier = null }) => {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const audits = useAudits({ status: "active", sort: "title", pageSize: 200 });
+  const audits = useAudits({ status: "active", sort: "title", pageSize: 200, ...(supplier ? { supplierId: supplier.id } : {}) });
   const mutation = useAuditMutation();
   const [auditId, setAuditId] = useState(null);
   const options = (audits.data?.data ?? []).map((a) => ({ value: a.id, label: `${a.reference} · ${a.title}` }));
   const chosen = audits.data?.data.find((a) => a.id === auditId);
 
   return (
-    <Dialog title="Start an audit" onClose={onClose}>
+    <Dialog title={supplier ? `Start an audit of ${supplier.displayName || supplier.name}` : "Start an audit"} onClose={onClose}>
       <form
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
           mutation.mutate(
-            { path: "/audit-records", body: { auditId } },
+            { path: "/audit-records", body: { auditId, ...(supplier ? { targets: [{ kind: "supplier", supplierId: supplier.id }] } : {}) } },
             {
               onSuccess: (record) => {
                 showToast({ type: "success", title: "Audit started", message: `${record.reference} is open.` });
@@ -35,6 +35,7 @@ const StartAuditDialog = ({ onClose }) => {
         }}
         className="flex flex-col gap-3">
         <SelectField label="Audit" required value={auditId} onChange={setAuditId} options={options} placeholder={audits.isLoading ? "Loading…" : "Choose an audit"} />
+        {supplier && !audits.isLoading && options.length === 0 && <p className="text-sm text-secondary-text">No active audit lists this supplier yet. Add the supplier under "Relevant to" on an audit first.</p>}
         {chosen && (
           <p className="text-sm text-secondary-text">
             {auditTypeLabel(chosen.auditType)}; {chosen.questionCount} {chosen.questionCount === 1 ? "question" : "questions"}

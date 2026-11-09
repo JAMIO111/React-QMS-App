@@ -94,6 +94,8 @@ const csv = <T extends z.ZodTypeAny>(item: T) =>
 export const FindingListQuery = z.object({
   q: z.string().trim().max(100).optional(),
   recordId: Id.optional(),
+  /** Only findings from audit records carried out on this supplier. */
+  supplierId: Id.optional(),
   auditId: Id.optional(),
   classificationId: Id.optional(),
   kind: csv(z.enum(FINDING_KINDS)),

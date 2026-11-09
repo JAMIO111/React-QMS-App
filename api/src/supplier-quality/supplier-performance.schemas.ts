@@ -38,6 +38,24 @@ export type PerformanceQuery = z.infer<typeof PerformanceQuery>;
 export const SaveScorecardBody = z.object({ from: DateOnly, to: DateOnly, note: z.string().trim().max(1000).nullable().optional() }).strict();
 export type SaveScorecardBody = z.infer<typeof SaveScorecardBody>;
 
+export const RecommendationQuery = z.object({ days: z.coerce.number().int().min(7).max(366).default(90) });
+export type RecommendationQuery = z.infer<typeof RecommendationQuery>;
+
+export const InspectionRecommendation = z.object({
+  /** Information only: nothing is changed by this. */
+  level: z.enum(['increased', 'normal', 'reduced']),
+  canReduce: z.boolean(),
+  current: z.object({ level: z.enum(['increased', 'normal', 'reduced']), ruleId: z.string().uuid().nullable(), ruleName: z.string().nullable(), basis: z.enum(['supplier_rule', 'default']) }),
+  change: z.enum(['none', 'raise', 'lower']),
+  reasons: z.array(z.object({ code: z.string(), message: z.string(), kind: z.enum(['raises', 'blocks_reduction', 'supports']) })),
+  basis: z.object({
+    days: z.number().int(), from: DateOnly, to: DateOnly, approvalStatus: z.string(), riskRating: z.string().nullable(), band: z.enum(BANDS), score: z.number().nullable(),
+    deliveredLines: z.number().int(), rejectedLines: z.number().int(), criticalNcs: z.number().int(), majorNcs: z.number().int(), overdueScars: z.number().int(), expiredCerts: z.number().int(), minLines: z.number().int(),
+  }),
+  generatedAt: Iso,
+});
+export type InspectionRecommendation = z.infer<typeof InspectionRecommendation>;
+
 export const WatchlistQuery = z.object({ days: z.coerce.number().int().min(7).max(366).default(90) });
 export type WatchlistQuery = z.infer<typeof WatchlistQuery>;
 

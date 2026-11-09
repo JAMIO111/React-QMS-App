@@ -43,6 +43,17 @@ export const useScorecardModel = () => {
   return useQuery({ queryKey: key(organisationId, "model"), queryFn: () => apiFetch(`${BASE}/performance/model`, { organisationId }), enabled: !!organisationId, retry: false });
 };
 
+/** INFORMATION ONLY: the incoming inspection level the rules would suggest for a supplier. */
+export const useInspectionRecommendation = (id, days = 90, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "recommendation", id, days),
+    queryFn: () => apiFetch(`${BASE}/suppliers/${id}/inspection-recommendation?days=${days}`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};
+
 export const useWatchlist = (days) => {
   const { organisationId } = useOrganisation();
   return useQuery({

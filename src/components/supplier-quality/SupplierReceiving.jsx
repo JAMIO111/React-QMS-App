@@ -5,6 +5,7 @@ import { usePurchaseOrders, useReceipts } from "../../hooks/useReceiving";
 import CTAButton from "../CTAButton";
 import MenuCard from "../ui/MenuCard";
 import { ErrorNotice } from "../master-data/shared";
+import InspectionRecommendation from "./InspectionRecommendation";
 import { CreatePurchaseOrderDialog, RecordReceiptDialog } from "./ReceivingDialogs";
 import { OrdersList, ReceiptsList } from "./ReceivingLists";
 
@@ -20,6 +21,7 @@ const SupplierReceiving = ({ supplier }) => {
   const close = () => setDialog(null);
   return (
     <div className="flex flex-col gap-4">
+      <InspectionRecommendation supplier={supplier} />
       <MenuCard title="Open purchase orders" subtitle="What is still expected from this supplier."
         action={manage ? <CTAButton type="secondary" size="default" icon={PlusIcon} onClick={() => setDialog("order")}>Record an order</CTAButton> : null}>
         {orders.error && <ErrorNotice error={orders.error} />}

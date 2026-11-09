@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { Performance, PerformanceQuery, SaveModelBody, SaveScorecardBody, Scorecard, ScorecardModel, ScorecardSummary, Watchlist, WatchlistQuery } from './supplier-performance.schemas';
+import { InspectionRecommendation, Performance, PerformanceQuery, RecommendationQuery, SaveModelBody, SaveScorecardBody, Scorecard, ScorecardModel, ScorecardSummary, Watchlist, WatchlistQuery } from './supplier-performance.schemas';
 import { SupplierPerformanceService } from './supplier-performance.service';
 
 const READ = 'supplier_quality.read';
@@ -48,6 +48,13 @@ export class SupplierPerformanceController {
   @ApiOkResponse({ description: 'The supplier\'s live figures, score, band and warnings for a period (default: the last 90 days)', schema: openApiSchema(Performance) })
   performance(@Ctx() ctx: RequestContext, @Param('id') id: string, @Query() query: unknown) {
     return this.service.performance(ctx, parse(Uuid, id), parse(PerformanceQuery, query));
+  }
+
+  @Get('suppliers/:id/inspection-recommendation')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'INFORMATION ONLY: the level of incoming inspection the rules would suggest from risk, approval status and performance over the last N days (default 90), beside the current supplier-wide requirement, with the reasons. Nothing is changed.', schema: openApiSchema(InspectionRecommendation) })
+  recommendation(@Ctx() ctx: RequestContext, @Param('id') id: string, @Query() query: unknown) {
+    return this.service.recommendation(ctx, parse(Uuid, id), parse(RecommendationQuery, query));
   }
 
   @Get('suppliers/:id/scorecards')

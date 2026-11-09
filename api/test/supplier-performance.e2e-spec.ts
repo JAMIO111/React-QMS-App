@@ -112,6 +112,20 @@ describe('supplier performance', () => {
     await api().get(`${base}/performance/watchlist?days=2`).set(await owner()).expect(400);
   });
 
+  it('recommends an inspection level with its reasons, and changes nothing', async () => {
+    const before = (await admin.query(`select count(*)::int as n from public.supplier_inspection_requirements where organisation_id = $1`, [ids.orgA])).rows[0].n;
+    const r = (await api().get(`${base}/suppliers/${ctx.s1}/inspection-recommendation?days=90`).set(await inspector()).expect(200)).body;
+    expect(r).toMatchObject({ level: 'increased', canReduce: false, change: 'raise', current: { level: 'normal', basis: 'default', ruleId: null }, basis: { days: 90, band: 'poor', deliveredLines: 6, rejectedLines: 1 } });
+    expect(r.reasons.map((x: { code: string }) => x.code)).toEqual(expect.arrayContaining(['band', 'rejections']));
+    const quiet = (await api().get(`${base}/suppliers/${ctx.s2}/inspection-recommendation`).set(await owner()).expect(200)).body;
+    expect(quiet).toMatchObject({ level: 'normal', change: 'none', canReduce: false });
+    expect(quiet.reasons.map((x: { code: string }) => x.code)).toEqual(expect.arrayContaining(['not_approved', 'unassessed', 'insufficient']));
+    await api().get(`${base}/suppliers/${ctx.s1}/inspection-recommendation?days=2`).set(await owner()).expect(400);
+    await api().get(`${base}/suppliers/${ctx.s1}/inspection-recommendation`).set(await other()).expect(404);
+    const after = (await admin.query(`select count(*)::int as n from public.supplier_inspection_requirements where organisation_id = $1`, [ids.orgA])).rows[0].n;
+    expect(after).toBe(before);
+  });
+
   it('is invisible to another organisation', async () => {
     await api().get(`${base}/suppliers/${ctx.s1}/performance`).set(await other()).expect(404);
     await api().get(`${base}/scorecards/${ctx.sc1}`).set(await other()).expect(404);

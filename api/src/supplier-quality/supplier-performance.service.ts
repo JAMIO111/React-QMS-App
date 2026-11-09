@@ -6,7 +6,8 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { todayUtc } from './expiry';
-import { Performance, PerformanceQuery, SaveModelBody, SaveScorecardBody, Scorecard, ScorecardConfig, ScorecardModel, ScorecardSummary, Watchlist, WatchlistQuery } from './supplier-performance.schemas';
+import { recommendInspection } from './inspection-recommendation';
+import { InspectionRecommendation, Performance, PerformanceQuery, RecommendationQuery, SaveModelBody, SaveScorecardBody, Scorecard, ScorecardConfig, ScorecardModel, ScorecardSummary, Watchlist, WatchlistQuery } from './supplier-performance.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown user' } : null);
@@ -143,6 +144,53 @@ export class SupplierPerformanceService {
       await this.assertSupplier(db, ctx, supplierId);
       const res = await db.execute<{ id: string }>(sql`select app.save_supplier_scorecard(${supplierId}::uuid, ${b.from}::date, ${b.to}::date, ${b.note ?? null}) as id`);
       return this.loadOne(db, ctx, res.rows[0].id);
+    });
+  }
+
+  /**
+   * What the rules in inspection-recommendation.ts would say about the level of incoming inspection for this supplier, from its risk rating, approval status and performance over the last N
+   * days, set beside the level its supplier-wide approved requirement gives today. INFORMATION ONLY: nothing is written.
+   */
+  recommendation(ctx: RequestContext, supplierId: string, q: RecommendationQuery): Promise<InspectionRecommendation> {
+    const to = todayUtc();
+    const from = addDays(to, -(q.days - 1));
+    return this.database.asUser(ctx, async (db) => {
+      const sup = await db.execute<Row>(sql`select approval_status, risk_rating from public.suppliers where id = ${supplierId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!sup.rows[0]) throw ApiError.notFound('supplier_not_found', 'Supplier not found');
+      const perf = await db.execute<{ r: RawScoring & { model: { config: RawConfig } } }>(sql`select app.supplier_performance(${supplierId}::uuid, ${from}::date, ${to}::date) as r`);
+      const r = perf.rows[0].r;
+      const m = r.metrics as Record<string, Record<string, number>>;
+      const rule = await db.execute<Row>(sql`
+        select id, name, level from public.supplier_inspection_requirements
+        where organisation_id = ${orgOf(ctx)}::uuid and supplier_id = ${supplierId}::uuid and part_id is null and part_family_id is null and classification_id is null and risk_rating is null and status = 'approved'
+        order by approved_at desc limit 1`);
+      const minLines = Number(r.model.config.min_lines);
+      const rec = recommendInspection({
+        approvalStatus: sup.rows[0].approval_status as string,
+        riskRating: (sup.rows[0].risk_rating as 'low' | 'medium' | 'high' | 'critical' | null) ?? null,
+        band: r.band,
+        deliveredLines: Number(m.deliveries.lines),
+        minLines,
+        rejectedLines: Number(m.lotRejection.rejectedLines),
+        criticalNcs: Number(m.ncs.critical),
+        majorNcs: Number(m.ncs.major),
+        overdueScars: Number(m.scars.overdue_now),
+        expiredCerts: Number(m.certs.expired),
+      });
+      const rank = { reduced: 0, normal: 1, increased: 2 } as const;
+      const currentLevel = (rule.rows[0]?.level as 'increased' | 'normal' | 'reduced' | undefined) ?? 'normal';
+      return {
+        level: rec.level,
+        canReduce: rec.canReduce,
+        current: { level: currentLevel, ruleId: (rule.rows[0]?.id as string) ?? null, ruleName: (rule.rows[0]?.name as string) ?? null, basis: rule.rows[0] ? ('supplier_rule' as const) : ('default' as const) },
+        change: rank[rec.level] === rank[currentLevel] ? ('none' as const) : rank[rec.level] > rank[currentLevel] ? ('raise' as const) : ('lower' as const),
+        reasons: rec.reasons,
+        basis: {
+          days: q.days, from, to, approvalStatus: sup.rows[0].approval_status as string, riskRating: (sup.rows[0].risk_rating as string) ?? null, band: r.band, score: num(r.score),
+          deliveredLines: Number(m.deliveries.lines), rejectedLines: Number(m.lotRejection.rejectedLines), criticalNcs: Number(m.ncs.critical), majorNcs: Number(m.ncs.major), overdueScars: Number(m.scars.overdue_now), expiredCerts: Number(m.certs.expired), minLines,
+        },
+        generatedAt: new Date().toISOString(),
+      };
     });
   }
 

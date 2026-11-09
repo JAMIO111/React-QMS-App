@@ -68,7 +68,7 @@ describe('file imports', () => {
 
   it('lists the kinds of record and their fields', async () => {
     const res = (await api().get(`${base}/entities`).set(await owner()).expect(200)).body.data;
-    expect(res.map((e: { entityType: string }) => e.entityType)).toEqual(['supplier', 'customer', 'part']);
+    expect(res.map((e: { entityType: string }) => e.entityType)).toEqual(['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge', 'nonconformance']);
     const code = res[0].fields.find((f: { key: string }) => f.key === 'code');
     expect(code).toMatchObject({ required: true, type: 'text', maxLength: 40 });
   });

@@ -1,13 +1,30 @@
 import type { PoolClient } from 'pg';
 
 /** The kinds of record a connection can bring (plan §7); the database holds the same list (`app.integration_entity_types`). */
-export const ENTITY_TYPES = ['supplier', 'customer', 'part', 'production_order', 'purchase_order', 'goods_receipt'] as const;
+export const ENTITY_TYPES = [
+  'supplier',
+  'customer',
+  'part',
+  'machine',
+  'employee',
+  'gauge_type',
+  'gauge',
+  'nonconformance',
+  'production_order',
+  'purchase_order',
+  'goods_receipt',
+] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
 export const ENTITY_LABELS: Record<EntityType, string> = {
   supplier: 'suppliers',
   customer: 'customers',
   part: 'parts',
+  machine: 'machines',
+  employee: 'employees',
+  gauge_type: 'gauge types',
+  gauge: 'gauges',
+  nonconformance: 'non-conformances',
   production_order: 'production orders',
   purchase_order: 'purchase orders',
   goods_receipt: 'goods receipts',

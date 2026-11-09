@@ -69,3 +69,39 @@ describe('applying a mapping', () => {
     expect(parseDate('09/11/2026')).toBeNull();
   });
 });
+
+describe('the catalogue of what can be imported', () => {
+  it('covers machines, employees, gauge types, gauges and non-conformances', () => {
+    for (const e of ['machine', 'employee', 'gauge_type', 'gauge', 'nonconformance']) expect(catalogueFor(e)?.fields.some((f) => f.required)).toBe(true);
+  });
+
+  it('checks a gauge row: integer interval, enum unit, number range', () => {
+    const cat = catalogueFor('gauge')!;
+    const spec = {
+      keyField: 'Asset',
+      fields: [
+        { target: 'assetNumber', source: 'Asset' },
+        { target: 'description', source: 'Desc' },
+        { target: 'intervalValue', source: 'Every' },
+        { target: 'intervalUnit', source: 'Unit' },
+        { target: 'rangeMax', source: 'Max', decimal: ',' as const },
+      ],
+    };
+    expect(mappingProblems(cat, spec, ['Asset', 'Desc', 'Every', 'Unit', 'Max'])).toEqual([]);
+    const ok = applyMapping(cat, spec, { Asset: 'G-1', Desc: 'Micrometer', Every: '6', Unit: 'Months', Max: '25,4' });
+    expect(ok.errors).toEqual([]);
+    expect(ok.canonical).toMatchObject({ assetNumber: 'G-1', intervalValue: 6, intervalUnit: 'months', rangeMax: 25.4 });
+    const bad = applyMapping(cat, spec, { Asset: 'G-2', Desc: 'Caliper', Every: '1.5', Unit: 'fortnights', Max: '' });
+    expect(bad.errors.map((e) => e.field)).toEqual(expect.arrayContaining(['intervalValue', 'intervalUnit']));
+  });
+
+  it('accepts a non-conformance source by its label and needs title and source', () => {
+    const cat = catalogueFor('nonconformance')!;
+    expect(mappingProblems(cat, { keyField: 'NC', fields: [{ target: 'title', source: 'T' }] })).toContain('Source is required: map a column to it');
+    const spec = { keyField: 'NC', fields: [{ target: 'title', source: 'T' }, { target: 'source', source: 'S' }, { target: 'severity', source: 'Sev' }] };
+    const r = applyMapping(cat, spec, { NC: 'NC-0042', T: 'Burr on edge', S: 'Goods receiving', Sev: 'Major' });
+    expect(r.errors).toEqual([]);
+    expect(r.canonical).toMatchObject({ source: 'goods_receiving', severity: 'major' });
+    expect(r.externalId).toBe('NC-0042');
+  });
+});

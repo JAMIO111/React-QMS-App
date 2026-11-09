@@ -122,6 +122,11 @@ Import functions run as the API login with no user, so the audit actor would be 
 |---|---|---|---|
 | Customers, suppliers | `customers`, `suppliers` | code, or external id | Create/update master fields only. A new supplier arrives **pending approval** (the existing rule); status and risk are never imported |
 | Parts | `parts` | part number | Revisions import as **drafts** (D6); characteristic specs are not imported in Phase 5 |
+| Machines | `machines` | code | Site by site code. Added after IN3 (Nov 2026) at the user's request, as are the four rows below |
+| Employees | `"Employees"` | employee number | Site and department by code (the department fills the site). Never deleted (deactivated); linking to a sign-in stays a Controller-seat holder's step, never imported |
+| Gauge types | `gauge_types` | name | Interval only; characteristics are set up in Fortress |
+| Gauges | `gauges` | asset number | Gauge type by name, site/department/supplier by code, unit by code. **Calibration dates and status are never imported**: they follow the calibrations recorded in Fortress |
+| Non-conformances | `nonconformances` | the old system's NC number | **Historical NCs:** arrive as **drafts** with a Fortress reference; source required (one of the eleven), category / part / customer / supplier / machines / responsible employee by code. Opening, moving stages and closing stay a person's steps (the brief's "a connector never closes an NC") |
 | Production orders | `production_orders`, optionally operations | order number | Fills the reserved `external_system` / `external_id`; status mapped; cannot complete with pending operations (existing rule) |
 | Purchase orders + lines | `purchase_orders`, `purchase_order_lines` | PO number + line | `requested_on` is set on create and **never changed by sync** (it is the original date); `agreed_on` follows the source |
 | Goods receipts | `goods_receipts`, `goods_receipt_lines`, lots | the source transaction id | **Historical mode** (§8): accepts closed orders, creates no inspection holds, sets the real dates. Supports the inventory-transaction shape (filter by transaction codes, group by document, lot from the lot field) and the PO-line-total shape (delta events). Returns/rejections become dispositions, never negative lines |
@@ -158,7 +163,7 @@ Each entity module declares: canonical fields (type, required, allowed values), 
 | **IN1** ✅ | Providers catalogue, connections, credentials (Vault), permissions + feature, state machine, audit; API + settings shell; guardrails and both sweeps | A connection can be created, credentials stored and revoked, nothing leaks |
 | **IN2** ✅ | External records map, staging inbox, sync jobs/runs/cursors, the batch runner, idempotency core, run monitoring API | A fake source imported twice stages and applies once; a failed row is retryable |
 | **IN3** ✅ | CSV/XLSX adapter (upload, parse, header discovery), mapping engine with versions, validation engine, **preview** UI | Upload → map → preview with correct counts, nothing written |
-| **IN4** | Canonical import functions + entity modules: suppliers, customers, parts (draft revisions) | Real import of masters; second import creates nothing; QMS-owned fields untouched |
+| **IN4** | Canonical import functions + entity modules: suppliers, customers, parts (draft revisions), machines, employees, gauge types, gauges; non-conformances as drafts | Real import of masters; second import creates nothing; QMS-owned fields untouched |
 | **IN5** | Production orders; activation approval (preparer ≠ approver); ownership policies + conflict queue | An order file imports, updates only owned fields, conflicts parked |
 | **IN6** | Purchase orders, lines and **goods receipts** (historical mode, both source shapes, reconciliation) | Inventory-transaction export → receipts; supplier performance computed; mismatches reported |
 | **IN7** | Generic REST adapter: auth types, pagination styles, incremental cursor, rate limits/backoff, **SSRF defence** | A fake REST server (in tests) imports with pagination and cursor; private targets refused |

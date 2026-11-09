@@ -60,6 +60,11 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT version FROM public.integration_mappings WHERE id = m1), 1, 'the first mapping is version 1 and needs no reason');
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.save_integration_mapping(%L, 'supplier', 'Code', %L::jsonb, 'Again')$f$, conn, fields)), 5), 'QM022', 'an unchanged mapping is refused');
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.save_integration_mapping(%L, 'supplier', 'Code', '[{"target": "code", "source": "Code"}]'::jsonb, NULL)$f$, conn)), 5), 'QM022', 'a change needs a reason');
+  -- machines, employees, gauge types, gauges and non-conformances can be mapped too (migration 20260111100000)
+  PERFORM pg_temp.assert_eq((SELECT count(*)::int FROM unnest(ARRAY['machine', 'employee', 'gauge_type', 'gauge', 'nonconformance']) e
+    WHERE app.save_integration_mapping(conn, e, 'Ref', '[{"target": "name", "source": "Name"}]'::jsonb, NULL) IS NOT NULL), 5, 'each new kind of record can be mapped');
+  PERFORM pg_temp.assert_eq((SELECT count(*)::int FROM public.integration_mappings WHERE connection_id = conn AND entity_type IN ('machine', 'employee', 'gauge_type', 'gauge', 'nonconformance') AND version = 1), 5, 'as version 1');
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.save_integration_mapping(%L, 'calibration', 'Ref', '[{"target": "name", "source": "Name"}]'::jsonb, NULL)$f$, conn)), 5), 'QM022', 'a kind of record not on the list is refused');
   PERFORM pg_temp.logout();
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$UPDATE public.integration_mappings SET key_field = 'X' WHERE id = %L$f$, m1)), 5), 'QM022', 'a saved version is never changed, even by SQL');
   PERFORM pg_temp.login(bob);

@@ -1,5 +1,6 @@
 import React from "react";
 import { useLocation, Link } from "react-router-dom";
+import { looksLikeId, useBreadcrumbEntries } from "../lib/breadcrumbs";
 import { BoxesIcon, FolderOpenIcon, GaugeIcon, HouseIcon, SettingsIcon, TriangleAlertIcon } from "@/components/icons";
 
 const iconMap = {
@@ -26,6 +27,7 @@ function splitPath(pathname) {
 const Breadcrumb = () => {
   const location = useLocation();
   const segments = splitPath(location.pathname);
+  const names = useBreadcrumbEntries();
 
   return (
     <nav className="flex items-center gap-1 text-sm text-secondary-text font-semibold">
@@ -35,12 +37,16 @@ const Breadcrumb = () => {
       </Link>
       {segments.map((segment, index) => {
         const path = "/" + segments.slice(0, index + 1).join("/");
+        const named = names.get(path);
+        const raw = decodeURIComponent(segment);
+        // A record's name, or a short wait mark: an id is never shown.
+        const text = named?.label ?? (looksLikeId(raw) ? "…" : formatSegment(raw));
         return (
           <React.Fragment key={segment}>
             <span className="mx-1">/</span>
             {iconMap[segment] || <FolderOpenIcon />}
-            <Link to={path} className="hover:underline capitalize">
-              {formatSegment(decodeURIComponent(segment))}
+            <Link to={named?.to ?? path} className={named?.label ? "hover:underline" : "hover:underline capitalize"}>
+              {text}
             </Link>
           </React.Fragment>
         );

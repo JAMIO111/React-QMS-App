@@ -52,7 +52,7 @@ export const lotColumns = [
   col("part", "Part", head(PackageIcon, "Part"), plain((r) => partLabel(r.part)), { size: 260, minSize: 120, maxSize: 500, sortKey: "part", accessor: (r) => partLabel(r.part) }),
   col("origin", "Origin", head(FactoryIcon, "Origin"), plain((r) => LOT_ORIGIN[r.origin]), { size: 110, sortKey: "origin" }),
   col("productionOrder", "Order", head(HashIcon, "Order"), plain((r) => r.productionOrder?.orderNumber), { size: 140, accessor: (r) => r.productionOrder?.orderNumber }),
-  col("supplier", "Supplier", head(UserIcon, "Supplier"), plain((r) => r.supplier?.name), { size: 170, accessor: (r) => r.supplier?.name }),
+  col("supplier", "Supplier", head(UserIcon, "Supplier"), (i) => <div className="table-row-item">{i.row.original.supplier ? <Link to={`/Suppliers/${i.row.original.supplier.id}`} className="text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>{i.row.original.supplier.name}</Link> : "—"}</div>, { size: 170, accessor: (r) => r.supplier?.name }),
   col("quantity", "Quantity", head(null, "Quantity", "table-header-number"), number((r) => r.quantity), { size: 110, sortKey: "quantity", align: "right" }),
   col("status", "Status", head(CircleCheckIcon, "Status", "table-header-number"), badge(LOT_STATUS), { size: 120, sortKey: "status", align: "center" }),
   col("serialCount", "Serials", head(TagIcon, "Serials", "table-header-number"), number((r) => r.serialCount), { size: 90, align: "right" }),

@@ -6,6 +6,7 @@ import { formatDate } from "../../lib/ncr";
 import { formatDateTime } from "../../lib/processControl";
 import { tracePath } from "../../lib/production";
 import { formatQuantity, lineLabel, poPath } from "../../lib/receiving";
+import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import Callout from "../ui/Callout";
@@ -28,6 +29,7 @@ const GoodsReceiptPage = () => {
   const { id } = useParams();
   const { can } = usePermissions();
   const query = useReceipt(id);
+  useBreadcrumbNames([{ path: `/Supplier-Quality/Goods-Receipts/${id}`, label: query.data?.reference }]);
   const [cancelling, setCancelling] = useState(false);
   if (query.isLoading) return <LoadingScreen />;
   if (query.error) return <div className="p-4"><ErrorNotice error={query.error} /></div>;

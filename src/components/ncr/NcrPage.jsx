@@ -369,6 +369,11 @@ const NcrPage = () => {
                 {(source === "supplier" || source === "goods_receiving") && (
                   <>
                     {controlled("supplierId", (f) => <PartyPicker {...f} kind="suppliers" label="Supplier" icon={UsersIcon} current={ncr?.supplier} required={source === "supplier"} hint={source === "goods_receiving" ? "If you know which supplier it came from" : undefined} />)}
+                    {ncr?.supplier && (
+                      <p className="-mt-1 text-xs">
+                        <Link to={`/Suppliers/${ncr.supplier.id}`} className="text-link-color hover:underline">Open {ncr.supplier.name}&apos;s profile</Link>
+                      </p>
+                    )}
                     {text("purchaseOrder", "Purchase order", { maxLength: 60, icon: ReceiptIcon })}
                   </>
                 )}
@@ -471,9 +476,10 @@ const NcrPage = () => {
                   <RHFComboBox {...f} label="Sub-failure mode" icon={TagsIcon} options={opt(subs)}
                     disabled={f.disabled || !form.failureModeId} placeholder={form.failureModeId ? "Select a sub-failure mode" : "Choose a failure mode first"} />
                 ))}
-                {controlled("causalProcessId", (f) => (
-                  <MachinePicker {...f} label="Causal process" icon={FactoryIcon} current={ncr?.causalProcess} />
-                ))}
+                {source !== "supplier" && source !== "goods_receiving" &&
+                  controlled("causalProcessId", (f) => (
+                    <MachinePicker {...f} label="Causal process" icon={FactoryIcon} current={ncr?.causalProcess} />
+                  ))}
                 {source !== "supplier" &&
                   controlled("responsibleEmployeeId", (f) => (
                     <RHFComboBox {...f} label="Responsible operator" icon={UsersIcon} placeholder="Select an operator"

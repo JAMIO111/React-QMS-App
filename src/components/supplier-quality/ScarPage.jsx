@@ -6,6 +6,7 @@ import { useScar, useScarMutation } from "../../hooks/useSupplierQuality";
 import { formatDate, ncrPath } from "../../lib/ncr";
 import { formatDateTime } from "../../lib/processControl";
 import { EXTENSION_STATUS, SCAR_STAGES, rootCauseMethodLabel, scarIsRunning, scarStageIndex, scarStatusOf } from "../../lib/supplierScars";
+import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import Callout from "../ui/Callout";
@@ -85,6 +86,7 @@ const ScarPage = () => {
   const { id } = useParams();
   const { can } = usePermissions();
   const query = useScar(id);
+  useBreadcrumbNames([{ path: `/Supplier-Quality/SCARs/${id}`, label: query.data?.reference }]);
   const [dialog, setDialog] = useState(null);
   const mutation = useScarMutation();
   const open = (d) => setDialog(d);

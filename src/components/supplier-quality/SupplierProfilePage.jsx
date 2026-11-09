@@ -7,6 +7,7 @@ import { addressLine, contactRoleLabel, productKindLabel, typeLabel } from "../.
 import { formatDate } from "../../lib/ncr";
 import { formatDateTime } from "../../lib/processControl";
 import { countryName } from "../../lib/onboarding";
+import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import LoadingScreen from "../ui/LoadingScreen";
@@ -235,6 +236,7 @@ const SupplierProfilePage = () => {
   const [params, setParams] = useSearchParams();
   const { can } = usePermissions();
   const supplier = useSupplier(id);
+  useBreadcrumbNames([{ path: `/Suppliers/${id}`, label: supplier.data ? supplier.data.displayName || supplier.data.name : null }]);
   const [dialog, setDialog] = useState(null); // { kind: "edit" | "status" | "contact" | "product", ... }
   const tab = TABS.some((t) => t.value === params.get("tab")) ? params.get("tab") : "overview";
   const canManage = can("supplier_quality.manage");

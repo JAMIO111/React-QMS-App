@@ -99,7 +99,7 @@ const Report = ({ type, id }) => {
           </Fact>
           <Fact label="Revision">{s.partRevision}</Fact>
           <Fact label="Customer">{s.customer?.name}</Fact>
-          <Fact label="Supplier">{s.supplier?.name}</Fact>
+          <Fact label="Supplier">{s.supplier ? <Link className="text-link-color hover:underline" to={`/Suppliers/${s.supplier.id}`}>{s.supplier.name}</Link> : null}</Fact>
           <Fact label="Site">{s.site?.name}</Fact>
           <Fact label="Quantity">{s.quantity?.toLocaleString()}</Fact>
           <Fact label="Inspections">{t.inspections.available ? String(t.inspections.total) : "Not available to you"}</Fact>
@@ -150,7 +150,7 @@ const Report = ({ type, id }) => {
                     <Td className="font-medium">{type === "lot" ? l.lotNumber : <Link className="text-link-color hover:underline" to={tracePath("lot", l.id)}>{l.lotNumber}</Link>}</Td>
                     <Td>{l.origin === "received" ? "Received" : "Produced"}</Td>
                     <Td className="tabular-nums">{l.quantity?.toLocaleString() ?? "—"}</Td>
-                    <Td>{l.supplier?.name ?? "—"}</Td>
+                    <Td>{l.supplier ? <Link className="text-link-color hover:underline" to={`/Suppliers/${l.supplier.id}`}>{l.supplier.name}</Link> : "—"}</Td>
                     <Td><StatusBadge map={LOT_STATUS} status={l.status} />{l.statusReason && <span className="ml-2 text-xs text-secondary-text">{l.statusReason}</span>}</Td>
                   </tr>
                 ))}

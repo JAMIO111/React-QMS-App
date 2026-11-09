@@ -4,6 +4,7 @@ import { useAssessmentMutation, useSupplierAssessment, useSupplierDocuments } fr
 import { usePermissions } from "../../hooks/useQmsApi";
 import { formatDateTime } from "../../lib/processControl";
 import { ASSESSMENT_STATUS, RESULT_TONE } from "../../lib/supplierQualification";
+import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import Callout from "../ui/Callout";
@@ -119,6 +120,11 @@ const AssessmentPage = () => {
   const navigate = useNavigate();
   const { can } = usePermissions();
   const query = useSupplierAssessment(id);
+  useBreadcrumbNames([
+    { path: `/Suppliers/${supplierId}`, label: query.data ? query.data.supplier.name : null },
+    { path: `/Suppliers/${supplierId}/assessments`, to: `/Suppliers/${supplierId}?tab=qualification` },
+    { path: `/Suppliers/${supplierId}/assessments/${id}`, label: query.data?.reference },
+  ]);
   const documents = useSupplierDocuments(supplierId);
   const mutation = useAssessmentMutation();
   const [dialog, setDialog] = useState(null);

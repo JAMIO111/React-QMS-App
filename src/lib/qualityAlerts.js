@@ -50,7 +50,7 @@ export const linkHref = (l) => {
     case "nonconformance":
       return ncrPath(l.recordId);
     case "supplier":
-      return "/Suppliers";
+      return `/Suppliers/${l.recordId}`;
     case "gauge":
       return `/Calibration/Gauges/${l.recordId}`;
     case "calibration":

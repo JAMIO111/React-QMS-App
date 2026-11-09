@@ -5,6 +5,7 @@ import { usePurchaseOrder, useReceivingMutation } from "../../hooks/useReceiving
 import { formatDate } from "../../lib/ncr";
 import { formatDateTime } from "../../lib/processControl";
 import { formatQuantity, lineLabel } from "../../lib/receiving";
+import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import Callout from "../ui/Callout";
@@ -28,6 +29,7 @@ const PurchaseOrderPage = () => {
   const { id } = useParams();
   const { can } = usePermissions();
   const query = usePurchaseOrder(id);
+  useBreadcrumbNames([{ path: `/Supplier-Quality/Purchase-Orders/${id}`, label: query.data?.poNumber }]);
   const [dialog, setDialog] = useState(null);
   const close = () => setDialog(null);
   if (query.isLoading) return <LoadingScreen />;

@@ -20,6 +20,7 @@ import SupplierDialog from "./SupplierDialog";
 import { ActivityBadge, ApprovalPill, RiskBadge } from "./SupplierBadges";
 import { CertificationsCard, DocumentsCard } from "./Qualification";
 import { RiskCard } from "./RiskAssessment";
+import { ApprovalCard, AssessmentsCard } from "./Approvals";
 
 const TABS = [
   { value: "overview", label: "Overview" },
@@ -300,9 +301,10 @@ const SupplierProfilePage = () => {
       {tab === "performance" && <NotYet title="Performance" text="Scorecards, PPM and on-time delivery are not available yet." />}
       {tab === "qualification" && (
         <>
+          <ApprovalCard supplier={s} canManage={canManage} canApprove={canApprove} />
+          <AssessmentsCard supplier={s} canManage={canManage} onOpen={(assessmentId) => navigate(`/Suppliers/${s.id}/assessments/${assessmentId}`)} />
           <RiskCard supplier={s} canManage={canManage} />
           <CertificationsCard supplierId={s.id} canManage={canManage} />
-          <NotYet title="Assessments and approval decisions" text="Qualification assessments and approval decisions are not available yet. Until then, the approval status is changed directly by someone who may approve, with a reason." />
         </>
       )}
       {tab === "incoming" && <NotYet title="Incoming quality" text="Goods receipts, incoming inspection rules and material certificates are not available yet." />}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useToast } from "../../contexts/ToastProvider";
 import { useSupplierMutation } from "../../hooks/useSupplierQuality";
 import { describeApiError } from "../../lib/api-client";
@@ -14,7 +15,10 @@ const field = "rounded-lg border border-border-color bg-text-input-color px-3 py
 const StatusChangeDialog = ({ supplier, initial, onClose }) => {
   const mutation = useSupplierMutation();
   const { showToast } = useToast();
-  const moves = movesFrom(supplier.approvalStatus);
+  // Approving (or approving conditionally) is a decision someone else makes: it is proposed on the Qualification tab, not done here.
+  const allMoves = movesFrom(supplier.approvalStatus);
+  const moves = allMoves.filter((m) => m !== "approved" && m !== "conditional");
+  const approvalPossible = allMoves.length !== moves.length;
   const [status, setStatus] = useState(initial && moves.includes(initial) ? initial : moves[0]);
   const [reason, setReason] = useState("");
   const [conditions, setConditions] = useState("");
@@ -68,6 +72,11 @@ const StatusChangeDialog = ({ supplier, initial, onClose }) => {
         )}
         {(conditional || status === "suspended") && (
           <RHFDatePickerPopout label="Review on" valueFormat="iso" clearable value={reviewOn} onChange={setReviewOn} minDate={new Date().toISOString().slice(0, 10)} placeholder="No date set" />
+        )}
+        {approvalPossible && (
+          <p className="text-xs text-secondary-text">
+            To approve this supplier, propose it on the <Link to={`/Suppliers/${supplier.id}?tab=qualification`} onClick={onClose} className="text-link-color hover:underline">Qualification tab</Link>: someone else decides it.
+          </p>
         )}
         <p className="text-xs text-secondary-text">Every change is kept in the supplier's history with who made it and why.</p>
         <div className="flex justify-end gap-2">

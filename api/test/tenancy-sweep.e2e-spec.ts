@@ -88,6 +88,18 @@ const sampleBody = (op: Op): object | undefined =>
     'GET /api/v1/supplier-quality/suppliers/{id}/risk-assessments': undefined,
     'POST /api/v1/supplier-quality/suppliers/{id}/risk-assessments': { scores: [{ key: 'quality_system', score: 2 }], rationale: 'Hijacked' },
     'POST /api/v1/supplier-quality/suppliers/{id}/risk-assessments/preview': { scores: [{ key: 'quality_system', score: 2 }] },
+    'PATCH /api/v1/supplier-quality/assessment-templates/{id}': { name: 'Hijacked' },
+    'POST /api/v1/supplier-quality/assessment-templates/{id}/versions': { questions: [{ key: 'aa', section: '', text: 'x', answerType: 'yes_no', weight: 1, critical: false, evidenceRequired: false }], passMark: 70, reason: 'Hijacked' },
+    'GET /api/v1/supplier-quality/suppliers/{id}/assessments': undefined,
+    'POST /api/v1/supplier-quality/suppliers/{id}/assessments': { templateVersionId: '00000000-0000-0000-0000-000000000001' },
+    'GET /api/v1/supplier-quality/supplier-assessments/{id}': undefined,
+    'PUT /api/v1/supplier-quality/supplier-assessments/{id}/responses': { questionKey: 'qms_certified', answer: 'yes' },
+    'POST /api/v1/supplier-quality/supplier-assessments/{id}/complete': {},
+    'POST /api/v1/supplier-quality/supplier-assessments/{id}/abandon': { reason: 'Hijacked' },
+    'GET /api/v1/supplier-quality/suppliers/{id}/approval-decisions': undefined,
+    'POST /api/v1/supplier-quality/suppliers/{id}/approval-decisions': { target: 'approved', rationale: 'Hijacked' },
+    'POST /api/v1/supplier-quality/supplier-approval-decisions/{id}/decide': { approve: true, note: 'Hijacked' },
+    'POST /api/v1/supplier-quality/supplier-approval-decisions/{id}/withdraw': { reason: 'Hijacked' },
     'GET /api/v1/parts/{id}': undefined,
     'PATCH /api/v1/parts/{id}': { name: 'Hijacked' },
     'POST /api/v1/parts/{id}/revisions': { revision: 'Z' },
@@ -328,6 +340,18 @@ const hasSample = (op: Op) =>
     'GET /api/v1/supplier-quality/suppliers/{id}/risk-assessments',
     'POST /api/v1/supplier-quality/suppliers/{id}/risk-assessments',
     'POST /api/v1/supplier-quality/suppliers/{id}/risk-assessments/preview',
+    'PATCH /api/v1/supplier-quality/assessment-templates/{id}',
+    'POST /api/v1/supplier-quality/assessment-templates/{id}/versions',
+    'GET /api/v1/supplier-quality/suppliers/{id}/assessments',
+    'POST /api/v1/supplier-quality/suppliers/{id}/assessments',
+    'GET /api/v1/supplier-quality/supplier-assessments/{id}',
+    'PUT /api/v1/supplier-quality/supplier-assessments/{id}/responses',
+    'POST /api/v1/supplier-quality/supplier-assessments/{id}/complete',
+    'POST /api/v1/supplier-quality/supplier-assessments/{id}/abandon',
+    'GET /api/v1/supplier-quality/suppliers/{id}/approval-decisions',
+    'POST /api/v1/supplier-quality/suppliers/{id}/approval-decisions',
+    'POST /api/v1/supplier-quality/supplier-approval-decisions/{id}/decide',
+    'POST /api/v1/supplier-quality/supplier-approval-decisions/{id}/withdraw',
     'GET /api/v1/parts/{id}',
     'PATCH /api/v1/parts/{id}',
     'POST /api/v1/parts/{id}/revisions',
@@ -542,6 +566,9 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/supplier-quality/supplier-contacts/')) return a.supplierContact;
   if (path.startsWith('/api/v1/supplier-quality/supplier-products/')) return a.supplierProduct;
   if (path.startsWith('/api/v1/supplier-quality/supplier-documents/')) return a.supplierDocument;
+  if (path.startsWith('/api/v1/supplier-quality/assessment-templates/')) return a.supplierTemplate;
+  if (path.startsWith('/api/v1/supplier-quality/supplier-assessments/')) return a.supplierAssessment;
+  if (path.startsWith('/api/v1/supplier-quality/supplier-approval-decisions/')) return a.supplierDecision;
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
   if (path.startsWith('/api/v1/supplier-quality/classifications/')) return a.supplierClassification;
   if (path.startsWith('/api/v1/parts/')) return a.part;
@@ -706,6 +733,9 @@ beforeAll(async () => {
     a.supplierContact = (await q1(`insert into public.supplier_contacts (organisation_id, supplier_id, name) values ($1, $2, 'Alpha contact') returning id`, [ids.orgA, a.supplier])).id;
     a.supplierDocument = (await q1(`select app.add_supplier_document($1::uuid, 'other', 'Alpha doc', null, null, null, null, $2, 'a.pdf', null, 1) as id`, [a.supplier, `${ids.orgA}/supplier/${a.supplier}/a.pdf`])).id;
     a.supplierCertification = (await q1(`select app.add_supplier_certification($1::uuid, $2::jsonb) as id`, [a.supplier, JSON.stringify({ certType: 'iso_9001', certificateNumber: 'A-1', issuingBody: 'Alpha body' })])).id;
+    a.supplierTemplate = (await q1(`select id from public.supplier_assessment_templates where organisation_id = $1 limit 1`, [ids.orgA])).id;
+    a.supplierAssessment = (await q1(`select app.start_supplier_assessment($1::uuid, (select v.id from public.supplier_assessment_template_versions v where v.organisation_id = $2 and v.version = 1 limit 1)) as id`, [a.supplier, ids.orgA])).id;
+    a.supplierDecision = (await q1(`select app.propose_supplier_approval($1::uuid, 'approved', 'Sweep proposal', null, null, null, 'Sweep exception reason') as id`, [a.supplier])).id;
     a.supplierProduct = (await q1(`insert into public.supplier_product_links (organisation_id, supplier_id, kind, description) values ($1, $2, 'service', 'Alpha service') returning id`, [ids.orgA, a.supplier])).id;
     await client.query('commit');
   } finally {

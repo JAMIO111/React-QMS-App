@@ -40,3 +40,31 @@ export const expiryBadge = (expiry) => {
 };
 
 export const formatBytes = (n) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+
+export const ANSWER_TYPES = [
+  { id: "yes_no", name: "Yes / no" },
+  { id: "rating", name: "Rating 1 to 5" },
+  { id: "text", name: "A note" },
+];
+
+export const ASSESSMENT_STATUS = {
+  in_progress: { label: "In progress", tone: "bg-warning-color/15 text-warning-color" },
+  completed: { label: "Completed", tone: "bg-success-color/15 text-success-color" },
+  abandoned: { label: "Abandoned", tone: "bg-border-color text-secondary-text" },
+};
+export const RESULT_TONE = { pass: "bg-success-color/15 text-success-color", fail: "bg-error-color/15 text-error-color" };
+
+export const DECISION_STATUS = {
+  proposed: { label: "Waiting for a decision", tone: "bg-warning-color/15 text-warning-color" },
+  approved: { label: "Approved", tone: "bg-success-color/15 text-success-color" },
+  rejected: { label: "Rejected", tone: "bg-error-color/15 text-error-color" },
+  withdrawn: { label: "Withdrawn", tone: "bg-border-color text-secondary-text" },
+};
+
+/** A stable question key from its wording (lower-case words, 2 to 40 characters, unique among `taken`). */
+export const questionKey = (text, taken = []) => {
+  const base = (text || "question").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").split("_").slice(0, 5).join("_").slice(0, 36) || "question";
+  let key = base.length < 2 ? `${base}_q` : base;
+  for (let n = 2; taken.includes(key); n += 1) key = `${base}_${n}`.slice(0, 40);
+  return key;
+};

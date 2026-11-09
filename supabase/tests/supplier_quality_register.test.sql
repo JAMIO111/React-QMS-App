@@ -43,6 +43,10 @@ BEGIN
   PERFORM pg_temp.assert_fails(format($f$UPDATE public.suppliers SET country = 'gb' WHERE id = %L$f$, s), 'a country is a two-letter capital code');
 
   -- ---- changing the status: permission, transitions, reason, conditions, history ----
+  -- Since SQ2c a move to approved / conditional is made only by an approval decision, which switches this on for its transaction; these tests exercise the status rules themselves.
+  r := pg_temp.fails(format($f$SELECT app.change_supplier_status(%L, 'approved', 'Passed the audit')$f$, s));
+  PERFORM pg_temp.assert_eq(left(r, 5), 'QM020', 'a direct approval is refused: it goes through a decision');
+  PERFORM set_config('app.supplier_approval_decision', 'on', true);
   r := pg_temp.fails(format($f$SELECT app.change_supplier_status(%L, 'approved', 'Passed the audit')$f$, s));
   PERFORM pg_temp.assert_eq(r = 'ok', true, 'an owner can approve (a quality manager level right)');
   PERFORM pg_temp.assert_eq((SELECT approval_status FROM public.suppliers WHERE id = s), 'approved', 'the status moved');

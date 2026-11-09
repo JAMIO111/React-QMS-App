@@ -80,6 +80,8 @@ import { BillingService } from './billing/billing.service';
 import { NotificationsController } from './notifications/notifications.controller';
 import { SavedFiltersController } from './saved-filters/saved-filters.controller';
 import { SupplierQualityController } from './supplier-quality/supplier-quality.controller';
+import { SupplierAssessmentController } from './supplier-quality/supplier-assessment.controller';
+import { SupplierAssessmentService } from './supplier-quality/supplier-assessment.service';
 import { SupplierRiskController } from './supplier-quality/supplier-risk.controller';
 import { SupplierRiskService } from './supplier-quality/supplier-risk.service';
 import { SupplierQualificationController } from './supplier-quality/supplier-qualification.controller';
@@ -191,6 +193,7 @@ export class AppModule implements NestModule {
         SupplierQualityController,
         SupplierQualificationController,
         SupplierRiskController,
+        SupplierAssessmentController,
         InspectionsController,
         InspectionMeasurementsController,
         NcrInspectionSourceController,
@@ -250,6 +253,7 @@ export class AppModule implements NestModule {
         SupplierQualityService,
         SupplierQualificationService,
         SupplierRiskService,
+        SupplierAssessmentService,
         InspectionService,
         SpcService,
         DocumentationService,

@@ -18,9 +18,21 @@ const other = () => as(ids.ownerB, ids.orgB);
 const ctx: Record<string, string> = {};
 const base = '/api/v1/supplier-quality';
 
+// A second person who may approve: a supplier is approved by one person proposing and another deciding (SQ2c).
+const qmId = ids.ownerA.replace(/a1$/, 'a4');
+const manager = () => as(qmId);
+/** Approve (or conditionally approve) a supplier through a decision: the owner proposes with an exception reason, the quality manager decides. */
+const approveVia = async (supplier: string, target: 'approved' | 'conditional', extra: Record<string, unknown> = {}) => {
+  const proposed = (await api().post(`${base}/suppliers/${supplier}/approval-decisions`).set(await owner()).send({ target, rationale: 'Approved for the tests', exceptionReason: 'No assessment in this test', ...extra }).expect(201)).body;
+  await api().post(`${base}/supplier-approval-decisions/${proposed.id}/decide`).set(await manager()).send({ approve: true, note: 'Agreed' }).expect(200);
+};
+
 beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });
   await seed(admin, ids, '-sq');
+  await admin.query(`insert into auth.users (id, email) values ($1, 'qm@example.test') on conflict do nothing`, [qmId]);
+  const mem = await admin.query(`insert into public.organisation_users (organisation_id, user_id, status) values ($1, $2, 'active') returning id`, [ids.orgA, qmId]);
+  await admin.query(`insert into public.user_role_assignments (organisation_id, membership_id, role_id) select $1, $2, id from public.roles where organisation_id = $1 and key = 'quality_manager'`, [ids.orgA, mem.rows[0].id]);
   app = await startApp({ RATE_LIMIT_PER_MINUTE: '10000' });
   const h = await owner();
   ctx.part = (await api().post('/api/v1/parts').set(h).send({ partNumber: 'BAR-50', name: 'Bar stock' }).expect(201)).body.id;
@@ -71,19 +83,22 @@ describe('the approval status', () => {
     await api().post(url).set(h).send({ status: 'approved' }).expect(400);
     await api().post(url).set(h).send({ status: 'approved', reason: 'ab' }).expect(400);
     await api().post(url).set(h).send({ status: 'bogus', reason: 'Because' }).expect(400);
-    const a = (await api().post(url).set(h).send({ status: 'approved', reason: 'Passed the audit' }).expect(200)).body;
-    expect(a).toMatchObject({ approvalStatus: 'approved', approvalStatusChangedBy: { name: 'Ada Owner' }, active: true });
-    expect((await api().post(url).set(h).send({ status: 'approved', reason: 'Again' }).expect(409)).body.error?.code ?? '').toBeDefined();
-    const same = await api().post(url).set(h).send({ status: 'approved', reason: 'Again' }).expect(409);
-    expect(JSON.stringify(same.body)).toContain('supplier_rule');
+    // Approval is not a direct move any more: it goes through a decision.
+    const direct = await api().post(url).set(h).send({ status: 'approved', reason: 'Passed the audit' });
+    expect(direct.status).toBe(409);
+    expect(direct.body.error.code).toBe('supplier_rule');
+    await approveVia(ctx.s1, 'approved');
+    const a = (await api().get(`${base}/suppliers/${ctx.s1}`).set(h).expect(200)).body;
+    expect(a).toMatchObject({ approvalStatus: 'approved', approvalStatusChangedBy: { name: expect.any(String) }, active: true });
     await api().post(url).set(h).send({ status: 'pending_approval', reason: 'Back' }).expect(409);
-    await api().post(url).set(h).send({ status: 'conditional', reason: 'Late deliveries' }).expect(409); // needs its conditions
-    const c = (await api().post(url).set(h).send({ status: 'conditional', reason: 'Late deliveries', conditions: 'Inspect every delivery', reviewOn: '2999-01-01' }).expect(200)).body;
+    await api().post(url).set(h).send({ status: 'conditional', reason: 'Late deliveries' }).expect(409); // direct conditional approval is refused too
+    await approveVia(ctx.s1, 'conditional', { rationale: 'Late deliveries', conditions: 'Inspect every delivery', reviewOn: '2999-01-01' });
+    const c = (await api().get(`${base}/suppliers/${ctx.s1}`).set(h).expect(200)).body;
     expect(c).toMatchObject({ approvalStatus: 'conditional', conditions: 'Inspect every delivery', reviewOn: '2999-01-01' });
     await api().post(url).set(h).send({ status: 'suspended', reason: 'Repeat major non-conformances' }).expect(200);
     const hist = (await api().get(`${base}/suppliers/${ctx.s1}/history`).set(await reader()).expect(200)).body.data;
     expect(hist.map((x: { toStatus: string }) => x.toStatus)).toEqual(['suspended', 'conditional', 'approved', 'pending_approval']);
-    expect(hist[1]).toMatchObject({ fromStatus: 'approved', conditions: 'Inspect every delivery', reviewOn: '2999-01-01', changedBy: { name: 'Ada Owner' } });
+    expect(hist[1]).toMatchObject({ fromStatus: 'approved', conditions: 'Inspect every delivery', reviewOn: '2999-01-01', changedBy: { name: expect.any(String) } });
     expect(hist[3]).toMatchObject({ fromStatus: null, reason: null });
     // The conditions only show while the status is conditional.
     expect((await api().get(`${base}/suppliers/${ctx.s1}`).set(h).expect(200)).body.conditions).toBeNull();
@@ -144,7 +159,7 @@ describe('the register', () => {
     const h = await owner();
     ctx.s2 = (await api().post(`${base}/suppliers`).set(h).send({ code: 'BETA', name: 'Beta Fasteners', supplierType: 'manufacturer', country: 'DE', classificationIds: [ctx.welding] }).expect(201)).body.id;
     ctx.s3 = (await api().post(`${base}/suppliers`).set(h).send({ code: 'GAMMA', name: 'Gamma Logistics', supplierType: 'logistics_provider', country: 'GB' }).expect(201)).body.id;
-    await api().post(`${base}/suppliers/${ctx.s2}/status`).set(h).send({ status: 'approved', reason: 'Audit passed' }).expect(200);
+    await approveVia(ctx.s2, 'approved', { rationale: 'Audit passed' });
     await api().patch(`${base}/suppliers/${ctx.s3}`).set(h).send({ active: false }).expect(200);
     // An open and a closed-out non-conformance naming ACME.
     const cat = await categoryId(admin, ids.orgA);

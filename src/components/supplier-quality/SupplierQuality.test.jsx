@@ -160,24 +160,24 @@ describe("supplier profile", () => {
     expect(screen.getByText(/1 Steel Way, Sheffield, S1 1AA/)).toBeInTheDocument();
   });
 
-  it("changes the approval status with only the allowed moves, a reason and conditions where needed", async () => {
+  it("changes the approval status with only the direct moves and a reason; approving goes through the Qualification tab", async () => {
     profile({ approvalStatus: "approved" });
     renderAt("/Suppliers/s1");
     await userEvent.click(await screen.findByRole("button", { name: "Change approval status" }));
     const dialog = await screen.findByRole("dialog", { name: "Change approval status" });
-    // From Approved: conditional, suspend, disqualify, archive; not approve or re-open.
-    expect(within(dialog).getByRole("radio", { name: "Suspend" })).toBeInTheDocument();
-    expect(within(dialog).getByRole("radio", { name: "Approve conditionally" })).toBeChecked();
+    // From Approved the direct moves are suspend, disqualify and archive; conditional approval is a decision, and approve / re-open are not allowed.
+    expect(within(dialog).getByRole("radio", { name: "Suspend" })).toBeChecked();
+    expect(within(dialog).getByRole("radio", { name: "Disqualify" })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("radio", { name: "Approve conditionally" })).toBeNull();
     expect(within(dialog).queryByRole("radio", { name: "Approve" })).toBeNull();
     expect(within(dialog).queryByRole("radio", { name: "Re-open for qualification" })).toBeNull();
-    const submit = within(dialog).getByRole("button", { name: "Approve conditionally" });
+    expect(within(dialog).getByRole("link", { name: "Qualification tab" })).toHaveAttribute("href", "/Suppliers/s1?tab=qualification");
+    const submit = within(dialog).getByRole("button", { name: "Suspend" });
     expect(submit).toBeDisabled();
     await userEvent.type(within(dialog).getByLabelText(/Reason/), "Late deliveries");
-    expect(submit).toBeDisabled(); // conditions are needed
-    await userEvent.type(within(dialog).getByLabelText(/Conditions or restrictions/), "Inspect every delivery");
     await userEvent.click(submit);
     await waitFor(() => expect(calls.find((c) => c.k === "POST /supplier-quality/suppliers/s1/status")).toBeTruthy());
-    expect(calls.find((c) => c.k === "POST /supplier-quality/suppliers/s1/status").body).toEqual({ status: "conditional", reason: "Late deliveries", conditions: "Inspect every delivery" });
+    expect(calls.find((c) => c.k === "POST /supplier-quality/suppliers/s1/status").body).toEqual({ status: "suspended", reason: "Late deliveries" });
   });
 
   it("hides the status and edit buttons from someone without the rights", async () => {

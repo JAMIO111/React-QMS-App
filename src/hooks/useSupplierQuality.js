@@ -200,3 +200,82 @@ export const useRiskMutation = () => {
     onSuccess: () => refreshOrganisation(queryClient, organisationId),
   });
 };
+
+/** The organisation's assessment templates, each with its current version. */
+export const useAssessmentTemplates = () => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "assessment-templates"),
+    queryFn: () => apiFetch("/supplier-quality/assessment-templates", { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+  });
+};
+
+export const useSupplierAssessments = (id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "assessments", id),
+    queryFn: () => apiFetch(`/supplier-quality/suppliers/${id}/assessments`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};
+
+/** One assessment: its frozen questions, the answers so far and what is still needed. */
+export const useSupplierAssessment = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "assessment", id),
+    queryFn: () => apiFetch(`/supplier-quality/supplier-assessments/${id}`, { organisationId }),
+    enabled: !!organisationId && !!id,
+    retry: false,
+  });
+};
+
+export const useApprovalDecisions = (id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "approval-decisions", id),
+    queryFn: () => apiFetch(`/supplier-quality/suppliers/${id}/approval-decisions`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};
+
+/** Commands for templates, assessments and approval decisions; each answers with the record it changed. */
+export const useAssessmentMutation = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, id, body }) => {
+      const send = (path, method = "POST") => apiFetch(path, { method, body, organisationId });
+      switch (action) {
+        case "createTemplate":
+          return send("/supplier-quality/assessment-templates");
+        case "updateTemplate":
+          return send(`/supplier-quality/assessment-templates/${id}`, "PATCH");
+        case "saveTemplateVersion":
+          return send(`/supplier-quality/assessment-templates/${id}/versions`);
+        case "startAssessment":
+          return send(`/supplier-quality/suppliers/${id}/assessments`);
+        case "respond":
+          return send(`/supplier-quality/supplier-assessments/${id}/responses`, "PUT");
+        case "completeAssessment":
+          return send(`/supplier-quality/supplier-assessments/${id}/complete`);
+        case "abandonAssessment":
+          return send(`/supplier-quality/supplier-assessments/${id}/abandon`);
+        case "propose":
+          return send(`/supplier-quality/suppliers/${id}/approval-decisions`);
+        case "decide":
+          return send(`/supplier-quality/supplier-approval-decisions/${id}/decide`);
+        case "withdraw":
+          return send(`/supplier-quality/supplier-approval-decisions/${id}/withdraw`);
+        default:
+          throw new Error(`Unknown action ${action}`);
+      }
+    },
+    // A decision can change the supplier's status, which shows everywhere, so everything is marked stale.
+    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+  });
+};

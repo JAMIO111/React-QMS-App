@@ -21,7 +21,7 @@ DECLARE
   a uuid; b uuid; site uuid; owner_role uuid; invite uuid; fm bigint; status bigint; proc bigint;
   part uuid := gen_random_uuid(); cust uuid := gen_random_uuid(); supp uuid := gen_random_uuid();
   emp uuid := gen_random_uuid(); d8 uuid := gen_random_uuid(); ncr uuid := gen_random_uuid(); notif uuid := gen_random_uuid();
-  inspection uuid; qa uuid; qm uuid;
+  inspection uuid; qa uuid; qm uuid; sweep_q record;
 BEGIN
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
   a := app.create_organisation('Sweep Alpha');
@@ -249,6 +249,19 @@ BEGIN
   PERFORM app.record_supplier_risk_assessment((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1),
     (SELECT jsonb_agg(jsonb_build_object('key', f ->> 'key', 'score', 2)) FROM public.supplier_risk_models m, jsonb_array_elements(m.factors) f WHERE m.organisation_id = a AND m.version = 1),
     'Sweep rationale');
+  -- Supplier quality (SQ2c): a completed assessment (every question answered) and a proposed approval decision.
+  CREATE TEMP TABLE _sweep_assessment AS
+    SELECT app.start_supplier_assessment((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1),
+      (SELECT v.id FROM public.supplier_assessment_template_versions v WHERE v.organisation_id = a AND v.version = 1 LIMIT 1)) AS id;
+  FOR sweep_q IN SELECT x FROM jsonb_array_elements((SELECT questions FROM public.supplier_assessments WHERE id = (SELECT id FROM _sweep_assessment))) x LOOP
+    PERFORM app.record_supplier_assessment_response((SELECT id FROM _sweep_assessment), sweep_q.x ->> 'key',
+      CASE sweep_q.x ->> 'answerType' WHEN 'yes_no' THEN 'yes' END, CASE sweep_q.x ->> 'answerType' WHEN 'rating' THEN 5 END,
+      CASE sweep_q.x ->> 'answerType' WHEN 'text' THEN 'Sweep note' END,
+      CASE WHEN (sweep_q.x ->> 'evidenceRequired')::boolean THEN (SELECT d.id FROM public.supplier_documents d WHERE d.organisation_id = a AND d.status = 'current' LIMIT 1) END);
+  END LOOP;
+  PERFORM app.complete_supplier_assessment((SELECT id FROM _sweep_assessment), 'Sweep summary');
+  PERFORM app.propose_supplier_approval((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), 'approved', 'Sweep proposal', (SELECT id FROM _sweep_assessment));
+  DROP TABLE _sweep_assessment;
   PERFORM pg_temp.logout();
   INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id FROM public.notifications WHERE organisation_id = a LIMIT 1;

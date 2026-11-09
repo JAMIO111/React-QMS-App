@@ -35,7 +35,8 @@ BEGIN
   PERFORM pg_temp.give_controller_seat(org, cat);
 
   PERFORM pg_temp.login(ann);
-  conn := app.create_integration_connection(org, 'csv', 'ERP suppliers', 'erp', '{}'::jsonb);
+  -- An API connection (a file connection needs a file and a mapping, covered in integrations_files.test.sql).
+  conn := app.create_integration_connection(org, 'rest_api', 'ERP suppliers', 'erp', '{"baseUrl": "https://erp.example.com"}'::jsonb);
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.request_integration_run(%L, 'supplier', 'full')$f$, conn)), 5), 'QM022', 'a draft connection cannot import');
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.request_integration_run(%L, 'widget', 'preview')$f$, conn)), 5), 'QM022', 'an unknown kind of record is refused');
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.request_integration_run(%L, 'supplier', 'retry')$f$, conn)), 5), 'QM022', 'a retry is asked for with its own function');
@@ -57,7 +58,7 @@ BEGIN
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.system_lease_integration_run(%L, %L, %L, 30)$f$, org2, run, owner)), 5), 'P0002', 'another organisation''s id finds nothing');
   lease := app.system_lease_integration_run(org, run, owner, 30);
   PERFORM pg_temp.assert_eq((lease ->> 'leased')::boolean, true, 'the runner takes the lease');
-  PERFORM pg_temp.assert_eq(lease ->> 'providerKey', 'csv', 'and learns the provider');
+  PERFORM pg_temp.assert_eq(lease ->> 'providerKey', 'rest_api', 'and learns the provider');
   PERFORM pg_temp.assert_eq((app.system_lease_integration_run(org, run, other, 30) ->> 'leased')::boolean, false, 'a second runner is turned away while the lease holds');
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.system_stage_integration_records(%L, %L, %L, '[]'::jsonb, NULL, true)$f$, org, run, other)), 5), 'QM022', 'only the lease holder stages');
   res := app.system_stage_integration_records(org, run, owner, pg_temp.rows(), 'page-2', true);
@@ -69,7 +70,7 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT count(*)::int FROM public.integration_inbox WHERE run_id = run AND status = 'previewed'), 2, 'its rows are kept as previewed');
 
   -- ---- activate, then a real import ----
-  PERFORM pg_temp.login(ann); PERFORM app.mark_integration_ready(conn); PERFORM pg_temp.logout();
+  PERFORM pg_temp.login(ann); PERFORM app.record_integration_connection_test(conn, true, 'Connected'); PERFORM app.mark_integration_ready(conn); PERFORM pg_temp.logout();
   PERFORM pg_temp.login(cat); PERFORM app.activate_integration_connection(conn); PERFORM pg_temp.logout();
   PERFORM pg_temp.login(ann);
   run := app.request_integration_run(conn, 'supplier', 'full');

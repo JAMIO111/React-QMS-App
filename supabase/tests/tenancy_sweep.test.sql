@@ -312,6 +312,12 @@ BEGIN
     SELECT a, connection_id, 'supplier', 'SW-EXT-0', gen_random_uuid(), 'h', id, id FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001';
   INSERT INTO public.integration_sync_cursors (organisation_id, connection_id, entity_type, cursor, run_id)
     SELECT a, connection_id, 'supplier', 'c1', id FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001';
+  INSERT INTO public.integration_files (id, organisation_id, connection_id, storage_path, file_name, size_bytes, status, headers, row_count, chunk_count)
+    SELECT '5f000000-0000-0000-0000-00000000f001', a, connection_id, a::text || '/integration/' || connection_id::text || '/sweep.csv', 'sweep.csv', 10, 'parsed', ARRAY['Code'], 1, 1
+      FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001';
+  INSERT INTO public.integration_file_chunks (organisation_id, file_id, seq, rows) VALUES (a, '5f000000-0000-0000-0000-00000000f001', 0, '[{"r": 2, "v": {"Code": "SW"}}]');
+  INSERT INTO public.integration_mappings (organisation_id, connection_id, entity_type, version, key_field, fields)
+    SELECT a, connection_id, 'supplier', 1, 'Code', '[{"target": "code", "source": "Code"}]' FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001';
   INSERT INTO public.integration_run_errors (organisation_id, run_id, attempt, kind, message, transient)
     VALUES (a, '5f000000-0000-0000-0000-00000000c001', 1, 'transient', 'Sweep error', true);
   INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)

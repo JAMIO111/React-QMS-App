@@ -34,7 +34,7 @@ let source: Record<string, unknown>[] = [];
 let fetchError: ConnectorError | null = null;
 class FakeFileAdapter implements ConnectorAdapter {
   getMetadata(): ConnectorMetadata {
-    return { key: 'csv', name: 'CSV / Excel file', kind: 'file', authTypes: [], capabilities: { testable: false, incremental: false, webhooks: false, writeBack: false } };
+    return { key: 'rest_api', name: 'REST API', kind: 'api', authTypes: [], capabilities: { testable: true, incremental: true, webhooks: false, writeBack: false } };
   }
   async testConnection() {
     return { ok: true, message: 'ok' };
@@ -91,10 +91,11 @@ describe('import runs', () => {
   let firstRun: string;
 
   it('a preview runs before activation and writes nothing', async () => {
-    connId = (await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'csv', name: 'ERP suppliers', externalSystem: 'erp' }).expect(201)).body.id;
+    connId = (await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'rest_api', name: 'ERP suppliers', externalSystem: 'erp', config: { baseUrl: 'https://erp.example.com' } }).expect(201)).body.id;
     const conn = (await api().get(`${base}/connections/${connId}`).set(await owner()).expect(200)).body;
-    expect(conn.runnable).toEqual(['supplier']);
-    await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'customer', kind: 'preview' }).expect(409);
+    expect(conn.runnable).toEqual(['supplier', 'customer', 'part']);
+    expect(conn.importable).toEqual(['supplier']);
+    await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'goods_receipt', kind: 'preview' }).expect(409);
     await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'supplier', kind: 'full' }).expect(409);
     await api().post(`${base}/connections/${connId}/runs`).set(await inspector()).send({ entityType: 'supplier', kind: 'preview' }).expect(403);
 
@@ -109,6 +110,7 @@ describe('import runs', () => {
   });
 
   it('imports once activated; a failed row stays for a retry', async () => {
+    await api().post(`${base}/connections/${connId}/test`).set(await owner()).send({}).expect(200);
     await api().post(`${base}/connections/${connId}/ready`).set(await owner()).send({}).expect(200);
     await api().post(`${base}/connections/${connId}/activate`).set(await approver()).send({}).expect(200);
     broken.add('S-3');

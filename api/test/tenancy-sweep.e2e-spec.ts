@@ -105,6 +105,11 @@ const sampleBody = (op: Op): object | undefined =>
     'GET /api/v1/integrations/runs/{id}/rows': undefined,
     'POST /api/v1/integrations/runs/{id}/continue': {},
     'POST /api/v1/integrations/runs/{id}/cancel': { reason: 'Hijacked' },
+    'GET /api/v1/integrations/connections/{id}/files': undefined,
+    'POST /api/v1/integrations/connections/{id}/files': { path: '00000000-0000-0000-0000-000000000000/integration/x/y.csv', fileName: 'y.csv', size: 1 },
+    'GET /api/v1/integrations/files/{id}': undefined,
+    'GET /api/v1/integrations/connections/{id}/mappings': undefined,
+    'PUT /api/v1/integrations/connections/{id}/mapping': { entityType: 'supplier', keyField: 'Code', fields: [{ target: 'code', source: 'Code' }, { target: 'name', source: 'Name' }] },
     'POST /api/v1/ncrs/{id}/receipt-link': { receiptLineId: '11111111-1111-4111-8111-111111111111' },
     'POST /api/v1/receipt-line-ncrs/{id}/unlink': { reason: 'Hijacked link' },
     'PUT /api/v1/supplier-quality/suppliers/{id}/performance/settings': { graceDaysAfter: 3 },
@@ -418,6 +423,11 @@ const hasSample = (op: Op) =>
     'GET /api/v1/integrations/runs/{id}/rows',
     'POST /api/v1/integrations/runs/{id}/continue',
     'POST /api/v1/integrations/runs/{id}/cancel',
+    'GET /api/v1/integrations/connections/{id}/files',
+    'POST /api/v1/integrations/connections/{id}/files',
+    'GET /api/v1/integrations/files/{id}',
+    'GET /api/v1/integrations/connections/{id}/mappings',
+    'PUT /api/v1/integrations/connections/{id}/mapping',
     'POST /api/v1/ncrs/{id}/receipt-link',
     'POST /api/v1/receipt-line-ncrs/{id}/unlink',
     'PUT /api/v1/supplier-quality/suppliers/{id}/performance/settings',
@@ -701,6 +711,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/receipt-line-ncrs/')) return a.receiptLineNcr;
   if (path.startsWith('/api/v1/integrations/connections/')) return a.integrationConnection;
   if (path.startsWith('/api/v1/integrations/runs/')) return a.integrationRun;
+  if (path.startsWith('/api/v1/integrations/files/')) return a.integrationFile;
   if (path.startsWith('/api/v1/material-certificates/')) return a.materialCertificate;
   if (path.startsWith('/api/v1/supplier-quality/scorecards/')) return a.scorecard;
   if (path.startsWith('/api/v1/supplier-quality/scar-items/')) return a.supplierScarItem;
@@ -887,7 +898,11 @@ beforeAll(async () => {
     const lkNcr = (await q1(`insert into public.nonconformances (organisation_id, reference, source, title, supplier_id) values ($1, 'A-NCR-LK', 'supplier', 'Alpha linked NCR', $2) returning id`, [ids.orgA, a.supplier])).id;
     a.receiptLineNcr = (await q1(`select app.link_ncr_to_receipt_line($1::uuid, $2::uuid) as id`, [lkNcr, a.receiptLine])).id;
     a.integrationConnection = (await q1(`select app.create_integration_connection($1::uuid, 'csv', 'Alpha file', 'alpha-file', '{}'::jsonb) as id`, [ids.orgA])).id;
-    a.integrationRun = (await q1(`select app.request_integration_run($1::uuid, 'supplier', 'preview') as id`, [a.integrationConnection])).id;
+    a.integrationFile = (await q1(`select app.register_integration_file($1::uuid, $2, 'alpha.csv', 10) as id`, [a.integrationConnection, `${ids.orgA}/integration/${a.integrationConnection}/alpha.csv`])).id;
+    await client.query(`select app.add_integration_file_chunk($1::uuid, 0, '[{"r": 2, "v": {"Code": "A"}}]'::jsonb)`, [a.integrationFile]);
+    await client.query(`select app.finish_integration_file($1::uuid, array['Code'], null, null)`, [a.integrationFile]);
+    await client.query(`select app.save_integration_mapping($1::uuid, 'supplier', 'Code', '[{"target": "code", "source": "Code"}]'::jsonb, null)`, [a.integrationConnection]);
+    a.integrationRun = (await q1(`select app.request_integration_run($1::uuid, 'supplier', 'preview', $2::uuid) as id`, [a.integrationConnection, a.integrationFile])).id;
     a.materialCertificate = (await q1(`select app.record_material_certificate($1::uuid, jsonb_build_object('certificateNumber', 'ALPHA-MTR', 'kind', 'mill_test_report', 'heatNumber', 'HA-1', 'receiptLineId', $2::text)) as id`, [a.supplier, a.receiptLine])).id;
     a.scorecard = (await q1(`select app.save_supplier_scorecard($1::uuid, current_date - 30, current_date, 'Alpha scorecard') as id`, [a.supplier])).id;
     a.supplierScarItem = (await q1(`select app.add_scar_item($1::uuid, '{"material":"Alpha steel"}'::jsonb) as id`, [a.supplierScar])).id;

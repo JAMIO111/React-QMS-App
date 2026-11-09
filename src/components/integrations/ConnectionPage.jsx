@@ -16,6 +16,7 @@ import MenuCard from "../ui/MenuCard";
 
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import ConnectionForm from "./ConnectionForm";
+import FilesCard from "./FilesCard";
 import ImportsCard from "./ImportsCard";
 import CTAButton from "@/components/CTAButton";
 
@@ -145,6 +146,8 @@ const ConnectionPage = () => {
           </div>
         </MenuCard>
       )}
+
+      {c.provider.key === "csv" && <FilesCard connection={c} canUpload={can("integrations.run")} canMap={manage} />}
 
       <ImportsCard connection={c} canRun={can("integrations.run")} />
 

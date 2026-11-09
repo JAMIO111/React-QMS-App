@@ -8,7 +8,8 @@ export const RUN_KINDS = ['preview', 'full', 'incremental', 'retry'] as const;
 export const RUN_STATUSES = ['queued', 'running', 'succeeded', 'partial', 'failed', 'cancelled'] as const;
 export const ROW_STATUSES = ['staged', 'previewed', 'unchanged', 'applied', 'rejected', 'failed', 'superseded'] as const;
 
-export const RequestRunBody = z.object({ entityType: z.enum(ENTITY_TYPES), kind: z.enum(['preview', 'full', 'incremental']) }).strict();
+/** A file connection names the uploaded file (`fileId`); other connections leave it out. */
+export const RequestRunBody = z.object({ entityType: z.enum(ENTITY_TYPES), kind: z.enum(['preview', 'full', 'incremental']), fileId: z.string().uuid().optional() }).strict();
 export type RequestRunBody = z.infer<typeof RequestRunBody>;
 
 /** Retry the failed rows of a kind of record on the connection (all of them, or the ones named). */
@@ -70,6 +71,9 @@ export const Run = z.object({
   cancelReason: z.string().nullable(),
   cancelledBy: Person,
   fetchDone: z.boolean(),
+  /** The file a file connection imported, and the mapping version applied. */
+  file: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
+  mappingVersion: z.number().int().nullable(),
 });
 export const RunPage = z.object({ data: z.array(Run), page: z.number().int(), pageSize: z.number().int(), total: z.number().int() });
 

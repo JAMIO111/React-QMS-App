@@ -123,7 +123,7 @@ const RunPage = () => {
     <div className="flex flex-col gap-4 p-4">
       <MenuCard
         title={`${RUN_KINDS[run.kind]} · ${ENTITY_LABELS[run.entityType] ?? run.entityType}`}
-        subtitle={`${run.connection.name} · asked for ${formatDateTime(run.requestedAt)}${run.requestedBy ? ` by ${run.requestedBy.name}` : ""}${run.finishedAt ? ` · finished ${formatDateTime(run.finishedAt)}` : ""}`}
+        subtitle={`${run.connection.name} · asked for ${formatDateTime(run.requestedAt)}${run.requestedBy ? ` by ${run.requestedBy.name}` : ""}${run.finishedAt ? ` · finished ${formatDateTime(run.finishedAt)}` : ""}${run.file ? ` · file ${run.file.name}` : ""}${run.mappingVersion ? ` · mapping version ${run.mappingVersion}` : ""}`}
         action={<RunStatusPill status={run.status} />}>
         <div className="flex flex-wrap gap-3">
           <StatTile label="Rows read" value={run.counts.total} />

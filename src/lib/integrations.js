@@ -135,3 +135,107 @@ export const drainMessage = (drain) => {
 };
 
 export const isLive = (run) => run && (run.status === "queued" || run.status === "running");
+
+export const FILE_STATUS = {
+  uploaded: { label: "Reading", tone: "bg-border-color text-secondary-text" },
+  parsed: { label: "Ready", tone: "bg-success-color/15 text-success-color" },
+  failed: { label: "Could not be read", tone: "bg-error-color/15 text-error-color" },
+  purged: { label: "Rows cleared", tone: "bg-border-color text-secondary-text" },
+};
+
+export const TRANSFORM_OPTIONS = [
+  { value: "none", label: "As it is" },
+  { value: "upper", label: "In capitals" },
+  { value: "lower", label: "In lower case" },
+  { value: "map", label: "Translate values" },
+  { value: "constant", label: "Same value for every record" },
+  { value: "concat", label: "Join two or more columns" },
+];
+
+export const DATE_FORMAT_OPTIONS = [
+  { value: "iso", label: "Year-month-day (2026-11-09)" },
+  { value: "dmy", label: "Day/month/year (09/11/2026)" },
+  { value: "mdy", label: "Month/day/year (11/09/2026)" },
+  { value: "excel", label: "Excel date number" },
+];
+
+const squash = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** Suggest a source column for each field from the file's headings (same words ignoring case, spaces and punctuation, or a heading that contains the field's name). */
+export const suggestColumns = (fields, headers) => {
+  const used = new Set();
+  const out = {};
+  for (const f of fields) {
+    const names = [squash(f.key), squash(f.label)];
+    const exact = headers.find((h) => !used.has(h) && names.includes(squash(h)));
+    const loose = exact ?? headers.find((h) => !used.has(h) && names.some((n) => n.length > 3 && squash(h).includes(n)));
+    if (loose) {
+      out[f.key] = loose;
+      used.add(loose);
+    }
+  }
+  return out;
+};
+
+/** "FROM=TO" lines ↔ a values object (for "Translate values"). */
+export const parseValueMap = (text) =>
+  Object.fromEntries(
+    String(text ?? "")
+      .split(/\r?\n/)
+      .map((l) => l.split("="))
+      .filter((p) => p.length >= 2 && p[0].trim() !== "")
+      .map(([from, ...to]) => [from.trim(), to.join("=").trim()]),
+  );
+export const formatValueMap = (values) => Object.entries(values ?? {}).map(([k, v]) => `${k}=${v}`).join("\n");
+
+/** One editable row per catalogue field, from a saved mapping version (or suggestions from the file's headings). */
+export const mappingToRows = (fields, saved, headers = []) => {
+  const byTarget = Object.fromEntries((saved?.fields ?? []).map((f) => [f.target, f]));
+  const suggested = saved ? {} : suggestColumns(fields, headers);
+  return fields.map((f) => {
+    const m = byTarget[f.key];
+    return {
+      target: f.key,
+      on: !!m || !!suggested[f.key] || !!f.required,
+      source: m?.source ?? suggested[f.key] ?? null,
+      sources: m?.sources ?? [],
+      transform: m?.transform ?? "none",
+      valuesText: formatValueMap(m?.values),
+      value: m?.value ?? "",
+      separator: m?.separator ?? " ",
+      dateFormat: m?.dateFormat ?? "iso",
+      decimal: m?.decimal ?? ".",
+      default: m?.default ?? "",
+    };
+  });
+};
+
+/** The editable rows back into the API's field list (only the rows switched on, with only what each transform uses). */
+export const rowsToFields = (rows, catalogueFields) =>
+  rows
+    .filter((r) => r.on)
+    .map((r) => {
+      const field = catalogueFields.find((f) => f.key === r.target);
+      const out = { target: r.target };
+      if (r.transform !== "none") out.transform = r.transform;
+      if (r.transform === "concat") {
+        out.sources = r.sources.filter(Boolean);
+        if (r.separator !== " ") out.separator = r.separator;
+      } else if (r.transform === "constant") out.value = r.value;
+      else out.source = r.source || null;
+      if (r.transform === "map") out.values = parseValueMap(r.valuesText);
+      if (field?.type === "date" && r.dateFormat !== "iso") out.dateFormat = r.dateFormat;
+      if ((field?.type === "number" || field?.type === "integer") && r.decimal !== ".") out.decimal = r.decimal;
+      if (r.default?.trim() && r.transform !== "constant") out.default = r.default.trim();
+      return out;
+    });
+
+export const MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+/** Why a file cannot be uploaded to a file connection, or null. */
+export const fileProblem = (file) => {
+  if (!/\.(csv|txt|xlsx)$/i.test(file.name)) return "Choose a .csv, .txt or .xlsx file";
+  if (file.size > MAX_FILE_BYTES) return "The file is larger than 25 MB";
+  if (file.size === 0) return "The file is empty";
+  return null;
+};

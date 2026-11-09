@@ -14,9 +14,12 @@ const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown user' } : null);
 
 const SELECT = `
-  select r.*, c.name as connection_name, ${personName('pq')} as requested_by_name, ${personName('px')} as cancelled_by_name
+  select r.*, c.name as connection_name, ${personName('pq')} as requested_by_name, ${personName('px')} as cancelled_by_name,
+         f.file_name, m.version as mapping_version
   from public.integration_sync_runs r
   join public.integration_connections c on c.id = r.connection_id
+  left join public.integration_files f on f.id = r.file_id
+  left join public.integration_mappings m on m.id = r.mapping_id
   left join public.profiles pq on pq.id = r.requested_by
   left join public.profiles px on px.id = r.cancelled_by`;
 
@@ -41,6 +44,8 @@ const toRun = (r: Row): z.infer<typeof Run> => ({
   cancelReason: (r.cancel_reason as string) ?? null,
   cancelledBy: person(r.cancelled_by, r.cancelled_by_name),
   fetchDone: !!r.fetch_done,
+  file: r.file_id ? { id: r.file_id as string, name: r.file_name as string } : null,
+  mappingVersion: r.mapping_version === null || r.mapping_version === undefined ? null : Number(r.mapping_version),
 });
 
 /**
@@ -54,15 +59,16 @@ export class IntegrationRunsService {
     private readonly engine: SyncEngine,
   ) {}
 
-  /** Can this connection import this kind of record with what this deployment has? (An adapter that fetches and an importer.) */
-  private async assertRunnable(ctx: RequestContext, connectionId: string, entity: EntityType): Promise<void> {
+  /** Can this connection preview (adapter + catalogue) or import (adapter + importer) this kind of record with what this deployment has? */
+  private async assertRunnable(ctx: RequestContext, connectionId: string, entity: EntityType, kind: 'preview' | 'full' | 'incremental' | 'retry'): Promise<void> {
     const provider = await this.database.asUser(ctx, async (db) => {
       const rows = await db.execute<Row>(sql`select p.key from public.integration_connections c join public.integration_providers p on p.id = c.provider_id where c.id = ${connectionId}::uuid and c.organisation_id = ${orgOf(ctx)}::uuid`);
       if (!rows.rows[0]) throw ApiError.notFound('connection_not_found', 'Connection not found');
       return rows.rows[0].key as string;
     });
-    if (!this.engine.runnable(provider).includes(entity)) {
-      throw new ApiError(409, 'integration_rule', `Importing ${ENTITY_LABELS[entity]} through this connection is not available yet`);
+    const allowed = kind === 'preview' ? this.engine.runnable(provider) : this.engine.importable(provider);
+    if (!allowed.includes(entity)) {
+      throw new ApiError(409, 'integration_rule', kind === 'preview' ? `Previewing ${ENTITY_LABELS[entity]} through this connection is not available` : `Importing ${ENTITY_LABELS[entity]} is not available yet: run a preview to check the file`);
     }
   }
 
@@ -73,13 +79,13 @@ export class IntegrationRunsService {
   }
 
   async request(ctx: RequestContext, connectionId: string, b: RequestRunBody): Promise<RunDetail> {
-    await this.assertRunnable(ctx, connectionId, b.entityType);
-    const id = await this.database.asUser(ctx, async (db) => (await db.execute<{ id: string }>(sql`select app.request_integration_run(${connectionId}::uuid, ${b.entityType}, ${b.kind}) as id`)).rows[0].id);
+    await this.assertRunnable(ctx, connectionId, b.entityType, b.kind);
+    const id = await this.database.asUser(ctx, async (db) => (await db.execute<{ id: string }>(sql`select app.request_integration_run(${connectionId}::uuid, ${b.entityType}, ${b.kind}, ${b.fileId ?? null}::uuid) as id`)).rows[0].id);
     return this.drainAndLoad(ctx, id);
   }
 
   async retry(ctx: RequestContext, connectionId: string, b: RetryBody): Promise<RunDetail> {
-    await this.assertRunnable(ctx, connectionId, b.entityType);
+    await this.assertRunnable(ctx, connectionId, b.entityType, 'retry');
     const id = await this.database.asUser(ctx, async (db, client) =>
       (await client.query('select app.retry_integration_rows($1::uuid, $2, $3::uuid[]) as id', [connectionId, b.entityType, b.rowIds ?? null])).rows[0].id as string,
     );

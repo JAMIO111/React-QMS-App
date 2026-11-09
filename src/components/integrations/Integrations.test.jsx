@@ -131,13 +131,13 @@ describe("Imports", () => {
   it("says imports are not available yet when nothing can be imported", async () => {
     routeApi({ "GET /integrations/connections/c1": detail(), "GET /integrations/providers": { data: providers }, "GET /integrations/runs": noRuns });
     renderAt("/Settings/Integrations/c1");
-    expect(await screen.findByText(/Nothing can be imported yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/Nothing can be imported through this connection yet/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Run an import" })).toBeNull();
   });
 
   it("starts a preview and lists the runs with what they did", async () => {
     routeApi({
-      "GET /integrations/connections/c1": detail({ runnable: ["supplier"], provider: { key: "csv", name: "CSV", kind: "file" } }),
+      "GET /integrations/connections/c1": detail({ runnable: ["supplier"] }),
       "GET /integrations/providers": { data: providers },
       "GET /integrations/runs": { ...noRuns, data: [run()], total: 1 },
       "POST /integrations/connections/c1/runs": run({ id: "r2", kind: "preview" }),

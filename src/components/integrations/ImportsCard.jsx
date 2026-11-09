@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "../../contexts/ToastProvider";
-import { useIntegrationMutation, useIntegrationRuns } from "../../hooks/useIntegrations";
+import { useIntegrationFiles, useIntegrationMappings, useIntegrationMutation, useIntegrationRuns } from "../../hooks/useIntegrations";
 import { describeApiError } from "../../lib/api-client";
 import { ENTITY_LABELS, RUN_KINDS, RUN_STATUS, runSummary } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
@@ -26,16 +26,27 @@ const RunDialog = ({ connection, onClose }) => {
   const active = connection.status === "active";
   const [entityType, setEntityType] = useState(connection.runnable[0] ?? null);
   const [kind, setKind] = useState("preview");
+  const isFile = connection.provider?.key === "csv";
+  const files = useIntegrationFiles(connection.id, { enabled: isFile });
+  const parsed = (files.data ?? []).filter((f) => f.status === "parsed");
+  const [fileId, setFileId] = useState(null);
+  const chosenFile = fileId ?? parsed[0]?.id ?? null;
+  const mappings = useIntegrationMappings(isFile ? connection.id : null, entityType);
+  const mapped = !isFile || (mappings.data ?? []).some((m) => m.current);
+  // Writing records needs an importer for that kind of record; a preview only needs the mapping.
+  const importable = (connection.importable ?? []).includes(entityType);
   const kinds = [
     { value: "preview", label: "Preview" },
-    { value: "full", label: "Full", disabled: !active },
-    { value: "incremental", label: "Incremental", disabled: !active },
+    { value: "full", label: "Full", disabled: !active || !importable },
+    ...(isFile ? [] : [{ value: "incremental", label: "Incremental", disabled: !active || !importable }]),
   ];
+  const runKind = kinds.some((k) => k.value === kind && !k.disabled) ? kind : "preview";
+  const blocked = isFile && (!chosenFile || (!mappings.isLoading && !mapped));
   const go = (e) => {
     e.preventDefault();
     if (!entityType) return;
     mutation.mutate(
-      { action: "requestRun", id: connection.id, body: { entityType, kind } },
+      { action: "requestRun", id: connection.id, body: { entityType, kind: runKind, ...(isFile ? { fileId: chosenFile } : {}) } },
       {
         onSuccess: (run) => {
           onClose();
@@ -51,20 +62,36 @@ const RunDialog = ({ connection, onClose }) => {
         <ComboField label="Records" value={entityType} onChange={setEntityType} options={connection.runnable.map((t) => ({ value: t, label: ENTITY_LABELS[t] ?? t }))} required />
         <div className="flex flex-col gap-1">
           <span className="text-sm font-medium text-primary-text">What to do</span>
-          <SlidingToggle ariaLabel="What to do" options={kinds} value={kind} onChange={setKind} />
+          <SlidingToggle ariaLabel="What to do" options={kinds} value={runKind} onChange={setKind} />
         </div>
+        {isFile && (
+          <ComboField
+            label="File"
+            value={chosenFile}
+            onChange={setFileId}
+            options={parsed.map((f) => ({ value: f.id, label: f.fileName, hint: `${f.rowCount} rows` }))}
+            required
+          />
+        )}
+        {isFile && parsed.length === 0 && <Callout tone="warning">Upload a file first.</Callout>}
+        {isFile && chosenFile && !mappings.isLoading && !mapped && (
+          <Callout tone="warning" action={<Link to={`/Settings/Integrations/${connection.id}/mapping?entity=${entityType}&file=${chosenFile}`} className="text-sm font-medium text-link-color hover:underline">Map columns</Link>}>
+            Map the file's columns to {ENTITY_LABELS[entityType]?.toLowerCase() ?? "these records"} first.
+          </Callout>
+        )}
         <Callout tone="info">
-          {kind === "preview"
+          {runKind === "preview"
             ? "A preview reads the source and shows what would be created, updated or rejected. Nothing is written."
-            : kind === "full"
+            : runKind === "full"
               ? "Reads everything from the start. Records already in Fortress and unchanged are left alone."
               : "Carries on from where the last import stopped."}
-          {!active && " Full and incremental imports need the connection to be active."}
+          {!active && ` ${isFile ? "A full import needs" : "Full and incremental imports need"} the connection to be active.`}
+          {active && !importable && entityType && ` Writing ${ENTITY_LABELS[entityType]?.toLowerCase() ?? "these records"} to Fortress is not available yet: preview only.`}
         </Callout>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !entityType}>{mutation.isPending ? "Running…" : "Run"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !entityType || blocked}>{mutation.isPending ? "Running…" : "Run"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -84,7 +111,7 @@ const ImportsCard = ({ connection, canRun }) => {
       action={canRun && runnable && connection.status !== "retired" && (
         <CTAButton buttonType="button" type="main" size="lg" onClick={() => setOpen(true)}>Run an import</CTAButton>
       )}>
-      {!runnable && <Callout tone="info" className="mb-3">Importing through this connection arrives with the file importer and the record importers (the next slices). Nothing can be imported yet.</Callout>}
+      {!runnable && <Callout tone="info" className="mb-3">Nothing can be imported through this connection yet.</Callout>}
       {list.length === 0 ? (
         <p className="text-sm text-secondary-text">No imports yet.</p>
       ) : (

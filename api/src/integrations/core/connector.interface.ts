@@ -18,6 +18,8 @@ export interface ConnectorMetadata {
 export interface AdapterContext {
   config: Record<string, unknown>;
   secret: string | null;
+  /** For a file connection: the uploaded file the run imports, read a chunk at a time (null past the end). */
+  file?: { id: string; chunkCount: number; readChunk(seq: number): Promise<Array<{ r: number; v: Record<string, string> }> | null> };
 }
 
 export interface ConnectionTestResult {

@@ -5,7 +5,9 @@ import { apiErrorFromDatabase } from '../../common/database-errors';
 import { DatabaseService } from '../../database/database.service';
 import { ConnectorError, RunErrorKind } from './connector.interface';
 import { ConnectorRegistry } from './connector.registry';
+import { CATALOGUE, catalogueFor } from './catalogue';
 import { EntityImporterRegistry, ImportContext, StagedRow } from './entity-importer';
+import { applyMapping, MappingSpec } from './mapping';
 
 /** How a call to `drain` ended. `paused`: the time allowed ran out with work left (call again); `waiting`: a transient error, tried again later. */
 export type DrainState = 'finished' | 'paused' | 'waiting' | 'failed' | 'blocked';
@@ -35,6 +37,8 @@ interface Lease {
   cursor: string | null;
   fetchDone: boolean;
   requestedBy: string | null;
+  file: { id: string; status: string; chunkCount: number; headers: string[] } | null;
+  mapping: (MappingSpec & { id: string; version: number }) | null;
 }
 
 const LEASE_LOST = 'The lease on this import was lost';
@@ -60,10 +64,16 @@ export class SyncEngine {
     private readonly importers: EntityImporterRegistry,
   ) {}
 
-  /** The kinds of record a provider can import with what this deployment has (an adapter that fetches and an importer for the entity). */
+  /** The kinds of record a provider can preview: an adapter that fetches, and a catalogue (to map to) or an importer. Nothing is written by a preview. */
   runnable(providerKey: string): string[] {
     const adapter = this.connectors.get(providerKey);
-    return adapter?.fetchRecords ? this.importers.types() : [];
+    if (!adapter?.fetchRecords) return [];
+    return [...new Set([...this.importers.types(), ...CATALOGUE.map((c) => c.entityType)])];
+  }
+
+  /** The kinds of record a provider can really import: an adapter that fetches and an importer that writes them. */
+  importable(providerKey: string): string[] {
+    return this.connectors.get(providerKey)?.fetchRecords ? this.importers.types() : [];
   }
 
   async drain(organisationId: string, runId: string, options: DrainOptions): Promise<DrainResult> {
@@ -88,7 +98,18 @@ export class SyncEngine {
 
     try {
       const importer = this.importers.get(lease.entityType);
-      if (!importer) return await runError('mapping', `Importing ${lease.entityType.replace('_', ' ')} records is not available yet`, false);
+      if (!importer && lease.kind !== 'preview') return await runError('mapping', `Importing ${lease.entityType.replace('_', ' ')} records is not available yet`, false);
+      const catalogue = catalogueFor(lease.entityType);
+      if (lease.mapping && !catalogue) return await runError('mapping', `There are no fields to map ${lease.entityType.replace('_', ' ')} records to yet`, false);
+      if (!lease.mapping && !importer) return await runError('mapping', 'Map the source to Fortress fields before importing', false);
+      const file = lease.file
+        ? {
+            id: lease.file.id,
+            chunkCount: lease.file.chunkCount,
+            readChunk: async (seq: number) =>
+              (await call((c) => c.query('select app.system_integration_file_chunk($1::uuid, $2::uuid, $3::uuid, $4::int) as r', [organisationId, runId, owner, seq]))).rows[0].r as Array<{ r: number; v: Record<string, string> }> | null,
+          }
+        : undefined;
       let fetchDone = lease.fetchDone;
       let cursor = lease.cursor;
       const ctx: ImportContext = { organisationId, connectionId: lease.connectionId, runId, externalSystem: lease.externalSystem, initiatingUser: user };
@@ -103,13 +124,20 @@ export class SyncEngine {
             : null;
           let page;
           try {
-            page = await adapter.fetchRecords({ config: lease.config ?? {}, secret }, lease.entityType, cursor);
+            page = await adapter.fetchRecords({ config: lease.config ?? {}, secret, file }, lease.entityType, cursor);
           } catch (error) {
             if (error instanceof ConnectorError) return await runError(error.kind, error.message, error.transient, error.retryAfterSeconds);
             this.log.warn({ runId, err: error instanceof Error ? error.name : 'unknown' }, 'integration fetch failed');
             return await runError('transient', 'The source could not be read', true);
           }
-          const records = page.records.map((r) => ({ externalId: importer.externalIdOf(r.payload), sourceRow: r.sourceRow ?? null, payload: r.payload }));
+          // With a mapping, each record is mapped and checked here: its identifier comes from the key column and any problem rejects the row when it is staged.
+          const records = page.records.map((r) => {
+            if (lease.mapping && catalogue) {
+              const mapped = applyMapping(catalogue, lease.mapping, r.payload);
+              return { externalId: mapped.externalId, sourceRow: r.sourceRow ?? null, payload: r.payload, canonical: mapped.canonical, errors: mapped.errors };
+            }
+            return { externalId: importer!.externalIdOf(r.payload), sourceRow: r.sourceRow ?? null, payload: r.payload };
+          });
           try {
             await call((c) => c.query('select app.system_stage_integration_records($1::uuid, $2::uuid, $3::uuid, $4::jsonb, $5, $6)', [organisationId, runId, owner, JSON.stringify(records), page.nextCursor, page.done]));
           } catch (error) {
@@ -133,7 +161,7 @@ export class SyncEngine {
           for (const row of rows) {
             await c.query('savepoint integration_row');
             try {
-              const { internalId } = await importer.apply(c, row, ctx);
+              const { internalId } = await importer!.apply(c, row, ctx);
               await c.query('select app.system_apply_integration_row($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6)', [organisationId, runId, owner, row.id, internalId, row.action]);
               await c.query('release savepoint integration_row');
             } catch (error) {

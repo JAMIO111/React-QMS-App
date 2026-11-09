@@ -157,7 +157,7 @@ Each entity module declares: canonical fields (type, required, allowed values), 
 | **IN0** | This plan agreed; decisions D1–D8 settled; sample data from one real customer (e.g. an inventory-transactions export) | Plan signed off |
 | **IN1** ✅ | Providers catalogue, connections, credentials (Vault), permissions + feature, state machine, audit; API + settings shell; guardrails and both sweeps | A connection can be created, credentials stored and revoked, nothing leaks |
 | **IN2** ✅ | External records map, staging inbox, sync jobs/runs/cursors, the batch runner, idempotency core, run monitoring API | A fake source imported twice stages and applies once; a failed row is retryable |
-| **IN3** | CSV/XLSX adapter (upload, parse, header discovery), mapping engine with versions, validation engine, **preview** UI | Upload → map → preview with correct counts, nothing written |
+| **IN3** ✅ | CSV/XLSX adapter (upload, parse, header discovery), mapping engine with versions, validation engine, **preview** UI | Upload → map → preview with correct counts, nothing written |
 | **IN4** | Canonical import functions + entity modules: suppliers, customers, parts (draft revisions) | Real import of masters; second import creates nothing; QMS-owned fields untouched |
 | **IN5** | Production orders; activation approval (preparer ≠ approver); ownership policies + conflict queue | An order file imports, updates only owned fields, conflicts parked |
 | **IN6** | Purchase orders, lines and **goods receipts** (historical mode, both source shapes, reconciliation) | Inventory-transaction export → receipts; supplier performance computed; mismatches reported |
@@ -192,4 +192,5 @@ Local SQL agent, SQL Server, SAP, Dynamics, PC-DMIS and any CMM ingestion; webho
 3. **Match-only rejections can be noisy** on first import (unknown suppliers/parts). The preview groups them by cause so a customer can import the masters first.
 4. **Vault access from the API login** needs a checked, minimal grant path; verified in IN1 before anything else is built on it.
 5. **Audit actor for scheduled runs** (§6.6) needs the audit trigger to accept an integration source and initiating user; small change, tested in IN2.
-6. **XLSX parsing library:** choose one without known vulnerabilities (not the npm `xlsx` package); decided in IN3.
+6. **XLSX parsing library:** decided in IN3: no spreadsheet library. `fflate` (small, no dependencies) unzips the workbook and a few lines read the shared strings, inline strings and date styles of the first worksheet (`api/src/integrations/core/file-parsers.ts`); formulas give their cached value. Large or unusual workbooks (pivot caches, several sheets) are out of scope.
+7. **File size and storage (IN3):** a Vercel function accepts at most 4.5 MB per request, so the browser uploads to the private `integration-files` bucket and the API downloads and parses it, then keeps its rows in `integration_file_chunks` (1,000 rows each) for the runner. Files up to 25 MB.

@@ -61,6 +61,41 @@ export const useIntegrationRunRows = (runId, status, page = 1) => {
   });
 };
 
+/** The kinds of record a source can be mapped to, and their Fortress fields (static; cached for long). */
+export const useIntegrationEntities = () => {
+  const { organisationId } = useOrganisation();
+  return useQuery({ queryKey: key(organisationId, "entities"), queryFn: () => apiFetch(`${BASE}/entities`, { organisationId }).then((r) => r.data), enabled: !!organisationId, retry: false, staleTime: 30 * 60_000 });
+};
+
+/** Files uploaded to a file connection, newest first. */
+export const useIntegrationFiles = (connectionId, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "files", connectionId),
+    queryFn: () => apiFetch(`${BASE}/connections/${connectionId}/files`, { organisationId }).then((r) => r.data),
+    enabled: !!organisationId && !!connectionId && enabled,
+    retry: false,
+  });
+};
+
+/** One uploaded file with its columns and first rows. */
+export const useIntegrationFile = (fileId) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({ queryKey: key(organisationId, "file", fileId), queryFn: () => apiFetch(`${BASE}/files/${fileId}`, { organisationId }), enabled: !!organisationId && !!fileId, retry: false });
+};
+
+/** Every mapping version of a connection (optionally one kind of record), newest first. */
+export const useIntegrationMappings = (connectionId, entityType) => {
+  const { organisationId } = useOrganisation();
+  const qs = entityType ? `?entityType=${entityType}` : "";
+  return useQuery({
+    queryKey: key(organisationId, "mappings", connectionId, entityType ?? "all"),
+    queryFn: () => apiFetch(`${BASE}/connections/${connectionId}/mappings${qs}`, { organisationId }).then((r) => r.data),
+    enabled: !!organisationId && !!connectionId,
+    retry: false,
+  });
+};
+
 /**
  * Every command on a connection. The credential goes in the body of one request and is never kept: the result is the connection without it.
  * Everything is marked stale afterwards so the list, the detail and the master data overview show what changed.
@@ -100,6 +135,10 @@ export const useIntegrationMutation = () => {
           return send(`/runs/${id}/continue`);
         case "cancelRun":
           return send(`/runs/${id}/cancel`);
+        case "registerFile":
+          return send(`/connections/${id}/files`);
+        case "saveMapping":
+          return send(`/connections/${id}/mapping`, "PUT");
         default:
           throw new Error(`Unknown action ${action}`);
       }

@@ -73,6 +73,8 @@ export const ConnectionDetail = z.object({
   problems: z.array(z.string()),
   /** The kinds of record this connection can import with what this deployment has (empty until an importer exists for its provider). */
   runnable: z.array(z.string()),
+  /** The kinds of record a real import can write (an importer exists). A preview needs only a mapping. */
+  importable: z.array(z.string()),
   /** The caller may activate it now: approval right, and a different person from whoever marked it ready (an owner or admin may activate their own). */
   canActivate: z.boolean(),
   events: z.array(z.object({ action: z.string(), fromStatus: z.string().nullable(), toStatus: z.string().nullable(), note: z.string().nullable(), at: Iso, by: Person })),

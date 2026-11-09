@@ -1,0 +1,103 @@
+import { z } from 'zod';
+import { ENTITY_TYPES } from './core/entity-importer';
+import { DATE_FORMATS, OWNERSHIP, TRANSFORMS } from './core/mapping';
+
+const Iso = z.string().datetime({ offset: true });
+const Person = z.object({ id: z.string().uuid(), name: z.string() }).nullable();
+
+/** After the browser has uploaded the file to integration-files at <org>/integration/<connection>/<uuid>-<name>. */
+export const RegisterFileBody = z
+  .object({
+    path: z.string().min(10).max(600),
+    fileName: z.string().trim().min(1).max(255),
+    size: z.number().int().min(0).max(26_214_400),
+  })
+  .strict();
+export type RegisterFileBody = z.infer<typeof RegisterFileBody>;
+
+export const FieldMappingBody = z
+  .object({
+    target: z.string().min(1).max(60),
+    source: z.string().max(200).nullable().optional(),
+    sources: z.array(z.string().max(200)).max(10).optional(),
+    transform: z.enum(TRANSFORMS).optional(),
+    values: z.record(z.string().max(200), z.string().max(200)).refine((v) => Object.keys(v).length <= 200, 'At most 200 values').optional(),
+    value: z.string().max(500).optional(),
+    separator: z.string().max(10).optional(),
+    dateFormat: z.enum(DATE_FORMATS).optional(),
+    decimal: z.enum(['.', ',']).optional(),
+    default: z.string().max(500).nullable().optional(),
+    ownership: z.enum(OWNERSHIP).optional(),
+  })
+  .strict();
+
+export const SaveMappingBody = z
+  .object({
+    entityType: z.enum(ENTITY_TYPES),
+    keyField: z.string().trim().min(1).max(200),
+    fields: z.array(FieldMappingBody).min(1).max(100),
+    reason: z.string().trim().max(1000).optional(),
+    /** Check the columns against this uploaded file. */
+    fileId: z.string().uuid().optional(),
+  })
+  .strict();
+export type SaveMappingBody = z.infer<typeof SaveMappingBody>;
+
+export const MappingQuery = z.object({ entityType: z.enum(ENTITY_TYPES).optional() });
+
+// ---- output --------------------------------------------------------------------------------------
+
+export const IntegrationFile = z.object({
+  id: z.string().uuid(),
+  connectionId: z.string().uuid(),
+  fileName: z.string(),
+  sizeBytes: z.number().int(),
+  status: z.enum(['uploaded', 'parsed', 'failed', 'purged']),
+  sheet: z.string().nullable(),
+  headers: z.array(z.string()),
+  rowCount: z.number().int(),
+  error: z.string().nullable(),
+  uploadedBy: Person,
+  uploadedAt: Iso,
+  purgedAt: Iso.nullable(),
+});
+export const IntegrationFileDetail = IntegrationFile.extend({
+  /** The first rows, to check the columns while mapping (empty once the rows are cleared). */
+  sample: z.array(z.object({ row: z.number().int(), values: z.record(z.string(), z.string()) })),
+});
+export type IntegrationFileDetail = z.infer<typeof IntegrationFileDetail>;
+export const IntegrationFileList = z.object({ data: z.array(IntegrationFile) });
+
+export const CatalogueResponse = z.object({
+  data: z.array(
+    z.object({
+      entityType: z.enum(ENTITY_TYPES),
+      label: z.string(),
+      keyHint: z.string(),
+      fields: z.array(
+        z.object({
+          key: z.string(),
+          label: z.string(),
+          type: z.string(),
+          required: z.boolean(),
+          maxLength: z.number().int().nullable(),
+          options: z.array(z.object({ value: z.string(), label: z.string() })).nullable(),
+          description: z.string().nullable(),
+        }),
+      ),
+    }),
+  ),
+});
+
+export const MappingVersion = z.object({
+  id: z.string().uuid(),
+  entityType: z.enum(ENTITY_TYPES),
+  version: z.number().int(),
+  keyField: z.string(),
+  fields: z.array(z.record(z.string(), z.unknown())),
+  reason: z.string().nullable(),
+  current: z.boolean(),
+  createdBy: Person,
+  createdAt: Iso,
+});
+export const MappingList = z.object({ data: z.array(MappingVersion) });

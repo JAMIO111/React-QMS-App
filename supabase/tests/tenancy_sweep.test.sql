@@ -298,6 +298,7 @@ BEGIN
   PERFORM app.raise_ncr_from_receipt_line((SELECT id FROM public.goods_receipt_lines WHERE goods_receipt_id = (SELECT id FROM _sweep_gr) LIMIT 1), 'Sweep receiving NC', NULL, 'minor', NULL, NULL);
   PERFORM app.record_material_certificate((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1),
     jsonb_build_object('certificateNumber', 'SWEEP-MTR', 'kind', 'mill_test_report', 'heatNumber', 'H-1', 'receiptLineId', (SELECT id FROM public.goods_receipt_lines WHERE goods_receipt_id = (SELECT id FROM _sweep_gr) LIMIT 1)));
+  PERFORM app.save_supplier_scorecard((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), current_date - 30, current_date, 'Sweep scorecard');
   DROP TABLE _sweep_gr;
   PERFORM pg_temp.logout();
   INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)

@@ -130,10 +130,11 @@ describe('supplier performance', () => {
     const rep = (await api().get(`${base}/reports/performance?from=${day(-60)}&to=${day(0)}`).set(await inspector()).expect(200)).body;
     expect(rep.meta).toMatchObject({ title: 'Supplier performance', from: day(-60), to: day(0), rowCount: 2 });
     expect(rep.meta.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(rep.meta.definitions.join(' ')).toMatch(/PPM = units/);
+    expect(rep.meta.definitions.join(' ')).toMatch(/PPM \(rejected\) = units rejected/);
+    expect(rep.meta.definitions.join(' ')).toMatch(/PPM \(non-conformances\)/);
     expect(rep.meta.basis.map((b: { label: string; value: string }) => `${b.label}=${b.value}`)).toEqual(expect.arrayContaining(['Scoring model version=2', 'On-time delivery judged against=the original requested date']));
     const acme = rep.rows.find((r: { code: string }) => r.code === 'ACME');
-    expect(acme).toMatchObject({ band: 'poor', ppm: 166667, lotRejectionPercent: 16.7, onTime: 3, matchedLines: 6, certsExpired: 1 });
+    expect(acme).toMatchObject({ band: 'poor', ppm: 166667, ppmNc: 0, ncUnits: 0, lotRejectionPercent: 16.7, onTime: 3, matchedLines: 6, certsExpired: 1 });
     expect(acme.warnings).toMatch(/certification/);
     expect(rep.rows.find((r: { code: string }) => r.code === 'BOLT')).toMatchObject({ band: 'insufficient', score: null });
     expect(rep.columns.map((c: { key: string }) => c.key)).toEqual(expect.arrayContaining(['code', 'score', 'ppm', 'otdPercent']));
@@ -150,3 +151,53 @@ describe('supplier performance', () => {
     expect((await api().get(`${base}/performance/watchlist`).set(await other()).expect(200)).body.data).toEqual([]);
   });
 });
+
+describe('supplier performance settings', () => {
+  it('lets a supplier override the date policy, grace days and in-full tolerances, and clears them again', async () => {
+    const start = (await api().get(`${base}/suppliers/${ctx.s1}/performance/settings`).set(await inspector()).expect(200)).body;
+    expect(start.overrides).toEqual({ otdPolicy: null, graceDaysBefore: null, graceDaysAfter: null, inFullUnderPct: null, inFullOverPct: null });
+    await api().put(`${base}/suppliers/${ctx.s1}/performance/settings`).set(await inspector()).send({ graceDaysAfter: 2 }).expect(403);
+    await api().put(`${base}/suppliers/${ctx.s1}/performance/settings`).set(await owner()).send({ nonsense: 1 }).expect(400);
+    await api().put(`${base}/suppliers/${ctx.s1}/performance/settings`).set(await owner()).send({ graceDaysAfter: 61 }).expect(400);
+    await api().put(`${base}/suppliers/${ctx.s1}/performance/settings`).set(await other()).send({ graceDaysAfter: 2 }).expect(404);
+    const saved = (await api().put(`${base}/suppliers/${ctx.s1}/performance/settings`).set(await owner()).send({ graceDaysBefore: 0, graceDaysAfter: 5, inFullUnderPct: 10, inFullOverPct: 25 }).expect(200)).body;
+    expect(saved.overrides).toMatchObject({ graceDaysBefore: 0, graceDaysAfter: 5, inFullUnderPct: 10, inFullOverPct: 25, otdPolicy: null });
+    expect(saved.effective).toMatchObject({ graceDaysAfter: 5, inFullUnderPct: 10, inFullOverPct: 25 });
+    const live = (await api().get(`${base}/suppliers/${ctx.s1}/performance?from=${day(-60)}&to=${day(0)}`).set(await owner()).expect(200)).body;
+    expect(live.overrides).toMatchObject({ graceDaysAfter: 5, inFullOverPct: 25 });
+    expect(live.model.config).toMatchObject({ graceDaysBefore: 0, graceDaysAfter: 5 });
+    expect(live.metrics.otd).toMatchObject({ graceBefore: 0, graceAfter: 5 });
+    expect(live.metrics.inFull).toMatchObject({ underPct: 10, overPct: 25 });
+    const cleared = (await api().put(`${base}/suppliers/${ctx.s1}/performance/settings`).set(await owner()).send({ graceDaysBefore: null, graceDaysAfter: null, inFullUnderPct: null, inFullOverPct: null }).expect(200)).body;
+    expect(cleared.overrides).toEqual({ otdPolicy: null, graceDaysBefore: null, graceDaysAfter: null, inFullUnderPct: null, inFullOverPct: null });
+    await api().get(`${base}/suppliers/${ctx.s1}/performance/settings`).set(await other()).expect(404);
+  });
+
+  it('keeps the PPM basis, grace days and the in-full weight in the model, with both PPM measures always shown', async () => {
+    const model = (await api().get(`${base}/performance/model`).set(await owner()).expect(200)).body;
+    expect(model.config).toMatchObject({ ppmBasis: 'rejected', graceDaysAfter: 0, weights: { inFull: 0 } });
+    await api().put(`${base}/performance/model`).set(await owner()).send({ config: { ...model.config, ppmBasis: 'vibes' }, reason: 'Unknown basis' }).expect(400);
+    const v = (await api().put(`${base}/performance/model`).set(await owner()).send({ config: { ...model.config, ppmBasis: 'ncs', graceDaysBefore: 3, weights: { ...model.config.weights, inFull: 20 } }, reason: 'Score NC PPM and in full' }).expect(200)).body;
+    expect(v.config).toMatchObject({ ppmBasis: 'ncs', graceDaysBefore: 3, weights: { inFull: 20 } });
+    const live = (await api().get(`${base}/suppliers/${ctx.s1}/performance?from=${day(-60)}&to=${day(0)}`).set(await owner()).expect(200)).body;
+    expect(live.metrics.ppm).toMatchObject({ basis: 'rejected', rejectedUnits: 100 });
+    expect(live.metrics.ppmNc).toMatchObject({ basis: 'ncs', affectedUnits: 0 });
+    expect(live.components.find((c: { key: string }) => c.key === 'in_full')).toMatchObject({ weight: 20, sufficient: true });
+    expect(live.components.find((c: { key: string }) => c.key === 'ppm').detail).toMatch(/non-conformances/);
+    // back to the defaults, so the other tests' figures stand
+    await api().put(`${base}/performance/model`).set(await owner()).send({ config: model.config, reason: 'Back to the defaults' }).expect(200);
+  });
+
+  it('counts only the rejected quantity of a part-rejected line, and refuses a quantity that makes no sense', async () => {
+    const receipt = (await api().post('/api/v1/goods-receipts').set(await owner()).send({ supplierId: ctx.s2, receivedOn: day(-3), deliveryNote: 'DN-Q', clientKey: 'sp-qty-0001', lines: [{ material: 'Strip', quantity: 50 }] }).expect(201)).body;
+    const line = (await api().get(`/api/v1/goods-receipts/${receipt.id}`).set(await owner()).expect(200)).body.lines[0].id;
+    await api().post(`/api/v1/goods-receipt-lines/${line}/disposition`).set(await owner()).send({ decision: 'accepted', quantity: 5 }).expect(409);
+    await api().post(`/api/v1/goods-receipt-lines/${line}/disposition`).set(await owner()).send({ decision: 'rejected', reason: 'Bad', quantity: 51 }).expect(409);
+    await api().post(`/api/v1/goods-receipt-lines/${line}/disposition`).set(await owner()).send({ decision: 'rejected', reason: 'Bad', quantity: 0 }).expect(400);
+    const res = (await api().post(`/api/v1/goods-receipt-lines/${line}/disposition`).set(await owner()).send({ decision: 'rejected', reason: 'Ten of the fifty were bent', quantity: 10 }).expect(200)).body;
+    expect(res.lines[0].disposition).toMatchObject({ decision: 'rejected', quantityRejected: 10 });
+    const p = (await api().get(`${base}/suppliers/${ctx.s2}/performance?from=${day(-60)}&to=${day(0)}`).set(await owner()).expect(200)).body;
+    expect(p.metrics.ppm).toMatchObject({ rejectedUnits: 10, receivedUnits: 50, value: 200000 });
+  });
+});
+

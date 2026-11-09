@@ -46,7 +46,7 @@ export const ComponentCards = ({ components }) => (
           </div>
           <p className="mt-1 text-2xl font-semibold tabular-nums text-primary-text">{c.sufficient ? formatScore(c.score) : "—"}</p>
           <p className="text-xs text-secondary-text">{c.detail}</p>
-          {!c.sufficient && <p className="mt-1 text-xs text-secondary-text">Left out of the score</p>}
+          {c.weight === 0 ? <p className="mt-1 text-xs text-secondary-text">Shown for information; not part of the score</p> : !c.sufficient && <p className="mt-1 text-xs text-secondary-text">Left out of the score</p>}
         </div>
       );
     })}
@@ -57,9 +57,14 @@ export const ComponentCards = ({ components }) => (
 export const FiguresTable = ({ metrics }) => {
   const rows = [
     ["Delivered lines", `${metrics.deliveries.lines} (${Number(metrics.deliveries.unitsReceived)} units)`],
-    ["PPM", metrics.ppm.value === null ? "—" : `${Number(metrics.ppm.value).toLocaleString()} (${Number(metrics.ppm.rejectedUnits)} of ${Number(metrics.ppm.receivedUnits)} units rejected)`],
+    ["PPM: rejected at receiving", metrics.ppm.value === null ? "—" : `${Number(metrics.ppm.value).toLocaleString()} (${Number(metrics.ppm.rejectedUnits)} of ${Number(metrics.ppm.receivedUnits)} units rejected)`],
+    ...(metrics.ppmNc ? [["PPM: from non-conformances", metrics.ppmNc.value === null ? "—" : `${Number(metrics.ppmNc.value).toLocaleString()} (${Number(metrics.ppmNc.affectedUnits)} of ${Number(metrics.ppmNc.receivedUnits)} units on non-conformances, ${metrics.ppmNc.lines} lines)`]] : []),
     ["Lot rejection", `${percent(metrics.lotRejection.rate, 1)} (${metrics.lotRejection.rejectedLines} of ${metrics.lotRejection.lines} lines)`],
-    ["On-time delivery", `${percent(metrics.otd.value, 0)} (${metrics.otd.onTime} on time, ${metrics.otd.late} late; ${metrics.otd.unmatchedLines} lines with no order left out; by the ${metrics.otd.policy} date)`],
+    ["On-time delivery", `${percent(metrics.otd.value, 0)} (${metrics.otd.onTime} on time, ${metrics.otd.late} late${metrics.otd.early ? `, ${metrics.otd.early} too early` : ""}; ${metrics.otd.unmatchedLines} lines with no order left out; by the ${metrics.otd.policy} date${metrics.otd.graceAfter ? `, ${metrics.otd.graceAfter} days late allowed` : ""}${metrics.otd.graceBefore !== null && metrics.otd.graceBefore !== undefined ? `, ${metrics.otd.graceBefore} days early allowed` : ""})`],
+    ...(metrics.inFull ? [
+      ["Delivered in full", `${percent(metrics.inFull.value, 0)} (${metrics.inFull.inFull} of ${metrics.inFull.lines - metrics.inFull.pending} order lines due in the period: ${metrics.inFull.short} short, ${metrics.inFull.over} over; ${metrics.inFull.underPct}% under to ${metrics.inFull.overPct}% over counts as in full${metrics.inFull.pending ? `; ${metrics.inFull.pending} still able to arrive left out` : ""})`],
+      ["On time and in full (OTIF)", `${percent(metrics.otif.value, 0)} (${metrics.otif.otif} of ${metrics.otif.lines} order lines)`],
+    ] : []),
     ["Non-conformances", `${metrics.ncs.total} (${metrics.ncs.critical} critical, ${metrics.ncs.major} major, ${metrics.ncs.minor} minor; ${metrics.ncs.repeat} repeat)`],
     ["Corrective action requests", `${metrics.scars.issued} issued (${metrics.scars.answered_on_time} on time, ${metrics.scars.answered_late} late, ${metrics.scars.overdue_now} overdue)`],
     ["Certifications", `${metrics.certs.current} current (${metrics.certs.expired} expired, ${metrics.certs.expiring_soon} expiring within 60 days)`],

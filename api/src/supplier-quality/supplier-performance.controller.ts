@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { InspectionRecommendation, Performance, PerformanceQuery, RecommendationQuery, SaveModelBody, SaveScorecardBody, Scorecard, ScorecardModel, ScorecardSummary, Watchlist, WatchlistQuery } from './supplier-performance.schemas';
+import { InspectionRecommendation, Performance, PerformanceQuery, RecommendationQuery, SaveModelBody, SaveScorecardBody, Scorecard, ScorecardModel, ScorecardSummary, SupplierSettings, SupplierSettingsBody, Watchlist, WatchlistQuery } from './supplier-performance.schemas';
 import { SupplierPerformanceService } from './supplier-performance.service';
 
 const READ = 'supplier_quality.read';
@@ -48,6 +48,21 @@ export class SupplierPerformanceController {
   @ApiOkResponse({ description: 'The supplier\'s live figures, score, band and warnings for a period (default: the last 90 days)', schema: openApiSchema(Performance) })
   performance(@Ctx() ctx: RequestContext, @Param('id') id: string, @Query() query: unknown) {
     return this.service.performance(ctx, parse(Uuid, id), parse(PerformanceQuery, query));
+  }
+
+  @Get('suppliers/:id/performance/settings')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'The supplier\'s own scoring settings (empty = follows the organisation\'s model) and what it is scored with now', schema: openApiSchema(SupplierSettings) })
+  settings(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.supplierSettings(ctx, parse(Uuid, id));
+  }
+
+  @Put('suppliers/:id/performance/settings')
+  @OrganisationScoped(CONFIGURE)
+  @ApiBody({ schema: openApiSchema(SupplierSettingsBody) })
+  @ApiOkResponse({ description: 'Sets this supplier\'s date policy, grace days and in-full tolerances; a key set to null clears it. Saved scorecards keep the configuration they used.', schema: openApiSchema(SupplierSettings) })
+  saveSettings(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.saveSupplierSettings(ctx, parse(Uuid, id), parse(SupplierSettingsBody, body));
   }
 
   @Get('suppliers/:id/inspection-recommendation')

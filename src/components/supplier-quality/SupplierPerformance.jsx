@@ -11,6 +11,7 @@ import MenuCard from "../ui/MenuCard";
 import SlidingToggle from "../ui/SlidingToggle";
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import { BandPill, ComponentCards, FiguresTable, Trend, WarningList } from "./PerformanceParts";
+import SupplierScoringSettings from "./SupplierScoringSettings";
 
 const SaveDialog = ({ supplierId, period, onClose }) => {
   const mutation = usePerformanceMutation();
@@ -84,6 +85,7 @@ export default function SupplierPerformance({ supplier }) {
           </div>
         )}
       </MenuCard>
+      <SupplierScoringSettings supplier={supplier} canConfigure={can("supplier_quality.configure")} />
       <MenuCard title="Saved scorecards" subtitle="Frozen records: they keep the figures and the model version they were saved with.">
         {cards.error && <ErrorNotice error={cards.error} />}
         {!cards.data ? null : cards.data.length === 0 ? <p className="text-sm text-secondary-text">No scorecards saved yet.</p> : (

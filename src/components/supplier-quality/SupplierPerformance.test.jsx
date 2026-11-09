@@ -34,11 +34,17 @@ const perf = (over = {}) => ({
   ...over,
 });
 const supplier = { id: "s1", code: "ACME", name: "Acme Metals" };
+const SETTINGS = {
+  overrides: { otdPolicy: null, graceDaysBefore: null, graceDaysAfter: null, inFullUnderPct: null, inFullOverPct: null },
+  effective: { otdPolicy: "agreed", graceDaysBefore: null, graceDaysAfter: 0, inFullUnderPct: 0, inFullOverPct: 10, ppmBasis: "rejected" },
+  modelVersion: 1,
+};
 const calls = [];
 const routeApi = (routes) =>
   apiFetch.mockImplementation(async (path, opts = {}) => {
     const k = `${opts.method ?? "GET"} ${path.split("?")[0]}`;
     calls.push({ k, path, body: opts.body });
+    if (k === "GET /supplier-quality/suppliers/s1/performance/settings" && !(k in routes)) return SETTINGS;
     if (!(k in routes)) throw new Error(`unexpected ${k}`);
     return routes[k];
   });
@@ -65,7 +71,7 @@ describe("performance tab", () => {
     expect(screen.getByRole("link", { name: /OLD-1/ })).toHaveAttribute("href", "/Suppliers/s1?tab=qualification");
     expect(screen.getByRole("link", { name: /NCR-26-0001/ })).toBeInTheDocument();
     expect(screen.getByText(/No scorecards saved yet/)).toBeInTheDocument();
-    expect(calls[0].path).toMatch(/from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}/);
+    expect(calls.find((c) => c.k === "GET /supplier-quality/suppliers/s1/performance").path).toMatch(/from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}/);
   });
 
   it("says when there is not enough data and leaves the score out", async () => {
@@ -100,6 +106,88 @@ describe("performance tab", () => {
     expect(await screen.findByRole("list", { name: "Saved scorecards" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save as a scorecard" })).toBeNull();
     expect(screen.getByText(/v1 · 2 warnings · Q3/)).toBeInTheDocument();
+  });
+});
+
+describe("scoring settings", () => {
+  it("shows what a supplier is scored with and which parts are its own", async () => {
+    routeApi({
+      "GET /supplier-quality/suppliers/s1/performance": perf(), "GET /supplier-quality/suppliers/s1/scorecards": { data: [] },
+      "GET /supplier-quality/suppliers/s1/performance/settings": { ...SETTINGS, overrides: { ...SETTINGS.overrides, graceDaysAfter: 3 }, effective: { ...SETTINGS.effective, graceDaysAfter: 3 } },
+    });
+    renderUi(<SupplierPerformance supplier={supplier} />);
+    const list = await screen.findByRole("list", { name: "Scoring settings in force" });
+    expect(list).toHaveTextContent("Up to 3 days late counts as on time (this supplier)");
+    expect(list).toHaveTextContent("Any early delivery counts as on time");
+    expect(list).toHaveTextContent("In full: 0% under to 10% over the ordered quantity");
+  });
+
+  it("saves this supplier's own grace days and tolerances, leaving the rest to follow the model", async () => {
+    routeApi({
+      "GET /supplier-quality/suppliers/s1/performance": perf(), "GET /supplier-quality/suppliers/s1/scorecards": { data: [] },
+      "PUT /supplier-quality/suppliers/s1/performance/settings": SETTINGS,
+    });
+    renderUi(<SupplierPerformance supplier={supplier} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+    await userEvent.type(await screen.findByLabelText("Days late that still count"), "4");
+    await userEvent.type(screen.getByLabelText("In full: % below the ordered quantity"), "5");
+    await userEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "PUT /supplier-quality/suppliers/s1/performance/settings")?.body).toEqual({ otdPolicy: null, graceDaysBefore: null, graceDaysAfter: 4, inFullUnderPct: 5, inFullOverPct: null }));
+  });
+
+  it("refuses grace days over 60 and offers no change to someone without the configure permission", async () => {
+    routeApi({ "GET /supplier-quality/suppliers/s1/performance": perf(), "GET /supplier-quality/suppliers/s1/scorecards": { data: [] } });
+    renderUi(<SupplierPerformance supplier={supplier} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+    await userEvent.type(await screen.findByLabelText("Days late that still count"), "61");
+    expect(screen.getByRole("button", { name: "Save settings" })).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent("whole numbers from 0 to 60");
+  });
+
+  it("shows both PPM measures, in full and OTIF among the figures, and an unscored in-full metric as information", async () => {
+    const m = { ...metrics, ppmNc: { value: 107692, affectedUnits: 70, receivedUnits: 650, lines: 2 }, inFull: { value: 0.5, lines: 6, inFull: 3, short: 2, over: 1, pending: 0, underPct: 0, overPct: 10 }, otif: { value: 0.3333, lines: 6, otif: 2 } };
+    routeApi({
+      "GET /supplier-quality/suppliers/s1/performance": perf({ metrics: m, components: [comp("otd", 30, 66.7, "4 of 6"), { ...comp("in_full", 0, 50, "3 of 6 order lines delivered in full"), sufficient: true }, comp("ppm", 30, 0, "153846 PPM")] }),
+      "GET /supplier-quality/suppliers/s1/scorecards": { data: [] },
+    });
+    renderUi(<SupplierPerformance supplier={supplier} />);
+    const figures = await screen.findByRole("table", { name: "Figures" });
+    expect(figures).toHaveTextContent("PPM: rejected at receiving");
+    expect(figures).toHaveTextContent("PPM: from non-conformances107,692 (70 of 650 units on non-conformances, 2 lines)");
+    expect(figures).toHaveTextContent("Delivered in full50% (3 of 6 order lines due in the period");
+    expect(figures).toHaveTextContent("On time and in full (OTIF)33% (2 of 6 order lines)");
+    expect(screen.getByText("Shown for information; not part of the score")).toBeInTheDocument();
+  });
+
+  it("switches the PPM that scores from the settings card, saving a new model version with a reason", async () => {
+    routeApi({
+      "GET /supplier-quality/performance/model": { id: "m1", version: 1, config: { ...config, ppmBasis: "rejected", graceDaysAfter: 0, inFullUnderPct: 0, inFullOverPct: 10, weights: { ...config.weights, inFull: 0 } }, reason: "Default model", createdAt: "2026-11-01T09:00:00Z", createdBy: null, versions: [{ version: 1, reason: "Default model", createdAt: "2026-11-01T09:00:00Z", createdBy: null }] },
+      "PUT /supplier-quality/performance/model": { version: 2 },
+    });
+    renderUi(<ScorecardModelCard canConfigure />);
+    await userEvent.click(await screen.findByRole("button", { name: "From non-conformances" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "PUT /supplier-quality/performance/model")?.body).toMatchObject({ config: { ppmBasis: "ncs" }, reason: expect.stringMatching(/non-conformances/i) }));
+  });
+
+  it("puts the new model settings in the model dialog and sends them with the new version", async () => {
+    routeApi({
+      "GET /supplier-quality/performance/model": { id: "m1", version: 1, config: { ...config, ppmBasis: "rejected", graceDaysBefore: null, graceDaysAfter: 0, inFullUnderPct: 0, inFullOverPct: 10, weights: { ...config.weights, inFull: 0 } }, reason: "Default model", createdAt: "2026-11-01T09:00:00Z", createdBy: null, versions: [{ version: 1, reason: "Default model", createdAt: "2026-11-01T09:00:00Z", createdBy: null }] },
+      "PUT /supplier-quality/performance/model": { version: 2 },
+    });
+    renderUi(<ScorecardModelCard canConfigure />);
+    await userEvent.click(await screen.findByRole("button", { name: "Change the model" }));
+    await userEvent.type(await screen.findByLabelText("Days early that still count as on time"), "2");
+    await userEvent.clear(screen.getByLabelText("Days late that still count as on time"));
+    await userEvent.type(screen.getByLabelText("Days late that still count as on time"), "3");
+    await userEvent.clear(screen.getByLabelText("In full: % below the ordered quantity"));
+    await userEvent.type(screen.getByLabelText("In full: % below the ordered quantity"), "5");
+    await userEvent.clear(screen.getByLabelText("Delivered in full"));
+    await userEvent.type(screen.getByLabelText("Delivered in full"), "15");
+    await userEvent.type(screen.getByLabelText(/Why is it changing/), "Allow a little slack");
+    await userEvent.click(screen.getByRole("button", { name: "Save new version" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "PUT /supplier-quality/performance/model")?.body).toMatchObject({
+      reason: "Allow a little slack", config: { graceDaysBefore: 2, graceDaysAfter: 3, inFullUnderPct: 5, inFullOverPct: 10, ppmBasis: "rejected", weights: { inFull: 15 } },
+    }));
   });
 });
 

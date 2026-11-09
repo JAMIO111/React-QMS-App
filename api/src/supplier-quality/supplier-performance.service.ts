@@ -7,7 +7,7 @@ import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { todayUtc } from './expiry';
 import { recommendInspection } from './inspection-recommendation';
-import { InspectionRecommendation, Performance, PerformanceQuery, RecommendationQuery, SaveModelBody, SaveScorecardBody, Scorecard, ScorecardConfig, ScorecardModel, ScorecardSummary, Watchlist, WatchlistQuery } from './supplier-performance.schemas';
+import { InspectionRecommendation, Performance, PerformanceOverrides, PerformanceQuery, RecommendationQuery, SaveModelBody, SaveScorecardBody, Scorecard, ScorecardConfig, ScorecardModel, ScorecardSummary, SupplierSettings, SupplierSettingsBody, Watchlist, WatchlistQuery } from './supplier-performance.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown user' } : null);
@@ -15,7 +15,12 @@ const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 
 type RawConfig = {
   otd_policy: ScorecardConfig['otdPolicy'];
-  weights: ScorecardConfig['weights'];
+  ppm_basis?: ScorecardConfig['ppmBasis'];
+  grace_days_before?: number | null;
+  grace_days_after?: number;
+  in_full_under_pct?: number;
+  in_full_over_pct?: number;
+  weights: { otd: number; in_full?: number; ppm: number; ncs: number; scar: number; certs: number };
   ppm_good: number;
   ppm_zero: number;
   nc_penalty: ScorecardConfig['ncPenalty'];
@@ -24,11 +29,30 @@ type RawConfig = {
   min_lines: number;
 };
 const fromRaw = (c: RawConfig): ScorecardConfig => ({
-  otdPolicy: c.otd_policy, weights: c.weights, ppmGood: Number(c.ppm_good), ppmZero: Number(c.ppm_zero), ncPenalty: c.nc_penalty, goodFrom: Number(c.good_from), watchFrom: Number(c.watch_from), minLines: Number(c.min_lines),
+  otdPolicy: c.otd_policy,
+  ppmBasis: c.ppm_basis ?? 'rejected',
+  graceDaysBefore: c.grace_days_before === undefined || c.grace_days_before === null ? null : Number(c.grace_days_before),
+  graceDaysAfter: Number(c.grace_days_after ?? 0),
+  inFullUnderPct: Number(c.in_full_under_pct ?? 0),
+  inFullOverPct: Number(c.in_full_over_pct ?? 10),
+  weights: { otd: c.weights.otd, inFull: Number(c.weights.in_full ?? 0), ppm: c.weights.ppm, ncs: c.weights.ncs, scar: c.weights.scar, certs: c.weights.certs },
+  ppmGood: Number(c.ppm_good), ppmZero: Number(c.ppm_zero), ncPenalty: c.nc_penalty, goodFrom: Number(c.good_from), watchFrom: Number(c.watch_from), minLines: Number(c.min_lines),
 });
 const toRaw = (c: ScorecardConfig): RawConfig => ({
-  otd_policy: c.otdPolicy, weights: c.weights, ppm_good: c.ppmGood, ppm_zero: c.ppmZero, nc_penalty: c.ncPenalty, good_from: c.goodFrom, watch_from: c.watchFrom, min_lines: c.minLines,
+  otd_policy: c.otdPolicy, ppm_basis: c.ppmBasis, grace_days_before: c.graceDaysBefore ?? undefined, grace_days_after: c.graceDaysAfter, in_full_under_pct: c.inFullUnderPct, in_full_over_pct: c.inFullOverPct,
+  weights: { otd: c.weights.otd, in_full: c.weights.inFull, ppm: c.weights.ppm, ncs: c.weights.ncs, scar: c.weights.scar, certs: c.weights.certs },
+  ppm_good: c.ppmGood, ppm_zero: c.ppmZero, nc_penalty: c.ncPenalty, good_from: c.goodFrom, watch_from: c.watchFrom, min_lines: c.minLines,
 });
+
+const overridesFromRaw = (o: Record<string, unknown> | null | undefined): PerformanceOverrides => {
+  const out: PerformanceOverrides = {};
+  if (o?.otd_policy) out.otdPolicy = o.otd_policy as 'agreed' | 'original';
+  if (o?.grace_days_before !== undefined && o?.grace_days_before !== null) out.graceDaysBefore = Number(o.grace_days_before);
+  if (o?.grace_days_after !== undefined && o?.grace_days_after !== null) out.graceDaysAfter = Number(o.grace_days_after);
+  if (o?.in_full_under_pct !== undefined && o?.in_full_under_pct !== null) out.inFullUnderPct = Number(o.in_full_under_pct);
+  if (o?.in_full_over_pct !== undefined && o?.in_full_over_pct !== null) out.inFullOverPct = Number(o.in_full_over_pct);
+  return out;
+};
 
 type RawScoring = { score: number | null; band: Performance['band']; components: Performance['components']; warnings: Performance['warnings']; weightWithData: number | null; metrics: Record<string, unknown> };
 
@@ -82,9 +106,9 @@ export class SupplierPerformanceService {
     const from = q.from ?? addDays(to, -89);
     return this.database.asUser(ctx, async (db) => {
       await this.assertSupplier(db, ctx, supplierId);
-      const res = await db.execute<{ r: RawScoring & { model: { id: string; version: number; config: RawConfig } } }>(sql`select app.supplier_performance(${supplierId}::uuid, ${from}::date, ${to}::date) as r`);
+      const res = await db.execute<{ r: RawScoring & { model: { id: string; version: number; config: RawConfig }; overrides: Record<string, unknown> } }>(sql`select app.supplier_performance(${supplierId}::uuid, ${from}::date, ${to}::date) as r`);
       const r = res.rows[0].r;
-      return { model: { id: r.model.id, version: Number(r.model.version), config: fromRaw(r.model.config) }, metrics: r.metrics, score: num(r.score), band: r.band, components: r.components, warnings: r.warnings, weightWithData: num(r.weightWithData) };
+      return { model: { id: r.model.id, version: Number(r.model.version), config: fromRaw(r.model.config) }, overrides: overridesFromRaw(r.overrides), metrics: r.metrics, score: num(r.score), band: r.band, components: r.components, warnings: r.warnings, weightWithData: num(r.weightWithData) };
     });
   }
 
@@ -144,6 +168,46 @@ export class SupplierPerformanceService {
       await this.assertSupplier(db, ctx, supplierId);
       const res = await db.execute<{ id: string }>(sql`select app.save_supplier_scorecard(${supplierId}::uuid, ${b.from}::date, ${b.to}::date, ${b.note ?? null}) as id`);
       return this.loadOne(db, ctx, res.rows[0].id);
+    });
+  }
+
+  /** A supplier's own overrides and what it is scored with now (the model's configuration with them on top). */
+  private async loadSettings(db: Db, ctx: RequestContext, supplierId: string): Promise<SupplierSettings> {
+    await this.assertSupplier(db, ctx, supplierId);
+    const model = await this.currentModel(db, ctx);
+    const row = await db.execute<Row>(sql`select otd_policy, grace_days_before, grace_days_after, in_full_under_pct, in_full_over_pct from public.supplier_performance_settings where supplier_id = ${supplierId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+    const o = row.rows[0];
+    const overrides = {
+      otdPolicy: (o?.otd_policy as ScorecardConfig['otdPolicy'] | null | undefined) ?? null,
+      graceDaysBefore: num(o?.grace_days_before),
+      graceDaysAfter: num(o?.grace_days_after),
+      inFullUnderPct: num(o?.in_full_under_pct),
+      inFullOverPct: num(o?.in_full_over_pct),
+    };
+    const c = model.config;
+    return {
+      overrides,
+      effective: {
+        otdPolicy: overrides.otdPolicy ?? c.otdPolicy,
+        graceDaysBefore: overrides.graceDaysBefore ?? c.graceDaysBefore,
+        graceDaysAfter: overrides.graceDaysAfter ?? c.graceDaysAfter,
+        inFullUnderPct: overrides.inFullUnderPct ?? c.inFullUnderPct,
+        inFullOverPct: overrides.inFullOverPct ?? c.inFullOverPct,
+        ppmBasis: c.ppmBasis,
+      },
+      modelVersion: model.version,
+    };
+  }
+
+  supplierSettings(ctx: RequestContext, supplierId: string): Promise<SupplierSettings> {
+    return this.database.asUser(ctx, (db) => this.loadSettings(db, ctx, supplierId));
+  }
+
+  saveSupplierSettings(ctx: RequestContext, supplierId: string, b: SupplierSettingsBody): Promise<SupplierSettings> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.assertSupplier(db, ctx, supplierId);
+      await db.execute(sql`select app.set_supplier_performance_settings(${supplierId}::uuid, ${JSON.stringify(b)}::jsonb)`);
+      return this.loadSettings(db, ctx, supplierId);
     });
   }
 

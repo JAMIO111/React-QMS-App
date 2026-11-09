@@ -260,7 +260,7 @@ export class ReceivingService {
         select k.receipt_line_id, n.id, n.reference, n.stage from public.receipt_line_ncrs k join public.nonconformances n on n.id = k.ncr_id
         where k.receipt_line_id in (select id from public.goods_receipt_lines where goods_receipt_id = ${id}::uuid) and n.deleted_at is null order by k.linked_at`),
     ]);
-    const toDecision = (r: Row) => ({ decision: r.decision as 'held' | 'accepted' | 'rejected' | 'conditional', reason: (r.reason as string) ?? null, conditions: (r.conditions as string) ?? null, decidedAt: iso(r.decided_at)!, decidedBy: person(r.decided_by, r.decided_by_name) });
+    const toDecision = (r: Row) => ({ decision: r.decision as 'held' | 'accepted' | 'rejected' | 'conditional', reason: (r.reason as string) ?? null, conditions: (r.conditions as string) ?? null, quantityRejected: r.quantity_rejected === null || r.quantity_rejected === undefined ? null : Number(r.quantity_rejected), decidedAt: iso(r.decided_at)!, decidedBy: person(r.decided_by, r.decided_by_name) });
     return {
       ...toReceiptRow(h),
       notes: (h.notes as string) ?? null,
@@ -314,7 +314,7 @@ export class ReceivingService {
     return this.lineCommand(ctx, lineId, (db) => db.execute(sql`select app.start_incoming_inspection(${lineId}::uuid)`));
   }
   disposition(ctx: RequestContext, lineId: string, b: DispositionBody) {
-    return this.lineCommand(ctx, lineId, (db) => db.execute(sql`select app.disposition_receipt_line(${lineId}::uuid, ${b.decision}, ${b.reason ?? null}, ${b.conditions ?? null})`));
+    return this.lineCommand(ctx, lineId, (db) => db.execute(sql`select app.disposition_receipt_line(${lineId}::uuid, ${b.decision}, ${b.reason ?? null}, ${b.conditions ?? null}, ${b.quantity ?? null}::numeric)`));
   }
   /** Raises a central non-conformance from a line and answers with its id (created: false when one was already raised). */
   async raiseNcr(ctx: RequestContext, lineId: string, b: RaiseNcrBody): Promise<{ nonconformanceId: string; created: boolean }> {

@@ -104,7 +104,7 @@ export const RecordReceiptBody = z
 export type RecordReceiptBody = z.infer<typeof RecordReceiptBody>;
 
 export const DispositionBody = z
-  .object({ decision: z.enum(['held', 'accepted', 'rejected', 'conditional']), reason: text(1000), conditions: text(2000) })
+  .object({ decision: z.enum(['held', 'accepted', 'rejected', 'conditional']), reason: text(1000), conditions: text(2000), quantity: z.number().gt(0).nullable().optional() })
   .strict();
 export type DispositionBody = z.infer<typeof DispositionBody>;
 export const RaiseNcrBody = z
@@ -180,7 +180,7 @@ export type ReceiptRow = z.infer<typeof ReceiptRow>;
 export const ReceiptPage = z.object({ data: z.array(ReceiptRow), page: z.number().int(), pageSize: z.number().int(), total: z.number().int() });
 
 export const DISPOSITIONS = ['held', 'accepted', 'rejected', 'conditional'] as const;
-const Disposition = z.object({ decision: z.enum(DISPOSITIONS), reason: z.string().nullable(), conditions: z.string().nullable(), decidedAt: Iso, decidedBy: Person });
+const Disposition = z.object({ decision: z.enum(DISPOSITIONS), reason: z.string().nullable(), conditions: z.string().nullable(), quantityRejected: z.number().nullable(), decidedAt: Iso, decidedBy: Person });
 const Determination = z.object({
   required: z.boolean(),
   ruleId: z.string().uuid().nullable(),

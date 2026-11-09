@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "../lib/api-client";
+import { apiFetch, describeApiError } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
+import { useToast } from "../contexts/ToastProvider";
 
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "supplier-performance", ...rest];
 const BASE = "/supplier-quality";
@@ -43,6 +44,17 @@ export const useScorecardModel = () => {
   return useQuery({ queryKey: key(organisationId, "model"), queryFn: () => apiFetch(`${BASE}/performance/model`, { organisationId }), enabled: !!organisationId, retry: false });
 };
 
+/** A supplier's own scoring settings (empty = follows the model) and what it is scored with now. */
+export const useSupplierPerformanceSettings = (id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "settings", id),
+    queryFn: () => apiFetch(`${BASE}/suppliers/${id}/performance/settings`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};
+
 /** INFORMATION ONLY: the incoming inspection level the rules would suggest for a supplier. */
 export const useInspectionRecommendation = (id, days = 90, { enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
@@ -75,6 +87,7 @@ export const useWatchlist = (days) => {
 export const usePerformanceMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   return useMutation({
     mutationFn: ({ action, id, body }) => {
       switch (action) {
@@ -82,10 +95,26 @@ export const usePerformanceMutation = () => {
           return apiFetch(`${BASE}/suppliers/${id}/scorecards`, { method: "POST", body, organisationId });
         case "saveModel":
           return apiFetch(`${BASE}/performance/model`, { method: "PUT", body, organisationId });
+        case "saveSupplierSettings":
+          return apiFetch(`${BASE}/suppliers/${id}/performance/settings`, { method: "PUT", body, organisationId });
         default:
           throw new Error(`Unknown action ${action}`);
       }
     },
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+    // A new model version shows at once on the Settings card; a refusal puts the old one back and says why.
+    onMutate: async ({ action, body }) => {
+      if (action !== "saveModel") return {};
+      const queryKey = key(organisationId, "model");
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData(queryKey);
+      if (previous) queryClient.setQueryData(queryKey, { ...previous, config: body.config });
+      return { previous, queryKey };
+    },
+    onError: (error, vars, context) => {
+      if (context?.previous) queryClient.setQueryData(context.queryKey, context.previous);
+      // A dialog shows its own error; a quick change made from a card has nowhere else to say it.
+      if (!vars.dialog) showToast({ type: "error", title: "Not saved", message: describeApiError(error) });
+    },
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };

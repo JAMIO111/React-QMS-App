@@ -6,7 +6,8 @@ const Person = z.object({ id: z.string().uuid(), name: z.string() }).nullable();
 
 export const OTD_POLICIES = ['agreed', 'original'] as const;
 export const BANDS = ['good', 'watch', 'poor', 'insufficient'] as const;
-export const METRIC_KEYS = ['otd', 'ppm', 'ncs', 'scar', 'certs'] as const;
+export const METRIC_KEYS = ['otd', 'in_full', 'ppm', 'ncs', 'scar', 'certs'] as const;
+export const PPM_BASES = ['rejected', 'ncs'] as const;
 
 const Weight = z.number().int().min(0).max(100);
 const Penalty = z.number().int().min(0).max(100);
@@ -15,7 +16,16 @@ const Penalty = z.number().int().min(0).max(100);
 export const ScorecardConfig = z
   .object({
     otdPolicy: z.enum(OTD_POLICIES),
-    weights: z.object({ otd: Weight, ppm: Weight, ncs: Weight, scar: Weight, certs: Weight }).strict(),
+    /** Which PPM scores: units rejected at receiving, or units on non-conformances linked to received lines. Both are always worked out and shown. */
+    ppmBasis: z.enum(PPM_BASES).default('rejected'),
+    /** Days early that still count as on time; empty = no limit (early is never late). */
+    graceDaysBefore: z.number().int().min(0).max(60).nullable().default(null),
+    /** Days late that still count as on time, and the allowance for in full to be reached. */
+    graceDaysAfter: z.number().int().min(0).max(60).default(0),
+    /** In full: the share (%) below the ordered quantity, and above it, that still counts as in full. */
+    inFullUnderPct: z.number().min(0).max(100).default(0),
+    inFullOverPct: z.number().min(0).max(100).default(10),
+    weights: z.object({ otd: Weight, inFull: Weight.default(0), ppm: Weight, ncs: Weight, scar: Weight, certs: Weight }).strict(),
     /** PPM at or below this scores 100. */
     ppmGood: z.number().min(0).max(1_000_000),
     /** PPM at or above this scores 0. */
@@ -31,6 +41,27 @@ export type ScorecardConfig = z.infer<typeof ScorecardConfig>;
 
 export const SaveModelBody = z.object({ config: ScorecardConfig, reason: z.string().trim().min(3, 'Say why the model is changing').max(1000) }).strict();
 export type SaveModelBody = z.infer<typeof SaveModelBody>;
+
+/** A supplier's own settings; a key that is present sets it, null clears it (it follows the model again). */
+export const SupplierSettingsBody = z
+  .object({
+    otdPolicy: z.enum(OTD_POLICIES).nullable().optional(),
+    graceDaysBefore: z.number().int().min(0).max(60).nullable().optional(),
+    graceDaysAfter: z.number().int().min(0).max(60).nullable().optional(),
+    inFullUnderPct: z.number().min(0).max(100).nullable().optional(),
+    inFullOverPct: z.number().min(0).max(100).nullable().optional(),
+  })
+  .strict();
+export type SupplierSettingsBody = z.infer<typeof SupplierSettingsBody>;
+
+export const SupplierSettings = z.object({
+  /** null = follows the organisation's model */
+  overrides: z.object({ otdPolicy: z.enum(OTD_POLICIES).nullable(), graceDaysBefore: z.number().int().nullable(), graceDaysAfter: z.number().int().nullable(), inFullUnderPct: z.number().nullable(), inFullOverPct: z.number().nullable() }),
+  /** what the supplier is scored with now */
+  effective: z.object({ otdPolicy: z.enum(OTD_POLICIES), graceDaysBefore: z.number().int().nullable(), graceDaysAfter: z.number().int(), inFullUnderPct: z.number(), inFullOverPct: z.number(), ppmBasis: z.enum(PPM_BASES) }),
+  modelVersion: z.number().int(),
+});
+export type SupplierSettings = z.infer<typeof SupplierSettings>;
 
 export const PerformanceQuery = z.object({ from: DateOnly.optional(), to: DateOnly.optional() });
 export type PerformanceQuery = z.infer<typeof PerformanceQuery>;
@@ -76,8 +107,19 @@ const Component = z.object({ key: z.enum(METRIC_KEYS), weight: z.number().int(),
 /** A warning says why, and names the records behind it (`sources` are small objects with ids and references the screen links to). */
 const Warning = z.object({ code: z.string(), level: z.enum(['info', 'warning', 'critical']), message: z.string(), sourceType: z.string(), sources: z.array(z.record(z.string(), z.unknown())) });
 
+/** What a supplier overrides of the organisation's model (only the keys it sets). */
+export const PerformanceOverrides = z.object({
+  otdPolicy: z.enum(OTD_POLICIES).optional(),
+  graceDaysBefore: z.number().int().optional(),
+  graceDaysAfter: z.number().int().optional(),
+  inFullUnderPct: z.number().optional(),
+  inFullOverPct: z.number().optional(),
+});
+export type PerformanceOverrides = z.infer<typeof PerformanceOverrides>;
+
 export const Performance = z.object({
   model: z.object({ id: z.string().uuid(), version: z.number().int(), config: ScorecardConfig }),
+  overrides: PerformanceOverrides,
   metrics: z.record(z.string(), z.unknown()),
   score: z.number().nullable(),
   band: z.enum(BANDS),
@@ -87,7 +129,7 @@ export const Performance = z.object({
 });
 export type Performance = z.infer<typeof Performance>;
 
-export const Scorecard = Performance.omit({ model: true }).extend({
+export const Scorecard = Performance.omit({ model: true, overrides: true }).extend({
   id: z.string().uuid(),
   supplierId: z.string().uuid(),
   periodFrom: DateOnly,

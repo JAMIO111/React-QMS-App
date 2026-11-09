@@ -3,12 +3,15 @@ import { ncrPath } from "./ncr";
 /** Shared definitions for supplier performance (SQ5). */
 export const METRIC_LABELS = {
   otd: "On-time delivery",
+  in_full: "Delivered in full",
   ppm: "Parts per million rejected",
   ncs: "Non-conformances",
   scar: "Corrective action responsiveness",
   certs: "Certifications in date",
 };
-export const METRIC_ORDER = ["otd", "ppm", "ncs", "scar", "certs"];
+export const METRIC_ORDER = ["otd", "in_full", "ppm", "ncs", "scar", "certs"];
+/** The config key of a metric's weight (the API names it in camel case). */
+export const WEIGHT_KEY = { otd: "otd", in_full: "inFull", ppm: "ppm", ncs: "ncs", scar: "scar", certs: "certs" };
 
 export const BAND = {
   good: { label: "Good", tone: "bg-success-color/15 text-success-color" },
@@ -31,6 +34,13 @@ export const periodFor = (days, now = new Date()) => {
   const from = new Date(to.getTime() - (Number(days) - 1) * 86_400_000);
   return { from: day(from), to: day(to) };
 };
+
+/** The two ways of measuring PPM. Both are always worked out; the model says which one scores. */
+export const PPM_BASES = [
+  { value: "rejected", label: "Units rejected at receiving", hint: "Pieces on received lines that were rejected (the quantity entered on the rejection, or the whole line)" },
+  { value: "ncs", label: "Units on non-conformances", hint: "Pieces on non-conformances raised from received lines, counted once per line and never more than was received" },
+];
+export const ppmBasisLabel = (v) => PPM_BASES.find((b) => b.value === v)?.label ?? v;
 
 export const OTD_POLICIES = [
   { value: "agreed", label: "The latest agreed date", hint: "Counts a delivery as on time against the date last agreed with the supplier" },

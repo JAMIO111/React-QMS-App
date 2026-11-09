@@ -23,12 +23,20 @@ const DispositionDialog = ({ line, onClose }) => {
   const [decision, setDecision] = useState(null);
   const [reason, setReason] = useState("");
   const [conditions, setConditions] = useState("");
-  const ok = decision && reason.trim() && (decision !== "conditional" || conditions.trim());
+  const received = Number(line.quantityReceived ?? 0);
+  const [quantity, setQuantity] = useState("");
+  const qty = quantity === "" ? null : Number(quantity);
+  const qtyBad = decision === "rejected" && qty !== null && !(qty > 0 && qty <= received);
+  const ok = decision && reason.trim() && (decision !== "conditional" || conditions.trim()) && !qtyBad;
   return (
     <Dialog title="Decide what happens to this material" onClose={onClose} width="max-w-lg">
-      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (ok && !mutation.isPending) mutation.mutate({ action: "disposition", id: line.id, body: { decision, reason: reason.trim(), conditions: decision === "conditional" ? conditions.trim() : null } }, { onSuccess: onClose }); }}>
+      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (ok && !mutation.isPending) mutation.mutate({ action: "disposition", id: line.id, body: { decision, reason: reason.trim(), conditions: decision === "conditional" ? conditions.trim() : null, ...(decision === "rejected" && qty !== null ? { quantity: qty } : {}) } }, { onSuccess: onClose }); }}>
         <p className="text-sm text-secondary-text">Accepting needs an acceptable inspection where one is required. Accepting on conditions, or changing a rejection, needs approval rights. Every decision is kept.</p>
         <ComboField label="Decision" required value={decision} onChange={setDecision} options={DECISIONS} />
+        {decision === "rejected" && (
+          <Field label="Quantity rejected" type="number" min="0" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} error={qtyBad ? `Enter a number above 0 and up to ${received}` : undefined}
+            hint={`Leave empty to reject the whole line (${received}). Only the quantity entered counts as rejected in the supplier's PPM.`} />
+        )}
         {decision === "conditional" && <TextAreaField label="Conditions" required value={conditions} onChange={(e) => setConditions(e.target.value)} maxLength={2000} rows={2} />}
         <TextAreaField label="Why" required value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} rows={3} />
         <FormError error={mutation.error} />
@@ -95,6 +103,7 @@ export const LineInspection = ({ line, receiptCancelled, supplier }) => {
           {a.inspectionId && ` · ${a.samples}${a.requiredSamples ? ` of ${a.requiredSamples}` : ""} sampled, ${a.failedSamples} failing · ${a.outcome === "acceptable" ? "acceptable" : a.outcome === "not_acceptable" ? "not acceptable" : "incomplete"}`}
         </p>
       )}
+      {line.disposition?.quantityRejected != null && <p className="text-xs text-secondary-text">Rejected: {line.disposition.quantityRejected} of {line.quantityReceived}</p>}
       {line.disposition?.reason && <p className="text-xs text-secondary-text">“{line.disposition.reason}” — {line.disposition.decidedBy?.name}{line.disposition.conditions ? ` · Conditions: ${line.disposition.conditions}` : ""}</p>}
       <p className="text-xs text-secondary-text">{certificateSummary(line.certificates)}</p>
       {line.ncrs?.length > 0 && <p className="text-xs">{line.ncrs.map((n) => <Link key={n.id} to={ncrPath(n.id)} className="mr-2 text-link-color hover:underline">{n.reference}</Link>)}</p>}

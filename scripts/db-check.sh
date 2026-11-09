@@ -4,6 +4,7 @@
 # Usage: npm run db:check
 # Env: DB_CHECK_FIXTURES=<dir> (fixtures loaded after the migration of the same name),
 #      DB_CHECK_EXTRA=<file.sql> (run after all migrations), DB_CHECK_SKIP_TESTS=1,
+#      DB_CHECK_ONLY="<substring>" (run only the SQL tests whose file name contains it),
 #      DB_CHECK_COMMAND="<cmd>" (run after migrations/tests with DATABASE_URL (qms_api login) and
 #      DATABASE_ADMIN_URL (superuser, for seeding) pointing at the throwaway cluster)
 set -euo pipefail
@@ -45,6 +46,7 @@ fail=0
 if [ -z "${DB_CHECK_SKIP_TESTS:-}" ]; then
   shopt -s nullglob
   for t in supabase/tests/*.test.sql; do
+    if [ -n "${DB_CHECK_ONLY:-}" ] && [[ "$t" != *"$DB_CHECK_ONLY"* ]]; then continue; fi
     if "${PSQL[@]}" -f "$t" >"$TMP/out" 2>&1; then echo "pass     $t"; else echo "FAIL     $t"; cat "$TMP/out"; fail=1; fi
   done
 fi

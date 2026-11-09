@@ -95,6 +95,22 @@ describe("receipt line inspection", () => {
     await waitFor(() => expect(calls.find((c) => c.k === "POST /goods-receipt-lines/x1/disposition")?.body).toMatchObject({ decision: "rejected", reason: "Out of tolerance" }));
   });
 
+  it("rejects only a part of the line when a quantity is given, and refuses more than was received", async () => {
+    routeApi({ "GET /goods-receipts/g1": receipt(pending), "POST /goods-receipt-lines/x1/disposition": { ok: true } });
+    renderAt(<GoodsReceiptPage />, "/r/g1", "/r/:id");
+    await userEvent.click(await screen.findByRole("button", { name: "Decide" }));
+    await userEvent.click(await screen.findByRole("combobox", { name: /Decision/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Reject" }));
+    await userEvent.type(screen.getByLabelText(/Why/), "Some were bent");
+    await userEvent.type(screen.getByLabelText("Quantity rejected"), "61");
+    expect(screen.getByText("Enter a number above 0 and up to 60")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Record decision" })).toBeDisabled();
+    await userEvent.clear(screen.getByLabelText("Quantity rejected"));
+    await userEvent.type(screen.getByLabelText("Quantity rejected"), "12");
+    await userEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "POST /goods-receipt-lines/x1/disposition")?.body).toMatchObject({ decision: "rejected", quantity: 12 }));
+  });
+
   it("offers no actions on a cancelled receipt", async () => {
     routeApi({ "GET /goods-receipts/g1": { ...receipt(pending), status: "cancelled", cancelReason: "Wrong supplier" } });
     renderAt(<GoodsReceiptPage />, "/r/g1", "/r/:id");

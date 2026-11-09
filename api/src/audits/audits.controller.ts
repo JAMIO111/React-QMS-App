@@ -31,6 +31,7 @@ export class AuditsController {
   @ApiQuery({ name: 'machineId', required: false, schema: { type: 'string', format: 'uuid' } })
   @ApiQuery({ name: 'operationCode', required: false, schema: { type: 'string' } })
   @ApiQuery({ name: 'departmentId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'supplierId', required: false, schema: { type: 'string', format: 'uuid' }, description: 'Only audits relevant to this supplier' })
   @ApiQuery({ name: 'sort', required: false, schema: { type: 'string', enum: [...AUDIT_SORTABLE], default: 'reference' } })
   @ApiQuery({ name: 'order', required: false, schema: { type: 'string', enum: ['asc', 'desc'], default: 'asc' } })
   @ApiQuery({ name: 'page', required: false, schema: { type: 'integer', minimum: 1, default: 1 } })

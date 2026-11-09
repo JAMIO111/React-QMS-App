@@ -91,6 +91,7 @@ export const TargetInput = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('machine'), machineId: Id }).strict(),
   z.object({ kind: z.literal('operation'), operationCode: text(40) }).strict(),
   z.object({ kind: z.literal('department'), departmentId: Id }).strict(),
+  z.object({ kind: z.literal('supplier'), supplierId: Id }).strict(),
 ]);
 
 const Header = {
@@ -145,6 +146,8 @@ export const AuditListQuery = z.object({
   machineId: Id.optional(),
   operationCode: z.string().trim().max(40).optional(),
   departmentId: Id.optional(),
+  /** Only audits that list this supplier as something they are relevant to. */
+  supplierId: Id.optional(),
   sort: z.enum(AUDIT_SORTABLE).default('reference'),
   order: z.enum(['asc', 'desc']).default('asc'),
   page: z.coerce.number().int().min(1).default(1),
@@ -154,7 +157,7 @@ export type AuditListQuery = z.infer<typeof AuditListQuery>;
 
 const Named = z.object({ id: Id, name: z.string() });
 export const AuditTarget = z.object({
-  kind: z.enum(['machine', 'operation', 'department']),
+  kind: z.enum(['machine', 'operation', 'department', 'supplier']),
   /** machine or department id; the operation code for an operation. */
   id: z.string(),
   label: z.string(),
@@ -261,7 +264,7 @@ export const AuditVersion = VersionSummary.extend({
   purpose: z.string().nullable(),
   procedure: z.string().nullable(),
   questions: z.array(VersionQuestion),
-  targets: z.array(z.object({ kind: z.enum(['machine', 'operation', 'department']), label: z.string() })),
+  targets: z.array(z.object({ kind: z.enum(['machine', 'operation', 'department', 'supplier']), label: z.string() })),
   /** The first records started against it (at most 25), newest first. */
   records: z.array(z.object({ id: Id, reference: z.string(), status: z.enum(['in_progress', 'completed', 'abandoned']), result: z.enum(['pass', 'fail']).nullable(), performedOn: DateOnly })),
   /** What this version changed from the one before; null for the first. */
@@ -274,7 +277,7 @@ export const AuditVersion = VersionSummary.extend({
         changed: z.array(z.object({ before: VersionQuestion, after: VersionQuestion, fields: z.array(z.string()) })),
         moved: z.array(z.object({ question: z.string(), from: z.number(), to: z.number() })),
       }),
-      targets: z.object({ added: z.array(z.object({ kind: z.enum(['machine', 'operation', 'department']), label: z.string() })), removed: z.array(z.object({ kind: z.enum(['machine', 'operation', 'department']), label: z.string() })) }),
+      targets: z.object({ added: z.array(z.object({ kind: z.enum(['machine', 'operation', 'department', 'supplier']), label: z.string() })), removed: z.array(z.object({ kind: z.enum(['machine', 'operation', 'department', 'supplier']), label: z.string() })) }),
     })
     .nullable(),
 });

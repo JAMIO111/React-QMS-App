@@ -124,7 +124,7 @@ export class AuditVersionsService {
         from public.audit_version_questions q join public.audit_versions v on v.id = q.audit_version_id
        where v.audit_definition_id = ${auditId}::uuid order by q.audit_version_id, q.sequence`);
     const targets = await db.execute<Row>(sql`
-      select t.audit_version_id, t.kind, coalesce(t.machine_id::text, t.operation_code, t.department_id::text) as ref, t.label
+      select t.audit_version_id, t.kind, coalesce(t.machine_id::text, t.operation_code, t.department_id::text, t.supplier_id::text) as ref, t.label
         from public.audit_version_targets t join public.audit_versions v on v.id = t.audit_version_id
        where v.audit_definition_id = ${auditId}::uuid order by t.audit_version_id, t.kind, t.label`);
     return versions.rows.map((row) => {

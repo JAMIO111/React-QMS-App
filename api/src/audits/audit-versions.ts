@@ -19,7 +19,7 @@ export type VQuestion = {
   passRating: number | null;
   critical: boolean;
 };
-export type VTarget = { kind: 'machine' | 'operation' | 'department'; ref: string; label: string };
+export type VTarget = { kind: 'machine' | 'operation' | 'department' | 'supplier'; ref: string; label: string };
 export type VContent = { title: string; auditType: string; purpose: string | null; procedure: string | null; passMark: number; questions: VQuestion[]; targets: VTarget[] };
 
 export const HEADER_FIELDS = ['title', 'auditType', 'purpose', 'procedure', 'passMark'] as const;

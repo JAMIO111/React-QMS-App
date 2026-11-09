@@ -148,8 +148,8 @@ const ITEM_SELECT = `
          d.id as audit_id, d.reference, d.title, d.audit_type, d.pass_mark, d.auditor_kind,
          case d.auditor_kind when 'person' then coalesce(${personName('ap')}, 'Unnamed person') when 'role' then ar.name when 'department' then ad.name end as auditor_name,
          (select coalesce(array_agg(x.label order by x.label), '{}') from (
-             select coalesce(m.code, t.operation_code, dp.code) as label
-               from public.audit_targets t left join public.machines m on m.id = t.machine_id left join public.departments dp on dp.id = t.department_id
+             select coalesce(m.code, t.operation_code, dp.code, sp.code) as label
+               from public.audit_targets t left join public.machines m on m.id = t.machine_id left join public.departments dp on dp.id = t.department_id left join public.suppliers sp on sp.id = t.supplier_id
               where t.audit_definition_id = d.id order by 1 limit 6) x) as relevant_to
     from public.audit_occurrences o
     join public.audit_definitions d on d.id = o.audit_definition_id

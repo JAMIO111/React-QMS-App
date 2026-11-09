@@ -104,6 +104,7 @@ export class AuditRecordsService {
       if (q.machineId) where.push(sql`exists (select 1 from public.audit_record_targets t where t.audit_record_id = r.id and t.machine_id = ${q.machineId}::uuid)`);
       if (q.operationCode) where.push(sql`exists (select 1 from public.audit_record_targets t where t.audit_record_id = r.id and upper(t.operation_code) = upper(${q.operationCode}))`);
       if (q.departmentId) where.push(sql`exists (select 1 from public.audit_record_targets t where t.audit_record_id = r.id and t.department_id = ${q.departmentId}::uuid)`);
+      if (q.supplierId) where.push(sql`exists (select 1 from public.audit_record_targets t where t.audit_record_id = r.id and t.supplier_id = ${q.supplierId}::uuid)`);
       if (q.version) where.push(sql`r.audit_version = ${q.version}::int`);
       if (q.performedBy) where.push(sql`${sql.raw(AUDITOR)} = ${q.performedBy}::uuid`);
       if (q.mine === 'true') where.push(sql`${sql.raw(AUDITOR)} = ${ctx.user.id}::uuid`);
@@ -244,16 +245,17 @@ export class AuditRecordsService {
        where q.audit_record_id = ${id}::uuid
        order by q.sequence`);
     const targets = await db.execute<Row>(sql`
-      select kind, case kind when 'machine' then machine_id::text when 'operation' then operation_code when 'department' then department_id::text end as id, label
+      select kind, case kind when 'machine' then machine_id::text when 'operation' then operation_code when 'department' then department_id::text when 'supplier' then supplier_id::text end as id, label
         from public.audit_record_targets where audit_record_id = ${id}::uuid order by label`);
     // What can be chosen: what the audit lists today (the labels are the ones the database keeps).
     const available = inProgress
       ? await db.execute<Row>(sql`
-          select t.kind, case t.kind when 'machine' then t.machine_id::text when 'operation' then t.operation_code when 'department' then t.department_id::text end as id,
-                 coalesce(m.code || ' · ' || m.name, t.operation_code, dp.code || ' · ' || dp.name) as label
+          select t.kind, case t.kind when 'machine' then t.machine_id::text when 'operation' then t.operation_code when 'department' then t.department_id::text when 'supplier' then t.supplier_id::text end as id,
+                 coalesce(m.code || ' · ' || m.name, t.operation_code, dp.code || ' · ' || dp.name, sp.code || ' · ' || sp.name) as label
             from public.audit_targets t
             left join public.machines m on m.id = t.machine_id
             left join public.departments dp on dp.id = t.department_id
+            left join public.suppliers sp on sp.id = t.supplier_id
            where t.audit_definition_id = ${r.audit_definition_id as string}::uuid
            order by t.kind, label`)
       : { rows: [] as Row[] };
@@ -269,10 +271,10 @@ export class AuditRecordsService {
       abandonReason: (r.abandon_reason as string) ?? null,
       naCount: num(r.na_count),
       completedBy: ref(r.completed_by, r.completed_name, 'Unnamed person'),
-      availableTargets: available.rows.map((t) => ({ kind: t.kind as 'machine' | 'operation' | 'department', id: t.id as string, label: t.label as string })),
+      availableTargets: available.rows.map((t) => ({ kind: t.kind as 'machine' | 'operation' | 'department' | 'supplier', id: t.id as string, label: t.label as string })),
       targetsRequired,
       problems,
-      targets: targets.rows.map((t) => ({ kind: t.kind as 'machine' | 'operation' | 'department', id: t.id as string, label: t.label as string })),
+      targets: targets.rows.map((t) => ({ kind: t.kind as 'machine' | 'operation' | 'department' | 'supplier', id: t.id as string, label: t.label as string })),
       questions: questions.rows.map((q) => ({
         id: q.id as string,
         sequence: Number(q.sequence),

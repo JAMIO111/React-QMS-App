@@ -127,10 +127,10 @@ const AuditPage = () => {
 
       <MenuCard title="Relevant to" subtitle="Whoever does the audit says which of these it was carried out on">
         {a.targets.length === 0 ? (
-          <p className="text-sm text-secondary-text">Not tied to any machine, operation or department.</p>
+          <p className="text-sm text-secondary-text">Not tied to any machine, operation, department or supplier.</p>
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {[["machine", "Machines"], ["operation", "Operations"], ["department", "Departments"]].map(([kind, title]) => (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {[["machine", "Machines"], ["operation", "Operations"], ["department", "Departments"], ["supplier", "Suppliers"]].map(([kind, title]) => (
               <div key={kind}>
                 <h3 className="mb-1 text-sm font-medium text-primary-text">{title}</h3>
                 {grouped(kind).length === 0 ? <p className="text-sm text-secondary-text">None</p> : <ul aria-label={title} className="flex flex-col gap-0.5 text-sm text-primary-text">{grouped(kind).map((t) => <li key={`${t.kind}-${t.id}`}>{t.label}</li>)}</ul>}

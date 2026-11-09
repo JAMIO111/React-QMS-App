@@ -25,8 +25,8 @@ const SELECT = `
          (select count(*) from public.audit_targets t where t.audit_definition_id = d.id and t.kind = 'operation') as operation_count,
          (select count(*) from public.audit_targets t where t.audit_definition_id = d.id and t.kind = 'department') as department_count,
          (select coalesce(array_agg(x.label order by x.label), '{}') from (
-             select coalesce(m.code, t.operation_code, dp.code) as label
-               from public.audit_targets t left join public.machines m on m.id = t.machine_id left join public.departments dp on dp.id = t.department_id
+             select coalesce(m.code, t.operation_code, dp.code, sp.code) as label
+               from public.audit_targets t left join public.machines m on m.id = t.machine_id left join public.departments dp on dp.id = t.department_id left join public.suppliers sp on sp.id = t.supplier_id
               where t.audit_definition_id = d.id order by 1 limit 4) x) as target_preview
     from public.audit_definitions d
     left join lateral (select r.id, r.reference, to_char(r.performed_on, 'YYYY-MM-DD') as performed_on, r.result
@@ -91,6 +91,7 @@ export class AuditsService {
       if (q.machineId) where.push(sql`exists (select 1 from public.audit_targets t where t.audit_definition_id = d.id and t.machine_id = ${q.machineId}::uuid)`);
       if (q.operationCode) where.push(sql`exists (select 1 from public.audit_targets t where t.audit_definition_id = d.id and upper(t.operation_code) = upper(${q.operationCode}))`);
       if (q.departmentId) where.push(sql`exists (select 1 from public.audit_targets t where t.audit_definition_id = d.id and t.department_id = ${q.departmentId}::uuid)`);
+      if (q.supplierId) where.push(sql`exists (select 1 from public.audit_targets t where t.audit_definition_id = d.id and t.supplier_id = ${q.supplierId}::uuid)`);
       if (q.q) {
         const like = likePattern(q.q);
         where.push(sql`(d.title ilike ${like} or d.reference ilike ${like} or d.purpose ilike ${like})`);
@@ -208,9 +209,9 @@ export class AuditsService {
     const questions = await db.execute<Row>(sql`select id, sequence, question, guidance, answer_type, pass_answer, unit, lower_limit, upper_limit, nominal, options, rating_max, pass_rating, critical
       from public.audit_questions where audit_definition_id = ${id}::uuid order by sequence`);
     const targets = await db.execute<Row>(sql`
-      select t.kind, coalesce(t.machine_id::text, t.operation_code, t.department_id::text) as ref,
-             case t.kind when 'machine' then m.code || ' · ' || m.name when 'operation' then t.operation_code else dp.code || ' · ' || dp.name end as label
-        from public.audit_targets t left join public.machines m on m.id = t.machine_id left join public.departments dp on dp.id = t.department_id
+      select t.kind, coalesce(t.machine_id::text, t.operation_code, t.department_id::text, t.supplier_id::text) as ref,
+             case t.kind when 'machine' then m.code || ' · ' || m.name when 'operation' then t.operation_code when 'supplier' then sp.code || ' · ' || sp.name else dp.code || ' · ' || dp.name end as label
+        from public.audit_targets t left join public.machines m on m.id = t.machine_id left join public.departments dp on dp.id = t.department_id left join public.suppliers sp on sp.id = t.supplier_id
        where t.audit_definition_id = ${id}::uuid order by t.kind, label`);
     const { targets: _omit, ...base } = toSummary(x);
     void _omit;
@@ -237,7 +238,7 @@ export class AuditsService {
         passRating: num(q.pass_rating),
         critical: q.critical as boolean,
       })),
-      targets: targets.rows.map((t) => ({ kind: t.kind as 'machine' | 'operation' | 'department', id: t.ref as string, label: t.label as string })),
+      targets: targets.rows.map((t) => ({ kind: t.kind as 'machine' | 'operation' | 'department' | 'supplier', id: t.ref as string, label: t.label as string })),
       createdBy: x.created_by ? { id: x.created_by as string, name: (x.created_name as string) ?? 'Unknown user' } : null,
       updatedAt: iso(x.updated_at)!,
     };

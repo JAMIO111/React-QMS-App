@@ -58,6 +58,8 @@ export const RecordListQuery = z.object({
   machineId: Id.optional(),
   operationCode: z.string().trim().max(40).optional(),
   departmentId: Id.optional(),
+  /** Only records carried out on this supplier. */
+  supplierId: Id.optional(),
   performedBy: Id.optional(),
   /** Only records done against this version of their audit. */
   version: z.coerce.number().int().min(1).optional(),
@@ -133,7 +135,7 @@ export const RecordQuestion = z.object({
     .nullable(),
 });
 
-export const RecordTarget = z.object({ kind: z.enum(['machine', 'operation', 'department']), id: z.string(), label: z.string() });
+export const RecordTarget = z.object({ kind: z.enum(['machine', 'operation', 'department', 'supplier']), id: z.string(), label: z.string() });
 
 export const AuditRecord = RecordSummary.extend({
   procedure: z.string().nullable(),

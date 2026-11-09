@@ -44,6 +44,7 @@ export class AuditRecordsController {
   @ApiQuery({ name: 'machineId', required: false, schema: { type: 'string', format: 'uuid' } })
   @ApiQuery({ name: 'operationCode', required: false, schema: { type: 'string' } })
   @ApiQuery({ name: 'departmentId', required: false, schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({ name: 'supplierId', required: false, schema: { type: 'string', format: 'uuid' }, description: 'Only records carried out on this supplier' })
   @ApiQuery({ name: 'performedBy', required: false, schema: { type: 'string', format: 'uuid' }, description: 'The user who completed it, else who started it' })
   @ApiQuery({ name: 'version', required: false, schema: { type: 'integer', minimum: 1 }, description: 'Only records done against this version of their audit' })
   @ApiQuery({ name: 'mine', required: false, schema: { type: 'string', enum: ['true', 'false'] } })

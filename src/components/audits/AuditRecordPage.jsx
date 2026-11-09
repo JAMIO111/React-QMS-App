@@ -249,13 +249,13 @@ const Targets = ({ record, editable }) => {
         ))}
       </ul>
     ) : (
-      <p className="text-sm text-secondary-text">{record.targetsRequired || record.status !== "in_progress" ? "None recorded." : "This audit is not tied to a machine, operation or department."}</p>
+      <p className="text-sm text-secondary-text">{record.targetsRequired || record.status !== "in_progress" ? "None recorded." : "This audit is not tied to a machine, operation, department or supplier."}</p>
     );
   }
   if (!record.availableTargets.length) return <p className="text-sm text-secondary-text">This audit is not tied to a machine, operation or department.</p>;
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-      {[["machine", "Machines"], ["operation", "Operations"], ["department", "Departments"]].map(([kind, title]) => {
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {[["machine", "Machines"], ["operation", "Operations"], ["department", "Departments"], ["supplier", "Suppliers"]].map(([kind, title]) => {
         const items = record.availableTargets.filter((t) => t.kind === kind);
         if (!items.length) return null;
         return (

@@ -258,7 +258,7 @@ export const provisionalResult = (q, { answer, value, choice }) => {
 
 /** A machine / operation / department choice → the body the API takes, and a stable key. */
 export const targetKey = (t) => `${t.kind}:${t.id}`;
-export const targetBody = (t) => (t.kind === "machine" ? { kind: "machine", machineId: t.id } : t.kind === "operation" ? { kind: "operation", operationCode: t.id } : { kind: "department", departmentId: t.id });
+export const targetBody = (t) => (t.kind === "machine" ? { kind: "machine", machineId: t.id } : t.kind === "operation" ? { kind: "operation", operationCode: t.id } : t.kind === "supplier" ? { kind: "supplier", supplierId: t.id } : { kind: "department", departmentId: t.id });
 
 /** The weeks (Monday first) of a month "YYYY-MM" as arrays of "YYYY-MM-DD", padded with the neighbouring months' days. */
 export const monthWeeks = (month) => {

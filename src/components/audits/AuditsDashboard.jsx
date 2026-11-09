@@ -27,7 +27,7 @@ const RESULT_SERIES = [
   { key: "pass", label: "Passed", color: "var(--chart-series-3)" },
   { key: "fail", label: "Failed", color: "var(--chart-critical)" },
 ];
-const KIND_LABEL = { machine: "Machine", operation: "Operation", department: "Department" };
+const KIND_LABEL = { machine: "Machine", operation: "Operation", department: "Department", supplier: "Supplier" };
 const th = "py-1 pr-2 text-left font-medium";
 const td = "py-1.5 pr-2 align-top";
 const Empty = ({ children }) => <p className="py-6 text-center text-sm text-secondary-text">{children}</p>;
@@ -196,7 +196,7 @@ const AuditsDashboard = () => {
         title="Coverage"
         subtitle={
           data
-            ? `${data.coverage.listed} machines, operations and departments named by active audits · ${data.coverage.never} never audited · ${data.coverage.stale} not audited for over ${data.coverage.staleAfterDays} days`
+            ? `${data.coverage.listed} machines, operations, departments and suppliers named by active audits · ${data.coverage.never} never audited · ${data.coverage.stale} not audited for over ${data.coverage.staleAfterDays} days`
             : "When each was last covered by a completed audit"
         }>
         {data?.coverage.items.length ? (
@@ -229,7 +229,7 @@ const AuditsDashboard = () => {
             </tbody>
           </table>
         ) : (
-          <Empty>No active audit names a machine, operation or department.</Empty>
+          <Empty>No active audit names a machine, operation, department or supplier.</Empty>
         )}
         {data && data.coverage.listed > data.coverage.items.length && (
           <p className="text-xs text-secondary-text">The {data.coverage.items.length} longest without an audit are shown.</p>

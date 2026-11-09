@@ -410,7 +410,10 @@ describe("audit form", () => {
   });
 
   it("defines an audit: the procedure, what it is relevant to chosen from drop-downs, who is expected, the schedule and a checklist", async () => {
-    routeApi({ "POST /audits": () => ({ ...detail(), id: "new1", reference: "AUD-003" }), "GET /audits/new1": detail() });
+    routeApi({
+      "POST /audits": () => ({ ...detail(), id: "new1", reference: "AUD-003" }), "GET /audits/new1": detail(),
+      "GET /supplier-quality/suppliers": { data: [{ id: "sup1", code: "ACME", name: "Acme Metals", displayName: "Acme Metals" }], page: 1, pageSize: 100, total: 1 },
+    });
     renderAt("/Documentation/Audits/new");
     await screen.findByRole("heading", { name: "Define an audit" });
     await userEvent.type(screen.getByLabelText(/^Title/), "Weekly LPA");
@@ -424,6 +427,8 @@ describe("audit form", () => {
     await pick("Add a machine", "CNC-2 · Mill");
     await pick("Add an operation", "OP-20");
     await pick("Add a department", "MACH · Machining");
+    await pick("Add a supplier", "ACME · Acme Metals");
+    expect(within(screen.getByRole("list", { name: "Suppliers" })).getByText("ACME · Acme Metals")).toBeInTheDocument();
     expect(within(screen.getByRole("list", { name: "Machines" })).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["CNC-1 · Lathe", "CNC-2 · Mill"]);
     expect(within(screen.getByRole("list", { name: "Operations" })).getByText("OP-20")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Remove machine CNC-2 · Mill" }));
@@ -467,7 +472,7 @@ describe("audit form", () => {
       { question: "Coolant concentration", guidance: null, answerType: "numeric", unit: "%", lowerLimit: 6, upperLimit: 9, critical: false },
       { question: "Sheet signed?", guidance: null, answerType: "yes_no", passAnswer: "no", critical: false },
     ]);
-    expect(saved().targets).toEqual([{ kind: "machine", machineId: "m1" }, { kind: "operation", operationCode: "OP-20" }, { kind: "department", departmentId: "d1" }]);
+    expect(saved().targets).toEqual([{ kind: "machine", machineId: "m1" }, { kind: "operation", operationCode: "OP-20" }, { kind: "department", departmentId: "d1" }, { kind: "supplier", supplierId: "sup1" }]);
     await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Documentation/Audits/new1"));
   });
 

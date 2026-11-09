@@ -149,7 +149,7 @@ describe("audits dashboard", () => {
     expect(rows[2]).toHaveTextContent("160 days ago");
     expect(rows[3]).toHaveTextContent("1 day ago");
     expect(rows[3]).toHaveTextContent("AUD-001, AUD-003");
-    expect(screen.getByText(/5 machines, operations and departments named by active audits · 1 never audited · 1 not audited for over 90 days/)).toBeInTheDocument();
+    expect(screen.getByText(/5 machines, operations, departments and suppliers named by active audits · 1 never audited · 1 not audited for over 90 days/)).toBeInTheDocument();
     expect(screen.getByText("The 3 longest without an audit are shown.")).toBeInTheDocument();
   });
 
@@ -194,7 +194,7 @@ describe("audits dashboard", () => {
     expect(screen.getByText("No audit failed in this period.")).toBeInTheDocument();
     expect(screen.getByText("No question failed in this period.")).toBeInTheDocument();
     expect(screen.getByText("No findings were raised in this period.")).toBeInTheDocument();
-    expect(screen.getByText("No active audit names a machine, operation or department.")).toBeInTheDocument();
+    expect(screen.getByText("No active audit names a machine, operation, department or supplier.")).toBeInTheDocument();
     expect(screen.getByText("No audit was changed in this period.")).toBeInTheDocument();
   });
 

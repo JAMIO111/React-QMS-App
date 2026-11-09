@@ -65,7 +65,7 @@ export const AuditsDashboard = z.object({
     never: z.number(),
     stale: z.number(),
     staleAfterDays: z.number(),
-    items: z.array(z.object({ kind: z.enum(['machine', 'operation', 'department']), label: z.string(), audits: z.array(z.string()), lastAuditedOn: isoDate.nullable(), daysSince: z.number().nullable() })),
+    items: z.array(z.object({ kind: z.enum(['machine', 'operation', 'department', 'supplier']), label: z.string(), audits: z.array(z.string()), lastAuditedOn: isoDate.nullable(), daysSince: z.number().nullable() })),
   }),
   slotsNeedingAttention: z.array(z.object({ auditId: Id, auditReference: z.string(), auditTitle: z.string(), dueOn: isoDate, state: z.enum(['overdue', 'missed']) })),
   overdueFindings: z.array(z.object({ id: Id, reference: z.string(), title: z.string(), classification: z.string(), dueOn: isoDate, daysOverdue: z.number(), owner: z.string().nullable() })),
@@ -177,16 +177,17 @@ export class AuditsDashboardService {
 
       const coverage = await rows(sql`
         with listed as (
-          select t.kind, coalesce(t.machine_id::text, upper(t.operation_code), t.department_id::text) as ref,
-                 min(case t.kind when 'machine' then m.code || ' · ' || m.name when 'operation' then t.operation_code else dp.code || ' · ' || dp.name end) as label,
+          select t.kind, coalesce(t.machine_id::text, upper(t.operation_code), t.department_id::text, t.supplier_id::text) as ref,
+                 min(case t.kind when 'machine' then m.code || ' · ' || m.name when 'operation' then t.operation_code when 'supplier' then sp.code || ' · ' || sp.name else dp.code || ' · ' || dp.name end) as label,
                  array_agg(distinct d.reference order by d.reference) as audits
             from public.audit_targets t
             join public.audit_definitions d on d.id = t.audit_definition_id and d.status = 'active'
             left join public.machines m on m.id = t.machine_id
             left join public.departments dp on dp.id = t.department_id
+            left join public.suppliers sp on sp.id = t.supplier_id
            where t.organisation_id = ${org}::uuid group by 1, 2
         ), covered as (
-          select rt.kind, coalesce(rt.machine_id::text, upper(rt.operation_code), rt.department_id::text) as ref, max(r.performed_on) as last_on
+          select rt.kind, coalesce(rt.machine_id::text, upper(rt.operation_code), rt.department_id::text, rt.supplier_id::text) as ref, max(r.performed_on) as last_on
             from public.audit_record_targets rt join public.audit_records r on r.id = rt.audit_record_id and r.status = 'completed'
            where rt.organisation_id = ${org}::uuid group by 1, 2
         )
@@ -224,7 +225,7 @@ export class AuditsDashboardService {
       const completed = n(recs.completed);
       const completedPrevious = n(recs.completed_previous);
       const items = coverage.map((r) => ({
-        kind: r.kind as 'machine' | 'operation' | 'department',
+        kind: r.kind as 'machine' | 'operation' | 'department' | 'supplier',
         label: r.label as string,
         audits: (r.audits as string[]) ?? [],
         lastAuditedOn: (r.last_on as string) ?? null,

@@ -105,7 +105,7 @@ export const VersionDialog = ({ audit, version, onClose }) => {
             {v.purpose && <p className="whitespace-pre-wrap text-sm text-primary-text">{v.purpose}</p>}
             {v.procedure && <p className="whitespace-pre-wrap rounded-lg bg-primary-bg p-2 text-sm text-primary-text">{v.procedure}</p>}
             <h4 className="mt-1 text-xs font-medium text-secondary-text">Relevant to</h4>
-            {v.targets.length === 0 ? <p className="text-sm text-secondary-text">Not tied to any machine, operation or department.</p> : <p className="text-sm text-primary-text">{v.targets.map((t) => t.label).join(", ")}</p>}
+            {v.targets.length === 0 ? <p className="text-sm text-secondary-text">Not tied to any machine, operation, department or supplier.</p> : <p className="text-sm text-primary-text">{v.targets.map((t) => t.label).join(", ")}</p>}
             <h4 className="mt-1 text-xs font-medium text-secondary-text">Checklist</h4>
             {v.questions.length === 0 ? (
               <p className="text-sm text-secondary-text">No questions.</p>

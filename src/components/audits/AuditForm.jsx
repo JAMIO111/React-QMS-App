@@ -5,6 +5,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useAudit, useAuditMutation, useOperationCodes } from "../../hooks/useAudits";
 import { useMachines } from "../../hooks/useProcessControl";
 import { useAllDepartments, useMembers, useRoles } from "../../hooks/useQmsApi";
+import { useSupplierRegister } from "../../hooks/useSupplierQuality";
 import { ANSWER_TYPES, AUDIT_TYPES, AUDITOR_KINDS, FREQUENCIES, emptyOption, emptyQuestion, isScoredType, measurementLimits, questionProblems, questionToForm, questionsBody } from "../../lib/audits";
 import { describeApiError } from "../../lib/api-client";
 import ComboField from "../ui/ComboField";
@@ -32,6 +33,7 @@ const fromAudit = (a) => ({
   machineIds: (a?.targets ?? []).filter((t) => t.kind === "machine").map((t) => t.id),
   operations: (a?.targets ?? []).filter((t) => t.kind === "operation").map((t) => t.id),
   departmentIds: (a?.targets ?? []).filter((t) => t.kind === "department").map((t) => t.id),
+  supplierIds: (a?.targets ?? []).filter((t) => t.kind === "supplier").map((t) => t.id),
 });
 
 const toBody = (f) => ({
@@ -53,6 +55,7 @@ const toBody = (f) => ({
     ...f.machineIds.map((machineId) => ({ kind: "machine", machineId })),
     ...f.operations.map((operationCode) => ({ kind: "operation", operationCode })),
     ...f.departmentIds.map((departmentId) => ({ kind: "department", departmentId })),
+    ...f.supplierIds.map((supplierId) => ({ kind: "supplier", supplierId })),
   ],
 });
 
@@ -204,6 +207,7 @@ const AuditFormBody = ({ audit }) => {
   const mutation = useAuditMutation();
   const machines = useMachines({ includeInactive: false });
   const departments = useAllDepartments();
+  const suppliers = useSupplierRegister({ active: "active", pageSize: 100, sort: "name", order: "asc" });
   const operationCodes = useOperationCodes();
   const members = useMembers();
   const roles = useRoles();
@@ -234,6 +238,7 @@ const AuditFormBody = ({ audit }) => {
 
   const machineOptions = (machines.data?.items ?? []).map((m) => ({ value: m.id, label: `${m.code} · ${m.name}` }));
   const departmentOptions = (departments.data?.data ?? []).map((d) => ({ value: d.id, label: `${d.code} · ${d.name}` }));
+  const supplierOptions = (suppliers.data?.data ?? []).map((s) => ({ value: s.id, label: `${s.code} · ${s.displayName || s.name}` }));
   const operationOptions = (operationCodes.data ?? []).map((o) => ({ value: o.code, label: o.code, hint: o.name ?? undefined }));
   // An operation already on the audit stays choosable by its own spelling, whatever the plans say.
   const operationList = [...operationOptions, ...f.operations.filter((c) => !operationOptions.some((o) => o.value.toLowerCase() === c.toLowerCase())).map((c) => ({ value: c, label: c }))];
@@ -309,7 +314,7 @@ const AuditFormBody = ({ audit }) => {
       </MenuCard>
 
       <MenuCard title="Relevant to" subtitle="Whoever does the audit chooses which of these it was carried out on">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <RelevantList
             legend="Machines"
             addLabel="Add a machine"
@@ -339,6 +344,16 @@ const AuditFormBody = ({ audit }) => {
             onAdd={(id) => set({ departmentIds: [...f.departmentIds, id] })}
             onRemove={(id) => set({ departmentIds: f.departmentIds.filter((x) => x !== id) })}
             empty="No departments yet"
+          />
+          <RelevantList
+            legend="Suppliers"
+            addLabel="Add a supplier"
+            options={supplierOptions}
+            chosen={f.supplierIds}
+            labelOf={labelIn(supplierOptions)}
+            onAdd={(id) => set({ supplierIds: [...f.supplierIds, id] })}
+            onRemove={(id) => set({ supplierIds: f.supplierIds.filter((x) => x !== id) })}
+            empty="No suppliers yet"
           />
         </div>
       </MenuCard>

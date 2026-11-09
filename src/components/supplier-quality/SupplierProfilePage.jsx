@@ -21,6 +21,7 @@ import { ActivityBadge, ApprovalPill, RiskBadge } from "./SupplierBadges";
 import { CertificationsCard, DocumentsCard } from "./Qualification";
 import { RiskCard } from "./RiskAssessment";
 import { ApprovalCard, AssessmentsCard } from "./Approvals";
+import SupplierNcs from "./SupplierNcs";
 
 const TABS = [
   { value: "overview", label: "Overview" },
@@ -252,7 +253,6 @@ const SupplierProfilePage = () => {
       </div>
     );
   const s = supplier.data;
-  const ncLink = `/Non-Conformance/Register?supplier=${s.id}&supplierLabel=${encodeURIComponent(s.displayName || s.name)}`;
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-4 overflow-y-auto p-4">
@@ -288,16 +288,7 @@ const SupplierProfilePage = () => {
       {tab === "overview" && <Overview supplier={s} canManage={canManage} onAddContact={() => setDialog({ kind: "contact" })} onEditContact={(c) => setDialog({ kind: "contact", contact: c })} />}
       {tab === "products" && <Products supplier={s} canManage={canManage} onAdd={() => setDialog({ kind: "product" })} />}
       {tab === "history" && <History id={s.id} />}
-      {tab === "nonconformities" && (
-        <MenuCard title="Nonconformities" subtitle="Supplier non-conformances are the central non-conformances, linked to this supplier.">
-          <p className="text-sm text-primary-text">
-            {s.counts.openNcs} open, {s.counts.totalNcs} in all.{" "}
-            <Link to={ncLink} className="text-link-color hover:underline">
-              Open them in the non-conformance register
-            </Link>
-          </p>
-        </MenuCard>
-      )}
+      {tab === "nonconformities" && <SupplierNcs supplier={s} />}
       {tab === "performance" && <NotYet title="Performance" text="Scorecards, PPM and on-time delivery are not available yet." />}
       {tab === "qualification" && (
         <>

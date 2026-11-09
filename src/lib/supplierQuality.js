@@ -77,3 +77,6 @@ export const addressLine = (s) => [s.addressLine1, s.addressLine2, s.city, s.reg
 
 /** Titles used when a saved supplier filter is listed. */
 export const SUPPLIER_FILTER_TITLES = { status: "Status", type: "Type", classification: "Classification", risk: "Risk", active: "Activity", search: "Search" };
+
+/** Non-conformance stages that are still being worked (everything except closed and cancelled). */
+export const OPEN_NC_STAGES = ["draft", "open", "contained", "investigating", "dispositioned", "awaiting_closure"];

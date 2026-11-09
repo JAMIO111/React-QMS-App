@@ -69,7 +69,7 @@ export const supplierColumns = [
     ),
     { size: 240, minSize: 120, maxSize: 600 }
   ),
-  col("riskRating", "Risk", head(TriangleAlertIcon, "Risk", "table-header-number"), (i) => <RiskBadge risk={i.row.original.riskRating} />, { size: 100, sortKey: "riskRating", align: "center" }),
+  col("riskRating", "Risk", head(TriangleAlertIcon, "Risk", "table-header-number"), (i) => <RiskBadge risk={i.row.original.riskRating} />, { size: 150, minSize: 130, sortKey: "riskRating", align: "center" }),
   col("country", "Location", head(MapPinIcon, "Location"), plain((r) => [r.city, r.country].filter(Boolean).join(", ")), { size: 160, sortKey: "country" }),
   col(
     "primaryContact",

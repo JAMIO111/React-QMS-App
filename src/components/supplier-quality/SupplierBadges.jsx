@@ -13,13 +13,13 @@ export const RiskBadge = ({ risk }) => {
   if (!r) return <span className="text-secondary-text">—</span>;
   const level = RISK_RATINGS.findIndex((x) => x.id === r.id) + 1;
   return (
-    <span className="inline-flex items-center gap-2" title={`${r.name} risk`}>
+    <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-border-color bg-text-input-color px-2.5 py-1" title={`${r.name} risk`}>
       <span className="flex gap-0.5" aria-hidden="true">
         {RISK_SQUARES.map((tone, i) => (
           <span key={tone} data-filled={i < level ? "true" : "false"} className={`h-2.5 w-2.5 rounded-[2px] ${i < level ? tone : "bg-border-color"}`} />
         ))}
       </span>
-      <span className="whitespace-nowrap text-xs text-secondary-text">{r.name}</span>
+      <span className="whitespace-nowrap text-xs font-medium text-primary-text">{r.name}</span>
     </span>
   );
 };

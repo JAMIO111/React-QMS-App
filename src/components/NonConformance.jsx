@@ -34,6 +34,7 @@ const toCsvRow = (n) => ({
   category: n.category?.name ?? "Uncategorised",
   stage: stageOf(n.stage).label,
   severity: n.severity ?? "",
+  eight_d: n.capaCount === 1 && n.capa ? n.capa.reference : n.capaCount ? `${n.capaCount} 8Ds` : "",
   detected: formatDate(n.detectedAt),
   title: n.title,
   part: n.part?.partNumber ?? "",

@@ -1,4 +1,5 @@
-import { AlignCenterIcon, BoxIcon, InboxIcon, TagsIcon, CalendarIcon, CircleDashedIcon, LayersIcon, PoundSterlingIcon, QrCodeIcon, TagIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { Link } from "react-router-dom";
+import { AlignCenterIcon, ClipboardCheckIcon, BoxIcon, InboxIcon, TagsIcon, CalendarIcon, CircleDashedIcon, LayersIcon, PoundSterlingIcon, QrCodeIcon, TagIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
 import { formatMoney } from "./costs";
 import { SeverityPill, StagePill } from "../components/ncr/Pills";
 import { formatDate, sourceLabel } from "./ncr";
@@ -67,6 +68,24 @@ const stage = col("stage", "Stage", head(CircleDashedIcon, "Stage", "table-heade
   sortKey: "stage",
   align: "center",
 });
+/** The 8D linked to the NC (its number, a link), or how many when there are several. */
+const capa = col(
+  "capaCount",
+  "8D",
+  head(ClipboardCheckIcon, "8D"),
+  (i) => {
+    const n = i.row.original;
+    if (!n.capaCount) return <div className="table-row-item text-secondary-text">—</div>;
+    if (n.capaCount === 1 && n.capa)
+      return (
+        <Link to={`/CAPA/${n.capa.id}`} className="table-row-item font-medium text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
+          {n.capa.reference}
+        </Link>
+      );
+    return <div className="table-row-item">{n.capaCount} 8Ds</div>;
+  },
+  { size: 130, sortKey: "capaCount", accessor: (r) => r.capaCount }
+);
 const workOrder = col("workOrder", "Work order", head(BoxIcon, "Work order"), text, { size: 130 });
 const customer = col("customer", "Customer", head(UsersIcon, "Customer"), nameOf, { size: 180, sortKey: "customer" });
 const customerReference = col("customerReference", "Customer ref.", head(UsersIcon, "Customer ref."), text, { size: 150 });
@@ -85,7 +104,7 @@ const category = col(
 /** The one register's columns: where it came from (source) and what the problem is (category) come first. */
 export const getNcColumns = () => [
   reference, detectedAt, source, category, customer, supplier, workOrder, customerReference, purchaseOrder, part, title, quantity, totalCost,
-  failureMode, subFailureMode, causalProcess, severity, stage,
+  failureMode, subFailureMode, causalProcess, severity, stage, capa,
 ];
 /** Columns that start hidden (they only apply to some sources); the column menu shows them. */
 export const NC_DEFAULT_HIDDEN = { workOrder: false, customerReference: false, purchaseOrder: false };

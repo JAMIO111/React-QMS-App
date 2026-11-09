@@ -38,6 +38,7 @@ const SORT_SQL: Record<NcrListQuery['sort'], string> = {
   source: 'n.source',
   category: 'lower(cat.name)',
   totalCost: 'coalesce(tc.total, 0)',
+  capaCount: 'coalesce(cl.n_capa, 0)',
   createdAt: 'n.created_at',
 };
 
@@ -59,7 +60,8 @@ const SELECT_SUMMARY = `
   c.id as customer_id, coalesce(c.display_name, c.name) as customer_name,
   s.id as supplier_id, coalesce(s.display_name, s.name) as supplier_name,
   fm.id as fm_id, fm.name as fm_name, sfm.id as sfm_id, sfm.name as sfm_name, cp.id as cp_id, cp.name as cp_name, cat.id as cat_id, cat.name as cat_name,
-  coalesce(tc.total, 0) as total_cost, os.base_currency`;
+  coalesce(tc.total, 0) as total_cost, os.base_currency,
+  coalesce(cl.n_capa, 0) as capa_count, case when cl.n_capa = 1 then cl.capa_id end as capa_id, case when cl.n_capa = 1 then cl.capa_reference end as capa_reference`;
 const FROM = `
   from public.nonconformances n
   left join public.parts p on p.id = n.part_id
@@ -74,7 +76,13 @@ const FROM = `
   -- Total of the NCR's costs that are not deleted, in the organisation's base currency.
   left join lateral (
     select sum(k.gross_base) as total from public.ncr_costs k where k.nonconformance_id = n.id and k.deleted_at is null
-  ) tc on true`;
+  ) tc on true
+  -- The 8Ds this is linked to (live links; only those the caller may read).
+  left join lateral (
+    select count(*)::int as n_capa, (array_agg(c8.id order by c8.reference))[1] as capa_id, (array_agg(c8.reference order by c8.reference))[1] as capa_reference
+    from public.capa_ncr_links l join public.capas c8 on c8.id = l.capa_id
+    where l.nonconformance_id = n.id and l.ended_at is null
+  ) cl on true`;
 
 type Row = Record<string, unknown>;
 const ref = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? '' } : null);
@@ -102,6 +110,8 @@ const toSummary = (r: Row): NcrSummary => ({
   causalProcess: ref(r.cp_id, r.cp_name),
   totalCost: Number(r.total_cost ?? 0),
   costCurrency: (r.base_currency as string) ?? 'GBP',
+  capaCount: Number(r.capa_count ?? 0),
+  capa: r.capa_id ? { id: r.capa_id as string, reference: r.capa_reference as string } : null,
   deletedAt: iso(r.deleted_at),
   createdAt: iso(r.created_at)!,
 });

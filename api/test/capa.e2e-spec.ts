@@ -171,6 +171,11 @@ describe('non-conformance links', () => {
     await api().post(`/api/v1/capas/${ctx.c1}/ncrs`).set(h).send({ ncrId: ctx.nc2 }).expect(409);
     await api().post(`/api/v1/capas/${ctx.c2}/ncrs`).set(h).send({ ncrId: ctx.nc2 }).expect(201);
     expect((await api().get(`/api/v1/capas?ncrId=${ctx.nc2}`).set(h).expect(200)).body.data).toHaveLength(2);
+    // The NC register shows the one 8D by reference and several as a count.
+    const rows = (await api().get('/api/v1/ncrs?pageSize=100').set(h).expect(200)).body.data as { id: string; capaCount: number; capa: { reference: string } | null }[];
+    expect(rows.find((r) => r.id === ctx.nc1)).toMatchObject({ capaCount: 1, capa: { reference: 'CAPA-000001' } });
+    expect(rows.find((r) => r.id === ctx.nc2)).toMatchObject({ capaCount: 2, capa: null });
+    expect(rows.find((r) => r.id === ctx.nc3)).toMatchObject({ capaCount: 0, capa: null });
     await api().post(`/api/v1/capas/${ctx.c1}/ncrs`).set(h).send({ ncrId: ctx.ncB }).expect(409); // another organisation's
     const link = d.ncrs.find((n: { nonconformanceId: string }) => n.nonconformanceId === ctx.nc2);
     await api().post(`/api/v1/capa-ncr-links/${link.id}/unlink`).set(h).send({}).expect(400);

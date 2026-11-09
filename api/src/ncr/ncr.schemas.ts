@@ -69,6 +69,9 @@ export const NcrSummary = z.object({
   /** Gross total of the NCR's costs (deleted lines excluded) in the organisation's base currency. */
   totalCost: z.number(),
   costCurrency: z.string(),
+  /** How many 8Ds (corrective actions) this is linked to that the caller can read, and the one when there is exactly one. */
+  capaCount: z.number().int(),
+  capa: z.object({ id: z.string().uuid(), reference: z.string() }).nullable(),
   deletedAt: dateTime.nullable(),
   createdAt: dateTime,
 });
@@ -103,7 +106,7 @@ export type NcrDetail = z.infer<typeof NcrDetail>;
 
 export const NcrPage = z.object({ data: z.array(NcrSummary), page: z.number(), pageSize: z.number(), total: z.number() });
 
-export const SORTABLE = ['reference', 'detectedAt', 'title', 'stage', 'severity', 'quantityAffected', 'partNumber', 'customer', 'supplier', 'failureMode', 'createdAt', 'totalCost', 'source', 'category'] as const;
+export const SORTABLE = ['reference', 'detectedAt', 'title', 'stage', 'severity', 'quantityAffected', 'partNumber', 'customer', 'supplier', 'failureMode', 'createdAt', 'totalCost', 'source', 'category', 'capaCount'] as const;
 
 export const NcrListQuery = z.object({
   /** One or several sources, comma-separated. */

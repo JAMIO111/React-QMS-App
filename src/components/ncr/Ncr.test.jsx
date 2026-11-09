@@ -374,6 +374,27 @@ describe("NC registers", () => {
     await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("sort=totalCost"));
   });
 
+  it("shows the linked 8D by number, a count when there are several, and sorts by it", async () => {
+    routeApi({
+      "GET /ncrs": {
+        data: [
+          ncr({ capaCount: 1, capa: { id: "c1", reference: "CAPA-000001" } }),
+          ncr({ id: "n2", reference: "NCM-26-002", capaCount: 3, capa: null }),
+          ncr({ id: "n3", reference: "NCM-26-003", capaCount: 0, capa: null }),
+        ],
+        page: 1,
+        pageSize: 25,
+        total: 3,
+      },
+    });
+    renderAt("/Non-Conformance/Register");
+    await screen.findByText("NCM-26-001");
+    expect(screen.getByRole("link", { name: "CAPA-000001" })).toHaveAttribute("href", "/CAPA/c1");
+    expect(screen.getByText("3 8Ds")).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole("columnheader", { name: /8D/ })).getByRole("button"));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("sort=capaCount"));
+  });
+
   it("opens a record on double-click and offers New NC with ncr.create", async () => {
     routeApi({ "GET /ncrs": { data: [ncr()], page: 1, pageSize: 25, total: 1 }, "GET /ncrs/n1": ncr() });
     renderAt("/Non-Conformance/Register");

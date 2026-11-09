@@ -4,7 +4,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
-  AgreedDateBody, CreatePurchaseOrderBody, PoLookup, PoLookupQuery, PurchaseOrderDetail, PurchaseOrderListQuery, PurchaseOrderPage, ReasonBody, ReceiptDetail, ReceiptListQuery, ReceiptPage, RecordReceiptBody,
+  AgreedDateBody, CreatePurchaseOrderBody, DispositionBody, PoLookup, PoLookupQuery, PurchaseOrderDetail, PurchaseOrderListQuery, PurchaseOrderPage, ReasonBody, ReceiptDetail, ReceiptListQuery, ReceiptPage, RaiseNcrBody, RecordReceiptBody,
 } from './receiving.schemas';
 import { ReceivingService } from './receiving.service';
 
@@ -107,5 +107,33 @@ export class ReceivingController {
   @ApiOkResponse({ description: 'Cancels a receipt with a reason; it and the lots it made are kept', schema: openApiSchema(ReceiptDetail) })
   cancelReceipt(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.cancelReceipt(ctx, parse(Uuid, id), parse(ReasonBody, body));
+  }
+
+  // ---- one receipt line: inspect, decide, raise a non-conformance
+
+  @Post('goods-receipt-lines/:id/start-inspection')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'Starts the incoming inspection of a line through the shared inspection engine (needs inspection.record; the line must need inspection)', schema: openApiSchema(ReceiptDetail) })
+  startInspection(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.startInspection(ctx, parse(Uuid, id));
+  }
+
+  @Post('goods-receipt-lines/:id/disposition')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(DispositionBody) })
+  @ApiOkResponse({ description: 'Holds, accepts, rejects or conditionally accepts a line. Accepting goods that need inspection needs a completed inspection with the required samples; conditional needs an approver and conditions; changing a rejection needs an approver.', schema: openApiSchema(ReceiptDetail) })
+  disposition(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.disposition(ctx, parse(Uuid, id), parse(DispositionBody, body));
+  }
+
+  @Post('goods-receipt-lines/:id/raise-ncr')
+  @HttpCode(200)
+  @OrganisationScoped('ncr.create')
+  @ApiBody({ schema: openApiSchema(RaiseNcrBody) })
+  @ApiOkResponse({ description: 'Raises a central goods-receiving non-conformance from the line (a draft, or open when a category is given). A live one already raised is returned with created: false.' })
+  raiseNcr(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.raiseNcr(ctx, parse(Uuid, id), parse(RaiseNcrBody, body ?? {}));
   }
 }

@@ -89,6 +89,8 @@ import { SupplierQualificationService } from './supplier-quality/supplier-qualif
 import { SupplierQualityService } from './supplier-quality/supplier-quality.service';
 import { ReceivingController } from './receiving/receiving.controller';
 import { ReceivingService } from './receiving/receiving.service';
+import { RequirementsController } from './receiving/requirements.controller';
+import { RequirementsService } from './receiving/requirements.service';
 import { SupplierScarController } from './supplier-quality/supplier-scar.controller';
 import { SupplierScarService } from './supplier-quality/supplier-scar.service';
 import { SavedFiltersService } from './saved-filters/saved-filters.service';
@@ -200,6 +202,7 @@ export class AppModule implements NestModule {
         SupplierAssessmentController,
         SupplierScarController,
         ReceivingController,
+        RequirementsController,
         InspectionsController,
         InspectionMeasurementsController,
         NcrInspectionSourceController,
@@ -262,6 +265,7 @@ export class AppModule implements NestModule {
         SupplierAssessmentService,
         SupplierScarService,
         ReceivingService,
+        RequirementsService,
         InspectionService,
         SpcService,
         DocumentationService,

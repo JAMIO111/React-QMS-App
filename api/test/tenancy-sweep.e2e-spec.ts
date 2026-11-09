@@ -123,6 +123,14 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/purchase-order-lines/{id}': { agreedOn: '2027-01-01' },
     'GET /api/v1/goods-receipts/{id}': undefined,
     'POST /api/v1/goods-receipts/{id}/cancel': { reason: 'Hijacked' },
+    'GET /api/v1/inspection-requirements/{id}': undefined,
+    'PATCH /api/v1/inspection-requirements/{id}': { name: 'Hijacked' },
+    'POST /api/v1/inspection-requirements/{id}/approve': {},
+    'POST /api/v1/inspection-requirements/{id}/retire': { reason: 'Hijacked' },
+    'POST /api/v1/goods-receipt-lines/{id}/start-inspection': {},
+    'POST /api/v1/goods-receipt-lines/{id}/disposition': { decision: 'held', reason: 'Hijacked' },
+    'POST /api/v1/goods-receipt-lines/{id}/raise-ncr': {},
+    'GET /api/v1/ncrs/{id}/receipt-source': undefined,
     'GET /api/v1/parts/{id}': undefined,
     'PATCH /api/v1/parts/{id}': { name: 'Hijacked' },
     'POST /api/v1/parts/{id}/revisions': { revision: 'Z' },
@@ -398,6 +406,14 @@ const hasSample = (op: Op) =>
     'PATCH /api/v1/purchase-order-lines/{id}',
     'GET /api/v1/goods-receipts/{id}',
     'POST /api/v1/goods-receipts/{id}/cancel',
+    'GET /api/v1/inspection-requirements/{id}',
+    'PATCH /api/v1/inspection-requirements/{id}',
+    'POST /api/v1/inspection-requirements/{id}/approve',
+    'POST /api/v1/inspection-requirements/{id}/retire',
+    'POST /api/v1/goods-receipt-lines/{id}/start-inspection',
+    'POST /api/v1/goods-receipt-lines/{id}/disposition',
+    'POST /api/v1/goods-receipt-lines/{id}/raise-ncr',
+    'GET /api/v1/ncrs/{id}/receipt-source',
     'GET /api/v1/parts/{id}',
     'PATCH /api/v1/parts/{id}',
     'POST /api/v1/parts/{id}/revisions',
@@ -620,6 +636,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/purchase-orders/')) return a.purchaseOrder;
   if (path.startsWith('/api/v1/purchase-order-lines/')) return a.poLine;
   if (path.startsWith('/api/v1/goods-receipts/')) return a.goodsReceipt;
+  if (path.startsWith('/api/v1/inspection-requirements/')) return a.requirement;
+  if (path.startsWith('/api/v1/goods-receipt-lines/')) return a.receiptLine;
   if (path.startsWith('/api/v1/supplier-quality/scar-items/')) return a.supplierScarItem;
   if (path.startsWith('/api/v1/supplier-quality/scar-extensions/')) return a.supplierScarExtension;
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
@@ -796,6 +814,8 @@ beforeAll(async () => {
     a.purchaseOrder = (await q1(`select app.create_purchase_order($1::uuid, 'ALPHA-PO-1', current_date, null, jsonb_build_array(jsonb_build_object('material', 'Alpha steel', 'quantity', 10, 'requestedOn', (current_date + 5)::text))) as id`, [a.supplier])).id;
     a.poLine = (await q1(`select id from public.purchase_order_lines where purchase_order_id = $1 limit 1`, [a.purchaseOrder])).id;
     a.goodsReceipt = ((await q1(`select app.record_goods_receipt($1::uuid, $2::uuid, null, current_date, 'DN-A1', null, jsonb_build_array(jsonb_build_object('poLineId', $3::text, 'quantity', 2)), null) as r`, [a.supplier, a.purchaseOrder, a.poLine])).r as { id: string }).id;
+    a.requirement = (await q1(`select app.save_inspection_requirement($1::uuid, null, '{"name":"Alpha rule","strategy":"full"}'::jsonb) as id`, [ids.orgA])).id;
+    a.receiptLine = (await q1(`select id from public.goods_receipt_lines where goods_receipt_id = $1 limit 1`, [a.goodsReceipt])).id;
     a.supplierScarItem = (await q1(`select app.add_scar_item($1::uuid, '{"material":"Alpha steel"}'::jsonb) as id`, [a.supplierScar])).id;
     a.supplierScarExtension = (await q1(`select app.request_scar_extension($1::uuid, current_date + 40, 'Alpha extension') as id`, [a.supplierScar])).id;
     a.supplierProduct = (await q1(`insert into public.supplier_product_links (organisation_id, supplier_id, kind, description) values ($1, $2, 'service', 'Alpha service') returning id`, [ids.orgA, a.supplier])).id;
@@ -919,7 +939,7 @@ describe('tenancy sweep over every API route', () => {
   it('never includes another organisation’s identifiers in list responses', async () => {
     const auth = { Authorization: `Bearer ${await token(ids.ownerB)}`, 'X-Organisation-Id': ids.orgB };
     // The SPC chart and baseline reads need a characteristic with readings; their isolation is tested in spc.e2e-spec.ts (analysis: spc-analysis.e2e-spec.ts).
-    const needsData = ['/api/v1/spc/chart', '/api/v1/spc/baselines', '/api/v1/spc/analysis'];
+    const needsData = ['/api/v1/spc/chart', '/api/v1/spc/baselines', '/api/v1/spc/analysis', '/api/v1/incoming-inspection/preview'];
     const lists = ops.filter((o) => o.scoped && o.method === 'GET' && !o.path.includes('{id}') && !needsData.includes(o.path));
     const leaks: string[] = [];
     // Routes that need query parameters get a valid set, so the tenant check is what is tested.

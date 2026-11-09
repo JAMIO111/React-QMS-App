@@ -11,7 +11,7 @@ const optionalText = (max: number) =>
     .transform((v) => (v === '' ? null : v))
     .nullable()
     .optional();
-export const Trigger = z.enum(['first_off', 'last_off', 'every_n_minutes', 'every_n_parts', 'start_of_shift', 'after_tool_change', 'after_setup', 'manual']);
+export const Trigger = z.enum(['first_off', 'last_off', 'every_n_minutes', 'every_n_parts', 'start_of_shift', 'after_tool_change', 'after_setup', 'manual', 'incoming']);
 
 /**
  * A measured value exactly as entered: a JSON number or a decimal string (e.g. "25.0500"). It is passed

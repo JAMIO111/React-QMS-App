@@ -7,7 +7,7 @@ import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import {
   AgreedDateBody, CreatePurchaseOrderBody, PoLookup, PoLookupQuery, PurchaseOrderDetail, PurchaseOrderListQuery, PurchaseOrderPage, PurchaseOrderRow, ReasonBody, ReceiptDetail, ReceiptListQuery,
-  ReceiptPage, ReceiptRow, RecordReceiptBody,
+  ReceiptPage, ReceiptRow, RecordReceiptBody, DispositionBody, RaiseNcrBody,
 } from './receiving.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -245,9 +245,22 @@ export class ReceivingService {
     const h = head.rows[0];
     if (!h) throw ApiError.notFound('goods_receipt_not_found', 'Goods receipt not found');
     const lines = await db.execute<Row>(sql`
-      select x.*, p.part_number, p.name as part_name, l.lot_number, pl.line_number as po_line_number
+      select x.*, p.part_number, p.name as part_name, l.lot_number, l.status as lot_status, pl.line_number as po_line_number,
+             d.required as d_required, d.rule_id as d_rule_id, d.rule_name as d_rule_name, d.strategy as d_strategy, d.level as d_level, d.sample_size as d_sample_size, d.accept_number as d_accept,
+             d.operation_code as d_operation, d.basis as d_basis, d.overridden as d_overridden,
+             case when d.id is null then null else app.incoming_inspection_assessment(x.id) end as assessment
       from public.goods_receipt_lines x left join public.parts p on p.id = x.part_id left join public.lots l on l.id = x.lot_id left join public.purchase_order_lines pl on pl.id = x.po_line_id
+      left join public.incoming_inspection_determinations d on d.receipt_line_id = x.id
       where x.goods_receipt_id = ${id}::uuid order by x.line_number`);
+    const [decisions, ncrs] = await Promise.all([
+      db.execute<Row>(sql`
+        select s.*, ${sql.raw(personName('p'))} as decided_by_name from public.receipt_line_dispositions s left join public.profiles p on p.id = s.decided_by
+        where s.receipt_line_id in (select id from public.goods_receipt_lines where goods_receipt_id = ${id}::uuid) order by s.decided_at, s.id`),
+      db.execute<Row>(sql`
+        select k.receipt_line_id, n.id, n.reference, n.stage from public.receipt_line_ncrs k join public.nonconformances n on n.id = k.ncr_id
+        where k.receipt_line_id in (select id from public.goods_receipt_lines where goods_receipt_id = ${id}::uuid) and n.deleted_at is null order by k.linked_at`),
+    ]);
+    const toDecision = (r: Row) => ({ decision: r.decision as 'held' | 'accepted' | 'rejected' | 'conditional', reason: (r.reason as string) ?? null, conditions: (r.conditions as string) ?? null, decidedAt: iso(r.decided_at)!, decidedBy: person(r.decided_by, r.decided_by_name) });
     return {
       ...toReceiptRow(h),
       notes: (h.notes as string) ?? null,
@@ -255,16 +268,62 @@ export class ReceivingService {
       cancelledBy: person(h.cancelled_by, h.cancelled_by_name),
       cancelReason: (h.cancel_reason as string) ?? null,
       createdBy: person(h.created_by, h.created_by_name),
-      lines: lines.rows.map((r) => ({
+      lines: lines.rows.map((r) => {
+        const history = decisions.rows.filter((d) => d.receipt_line_id === r.id).map(toDecision);
+        const current = history.length ? history[history.length - 1] : null;
+        const required = r.d_required === null || r.d_required === undefined ? null : !!r.d_required;
+        return {
         id: r.id as string,
+        status: current ? current.decision : required ? ('pending' as const) : ('not_required' as const),
+        determination:
+          required === null
+            ? null
+            : { required, ruleId: (r.d_rule_id as string) ?? null, ruleName: (r.d_rule_name as string) ?? null, strategy: r.d_strategy as string, level: r.d_level as string, sampleSize: r.d_sample_size === null ? null : num(r.d_sample_size), acceptNumber: num(r.d_accept), operationCode: (r.d_operation as string) ?? null, basis: r.d_basis as string, overridden: !!r.d_overridden },
+        assessment: r.assessment
+          ? (() => {
+              const a = r.assessment as Record<string, unknown>;
+              return { state: a.state as 'not_required' | 'not_started' | 'in_progress' | 'completed' | 'abandoned', samples: num(a.samples), failedSamples: num(a.failedSamples), requiredSamples: a.requiredSamples === null || a.requiredSamples === undefined ? null : num(a.requiredSamples), acceptNumber: num(a.acceptNumber), outcome: a.outcome as 'acceptable' | 'not_acceptable' | 'incomplete', inspectionId: (a.inspectionId as string) ?? null, inspectionReference: (a.inspectionReference as string) ?? null };
+            })()
+          : null,
+        disposition: current,
+        dispositions: history,
+        lotStatus: (r.lot_status as string) ?? null,
+        ncrs: ncrs.rows.filter((n) => n.receipt_line_id === r.id).map((n) => ({ id: n.id as string, reference: n.reference as string, stage: n.stage as string })),
         poLine: r.po_line_id ? { id: r.po_line_id as string, lineNumber: num(r.po_line_number) } : null,
         part: r.part_id ? { id: r.part_id as string, partNumber: r.part_number as string, name: r.part_name as string } : null,
         material: (r.material as string) ?? null,
         quantityReceived: num(r.quantity_received),
         lot: r.lot_id ? { id: r.lot_id as string, lotNumber: r.lot_number as string } : null,
         notes: (r.notes as string) ?? null,
-      })),
+        };
+      }),
     };
+  }
+
+  /** Commands on one receipt line; each answers with the whole receipt. */
+  async lineCommand(ctx: RequestContext, lineId: string, run: (db: Db) => Promise<unknown>): Promise<ReceiptDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      const res = await db.execute<{ goods_receipt_id: string }>(sql`select goods_receipt_id from public.goods_receipt_lines where id = ${lineId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (res.rows.length === 0) throw ApiError.notFound('goods_receipt_line_not_found', 'Receipt line not found');
+      await run(db);
+      return this.loadReceipt(db, ctx, res.rows[0].goods_receipt_id);
+    });
+  }
+  startInspection(ctx: RequestContext, lineId: string) {
+    return this.lineCommand(ctx, lineId, (db) => db.execute(sql`select app.start_incoming_inspection(${lineId}::uuid)`));
+  }
+  disposition(ctx: RequestContext, lineId: string, b: DispositionBody) {
+    return this.lineCommand(ctx, lineId, (db) => db.execute(sql`select app.disposition_receipt_line(${lineId}::uuid, ${b.decision}, ${b.reason ?? null}, ${b.conditions ?? null})`));
+  }
+  /** Raises a central non-conformance from a line and answers with its id (created: false when one was already raised). */
+  async raiseNcr(ctx: RequestContext, lineId: string, b: RaiseNcrBody): Promise<{ nonconformanceId: string; created: boolean }> {
+    return this.database.asUser(ctx, async (db) => {
+      const res = await db.execute<Row>(sql`select 1 from public.goods_receipt_lines where id = ${lineId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (res.rows.length === 0) throw ApiError.notFound('goods_receipt_line_not_found', 'Receipt line not found');
+      const r = await db.execute<{ r: { nonconformanceId: string; created: boolean } }>(sql`
+        select app.raise_ncr_from_receipt_line(${lineId}::uuid, ${b.title ?? null}, ${b.description ?? null}, ${b.severity ?? 'major'}, ${b.categoryId ?? null}::uuid, ${b.quantity ?? null}::numeric) as r`);
+      return r.rows[0].r;
+    });
   }
 
   recordReceipt(ctx: RequestContext, b: RecordReceiptBody): Promise<ReceiptDetail> {

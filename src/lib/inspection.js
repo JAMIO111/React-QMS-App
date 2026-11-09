@@ -6,7 +6,7 @@ export const STATUS = {
   abandoned: { label: "Abandoned", className: "bg-border-color text-secondary-text line-through" },
 };
 
-export const TRIGGER_LABEL = Object.fromEntries(Object.entries(SAMPLING_TRIGGERS).map(([k, v]) => [k, v.label]));
+export const TRIGGER_LABEL = { ...Object.fromEntries(Object.entries(SAMPLING_TRIGGERS).map(([k, v]) => [k, v.label])), incoming: "Incoming inspection" };
 
 /** Decimal input as typed: digits, optional sign and point. */
 export const isDecimal = (text) => /^-?\d{1,12}(\.\d{1,12})?$/.test(String(text).trim());

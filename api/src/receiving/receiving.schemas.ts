@@ -103,6 +103,15 @@ export const RecordReceiptBody = z
   .strict();
 export type RecordReceiptBody = z.infer<typeof RecordReceiptBody>;
 
+export const DispositionBody = z
+  .object({ decision: z.enum(['held', 'accepted', 'rejected', 'conditional']), reason: text(1000), conditions: text(2000) })
+  .strict();
+export type DispositionBody = z.infer<typeof DispositionBody>;
+export const RaiseNcrBody = z
+  .object({ title: text(200), description: text(4000), severity: z.enum(['minor', 'major', 'critical']).optional(), categoryId: z.string().uuid().nullable().optional(), quantity: z.number().gt(0).nullable().optional() })
+  .strict();
+export type RaiseNcrBody = z.infer<typeof RaiseNcrBody>;
+
 // ---- output --------------------------------------------------------------------------------------
 
 const SupplierRef = z.object({ id: z.string().uuid(), code: z.string(), name: z.string() });
@@ -170,8 +179,43 @@ export const ReceiptRow = z.object({
 export type ReceiptRow = z.infer<typeof ReceiptRow>;
 export const ReceiptPage = z.object({ data: z.array(ReceiptRow), page: z.number().int(), pageSize: z.number().int(), total: z.number().int() });
 
+export const DISPOSITIONS = ['held', 'accepted', 'rejected', 'conditional'] as const;
+const Disposition = z.object({ decision: z.enum(DISPOSITIONS), reason: z.string().nullable(), conditions: z.string().nullable(), decidedAt: Iso, decidedBy: Person });
+const Determination = z.object({
+  required: z.boolean(),
+  ruleId: z.string().uuid().nullable(),
+  ruleName: z.string().nullable(),
+  strategy: z.string(),
+  level: z.string(),
+  sampleSize: z.number().int().nullable(),
+  acceptNumber: z.number().int(),
+  operationCode: z.string().nullable(),
+  basis: z.string(),
+  /** A rule that would reduce inspection was not applied (a critical or unresolved part), or a plan had no band for the lot. */
+  overridden: z.boolean(),
+});
+const Assessment = z.object({
+  state: z.enum(['not_required', 'not_started', 'in_progress', 'completed', 'abandoned']),
+  samples: z.number().int(),
+  failedSamples: z.number().int(),
+  requiredSamples: z.number().int().nullable(),
+  acceptNumber: z.number().int(),
+  /** Whether the inspection evidence supports accepting the line: acceptable, not_acceptable, or incomplete. */
+  outcome: z.enum(['acceptable', 'not_acceptable', 'incomplete']),
+  inspectionId: z.string().uuid().nullable(),
+  inspectionReference: z.string().nullable(),
+});
+/** Where a line stands: not required, pending inspection, or the latest decision. */
+export const LINE_STATUSES = ['not_required', 'pending', 'held', 'accepted', 'rejected', 'conditional'] as const;
 const ReceiptLine = z.object({
   id: z.string().uuid(),
+  status: z.enum(LINE_STATUSES),
+  determination: Determination.nullable(),
+  assessment: Assessment.nullable(),
+  disposition: Disposition.nullable(),
+  dispositions: z.array(Disposition),
+  lotStatus: z.string().nullable(),
+  ncrs: z.array(z.object({ id: z.string().uuid(), reference: z.string(), stage: z.string() })),
   poLine: z.object({ id: z.string().uuid(), lineNumber: z.number().int() }).nullable(),
   part: PartRef.nullable(),
   material: z.string().nullable(),

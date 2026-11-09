@@ -65,15 +65,7 @@ const SettingsProcessControl = () => {
   }, [templates, query, showInactive]);
 
   return (
-    <div className="flex w-full grow flex-col gap-4 p-4 pr-2">
-      <div>
-        <h2 className="text-2xl font-semibold text-primary-text">Process control</h2>
-        <p className="text-sm text-secondary-text">
-          Characteristic templates are reusable checks (for example an outer diameter) that you choose from a dropdown when adding a characteristic to a draft control plan revision. Choosing one copies its
-          values, so later changes here never alter existing plans.
-          {canManage ? "" : " You can view them; a process control manager can change them."}
-        </p>
-      </div>
+    <div className="flex w-full flex-col gap-4">
       {error && (
         <p role="alert" className="text-error-color">
           {describeApiError(error)}

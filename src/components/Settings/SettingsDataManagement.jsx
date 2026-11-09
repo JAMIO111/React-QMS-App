@@ -1,125 +1,110 @@
-import { Link } from "react-router-dom";
-import MenuCard from "../ui/MenuCard";
-import StatTile from "../ui/StatTile";
-import LoadingScreen from "../ui/LoadingScreen";
-import ClassificationList from "./ClassificationList";
-import { FactoryIcon, PackageIcon, UsersIcon } from "@/components/icons";
+import { lazy, Suspense } from "react";
+import { useSearchParams } from "react-router-dom";
 import { usePermissions } from "../../hooks/useQmsApi";
-import { useClassifications } from "../../hooks/useNcr";
-import { NC_SOURCES, STAGES } from "../../lib/ncr";
-import { StagePill } from "../ncr/Pills";
-import { describeApiError } from "../../lib/api-client";
+import LoadingScreen from "../ui/LoadingScreen";
+import SlidingToggle from "../ui/SlidingToggle";
 
-const STAGE_HELP = {
-  draft: "Being written; not yet raised.",
-  open: "Raised: category, severity, quantity and (for customer/supplier sources) the customer or supplier are recorded.",
-  contained: "Affected product is secured.",
-  investigating: "Root cause is being investigated.",
-  dispositioned: "A decision has been made on the affected product.",
-  awaiting_closure: "Corrective action is being verified.",
-  closed: "Complete. Locked until reopened (with a reason).",
-  cancelled: "Raised in error or a duplicate (with a reason). Locked until reopened.",
-};
+const SettingsNonConformance = lazy(() => import("./SettingsNonConformance"));
+const SettingsCalibration = lazy(() => import("./SettingsCalibration"));
+const SettingsProcessControl = lazy(() => import("./SettingsProcessControl"));
+const SettingsAudits = lazy(() => import("./SettingsAudits"));
+const SettingsSupplierQuality = lazy(() => import("./SettingsSupplierQuality"));
 
-const MASTER_DATA = [
-  { to: "/Customers", label: "Customers", hint: "Who you make product for", Icon: UsersIcon },
-  { to: "/Suppliers", label: "Suppliers", hint: "Where material comes from", Icon: FactoryIcon },
-  { to: "/Parts", label: "Parts", hint: "Products, revisions and specs", Icon: PackageIcon },
+/**
+ * The module lists and set-up, one tab per module. A tab shows only to people who may read that module; `manage` decides whether the
+ * description says they can change it. The tab is kept in the address (`?tab=`), so a link can open a module directly.
+ */
+const DATA_TABS = [
+  {
+    value: "non-conformance",
+    label: "Non-conformance",
+    read: "ncr.read",
+    manage: "lookups.manage",
+    description: "Lists used when recording non-conformances. Switch an entry off to retire it without losing history.",
+    Component: SettingsNonConformance,
+  },
+  {
+    value: "calibration",
+    label: "Calibration",
+    read: "calibration.read",
+    manage: "calibration.manage",
+    description:
+      "Gauge types set the default calibration interval and the characteristics checked at each calibration. A new gauge copies them; each gauge can then be adjusted.",
+    Component: SettingsCalibration,
+  },
+  {
+    value: "process-control",
+    label: "Process control",
+    read: "process_control.read",
+    manage: "process_control.manage",
+    description:
+      "Characteristic templates are reusable checks you choose when adding a characteristic to a draft control plan revision. Choosing one copies its values, so later changes here never alter existing plans.",
+    Component: SettingsProcessControl,
+  },
+  {
+    value: "audits",
+    label: "Audits",
+    read: "audits.read",
+    manage: "audits.manage",
+    description: "How audit findings are classified.",
+    Component: SettingsAudits,
+  },
+  {
+    value: "supplier-quality",
+    label: "Supplier quality",
+    read: "supplier_quality.read",
+    manage: "supplier_quality.configure",
+    description: "Supplier classifications, qualification questionnaires, the risk model and the performance scoring model.",
+    Component: SettingsSupplierQuality,
+  },
 ];
 
-const Stat = ({ label, active, total }) => <StatTile label={label} value={active} note={total - active > 0 ? `${total - active} inactive` : "all active"} />;
-
+/** Settings → Data Management: the module lists and set-up, with a sticky header and a tab per module. */
 const SettingsDataManagement = () => {
   const { can } = usePermissions();
-  const canManage = can("lookups.manage");
-  const { data: lists, error, isLoading } = useClassifications({ includeInactive: true });
-  const count = (rows) => ({ active: rows.filter((r) => r.active).length, total: rows.length });
-  const fm = lists && count(lists.failureModes);
-  const sub = lists && count(lists.subFailureModes);
-  const cat = lists && count(lists.categories);
+  const [params, setParams] = useSearchParams();
+  const tabs = DATA_TABS.filter((t) => can(t.read));
+  const current = tabs.find((t) => t.value === params.get("tab")) ?? tabs[0];
+
+  if (!current) {
+    return <p className="p-4 text-secondary-text">You have no access to any module's lists. Ask an administrator for the permission you need.</p>;
+  }
+  const choose = (value) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", value);
+        return next;
+      },
+      { replace: true },
+    );
+  const { Component } = current;
 
   return (
-    <div className="flex w-full grow flex-col gap-4 pr-2">
-      <div>
-        <h2 className="text-2xl font-semibold text-primary-text">Data Management</h2>
-        <p className="text-sm text-secondary-text">
-          Lists used when recording non-conformances.{canManage ? " Switch an entry off to retire it without losing history." : " You can view them; an administrator can change them."}
-        </p>
-      </div>
-      {error && (
-        <p role="alert" className="text-error-color">
-          {describeApiError(error)}
-        </p>
-      )}
-      {isLoading && <LoadingScreen size="sm" />}
-      {lists && (
-        <>
-          <div className="flex flex-wrap gap-3">
-            <Stat label="Categories" {...cat} />
-            <Stat label="Failure modes" {...fm} />
-            <Stat label="Sub-failure modes" {...sub} />
-          </div>
-          <MenuCard title="Categories" subtitle="What kind of problem a non-conformance is (the source says where it came from). Add your own; switch one off to retire it.">
-            <ClassificationList kind="category" lists={lists} canManage={canManage} />
-          </MenuCard>
-          <MenuCard title="Failure modes" subtitle="Failure modes and their sub-failure modes">
-            <ClassificationList kind="failure_mode" lists={lists} canManage={canManage} />
-          </MenuCard>
-          <MenuCard title="Where detected and causal process" subtitle="These two fields on a non-conformance pick a machine. Add or change machines under Master Data.">
-            <Link to="/Machines" className="text-sm text-link-color hover:underline">
-              Open the machines
-            </Link>
-          </MenuCard>
-        </>
-      )}
-      <MenuCard title="Sources" subtitle="Where a non-conformance came from or was detected. The list is fixed; each non-conformance has one source and one category.">
-        <ul className="grid gap-2 sm:grid-cols-2">
-          {NC_SOURCES.map((s) => (
-            <li key={s.key} className="rounded-xl border border-border-color px-3 py-2">
-              <p className="font-medium text-primary-text">{s.label}</p>
-              <p className="text-xs text-secondary-text">
-                {s.hint}
-                {s.party === "customer" && ". Needs the customer to open."}
-                {s.party === "supplier" && ". Needs the supplier to open."}
-                {s.party === "supplier?" && ". May name the supplier."}
-              </p>
-            </li>
-          ))}
-        </ul>
-      </MenuCard>
-      <MenuCard title="NCR stages" subtitle="How a non-conformance moves from draft to closed">
-        <ol className="flex flex-col">
-          {STAGES.map((s, i) => (
-            <li key={s.key} className="flex items-stretch gap-4">
-              <div className="flex flex-col items-center">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-color bg-primary-bg text-xs text-secondary-text">{i + 1}</span>
-                {i < STAGES.length - 1 && <span className="w-px grow bg-border-color" />}
-              </div>
-              <div className="flex flex-wrap items-start gap-x-3 gap-y-1 pb-4 text-sm text-primary-text">
-                <span className="w-36 shrink-0">
-                  <StagePill stage={s.key} />
-                </span>
-                <span className="min-w-0 flex-1 text-secondary-text">{STAGE_HELP[s.key]}</span>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </MenuCard>
-      <MenuCard title="Customers, suppliers and products" subtitle="Managed under Master Data">
-        <div className="grid gap-3 sm:grid-cols-3">
-          {MASTER_DATA.map(({ to, label, hint, Icon }) => (
-            <Link key={to} to={to} className="flex items-center gap-3 rounded-xl border border-border-color p-3 transition-colors hover:border-brand-primary hover:bg-border-color/30">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-border-color/60 text-lg text-primary-text">
-                <Icon />
-              </span>
-              <span className="flex flex-col">
-                <span className="font-medium text-primary-text">{label}</span>
-                <span className="text-xs text-secondary-text">{hint}</span>
-              </span>
-            </Link>
-          ))}
+    <div className="flex w-full flex-col">
+      <header className="sticky top-0 z-20 -mx-5 -mt-5 mb-4 flex flex-col gap-3 border-b border-border-color bg-primary-bg/95 px-5 pb-3 pt-5 backdrop-blur">
+        <div>
+          <h2 className="text-2xl font-semibold text-primary-text">Data Management</h2>
+          <p className="text-sm text-secondary-text">
+            {current.description}
+            {can(current.manage) ? "" : " You can view these; someone with the right permission can change them."}
+          </p>
         </div>
-      </MenuCard>
+        <div className="overflow-x-auto">
+          <SlidingToggle
+            mode="tabs"
+            ariaLabel="Data Management sections"
+            value={current.value}
+            onChange={choose}
+            options={tabs.map((t) => ({ value: t.value, label: t.label, id: `data-tab-${t.value}`, controls: "data-tab-panel" }))}
+          />
+        </div>
+      </header>
+      <section id="data-tab-panel" role="tabpanel" aria-labelledby={`data-tab-${current.value}`}>
+        <Suspense fallback={<LoadingScreen size="sm" />}>
+          <Component key={current.value} />
+        </Suspense>
+      </section>
     </div>
   );
 };

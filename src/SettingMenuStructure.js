@@ -1,9 +1,7 @@
 import {
   BellIcon,
   CreditCardIcon,
-  ClipboardListIcon,
   DatabaseIcon,
-  GaugeIcon,
   MonitorCogIcon,
   PlugIcon,
   SettingsIcon,
@@ -41,35 +39,8 @@ const SettingMenuStructure = [
     name: "Data Management",
     path: "Data-Management",
     icon: DatabaseIcon,
-    permission: "lookups.manage",
-    subMenu: [],
-  },
-  {
-    name: "Calibration",
-    path: "Calibration",
-    icon: GaugeIcon,
-    permission: "calibration.read",
-    subMenu: [],
-  },
-  {
-    name: "Process control",
-    path: "Process-Control",
-    icon: ClipboardListIcon,
-    permission: "process_control.read",
-    subMenu: [],
-  },
-  {
-    name: "Audits",
-    path: "Audits",
-    icon: ClipboardListIcon,
-    permission: "audits.read",
-    subMenu: [],
-  },
-  {
-    name: "Supplier quality",
-    path: "Supplier-Quality",
-    icon: ClipboardListIcon,
-    permission: "supplier_quality.read",
+    // Any module the person may read: Non-conformance, Calibration, Process control, Audits, Supplier quality (tabs inside).
+    permission: ["ncr.read", "calibration.read", "process_control.read", "audits.read", "supplier_quality.read"],
     subMenu: [],
   },
   {

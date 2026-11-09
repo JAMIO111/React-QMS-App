@@ -243,20 +243,7 @@ const SettingsCalibration = () => {
   const [adding, setAdding] = useState(false);
 
   return (
-    <div className="flex w-full grow flex-col gap-4 p-4 pr-2">
-      <div>
-        <h2 className="text-2xl font-semibold text-primary-text">
-          Calibration
-        </h2>
-        <p className="text-sm text-secondary-text">
-          Gauge types set the default calibration interval and the
-          characteristics checked at each calibration. A new gauge copies them;
-          each gauge can then be adjusted.
-          {canManage
-            ? ""
-            : " You can view them; a calibration manager can change them."}
-        </p>
-      </div>
+    <div className="flex w-full flex-col gap-4">
       {error && (
         <p role="alert" className="text-error-color">
           {describeApiError(error)}

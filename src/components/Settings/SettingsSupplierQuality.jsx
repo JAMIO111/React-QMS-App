@@ -186,7 +186,7 @@ const SettingsSupplierQuality = () => {
     mutation.mutate({ action: "updateClassification", id: c.id, body: { active } }, { onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) });
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex w-full flex-col gap-4">
       <MenuCard
         title="Supplier classifications"
         subtitle="What kind of supplier each one is. A supplier can have several. Switch one off to stop it being chosen; suppliers that already have it keep it."

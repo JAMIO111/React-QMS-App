@@ -95,7 +95,7 @@ const SettingsAudits = () => {
   const toggle = (c, active) => update.mutate({ id: c.id, body: { active } }, { onError: (e) => showToast({ type: "error", title: "Not saved", message: describeApiError(e) }) });
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex w-full flex-col gap-4">
       <MenuCard
         title="Finding classifications"
         subtitle="How an audit finding is classified. Switch one off to stop it being chosen; findings already using it keep it."

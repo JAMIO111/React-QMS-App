@@ -45,9 +45,6 @@ const CalibrationRecordPage = lazy(() => import("./components/calibration/Calibr
 const SettingsNotifications = lazy(() => import("./components/Settings/SettingsNotifications.jsx"));
 const SettingsSubscription = lazy(() => import("./components/Settings/SettingsSubscription.jsx"));
 const RequireModule = lazy(() => import("./components/RequireModule.jsx"));
-const SettingsCalibration = lazy(() => import("./components/Settings/SettingsCalibration.jsx"));
-const SettingsAudits = lazy(() => import("./components/Settings/SettingsAudits.jsx"));
-const SettingsProcessControl = lazy(() => import("./components/Settings/SettingsProcessControl.jsx"));
 const PartDetailPage = lazy(() => import("./components/master-data/PartDetailPage.jsx"));
 const PartiesPage = lazy(() => import("./components/master-data/PartiesPage.jsx"));
 const SuppliersRegisterPage = lazy(() => import("./components/supplier-quality/SuppliersRegisterPage.jsx"));
@@ -63,7 +60,6 @@ const WatchlistPage = lazy(() => import("./components/supplier-quality/Watchlist
 const RequirementsPage = lazy(() => import("./components/supplier-quality/RequirementsPage.jsx"));
 const ScarsPage = lazy(() => import("./components/supplier-quality/ScarsPage.jsx"));
 const ScarPage = lazy(() => import("./components/supplier-quality/ScarPage.jsx"));
-const SettingsSupplierQuality = lazy(() => import("./components/Settings/SettingsSupplierQuality.jsx"));
 const SettingsIntegrations = lazy(() => import("./components/Settings/SettingsIntegrations.jsx"));
 const ConnectionPage = lazy(() => import("./components/integrations/ConnectionPage.jsx"));
 const IntegrationRunPage = lazy(() => import("./components/integrations/RunPage.jsx"));
@@ -203,18 +199,12 @@ const router = createBrowserRouter([
                   </div>
                 ),
               },
-              {
-                path: "Data-Management",
-                element: (
-                  <div>
-                    <SettingsDataManagement />
-                  </div>
-                ),
-              },
-              { path: "Calibration", element: <SettingsCalibration /> },
-              { path: "Process-Control", element: <SettingsProcessControl /> },
-              { path: "Audits", element: <SettingsAudits /> },
-              { path: "Supplier-Quality", element: <SettingsSupplierQuality /> },
+              { path: "Data-Management", element: <SettingsDataManagement /> },
+              // These settings are tabs of Data Management now; the old addresses open the right tab.
+              { path: "Calibration", element: <Navigate to="../Data-Management?tab=calibration" replace /> },
+              { path: "Process-Control", element: <Navigate to="../Data-Management?tab=process-control" replace /> },
+              { path: "Audits", element: <Navigate to="../Data-Management?tab=audits" replace /> },
+              { path: "Supplier-Quality", element: <Navigate to="../Data-Management?tab=supplier-quality" replace /> },
               { path: "Integrations", element: <SettingsIntegrations /> },
               { path: "Integrations/:id", element: <ConnectionPage /> },
               { path: "Integrations/:id/runs/:runId", element: <IntegrationRunPage /> },

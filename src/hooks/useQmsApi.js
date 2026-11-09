@@ -278,10 +278,11 @@ export const useAcceptInvitation = () => {
 };
 
 /**
- * Whether to show a menu item that needs `permission`. While permissions are unknown (loading, or
+ * Whether to show a menu item that needs `permission` (or any of a list of permissions). While permissions are unknown (loading, or
  * the API is not reachable) items stay visible — the server still refuses what is not allowed.
  */
 export const useCanSee = () => {
   const { can, isLoading, error } = usePermissions();
-  return (permission) => !permission || isLoading || !!error || can(permission);
+  // `permission` may be a list: any one of them is enough.
+  return (permission) => !permission || isLoading || !!error || (Array.isArray(permission) ? permission.some(can) : can(permission));
 };

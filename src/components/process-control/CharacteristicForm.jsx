@@ -322,7 +322,7 @@ const CharacteristicForm = ({
             value: t.id,
             label: `${t.name} (${t.characteristicKey})`,
           }))}
-          hint="Fills in the fields below from Settings → Process control; you can still change them"
+          hint="Fills in the fields below from Settings → Data Management → Process control; you can still change them"
         />
       )}
       {asTemplate && (

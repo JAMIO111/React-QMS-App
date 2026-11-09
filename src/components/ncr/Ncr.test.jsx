@@ -23,7 +23,7 @@ vi.mock("../../contexts/SearchProvider", () => ({ useGlobalSearch: () => ({ debo
 import NcrPage from "./NcrPage";
 import LegacyNcrRedirect from "./LegacyNcrRedirect";
 import NonConformance from "../NonConformance";
-import SettingsDataManagement from "../Settings/SettingsDataManagement";
+import SettingsDataManagement from "../Settings/SettingsNonConformance";
 
 const ALL = ["ncr.read", "ncr.create", "ncr.update", "ncr.delete", "lookups.manage", "master_data.read"];
 const classifications = [

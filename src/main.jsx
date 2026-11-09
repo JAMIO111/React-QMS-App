@@ -64,6 +64,8 @@ const RequirementsPage = lazy(() => import("./components/supplier-quality/Requir
 const ScarsPage = lazy(() => import("./components/supplier-quality/ScarsPage.jsx"));
 const ScarPage = lazy(() => import("./components/supplier-quality/ScarPage.jsx"));
 const SettingsSupplierQuality = lazy(() => import("./components/Settings/SettingsSupplierQuality.jsx"));
+const SettingsIntegrations = lazy(() => import("./components/Settings/SettingsIntegrations.jsx"));
+const ConnectionPage = lazy(() => import("./components/integrations/ConnectionPage.jsx"));
 const MachinesPage = lazy(() => import("./components/master-data/MachinesPage.jsx"));
 const ProductionOrdersPage = lazy(() => import("./components/production/OrdersPage.jsx"));
 const ProductionOrderPage = lazy(() => import("./components/production/OrderPage.jsx"));
@@ -212,6 +214,8 @@ const router = createBrowserRouter([
               { path: "Process-Control", element: <SettingsProcessControl /> },
               { path: "Audits", element: <SettingsAudits /> },
               { path: "Supplier-Quality", element: <SettingsSupplierQuality /> },
+              { path: "Integrations", element: <SettingsIntegrations /> },
+              { path: "Integrations/:id", element: <ConnectionPage /> },
               {
                 path: "Notifications",
                 element: <SettingsNotifications />,

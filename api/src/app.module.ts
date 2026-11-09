@@ -96,6 +96,8 @@ import { ReceivingService } from './receiving/receiving.service';
 import { MaterialCertificatesController } from './receiving/material-certificates.controller';
 import { MaterialCertificatesService } from './receiving/material-certificates.service';
 import { RequirementsController } from './receiving/requirements.controller';
+import { IntegrationsController } from './integrations/integrations.controller';
+import { IntegrationsService } from './integrations/integrations.service';
 import { RequirementsService } from './receiving/requirements.service';
 import { SupplierScarController } from './supplier-quality/supplier-scar.controller';
 import { SupplierScarService } from './supplier-quality/supplier-scar.service';
@@ -211,6 +213,7 @@ export class AppModule implements NestModule {
         SupplierScarController,
         ReceivingController,
         RequirementsController,
+        IntegrationsController,
         MaterialCertificatesController,
         InspectionsController,
         InspectionMeasurementsController,
@@ -277,6 +280,7 @@ export class AppModule implements NestModule {
         SupplierScarService,
         ReceivingService,
         RequirementsService,
+        IntegrationsService,
         MaterialCertificatesService,
         InspectionService,
         SpcService,

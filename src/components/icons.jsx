@@ -12,6 +12,7 @@ import {
   ArrowDownUp as LucideArrowDownUp,
   ArrowDownWideNarrow as LucideArrowDownWideNarrow,
   ArrowLeft as LucideArrowLeft,
+  Plug as LucidePlug,
   Play as LucidePlay,
   ArrowUp as LucideArrowUp,
   ArrowUp01 as LucideArrowUp01,
@@ -205,6 +206,7 @@ export const SearchIcon = withDefaults(LucideSearch);
 export const SettingsIcon = withDefaults(LucideSettings);
 export const ShareIcon = withDefaults(LucideShare);
 export const ShieldCheckIcon = withDefaults(LucideShieldCheck);
+export const PlugIcon = withDefaults(LucidePlug);
 export const ShieldUserIcon = withDefaults(LucideShieldUser);
 export const SlidersHorizontalIcon = withDefaults(LucideSlidersHorizontal);
 export const SunIcon = withDefaults(LucideSun);

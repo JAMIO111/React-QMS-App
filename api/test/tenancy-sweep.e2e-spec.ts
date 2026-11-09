@@ -88,6 +88,16 @@ const sampleBody = (op: Op): object | undefined =>
     'GET /api/v1/supplier-quality/suppliers/{id}/risk-assessments': undefined,
     'GET /api/v1/supplier-quality/suppliers/{id}/performance': undefined,
     'GET /api/v1/supplier-quality/suppliers/{id}/performance/settings': undefined,
+    'GET /api/v1/integrations/connections/{id}': undefined,
+    'PATCH /api/v1/integrations/connections/{id}': { name: 'Hijacked' },
+    'PUT /api/v1/integrations/connections/{id}/credential': { kind: 'bearer', secret: 'hijack' },
+    'POST /api/v1/integrations/connections/{id}/credential/revoke': { reason: 'Hijacked' },
+    'POST /api/v1/integrations/connections/{id}/test': {},
+    'POST /api/v1/integrations/connections/{id}/ready': {},
+    'POST /api/v1/integrations/connections/{id}/activate': {},
+    'POST /api/v1/integrations/connections/{id}/pause': { reason: 'Hijacked' },
+    'POST /api/v1/integrations/connections/{id}/resume': {},
+    'POST /api/v1/integrations/connections/{id}/retire': { reason: 'Hijacked' },
     'POST /api/v1/ncrs/{id}/receipt-link': { receiptLineId: '11111111-1111-4111-8111-111111111111' },
     'POST /api/v1/receipt-line-ncrs/{id}/unlink': { reason: 'Hijacked link' },
     'PUT /api/v1/supplier-quality/suppliers/{id}/performance/settings': { graceDaysAfter: 3 },
@@ -384,6 +394,16 @@ const hasSample = (op: Op) =>
     'GET /api/v1/supplier-quality/suppliers/{id}/risk-assessments',
     'GET /api/v1/supplier-quality/suppliers/{id}/performance',
     'GET /api/v1/supplier-quality/suppliers/{id}/performance/settings',
+    'GET /api/v1/integrations/connections/{id}',
+    'PATCH /api/v1/integrations/connections/{id}',
+    'PUT /api/v1/integrations/connections/{id}/credential',
+    'POST /api/v1/integrations/connections/{id}/credential/revoke',
+    'POST /api/v1/integrations/connections/{id}/test',
+    'POST /api/v1/integrations/connections/{id}/ready',
+    'POST /api/v1/integrations/connections/{id}/activate',
+    'POST /api/v1/integrations/connections/{id}/pause',
+    'POST /api/v1/integrations/connections/{id}/resume',
+    'POST /api/v1/integrations/connections/{id}/retire',
     'POST /api/v1/ncrs/{id}/receipt-link',
     'POST /api/v1/receipt-line-ncrs/{id}/unlink',
     'PUT /api/v1/supplier-quality/suppliers/{id}/performance/settings',
@@ -665,6 +685,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/inspection-requirements/')) return a.requirement;
   if (path.startsWith('/api/v1/goods-receipt-lines/')) return a.receiptLine;
   if (path.startsWith('/api/v1/receipt-line-ncrs/')) return a.receiptLineNcr;
+  if (path.startsWith('/api/v1/integrations/connections/')) return a.integrationConnection;
   if (path.startsWith('/api/v1/material-certificates/')) return a.materialCertificate;
   if (path.startsWith('/api/v1/supplier-quality/scorecards/')) return a.scorecard;
   if (path.startsWith('/api/v1/supplier-quality/scar-items/')) return a.supplierScarItem;
@@ -847,6 +868,7 @@ beforeAll(async () => {
     a.receiptLine = (await q1(`select id from public.goods_receipt_lines where goods_receipt_id = $1 limit 1`, [a.goodsReceipt])).id;
     const lkNcr = (await q1(`insert into public.nonconformances (organisation_id, reference, source, title, supplier_id) values ($1, 'A-NCR-LK', 'supplier', 'Alpha linked NCR', $2) returning id`, [ids.orgA, a.supplier])).id;
     a.receiptLineNcr = (await q1(`select app.link_ncr_to_receipt_line($1::uuid, $2::uuid) as id`, [lkNcr, a.receiptLine])).id;
+    a.integrationConnection = (await q1(`select app.create_integration_connection($1::uuid, 'csv', 'Alpha file', 'alpha-file', '{}'::jsonb) as id`, [ids.orgA])).id;
     a.materialCertificate = (await q1(`select app.record_material_certificate($1::uuid, jsonb_build_object('certificateNumber', 'ALPHA-MTR', 'kind', 'mill_test_report', 'heatNumber', 'HA-1', 'receiptLineId', $2::text)) as id`, [a.supplier, a.receiptLine])).id;
     a.scorecard = (await q1(`select app.save_supplier_scorecard($1::uuid, current_date - 30, current_date, 'Alpha scorecard') as id`, [a.supplier])).id;
     a.supplierScarItem = (await q1(`select app.add_scar_item($1::uuid, '{"material":"Alpha steel"}'::jsonb) as id`, [a.supplierScar])).id;

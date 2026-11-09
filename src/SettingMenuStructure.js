@@ -5,6 +5,7 @@ import {
   DatabaseIcon,
   GaugeIcon,
   MonitorCogIcon,
+  PlugIcon,
   SettingsIcon,
   ShieldUserIcon,
   UserCogIcon,
@@ -69,6 +70,13 @@ const SettingMenuStructure = [
     path: "Supplier-Quality",
     icon: ClipboardListIcon,
     permission: "supplier_quality.read",
+    subMenu: [],
+  },
+  {
+    name: "Integrations",
+    path: "Integrations",
+    icon: PlugIcon,
+    permission: "integrations.read",
     subMenu: [],
   },
   {

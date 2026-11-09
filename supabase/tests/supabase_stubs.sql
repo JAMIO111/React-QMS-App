@@ -32,3 +32,14 @@ GRANT EXECUTE ON FUNCTION auth.uid(), auth.role(), auth.jwt() TO anon, authentic
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
+
+-- Supabase Vault (secrets, encrypted at rest on the real service). The stand-in keeps the same functions and view but stores the text as given: it is only for migration checks.
+CREATE SCHEMA IF NOT EXISTS vault;
+CREATE TABLE IF NOT EXISTS vault.secrets (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text UNIQUE, description text NOT NULL DEFAULT '', secret text NOT NULL, key_id uuid,
+  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
+CREATE OR REPLACE VIEW vault.decrypted_secrets AS SELECT id, name, description, secret, secret AS decrypted_secret, created_at, updated_at FROM vault.secrets;
+CREATE OR REPLACE FUNCTION vault.create_secret(new_secret text, new_name text DEFAULT NULL, new_description text DEFAULT '', new_key_id uuid DEFAULT NULL) RETURNS uuid
+LANGUAGE sql AS $$ INSERT INTO vault.secrets (secret, name, description, key_id) VALUES (new_secret, new_name, coalesce(new_description, ''), new_key_id) RETURNING id $$;
+REVOKE ALL ON SCHEMA vault FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON vault.secrets, vault.decrypted_secrets FROM PUBLIC, anon, authenticated;

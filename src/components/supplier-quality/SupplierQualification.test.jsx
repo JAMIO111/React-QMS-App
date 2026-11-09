@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -167,6 +167,50 @@ describe("documents", () => {
       docType: "certificate", title: "Quality manual", storagePath: "org-1/supplier/s1/uuid-manual.pdf", fileName: "manual.pdf", sizeBytes: file.size,
     }));
     expect(calls.find((c) => c.k === "POST /supplier-quality/suppliers/s1/documents").body.replacesId).toBeUndefined();
+  });
+
+  it("has a drop area that takes a dragged file and suggests the title from its name", async () => {
+    routeApi({ "GET /supplier-quality/suppliers/s1/documents": { data: [] } });
+    renderUi(<DocumentsCard supplierId="s1" canManage />);
+    await screen.findByText("No documents yet.");
+    await userEvent.click(screen.getByRole("button", { name: "Add document" }));
+    const dialog = screen.getByRole("dialog");
+    const file = new File(["%PDF"], "Calibration-report.pdf", { type: "application/pdf" });
+    fireEvent.drop(within(dialog).getByTestId("document-drop"), { dataTransfer: { files: [file] } });
+    expect(await within(dialog).findByText("Calibration-report.pdf")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/Title/)).toHaveValue("Calibration-report");
+  });
+
+  it("shows a picture for an image and the icon of its kind for other files", async () => {
+    signed.mockResolvedValue("https://files.test/photo.png");
+    routeApi({ "GET /supplier-quality/suppliers/s1/documents": { data: [doc({ id: "d1", title: "Manual" }), doc({ id: "d2", title: "Site photo", fileName: "photo.png", contentType: "image/png", storagePath: "org-1/supplier/s1/photo.png" })] } });
+    const { container } = renderUi(<DocumentsCard supplierId="s1" canManage />);
+    await screen.findByText("Site photo");
+    await waitFor(() => expect(container.querySelector('img[src="https://files.test/photo.png"]')).not.toBeNull());
+    expect(container.querySelector('img[alt="PDF"]')).not.toBeNull();
+    expect(signed).toHaveBeenCalledTimes(1);
+  });
+
+  it("adds a document from the certification form and chooses it, without leaving", async () => {
+    upload.mockResolvedValue({ path: "org-1/supplier/s1/uuid-iso.pdf" });
+    let docs = [];
+    routeApi({
+      "GET /supplier-quality/suppliers/s1/certifications": { data: [] },
+      "GET /supplier-quality/suppliers/s1/documents": () => ({ data: docs }),
+      "POST /supplier-quality/suppliers/s1/documents": () => { docs = [doc({ id: "dnew", title: "New ISO scan" })]; return docs[0]; },
+    });
+    renderUi(<CertificationsCard supplierId="s1" canManage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Add certification" }));
+    const cert = screen.getByRole("dialog", { name: /certification/i });
+    await userEvent.click(within(cert).getByRole("button", { name: "Add a new document" }));
+    const dialogs = screen.getAllByRole("dialog");
+    const add = dialogs[dialogs.length - 1];
+    await userEvent.type(within(add).getByLabelText(/Title/), "New ISO scan");
+    await userEvent.upload(within(add).getByLabelText("File"), new File(["%PDF"], "iso.pdf", { type: "application/pdf" }));
+    await userEvent.click(within(add).getByRole("button", { name: "Add document" }));
+    await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(1));
+    await waitFor(() => expect(within(screen.getByRole("dialog")).getByRole("combobox", { name: "Evidence document" })).toHaveValue("New ISO scan"));
+    expect(calls.some((c) => c.k === "POST /supplier-quality/suppliers/s1/certifications")).toBe(false);
   });
 
   it("a new version names the document it replaces; superseded and removed ones are listed apart", async () => {

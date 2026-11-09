@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CircleCheckIcon, DownloadIcon, PlusIcon } from "@/components/icons";
 import { generateSignedUrl, uploadFileToSupabase } from "@/api/supabaseApi";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useToast } from "../../contexts/ToastProvider";
+import { usePermissions } from "../../hooks/useQmsApi";
 import { useQualificationMutation, useSupplierCertifications, useSupplierDocuments } from "../../hooks/useSupplierQuality";
 import { describeApiError } from "../../lib/api-client";
 import { formatDate } from "../../lib/ncr";
@@ -14,6 +15,7 @@ import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import DropdownMenu from "../ui/DropdownMenu";
 import Field from "../ui/Field";
+import { FileIcon } from "../ui/FileDrop";
 import MenuCard from "../ui/MenuCard";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { EllipsisIcon } from "@/components/icons";
@@ -71,7 +73,7 @@ const NoteDialog = ({ title, intro, label, required, confirmText, tone = "main",
 // ---- documents --------------------------------------------------------------------------------
 
 /** Add a document (a file and its details), upload a new version of one, or edit the details of one that is not verified yet. */
-const DocumentDialog = ({ supplierId, document, replaces, onClose }) => {
+export const DocumentDialog = ({ supplierId, document, replaces, onClose, onSaved }) => {
   const { organisationId } = useOrganisation();
   const mutation = useQualificationMutation();
   const { showToast } = useToast();
@@ -87,8 +89,17 @@ const DocumentDialog = ({ supplierId, document, replaces, onClose }) => {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const details = { docType: form.docType, title: form.title.trim(), revision: nul(form.revision), documentDate: form.documentDate || null, expiresOn: form.expiresOn || null, notes: nul(form.notes) };
 
+  const [dragActive, setDragActive] = useState(false);
+  const chooseFile = (f) => {
+    if (!f) return;
+    setFile(f);
+    setProblem(null);
+    setForm((cur) => (cur.title.trim() ? cur : { ...cur, title: f.name.replace(/\.[^.]+$/, "") }));
+  };
+
   const submit = async (e) => {
     e.preventDefault();
+    e.stopPropagation(); // this dialog can open from inside another form
     setProblem(null);
     if (!form.title.trim()) return setProblem("Give the document a title.");
     if (form.documentDate && form.expiresOn && form.expiresOn < form.documentDate) return setProblem("The expiry date cannot be before the document date.");
@@ -99,7 +110,7 @@ const DocumentDialog = ({ supplierId, document, replaces, onClose }) => {
       const { path } = await uploadFileToSupabase(file, "supplier-files", organisationId, supplierId, "supplier");
       mutation.mutate(
         { action: "addDocument", id: supplierId, body: { ...details, storagePath: path, fileName: file.name, contentType: file.type || null, sizeBytes: file.size, ...(replaces ? { replacesId: replaces.id } : {}) } },
-        { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) },
+        { onSuccess: (doc) => { onSaved?.(doc); onClose(); }, onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) },
       );
     } catch (err) {
       setProblem(err.message);
@@ -121,11 +132,26 @@ const DocumentDialog = ({ supplierId, document, replaces, onClose }) => {
         </div>
         <TextAreaField label="Notes" value={form.notes} onChange={set("notes")} maxLength={2000} rows={2} />
         {!editing && (
-          <label className="flex flex-col gap-1 text-sm font-medium text-secondary-text">
-            <span data-required>File</span>
-            <input type="file" aria-label="File" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm font-normal text-primary-text" />
-            <span className="text-xs font-normal">Up to 25 MB.</span>
-          </label>
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium text-secondary-text" data-required>File</span>
+            <label
+              data-testid="document-drop"
+              onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
+              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
+              onDrop={(e) => { e.preventDefault(); setDragActive(false); chooseFile(e.dataTransfer?.files?.[0]); }}
+              className={`flex cursor-pointer items-center gap-3 rounded-lg border-2 border-dashed px-4 py-3 text-sm transition-colors focus-within:border-brand-primary ${dragActive ? "border-brand-primary bg-brand-primary/5" : "border-border-color hover:border-brand-primary"}`}>
+              <input type="file" aria-label="File" className="sr-only" onChange={(e) => chooseFile(e.target.files?.[0])} />
+              {file ? (
+                <>
+                  <FileIcon name={file.name} type={file.type} className="h-8 w-8" />
+                  <span className="min-w-0 flex-1"><span className="block truncate font-medium text-primary-text">{file.name}</span><span className="text-xs text-secondary-text">{formatBytes(file.size)} · click or drop to choose another</span></span>
+                </>
+              ) : (
+                <span className="text-secondary-text">Drag a file here, or <span className="text-link-color underline">click to choose one</span>. Up to 25 MB.</span>
+              )}
+            </label>
+          </div>
         )}
         {problem && <p role="alert" className="text-sm text-error-color">{problem}</p>}
         <FormError error={mutation.error} />
@@ -137,6 +163,42 @@ const DocumentDialog = ({ supplierId, document, replaces, onClose }) => {
         </div>
       </form>
     </Dialog>
+  );
+};
+
+/** The stored file shown small: a picture for an image, otherwise the icon of its kind (Word, PDF, Excel…). */
+const DocumentPreview = ({ document: d }) => {
+  const [url, setUrl] = useState(null);
+  const isImage = (d.contentType ?? "").startsWith("image/");
+  useEffect(() => {
+    if (!isImage) return undefined;
+    let live = true;
+    generateSignedUrl("supplier-files", d.storagePath).then((u) => live && setUrl(u)).catch(() => {});
+    return () => { live = false; };
+  }, [isImage, d.storagePath]);
+  return (
+    <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border-color bg-text-input-color" aria-hidden="true">
+      {isImage && url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <FileIcon name={d.fileName ?? ""} type={d.contentType} className="h-9 w-9" />}
+    </div>
+  );
+};
+
+/**
+ * Choose one of a supplier's current documents, or add a new one without leaving the page: the same dialog as the Documents tab opens,
+ * and on saving the new document is chosen. Documents out of date are marked in the list.
+ */
+export const DocumentPicker = ({ supplierId, documents, label, value, onChange, placeholder = "None", hint, clearable = true }) => {
+  const { can } = usePermissions();
+  const [adding, setAdding] = useState(false);
+  const options = documents.filter((d) => d.status === "current").map((d) => ({ value: d.id, label: d.title, hint: d.expiry?.state === "expired" ? `${d.fileName ?? ""} · expired`.trim() : d.fileName }));
+  return (
+    <div className="flex flex-col gap-1.5">
+      <ComboField label={label} value={value} onChange={onChange} options={options} placeholder={placeholder} clearable={clearable} hint={hint} />
+      {supplierId && can("supplier_quality.manage") && (
+        <CTAButton buttonType="button" type="neutral" size="default" icon={PlusIcon} iconSize="h-4 w-4" className="self-start" onClick={() => setAdding(true)}>Add a new document</CTAButton>
+      )}
+      {adding && <DocumentDialog supplierId={supplierId} onClose={() => setAdding(false)} onSaved={(doc) => doc?.id && onChange(doc.id)} />}
+    </div>
   );
 };
 
@@ -165,7 +227,8 @@ export const DocumentsCard = ({ supplierId, canManage }) => {
         <ul className="flex flex-col divide-y divide-border-color" aria-label="Current documents">
           {current.map((d) => (
             <li key={d.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
-              <div className="min-w-0">
+              <DocumentPreview document={d} />
+              <div className="min-w-0 flex-1">
                 <p className="font-medium text-primary-text">
                   {d.title}
                   {d.revision ? <span className="font-normal text-secondary-text"> · revision {d.revision}</span> : null}
@@ -243,7 +306,6 @@ const CertificationDialog = ({ supplierId, certification, renew, documents, onCl
   });
   const [problem, setProblem] = useState(null);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const docOptions = documents.filter((d) => d.status === "current").map((d) => ({ value: d.id, label: d.title, hint: d.fileName }));
 
   const submit = (e) => {
     e.preventDefault();
@@ -275,7 +337,7 @@ const CertificationDialog = ({ supplierId, certification, renew, documents, onCl
           <RHFDatePickerPopout label="Issued on" valueFormat="iso" clearable value={form.issuedOn} onChange={(v) => setForm((f) => ({ ...f, issuedOn: v ?? "" }))} placeholder="Select a date" />
           <RHFDatePickerPopout label="Expires on" valueFormat="iso" clearable value={form.expiresOn} onChange={(v) => setForm((f) => ({ ...f, expiresOn: v ?? "" }))} placeholder="No expiry" />
         </div>
-        <ComboField label="Evidence document" value={form.documentId} onChange={(v) => setForm((f) => ({ ...f, documentId: v }))} options={docOptions} placeholder="None" hint={docOptions.length ? "A document uploaded on the Documents tab" : "Upload the certificate on the Documents tab first to attach it"} />
+        <DocumentPicker supplierId={supplierId} documents={documents} label="Evidence document" value={form.documentId} onChange={(v) => setForm((f) => ({ ...f, documentId: v }))} hint="Choose a document of this supplier, or add a new one here" />
         <TextAreaField label="Notes" value={form.notes} onChange={set("notes")} maxLength={2000} rows={2} />
         {problem && <p role="alert" className="text-sm text-error-color">{problem}</p>}
         <FormError error={mutation.error} />

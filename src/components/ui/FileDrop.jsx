@@ -31,11 +31,11 @@ const ICONS = {
   xls: ["/icons/excel-icon.png", "Excel"], xlsx: ["/icons/excel-icon.png", "Excel"], csv: ["/icons/excel-icon.png", "Excel"],
   ppt: ["/icons/ppt-icon.png", "PowerPoint"], pptx: ["/icons/ppt-icon.png", "PowerPoint"],
 };
-const FileIcon = ({ name, type }) => {
+export const FileIcon = ({ name, type, className = "h-10 w-10" }) => {
   const ext = name.split(".").pop()?.toLowerCase();
   const [main] = (type || "").split("/");
   const [src, alt] = ICONS[ext] ?? (main === "video" ? ["/icons/video-icon.png", "Video"] : main === "audio" ? ["/icons/audio-icon.png", "Audio"] : ["/icons/file-icon.png", "File"]);
-  return <img src={src} alt={alt} className="h-10 w-10" />;
+  return <img src={src} alt={alt} className={className} />;
 };
 
 /**

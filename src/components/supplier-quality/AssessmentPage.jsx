@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAssessmentMutation, useSupplierAssessment, useSupplierDocuments } from "../../hooks/useSupplierQuality";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { formatDateTime } from "../../lib/processControl";
+import { DocumentPicker } from "./Qualification";
 import { ASSESSMENT_STATUS, RESULT_TONE, expiryBadge } from "../../lib/supplierQualification";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import Breadcrumb from "../Breadcrumb";
@@ -20,10 +21,9 @@ const RATINGS = [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n)
 const RESULT_LABEL = { pass: "Pass", fail: "Fail", na: "Not applicable", unscored: "Noted" };
 
 /** One question: the control for its type, a note, and the evidence document where one is required. Each change is saved as it is made. */
-const QuestionRow = ({ q, editable, documents, onSave, saving }) => {
+const QuestionRow = ({ q, editable, supplierId, documents, onSave, saving }) => {
   const r = q.response;
   const [note, setNote] = useState(r?.note ?? "");
-  const docOptions = documents.filter((d) => d.status === "current").map((d) => ({ value: d.id, label: d.title, hint: d.expiry?.state === "expired" ? `${d.fileName ?? ""} · expired`.trim() : d.fileName }));
   const chosen = documents.find((d) => d.id === r?.document?.id);
   const chosenExpiry = chosen?.expiry?.state === "expired" || chosen?.expiry?.state === "expiring" ? expiryBadge(chosen.expiry) : null;
   const send = (patch) => onSave({ questionKey: q.key, answer: r?.answer ?? null, rating: r?.rating ?? null, note: note.trim() || null, documentId: r?.document?.id ?? null, ...patch });
@@ -53,7 +53,7 @@ const QuestionRow = ({ q, editable, documents, onSave, saving }) => {
             className="rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary"
           />
           {q.evidenceRequired && r && r.result !== "na" && (
-            <ComboField label="Evidence" value={r.document?.id ?? null} onChange={(v) => send({ documentId: v })} options={docOptions} placeholder="Choose a document" hint={docOptions.length ? "A current document of this supplier" : "Upload the document on the supplier's Documents tab first"} />
+            <DocumentPicker supplierId={supplierId} documents={documents} label="Evidence" value={r.document?.id ?? null} onChange={(v) => send({ documentId: v })} placeholder="Choose a document" clearable={false} hint="A current document of this supplier, or add a new one here" />
           )}
           {q.evidenceRequired && r && r.result !== "na" && chosenExpiry && (
             <Callout tone="warning" title={chosen.expiry.state === "expired" ? "This document is out of date" : "This document expires soon"}>
@@ -186,7 +186,7 @@ const AssessmentPage = () => {
         <MenuCard key={sec} title={sec}>
           <ul className="flex flex-col gap-3" aria-label={sec}>
             {a.questions.filter((q) => (q.section || "Questions") === sec).map((q) => (
-              <QuestionRow key={`${q.key}:${q.response?.answeredAt ?? ""}`} q={q} editable={editable} documents={documents.data?.data ?? []} onSave={(body) => mutation.mutate({ action: "respond", id: a.id, body })} saving={mutation.isPending && mutation.variables?.body?.questionKey === q.key} />
+              <QuestionRow key={`${q.key}:${q.response?.answeredAt ?? ""}`} supplierId={supplierId} q={q} editable={editable} documents={documents.data?.data ?? []} onSave={(body) => mutation.mutate({ action: "respond", id: a.id, body })} saving={mutation.isPending && mutation.variables?.body?.questionKey === q.key} />
             ))}
           </ul>
         </MenuCard>

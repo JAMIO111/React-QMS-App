@@ -7,6 +7,7 @@ import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import { DocumentPicker } from "./Qualification";
 import { FormError, TextAreaField } from "../master-data/shared";
 
 /**
@@ -36,7 +37,6 @@ export const RecordCertificateDialog = ({ line = null, supplier = null, certific
     if (certificate) return mutation.mutate({ action: "update", id: certificate.id, body: { ...body, material: certificate.part ? undefined : material.trim() || null } }, { onSuccess: onClose });
     mutation.mutate({ action: "record", body: { ...body, supplierId, receiptLineId: line?.id ?? null, material: line ? undefined : material.trim() || null } }, { onSuccess: onClose });
   };
-  const documents = (docs.data?.data ?? []).filter((d) => d.status === "current");
 
   return (
     <Dialog title={certificate ? "Edit the certificate" : "Record a material certificate"} onClose={onClose} width="max-w-2xl">
@@ -56,8 +56,7 @@ export const RecordCertificateDialog = ({ line = null, supplier = null, certific
           {!line && !certificate?.part && <Field label="Material" required value={material} onChange={(e) => setMaterial(e.target.value)} maxLength={200} hint="What it covers, in words" />}
           <RHFDatePickerPopout label="Issued on" value={issuedOn} onChange={setIssuedOn} valueFormat="iso" clearable maxDate={new Date()} />
         </div>
-        <ComboField label="Certificate file" clearable value={documentId} onChange={setDocumentId} placeholder={supplierId ? "Choose a document of the supplier" : "Choose the supplier first"}
-          options={documents.map((d) => ({ value: d.id, label: d.title, hint: d.fileName }))} hint="Upload it under the supplier's Documents tab first" />
+        <DocumentPicker supplierId={supplierId} documents={docs.data?.data ?? []} label="Certificate file" value={documentId} onChange={setDocumentId} placeholder={supplierId ? "Choose a document of the supplier" : "Choose the supplier first"} hint="A document of the supplier, or add a new one here" />
         <TextAreaField label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} rows={2} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">

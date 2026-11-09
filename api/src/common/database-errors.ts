@@ -120,6 +120,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'saved_filter_rule', pg.message ?? 'You cannot save more filters here');
     case 'QM020': // supplier quality rules: approval status, classifications (messages are written for users)
       return new ApiError(409, 'supplier_rule', pg.message ?? 'That change is not allowed for this supplier');
+    case 'QM021': // purchasing and goods receiving rules (messages are written for users)
+      return new ApiError(409, 'receiving_rule', pg.message ?? 'That change is not allowed for this purchase order or receipt');
     case 'QM010': // notification type the caller cannot choose
       return new ApiError(404, 'notification_type_not_found', 'That notification type does not exist');
     case 'P0002': // no_data_found raised by app functions

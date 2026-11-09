@@ -278,6 +278,13 @@ BEGIN
   PERFORM app.record_scar_implementation((SELECT id FROM _sweep_scar), 'Sweep implementation', current_date, NULL);
   PERFORM app.record_scar_verification((SELECT id FROM _sweep_scar), 'effective', 'Sweep method', 'Sweep finding');
   DROP TABLE _sweep_scar;
+  -- Supplier quality (SQ4a): a purchase order and a receipt against it that makes a received lot.
+  CREATE TEMP TABLE _sweep_po AS
+    SELECT app.create_purchase_order((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), 'SWEEP-PO-1', current_date, NULL,
+      jsonb_build_array(jsonb_build_object('partId', (SELECT id FROM public.parts WHERE organisation_id = a LIMIT 1), 'quantity', 10, 'requestedOn', (current_date + 5)::text))) AS id;
+  PERFORM app.record_goods_receipt((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), (SELECT id FROM _sweep_po), NULL, current_date, 'DN-1', NULL,
+    jsonb_build_array(jsonb_build_object('poLineId', (SELECT id FROM public.purchase_order_lines WHERE purchase_order_id = (SELECT id FROM _sweep_po) LIMIT 1), 'quantity', 4, 'lotNumber', 'SWEEP-RLOT')), NULL);
+  DROP TABLE _sweep_po;
   PERFORM pg_temp.logout();
   INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id FROM public.notifications WHERE organisation_id = a LIMIT 1;

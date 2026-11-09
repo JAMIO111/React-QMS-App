@@ -1,14 +1,17 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNcrs } from "../../hooks/useNcr";
-import { useScarMutation, useSupplier, useSupplierRegister } from "../../hooks/useSupplierQuality";
+import { useScarMutation, useScarPeople, useSupplier, useSupplierRegister } from "../../hooks/useSupplierQuality";
+import { usePermissions } from "../../hooks/useQmsApi";
 import { formatDate, sourceLabel } from "../../lib/ncr";
-import { SCAR_SEVERITIES, newClientKey, scarPath } from "../../lib/supplierScars";
+import { ROOT_CAUSE_METHODS, SCAR_SEVERITIES, newClientKey, scarPath } from "../../lib/supplierScars";
 import { OPEN_NC_STAGES } from "../../lib/supplierQuality";
 import CTAButton from "../CTAButton";
 import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
+import { LotPicker } from "../production/pickers";
+import { PartPicker } from "../ncr/Pickers";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import SlidingToggle from "../ui/SlidingToggle";
 import { FormError, TextAreaField } from "../master-data/shared";
@@ -64,6 +67,11 @@ export const CreateScarDialog = ({ supplier: fixedSupplier = null, ncrId = null,
   const [dueOn, setDueOn] = useState(inDays(14));
   const [contactId, setContactId] = useState(null);
   const [picked, setPicked] = useState(ncrId ? [ncrId] : []);
+  const [requirement, setRequirement] = useState("");
+  const [evidence, setEvidence] = useState("");
+  const [containment, setContainment] = useState("");
+  const [ownerId, setOwnerId] = useState(null);
+  const people = useScarPeople();
   const rows = supplierId ? (ncrs.data?.data ?? []) : [];
   const toggle = (id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const ok = !!supplierId && title.trim().length >= 3;
@@ -79,6 +87,10 @@ export const CreateScarDialog = ({ supplier: fixedSupplier = null, ncrId = null,
           severity,
           ...(dueOn ? { responseDueOn: dueOn } : {}),
           ...(contactId ? { contactId } : {}),
+          ...(requirement.trim() ? { requirementBreached: requirement.trim() } : {}),
+          ...(evidence.trim() ? { objectiveEvidence: evidence.trim() } : {}),
+          ...(containment.trim() ? { containmentRequirements: containment.trim() } : {}),
+          ...(ownerId ? { ownerId } : {}),
           ncrIds: picked.filter((id) => rows.some((n) => n.id === id)),
           clientKey: clientKey.current,
         },
@@ -99,10 +111,14 @@ export const CreateScarDialog = ({ supplier: fixedSupplier = null, ncrId = null,
       )}
       <Field label="Title" required value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} placeholder="For example: Bent brackets on pallet 4" />
       <TextAreaField label="The problem" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={4000} rows={3} hint="What the supplier is being asked to look into." />
+      <TextAreaField label="Requirement breached" value={requirement} onChange={(e) => setRequirement(e.target.value)} maxLength={2000} rows={2} hint="The drawing, specification, order or agreement the product did not meet" />
+      <TextAreaField label="Objective evidence" value={evidence} onChange={(e) => setEvidence(e.target.value)} maxLength={4000} rows={2} hint="What shows it: measurements, photos, inspection references" />
+      <TextAreaField label="Containment required" value={containment} onChange={(e) => setContainment(e.target.value)} maxLength={4000} rows={2} hint="What you need the supplier to do now: segregate stock, stop shipments, inspect stock, review earlier deliveries" />
       <div className="flex flex-col gap-1">
         <span className="text-sm font-medium text-secondary-text">Severity</span>
         <SlidingToggle ariaLabel="Severity" mode="radio" options={[...SCAR_SEVERITIES].reverse().map((s) => ({ value: s.key, label: s.label }))} value={severity} onChange={setSeverity} />
       </div>
+      <ComboField label="Internal owner" value={ownerId} onChange={setOwnerId} placeholder="Me" hint="Who follows this SCAR up. Defaults to you." options={(people.data ?? []).map((p) => ({ value: p.userId, label: p.name }))} />
       <div className="grid gap-3 sm:grid-cols-2">
         <RHFDatePickerPopout label="Response due" valueFormat="iso" clearable value={dueOn} onChange={(v) => setDueOn(v ?? "")} minDate={today()} placeholder="No date yet" hint="Needed before it can be issued" />
         <ComboField label="Supplier contact" value={contactId} onChange={setContactId} placeholder="Choose later" disabled={!supplierId}
@@ -145,13 +161,22 @@ export const EditScarDialog = ({ scar, onClose }) => {
   const [severity, setSeverity] = useState(scar.severity);
   const [dueOn, setDueOn] = useState(scar.responseDueOn ?? "");
   const [contactId, setContactId] = useState(scar.contact?.id ?? null);
-  const ok = title.trim().length >= 3;
+  const [requirement, setRequirement] = useState(scar.requirementBreached ?? "");
+  const [evidence, setEvidence] = useState(scar.objectiveEvidence ?? "");
+  const [containment, setContainment] = useState(scar.containmentRequirements ?? "");
+  const [ownerId, setOwnerId] = useState(scar.owner?.id ?? null);
+  const people = useScarPeople();
+  const ok = title.trim().length >= 3 && !!ownerId;
   return (
     <CommandDialog title="Edit the SCAR" width="max-w-2xl" mutation={mutation} ok={ok} submitLabel="Save" onClose={onClose}
-      onSubmit={() => run({ action: "update", id: scar.id, body: { title: title.trim(), problemDescription: description.trim(), severity, responseDueOn: dueOn || null, contactId } })}>
+      onSubmit={() => run({ action: "update", id: scar.id, body: { title: title.trim(), problemDescription: description.trim(), requirementBreached: requirement.trim(), objectiveEvidence: evidence.trim(), containmentRequirements: containment.trim(), severity, responseDueOn: dueOn || null, contactId, ownerId } })}>
       <Field label="Title" required value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
       <TextAreaField label="The problem" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={4000} rows={3} />
+      <TextAreaField label="Requirement breached" value={requirement} onChange={(e) => setRequirement(e.target.value)} maxLength={2000} rows={2} />
+      <TextAreaField label="Objective evidence" value={evidence} onChange={(e) => setEvidence(e.target.value)} maxLength={4000} rows={2} />
+      <TextAreaField label="Containment required" value={containment} onChange={(e) => setContainment(e.target.value)} maxLength={4000} rows={2} />
       <SlidingToggle ariaLabel="Severity" mode="radio" options={[...SCAR_SEVERITIES].reverse().map((s) => ({ value: s.key, label: s.label }))} value={severity} onChange={setSeverity} />
+      <ComboField label="Internal owner" required value={ownerId} onChange={setOwnerId} options={(people.data ?? []).map((p) => ({ value: p.userId, label: p.name }))} />
       <div className="grid gap-3 sm:grid-cols-2">
         <RHFDatePickerPopout label="Response due" valueFormat="iso" clearable value={dueOn} onChange={(v) => setDueOn(v ?? "")} minDate={today()} placeholder="No date yet" />
         <ComboField label="Supplier contact" value={contactId} onChange={setContactId} placeholder="None" options={(detail.data?.contacts ?? []).filter((c) => c.active).map((c) => ({ value: c.id, label: c.name }))} />
@@ -182,6 +207,10 @@ export const ResponseDialog = ({ scar, onClose }) => {
   const [respondedOn, setRespondedOn] = useState(today());
   const [by, setBy] = useState("");
   const [contactId, setContactId] = useState(scar.contact?.id ?? null);
+  const [extent, setExtent] = useState("");
+  const [escape, setEscape] = useState("");
+  const [responsible, setResponsible] = useState("");
+  const [method, setMethod] = useState(null);
   const detail = useSupplier(scar.supplier.id);
   const ok = rootCause.trim().length >= 3 && corrective.trim().length >= 3 && !!respondedOn;
   const body = () => ({
@@ -193,12 +222,19 @@ export const ResponseDialog = ({ scar, onClose }) => {
     respondedOn,
     ...(by.trim() ? { respondedByName: by.trim() } : {}),
     ...(contactId ? { contactId } : {}),
+    ...(extent.trim() ? { extentOfCondition: extent.trim() } : {}),
+    ...(escape.trim() ? { escapePoint: escape.trim() } : {}),
+    ...(responsible.trim() ? { responsibleName: responsible.trim() } : {}),
+    ...(method ? { rootCauseMethod: method } : {}),
   });
   return (
     <CommandDialog title={scar.responses.length ? "Record a new response" : "Record the supplier's response"} width="max-w-2xl" mutation={mutation} ok={ok} submitLabel="Record response" onClose={onClose}
       onSubmit={() => run({ action: "respond", id: scar.id, body: body() })}
       intro="Enter what the supplier told you. It waits for review: recording a response does not accept it or close the SCAR.">
       <TextAreaField label="Root cause" required value={rootCause} onChange={(e) => setRootCause(e.target.value)} maxLength={4000} rows={3} />
+      <ComboField label="How the root cause was found" value={method} onChange={setMethod} placeholder="Not stated" clearable options={ROOT_CAUSE_METHODS} />
+      <TextAreaField label="Escape point" value={escape} onChange={(e) => setEscape(e.target.value)} maxLength={4000} rows={2} hint="Why the problem was not caught before it reached us" />
+      <TextAreaField label="Extent of condition" value={extent} onChange={(e) => setExtent(e.target.value)} maxLength={4000} rows={2} hint="Where else the same problem could be: other lots, parts or customers" />
       <TextAreaField label="Containment" value={containment} onChange={(e) => setContainment(e.target.value)} maxLength={4000} rows={2} hint="What was done about product already made or shipped" />
       <TextAreaField label="Corrective action" required value={corrective} onChange={(e) => setCorrective(e.target.value)} maxLength={4000} rows={3} />
       <TextAreaField label="Preventive action" value={preventive} onChange={(e) => setPreventive(e.target.value)} maxLength={4000} rows={2} />
@@ -206,6 +242,7 @@ export const ResponseDialog = ({ scar, onClose }) => {
         <RHFDatePickerPopout label="Responded on" required valueFormat="iso" value={respondedOn} onChange={(v) => setRespondedOn(v ?? "")} maxDate={today()} />
         <RHFDatePickerPopout label="Planned completion" valueFormat="iso" clearable value={planned} onChange={(v) => setPlanned(v ?? "")} minDate={today()} placeholder="Not given" />
         <Field label="Answered by" value={by} onChange={(e) => setBy(e.target.value)} maxLength={200} placeholder="Name at the supplier" />
+        <Field label="Responsible for the corrective action" value={responsible} onChange={(e) => setResponsible(e.target.value)} maxLength={200} placeholder="Name at the supplier" />
         <ComboField label="Supplier contact" value={contactId} onChange={setContactId} placeholder="None" options={(detail.data?.contacts ?? []).filter((c) => c.active).map((c) => ({ value: c.id, label: c.name }))} />
       </div>
     </CommandDialog>
@@ -264,11 +301,54 @@ export const ExtendDialog = ({ scar, onClose }) => {
   const [newDue, setNewDue] = useState("");
   const [reason, setReason] = useState("");
   return (
-    <CommandDialog title="Extend the due date" mutation={mutation} ok={!!newDue && reason.trim().length >= 3} submitLabel="Extend" onClose={onClose}
+    <CommandDialog title="Request more time" mutation={mutation} ok={!!newDue && reason.trim().length >= 3} submitLabel="Request extension" onClose={onClose}
       onSubmit={() => run({ action: "extend", id: scar.id, body: { newDueOn: newDue, reason: reason.trim() } })}
-      intro={`The response is due ${formatDate(scar.responseDueOn)}. The original date is kept and the extension is recorded.`}>
+      intro={`The response is due ${formatDate(scar.responseDueOn)}. The date does not move until someone else with approval rights approves the request; the original date is always kept.`}>
       <RHFDatePickerPopout label="New due date" required valueFormat="iso" value={newDue} onChange={(v) => setNewDue(v ?? "")} minDate={scar.responseDueOn ? new Date(new Date(`${scar.responseDueOn}T00:00:00`).getTime() + 86_400_000).toISOString().slice(0, 10) : tomorrow()} />
-      <TextAreaField label="Why" required value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} rows={2} />
+      <TextAreaField label="Why the supplier needs more time" required value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} rows={2} />
+    </CommandDialog>
+  );
+};
+
+/** Approve or reject a request for more time. Never the person who asked. */
+export const DecideExtensionDialog = ({ extension, onClose }) => {
+  const [mutation, run] = useCommand(onClose);
+  const [decision, setDecision] = useState("approve");
+  const [note, setNote] = useState("");
+  return (
+    <CommandDialog title="Decide on the extension" mutation={mutation} ok={note.trim().length >= 3} submitLabel="Record decision" onClose={onClose}
+      onSubmit={() => run({ action: "decideExtension", id: extension.id, body: { approve: decision === "approve", note: note.trim() } })}
+      intro={`The supplier asked for the response date to move from ${formatDate(extension.previousDueOn)} to ${formatDate(extension.newDueOn)}: ${extension.reason}`}>
+      <SlidingToggle ariaLabel="Decision" mode="radio" options={[{ value: "approve", label: "Approve" }, { value: "reject", label: "Reject" }]} value={decision} onChange={setDecision} />
+      <TextAreaField label={decision === "approve" ? "Why it is justified" : "Why not"} required value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} rows={2} />
+    </CommandDialog>
+  );
+};
+
+/** Add something the problem affects: a part, a material, a lot, a receipt, with a quantity. */
+export const ItemDialog = ({ scar, onClose }) => {
+  const [mutation, run] = useCommand(onClose);
+  const { can } = usePermissions();
+  const [part, setPart] = useState(null);
+  const [lot, setLot] = useState(null);
+  const [material, setMaterial] = useState("");
+  const [receipt, setReceipt] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [notes, setNotes] = useState("");
+  const qty = quantity.trim() === "" ? null : Number(quantity);
+  const ok = !!(part || lot || material.trim() || receipt.trim()) && (qty === null || (Number.isFinite(qty) && qty >= 0));
+  return (
+    <CommandDialog title="Add an affected item" mutation={mutation} ok={ok} submitLabel="Add" onClose={onClose}
+      onSubmit={() => run({ action: "addItem", id: scar.id, body: { ...(part ? { partId: part } : {}), ...(lot ? { lotId: lot } : {}), ...(material.trim() ? { material: material.trim() } : {}), ...(receipt.trim() ? { receiptReference: receipt.trim() } : {}), ...(qty !== null ? { quantity: qty } : {}), ...(notes.trim() ? { notes: notes.trim() } : {}) } })}
+      intro="Name at least one of a part, a material, a lot or a receipt. A lot brings its part with it.">
+      {can("master_data.read") && <PartPicker label="Part" value={part} onChange={(id) => setPart(id)} clearable />}
+      {can("production.read") && <LotPicker label="Lot" partId={part ?? undefined} value={lot} onChange={(id) => setLot(id)} clearable />}
+      <Field label="Material" value={material} onChange={(e) => setMaterial(e.target.value)} maxLength={200} placeholder="For example: steel bar 20 mm" />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Receipt or delivery reference" value={receipt} onChange={(e) => setReceipt(e.target.value)} maxLength={100} placeholder="Delivery note or PO" />
+        <Field label="Quantity" type="number" min="0" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+      </div>
+      <Field label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} />
     </CommandDialog>
   );
 };

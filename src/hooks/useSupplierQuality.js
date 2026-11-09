@@ -294,6 +294,17 @@ export const useScars = (filters = {}, { enabled = true } = {}) => {
   });
 };
 
+/** Active members, for choosing the internal owner of a SCAR. */
+export const useScarPeople = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "scar-people"),
+    queryFn: () => apiFetch(`/supplier-quality/scar-people`, { organisationId }).then((r) => r.data),
+    enabled: !!organisationId && enabled,
+    retry: false,
+  });
+};
+
 /** One SCAR with its NC links, responses (each with our review), implementation, verification, extensions and history. */
 export const useScar = (id) => {
   const { organisationId } = useOrganisation();
@@ -339,6 +350,14 @@ export const useScarMutation = () => {
           return send(`/scars/${id}/ncrs`);
         case "unlinkNcr":
           return send(`/scar-ncrs/${id}/unlink`);
+        case "addItem":
+          return send(`/scars/${id}/items`);
+        case "removeItem":
+          return send(`/scar-items/${id}/remove`);
+        case "decideExtension":
+          return send(`/scar-extensions/${id}/decide`);
+        case "withdrawExtension":
+          return send(`/scar-extensions/${id}/withdraw`);
         default:
           throw new Error(`Unknown action ${action}`);
       }

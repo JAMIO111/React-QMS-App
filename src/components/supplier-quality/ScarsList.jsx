@@ -12,6 +12,7 @@ const ScarsList = ({ rows, showSupplier = true, ariaLabel = "SCARs" }) => (
           <th className="py-1 pr-3 font-medium">Reference</th>
           <th className="py-1 pr-3 font-medium">Title</th>
           {showSupplier && <th className="py-1 pr-3 font-medium">Supplier</th>}
+          <th className="py-1 pr-3 font-medium">Owner</th>
           <th className="py-1 pr-3 font-medium">Severity</th>
           <th className="py-1 pr-3 font-medium">Status</th>
           <th className="py-1 pr-3 font-medium">Response due</th>
@@ -30,6 +31,7 @@ const ScarsList = ({ rows, showSupplier = true, ariaLabel = "SCARs" }) => (
                 <Link to={`/Suppliers/${r.supplier.id}`} className="text-secondary-text hover:underline">{r.supplier.code} · {r.supplier.name}</Link>
               </td>
             )}
+            <td className="whitespace-nowrap py-2 pr-3 text-secondary-text">{r.owner?.name ?? "—"}</td>
             <td className="py-2 pr-3"><ScarSeverityPill severity={r.severity} /></td>
             <td className="py-2 pr-3"><ScarStatusPill status={r.status} /></td>
             <td className="whitespace-nowrap py-2 pr-3 text-secondary-text">{r.responseDueOn ? formatDate(r.responseDueOn) : "—"}<OverdueFlag scar={r} /></td>

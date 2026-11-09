@@ -55,6 +55,20 @@ export const scarFilterQuery = (filter) => {
   return { status: "running" };
 };
 
+export const ROOT_CAUSE_METHODS = [
+  { value: "five_whys", label: "5 Whys" },
+  { value: "fishbone", label: "Fishbone (Ishikawa)" },
+  { value: "other", label: "Another method" },
+];
+export const rootCauseMethodLabel = (v) => ROOT_CAUSE_METHODS.find((m) => m.value === v)?.label ?? null;
+
+export const EXTENSION_STATUS = {
+  pending: { label: "Waiting for a decision", tone: "bg-warning-color/20 text-primary-text" },
+  approved: { label: "Approved", tone: "bg-success-color/15 text-success-color" },
+  rejected: { label: "Rejected", tone: "bg-error-color/15 text-error-color" },
+  withdrawn: { label: "Withdrawn", tone: "bg-border-color text-secondary-text" },
+};
+
 export const scarPath = (id) => `/Supplier-Quality/SCARs/${id}`;
 export const SCAR_REGISTER = "/Supplier-Quality/SCARs";
 

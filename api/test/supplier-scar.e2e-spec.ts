@@ -166,17 +166,41 @@ describe('the stages', () => {
 });
 
 describe('due dates, overdue and cancelling', () => {
-  it('extends the response due date with a reason and keeps the original', async () => {
+  it('an extension is requested, then approved or rejected by a different approver; the due date moves only on approval', async () => {
     const h = await engineer();
     const draft = (await api().post(`${base}/scars`).set(h).send(NEW({ title: 'Wrong finish', ncrIds: [ctx.nc2] })).expect(201)).body;
     ctx.scar2 = draft.id;
-    expect((await api().post(`${base}/scars/${ctx.scar2}/extensions`).set(h).send({ newDueOn: day(21), reason: 'More time' })).status).toBe(409); // a draft
+    const ask = (body: Record<string, unknown>, who = h) => api().post(`${base}/scars/${ctx.scar2}/extensions`).set(who).send(body);
+    expect((await ask({ newDueOn: day(21), reason: 'More time' })).status).toBe(409); // a draft
     await api().post(`${base}/scars/${ctx.scar2}/issue`).set(h).send({}).expect(200);
-    expect((await api().post(`${base}/scars/${ctx.scar2}/extensions`).set(h).send({ newDueOn: day(7), reason: 'Earlier' })).status).toBe(409);
-    await api().post(`${base}/scars/${ctx.scar2}/extensions`).set(h).send({ newDueOn: day(21), reason: '' }).expect(400);
-    const ext = (await api().post(`${base}/scars/${ctx.scar2}/extensions`).set(h).send({ newDueOn: day(21), reason: 'Supplier on holiday' }).expect(200)).body;
-    expect(ext).toMatchObject({ responseDueOn: day(21), originalResponseDueOn: day(14) });
-    expect(ext.extensions).toEqual([expect.objectContaining({ previousDueOn: day(14), newDueOn: day(21), reason: 'Supplier on holiday' })]);
+    expect((await ask({ newDueOn: day(7), reason: 'Earlier' })).status).toBe(409);
+    await ask({ newDueOn: day(21), reason: '' }).expect(400);
+    await ask({ newDueOn: day(21), reason: 'Supplier on holiday' }).set(await reader()).expect(403);
+    const requested = (await ask({ newDueOn: day(21), reason: 'Supplier on holiday' }).expect(200)).body;
+    expect(requested).toMatchObject({ responseDueOn: day(14), originalResponseDueOn: day(14) }); // not moved yet
+    expect(requested.extensions).toEqual([expect.objectContaining({ previousDueOn: day(14), newDueOn: day(21), status: 'pending', canDecide: false, extendedBy: { id: engId, name: expect.any(String) } })]);
+    ctx.ext1 = requested.extensions[0].id;
+    expect((await ask({ newDueOn: day(28), reason: 'Another' })).status).toBe(409); // one waiting at a time
+    // the engineer cannot decide at all, and the approver sees they can
+    await api().post(`${base}/scar-extensions/${ctx.ext1}/decide`).set(h).send({ approve: true, note: 'Fine by me' }).expect(403);
+    expect((await api().get(`${base}/scars/${ctx.scar2}`).set(await manager()).expect(200)).body.extensions[0].canDecide).toBe(true);
+    await api().post(`${base}/scar-extensions/${ctx.ext1}/decide`).set(await manager()).send({ approve: true, note: 'x' }).expect(400);
+    const approved = (await api().post(`${base}/scar-extensions/${ctx.ext1}/decide`).set(await manager()).send({ approve: true, note: 'Justified: holiday shutdown' }).expect(200)).body;
+    expect(approved).toMatchObject({ responseDueOn: day(21), originalResponseDueOn: day(14) });
+    expect(approved.extensions[0]).toMatchObject({ status: 'approved', decidedBy: { id: qmId }, decisionNote: 'Justified: holiday shutdown', canDecide: false });
+    expect((await api().post(`${base}/scar-extensions/${ctx.ext1}/decide`).set(await manager()).send({ approve: false, note: 'Changed my mind' })).status).toBe(409); // final
+    // a rejection leaves the date alone; nobody decides their own request; the person who asked can withdraw
+    const second = (await ask({ newDueOn: day(35), reason: 'Still not ready' }).expect(200)).body.extensions.find((e: { status: string }) => e.status === 'pending');
+    const rejected = (await api().post(`${base}/scar-extensions/${second.id}/decide`).set(await manager()).send({ approve: false, note: 'No: chase the supplier' }).expect(200)).body;
+    expect(rejected.responseDueOn).toBe(day(21));
+    expect(rejected.extensions.find((e: { id: string }) => e.id === second.id)).toMatchObject({ status: 'rejected' });
+    const own = (await ask({ newDueOn: day(40), reason: 'Approver asks too' }, await manager()).expect(200)).body.extensions.find((e: { status: string }) => e.status === 'pending');
+    expect(own.canDecide).toBe(false);
+    expect((await api().post(`${base}/scar-extensions/${own.id}/decide`).set(await manager()).send({ approve: true, note: 'Approving my own request' })).status).toBe(409);
+    await api().post(`${base}/scar-extensions/${own.id}/withdraw`).set(await manager()).send({ reason: 'x' }).expect(400);
+    const w = (await api().post(`${base}/scar-extensions/${own.id}/withdraw`).set(await manager()).send({ reason: 'Asked in error' }).expect(200)).body;
+    expect(w.extensions.find((e: { id: string }) => e.id === own.id)).toMatchObject({ status: 'withdrawn', decisionNote: 'Asked in error' });
+    await api().post(`${base}/scar-extensions/00000000-0000-0000-0000-000000000001/decide`).set(await manager()).send({ approve: true, note: 'Nothing here' }).expect(404);
   });
 
   it('works out overdue on read, only while a response is awaited', async () => {
@@ -226,5 +250,62 @@ describe('another organisation', () => {
     await api().post(`${base}/scars/${ctx.scar2}/cancel`).set(h).send({ reason: 'Foreign cancel' }).expect(404);
     await api().post(`${base}/scars`).set(h).send(NEW()).expect(404);
     await api().post(`${base}/scar-ncrs/${ctx.scar}/unlink`).set(h).send({ reason: 'Foreign unlink' }).expect(404);
+  });
+});
+
+describe('the fields the spec asks for', () => {
+  it('a SCAR keeps the requirement, evidence, containment, owner and affected items', async () => {
+    const h = await engineer();
+    const part = (await admin.query(`insert into public.parts (organisation_id, part_number, name) values ($1, 'BRK-1', 'Bracket') returning id`, [ids.orgA])).rows[0].id as string;
+    const part2 = (await admin.query(`insert into public.parts (organisation_id, part_number, name) values ($1, 'BRK-2', 'Other') returning id`, [ids.orgA])).rows[0].id as string;
+    const lot = (await admin.query(`insert into public.lots (organisation_id, lot_number, part_id, origin, supplier_id, quantity) values ($1, 'LOT-A', $2, 'received', $3, 500) returning id`, [ids.orgA, part, ctx.s1])).rows[0].id as string;
+    const people = (await api().get(`${base}/scar-people`).set(h).expect(200)).body.data;
+    expect(people.map((p: { userId: string }) => p.userId)).toEqual(expect.arrayContaining([qmId, engId]));
+    await api().post(`${base}/scars`).set(h).send(NEW({ ownerId: ids.outsider })).expect(409); // not a member
+    await api().post(`${base}/scars`).set(h).send(NEW({ items: [{}] })).expect(400); // an item names something
+    await api().post(`${base}/scars`).set(h).send(NEW({ items: [{ lotId: lot, partId: part2 }] })).expect(409); // lot and part must agree
+    const created = (await api().post(`${base}/scars`).set(h).send(NEW({
+      title: 'Cracked castings', ncrIds: [ctx.nc1], ownerId: qmId,
+      requirementBreached: 'Drawing note 4: no cracks', objectiveEvidence: 'Photos 1 to 3', containmentRequirements: 'Quarantine stock and check shipments',
+      items: [{ lotId: lot, quantity: 120, receiptReference: 'DN-4412' }, { material: 'Steel bar 20mm', quantity: 15.5 }],
+    })).expect(201)).body;
+    ctx.scar3 = created.id;
+    expect(created).toMatchObject({ requirementBreached: 'Drawing note 4: no cracks', objectiveEvidence: 'Photos 1 to 3', containmentRequirements: 'Quarantine stock and check shipments', owner: { id: qmId } });
+    expect(created.items).toHaveLength(2);
+    expect(created.items[0]).toMatchObject({ part: { id: part, partNumber: 'BRK-1' }, lot: { id: lot, lotNumber: 'LOT-A' }, quantity: 120, receiptReference: 'DN-4412', endedAt: null });
+    expect(created.items[1]).toMatchObject({ part: null, lot: null, material: 'Steel bar 20mm', quantity: 15.5 });
+    expect((await api().get(`${base}/scars?status=all&q=Cracked`).set(await owner()).expect(200)).body.data[0].owner).toMatchObject({ id: qmId });
+    // items can be added and removed (with a reason) while the SCAR runs
+    const added = (await api().post(`${base}/scars/${ctx.scar3}/items`).set(h).send({ partId: part2, notes: 'Same pallet' }).expect(200)).body;
+    const extra = added.items.find((i: { part: { id: string } | null }) => i.part?.id === part2);
+    await api().post(`${base}/scars/${ctx.scar3}/items`).set(h).send({}).expect(400);
+    await api().post(`${base}/scars/${ctx.scar3}/items`).set(await reader()).send({ material: 'x' }).expect(403);
+    await api().post(`${base}/scar-items/${extra.id}/remove`).set(h).send({ reason: 'x' }).expect(400);
+    const removed = (await api().post(`${base}/scar-items/${extra.id}/remove`).set(h).send({ reason: 'Added in error' }).expect(200)).body;
+    expect(removed.items.find((i: { id: string }) => i.id === extra.id)).toMatchObject({ endReason: 'Added in error' });
+    // a draft edits the text fields; once issued only the owner (and contact) can change
+    await api().patch(`${base}/scars/${ctx.scar3}`).set(h).send({ requirementBreached: 'Drawing note 5' }).expect(200);
+    await api().post(`${base}/scars/${ctx.scar3}/issue`).set(h).send({}).expect(200);
+    expect((await api().patch(`${base}/scars/${ctx.scar3}`).set(h).send({ objectiveEvidence: 'Changed after issue' })).status).toBe(409);
+    expect((await api().patch(`${base}/scars/${ctx.scar3}`).set(h).send({ ownerId: engId }).expect(200)).body.owner).toMatchObject({ id: engId });
+    expect((await api().patch(`${base}/scars/${ctx.scar3}`).set(h).send({ ownerId: ids.outsider })).status).toBe(409);
+  });
+
+  it('a response keeps the extent of condition, escape point, responsible person and method', async () => {
+    const h = await engineer();
+    await api().post(`${base}/scars/${ctx.scar3}/responses`).set(h).send(RESPONSE({ rootCauseMethod: 'guessing' })).expect(400);
+    const r = (await api().post(`${base}/scars/${ctx.scar3}/responses`).set(h).send(RESPONSE({
+      extentOfCondition: 'Lots 1180 to 1184 may be affected', escapePoint: 'Final inspection had no dye-penetrant check', responsibleName: 'Their welding engineer', rootCauseMethod: 'five_whys',
+    })).expect(200)).body;
+    expect(r.responses[0]).toMatchObject({ extentOfCondition: 'Lots 1180 to 1184 may be affected', escapePoint: 'Final inspection had no dye-penetrant check', responsibleName: 'Their welding engineer', rootCauseMethod: 'five_whys' });
+    const plain = (await api().post(`${base}/scars`).set(h).send(NEW({ title: 'Plain', ncrIds: [ctx.nc2] })).expect(201)).body;
+    expect(plain).toMatchObject({ requirementBreached: null, items: [], owner: { id: engId } }); // the owner defaults to whoever raised it
+  });
+
+  it('another organisation cannot reach items or extensions', async () => {
+    const h = await other();
+    await api().post(`${base}/scars/${ctx.scar3}/items`).set(h).send({ material: 'x' }).expect(404);
+    await api().post(`${base}/scar-items/${ctx.scar3}/remove`).set(h).send({ reason: 'Foreign' }).expect(404);
+    await api().post(`${base}/scar-extensions/${ctx.ext1}/withdraw`).set(h).send({ reason: 'Foreign' }).expect(404);
   });
 });

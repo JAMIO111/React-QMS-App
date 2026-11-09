@@ -5,7 +5,7 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useScar, useScarMutation } from "../../hooks/useSupplierQuality";
 import { formatDate, ncrPath } from "../../lib/ncr";
 import { formatDateTime } from "../../lib/processControl";
-import { SCAR_STAGES, scarIsRunning, scarStageIndex, scarStatusOf } from "../../lib/supplierScars";
+import { EXTENSION_STATUS, SCAR_STAGES, rootCauseMethodLabel, scarIsRunning, scarStageIndex, scarStatusOf } from "../../lib/supplierScars";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import Callout from "../ui/Callout";
@@ -14,7 +14,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { ErrorNotice, FormError } from "../master-data/shared";
 import { StagePill } from "../ncr/Pills";
-import { AcknowledgeDialog, EditScarDialog, ExtendDialog, ImplementationDialog, LinkNcrDialog, ReasonCommandDialog, ResponseDialog, ReviewDialog, VerificationDialog } from "./ScarDialogs";
+import { AcknowledgeDialog, DecideExtensionDialog, EditScarDialog, ExtendDialog, ImplementationDialog, ItemDialog, LinkNcrDialog, ReasonCommandDialog, ResponseDialog, ReviewDialog, VerificationDialog } from "./ScarDialogs";
 import { OverdueFlag, ScarSeverityPill, ScarStatusPill } from "./ScarPills";
 
 const Fact = ({ label, children }) => (
@@ -62,7 +62,7 @@ const nextActions = (scar, can, open) => {
       case "verifying": push("Record more implementation", () => open({ kind: "implement" }), "secondary"); break;
       default: break;
     }
-    if (["issued", "acknowledged", "revision_requested"].includes(scar.status)) push("Extend the due date", () => open({ kind: "extend" }), "neutral");
+    if (["issued", "acknowledged", "revision_requested"].includes(scar.status) && !scar.extensions.some((e) => e.status === "pending")) push("Request more time", () => open({ kind: "extend" }), "neutral");
   }
   if (approve && scar.status === "verifying") a.unshift({ label: "Verify effectiveness", onClick: () => open({ kind: "verify" }), type: "main" });
   return a;
@@ -96,6 +96,8 @@ const ScarPage = () => {
   const manage = can("supplier_quality.manage");
   const running = scarIsRunning(s.status);
   const actions = nextActions(s, can, open);
+  const liveItems = s.items.filter((i) => !i.endedAt);
+  const endedItems = s.items.filter((i) => i.endedAt);
   const liveNcrs = s.ncrs.filter((n) => !n.endedAt);
   const endedNcrs = s.ncrs.filter((n) => n.endedAt);
   const draft = s.status === "draft";
@@ -152,10 +154,42 @@ const ScarPage = () => {
           <Fact label="Originally due">{s.originalResponseDueOn && s.originalResponseDueOn !== s.responseDueOn ? formatDate(s.originalResponseDueOn) : null}</Fact>
           <Fact label="Issued">{s.issuedAt ? by(s.issuedBy, s.issuedAt) : null}</Fact>
           <Fact label="Acknowledged">{s.acknowledgedAt ? `${by(s.acknowledgedBy, s.acknowledgedAt)}${s.acknowledgedNote ? ` — ${s.acknowledgedNote}` : ""}` : null}</Fact>
+          <Fact label="Internal owner">{s.owner?.name}</Fact>
           <Fact label="Internal 8D">{s.capa ? <Link to={`/CAPA/${s.capa.id}`} className="text-link-color hover:underline">{s.capa.reference}</Link> : null}</Fact>
           <Fact label="Raised">{by(s.createdBy, s.createdAt)}</Fact>
         </dl>
         {s.problemDescription && <p className="mt-3 whitespace-pre-wrap text-sm text-primary-text">{s.problemDescription}</p>}
+        {(s.requirementBreached || s.objectiveEvidence || s.containmentRequirements) && (
+          <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+            <Fact label="Requirement breached">{s.requirementBreached}</Fact>
+            <Fact label="Objective evidence">{s.objectiveEvidence}</Fact>
+            <Fact label="Containment required">{s.containmentRequirements}</Fact>
+          </dl>
+        )}
+      </MenuCard>
+
+      <MenuCard title="Affected items" subtitle="The parts, materials, lots and deliveries the problem touches."
+        action={manage && running ? <CTAButton type="secondary" size="default" icon={PlusIcon} onClick={() => open({ kind: "item" })}>Add</CTAButton> : null}>
+        {liveItems.length === 0 ? <p className="text-sm text-secondary-text">None listed yet.</p> : (
+          <ul className="flex flex-col divide-y divide-border-color" aria-label="Affected items">
+            {liveItems.map((i) => (
+              <li key={i.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm text-primary-text">
+                <span>
+                  {[i.part && `${i.part.partNumber} · ${i.part.name}`, i.lot && `Lot ${i.lot.lotNumber}`, i.material, i.receiptReference && `Receipt ${i.receiptReference}`].filter(Boolean).join(" · ")}
+                  {i.quantity !== null && <span className="text-secondary-text"> · quantity {i.quantity}</span>}
+                  {i.notes && <span className="block text-xs text-secondary-text">{i.notes}</span>}
+                </span>
+                {manage && running && <button type="button" className="text-xs text-secondary-text hover:underline" onClick={() => open({ kind: "removeItem", itemId: i.id })}>Remove</button>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {endedItems.length > 0 && (
+          <details className="mt-2 text-sm text-secondary-text">
+            <summary className="cursor-pointer">{endedItems.length} removed</summary>
+            <ul className="mt-1 flex flex-col gap-1">{endedItems.map((i) => <li key={i.id}>{i.part?.partNumber ?? i.material ?? i.receiptReference ?? "Item"} — {i.endReason}</li>)}</ul>
+          </details>
+        )}
       </MenuCard>
 
       <MenuCard title="Non-conformances" subtitle="The supplier's non-conformances this request is about."
@@ -189,7 +223,11 @@ const ScarPage = () => {
                 <dl className="grid gap-3 sm:grid-cols-2">
                   <Fact label="Root cause">{r.rootCause}</Fact>
                   <Fact label="Containment">{r.containment}</Fact>
+                  <Fact label="Root cause method">{rootCauseMethodLabel(r.rootCauseMethod)}</Fact>
+                  <Fact label="Escape point">{r.escapePoint}</Fact>
+                  <Fact label="Extent of condition">{r.extentOfCondition}</Fact>
                   <Fact label="Corrective action">{r.correctiveAction}</Fact>
+                  <Fact label="Responsible for it">{r.responsibleName}</Fact>
                   <Fact label="Preventive action">{r.preventiveAction}</Fact>
                   <Fact label="Planned completion">{r.plannedCompletionOn ? formatDate(r.plannedCompletionOn) : null}</Fact>
                 </dl>
@@ -232,10 +270,21 @@ const ScarPage = () => {
       </MenuCard>
 
       {s.extensions.length > 0 && (
-        <MenuCard title="Due-date extensions" subtitle="The original date is kept.">
+        <MenuCard title="Due-date extensions" subtitle="Asked for by one person and decided by another. The date moves only when one is approved; the original date is kept.">
           <ul className="flex flex-col divide-y divide-border-color" aria-label="Extensions">
             {s.extensions.map((e) => (
-              <li key={e.id} className="py-2 text-sm text-primary-text">{formatDate(e.previousDueOn)} → {formatDate(e.newDueOn)} · {e.reason}<span className="block text-xs text-secondary-text">{by(e.extendedBy, e.extendedAt)}</span></li>
+              <li key={e.id} className="flex flex-wrap items-start justify-between gap-2 py-2 text-sm text-primary-text">
+                <span>
+                  {formatDate(e.previousDueOn)} → {formatDate(e.newDueOn)} · {e.reason}
+                  <span className="block text-xs text-secondary-text">Asked {by(e.extendedBy, e.extendedAt)}</span>
+                  {e.status !== "pending" && e.decidedAt && <span className="block text-xs text-secondary-text">{EXTENSION_STATUS[e.status].label}{e.decidedBy ? ` by ${e.decidedBy.name}` : ""}, {formatDateTime(e.decidedAt)}{e.decisionNote ? ` — ${e.decisionNote}` : ""}</span>}
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${EXTENSION_STATUS[e.status].tone}`}>{EXTENSION_STATUS[e.status].label}</span>
+                  {e.canDecide && <CTAButton type="main" size="default" onClick={() => open({ kind: "decideExtension", extension: e })}>Decide</CTAButton>}
+                  {e.status === "pending" && manage && running && <button type="button" className="text-xs text-secondary-text hover:underline" onClick={() => open({ kind: "withdrawExtension", extensionId: e.id })}>Withdraw</button>}
+                </span>
+              </li>
             ))}
           </ul>
         </MenuCard>
@@ -259,6 +308,10 @@ const ScarPage = () => {
       {dialog?.kind === "implement" && <ImplementationDialog scar={s} onClose={close} />}
       {dialog?.kind === "verify" && <VerificationDialog scar={s} onClose={close} />}
       {dialog?.kind === "extend" && <ExtendDialog scar={s} onClose={close} />}
+      {dialog?.kind === "item" && <ItemDialog scar={s} onClose={close} />}
+      {dialog?.kind === "decideExtension" && <DecideExtensionDialog extension={dialog.extension} onClose={close} />}
+      {dialog?.kind === "removeItem" && <ReasonCommandDialog title="Remove this item" intro="The item is removed from the list and kept, with the reason." label="Why is it being removed?" submitLabel="Remove" action="removeItem" id={dialog.itemId} onClose={close} />}
+      {dialog?.kind === "withdrawExtension" && <ReasonCommandDialog title="Withdraw the request" intro="The request is withdrawn and kept, with the reason." label="Why is it being withdrawn?" submitLabel="Withdraw" action="withdrawExtension" id={dialog.extensionId} onClose={close} />}
       {dialog?.kind === "link" && <LinkNcrDialog scar={s} onClose={close} />}
       {dialog?.kind === "cancel" && <ReasonCommandDialog title="Cancel this SCAR" intro="A cancelled SCAR is kept, with the reason, but cannot be worked on." label="Why is it being cancelled?" submitLabel="Cancel SCAR" action="cancel" id={s.id} onClose={close} />}
       {dialog?.kind === "unlink" && <ReasonCommandDialog title={`Unlink ${dialog.label}`} intro="The link is ended and kept, with the reason." label="Why is it being unlinked?" submitLabel="Unlink" action="unlinkNcr" id={dialog.linkId} onClose={close} />}

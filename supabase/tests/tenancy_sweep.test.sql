@@ -269,7 +269,8 @@ BEGIN
     SELECT (app.create_supplier_scar((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), 'Sweep SCAR', NULL, 'minor', current_date + 10, NULL,
       ARRAY[(SELECT id FROM public.nonconformances WHERE organisation_id = a AND title = 'Sweep supplier NC')], NULL, NULL) ->> 'id')::uuid AS id;
   PERFORM app.issue_supplier_scar((SELECT id FROM _sweep_scar));
-  PERFORM app.extend_scar_due_date((SELECT id FROM _sweep_scar), current_date + 20, 'Sweep extension');
+  PERFORM app.request_scar_extension((SELECT id FROM _sweep_scar), current_date + 20, 'Sweep extension');
+  PERFORM app.add_scar_item((SELECT id FROM _sweep_scar), '{"material":"Sweep steel","quantity":3}'::jsonb);
   PERFORM app.acknowledge_supplier_scar((SELECT id FROM _sweep_scar), 'Sweep acknowledgement');
   PERFORM app.record_scar_response((SELECT id FROM _sweep_scar), 'Sweep cause', NULL, 'Sweep fix', NULL, NULL, current_date, 'Sweep supplier', NULL);
   PERFORM app.start_scar_review((SELECT id FROM _sweep_scar));

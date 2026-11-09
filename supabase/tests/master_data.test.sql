@@ -21,7 +21,7 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT code || '|' || name FROM public.customers WHERE id = '00000000-0000-0000-0000-0000000000c1'), 'C0001|Acme', 'legacy customer copied with a code');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.parts), 1::bigint, 'every legacy part copied (the fixture had one)');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.customers), 1::bigint, 'every legacy customer copied (the fixture had one)');
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.suppliers), 0::bigint, 'every legacy supplier copied (the fixture had none)');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.suppliers WHERE code <> 'FIXSCAR'), 0::bigint, 'every legacy supplier copied (the fixture had none)');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.outbox_events), 0::bigint, 'migration wrote no events');
 
   -- Units are a global catalogue.

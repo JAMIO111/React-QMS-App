@@ -4,7 +4,8 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
-  AcknowledgeScarBody, CreateScarBody, ExtendBody, ImplementationBody, LinkNcrBody, RecordResponseBody, ReviewBody, ScarDetail, ScarListQuery, ScarPage, ScarReasonBody, UpdateScarBody, VerificationBody,
+  AcknowledgeScarBody, CreateScarBody, DecideExtensionBody, ExtendBody, ImplementationBody, LinkNcrBody, RecordResponseBody, ReviewBody, ScarDetail, ScarItemInput, ScarListQuery, ScarPage, ScarPeople,
+  ScarPeopleQuery, ScarReasonBody, UpdateScarBody, VerificationBody,
 } from './supplier-scar.schemas';
 import { SupplierScarService } from './supplier-scar.service';
 
@@ -21,6 +22,13 @@ const APPROVE = 'supplier_quality.approve';
 @Controller('supplier-quality')
 export class SupplierScarController {
   constructor(private readonly service: SupplierScarService) {}
+
+  @Get('scar-people')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'Active members, for choosing the internal owner of a SCAR', schema: openApiSchema(ScarPeople) })
+  people(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.people(ctx, parse(ScarPeopleQuery, query));
+  }
 
   @Get('scars')
   @OrganisationScoped(READ)
@@ -118,9 +126,45 @@ export class SupplierScarController {
   @HttpCode(200)
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(ExtendBody) })
-  @ApiOkResponse({ description: 'Moves the response due date later, with a reason; the original date is kept', schema: openApiSchema(ScarDetail) })
+  @ApiOkResponse({ description: 'Asks for the response due date to move later, with a reason. It waits: the date moves only when a different approver approves it.', schema: openApiSchema(ScarDetail) })
   extend(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.extend(ctx, parse(Uuid, id), parse(ExtendBody, body));
+  }
+
+  @Post('scar-extensions/:id/decide')
+  @HttpCode(200)
+  @OrganisationScoped(APPROVE)
+  @ApiBody({ schema: openApiSchema(DecideExtensionBody) })
+  @ApiOkResponse({ description: 'Approves (the due date moves) or rejects an extension request, with a note. Never the person who asked.', schema: openApiSchema(ScarDetail) })
+  decideExtension(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.decideExtension(ctx, parse(Uuid, id), parse(DecideExtensionBody, body));
+  }
+
+  @Post('scar-extensions/:id/withdraw')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ScarReasonBody) })
+  @ApiOkResponse({ description: 'Withdraws a request that is still waiting (the person who asked, or an approver)', schema: openApiSchema(ScarDetail) })
+  withdrawExtension(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.withdrawExtension(ctx, parse(Uuid, id), parse(ScarReasonBody, body));
+  }
+
+  @Post('scars/:id/items')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ScarItemInput) })
+  @ApiOkResponse({ description: 'Adds an affected part, material, lot or receipt with a quantity', schema: openApiSchema(ScarDetail) })
+  addItem(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addItem(ctx, parse(Uuid, id), parse(ScarItemInput, body));
+  }
+
+  @Post('scar-items/:id/remove')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ScarReasonBody) })
+  @ApiOkResponse({ description: 'Removes an affected item with a reason; the row is kept', schema: openApiSchema(ScarDetail) })
+  removeItem(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.removeItem(ctx, parse(Uuid, id), parse(ScarReasonBody, body));
   }
 
   @Post('scars/:id/cancel')

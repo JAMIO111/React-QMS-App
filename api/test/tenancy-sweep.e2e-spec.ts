@@ -113,6 +113,10 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/supplier-quality/scars/{id}/cancel': { reason: 'Hijacked' },
     'POST /api/v1/supplier-quality/scars/{id}/ncrs': { ncrId: '00000000-0000-0000-0000-000000000001' },
     'POST /api/v1/supplier-quality/scar-ncrs/{id}/unlink': { reason: 'Hijacked' },
+    'POST /api/v1/supplier-quality/scars/{id}/items': { material: 'Hijacked' },
+    'POST /api/v1/supplier-quality/scar-items/{id}/remove': { reason: 'Hijacked' },
+    'POST /api/v1/supplier-quality/scar-extensions/{id}/decide': { approve: true, note: 'Hijacked' },
+    'POST /api/v1/supplier-quality/scar-extensions/{id}/withdraw': { reason: 'Hijacked' },
     'GET /api/v1/parts/{id}': undefined,
     'PATCH /api/v1/parts/{id}': { name: 'Hijacked' },
     'POST /api/v1/parts/{id}/revisions': { revision: 'Z' },
@@ -378,6 +382,10 @@ const hasSample = (op: Op) =>
     'POST /api/v1/supplier-quality/scars/{id}/cancel',
     'POST /api/v1/supplier-quality/scars/{id}/ncrs',
     'POST /api/v1/supplier-quality/scar-ncrs/{id}/unlink',
+    'POST /api/v1/supplier-quality/scars/{id}/items',
+    'POST /api/v1/supplier-quality/scar-items/{id}/remove',
+    'POST /api/v1/supplier-quality/scar-extensions/{id}/decide',
+    'POST /api/v1/supplier-quality/scar-extensions/{id}/withdraw',
     'GET /api/v1/parts/{id}',
     'PATCH /api/v1/parts/{id}',
     'POST /api/v1/parts/{id}/revisions',
@@ -597,6 +605,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/supplier-quality/supplier-approval-decisions/')) return a.supplierDecision;
   if (path.startsWith('/api/v1/supplier-quality/scars/')) return a.supplierScar;
   if (path.startsWith('/api/v1/supplier-quality/scar-ncrs/')) return a.supplierScarLink;
+  if (path.startsWith('/api/v1/supplier-quality/scar-items/')) return a.supplierScarItem;
+  if (path.startsWith('/api/v1/supplier-quality/scar-extensions/')) return a.supplierScarExtension;
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
   if (path.startsWith('/api/v1/supplier-quality/classifications/')) return a.supplierClassification;
   if (path.startsWith('/api/v1/parts/')) return a.part;
@@ -765,8 +775,11 @@ beforeAll(async () => {
     a.supplierTemplate = (await q1(`select id from public.supplier_assessment_templates where organisation_id = $1 limit 1`, [ids.orgA])).id;
     a.supplierAssessment = (await q1(`select app.start_supplier_assessment($1::uuid, (select v.id from public.supplier_assessment_template_versions v where v.organisation_id = $2 and v.version = 1 limit 1)) as id`, [a.supplier, ids.orgA])).id;
     a.supplierDecision = (await q1(`select app.propose_supplier_approval($1::uuid, 'approved', 'Sweep proposal', null, null, null, 'Sweep exception reason') as id`, [a.supplier])).id;
-    a.supplierScar = (await q1(`select (app.create_supplier_scar($1::uuid, 'Alpha SCAR', null, 'minor', null, null, array[$2]::uuid[], null, null) ->> 'id')::uuid as id`, [a.supplier, a.supplierNcr])).id;
+    a.supplierScar = (await q1(`select (app.create_supplier_scar($1::uuid, 'Alpha SCAR', null, 'minor', current_date + 30, null, array[$2]::uuid[], null, null) ->> 'id')::uuid as id`, [a.supplier, a.supplierNcr])).id;
+    await client.query(`select app.issue_supplier_scar($1::uuid)`, [a.supplierScar]);
     a.supplierScarLink = (await q1(`select id from public.supplier_scar_ncrs where scar_id = $1 limit 1`, [a.supplierScar])).id;
+    a.supplierScarItem = (await q1(`select app.add_scar_item($1::uuid, '{"material":"Alpha steel"}'::jsonb) as id`, [a.supplierScar])).id;
+    a.supplierScarExtension = (await q1(`select app.request_scar_extension($1::uuid, current_date + 40, 'Alpha extension') as id`, [a.supplierScar])).id;
     a.supplierProduct = (await q1(`insert into public.supplier_product_links (organisation_id, supplier_id, kind, description) values ($1, $2, 'service', 'Alpha service') returning id`, [ids.orgA, a.supplier])).id;
     await client.query('commit');
   } finally {

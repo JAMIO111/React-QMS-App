@@ -31,6 +31,22 @@ export const ScarListQuery = z.object({
 });
 export type ScarListQuery = z.infer<typeof ScarListQuery>;
 
+/** One affected item: a part of ours, a material in words, a lot, a receipt reference (typed until receiving exists), with a quantity. A lot brings its part along. */
+export const ScarItemInput = z
+  .object({
+    partId: z.string().uuid().nullable().optional(),
+    material: text(200),
+    lotId: z.string().uuid().nullable().optional(),
+    receiptReference: text(100),
+    quantity: z.number().min(0).max(999_999_999).nullable().optional(),
+    notes: text(1000),
+  })
+  .strict()
+  .refine((i) => !!(i.partId || i.lotId || i.material || i.receiptReference), { message: 'Name a part, a material, a lot or a receipt' });
+export type ScarItemInput = z.infer<typeof ScarItemInput>;
+
+export const ROOT_CAUSE_METHODS = ['five_whys', 'fishbone', 'other'] as const;
+
 export const CreateScarBody = z
   .object({
     supplierId: z.string().uuid(),
@@ -41,6 +57,12 @@ export const CreateScarBody = z
     contactId: z.string().uuid().nullable().optional(),
     ncrIds: z.array(z.string().uuid()).max(50).default([]),
     capaId: z.string().uuid().nullable().optional(),
+    requirementBreached: text(2000),
+    objectiveEvidence: text(4000),
+    containmentRequirements: text(4000),
+    /** The internal owner: an active member. Defaults to whoever raises the SCAR. */
+    ownerId: z.string().uuid().optional(),
+    items: z.array(ScarItemInput).max(50).default([]),
     /** Sent by the client so that a retried request returns the same SCAR instead of making another. */
     clientKey: z.string().trim().min(8).max(100).optional(),
   })
@@ -48,7 +70,18 @@ export const CreateScarBody = z
 export type CreateScarBody = z.infer<typeof CreateScarBody>;
 
 export const UpdateScarBody = z
-  .object({ title: required(3, 200, 'A title'), problemDescription: text(4000), severity: z.enum(SCAR_SEVERITIES), responseDueOn: DateOnly.nullable(), contactId: z.string().uuid().nullable(), capaId: z.string().uuid().nullable() })
+  .object({
+    title: required(3, 200, 'A title'),
+    problemDescription: text(4000),
+    requirementBreached: text(2000),
+    objectiveEvidence: text(4000),
+    containmentRequirements: text(4000),
+    severity: z.enum(SCAR_SEVERITIES),
+    responseDueOn: DateOnly.nullable(),
+    contactId: z.string().uuid().nullable(),
+    capaId: z.string().uuid().nullable(),
+    ownerId: z.string().uuid(),
+  })
   .partial()
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
@@ -67,6 +100,11 @@ export const RecordResponseBody = z
     respondedOn: DateOnly,
     respondedByName: text(200),
     contactId: z.string().uuid().nullable().optional(),
+    /** How far the problem reaches (other lots, parts, customers), the escape point (why it was not caught), who is responsible, and how the root cause was found. */
+    extentOfCondition: text(4000),
+    escapePoint: text(4000),
+    responsibleName: text(200),
+    rootCauseMethod: z.enum(ROOT_CAUSE_METHODS).nullable().optional(),
   })
   .strict();
 export type RecordResponseBody = z.infer<typeof RecordResponseBody>;
@@ -80,8 +118,11 @@ export type ImplementationBody = z.infer<typeof ImplementationBody>;
 export const VerificationBody = z.object({ result: z.enum(['effective', 'not_effective']), method: required(3, 1000, 'The method'), note: required(3, 2000, 'What was found') }).strict();
 export type VerificationBody = z.infer<typeof VerificationBody>;
 
+/** Asks for more time. The due date moves only when someone else with approval rights approves. */
 export const ExtendBody = z.object({ newDueOn: DateOnly, reason: required(3, 1000, 'A reason') }).strict();
 export type ExtendBody = z.infer<typeof ExtendBody>;
+export const DecideExtensionBody = z.object({ approve: z.boolean(), note: required(3, 1000, 'A reason for the decision') }).strict();
+export type DecideExtensionBody = z.infer<typeof DecideExtensionBody>;
 
 export const ScarReasonBody = z.object({ reason: required(3, 1000, 'A reason') }).strict();
 export type ScarReasonBody = z.infer<typeof ScarReasonBody>;
@@ -101,6 +142,7 @@ export const ScarRow = z.object({
   supplier: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }),
   severity: Severity,
   status: Status,
+  owner: Person,
   responseDueOn: DateOnly.nullable(),
   /** The supplier's response is awaited and its due date has passed (worked out when read). */
   overdue: z.boolean(),
@@ -125,6 +167,10 @@ const ResponseItem = z.object({
   plannedCompletionOn: DateOnly.nullable(),
   respondedOn: DateOnly,
   respondedByName: z.string().nullable(),
+  extentOfCondition: z.string().nullable(),
+  escapePoint: z.string().nullable(),
+  responsibleName: z.string().nullable(),
+  rootCauseMethod: z.enum(ROOT_CAUSE_METHODS).nullable(),
   contact: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
   receivedAt: Iso,
   receivedBy: Person,
@@ -132,7 +178,33 @@ const ResponseItem = z.object({
 });
 const Implementation = z.object({ id: z.string().uuid(), description: z.string(), implementedOn: DateOnly, evidenceNote: z.string().nullable(), recordedAt: Iso, recordedBy: Person });
 const Verification = z.object({ id: z.string().uuid(), result: z.enum(['effective', 'not_effective']), method: z.string(), note: z.string(), verifiedAt: Iso, verifiedBy: Person });
-const Extension = z.object({ id: z.string().uuid(), previousDueOn: DateOnly, newDueOn: DateOnly, reason: z.string(), extendedAt: Iso, extendedBy: Person });
+const Extension = z.object({
+  id: z.string().uuid(),
+  previousDueOn: DateOnly,
+  newDueOn: DateOnly,
+  reason: z.string(),
+  /** Requested by (the person who recorded the supplier's request) and when. */
+  extendedAt: Iso,
+  extendedBy: Person,
+  status: z.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  decidedAt: Iso.nullable(),
+  decidedBy: Person,
+  decisionNote: z.string().nullable(),
+  /** The caller may approve or reject it: it waits, they hold supplier_quality.approve and did not ask for it. */
+  canDecide: z.boolean(),
+});
+const Item = z.object({
+  id: z.string().uuid(),
+  part: z.object({ id: z.string().uuid(), partNumber: z.string(), name: z.string() }).nullable(),
+  material: z.string().nullable(),
+  lot: z.object({ id: z.string().uuid(), lotNumber: z.string() }).nullable(),
+  receiptReference: z.string().nullable(),
+  quantity: z.number().nullable(),
+  notes: z.string().nullable(),
+  addedAt: Iso,
+  endedAt: Iso.nullable(),
+  endReason: z.string().nullable(),
+});
 const NcrLink = z.object({
   linkId: z.string().uuid(),
   ncr: z.object({ id: z.string().uuid(), reference: z.string(), title: z.string(), stage: z.string(), severity: z.string().nullable() }),
@@ -144,6 +216,10 @@ const HistoryItem = z.object({ id: z.string().uuid(), fromStatus: Status.nullabl
 
 export const ScarDetail = ScarRow.extend({
   problemDescription: z.string().nullable(),
+  requirementBreached: z.string().nullable(),
+  objectiveEvidence: z.string().nullable(),
+  containmentRequirements: z.string().nullable(),
+  items: z.array(Item),
   originalResponseDueOn: DateOnly.nullable(),
   contact: z.object({ id: z.string().uuid(), name: z.string(), email: z.string().nullable() }).nullable(),
   capa: z.object({ id: z.string().uuid(), reference: z.string(), title: z.string().nullable() }).nullable(),
@@ -164,3 +240,7 @@ export const ScarDetail = ScarRow.extend({
   history: z.array(HistoryItem),
 });
 export type ScarDetail = z.infer<typeof ScarDetail>;
+
+export const ScarPeople = z.object({ data: z.array(z.object({ userId: z.string().uuid(), name: z.string() })) });
+export const ScarPeopleQuery = z.object({ q: z.string().trim().min(1).max(100).optional() });
+export type ScarPeopleQuery = z.infer<typeof ScarPeopleQuery>;

@@ -117,6 +117,12 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/supplier-quality/scar-items/{id}/remove': { reason: 'Hijacked' },
     'POST /api/v1/supplier-quality/scar-extensions/{id}/decide': { approve: true, note: 'Hijacked' },
     'POST /api/v1/supplier-quality/scar-extensions/{id}/withdraw': { reason: 'Hijacked' },
+    'GET /api/v1/purchase-orders/{id}': undefined,
+    'POST /api/v1/purchase-orders/{id}/close': {},
+    'POST /api/v1/purchase-orders/{id}/cancel': { reason: 'Hijacked' },
+    'PATCH /api/v1/purchase-order-lines/{id}': { agreedOn: '2027-01-01' },
+    'GET /api/v1/goods-receipts/{id}': undefined,
+    'POST /api/v1/goods-receipts/{id}/cancel': { reason: 'Hijacked' },
     'GET /api/v1/parts/{id}': undefined,
     'PATCH /api/v1/parts/{id}': { name: 'Hijacked' },
     'POST /api/v1/parts/{id}/revisions': { revision: 'Z' },
@@ -386,6 +392,12 @@ const hasSample = (op: Op) =>
     'POST /api/v1/supplier-quality/scar-items/{id}/remove',
     'POST /api/v1/supplier-quality/scar-extensions/{id}/decide',
     'POST /api/v1/supplier-quality/scar-extensions/{id}/withdraw',
+    'GET /api/v1/purchase-orders/{id}',
+    'POST /api/v1/purchase-orders/{id}/close',
+    'POST /api/v1/purchase-orders/{id}/cancel',
+    'PATCH /api/v1/purchase-order-lines/{id}',
+    'GET /api/v1/goods-receipts/{id}',
+    'POST /api/v1/goods-receipts/{id}/cancel',
     'GET /api/v1/parts/{id}',
     'PATCH /api/v1/parts/{id}',
     'POST /api/v1/parts/{id}/revisions',
@@ -605,6 +617,9 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/supplier-quality/supplier-approval-decisions/')) return a.supplierDecision;
   if (path.startsWith('/api/v1/supplier-quality/scars/')) return a.supplierScar;
   if (path.startsWith('/api/v1/supplier-quality/scar-ncrs/')) return a.supplierScarLink;
+  if (path.startsWith('/api/v1/purchase-orders/')) return a.purchaseOrder;
+  if (path.startsWith('/api/v1/purchase-order-lines/')) return a.poLine;
+  if (path.startsWith('/api/v1/goods-receipts/')) return a.goodsReceipt;
   if (path.startsWith('/api/v1/supplier-quality/scar-items/')) return a.supplierScarItem;
   if (path.startsWith('/api/v1/supplier-quality/scar-extensions/')) return a.supplierScarExtension;
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
@@ -778,6 +793,9 @@ beforeAll(async () => {
     a.supplierScar = (await q1(`select (app.create_supplier_scar($1::uuid, 'Alpha SCAR', null, 'minor', current_date + 30, null, array[$2]::uuid[], null, null) ->> 'id')::uuid as id`, [a.supplier, a.supplierNcr])).id;
     await client.query(`select app.issue_supplier_scar($1::uuid)`, [a.supplierScar]);
     a.supplierScarLink = (await q1(`select id from public.supplier_scar_ncrs where scar_id = $1 limit 1`, [a.supplierScar])).id;
+    a.purchaseOrder = (await q1(`select app.create_purchase_order($1::uuid, 'ALPHA-PO-1', current_date, null, jsonb_build_array(jsonb_build_object('material', 'Alpha steel', 'quantity', 10, 'requestedOn', (current_date + 5)::text))) as id`, [a.supplier])).id;
+    a.poLine = (await q1(`select id from public.purchase_order_lines where purchase_order_id = $1 limit 1`, [a.purchaseOrder])).id;
+    a.goodsReceipt = ((await q1(`select app.record_goods_receipt($1::uuid, $2::uuid, null, current_date, 'DN-A1', null, jsonb_build_array(jsonb_build_object('poLineId', $3::text, 'quantity', 2)), null) as r`, [a.supplier, a.purchaseOrder, a.poLine])).r as { id: string }).id;
     a.supplierScarItem = (await q1(`select app.add_scar_item($1::uuid, '{"material":"Alpha steel"}'::jsonb) as id`, [a.supplierScar])).id;
     a.supplierScarExtension = (await q1(`select app.request_scar_extension($1::uuid, current_date + 40, 'Alpha extension') as id`, [a.supplierScar])).id;
     a.supplierProduct = (await q1(`insert into public.supplier_product_links (organisation_id, supplier_id, kind, description) values ($1, $2, 'service', 'Alpha service') returning id`, [ids.orgA, a.supplier])).id;

@@ -87,6 +87,8 @@ import { SupplierRiskService } from './supplier-quality/supplier-risk.service';
 import { SupplierQualificationController } from './supplier-quality/supplier-qualification.controller';
 import { SupplierQualificationService } from './supplier-quality/supplier-qualification.service';
 import { SupplierQualityService } from './supplier-quality/supplier-quality.service';
+import { ReceivingController } from './receiving/receiving.controller';
+import { ReceivingService } from './receiving/receiving.service';
 import { SupplierScarController } from './supplier-quality/supplier-scar.controller';
 import { SupplierScarService } from './supplier-quality/supplier-scar.service';
 import { SavedFiltersService } from './saved-filters/saved-filters.service';
@@ -197,6 +199,7 @@ export class AppModule implements NestModule {
         SupplierRiskController,
         SupplierAssessmentController,
         SupplierScarController,
+        ReceivingController,
         InspectionsController,
         InspectionMeasurementsController,
         NcrInspectionSourceController,
@@ -258,6 +261,7 @@ export class AppModule implements NestModule {
         SupplierRiskService,
         SupplierAssessmentService,
         SupplierScarService,
+        ReceivingService,
         InspectionService,
         SpcService,
         DocumentationService,

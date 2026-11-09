@@ -9,7 +9,8 @@ import { CATALOGUE, catalogueFor } from './core/catalogue';
 import { FileParseError, ParsedFile, parseFile, ParseOptions } from './core/file-parsers';
 import { IntegrationFileStore } from './core/file-store';
 import { mappingProblems, MappingSpec } from './core/mapping';
-import { CatalogueResponse, IntegrationFile, IntegrationFileDetail, IntegrationFileList, MappingList, RegisterFileBody, SaveMappingBody } from './integration-files.schemas';
+import { CatalogueResponse, ImportSettings, ImportSettingsList, IntegrationFile, IntegrationFileDetail, IntegrationFileList, MappingList, RegisterFileBody, SaveImportSettingsBody, SaveMappingBody } from './integration-files.schemas';
+import { ENTITY_TYPES, EntityType } from './core/entity-importer';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown user' } : null);
@@ -49,7 +50,7 @@ export class IntegrationFilesService {
         entityType: c.entityType,
         label: c.label,
         keyHint: c.keyHint,
-        fields: c.fields.map((f) => ({ key: f.key, label: f.label, type: f.type, required: !!f.required, maxLength: f.maxLength ?? null, options: f.options ?? null, description: f.description ?? null })),
+        fields: c.fields.map((f) => ({ key: f.key, label: f.label, type: f.type, required: !!f.required, maxLength: f.maxLength ?? null, options: f.options ?? null, description: f.description ?? null, ref: f.ref ?? null })),
       })),
     };
   }
@@ -163,4 +164,39 @@ export class IntegrationFilesService {
       return this.loadMappings(db, ctx, connectionId, b.entityType);
     });
   }
+
+  /** The import settings of every kind of record on a connection (the defaults where none are saved; NCs are fixed to "add new only"). */
+  settings(ctx: RequestContext, connectionId: string): Promise<z.infer<typeof ImportSettingsList>> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.connection(db, ctx, connectionId);
+      const rows = await db.execute<Row>(sql`select * from public.integration_import_settings where connection_id = ${connectionId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      const saved = new Map(rows.rows.map((r) => [r.entity_type as string, r]));
+      return { data: ENTITY_TYPES.map((t) => toSettings(t, saved.get(t))) };
+    });
+  }
+
+  saveSettings(ctx: RequestContext, connectionId: string, b: SaveImportSettingsBody): Promise<z.infer<typeof ImportSettings>> {
+    return this.database.asUser(ctx, async (db, client) => {
+      await this.connection(db, ctx, connectionId);
+      const { entityType, ...rest } = b;
+      await client.query('select app.set_integration_import_settings($1::uuid, $2, $3::jsonb)', [connectionId, entityType, JSON.stringify(rest)]);
+      const row = await db.execute<Row>(sql`select * from public.integration_import_settings where connection_id = ${connectionId}::uuid and entity_type = ${entityType}`);
+      return toSettings(entityType, row.rows[0]);
+    });
+  }
+}
+
+const HAS_ACTIVE = new Set<EntityType>(['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type']);
+function toSettings(t: EntityType, r: Row | undefined): z.infer<typeof ImportSettings> {
+  const fixed = t === 'nonconformance';
+  return {
+    entityType: t,
+    writeMode: fixed ? 'add_only' : ((r?.write_mode as z.infer<typeof ImportSettings>['writeMode']) ?? 'add_only'),
+    matchExisting: fixed ? false : !!r?.match_existing,
+    onMissing: (r?.on_missing as z.infer<typeof ImportSettings>['onMissing']) ?? 'nothing',
+    schedule: (r?.schedule as z.infer<typeof ImportSettings>['schedule']) ?? 'manual',
+    saved: !!r,
+    fixed,
+    canDeactivate: HAS_ACTIVE.has(t),
+  };
 }

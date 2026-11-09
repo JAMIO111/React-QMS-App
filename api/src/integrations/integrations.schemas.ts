@@ -75,6 +75,10 @@ export const ConnectionDetail = z.object({
   runnable: z.array(z.string()),
   /** The kinds of record a real import can write (an importer exists). A preview needs only a mapping. */
   importable: z.array(z.string()),
+  /** Of those, the kinds the caller may write (the same create/edit permission as the screens). */
+  writable: z.array(z.string()),
+  /** A file connection: no test, ready, activate, pause or resume; whoever imports a file approves it. */
+  fileConnection: z.boolean(),
   /** The caller may activate it now: approval right, and a different person from whoever marked it ready (an owner or admin may activate their own). */
   canActivate: z.boolean(),
   events: z.array(z.object({ action: z.string(), fromStatus: z.string().nullable(), toStatus: z.string().nullable(), note: z.string().nullable(), at: Iso, by: Person })),

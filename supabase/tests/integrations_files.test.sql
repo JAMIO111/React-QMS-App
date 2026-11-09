@@ -98,10 +98,6 @@ BEGIN
 
   -- ---- a file connection has no incremental imports ----
   PERFORM pg_temp.login(ann);
-  PERFORM app.mark_integration_ready(conn);
-  PERFORM pg_temp.logout();
-  UPDATE public.integration_connections SET status = 'active', activated_at = now() WHERE id = conn;
-  PERFORM pg_temp.login(ann);
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.request_integration_run(%L, 'supplier', 'incremental', %L)$f$, conn, f)), 5), 'QM022', 'a file is imported whole');
   PERFORM pg_temp.logout();
 

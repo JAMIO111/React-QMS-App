@@ -56,7 +56,7 @@ BEGIN
   -- ---- creating ----
   PERFORM pg_temp.login(ann);
   csv := app.create_integration_connection(org, 'csv', 'ERP parts file', 'erp', '{"delimiter": ";", "hasHeader": true}'::jsonb);
-  PERFORM pg_temp.assert_eq((SELECT status FROM public.integration_connections WHERE id = csv), 'draft', 'a connection starts as a draft');
+  PERFORM pg_temp.assert_eq((SELECT status FROM public.integration_connections WHERE id = csv), 'active', 'a file connection is in use as soon as it is created (IN4)');
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.create_integration_connection(%L, 'csv', 'erp parts FILE', 'erp2', '{}'::jsonb)$f$, org)), 5), 'QM022', 'names are unique ignoring case');
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.create_integration_connection(%L, 'csv', 'Another', 'erp', '{}'::jsonb)$f$, org)), 5), 'QM022', 'and so is the system code');
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.create_integration_connection(%L, 'csv', 'Another', 'ERP 2', '{}'::jsonb)$f$, org)), 5), 'QM022', 'the code is lower-case letters, digits, hyphens and underscores');
@@ -87,8 +87,10 @@ BEGIN
   PERFORM app.record_integration_connection_test(rest, true, 'Connected');
   PERFORM app.mark_integration_ready(rest);
   PERFORM pg_temp.assert_eq((SELECT status FROM public.integration_connections WHERE id = rest), 'ready', 'a tested, credentialed connection is ready');
-  PERFORM app.mark_integration_ready(csv);
-  PERFORM pg_temp.assert_eq((SELECT status FROM public.integration_connections WHERE id = csv), 'ready', 'a file connection needs neither credential nor test');
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.mark_integration_ready(%L)$f$, csv)), 5), 'QM022', 'a file connection is never marked ready');
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.pause_integration_connection(%L, 'Not needed')$f$, csv)), 5), 'QM022', 'nor paused');
+  PERFORM app.update_integration_connection(csv, 'ERP parts (file)', NULL);
+  PERFORM pg_temp.assert_eq((SELECT name FROM public.integration_connections WHERE id = csv), 'ERP parts (file)', 'and can be changed while in use');
 
   -- changing the config sends a ready connection back to draft
   PERFORM app.update_integration_connection(rest, NULL, '{"baseUrl": "https://api.example.com/v2", "authType": "bearer"}'::jsonb);
@@ -98,14 +100,16 @@ BEGIN
   PERFORM app.mark_integration_ready(rest);
 
   -- ---- activation needs a second person, unless an owner or admin activates their own ----
-  qmc := app.create_integration_connection(org, 'csv', 'QM file', 'qm-file', '{}'::jsonb);
   PERFORM pg_temp.logout(); PERFORM pg_temp.login(cat);
+  qmc := app.create_integration_connection(org, 'rest_api', 'QM api', 'qm-api', '{"baseUrl": "https://qm.example.com", "authType": "none"}'::jsonb);
+  PERFORM app.record_integration_connection_test(qmc, true, 'ok');
   PERFORM app.mark_integration_ready(qmc);
   PERFORM pg_temp.assert_eq(app.integration_can_activate(qmc), false, 'a quality manager who marked it ready may not activate it');
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.activate_integration_connection(%L)$f$, qmc)), 5), 'QM022', 'the database refuses it too');
   PERFORM pg_temp.logout(); PERFORM pg_temp.login(ann);
   PERFORM pg_temp.assert_eq(app.integration_can_activate(qmc), true, 'another approver may');
-  selfc := app.create_integration_connection(org, 'csv', 'Owner file', 'owner-file', '{}'::jsonb);
+  selfc := app.create_integration_connection(org, 'rest_api', 'Owner api', 'owner-api', '{"baseUrl": "https://owner.example.com", "authType": "none"}'::jsonb);
+  PERFORM app.record_integration_connection_test(selfc, true, 'ok');
   PERFORM app.mark_integration_ready(selfc);
   PERFORM pg_temp.assert_eq(app.integration_can_activate(selfc), true, 'an owner may activate a connection they prepared');
   PERFORM app.activate_integration_connection(selfc);
@@ -114,27 +118,33 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT count(*)::int FROM public.integration_connections), 0, 'an admin without a Controller seat sees no connections');
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.activate_integration_connection(%L)$f$, qmc)), 5), '42501', 'and cannot activate one');
   PERFORM pg_temp.logout(); PERFORM pg_temp.give_controller_seat(org, dan); PERFORM pg_temp.login(dan);
-  selfc := app.create_integration_connection(org, 'csv', 'Admin file', 'admin-file', '{}'::jsonb);
+  selfc := app.create_integration_connection(org, 'rest_api', 'Admin api', 'admin-api', '{"baseUrl": "https://admin.example.com", "authType": "none"}'::jsonb);
+  PERFORM app.record_integration_connection_test(selfc, true, 'ok');
   PERFORM app.mark_integration_ready(selfc);
   PERFORM app.activate_integration_connection(selfc);
   PERFORM pg_temp.assert_eq((SELECT status FROM public.integration_connections WHERE id = selfc), 'active', 'an admin with a seat sets a connection up and activates it on their own');
-  PERFORM pg_temp.logout(); PERFORM pg_temp.login(bob);
-  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.activate_integration_connection(%L)$f$, csv)), 5), '42501', 'a viewer cannot activate');
-  PERFORM pg_temp.logout(); PERFORM pg_temp.login(cat);
-  PERFORM app.activate_integration_connection(csv);
-  PERFORM pg_temp.assert_eq((SELECT status FROM public.integration_connections WHERE id = csv), 'active', 'a quality manager who did not prepare it can activate it');
-  PERFORM pg_temp.assert_eq((SELECT activated_by FROM public.integration_connections WHERE id = csv), cat, 'and is recorded as the approver');
-  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.update_integration_connection(%L, 'Renamed', NULL)$f$, csv)), 5), 'QM022', 'an active connection cannot be changed');
   PERFORM pg_temp.logout(); PERFORM pg_temp.login(ann);
-  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.pause_integration_connection(%L, 'x')$f$, csv)), 5), 'QM022', 'pausing needs a reason');
-  PERFORM app.pause_integration_connection(csv, 'Source file is being rebuilt');
-  PERFORM app.update_integration_connection(csv, 'ERP parts (file)', NULL);
-  PERFORM app.resume_integration_connection(csv);
-  PERFORM pg_temp.assert_eq((SELECT status FROM public.integration_connections WHERE id = csv), 'active', 'a paused connection can be changed and resumed');
+  qmc := app.create_integration_connection(org, 'rest_api', 'Owner api 2', 'owner-api-2', '{"baseUrl": "https://owner2.example.com", "authType": "none"}'::jsonb);
+  PERFORM app.record_integration_connection_test(qmc, true, 'ok');
+  PERFORM app.mark_integration_ready(qmc);
+  PERFORM pg_temp.logout(); PERFORM pg_temp.login(bob);
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.activate_integration_connection(%L)$f$, qmc)), 5), '42501', 'a viewer cannot activate');
+  PERFORM pg_temp.logout(); PERFORM pg_temp.login(cat);
+  PERFORM app.activate_integration_connection(qmc);
+  PERFORM pg_temp.assert_eq((SELECT status FROM public.integration_connections WHERE id = qmc), 'active', 'a quality manager who did not prepare it can activate it');
+  PERFORM pg_temp.assert_eq((SELECT activated_by FROM public.integration_connections WHERE id = qmc), cat, 'and is recorded as the approver');
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.update_integration_connection(%L, 'Renamed', NULL)$f$, qmc)), 5), 'QM022', 'an active API connection cannot be changed');
+  PERFORM pg_temp.logout(); PERFORM pg_temp.login(ann);
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.pause_integration_connection(%L, 'x')$f$, qmc)), 5), 'QM022', 'pausing needs a reason');
+  PERFORM app.pause_integration_connection(qmc, 'Source is being rebuilt');
+  PERFORM app.update_integration_connection(qmc, 'Owner api (renamed)', NULL);
+  PERFORM app.resume_integration_connection(qmc);
+  PERFORM pg_temp.assert_eq((SELECT status FROM public.integration_connections WHERE id = qmc), 'active', 'a paused connection can be changed and resumed');
 
   -- SQL cannot make an impossible move either
   PERFORM pg_temp.logout();
-  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$UPDATE public.integration_connections SET status = 'ready' WHERE id = %L$f$, csv)), 5), 'QM022', 'active cannot go back to ready');
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$UPDATE public.integration_connections SET status = 'ready' WHERE id = %L$f$, qmc)), 5), 'QM022', 'active cannot go back to ready');
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$UPDATE public.integration_connections SET status = 'paused' WHERE id = %L$f$, csv)), 5), 'QM022', 'a file connection cannot be paused even by SQL');
   PERFORM pg_temp.login(ann);
 
   -- ---- credentials: Vault only ----

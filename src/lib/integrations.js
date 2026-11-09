@@ -108,6 +108,7 @@ export const ROW_STATUS = {
   staged: "Waiting",
   previewed: "Previewed",
   unchanged: "Unchanged",
+  skipped: "Skipped",
   applied: "Applied",
   rejected: "Rejected",
   failed: "Failed",
@@ -122,6 +123,7 @@ export const runSummary = (run) => {
     c.created && `${c.created} ${would}created`,
     c.updated && `${c.updated} ${would}updated`,
     c.unchanged && `${c.unchanged} unchanged`,
+    c.skipped && `${c.skipped} skipped`,
     c.rejected && `${c.rejected} rejected`,
     c.failed && `${c.failed} failed`,
     c.superseded && `${c.superseded} superseded`,
@@ -211,6 +213,7 @@ export const mappingToRows = (fields, saved, headers = []) => {
       dateFormat: m?.dateFormat ?? "iso",
       decimal: m?.decimal ?? ".",
       default: m?.default ?? "",
+      match: m?.match ?? "code",
     };
   });
 };
@@ -232,6 +235,7 @@ export const rowsToFields = (rows, catalogueFields) =>
       if (field?.type === "date" && r.dateFormat !== "iso") out.dateFormat = r.dateFormat;
       if ((field?.type === "number" || field?.type === "integer") && r.decimal !== ".") out.decimal = r.decimal;
       if (r.default?.trim() && r.transform !== "constant") out.default = r.default.trim();
+      if (field?.ref && r.match === "source" && field.ref.source) out.match = "source";
       return out;
     });
 
@@ -244,3 +248,23 @@ export const fileProblem = (file) => {
   if (file.size === 0) return "The file is empty";
   return null;
 };
+
+export const WRITE_MODES = [
+  { value: "add_only", label: "Add new records only", hint: "Records already imported are never touched again: for a one-time historical import" },
+  { value: "add_update", label: "Add new and update existing", hint: "The source keeps feeding its changes in: for records kept in sync" },
+  { value: "update_only", label: "Update existing only", hint: "Creates nothing; tops up records already in Fortress" },
+];
+export const WRITE_MODE_LABELS = Object.fromEntries(WRITE_MODES.map((m) => [m.value, m.label]));
+export const ON_MISSING = [
+  { value: "nothing", label: "Do nothing" },
+  { value: "list", label: "List it on the import" },
+  { value: "deactivate", label: "Make it inactive" },
+];
+export const SCHEDULES = [
+  { value: "manual", label: "By hand" },
+  { value: "daily", label: "Daily" },
+];
+export const MATCH_OPTIONS = [
+  { value: "code", label: "Fortress code" },
+  { value: "source", label: "Id from an earlier import" },
+];

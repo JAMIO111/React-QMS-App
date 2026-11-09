@@ -78,12 +78,17 @@ export class IntegrationsService {
       db.execute<{ p: string[]; can_activate: boolean | null }>(sql`select app.integration_activation_problems(${id}::uuid) as p, app.integration_can_activate(${id}::uuid) as can_activate`),
     ]);
     const c = cred.rows[0];
+    const importable = this.engine.importable(rows.rows[0].provider_key as string);
     return {
       ...toRow(rows.rows[0]),
       credential: c ? { kind: c.kind as 'api_key' | 'bearer' | 'basic' | 'oauth_client', setAt: iso(c.created_at)!, setBy: person(c.created_by, c.created_by_name) } : null,
       problems: problems.rows[0].p ?? [],
       runnable: this.engine.runnable(rows.rows[0].provider_key as string),
-      importable: this.engine.importable(rows.rows[0].provider_key as string),
+      importable,
+      writable: importable.length
+        ? (await db.execute<{ e: string }>(sql`select e from unnest(${`{${importable.join(',')}}`}::text[]) e where app.integration_may_write(${orgOf(ctx)}::uuid, e)`)).rows.map((r) => r.e)
+        : [],
+      fileConnection: rows.rows[0].provider_key === 'csv',
       canActivate: !!problems.rows[0].can_activate,
       events: events.rows.map((e) => ({ action: e.action as string, fromStatus: (e.from_status as string) ?? null, toStatus: (e.to_status as string) ?? null, note: (e.note as string) ?? null, at: iso(e.at)!, by: person(e.by, e.by_name) })),
     };

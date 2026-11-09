@@ -8,6 +8,7 @@ import { ConnectorRegistry } from './connector.registry';
 import { CATALOGUE, catalogueFor } from './catalogue';
 import { EntityImporterRegistry, ImportContext, StagedRow } from './entity-importer';
 import { applyMapping, MappingSpec } from './mapping';
+import { resolveReferences } from './references';
 
 /** How a call to `drain` ended. `paused`: the time allowed ran out with work left (call again); `waiting`: a transient error, tried again later. */
 export type DrainState = 'finished' | 'paused' | 'waiting' | 'failed' | 'blocked';
@@ -112,7 +113,7 @@ export class SyncEngine {
         : undefined;
       let fetchDone = lease.fetchDone;
       let cursor = lease.cursor;
-      const ctx: ImportContext = { organisationId, connectionId: lease.connectionId, runId, externalSystem: lease.externalSystem, initiatingUser: user };
+      const ctx: ImportContext = { organisationId, connectionId: lease.connectionId, runId, externalSystem: lease.externalSystem, initiatingUser: user, owner };
 
       while (Date.now() < deadline) {
         if (!fetchDone) {
@@ -134,10 +135,16 @@ export class SyncEngine {
           const records = page.records.map((r) => {
             if (lease.mapping && catalogue) {
               const mapped = applyMapping(catalogue, lease.mapping, r.payload);
-              return { externalId: mapped.externalId, sourceRow: r.sourceRow ?? null, payload: r.payload, canonical: mapped.canonical, errors: mapped.errors };
+              return { externalId: mapped.externalId, sourceRow: r.sourceRow ?? null, payload: r.payload, canonical: mapped.canonical as Record<string, unknown> | null, errors: mapped.errors };
             }
-            return { externalId: importer!.externalIdOf(r.payload), sourceRow: r.sourceRow ?? null, payload: r.payload };
+            return { externalId: importer!.externalIdOf(r.payload), sourceRow: r.sourceRow ?? null, payload: r.payload } as { externalId: string | null; sourceRow: number | null; payload: Record<string, unknown>; canonical: Record<string, unknown> | null; errors: { field: string | null; message: string }[] };
           });
+          // Links to other records (D10) are resolved before staging, so a preview shows a row that cannot be linked as rejected, with the reason.
+          if (lease.mapping && catalogue) {
+            await resolveReferences(catalogue, lease.mapping, records, async (kind, mode, values) =>
+              (await call((c) => c.query('select app.system_integration_lookup($1::uuid, $2::uuid, $3::uuid, $4, $5, $6::text[]) as r', [organisationId, runId, owner, kind, mode, values]))).rows[0].r as Record<string, string>,
+            );
+          }
           try {
             await call((c) => c.query('select app.system_stage_integration_records($1::uuid, $2::uuid, $3::uuid, $4::jsonb, $5, $6)', [organisationId, runId, owner, JSON.stringify(records), page.nextCursor, page.done]));
           } catch (error) {

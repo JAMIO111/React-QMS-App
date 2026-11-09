@@ -35,10 +35,11 @@ const RunDialog = ({ connection, onClose }) => {
   const mapped = !isFile || (mappings.data ?? []).some((m) => m.current);
   // Writing records needs an importer for that kind of record; a preview only needs the mapping.
   const importable = (connection.importable ?? []).includes(entityType);
+  const writable = (connection.writable ?? connection.importable ?? []).includes(entityType);
   const kinds = [
     { value: "preview", label: "Preview" },
-    { value: "full", label: "Full", disabled: !active || !importable },
-    ...(isFile ? [] : [{ value: "incremental", label: "Incremental", disabled: !active || !importable }]),
+    { value: "full", label: isFile ? "Import" : "Full", disabled: !active || !importable || !writable },
+    ...(isFile ? [] : [{ value: "incremental", label: "Incremental", disabled: !active || !importable || !writable }]),
   ];
   const runKind = kinds.some((k) => k.value === kind && !k.disabled) ? kind : "preview";
   const blocked = isFile && (!chosenFile || (!mappings.isLoading && !mapped));
@@ -87,6 +88,8 @@ const RunDialog = ({ connection, onClose }) => {
               : "Carries on from where the last import stopped."}
           {!active && ` ${isFile ? "A full import needs" : "Full and incremental imports need"} the connection to be active.`}
           {active && !importable && entityType && ` Writing ${ENTITY_LABELS[entityType]?.toLowerCase() ?? "these records"} to Fortress is not available yet: preview only.`}
+          {active && importable && !writable && entityType && ` You can preview these, but writing them needs the permission to create and edit ${ENTITY_LABELS[entityType]?.toLowerCase() ?? "them"}.`}
+          {isFile && runKind === "full" && " You approve this import yourself: the records are written as soon as it runs."}
         </Callout>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">

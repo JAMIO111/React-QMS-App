@@ -318,6 +318,8 @@ BEGIN
   INSERT INTO public.integration_file_chunks (organisation_id, file_id, seq, rows) VALUES (a, '5f000000-0000-0000-0000-00000000f001', 0, '[{"r": 2, "v": {"Code": "SW"}}]');
   INSERT INTO public.integration_mappings (organisation_id, connection_id, entity_type, version, key_field, fields)
     SELECT a, connection_id, 'supplier', 1, 'Code', '[{"target": "code", "source": "Code"}]' FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001';
+  INSERT INTO public.integration_import_settings (organisation_id, connection_id, entity_type)
+    SELECT a, connection_id, 'supplier' FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001';
   INSERT INTO public.integration_run_errors (organisation_id, run_id, attempt, kind, message, transient)
     VALUES (a, '5f000000-0000-0000-0000-00000000c001', 1, 'transient', 'Sweep error', true);
   INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)

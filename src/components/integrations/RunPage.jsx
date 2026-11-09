@@ -5,7 +5,7 @@ import { useIntegrationConnection, useIntegrationMutation, useIntegrationRun, us
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
-import { ENTITY_LABELS, ROW_STATUS, RUN_KINDS, drainMessage, isLive } from "../../lib/integrations";
+import { ENTITY_LABELS, ROW_STATUS, RUN_KINDS, WRITE_MODE_LABELS, drainMessage, isLive } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
 import Dialog from "../ui/Dialog";
@@ -42,7 +42,7 @@ const CancelDialog = ({ run, onClose }) => {
   );
 };
 
-const FILTERS = ["all", "failed", "rejected", "applied", "unchanged", "previewed", "superseded"];
+const FILTERS = ["all", "failed", "rejected", "skipped", "applied", "unchanged", "previewed", "superseded"];
 
 /** The rows of a run: identifier, source row, what happened, why it did not apply, and the record as it arrived. */
 const RowsCard = ({ run }) => {
@@ -123,13 +123,14 @@ const RunPage = () => {
     <div className="flex flex-col gap-4 p-4">
       <MenuCard
         title={`${RUN_KINDS[run.kind]} · ${ENTITY_LABELS[run.entityType] ?? run.entityType}`}
-        subtitle={`${run.connection.name} · asked for ${formatDateTime(run.requestedAt)}${run.requestedBy ? ` by ${run.requestedBy.name}` : ""}${run.finishedAt ? ` · finished ${formatDateTime(run.finishedAt)}` : ""}${run.file ? ` · file ${run.file.name}` : ""}${run.mappingVersion ? ` · mapping version ${run.mappingVersion}` : ""}`}
+        subtitle={`${run.connection.name} · asked for ${formatDateTime(run.requestedAt)}${run.requestedBy ? ` by ${run.requestedBy.name}` : ""}${run.finishedAt ? ` · finished ${formatDateTime(run.finishedAt)}` : ""}${run.file ? ` · file ${run.file.name}` : ""}${run.mappingVersion ? ` · mapping version ${run.mappingVersion}` : ""}${run.settings ? ` · ${WRITE_MODE_LABELS[run.settings.writeMode]?.toLowerCase() ?? run.settings.writeMode}` : ""}`}
         action={<RunStatusPill status={run.status} />}>
         <div className="flex flex-wrap gap-3">
           <StatTile label="Rows read" value={run.counts.total} />
           <StatTile label={preview ? "Would be created" : "Created"} value={run.counts.created} />
           <StatTile label={preview ? "Would be updated" : "Updated"} value={run.counts.updated} />
           <StatTile label="Unchanged" value={run.counts.unchanged} note="Nothing written" />
+          {run.counts.skipped > 0 && <StatTile label="Skipped" value={run.counts.skipped} note="Left alone by the settings" />}
           <StatTile label="Rejected" value={run.counts.rejected} note="Problems in the source" />
           {!preview && <StatTile label="Failed" value={run.counts.failed} note="Can be retried" />}
         </div>

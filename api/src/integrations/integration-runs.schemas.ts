@@ -6,7 +6,7 @@ const Person = z.object({ id: z.string().uuid(), name: z.string() }).nullable();
 
 export const RUN_KINDS = ['preview', 'full', 'incremental', 'retry'] as const;
 export const RUN_STATUSES = ['queued', 'running', 'succeeded', 'partial', 'failed', 'cancelled'] as const;
-export const ROW_STATUSES = ['staged', 'previewed', 'unchanged', 'applied', 'rejected', 'failed', 'superseded'] as const;
+export const ROW_STATUSES = ['staged', 'previewed', 'unchanged', 'skipped', 'applied', 'rejected', 'failed', 'superseded'] as const;
 
 /** A file connection names the uploaded file (`fileId`); other connections leave it out. */
 export const RequestRunBody = z.object({ entityType: z.enum(ENTITY_TYPES), kind: z.enum(['preview', 'full', 'incremental']), fileId: z.string().uuid().optional() }).strict();
@@ -50,6 +50,8 @@ const Counts = z.object({
   updated: z.number().int(),
   failed: z.number().int(),
   superseded: z.number().int(),
+  /** Left alone by the import settings: already imported under "add new only", or not in Fortress under "update existing only". */
+  skipped: z.number().int(),
 });
 
 export const Run = z.object({
@@ -74,6 +76,8 @@ export const Run = z.object({
   /** The file a file connection imported, and the mapping version applied. */
   file: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
   mappingVersion: z.number().int().nullable(),
+  /** The import settings this run used (frozen when it was asked for); null for runs from before IN4. */
+  settings: z.object({ writeMode: z.string(), matchExisting: z.boolean(), onMissing: z.string(), schedule: z.string() }).nullable(),
 });
 export const RunPage = z.object({ data: z.array(Run), page: z.number().int(), pageSize: z.number().int(), total: z.number().int() });
 

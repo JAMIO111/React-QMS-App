@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ENTITY_TYPES } from './core/entity-importer';
-import { DATE_FORMATS, OWNERSHIP, TRANSFORMS } from './core/mapping';
+import { DATE_FORMATS, OWNERSHIP, REF_MATCH, TRANSFORMS } from './core/mapping';
 
 const Iso = z.string().datetime({ offset: true });
 const Person = z.object({ id: z.string().uuid(), name: z.string() }).nullable();
@@ -28,6 +28,8 @@ export const FieldMappingBody = z
     decimal: z.enum(['.', ',']).optional(),
     default: z.string().max(500).nullable().optional(),
     ownership: z.enum(OWNERSHIP).optional(),
+    /** A reference field: by the Fortress code (default) or by the id the source gave the record in an earlier import (D10). */
+    match: z.enum(REF_MATCH).optional(),
   })
   .strict();
 
@@ -83,6 +85,8 @@ export const CatalogueResponse = z.object({
           maxLength: z.number().int().nullable(),
           options: z.array(z.object({ value: z.string(), label: z.string() })).nullable(),
           description: z.string().nullable(),
+          /** A link to another record: what it points at, and whether it can be matched by the source's own id. */
+          ref: z.object({ kind: z.string(), source: z.boolean() }).nullable(),
         }),
       ),
     }),
@@ -101,3 +105,33 @@ export const MappingVersion = z.object({
   createdAt: Iso,
 });
 export const MappingList = z.object({ data: z.array(MappingVersion) });
+
+// ---- import settings (D9) ------------------------------------------------------------------------
+
+export const WRITE_MODES = ['add_only', 'add_update', 'update_only'] as const;
+export const ON_MISSING = ['nothing', 'list', 'deactivate'] as const;
+export const SCHEDULES = ['manual', 'daily'] as const;
+export const ImportSettings = z.object({
+  entityType: z.enum(ENTITY_TYPES),
+  writeMode: z.enum(WRITE_MODES),
+  matchExisting: z.boolean(),
+  onMissing: z.enum(ON_MISSING),
+  schedule: z.enum(SCHEDULES),
+  /** False while the defaults apply (nothing saved yet). */
+  saved: z.boolean(),
+  /** Fixed for this kind of record (non-conformances are only ever added). */
+  fixed: z.boolean(),
+  /** "Make inactive" is possible for this kind of record. */
+  canDeactivate: z.boolean(),
+});
+export const ImportSettingsList = z.object({ data: z.array(ImportSettings) });
+export const SaveImportSettingsBody = z
+  .object({
+    entityType: z.enum(ENTITY_TYPES),
+    writeMode: z.enum(WRITE_MODES).optional(),
+    matchExisting: z.boolean().optional(),
+    onMissing: z.enum(ON_MISSING).optional(),
+    schedule: z.enum(SCHEDULES).optional(),
+  })
+  .strict();
+export type SaveImportSettingsBody = z.infer<typeof SaveImportSettingsBody>;

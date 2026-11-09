@@ -16,7 +16,25 @@ export interface CatalogueField {
   maxLength?: number;
   options?: { value: string; label: string }[];
   description?: string;
+  /** A link to another record (D10): given in the file by its Fortress code, or (when `source`) by the id the source gave it in an earlier import. */
+  ref?: { kind: RefKind; source: boolean };
 }
+
+/** What a reference can point at. The importable kinds can also be matched by the source's own id (the map of an earlier import). */
+export type RefKind = 'site' | 'department' | 'unit' | 'category' | 'supplier' | 'customer' | 'part' | 'machine' | 'employee' | 'gauge_type';
+export const REF_KIND_WORDS: Record<RefKind, string> = {
+  site: 'site',
+  department: 'department',
+  unit: 'unit',
+  category: 'category',
+  supplier: 'supplier',
+  customer: 'customer',
+  part: 'part',
+  machine: 'machine',
+  employee: 'employee',
+  gauge_type: 'gauge type',
+};
+const SOURCE_KINDS: RefKind[] = ['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type'];
 
 export interface EntityCatalogue {
   entityType: EntityType;
@@ -32,13 +50,16 @@ const options = (values: readonly string[], label: (v: string) => string = words
 const INTERVAL_UNITS = ['days', 'weeks', 'months', 'years'];
 
 /** A link to another Fortress record, given in the file by its code (matched ignoring case when the record is imported). */
-const ref = (key: string, label: string, what: string, extra: Partial<CatalogueField> = {}): CatalogueField => ({
+const ref = (key: string, label: string, kind: RefKind, what: string, extra: Partial<CatalogueField> = {}): CatalogueField => ({
   key,
   label,
   type: 'text',
   maxLength: 100,
-  description: `The ${what} as it is in Fortress; it must already exist`,
+  description: SOURCE_KINDS.includes(kind)
+    ? `The ${what} in Fortress, or the id your source gave it when it was imported here; it must already exist`
+    : `The ${what} as it is in Fortress; it must already exist`,
   ...extra,
+  ref: { kind, source: SOURCE_KINDS.includes(kind) },
 });
 
 const party = (extra: CatalogueField[] = []): CatalogueField[] => [
@@ -96,7 +117,7 @@ export const CATALOGUE: EntityCatalogue[] = [
     fields: [
       { key: 'code', label: 'Code', type: 'text', required: true, maxLength: 40, description: 'Unique in Fortress' },
       { key: 'name', label: 'Name', type: 'text', required: true, maxLength: 120 },
-      ref('site', 'Site', 'site code'),
+      ref('site', 'Site', 'site', 'site code'),
       { key: 'workCentre', label: 'Work centre', type: 'text', maxLength: 100 },
       { key: 'description', label: 'Description', type: 'text', maxLength: 1000 },
       { key: 'active', label: 'Active', type: 'boolean', description: 'Yes / no; empty keeps it active' },
@@ -112,8 +133,8 @@ export const CATALOGUE: EntityCatalogue[] = [
       { key: 'surname', label: 'Surname', type: 'text', required: true, maxLength: 100 },
       { key: 'jobTitle', label: 'Job title', type: 'text', maxLength: 100 },
       { key: 'email', label: 'Email', type: 'email', maxLength: 200 },
-      ref('site', 'Site', 'site code'),
-      ref('department', 'Department', 'department code', { description: 'The department code as it is in Fortress; it must already exist, and fills the site when that is empty' }),
+      ref('site', 'Site', 'site', 'site code'),
+      ref('department', 'Department', 'department', 'department code', { description: 'The department code as it is in Fortress; it must already exist (and be the only department with that code), and fills the site when that is empty' }),
       { key: 'active', label: 'Active', type: 'boolean', description: 'Yes / no; empty keeps them active. Linking an employee to a sign-in stays a person\'s step' },
     ],
   },
@@ -136,19 +157,19 @@ export const CATALOGUE: EntityCatalogue[] = [
     fields: [
       { key: 'assetNumber', label: 'Asset number', type: 'text', required: true, maxLength: 40, description: 'Unique in Fortress' },
       { key: 'description', label: 'Description', type: 'text', required: true, maxLength: 200 },
-      ref('gaugeType', 'Gauge type', 'gauge type name', { description: 'The gauge type name as it is in Fortress; it must already exist, and gives the gauge its characteristics' }),
+      ref('gaugeType', 'Gauge type', 'gauge_type', 'gauge type name', { description: 'The gauge type name in Fortress, or the id your source gave it when it was imported here; it gives the gauge its characteristics' }),
       { key: 'manufacturer', label: 'Manufacturer', type: 'text', maxLength: 100 },
       { key: 'model', label: 'Model', type: 'text', maxLength: 100 },
       { key: 'serialNumber', label: 'Serial number', type: 'text', maxLength: 100 },
-      ref('site', 'Site', 'site code'),
-      ref('department', 'Department', 'department code'),
+      ref('site', 'Site', 'site', 'site code'),
+      ref('department', 'Department', 'department', 'department code'),
       { key: 'location', label: 'Location', type: 'text', maxLength: 200 },
       { key: 'rangeMin', label: 'Range from', type: 'number' },
       { key: 'rangeMax', label: 'Range to', type: 'number' },
-      ref('unit', 'Unit', 'unit code', { maxLength: 20, description: 'A unit code Fortress knows, such as mm' }),
+      ref('unit', 'Unit', 'unit', 'unit code', { maxLength: 20, description: 'A unit code Fortress knows, such as mm' }),
       { key: 'resolution', label: 'Resolution', type: 'number', description: 'Greater than 0' },
       { key: 'calibrationSource', label: 'Calibrated', type: 'enum', options: options(['internal', 'external']), description: 'Internal or external; empty means internal' },
-      ref('supplier', 'Calibration supplier', 'supplier code'),
+      ref('supplier', 'Calibration supplier', 'supplier', 'supplier code'),
       { key: 'intervalValue', label: 'Calibration interval', type: 'integer', description: 'Empty follows the gauge type' },
       { key: 'intervalUnit', label: 'Interval unit', type: 'enum', options: options(INTERVAL_UNITS) },
       { key: 'commissionedOn', label: 'Commissioned on', type: 'date' },
@@ -162,19 +183,19 @@ export const CATALOGUE: EntityCatalogue[] = [
     fields: [
       { key: 'title', label: 'Title', type: 'text', required: true, maxLength: 200 },
       { key: 'source', label: 'Source', type: 'enum', required: true, options: options(NCR_SOURCES, (v) => NCR_SOURCE_LABELS[v as (typeof NCR_SOURCES)[number]]), description: 'Where it came from or was found' },
-      ref('category', 'Category', 'category code', { description: 'A category code such as PRODUCT or PROCESS; it must already exist' }),
+      ref('category', 'Category', 'category', 'category code', { description: 'A category code such as PRODUCT or PROCESS; it must already exist' }),
       { key: 'severity', label: 'Severity', type: 'enum', options: options(['critical', 'major', 'minor']) },
       { key: 'description', label: 'Description', type: 'text', maxLength: 5000 },
       { key: 'requirement', label: 'Requirement', type: 'text', maxLength: 2000 },
       { key: 'actualResult', label: 'Actual result', type: 'text', maxLength: 2000 },
       { key: 'detectedAt', label: 'Detected on', type: 'date' },
-      ref('site', 'Site', 'site code'),
-      ref('part', 'Part number', 'part number'),
-      ref('customer', 'Customer', 'customer code', { description: 'Needed when the source is Customer' }),
-      ref('supplier', 'Supplier', 'supplier code', { description: 'Needed when the source is Supplier' }),
-      ref('detectionMachine', 'Where detected', 'machine code'),
-      ref('causalMachine', 'Causal process', 'machine code'),
-      ref('responsibleEmployee', 'Responsible employee', 'employee number'),
+      ref('site', 'Site', 'site', 'site code'),
+      ref('part', 'Part number', 'part', 'part number'),
+      ref('customer', 'Customer', 'customer', 'customer code', { description: 'Needed when the source is Customer' }),
+      ref('supplier', 'Supplier', 'supplier', 'supplier code', { description: 'Needed when the source is Supplier' }),
+      ref('detectionMachine', 'Where detected', 'machine', 'machine code'),
+      ref('causalMachine', 'Causal process', 'machine', 'machine code'),
+      ref('responsibleEmployee', 'Responsible employee', 'employee', 'employee number'),
       { key: 'quantityAffected', label: 'Quantity affected', type: 'number' },
       { key: 'quantityInspected', label: 'Quantity inspected', type: 'number' },
       { key: 'workOrder', label: 'Work order', type: 'text', maxLength: 60 },

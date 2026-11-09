@@ -48,6 +48,8 @@ export interface ImportContext {
   externalSystem: string;
   /** The person who started or approved the run; the audit trail records them as the actor. */
   initiatingUser: string | null;
+  /** The lease owner of this call (the runner functions re-check it). */
+  owner: string;
 }
 
 /**

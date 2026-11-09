@@ -9,6 +9,7 @@ export type TransformKind = (typeof TRANSFORMS)[number];
 export const DATE_FORMATS = ['iso', 'dmy', 'mdy', 'excel'] as const;
 export type DateFormat = (typeof DATE_FORMATS)[number];
 export const OWNERSHIP = ['source_wins', 'qms_wins', 'manual_review'] as const;
+export const REF_MATCH = ['code', 'source'] as const;
 
 export interface FieldMapping {
   target: string;
@@ -31,6 +32,8 @@ export interface FieldMapping {
   default?: string | null;
   /** Who owns the field once the record exists (IN5); stored now, source_wins by default. */
   ownership?: (typeof OWNERSHIP)[number];
+  /** A reference field (D10): matched by the Fortress code (default) or by the id the source gave the record in an earlier import. */
+  match?: (typeof REF_MATCH)[number];
 }
 
 export interface MappingSpec {
@@ -69,6 +72,9 @@ export function mappingProblems(catalogue: EntityCatalogue, spec: MappingSpec, h
     if (columns) for (const c of cols) if (!columns.has(c)) problems.push(`${f.label}: the column "${c}" is not in the file`);
     if (m.dateFormat && !DATE_FORMATS.includes(m.dateFormat)) problems.push(`${f.label}: unknown date format`);
     if (m.ownership && !OWNERSHIP.includes(m.ownership)) problems.push(`${f.label}: unknown ownership`);
+    if (m.match && !REF_MATCH.includes(m.match)) problems.push(`${f.label}: unknown way of matching`);
+    else if (m.match && !f.ref) problems.push(`${f.label} is not a link to another record`);
+    else if (m.match === 'source' && !f.ref?.source) problems.push(`${f.label} can only be matched by its Fortress code`);
   }
   for (const f of catalogue.fields) if (f.required && !seen.has(f.key)) problems.push(`${f.label} is required: map a column to it`);
   return problems;

@@ -134,11 +134,11 @@ describe('file imports', () => {
     expect(canonical.rows[0].canonical).toEqual({ code: 'S-1', name: 'Alpha Ltd', supplierType: 'manufacturer', country: 'GB', email: 'q@alpha.example', active: true });
   });
 
-  it('refuses a run without a file, a failed file, and a real import with no importer yet', async () => {
+  it('refuses a run without a file, a failed file, and a kind of record with no mapping', async () => {
     await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'supplier', kind: 'preview' }).expect(409);
     const failed = (await admin.query(`select id from public.integration_files where connection_id = $1 and status = 'failed' limit 1`, [connId])).rows[0].id;
     await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'supplier', kind: 'preview', fileId: failed }).expect(409);
-    await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'supplier', kind: 'full', fileId }).expect(409);
+    await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'customer', kind: 'full', fileId }).expect(409);
   });
 
   it('shows nothing of it to another organisation', async () => {

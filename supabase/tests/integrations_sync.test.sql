@@ -37,6 +37,7 @@ BEGIN
   PERFORM pg_temp.login(ann);
   -- An API connection (a file connection needs a file and a mapping, covered in integrations_files.test.sql).
   conn := app.create_integration_connection(org, 'rest_api', 'ERP suppliers', 'erp', '{"baseUrl": "https://erp.example.com"}'::jsonb);
+  PERFORM app.set_integration_import_settings(conn, 'supplier', '{"writeMode": "add_update"}'::jsonb);
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.request_integration_run(%L, 'supplier', 'full')$f$, conn)), 5), 'QM022', 'a draft connection cannot import');
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.request_integration_run(%L, 'widget', 'preview')$f$, conn)), 5), 'QM022', 'an unknown kind of record is refused');
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.request_integration_run(%L, 'supplier', 'retry')$f$, conn)), 5), 'QM022', 'a retry is asked for with its own function');

@@ -105,3 +105,13 @@ describe('the catalogue of what can be imported', () => {
     expect(r.externalId).toBe('NC-0042');
   });
 });
+
+describe('matching reference fields', () => {
+  it('allows the source id only on links to importable records', () => {
+    const cat = catalogueFor('gauge')!;
+    const base = [{ target: 'assetNumber', source: 'A' }, { target: 'description', source: 'D' }];
+    expect(mappingProblems(cat, { keyField: 'A', fields: [...base, { target: 'gaugeType', source: 'T', match: 'source' as const }] })).toEqual([]);
+    expect(mappingProblems(cat, { keyField: 'A', fields: [...base, { target: 'site', source: 'S', match: 'source' as const }] })).toContain('Site can only be matched by its Fortress code');
+    expect(mappingProblems(cat, { keyField: 'A', fields: [...base, { target: 'notes', source: 'N', match: 'code' as const }] })).toContain('Notes is not a link to another record');
+  });
+});

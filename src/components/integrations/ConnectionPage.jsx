@@ -13,6 +13,7 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
+import RowActionsMenu from "../ui/RowActionsMenu";
 
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import ConnectionForm from "./ConnectionForm";
@@ -103,8 +104,11 @@ const ConnectionPage = () => {
   const button = (label, onClick, type = "neutral", disabled = false) => (
     <CTAButton key={label} buttonType="button" type={type} size="md" onClick={onClick} disabled={disabled || mutation.isPending}>{label}</CTAButton>
   );
+  const isFile = !!c.fileConnection;
   const actions = [];
-  if (manage && !retired) {
+  if (isFile) {
+    // A file connection is in use from the start: no test, ready, activate, pause or resume (plan §6.9). Edit and retire sit in the "…" menu.
+  } else if (manage && !retired) {
     actions.push(button("Edit settings", () => setDialog("edit")));
     actions.push(button("Test connection", () => run("test", "Test finished")));
     if (c.status === "draft") actions.push(button("Mark ready", () => run("ready", "Marked ready"), "main", c.problems.length > 0));
@@ -112,22 +116,41 @@ const ConnectionPage = () => {
     if (c.status === "paused") actions.push(button("Resume", () => run("resume", "Resumed"), "main"));
     actions.push(button("Retire", () => setDialog("retire"), "danger"));
   }
-  if (c.canActivate) actions.push(button("Activate", () => run("activate", "Activated"), "main"));
+  if (!isFile && c.canActivate) actions.push(button("Activate", () => run("activate", "Activated"), "main"));
+  const fileMenu = isFile && manage && !retired && (
+    <RowActionsMenu
+      label={`Actions for ${c.name}`}
+      items={[
+        { label: "Edit settings", onSelect: () => setDialog("edit") },
+        { separator: true },
+        { label: "Retire", tone: "danger", onSelect: () => setDialog("retire") },
+      ]}
+    />
+  );
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <MenuCard title={c.name} subtitle={`${c.provider.name} · system code ${c.externalSystem}`} action={<StatusPill status={c.status} />}>
+      <MenuCard
+        title={c.name}
+        subtitle={`${c.provider.name} · system code ${c.externalSystem}`}
+        action={<div className="flex items-center gap-2">{isFile && c.status === "active" ? <span className="text-xs text-secondary-text">In use</span> : <StatusPill status={c.status} />}{fileMenu}</div>}>
+        {isFile ? (
+          <p className="text-sm text-secondary-text">
+            Upload a file, map its columns, preview it, then import it. Whoever imports a file approves it. {c.activatedAt ? `In use since ${formatDateTime(c.activatedAt)}.` : ""}
+          </p>
+        ) : (
         <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Fact label="Last test">{c.lastTest ? `${c.lastTest.ok ? "Passed" : "Failed"} · ${formatDateTime(c.lastTest.at)}${c.lastTest.message ? ` · ${c.lastTest.message}` : ""}` : "Not tested"}</Fact>
           <Fact label="Marked ready">{c.readyAt ? formatDateTime(c.readyAt) : null}</Fact>
           <Fact label="Activated">{c.activatedAt ? formatDateTime(c.activatedAt) : null}</Fact>
         </dl>
-        {c.status === "draft" && c.problems.length > 0 && (
+        )}
+        {!isFile && c.status === "draft" && c.problems.length > 0 && (
           <Callout tone="warning" title="Still needed before this can be marked ready" className="mt-3">
             <ul className="list-disc pl-5">{c.problems.map((p) => <li key={p}>{p}</li>)}</ul>
           </Callout>
         )}
-        {c.status === "ready" && !c.canActivate && (
+        {!isFile && c.status === "ready" && !c.canActivate && (
           <Callout tone="info" className="mt-3">
             Waiting for {approve ? "a different person" : "someone"} with approval rights to activate it. An owner or admin may activate a connection they prepared themselves.
           </Callout>
@@ -152,7 +175,9 @@ const ConnectionPage = () => {
       <ImportsCard connection={c} canRun={can("integrations.run")} />
 
       <MenuCard title="History" subtitle="Every change to this connection, newest first.">
-        <ul aria-label="History" className="flex flex-col divide-y divide-border-color">
+        <details open={!isFile}>
+          <summary className="cursor-pointer text-sm text-secondary-text">{isFile ? `Show the history (${c.events.length})` : "History"}</summary>
+        <ul aria-label="History" className="mt-2 flex flex-col divide-y divide-border-color">
           {c.events.map((e, i) => (
             <li key={i} className="flex flex-wrap items-baseline gap-2 py-1.5 text-sm">
               <span className="font-medium text-primary-text">{EVENT_LABELS[e.action] ?? e.action}</span>
@@ -161,6 +186,7 @@ const ConnectionPage = () => {
             </li>
           ))}
         </ul>
+        </details>
       </MenuCard>
 
       {dialog === "edit" && <ConnectionForm existing={c} providers={providers.data ?? []} onClose={() => setDialog(null)} />}

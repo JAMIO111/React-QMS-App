@@ -96,6 +96,35 @@ export const useIntegrationMappings = (connectionId, entityType) => {
   });
 };
 
+/** What an import may do for each kind of record on a connection (defaults where none are saved). */
+export const useIntegrationSettings = (connectionId) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "settings", connectionId),
+    queryFn: () => apiFetch(`${BASE}/connections/${connectionId}/settings`, { organisationId }).then((r) => r.data),
+    enabled: !!organisationId && !!connectionId,
+    retry: false,
+  });
+};
+
+/** Save one kind of record's import settings: shown at once, put back with a message if the server refuses. */
+export const useSaveImportSettings = (connectionId) => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  const queryKey = key(organisationId, "settings", connectionId);
+  return useMutation({
+    mutationFn: (body) => apiFetch(`${BASE}/connections/${connectionId}/settings`, { method: "PUT", body, organisationId }),
+    onMutate: async (body) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData(queryKey);
+      queryClient.setQueryData(queryKey, (old) => old?.map((s) => (s.entityType === body.entityType ? { ...s, ...body, saved: true } : s)));
+      return { previous };
+    },
+    onError: (_e, _b, context) => queryClient.setQueryData(queryKey, context?.previous),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
 /**
  * Every command on a connection. The credential goes in the body of one request and is never kept: the result is the connection without it.
  * Everything is marked stale afterwards so the list, the detail and the master data overview show what changed.

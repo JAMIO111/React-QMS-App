@@ -36,7 +36,7 @@ const toRun = (r: Row): z.infer<typeof Run> => ({
   finishedAt: iso(r.finished_at),
   counts: {
     total: Number(r.records_total), rejected: Number(r.rejected), unchanged: Number(r.unchanged), created: Number(r.created), updated: Number(r.updated),
-    failed: Number(r.failed), superseded: Number(r.superseded),
+    failed: Number(r.failed), superseded: Number(r.superseded), skipped: Number(r.skipped ?? 0),
   },
   attempts: Number(r.attempts),
   nextAttemptAt: ['queued', 'running'].includes(r.status as string) && r.next_attempt_at && new Date(r.next_attempt_at as string) > new Date() ? iso(r.next_attempt_at) : null,
@@ -46,6 +46,7 @@ const toRun = (r: Row): z.infer<typeof Run> => ({
   fetchDone: !!r.fetch_done,
   file: r.file_id ? { id: r.file_id as string, name: r.file_name as string } : null,
   mappingVersion: r.mapping_version === null || r.mapping_version === undefined ? null : Number(r.mapping_version),
+  settings: (r.settings as z.infer<typeof Run>['settings']) ?? null,
 });
 
 /**

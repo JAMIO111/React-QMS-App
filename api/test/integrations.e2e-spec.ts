@@ -38,6 +38,7 @@ afterAll(async () => {
 
 describe('integration connections', () => {
   let csvId: string;
+  let lifeId: string;
   let restId: string;
 
   it('lists the providers, and only for people who may read integrations', async () => {
@@ -51,7 +52,7 @@ describe('integration connections', () => {
   it('creates a draft connection and validates what it is given', async () => {
     const c = (await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'csv', name: 'ERP parts file', externalSystem: 'erp', config: { delimiter: ';' } }).expect(201)).body;
     csvId = c.id;
-    expect(c).toMatchObject({ status: 'draft', externalSystem: 'erp', provider: { key: 'csv' }, credential: null, problems: [] });
+    expect(c).toMatchObject({ status: 'active', externalSystem: 'erp', provider: { key: 'csv' }, credential: null, problems: [], fileConnection: true }); // a file connection is in use at once (IN4)
     expect(c.events).toHaveLength(1);
     await api().post(`${base}/connections`).set(await inspector()).send({ providerKey: 'csv', name: 'Nope', externalSystem: 'nope' }).expect(403);
     await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'csv', name: 'x', externalSystem: 'erp3' }).expect(400); // name too short
@@ -90,33 +91,40 @@ describe('integration connections', () => {
     expect(hist.rows[0].n).toBe(0);
   });
 
-  it('a REST connection cannot be tested or made ready until its connector exists; a file connection can', async () => {
+  it('a REST connection cannot be tested or made ready until its connector exists; a file connection has no lifecycle', async () => {
     const t = await api().post(`${base}/connections/${restId}/test`).set(await owner()).send({}).expect(409);
     expect(t.body.error.message).toMatch(/not available yet/);
     const r = await api().post(`${base}/connections/${restId}/ready`).set(await owner()).send({}).expect(409);
     expect(r.body.error.message).toMatch(/Test the connection/);
-    const tested = (await api().post(`${base}/connections/${csvId}/test`).set(await owner()).send({}).expect(200)).body;
-    expect(tested.lastTest).toMatchObject({ ok: true });
-    await api().post(`${base}/connections/${csvId}/test`).set(await inspector()).send({}).expect(403);
-    const ready = (await api().post(`${base}/connections/${csvId}/ready`).set(await approver()).send({}).expect(200)).body;
+    const f = await api().post(`${base}/connections/${csvId}/ready`).set(await owner()).send({}).expect(409);
+    expect(f.body.error.message).toMatch(/draft|file connection/);
+    await api().post(`${base}/connections/${csvId}/pause`).set(await owner()).send({ reason: 'Not needed' }).expect(409);
+    const renamed = (await api().patch(`${base}/connections/${csvId}`).set(await owner()).send({ name: 'ERP parts (file)' }).expect(200)).body;
+    expect(renamed).toMatchObject({ name: 'ERP parts (file)', status: 'active' });
+    // an API connection with a passed test (recorded here: the REST connector makes no calls until IN7) can be made ready
+    const life = (await api().post(`${base}/connections`).set(await approver()).send({ providerKey: 'rest_api', name: 'Lifecycle API', externalSystem: 'life', config: { baseUrl: 'https://life.example.com', authType: 'none' } }).expect(201)).body;
+    lifeId = life.id;
+    await admin.query(`update public.integration_connections set last_tested_at = clock_timestamp(), last_test_ok = true, last_test_message = 'ok' where id = $1`, [lifeId]);
+    await api().post(`${base}/connections/${lifeId}/test`).set(await inspector()).send({}).expect(403);
+    const ready = (await api().post(`${base}/connections/${lifeId}/ready`).set(await approver()).send({}).expect(200)).body;
     expect(ready).toMatchObject({ status: 'ready', readyBy: { name: expect.any(String) }, canActivate: false });
   });
 
   it('activation needs a different person with approval rights (an owner or admin may activate their own), and the lifecycle keeps its history', async () => {
-    await api().post(`${base}/connections/${csvId}/activate`).set(await approver()).send({}).expect(409); // the preparer, a quality manager
-    await api().post(`${base}/connections/${csvId}/activate`).set(await inspector()).send({}).expect(403);
-    expect((await api().get(`${base}/connections/${csvId}`).set(await owner()).expect(200)).body.canActivate).toBe(true);
-    const active = (await api().post(`${base}/connections/${csvId}/activate`).set(await owner()).send({}).expect(200)).body;
+    await api().post(`${base}/connections/${lifeId}/activate`).set(await approver()).send({}).expect(409); // the preparer, a quality manager
+    await api().post(`${base}/connections/${lifeId}/activate`).set(await inspector()).send({}).expect(403);
+    expect((await api().get(`${base}/connections/${lifeId}`).set(await owner()).expect(200)).body.canActivate).toBe(true);
+    const active = (await api().post(`${base}/connections/${lifeId}/activate`).set(await owner()).send({}).expect(200)).body;
     expect(active).toMatchObject({ status: 'active' });
     expect(active.activatedBy).not.toBeNull();
-    await api().patch(`${base}/connections/${csvId}`).set(await owner()).send({ name: 'Renamed while active' }).expect(409);
-    await api().post(`${base}/connections/${csvId}/pause`).set(await owner()).send({ reason: 'x' }).expect(400);
-    await api().post(`${base}/connections/${csvId}/pause`).set(await owner()).send({ reason: 'Source being rebuilt' }).expect(200);
-    const renamed = (await api().patch(`${base}/connections/${csvId}`).set(await owner()).send({ name: 'ERP parts (file)' }).expect(200)).body;
-    expect(renamed.name).toBe('ERP parts (file)');
-    await api().post(`${base}/connections/${csvId}/resume`).set(await owner()).send({}).expect(200);
-    const detail = (await api().get(`${base}/connections/${csvId}`).set(await owner()).expect(200)).body;
-    expect(detail.events.map((e: { action: string }) => e.action).reverse()).toEqual(expect.arrayContaining(['created', 'tested', 'ready', 'activated', 'paused', 'resumed']));
+    await api().patch(`${base}/connections/${lifeId}`).set(await owner()).send({ name: 'Renamed while active' }).expect(409);
+    await api().post(`${base}/connections/${lifeId}/pause`).set(await owner()).send({ reason: 'x' }).expect(400);
+    await api().post(`${base}/connections/${lifeId}/pause`).set(await owner()).send({ reason: 'Source being rebuilt' }).expect(200);
+    const renamed = (await api().patch(`${base}/connections/${lifeId}`).set(await owner()).send({ name: 'Lifecycle API (renamed)' }).expect(200)).body;
+    expect(renamed.name).toBe('Lifecycle API (renamed)');
+    await api().post(`${base}/connections/${lifeId}/resume`).set(await owner()).send({}).expect(200);
+    const detail = (await api().get(`${base}/connections/${lifeId}`).set(await owner()).expect(200)).body;
+    expect(detail.events.map((e: { action: string }) => e.action).reverse()).toEqual(expect.arrayContaining(['created', 'ready', 'activated', 'paused', 'resumed']));
   });
 
   it('revoking a credential deletes the secret and retiring is final', async () => {
@@ -144,7 +152,8 @@ describe('integration connections', () => {
 
 describe('Controller seats and owners activating their own', () => {
   it('an owner sets up and activates a connection on their own', async () => {
-    const c = (await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'csv', name: 'Owner solo file', externalSystem: 'solo' }).expect(201)).body;
+    const c = (await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'rest_api', name: 'Owner solo API', externalSystem: 'solo', config: { baseUrl: 'https://solo.example.com', authType: 'none' } }).expect(201)).body;
+    await admin.query(`update public.integration_connections set last_tested_at = clock_timestamp(), last_test_ok = true where id = $1`, [c.id]);
     const ready = (await api().post(`${base}/connections/${c.id}/ready`).set(await owner()).send({}).expect(200)).body;
     expect(ready.canActivate).toBe(true);
     const active = (await api().post(`${base}/connections/${c.id}/activate`).set(await owner()).send({}).expect(200)).body;

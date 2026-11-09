@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiTags } fr
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { CatalogueResponse, IntegrationFileDetail, IntegrationFileList, MappingList, MappingQuery, RegisterFileBody, SaveMappingBody } from './integration-files.schemas';
+import { CatalogueResponse, ImportSettings, ImportSettingsList, IntegrationFileDetail, IntegrationFileList, MappingList, MappingQuery, RegisterFileBody, SaveImportSettingsBody, SaveMappingBody } from './integration-files.schemas';
 import { IntegrationFilesService } from './integration-files.service';
 
 const READ = 'integrations.read';
@@ -60,5 +60,20 @@ export class IntegrationFilesController {
   @ApiOkResponse({ description: 'Saves a new mapping version (a change needs a reason; an unchanged mapping is refused). 409 lists what is wrong with it.', schema: openApiSchema(MappingList) })
   saveMapping(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.saveMapping(ctx, parse(Uuid, id), parse(SaveMappingBody, body));
+  }
+
+  @Get('connections/:id/settings')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'What an import may do for each kind of record on the connection (the defaults where none are saved)', schema: openApiSchema(ImportSettingsList) })
+  settings(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.settings(ctx, parse(Uuid, id));
+  }
+
+  @Put('connections/:id/settings')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(SaveImportSettingsBody) })
+  @ApiOkResponse({ description: 'Saves the import settings of one kind of record (what is not given stays as it was). 409 when not allowed (e.g. NCs are only ever added, a file cannot run on a schedule).', schema: openApiSchema(ImportSettings) })
+  saveSettings(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.saveSettings(ctx, parse(Uuid, id), parse(SaveImportSettingsBody, body));
   }
 }

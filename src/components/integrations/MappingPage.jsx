@@ -12,7 +12,7 @@ import {
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
-import { DATE_FORMAT_OPTIONS, TRANSFORM_OPTIONS, mappingToRows, rowsToFields } from "../../lib/integrations";
+import { DATE_FORMAT_OPTIONS, MATCH_OPTIONS, TRANSFORM_OPTIONS, mappingToRows, rowsToFields } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
@@ -20,6 +20,7 @@ import Field from "../ui/Field";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { ErrorNotice, TextAreaField } from "../master-data/shared";
+import ImportSettingsCard from "./ImportSettingsCard";
 import CTAButton from "@/components/CTAButton";
 
 const TYPE_HINTS = { date: "date", number: "number", integer: "whole number", boolean: "yes / no", email: "email", url: "web address", enum: "one of a list" };
@@ -81,6 +82,17 @@ const FieldRow = ({ field, row, columns, onChange, readOnly }) => {
           )}
           {field.type === "date" && row.transform !== "constant" && (
             <ComboField label="Dates written as" value={row.dateFormat} onChange={(v) => set({ dateFormat: v ?? "iso" })} options={DATE_FORMAT_OPTIONS} required disabled={readOnly} />
+          )}
+          {field.ref?.source && row.transform !== "constant" && row.transform !== "concat" && (
+            <ComboField
+              label="Match by"
+              value={row.match}
+              onChange={(v) => set({ match: v ?? "code" })}
+              options={MATCH_OPTIONS}
+              hint={row.match === "source" ? "The id the source gave it when it was imported here" : "The code as it is in Fortress"}
+              required
+              disabled={readOnly}
+            />
           )}
           {(field.type === "number" || field.type === "integer") && row.transform !== "constant" && (
             <ComboField label="Decimal mark" value={row.decimal} onChange={(v) => set({ decimal: v ?? "." })} options={[{ value: ".", label: "Point (1.5)" }, { value: ",", label: "Comma (1,5)" }]} required disabled={readOnly} />
@@ -219,6 +231,8 @@ const MappingPage = () => {
         {parsed.length === 0 && <Callout tone="info" className="mt-3">Upload a file on the connection page first: its column headings are what you map.</Callout>}
         {current && <p className="mt-3 text-sm text-secondary-text">In use: version {current.version}, saved {formatDateTime(current.createdAt)}{current.createdBy ? ` by ${current.createdBy.name}` : ""}.</p>}
       </MenuCard>
+
+      {catalogue && <ImportSettingsCard connection={c} entityType={entityType} readOnly={readOnly} />}
 
       {file.data && (
         <MenuCard title="First rows of the file" subtitle={`${file.data.fileName} · ${file.data.rowCount} rows`}>

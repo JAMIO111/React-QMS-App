@@ -74,6 +74,17 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/supplier-quality/suppliers/{id}/products': { kind: 'service', description: 'Hijacked' },
     'PATCH /api/v1/supplier-quality/supplier-products/{id}': { active: false },
     'PATCH /api/v1/supplier-quality/classifications/{id}': { label: 'Hijacked' },
+    'GET /api/v1/supplier-quality/suppliers/{id}/documents': undefined,
+    'POST /api/v1/supplier-quality/suppliers/{id}/documents': { docType: 'other', title: 'Hijacked', storagePath: 'x/supplier/y/z.pdf', fileName: 'z.pdf', sizeBytes: 1 },
+    'PATCH /api/v1/supplier-quality/supplier-documents/{id}': { title: 'Hijacked' },
+    'POST /api/v1/supplier-quality/supplier-documents/{id}/verify': {},
+    'POST /api/v1/supplier-quality/supplier-documents/{id}/remove': { reason: 'Hijacked' },
+    'GET /api/v1/supplier-quality/suppliers/{id}/certifications': undefined,
+    'POST /api/v1/supplier-quality/suppliers/{id}/certifications': { certType: 'iso_9001', certificateNumber: 'X-1', issuingBody: 'Hijacker' },
+    'PATCH /api/v1/supplier-quality/supplier-certifications/{id}': { title: 'Hijacked' },
+    'POST /api/v1/supplier-quality/supplier-certifications/{id}/renew': { certificateNumber: 'X-2', issuingBody: 'Hijacker' },
+    'POST /api/v1/supplier-quality/supplier-certifications/{id}/verify': {},
+    'POST /api/v1/supplier-quality/supplier-certifications/{id}/withdraw': { reason: 'Hijacked' },
     'GET /api/v1/parts/{id}': undefined,
     'PATCH /api/v1/parts/{id}': { name: 'Hijacked' },
     'POST /api/v1/parts/{id}/revisions': { revision: 'Z' },
@@ -300,6 +311,17 @@ const hasSample = (op: Op) =>
     'POST /api/v1/supplier-quality/suppliers/{id}/products',
     'PATCH /api/v1/supplier-quality/supplier-products/{id}',
     'PATCH /api/v1/supplier-quality/classifications/{id}',
+    'GET /api/v1/supplier-quality/suppliers/{id}/documents',
+    'POST /api/v1/supplier-quality/suppliers/{id}/documents',
+    'PATCH /api/v1/supplier-quality/supplier-documents/{id}',
+    'POST /api/v1/supplier-quality/supplier-documents/{id}/verify',
+    'POST /api/v1/supplier-quality/supplier-documents/{id}/remove',
+    'GET /api/v1/supplier-quality/suppliers/{id}/certifications',
+    'POST /api/v1/supplier-quality/suppliers/{id}/certifications',
+    'PATCH /api/v1/supplier-quality/supplier-certifications/{id}',
+    'POST /api/v1/supplier-quality/supplier-certifications/{id}/renew',
+    'POST /api/v1/supplier-quality/supplier-certifications/{id}/verify',
+    'POST /api/v1/supplier-quality/supplier-certifications/{id}/withdraw',
     'GET /api/v1/parts/{id}',
     'PATCH /api/v1/parts/{id}',
     'POST /api/v1/parts/{id}/revisions',
@@ -513,6 +535,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/supplier-quality/suppliers/')) return a.supplier;
   if (path.startsWith('/api/v1/supplier-quality/supplier-contacts/')) return a.supplierContact;
   if (path.startsWith('/api/v1/supplier-quality/supplier-products/')) return a.supplierProduct;
+  if (path.startsWith('/api/v1/supplier-quality/supplier-documents/')) return a.supplierDocument;
+  if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
   if (path.startsWith('/api/v1/supplier-quality/classifications/')) return a.supplierClassification;
   if (path.startsWith('/api/v1/parts/')) return a.part;
   if (path.startsWith('/api/v1/part-revisions/')) return a.draftRevision;
@@ -674,6 +698,8 @@ beforeAll(async () => {
     a.savedFilter = (await q1(`insert into public.saved_filters (organisation_id, user_id, scope, name, filters) values ($1, $2, 'ncr_register', 'Alpha filter', '{"stage":"open"}') returning id`, [ids.orgA, ids.ownerA])).id;
     a.supplierClassification = (await q1(`select id from public.supplier_classifications where organisation_id = $1 and key = 'welding'`, [ids.orgA])).id;
     a.supplierContact = (await q1(`insert into public.supplier_contacts (organisation_id, supplier_id, name) values ($1, $2, 'Alpha contact') returning id`, [ids.orgA, a.supplier])).id;
+    a.supplierDocument = (await q1(`select app.add_supplier_document($1::uuid, 'other', 'Alpha doc', null, null, null, null, $2, 'a.pdf', null, 1) as id`, [a.supplier, `${ids.orgA}/supplier/${a.supplier}/a.pdf`])).id;
+    a.supplierCertification = (await q1(`select app.add_supplier_certification($1::uuid, $2::jsonb) as id`, [a.supplier, JSON.stringify({ certType: 'iso_9001', certificateNumber: 'A-1', issuingBody: 'Alpha body' })])).id;
     a.supplierProduct = (await q1(`insert into public.supplier_product_links (organisation_id, supplier_id, kind, description) values ($1, $2, 'service', 'Alpha service') returning id`, [ids.orgA, a.supplier])).id;
     await client.query('commit');
   } finally {

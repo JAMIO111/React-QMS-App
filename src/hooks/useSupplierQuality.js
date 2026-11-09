@@ -92,3 +92,69 @@ export const useSupplierMutation = () => {
     },
   });
 };
+
+export const useSupplierDocuments = (id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "documents", id),
+    queryFn: () => apiFetch(`/supplier-quality/suppliers/${id}/documents`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};
+
+export const useSupplierCertifications = (id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "certifications", id),
+    queryFn: () => apiFetch(`/supplier-quality/suppliers/${id}/certifications`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};
+
+/** Current certifications and documents that expired or expire within `days`, across suppliers. */
+export const useExpiryWatchlist = ({ days = 60, kind = "" } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "watchlist", days, kind),
+    queryFn: () => apiFetch(`/supplier-quality/expiry-watchlist?${qs({ days, kind })}`, { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+    placeholderData: (previous) => previous,
+  });
+};
+
+/** Commands on certifications and documents; each answers with the record it changed. */
+export const useQualificationMutation = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, id, body }) => {
+      const send = (path, method = "POST") => apiFetch(path, { method, body, organisationId });
+      switch (action) {
+        case "addDocument":
+          return send(`/supplier-quality/suppliers/${id}/documents`);
+        case "updateDocument":
+          return send(`/supplier-quality/supplier-documents/${id}`, "PATCH");
+        case "verifyDocument":
+          return send(`/supplier-quality/supplier-documents/${id}/verify`);
+        case "removeDocument":
+          return send(`/supplier-quality/supplier-documents/${id}/remove`);
+        case "addCertification":
+          return send(`/supplier-quality/suppliers/${id}/certifications`);
+        case "updateCertification":
+          return send(`/supplier-quality/supplier-certifications/${id}`, "PATCH");
+        case "renewCertification":
+          return send(`/supplier-quality/supplier-certifications/${id}/renew`);
+        case "verifyCertification":
+          return send(`/supplier-quality/supplier-certifications/${id}/verify`);
+        case "withdrawCertification":
+          return send(`/supplier-quality/supplier-certifications/${id}/withdraw`);
+        default:
+          throw new Error(`Unknown action ${action}`);
+      }
+    },
+    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+  });
+};

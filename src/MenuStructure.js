@@ -85,7 +85,10 @@ export const menuStructure = [
     icon: ShieldCheckIcon,
     permission: "supplier_quality.read",
     path: "/Suppliers",
-    subMenu: [{ name: "Supplier register", path: "/Suppliers" }],
+    subMenu: [
+      { name: "Supplier register", path: "/Suppliers" },
+      { name: "Expiry watchlist", path: "/Supplier-Quality/Expiry" },
+    ],
   },
   {
     name: "Production",

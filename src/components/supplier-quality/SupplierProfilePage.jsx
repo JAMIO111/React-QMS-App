@@ -18,6 +18,7 @@ import { ContactDialog, ProductDialog } from "./ContactProductDialogs";
 import StatusChangeDialog from "./StatusChangeDialog";
 import SupplierDialog from "./SupplierDialog";
 import { ActivityBadge, ApprovalPill, RiskBadge } from "./SupplierBadges";
+import { CertificationsCard, DocumentsCard } from "./Qualification";
 
 const TABS = [
   { value: "overview", label: "Overview" },
@@ -296,10 +297,15 @@ const SupplierProfilePage = () => {
         </MenuCard>
       )}
       {tab === "performance" && <NotYet title="Performance" text="Scorecards, PPM and on-time delivery are not available yet." />}
-      {tab === "qualification" && <NotYet title="Qualification" text="Assessments, approval decisions, certifications and risk assessments are not available yet. Until then, the approval status is changed directly by someone who may approve, with a reason." />}
+      {tab === "qualification" && (
+        <>
+          <CertificationsCard supplierId={s.id} canManage={canManage} />
+          <NotYet title="Assessments and approval decisions" text="Qualification assessments, approval decisions and risk assessments are not available yet. Until then, the approval status is changed directly by someone who may approve, with a reason." />
+        </>
+      )}
       {tab === "incoming" && <NotYet title="Incoming quality" text="Goods receipts, incoming inspection rules and material certificates are not available yet." />}
       {tab === "audits" && <NotYet title="Audits" text="Supplier audits are not available yet." />}
-      {tab === "documents" && <NotYet title="Documents" text="Certificates and supplier documents are not available yet." />}
+      {tab === "documents" && <DocumentsCard supplierId={s.id} canManage={canManage} />}
 
       {dialog?.kind === "edit" && <SupplierDialog supplier={s} onClose={() => setDialog(null)} />}
       {dialog?.kind === "status" && <StatusChangeDialog supplier={s} onClose={() => setDialog(null)} />}

@@ -239,6 +239,13 @@ BEGIN
     SELECT a, (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), id FROM public.supplier_classifications WHERE organisation_id = a AND key = 'welding';
   INSERT INTO public.supplier_contacts (organisation_id, supplier_id, name) VALUES (a, (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), 'Sweep Contact');
   INSERT INTO public.supplier_product_links (organisation_id, supplier_id, kind, description) VALUES (a, (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), 'service', 'Sweep service');
+  -- Supplier quality (SQ2a): a document and a certification, written by the functions (as a member).
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
+  PERFORM app.add_supplier_certification((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1),
+    jsonb_build_object('certType', 'iso_9001', 'certificateNumber', 'SWEEP-1', 'issuingBody', 'Sweep Body', 'expiresOn', (current_date + 400)::text));
+  PERFORM app.add_supplier_document((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), 'quality_manual', 'Sweep manual', 'A', NULL, NULL, NULL,
+    a::text || '/supplier/' || (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1)::text || '/sweep.pdf', 'sweep.pdf', 'application/pdf', 10);
+  PERFORM pg_temp.logout();
   INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id FROM public.notifications WHERE organisation_id = a LIMIT 1;
   INSERT INTO sweep VALUES ('pc_part', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'));

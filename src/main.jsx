@@ -52,6 +52,7 @@ const PartDetailPage = lazy(() => import("./components/master-data/PartDetailPag
 const PartiesPage = lazy(() => import("./components/master-data/PartiesPage.jsx"));
 const SuppliersRegisterPage = lazy(() => import("./components/supplier-quality/SuppliersRegisterPage.jsx"));
 const SupplierProfilePage = lazy(() => import("./components/supplier-quality/SupplierProfilePage.jsx"));
+const ExpiryWatchlistPage = lazy(() => import("./components/supplier-quality/ExpiryWatchlistPage.jsx"));
 const SettingsSupplierQuality = lazy(() => import("./components/Settings/SettingsSupplierQuality.jsx"));
 const MachinesPage = lazy(() => import("./components/master-data/MachinesPage.jsx"));
 const ProductionOrdersPage = lazy(() => import("./components/production/OrdersPage.jsx"));
@@ -217,6 +218,7 @@ const router = createBrowserRouter([
           { path: "Customers", element: <PartiesPage key="customers" kind="customers" /> },
           { path: "Suppliers", element: <SuppliersRegisterPage /> },
           { path: "Suppliers/:id", element: <SupplierProfilePage /> },
+          { path: "Supplier-Quality/Expiry", element: <ExpiryWatchlistPage /> },
           { path: "Machines", element: <MachinesPage /> },
           { path: "Production", element: <Navigate to="/Production/Orders" replace /> },
           { path: "Production/Orders", element: <ProductionOrdersPage /> },

@@ -5,6 +5,7 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useRiskModel, useRiskMutation, useSupplierClassifications, useSupplierMutation } from "../../hooks/useSupplierQuality";
 import { formatDateTime } from "../../lib/processControl";
 import AssessmentTemplatesCard from "../supplier-quality/AssessmentTemplates";
+import ScorecardModelCard from "../supplier-quality/ScorecardModel";
 import { factorKey } from "../../lib/supplierRisk";
 import { describeApiError } from "../../lib/api-client";
 import Dialog from "../ui/Dialog";
@@ -218,6 +219,7 @@ const SettingsSupplierQuality = () => {
       </MenuCard>
       <AssessmentTemplatesCard canConfigure={canConfigure} />
       <RiskModelCard canConfigure={canConfigure} />
+      <ScorecardModelCard canConfigure={canConfigure} />
       {dialog && <ClassificationDialog existing={dialog.id ? dialog : undefined} onClose={() => setDialog(null)} />}
     </div>
   );

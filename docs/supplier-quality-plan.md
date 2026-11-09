@@ -91,6 +91,9 @@ Order differs from the spec only where a dependency forces it (§2.5).
 ### SQ5 — Performance *(spec phase 4, after receipts)*
 - Metric definitions in pure code (PPM from received/rejected units, lot rejection rate kept distinct, OTD with configurable original-vs-agreed date policy, NC counts/severity/repeat, SCAR responsiveness, certification validity, document completeness), configurable weights/bands, **stored scorecard snapshots** (period, values, config version, band, warnings) that never change, trends, supplier dashboard and **watchlist** where every warning drills to its source and says why.
 
+#### SQ5 as built
+- One migration `20260103100000_supplier_performance.sql`: the **database** works out the metrics, score, band and warnings (`app.supplier_performance`), so a saved scorecard, the live tab and the watchlist share one definition; the model is versioned per organisation; scorecards are frozen snapshots. The API only reads and reshapes (no `metrics.ts`). UI: Performance tab, watchlist page, scoring model in Settings. Document completeness is not a metric yet.
+
 ### SQ6 — Audits, reports, advanced *(spec phase 6)*
 - `supplier` as an audit target kind across definitions, versions, schedule, records and the audits dashboard; supplier-filtered audit tab with findings → NC links; risk-based inspection **recommendations** (never automatic weakening); reports/exports with period, definitions and calculation timestamp; portal readiness notes only.
 

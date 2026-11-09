@@ -22,6 +22,7 @@ import { CertificationsCard, DocumentsCard } from "./Qualification";
 import { RiskCard } from "./RiskAssessment";
 import { ApprovalCard, AssessmentsCard } from "./Approvals";
 import SupplierNcs from "./SupplierNcs";
+import SupplierPerformance from "./SupplierPerformance";
 import SupplierReceiving from "./SupplierReceiving";
 import SupplierScars from "./SupplierScars";
 
@@ -293,7 +294,7 @@ const SupplierProfilePage = () => {
       {tab === "history" && <History id={s.id} />}
       {tab === "nonconformities" && <SupplierNcs supplier={s} />}
       {tab === "scars" && <SupplierScars supplier={s} />}
-      {tab === "performance" && <NotYet title="Performance" text="Scorecards, PPM and on-time delivery are not available yet." />}
+      {tab === "performance" && <SupplierPerformance supplier={s} />}
       {tab === "qualification" && (
         <>
           <ApprovalCard supplier={s} canManage={canManage} canApprove={canApprove} />

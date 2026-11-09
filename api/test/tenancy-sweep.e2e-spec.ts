@@ -86,6 +86,10 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/supplier-quality/supplier-certifications/{id}/verify': {},
     'POST /api/v1/supplier-quality/supplier-certifications/{id}/withdraw': { reason: 'Hijacked' },
     'GET /api/v1/supplier-quality/suppliers/{id}/risk-assessments': undefined,
+    'GET /api/v1/supplier-quality/suppliers/{id}/performance': undefined,
+    'GET /api/v1/supplier-quality/suppliers/{id}/scorecards': undefined,
+    'POST /api/v1/supplier-quality/suppliers/{id}/scorecards': { from: '2026-01-01', to: '2026-01-31' },
+    'GET /api/v1/supplier-quality/scorecards/{id}': undefined,
     'POST /api/v1/supplier-quality/suppliers/{id}/risk-assessments': { scores: [{ key: 'quality_system', score: 2 }], rationale: 'Hijacked' },
     'POST /api/v1/supplier-quality/suppliers/{id}/risk-assessments/preview': { scores: [{ key: 'quality_system', score: 2 }] },
     'PATCH /api/v1/supplier-quality/assessment-templates/{id}': { name: 'Hijacked' },
@@ -373,6 +377,10 @@ const hasSample = (op: Op) =>
     'POST /api/v1/supplier-quality/supplier-certifications/{id}/verify',
     'POST /api/v1/supplier-quality/supplier-certifications/{id}/withdraw',
     'GET /api/v1/supplier-quality/suppliers/{id}/risk-assessments',
+    'GET /api/v1/supplier-quality/suppliers/{id}/performance',
+    'GET /api/v1/supplier-quality/suppliers/{id}/scorecards',
+    'POST /api/v1/supplier-quality/suppliers/{id}/scorecards',
+    'GET /api/v1/supplier-quality/scorecards/{id}',
     'POST /api/v1/supplier-quality/suppliers/{id}/risk-assessments',
     'POST /api/v1/supplier-quality/suppliers/{id}/risk-assessments/preview',
     'PATCH /api/v1/supplier-quality/assessment-templates/{id}',
@@ -647,6 +655,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/inspection-requirements/')) return a.requirement;
   if (path.startsWith('/api/v1/goods-receipt-lines/')) return a.receiptLine;
   if (path.startsWith('/api/v1/material-certificates/')) return a.materialCertificate;
+  if (path.startsWith('/api/v1/supplier-quality/scorecards/')) return a.scorecard;
   if (path.startsWith('/api/v1/supplier-quality/scar-items/')) return a.supplierScarItem;
   if (path.startsWith('/api/v1/supplier-quality/scar-extensions/')) return a.supplierScarExtension;
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
@@ -826,6 +835,7 @@ beforeAll(async () => {
     a.requirement = (await q1(`select app.save_inspection_requirement($1::uuid, null, '{"name":"Alpha rule","strategy":"full"}'::jsonb) as id`, [ids.orgA])).id;
     a.receiptLine = (await q1(`select id from public.goods_receipt_lines where goods_receipt_id = $1 limit 1`, [a.goodsReceipt])).id;
     a.materialCertificate = (await q1(`select app.record_material_certificate($1::uuid, jsonb_build_object('certificateNumber', 'ALPHA-MTR', 'kind', 'mill_test_report', 'heatNumber', 'HA-1', 'receiptLineId', $2::text)) as id`, [a.supplier, a.receiptLine])).id;
+    a.scorecard = (await q1(`select app.save_supplier_scorecard($1::uuid, current_date - 30, current_date, 'Alpha scorecard') as id`, [a.supplier])).id;
     a.supplierScarItem = (await q1(`select app.add_scar_item($1::uuid, '{"material":"Alpha steel"}'::jsonb) as id`, [a.supplierScar])).id;
     a.supplierScarExtension = (await q1(`select app.request_scar_extension($1::uuid, current_date + 40, 'Alpha extension') as id`, [a.supplierScar])).id;
     a.supplierProduct = (await q1(`insert into public.supplier_product_links (organisation_id, supplier_id, kind, description) values ($1, $2, 'service', 'Alpha service') returning id`, [ids.orgA, a.supplier])).id;

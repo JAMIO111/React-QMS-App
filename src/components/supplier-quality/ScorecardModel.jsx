@@ -1,0 +1,107 @@
+import { useState } from "react";
+import { usePerformanceMutation, useScorecardModel } from "../../hooks/useSupplierPerformance";
+import { formatDateTime } from "../../lib/processControl";
+import { METRIC_LABELS, METRIC_ORDER, OTD_POLICIES } from "../../lib/supplierPerformance";
+import CTAButton from "../CTAButton";
+import ComboField from "../ui/ComboField";
+import Dialog from "../ui/Dialog";
+import Field from "../ui/Field";
+import MenuCard from "../ui/MenuCard";
+import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
+
+const num = (v) => (v === "" ? NaN : Number(v));
+
+/** A new version of the scoring model: date policy, weights, PPM targets, NC penalties, bands and the minimum data. The reason is kept with it. */
+const ModelDialog = ({ model, onClose }) => {
+  const mutation = usePerformanceMutation();
+  const c = model.config;
+  const [policy, setPolicy] = useState(c.otdPolicy);
+  const [weights, setWeights] = useState(Object.fromEntries(METRIC_ORDER.map((k) => [k, String(c.weights[k])])));
+  const [ppmGood, setPpmGood] = useState(String(c.ppmGood));
+  const [ppmZero, setPpmZero] = useState(String(c.ppmZero));
+  const [pen, setPen] = useState({ critical: String(c.ncPenalty.critical), major: String(c.ncPenalty.major), minor: String(c.ncPenalty.minor) });
+  const [goodFrom, setGoodFrom] = useState(String(c.goodFrom));
+  const [watchFrom, setWatchFrom] = useState(String(c.watchFrom));
+  const [minLines, setMinLines] = useState(String(c.minLines));
+  const [reason, setReason] = useState("");
+
+  const config = {
+    otdPolicy: policy,
+    weights: Object.fromEntries(METRIC_ORDER.map((k) => [k, num(weights[k])])),
+    ppmGood: num(ppmGood), ppmZero: num(ppmZero),
+    ncPenalty: { critical: num(pen.critical), major: num(pen.major), minor: num(pen.minor) },
+    goodFrom: num(goodFrom), watchFrom: num(watchFrom), minLines: num(minLines),
+  };
+  const ints = [...Object.values(config.weights), ...Object.values(config.ncPenalty), config.minLines];
+  const problems = [];
+  if (ints.some((n) => !Number.isInteger(n) || n < 0)) problems.push("Weights, penalties and the minimum are whole numbers");
+  else if (Object.values(config.weights).reduce((a, b) => a + b, 0) <= 0) problems.push("At least one metric needs a weight above zero");
+  if (!(config.ppmZero > config.ppmGood && config.ppmGood >= 0)) problems.push("The PPM that scores zero must be above the one that scores 100");
+  if (!(config.watchFrom > 0 && config.watchFrom < config.goodFrom && config.goodFrom <= 100)) problems.push("Bands must rise: watch below good, up to 100");
+  if (!(config.minLines >= 1)) problems.push("Ask for at least one delivered line");
+  const ok = problems.length === 0 && reason.trim().length >= 3;
+
+  return (
+    <Dialog title="Change the scorecard model" onClose={onClose} width="max-w-2xl">
+      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (ok && !mutation.isPending) mutation.mutate({ action: "saveModel", body: { config, reason: reason.trim() } }, { onSuccess: onClose }); }}>
+        <p className="text-sm text-secondary-text">This saves version {model.version + 1}. Scorecards already saved keep the version they used; the live figures use the new one straight away.</p>
+        <ComboField label="On-time delivery is judged against" required value={policy} onChange={setPolicy} options={OTD_POLICIES} />
+        <fieldset className="grid gap-3 sm:grid-cols-5">
+          <legend className="mb-1 text-sm font-medium text-secondary-text">Weight of each metric (0 to 100)</legend>
+          {METRIC_ORDER.map((k) => <Field key={k} label={METRIC_LABELS[k]} type="number" min="0" max="100" value={weights[k]} onChange={(e) => setWeights((w) => ({ ...w, [k]: e.target.value }))} />)}
+        </fieldset>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="PPM that scores 100" type="number" min="0" value={ppmGood} onChange={(e) => setPpmGood(e.target.value)} />
+          <Field label="PPM that scores 0" type="number" min="1" value={ppmZero} onChange={(e) => setPpmZero(e.target.value)} />
+        </div>
+        <fieldset className="grid gap-3 sm:grid-cols-3">
+          <legend className="mb-1 text-sm font-medium text-secondary-text">Points taken off per non-conformance</legend>
+          {["critical", "major", "minor"].map((k) => <Field key={k} label={k[0].toUpperCase() + k.slice(1)} type="number" min="0" max="100" value={pen[k]} onChange={(e) => setPen((p) => ({ ...p, [k]: e.target.value }))} />)}
+        </fieldset>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Good from (score)" type="number" min="1" max="100" value={goodFrom} onChange={(e) => setGoodFrom(e.target.value)} />
+          <Field label="Watch from (score)" type="number" min="1" max="100" value={watchFrom} onChange={(e) => setWatchFrom(e.target.value)} hint="Below this is poor" />
+          <Field label="Delivered lines needed" type="number" min="1" max="100" value={minLines} onChange={(e) => setMinLines(e.target.value)} hint="Before on-time delivery and PPM are scored" />
+        </div>
+        <TextAreaField label="Why is it changing?" required value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} rows={2} />
+        {problems.length > 0 && <p className="text-sm text-error-color" role="alert">{problems.join(". ")}.</p>}
+        <FormError error={mutation.error} />
+        <div className="flex justify-end gap-2">
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!ok || mutation.isPending}>{mutation.isPending ? "Saving…" : "Save new version"}</CTAButton>
+        </div>
+      </form>
+    </Dialog>
+  );
+};
+
+/** Settings → Supplier quality: how performance is scored. */
+export default function ScorecardModelCard({ canConfigure }) {
+  const query = useScorecardModel();
+  const [open, setOpen] = useState(false);
+  if (query.isLoading) return null;
+  if (query.error) return <ErrorNotice error={query.error} />;
+  const m = query.data;
+  const c = m.config;
+  return (
+    <MenuCard
+      title="Supplier performance scoring"
+      subtitle={`How scorecards are worked out (version ${m.version}). Each metric scores 0 to 100; the weighted average gives the band. A metric without enough data is left out.`}
+      action={canConfigure && <CTAButton buttonType="button" type="secondary" size="default" onClick={() => setOpen(true)}>Change the model</CTAButton>}>
+      <table className="w-full text-left text-sm" aria-label="Scoring weights">
+        <thead><tr className="text-secondary-text"><th className="py-1 pr-3 font-medium">Metric</th><th className="py-1 font-medium">Weight</th></tr></thead>
+        <tbody>{METRIC_ORDER.map((k) => <tr key={k} className="border-t border-border-color"><td className="py-1.5 pr-3 text-primary-text">{METRIC_LABELS[k]}</td><td className="py-1.5 tabular-nums text-primary-text">{c.weights[k]}</td></tr>)}</tbody>
+      </table>
+      <p className="mt-3 text-sm text-secondary-text">
+        On-time delivery by the {OTD_POLICIES.find((p) => p.value === c.otdPolicy)?.label.toLowerCase()} · {c.ppmGood.toLocaleString()} PPM scores 100, {c.ppmZero.toLocaleString()} scores 0 · NC penalties {c.ncPenalty.critical}/{c.ncPenalty.major}/{c.ncPenalty.minor} (critical/major/minor) · good from {c.goodFrom}, watch from {c.watchFrom} · {c.minLines} delivered lines needed
+      </p>
+      <details className="mt-2">
+        <summary className="cursor-pointer text-sm text-secondary-text">Versions ({m.versions.length})</summary>
+        <ul className="mt-2 flex flex-col gap-1 text-sm text-secondary-text" aria-label="Scoring model versions">
+          {m.versions.map((v) => <li key={v.version}>Version {v.version} · {formatDateTime(v.createdAt)}{v.createdBy ? ` · ${v.createdBy.name}` : ""} · {v.reason}</li>)}
+        </ul>
+      </details>
+      {open && <ModelDialog model={m} onClose={() => setOpen(false)} />}
+    </MenuCard>
+  );
+}

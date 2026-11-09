@@ -3,10 +3,14 @@ import { CheckIcon, PencilIcon, PlusIcon } from "@/components/icons";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import LoadingScreen from "../ui/LoadingScreen";
-import { ErrorNotice, FormError, SelectField } from "../master-data/shared";
+import { ErrorNotice, FormError } from "../master-data/shared";
+import ComboField from "../ui/ComboField";
 import { TextAreaField } from "./Pickers";
 import ReasonDialog from "./ReasonDialog";
 import { useToast } from "../../contexts/ToastProvider";
+import { useOrganisation } from "../../contexts/OrganisationProvider";
+import { apiFetch } from "../../lib/api-client";
+import { useOptimisticSubmit } from "../../lib/optimisticSubmit";
 import { useNcrAffectedLots, useNcrDispositions, useNcrMutation } from "../../hooks/useNcr";
 import { DISPOSITION_DECISIONS, decisionLabel } from "../../lib/ncrWorkflow";
 import { formatDate } from "../../lib/ncr";
@@ -19,9 +23,11 @@ const STATUS = {
 };
 
 /** Propose or change a disposition (only a proposed one can be changed). */
-const DispositionDialog = ({ ncrId, disposition, remaining, lots, onClose }) => {
-  const mutation = useNcrMutation();
-  const { showToast } = useToast();
+const DispositionDialog = ({ ncrId, disposition, remaining: remainingNow, lots: lotsNow, onClose }) => {
+  const { organisationId } = useOrganisation();
+  const submitOptimistically = useOptimisticSubmit();
+  // What is left to decide is fixed when the dialog opens: the saved result changes the numbers behind it, and that must never make a valid entry look wrong.
+  const [{ remaining, lots }] = useState({ remaining: remainingNow, lots: lotsNow });
   const [form, setForm] = useState({
     decision: disposition?.decision ?? "scrap",
     quantity: disposition?.quantity ?? (remaining > 0 ? remaining : ""),
@@ -37,21 +43,37 @@ const DispositionDialog = ({ ncrId, disposition, remaining, lots, onClose }) => 
   const qtyOk = String(form.quantity).trim() !== "" && Number.isFinite(qty) && qty > 0 && qty <= max;
   const submit = (e) => {
     e.preventDefault();
+    if (!qtyOk || !form.instructions.trim()) return;
     const body = { decision: form.decision, quantity: qty, instructions: form.instructions.trim(), reference: form.reference.trim() || null, lotId: form.lotId };
-    mutation.mutate(disposition ? { path: `/ncr-dispositions/${disposition.id}`, method: "PATCH", body } : { path: `/ncrs/${ncrId}/dispositions`, body }, {
-      onSuccess: () => {
-        showToast({ type: "success", title: "Saved", message: disposition ? "Disposition updated." : "Disposition proposed." });
-        onClose();
-      },
+    const chosenLot = lots.find((l) => l.lot.id === body.lotId);
+    const delta = qty - (disposition?.quantity ?? 0);
+    // The list shows the proposal at once; the dialog closes; the server's version replaces it a moment later (or the list goes back and a message says why).
+    onClose();
+    submitOptimistically({
+      request: () => apiFetch(disposition ? `/ncr-dispositions/${disposition.id}` : `/ncrs/${ncrId}/dispositions`, { method: disposition ? "PATCH" : "POST", body, organisationId }),
+      patches: [{
+        queryKey: ["api", "org", organisationId, "ncr", "dispositions", ncrId],
+        update: (d) => ({
+          ...d,
+          data: disposition
+            ? d.data.map((x) => (x.id === disposition.id ? { ...x, ...body, lot: chosenLot ? { id: chosenLot.lot.id, lotNumber: chosenLot.lot.lotNumber } : null } : x))
+            : [...d.data, { id: `pending-${Date.now()}`, ...body, status: "proposed", lot: chosenLot ? { id: chosenLot.lot.id, lotNumber: chosenLot.lot.lotNumber } : null, createdAt: new Date().toISOString(), createdBy: null }],
+          proposedQuantity: (d.proposedQuantity ?? 0) + delta,
+          remaining: (d.remaining ?? 0) - delta,
+        }),
+      }],
+      success: { title: "Saved", message: disposition ? "Disposition updated." : "Disposition proposed." },
+      errorTitle: "Disposition not saved",
     });
   };
   return (
     <Dialog title={disposition ? "Edit the proposed disposition" : "Propose a disposition"} onClose={onClose} width="max-w-xl">
       <form onSubmit={submit} noValidate className="flex flex-col gap-3">
-        <SelectField label="Decision" required value={form.decision} onChange={(v) => setForm((f) => ({ ...f, decision: v }))} options={DISPOSITION_DECISIONS} placeholder="Choose one" />
+        <ComboField label="Decision" required clearable={false} value={form.decision} onChange={(v) => setForm((f) => ({ ...f, decision: v }))} options={DISPOSITION_DECISIONS} placeholder="Choose one" />
         {lots.length > 0 && (
-          <SelectField
+          <ComboField
             label="Lot"
+            clearable
             value={form.lotId}
             onChange={(v) => setForm((f) => ({ ...f, lotId: v || null }))}
             options={lots.map((l) => ({ value: l.lot.id, label: `${l.lot.lotNumber} (${l.quantity} affected)` }))}
@@ -77,13 +99,12 @@ const DispositionDialog = ({ ncrId, disposition, remaining, lots, onClose }) => 
           required={form.decision === "concession"}
           hint={form.decision === "concession" ? "The customer's written approval: needed before a concession can be approved" : "Optional: a return authorisation, rework order…"}
         />
-        <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !qtyOk || !form.instructions.trim()}>
-            {mutation.isPending ? "Saving…" : disposition ? "Save" : "Propose"}
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!qtyOk || !form.instructions.trim()}>
+            {disposition ? "Save" : "Propose"}
           </CTAButton>
         </div>
       </form>

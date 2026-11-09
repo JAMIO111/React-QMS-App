@@ -4,10 +4,14 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import LoadingScreen from "../ui/LoadingScreen";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
-import { ErrorNotice, FormError, SelectField } from "../master-data/shared";
+import { ErrorNotice, FormError } from "../master-data/shared";
+import ComboField from "../ui/ComboField";
 import { TextAreaField } from "./Pickers";
 import ReasonDialog from "./ReasonDialog";
 import { useToast } from "../../contexts/ToastProvider";
+import { useOrganisation } from "../../contexts/OrganisationProvider";
+import { apiFetch } from "../../lib/api-client";
+import { useOptimisticSubmit } from "../../lib/optimisticSubmit";
 import { useEmployees, useNcrAffectedLots, useNcrContainment, useNcrMutation } from "../../hooks/useNcr";
 import { CONTAINMENT_KINDS, containmentKindLabel } from "../../lib/ncrWorkflow";
 import { formatDate } from "../../lib/ncr";
@@ -24,8 +28,8 @@ const toNumber = (text) => (String(text).trim() === "" ? null : Number(text));
 /** Add or change a containment action (only an open one can be changed). */
 const ActionDialog = ({ ncrId, action, lots, onClose }) => {
   const employees = useEmployees();
-  const mutation = useNcrMutation();
-  const { showToast } = useToast();
+  const { organisationId } = useOrganisation();
+  const submitOptimistically = useOptimisticSubmit();
   const [form, setForm] = useState({
     kind: action?.kind ?? "quarantine",
     description: action?.description ?? "",
@@ -38,28 +42,44 @@ const ActionDialog = ({ ncrId, action, lots, onClose }) => {
   const submit = (e) => {
     e.preventDefault();
     const body = { kind: form.kind, description: form.description.trim(), ownerEmployeeId: form.ownerEmployeeId, dueDate: form.dueDate, quantityContained: toNumber(form.quantityContained), lotId: form.lotId };
-    mutation.mutate(action ? { path: `/ncr-containment-actions/${action.id}`, method: "PATCH", body } : { path: `/ncrs/${ncrId}/containment-actions`, body }, {
-      onSuccess: () => {
-        showToast({ type: "success", title: "Saved", message: action ? "Containment action updated." : "Containment action added." });
-        onClose();
-      },
+    if (!form.description.trim() || !qtyValid) return;
+    const owner = (employees.data ?? []).find((e) => e.id === body.ownerEmployeeId);
+    const lot = lots.find((l) => l.lot.id === body.lotId);
+    const shown = { ...body, owner: owner ? { id: owner.id, name: owner.name } : null, lot: lot ? { id: lot.lot.id, lotNumber: lot.lot.lotNumber } : null };
+    // The action appears in the list at once and the dialog closes; the server's version replaces it, or the list goes back and a message says why.
+    onClose();
+    submitOptimistically({
+      request: () => apiFetch(action ? `/ncr-containment-actions/${action.id}` : `/ncrs/${ncrId}/containment-actions`, { method: action ? "PATCH" : "POST", body, organisationId }),
+      patches: [{
+        queryKey: ["api", "org", organisationId, "ncr", "containment", ncrId],
+        update: (c) => ({
+          ...c,
+          actions: action
+            ? c.actions.map((x) => (x.id === action.id ? { ...x, ...shown } : x))
+            : [...c.actions, { id: `pending-${Date.now()}`, ...shown, status: "open", createdAt: new Date().toISOString() }],
+        }),
+      }],
+      success: { title: "Saved", message: action ? "Containment action updated." : "Containment action added." },
+      errorTitle: "Containment action not saved",
     });
   };
   return (
     <Dialog title={action ? "Edit containment action" : "Add a containment action"} onClose={onClose} width="max-w-xl">
       <form onSubmit={submit} noValidate className="flex flex-col gap-3">
-        <SelectField label="What kind of action is it?" required value={form.kind} onChange={(v) => setForm((f) => ({ ...f, kind: v }))} options={CONTAINMENT_KINDS} placeholder="Choose one" />
+        <ComboField label="What kind of action is it?" required clearable={false} value={form.kind} onChange={(v) => setForm((f) => ({ ...f, kind: v }))} options={CONTAINMENT_KINDS} placeholder="Choose one" />
         <TextAreaField label="What is being done?" required value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} maxLength={1000} rows={3} />
-        <SelectField
+        <ComboField
           label="Owner"
+          clearable
           value={form.ownerEmployeeId}
           onChange={(v) => setForm((f) => ({ ...f, ownerEmployeeId: v || null }))}
           options={(employees.data ?? []).filter((e) => e.active || e.id === form.ownerEmployeeId).map((e) => ({ value: e.id, label: e.name }))}
           placeholder="Not assigned"
         />
         {lots.length > 0 && (
-          <SelectField
+          <ComboField
             label="Lot"
+            clearable
             value={form.lotId}
             onChange={(v) => setForm((f) => ({ ...f, lotId: v || null }))}
             options={lots.map((l) => ({ value: l.lot.id, label: `${l.lot.lotNumber} (${l.quantity} affected)` }))}
@@ -70,13 +90,12 @@ const ActionDialog = ({ ncrId, action, lots, onClose }) => {
           <RHFDatePickerPopout label="Due" value={form.dueDate} onChange={(v) => setForm((f) => ({ ...f, dueDate: v }))} valueFormat="iso" clearable />
           <Field label="Quantity contained" inputMode="decimal" value={form.quantityContained} onChange={(e) => setForm((f) => ({ ...f, quantityContained: e.target.value }))} error={!qtyValid ? "Enter a number" : undefined} hint="Optional" />
         </div>
-        <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !form.description.trim() || !qtyValid}>
-            {mutation.isPending ? "Saving…" : action ? "Save" : "Add action"}
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!form.description.trim() || !qtyValid}>
+            {action ? "Save" : "Add action"}
           </CTAButton>
         </div>
       </form>

@@ -52,6 +52,11 @@ const disp = (over) => ({
   createdBy: { id: "u1", name: "Sam" },
   ...over,
 });
+const pickIn = async (dialog, label, option) => {
+  await userEvent.click(within(dialog).getByRole("combobox", { name: label }));
+  await userEvent.click(await screen.findByRole("option", { name: new RegExp(option, "i") }));
+};
+
 const lotRow = (over = {}) => ({
   id: "al1",
   nonconformanceId: "n1",
@@ -120,9 +125,9 @@ describe("containment", () => {
     const dialog = screen.getByRole("dialog", { name: "Add a containment action" });
     const add = within(dialog).getByRole("button", { name: "Add action" });
     expect(add).toBeDisabled();
-    await user.selectOptions(within(dialog).getByLabelText(/What kind of action/), "sort");
+    await pickIn(dialog, /What kind of action/, "sort");
     await user.type(within(dialog).getByLabelText(/What is being done/), "  Sort the remaining stock  ");
-    await user.selectOptions(within(dialog).getByLabelText("Owner"), "e1");
+    await pickIn(dialog, "Owner", "Ada Lovelace");
     await user.type(within(dialog).getByLabelText("Quantity contained"), "40");
     await user.click(add);
     await waitFor(() => expect(sent("/ncrs/n1/containment-actions")).toHaveLength(1));
@@ -209,7 +214,7 @@ describe("dispositions", () => {
     const dialog = screen.getByRole("dialog", { name: "Propose a disposition" });
     expect(within(dialog).getByLabelText(/^Quantity/)).toHaveValue("4");
     await user.type(within(dialog).getByLabelText(/Instructions/), "Rework at op 20");
-    await user.selectOptions(within(dialog).getByLabelText(/Decision/), "rework");
+    await pickIn(dialog, /Decision/, "rework");
     const qty = within(dialog).getByLabelText(/^Quantity/);
     await user.clear(qty);
     await user.type(qty, "5");
@@ -227,7 +232,7 @@ describe("dispositions", () => {
     renderIt(<NcrDispositions ncrId="n1" canEdit />);
     await user.click(await screen.findByRole("button", { name: "Propose a disposition" }));
     const dialog = screen.getByRole("dialog", { name: "Propose a disposition" });
-    await user.selectOptions(within(dialog).getByLabelText(/Decision/), "concession");
+    await pickIn(dialog, /Decision/, "concession");
     expect(within(dialog).getByText(/The customer's written approval: needed before a concession can be approved/)).toBeInTheDocument();
   });
 
@@ -374,13 +379,13 @@ describe("naming a lot on a disposition or containment action", () => {
     renderIt(<NcrDispositions ncrId="n1" canEdit />);
     await userEvent.click(await screen.findByRole("button", { name: /Propose a disposition/ }));
     const dialog = await screen.findByRole("dialog");
-    await userEvent.selectOptions(await within(dialog).findByLabelText("Lot"), "l1");
+    await pickIn(dialog, "Lot", "LOT-1");
     await userEvent.clear(within(dialog).getByLabelText(/Quantity/));
     await userEvent.type(within(dialog).getByLabelText(/Quantity/), "1");
     await userEvent.type(within(dialog).getByLabelText(/Instructions/), "Scrap one");
     expect(within(dialog).getByText("Enter a number above 0 and up to 0")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Propose" })).toBeDisabled();
-    await userEvent.selectOptions(within(dialog).getByLabelText("Lot"), "l2");
+    await pickIn(dialog, "Lot", "LOT-2");
     expect(within(dialog).getByRole("button", { name: "Propose" })).toBeEnabled();
     await userEvent.click(within(dialog).getByRole("button", { name: "Propose" }));
     await waitFor(() => expect(sent("/ncrs/n1/dispositions")).toHaveLength(1));
@@ -401,9 +406,10 @@ describe("naming a lot on a disposition or containment action", () => {
     affectedLots = { data: [lotRow(), lotRow({ id: "al3", lot: { id: "l3", lotNumber: "LOT-GONE", status: "open", statusReason: null }, removedAt: "2026-11-06T09:00:00Z", removedBy: { id: "u1", name: "Sam" }, removedReason: "Mistake" })], affected: 10, assigned: 6, remaining: 4, suggestedLot: null, problems: [] };
     renderIt(<NcrContainment ncrId="n1" canEdit />);
     await userEvent.click(await screen.findByRole("button", { name: /Add containment action/ }));
-    const select = await within(await screen.findByRole("dialog")).findByLabelText("Lot");
-    expect(within(select).getByRole("option", { name: /LOT-1/ })).toBeInTheDocument();
-    expect(within(select).queryByRole("option", { name: /LOT-GONE/ })).toBeNull();
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(await within(dialog).findByRole("combobox", { name: /Lot/ }));
+    expect(await screen.findByRole("option", { name: /LOT-1/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /LOT-GONE/ })).toBeNull();
   });
 
   it("offers no Lot choice when the NC names no lot", async () => {

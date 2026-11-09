@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "../lib/api-client";
+import { apiFetch, describeApiError } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
 import { useOptimisticSubmit } from "../lib/optimisticSubmit";
+import { useToast } from "../contexts/ToastProvider";
 
 /** Supplier quality (docs/supplier-quality-plan.md): the register, a supplier's profile and history, classifications, and the commands. */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "supplier-quality", ...rest];
@@ -127,9 +128,19 @@ export const useExpiryWatchlist = ({ days = 60, kind = "" } = {}) => {
 };
 
 /** Commands on certifications and documents; each answers with the record it changed. */
+const stamp = (note) => ({ at: new Date().toISOString(), by: null, note: note ?? null });
+const QUALIFICATION_GUESSES = {
+  verifyDocument: { list: "documents", apply: (row, b) => ({ ...row, verification: stamp(b.note) }) },
+  removeDocument: { list: "documents", apply: (row, b) => ({ ...row, status: "removed", removal: { ...row.removal, reason: b.reason } }) },
+  updateDocument: { list: "documents", apply: (row, b) => ({ ...row, ...b }) },
+  verifyCertification: { list: "certifications", apply: (row, b) => ({ ...row, verification: stamp(b.note) }) },
+  withdrawCertification: { list: "certifications", apply: (row, b) => ({ ...row, status: "withdrawn", withdrawal: { ...row.withdrawal, reason: b.reason } }) },
+};
+
 export const useQualificationMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   return useMutation({
     mutationFn: ({ action, id, body }) => {
       const send = (path, method = "POST") => apiFetch(path, { method, body, organisationId });
@@ -156,7 +167,21 @@ export const useQualificationMutation = () => {
           throw new Error(`Unknown action ${action}`);
       }
     },
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+    // The lists show the result of a verify / remove / withdraw / edit at once; the server's version replaces the guess, and a refusal puts the old rows back and says why.
+    onMutate: async ({ action, id, body }) => {
+      const change = QUALIFICATION_GUESSES[action];
+      if (!change) return { snapshots: [] };
+      const queryKey = key(organisationId, change.list);
+      await queryClient.cancelQueries({ queryKey });
+      const snapshots = queryClient.getQueriesData({ queryKey });
+      queryClient.setQueriesData({ queryKey }, (previous) => previous && Array.isArray(previous.data) ? { ...previous, data: previous.data.map((row) => (row.id === id ? change.apply(row, body ?? {}) : row)) } : previous);
+      return { snapshots };
+    },
+    onError: (error, _vars, context) => {
+      context?.snapshots?.forEach(([queryKey, data]) => queryClient.setQueryData(queryKey, data));
+      showToast({ type: "error", title: "Not saved", message: describeApiError(error) });
+    },
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };
 

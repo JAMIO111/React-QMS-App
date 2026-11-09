@@ -213,6 +213,23 @@ describe("documents", () => {
     expect(calls.some((c) => c.k === "POST /supplier-quality/suppliers/s1/certifications")).toBe(false);
   });
 
+  it("marks a document verified at once and puts it back if the save is refused", async () => {
+    let fail;
+    routeApi({
+      "GET /supplier-quality/suppliers/s1/documents": { data: [doc()] },
+      "POST /supplier-quality/supplier-documents/d1/verify": () => new Promise((_ok, reject) => { fail = () => reject(new Error("Refused")); }),
+    });
+    renderUi(<DocumentsCard supplierId="s1" canManage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Actions for ISO certificate" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Verify" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Verify" }));
+    expect(await screen.findByText("Verified")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() => expect(fail).toBeTypeOf("function"));
+    fail();
+    await waitFor(() => expect(screen.queryByText("Verified")).toBeNull());
+  });
+
   it("a new version names the document it replaces; superseded and removed ones are listed apart", async () => {
     upload.mockResolvedValue({ path: "org-1/supplier/s1/uuid-v2.pdf" });
     routeApi({

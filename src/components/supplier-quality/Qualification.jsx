@@ -54,7 +54,8 @@ const NoteDialog = ({ title, intro, label, required, confirmText, tone = "main",
         className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
-          mutation.mutate({ action, id, body: required ? { reason: text.trim() } : text.trim() ? { note: text.trim() } : {} }, { onSuccess: onClose });
+          mutation.mutate({ action, id, body: required ? { reason: text.trim() } : text.trim() ? { note: text.trim() } : {} });
+          onClose(); // the lists already show the result; a refusal comes back as a message
         }}>
         <p className="text-sm text-primary-text">{intro}</p>
         <TextAreaField label={label} value={text} onChange={(e) => setText(e.target.value)} required={required} maxLength={1000} rows={3} />
@@ -103,7 +104,10 @@ export const DocumentDialog = ({ supplierId, document, replaces, onClose, onSave
     setProblem(null);
     if (!form.title.trim()) return setProblem("Give the document a title.");
     if (form.documentDate && form.expiresOn && form.expiresOn < form.documentDate) return setProblem("The expiry date cannot be before the document date.");
-    if (editing) return mutation.mutate({ action: "updateDocument", id: document.id, body: details }, { onSuccess: onClose });
+    if (editing) {
+      mutation.mutate({ action: "updateDocument", id: document.id, body: details });
+      return onClose();
+    }
     if (!file) return setProblem("Choose the file to upload.");
     setBusy(true);
     try {

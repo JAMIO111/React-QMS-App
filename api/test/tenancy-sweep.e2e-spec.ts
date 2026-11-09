@@ -100,6 +100,19 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/supplier-quality/suppliers/{id}/approval-decisions': { target: 'approved', rationale: 'Hijacked' },
     'POST /api/v1/supplier-quality/supplier-approval-decisions/{id}/decide': { approve: true, note: 'Hijacked' },
     'POST /api/v1/supplier-quality/supplier-approval-decisions/{id}/withdraw': { reason: 'Hijacked' },
+    'GET /api/v1/supplier-quality/scars/{id}': undefined,
+    'PATCH /api/v1/supplier-quality/scars/{id}': { title: 'Hijacked' },
+    'POST /api/v1/supplier-quality/scars/{id}/issue': {},
+    'POST /api/v1/supplier-quality/scars/{id}/acknowledge': {},
+    'POST /api/v1/supplier-quality/scars/{id}/responses': { rootCause: 'Hijacked', correctiveAction: 'Hijacked', respondedOn: '2026-11-01' },
+    'POST /api/v1/supplier-quality/scars/{id}/start-review': {},
+    'POST /api/v1/supplier-quality/scars/{id}/review': { decision: 'accepted', note: 'Hijacked' },
+    'POST /api/v1/supplier-quality/scars/{id}/implementations': { description: 'Hijacked', implementedOn: '2026-11-01' },
+    'POST /api/v1/supplier-quality/scars/{id}/verifications': { result: 'effective', method: 'Hijacked', note: 'Hijacked' },
+    'POST /api/v1/supplier-quality/scars/{id}/extensions': { newDueOn: '2027-01-01', reason: 'Hijacked' },
+    'POST /api/v1/supplier-quality/scars/{id}/cancel': { reason: 'Hijacked' },
+    'POST /api/v1/supplier-quality/scars/{id}/ncrs': { ncrId: '00000000-0000-0000-0000-000000000001' },
+    'POST /api/v1/supplier-quality/scar-ncrs/{id}/unlink': { reason: 'Hijacked' },
     'GET /api/v1/parts/{id}': undefined,
     'PATCH /api/v1/parts/{id}': { name: 'Hijacked' },
     'POST /api/v1/parts/{id}/revisions': { revision: 'Z' },
@@ -352,6 +365,19 @@ const hasSample = (op: Op) =>
     'POST /api/v1/supplier-quality/suppliers/{id}/approval-decisions',
     'POST /api/v1/supplier-quality/supplier-approval-decisions/{id}/decide',
     'POST /api/v1/supplier-quality/supplier-approval-decisions/{id}/withdraw',
+    'GET /api/v1/supplier-quality/scars/{id}',
+    'PATCH /api/v1/supplier-quality/scars/{id}',
+    'POST /api/v1/supplier-quality/scars/{id}/issue',
+    'POST /api/v1/supplier-quality/scars/{id}/acknowledge',
+    'POST /api/v1/supplier-quality/scars/{id}/responses',
+    'POST /api/v1/supplier-quality/scars/{id}/start-review',
+    'POST /api/v1/supplier-quality/scars/{id}/review',
+    'POST /api/v1/supplier-quality/scars/{id}/implementations',
+    'POST /api/v1/supplier-quality/scars/{id}/verifications',
+    'POST /api/v1/supplier-quality/scars/{id}/extensions',
+    'POST /api/v1/supplier-quality/scars/{id}/cancel',
+    'POST /api/v1/supplier-quality/scars/{id}/ncrs',
+    'POST /api/v1/supplier-quality/scar-ncrs/{id}/unlink',
     'GET /api/v1/parts/{id}',
     'PATCH /api/v1/parts/{id}',
     'POST /api/v1/parts/{id}/revisions',
@@ -569,6 +595,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/supplier-quality/assessment-templates/')) return a.supplierTemplate;
   if (path.startsWith('/api/v1/supplier-quality/supplier-assessments/')) return a.supplierAssessment;
   if (path.startsWith('/api/v1/supplier-quality/supplier-approval-decisions/')) return a.supplierDecision;
+  if (path.startsWith('/api/v1/supplier-quality/scars/')) return a.supplierScar;
+  if (path.startsWith('/api/v1/supplier-quality/scar-ncrs/')) return a.supplierScarLink;
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
   if (path.startsWith('/api/v1/supplier-quality/classifications/')) return a.supplierClassification;
   if (path.startsWith('/api/v1/parts/')) return a.part;
@@ -657,6 +685,7 @@ beforeAll(async () => {
   a.ownerUser = ids.ownerA;
   a.customer = (await one(`insert into public.customers (organisation_id, code, name) values ($1, 'ACUST', 'Alpha customer') returning id`, [ids.orgA])).id;
   a.supplier = (await one(`insert into public.suppliers (organisation_id, code, name) values ($1, 'ASUPP', 'Alpha supplier') returning id`, [ids.orgA])).id;
+  a.supplierNcr = (await one(`insert into public.nonconformances (organisation_id, reference, source, title, supplier_id) values ($1, 'A-NCR-SCAR', 'supplier', 'Alpha supplier NC', $2) returning id`, [ids.orgA, a.supplier])).id;
   a.part = (await one(`insert into public.parts (organisation_id, part_number, name) values ($1, 'A-PART', 'Alpha part') returning id`, [ids.orgA])).id;
   a.draftRevision = (await one(`insert into public.part_revisions (organisation_id, part_id, revision) values ($1, $2, 'A') returning id`, [ids.orgA, a.part])).id;
   a.classification = (await one(`insert into public.ncr_classifications (organisation_id, kind, name) values ($1, 'failure_mode', 'Alpha failure') returning id`, [ids.orgA])).id;
@@ -736,6 +765,8 @@ beforeAll(async () => {
     a.supplierTemplate = (await q1(`select id from public.supplier_assessment_templates where organisation_id = $1 limit 1`, [ids.orgA])).id;
     a.supplierAssessment = (await q1(`select app.start_supplier_assessment($1::uuid, (select v.id from public.supplier_assessment_template_versions v where v.organisation_id = $2 and v.version = 1 limit 1)) as id`, [a.supplier, ids.orgA])).id;
     a.supplierDecision = (await q1(`select app.propose_supplier_approval($1::uuid, 'approved', 'Sweep proposal', null, null, null, 'Sweep exception reason') as id`, [a.supplier])).id;
+    a.supplierScar = (await q1(`select (app.create_supplier_scar($1::uuid, 'Alpha SCAR', null, 'minor', null, null, array[$2]::uuid[], null, null) ->> 'id')::uuid as id`, [a.supplier, a.supplierNcr])).id;
+    a.supplierScarLink = (await q1(`select id from public.supplier_scar_ncrs where scar_id = $1 limit 1`, [a.supplierScar])).id;
     a.supplierProduct = (await q1(`insert into public.supplier_product_links (organisation_id, supplier_id, kind, description) values ($1, $2, 'service', 'Alpha service') returning id`, [ids.orgA, a.supplier])).id;
     await client.query('commit');
   } finally {

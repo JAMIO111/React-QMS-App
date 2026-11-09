@@ -87,6 +87,8 @@ import { SupplierRiskService } from './supplier-quality/supplier-risk.service';
 import { SupplierQualificationController } from './supplier-quality/supplier-qualification.controller';
 import { SupplierQualificationService } from './supplier-quality/supplier-qualification.service';
 import { SupplierQualityService } from './supplier-quality/supplier-quality.service';
+import { SupplierScarController } from './supplier-quality/supplier-scar.controller';
+import { SupplierScarService } from './supplier-quality/supplier-scar.service';
 import { SavedFiltersService } from './saved-filters/saved-filters.service';
 import { NotificationsService } from './notifications/notifications.service';
 import { CharacteristicTemplatesController } from './process-control/characteristic-templates.controller';
@@ -194,6 +196,7 @@ export class AppModule implements NestModule {
         SupplierQualificationController,
         SupplierRiskController,
         SupplierAssessmentController,
+        SupplierScarController,
         InspectionsController,
         InspectionMeasurementsController,
         NcrInspectionSourceController,
@@ -254,6 +257,7 @@ export class AppModule implements NestModule {
         SupplierQualificationService,
         SupplierRiskService,
         SupplierAssessmentService,
+        SupplierScarService,
         InspectionService,
         SpcService,
         DocumentationService,

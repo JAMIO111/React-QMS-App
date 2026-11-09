@@ -115,6 +115,7 @@ CREATE TABLE public.goods_receipt_lines (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organisation_id uuid NOT NULL REFERENCES public.organisations (id) ON DELETE CASCADE,
   goods_receipt_id uuid NOT NULL,
+  line_number integer NOT NULL CHECK (line_number >= 1),
   po_line_id uuid,
   part_id uuid,
   material text CHECK (material IS NULL OR length(btrim(material)) BETWEEN 1 AND 200),
@@ -130,6 +131,7 @@ CREATE TABLE public.goods_receipt_lines (
   CONSTRAINT goods_receipt_lines_po_line_fkey FOREIGN KEY (po_line_id, organisation_id) REFERENCES public.purchase_order_lines (id, organisation_id),
   CONSTRAINT goods_receipt_lines_part_fkey FOREIGN KEY (part_id, organisation_id) REFERENCES public.parts (id, organisation_id),
   CONSTRAINT goods_receipt_lines_lot_fkey FOREIGN KEY (lot_id, organisation_id) REFERENCES public.lots (id, organisation_id),
+  CONSTRAINT goods_receipt_lines_number_key UNIQUE (goods_receipt_id, line_number),
   CONSTRAINT goods_receipt_lines_what CHECK (part_id IS NOT NULL OR material IS NOT NULL)
 );
 CREATE INDEX goods_receipt_lines_receipt_idx ON public.goods_receipt_lines (goods_receipt_id);
@@ -309,8 +311,8 @@ BEGIN
       END IF;
       INSERT INTO public.lots (organisation_id, lot_number, part_id, origin, supplier_id, site_id, quantity, received_on) VALUES (s.organisation_id, v_lot_no, v_part, 'received', s.id, v_site, v_qty, p_received_on) RETURNING id INTO v_lot;
     END IF;
-    INSERT INTO public.goods_receipt_lines (organisation_id, goods_receipt_id, po_line_id, part_id, material, quantity_received, lot_id, notes)
-    VALUES (s.organisation_id, v_id, v_poline, v_part, v_material, v_qty, v_lot, nullif(btrim(coalesce(l ->> 'notes', '')), ''));
+    INSERT INTO public.goods_receipt_lines (organisation_id, goods_receipt_id, line_number, po_line_id, part_id, material, quantity_received, lot_id, notes)
+    VALUES (s.organisation_id, v_id, i, v_poline, v_part, v_material, v_qty, v_lot, nullif(btrim(coalesce(l ->> 'notes', '')), ''));
   END LOOP;
   RETURN jsonb_build_object('id', v_id, 'created', true);
 END $$;

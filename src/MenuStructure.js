@@ -87,6 +87,8 @@ export const menuStructure = [
     path: "/Suppliers",
     subMenu: [
       { name: "Supplier register", path: "/Suppliers" },
+      { name: "Purchase orders", path: "/Supplier-Quality/Purchase-Orders", permission: "receiving.read" },
+      { name: "Goods receipts", path: "/Supplier-Quality/Goods-Receipts", permission: "receiving.read" },
       { name: "Supplier corrective actions", path: "/Supplier-Quality/SCARs" },
       { name: "Expiry watchlist", path: "/Supplier-Quality/Expiry" },
     ],

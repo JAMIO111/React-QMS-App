@@ -22,6 +22,7 @@ import { CertificationsCard, DocumentsCard } from "./Qualification";
 import { RiskCard } from "./RiskAssessment";
 import { ApprovalCard, AssessmentsCard } from "./Approvals";
 import SupplierNcs from "./SupplierNcs";
+import SupplierReceiving from "./SupplierReceiving";
 import SupplierScars from "./SupplierScars";
 
 const TABS = [
@@ -301,7 +302,7 @@ const SupplierProfilePage = () => {
           <CertificationsCard supplierId={s.id} canManage={canManage} />
         </>
       )}
-      {tab === "incoming" && <NotYet title="Incoming quality" text="Goods receipts, incoming inspection rules and material certificates are not available yet." />}
+      {tab === "incoming" && <SupplierReceiving supplier={s} />}
       {tab === "audits" && <NotYet title="Audits" text="Supplier audits are not available yet." />}
       {tab === "documents" && <DocumentsCard supplierId={s.id} canManage={canManage} />}
 

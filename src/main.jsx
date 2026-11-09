@@ -54,6 +54,10 @@ const SuppliersRegisterPage = lazy(() => import("./components/supplier-quality/S
 const SupplierProfilePage = lazy(() => import("./components/supplier-quality/SupplierProfilePage.jsx"));
 const AssessmentPage = lazy(() => import("./components/supplier-quality/AssessmentPage.jsx"));
 const ExpiryWatchlistPage = lazy(() => import("./components/supplier-quality/ExpiryWatchlistPage.jsx"));
+const PurchaseOrdersPage = lazy(() => import("./components/supplier-quality/PurchaseOrdersPage.jsx"));
+const PurchaseOrderPage = lazy(() => import("./components/supplier-quality/PurchaseOrderPage.jsx"));
+const GoodsReceiptsPage = lazy(() => import("./components/supplier-quality/GoodsReceiptsPage.jsx"));
+const GoodsReceiptPage = lazy(() => import("./components/supplier-quality/GoodsReceiptPage.jsx"));
 const ScarsPage = lazy(() => import("./components/supplier-quality/ScarsPage.jsx"));
 const ScarPage = lazy(() => import("./components/supplier-quality/ScarPage.jsx"));
 const SettingsSupplierQuality = lazy(() => import("./components/Settings/SettingsSupplierQuality.jsx"));
@@ -223,6 +227,10 @@ const router = createBrowserRouter([
           { path: "Suppliers/:id", element: <SupplierProfilePage /> },
           { path: "Suppliers/:supplierId/assessments/:id", element: <AssessmentPage /> },
           { path: "Supplier-Quality/Expiry", element: <ExpiryWatchlistPage /> },
+          { path: "Supplier-Quality/Purchase-Orders", element: <PurchaseOrdersPage /> },
+          { path: "Supplier-Quality/Purchase-Orders/:id", element: <PurchaseOrderPage /> },
+          { path: "Supplier-Quality/Goods-Receipts", element: <GoodsReceiptsPage /> },
+          { path: "Supplier-Quality/Goods-Receipts/:id", element: <GoodsReceiptPage /> },
           { path: "Supplier-Quality/SCARs", element: <ScarsPage /> },
           { path: "Supplier-Quality/SCARs/:id", element: <ScarPage /> },
           { path: "Machines", element: <MachinesPage /> },

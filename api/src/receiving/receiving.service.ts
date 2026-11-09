@@ -247,7 +247,7 @@ export class ReceivingService {
     const lines = await db.execute<Row>(sql`
       select x.*, p.part_number, p.name as part_name, l.lot_number, pl.line_number as po_line_number
       from public.goods_receipt_lines x left join public.parts p on p.id = x.part_id left join public.lots l on l.id = x.lot_id left join public.purchase_order_lines pl on pl.id = x.po_line_id
-      where x.goods_receipt_id = ${id}::uuid order by x.created_at, x.id`);
+      where x.goods_receipt_id = ${id}::uuid order by x.line_number`);
     return {
       ...toReceiptRow(h),
       notes: (h.notes as string) ?? null,

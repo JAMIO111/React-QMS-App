@@ -262,6 +262,21 @@ BEGIN
   PERFORM app.complete_supplier_assessment((SELECT id FROM _sweep_assessment), 'Sweep summary');
   PERFORM app.propose_supplier_approval((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), 'approved', 'Sweep proposal', (SELECT id FROM _sweep_assessment));
   DROP TABLE _sweep_assessment;
+  -- Supplier quality (SQ3): a SCAR taken through every stage, so each of its tables has a row.
+  INSERT INTO public.nonconformances (organisation_id, source, title, description, severity, quantity_affected, supplier_id)
+    VALUES (a, 'supplier', 'Sweep supplier NC', 'x', 'minor', 1, (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1));
+  CREATE TEMP TABLE _sweep_scar AS
+    SELECT (app.create_supplier_scar((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), 'Sweep SCAR', NULL, 'minor', current_date + 10, NULL,
+      ARRAY[(SELECT id FROM public.nonconformances WHERE organisation_id = a AND title = 'Sweep supplier NC')], NULL, NULL) ->> 'id')::uuid AS id;
+  PERFORM app.issue_supplier_scar((SELECT id FROM _sweep_scar));
+  PERFORM app.extend_scar_due_date((SELECT id FROM _sweep_scar), current_date + 20, 'Sweep extension');
+  PERFORM app.acknowledge_supplier_scar((SELECT id FROM _sweep_scar), 'Sweep acknowledgement');
+  PERFORM app.record_scar_response((SELECT id FROM _sweep_scar), 'Sweep cause', NULL, 'Sweep fix', NULL, NULL, current_date, 'Sweep supplier', NULL);
+  PERFORM app.start_scar_review((SELECT id FROM _sweep_scar));
+  PERFORM app.review_scar_response((SELECT id FROM _sweep_scar), 'accepted', 'Sweep review');
+  PERFORM app.record_scar_implementation((SELECT id FROM _sweep_scar), 'Sweep implementation', current_date, NULL);
+  PERFORM app.record_scar_verification((SELECT id FROM _sweep_scar), 'effective', 'Sweep method', 'Sweep finding');
+  DROP TABLE _sweep_scar;
   PERFORM pg_temp.logout();
   INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id FROM public.notifications WHERE organisation_id = a LIMIT 1;

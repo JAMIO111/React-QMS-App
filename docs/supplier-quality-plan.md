@@ -97,6 +97,9 @@ Order differs from the spec only where a dependency forces it (§2.5).
 ### SQ6 — Audits, reports, advanced *(spec phase 6)*
 - `supplier` as an audit target kind across definitions, versions, schedule, records and the audits dashboard; supplier-filtered audit tab with findings → NC links; risk-based inspection **recommendations** (never automatic weakening); reports/exports with period, definitions and calculation timestamp; portal readiness notes only.
 
+#### SQ6 as built
+- **SQ6a** `supplier` as an audit target kind (migration `20260104100000_supplier_audit_targets.sql`, fingerprints of existing audits unchanged); **SQ6b** the profile Audits tab; **SQ6c** an information-only inspection recommendation from risk, approval status and performance (pure rules, never writes); **SQ6d** read-only report endpoints and a CSV export that carries the period, definitions, scoring basis and generation time. Portal readiness: no external identity was built; response tables stay free of internal-only fields. Supplier audit coverage on the schedule is not built.
+
 ## 6. Cross-cutting acceptance (from spec §21), mapped
 Tenant isolation and permission checks on every endpoint → sweeps; status transitions → SQL and API tests with mutation checks; history preserved → append-only tests; PPM ≠ lot rejection → pure-function tests; OTD policy → tests per policy; snapshots stable → test that later changes do not alter old snapshots; critical controls cannot be reduced → rule tests; retries create no duplicates → idempotency tests; dashboard/profile queries without N+1 → single aggregate queries, checked in e2e.
 

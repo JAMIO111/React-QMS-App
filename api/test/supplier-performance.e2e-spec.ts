@@ -126,6 +126,23 @@ describe('supplier performance', () => {
     expect(after).toBe(before);
   });
 
+  it('reports every active supplier with the period, the definitions and when it was worked out', async () => {
+    const rep = (await api().get(`${base}/reports/performance?from=${day(-60)}&to=${day(0)}`).set(await inspector()).expect(200)).body;
+    expect(rep.meta).toMatchObject({ title: 'Supplier performance', from: day(-60), to: day(0), rowCount: 2 });
+    expect(rep.meta.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(rep.meta.definitions.join(' ')).toMatch(/PPM = units/);
+    expect(rep.meta.basis.map((b: { label: string; value: string }) => `${b.label}=${b.value}`)).toEqual(expect.arrayContaining(['Scoring model version=2', 'On-time delivery judged against=the original requested date']));
+    const acme = rep.rows.find((r: { code: string }) => r.code === 'ACME');
+    expect(acme).toMatchObject({ band: 'poor', ppm: 166667, lotRejectionPercent: 16.7, onTime: 3, matchedLines: 6, certsExpired: 1 });
+    expect(acme.warnings).toMatch(/certification/);
+    expect(rep.rows.find((r: { code: string }) => r.code === 'BOLT')).toMatchObject({ band: 'insufficient', score: null });
+    expect(rep.columns.map((c: { key: string }) => c.key)).toEqual(expect.arrayContaining(['code', 'score', 'ppm', 'otdPercent']));
+    expect((await api().get(`${base}/reports/performance`).set(await owner()).expect(200)).body.meta.to).toBe(day(0));
+    await api().get(`${base}/reports/performance?from=${day(0)}&to=${day(-5)}`).set(await owner()).expect(400);
+    await api().get(`${base}/reports/performance?from=${day(-400)}&to=${day(0)}`).set(await owner()).expect(400);
+    expect((await api().get(`${base}/reports/performance`).set(await other()).expect(200)).body.rows).toEqual([]);
+  });
+
   it('is invisible to another organisation', async () => {
     await api().get(`${base}/suppliers/${ctx.s1}/performance`).set(await other()).expect(404);
     await api().get(`${base}/scorecards/${ctx.sc1}`).set(await other()).expect(404);

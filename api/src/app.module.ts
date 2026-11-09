@@ -84,6 +84,8 @@ import { SupplierAssessmentController } from './supplier-quality/supplier-assess
 import { SupplierAssessmentService } from './supplier-quality/supplier-assessment.service';
 import { SupplierPerformanceController } from './supplier-quality/supplier-performance.controller';
 import { SupplierPerformanceService } from './supplier-quality/supplier-performance.service';
+import { SupplierReportsController } from './supplier-quality/supplier-reports.controller';
+import { SupplierReportsService } from './supplier-quality/supplier-reports.service';
 import { SupplierRiskController } from './supplier-quality/supplier-risk.controller';
 import { SupplierRiskService } from './supplier-quality/supplier-risk.service';
 import { SupplierQualificationController } from './supplier-quality/supplier-qualification.controller';
@@ -204,6 +206,7 @@ export class AppModule implements NestModule {
         SupplierQualificationController,
         SupplierRiskController,
         SupplierPerformanceController,
+        SupplierReportsController,
         SupplierAssessmentController,
         SupplierScarController,
         ReceivingController,
@@ -269,6 +272,7 @@ export class AppModule implements NestModule {
         SupplierQualificationService,
         SupplierRiskService,
         SupplierPerformanceService,
+        SupplierReportsService,
         SupplierAssessmentService,
         SupplierScarService,
         ReceivingService,

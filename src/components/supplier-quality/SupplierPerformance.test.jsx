@@ -112,6 +112,33 @@ describe("watchlist", () => {
     expect(calls[0].path).toContain("days=90");
   });
 
+  it("exports a report with the period and definitions, offering the audits report only to people who read audits", async () => {
+    permissions = ["supplier_quality.read", "receiving.read", "audits.read"];
+    const report = { meta: { title: "Supplier performance", from: "2026-08-12", to: "2026-11-09", generatedAt: "2026-11-09T10:00:00.000Z", rowCount: 1, basis: [], definitions: ["PPM = x"] }, columns: [{ key: "code", label: "Supplier" }], rows: [{ code: "ACME" }] };
+    routeApi({ "GET /supplier-quality/performance/watchlist": { days: 90, data: [] }, "GET /supplier-quality/reports/performance": report, "GET /supplier-quality/reports/audits": { ...report, meta: { ...report.meta, title: "Supplier audits" } } });
+    const blobs = [];
+    const create = vi.fn((b) => { blobs.push(b); return "blob:x"; });
+    Object.assign(URL, { createObjectURL: create, revokeObjectURL: vi.fn() });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    renderUi(<WatchlistPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Export a report" }));
+    expect(await screen.findByRole("menuitem", { name: /Supplier audits/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("menuitem", { name: /Supplier performance/ }));
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    expect(calls.find((c) => c.k === "GET /supplier-quality/reports/performance").path).toMatch(/from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}/);
+    const text = await new Promise((resolve) => { const fr = new FileReader(); fr.onload = () => resolve(fr.result); fr.readAsText(blobs[0]); });
+    expect(text).toContain("Report,Supplier performance");
+    click.mockRestore();
+  });
+
+  it("offers only the performance report to someone who cannot read audits", async () => {
+    routeApi({ "GET /supplier-quality/performance/watchlist": { days: 90, data: [] } });
+    renderUi(<WatchlistPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Export a report" }));
+    expect(await screen.findByRole("menuitem", { name: /Supplier performance/ })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Supplier audits/ })).toBeNull();
+  });
+
   it("shows a calm message when nothing needs watching", async () => {
     routeApi({ "GET /supplier-quality/performance/watchlist": { days: 90, data: [] } });
     renderUi(<WatchlistPage />);

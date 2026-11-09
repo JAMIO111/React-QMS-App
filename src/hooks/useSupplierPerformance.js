@@ -54,6 +54,12 @@ export const useInspectionRecommendation = (id, days = 90, { enabled = true } = 
   });
 };
 
+/** Fetch a report for export: read-only, nothing is stored, so nothing is refreshed. `kind` is performance or audits. */
+export const useSupplierReport = () => {
+  const { organisationId } = useOrganisation();
+  return useMutation({ mutationFn: ({ kind, from, to }) => apiFetch(`${BASE}/reports/${kind}?from=${from}&to=${to}`, { organisationId }) });
+};
+
 export const useWatchlist = (days) => {
   const { organisationId } = useOrganisation();
   return useQuery({

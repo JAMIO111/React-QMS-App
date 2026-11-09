@@ -84,6 +84,18 @@ describe('suppliers as audit targets', () => {
     await api().get('/api/v1/audit-findings?supplierId=nope').set(h).expect(400);
   });
 
+  it('are reported one row per record and supplier, with the period and definitions', async () => {
+    const h = await as(ids.ownerA);
+    const rep = (await api().get(`/api/v1/supplier-quality/reports/audits?from=${day(-29)}&to=${day(0)}`).set(h).expect(200)).body;
+    expect(rep.meta).toMatchObject({ title: 'Supplier audits', from: day(-29), to: day(0), rowCount: 2 });
+    expect(rep.meta.definitions.length).toBeGreaterThan(2);
+    expect(rep.rows.map((r: { supplier: string }) => r.supplier)).toEqual(['ACME', 'CAST']);
+    expect(rep.rows[0]).toMatchObject({ record: expect.stringMatching(/^AR-/), audit: expect.stringMatching(/^AUD-/), version: 2, status: 'in_progress', findings: 1, nonConformances: 0 });
+    expect((await api().get(`/api/v1/supplier-quality/reports/audits?from=${day(-400)}&to=${day(-300)}`).set(h).expect(200)).body.rows).toEqual([]);
+    await api().get(`/api/v1/supplier-quality/reports/audits?from=${day(0)}&to=${day(-1)}`).set(h).expect(400);
+    expect((await api().get('/api/v1/supplier-quality/reports/audits').set(await as(ids.ownerB, ids.orgB)).expect(200)).body.rows).toEqual([]);
+  });
+
   it('show in the audits dashboard coverage once audited', async () => {
     const h = await as(ids.ownerA);
     const d = (await api().get(`/api/v1/audits-dashboard?from=${day(-29)}&to=${day(0)}`).set(h).expect(200)).body;

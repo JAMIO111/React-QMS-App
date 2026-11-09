@@ -102,7 +102,7 @@ BEGIN
   PERFORM app.set_audit_targets(a1, jsonb_build_array(jsonb_build_object('kind','machine','machineId',mach), jsonb_build_object('kind','operation','operationCode','OP-20'), jsonb_build_object('kind','department','departmentId',dept)));
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.audit_targets WHERE audit_definition_id = a1), 3::bigint, 'a machine, an operation and a department');
   r := pg_temp.fails(format($q$SELECT app.set_audit_targets(%L, '[{"kind":"operation","operationCode":"OP-20"},{"kind":"operation","operationCode":"op-20"}]'::jsonb)$q$, a1));
-  PERFORM pg_temp.assert_eq(r LIKE 'QM018: The same machine, operation or department is listed twice%', true, 'an operation twice, in any case: ' || r);
+  PERFORM pg_temp.assert_eq(r LIKE 'QM018: The same machine, operation, department or supplier is listed twice%', true, 'an operation twice, in any case: ' || r);
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.audit_targets WHERE audit_definition_id = a1), 3::bigint, 'a refused list changes nothing');
   r := pg_temp.fails(format($q$SELECT app.set_audit_targets(%L, jsonb_build_array(jsonb_build_object('kind','machine','machineId',%L)))$q$, a1, mach2));
   PERFORM pg_temp.assert_eq(r LIKE 'P0002:%', true, 'another organisation''s machine is not found: ' || r);

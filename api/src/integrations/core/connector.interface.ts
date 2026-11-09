@@ -32,17 +32,41 @@ export interface ExternalEntity {
   label: string;
 }
 
+/** One record as the source gave it, with its row number in a file when there is one. */
+export interface FetchedRecord {
+  payload: Record<string, unknown>;
+  sourceRow?: number;
+}
+
+/** One page of records. `nextCursor` is where the next page (or the next incremental run) starts; `done` is true on the last page. */
 export interface FetchResult {
-  records: Array<Record<string, unknown>>;
+  records: FetchedRecord[];
   nextCursor: string | null;
   done: boolean;
+}
+
+export type RunErrorKind = 'auth' | 'rate_limit' | 'malformed' | 'mapping' | 'transient' | 'timeout' | 'limit' | 'internal';
+
+/**
+ * What an adapter throws when the source cannot be read. `transient` errors are tried again later (up to five attempts, waiting longer each time, or as long
+ * as the source's Retry-After says); the others fail the run with the message, which must make sense to a person and never contain a secret.
+ */
+export class ConnectorError extends Error {
+  constructor(
+    message: string,
+    readonly kind: RunErrorKind,
+    readonly transient: boolean,
+    readonly retryAfterSeconds?: number,
+  ) {
+    super(message);
+  }
 }
 
 export interface ConnectorAdapter {
   getMetadata(): ConnectorMetadata;
   testConnection(ctx: AdapterContext): Promise<ConnectionTestResult>;
   discoverEntities?(ctx: AdapterContext): Promise<ExternalEntity[]>;
-  fetchRecords?(ctx: AdapterContext, entity: string, cursor?: string): Promise<FetchResult>;
+  fetchRecords?(ctx: AdapterContext, entity: string, cursor: string | null): Promise<FetchResult>;
   /** Declared for completeness (brief §7.3); webhooks and write-back are Phase 6 and no adapter implements them. */
   subscribeToEvents?(ctx: AdapterContext): Promise<void>;
   pushRecord?(ctx: AdapterContext, entity: string, record: unknown): Promise<unknown>;

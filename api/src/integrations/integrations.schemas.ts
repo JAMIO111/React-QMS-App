@@ -71,6 +71,8 @@ export const ConnectionDetail = z.object({
   credential: z.object({ kind: z.enum(CREDENTIAL_KINDS), setAt: Iso, setBy: Person }).nullable(),
   /** What still stops the connection being made ready or activated, in plain sentences. */
   problems: z.array(z.string()),
+  /** The kinds of record this connection can import with what this deployment has (empty until an importer exists for its provider). */
+  runnable: z.array(z.string()),
   events: z.array(z.object({ action: z.string(), fromStatus: z.string().nullable(), toStatus: z.string().nullable(), note: z.string().nullable(), at: Iso, by: Person })),
 });
 export type ConnectionDetail = z.infer<typeof ConnectionDetail>;

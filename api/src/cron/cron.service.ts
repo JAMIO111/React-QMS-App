@@ -3,6 +3,7 @@ import { ApiError } from '../common/api-error';
 import { DatabaseService } from '../database/database.service';
 import { StripeBillingService } from '../billing/stripe-billing.service';
 import { StripeGateway } from '../billing/stripe.gateway';
+import { SyncEngine } from '../integrations/core/sync.engine';
 
 export interface ArchiveOutcome {
   dryRun: boolean;
@@ -25,6 +26,7 @@ export class CronService {
     private readonly database: DatabaseService,
     private readonly billing: StripeBillingService,
     private readonly gateway: StripeGateway,
+    private readonly sync: SyncEngine,
   ) {}
 
   /**
@@ -69,5 +71,31 @@ export class CronService {
         (await client.query(`select app.system_archive_stale_organisations($1::int, $2::int, $3::boolean) as r`, [unpaidDays, lapsedDays, dryRun])).rows[0].r as ArchiveOutcome,
       correlationId,
     );
+  }
+
+  /**
+   * Works integration runs that are waiting (queued, part-done, or due to try again), oldest first, each for a short while, stopping after about 45 seconds
+   * in all. Each run is leased, so this never collides with a person's "Run now"; anything left is picked up by the next call.
+   */
+  async integrationRuns(limit: number, correlationId: string): Promise<{ due: number; results: { runId: string; state: string; reason: string | null }[] }> {
+    const due = await this.database.asApi(
+      async (client) => (await client.query(`select organisation_id, run_id from app.system_integration_runs_due($1::int)`, [limit])).rows as { organisation_id: string; run_id: string }[],
+      correlationId,
+      'integration',
+    );
+    const stopAt = Date.now() + 45_000;
+    const results: { runId: string; state: string; reason: string | null }[] = [];
+    for (const d of due) {
+      const left = stopAt - Date.now();
+      if (left < 2_000) break;
+      try {
+        const r = await this.sync.drain(d.organisation_id, d.run_id, { correlationId, budgetMs: Math.min(20_000, left) });
+        results.push({ runId: d.run_id, state: r.state, reason: r.reason ?? null });
+      } catch (error) {
+        this.log.warn(`Integration run ${d.run_id} failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+        results.push({ runId: d.run_id, state: 'error', reason: 'The run could not be worked on' });
+      }
+    }
+    return { due: due.length, results };
   }
 }

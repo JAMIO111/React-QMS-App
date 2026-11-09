@@ -303,6 +303,17 @@ BEGIN
   PERFORM app.set_integration_credential(app.create_integration_connection(a, 'rest_api', 'Sweep REST', 'sweep-rest', '{"baseUrl": "https://api.example.com", "authType": "bearer"}'::jsonb), 'bearer', 'sweep-secret');
   DROP TABLE _sweep_gr;
   PERFORM pg_temp.logout();
+  -- Integrations IN2: a run with a staged row, the map, a cursor and a run error (the runner's tables are written by the API login only, so seeded directly).
+  INSERT INTO public.integration_sync_runs (id, organisation_id, connection_id, entity_type, kind, status)
+    SELECT '5f000000-0000-0000-0000-00000000c001', a, id, 'supplier', 'full', 'partial' FROM public.integration_connections WHERE organisation_id = a LIMIT 1;
+  INSERT INTO public.integration_inbox (organisation_id, connection_id, run_id, entity_type, external_id, payload, content_hash, status, last_run_id)
+    SELECT a, connection_id, id, 'supplier', 'SW-EXT-1', '{"code": "SW"}'::jsonb, 'h', 'failed', id FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001';
+  INSERT INTO public.integration_external_records (organisation_id, connection_id, entity_type, external_id, internal_id, content_hash, first_run_id, last_run_id)
+    SELECT a, connection_id, 'supplier', 'SW-EXT-0', gen_random_uuid(), 'h', id, id FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001';
+  INSERT INTO public.integration_sync_cursors (organisation_id, connection_id, entity_type, cursor, run_id)
+    SELECT a, connection_id, 'supplier', 'c1', id FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001';
+  INSERT INTO public.integration_run_errors (organisation_id, run_id, attempt, kind, message, transient)
+    VALUES (a, '5f000000-0000-0000-0000-00000000c001', 1, 'transient', 'Sweep error', true);
   INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id FROM public.notifications WHERE organisation_id = a LIMIT 1;
   INSERT INTO sweep VALUES ('pc_part', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'));

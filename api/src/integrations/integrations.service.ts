@@ -6,14 +6,11 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { ConnectorRegistry } from './core/connector.registry';
-import { CsvAdapter } from './providers/csv/csv.adapter';
-import { RestApiAdapter } from './providers/rest-api/rest-api.adapter';
+import { SyncEngine } from './core/sync.engine';
 import { ConnectionDetail, ConnectionList, CreateConnectionBody, CredentialBody, ProviderList, ReasonBody, UpdateConnectionBody } from './integrations.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown user' } : null);
-
-const registry = new ConnectorRegistry().register(new CsvAdapter()).register(new RestApiAdapter());
 
 const toRow = (r: Row) => ({
   id: r.id as string,
@@ -47,7 +44,11 @@ const SELECT = `
  */
 @Injectable()
 export class IntegrationsService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly registry: ConnectorRegistry,
+    private readonly engine: SyncEngine,
+  ) {}
 
   providers(ctx: RequestContext): Promise<z.infer<typeof ProviderList>> {
     return this.database.asUser(ctx, async (db) => {
@@ -81,6 +82,7 @@ export class IntegrationsService {
       ...toRow(rows.rows[0]),
       credential: c ? { kind: c.kind as 'api_key' | 'bearer' | 'basic' | 'oauth_client', setAt: iso(c.created_at)!, setBy: person(c.created_by, c.created_by_name) } : null,
       problems: problems.rows[0].p ?? [],
+      runnable: this.engine.runnable(rows.rows[0].provider_key as string),
       events: events.rows.map((e) => ({ action: e.action as string, fromStatus: (e.from_status as string) ?? null, toStatus: (e.to_status as string) ?? null, note: (e.note as string) ?? null, at: iso(e.at)!, by: person(e.by, e.by_name) })),
     };
   }
@@ -135,7 +137,7 @@ export class IntegrationsService {
       return rows.rows[0];
     });
     if (info.status === 'retired') throw new ApiError(409, 'integration_rule', 'A retired connection cannot be tested');
-    const adapter = registry.get(info.provider_key as string);
+    const adapter = this.registry.get(info.provider_key as string);
     if (!adapter) throw new ApiError(409, 'integration_rule', 'That provider has no connector yet');
     const meta = adapter.getMetadata();
     // Only a provider that signs in has a secret to fetch, and only the API login can read it.

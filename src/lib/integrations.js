@@ -73,3 +73,65 @@ export const configFromForm = (provider, f) => {
   }
   return {};
 };
+
+export const ENTITY_LABELS = {
+  supplier: "Suppliers",
+  customer: "Customers",
+  part: "Parts",
+  production_order: "Production orders",
+  purchase_order: "Purchase orders",
+  goods_receipt: "Goods receipts",
+};
+
+export const RUN_KINDS = {
+  preview: "Preview",
+  full: "Full import",
+  incremental: "Incremental import",
+  retry: "Retry of failed rows",
+};
+
+export const RUN_STATUS = {
+  queued: { label: "Queued", tone: "bg-border-color text-secondary-text" },
+  running: { label: "Running", tone: "bg-info-color/15 text-info-color" },
+  succeeded: { label: "Succeeded", tone: "bg-success-color/15 text-success-color" },
+  partial: { label: "Partly done", tone: "bg-warning-color/20 text-primary-text" },
+  failed: { label: "Failed", tone: "bg-error-color/15 text-error-color" },
+  cancelled: { label: "Cancelled", tone: "bg-border-color text-secondary-text" },
+};
+
+export const ROW_STATUS = {
+  staged: "Waiting",
+  previewed: "Previewed",
+  unchanged: "Unchanged",
+  applied: "Applied",
+  rejected: "Rejected",
+  failed: "Failed",
+  superseded: "Superseded",
+};
+
+/** "2 created · 1 failed" — only the figures that are not zero; a preview says "would". */
+export const runSummary = (run) => {
+  const c = run.counts;
+  const would = run.kind === "preview" ? "would be " : "";
+  const parts = [
+    c.created && `${c.created} ${would}created`,
+    c.updated && `${c.updated} ${would}updated`,
+    c.unchanged && `${c.unchanged} unchanged`,
+    c.rejected && `${c.rejected} rejected`,
+    c.failed && `${c.failed} failed`,
+    c.superseded && `${c.superseded} superseded`,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : c.total ? `${c.total} rows` : "No rows";
+};
+
+/** What the work done during a request came to, in words. */
+export const drainMessage = (drain) => {
+  if (!drain) return null;
+  if (drain.state === "paused") return "There is more to do. Carry on to continue the import.";
+  if (drain.state === "waiting") return `The source could not be read (${drain.reason}). It will be tried again automatically.`;
+  if (drain.state === "failed") return drain.reason;
+  if (drain.state === "blocked") return drain.reason;
+  return null;
+};
+
+export const isLive = (run) => run && (run.status === "queued" || run.status === "running");

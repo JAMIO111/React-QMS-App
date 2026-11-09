@@ -98,6 +98,12 @@ import { MaterialCertificatesService } from './receiving/material-certificates.s
 import { RequirementsController } from './receiving/requirements.controller';
 import { IntegrationsController } from './integrations/integrations.controller';
 import { IntegrationsService } from './integrations/integrations.service';
+import { IntegrationRunsController } from './integrations/integration-runs.controller';
+import { IntegrationRunsService } from './integrations/integration-runs.service';
+import { ConnectorRegistry } from './integrations/core/connector.registry';
+import { EntityImporterRegistry } from './integrations/core/entity-importer';
+import { SyncEngine } from './integrations/core/sync.engine';
+import { defaultConnectorRegistry, defaultImporterRegistry } from './integrations/core/defaults';
 import { RequirementsService } from './receiving/requirements.service';
 import { SupplierScarController } from './supplier-quality/supplier-scar.controller';
 import { SupplierScarService } from './supplier-quality/supplier-scar.service';
@@ -214,6 +220,7 @@ export class AppModule implements NestModule {
         ReceivingController,
         RequirementsController,
         IntegrationsController,
+        IntegrationRunsController,
         MaterialCertificatesController,
         InspectionsController,
         InspectionMeasurementsController,
@@ -281,6 +288,10 @@ export class AppModule implements NestModule {
         ReceivingService,
         RequirementsService,
         IntegrationsService,
+        IntegrationRunsService,
+        SyncEngine,
+        { provide: ConnectorRegistry, useFactory: defaultConnectorRegistry },
+        { provide: EntityImporterRegistry, useFactory: defaultImporterRegistry },
         MaterialCertificatesService,
         InspectionService,
         SpcService,

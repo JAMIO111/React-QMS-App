@@ -13,9 +13,10 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
-import TextArea from "../ui/TextArea";
-import { ErrorNotice, FormError } from "../master-data/shared";
+
+import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import ConnectionForm from "./ConnectionForm";
+import ImportsCard from "./ImportsCard";
 import CTAButton from "@/components/CTAButton";
 
 /** Paste a credential once. It is sent in one request, stored encrypted and never shown again. */
@@ -60,7 +61,7 @@ const ReasonDialog = ({ title, action, connection, confirm, tone = "danger", onC
   return (
     <Dialog title={title} onClose={onClose}>
       <form noValidate onSubmit={go} className="flex flex-col gap-3">
-        <TextArea label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} required rows={3} maxLength={500} />
+        <TextAreaField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} required rows={3} maxLength={500} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
@@ -140,6 +141,8 @@ const ConnectionPage = () => {
           </div>
         </MenuCard>
       )}
+
+      <ImportsCard connection={c} canRun={can("integrations.run")} />
 
       <MenuCard title="History" subtitle="Every change to this connection, newest first.">
         <ul aria-label="History" className="flex flex-col divide-y divide-border-color">

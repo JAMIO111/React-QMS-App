@@ -12,6 +12,7 @@ const ReconcileQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   staleMinutes: z.coerce.number().int().min(1).max(10080).default(60),
 });
+const IntegrationRunsQuery = z.object({ limit: z.coerce.number().int().min(1).max(50).default(10) });
 const ArchiveQuery = z.object({
   /** Defaults to true: a call without dryRun=false only reports. The schedule asks for dryRun=false. */
   dryRun: z
@@ -65,6 +66,17 @@ export class CronController {
   @HttpCode(200)
   expirePost(@Req() req: ApiRequest) {
     return this.cron.expireQualityAlerts(resolveCorrelationId(req));
+  }
+
+  @Get('integration-runs')
+  integrationRunsGet(@Req() req: ApiRequest, @Query() query: unknown) {
+    return this.cron.integrationRuns(parse(IntegrationRunsQuery, query).limit, resolveCorrelationId(req));
+  }
+
+  @Post('integration-runs')
+  @HttpCode(200)
+  integrationRunsPost(@Req() req: ApiRequest, @Query() query: unknown) {
+    return this.cron.integrationRuns(parse(IntegrationRunsQuery, query).limit, resolveCorrelationId(req));
   }
 
   private reconcile(req: ApiRequest, query: unknown) {

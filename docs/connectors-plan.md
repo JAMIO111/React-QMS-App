@@ -82,15 +82,17 @@ The adapter contract (brief §7.3, trimmed to what Phase 5 needs):
 | `integration_credentials` | Connection id + **Vault secret id** + kind (api key, bearer, basic, oauth client), rotated-at, revoked-at. No secret value, ever |
 | `integration_entities` | What a connection brings: entity type (`part`, `production_order`, …), source object/endpoint, key field(s), cursor field, match/upsert policy (D5) |
 | `integration_field_mappings` | **Versioned** per connection + entity: source field → canonical field, transform, required, default, **ownership** (`source_wins` / `qms_wins` / `manual_review`). A saved mapping version is immutable; runs record the version used |
-| `integration_sync_jobs` | The queue: connection, entity, kind (`preview` / `full` / `incremental` / `retry`), trigger (user, schedule), status, attempts, next attempt |
+| `integration_sync_jobs` | **Merged into `integration_sync_runs` in IN2** (a run is queued, leased, resumed and finished, with its attempts and next attempt on it): one table instead of two, nothing lost |
 | `integration_sync_runs` | One execution: counts (fetched, staged, valid, rejected, created, updated, skipped, unchanged), mapping version, started/finished, who, result, error summary |
 | `integration_sync_cursors` | Per connection + entity: the last good cursor / watermark, advanced only after a batch is applied |
 | `integration_external_records` | **The map for master data:** primary key (organisation, connection, entity type, external id) → internal id, content hash, last run id. Written only on create or when the hash changes (no per-sync timestamp churn). Receipt lines do **not** use this table: they carry `source_connection_id` + `external_id` columns (D4) |
 | `integration_inbox` | **Staging:** one row per source record per run: raw payload (jsonb), source row number, external id, content hash, status (`staged` → `validated` / `rejected` / `unchanged` → `applied` / `failed` / `conflict`), errors (field-level, actionable), attempt count. Retained for replay; payload retention policy in §8 |
-| `integration_errors` | Run-level failures (auth, rate limit, malformed file, mapping error) separate from row errors |
+| `integration_errors` | Run-level failures (auth, rate limit, malformed file, mapping error) separate from row errors. Built in IN2 as `integration_run_errors` (append-only) |
 | `integration_outbox`, `integration_webhook_*` | **Created empty-shell or skipped** in Phase 5 (Phase 6). I would not create them until needed |
 
 Import files: private bucket `integration-files`, path `<org>/integration/<connection>/<uuid>-<name>`, upload only via a function, readable with `integrations.read`.
+
+**As built in IN2:** the inbox, runs and run errors carry no audit trigger (they are themselves the record of the work and change on every batch); the map and the cursors are audited, and integration work records the person who started the run as the audit actor (`app.source = 'integration'`, `app.initiating_user`). Staged payloads are cleared after 90 days by `app.system_purge_integration_payloads` (failed rows keep theirs); the cron route for it arrives with schedules (IN8).
 
 ## 6. How it behaves
 
@@ -151,8 +153,8 @@ Each entity module declares: canonical fields (type, required, allowed values), 
 | Slice | Content | Exit |
 |---|---|---|
 | **IN0** | This plan agreed; decisions D1–D8 settled; sample data from one real customer (e.g. an inventory-transactions export) | Plan signed off |
-| **IN1** | Providers catalogue, connections, credentials (Vault), permissions + feature, state machine, audit; API + settings shell; guardrails and both sweeps | A connection can be created, credentials stored and revoked, nothing leaks |
-| **IN2** | External records map, staging inbox, sync jobs/runs/cursors, the batch runner, idempotency core, run monitoring API | A fake source imported twice stages and applies once; a failed row is retryable |
+| **IN1** ✅ | Providers catalogue, connections, credentials (Vault), permissions + feature, state machine, audit; API + settings shell; guardrails and both sweeps | A connection can be created, credentials stored and revoked, nothing leaks |
+| **IN2** ✅ | External records map, staging inbox, sync jobs/runs/cursors, the batch runner, idempotency core, run monitoring API | A fake source imported twice stages and applies once; a failed row is retryable |
 | **IN3** | CSV/XLSX adapter (upload, parse, header discovery), mapping engine with versions, validation engine, **preview** UI | Upload → map → preview with correct counts, nothing written |
 | **IN4** | Canonical import functions + entity modules: suppliers, customers, parts (draft revisions) | Real import of masters; second import creates nothing; QMS-owned fields untouched |
 | **IN5** | Production orders; activation approval (preparer ≠ approver); ownership policies + conflict queue | An order file imports, updates only owned fields, conflicts parked |

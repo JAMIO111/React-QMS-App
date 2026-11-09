@@ -20,7 +20,7 @@ const dataOf = (r) => r.data;
 
 export const usePlanCatalogue = () => useOrgQuery(["plans"], "/subscription-plans", { staleTime: 1000 * 60 * 5 });
 export const useSubscriptionOverview = ({ enabled = true } = {}) => useOrgQuery(["overview"], "/subscription", { enabled });
-export const useSeatAssignments = () => useOrgQuery(["assignments"], "/subscription/assignments", { select: dataOf });
+export const useSeatAssignments = ({ enabled = true } = {}) => useOrgQuery(["assignments"], "/subscription/assignments", { enabled, select: dataOf });
 export const useInvoices = ({ enabled = true } = {}) => useOrgQuery(["invoices"], "/billing/invoices", { enabled, select: dataOf });
 export const useSubscriptionHistory = () => useOrgQuery(["history"], "/subscription/history", { select: dataOf });
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import CheckoutNotice from "../billing/CheckoutNotice";
 import SeatPicker from "../billing/SeatPicker";
+import ComboField from "../ui/ComboField";
 import MenuCard from "../ui/MenuCard";
 import LoadingScreen from "../ui/LoadingScreen";
 import LoadingButton from "../ui/LoadingButton";
@@ -26,9 +27,6 @@ import {
   useSubscriptionOverview,
 } from "../../hooks/useSubscription";
 import CTAButton from "@/components/CTAButton";
-
-const select =
-  "rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-sm text-primary-text disabled:opacity-60";
 
 const STATUS_STYLES = {
   active: "bg-green-500/15 text-green-700 dark:text-green-300",
@@ -629,19 +627,16 @@ const Seats = ({ catalogue, overview, canAssign }) => {
               </td>
               <td className="py-2 pr-3">
                 {canAssign ? (
-                  <select
-                    aria-label={`Package for ${displayName(m)}`}
-                    className={select}
-                    value={m.plan?.slug ?? ""}
+                  <ComboField
+                    label={`Package for ${displayName(m)}`}
+                    value={m.plan?.slug ?? null}
                     disabled={mutation.isPending || m.status === "removed"}
-                    onChange={(e) => change(m, e.target.value)}>
-                    <option value="">No package</option>
-                    {catalogue.plans.map((p) => (
-                      <option key={p.slug} value={p.slug}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => (v ?? "") !== (m.plan?.slug ?? "") && change(m, v ?? "")}
+                    placeholder="No package"
+                    clearable
+                    options={catalogue.plans.map((p) => ({ value: p.slug, label: p.name, hint: `${freeOf(p.slug)} free` }))}
+                    className="min-w-44 [&_label]:sr-only"
+                  />
                 ) : (
                   (m.plan?.name ?? (
                     <span className="text-tertiary-text">No package</span>

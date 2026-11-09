@@ -31,7 +31,13 @@ vi.mock("../../hooks/useQmsApi", () => ({
   usePermissions: () => ({ can: (p) => permissions.includes(p) }),
   useMemberMutation: () => ({ mutate, isPending: false, error: null }),
 }));
-vi.mock("../../hooks/useSubscription", () => ({ useSubscriptionOverview: () => ({ data: seatOverview }) }));
+const seatMutate = vi.fn();
+let seatAssignments;
+vi.mock("../../hooks/useSubscription", () => ({
+  useSubscriptionOverview: () => ({ data: seatOverview }),
+  useSeatAssignments: () => ({ data: seatAssignments }),
+  useSubscriptionMutation: () => ({ mutate: seatMutate, isPending: false }),
+}));
 vi.mock("../../contexts/AuthProvider", () => ({ useAuth: () => ({ user: { id: "u-me" } }) }));
 vi.mock("../../contexts/ConfirmationModalProvider", () => ({ useConfirm: () => confirm }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
@@ -39,14 +45,24 @@ vi.mock("./SettingsOrganisation", () => ({ ApiUnavailable: () => <p>api unavaila
 
 import SettingsUsers from "./SettingsUsers";
 
-const row = (name) => screen.getByText(name).closest("tr");
+const card = (name) => screen.getByRole("listitem", { name });
+const pick = async (scope, label, option) => {
+  await userEvent.click(within(scope).getByRole("combobox", { name: label }));
+  await userEvent.click(await screen.findByRole("option", { name: new RegExp(`^${option}`) }));
+};
+const act = async (name, item) => {
+  await userEvent.click(within(card(name)).getByRole("button", { name: "Actions" }));
+  await userEvent.click(await screen.findByRole("menuitem", { name: item }));
+};
 
 describe("SettingsUsers", () => {
   beforeEach(() => {
     mutate.mockReset();
+    seatMutate.mockReset();
     confirm.mockReset();
     membersState = { data: { data: members }, isLoading: false, error: null };
-    seatOverview = { items: [{ planSlug: "contributor", planName: "Contributor", available: 1 }, { planSlug: "observer", planName: "Observer", available: 0 }] };
+    seatOverview = { items: [{ planSlug: "controller", planName: "Controller", available: 1 }, { planSlug: "contributor", planName: "Contributor", available: 1 }, { planSlug: "observer", planName: "Observer", available: 0 }] };
+    seatAssignments = [{ membershipId: "m-me", plan: { slug: "controller", name: "Controller" } }, { membershipId: "m-bob", plan: null }];
   });
 
   it("lets a manager invite with a role and departments, one of them primary", async () => {
@@ -54,7 +70,7 @@ describe("SettingsUsers", () => {
     render(<SettingsUsers />);
     const form = screen.getByRole("form", { name: "Invite member" });
     await userEvent.type(within(form).getByLabelText("Email address"), "someone@example.test");
-    await userEvent.selectOptions(within(form).getByLabelText("Role"), "r-viewer");
+    await pick(form, "Role", "Viewer");
     await userEvent.click(within(form).getByRole("button", { name: "Send invitation" }));
     expect(mutate).not.toHaveBeenCalled();
     expect(within(form).getByRole("status")).toHaveTextContent("Choose at least one department");
@@ -68,30 +84,36 @@ describe("SettingsUsers", () => {
     );
   });
 
-  it("needs no department for an organisation-wide role", async () => {
+  it("asks for a role, and needs no department for an organisation-wide role", async () => {
     permissions = ["members.read", "members.manage"];
     render(<SettingsUsers />);
     const form = screen.getByRole("form", { name: "Invite member" });
     await userEvent.type(within(form).getByLabelText("Email address"), "boss@example.test");
-    await userEvent.selectOptions(within(form).getByLabelText("Role"), "r-owner");
+    await userEvent.click(within(form).getByRole("button", { name: "Send invitation" }));
+    expect(within(form).getByRole("status")).toHaveTextContent("Choose a role");
+    await pick(form, "Role", "Owner");
     expect(within(form).getByText(/Not needed for owners, admins and quality managers/)).toBeInTheDocument();
     await userEvent.click(within(form).getByRole("button", { name: "Send invitation" }));
     expect(mutate).toHaveBeenCalledWith({ action: "invite", body: { email: "boss@example.test", roleId: "r-owner" } }, expect.any(Object));
   });
 
+  it("uses combo boxes, never a native drop-down", () => {
+    permissions = ["members.read", "members.manage", "subscription.read", "subscription.seats"];
+    const { container } = render(<SettingsUsers />);
+    expect(container.querySelector("select")).toBeNull();
+  });
+
   it("shows departments, with the primary one marked, and adds, switches and removes them", async () => {
     permissions = ["members.read", "members.manage"];
     render(<SettingsUsers />);
-    const list = screen.getByRole("list", { name: "Departments of Bob Builder" });
+    const list = screen.getByRole("list", { name: "Department list of Bob Builder" });
     expect(within(list).getByText("Goods-in")).toBeInTheDocument();
     expect(within(list).getByText("primary")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Make Final inspection the primary department of Bob Builder" }));
     expect(mutate).toHaveBeenLastCalledWith({ action: "setPrimaryDepartment", departmentMembershipId: "dm2" }, expect.any(Object));
     await userEvent.click(screen.getByRole("button", { name: "Remove Bob Builder from Goods-in" }));
     expect(mutate).toHaveBeenLastCalledWith({ action: "endDepartment", departmentMembershipId: "dm1" }, expect.any(Object));
-    const addForm = screen.getByRole("form", { name: "Add department to Mia Owner" });
-    await userEvent.selectOptions(within(addForm).getByLabelText("Department to add for Mia Owner"), "d-gi");
-    await userEvent.click(within(addForm).getByRole("button", { name: "Add" }));
+    await pick(card("Mia Owner"), "Add a department for Mia Owner", "PA · Goods-in");
     expect(mutate).toHaveBeenLastCalledWith({ action: "addDepartment", membershipId: "m-me", body: { departmentId: "d-gi" } }, expect.any(Object));
   });
 
@@ -111,31 +133,57 @@ describe("SettingsUsers", () => {
     permissions = ["members.read", "members.manage"];
     confirm.mockResolvedValue(true);
     render(<SettingsUsers />);
-    expect(within(row("Mia Owner")).queryByRole("button", { name: "Suspend" })).not.toBeInTheDocument();
-
-    await userEvent.click(within(row("Bob Builder")).getByRole("button", { name: "Remove" }));
+    expect(within(card("Mia Owner")).queryByRole("button", { name: "Actions" })).not.toBeInTheDocument();
+    await act("Bob Builder", "Remove from organisation");
     expect(confirm).toHaveBeenCalled();
     expect(mutate).toHaveBeenCalledWith({ action: "status", membershipId: "m-bob", body: { status: "removed" } }, expect.any(Object));
-
-    await userEvent.click(within(row("new@example.test")).getByRole("button", { name: "Revoke" }));
+    await act("new@example.test", "Revoke invitation");
     expect(mutate).toHaveBeenLastCalledWith({ action: "status", membershipId: "m-inv", body: { status: "removed" } }, expect.any(Object));
   });
 
   it("adds and removes roles", async () => {
     permissions = ["members.read", "members.manage"];
     render(<SettingsUsers />);
-    await userEvent.selectOptions(screen.getByLabelText("Role to add for Bob Builder"), "r-owner");
-    await userEvent.click(within(screen.getByRole("form", { name: "Add role to Bob Builder" })).getByRole("button", { name: "Add" }));
+    await pick(card("Bob Builder"), "Add a role for Bob Builder", "Owner");
     expect(mutate).toHaveBeenCalledWith({ action: "assign", membershipId: "m-bob", body: { roleId: "r-owner" } }, expect.any(Object));
     await userEvent.click(screen.getByRole("button", { name: "Remove role Viewer from Bob Builder" }));
     expect(mutate).toHaveBeenLastCalledWith({ action: "unassign", assignmentId: "a2" }, expect.any(Object));
+  });
+
+  it("shows each person's seat and lets someone who manages seats change it", async () => {
+    permissions = ["members.read", "members.manage", "subscription.read", "subscription.seats"];
+    confirm.mockResolvedValue(true);
+    render(<SettingsUsers />);
+    expect(within(card("Mia Owner")).getByRole("combobox", { name: "Seat for Mia Owner" })).toHaveValue("Controller");
+    await pick(card("Bob Builder"), "Seat for Bob Builder", "Contributor");
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Give Bob Builder a Contributor seat?" }));
+    expect(seatMutate).toHaveBeenCalledWith({ action: "assign", membershipId: "m-bob", planSlug: "contributor" }, expect.any(Object));
+  });
+
+  it("shows the seat read-only to someone who may see seats but not change them, and hides it from others", () => {
+    permissions = ["members.read", "subscription.read"];
+    const { unmount } = render(<SettingsUsers />);
+    expect(within(card("Mia Owner")).getByText("Controller")).toBeInTheDocument();
+    expect(within(card("Mia Owner")).queryByRole("combobox", { name: "Seat for Mia Owner" })).toBeNull();
+    unmount();
+    permissions = ["members.read"];
+    render(<SettingsUsers />);
+    expect(screen.queryByRole("region", { name: "Seat of Mia Owner" })).toBeNull();
+  });
+
+  it("finds people by name or email", async () => {
+    permissions = ["members.read"];
+    render(<SettingsUsers />);
+    await userEvent.type(screen.getByLabelText("Search people"), "bob");
+    expect(screen.getByRole("listitem", { name: "Bob Builder" })).toBeInTheDocument();
+    expect(screen.queryByRole("listitem", { name: "Mia Owner" })).toBeNull();
   });
 
   it("is read-only with members.read only, and hides removed members unless asked", async () => {
     permissions = ["members.read"];
     render(<SettingsUsers />);
     expect(screen.queryByRole("form", { name: "Invite member" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Actions" })).not.toBeInTheDocument();
     expect(screen.queryByText("Old Timer")).not.toBeInTheDocument();
     await userEvent.click(screen.getByLabelText("Show removed"));
     expect(screen.getByText("Old Timer")).toBeInTheDocument();
@@ -148,16 +196,15 @@ describe("SettingsUsers", () => {
     expect(screen.getByText(/members\.read permission/)).toBeInTheDocument();
   });
 
-  it("sends a message and a package with the invitation, offering only packages with a seat left", async () => {
+  it("sends a message and a seat with the invitation, offering only seats that are left", async () => {
     permissions = ["members.read", "members.manage", "subscription.seats"];
     render(<SettingsUsers />);
     const form = screen.getByRole("form", { name: "Invite member" });
     await userEvent.type(within(form).getByLabelText("Email address"), "boss@example.test");
-    await userEvent.selectOptions(within(form).getByLabelText("Role"), "r-owner");
-    const pkg = within(form).getByLabelText("Package");
-    expect(within(pkg).getByRole("option", { name: "Contributor (1 left)" })).toBeEnabled();
-    expect(within(pkg).getByRole("option", { name: "Observer (0 left)" })).toBeDisabled();
-    await userEvent.selectOptions(pkg, "contributor");
+    await pick(form, "Role", "Owner");
+    await userEvent.click(within(form).getByRole("combobox", { name: "Seat" }));
+    expect(await screen.findByRole("option", { name: /^Observer/ })).toHaveAttribute("aria-disabled", "true");
+    await userEvent.click(screen.getByRole("option", { name: /^Contributor/ }));
     await userEvent.type(within(form).getByLabelText("Message (optional)"), "Welcome aboard");
     await userEvent.click(within(form).getByRole("button", { name: "Send invitation" }));
     expect(mutate).toHaveBeenCalledWith(
@@ -166,10 +213,10 @@ describe("SettingsUsers", () => {
     );
   });
 
-  it("offers no package to someone who cannot manage seats", () => {
+  it("offers no seat to someone who cannot manage seats", () => {
     permissions = ["members.read", "members.manage"];
     render(<SettingsUsers />);
-    expect(within(screen.getByRole("form", { name: "Invite member" })).queryByLabelText("Package")).toBeNull();
+    expect(within(screen.getByRole("form", { name: "Invite member" })).queryByRole("combobox", { name: "Seat" })).toBeNull();
   });
 
   it("shows when an invitation expires and which seat is reserved, and resends or revokes it", async () => {
@@ -184,7 +231,7 @@ describe("SettingsUsers", () => {
     expect(detail).toHaveTextContent(/Expires in [45] days/);
     expect(detail).toHaveTextContent("Contributor seat reserved");
     expect(detail).toHaveTextContent("sent 3 times");
-    await userEvent.click(screen.getByRole("button", { name: "Resend invitation to new@example.test" }));
+    await act("new@example.test", "Resend invitation");
     expect(mutate).toHaveBeenLastCalledWith({ action: "resend", membershipId: "m-inv" }, expect.any(Object));
   });
 

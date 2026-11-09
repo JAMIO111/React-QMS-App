@@ -86,14 +86,17 @@ describe("SettingsSubscription", () => {
     permissions = ["subscription.read", "subscription.seats"];
     confirm.mockResolvedValue(true);
     renderPage();
-    const select = screen.getByLabelText("Package for Ann Quality");
-    await userEvent.selectOptions(select, "observer");
+    const pick = async (name) => {
+      await userEvent.click(screen.getByRole("combobox", { name: "Package for Ann Quality" }));
+      await userEvent.click(await screen.findByRole("option", { name: new RegExp(`^${name}`) }));
+    };
+    await pick("Observer");
     expect(confirm).toHaveBeenCalled();
     expect(mutate).toHaveBeenCalledWith({ action: "assign", membershipId: "m1", planSlug: "observer" }, expect.any(Object));
 
     mutate.mockReset();
     confirm.mockClear();
-    await userEvent.selectOptions(select, "controller");
+    await pick("Controller");
     expect(confirm).not.toHaveBeenCalled();
     expect(mutate).not.toHaveBeenCalled();
   });

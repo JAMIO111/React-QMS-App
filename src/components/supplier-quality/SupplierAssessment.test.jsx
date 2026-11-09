@@ -201,6 +201,23 @@ describe("the assessment page", () => {
     expect(screen.getByText("Everything is answered")).toBeInTheDocument();
   });
 
+  it("shows an answer at once, and takes it back with a message when the save is refused", async () => {
+    let release;
+    routeApi({
+      "GET /supplier-quality/supplier-assessments/a1": () => detail(),
+      "GET /supplier-quality/suppliers/s1/documents": { data: [] },
+      "PUT /supplier-quality/supplier-assessments/a1/responses": () => new Promise((_ok, fail) => { release = () => fail(new Error("Refused")); }),
+    });
+    renderUi(null, "/Suppliers/s1/assessments/a1");
+    const group = await screen.findByRole("radiogroup", { name: "Certified? answer" });
+    await userEvent.click(within(group).getByRole("radio", { name: "Yes" }));
+    // the answer is on screen while the request is still out
+    expect(within(group).getByRole("radio", { name: "Yes" })).toHaveAttribute("aria-checked", "true");
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    release();
+    await waitFor(() => expect(within(screen.getByRole("radiogroup", { name: "Certified? answer" })).getByRole("radio", { name: "Yes" })).toHaveAttribute("aria-checked", "false"));
+  });
+
   it("warns when the chosen evidence document is out of date", async () => {
     const base = detail();
     const withAnswer = detail({ questions: base.questions.map((x) => (x.key === "qms" ? { ...x, response: { answer: "yes", rating: null, note: null, document: { id: "doc2", title: "Old ISO certificate", fileName: "old.pdf" }, result: "pass", answeredAt: "2026-11-02T09:00:00Z" } } : x)) });

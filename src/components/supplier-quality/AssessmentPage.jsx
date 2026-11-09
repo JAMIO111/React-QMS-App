@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useAssessmentMutation, useSupplierAssessment, useSupplierDocuments } from "../../hooks/useSupplierQuality";
+import { useAssessmentMutation, useRespondToAssessment, useSupplierAssessment, useSupplierDocuments } from "../../hooks/useSupplierQuality";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { formatDateTime } from "../../lib/processControl";
 import { DocumentPicker } from "./Qualification";
@@ -21,7 +21,7 @@ const RATINGS = [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n)
 const RESULT_LABEL = { pass: "Pass", fail: "Fail", na: "Not applicable", unscored: "Noted" };
 
 /** One question: the control for its type, a note, and the evidence document where one is required. Each change is saved as it is made. */
-const QuestionRow = ({ q, editable, supplierId, documents, onSave, saving }) => {
+const QuestionRow = ({ q, editable, supplierId, documents, onSave }) => {
   const r = q.response;
   const [note, setNote] = useState(r?.note ?? "");
   const chosen = documents.find((d) => d.id === r?.document?.id);
@@ -60,7 +60,6 @@ const QuestionRow = ({ q, editable, supplierId, documents, onSave, saving }) => 
               {chosen.title}: {chosenExpiry.label.toLowerCase()}. Ask the supplier for a current one, or choose another document.
             </Callout>
           )}
-          {saving && <p className="text-xs text-secondary-text">Saving…</p>}
         </>
       ) : (
         <div className="text-sm text-primary-text">
@@ -134,6 +133,7 @@ const AssessmentPage = () => {
   ]);
   const documents = useSupplierDocuments(supplierId);
   const mutation = useAssessmentMutation();
+  const respond = useRespondToAssessment(id);
   const [dialog, setDialog] = useState(null);
   if (query.isLoading) return <LoadingScreen />;
   if (query.error) return <div className="p-4"><ErrorNotice error={query.error} /></div>;
@@ -186,7 +186,7 @@ const AssessmentPage = () => {
         <MenuCard key={sec} title={sec}>
           <ul className="flex flex-col gap-3" aria-label={sec}>
             {a.questions.filter((q) => (q.section || "Questions") === sec).map((q) => (
-              <QuestionRow key={`${q.key}:${q.response?.answeredAt ?? ""}`} supplierId={supplierId} q={q} editable={editable} documents={documents.data?.data ?? []} onSave={(body) => mutation.mutate({ action: "respond", id: a.id, body })} saving={mutation.isPending && mutation.variables?.body?.questionKey === q.key} />
+              <QuestionRow key={q.key} supplierId={supplierId} q={q} editable={editable} documents={documents.data?.data ?? []} onSave={(body) => respond({ body, documents: documents.data?.data ?? [] })} />
             ))}
           </ul>
         </MenuCard>

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
+import { useOptimisticSubmit } from "../lib/optimisticSubmit";
 
 /** Supplier quality (docs/supplier-quality-plan.md): the register, a supplier's profile and history, classifications, and the commands. */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "supplier-quality", ...rest];
@@ -278,6 +279,32 @@ export const useAssessmentMutation = () => {
     // A decision can change the supplier's status, which shows everywhere, so everything is marked stale.
     onSuccess: () => refreshOrganisation(queryClient, organisationId),
   });
+};
+
+/**
+ * Record one answer of a supplier assessment. The screen shows the answer at once; the database's own result
+ * (pass / fail, the score, what is still needed) replaces the guess when the save comes back, and the old answer returns if it is refused.
+ */
+export const useRespondToAssessment = (assessmentId) => {
+  const { organisationId } = useOrganisation();
+  const submit = useOptimisticSubmit();
+  return ({ body, documents = [] }) =>
+    submit({
+      errorTitle: "Answer not saved",
+      request: () => apiFetch(`/supplier-quality/supplier-assessments/${assessmentId}/responses`, { method: "PUT", body, organisationId }),
+      patches: [{
+        queryKey: key(organisationId, "assessment", assessmentId),
+        update: (a) => ({
+          ...a,
+          questions: a.questions.map((q) => {
+            if (q.key !== body.questionKey) return q;
+            const document = body.documentId ? (documents.find((d) => d.id === body.documentId) ?? q.response?.document ?? null) : null;
+            const result = body.answer === "na" ? "na" : body.answer === "yes" ? "pass" : body.answer === "no" ? "fail" : (q.response?.result ?? "unscored");
+            return { ...q, response: { ...q.response, answer: body.answer ?? null, rating: body.rating ?? null, note: body.note ?? null, document: document && { id: document.id, title: document.title, fileName: document.fileName }, result, answeredAt: q.response?.answeredAt ?? new Date().toISOString() } };
+          }),
+        }),
+      }],
+    });
 };
 
 // ---- SCARs (supplier corrective action requests) ----------------------------------------------

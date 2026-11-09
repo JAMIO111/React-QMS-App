@@ -6,7 +6,8 @@ BEGIN;
 
 INSERT INTO auth.users (id, email) VALUES
   ('5d000000-0000-0000-0000-000000000a01', 'ann@in.test'), ('5d000000-0000-0000-0000-000000000a02', 'bob@in.test'),
-  ('5d000000-0000-0000-0000-000000000a03', 'cat@in.test'), ('5d000000-0000-0000-0000-000000000a04', 'eve@in.test');
+  ('5d000000-0000-0000-0000-000000000a03', 'cat@in.test'), ('5d000000-0000-0000-0000-000000000a04', 'eve@in.test'),
+  ('5d000000-0000-0000-0000-000000000a05', 'dan@in.test');
 
 CREATE FUNCTION pg_temp.fails(p_sql text) RETURNS text LANGUAGE plpgsql AS $$
 BEGIN EXECUTE p_sql; RETURN 'ok'; EXCEPTION WHEN OTHERS THEN RETURN SQLSTATE || ': ' || SQLERRM; END $$;
@@ -16,6 +17,7 @@ CREATE FUNCTION pg_temp.vault_has(p_id uuid) RETURNS integer LANGUAGE sql SECURI
 DO $$
 DECLARE
   ann uuid := '5d000000-0000-0000-0000-000000000a01'; bob uuid := '5d000000-0000-0000-0000-000000000a02'; cat uuid := '5d000000-0000-0000-0000-000000000a03'; eve uuid := '5d000000-0000-0000-0000-000000000a04';
+  dan uuid := '5d000000-0000-0000-0000-000000000a05'; selfc uuid; qmc uuid;
   org uuid; org2 uuid; r_viewer uuid; r_qm uuid; csv uuid; rest uuid; cred uuid; cred2 uuid; v_secret uuid; v_old uuid; n integer;
 BEGIN
   PERFORM pg_temp.login(ann); org := app.create_organisation('IN Alpha'); PERFORM pg_temp.logout();
@@ -25,6 +27,23 @@ BEGIN
   SELECT id INTO r_qm FROM public.roles WHERE organisation_id = org AND key = 'quality_manager';
   INSERT INTO public.user_role_assignments (organisation_id, membership_id, role_id) SELECT org, ou.id, r_viewer FROM public.organisation_users ou WHERE ou.organisation_id = org AND ou.user_id = bob;
   INSERT INTO public.user_role_assignments (organisation_id, membership_id, role_id) SELECT org, ou.id, r_qm FROM public.organisation_users ou WHERE ou.organisation_id = org AND ou.user_id = cat;
+  INSERT INTO public.organisation_users (organisation_id, user_id, status) VALUES (org, dan, 'active');
+  INSERT INTO public.user_role_assignments (organisation_id, membership_id, role_id)
+    SELECT org, ou.id, r.id FROM public.organisation_users ou JOIN public.roles r ON r.organisation_id = org AND r.key = 'admin' WHERE ou.organisation_id = org AND ou.user_id = dan;
+
+  -- ---- integrations are for Controller seat holders only ----
+  PERFORM pg_temp.login(ann);
+  PERFORM pg_temp.assert_eq(app.has_permission(org, 'integrations.manage'), false, 'an owner without a Controller seat has no integrations permission');
+  PERFORM pg_temp.assert_eq((SELECT count(*)::int FROM app.my_permissions(org) p WHERE p LIKE 'integrations.%'), 0, 'nor are any listed for the menu');
+  PERFORM pg_temp.assert_eq(app.has_permission(org, 'ncr.read'), true, 'other permissions are unchanged');
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.create_integration_connection(%L, 'csv', 'No seat', 'noseat', '{}'::jsonb)$f$, org)), 5), '42501', 'and cannot create a connection');
+  PERFORM pg_temp.logout();
+  PERFORM pg_temp.give_controller_seat(org, ann);
+  PERFORM pg_temp.give_controller_seat(org, cat);
+  PERFORM pg_temp.login(ann);
+  PERFORM pg_temp.assert_eq(app.has_permission(org, 'integrations.manage'), true, 'with a Controller seat the owner may manage integrations');
+  PERFORM pg_temp.assert_eq((SELECT count(*)::int FROM app.my_permissions(org) p WHERE p LIKE 'integrations.%'), 4, 'and all four are listed');
+  PERFORM pg_temp.logout();
 
   -- ---- providers: read by anyone signed in, written by no one ----
   PERFORM pg_temp.login(bob);
@@ -78,8 +97,27 @@ BEGIN
   PERFORM app.record_integration_connection_test(rest, true, 'Connected again');
   PERFORM app.mark_integration_ready(rest);
 
-  -- ---- activation needs a second person ----
-  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.activate_integration_connection(%L)$f$, csv)), 5), 'QM022', 'the person who marked it ready cannot activate it');
+  -- ---- activation needs a second person, unless an owner or admin activates their own ----
+  qmc := app.create_integration_connection(org, 'csv', 'QM file', 'qm-file', '{}'::jsonb);
+  PERFORM pg_temp.logout(); PERFORM pg_temp.login(cat);
+  PERFORM app.mark_integration_ready(qmc);
+  PERFORM pg_temp.assert_eq(app.integration_can_activate(qmc), false, 'a quality manager who marked it ready may not activate it');
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.activate_integration_connection(%L)$f$, qmc)), 5), 'QM022', 'the database refuses it too');
+  PERFORM pg_temp.logout(); PERFORM pg_temp.login(ann);
+  PERFORM pg_temp.assert_eq(app.integration_can_activate(qmc), true, 'another approver may');
+  selfc := app.create_integration_connection(org, 'csv', 'Owner file', 'owner-file', '{}'::jsonb);
+  PERFORM app.mark_integration_ready(selfc);
+  PERFORM pg_temp.assert_eq(app.integration_can_activate(selfc), true, 'an owner may activate a connection they prepared');
+  PERFORM app.activate_integration_connection(selfc);
+  PERFORM pg_temp.assert_eq((SELECT ready_by = activated_by FROM public.integration_connections WHERE id = selfc), true, 'and the record shows the same person did both');
+  PERFORM pg_temp.logout(); PERFORM pg_temp.login(dan);
+  PERFORM pg_temp.assert_eq((SELECT count(*)::int FROM public.integration_connections), 0, 'an admin without a Controller seat sees no connections');
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.activate_integration_connection(%L)$f$, qmc)), 5), '42501', 'and cannot activate one');
+  PERFORM pg_temp.logout(); PERFORM pg_temp.give_controller_seat(org, dan); PERFORM pg_temp.login(dan);
+  selfc := app.create_integration_connection(org, 'csv', 'Admin file', 'admin-file', '{}'::jsonb);
+  PERFORM app.mark_integration_ready(selfc);
+  PERFORM app.activate_integration_connection(selfc);
+  PERFORM pg_temp.assert_eq((SELECT status FROM public.integration_connections WHERE id = selfc), 'active', 'an admin with a seat sets a connection up and activates it on their own');
   PERFORM pg_temp.logout(); PERFORM pg_temp.login(bob);
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.activate_integration_connection(%L)$f$, csv)), 5), '42501', 'a viewer cannot activate');
   PERFORM pg_temp.logout(); PERFORM pg_temp.login(cat);

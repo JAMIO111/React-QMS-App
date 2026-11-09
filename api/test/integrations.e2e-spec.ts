@@ -5,7 +5,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { makeIds, requireDb, seed, startApp, token } from './helpers';
+import { giveControllerSeats, makeIds, requireDb, seed, startApp, token } from './helpers';
 
 const ids = makeIds('1f');
 const approverId = `${String('1f').padEnd(8, '0')}-0000-0000-0000-0000000000e1`;
@@ -26,6 +26,8 @@ beforeAll(async () => {
   await admin.query(`insert into auth.users (id, email) values ($1, 'approver@example.test')`, [approverId]);
   const { rows } = await admin.query(`insert into public.organisation_users (organisation_id, user_id, status, joined_at) values ($1, $2, 'active', now()) returning id`, [ids.orgA, approverId]);
   await admin.query(`insert into public.user_role_assignments (organisation_id, membership_id, role_id) select $1, $2, id from public.roles where organisation_id = $1 and key = 'quality_manager'`, [ids.orgA, rows[0].id]);
+  await giveControllerSeats(admin, ids.orgA, [ids.ownerA, approverId]);
+  await giveControllerSeats(admin, ids.orgB, [ids.ownerB]);
   app = await startApp({ RATE_LIMIT_PER_MINUTE: '10000' });
 });
 
@@ -96,14 +98,15 @@ describe('integration connections', () => {
     const tested = (await api().post(`${base}/connections/${csvId}/test`).set(await owner()).send({}).expect(200)).body;
     expect(tested.lastTest).toMatchObject({ ok: true });
     await api().post(`${base}/connections/${csvId}/test`).set(await inspector()).send({}).expect(403);
-    const ready = (await api().post(`${base}/connections/${csvId}/ready`).set(await owner()).send({}).expect(200)).body;
-    expect(ready).toMatchObject({ status: 'ready', readyBy: { name: expect.any(String) } });
+    const ready = (await api().post(`${base}/connections/${csvId}/ready`).set(await approver()).send({}).expect(200)).body;
+    expect(ready).toMatchObject({ status: 'ready', readyBy: { name: expect.any(String) }, canActivate: false });
   });
 
-  it('activation needs a different person with approval rights, and the lifecycle keeps its history', async () => {
-    await api().post(`${base}/connections/${csvId}/activate`).set(await owner()).send({}).expect(409); // the preparer
+  it('activation needs a different person with approval rights (an owner or admin may activate their own), and the lifecycle keeps its history', async () => {
+    await api().post(`${base}/connections/${csvId}/activate`).set(await approver()).send({}).expect(409); // the preparer, a quality manager
     await api().post(`${base}/connections/${csvId}/activate`).set(await inspector()).send({}).expect(403);
-    const active = (await api().post(`${base}/connections/${csvId}/activate`).set(await approver()).send({}).expect(200)).body;
+    expect((await api().get(`${base}/connections/${csvId}`).set(await owner()).expect(200)).body.canActivate).toBe(true);
+    const active = (await api().post(`${base}/connections/${csvId}/activate`).set(await owner()).send({}).expect(200)).body;
     expect(active).toMatchObject({ status: 'active' });
     expect(active.activatedBy).not.toBeNull();
     await api().patch(`${base}/connections/${csvId}`).set(await owner()).send({ name: 'Renamed while active' }).expect(409);
@@ -136,5 +139,30 @@ describe('integration connections', () => {
     await api().put(`${base}/connections/${csvId}/credential`).set(await other()).send({ kind: 'bearer', secret: 'x' }).expect(404);
     await api().post(`${base}/connections/${csvId}/pause`).set(await other()).send({ reason: 'Hijacked' }).expect(404);
     expect((await api().get(`${base}/connections`).set(await other()).expect(200)).body.data).toEqual([]);
+  });
+});
+
+describe('Controller seats and owners activating their own', () => {
+  it('an owner sets up and activates a connection on their own', async () => {
+    const c = (await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'csv', name: 'Owner solo file', externalSystem: 'solo' }).expect(201)).body;
+    const ready = (await api().post(`${base}/connections/${c.id}/ready`).set(await owner()).send({}).expect(200)).body;
+    expect(ready.canActivate).toBe(true);
+    const active = (await api().post(`${base}/connections/${c.id}/activate`).set(await owner()).send({}).expect(200)).body;
+    expect(active).toMatchObject({ status: 'active', readyBy: { id: ids.ownerA }, activatedBy: { id: ids.ownerA } });
+  });
+
+  it('someone whose role allows integrations but who holds no Controller seat sees nothing and the menu lists no integrations permission', async () => {
+    await admin.query(
+      `insert into public.user_role_assignments (organisation_id, membership_id, role_id)
+       select $1, m.id, r.id from public.organisation_users m join public.roles r on r.organisation_id = $1 and r.key = 'admin' where m.organisation_id = $1 and m.user_id = $2`,
+      [ids.orgA, ids.dual],
+    );
+    const dual = await as(ids.dual);
+    await api().get(`${base}/connections`).set(dual).expect(403);
+    await api().post(`${base}/connections`).set(dual).send({ providerKey: 'csv', name: 'No seat', externalSystem: 'noseat' }).expect(403);
+    const me = (await api().get('/api/v1/me').set(dual).expect(200)).body;
+    const perms = me.memberships.find((m: { organisation: { id: string } }) => m.organisation.id === ids.orgA).permissions as string[];
+    expect(perms.some((p) => p.startsWith('integrations.'))).toBe(false);
+    expect(perms).toContain('capa.manage'); // the rest of the admin role is unchanged
   });
 });

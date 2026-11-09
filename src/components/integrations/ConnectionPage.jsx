@@ -111,7 +111,7 @@ const ConnectionPage = () => {
     if (c.status === "paused") actions.push(button("Resume", () => run("resume", "Resumed"), "main"));
     actions.push(button("Retire", () => setDialog("retire"), "danger"));
   }
-  if (approve && c.status === "ready") actions.push(button("Activate", () => run("activate", "Activated"), "main"));
+  if (c.canActivate) actions.push(button("Activate", () => run("activate", "Activated"), "main"));
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -126,7 +126,11 @@ const ConnectionPage = () => {
             <ul className="list-disc pl-5">{c.problems.map((p) => <li key={p}>{p}</li>)}</ul>
           </Callout>
         )}
-        {c.status === "ready" && !approve && <Callout tone="info" className="mt-3">Waiting for a different person with approval rights to activate it.</Callout>}
+        {c.status === "ready" && !c.canActivate && (
+          <Callout tone="info" className="mt-3">
+            Waiting for {approve ? "a different person" : "someone"} with approval rights to activate it. An owner or admin may activate a connection they prepared themselves.
+          </Callout>
+        )}
         {actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{actions}</div>}
       </MenuCard>
 

@@ -14,7 +14,7 @@ import { AppModule } from '../src/app.module';
 import { AdapterContext, ConnectorAdapter, ConnectorError, ConnectorMetadata, FetchResult } from '../src/integrations/core/connector.interface';
 import { ConnectorRegistry } from '../src/integrations/core/connector.registry';
 import { EntityImporter, EntityImporterRegistry, StagedRow } from '../src/integrations/core/entity-importer';
-import { makeIds, requireDb, seed, testEnv, token } from './helpers';
+import { giveControllerSeats, makeIds, requireDb, seed, testEnv, token } from './helpers';
 
 const ids = makeIds('2f');
 const approverId = `${String('2f').padEnd(8, '0')}-0000-0000-0000-0000000000e1`;
@@ -69,6 +69,8 @@ beforeAll(async () => {
   await admin.query(`insert into auth.users (id, email) values ($1, 'approver@example.test') on conflict do nothing`, [approverId]);
   const { rows } = await admin.query(`insert into public.organisation_users (organisation_id, user_id, status, joined_at) values ($1, $2, 'active', now()) returning id`, [ids.orgA, approverId]);
   await admin.query(`insert into public.user_role_assignments (organisation_id, membership_id, role_id) select $1, $2, id from public.roles where organisation_id = $1 and key = 'quality_manager'`, [ids.orgA, rows[0].id]);
+  await giveControllerSeats(admin, ids.orgA, [ids.ownerA, approverId]);
+  await giveControllerSeats(admin, ids.orgB, [ids.ownerB]);
   const env = testEnv({ RATE_LIMIT_PER_MINUTE: '10000', CRON_SECRET });
   const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(env)] })
     .overrideProvider(ConnectorRegistry).useValue(new ConnectorRegistry().register(new FakeFileAdapter()))

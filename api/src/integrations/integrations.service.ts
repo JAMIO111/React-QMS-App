@@ -75,7 +75,7 @@ export class IntegrationsService {
     const [cred, events, problems] = await Promise.all([
       db.execute<Row>(sql`select k.kind, k.created_at, k.created_by, ${sql.raw(personName('p'))} as created_by_name from public.integration_credentials k left join public.profiles p on p.id = k.created_by where k.connection_id = ${id}::uuid and k.revoked_at is null`),
       db.execute<Row>(sql`select e.action, e.from_status, e.to_status, e.note, e.at, e.by, ${sql.raw(personName('p'))} as by_name from public.integration_connection_events e left join public.profiles p on p.id = e.by where e.connection_id = ${id}::uuid order by e.at desc, e.created_at desc limit 100`),
-      db.execute<{ p: string[] }>(sql`select app.integration_activation_problems(${id}::uuid) as p`),
+      db.execute<{ p: string[]; can_activate: boolean | null }>(sql`select app.integration_activation_problems(${id}::uuid) as p, app.integration_can_activate(${id}::uuid) as can_activate`),
     ]);
     const c = cred.rows[0];
     return {
@@ -83,6 +83,7 @@ export class IntegrationsService {
       credential: c ? { kind: c.kind as 'api_key' | 'bearer' | 'basic' | 'oauth_client', setAt: iso(c.created_at)!, setBy: person(c.created_by, c.created_by_name) } : null,
       problems: problems.rows[0].p ?? [],
       runnable: this.engine.runnable(rows.rows[0].provider_key as string),
+      canActivate: !!problems.rows[0].can_activate,
       events: events.rows.map((e) => ({ action: e.action as string, fromStatus: (e.from_status as string) ?? null, toStatus: (e.to_status as string) ?? null, note: (e.note as string) ?? null, at: iso(e.at)!, by: person(e.by, e.by_name) })),
     };
   }

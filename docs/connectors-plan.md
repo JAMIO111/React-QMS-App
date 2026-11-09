@@ -46,6 +46,8 @@ Phase 5 exit criterion (brief): *a customer can safely import a supported extern
 | **D7** | **Entitlement and permissions** | module `integrations` gated by package or open to all | New permissions `integrations.read / .manage / .run / .approve` (owner, admin, quality manager manage and run; **activating a connection needs a second person with `.approve` — preparer ≠ approver**, as for supplier approvals and inspection rules). Subscription: a new feature `integrations`, mapped to a package you choose (commercial call, not mine) |
 | **D8** | **File size and volume limits for Phase 5** | — | 25 MB per file (as other uploads), 100,000 rows per run; larger needs the Phase 6 agent or chunked REST. Say if a real customer needs more |
 
+**Change after IN2 (agreed with the product owner):** integrations are for **Controller seat holders only** (every `integrations.*` permission also needs an active Controller seat), and an organisation-wide **Owner or Admin may activate a connection they prepared themselves**; everyone else still needs a different approver (D7 amended).
+
 ## 4. Architecture
 
 ```

@@ -10,7 +10,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { makeIds, requireDb, seed, startApp, token } from './helpers';
+import { giveControllerSeats, makeIds, requireDb, seed, startApp, token } from './helpers';
 
 const ids = makeIds(4);
 let app: INestApplication;
@@ -771,6 +771,9 @@ const call = (op: Op, path: string, headers: Record<string, string>, body?: obje
 beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });
   await seed(admin, ids, '-sweep');
+  // Integrations need a Controller seat: both owners hold one, so the sweep checks tenancy, not the seat rule.
+  await giveControllerSeats(admin, ids.orgA, [ids.ownerA]);
+  await giveControllerSeats(admin, ids.orgB, [ids.ownerB]);
   app = await startApp({ RATE_LIMIT_PER_MINUTE: '10000' });
 
   const doc = (await api().get('/api/v1/openapi.json').expect(200)).body;

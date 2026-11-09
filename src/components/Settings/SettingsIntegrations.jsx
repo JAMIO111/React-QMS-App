@@ -17,8 +17,8 @@ export const StatusPill = ({ status }) => {
   return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${s.tone}`}>{s.label}</span>;
 };
 
-/** Settings → Integrations: the systems this organisation connects to Fortress. */
-const SettingsIntegrations = () => {
+/** The connections list (only mounted for people who may see integrations, so nothing is fetched for anyone else). */
+const IntegrationsList = () => {
   const { can } = usePermissions();
   const navigate = useNavigate();
   const connections = useIntegrationConnections();
@@ -58,6 +58,21 @@ const SettingsIntegrations = () => {
       {adding && <ConnectionForm providers={providers.data ?? []} onClose={() => setAdding(false)} onCreated={(c) => c?.id && navigate(`/Settings/Integrations/${c.id}`)} />}
     </div>
   );
+};
+
+/** Settings → Integrations: the systems this organisation connects to Fortress. Controller seat holders only (the database enforces it). */
+const SettingsIntegrations = () => {
+  const { can } = usePermissions();
+  if (!can("integrations.read")) {
+    return (
+      <div className="p-4">
+        <Callout tone="info" title="Integrations are for Controller seat holders">
+          Setting up and running integrations needs a Controller seat and a role that allows it. Ask whoever manages your subscription to give you a Controller seat.
+        </Callout>
+      </div>
+    );
+  }
+  return <IntegrationsList />;
 };
 
 export default SettingsIntegrations;

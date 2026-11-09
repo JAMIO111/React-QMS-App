@@ -31,6 +31,8 @@ BEGIN
   SELECT id INTO r_qm FROM public.roles WHERE organisation_id = org AND key = 'quality_manager';
   INSERT INTO public.user_role_assignments (organisation_id, membership_id, role_id) SELECT org, ou.id, r_viewer FROM public.organisation_users ou WHERE ou.organisation_id = org AND ou.user_id = bob;
   INSERT INTO public.user_role_assignments (organisation_id, membership_id, role_id) SELECT org, ou.id, r_qm FROM public.organisation_users ou WHERE ou.organisation_id = org AND ou.user_id = cat;
+  PERFORM pg_temp.give_controller_seat(org, ann);
+  PERFORM pg_temp.give_controller_seat(org, cat);
 
   PERFORM pg_temp.login(ann);
   conn := app.create_integration_connection(org, 'csv', 'ERP suppliers', 'erp', '{}'::jsonb);

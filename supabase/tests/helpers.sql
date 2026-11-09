@@ -88,3 +88,20 @@ END $$;
 CREATE FUNCTION pg_temp.cat(p_org uuid) RETURNS uuid LANGUAGE sql AS $$
   SELECT id FROM public.ncr_classifications WHERE organisation_id = p_org AND kind = 'category' AND code = 'PRODUCT'
 $$;
+
+-- Give a member a Controller seat (adds one to the organisation's Controller quantity, making a subscription when there is none). Run as the superuser.
+-- Integrations need one: every integrations.* permission requires the caller to hold a Controller seat.
+CREATE FUNCTION pg_temp.give_controller_seat(p_org uuid, p_user uuid) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE v_sub uuid; v_price public.subscription_prices%ROWTYPE; v_plan uuid; v_item uuid;
+BEGIN
+  SELECT id INTO v_sub FROM public.organisation_subscriptions WHERE organisation_id = p_org;
+  IF v_sub IS NULL THEN INSERT INTO public.organisation_subscriptions (organisation_id, current_period_end) VALUES (p_org, now() + interval '1 month') RETURNING id INTO v_sub; END IF;
+  SELECT id INTO v_plan FROM public.subscription_plans WHERE slug = 'controller';
+  SELECT * INTO v_price FROM public.subscription_prices WHERE subscription_plan_id = v_plan AND billing_interval = 'month' AND currency = 'GBP' AND active AND effective_to IS NULL;
+  INSERT INTO public.organisation_subscription_items (organisation_id, organisation_subscription_id, subscription_plan_id, subscription_price_id, quantity, unit_amount_snapshot, currency)
+  VALUES (p_org, v_sub, v_plan, v_price.id, 1, v_price.unit_amount, 'GBP')
+  ON CONFLICT (organisation_subscription_id, subscription_plan_id) DO UPDATE SET quantity = public.organisation_subscription_items.quantity + 1
+  RETURNING id INTO v_item;
+  INSERT INTO public.user_subscription_assignments (organisation_id, organisation_membership_id, subscription_plan_id, subscription_item_id)
+  SELECT p_org, m.id, v_plan, v_item FROM public.organisation_users m WHERE m.organisation_id = p_org AND m.user_id = p_user;
+END $$;

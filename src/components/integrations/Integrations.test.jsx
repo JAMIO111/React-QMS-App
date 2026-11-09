@@ -24,7 +24,7 @@ const conn = (over = {}) => ({
   config: { baseUrl: "https://erp.example.com/api", authType: "bearer" }, lastTest: null, readyAt: null, readyBy: null, activatedAt: null, activatedBy: null,
   createdAt: "2026-11-09T09:00:00Z", createdBy: { id: "u1", name: "Ada Owner" }, ...over,
 });
-const detail = (over = {}) => ({ ...conn(), credential: null, problems: ["Store a credential"], runnable: [], events: [{ action: "created", fromStatus: null, toStatus: "draft", note: "REST API", at: "2026-11-09T09:00:00Z", by: { id: "u1", name: "Ada Owner" } }], ...over });
+const detail = (over = {}) => ({ ...conn(), credential: null, problems: ["Store a credential"], runnable: [], canActivate: false, events: [{ action: "created", fromStatus: null, toStatus: "draft", note: "REST API", at: "2026-11-09T09:00:00Z", by: { id: "u1", name: "Ada Owner" } }], ...over });
 
 const noRuns = { data: [], page: 1, pageSize: 20, total: 0 };
 const run = (over = {}) => ({
@@ -71,6 +71,14 @@ describe("Settings → Integrations", () => {
     expect(screen.getByRole("button", { name: /Add connection/ })).toBeInTheDocument();
   });
 
+  it("tells someone without a Controller seat that integrations need one", async () => {
+    permissions = ["ncr.read"];
+    routeApi({});
+    renderAt("/Settings/Integrations");
+    expect(await screen.findByText("Integrations are for Controller seat holders")).toBeInTheDocument();
+    expect(calls).toHaveLength(0);
+  });
+
   it("hides Add without the manage permission", async () => {
     permissions = ["integrations.read"];
     routeApi({ "GET /integrations/connections": { data: [] }, "GET /integrations/providers": { data: providers } });
@@ -105,14 +113,13 @@ describe("Connection page", () => {
     expect(screen.queryByText("s3cret-value")).toBeNull();
   });
 
-  it("offers Activate to an approver only when the connection is ready", async () => {
-    routeApi({ "GET /integrations/connections/c1": detail({ status: "ready", problems: [] }), "GET /integrations/providers": { data: providers }, "GET /integrations/runs": noRuns });
+  it("offers Activate when the API says the caller may activate it", async () => {
+    routeApi({ "GET /integrations/connections/c1": detail({ status: "ready", problems: [], canActivate: true }), "GET /integrations/providers": { data: providers }, "GET /integrations/runs": noRuns });
     renderAt("/Settings/Integrations/c1");
     expect(await screen.findByRole("button", { name: "Activate" })).toBeInTheDocument();
   });
 
-  it("does not offer Activate without approval rights", async () => {
-    permissions = ["integrations.read", "integrations.manage"];
+  it("does not offer Activate to the person who marked it ready unless they may self-approve", async () => {
     routeApi({ "GET /integrations/connections/c1": detail({ status: "ready", problems: [] }), "GET /integrations/providers": { data: providers }, "GET /integrations/runs": noRuns });
     renderAt("/Settings/Integrations/c1");
     expect(await screen.findByText(/Waiting for a different person/)).toBeInTheDocument();

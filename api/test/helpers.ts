@@ -153,3 +153,34 @@ export async function categoryId(admin: Pool, organisationId: string, code = 'PR
   }
   return categories.get(key)!;
 }
+
+/**
+ * Give members Controller seats (adds to the organisation's Controller quantity, making a subscription when there is none). Integrations need one:
+ * every integrations.* permission requires the caller to hold a Controller seat.
+ */
+export async function giveControllerSeats(admin: Pool, organisationId: string, userIds: string[]): Promise<void> {
+  const price = (await admin.query(
+    `select p.id plan, pr.id price, pr.unit_amount from public.subscription_plans p join public.subscription_prices pr on pr.subscription_plan_id = p.id
+      where p.slug = 'controller' and pr.billing_interval = 'month' and pr.currency = 'GBP' and pr.active and pr.effective_to is null`,
+  )).rows[0];
+  const sub = (await admin.query(
+    `insert into public.organisation_subscriptions (organisation_id, current_period_end) values ($1, now() + interval '1 month')
+     on conflict (organisation_id) do update set organisation_id = excluded.organisation_id returning id`,
+    [organisationId],
+  )).rows[0].id;
+  for (const userId of userIds) {
+    const item = (await admin.query(
+      `insert into public.organisation_subscription_items (organisation_id, organisation_subscription_id, subscription_plan_id, subscription_price_id, quantity, unit_amount_snapshot, currency)
+       values ($1, $2, $3, $4, 1, $5, 'GBP')
+       on conflict (organisation_subscription_id, subscription_plan_id) do update set quantity = public.organisation_subscription_items.quantity + 1 returning id`,
+      [organisationId, sub, price.plan, price.price, price.unit_amount],
+    )).rows[0].id;
+    await admin.query(
+      `insert into public.user_subscription_assignments (organisation_id, organisation_membership_id, subscription_plan_id, subscription_item_id)
+       select $1, m.id, $3, $4 from public.organisation_users m
+        where m.organisation_id = $1 and m.user_id = $2
+          and not exists (select 1 from public.user_subscription_assignments a where a.organisation_membership_id = m.id and a.subscription_plan_id = $3 and a.status = 'active')`,
+      [organisationId, userId, price.plan, item],
+    );
+  }
+}

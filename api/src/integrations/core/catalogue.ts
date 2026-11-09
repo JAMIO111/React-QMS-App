@@ -5,6 +5,9 @@ import { EntityType } from './entity-importer';
  * The canonical fields each kind of record takes from a source (brief §6: a canonical data model, never a free-form store). A mapping can only point source
  * columns at these targets, and every value is checked against its type here before it is staged. The importers (IN4–IN6) write exactly these fields.
  * Only kinds with a catalogue can be previewed; one is importable once its importer exists.
+ * Which fields are offered, their labels and whether they are required are written here. At runtime the length limits, patterns, allowed values and
+ * numeric bounds are read from the database's own rules (core/column-rules.ts, CatalogueService); the limits written here are only the fallback.
+ * core/columns.ts says which column each field fills, and test/integration-catalogue-drift.e2e-spec.ts fails when the schema and these drift apart.
  */
 export type FieldType = 'text' | 'email' | 'url' | 'country' | 'number' | 'integer' | 'date' | 'boolean' | 'enum';
 
@@ -16,6 +19,11 @@ export interface CatalogueField {
   maxLength?: number;
   options?: { value: string; label: string }[];
   description?: string;
+  /** From the database's own CHECK constraints (core/column-rules.ts): a pattern the text must match, and numeric bounds. */
+  pattern?: string;
+  min?: number;
+  max?: number;
+  minExclusive?: boolean;
   /** A link to another record (D10): given in the file by its Fortress code, or (when `source`) by the id the source gave it in an earlier import. */
   ref?: { kind: RefKind; source: boolean };
 }
@@ -63,9 +71,9 @@ const ref = (key: string, label: string, kind: RefKind, what: string, extra: Par
 });
 
 const party = (extra: CatalogueField[] = []): CatalogueField[] => [
-  { key: 'code', label: 'Code', type: 'text', required: true, maxLength: 40, description: 'Your short code for them; unique in Fortress' },
+  { key: 'code', label: 'Code', type: 'text', required: true, maxLength: 20, description: 'Your short code for them in capitals (letters, digits, - and _); unique in Fortress' },
   { key: 'name', label: 'Name', type: 'text', required: true, maxLength: 200 },
-  { key: 'displayName', label: 'Display name', type: 'text', maxLength: 200 },
+  { key: 'displayName', label: 'Display name', type: 'text', maxLength: 100 },
   { key: 'companyNumber', label: 'Company number', type: 'text', maxLength: 50 },
   { key: 'vatNumber', label: 'VAT number', type: 'text', maxLength: 50 },
   ...extra,
@@ -81,15 +89,15 @@ export const CATALOGUE: EntityCatalogue[] = [
     fields: party([
       { key: 'supplierType', label: 'Supplier type', type: 'enum', options: SUPPLIER_TYPES.map((v) => ({ value: v, label: words(v) })) },
       { key: 'email', label: 'Email', type: 'email', maxLength: 200 },
-      { key: 'phone', label: 'Phone', type: 'text', maxLength: 50 },
+      { key: 'phone', label: 'Phone', type: 'text', maxLength: 40 },
       { key: 'website', label: 'Website', type: 'url', maxLength: 300 },
-      { key: 'addressLine1', label: 'Address line 1', type: 'text', maxLength: 200 },
-      { key: 'addressLine2', label: 'Address line 2', type: 'text', maxLength: 200 },
-      { key: 'city', label: 'Town or city', type: 'text', maxLength: 100 },
-      { key: 'region', label: 'County or region', type: 'text', maxLength: 100 },
+      { key: 'addressLine1', label: 'Address line 1', type: 'text', maxLength: 120 },
+      { key: 'addressLine2', label: 'Address line 2', type: 'text', maxLength: 120 },
+      { key: 'city', label: 'Town or city', type: 'text', maxLength: 80 },
+      { key: 'region', label: 'County or region', type: 'text', maxLength: 80 },
       { key: 'postcode', label: 'Postcode', type: 'text', maxLength: 20 },
       { key: 'country', label: 'Country', type: 'country', description: 'Two-letter code, such as GB' },
-      { key: 'purchasingReference', label: 'Purchasing reference', type: 'text', maxLength: 100 },
+      { key: 'purchasingReference', label: 'Purchasing reference', type: 'text', maxLength: 60 },
     ]),
   },
   {
@@ -103,7 +111,7 @@ export const CATALOGUE: EntityCatalogue[] = [
     label: 'Parts',
     keyHint: 'The part number',
     fields: [
-      { key: 'partNumber', label: 'Part number', type: 'text', required: true, maxLength: 100 },
+      { key: 'partNumber', label: 'Part number', type: 'text', required: true, maxLength: 60 },
       { key: 'name', label: 'Name', type: 'text', required: true, maxLength: 200 },
       { key: 'description', label: 'Description', type: 'text', maxLength: 2000 },
       { key: 'revision', label: 'Revision', type: 'text', maxLength: 20, description: 'Arrives as a draft revision; releasing it stays a person\'s decision' },

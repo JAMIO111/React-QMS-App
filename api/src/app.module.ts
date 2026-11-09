@@ -105,6 +105,7 @@ import { IntegrationFileStore, SupabaseIntegrationFileStore } from './integratio
 import { IntegrationRunsService } from './integrations/integration-runs.service';
 import { ConnectorRegistry } from './integrations/core/connector.registry';
 import { EntityImporterRegistry } from './integrations/core/entity-importer';
+import { CatalogueService } from './integrations/core/catalogue.service';
 import { SyncEngine } from './integrations/core/sync.engine';
 import { defaultConnectorRegistry, defaultImporterRegistry } from './integrations/core/defaults';
 import { RequirementsService } from './receiving/requirements.service';
@@ -296,6 +297,7 @@ export class AppModule implements NestModule {
         IntegrationFilesService,
         { provide: IntegrationFileStore, useClass: SupabaseIntegrationFileStore },
         SyncEngine,
+        CatalogueService,
         { provide: ConnectorRegistry, useFactory: defaultConnectorRegistry },
         { provide: EntityImporterRegistry, useFactory: defaultImporterRegistry },
         MaterialCertificatesService,

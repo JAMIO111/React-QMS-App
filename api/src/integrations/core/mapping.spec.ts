@@ -115,3 +115,20 @@ describe('matching reference fields', () => {
     expect(mappingProblems(cat, { keyField: 'A', fields: [...base, { target: 'notes', source: 'N', match: 'code' as const }] })).toContain('Notes is not a link to another record');
   });
 });
+
+describe('values checked against the database rules', () => {
+  it('refuses text that breaks a pattern and numbers outside the bounds', () => {
+    const cat = catalogueFor('gauge')!;
+    const withRules = {
+      ...cat,
+      fields: cat.fields.map((f) =>
+        f.key === 'assetNumber' ? { ...f, pattern: '^\\S(.{0,38}\\S)?$' } : f.key === 'intervalValue' ? { ...f, min: 1, max: 1000 } : f.key === 'resolution' ? { ...f, min: 0, minExclusive: true } : f,
+      ),
+    };
+    const spec = { keyField: 'A', fields: [{ target: 'assetNumber', source: 'A' }, { target: 'description', source: 'D' }, { target: 'intervalValue', source: 'I' }, { target: 'resolution', source: 'R' }] };
+    const bad = applyMapping(withRules, spec, { A: ' G 1', D: 'x', I: '0', R: '0' });
+    expect(bad.errors.map((e) => e.field)).toEqual(['intervalValue', 'resolution']);
+    const odd = applyMapping(withRules, spec, { A: 'G1', D: 'x', I: '1001', R: '0.01' });
+    expect(odd.errors).toEqual([{ field: 'intervalValue', message: 'Calibration interval: "1001" must be at most 1000' }]);
+  });
+});

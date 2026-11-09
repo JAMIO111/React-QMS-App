@@ -116,6 +116,8 @@ export function convert(field: CatalogueField, raw: string, m: FieldMapping): { 
       if (!/^-?\d+(\.\d+)?$/.test(normal)) return { error: `"${raw}" is not a number` };
       const n = Number(normal);
       if (field.type === 'integer' && !Number.isInteger(n)) return { error: `"${raw}" is not a whole number` };
+      if (field.min !== undefined && (field.minExclusive ? n <= field.min : n < field.min)) return { error: `"${raw}" must be ${field.minExclusive ? 'more than' : 'at least'} ${field.min}` };
+      if (field.max !== undefined && n > field.max) return { error: `"${raw}" must be at most ${field.max}` };
       return { value: n };
     }
     case 'date': {
@@ -138,11 +140,15 @@ export function convert(field: CatalogueField, raw: string, m: FieldMapping): { 
       return /^[A-Z]{2}$/.test(s) ? { value: s } : { error: `"${raw}" is not a two-letter country code` };
     }
     case 'email':
-      return EMAIL.test(raw) ? { value: raw } : { error: `"${raw}" is not an email address` };
-    case 'url':
-      return /^https?:\/\/\S+$/i.test(raw) || /^[a-z0-9.-]+\.[a-z]{2,}(\/\S*)?$/i.test(raw) ? { value: raw } : { error: `"${raw}" is not a web address` };
-    default:
+      if (!EMAIL.test(raw)) return { error: `"${raw}" is not an email address` };
       return field.maxLength && raw.length > field.maxLength ? { error: `Longer than ${field.maxLength} characters` } : { value: raw };
+    case 'url':
+      if (!(/^https?:\/\/\S+$/i.test(raw) || /^[a-z0-9.-]+\.[a-z]{2,}(\/\S*)?$/i.test(raw))) return { error: `"${raw}" is not a web address` };
+      return field.maxLength && raw.length > field.maxLength ? { error: `Longer than ${field.maxLength} characters` } : { value: raw };
+    default:
+      if (field.maxLength && raw.length > field.maxLength) return { error: `Longer than ${field.maxLength} characters` };
+      if (field.pattern && !new RegExp(field.pattern).test(raw)) return { error: `"${raw}" is not in the form Fortress allows for ${field.label.toLowerCase()}` };
+      return { value: raw };
   }
 }
 

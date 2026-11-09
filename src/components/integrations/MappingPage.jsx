@@ -25,6 +25,17 @@ import CTAButton from "@/components/CTAButton";
 
 const TYPE_HINTS = { date: "date", number: "number", integer: "whole number", boolean: "yes / no", email: "email", url: "web address", enum: "one of a list" };
 
+/** The limits the database sets for a field, in words ("Up to 20 characters", "From 1 to 1000"). */
+const fieldLimits = (f) => {
+  if (f.ref) return null;
+  if ((f.type === "number" || f.type === "integer") && (f.min != null || f.max != null)) {
+    if (f.min != null && f.max != null) return `From ${f.min} to ${f.max}`;
+    if (f.min == null) return `At most ${f.max}`;
+    return f.minExclusive ? `More than ${f.min}` : `At least ${f.min}`;
+  }
+  return f.maxLength ? `Up to ${f.maxLength} characters` : null;
+};
+
 /** One Fortress field: whether it is used, where its value comes from and how it is cleaned. */
 const FieldRow = ({ field, row, columns, onChange, readOnly }) => {
   const set = (patch) => onChange({ ...row, ...patch });
@@ -39,6 +50,7 @@ const FieldRow = ({ field, row, columns, onChange, readOnly }) => {
         {field.description && <span className="text-xs text-secondary-text">· {field.description}</span>}
       </div>
       {field.options && row.on && <p className="text-xs text-secondary-text">Accepted values: {field.options.map((o) => o.value).join(", ")}</p>}
+      {row.on && fieldLimits(field) && <p className="text-xs text-secondary-text">{fieldLimits(field)}</p>}
       {row.on && (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <ComboField label="How" value={row.transform} onChange={(v) => set({ transform: v ?? "none" })} options={TRANSFORM_OPTIONS} required disabled={readOnly} />

@@ -87,6 +87,11 @@ export const CatalogueResponse = z.object({
           description: z.string().nullable(),
           /** A link to another record: what it points at, and whether it can be matched by the source's own id. */
           ref: z.object({ kind: z.string(), source: z.boolean() }).nullable(),
+          /** Read from the database's own rules: a pattern the text must match, and numeric bounds. */
+          pattern: z.string().nullable(),
+          min: z.number().nullable(),
+          max: z.number().nullable(),
+          minExclusive: z.boolean(),
         }),
       ),
     }),

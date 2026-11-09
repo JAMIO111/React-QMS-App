@@ -5,7 +5,8 @@ import { apiErrorFromDatabase } from '../../common/database-errors';
 import { DatabaseService } from '../../database/database.service';
 import { ConnectorError, RunErrorKind } from './connector.interface';
 import { ConnectorRegistry } from './connector.registry';
-import { CATALOGUE, catalogueFor } from './catalogue';
+import { CATALOGUE } from './catalogue';
+import { CatalogueService } from './catalogue.service';
 import { EntityImporterRegistry, ImportContext, StagedRow } from './entity-importer';
 import { applyMapping, MappingSpec } from './mapping';
 import { resolveReferences } from './references';
@@ -63,6 +64,7 @@ export class SyncEngine {
     private readonly database: DatabaseService,
     private readonly connectors: ConnectorRegistry,
     private readonly importers: EntityImporterRegistry,
+    private readonly catalogues: CatalogueService,
   ) {}
 
   /** The kinds of record a provider can preview: an adapter that fetches, and a catalogue (to map to) or an importer. Nothing is written by a preview. */
@@ -100,7 +102,7 @@ export class SyncEngine {
     try {
       const importer = this.importers.get(lease.entityType);
       if (!importer && lease.kind !== 'preview') return await runError('mapping', `Importing ${lease.entityType.replace('_', ' ')} records is not available yet`, false);
-      const catalogue = catalogueFor(lease.entityType);
+      const catalogue = await this.catalogues.get(lease.entityType);
       if (lease.mapping && !catalogue) return await runError('mapping', `There are no fields to map ${lease.entityType.replace('_', ' ')} records to yet`, false);
       if (!lease.mapping && !importer) return await runError('mapping', 'Map the source to Fortress fields before importing', false);
       const file = lease.file

@@ -101,6 +101,8 @@ import {
   Receipt as LucideReceipt,
   CreditCard as LucideCreditCard,
   Tags as LucideTags,
+  Building2 as LucideBuilding2,
+  MapPin as LucideMapPin,
   Wrench as LucideWrench,
   Coins as LucideCoins,
   Image as LucideImage,
@@ -231,6 +233,8 @@ export const PaperclipIcon = withDefaults(LucidePaperclip);
 export const CreditCardIcon = withDefaults(LucideCreditCard);
 export const ReceiptIcon = withDefaults(LucideReceipt);
 export const TagsIcon = withDefaults(LucideTags);
+export const BuildingIcon = withDefaults(LucideBuilding2);
+export const MapPinIcon = withDefaults(LucideMapPin);
 export const WrenchIcon = withDefaults(LucideWrench);
 export const CoinsIcon = withDefaults(LucideCoins);
 export const ImageIcon = withDefaults(LucideImage);

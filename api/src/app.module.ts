@@ -79,6 +79,8 @@ import { StripeGateway, StripeSdkGateway } from './billing/stripe.gateway';
 import { BillingService } from './billing/billing.service';
 import { NotificationsController } from './notifications/notifications.controller';
 import { SavedFiltersController } from './saved-filters/saved-filters.controller';
+import { SupplierQualityController } from './supplier-quality/supplier-quality.controller';
+import { SupplierQualityService } from './supplier-quality/supplier-quality.service';
 import { SavedFiltersService } from './saved-filters/saved-filters.service';
 import { NotificationsService } from './notifications/notifications.service';
 import { CharacteristicTemplatesController } from './process-control/characteristic-templates.controller';
@@ -182,6 +184,7 @@ export class AppModule implements NestModule {
         StripeWebhookController,
         NotificationsController,
         SavedFiltersController,
+        SupplierQualityController,
         InspectionsController,
         InspectionMeasurementsController,
         NcrInspectionSourceController,
@@ -238,6 +241,7 @@ export class AppModule implements NestModule {
         { provide: StripeGateway, useClass: StripeSdkGateway },
         NotificationsService,
         SavedFiltersService,
+        SupplierQualityService,
         InspectionService,
         SpcService,
         DocumentationService,

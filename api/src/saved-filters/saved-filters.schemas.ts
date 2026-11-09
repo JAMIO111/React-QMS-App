@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** The registers that can keep saved filters (each person may keep up to `SAVED_FILTER_LIMIT` per register). */
-export const SAVED_FILTER_SCOPES = ['ncr_register'] as const;
+export const SAVED_FILTER_SCOPES = ['ncr_register', 'supplier_register'] as const;
 export const SAVED_FILTER_LIMIT = 5;
 export const SavedFilterScope = z.enum(SAVED_FILTER_SCOPES);
 

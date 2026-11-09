@@ -65,6 +65,13 @@ const SettingMenuStructure = [
     subMenu: [],
   },
   {
+    name: "Supplier quality",
+    path: "Supplier-Quality",
+    icon: ClipboardListIcon,
+    permission: "supplier_quality.read",
+    subMenu: [],
+  },
+  {
     name: "Notifications",
     path: "Notifications",
     icon: BellIcon,

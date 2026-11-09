@@ -64,6 +64,16 @@ const sampleBody = (op: Op): object | undefined =>
     'DELETE /api/v1/saved-filters/{id}': undefined,
     'PATCH /api/v1/customers/{id}': { name: 'Hijacked' },
     'PATCH /api/v1/suppliers/{id}': { name: 'Hijacked' },
+    'GET /api/v1/supplier-quality/suppliers/{id}': undefined,
+    'PATCH /api/v1/supplier-quality/suppliers/{id}': { city: 'Hijacked' },
+    'POST /api/v1/supplier-quality/suppliers/{id}/status': { status: 'approved', reason: 'Hijacked' },
+    'GET /api/v1/supplier-quality/suppliers/{id}/history': undefined,
+    'PUT /api/v1/supplier-quality/suppliers/{id}/classifications': { classificationIds: [] },
+    'POST /api/v1/supplier-quality/suppliers/{id}/contacts': { name: 'Hijacker' },
+    'PATCH /api/v1/supplier-quality/supplier-contacts/{id}': { name: 'Hijacked' },
+    'POST /api/v1/supplier-quality/suppliers/{id}/products': { kind: 'service', description: 'Hijacked' },
+    'PATCH /api/v1/supplier-quality/supplier-products/{id}': { active: false },
+    'PATCH /api/v1/supplier-quality/classifications/{id}': { label: 'Hijacked' },
     'GET /api/v1/parts/{id}': undefined,
     'PATCH /api/v1/parts/{id}': { name: 'Hijacked' },
     'POST /api/v1/parts/{id}/revisions': { revision: 'Z' },
@@ -279,6 +289,16 @@ const hasSample = (op: Op) =>
     'DELETE /api/v1/saved-filters/{id}',
     'PATCH /api/v1/customers/{id}',
     'PATCH /api/v1/suppliers/{id}',
+    'GET /api/v1/supplier-quality/suppliers/{id}',
+    'PATCH /api/v1/supplier-quality/suppliers/{id}',
+    'POST /api/v1/supplier-quality/suppliers/{id}/status',
+    'GET /api/v1/supplier-quality/suppliers/{id}/history',
+    'PUT /api/v1/supplier-quality/suppliers/{id}/classifications',
+    'POST /api/v1/supplier-quality/suppliers/{id}/contacts',
+    'PATCH /api/v1/supplier-quality/supplier-contacts/{id}',
+    'POST /api/v1/supplier-quality/suppliers/{id}/products',
+    'PATCH /api/v1/supplier-quality/supplier-products/{id}',
+    'PATCH /api/v1/supplier-quality/classifications/{id}',
     'GET /api/v1/parts/{id}',
     'PATCH /api/v1/parts/{id}',
     'POST /api/v1/parts/{id}/revisions',
@@ -488,6 +508,10 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/department-memberships/')) return a.departmentMember;
   if (path.startsWith('/api/v1/customers/')) return a.customer;
   if (path.startsWith('/api/v1/suppliers/')) return a.supplier;
+  if (path.startsWith('/api/v1/supplier-quality/suppliers/')) return a.supplier;
+  if (path.startsWith('/api/v1/supplier-quality/supplier-contacts/')) return a.supplierContact;
+  if (path.startsWith('/api/v1/supplier-quality/supplier-products/')) return a.supplierProduct;
+  if (path.startsWith('/api/v1/supplier-quality/classifications/')) return a.supplierClassification;
   if (path.startsWith('/api/v1/parts/')) return a.part;
   if (path.startsWith('/api/v1/part-revisions/')) return a.draftRevision;
   if (path.startsWith('/api/v1/ncrs/')) return a.ncr;
@@ -646,6 +670,9 @@ beforeAll(async () => {
     a.capaRootCause = (await q1(`insert into public.capa_root_causes (organisation_id, capa_id, kind, description) values ($1, $2, 'occurrence', 'Alpha root cause') returning id`, [ids.orgA, a.capa])).id;
     a.capaAction = (await q1(`insert into public.capa_actions (organisation_id, capa_id, phase, description) values ($1, $2, 'interim', 'Alpha containment') returning id`, [ids.orgA, a.capa])).id;
     a.savedFilter = (await q1(`insert into public.saved_filters (organisation_id, user_id, scope, name, filters) values ($1, $2, 'ncr_register', 'Alpha filter', '{"stage":"open"}') returning id`, [ids.orgA, ids.ownerA])).id;
+    a.supplierClassification = (await q1(`select id from public.supplier_classifications where organisation_id = $1 and key = 'welding'`, [ids.orgA])).id;
+    a.supplierContact = (await q1(`insert into public.supplier_contacts (organisation_id, supplier_id, name) values ($1, $2, 'Alpha contact') returning id`, [ids.orgA, a.supplier])).id;
+    a.supplierProduct = (await q1(`insert into public.supplier_product_links (organisation_id, supplier_id, kind, description) values ($1, $2, 'service', 'Alpha service') returning id`, [ids.orgA, a.supplier])).id;
     await client.query('commit');
   } finally {
     client.release();

@@ -20,6 +20,7 @@ import { useChangeSeats, useConfirmCheckout, usePortalSession, useSeatPreview, u
 import { useAlertMutation } from "../hooks/useDocumentation";
 import { useMarkNotificationsRead } from "../hooks/useNotifications";
 import { useCapaMutation } from "../hooks/useCapa";
+import { useSupplierMutation } from "../hooks/useSupplierQuality";
 import { useOnboardingMutation } from "../hooks/useOnboarding";
 import { useJobLinks, useJobMutation } from "../hooks/useJobs";
 import { useBackfillProduction, useCreateInlineOrder } from "../hooks/useProduction";
@@ -96,6 +97,8 @@ describe("every action refreshes every module's data", () => {
     ["subscription", useSubscriptionMutation, { action: "seats", planSlug: "controller", quantity: 2 }],
     ["notifications read", useMarkNotificationsRead, { all: true }],
     ["CAPA / 8D", useCapaMutation, { action: "update", id: "c1", body: { title: "x" } }],
+    ["supplier", useSupplierMutation, { action: "status", id: "s1", body: { status: "approved", reason: "Audit passed" } }],
+    ["supplier classification", useSupplierMutation, { action: "updateClassification", id: "k1", body: { active: false } }],
     ["start checkout", useStartCheckout, { interval: "month", seats: { controller: 1 } }],
     ["confirm checkout", useConfirmCheckout, { sessionId: "cs_test_1" }],
     ["billing portal", usePortalSession, undefined],

@@ -72,14 +72,14 @@ const NameDialog = ({ title, saveText, initial = "", summary = [], existing = []
 const labelFor = (key, value) => (key === "source" ? sourceLabel(value) : key === "stage" ? stageOf(value).label : null);
 
 /** Every saved filter by name with what it contains; each row's "…" renames or deletes it. */
-const ManageDialog = ({ saved, onRename, onDelete, onClose }) => (
+const ManageDialog = ({ saved, describe, onRename, onDelete, onClose }) => (
   <Dialog title="Saved filters" onClose={onClose} width="max-w-2xl">
     {saved.length === 0 ? (
       <p className="text-sm text-secondary-text">You have no saved filters.</p>
     ) : (
       <ul className="flex flex-col divide-y divide-border-color">
         {saved.map((f) => {
-          const rows = describeFilter(f.filters, labelFor);
+          const rows = describe(f.filters);
           return (
             <li key={f.id} className="flex items-start gap-3 py-3">
               <div className="min-w-0 flex-1">
@@ -125,9 +125,9 @@ const ManageDialog = ({ saved, onRename, onDelete, onClose }) => (
 /**
  * The bar above a register: "All" and the person's own saved filters (up to five), each one click to apply. A filter chosen in the filter pane that is not saved
  * yet gets a "Save filter" button that asks for a name; a "…" menu renames or deletes the saved ones. `values` are the register's current filters, `keys` the names of
- * all its filters, `summary` the chips' text for the save dialog.
+ * all its filters, `summary` the chips' text for the save dialog, `describe(filters)` the rows listing what a saved filter contains (defaults to the NC register's).
  */
-const SavedFilterBar = ({ scope, keys, values, summary = [], onApply, onClearAll }) => {
+const SavedFilterBar = ({ scope, keys, values, summary = [], describe = (filters) => describeFilter(filters, labelFor), onApply, onClearAll }) => {
   const { data } = useSavedFilters(scope);
   const mutation = useSavedFilterMutation(scope);
   const { showToast } = useToast();
@@ -174,7 +174,7 @@ const SavedFilterBar = ({ scope, keys, values, summary = [], onApply, onClearAll
         </button>
       )}
       {dialog?.mode === "manage" && (
-        <ManageDialog saved={saved} onClose={() => setDialog(null)} onRename={(f) => setDialog({ mode: "rename", filter: f })} onDelete={remove} />
+        <ManageDialog saved={saved} describe={describe} onClose={() => setDialog(null)} onRename={(f) => setDialog({ mode: "rename", filter: f })} onDelete={remove} />
       )}
       {dialog?.mode === "save" && (
         <NameDialog title="Save filter" saveText="Save" summary={summary} existing={saved} blocked={saved.length >= limit} pending={mutation.isPending} onSave={save} onClose={() => setDialog(null)} />

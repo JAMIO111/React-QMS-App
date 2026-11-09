@@ -1,4 +1,4 @@
-import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, LayoutDashboardIcon, ListChecksIcon, TriangleAlertIcon } from "@/components/icons";
+import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, LayoutDashboardIcon, ListChecksIcon, ShieldCheckIcon, TriangleAlertIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
@@ -79,6 +79,13 @@ export const menuStructure = [
       { name: "Audit records", path: "/Documentation/Audit-Records", permission: "audits.read" },
       { name: "Audit findings", path: "/Documentation/Audit-Findings", permission: "audits.read" },
     ],
+  },
+  {
+    name: "Supplier Quality",
+    icon: ShieldCheckIcon,
+    permission: "supplier_quality.read",
+    path: "/Suppliers",
+    subMenu: [{ name: "Supplier register", path: "/Suppliers" }],
   },
   {
     name: "Production",

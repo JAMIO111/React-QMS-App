@@ -65,3 +65,7 @@ export const useAuditScheduleFilters = () => useUrlFilters(AUDIT_SCHEDULE_FILTER
 /** 8D (CAPA) register filters. Empty stage = running 8Ds (not closed or cancelled). */
 export const CAPA_FILTER_KEYS = ["search", "stage", "source", "severity", "owner", "overdue", "from", "to"];
 export const useCapaFilters = () => useUrlFilters(CAPA_FILTER_KEYS);
+
+/** Supplier register filters. Empty `active` = active suppliers only; `inactive` or `all` otherwise. Classifications are ids (comma list). */
+export const SUPPLIER_FILTER_KEYS = ["search", "status", "type", "classification", "risk", "active"];
+export const useSupplierFilters = () => useUrlFilters(SUPPLIER_FILTER_KEYS);

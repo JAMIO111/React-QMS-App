@@ -50,6 +50,9 @@ const SettingsAudits = lazy(() => import("./components/Settings/SettingsAudits.j
 const SettingsProcessControl = lazy(() => import("./components/Settings/SettingsProcessControl.jsx"));
 const PartDetailPage = lazy(() => import("./components/master-data/PartDetailPage.jsx"));
 const PartiesPage = lazy(() => import("./components/master-data/PartiesPage.jsx"));
+const SuppliersRegisterPage = lazy(() => import("./components/supplier-quality/SuppliersRegisterPage.jsx"));
+const SupplierProfilePage = lazy(() => import("./components/supplier-quality/SupplierProfilePage.jsx"));
+const SettingsSupplierQuality = lazy(() => import("./components/Settings/SettingsSupplierQuality.jsx"));
 const MachinesPage = lazy(() => import("./components/master-data/MachinesPage.jsx"));
 const ProductionOrdersPage = lazy(() => import("./components/production/OrdersPage.jsx"));
 const ProductionOrderPage = lazy(() => import("./components/production/OrderPage.jsx"));
@@ -197,6 +200,7 @@ const router = createBrowserRouter([
               { path: "Calibration", element: <SettingsCalibration /> },
               { path: "Process-Control", element: <SettingsProcessControl /> },
               { path: "Audits", element: <SettingsAudits /> },
+              { path: "Supplier-Quality", element: <SettingsSupplierQuality /> },
               {
                 path: "Notifications",
                 element: <SettingsNotifications />,
@@ -211,7 +215,8 @@ const router = createBrowserRouter([
           { path: "Parts", element: <PartsPage /> },
           { path: "Parts/:id", element: <PartDetailPage /> },
           { path: "Customers", element: <PartiesPage key="customers" kind="customers" /> },
-          { path: "Suppliers", element: <PartiesPage key="suppliers" kind="suppliers" /> },
+          { path: "Suppliers", element: <SuppliersRegisterPage /> },
+          { path: "Suppliers/:id", element: <SupplierProfilePage /> },
           { path: "Machines", element: <MachinesPage /> },
           { path: "Production", element: <Navigate to="/Production/Orders" replace /> },
           { path: "Production/Orders", element: <ProductionOrdersPage /> },

@@ -63,7 +63,8 @@ audited(relname) AS (VALUES
   ('inspection_ncr_links'), ('inspection_failure_acknowledgements'), ('spc_baselines'), ('spc_alerts'), ('department_members'),
   ('quality_alerts'), ('quality_alert_parts'), ('quality_alert_machines'), ('quality_alert_operations'), ('quality_alert_departments'), ('quality_alert_targets'), ('quality_alert_recipients'), ('quality_alert_attachments'), ('quality_alert_links'),
   ('Employees'), ('capas'), ('capa_steps'), ('capa_team_members'), ('capa_ncr_links'), ('capa_analyses'), ('capa_actions'), ('capa_root_causes'), ('capa_verifications'), ('capa_attachments'), ('organisation_onboarding'), ('billing_customers'), ('stripe_checkout_sessions'),
-  ('production_orders'), ('production_operations'), ('lots'), ('serial_numbers'), ('audit_definitions'), ('audit_questions'), ('audit_targets'), ('audit_occurrences'), ('audit_records'), ('audit_record_questions'), ('audit_record_targets'), ('audit_responses'), ('audit_ncr_links'), ('audit_attachments'), ('audit_finding_classifications'), ('audit_findings'), ('audit_finding_attachments'), ('audit_versions'), ('audit_version_questions'), ('audit_version_targets')
+  ('production_orders'), ('production_operations'), ('lots'), ('serial_numbers'), ('audit_definitions'), ('audit_questions'), ('audit_targets'), ('audit_occurrences'), ('audit_records'), ('audit_record_questions'), ('audit_record_targets'), ('audit_responses'), ('audit_ncr_links'), ('audit_attachments'), ('audit_finding_classifications'), ('audit_findings'), ('audit_finding_attachments'), ('audit_versions'), ('audit_version_questions'), ('audit_version_targets'),
+  ('supplier_status_history'), ('supplier_classifications'), ('supplier_classification_links'), ('supplier_contacts'), ('supplier_product_links')
 )
 SELECT rule, object FROM (
   SELECT '1 rls disabled' AS rule, format('%I.%I', nspname, relname) AS object

@@ -231,6 +231,11 @@ BEGIN
   INSERT INTO public.notification_preferences (organisation_id, user_id, event_type_id, enabled)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id, false FROM public.notification_event_types WHERE key = 'parts.created';
   INSERT INTO public.saved_filters (organisation_id, user_id, scope, name, filters) VALUES (a, '50000000-0000-0000-0000-0000000000a1', 'ncr_register', 'Sweep filter', '{"stage":"open"}');
+  -- Supplier quality (SQ1): the supplier's first status row exists already; classifications are seeded per organisation.
+  INSERT INTO public.supplier_classification_links (organisation_id, supplier_id, classification_id)
+    SELECT a, (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), id FROM public.supplier_classifications WHERE organisation_id = a AND key = 'welding';
+  INSERT INTO public.supplier_contacts (organisation_id, supplier_id, name) VALUES (a, (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), 'Sweep Contact');
+  INSERT INTO public.supplier_product_links (organisation_id, supplier_id, kind, description) VALUES (a, (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), 'service', 'Sweep service');
   INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id FROM public.notifications WHERE organisation_id = a LIMIT 1;
   INSERT INTO sweep VALUES ('pc_part', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'));

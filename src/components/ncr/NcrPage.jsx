@@ -60,6 +60,7 @@ import LinkNotices from "../production/LinkNotices";
 import TraceLinks from "../production/TraceLinks";
 import LoadingScreen from "../ui/LoadingScreen";
 import NcrCapaCard from "../capa/NcrCapaCard";
+import NcrScarCard from "../supplier-quality/NcrScarCard";
 import NcrAffectedLots from "./NcrAffectedLots";
 import NcrContainment from "./NcrContainment";
 import NcrDispositions from "./NcrDispositions";
@@ -468,6 +469,7 @@ const NcrPage = () => {
                   ))}
               </div>
               {!isNew && ncr && <NcrCapaCard ncr={ncr} />}
+              {!isNew && ncr && <NcrScarCard ncr={ncr} />}
             </Card>
 
             {!isNew && (

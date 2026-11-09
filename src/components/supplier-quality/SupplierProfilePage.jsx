@@ -22,6 +22,7 @@ import { CertificationsCard, DocumentsCard } from "./Qualification";
 import { RiskCard } from "./RiskAssessment";
 import { ApprovalCard, AssessmentsCard } from "./Approvals";
 import SupplierNcs from "./SupplierNcs";
+import SupplierScars from "./SupplierScars";
 
 const TABS = [
   { value: "overview", label: "Overview" },
@@ -29,6 +30,7 @@ const TABS = [
   { value: "qualification", label: "Qualification" },
   { value: "incoming", label: "Incoming quality" },
   { value: "nonconformities", label: "Nonconformities" },
+  { value: "scars", label: "SCARs" },
   { value: "audits", label: "Audits" },
   { value: "documents", label: "Documents" },
   { value: "products", label: "Products & services" },
@@ -289,6 +291,7 @@ const SupplierProfilePage = () => {
       {tab === "products" && <Products supplier={s} canManage={canManage} onAdd={() => setDialog({ kind: "product" })} />}
       {tab === "history" && <History id={s.id} />}
       {tab === "nonconformities" && <SupplierNcs supplier={s} />}
+      {tab === "scars" && <SupplierScars supplier={s} />}
       {tab === "performance" && <NotYet title="Performance" text="Scorecards, PPM and on-time delivery are not available yet." />}
       {tab === "qualification" && (
         <>

@@ -279,3 +279,70 @@ export const useAssessmentMutation = () => {
     onSuccess: () => refreshOrganisation(queryClient, organisationId),
   });
 };
+
+// ---- SCARs (supplier corrective action requests) ----------------------------------------------
+
+/** Register page: { data, page, pageSize, total }. Filters: q, status (running | all | statuses), overdue, severity, supplierId, ncrId, sort, order, page, pageSize. */
+export const useScars = (filters = {}, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "scars", filters),
+    queryFn: () => apiFetch(`/supplier-quality/scars?${qs(filters)}`, { organisationId }),
+    enabled: !!organisationId && enabled,
+    retry: false,
+    placeholderData: (previous) => previous,
+  });
+};
+
+/** One SCAR with its NC links, responses (each with our review), implementation, verification, extensions and history. */
+export const useScar = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "scar", id),
+    queryFn: () => apiFetch(`/supplier-quality/scars/${id}`, { organisationId }),
+    enabled: !!organisationId && !!id,
+    retry: false,
+  });
+};
+
+/** Commands on SCARs; each answers with the whole SCAR (the create too). Everything is marked stale: the register, supplier counts and NC cards all show them. */
+export const useScarMutation = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, id, body }) => {
+      const send = (path, method = "POST") => apiFetch(`/supplier-quality${path}`, { method, body: body ?? {}, organisationId });
+      switch (action) {
+        case "create":
+          return send("/scars");
+        case "update":
+          return send(`/scars/${id}`, "PATCH");
+        case "issue":
+          return send(`/scars/${id}/issue`);
+        case "acknowledge":
+          return send(`/scars/${id}/acknowledge`);
+        case "respond":
+          return send(`/scars/${id}/responses`);
+        case "startReview":
+          return send(`/scars/${id}/start-review`);
+        case "review":
+          return send(`/scars/${id}/review`);
+        case "implement":
+          return send(`/scars/${id}/implementations`);
+        case "verify":
+          return send(`/scars/${id}/verifications`);
+        case "extend":
+          return send(`/scars/${id}/extensions`);
+        case "cancel":
+          return send(`/scars/${id}/cancel`);
+        case "linkNcr":
+          return send(`/scars/${id}/ncrs`);
+        case "unlinkNcr":
+          return send(`/scar-ncrs/${id}/unlink`);
+        default:
+          throw new Error(`Unknown action ${action}`);
+      }
+    },
+    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+  });
+};

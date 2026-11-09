@@ -4,7 +4,9 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useIncomingMutation } from "../../hooks/useIncoming";
 import { DECISIONS, LINE_STATUS, levelLabel, strategyLabel } from "../../lib/incoming";
 import { ncrPath } from "../../lib/ncr";
+import { certificateSummary } from "../../lib/materialCertificates";
 import CTAButton from "../CTAButton";
+import { RecordCertificateDialog } from "./CertificateDialogs";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
@@ -67,7 +69,7 @@ const RaiseNcrDialog = ({ line, onClose }) => {
 };
 
 /** Under one receipt line: why inspection is (not) needed, how far it has got, the decision and the actions open to the person. */
-export const LineInspection = ({ line, receiptCancelled }) => {
+export const LineInspection = ({ line, receiptCancelled, supplier }) => {
   const { can } = usePermissions();
   const mutation = useIncomingMutation();
   const [dialog, setDialog] = useState(null);
@@ -94,6 +96,7 @@ export const LineInspection = ({ line, receiptCancelled }) => {
         </p>
       )}
       {line.disposition?.reason && <p className="text-xs text-secondary-text">“{line.disposition.reason}” — {line.disposition.decidedBy?.name}{line.disposition.conditions ? ` · Conditions: ${line.disposition.conditions}` : ""}</p>}
+      <p className="text-xs text-secondary-text">{certificateSummary(line.certificates)}</p>
       {line.ncrs?.length > 0 && <p className="text-xs">{line.ncrs.map((n) => <Link key={n.id} to={ncrPath(n.id)} className="mr-2 text-link-color hover:underline">{n.reference}</Link>)}</p>}
       {live && canManage && (
         <div className="flex flex-wrap gap-3 text-xs">
@@ -101,11 +104,13 @@ export const LineInspection = ({ line, receiptCancelled }) => {
             <button type="button" className="text-link-color hover:underline" disabled={mutation.isPending} aria-label={`Start inspection of line ${line.lot?.lotNumber ?? ""}`} onClick={() => mutation.mutate({ action: "startInspection", id: line.id, body: {} })}>Start inspection</button>
           )}
           <button type="button" className="text-link-color hover:underline" onClick={() => setDialog("disposition")}>Decide</button>
+          <button type="button" className="text-link-color hover:underline" onClick={() => setDialog("certificate")}>Add certificate</button>
           {can("ncr.create") && <button type="button" className="text-link-color hover:underline" onClick={() => setDialog("ncr")}>Raise non-conformance</button>}
         </div>
       )}
       {mutation.error && <Callout tone="error">{mutation.error.message}</Callout>}
       {dialog === "disposition" && <DispositionDialog line={line} onClose={() => setDialog(null)} />}
+      {dialog === "certificate" && <RecordCertificateDialog line={line} supplier={supplier} onClose={() => setDialog(null)} />}
       {dialog === "ncr" && <RaiseNcrDialog line={line} onClose={() => setDialog(null)} />}
     </div>
   );

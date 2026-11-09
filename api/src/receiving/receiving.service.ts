@@ -248,7 +248,7 @@ export class ReceivingService {
       select x.*, p.part_number, p.name as part_name, l.lot_number, l.status as lot_status, pl.line_number as po_line_number,
              d.required as d_required, d.rule_id as d_rule_id, d.rule_name as d_rule_name, d.strategy as d_strategy, d.level as d_level, d.sample_size as d_sample_size, d.accept_number as d_accept,
              d.operation_code as d_operation, d.basis as d_basis, d.overridden as d_overridden,
-             case when d.id is null then null else app.incoming_inspection_assessment(x.id) end as assessment
+             case when d.id is null then null else app.incoming_inspection_assessment(x.id) end as assessment, app.receipt_line_certificates(x.id) as certs
       from public.goods_receipt_lines x left join public.parts p on p.id = x.part_id left join public.lots l on l.id = x.lot_id left join public.purchase_order_lines pl on pl.id = x.po_line_id
       left join public.incoming_inspection_determinations d on d.receipt_line_id = x.id
       where x.goods_receipt_id = ${id}::uuid order by x.line_number`);
@@ -288,6 +288,7 @@ export class ReceivingService {
         disposition: current,
         dispositions: history,
         lotStatus: (r.lot_status as string) ?? null,
+        certificates: { received: Number((r.certs as Record<string, number>).received), accepted: Number((r.certs as Record<string, number>).accepted), rejected: Number((r.certs as Record<string, number>).rejected) },
         ncrs: ncrs.rows.filter((n) => n.receipt_line_id === r.id).map((n) => ({ id: n.id as string, reference: n.reference as string, stage: n.stage as string })),
         poLine: r.po_line_id ? { id: r.po_line_id as string, lineNumber: num(r.po_line_number) } : null,
         part: r.part_id ? { id: r.part_id as string, partNumber: r.part_number as string, name: r.part_name as string } : null,

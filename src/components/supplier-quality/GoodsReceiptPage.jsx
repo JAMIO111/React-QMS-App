@@ -76,7 +76,7 @@ const GoodsReceiptPage = () => {
                   <td className="py-2 pr-3 text-secondary-text">{l.poLine ? `Line ${l.poLine.lineNumber}` : "—"}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{formatQuantity(l.quantityReceived)}</td>
                   <td className="py-2 pr-3">{l.lot ? <Link to={tracePath("lot", l.lot.id)} className="text-link-color hover:underline">{l.lot.lotNumber}</Link> : <span className="text-secondary-text">—</span>}</td>
-                  <td className="py-2"><LineInspection line={l} receiptCancelled={g.status === "cancelled"} /></td>
+                  <td className="py-2"><LineInspection line={l} supplier={g.supplier} receiptCancelled={g.status === "cancelled"} /></td>
                 </tr>
               ))}
             </tbody>

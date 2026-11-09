@@ -216,6 +216,8 @@ const ReceiptLine = z.object({
   dispositions: z.array(Disposition),
   lotStatus: z.string().nullable(),
   ncrs: z.array(z.object({ id: z.string().uuid(), reference: z.string(), stage: z.string() })),
+  /** Live material certificates on file for this line (or its lot); information only. */
+  certificates: z.object({ received: z.number().int(), accepted: z.number().int(), rejected: z.number().int() }),
   poLine: z.object({ id: z.string().uuid(), lineNumber: z.number().int() }).nullable(),
   part: PartRef.nullable(),
   material: z.string().nullable(),

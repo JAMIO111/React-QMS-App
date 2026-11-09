@@ -89,6 +89,7 @@ export const menuStructure = [
       { name: "Supplier register", path: "/Suppliers" },
       { name: "Purchase orders", path: "/Supplier-Quality/Purchase-Orders", permission: "receiving.read" },
       { name: "Goods receipts", path: "/Supplier-Quality/Goods-Receipts", permission: "receiving.read" },
+      { name: "Material certificates", path: "/Supplier-Quality/Material-Certificates", permission: "receiving.read" },
       { name: "Inspection requirements", path: "/Supplier-Quality/Inspection-Requirements", permission: "receiving.read" },
       { name: "Supplier corrective actions", path: "/Supplier-Quality/SCARs" },
       { name: "Expiry watchlist", path: "/Supplier-Quality/Expiry" },

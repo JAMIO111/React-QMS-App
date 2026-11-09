@@ -15,6 +15,7 @@ import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import FindingDialog from "./FindingDialog";
 import CTAButton from "@/components/CTAButton";
+import Callout from "../ui/Callout";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -365,9 +366,9 @@ const AuditRecordPage = () => {
         </div>
       )}
       {r.status === "abandoned" && (
-        <p role="status" className="rounded-2xl border border-border-color bg-secondary-bg p-4 text-sm text-primary-text">
-          Abandoned: {r.abandonReason}
-        </p>
+        <Callout tone="info" role="status" title="Abandoned">
+          {r.abandonReason}
+        </Callout>
       )}
 
       <MenuCard title="About this audit" subtitle="Who did it, when, and for which scheduled slot">

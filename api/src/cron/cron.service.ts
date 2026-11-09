@@ -56,6 +56,12 @@ export class CronService {
     return { checked: candidates.length, synced, failed };
   }
 
+  /** Expires every active quality alert past its expiry date, in every organisation, and logs each in the alert's history. Safe to run as often as you like. */
+  async expireQualityAlerts(correlationId: string): Promise<{ expired: number }> {
+    const expired = await this.database.asApi(async (client) => Number((await client.query(`select app.system_expire_quality_alerts() as n`)).rows[0].n), correlationId);
+    return { expired };
+  }
+
   /** Archives unused organisations (see app.system_archive_stale_organisations). A dry run only reports what it would do. */
   archiveStale(unpaidDays: number, lapsedDays: number, dryRun: boolean, correlationId: string): Promise<ArchiveOutcome> {
     return this.database.asApi(

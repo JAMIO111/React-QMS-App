@@ -65,6 +65,7 @@ import NcrContainment from "./NcrContainment";
 import NcrDispositions from "./NcrDispositions";
 import { useNcrGates } from "../../hooks/useNcr";
 import CTAButton from "@/components/CTAButton";
+import Callout from "../ui/Callout";
 
 /** Section title with a rule, as in the original NC entry form. */
 const SectionHeading = ({ id, title, sectionRef }) => (
@@ -174,7 +175,7 @@ const NcrPage = () => {
     return (
       <div className="flex flex-col gap-3 p-4">
         <Link to={NCR_REGISTER} className="text-link-color hover:underline">← Register</Link>
-        <p role="alert" className="text-error-color">{describeApiError(error)}</p>
+        <Callout tone="error" role="alert">{describeApiError(error)}</Callout>
       </div>
     );
   }

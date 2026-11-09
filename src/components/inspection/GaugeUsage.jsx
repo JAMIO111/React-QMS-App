@@ -3,6 +3,7 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useGaugeUsage } from "../../hooks/useInspection";
 import { describeApiError } from "../../lib/api-client";
 import { formatDate, formatDateTime } from "../../lib/processControl";
+import Callout from "../ui/Callout";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2";
@@ -15,7 +16,7 @@ const GaugeUsage = ({ calibrationId }) => {
   const { can } = usePermissions();
   const { data, isLoading, error } = useGaugeUsage(calibrationId);
   if (isLoading) return <p className="text-sm text-secondary-text">Looking for measurements made with this gauge…</p>;
-  if (error) return <p role="alert" className="text-sm text-error-color">{describeApiError(error)}</p>;
+  if (error) return <Callout tone="error" role="alert">{describeApiError(error)}</Callout>;
   const since = data.previous ? `since ${data.previous.reference} (${formatDate(data.previous.calibratedOn)})` : "since it was first used";
   return (
     <div className="flex flex-col gap-3">

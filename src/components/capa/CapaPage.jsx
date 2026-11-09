@@ -20,6 +20,7 @@ import D6Implement from "./steps/D6Implement";
 import D7Prevent from "./steps/D7Prevent";
 import D8Close from "./steps/D8Close";
 import CTAButton from "@/components/CTAButton";
+import Callout from "../ui/Callout";
 
 const STEP_PAGES = { d0: D0Initiate, d1: D1Team, d2: D2Problem, d3: D3Containment, d4: D4RootCause, d5: D5Corrective, d6: D6Implement, d7: D7Prevent, d8: D8Close };
 
@@ -96,8 +97,8 @@ const CapaPage = () => {
             <h2 className="text-xl font-semibold text-primary-text">{def.code} · {def.title}</h2>
             <p className="mt-1 max-w-3xl text-sm text-secondary-text">{def.help}</p>
           </div>
-          {!running && <p role="status" className="rounded-lg border border-border-color bg-primary-bg p-3 text-sm text-primary-text">This 8D is {capa.stage}. Reopen it to make changes.</p>}
-          {running && stepDone && step !== "d8" && <p role="status" className="rounded-lg border border-border-color bg-primary-bg p-3 text-sm text-primary-text">{def.code} is complete, so it is read-only. Reopen it (at the bottom of this page) to make changes.</p>}
+          {!running && <Callout tone="info" role="status">This 8D is {capa.stage}. Reopen it to make changes.</Callout>}
+          {running && stepDone && step !== "d8" && <Callout tone="info" role="status">{def.code} is complete, so it is read-only. Reopen it (at the bottom of this page) to make changes.</Callout>}
           {Page && <Page capa={capa} editable={editable} />}
           <StepFooter capa={capa} step={step} editable={canEdit} />
         </section>

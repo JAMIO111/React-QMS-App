@@ -191,7 +191,7 @@ describe("a finding", () => {
     routeApi({ "GET /audit-findings/f1": finding({ status: "closed", closedNote: "Instruction posted", closedBy: { id: "u2", name: "Mo Manager" }, closedAt: "2026-11-09T10:00:00Z" }) });
     const view = renderAt("/Documentation/Audit-Findings/f1");
     const banner = await screen.findByRole("status");
-    expect(banner).toHaveTextContent("Closed by Mo Manager");
+    expect(banner).toHaveTextContent(/Closed.*By Mo Manager/);
     expect(banner).toHaveTextContent("Instruction posted");
     expect(screen.getByRole("button", { name: "Reopen" })).toBeInTheDocument();
     for (const name of ["Edit", "Close finding", "Withdraw", "Create non-conformance"]) expect(screen.queryByRole("button", { name })).toBeNull();
@@ -199,7 +199,7 @@ describe("a finding", () => {
 
     routeApi({ "GET /audit-findings/f1": finding({ status: "withdrawn", withdrawReason: "Raised on the wrong record" }) });
     renderAt("/Documentation/Audit-Findings/f1");
-    expect(await screen.findByRole("status")).toHaveTextContent("Withdrawn: Raised on the wrong record");
+    expect(await screen.findByRole("status")).toHaveTextContent(/Withdrawn.*Raised on the wrong record/);
     expect(screen.queryAllByRole("button", { name: /^(Edit|Close finding|Withdraw|Reopen|Create non-conformance)$/ })).toHaveLength(0);
   });
 

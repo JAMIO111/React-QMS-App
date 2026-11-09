@@ -20,6 +20,7 @@ import { useSubscriptionOverview } from "../../hooks/useSubscription";
 import { ORGANISATION_WIDE_ROLE_KEYS, isUnassigned } from "../../lib/departments";
 import { expiresIn } from "../../lib/onboarding";
 import CTAButton from "@/components/CTAButton";
+import Callout from "../ui/Callout";
 
 const STATUS_STYLES = {
   active: "bg-green-500/15 text-green-700 dark:text-green-300",
@@ -532,10 +533,10 @@ const SettingsUsers = () => {
       {canManage && <InviteForm roles={roleList} sites={siteList} departments={departmentList} />}
 
       {unassigned.length > 0 && (
-        <p role="status" className="rounded-lg border border-border-color p-3 text-sm text-primary-text">
+        <Callout tone="warning" role="status">
           {unassigned.length} {unassigned.length === 1 ? "person has" : "people have"} no department
           ({unassigned.map(displayName).join(", ")}). Alerts addressed to a department will not reach them until they are added to one.
-        </p>
+        </Callout>
       )}
 
       <MenuCard

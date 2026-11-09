@@ -21,6 +21,7 @@ import SeatPicker from "../billing/SeatPicker";
 import TeamInvite from "./TeamInvite";
 import { ErrorNotice, FormError } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
+import Callout from "../ui/Callout";
 
 /** Step 1: the organisation's name, and where the first site is. */
 export const OrganisationStep = () => {
@@ -244,6 +245,6 @@ export const ReviewStep = ({ state, labelOf, error }) => (
         ))}
       </ul>
     </MenuCard>
-    {error && <p role="alert" className="text-sm text-error-color">{describeApiError(error)}</p>}
+    {error && <Callout tone="error" role="alert">{describeApiError(error)}</Callout>}
   </div>
 );

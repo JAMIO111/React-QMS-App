@@ -44,8 +44,8 @@ const job = {
   measurements: [],
   ncrs: [],
 };
-const alertA = { id: "a1", reference: "QA-001", revisionLetter: "A", title: "Burr on bore", category: "product", severity: "high", requiredAction: "Deburr every part", effectiveDate: "2026-11-01", acknowledgeBy: null, matched: ["part"], acknowledged: false };
-const alertB = { id: "a2", reference: "QA-002", revisionLetter: "B", title: "Coolant change", category: "process", severity: "low", requiredAction: null, effectiveDate: "2026-11-03", acknowledgeBy: null, matched: ["machine"], acknowledged: true };
+const alertA = { id: "a1", reference: "QA-001", revisionLetter: "A", title: "Burr on bore", category: "product", severity: "high", actions: [{ description: "Deburr every part", department: null, machine: null }], effectiveDate: "2026-11-01", acknowledgeBy: null, matched: ["part"], acknowledged: false };
+const alertB = { id: "a2", reference: "QA-002", revisionLetter: "B", title: "Coolant change", category: "process", severity: "low", actions: [], effectiveDate: "2026-11-03", acknowledgeBy: null, matched: ["machine"], acknowledged: true };
 const ncr = (over) => ({ id: "n1", reference: "NCM-26-001", stage: "open", source: "internal", severity: "major", title: "Rod burr", detectedAt: "2026-11-02", quantityAffected: 3, part: { id: "p1", partNumber: "ROD-1" }, matched: ["part"], open: true, characteristics: ["OD"], ...over });
 
 const renderIt = () =>

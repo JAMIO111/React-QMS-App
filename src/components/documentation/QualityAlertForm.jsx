@@ -13,14 +13,17 @@ import { LinksEditor } from "./AlertLinks";
 import { CATEGORIES, SEVERITIES, linkBody, referenceText } from "../../lib/qualityAlerts";
 import { ErrorNotice, FormError, SelectField, TextAreaField } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
+import { ArrowUpIcon, ChevronDownIcon, PlusIcon, Trash2Icon } from "@/components/icons";
+import Callout from "../ui/Callout";
 
 const empty = {
-  title: "", category: "product", severity: "medium", description: "", requiredAction: "", effectiveDate: "", expiryDate: "", acknowledgeBy: "",
+  title: "", category: "product", severity: "medium", description: "", actions: [], effectiveDate: "", expiryDate: "", acknowledgeBy: "",
   parts: [], machines: [], operations: [], links: [], departments: [], targetDepartments: [], targetRoles: [], targetPeople: [],
 };
 
 const fromAlert = (a) => ({
-  title: a.title, category: a.category, severity: a.severity, description: a.description ?? "", requiredAction: a.requiredAction ?? "",
+  title: a.title, category: a.category, severity: a.severity, description: a.description ?? "",
+  actions: a.actions.map((x) => ({ key: x.id, description: x.description, departmentId: x.departmentId, machineId: x.machineId })),
   effectiveDate: a.effectiveDate ?? "", expiryDate: a.expiryDate ?? "", acknowledgeBy: a.acknowledgeBy ?? "",
   parts: a.scope.parts.map((p) => ({ key: p.id, partId: p.partId, partFamilyId: p.partFamilyId, label: p.label })),
   machines: a.scope.machines.map((m) => ({ id: m.machineId, label: m.label })),
@@ -43,6 +46,56 @@ const Chips = ({ items, onRemove, label }) => (
     ))}
   </ul>
 );
+
+let nextKey = 0;
+const blankAction = () => ({ key: `new-${nextKey++}`, description: "", departmentId: null, machineId: null });
+
+/**
+ * The actions people must take, one line each, in order. Each can be for a department and/or a machine, so one alert can say "Goods-in: quarantine
+ * lot 77" and "Lathe 1: re-check the first piece". Empty lines are dropped when the draft is saved.
+ */
+const ActionsEditor = ({ actions, onChange, departments, machines }) => {
+  const update = (key, patch) => onChange(actions.map((x) => (x.key === key ? { ...x, ...patch } : x)));
+  const move = (index, by) => {
+    const next = [...actions];
+    const [item] = next.splice(index, 1);
+    next.splice(index + by, 0, item);
+    onChange(next);
+  };
+  return (
+    <div className="flex flex-col gap-3">
+      {actions.length === 0 && <p className="text-sm text-secondary-text">No actions yet. Add the first thing people must do.</p>}
+      <ol className="flex flex-col gap-3" aria-label="Actions">
+        {actions.map((x, i) => (
+          <li key={x.key} className="flex flex-col gap-2 rounded-lg border border-border-color p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-primary-text">Action {i + 1}</span>
+              <div className="flex items-center gap-1">
+                <button type="button" aria-label={`Move action ${i + 1} up`} disabled={i === 0} onClick={() => move(i, -1)} className="rounded p-1 text-secondary-text hover:text-brand-primary disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed">
+                  <ArrowUpIcon size={16} />
+                </button>
+                <button type="button" aria-label={`Move action ${i + 1} down`} disabled={i === actions.length - 1} onClick={() => move(i, 1)} className="rounded p-1 text-secondary-text hover:text-brand-primary disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed">
+                  <ChevronDownIcon size={16} />
+                </button>
+                <button type="button" aria-label={`Remove action ${i + 1}`} onClick={() => onChange(actions.filter((a) => a.key !== x.key))} className="rounded p-1 text-secondary-text hover:text-error-color cursor-pointer">
+                  <Trash2Icon size={16} />
+                </button>
+              </div>
+            </div>
+            <TextAreaField label={`What must be done (action ${i + 1})`} required value={x.description} onChange={(e) => update(x.key, { description: e.target.value })} rows={2} maxLength={2000} />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <RHFComboBox label="For department" placeholder="Anyone" clearable value={x.departmentId} onChange={(v) => update(x.key, { departmentId: v || null })} options={departments} hint="Optional" />
+              <RHFComboBox label="On machine" placeholder="Any machine" clearable value={x.machineId} onChange={(v) => update(x.key, { machineId: v || null })} options={machines} hint="Optional" />
+            </div>
+          </li>
+        ))}
+      </ol>
+      <div>
+        <CTAButton buttonType="button" type="secondary" size="default" icon={PlusIcon} iconSize="h-4 w-4" onClick={() => onChange([...actions, blankAction()])}>Add action</CTAButton>
+      </div>
+    </div>
+  );
+};
 
 const Checks = ({ legend, options, selected, onToggle }) => (
   <fieldset className="flex flex-col gap-1">
@@ -101,6 +154,8 @@ const QualityAlertForm = () => {
   const deptOptions = (departments.data?.data ?? []).map((d) => ({ id: d.id, label: `${d.code} · ${d.name}` }));
   const roleOptions = (roles.data?.data ?? []).map((r) => ({ id: r.id, label: r.name }));
   const people = (members.data?.data ?? []).filter((m) => m.status !== "removed").map((m) => ({ id: m.membershipId, label: [m.firstName, m.surname].filter(Boolean).join(" ") || m.email }));
+  const actionDepartments = (departments.data?.data ?? []).map((d) => ({ id: d.id, name: d.name, hint: d.code }));
+  const actionMachines = (machines.data?.items ?? []).map((m) => ({ id: m.id, name: m.name, hint: m.code }));
   const machineOptions = (machines.data?.items ?? []).filter((m) => !form.machines.some((x) => x.id === m.id)).map((m) => ({ id: m.id, name: m.name, hint: m.code }));
   const familyOptions = (families.data?.items ?? []).filter((f) => !form.parts.some((p) => p.partFamilyId === f.id)).map((f) => ({ id: f.id, name: f.name, hint: f.code }));
 
@@ -125,7 +180,7 @@ const QualityAlertForm = () => {
       category: form.category,
       severity: form.severity,
       description: nullable(form.description),
-      requiredAction: nullable(form.requiredAction),
+      actions: form.actions.filter((x) => x.description.trim()).map((x) => ({ description: x.description.trim(), departmentId: x.departmentId || null, machineId: x.machineId || null })),
       effectiveDate: form.effectiveDate || null,
       expiryDate: form.expiryDate || null,
       acknowledgeBy: form.acknowledgeBy || null,
@@ -159,12 +214,15 @@ const QualityAlertForm = () => {
           <SelectField label="Severity" required value={form.severity} onChange={(v) => setValue("severity")(v ?? "medium")} options={SEVERITIES} hint="High and critical alerts need an acknowledge-by date to be issued" />
         </div>
         <TextAreaField label="Description" required value={form.description} onChange={set("description")} rows={5} maxLength={10000} hint="The details of the issue" />
-        <TextAreaField label="Required action" required value={form.requiredAction} onChange={set("requiredAction")} rows={3} maxLength={5000} hint="What people must do" />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <RHFDatePickerPopout label="Effective date" required valueFormat="iso" clearable value={form.effectiveDate} onChange={(v) => setValue("effectiveDate")(v ?? "")} hint="When it applies" placeholder="Select a date" />
           <RHFDatePickerPopout label="Expiry date" valueFormat="iso" clearable value={form.expiryDate} onChange={(v) => setValue("expiryDate")(v ?? "")} hint="Optional" placeholder="Select a date" />
           <RHFDatePickerPopout label="Acknowledge by" required={form.severity === "high" || form.severity === "critical"} valueFormat="iso" clearable value={form.acknowledgeBy} onChange={(v) => setValue("acknowledgeBy")(v ?? "")} hint="When people must have confirmed" placeholder="Select a date" />
         </div>
+      </MenuCard>
+
+      <MenuCard title={<span data-required>Required actions</span>} subtitle="What people must do. Add one line per action, each for a department, a machine, or everyone." bodyClassName="flex flex-col gap-3">
+        <ActionsEditor actions={form.actions} onChange={setValue("actions")} departments={actionDepartments} machines={actionMachines} />
       </MenuCard>
 
       <MenuCard title="What it affects" subtitle="Optional, but it is how the alert is found where people work" bodyClassName="flex flex-col gap-4">
@@ -233,7 +291,7 @@ const QualityAlertForm = () => {
         {people.length > 0 && <Checks legend="Named people" options={people} selected={form.targetPeople} onToggle={toggle("targetPeople")} />}
       </MenuCard>
 
-      {problem && <p role="alert" className="text-sm text-error-color">{problem}</p>}
+      {problem && <Callout tone="error" role="alert">{problem}</Callout>}
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={() => navigate(id ? `/Documentation/Quality-Alerts/${id}` : "/Documentation/Quality-Alerts")}>Cancel</CTAButton>

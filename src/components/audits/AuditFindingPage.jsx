@@ -15,6 +15,7 @@ import MenuCard from "../ui/MenuCard";
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import FindingDialog from "./FindingDialog";
 import CTAButton from "@/components/CTAButton";
+import Callout from "../ui/Callout";
 
 const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm font-normal text-primary-text focus:outline-none focus:border-brand-primary";
 
@@ -162,20 +163,20 @@ const AuditFindingPage = () => {
       </div>
 
       {f.status === "closed" && (
-        <p role="status" className="rounded-2xl border border-success-color/50 bg-success-color/10 p-4 text-sm text-primary-text">
-          Closed{f.closedBy ? ` by ${f.closedBy.name}` : ""}
+        <Callout tone="success" role="status" title="Closed">
+          {f.closedBy ? `By ${f.closedBy.name}` : ""}
           {f.closedAt ? ` on ${formatDateTime(f.closedAt)}` : ""}: {f.closedNote}
-        </p>
+        </Callout>
       )}
       {f.status === "withdrawn" && (
-        <p role="status" className="rounded-2xl border border-border-color bg-secondary-bg p-4 text-sm text-primary-text">
-          Withdrawn: {f.withdrawReason}
-        </p>
+        <Callout tone="info" role="status" title="Withdrawn">
+          {f.withdrawReason}
+        </Callout>
       )}
       {open && f.reopenReason && (
-        <p role="status" className="rounded-2xl border border-warning-color/50 bg-warning-color/10 p-4 text-sm text-primary-text">
-          Reopened: {f.reopenReason}
-        </p>
+        <Callout tone="warning" role="status" title="Reopened">
+          {f.reopenReason}
+        </Callout>
       )}
 
       <MenuCard title="The finding" subtitle="What the audit found">

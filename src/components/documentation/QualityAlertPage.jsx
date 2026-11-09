@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Dialog from "../ui/Dialog";
 import MenuCard from "../ui/MenuCard";
+import Callout from "../ui/Callout";
+import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { useConfirm } from "../../contexts/ConfirmationModalProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useMembers } from "../../hooks/useQmsApi";
@@ -10,7 +12,7 @@ import { formatDateTime } from "../../lib/processControl";
 import { categoryLabel, formatDay, referenceText, statusOf } from "../../lib/qualityAlerts";
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import { AcknowledgeDialog } from "./Acknowledge";
-import { SeverityBadge, StatusPill } from "./shared";
+import { ActionsList, SeverityBadge, StatusPill } from "./shared";
 import AlertFiles from "./AlertFiles";
 import { LinkList } from "./AlertLinks";
 import CTAButton from "@/components/CTAButton";
@@ -64,6 +66,54 @@ const ReasonDialog = ({ title, intro, confirmText, action, alert, onClose, onDon
     </Dialog>
   );
 };
+
+/** An expired alert back in force: a new expiry date (today or later) and why; both the old and the new date are kept in the history. */
+const ReopenDialog = ({ alert, onClose }) => {
+  const mutation = useAlertMutation();
+  const [expiry, setExpiry] = useState("");
+  const [reason, setReason] = useState("");
+  const today = new Date().toISOString().slice(0, 10);
+  return (
+    <Dialog title={`Reopen ${referenceText(alert)}`} onClose={onClose}>
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          mutation.mutate({ action: "reopen", id: alert.id, body: { expiryDate: expiry, reason: reason.trim() } }, { onSuccess: onClose });
+        }}>
+        <p className="text-sm text-primary-text">
+          The alert expired on {formatDay(alert.expiryDate)}. Reopening puts it back in force with a new expiry date. The change is recorded in its history.
+        </p>
+        <RHFDatePickerPopout label="New expiry date" required valueFormat="iso" minDate={today} value={expiry} onChange={(v) => setExpiry(v ?? "")} placeholder="Select a date" />
+        <TextAreaField label="Why is it being reopened?" value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={2000} rows={3} />
+        <FormError error={mutation.error} />
+        <div className="flex justify-end gap-2">
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!expiry || !reason.trim() || mutation.isPending}>
+            {mutation.isPending ? "Saving…" : "Reopen alert"}
+          </CTAButton>
+        </div>
+      </form>
+    </Dialog>
+  );
+};
+
+/** When the alert expired or was reopened, by whom, and the old and new expiry dates. */
+const History = ({ history }) => (
+  <MenuCard title="Expiry history" subtitle="Every expiry and reopening of this revision">
+    <ol className="flex flex-col gap-2" aria-label="Expiry history">
+      {history.map((h) => (
+        <li key={h.id} className="text-sm text-primary-text">
+          <span className="font-medium">{h.kind === "expired" ? "Expired" : "Reopened"}</span> · {formatDateTime(h.at)}
+          {h.kind === "reopened" && h.by ? ` · ${h.by.name}` : h.kind === "expired" ? " · automatically" : ""}
+          <span className="block text-secondary-text">
+            {h.kind === "expired" ? `Its expiry date was ${formatDay(h.previousExpiry)}.` : `Expiry moved from ${formatDay(h.previousExpiry)} to ${formatDay(h.newExpiry)}: ${h.reason}`}
+          </span>
+        </li>
+      ))}
+    </ol>
+  </MenuCard>
+);
 
 /** Before issuing: how many people each target reaches, and a warning when somebody chosen reaches nobody. */
 const RecipientsPreview = ({ id }) => {
@@ -214,7 +264,7 @@ const QualityAlertPage = () => {
   const { can } = usePermissions();
   const query = useQualityAlert(id);
   const mutation = useAlertMutation();
-  const [dialog, setDialog] = useState(null); // "withdraw" | "revise" | "acknowledge"
+  const [dialog, setDialog] = useState(null); // "withdraw" | "revise" | "acknowledge" | "reopen"
   const a = query.data;
 
   if (query.isLoading) return <p className="p-4 text-secondary-text">Loading…</p>;
@@ -266,6 +316,7 @@ const QualityAlertPage = () => {
           )}
           {current && issue && (
             <>
+              {a.status === "expired" && <CTAButton buttonType="button" type="main" size="md" onClick={() => setDialog("reopen")}>Reopen</CTAButton>}
               <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setDialog("revise")}>Issue a revision</CTAButton>
               <CTAButton buttonType="button" type="danger" size="md" onClick={() => setDialog("withdraw")}>Withdraw</CTAButton>
             </>
@@ -275,33 +326,38 @@ const QualityAlertPage = () => {
       <FormError error={mutation.error} />
 
       {a.me && a.status === "active" && !a.me.acknowledgedAt && (
-        <div role="status" className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 text-sm text-primary-text ${a.me.overdue ? "border-error-color" : "border-border-color"}`}>
-          <span>
-            {a.me.overdue ? "Overdue: this" : "This"} alert is addressed to you{a.acknowledgeBy ? ` — please acknowledge it by ${formatDay(a.acknowledgeBy)}` : ""}. Read it, then confirm.
-          </span>
-          <CTAButton buttonType="button" type="main" size="lg" onClick={() => setDialog("acknowledge")}>Acknowledge</CTAButton>
-        </div>
+        <Callout
+          tone={a.me.overdue ? "error" : "warning"}
+          role="status"
+          title={a.me.overdue ? "Overdue: your acknowledgement is needed" : "Your acknowledgement is needed"}
+          action={<CTAButton buttonType="button" type="main" size="lg" onClick={() => setDialog("acknowledge")}>Acknowledge</CTAButton>}>
+          This alert is addressed to you{a.acknowledgeBy ? ` — please acknowledge it by ${formatDay(a.acknowledgeBy)}` : ""}. Read it, then confirm.
+        </Callout>
       )}
       {a.me && a.me.acknowledgedAt && (
-        <p role="status" className="rounded-lg border border-border-color p-3 text-sm text-primary-text">
-          You acknowledged this alert on {formatDateTime(a.me.acknowledgedAt)}{a.me.note ? `: “${a.me.note}”` : "."}
-        </p>
+        <Callout tone="success" title="You have acknowledged this alert">
+          On {formatDateTime(a.me.acknowledgedAt)}{a.me.note ? `: “${a.me.note}”` : "."}
+        </Callout>
       )}
-
+      {a.status === "expired" && (
+        <Callout tone="warning" title="This alert has expired">
+          It expired after {formatDay(a.expiryDate)} and no longer shows where people work.{issue ? " Reopen it with a new expiry date if it still applies." : ""}
+        </Callout>
+      )}
       {a.revisionReason && (
-        <p className="rounded-lg border border-border-color p-3 text-sm text-primary-text">
-          <span className="text-secondary-text">Why revision {a.revisionLetter}:</span> {a.revisionReason}
-        </p>
+        <Callout tone="info" title={`Why revision ${a.revisionLetter}`}>
+          {a.revisionReason}
+        </Callout>
       )}
       {a.withdrawn && (
-        <p role="status" className="rounded-lg border border-error-color p-3 text-sm text-primary-text">
-          Withdrawn {formatDateTime(a.withdrawn.at)}{a.withdrawn.by ? ` by ${a.withdrawn.by.name}` : ""}: {a.withdrawn.reason}
-        </p>
+        <Callout tone="error" role="status" title="Withdrawn">
+          {formatDateTime(a.withdrawn.at)}{a.withdrawn.by ? ` by ${a.withdrawn.by.name}` : ""}: {a.withdrawn.reason}
+        </Callout>
       )}
       {a.status === "superseded" && (
-        <p role="status" className="rounded-lg border border-border-color p-3 text-sm text-primary-text">
+        <Callout tone="info" role="status" title="Superseded">
           A newer revision replaced this one. See the revisions below.
-        </p>
+        </Callout>
       )}
 
       <MenuCard title="What happened and what to do">
@@ -311,8 +367,8 @@ const QualityAlertPage = () => {
             <p className="whitespace-pre-wrap text-sm text-primary-text">{a.description ?? "Not written yet."}</p>
           </div>
           <div>
-            <h2 className="text-sm font-medium text-secondary-text">Required action</h2>
-            <p className="whitespace-pre-wrap text-sm text-primary-text">{a.requiredAction ?? "Not written yet."}</p>
+            <h2 className="mb-1 text-sm font-medium text-secondary-text">Required actions</h2>
+            <ActionsList actions={a.actions} />
           </div>
           <Facts
             items={[
@@ -364,7 +420,9 @@ const QualityAlertPage = () => {
         </MenuCard>
       )}
 
+      {a.history?.length > 0 && <History history={a.history} />}
       {dialog === "acknowledge" && <AcknowledgeDialog alert={a} onClose={() => setDialog(null)} />}
+      {dialog === "reopen" && <ReopenDialog alert={a} onClose={() => setDialog(null)} />}
       {dialog === "withdraw" && (
         <ReasonDialog
           title={`Withdraw ${referenceText(a)}`}

@@ -87,8 +87,9 @@ const RHFDatePickerPopout = ({
       const height = 330;
       const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
       const below = rect.bottom + 8;
-      const top = below + height > window.innerHeight && rect.top - height - 8 > 0 ? rect.top - height - 8 : below;
-      setPos({ top, left });
+      // Above the field the calendar hangs from its bottom edge, so there is no gap whatever its real height.
+      if (below + height > window.innerHeight && rect.top - height - 8 > 0) setPos({ bottom: window.innerHeight - rect.top + 8, left });
+      else setPos({ top: below, left });
     } else {
       setPos(null);
     }
@@ -102,9 +103,9 @@ const RHFDatePickerPopout = ({
 
   return (
     <div ref={wrapperRef} className={`relative flex h-fit w-full min-w-0 flex-col gap-1 ${className}`}>
-      <label htmlFor={id} className="text-sm font-medium text-secondary-text" data-required={required || undefined}>
+      <label htmlFor={id} onClick={(e) => e.preventDefault()} className="text-sm font-medium text-secondary-text" data-required={required || undefined}>
         {label}
-        </label>
+      </label>
       <div className="relative">
         <button
           ref={(el) => {

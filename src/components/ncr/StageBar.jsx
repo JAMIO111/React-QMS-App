@@ -2,6 +2,7 @@ import { RotateCcwIcon } from "@/components/icons";
 import { STAGES, nextStages, stageOf } from "../../lib/ncr";
 import { gateKey } from "../../lib/ncrWorkflow";
 import CTAButton from "@/components/CTAButton";
+import Callout from "../ui/Callout";
 
 /** Stage track with the moves allowed from the current stage. */
 const StageBar = ({ ncr, gates, canUpdate, dirty, onMove, onCancel, onReopen, pending }) => {
@@ -28,14 +29,14 @@ const StageBar = ({ ncr, gates, canUpdate, dirty, onMove, onCancel, onReopen, pe
         </p>
       )}
       {needed.length > 0 && (
-        <div role="status" aria-label="Needed for the next stage" className="rounded-lg border border-warning-color/40 bg-warning-color/10 p-3 text-sm text-primary-text">
+        <Callout tone="warning" role="status" aria-label="Needed for the next stage">
           Before this can move to {stageOf(next).label}:
           <ul className="mt-1 list-disc pl-5">
             {needed.map((p) => (
               <li key={p}>{p}</li>
             ))}
           </ul>
-        </div>
+        </Callout>
       )}
       {!blocked && (
         <div className="flex flex-wrap items-center gap-2">

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAlertAttachments, useQualityAlert } from "../../../hooks/useDocumentation";
 import { formatDay, referenceText } from "../../../lib/qualityAlerts";
-import { SeverityBadge } from "../../documentation/shared";
+import { ActionsList, SeverityBadge } from "../../documentation/shared";
 import AlertFileViewer from "./AlertFileViewer";
 import { Pager } from "./SidePanes";
 
@@ -23,7 +23,7 @@ const AlertsPane = ({ alerts }) => {
   if (!current) return <p className="text-sm text-secondary-text">No quality alerts are in force for this part, family, machine or operation.</p>;
   const d = detail.data;
   const description = d?.description;
-  const action = d?.requiredAction ?? current.requiredAction;
+  const actions = d?.actions ?? current.actions ?? [];
 
   return (
     <>
@@ -38,11 +38,11 @@ const AlertsPane = ({ alerts }) => {
           {referenceText(current)} · {current.title}
         </h3>
         {description && <p className="whitespace-pre-line text-sm text-primary-text">{description}</p>}
-        {action && (
-          <p className="rounded-lg border border-border-color bg-secondary-bg p-3 text-sm text-primary-text">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-secondary-text">Required action</span>
-            {action}
-          </p>
+        {actions.length > 0 && (
+          <div className="rounded-lg border border-border-color bg-secondary-bg p-3">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-secondary-text">Required {actions.length === 1 ? "action" : "actions"}</span>
+            <ActionsList actions={actions} />
+          </div>
         )}
         <p className="text-xs text-secondary-text">
           Affects {current.matched.map((m) => WHY[m]).join(", ")} · in force since {formatDay(current.effectiveDate)}

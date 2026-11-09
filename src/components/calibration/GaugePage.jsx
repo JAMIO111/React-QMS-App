@@ -42,6 +42,7 @@ import PeoplePicker from "./PeoplePicker";
 import { DuePill, GaugeStatusPill, OutcomePill } from "./Pills";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
+import Callout from "../ui/Callout";
 
 const EMPTY = {
   assetNumber: "", description: "", gaugeTypeId: null, manufacturer: "", model: "", serialNumber: "",
@@ -88,7 +89,7 @@ const CalibrationList = ({ gaugeId, canRecord }) => {
   const [showDeleted, setShowDeleted] = useState(false);
   const { data, isLoading, error } = useGaugeCalibrations(gaugeId, { deleted: showDeleted ? "include" : "exclude" });
   if (isLoading) return <LoadingScreen size="sm" />;
-  if (error) return <p role="alert" className="text-error-color">{describeApiError(error)}</p>;
+  if (error) return <Callout tone="error" role="alert">{describeApiError(error)}</Callout>;
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -206,7 +207,7 @@ const GaugePage = () => {
     return (
       <div className="flex flex-col gap-3 p-4">
         <Link to="/Calibration/Gauges" className="text-link-color hover:underline">← Gauge register</Link>
-        <p role="alert" className="text-error-color">{describeApiError(error)}</p>
+        <Callout tone="error" role="alert">{describeApiError(error)}</Callout>
       </div>
     );
   }
@@ -322,7 +323,7 @@ const GaugePage = () => {
             </p>
           )}
           {mutation.error && !dialog && (
-            <p role="alert" className="rounded-lg border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">{describeApiError(mutation.error)}</p>
+            <Callout tone="error" role="alert">{describeApiError(mutation.error)}</Callout>
           )}
 
           <form

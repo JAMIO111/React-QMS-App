@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useActiveAlerts } from "../../hooks/useDocumentation";
 import { formatDay } from "../../lib/qualityAlerts";
-import { SeverityBadge } from "./shared";
+import { ActionsList, SeverityBadge } from "./shared";
 
 const WHY = { part: "this part", family: "this part family", machine: "this machine", operation: "this operation" };
 
@@ -37,11 +37,11 @@ const ActiveAlertsBanner = ({ partId, partFamilyId, machineId, operationCode, cl
               {a.acknowledged === false && <span className="rounded-full border border-error-color px-2 py-0.5 text-xs text-error-color">Not acknowledged</span>}
               {a.acknowledged === true && <span className="text-xs text-secondary-text">Acknowledged</span>}
             </div>
-            {a.requiredAction && (
-              <p className="text-sm text-primary-text">
-                <span className="text-secondary-text">Required action: </span>
-                {a.requiredAction}
-              </p>
+            {a.actions?.length > 0 && (
+              <div>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-secondary-text">Required {a.actions.length === 1 ? "action" : "actions"}</p>
+                <ActionsList actions={a.actions} />
+              </div>
             )}
             <p className="text-xs text-secondary-text">
               Affects {a.matched.map((m) => WHY[m]).join(", ")} · in force since {formatDay(a.effectiveDate)}

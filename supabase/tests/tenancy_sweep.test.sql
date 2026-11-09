@@ -192,6 +192,7 @@ BEGIN
     jsonb_build_object('calibrationId', (SELECT id FROM public.calibrations WHERE organisation_id = a LIMIT 1))));
   -- DOC2: issued, so its recipient (the owner) exists.
   UPDATE public.quality_alerts SET description = 'd', required_action = 'a', effective_date = current_date WHERE id = qa;
+  PERFORM app.set_quality_alert_actions(qa, '[{"description":"a"}]'::jsonb);
   PERFORM app.issue_quality_alert(qa);
   -- CAPA1: an 8D started from a non-conformance (steps, the creator as leader, the NC link).
   PERFORM app.start_capa(a, NULL, NULL, NULL, NULL, (SELECT id FROM public.nonconformances WHERE organisation_id = a AND deleted_at IS NULL LIMIT 1));
@@ -213,6 +214,8 @@ BEGIN
   -- CAPA5: an evidence file.
   PERFORM app.add_capa_attachment((SELECT id FROM public.capas WHERE organisation_id = a LIMIT 1), a::text || '/capa/' || (SELECT id FROM public.capas WHERE organisation_id = a LIMIT 1)::text || '/sweep.pdf', 'sweep.pdf', 'application/pdf', 10, 'Sweep file');
   PERFORM pg_temp.logout();
+  -- DOC: the history of an expiry, as the database writes it (nobody is signed in).
+  INSERT INTO public.quality_alert_events (organisation_id, alert_id, kind, previous_expiry) VALUES (a, qa, 'expired', current_date - 1);
 
   -- Subscription: seats and an assignment through the API functions, invoice and payment as the provider would.
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');

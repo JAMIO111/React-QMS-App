@@ -5,6 +5,7 @@ import { ACTION_STATUS, FIVE_W2H, ROOT_CAUSE_KINDS, SOURCES, STEPS, roleLabel, s
 import { formatDay } from "../../lib/qualityAlerts";
 import { formatDateTime } from "../../lib/processControl";
 import CTAButton from "@/components/CTAButton";
+import Callout from "../ui/Callout";
 
 const Section = ({ code, title, children }) => (
   <section className="break-inside-avoid-page flex flex-col gap-2 border-t border-gray-300 pt-3" aria-label={`${code} ${title}`}>
@@ -43,7 +44,7 @@ const CapaReportPage = () => {
   const query = useCapa(id);
   const files = useCapaAttachments(id);
   if (query.isLoading) return <p className="p-4 text-sm text-secondary-text">Loading…</p>;
-  if (query.isError) return <p role="alert" className="p-4 text-sm text-error-color">Could not load this 8D.</p>;
+  if (query.isError) return <Callout tone="error" role="alert">Could not load this 8D.</Callout>;
   const capa = query.data;
   const live = capa.ncrs.filter((n) => !n.endedAt);
   const team = capa.team.filter((t) => !t.endedAt);

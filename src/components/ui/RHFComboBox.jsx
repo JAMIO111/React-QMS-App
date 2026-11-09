@@ -221,6 +221,8 @@ const RHFComboBox = ({
         {label && (
           <label
             htmlFor={id}
+            // Only the box opens the list: a tap on the label does not.
+            onClick={(e) => e.preventDefault()}
             className="text-sm font-medium text-secondary-text"
             data-required={required || undefined}>
             {label}

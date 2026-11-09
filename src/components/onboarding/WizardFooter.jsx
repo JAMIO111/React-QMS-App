@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 import CTAButton from "@/components/CTAButton";
+import Callout from "../ui/Callout";
 
 /**
  * Under every step: Back, and the ways forward. `mark` steps (details, security, team) offer "Skip for now" and "Done, continue"; the others just continue.
@@ -8,7 +9,7 @@ import CTAButton from "@/components/CTAButton";
  */
 const WizardFooter = ({ prev, onBack, onSkip, onContinue, continueLabel = "Continue", canSkip = false, pending = false, blocked = null }) => (
   <div className="flex flex-col gap-3 border-t border-border-color pt-4">
-    {blocked && <p role="status" className="rounded-lg border border-border-color bg-secondary-bg p-3 text-sm text-primary-text">{blocked}</p>}
+    {blocked && <Callout tone="info" role="status">{blocked}</Callout>}
     <div className="flex flex-wrap items-center justify-between gap-2">
       {prev ? (
         <CTAButton to={`/setup/${prev.key}`} onClick={onBack} type="neutral" size="md" className="inline-flex items-center gap-1">

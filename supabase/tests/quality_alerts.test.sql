@@ -45,6 +45,15 @@ BEGIN
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.quality_alerts SET status = 'active' WHERE id = %L$q$, a1), 'status is not editable directly');
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.quality_alerts SET reference = 'QA-500' WHERE id = %L$q$, a1), 'the reference is not editable');
   PERFORM app.set_quality_alert_scope(a1, scope);
+  PERFORM pg_temp.assert_fails(format($q$SELECT app.set_quality_alert_actions(%L, '[{"description":" "}]'::jsonb)$q$, a1), 'an action needs a description');
+  PERFORM pg_temp.assert_fails(format($q$SELECT app.set_quality_alert_actions(%L, jsonb_build_array(jsonb_build_object('description', 'x', 'machineId', gen_random_uuid())))$q$, a1), 'a machine of another organisation cannot be named');
+  PERFORM app.set_quality_alert_actions(a1, jsonb_build_array(
+    jsonb_build_object('description', 'Quarantine all bar stock from lot 77.', 'departmentId', dept),
+    jsonb_build_object('description', 'Re-check the stock on this lathe.', 'machineId', mach),
+    jsonb_build_object('description', 'Tell your supervisor.')));
+  PERFORM pg_temp.assert_eq((SELECT array_agg(position ORDER BY position) FROM public.quality_alert_actions WHERE alert_id = a1), ARRAY[1, 2, 3], 'actions keep their order');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.quality_alert_actions WHERE alert_id = a1 AND (department_id IS NOT NULL OR machine_id IS NOT NULL)), 2::bigint, 'two are for a department or a machine');
+  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.quality_alert_actions (organisation_id, alert_id, position, description) VALUES (%L, %L, 9, 'x')$q$, org, a1), 'actions are written only through the function');
   PERFORM pg_temp.assert_eq((SELECT (SELECT count(*) FROM public.quality_alert_parts WHERE alert_id = a1) + (SELECT count(*) FROM public.quality_alert_machines WHERE alert_id = a1)
       + (SELECT count(*) FROM public.quality_alert_operations WHERE alert_id = a1) + (SELECT count(*) FROM public.quality_alert_departments WHERE alert_id = a1)
       + (SELECT count(*) FROM public.quality_alert_targets WHERE alert_id = a1)), 6::bigint, 'scope and targets stored');
@@ -60,7 +69,9 @@ BEGIN
   PERFORM pg_temp.login('3e000000-0000-0000-0000-000000000101');
   -- Issue rules: incomplete alert, high severity without acknowledge-by, no targets.
   PERFORM pg_temp.assert_fails(format($q$SELECT app.issue_quality_alert(%L)$q$, a2), 'incomplete: no description or effective date');
-  UPDATE public.quality_alerts SET description = 'd', required_action = 'a', effective_date = current_date WHERE id = a2;
+  UPDATE public.quality_alerts SET description = 'd', effective_date = current_date WHERE id = a2;
+  PERFORM pg_temp.assert_fails(format($q$SELECT app.issue_quality_alert(%L)$q$, a2), 'no actions');
+  PERFORM app.set_quality_alert_actions(a2, '[{"description":"a"}]'::jsonb);
   PERFORM pg_temp.assert_fails(format($q$SELECT app.issue_quality_alert(%L)$q$, a2), 'no targets');
   UPDATE public.quality_alerts SET severity = 'critical' WHERE id = a2;
   PERFORM app.set_quality_alert_scope(a2, jsonb_build_object('targets', jsonb_build_array(jsonb_build_object('departmentId', dept))));
@@ -88,6 +99,7 @@ BEGIN
   PERFORM pg_temp.login('3e000000-0000-0000-0000-000000000101');
   PERFORM pg_temp.assert_fails(format($q$SELECT app.revise_quality_alert(%L, '  ')$q$, a1), 'a revision needs a reason');
   rev2 := app.revise_quality_alert(a1, 'The certificate was for lot 76, not 77');
+  PERFORM pg_temp.assert_eq((SELECT array_agg(description ORDER BY position) FROM public.quality_alert_actions WHERE alert_id = rev2), (SELECT array_agg(description ORDER BY position) FROM public.quality_alert_actions WHERE alert_id = a1), 'a revision copies the actions');
   PERFORM pg_temp.assert_eq((SELECT (reference, revision, status, supersedes_id = a1, effective_date IS NULL, acknowledge_by IS NULL)::text FROM public.quality_alerts WHERE id = rev2), '(QA-001,2,draft,t,t,t)', 'a draft revision with fresh dates');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.quality_alert_targets WHERE alert_id = rev2), 2::bigint, 'scope copied');
   PERFORM pg_temp.assert_fails(format($q$SELECT app.revise_quality_alert(%L, 'again')$q$, a1), 'one draft revision at a time');
@@ -110,6 +122,30 @@ BEGIN
   PERFORM pg_temp.login('3e000000-0000-0000-0000-000000000103');
   PERFORM pg_temp.assert_eq(app.expire_quality_alerts(org), 1, 'one alert expired');
   PERFORM pg_temp.assert_eq((SELECT status FROM public.quality_alerts WHERE title = 'Old news'), 'expired', 'now expired');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.quality_alert_events e JOIN public.quality_alerts q ON q.id = e.alert_id WHERE q.title = 'Old news' AND e.kind = 'expired' AND e.previous_expiry = current_date - 1 AND e.actor_id IS NULL), 1::bigint, 'the expiry is in the history');
+  PERFORM pg_temp.assert_eq(app.expire_quality_alerts(org), 0, 'expiring twice logs nothing more');
+  PERFORM pg_temp.assert_fails(format($q$SELECT app.reopen_quality_alert(%L, current_date + 5, 'still needed')$q$, (SELECT id FROM public.quality_alerts WHERE title = 'Old news')), 'a viewer cannot reopen');
+  PERFORM pg_temp.assert_fails($q$SELECT app.system_expire_quality_alerts()$q$, 'a signed-in person cannot run the system job');
+  PERFORM pg_temp.logout();
+  -- Reopening: documentation.issue, only an expired alert, a new expiry from today, a reason; logged with the old and new dates.
+  PERFORM pg_temp.login('3e000000-0000-0000-0000-000000000101');
+  DECLARE old_id uuid := (SELECT id FROM public.quality_alerts WHERE title = 'Old news');
+  BEGIN
+    PERFORM pg_temp.assert_fails(format($q$SELECT app.reopen_quality_alert(%L, current_date + 5, 'x')$q$, a1), 'an alert in force is not reopened');
+    PERFORM pg_temp.assert_fails(format($q$SELECT app.reopen_quality_alert(%L, current_date - 1, 'x')$q$, old_id), 'the new expiry cannot be in the past');
+    PERFORM pg_temp.assert_fails(format($q$SELECT app.reopen_quality_alert(%L, NULL, 'x')$q$, old_id), 'the new expiry is needed');
+    PERFORM pg_temp.assert_fails(format($q$SELECT app.reopen_quality_alert(%L, current_date + 5, ' ')$q$, old_id), 'a reason is needed');
+    UPDATE public.quality_alerts SET expiry_date = current_date + 9 WHERE id = old_id;
+    PERFORM pg_temp.assert_eq((SELECT expiry_date FROM public.quality_alerts WHERE id = old_id), current_date - 1, 'the expiry of an issued alert is not edited directly');
+    PERFORM app.reopen_quality_alert(old_id, current_date + 5, 'Still relevant until the new batch arrives');
+    PERFORM pg_temp.assert_eq((SELECT (status, expiry_date = current_date + 5)::text FROM public.quality_alerts WHERE id = old_id), '(active,t)', 'back in force with the new expiry');
+    PERFORM pg_temp.assert_eq((SELECT (kind, previous_expiry = current_date - 1, new_expiry = current_date + 5, reason, actor_id IS NOT NULL)::text FROM public.quality_alert_events WHERE alert_id = old_id AND kind = 'reopened'),
+      '(reopened,t,t,"Still relevant until the new batch arrives",t)', 'the reopening is in the history');
+    UPDATE public.quality_alerts SET expiry_date = current_date + 9 WHERE id = old_id;
+    PERFORM pg_temp.assert_eq((SELECT expiry_date FROM public.quality_alerts WHERE id = old_id), current_date + 5, 'and the expiry is frozen again afterwards');
+    PERFORM pg_temp.assert_fails(format($q$DELETE FROM public.quality_alert_events WHERE alert_id = %L$q$, old_id), 'history is never deleted');
+    PERFORM pg_temp.assert_fails(format($q$UPDATE public.quality_alert_events SET reason = 'x' WHERE alert_id = %L$q$, old_id), 'or changed');
+  END;
   PERFORM pg_temp.logout();
   PERFORM pg_temp.assert_eq((SELECT count(*) >= 6 FROM public.audit_events WHERE entity_type = 'quality_alerts'), true, 'the lifecycle is audited');
 

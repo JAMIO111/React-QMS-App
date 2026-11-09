@@ -69,7 +69,7 @@ describe('drafting', () => {
   it('edits content and replaces scope and targets in one call, with labels', async () => {
     const res = (await api().patch(`/api/v1/quality-alerts/${ctx.a1}`).set(await as(ids.ownerA)).send({
       description: 'The certificate says 4140, the drawing needs 4340.',
-      requiredAction: 'Quarantine lot 77 and tell your supervisor.',
+      actions: [{ description: 'Quarantine lot 77 and tell your supervisor.' }],
       effectiveDate: TODAY,
       acknowledgeBy: TOMORROW,
       expiryDate: NEXT_WEEK,
@@ -78,6 +78,7 @@ describe('drafting', () => {
     expect(res).toMatchObject({ description: expect.stringContaining('4340'), effectiveDate: TODAY, acknowledgeBy: TOMORROW, expiryDate: NEXT_WEEK });
     expect(res.scope.parts.map((p: { kind: string; label: string }) => [p.kind, p.label])).toEqual([['family', 'HCR · Rods'], ['part', 'HCR-100 · Rod 100']]);
     expect(res.scope.machines).toEqual([expect.objectContaining({ machineId: ctx.machine, label: 'L1 · Lathe 1' })]);
+    expect(res.actions).toEqual([expect.objectContaining({ position: 1, description: 'Quarantine lot 77 and tell your supervisor.', departmentId: null, machineId: null })]);
     expect(res.scope.operations).toEqual(['OP-020']);
     expect(res.scope.departments[0]).toMatchObject({ departmentId: ctx.dept, label: expect.stringMatching(/^GI · Goods-in/) });
     expect(res.scope.targets.map((t: { kind: string }) => t.kind).sort()).toEqual(['department', 'role']);
@@ -85,6 +86,24 @@ describe('drafting', () => {
     expect(again.scope.targets).toHaveLength(2);
     const bad = await api().patch(`/api/v1/quality-alerts/${ctx.a1}`).set(await as(ids.ownerA)).send({ scope: { machines: ['00000000-0000-0000-0000-000000000000'] } });
     expect(bad.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it('actions are line items for departments and machines, replaced in the order given, with labels', async () => {
+    const h = await as(ids.ownerA);
+    const res = (await api().patch(`/api/v1/quality-alerts/${ctx.a1}`).set(h).send({
+      actions: [
+        { description: 'Quarantine lot 77.', departmentId: ctx.dept },
+        { description: 'Re-check the first piece.', machineId: ctx.machine },
+        { description: 'Tell your supervisor.' },
+      ],
+    }).expect(200)).body;
+    expect(res.actions.map((x: { position: number; description: string }) => [x.position, x.description])).toEqual([[1, 'Quarantine lot 77.'], [2, 'Re-check the first piece.'], [3, 'Tell your supervisor.']]);
+    expect(res.actions[0]).toMatchObject({ departmentId: ctx.dept, departmentLabel: expect.stringMatching(/^GI · Goods-in/), machineId: null });
+    expect(res.actions[1]).toMatchObject({ machineId: ctx.machine, machineLabel: 'L1 · Lathe 1' });
+    await api().patch(`/api/v1/quality-alerts/${ctx.a1}`).set(h).send({ actions: [{ description: ' ' }] }).expect(400);
+    await api().patch(`/api/v1/quality-alerts/${ctx.a1}`).set(h).send({ actions: [{ description: 'x', machineId: '00000000-0000-0000-0000-000000000000' }] }).expect((r) => expect(r.status).toBeGreaterThanOrEqual(400));
+    expect((await api().get(`/api/v1/quality-alerts/${ctx.a1}`).set(h).expect(200)).body.actions).toHaveLength(3); // a refused change leaves them
+    await api().patch(`/api/v1/quality-alerts/${ctx.a1}`).set(h).send({ requiredAction: 'old field' }).expect(400);
   });
 
   it('drafts are seen by those who manage documentation, not by others', async () => {
@@ -158,7 +177,7 @@ describe('revisions, withdrawal, discard and expiry', () => {
   it('an active alert past its expiry date is expired when next read', async () => {
     const owner = await as(ids.ownerA);
     const a = (await api().post('/api/v1/quality-alerts').set(owner).send({
-      title: 'Temporary inspection frequency change', category: 'process', severity: 'low', description: 'd', requiredAction: 'Inspect every 30 minutes.',
+      title: 'Temporary inspection frequency change', category: 'process', severity: 'low', description: 'd', actions: [{ description: 'Inspect every 30 minutes.' }],
       effectiveDate: TODAY, expiryDate: NEXT_WEEK, scope: { targets: [{ departmentId: ctx.dept }] },
     }).expect(201)).body;
     await api().post(`/api/v1/quality-alerts/${a.id}/issue`).set(owner).expect(200);
@@ -169,6 +188,17 @@ describe('revisions, withdrawal, discard and expiry', () => {
     await admin.query(`alter table public.quality_alerts enable trigger quality_alerts_rules`);
     const after = (await api().get(`/api/v1/quality-alerts/${a.id}`).set(owner).expect(200)).body;
     expect(after).toMatchObject({ status: 'expired', inForce: false });
+    expect(after.history).toEqual([expect.objectContaining({ kind: 'expired', by: null, previousExpiry: expect.any(String), newExpiry: null })]);
+    // Reopening: needs documentation.issue, a new expiry from today and a reason; it is logged.
+    await api().post(`/api/v1/quality-alerts/${a.id}/reopen`).set(await as(ids.inspectorA)).send({ expiryDate: NEXT_WEEK, reason: 'Still needed' }).expect(403);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    expect((await api().post(`/api/v1/quality-alerts/${a.id}/reopen`).set(owner).send({ expiryDate: yesterday, reason: 'Still needed' })).body.error.code).toBe('documentation_rule');
+    await api().post(`/api/v1/quality-alerts/${a.id}/reopen`).set(owner).send({ expiryDate: NEXT_WEEK }).expect(400);
+    const reopened = (await api().post(`/api/v1/quality-alerts/${a.id}/reopen`).set(owner).send({ expiryDate: NEXT_WEEK, reason: 'Still needed for the next batch' }).expect(200)).body;
+    expect(reopened).toMatchObject({ status: 'active', inForce: true, expiryDate: NEXT_WEEK });
+    expect(reopened.history.map((h: { kind: string }) => h.kind)).toEqual(['expired', 'reopened']);
+    expect(reopened.history[1]).toMatchObject({ kind: 'reopened', previousExpiry: expect.any(String), newExpiry: NEXT_WEEK, reason: 'Still needed for the next batch', by: { id: ids.ownerA } });
+    expect((await api().post(`/api/v1/quality-alerts/${a.id}/reopen`).set(owner).send({ expiryDate: NEXT_WEEK, reason: 'Again' })).body.error.code).toBe('documentation_rule'); // it is active now
     const revision = await api().post(`/api/v1/quality-alerts/${a.id}/revisions`).set(owner).send({ reason: 'Extend it' });
     expect(revision.status).toBe(201);
   });

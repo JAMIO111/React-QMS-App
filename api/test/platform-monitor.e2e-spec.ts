@@ -159,12 +159,31 @@ describe('the scheduled jobs', () => {
   });
 
   it('need the secret: none, wrong, or of a different length is 401', async () => {
-    for (const route of ['reconcile', 'abandoned-setups']) {
+    for (const route of ['reconcile', 'abandoned-setups', 'expire-quality-alerts']) {
       await cron().get(`/api/v1/internal/cron/${route}`).expect(401);
       await cron().get(`/api/v1/internal/cron/${route}`).set(bearer('wrong')).expect(401);
       await cron().get(`/api/v1/internal/cron/${route}`).set(bearer(SECRET.replace(/.$/, 'x'))).expect(401);
       await cron().post(`/api/v1/internal/cron/${route}`).set({ Authorization: SECRET }).expect(401);
     }
+  });
+
+  describe('quality alert expiry', () => {
+    it('expires every active alert past its expiry date, in every organisation, logs each, and does nothing the second time', async () => {
+      const org = ORG(9);
+      await admin.query(`insert into public.organisations (id, name, slug) values ($1, 'Cron QA', 'cron-e2e-qa')`, [org]);
+      const rows = await admin.query(
+        `insert into public.quality_alerts (organisation_id, alert_number, reference, revision, title, category, severity, description, effective_date, expiry_date, status, issued_at)
+         values ($1, 1, 'QA-001', 1, 'Past', 'process', 'low', 'd', current_date - 10, current_date - 1, 'active', now()),
+                ($1, 2, 'QA-002', 1, 'Future', 'process', 'low', 'd', current_date - 1, current_date + 5, 'active', now()) returning id, title`,
+        [org],
+      );
+      const past = rows.rows.find((r: { title: string }) => r.title === 'Past').id;
+      const res = (await cron().get('/api/v1/internal/cron/expire-quality-alerts').set(bearer()).expect(200)).body;
+      expect(res.expired).toBeGreaterThanOrEqual(1);
+      expect((await admin.query(`select status from public.quality_alerts where organisation_id = $1 order by alert_number`, [org])).rows.map((r: { status: string }) => r.status)).toEqual(['expired', 'active']);
+      expect((await admin.query(`select kind from public.quality_alert_events where alert_id = $1`, [past])).rows).toEqual([{ kind: 'expired' }]);
+      expect((await cron().post('/api/v1/internal/cron/expire-quality-alerts').set(bearer()).expect(200)).body).toEqual({ expired: 0 });
+    });
   });
 
   describe('abandoned set-ups', () => {

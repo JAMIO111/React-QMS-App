@@ -38,6 +38,7 @@ import { GaugeStatusPill, OutcomePill } from "./Pills";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import SlidingToggle from "../ui/SlidingToggle";
+import Callout from "../ui/Callout";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const str = (v) => (v === null || v === undefined ? "" : String(v));
@@ -268,12 +269,12 @@ const CalibrationRecordPage = () => {
     return (
       <div className="flex flex-col gap-3 p-4">
         <Link to="/Calibration/Gauges" className="text-link-color hover:underline">← Gauge register</Link>
-        <p role="alert" className="text-error-color">{describeApiError(loadError)}</p>
+        <Callout tone="error" role="alert">{describeApiError(loadError)}</Callout>
       </div>
     );
   }
   if (isNew && !can("calibration.record")) {
-    return <p role="alert" className="p-4 text-error-color">You do not have permission to record calibrations.</p>;
+    return <Callout tone="error" role="alert">You do not have permission to record calibrations.</Callout>;
   }
 
   const text = (name, label, props = {}) => <TextInput label={label} value={form[name] ?? ""} onChange={set(name)} disabled={!canEdit} placeholder="—" {...props} />;
@@ -336,8 +337,8 @@ const CalibrationRecordPage = () => {
             )}
           </div>
         )}
-        {g.deletedAt && <p role="status" className="rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm">This gauge is deleted; its records are read-only.</p>}
-        {mutation.error && !dialog && <p role="alert" className="rounded-lg border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">{describeApiError(mutation.error)}</p>}
+        {g.deletedAt && <Callout tone="error" role="status">This gauge is deleted; its records are read-only.</Callout>}
+        {mutation.error && !dialog && <Callout tone="error" role="alert">{describeApiError(mutation.error)}</Callout>}
 
         <Card title="Readings" subtitle="As found (before any adjustment) and, if adjusted or reworked, as left. Limits include the tolerance; checks are pass or fail.">
           {characteristics.isLoading ? (

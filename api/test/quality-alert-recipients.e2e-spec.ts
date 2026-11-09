@@ -39,7 +39,7 @@ afterAll(async () => {
 
 const draft = async (title: string, scope: object, extra: object = {}) =>
   (await api().post('/api/v1/quality-alerts').set(await as(ids.ownerA)).send({
-    title, category: 'supplier', severity: 'high', description: 'd', requiredAction: 'a', effectiveDate: TODAY, acknowledgeBy: TOMORROW, scope, ...extra,
+    title, category: 'supplier', severity: 'high', description: 'd', actions: [{ description: 'a' }], effectiveDate: TODAY, acknowledgeBy: TOMORROW, scope, ...extra,
   }).expect(201)).body;
 const mine = async (user: string) => (await api().get('/api/v1/quality-alerts/mine').set(await as(user)).expect(200)).body;
 const count = async (user: string) => (await api().get('/api/v1/quality-alerts/mine/count').set(await as(user)).expect(200)).body;

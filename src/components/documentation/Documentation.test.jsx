@@ -41,7 +41,8 @@ const summary = (over = {}) => ({
 const detail = (over = {}) => ({
   ...summary(),
   description: "The certificate says 4140, the drawing needs 4340.",
-  requiredAction: "Quarantine lot 77.",
+  actions: [{ id: "x1", position: 1, description: "Quarantine lot 77.", departmentId: "d1", machineId: null, departmentLabel: "GI · Goods-in", machineLabel: null }],
+  history: [],
   revisionReason: "It was lot 76",
   supersedesId: "a0",
   withdrawn: null,
@@ -139,12 +140,49 @@ describe("Quality alert page", () => {
     expect(screen.getByText(/certificate says 4140/)).toBeInTheDocument();
     expect(screen.getByText("HCR-100 · Rod 100")).toBeInTheDocument();
     expect(screen.getByText("OP-020")).toBeInTheDocument();
-    expect(screen.getByText(/Why revision B:/)).toBeInTheDocument();
+    expect(screen.getByText("Why revision B")).toBeInTheDocument();
+    expect(screen.getByText("It was lot 76")).toBeInTheDocument();
+    const actions = screen.getByRole("list", { name: "Required actions" });
+    expect(within(actions).getByText("Quarantine lot 77.")).toBeInTheDocument();
+    expect(within(actions).getByText("For GI · Goods-in")).toBeInTheDocument();
     const revisions = screen.getByRole("list", { name: "Revisions" });
     expect(within(revisions).getByRole("link", { name: "Revision A" })).toHaveAttribute("href", "/Documentation/Quality-Alerts/a0");
     expect(screen.getByRole("button", { name: "Issue a revision" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Withdraw" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+  });
+
+  it("an expired alert says so, can be reopened with a new expiry date and a reason, and shows its history", async () => {
+    permissions = ["documentation.read", "documentation.issue"];
+    let body;
+    const expired = detail({ status: "expired", inForce: false, expiryDate: "2026-11-01", history: [{ id: "h1", kind: "expired", at: "2026-11-02T00:10:00Z", by: null, previousExpiry: "2026-11-01", newExpiry: null, reason: null }] });
+    apiFetch.mockImplementation(respond((path, opts = {}) => (path.endsWith("/reopen") ? ((body = opts.body), detail({ expiryDate: "2099-12-31" })) : expired)));
+    renderAt("/Documentation/Quality-Alerts/a1");
+    expect(await screen.findByText("This alert has expired")).toBeInTheDocument();
+    const history = screen.getByRole("list", { name: "Expiry history" });
+    expect(history).toHaveTextContent(/Expired/);
+    expect(history).toHaveTextContent(/automatically/);
+    expect(history).toHaveTextContent(/Its expiry date was 1 Nov 2026/);
+    await userEvent.click(screen.getByRole("button", { name: "Reopen" }));
+    const dialog = screen.getByRole("dialog");
+    const submit = within(dialog).getByRole("button", { name: "Reopen alert" });
+    expect(submit).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText(/Why is it being reopened/), "Still needed for the next batch");
+    expect(submit).toBeDisabled(); // a new expiry date is needed too
+    await userEvent.click(within(dialog).getByRole("button", { name: /New expiry date/ }));
+    const lastDay = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+    await userEvent.click(screen.getByRole("button", { name: format(new Date(new Date().getFullYear(), new Date().getMonth(), lastDay), "EEEE d MMMM yyyy") }));
+    await waitFor(() => expect(submit).toBeEnabled());
+    await userEvent.click(submit);
+    expect(body).toMatchObject({ reason: "Still needed for the next batch", expiryDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+  });
+
+  it("only people who can issue are offered Reopen", async () => {
+    permissions = ["documentation.read"];
+    apiFetch.mockImplementation(respond(detail({ status: "expired", inForce: false })));
+    renderAt("/Documentation/Quality-Alerts/a1");
+    expect(await screen.findByText("This alert has expired")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reopen" })).toBeNull();
   });
 
   it("withdraws with a required reason", async () => {
@@ -190,7 +228,8 @@ describe("Quality alert form", () => {
     await userEvent.selectOptions(within(form).getByLabelText("Category"), "supplier");
     await userEvent.selectOptions(within(form).getByLabelText("Severity"), "critical");
     await userEvent.type(within(form).getByLabelText("Description"), "Cracks found");
-    await userEvent.type(within(form).getByLabelText("Required action"), "Stop using lot 12");
+    await userEvent.click(within(form).getByRole("button", { name: "Add action" }));
+    await userEvent.type(within(form).getByLabelText(/What must be done \(action 1\)/), "Stop using lot 12");
     await userEvent.type(within(form).getByLabelText("Add an operation code"), "OP-020{enter}");
     await userEvent.click(within(form).getByRole("combobox", { name: "Add a machine" }));
     await userEvent.click(screen.getByRole("option", { name: /Lathe 1/ }));
@@ -198,11 +237,35 @@ describe("Quality alert form", () => {
     await userEvent.click(target.getByRole("checkbox", { name: /Goods-in/ }));
     await userEvent.click(within(form).getByRole("button", { name: "Save draft" }));
     expect(body).toMatchObject({
-      title: "Supplier material defect", category: "supplier", severity: "critical", description: "Cracks found", requiredAction: "Stop using lot 12",
+      title: "Supplier material defect", category: "supplier", severity: "critical", description: "Cracks found", actions: [{ description: "Stop using lot 12", departmentId: null, machineId: null }],
       effectiveDate: null, expiryDate: null, acknowledgeBy: null,
       scope: { parts: [], machines: ["mc1"], operations: ["OP-020"], departments: [], targets: [{ departmentId: "d1" }] },
     });
     await waitFor(() => expect(where()).toBe("/Documentation/Quality-Alerts/new1"));
+  });
+
+  it("actions are line items: several, each for a department and/or a machine, in order, empty ones dropped", async () => {
+    let body;
+    apiFetch.mockImplementation(respond((path, opts = {}) => (opts.method === "POST" && (body = opts.body), detail({ id: "new1", status: "draft" }))));
+    renderAt("/Documentation/Quality-Alerts/new");
+    const form = screen.getByRole("form", { name: "Quality alert" });
+    await userEvent.type(within(form).getByLabelText("Title"), "Burr on bore");
+    const add = within(form).getByRole("button", { name: "Add action" });
+    await userEvent.click(add);
+    await userEvent.click(add);
+    await userEvent.click(add);
+    await userEvent.type(within(form).getByLabelText(/What must be done \(action 1\)/), "Quarantine lot 77");
+    await userEvent.type(within(form).getByLabelText(/What must be done \(action 2\)/), "Re-check the first piece");
+    await userEvent.click(within(form).getAllByRole("combobox", { name: "For department" })[0]);
+    await userEvent.click(screen.getByRole("option", { name: /Goods-in/ }));
+    await userEvent.click(within(form).getAllByRole("combobox", { name: "On machine" })[1]);
+    await userEvent.click(screen.getByRole("option", { name: /Lathe 1/ }));
+    await userEvent.click(within(form).getByRole("button", { name: "Move action 2 up" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Save draft" }));
+    expect(body.actions).toEqual([
+      { description: "Re-check the first piece", departmentId: null, machineId: "mc1" },
+      { description: "Quarantine lot 77", departmentId: "d1", machineId: null },
+    ]);
   });
 
   it("needs a title, and checks the dates", async () => {
@@ -259,7 +322,7 @@ describe("Acknowledgement", () => {
     permissions = ["documentation.read"];
     apiFetch.mockResolvedValue(detail({ progress: null, me: { firstViewedAt: "2026-11-05T09:30:00Z", acknowledgedAt: "2026-11-05T10:00:00Z", note: null, reachedVia: ["Named"], overdue: false } }));
     renderAt("/Documentation/Quality-Alerts/a1");
-    expect(await screen.findByText(/You acknowledged this alert on/)).toBeInTheDocument();
+    expect(await screen.findByText(/You have acknowledged this alert/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Acknowledge" })).toBeNull();
   });
 

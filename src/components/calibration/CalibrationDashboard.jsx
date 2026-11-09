@@ -19,6 +19,7 @@ import { describeApiError } from "../../lib/api-client";
 import { describeDue } from "../../lib/calibration";
 import { formatDate } from "../../lib/ncr";
 import { GaugeStatusPill } from "./Pills";
+import Callout from "../ui/Callout";
 
 const PERIODS = [
   { id: "30d", name: "Last 30 days", from: (t) => subDays(t, 29) },
@@ -167,7 +168,7 @@ const CalibrationDashboard = () => {
         </div>
       </div>
 
-      {error && <p role="alert" className="rounded-lg border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">{describeApiError(error)}</p>}
+      {error && <Callout tone="error" role="alert">{describeApiError(error)}</Callout>}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6" aria-busy={isLoading || undefined}>
         <Kpi icon={GaugeIcon} label="Gauges" value={k ? k.gauges.toLocaleString("en-GB") : "—"} note={k ? `${k.inUse} in use` : ""} to="/Calibration/Gauges" />

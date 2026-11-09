@@ -6,16 +6,16 @@ import type { RequestContext } from '../common/request-context';
 import { iso, personName, Row } from '../calibration/calibration.service';
 import type { Attachment, CreateAttachmentBody, DeletedQuery } from '../calibration/calibration.schemas';
 import { DatabaseService, Db } from '../database/database.service';
-import { ActiveAlert, ActiveList, ActiveQuery, AcknowledgeBody, AddRecipientBody, AlertDetail, MineCount, MineList, RecipientList, RecipientsPreview, AlertSummary, CreateAlertBody, ListQuery, ReasonBody, revisionLetter, ScopeInput, UpdateAlertBody } from './documentation.schemas';
+import { ActionInput, ActiveAlert, ActiveList, ActiveQuery, AcknowledgeBody, AddRecipientBody, AlertDetail, MineCount, MineList, RecipientList, RecipientsPreview, AlertSummary, CreateAlertBody, ListQuery, ReasonBody, ReopenBody, revisionLetter, ScopeInput, UpdateAlertBody } from './documentation.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown' } : null);
 
 const SELECT = sql`
-  select a.id, a.alert_number, a.reference, a.revision, a.title, a.category, a.severity, a.description, a.required_action, a.status,
+  select a.id, a.alert_number, a.reference, a.revision, a.title, a.category, a.severity, a.description, a.status,
          a.effective_date::text as effective_date, a.expiry_date::text as expiry_date, a.acknowledge_by::text as acknowledge_by,
          a.revision_reason, a.supersedes_id, a.issued_at, a.issued_by, a.withdrawn_at, a.withdrawn_by, a.withdrawn_reason, a.created_by, a.updated_at,
-         (a.status = 'active' and a.effective_date <= current_date) as in_force,
+         (a.status = 'active' and a.effective_date <= current_date and (a.expiry_date is null or a.expiry_date >= current_date)) as in_force,
          (select count(*) from public.quality_alert_recipients r where r.alert_id = a.id)::int as r_total,
          (select count(*) from public.quality_alert_recipients r where r.alert_id = a.id and r.first_viewed_at is not null)::int as r_viewed,
          (select count(*) from public.quality_alert_recipients r where r.alert_id = a.id and r.acknowledged_at is not null)::int as r_ack,
@@ -65,7 +65,7 @@ const toAttachment = (r: Row): z.infer<typeof Attachment> => ({
 });
 
 const COLUMNS: Record<string, string> = {
-  title: 'title', category: 'category', severity: 'severity', description: 'description', requiredAction: 'required_action',
+  title: 'title', category: 'category', severity: 'severity', description: 'description',
   effectiveDate: 'effective_date', expiryDate: 'expiry_date', acknowledgeBy: 'acknowledge_by', revisionReason: 'revision_reason',
 };
 const DATE_COLUMNS = new Set(['effectiveDate', 'expiryDate', 'acknowledgeBy']);
@@ -120,12 +120,13 @@ export class DocumentationService {
   create(ctx: RequestContext, body: CreateAlertBody): Promise<AlertDetail> {
     return this.database.asUser(ctx, async (db) => {
       const row = await db.execute<{ id: string }>(sql`
-        insert into public.quality_alerts (organisation_id, title, category, severity, description, required_action, effective_date, expiry_date, acknowledge_by)
-        values (${orgOf(ctx)}::uuid, ${body.title}, ${body.category}, ${body.severity}, ${body.description ?? null}, ${body.requiredAction ?? null},
+        insert into public.quality_alerts (organisation_id, title, category, severity, description, effective_date, expiry_date, acknowledge_by)
+        values (${orgOf(ctx)}::uuid, ${body.title}, ${body.category}, ${body.severity}, ${body.description ?? null},
                 ${body.effectiveDate ?? null}::date, ${body.expiryDate ?? null}::date, ${body.acknowledgeBy ?? null}::date)
         returning id`);
       const id = row.rows[0].id;
       if (body.scope) await this.setScope(db, id, body.scope);
+      if (body.actions) await this.setActions(db, id, body.actions);
       return this.load(db, ctx, id);
     });
   }
@@ -136,7 +137,7 @@ export class DocumentationService {
       if (current.status !== 'draft') {
         throw new ApiError(409, 'documentation_rule', 'An issued quality alert cannot be edited; issue a revision instead');
       }
-      const { scope, ...fields } = body;
+      const { scope, actions, ...fields } = body;
       const sets: SQL[] = [];
       for (const [key, column] of Object.entries(COLUMNS)) {
         const value = (fields as Record<string, unknown>)[key];
@@ -148,6 +149,7 @@ export class DocumentationService {
         if (updated.rows.length === 0) throw ApiError.forbidden('You are not allowed to edit this quality alert');
       }
       if (scope) await this.setScope(db, id, scope);
+      if (actions) await this.setActions(db, id, actions);
       return this.load(db, ctx, id);
     });
   }
@@ -163,6 +165,15 @@ export class DocumentationService {
     return this.database.asUser(ctx, async (db) => {
       await this.load(db, ctx, id);
       await db.execute(sql`select app.issue_quality_alert(${id}::uuid)`);
+      return this.load(db, ctx, id);
+    });
+  }
+
+  /** An expired alert back in force with a new expiry date; the change is logged in its history. */
+  reopen(ctx: RequestContext, id: string, body: ReopenBody): Promise<AlertDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.load(db, ctx, id);
+      await db.execute(sql`select app.reopen_quality_alert(${id}::uuid, ${body.expiryDate}::date, ${body.reason})`);
       return this.load(db, ctx, id);
     });
   }
@@ -301,7 +312,10 @@ export class DocumentationService {
           select ${q.partId ?? null}::uuid as part_id,
                  coalesce(${q.partFamilyId ?? null}::uuid, (select p.part_family_id from public.parts p where p.id = ${q.partId ?? null}::uuid)) as family_id,
                  ${q.machineId ?? null}::uuid as machine_id, ${q.operationCode ?? null}::text as operation_code)
-        select a.id, a.reference, a.revision, a.title, a.category, a.severity, a.required_action, a.effective_date::text as effective_date, a.acknowledge_by::text as acknowledge_by,
+        select a.id, a.reference, a.revision, a.title, a.category, a.severity, a.effective_date::text as effective_date,
+               (select coalesce(jsonb_agg(jsonb_build_object('description', x.description, 'department', d.name, 'machine', m.name) order by x.position), '[]'::jsonb)
+                  from public.quality_alert_actions x left join public.departments d on d.id = x.department_id left join public.machines m on m.id = x.machine_id
+                 where x.alert_id = a.id) as actions, a.acknowledge_by::text as acknowledge_by,
                exists (select 1 from public.quality_alert_parts x, ctx where x.alert_id = a.id and x.part_id = ctx.part_id) as m_part,
                exists (select 1 from public.quality_alert_parts x, ctx where x.alert_id = a.id and x.part_family_id = ctx.family_id) as m_family,
                exists (select 1 from public.quality_alert_machines x, ctx where x.alert_id = a.id and x.machine_id = ctx.machine_id) as m_machine,
@@ -309,6 +323,7 @@ export class DocumentationService {
                (select (r.acknowledged_at is not null) from public.quality_alert_recipients r where r.alert_id = a.id and r.user_id = auth.uid()) as acknowledged
         from public.quality_alerts a
         where a.organisation_id = ${orgOf(ctx)}::uuid and a.deleted_at is null and a.status = 'active' and a.effective_date <= current_date
+          and (a.expiry_date is null or a.expiry_date >= current_date)
         order by case a.severity when 'critical' then 0 when 'high' then 1 when 'medium' then 2 else 3 end, a.issued_at desc`);
       const data = rows.rows
         .map((r) => {
@@ -320,7 +335,7 @@ export class DocumentationService {
             title: r.title as string,
             category: r.category as AlertSummary['category'],
             severity: r.severity as AlertSummary['severity'],
-            requiredAction: (r.required_action as string) ?? null,
+            actions: r.actions as z.infer<typeof ActiveAlert>['actions'],
             effectiveDate: r.effective_date as string,
             acknowledgeBy: (r.acknowledge_by as string) ?? null,
             matched: [...matched],
@@ -396,6 +411,10 @@ export class DocumentationService {
     await db.execute(sql`select app.expire_quality_alerts(${orgOf(ctx)}::uuid)`);
   }
 
+  private async setActions(db: Db, id: string, actions: ActionInput[]) {
+    await db.execute(sql`select app.set_quality_alert_actions(${id}::uuid, ${JSON.stringify(actions)}::jsonb)`);
+  }
+
   private async setScope(db: Db, id: string, scope: z.infer<typeof ScopeInput>) {
     const { links, ...rest } = scope;
     if (Object.keys(rest).length) await db.execute(sql`select app.set_quality_alert_scope(${id}::uuid, ${JSON.stringify(rest)}::jsonb)`);
@@ -408,7 +427,7 @@ export class DocumentationService {
     const r = rows.rows[0];
     const manager = await this.isManager(db, ctx);
     const mineRow = await db.execute<Row>(sql`select first_viewed_at, acknowledged_at, acknowledgement_note, reached_via from public.quality_alert_recipients where alert_id = ${id}::uuid and user_id = auth.uid()`);
-    const [parts, machines, operations, departments, targets, revisions, links] = await Promise.all([
+    const [parts, machines, operations, departments, targets, revisions, links, actions, events] = await Promise.all([
       db.execute<Row>(sql`select qp.id, qp.part_id, qp.part_family_id, coalesce(p.part_number || ' · ' || p.name, f.code || ' · ' || f.name) as label
         from public.quality_alert_parts qp left join public.parts p on p.id = qp.part_id left join public.part_families f on f.id = qp.part_family_id
         where qp.alert_id = ${id}::uuid order by label`),
@@ -435,6 +454,11 @@ export class DocumentationService {
         left join public.gauges g on g.id = l.gauge_id
         left join public.calibrations c on c.id = l.calibration_id
         where l.alert_id = ${id}::uuid order by l.created_at`),
+      db.execute<Row>(sql`select x.id, x.position, x.description, x.department_id, x.machine_id, d.code || ' · ' || d.name as department_label, m.code || ' · ' || m.name as machine_label
+        from public.quality_alert_actions x left join public.departments d on d.id = x.department_id left join public.machines m on m.id = x.machine_id
+        where x.alert_id = ${id}::uuid order by x.position`),
+      db.execute<Row>(sql`select e.id, e.kind, e.occurred_at, e.actor_id, e.previous_expiry::text as previous_expiry, e.new_expiry::text as new_expiry, e.reason, ${sql.raw(personName('pe'))} as actor_name
+        from public.quality_alert_events e left join public.profiles pe on pe.id = e.actor_id where e.alert_id = ${id}::uuid order by e.occurred_at, e.id`),
     ]);
     const summary = toSummary(r, manager);
     const m = mineRow.rows[0];
@@ -450,7 +474,24 @@ export class DocumentationService {
           }
         : null,
       description: (r.description as string) ?? null,
-      requiredAction: (r.required_action as string) ?? null,
+      actions: actions.rows.map((x) => ({
+        id: x.id as string,
+        position: Number(x.position),
+        description: x.description as string,
+        departmentId: (x.department_id as string) ?? null,
+        machineId: (x.machine_id as string) ?? null,
+        departmentLabel: (x.department_label as string) ?? null,
+        machineLabel: (x.machine_label as string) ?? null,
+      })),
+      history: events.rows.map((x) => ({
+        id: x.id as string,
+        kind: x.kind as 'expired' | 'reopened',
+        at: iso(x.occurred_at)!,
+        by: person(x.actor_id, x.actor_name),
+        previousExpiry: (x.previous_expiry as string) ?? null,
+        newExpiry: (x.new_expiry as string) ?? null,
+        reason: (x.reason as string) ?? null,
+      })),
       revisionReason: (r.revision_reason as string) ?? null,
       supersedesId: (r.supersedes_id as string) ?? null,
       withdrawn: r.withdrawn_at ? { at: iso(r.withdrawn_at)!, by: person(r.withdrawn_by, r.withdrawn_by_name), reason: r.withdrawn_reason as string } : null,

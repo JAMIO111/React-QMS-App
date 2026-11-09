@@ -424,7 +424,7 @@ describe("a completed audit", () => {
     permissions = ["audits.read", "audits.perform"];
     routeApi({ "GET /audit-records/r1": { ...done(), status: "abandoned", result: null, abandonReason: "Wrong machine" } });
     renderAt("/Documentation/Audit-Records/r1");
-    await screen.findByText(/Abandoned: Wrong machine/);
+    await screen.findByText("Wrong machine");
     expect(screen.queryByRole("button", { name: "Create finding" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Add finding" })).toBeNull();
     expect(screen.queryByRole("list", { name: "Findings" })).toBeNull();

@@ -8,6 +8,7 @@ import { describeApiError } from "../../lib/api-client";
 import { CHARACTERISTIC_KINDS, formatNumber, formatTolerance } from "../../lib/calibration";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
+import Callout from "../ui/Callout";
 
 const input = "w-full rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-sm text-primary-text focus:outline-none focus:border-brand-primary disabled:opacity-60";
 const EMPTY = { kind: "variable", name: "", nominal: "", toleranceMinus: "", tolerancePlus: "", unitCode: "mm", method: "" };
@@ -114,7 +115,7 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
     );
 
   if (isLoading) return <LoadingScreen size="sm" />;
-  if (error) return <p role="alert" className="text-error-color">{describeApiError(error)}</p>;
+  if (error) return <Callout tone="error" role="alert">{describeApiError(error)}</Callout>;
 
   return (
     <div className="flex flex-col gap-3">

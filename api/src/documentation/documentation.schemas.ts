@@ -47,27 +47,37 @@ export const ScopeInput = z
   .strict();
 export type ScopeInput = z.infer<typeof ScopeInput>;
 
+/** One thing people must do, optionally for a department and/or a machine. The list replaces the draft's actions as a whole, in the order given. */
+export const ActionInput = z
+  .object({ description: text(2000), departmentId: z.string().uuid().nullable().optional(), machineId: z.string().uuid().nullable().optional() })
+  .strict();
+export type ActionInput = z.infer<typeof ActionInput>;
+const ActionsInput = z.array(ActionInput).max(50);
+
 const Content = {
   title: text(200),
   category: Category,
   severity: Severity,
   description: z.string().trim().max(10000).nullable().optional(),
-  requiredAction: z.string().trim().max(5000).nullable().optional(),
   effectiveDate: DateOnly.nullable().optional(),
   expiryDate: DateOnly.nullable().optional(),
   acknowledgeBy: DateOnly.nullable().optional(),
 };
 
 /** A new draft: only the title, category and severity are needed to start. */
-export const CreateAlertBody = z.object({ ...Content, scope: ScopeInput.optional() }).strict();
+export const CreateAlertBody = z.object({ ...Content, actions: ActionsInput.optional(), scope: ScopeInput.optional() }).strict();
 export type CreateAlertBody = z.infer<typeof CreateAlertBody>;
 
 export const UpdateAlertBody = z
-  .object({ ...Content, revisionReason: z.string().trim().max(2000).nullable().optional(), scope: ScopeInput.optional() })
+  .object({ ...Content, revisionReason: z.string().trim().max(2000).nullable().optional(), actions: ActionsInput.optional(), scope: ScopeInput.optional() })
   .partial()
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
 export type UpdateAlertBody = z.infer<typeof UpdateAlertBody>;
+
+/** Reopening an expired alert: the new expiry date and why. */
+export const ReopenBody = z.object({ expiryDate: DateOnly, reason: z.string().trim().min(1, 'Give a reason').max(2000) }).strict();
+export type ReopenBody = z.infer<typeof ReopenBody>;
 
 export const ReasonBody = z.object({ reason: z.string().trim().min(1, 'Give a reason').max(2000) }).strict();
 export type ReasonBody = z.infer<typeof ReasonBody>;
@@ -114,7 +124,20 @@ export type AlertSummary = z.infer<typeof AlertSummary>;
 
 export const AlertDetail = AlertSummary.extend({
   description: z.string().nullable(),
-  requiredAction: z.string().nullable(),
+  /** What people must do, in order; each may be for a department and/or a machine (labels are null when the caller cannot see the record). */
+  actions: z.array(
+    z.object({
+      id: z.string().uuid(),
+      position: z.number().int(),
+      description: z.string(),
+      departmentId: z.string().uuid().nullable(),
+      machineId: z.string().uuid().nullable(),
+      departmentLabel: z.string().nullable(),
+      machineLabel: z.string().nullable(),
+    }),
+  ),
+  /** Expiries and reopenings, oldest first (an expiry made by the system has no person). */
+  history: z.array(z.object({ id: z.string().uuid(), kind: z.enum(['expired', 'reopened']), at: Iso, by: Person, previousExpiry: DateOnly.nullable(), newExpiry: DateOnly.nullable(), reason: z.string().nullable() })),
   revisionReason: z.string().nullable(),
   supersedesId: z.string().uuid().nullable(),
   withdrawn: z.object({ at: Iso, by: Person, reason: z.string() }).nullable(),
@@ -199,7 +222,7 @@ export const ActiveAlert = z.object({
   title: z.string(),
   category: Category,
   severity: Severity,
-  requiredAction: z.string().nullable(),
+  actions: z.array(z.object({ description: z.string(), department: z.string().nullable(), machine: z.string().nullable() })),
   effectiveDate: DateOnly,
   acknowledgeBy: DateOnly.nullable(),
   /** What matched: the part, its family, the machine or the operation. */

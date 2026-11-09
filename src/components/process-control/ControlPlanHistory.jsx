@@ -1,6 +1,7 @@
 import { useControlPlanHistory, REVISION_STATUS } from "../../hooks/useProcessControl";
 import { describeApiError } from "../../lib/api-client";
 import LoadingScreen from "../ui/LoadingScreen";
+import Callout from "../ui/Callout";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Stamps set alongside another change; the change itself says enough.
@@ -46,7 +47,7 @@ const verb = (action) => (action === "insert" ? "added" : action === "delete" ? 
 const ControlPlanHistory = ({ id }) => {
   const { data, isLoading, error } = useControlPlanHistory(id);
   if (isLoading) return <LoadingScreen size="sm" />;
-  if (error) return <p role="alert" className="text-error-color">{describeApiError(error)}</p>;
+  if (error) return <Callout tone="error" role="alert">{describeApiError(error)}</Callout>;
   if (!data?.length) return <p className="text-secondary-text">No changes recorded yet.</p>;
   return (
     <ol className="flex flex-col gap-3">

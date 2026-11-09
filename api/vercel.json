@@ -9,6 +9,10 @@
     {
       "path": "/api/v1/internal/cron/abandoned-setups?dryRun=false",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/v1/internal/cron/expire-quality-alerts",
+      "schedule": "10 0 * * *"
     }
   ]
 }

@@ -33,6 +33,7 @@ BEGIN
   PERFORM pg_temp.login('3f000000-0000-0000-0000-000000000201');
   INSERT INTO public.quality_alerts (organisation_id, title, category, severity, description, required_action, effective_date)
     VALUES (org, 'Wrong spec on bar stock', 'supplier', 'low', 'd', 'a', current_date) RETURNING id INTO a;
+  PERFORM app.set_quality_alert_actions(a, '[{"description":"a"}]'::jsonb);
   PERFORM app.set_quality_alert_scope(a, jsonb_build_object('targets', jsonb_build_array(jsonb_build_object('departmentId', gi))));
   path := org::text || '/quality-alerts/' || a::text || '/' || gen_random_uuid() || '-cert.pdf';
 

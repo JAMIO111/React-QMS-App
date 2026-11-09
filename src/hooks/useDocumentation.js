@@ -99,6 +99,8 @@ export const useAlertMutation = () => {
           return apiFetch(`/quality-alerts/${id}/issue`, { method: "POST", organisationId });
         case "withdraw":
           return apiFetch(`/quality-alerts/${id}/withdraw`, { method: "POST", body, organisationId });
+        case "reopen":
+          return apiFetch(`/quality-alerts/${id}/reopen`, { method: "POST", body, organisationId });
         case "revise":
           return apiFetch(`/quality-alerts/${id}/revisions`, { method: "POST", body, organisationId });
         case "acknowledge":

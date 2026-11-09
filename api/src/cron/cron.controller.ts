@@ -56,6 +56,17 @@ export class CronController {
     return this.archive(req, query);
   }
 
+  @Get('expire-quality-alerts')
+  expireGet(@Req() req: ApiRequest) {
+    return this.cron.expireQualityAlerts(resolveCorrelationId(req));
+  }
+
+  @Post('expire-quality-alerts')
+  @HttpCode(200)
+  expirePost(@Req() req: ApiRequest) {
+    return this.cron.expireQualityAlerts(resolveCorrelationId(req));
+  }
+
   private reconcile(req: ApiRequest, query: unknown) {
     const q = parse(ReconcileQuery, query);
     return this.cron.reconcile(q.limit, q.staleMinutes, resolveCorrelationId(req));

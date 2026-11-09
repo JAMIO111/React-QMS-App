@@ -5,7 +5,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import { Attachment, CreateAttachmentBody, DeleteBody, DeletedQuery } from '../calibration/calibration.schemas';
-import { ActiveList, ActiveQuery, AcknowledgeBody, AddRecipientBody, AlertDetail, AlertList, CreateAlertBody, ListQuery, MineCount, MineList, ReasonBody, RecipientList, RecipientsPreview, UpdateAlertBody } from './documentation.schemas';
+import { ActiveList, ActiveQuery, AcknowledgeBody, AddRecipientBody, AlertDetail, AlertList, CreateAlertBody, ListQuery, MineCount, MineList, ReasonBody, ReopenBody, RecipientList, RecipientsPreview, UpdateAlertBody } from './documentation.schemas';
 import { DocumentationService } from './documentation.service';
 
 const READ = 'documentation.read';
@@ -153,6 +153,15 @@ export class QualityAlertsController {
   @ApiOkResponse({ schema: openApiSchema(AlertDetail) })
   withdraw(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.withdraw(ctx, parse(Uuid, id), parse(ReasonBody, body));
+  }
+
+  @Post(':id/reopen')
+  @HttpCode(200)
+  @OrganisationScoped(ISSUE)
+  @ApiBody({ schema: openApiSchema(ReopenBody) })
+  @ApiOkResponse({ description: 'An expired alert back in force with a new expiry date; the change is kept in its history', schema: openApiSchema(AlertDetail) })
+  reopen(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.reopen(ctx, parse(Uuid, id), parse(ReopenBody, body));
   }
 
   @Post(':id/revisions')

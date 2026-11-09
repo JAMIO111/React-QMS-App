@@ -44,7 +44,7 @@ afterAll(async () => {
 
 const draft = async (title: string, scope: object = {}, extra: object = {}) =>
   (await api().post('/api/v1/quality-alerts').set(await as(ids.ownerA)).send({
-    title, category: 'process', severity: 'medium', description: 'd', requiredAction: 'Stop and check', effectiveDate: TODAY, acknowledgeBy: TOMORROW,
+    title, category: 'process', severity: 'medium', description: 'd', actions: [{ description: 'Stop and check' }], effectiveDate: TODAY, acknowledgeBy: TOMORROW,
     scope: { targets: [{ departmentId: ctx.dept }], ...scope }, ...extra,
   }).expect(201)).body;
 const issue = async (id: string) => api().post(`/api/v1/quality-alerts/${id}/issue`).set(await as(ids.ownerA)).expect(200);

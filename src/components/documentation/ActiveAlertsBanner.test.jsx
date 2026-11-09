@@ -13,7 +13,7 @@ import ActiveAlertsBanner from "./ActiveAlertsBanner";
 
 const alert = (over = {}) => ({
   id: "a1", reference: "QA-001", revisionLetter: "B", title: "Incorrect material specification", category: "supplier", severity: "critical",
-  requiredAction: "Quarantine lot 77.", effectiveDate: "2026-11-05", acknowledgeBy: "2026-11-07", matched: ["part", "machine"], acknowledged: false, ...over,
+  actions: [{ description: "Quarantine lot 77.", department: "Goods-in", machine: null }], effectiveDate: "2026-11-05", acknowledgeBy: "2026-11-07", matched: ["part", "machine"], acknowledged: false, ...over,
 });
 
 const show = (props) =>
@@ -32,7 +32,7 @@ beforeEach(() => {
 
 describe("ActiveAlertsBanner", () => {
   it("asks for what is being worked on and shows each alert with severity, action, why it matches and acknowledgement", async () => {
-    apiFetch.mockResolvedValue({ data: [alert(), alert({ id: "a2", reference: "QA-002", revisionLetter: "A", title: "Temporary frequency change", severity: "low", requiredAction: null, matched: ["family"], acknowledged: true, acknowledgeBy: null })] });
+    apiFetch.mockResolvedValue({ data: [alert(), alert({ id: "a2", reference: "QA-002", revisionLetter: "A", title: "Temporary frequency change", severity: "low", actions: [], matched: ["family"], acknowledged: true, acknowledgeBy: null })] });
     show({ partId: "p1", machineId: "m1", operationCode: "OP-020" });
     const region = await screen.findByRole("region", { name: "Active quality alerts" });
     expect(apiFetch).toHaveBeenCalledWith("/quality-alerts/active?partId=p1&machineId=m1&operationCode=OP-020", { organisationId: "org-1" });

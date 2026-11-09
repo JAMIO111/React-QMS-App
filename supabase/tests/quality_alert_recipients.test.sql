@@ -41,6 +41,7 @@ BEGIN
   PERFORM pg_temp.login('3f000000-0000-0000-0000-000000000101');
   INSERT INTO public.quality_alerts (organisation_id, title, category, severity, description, required_action, effective_date, acknowledge_by)
     VALUES (org, 'Wrong spec on bar stock', 'supplier', 'high', 'd', 'a', current_date, current_date + 2) RETURNING id INTO a;
+  PERFORM app.set_quality_alert_actions(a, '[{"description":"a"}]'::jsonb);
   PERFORM app.set_quality_alert_scope(a, jsonb_build_object('targets', jsonb_build_array(jsonb_build_object('departmentId', mc))));
   PERFORM pg_temp.assert_fails(format($q$SELECT app.issue_quality_alert(%L)$q$, a), 'an empty department reaches nobody');
   PERFORM pg_temp.assert_eq((app.preview_quality_alert_recipients(a) ->> 'total')::int, 0, 'preview: nobody');
@@ -122,6 +123,7 @@ BEGIN
   PERFORM pg_temp.login('3f000000-0000-0000-0000-000000000101');
   INSERT INTO public.quality_alerts (organisation_id, title, category, severity, description, required_action, effective_date)
     VALUES (org, 'Temporary frequency change', 'process', 'low', 'd', 'a', current_date) RETURNING id INTO b;
+  PERFORM app.set_quality_alert_actions(b, '[{"description":"a"}]'::jsonb);
   PERFORM app.set_quality_alert_scope(b, jsonb_build_object('targets', jsonb_build_array(jsonb_build_object('departmentId', gi))));
   PERFORM app.issue_quality_alert(b);
   PERFORM pg_temp.logout();

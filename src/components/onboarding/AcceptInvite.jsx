@@ -8,6 +8,7 @@ import { expiresIn } from "../../lib/onboarding";
 import { useAuth } from "../../contexts/AuthProvider";
 import { useAcceptInvitation, useMe, useMyInvitations, usePermissions, useUpdateProfile } from "../../hooks/useQmsApi";
 import CTAButton from "@/components/CTAButton";
+import Callout from "../ui/Callout";
 
 const Shell = ({ children }) => (
   <main className="h-dvh w-full overflow-y-auto bg-primary-bg">
@@ -48,7 +49,7 @@ const InvitationCard = ({ invitation: inv, onAccept, pending, disabled }) => (
     </dl>
     {inv.message && <blockquote className="rounded-lg border-l-4 border-brand-primary bg-primary-bg/50 px-3 py-2 text-sm italic">{inv.message}</blockquote>}
     {inv.expired ? (
-      <p role="alert" className="text-sm text-error-color">This invitation has expired. Ask {inv.invitedByName ?? "the person who invited you"} to send you a new one.</p>
+      <Callout tone="error" role="alert">This invitation has expired. Ask {inv.invitedByName ?? "the person who invited you"} to send you a new one.</Callout>
     ) : (
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-secondary-text">{inv.expiresAt ? `Expires in ${expiresIn(inv.expiresAt)}` : ""}</span>
@@ -174,7 +175,7 @@ const AcceptInvite = () => {
         ))}
       </ul>
       {nameMissing && <p className="text-xs text-secondary-text">Enter your name to join.</p>}
-      {error && <p role="alert" className="text-sm text-error-color">{describeApiError(error)}</p>}
+      {error && <Callout tone="error" role="alert">{describeApiError(error)}</Callout>}
     </Shell>
   );
 };

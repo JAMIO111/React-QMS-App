@@ -18,6 +18,8 @@ export const ScorecardConfig = z
     otdPolicy: z.enum(OTD_POLICIES),
     /** Which PPM scores: units rejected at receiving, or units on non-conformances linked to received lines. Both are always worked out and shown. */
     ppmBasis: z.enum(PPM_BASES).default('rejected'),
+    /** In the NC-based PPM, also count the pieces on supplier NCs that are linked to no received line (they cannot be matched to a delivery). */
+    ppmNcIncludeUnlinked: z.boolean().default(false),
     /** Days early that still count as on time; empty = no limit (early is never late). */
     graceDaysBefore: z.number().int().min(0).max(60).nullable().default(null),
     /** Days late that still count as on time, and the allowance for in full to be reached. */

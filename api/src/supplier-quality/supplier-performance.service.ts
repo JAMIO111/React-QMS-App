@@ -16,6 +16,7 @@ const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 type RawConfig = {
   otd_policy: ScorecardConfig['otdPolicy'];
   ppm_basis?: ScorecardConfig['ppmBasis'];
+  ppm_nc_include_unlinked?: boolean;
   grace_days_before?: number | null;
   grace_days_after?: number;
   in_full_under_pct?: number;
@@ -31,6 +32,7 @@ type RawConfig = {
 const fromRaw = (c: RawConfig): ScorecardConfig => ({
   otdPolicy: c.otd_policy,
   ppmBasis: c.ppm_basis ?? 'rejected',
+  ppmNcIncludeUnlinked: c.ppm_nc_include_unlinked ?? false,
   graceDaysBefore: c.grace_days_before === undefined || c.grace_days_before === null ? null : Number(c.grace_days_before),
   graceDaysAfter: Number(c.grace_days_after ?? 0),
   inFullUnderPct: Number(c.in_full_under_pct ?? 0),
@@ -39,7 +41,7 @@ const fromRaw = (c: RawConfig): ScorecardConfig => ({
   ppmGood: Number(c.ppm_good), ppmZero: Number(c.ppm_zero), ncPenalty: c.nc_penalty, goodFrom: Number(c.good_from), watchFrom: Number(c.watch_from), minLines: Number(c.min_lines),
 });
 const toRaw = (c: ScorecardConfig): RawConfig => ({
-  otd_policy: c.otdPolicy, ppm_basis: c.ppmBasis, grace_days_before: c.graceDaysBefore ?? undefined, grace_days_after: c.graceDaysAfter, in_full_under_pct: c.inFullUnderPct, in_full_over_pct: c.inFullOverPct,
+  otd_policy: c.otdPolicy, ppm_basis: c.ppmBasis, ppm_nc_include_unlinked: c.ppmNcIncludeUnlinked, grace_days_before: c.graceDaysBefore ?? undefined, grace_days_after: c.graceDaysAfter, in_full_under_pct: c.inFullUnderPct, in_full_over_pct: c.inFullOverPct,
   weights: { otd: c.weights.otd, in_full: c.weights.inFull, ppm: c.weights.ppm, ncs: c.weights.ncs, scar: c.weights.scar, certs: c.weights.certs },
   ppm_good: c.ppmGood, ppm_zero: c.ppmZero, nc_penalty: c.ncPenalty, good_from: c.goodFrom, watch_from: c.watchFrom, min_lines: c.minLines,
 });

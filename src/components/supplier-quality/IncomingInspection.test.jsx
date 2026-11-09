@@ -125,4 +125,39 @@ describe("NC receipt source", () => {
     expect(screen.getByRole("link", { name: "GR-26-0001" })).toHaveAttribute("href", "/Supplier-Quality/Goods-Receipts/g1");
     expect(screen.getByText(/lot LOT-A/)).toBeInTheDocument();
   });
+
+  const ncr = { id: "n1", supplier: { id: "s1", name: "Acme Metals" }, part: { id: "p1", partNumber: "BRK-1" }, stage: "open" };
+  const wrap = (ui) => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter>{ui}<div id="modal-root" /></MemoryRouter></QueryClientProvider>);
+
+  it("offers to link an NC with no delivery to a received line of its supplier, and sends the choice", async () => {
+    routeApi({
+      "GET /goods-receipt-lines/lookup": { data: [{ id: "x9", receiptId: "g9", reference: "GR-26-0009", lineNumber: 2, receivedOn: "2026-11-03", deliveryNote: "DN-9", part: { id: "p1", partNumber: "BRK-1", name: "Bracket" }, material: null, lotNumber: "LOT-Z", quantityReceived: 80, poNumber: "PO-7" }] },
+      "POST /ncrs/n1/receipt-link": { available: true, items: [] },
+    });
+    wrap(<NcrReceiptSource source={{ available: true, items: [] }} ncr={ncr} canLink />);
+    expect(screen.getByText(/Not linked to a delivery/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Link to a received line" }));
+    await userEvent.click(await screen.findByRole("combobox", { name: /Received line/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /GR-26-0009 · line 2/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Link" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "POST /ncrs/n1/receipt-link")?.body).toEqual({ receiptLineId: "x9" }));
+    expect(calls.find((c) => c.k === "GET /goods-receipt-lines/lookup").path).toMatch(/supplierId=s1&partId=p1/);
+  });
+
+  it("ends a link only with a reason", async () => {
+    routeApi({ "POST /receipt-line-ncrs/k1/unlink": { available: true, items: [] } });
+    wrap(<NcrReceiptSource source={{ available: true, items: [{ linkId: "k1", linkedAt: "2026-11-04T09:00:00Z", receiptId: "g1", reference: "GR-26-0001", lineNumber: 1, receivedOn: "2026-11-02", deliveryNote: null, lotNumber: null, quantityReceived: 60 }] }} ncr={ncr} canLink />);
+    expect(screen.queryByRole("button", { name: "Link to a received line" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "End link" }));
+    const end = await screen.findByRole("button", { name: "End the link" });
+    expect(end).toBeDisabled();
+    await userEvent.type(screen.getByLabelText(/Why is it ending/), "Wrong line");
+    await userEvent.click(end);
+    await waitFor(() => expect(calls.find((c) => c.k === "POST /receipt-line-ncrs/k1/unlink")?.body).toEqual({ reason: "Wrong line" }));
+  });
+
+  it("offers no link or unlink to someone who cannot change the NC", () => {
+    wrap(<NcrReceiptSource source={{ available: true, items: [{ linkId: "k1", linkedAt: "2026-11-04T09:00:00Z", receiptId: "g1", reference: "GR-26-0001", lineNumber: 1, receivedOn: "2026-11-02", deliveryNote: null, lotNumber: null, quantityReceived: 60 }] }} ncr={ncr} />);
+    expect(screen.queryByRole("button", { name: "End link" })).toBeNull();
+  });
 });

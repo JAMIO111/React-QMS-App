@@ -53,6 +53,7 @@ export const sourceLink = (sourceType, item, supplierId) => {
     case "otd":
     case "ppm":
     case "deliveries":
+      if (item.ncrId) return { to: ncrPath(item.ncrId), label: `${item.reference} · ${item.units ?? "?"} units, no receipt linked` };
       return item.receiptId ? { to: `/Supplier-Quality/Goods-Receipts/${item.receiptId}`, label: `${item.reference} line ${item.lineNumber}${item.daysLate ? ` (${item.daysLate} days late)` : ""}` } : null;
     case "orders":
       return item.purchaseOrderId ? { to: `/Supplier-Quality/Purchase-Orders/${item.purchaseOrderId}`, label: `${item.poNumber} line ${item.lineNumber} (${item.daysLate} days late)` } : null;

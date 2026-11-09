@@ -118,5 +118,26 @@ export type IncomingPreview = z.infer<typeof IncomingPreview>;
 
 export const ReceiptSource = z.object({
   available: z.boolean(),
-  items: z.array(z.object({ receiptId: z.string().uuid(), reference: z.string(), lineNumber: z.number().int(), receivedOn: z.string(), deliveryNote: z.string().nullable(), lotNumber: z.string().nullable(), quantityReceived: z.number() })),
+  items: z.array(z.object({ linkId: z.string().uuid(), linkedAt: z.string(), receiptId: z.string().uuid(), reference: z.string(), lineNumber: z.number().int(), receivedOn: z.string(), deliveryNote: z.string().nullable(), lotNumber: z.string().nullable(), quantityReceived: z.number() })),
 });
+
+/** Received lines of a supplier to link a non-conformance to (newest first). */
+export const ReceiptLineLookupQuery = z.object({
+  supplierId: z.string().uuid(),
+  q: z.string().trim().max(100).optional(),
+  partId: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(25),
+});
+export type ReceiptLineLookupQuery = z.infer<typeof ReceiptLineLookupQuery>;
+export const ReceiptLineLookup = z.object({
+  data: z.array(z.object({
+    id: z.string().uuid(), receiptId: z.string().uuid(), reference: z.string(), lineNumber: z.number().int(), receivedOn: z.string(), deliveryNote: z.string().nullable(),
+    part: z.object({ id: z.string().uuid(), partNumber: z.string(), name: z.string() }).nullable(), material: z.string().nullable(), lotNumber: z.string().nullable(),
+    quantityReceived: z.number(), poNumber: z.string().nullable(),
+  })),
+});
+
+export const LinkNcrBody = z.object({ receiptLineId: z.string().uuid() }).strict();
+export type LinkNcrBody = z.infer<typeof LinkNcrBody>;
+export const UnlinkNcrBody = z.object({ reason: z.string().trim().min(3, 'Say why the link is ending').max(1000) }).strict();
+export type UnlinkNcrBody = z.infer<typeof UnlinkNcrBody>;

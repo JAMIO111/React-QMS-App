@@ -22,6 +22,7 @@ const ModelDialog = ({ model, onClose }) => {
   const [under, setUnder] = useState(String(c.inFullUnderPct ?? 0));
   const [over, setOver] = useState(String(c.inFullOverPct ?? 10));
   const [ppmBasis, setPpmBasis] = useState(c.ppmBasis ?? "rejected");
+  const [includeUnlinked, setIncludeUnlinked] = useState(c.ppmNcIncludeUnlinked ? "yes" : "no");
   const [weights, setWeights] = useState(Object.fromEntries(METRIC_ORDER.map((k) => [k, String(c.weights[WEIGHT_KEY[k]] ?? 0)])));
   const [ppmGood, setPpmGood] = useState(String(c.ppmGood));
   const [ppmZero, setPpmZero] = useState(String(c.ppmZero));
@@ -34,6 +35,7 @@ const ModelDialog = ({ model, onClose }) => {
   const config = {
     otdPolicy: policy,
     ppmBasis,
+    ppmNcIncludeUnlinked: includeUnlinked === "yes",
     graceDaysBefore: graceBefore === "" ? null : num(graceBefore),
     graceDaysAfter: num(graceAfter),
     inFullUnderPct: num(under),
@@ -68,6 +70,8 @@ const ModelDialog = ({ model, onClose }) => {
           <Field label="In full: % above the ordered quantity" type="number" min="0" max="100" step="any" value={over} onChange={(e) => setOver(e.target.value)} hint="Receiving more than this is over-delivery, not in full" />
         </div>
         <ComboField label="The PPM that scores is measured from" required value={ppmBasis} onChange={setPpmBasis} options={PPM_BASES} clearable={false} hint="Both measures are always worked out and shown; this chooses which one counts toward the score" />
+        <ComboField label="Non-conformance PPM counts" required value={includeUnlinked} onChange={setIncludeUnlinked} options={UNLINKED_OPTIONS} clearable={false}
+          hint="Pieces on a non-conformance linked to no received line cannot be matched to a delivery. They are always shown apart; this decides whether they count." />
         <fieldset className="grid gap-3 sm:grid-cols-3">
           <legend className="mb-1 text-sm font-medium text-secondary-text">Weight of each metric (0 to 100; 0 shows it without scoring it)</legend>
           {METRIC_ORDER.map((k) => <Field key={k} label={METRIC_LABELS[k]} type="number" min="0" max="100" value={weights[k]} onChange={(e) => setWeights((w) => ({ ...w, [k]: e.target.value }))} />)}
@@ -97,6 +101,11 @@ const ModelDialog = ({ model, onClose }) => {
   );
 };
 
+const UNLINKED_OPTIONS = [
+  { value: "no", label: "Only non-conformances linked to a received line", hint: "Exact: each piece is measured against the delivery it came in on" },
+  { value: "yes", label: "Also non-conformances with no receipt linked", hint: "Counts every piece on a supplier non-conformance detected in the period, even when it cannot be matched to a delivery" },
+];
+
 const PPM_TOGGLE = [
   { value: "rejected", label: "Rejected at receiving", title: PPM_BASES[0].hint },
   { value: "ncs", label: "From non-conformances", title: PPM_BASES[1].hint },
@@ -124,7 +133,7 @@ export default function ScorecardModelCard({ canConfigure }) {
         ) : (
           <span className="text-sm text-primary-text">{ppmBasisLabel(c.ppmBasis ?? "rejected")}</span>
         )}
-        <span className="text-xs text-secondary-text">Both are shown on every supplier&apos;s Performance tab.</span>
+        <span className="text-xs text-secondary-text">Both are shown on every supplier&apos;s Performance tab.{(c.ppmBasis ?? "rejected") === "ncs" && (c.ppmNcIncludeUnlinked ? " Non-conformances with no receipt linked are counted too." : " Only non-conformances linked to a received line are counted.")}</span>
       </div>
       <table className="w-full text-left text-sm" aria-label="Scoring weights">
         <thead><tr className="text-secondary-text"><th className="py-1 pr-3 font-medium">Metric</th><th className="py-1 font-medium">Weight</th></tr></thead>

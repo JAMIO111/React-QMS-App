@@ -427,11 +427,11 @@ const NcrPage = () => {
               </>
             )}
 
-            {!isNew && receiptSource?.available && receiptSource.items.length > 0 && (
+            {!isNew && receiptSource?.available && (receiptSource.items.length > 0 || (ncr.supplier && can("ncr.update") && !["cancelled"].includes(ncr.stage))) && (
               <>
                 <SectionHeading id="ncr-receipt-source" title="Source delivery" />
                 <Card>
-                  <NcrReceiptSource source={receiptSource} />
+                  <NcrReceiptSource source={receiptSource} ncr={ncr} canLink={can("ncr.update") && ncr.stage !== "cancelled"} />
                 </Card>
               </>
             )}

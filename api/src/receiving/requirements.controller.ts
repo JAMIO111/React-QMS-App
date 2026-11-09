@@ -4,7 +4,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
-  ApproveRequirementBody, CreateRequirementBody, IncomingPreview, PreviewQuery, ReceiptSource, Requirement, RequirementList, RequirementListQuery, RetireRequirementBody, UpdateRequirementBody,
+  ApproveRequirementBody, CreateRequirementBody, IncomingPreview, LinkNcrBody, PreviewQuery, ReceiptLineLookup, ReceiptLineLookupQuery, ReceiptSource, UnlinkNcrBody, Requirement, RequirementList, RequirementListQuery, RetireRequirementBody, UpdateRequirementBody,
 } from './requirements.schemas';
 import { RequirementsService } from './requirements.service';
 
@@ -72,6 +72,31 @@ export class RequirementsController {
   @ApiOkResponse({ description: 'What the approved requirements decide for this supplier, part and quantity (nothing is recorded)', schema: openApiSchema(IncomingPreview) })
   preview(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.preview(ctx, parse(PreviewQuery, query));
+  }
+
+  @Get('goods-receipt-lines/lookup')
+  @OrganisationScoped('receiving.read')
+  @ApiOkResponse({ description: 'Received lines of a supplier (newest first) to link a non-conformance to; searchable by receipt, delivery note, order, lot, part or material', schema: openApiSchema(ReceiptLineLookup) })
+  lookupLines(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.lookupReceiptLines(ctx, parse(ReceiptLineLookupQuery, query));
+  }
+
+  @Post('ncrs/:id/receipt-link')
+  @HttpCode(200)
+  @OrganisationScoped('ncr.update')
+  @ApiBody({ schema: openApiSchema(LinkNcrBody) })
+  @ApiOkResponse({ description: 'Links the non-conformance to a received line of the same supplier (and part, when both name one). A non-conformance sits on one line only. Answers with its source delivery.', schema: openApiSchema(ReceiptSource) })
+  linkNcr(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.linkNcr(ctx, parse(Uuid, id), parse(LinkNcrBody, body));
+  }
+
+  @Post('receipt-line-ncrs/:id/unlink')
+  @HttpCode(200)
+  @OrganisationScoped('ncr.update')
+  @ApiBody({ schema: openApiSchema(UnlinkNcrBody) })
+  @ApiOkResponse({ description: 'Ends the link with a reason; it stays on record and the pieces stop counting against that delivery. Answers with the non-conformance\'s source delivery.', schema: openApiSchema(ReceiptSource) })
+  unlinkNcr(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.unlinkNcr(ctx, parse(Uuid, id), parse(UnlinkNcrBody, body));
   }
 
   @Get('ncrs/:id/receipt-source')

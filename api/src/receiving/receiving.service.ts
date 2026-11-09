@@ -258,7 +258,7 @@ export class ReceivingService {
         where s.receipt_line_id in (select id from public.goods_receipt_lines where goods_receipt_id = ${id}::uuid) order by s.decided_at, s.id`),
       db.execute<Row>(sql`
         select k.receipt_line_id, n.id, n.reference, n.stage from public.receipt_line_ncrs k join public.nonconformances n on n.id = k.ncr_id
-        where k.receipt_line_id in (select id from public.goods_receipt_lines where goods_receipt_id = ${id}::uuid) and n.deleted_at is null order by k.linked_at`),
+        where k.receipt_line_id in (select id from public.goods_receipt_lines where goods_receipt_id = ${id}::uuid) and k.ended_at is null and n.deleted_at is null order by k.linked_at`),
     ]);
     const toDecision = (r: Row) => ({ decision: r.decision as 'held' | 'accepted' | 'rejected' | 'conditional', reason: (r.reason as string) ?? null, conditions: (r.conditions as string) ?? null, quantityRejected: r.quantity_rejected === null || r.quantity_rejected === undefined ? null : Number(r.quantity_rejected), decidedAt: iso(r.decided_at)!, decidedBy: person(r.decided_by, r.decided_by_name) });
     return {

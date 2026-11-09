@@ -201,3 +201,65 @@ describe('supplier performance settings', () => {
   });
 });
 
+let seq = 0;
+describe('linking a non-conformance to a received line', () => {
+  const lookup = async (q = '') => (await api().get(`/api/v1/goods-receipt-lines/lookup?supplierId=${ctx.s1}${q}`).set(await owner()).expect(200)).body.data;
+  const ncr = async (qty: number | null, supplier = ctx.s1) =>
+    (await admin.query(`insert into public.nonconformances (organisation_id, reference, source, title, description, severity, quantity_affected, supplier_id) values ($1, $4, 'supplier', 'Bent', 'x', 'minor', $2, $3) returning id`, [ids.orgA, qty, supplier, `LK-${Date.now()}-${(seq += 1)}`])).rows[0].id as string;
+
+  it('looks up the supplier\'s received lines, newest first, and searches them', async () => {
+    const all = await lookup();
+    expect(all.length).toBeGreaterThanOrEqual(6);
+    expect(all[0]).toMatchObject({ reference: expect.stringMatching(/^GR-/), quantityReceived: 100 });
+    const one = await lookup('&q=DN-3');
+    expect(one).toHaveLength(1);
+    expect(one[0].deliveryNote).toBe('DN-3');
+    await api().get(`/api/v1/goods-receipt-lines/lookup`).set(await owner()).expect(400); // a supplier is needed
+    expect((await api().get(`/api/v1/goods-receipt-lines/lookup?supplierId=${ctx.s1}`).set(await other()).expect(200)).body.data).toEqual([]);
+  });
+
+  it('links, refuses a second line, ends the link with a reason, and counts the pieces in the NC-based PPM only while linked', async () => {
+    const line = (await lookup('&q=DN-1'))[0].id as string;
+    const other2 = (await lookup('&q=DN-2'))[0].id as string;
+    const n = await ncr(30);
+    const day0 = day(0);
+    const before = (await api().get(`${base}/suppliers/${ctx.s1}/performance?from=${day(-60)}&to=${day0}`).set(await owner()).expect(200)).body.metrics.ppmNc;
+    await api().post(`/api/v1/ncrs/${n}/receipt-link`).set(await inspector()).send({ receiptLineId: line }).expect(403);
+    await api().post(`/api/v1/ncrs/${n}/receipt-link`).set(await owner()).send({ receiptLineId: line, extra: 1 }).expect(400);
+    await api().post(`/api/v1/ncrs/${n}/receipt-link`).set(await other()).send({ receiptLineId: line }).expect(404);
+    const linked = (await api().post(`/api/v1/ncrs/${n}/receipt-link`).set(await owner()).send({ receiptLineId: line }).expect(200)).body;
+    expect(linked).toMatchObject({ available: true, items: [{ lineNumber: 1, quantityReceived: 100 }] });
+    await api().post(`/api/v1/ncrs/${n}/receipt-link`).set(await owner()).send({ receiptLineId: other2 }).expect(409);
+    const after = (await api().get(`${base}/suppliers/${ctx.s1}/performance?from=${day(-60)}&to=${day0}`).set(await owner()).expect(200)).body.metrics.ppmNc;
+    expect(after.linkedUnits - before.linkedUnits).toBe(30);
+    expect(after.unlinkedUnits).toBe(before.unlinkedUnits - 30); // it left the unlinked pile
+    const linkId = linked.items[0].linkId as string;
+    await api().post(`/api/v1/receipt-line-ncrs/${linkId}/unlink`).set(await owner()).send({ reason: 'x' }).expect(400);
+    await api().post(`/api/v1/receipt-line-ncrs/${linkId}/unlink`).set(await inspector()).send({ reason: 'Linked in error' }).expect(403);
+    const ended = (await api().post(`/api/v1/receipt-line-ncrs/${linkId}/unlink`).set(await owner()).send({ reason: 'Linked in error' }).expect(200)).body;
+    expect(ended.items).toEqual([]);
+    await api().post(`/api/v1/receipt-line-ncrs/${linkId}/unlink`).set(await owner()).send({ reason: 'Again' }).expect(409);
+    const back = (await api().get(`${base}/suppliers/${ctx.s1}/performance?from=${day(-60)}&to=${day0}`).set(await owner()).expect(200)).body.metrics.ppmNc;
+    expect(back.linkedUnits).toBe(before.linkedUnits);
+  });
+
+  it('refuses a receipt from another supplier, and counts unlinked pieces only when the model says so', async () => {
+    const n = await ncr(40);
+    const foreign = (await api().post('/api/v1/goods-receipts').set(await owner()).send({ supplierId: ctx.s2, receivedOn: day(-2), clientKey: 'lk-key-0001', lines: [{ material: 'Wire', quantity: 10 }] }).expect(201)).body;
+    const line = (await api().get(`/api/v1/goods-receipts/${foreign.id}`).set(await owner()).expect(200)).body.lines[0].id as string;
+    await api().post(`/api/v1/ncrs/${n}/receipt-link`).set(await owner()).send({ receiptLineId: line }).expect(409);
+    const model = (await api().get(`${base}/performance/model`).set(await owner()).expect(200)).body;
+    expect(model.config.ppmNcIncludeUnlinked).toBe(false);
+    const off = (await api().get(`${base}/suppliers/${ctx.s1}/performance?from=${day(-60)}&to=${day(0)}`).set(await owner()).expect(200)).body.metrics.ppmNc;
+    expect(off).toMatchObject({ includeUnlinked: false });
+    expect(off.unlinkedUnits).toBeGreaterThanOrEqual(40);
+    expect(off.affectedUnits).toBe(off.linkedUnits);
+    await api().put(`${base}/performance/model`).set(await owner()).send({ config: { ...model.config, ppmNcIncludeUnlinked: true }, reason: 'Count NCs with no receipt as well' }).expect(200);
+    const on = (await api().get(`${base}/suppliers/${ctx.s1}/performance?from=${day(-60)}&to=${day(0)}`).set(await owner()).expect(200)).body.metrics.ppmNc;
+    expect(on).toMatchObject({ includeUnlinked: true });
+    expect(on.affectedUnits).toBe(on.linkedUnits + on.unlinkedUnits);
+    await api().put(`${base}/performance/model`).set(await owner()).send({ config: { ...model.config, ppmNcIncludeUnlinked: 'yes' }, reason: 'Not a boolean' }).expect(400);
+    await api().put(`${base}/performance/model`).set(await owner()).send({ config: model.config, reason: 'Linked only again' }).expect(200);
+  });
+});
+

@@ -159,6 +159,33 @@ describe("scoring settings", () => {
     expect(screen.getByText("Shown for information; not part of the score")).toBeInTheDocument();
   });
 
+  it("says how many pieces are on supplier NCs with no receipt, and whether they are counted", async () => {
+    const m = { ...metrics, ppmNc: { value: 0, affectedUnits: 0, linkedUnits: 0, unlinkedUnits: 550, unlinkedNcs: 4, unlinkedWithoutQuantity: 1, includeUnlinked: false, receivedUnits: 650, lines: 0 } };
+    routeApi({ "GET /supplier-quality/suppliers/s1/performance": perf({ metrics: m }), "GET /supplier-quality/suppliers/s1/scorecards": { data: [] } });
+    const { unmount } = renderUi(<SupplierPerformance supplier={supplier} />);
+    expect(await screen.findByRole("table", { name: "Figures" })).toHaveTextContent("550 units on 4 not counted in the PPM above (1 with no quantity entered)");
+    unmount();
+    const on = { ...m, ppmNc: { ...m.ppmNc, includeUnlinked: true, affectedUnits: 550, value: 846154 } };
+    routeApi({ "GET /supplier-quality/suppliers/s1/performance": perf({ metrics: on }), "GET /supplier-quality/suppliers/s1/scorecards": { data: [] } });
+    renderUi(<SupplierPerformance supplier={supplier} />);
+    expect(await screen.findByRole("table", { name: "Figures" })).toHaveTextContent("550 units on 4 counted in the PPM above");
+  });
+
+  it("sends the choice to count NCs with no receipt with the new model version", async () => {
+    routeApi({
+      "GET /supplier-quality/performance/model": { id: "m1", version: 1, config: { ...config, ppmBasis: "ncs", ppmNcIncludeUnlinked: false, graceDaysBefore: null, graceDaysAfter: 0, inFullUnderPct: 0, inFullOverPct: 10, weights: { ...config.weights, inFull: 0 } }, reason: "Default model", createdAt: "2026-11-01T09:00:00Z", createdBy: null, versions: [{ version: 1, reason: "Default model", createdAt: "2026-11-01T09:00:00Z", createdBy: null }] },
+      "PUT /supplier-quality/performance/model": { version: 2 },
+    });
+    renderUi(<ScorecardModelCard canConfigure />);
+    expect(await screen.findByText(/Only non-conformances linked to a received line are counted/)).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "Change the model" }));
+    await userEvent.click(await screen.findByRole("combobox", { name: /Non-conformance PPM counts/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /Also non-conformances with no receipt linked/ }));
+    await userEvent.type(screen.getByLabelText(/Why is it changing/), "Count them all");
+    await userEvent.click(screen.getByRole("button", { name: "Save new version" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "PUT /supplier-quality/performance/model")?.body).toMatchObject({ reason: "Count them all", config: { ppmNcIncludeUnlinked: true, ppmBasis: "ncs" } }));
+  });
+
   it("switches the PPM that scores from the settings card, saving a new model version with a reason", async () => {
     routeApi({
       "GET /supplier-quality/performance/model": { id: "m1", version: 1, config: { ...config, ppmBasis: "rejected", graceDaysAfter: 0, inFullUnderPct: 0, inFullOverPct: 10, weights: { ...config.weights, inFull: 0 } }, reason: "Default model", createdAt: "2026-11-01T09:00:00Z", createdBy: null, versions: [{ version: 1, reason: "Default model", createdAt: "2026-11-01T09:00:00Z", createdBy: null }] },

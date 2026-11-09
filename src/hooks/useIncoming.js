@@ -32,6 +32,18 @@ export const useIncomingPreview = ({ supplierId, partId, quantity, enabled = tru
   });
 };
 
+/** Received lines of a supplier to link a non-conformance to (searchable, newest first). */
+export const useReceiptLineLookup = ({ supplierId, partId, q }, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "line-lookup", supplierId, partId, q),
+    queryFn: () => apiFetch(`/goods-receipt-lines/lookup?${qs({ supplierId, partId, q })}`, { organisationId }).then((r) => r.data),
+    enabled: !!organisationId && !!supplierId && enabled,
+    retry: false,
+    placeholderData: (previous) => previous,
+  });
+};
+
 /** The goods receipt line(s) a non-conformance was raised from. */
 export const useNcrReceiptSource = (ncrId, enabled = true) => {
   const { organisationId } = useOrganisation();
@@ -65,6 +77,10 @@ export const useIncomingMutation = () => {
           return send(`/goods-receipt-lines/${id}/disposition`);
         case "raiseNcr":
           return send(`/goods-receipt-lines/${id}/raise-ncr`);
+        case "linkNcr":
+          return send(`/ncrs/${id}/receipt-link`);
+        case "unlinkNcr":
+          return send(`/receipt-line-ncrs/${id}/unlink`);
         default:
           throw new Error(`Unknown action ${action}`);
       }

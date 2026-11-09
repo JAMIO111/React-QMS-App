@@ -14,7 +14,7 @@ const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 
 const PERFORMANCE_COLUMNS = [
   ['code', 'Supplier'], ['name', 'Name'], ['approvalStatus', 'Approval status'], ['riskRating', 'Risk rating'], ['band', 'Band'], ['score', 'Score'],
-  ['otdPercent', 'On-time delivery %'], ['onTime', 'Lines on time'], ['matchedLines', 'Lines against an order'], ['ppm', 'PPM (rejected)'], ['rejectedUnits', 'Units rejected'], ['ppmNc', 'PPM (non-conformances)'], ['ncUnits', 'Units on non-conformances'], ['receivedUnits', 'Units received'],
+  ['otdPercent', 'On-time delivery %'], ['onTime', 'Lines on time'], ['matchedLines', 'Lines against an order'], ['ppm', 'PPM (rejected)'], ['rejectedUnits', 'Units rejected'], ['ppmNc', 'PPM (non-conformances)'], ['ncUnits', 'Units on non-conformances'], ['ncUnitsUnlinked', 'Of which not linked to a receipt'], ['receivedUnits', 'Units received'],
   ['inFullPercent', 'In full %'], ['otifPercent', 'OTIF %'],
   ['lotRejectionPercent', 'Lot rejection %'], ['ncTotal', 'Non-conformances'], ['ncCritical', 'Critical'], ['ncMajor', 'Major'], ['ncMinor', 'Minor'], ['ncRepeat', 'Repeat'],
   ['scarIssued', 'Corrective action requests issued'], ['scarOnTime', 'Answered on time'], ['scarLate', 'Answered late'], ['scarOverdue', 'Overdue now'],
@@ -23,7 +23,7 @@ const PERFORMANCE_COLUMNS = [
 
 const PERFORMANCE_DEFINITIONS = [
   'PPM (rejected) = units rejected at receiving ÷ units received × 1,000,000. A rejection counts the quantity entered on it, or the whole line when none was.',
-  'PPM (non-conformances) = units on live non-conformances linked to a received line (counted once per line, at most what was received) ÷ units received × 1,000,000. Which of the two scores is a model setting.',
+  'PPM (non-conformances) = units on live non-conformances linked to a received line (counted once per line, at most what was received) ÷ units received × 1,000,000; when the model says so, pieces on supplier NCs with no receipt linked are added. Which of the two scores is a model setting.',
   'In full % = order lines due in the period that had received, by the due date plus the days late allowed, the ordered quantity within the in-full tolerances. OTIF % = those that were also not delivered earlier than the days-early allowance.',
   'Lot rejection % = rejected delivered lines ÷ delivered lines. It is not PPM.',
   'On-time delivery % = delivered lines against an order line received within the grace days of the due date (days early allowed, if limited, and days late allowed). Lines with no order line are left out.',
@@ -75,14 +75,14 @@ export class SupplierReportsService {
         const warn = r.warnings.filter((w) => w.level !== 'info');
         rows.push({
           code: s.code as string, name: s.name as string, approvalStatus: s.approval_status as string, riskRating: (s.risk_rating as string) ?? null, band: r.band, score: n(r.score),
-          otdPercent: pct(m.otd.value), onTime: n(m.otd.onTime), matchedLines: n(m.otd.matchedLines), ppm: n(m.ppm.value), rejectedUnits: n(m.ppm.rejectedUnits), ppmNc: n(m.ppmNc?.value), ncUnits: n(m.ppmNc?.affectedUnits), receivedUnits: n(m.ppm.receivedUnits),
+          otdPercent: pct(m.otd.value), onTime: n(m.otd.onTime), matchedLines: n(m.otd.matchedLines), ppm: n(m.ppm.value), rejectedUnits: n(m.ppm.rejectedUnits), ppmNc: n(m.ppmNc?.value), ncUnits: n(m.ppmNc?.affectedUnits), ncUnitsUnlinked: m.ppmNc?.includeUnlinked ? n(m.ppmNc?.unlinkedUnits) : null, receivedUnits: n(m.ppm.receivedUnits),
           inFullPercent: pct(m.inFull?.value), otifPercent: pct(m.otif?.value),
           lotRejectionPercent: pct(m.lotRejection.rate), ncTotal: n(m.ncs.total), ncCritical: n(m.ncs.critical), ncMajor: n(m.ncs.major), ncMinor: n(m.ncs.minor), ncRepeat: n(m.ncs.repeat),
           scarIssued: n(m.scars.issued), scarOnTime: n(m.scars.answered_on_time), scarLate: n(m.scars.answered_late), scarOverdue: n(m.scars.overdue_now),
           certsCurrent: n(m.certs.current), certsExpired: n(m.certs.expired), warnings: warn.map((w) => w.message).join('; ') || null,
         });
       }
-      const c = (model?.config ?? {}) as { otd_policy?: string; ppm_basis?: string; grace_days_before?: number | null; grace_days_after?: number; in_full_under_pct?: number; in_full_over_pct?: number; weights?: Record<string, number>; good_from?: number; watch_from?: number; min_lines?: number; ppm_good?: number; ppm_zero?: number };
+      const c = (model?.config ?? {}) as { otd_policy?: string; ppm_basis?: string; ppm_nc_include_unlinked?: boolean; grace_days_before?: number | null; grace_days_after?: number; in_full_under_pct?: number; in_full_over_pct?: number; weights?: Record<string, number>; good_from?: number; watch_from?: number; min_lines?: number; ppm_good?: number; ppm_zero?: number };
       return {
         meta: {
           title: 'Supplier performance',
@@ -93,6 +93,7 @@ export class SupplierReportsService {
             { label: 'On-time delivery judged against', value: c.otd_policy === 'original' ? 'the original requested date' : 'the latest agreed date' },
             { label: 'Days early / late that still count as on time', value: `${c.grace_days_before ?? 'no limit'} / ${c.grace_days_after ?? 0} (a supplier may override this)` },
             { label: 'In full: below / above the ordered quantity', value: `${c.in_full_under_pct ?? 0}% / ${c.in_full_over_pct ?? 10}%` },
+            { label: 'NC-based PPM counts non-conformances with no receipt', value: c.ppm_nc_include_unlinked ? 'yes' : 'no (only those linked to a received line)' },
             { label: 'PPM that scores', value: c.ppm_basis === 'ncs' ? 'units on non-conformances' : 'units rejected at receiving' },
             { label: 'Weights (on-time / in full / PPM / non-conformances / corrective actions / certifications)', value: ['otd', 'in_full', 'ppm', 'ncs', 'scar', 'certs'].map((k) => c.weights?.[k] ?? 0).join(' / ') },
             { label: 'PPM scoring 100 / scoring 0', value: `${c.ppm_good} / ${c.ppm_zero}` },

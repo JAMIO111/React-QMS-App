@@ -5,7 +5,7 @@ import { iso, personName, Row } from '../calibration/calibration.service';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
-import { ApproveRequirementBody, CreateRequirementBody, IncomingPreview, PreviewQuery, ReceiptSource, Requirement, RequirementList, RequirementListQuery, RetireRequirementBody, UpdateRequirementBody } from './requirements.schemas';
+import { ApproveRequirementBody, CreateRequirementBody, IncomingPreview, LinkNcrBody, PreviewQuery, ReceiptLineLookup, ReceiptLineLookupQuery, ReceiptSource, UnlinkNcrBody, Requirement, RequirementList, RequirementListQuery, RetireRequirementBody, UpdateRequirementBody } from './requirements.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown user' } : null);
@@ -125,10 +125,53 @@ export class RequirementsService {
       const allowed = await db.execute<{ ok: boolean }>(sql`select app.has_permission(${orgOf(ctx)}::uuid, 'receiving.read') as ok`);
       if (!allowed.rows[0].ok) return { available: false, items: [] };
       const rows = await db.execute<Row>(sql`
-        select g.id as receipt_id, g.reference, x.line_number, g.received_on::text as received_on, g.delivery_note, l.lot_number, x.quantity_received
+        select k.id as link_id, k.linked_at, g.id as receipt_id, g.reference, x.line_number, g.received_on::text as received_on, g.delivery_note, l.lot_number, x.quantity_received
         from public.receipt_line_ncrs k join public.goods_receipt_lines x on x.id = k.receipt_line_id join public.goods_receipts g on g.id = x.goods_receipt_id left join public.lots l on l.id = x.lot_id
-        where k.ncr_id = ${ncrId}::uuid and k.organisation_id = ${orgOf(ctx)}::uuid order by g.received_on desc`);
-      return { available: true, items: rows.rows.map((r) => ({ receiptId: r.receipt_id as string, reference: r.reference as string, lineNumber: Number(r.line_number), receivedOn: (r.received_on as string).slice(0, 10), deliveryNote: (r.delivery_note as string) ?? null, lotNumber: (r.lot_number as string) ?? null, quantityReceived: Number(r.quantity_received) })) };
+        where k.ncr_id = ${ncrId}::uuid and k.ended_at is null and k.organisation_id = ${orgOf(ctx)}::uuid order by g.received_on desc`);
+      return { available: true, items: rows.rows.map((r) => ({ linkId: r.link_id as string, linkedAt: iso(r.linked_at)!, receiptId: r.receipt_id as string, reference: r.reference as string, lineNumber: Number(r.line_number), receivedOn: (r.received_on as string).slice(0, 10), deliveryNote: (r.delivery_note as string) ?? null, lotNumber: (r.lot_number as string) ?? null, quantityReceived: Number(r.quantity_received) })) };
     });
+  }
+
+  /** Received lines of a supplier a non-conformance could be linked to. Optionally narrowed to a part (lines with no part are kept) and a search over the receipt, delivery note, order, lot, part and material. */
+  lookupReceiptLines(ctx: RequestContext, q: ReceiptLineLookupQuery): Promise<z.infer<typeof ReceiptLineLookup>> {
+    return this.database.asUser(ctx, async (db) => {
+      const like = q.q ? `%${q.q.replace(/[%_\\]/g, (c) => `\\${c}`)}%` : null;
+      const rows = await db.execute<Row>(sql`
+        select x.id, g.id as receipt_id, g.reference, x.line_number, g.received_on::text as received_on, g.delivery_note, x.part_id, p.part_number, p.name as part_name, x.material, l.lot_number, x.quantity_received, o.po_number
+        from public.goods_receipt_lines x join public.goods_receipts g on g.id = x.goods_receipt_id
+        left join public.parts p on p.id = x.part_id left join public.lots l on l.id = x.lot_id left join public.purchase_orders o on o.id = g.purchase_order_id
+        where g.organisation_id = ${orgOf(ctx)}::uuid and g.supplier_id = ${q.supplierId}::uuid and g.status = 'received'
+          and (${q.partId ?? null}::uuid is null or x.part_id is null or x.part_id = ${q.partId ?? null}::uuid)
+          and (${like}::text is null or g.reference ilike ${like} or g.delivery_note ilike ${like} or o.po_number ilike ${like} or l.lot_number ilike ${like} or p.part_number ilike ${like} or x.material ilike ${like})
+        order by g.received_on desc, g.reference desc, x.line_number limit ${q.limit}`);
+      return {
+        data: rows.rows.map((r) => ({
+          id: r.id as string, receiptId: r.receipt_id as string, reference: r.reference as string, lineNumber: Number(r.line_number), receivedOn: (r.received_on as string).slice(0, 10), deliveryNote: (r.delivery_note as string) ?? null,
+          part: r.part_id ? { id: r.part_id as string, partNumber: r.part_number as string, name: r.part_name as string } : null, material: (r.material as string) ?? null, lotNumber: (r.lot_number as string) ?? null,
+          quantityReceived: Number(r.quantity_received), poNumber: (r.po_number as string) ?? null,
+        })),
+      };
+    });
+  }
+
+  /** Link a non-conformance to a received line (the database checks the supplier, the part and that the NC is on one line only). Answers with the NC's source delivery. */
+  async linkNcr(ctx: RequestContext, ncrId: string, b: LinkNcrBody): Promise<z.infer<typeof ReceiptSource>> {
+    await this.database.asUser(ctx, async (db) => {
+      const ncr = await db.execute(sql`select 1 from public.nonconformances where id = ${ncrId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!ncr.rows.length) throw ApiError.notFound('ncr_not_found', 'Non-conformance not found');
+      await db.execute(sql`select app.link_ncr_to_receipt_line(${ncrId}::uuid, ${b.receiptLineId}::uuid)`);
+    });
+    return this.receiptSource(ctx, ncrId);
+  }
+
+  /** End a link, with a reason. It stays on record. */
+  async unlinkNcr(ctx: RequestContext, linkId: string, b: UnlinkNcrBody): Promise<z.infer<typeof ReceiptSource>> {
+    const ncrId = await this.database.asUser(ctx, async (db) => {
+      const row = await db.execute<{ ncr_id: string }>(sql`select ncr_id from public.receipt_line_ncrs where id = ${linkId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!row.rows[0]) throw ApiError.notFound('link_not_found', 'Link not found');
+      await db.execute(sql`select app.unlink_ncr_from_receipt_line(${linkId}::uuid, ${b.reason})`);
+      return row.rows[0].ncr_id;
+    });
+    return this.receiptSource(ctx, ncrId);
   }
 }

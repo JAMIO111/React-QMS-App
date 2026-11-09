@@ -51,6 +51,8 @@ import NcrHistory from "./NcrHistory";
 import NcrCosts from "./NcrCosts";
 import NcrInspectionSource from "../inspection/NcrInspectionSource";
 import NcrAuditSource from "../audits/NcrAuditSource";
+import NcrReceiptSource from "../supplier-quality/NcrReceiptSource";
+import { useNcrReceiptSource } from "../../hooks/useIncoming";
 import { useNcrAuditSource } from "../../hooks/useAudits";
 import { useNcrInspectionSource } from "../../hooks/useInspection";
 import { EMPTY, changedFields, toBody, toForm } from "./formModel";
@@ -100,6 +102,7 @@ const NcrPage = () => {
   const gates = useNcrGates(isNew ? null : routeId);
   const { data: inspectionSource } = useNcrInspectionSource(isNew ? null : routeId, can("inspection.read"));
   const { data: auditSource } = useNcrAuditSource(isNew ? null : routeId, can("audits.read"));
+  const { data: receiptSource } = useNcrReceiptSource(isNew ? null : routeId, can("receiving.read"));
   const { data: lists } = useClassifications();
   const { data: employees } = useEmployees();
   const { data: sites } = useSites();
@@ -415,6 +418,15 @@ const NcrPage = () => {
                 <SectionHeading id="ncr-audit-source" title="Source audit" />
                 <Card>
                   <NcrAuditSource source={auditSource} />
+                </Card>
+              </>
+            )}
+
+            {!isNew && receiptSource?.available && receiptSource.items.length > 0 && (
+              <>
+                <SectionHeading id="ncr-receipt-source" title="Source delivery" />
+                <Card>
+                  <NcrReceiptSource source={receiptSource} />
                 </Card>
               </>
             )}

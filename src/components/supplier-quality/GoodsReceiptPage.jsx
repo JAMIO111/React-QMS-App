@@ -12,6 +12,7 @@ import Callout from "../ui/Callout";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { ErrorNotice } from "../master-data/shared";
+import { LineInspection } from "./LineInspection";
 import { ReasonDialog } from "./ReceivingDialogs";
 import { ReceiptStatusPill } from "./ReceivingPills";
 
@@ -64,7 +65,8 @@ const GoodsReceiptPage = () => {
                 <th className="py-1 pr-3 font-medium">What</th>
                 <th className="py-1 pr-3 font-medium">Order line</th>
                 <th className="py-1 pr-3 text-right font-medium">Received</th>
-                <th className="py-1 font-medium">Lot</th>
+                <th className="py-1 pr-3 font-medium">Lot</th>
+                <th className="py-1 font-medium">Incoming inspection</th>
               </tr>
             </thead>
             <tbody>
@@ -73,7 +75,8 @@ const GoodsReceiptPage = () => {
                   <td className="py-2 pr-3 text-primary-text">{l.part ? <Link to={`/Parts/${l.part.id}`} className="text-link-color hover:underline">{lineLabel(l)}</Link> : lineLabel(l)}{l.notes && <span className="block text-xs text-secondary-text">{l.notes}</span>}</td>
                   <td className="py-2 pr-3 text-secondary-text">{l.poLine ? `Line ${l.poLine.lineNumber}` : "—"}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{formatQuantity(l.quantityReceived)}</td>
-                  <td className="py-2">{l.lot ? <Link to={tracePath("lot", l.lot.id)} className="text-link-color hover:underline">{l.lot.lotNumber}</Link> : <span className="text-secondary-text">—</span>}</td>
+                  <td className="py-2 pr-3">{l.lot ? <Link to={tracePath("lot", l.lot.id)} className="text-link-color hover:underline">{l.lot.lotNumber}</Link> : <span className="text-secondary-text">—</span>}</td>
+                  <td className="py-2"><LineInspection line={l} receiptCancelled={g.status === "cancelled"} /></td>
                 </tr>
               ))}
             </tbody>

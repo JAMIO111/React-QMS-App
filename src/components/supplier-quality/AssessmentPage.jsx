@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAssessmentMutation, useSupplierAssessment, useSupplierDocuments } from "../../hooks/useSupplierQuality";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { formatDateTime } from "../../lib/processControl";
-import { ASSESSMENT_STATUS, RESULT_TONE } from "../../lib/supplierQualification";
+import { ASSESSMENT_STATUS, RESULT_TONE, expiryBadge } from "../../lib/supplierQualification";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
@@ -23,7 +23,9 @@ const RESULT_LABEL = { pass: "Pass", fail: "Fail", na: "Not applicable", unscore
 const QuestionRow = ({ q, editable, documents, onSave, saving }) => {
   const r = q.response;
   const [note, setNote] = useState(r?.note ?? "");
-  const docOptions = documents.filter((d) => d.status === "current").map((d) => ({ value: d.id, label: d.title, hint: d.fileName }));
+  const docOptions = documents.filter((d) => d.status === "current").map((d) => ({ value: d.id, label: d.title, hint: d.expiry?.state === "expired" ? `${d.fileName ?? ""} · expired`.trim() : d.fileName }));
+  const chosen = documents.find((d) => d.id === r?.document?.id);
+  const chosenExpiry = chosen?.expiry?.state === "expired" || chosen?.expiry?.state === "expiring" ? expiryBadge(chosen.expiry) : null;
   const send = (patch) => onSave({ questionKey: q.key, answer: r?.answer ?? null, rating: r?.rating ?? null, note: note.trim() || null, documentId: r?.document?.id ?? null, ...patch });
   const failing = r?.result === "fail";
 
@@ -52,6 +54,11 @@ const QuestionRow = ({ q, editable, documents, onSave, saving }) => {
           />
           {q.evidenceRequired && r && r.result !== "na" && (
             <ComboField label="Evidence" value={r.document?.id ?? null} onChange={(v) => send({ documentId: v })} options={docOptions} placeholder="Choose a document" hint={docOptions.length ? "A current document of this supplier" : "Upload the document on the supplier's Documents tab first"} />
+          )}
+          {q.evidenceRequired && r && r.result !== "na" && chosenExpiry && (
+            <Callout tone="warning" title={chosen.expiry.state === "expired" ? "This document is out of date" : "This document expires soon"}>
+              {chosen.title}: {chosenExpiry.label.toLowerCase()}. Ask the supplier for a current one, or choose another document.
+            </Callout>
           )}
           {saving && <p className="text-xs text-secondary-text">Saving…</p>}
         </>

@@ -201,6 +201,18 @@ describe("the assessment page", () => {
     expect(screen.getByText("Everything is answered")).toBeInTheDocument();
   });
 
+  it("warns when the chosen evidence document is out of date", async () => {
+    const base = detail();
+    const withAnswer = detail({ questions: base.questions.map((x) => (x.key === "qms" ? { ...x, response: { answer: "yes", rating: null, note: null, document: { id: "doc2", title: "Old ISO certificate", fileName: "old.pdf" }, result: "pass", answeredAt: "2026-11-02T09:00:00Z" } } : x)) });
+    routeApi({
+      "GET /supplier-quality/supplier-assessments/a1": () => withAnswer,
+      "GET /supplier-quality/suppliers/s1/documents": { data: [{ id: "doc2", status: "current", title: "Old ISO certificate", fileName: "old.pdf", expiry: { state: "expired", daysLeft: -12 } }] },
+    });
+    renderUi(null, "/Suppliers/s1/assessments/a1");
+    expect(await screen.findByText("This document is out of date")).toBeInTheDocument();
+    expect(screen.getByText(/expired 12 days ago/)).toBeInTheDocument();
+  });
+
   it("completes with a summary and shows a failure without a note as still needed", async () => {
     routeApi({
       "GET /supplier-quality/supplier-assessments/a1": detail({ progress: { scored: 2, answered: 2, problems: [], score: 88.5, criticalFailures: 1, passMark: 75, result: "fail" } }),

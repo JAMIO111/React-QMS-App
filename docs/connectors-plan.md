@@ -1,6 +1,6 @@
 # Connectors and integrations (brief Phase 5) — plan
 
-**Status: decisions D1–D8 agreed (recommendations accepted, D4 refined as in §3 and §5). IN1 started.**
+**Status: decisions D1–D10 agreed (D4 refined as in §3 and §5; D5 and D7 amended and D9–D10 added after IN3, see §6.7–§6.9). IN0–IN3 done; IN4 next.**
 
 Source: `docs/design-brief.md` §7 (integration platform), §8 (events), §12 Phase 5, §13 (integration backlog), §14 (definition of done for integrations), §15 (non-goals).
 This is the **planning document**. Nothing here is built. Each slice is agreed before it starts (CLAUDE.md, brief §14).
@@ -46,7 +46,12 @@ Phase 5 exit criterion (brief): *a customer can safely import a supported extern
 | **D7** | **Entitlement and permissions** | module `integrations` gated by package or open to all | New permissions `integrations.read / .manage / .run / .approve` (owner, admin, quality manager manage and run; **activating a connection needs a second person with `.approve` — preparer ≠ approver**, as for supplier approvals and inspection rules). Subscription: a new feature `integrations`, mapped to a package you choose (commercial call, not mine) |
 | **D8** | **File size and volume limits for Phase 5** | — | 25 MB per file (as other uploads), 100,000 rows per run; larger needs the Phase 6 agent or chunked REST. Say if a real customer needs more |
 
+| **D9** | **Import settings per connection and kind of record** (agreed after IN3) | — | One setting decides what an import may do: **add new only**, **add new and update existing**, or **update existing only**; plus **match existing Fortress records by code**, **field ownership**, a **schedule** and what happens when a record **disappears** from the source. Non-conformances are always *add new only*. Replaces D5's fixed per-entity defaults with a setting whose default is the safest choice for the kind of record. §6.7 |
+| **D10** | **References between imported records** (agreed after IN3) | — | A field that links to another record (site, department, part, machine, gauge type, supplier, customer, employee, category, unit) matches **either by the id the source gave that record in an earlier import** (looked up in the map, across every connection with the same `external_system` code) **or by the Fortress code**. A row whose link cannot be resolved is rejected with the reason, in the preview as well as the real import; nothing is guessed or created to satisfy it. §6.8 |
+
 **Change after IN2 (agreed with the product owner):** integrations are for **Controller seat holders only** (every `integrations.*` permission also needs an active Controller seat), and an organisation-wide **Owner or Admin may activate a connection they prepared themselves**; everyone else still needs a different approver (D7 amended).
+
+**Change after IN3 (agreed with the product owner):** a **file connection** (`csv`) has no test / ready / activate / pause / resume lifecycle: it can be used once created, and **whoever imports a file approves it themselves** (no second person). Only Controller seat holders can do any of it (every `integrations.*` permission already needs a Controller seat). API connections keep the lifecycle and the activation approval of D7, because they run unattended (D7 amended again; §6.9).
 
 ## 4. Architecture
 
@@ -116,6 +121,38 @@ Per mapped field: `source_wins` (the connector updates it; the QMS shows it read
 ### 6.6 Audit and provenance
 Import functions run as the API login with no user, so the audit actor would be empty. They set `app.source = 'integration'`, the correlation id to the **run id**, and an **initiating user** (who started or approved the run; a schedule uses the user who activated it), so every audit event says *imported by connection X, run Y, started by Z*. Canonical rows show **"Imported from X"** with a link to the run and the original staged payload.
 
+### 6.7 Import settings (D9)
+
+Set per connection **and** kind of record (on the mapping page), frozen onto every run beside the mapping version, so a run always says why a record was or was not changed.
+
+| Setting | Choices | Default |
+|---|---|---|
+| **What an import may do** | *Add new only* (records already imported are never touched again: the historical-import setting; re-uploading a later export adds only the new rows) · *Add new and update existing* (the source keeps feeding changes: the "kept in sync" setting) · *Update existing only* (enrich records already there, create nothing) | *Add new only* |
+| **Match existing Fortress records** | On: a row whose code matches a record made by hand is linked to it (and treated as an update) instead of being created again. Off: only records this source system created are updated | Off |
+| **Field ownership** (per mapped field, stored on the mapping since IN3) | *Source wins* (an update overwrites it) · *Fortress wins* (set on create, then only people change it) · *Review* (a differing value is parked for a person to accept or reject) | *Source wins* |
+| **Schedule** | *Manual* · *Daily* (cron on the production deployment; sub-daily needs a worker, D2). Only a connection Fortress can fetch from (REST, or a CSV at an address) can be scheduled: **an uploaded file is always manual** | *Manual* |
+| **When a record disappears from the source** | Nothing · list it on the run · make it inactive (kinds that have Active). **Nothing is ever deleted** | Nothing |
+
+Fixed rules: **non-conformances are always *add new only*** (once in Fortress an NC's investigation, containment, dispositions and stage are managed there; the catalogue has no workflow fields anyway); imported NCs arrive as drafts; gauge calibration dates and status are never imported; part revisions arrive as drafts (D6); suppliers arrive pending approval.
+
+The three situations this covers:
+
+| Situation | What an import may do | Schedule | Ownership |
+|---|---|---|---|
+| Historical import, then managed in Fortress | Add new only | Manual | not used |
+| Kept in sync (e.g. parts or employees from ERP / HR) | Add new and update existing | Daily | mostly *source wins*; Fortress-only fields *Fortress wins* |
+| Imported once, topped up now and then | Add new only (or update existing only) | Manual, upload again | not used |
+
+### 6.8 References between imported records (D10)
+
+Fortress keeps its own ids. The map (`integration_external_records`) records *"machine 17 in Sage became Fortress machine CNC-01"*. When an NC row says its causal machine is `17`, the importer looks `17` up as a machine **from the same source system** and writes Fortress's own id onto the NC (a real foreign key, so renaming the machine never breaks it); the source's id stays only in the map, which is also what makes re-importing the same or a corrected file update instead of duplicate.
+
+Each reference field in a mapping says how it matches: **by the source's id from an earlier import** (looked up across every connection with the same `external_system` code, so machines imported through one file connection resolve when NCs arrive through another) or **by the Fortress code** (for records that existed in Fortress before). Import the referenced records first (sites and departments exist in Fortress; then suppliers, customers, machines, employees, gauge types, parts; then gauges and NCs). An unresolved reference rejects the row with the reason, **in the preview too**; a retry after the missing record is imported picks it up.
+
+### 6.9 File connections (D7 amended after IN3)
+
+A file connection is created ready to use: the page shows **Files**, **Mapping** (with the import settings) and **Imports**; no test, ready, activate, pause or resume (retire stays, in a "…" menu, to tidy up). Uploading, mapping and previewing need `integrations.run` / `.manage`; a **real import is approved by the person who starts it**. All of it needs a Controller seat. API connections keep the full lifecycle and the second-person activation (owner/admin self-activation as amended after IN2).
+
 ## 7. Entity catalogue (Phase 5)
 
 | Entity | Canonical target | Match key | Notes |
@@ -163,11 +200,11 @@ Each entity module declares: canonical fields (type, required, allowed values), 
 | **IN1** ✅ | Providers catalogue, connections, credentials (Vault), permissions + feature, state machine, audit; API + settings shell; guardrails and both sweeps | A connection can be created, credentials stored and revoked, nothing leaks |
 | **IN2** ✅ | External records map, staging inbox, sync jobs/runs/cursors, the batch runner, idempotency core, run monitoring API | A fake source imported twice stages and applies once; a failed row is retryable |
 | **IN3** ✅ | CSV/XLSX adapter (upload, parse, header discovery), mapping engine with versions, validation engine, **preview** UI | Upload → map → preview with correct counts, nothing written |
-| **IN4** | Canonical import functions + entity modules: suppliers, customers, parts (draft revisions), machines, employees, gauge types, gauges; non-conformances as drafts | Real import of masters; second import creates nothing; QMS-owned fields untouched |
-| **IN5** | Production orders; activation approval (preparer ≠ approver); ownership policies + conflict queue | An order file imports, updates only owned fields, conflicts parked |
+| **IN4** | **IN4a** import settings (D9: what an import may do, match existing, disappeared records stored; NCs add-new-only), file connections without the lifecycle and self-approved (§6.9), references (D10: by source id across the `external_system`, or by Fortress code; resolved in the preview). **IN4b** canonical import functions + importers: suppliers, customers, parts (draft revisions), machines, employees, gauge types, gauges; non-conformances as drafts. **IN4c** UI (settings on the mapping page, reference matching per field, simplified file connection page), tests, journey step | Real import of masters and historical NCs; second import creates nothing; *add new only* never touches an existing record; an unresolved reference is rejected in the preview |
+| **IN5** | Production orders; field ownership (*Fortress wins* / *Review*) + the review queue | An order file imports, updates only owned fields, conflicts parked |
 | **IN6** | Purchase orders, lines and **goods receipts** (historical mode, both source shapes, reconciliation) | Inventory-transaction export → receipts; supplier performance computed; mismatches reported |
 | **IN7** | Generic REST adapter: auth types, pagination styles, incremental cursor, rate limits/backoff, **SSRF defence** | A fake REST server (in tests) imports with pagination and cursor; private targets refused |
-| **IN8** | Schedules (cron route), retries, rejected-record resolution UI, monitoring, integration card on the overview | Scheduled incremental sync recovers from a failure without duplicates |
+| **IN8** | Schedules (D9: daily cron for fetchable sources), records that disappeared (list / make inactive), retries, rejected-record resolution UI, monitoring, integration card on the overview | Scheduled incremental sync recovers from a failure without duplicates |
 | **IN9** | Exit check: browser journey (set up → preview → approve → sync → run twice → no duplicates → fix a rejected row), live guardrails, exit report | Brief §14 integration checklist all verified |
 
 Each slice ends with: migration + SQL tests, API + e2e, UI + component tests, sweeps updated, CLAUDE.md updated, nothing pushed until you say so.

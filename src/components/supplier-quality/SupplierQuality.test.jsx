@@ -228,7 +228,7 @@ describe("supplier profile", () => {
 
   it("says plainly which sections are not available yet", async () => {
     profile();
-    renderAt("/Suppliers/s1?tab=performance");
+    renderAt("/Suppliers/s1?tab=audits");
     expect(await screen.findByText(/not available yet/)).toBeInTheDocument();
   });
 });

@@ -101,6 +101,8 @@ export const CatalogueResponse = z.object({
           min: z.number().nullable(),
           max: z.number().nullable(),
           minExclusive: z.boolean(),
+          /** One of the organisation's custom fields (key `cf_<field key>`). */
+          custom: z.boolean(),
         }),
       ),
     }),

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
-import { CATALOGUE, catalogueFor, EntityCatalogue } from './catalogue';
+import { CATALOGUE, CatalogueField, catalogueFor, EntityCatalogue } from './catalogue';
 import { applyRules, CATALOGUE_TABLES, tableRules, TableRules } from './column-rules';
 
 /**
@@ -36,13 +36,64 @@ export class CatalogueService {
     return this.rules;
   }
 
-  async get(entity: string): Promise<EntityCatalogue | undefined> {
+  /**
+   * A kind of record's catalogue. With `organisationId` the organisation's active custom fields are added as fields `cf_<key>` (read each time: they
+   * change without a deployment); the database turns and checks their values when a row is imported (app.import_custom_values).
+   */
+  async get(entity: string, organisationId?: string): Promise<EntityCatalogue | undefined> {
     const c = catalogueFor(entity);
-    return c ? applyRules(c, await this.load()) : undefined;
+    if (!c) return undefined;
+    const withRules = applyRules(c, await this.load());
+    return organisationId ? { ...withRules, fields: [...withRules.fields, ...(await this.customFields(organisationId, entity))] } : withRules;
   }
 
-  async all(): Promise<EntityCatalogue[]> {
-    const rules = await this.load();
-    return CATALOGUE.map((c) => applyRules(c, rules));
+  async all(organisationId?: string): Promise<EntityCatalogue[]> {
+    return Promise.all(CATALOGUE.map(async (c) => (await this.get(c.entityType, organisationId))!));
+  }
+
+  /** The organisation's active custom fields of a kind of record as catalogue fields. */
+  async customFields(organisationId: string, entity: string): Promise<CatalogueField[]> {
+    const defs = await this.database.asApi(
+      async (client) => (await client.query<{ c: CustomDefinition[] }>('select app.custom_field_catalogue($1::uuid, $2) as c', [organisationId, entity])).rows[0]?.c ?? [],
+      '',
+      'integration',
+    );
+    return defs.map(customField);
+  }
+}
+
+interface CustomDefinition {
+  key: string;
+  label: string;
+  fieldType: string;
+  requiredAt: string;
+  helpText: string | null;
+  options: { key: string; label: string }[];
+  min: number | null;
+  max: number | null;
+  decimals: number | null;
+  unit: string | null;
+}
+
+/** A custom field as a catalogue field: the file's text is turned into its stored value here (type) or by the database (choices, people). */
+export function customField(d: CustomDefinition): CatalogueField {
+  const base: CatalogueField = { key: `cf_${d.key}`, label: d.label, type: 'text', required: d.requiredAt === 'save', custom: true, description: d.helpText ?? undefined };
+  switch (d.fieldType) {
+    case 'long_text':
+      return { ...base, maxLength: 5000 };
+    case 'number':
+      return { ...base, type: 'number', min: d.min ?? undefined, max: d.max ?? undefined, description: [d.helpText, d.unit && `In ${d.unit}`, d.decimals != null && `At most ${d.decimals} decimal places`].filter(Boolean).join('. ') || undefined };
+    case 'date':
+      return { ...base, type: 'date' };
+    case 'boolean':
+      return { ...base, type: 'boolean' };
+    case 'choice':
+      return { ...base, type: 'enum', options: d.options.map((o) => ({ value: o.key, label: o.label })) };
+    case 'multi_choice':
+      return { ...base, maxLength: 2000, description: `Any of ${d.options.map((o) => o.label).join(', ')}, separated by commas` };
+    case 'person':
+      return { ...base, maxLength: 320, description: 'The email address or full name of a member of the organisation' };
+    default:
+      return { ...base, maxLength: 500 };
   }
 }

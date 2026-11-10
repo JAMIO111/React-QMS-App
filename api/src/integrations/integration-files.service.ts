@@ -45,13 +45,13 @@ export class IntegrationFilesService {
     private readonly catalogues: CatalogueService,
   ) {}
 
-  async catalogue(): Promise<z.infer<typeof CatalogueResponse>> {
+  async catalogue(ctx: RequestContext): Promise<z.infer<typeof CatalogueResponse>> {
     return {
-      data: (await this.catalogues.all()).map((c) => ({
+      data: (await this.catalogues.all(orgOf(ctx))).map((c) => ({
         entityType: c.entityType,
         label: c.label,
         keyHint: c.keyHint,
-        fields: c.fields.map((f) => ({ key: f.key, label: f.label, type: f.type, required: !!f.required, maxLength: f.maxLength ?? null, options: f.options ?? null, description: f.description ?? null, ref: f.ref ?? null, pattern: f.pattern ?? null, min: f.min ?? null, max: f.max ?? null, minExclusive: !!f.minExclusive })),
+        fields: c.fields.map((f) => ({ key: f.key, label: f.label, type: f.type, required: !!f.required, maxLength: f.maxLength ?? null, options: f.options ?? null, description: f.description ?? null, ref: f.ref ?? null, pattern: f.pattern ?? null, min: f.min ?? null, max: f.max ?? null, minExclusive: !!f.minExclusive, custom: !!f.custom })),
       })),
     };
   }
@@ -146,7 +146,7 @@ export class IntegrationFilesService {
 
   /** Check the mapping against the catalogue (and the named file's columns), then save it as a new version. */
   async saveMapping(ctx: RequestContext, connectionId: string, b: SaveMappingBody): Promise<z.infer<typeof MappingList>> {
-    const catalogue = await this.catalogues.get(b.entityType);
+    const catalogue = await this.catalogues.get(b.entityType, orgOf(ctx));
     if (!catalogue) throw new ApiError(409, 'integration_rule', 'There are no Fortress fields to map this kind of record to yet');
     return this.database.asUser(ctx, async (db, client) => {
       await this.connection(db, ctx, connectionId);

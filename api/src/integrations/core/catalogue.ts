@@ -26,6 +26,8 @@ export interface CatalogueField {
   minExclusive?: boolean;
   /** A link to another record (D10): given in the file by its Fortress code, or (when `source`) by the id the source gave it in an earlier import. */
   ref?: { kind: RefKind; source: boolean };
+  /** One of the organisation's custom fields (key `cf_<field key>`), written to its custom values, not a column. */
+  custom?: boolean;
 }
 
 /** What a reference can point at. The importable kinds can also be matched by the source's own id (the map of an earlier import). */

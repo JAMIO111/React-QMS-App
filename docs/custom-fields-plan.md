@@ -47,3 +47,10 @@ Organisation-defined extra fields on Fortress records, filled in on the record's
 | **CF2** | API: definitions (list, create, edit, retire, reactivate, reorder), `PUT /custom-values/{kind}/{id}`, `customValues` on the 13 records' detail and list rows, create bodies take `customValues`, register filters on custom fields; e2e and sweeps. |
 | **CF3** | Screens: Settings → Data Management → **Custom fields**; a **More details** card on the 13 record pages; register columns (hidden at first) and filters; CSV export. |
 | **CF4** | Imports: the catalogue offers each organisation's custom fields, the importers write them, the drift test knows the values table. |
+
+## 4. Status (2026-11-10)
+
+All four slices are built: CF1 database, CF2 API, CF3 screens, CF4 imports (see CLAUDE.md "Custom fields" for the detail). Known gaps: saved filters
+do not keep custom field filters; the one-click calibration "Raise NC" and the NC page's "Start a new 8D" have nowhere to enter values, so a field
+required on save on NCs / 8Ds refuses them; inline production orders made by inspectors cannot write order custom values; imports cover the eight
+importable kinds only.

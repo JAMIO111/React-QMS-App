@@ -20,8 +20,8 @@ export class IntegrationFilesController {
   @Get('entities')
   @OrganisationScoped(READ)
   @ApiOkResponse({ description: 'The kinds of record a source can be mapped to, and their Fortress fields', schema: openApiSchema(CatalogueResponse) })
-  entities() {
-    return this.service.catalogue();
+  entities(@Ctx() ctx: RequestContext) {
+    return this.service.catalogue(ctx);
   }
 
   @Get('connections/:id/files')

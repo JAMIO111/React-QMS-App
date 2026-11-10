@@ -102,7 +102,7 @@ export class SyncEngine {
     try {
       const importer = this.importers.get(lease.entityType);
       if (!importer && lease.kind !== 'preview') return await runError('mapping', `Importing ${lease.entityType.replace('_', ' ')} records is not available yet`, false);
-      const catalogue = await this.catalogues.get(lease.entityType);
+      const catalogue = await this.catalogues.get(lease.entityType, organisationId);
       if (lease.mapping && !catalogue) return await runError('mapping', `There are no fields to map ${lease.entityType.replace('_', ' ')} records to yet`, false);
       if (!lease.mapping && !importer) return await runError('mapping', 'Map the source to Fortress fields before importing', false);
       const file = lease.file

@@ -130,7 +130,7 @@ const MappingRow = ({ field, row, onChange, colOptions, values, readOnly }) => {
           <div className="flex min-w-0 flex-col">
             <span className="truncate text-sm font-medium text-primary-text" data-required={field.required || undefined}>{field.label}</span>
             <span className="truncate text-xs text-secondary-text">
-              {[TYPE_HINTS[field.type], field.ref ? "link to another record" : null, row.transform !== "none" ? TRANSFORM_OPTIONS.find((t) => t.value === row.transform)?.label.toLowerCase() : null].filter(Boolean).join(" · ") || "text"}
+              {[field.custom ? "custom field" : null, TYPE_HINTS[field.type], field.ref ? "link to another record" : null, row.transform !== "none" ? TRANSFORM_OPTIONS.find((t) => t.value === row.transform)?.label.toLowerCase() : null].filter(Boolean).join(" · ") || "text"}
             </span>
           </div>
         </div>

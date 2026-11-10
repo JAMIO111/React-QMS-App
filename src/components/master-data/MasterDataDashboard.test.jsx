@@ -73,6 +73,20 @@ beforeEach(() => {
 });
 
 describe("the master data overview", () => {
+  it("shows import health to people who may see integrations", async () => {
+    permissions = ["master_data.read", "integrations.read"];
+    apiFetch.mockImplementation(async (path) => {
+      if (path === "/master-data-dashboard") return payload;
+      if (path === "/integrations/health") return { data: [{}], counts: { ok: 2, attention: 1, failing: 0 } };
+      throw new Error(`unexpected ${path}`);
+    });
+    renderIt();
+    const health = await screen.findByLabelText("Import health");
+    expect(within(health).getByText("Healthy").nextSibling).toHaveTextContent("2");
+    expect(within(health).getByText("Need a look").nextSibling).toHaveTextContent("1");
+    expect(screen.getByRole("link", { name: /Import health in Settings/ })).toHaveAttribute("href", "/Settings/Integrations");
+  });
+
   it("shows a tile for each kind with its total, active and recent additions, linking to its register", async () => {
     renderIt();
     const totals = await screen.findByLabelText("Totals");
@@ -115,9 +129,9 @@ describe("the master data overview", () => {
     expect(within(list).getAllByRole("listitem")[2]).toHaveTextContent("Part family"); // not "Part familie"
   });
 
-  it("is honest that no connectors exist yet, and shows the change events that are real", async () => {
+  it("says imports are for Controller seat holders, and shows the change events that are real", async () => {
     renderIt();
-    expect(await screen.findByText(/No connectors, imports or sync runs are set up yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/Imports are visible to Controller seat holders/)).toBeInTheDocument();
     const card = screen.getByRole("region", { name: "Integrations and change events" });
     expect(within(card).getByText("Events in 24 hours").nextSibling).toHaveTextContent("4");
     expect(within(card).getByText("Waiting for a consumer").nextSibling).toHaveTextContent("3");

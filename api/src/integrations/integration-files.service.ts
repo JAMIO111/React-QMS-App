@@ -170,7 +170,7 @@ export class IntegrationFilesService {
   settings(ctx: RequestContext, connectionId: string): Promise<z.infer<typeof ImportSettingsList>> {
     return this.database.asUser(ctx, async (db) => {
       await this.connection(db, ctx, connectionId);
-      const rows = await db.execute<Row>(sql`select * from public.integration_import_settings where connection_id = ${connectionId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      const rows = await db.execute<Row>(sql`${SETTINGS_SELECT} where s.connection_id = ${connectionId}::uuid and s.organisation_id = ${orgOf(ctx)}::uuid`);
       const saved = new Map(rows.rows.map((r) => [r.entity_type as string, r]));
       return { data: ENTITY_TYPES.map((t) => toSettings(t, saved.get(t))) };
     });
@@ -215,12 +215,19 @@ export class IntegrationFilesService {
       await this.connection(db, ctx, connectionId);
       const { entityType, ...rest } = b;
       await client.query('select app.set_integration_import_settings($1::uuid, $2, $3::jsonb)', [connectionId, entityType, JSON.stringify(rest)]);
-      const row = await db.execute<Row>(sql`select * from public.integration_import_settings where connection_id = ${connectionId}::uuid and entity_type = ${entityType}`);
+      const row = await db.execute<Row>(sql`${SETTINGS_SELECT} where s.connection_id = ${connectionId}::uuid and s.entity_type = ${entityType}`);
       return toSettings(entityType, row.rows[0]);
     });
   }
 }
 
+/** The saved settings with the template and the person a schedule acts for. */
+const SETTINGS_SELECT = sql.raw(`select s.*, t.name as template_name, t.current_version as template_version, t.archived_at as template_archived_at,
+    nullif(btrim(concat_ws(' ', p.first_name, p.surname)), '') as scheduled_by_name
+  from public.integration_import_settings s
+  left join public.integration_templates t on t.id = s.template_id
+  left join public.profiles p on p.id = s.schedule_set_by`);
+const EVENT_KINDS = new Set<EntityType>(['nonconformance', 'goods_receipt', 'po_receipt_total']);
 const HAS_ACTIVE = new Set<EntityType>(['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type']);
 /** Kinds of record an import only ever adds: non-conformances (managed in Fortress once in) and goods receipts (a delivery is never changed afterwards). */
 export const ADD_ONLY_KINDS = new Set<EntityType>(['nonconformance', 'goods_receipt']);
@@ -237,5 +244,12 @@ function toSettings(t: EntityType, r: Row | undefined): z.infer<typeof ImportSet
     saved: !!r,
     fixed,
     canDeactivate: HAS_ACTIVE.has(t),
+    tracksMissing: !EVENT_KINDS.has(t),
+    template: r?.template_id
+      ? { id: r.template_id as string, name: r.template_name as string, version: Number(r.template_version), archived: !!r.template_archived_at }
+      : null,
+    scheduledBy: r?.schedule_set_by ? { id: r.schedule_set_by as string, name: (r.scheduled_by_name as string) ?? 'Unknown user' } : null,
+    lastScheduledAt: r?.last_scheduled_at ? new Date(r.last_scheduled_at as string).toISOString() : null,
+    scheduleProblem: (r?.last_schedule_problem as string) ?? null,
   };
 }

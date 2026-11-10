@@ -73,6 +73,8 @@ export const Run = z.object({
   nextAttemptAt: Iso.nullable(),
   errorSummary: z.string().nullable(),
   cancelReason: z.string().nullable(),
+  /** After a full read (IN8): records the source no longer sent — listed, held for a person, made inactive, or come back. */
+  missing: z.record(z.string(), z.union([z.number(), z.string()])).nullable().optional(),
   cancelledBy: Person,
   fetchDone: z.boolean(),
   /** The file a file connection imported, and the mapping version applied. */

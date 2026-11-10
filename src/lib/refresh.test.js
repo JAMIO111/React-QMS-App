@@ -27,7 +27,7 @@ import { useBackfillProduction, useCreateInlineOrder } from "../hooks/useProduct
 import { useSavedFilterMutation } from "../hooks/useSavedFilters";
 import { useAnswerAudit, useAuditMutation, useSetAuditTargets, useUpdateClassification } from "../hooks/useAudits";
 import { useCustomFieldMutation, useSetCustomValues } from "../hooks/useCustomFields";
-import { useIntegrationMutation, useSetAllowedHosts, useTemplateMutation } from "../hooks/useIntegrations";
+import { useDecideMissing, useIgnoreRows, useIntegrationMutation, useSetAllowedHosts, useTemplateMutation } from "../hooks/useIntegrations";
 
 /** What other modules have on screen: each must be marked stale by an action in any module. */
 const watched = [
@@ -126,6 +126,8 @@ describe("every action refreshes every module's data", () => {
     ["reorder custom fields", useCustomFieldMutation, { action: "reorder", entityType: "part", ids: ["f1"] }],
     ["import connection", useIntegrationMutation, { action: "requestRun", id: "c1", body: { entityType: "part", kind: "preview" } }],
     ["allowed hosts for integrations", useSetAllowedHosts, ["example.com"]],
+    ["decide disappeared records", useDecideMissing, { ids: ["m1"], deactivate: true }],
+    ["ignore import rows", () => useIgnoreRows("c1"), { action: "ignore", rowIds: ["r1"], reason: "Test row" }],
     ["save an import template", useTemplateMutation, { action: "create", body: { entityType: "part", name: "x", keyField: "Code", fields: [] } }],
     ["new template version", useTemplateMutation, { action: "saveVersion", id: "t1", body: { reason: "Why" } }],
     ["bring back a template version", useTemplateMutation, { action: "restoreVersion", id: "t1", body: { version: 1, reason: "Why" } }],

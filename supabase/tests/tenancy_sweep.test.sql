@@ -329,6 +329,10 @@ BEGIN
   INSERT INTO public.integration_po_line_totals (organisation_id, connection_id, po_line_id, quantity_received)
     SELECT a, (SELECT connection_id FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001'), l.id, 1
       FROM public.purchase_order_lines l WHERE l.organisation_id = a LIMIT 1;
+  -- IN8: a record that disappeared from a full read (written only by the runner and the decide function).
+  INSERT INTO public.integration_missing_records (organisation_id, connection_id, entity_type, external_id, internal_id, detected_run_id, status)
+    SELECT a, connection_id, 'supplier', 'SW-GONE-1', gen_random_uuid(), id, 'listed'
+      FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001';
   -- IN5: a value parked for review (written only by the runner).
   INSERT INTO public.integration_conflicts (organisation_id, connection_id, run_id, entity_type, internal_id, external_id, field, source_data, fortress_change)
     SELECT a, connection_id, id, 'supplier', gen_random_uuid(), 'SW-EXT-1', 'name', '{"name": "Sweep"}'::jsonb, '{"name": {"from": "A", "to": "Sweep"}}'::jsonb

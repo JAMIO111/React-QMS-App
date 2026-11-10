@@ -99,6 +99,8 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/integrations/connections/{id}/credential/revoke': { reason: 'Hijacked' },
     'POST /api/v1/integrations/connections/{id}/test': {},
     'POST /api/v1/integrations/connections/{id}/sample': { entityType: 'machine' },
+    'POST /api/v1/integrations/connections/{id}/rows/ignore': { rowIds: ['00000000-0000-0000-0000-000000000000'], reason: 'Sweep reason' },
+    'POST /api/v1/integrations/connections/{id}/rows/restore': { rowIds: ['00000000-0000-0000-0000-000000000000'] },
     'POST /api/v1/integrations/connections/{id}/ready': {},
     'POST /api/v1/integrations/connections/{id}/activate': {},
     'POST /api/v1/integrations/connections/{id}/pause': { reason: 'Hijacked' },
@@ -437,6 +439,9 @@ const hasSample = (op: Op) =>
     'POST /api/v1/integrations/connections/{id}/credential/revoke',
     'POST /api/v1/integrations/connections/{id}/test',
     'POST /api/v1/integrations/connections/{id}/sample',
+    'GET /api/v1/integrations/connections/{id}/attention',
+    'POST /api/v1/integrations/connections/{id}/rows/ignore',
+    'POST /api/v1/integrations/connections/{id}/rows/restore',
     'POST /api/v1/integrations/connections/{id}/ready',
     'POST /api/v1/integrations/connections/{id}/activate',
     'POST /api/v1/integrations/connections/{id}/pause',
@@ -1008,7 +1013,7 @@ describe('tenancy sweep over every API route', () => {
 
     const results: string[] = [];
     for (const op of idOps) {
-      const query = op.path === '/api/v1/custom-values/{id}' && op.method === 'GET' ? '?entityType=part' : '';
+      const query = op.path === '/api/v1/custom-values/{id}' && op.method === 'GET' ? '?entityType=part' : op.path === '/api/v1/integrations/connections/{id}/attention' ? '?entityType=machine' : '';
       const res = await call(op, op.path.replace('{id}', foreignIdFor(op.path)!).replace('{version}', '1') + query, auth, sampleBody(op));
       if (res.status !== 404) results.push(`${op.method} ${op.path} -> ${res.status} ${JSON.stringify(res.body)}`);
     }

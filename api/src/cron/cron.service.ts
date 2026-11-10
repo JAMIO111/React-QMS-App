@@ -74,6 +74,20 @@ export class CronService {
   }
 
   /**
+   * The daily integration job (IN8): asks for every scheduled import (once a day each, as the person who scheduled it; one still waiting from
+   * before carries on instead), then works the runs that are waiting for as long as this call allows.
+   */
+  async integrationSchedule(limit: number, correlationId: string) {
+    const scheduled = await this.database.asApi(
+      async (client) => (await client.query(`select app.system_schedule_integration_runs() as r`)).rows[0].r as { connectionId: string; entityType: string; runId: string | null; skipped: string | null }[],
+      correlationId,
+      'integration',
+    );
+    const worked = await this.integrationRuns(limit, correlationId);
+    return { scheduled, ...worked };
+  }
+
+  /**
    * Works integration runs that are waiting (queued, part-done, or due to try again), oldest first, each for a short while, stopping after about 45 seconds
    * in all. Each run is leased, so this never collides with a person's "Run now"; anything left is picked up by the next call.
    */

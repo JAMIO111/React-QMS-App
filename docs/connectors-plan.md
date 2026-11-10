@@ -1,6 +1,6 @@
 # Connectors and integrations (brief Phase 5) — plan
 
-**Status: decisions D1–D10 agreed (D4 refined as in §3 and §5; D5 and D7 amended and D9–D10 added after IN3, see §6.7–§6.9). IN0–IN7 done (IN7 applied live 2026-11-10); IN8 next.**
+**Status: decisions D1–D10 agreed (D4 refined as in §3 and §5; D5 and D7 amended and D9–D10 added after IN3, see §6.7–§6.9). IN0–IN8 done (IN8 built, migration not applied live yet); IN9 next.**
 
 Source: `docs/design-brief.md` §7 (integration platform), §8 (events), §12 Phase 5, §13 (integration backlog), §14 (definition of done for integrations), §15 (non-goals).
 This is the **planning document**. Nothing here is built. Each slice is agreed before it starts (CLAUDE.md, brief §14).
@@ -224,6 +224,31 @@ One migration, `20260121100000_integration_purchasing.sql`.
   dotted column names; the wizard's file step for APIs is IN7d/IN8), schedules (IN8), OAuth client credentials, request bodies/POST queries, per-request
   custom headers, response formats other than JSON.
 
+### 6.16 IN8 decisions (agreed 2026-11-10) and as built
+
+- **F1 — records that disappear: guarded.** Only after a *full* read that finished (succeeded or partial, never incremental, never a preview) are the
+  records this connection imported before and the source no longer sent recorded in `integration_missing_records`. "List" only lists them. "Make
+  inactive" makes them inactive when **no row of the read was rejected without an identifier** and **at most 20%** of the kind's imported records
+  would go; otherwise they are **held** for a person, with the reason. A person makes them inactive or keeps them active with a reason
+  (`app.decide_missing_records`); a kept record is not asked about again until the source sends it once more; a record sent again is marked
+  returned. Nothing is deleted; not offered for records of events (NCs, goods receipts, received quantities). Detection runs inside
+  `app.system_finish_integration_run`, so every path that finishes a run does it; the run carries a `missing` summary.
+- **F2 — rejected and failed rows: ignore or retry.** Fortress never edits what a source sent. A person ignores rows with a reason
+  (`app.ignore_integration_rows`, status `ignored`, kept with who/when/why and what it was) or brings them back (`app.restore_integration_rows`);
+  failed rows are retried as before; the fix for a rejected row is in the source or the template, then import again. "Needs a person" = the newest
+  copy of each source record still rejected or failed (`app.integration_rows_needing_action`), plus rows without an identifier from the latest read.
+- **F3 — one daily run.** Vercel's free plan runs crons once a day and only in production, so every daily import is asked for at 04:00 UTC by
+  `GET|POST /internal/cron/integration-schedule` (`app.system_schedule_integration_runs`, then the runs that are waiting are worked). A schedule
+  needs an import template (`integration_import_settings.template_id`) and acts for whoever switched it on (`schedule_set_by`), checked as them
+  each day (still a member, may run imports and write that kind); incremental when the connection says how and a cursor exists, otherwise full;
+  never twice a day and **never beside a run still waiting or running** — that run carries on, so a failed import recovers on a later call
+  without duplicates. Why a scheduled import did not start is kept (`last_schedule_problem`). On dev the cron is called by hand (curl).
+- **Monitoring:** `app.integration_health(org)` → `GET /integrations/health` (per connection and kind: schedule, template, last run, last success,
+  failures in a row, rows needing a person, records waiting, values to review, scheduler problem; state ok / attention / failing); the import health
+  card on Settings → Integrations and counts on the master data overview's integrations card.
+- **Not built in IN8:** a time per connection (needs an hourly cron), email/push when an import fails or records wait, editing a rejected row in
+  Fortress, reactivating a record that comes back (an import that maps Active does it), the wizard reading an API sample.
+
 ## 7. Entity catalogue (Phase 5)
 
 | Entity | Canonical target | Match key | Notes |
@@ -275,8 +300,8 @@ Each entity module declares: canonical fields (type, required, allowed values), 
 | **IN4** ✅ | **IN4a** import settings (D9: what an import may do, match existing, disappeared records stored; NCs add-new-only), file connections without the lifecycle and self-approved (§6.9), references (D10: by source id across the `external_system`, or by Fortress code; resolved in the preview). **IN4b** canonical import functions + importers: suppliers, customers, parts (draft revisions), machines, employees, gauge types, gauges; non-conformances as drafts. **IN4c** UI (settings on the mapping page, reference matching per field, simplified file connection page), tests, journey step | Real import of masters and historical NCs; second import creates nothing; *add new only* never touches an existing record; an unresolved reference is rejected in the preview |
 | **IN5** ✅ | Production orders; field ownership (*Fortress wins* / *Review*) + the review queue (§6.12) | An order file imports, updates only owned fields, conflicts parked |
 | **IN6** ✅ | Purchase orders, lines and **goods receipts** (historical mode, both source shapes, reconciliation) (§6.13–§6.14) | Inventory-transaction export → receipts; supplier performance computed; mismatches reported |
-| **IN7** | Generic REST adapter: auth types, pagination styles, incremental cursor, rate limits/backoff, **SSRF defence** | A fake REST server (in tests) imports with pagination and cursor; private targets refused |
-| **IN8** | Schedules (D9: daily cron for fetchable sources), records that disappeared (list / make inactive), retries, rejected-record resolution UI, monitoring, integration card on the overview | Scheduled incremental sync recovers from a failure without duplicates |
+| **IN7** ✅ | Generic REST adapter: auth types, pagination styles, incremental cursor, rate limits/backoff, **SSRF defence** | A fake REST server (in tests) imports with pagination and cursor; private targets refused |
+| **IN8** ✅ | Schedules (D9: daily cron for fetchable sources), records that disappeared (list / make inactive), retries, rejected-record resolution UI, monitoring, integration card on the overview | Scheduled incremental sync recovers from a failure without duplicates |
 | **IN9** | Exit check: browser journey (set up → preview → approve → sync → run twice → no duplicates → fix a rejected row), live guardrails, exit report | Brief §14 integration checklist all verified |
 
 Each slice ends with: migration + SQL tests, API + e2e, UI + component tests, sweeps updated, CLAUDE.md updated, nothing pushed until you say so.

@@ -68,6 +68,17 @@ export class CronController {
     return this.cron.expireQualityAlerts(resolveCorrelationId(req));
   }
 
+  @Get('integration-schedule')
+  integrationScheduleGet(@Req() req: ApiRequest, @Query() query: unknown) {
+    return this.cron.integrationSchedule(parse(IntegrationRunsQuery, query).limit, resolveCorrelationId(req));
+  }
+
+  @Post('integration-schedule')
+  @HttpCode(200)
+  integrationSchedulePost(@Req() req: ApiRequest, @Query() query: unknown) {
+    return this.cron.integrationSchedule(parse(IntegrationRunsQuery, query).limit, resolveCorrelationId(req));
+  }
+
   @Get('integration-runs')
   integrationRunsGet(@Req() req: ApiRequest, @Query() query: unknown) {
     return this.cron.integrationRuns(parse(IntegrationRunsQuery, query).limit, resolveCorrelationId(req));

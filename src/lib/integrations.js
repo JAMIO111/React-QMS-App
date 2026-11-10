@@ -479,3 +479,30 @@ export const wizardPath = (connectionId, { entity, file, step, template } = {}) 
   if (step) q.set("step", String(step));
   return `/Settings/Integrations/csv?${q}`;
 };
+
+/** What happens when a full read no longer contains a record (IN8). */
+export const MISSING_OPTIONS = [
+  { value: "nothing", label: "Nothing" },
+  { value: "list", label: "List it for a person" },
+  { value: "deactivate", label: "Make it inactive (a person confirms above 20%)" },
+];
+
+/** The health of a connection's kind of record, in words and colour. */
+export const HEALTH_STATES = {
+  ok: { label: "Healthy", tone: "bg-success-color/15 text-success-color" },
+  attention: { label: "Needs a look", tone: "bg-warning-color/15 text-warning-color" },
+  failing: { label: "Failing", tone: "bg-error-color/15 text-error-color" },
+};
+
+/** A run's disappeared-records summary in words (null when there is nothing to say). */
+export const missingSummary = (m) => {
+  if (!m) return null;
+  if (m.skipped) return m.skipped;
+  const parts = [
+    m.deactivated ? `${m.deactivated} made inactive` : null,
+    m.held ? `${m.held} held for a person` : null,
+    m.listed ? `${m.listed} listed` : null,
+    m.returned ? `${m.returned} came back` : null,
+  ].filter(Boolean);
+  return parts.length ? `No longer in the source: ${parts.join(" · ")}` : null;
+};

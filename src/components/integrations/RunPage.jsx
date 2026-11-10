@@ -5,7 +5,7 @@ import { useIntegrationConnection, useIntegrationMutation, useIntegrationRun, us
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
-import { ENTITY_LABELS, ROW_STATUS, RUN_KINDS, WRITE_MODE_LABELS, drainMessage, isLive, wizardPath } from "../../lib/integrations";
+import { ENTITY_LABELS, ROW_STATUS, RUN_KINDS, WRITE_MODE_LABELS, drainMessage, isLive, missingSummary, wizardPath } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
 import Dialog from "../ui/Dialog";
@@ -13,6 +13,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import SlidingToggle from "../ui/SlidingToggle";
 import StatTile from "../ui/StatTile";
+import { MissingCard } from "./KeepHealthy";
 
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import { RunStatusPill } from "./ImportsCard";
@@ -144,6 +145,9 @@ const RunPage = () => {
           <StatTile label="Rejected" value={run.counts.rejected} note="Problems in the source" />
           {!preview && <StatTile label="Failed" value={run.counts.failed} note="Can be retried" />}
           {run.counts.parked > 0 && <StatTile label="To review" value={run.counts.parked} note="Values held back" />}
+          {run.missing && (run.missing.deactivated > 0 || run.missing.held > 0 || run.missing.listed > 0) && (
+            <StatTile label="No longer in the source" value={(run.missing.deactivated ?? 0) + (run.missing.held ?? 0) + (run.missing.listed ?? 0)} note={missingSummary(run.missing)} />
+          )}
         </div>
         {run.counts.parked > 0 && (
           <Callout
@@ -192,6 +196,7 @@ const RunPage = () => {
         </MenuCard>
       )}
 
+      {run.missing?.held > 0 || run.missing?.listed > 0 ? <MissingCard runId={run.id} /> : null}
       <RowsCard run={run} />
       {cancelling && <CancelDialog run={run} onClose={() => setCancelling(false)} />}
     </div>

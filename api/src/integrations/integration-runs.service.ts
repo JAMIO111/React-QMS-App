@@ -44,6 +44,7 @@ const toRun = (r: Row): z.infer<typeof Run> => ({
   nextAttemptAt: ['queued', 'running'].includes(r.status as string) && r.next_attempt_at && new Date(r.next_attempt_at as string) > new Date() ? iso(r.next_attempt_at) : null,
   errorSummary: (r.error_summary as string) ?? null,
   cancelReason: (r.cancel_reason as string) ?? null,
+  missing: (r.missing as Record<string, number | string>) ?? null,
   cancelledBy: person(r.cancelled_by, r.cancelled_by_name),
   fetchDone: !!r.fetch_done,
   file: r.file_id ? { id: r.file_id as string, name: r.file_name as string } : null,

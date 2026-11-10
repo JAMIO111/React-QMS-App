@@ -75,8 +75,9 @@ BEGIN
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.set_integration_import_settings(%L, 'gauge', '{"onMissing": "deactivate"}'::jsonb)$f$, api)), 5), 'QM022', 'a gauge cannot be made inactive');
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.set_integration_import_settings(%L, 'machine', '{"schedule": "daily"}'::jsonb)$f$, csv)), 5), 'QM022', 'an uploaded file cannot run on a schedule');
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.set_integration_import_settings(%L, 'machine', '{"writeMode": "replace"}'::jsonb)$f$, api)), 5), 'QM022', 'an unknown mode is refused');
-  res := app.set_integration_import_settings(api, 'machine', '{"schedule": "daily", "onMissing": "deactivate"}'::jsonb);
-  PERFORM pg_temp.assert_eq(res ->> 'schedule', 'daily', 'an API connection may run daily');
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.set_integration_import_settings(%L, 'machine', '{"schedule": "daily"}'::jsonb)$f$, api)), 5), 'QM022', 'a daily import needs its records set up and a template (IN8)');
+  res := app.set_integration_import_settings(api, 'machine', '{"onMissing": "deactivate"}'::jsonb);
+  PERFORM pg_temp.assert_eq(res ->> 'onMissing', 'deactivate', 'what happens to records that disappear is kept');
   PERFORM pg_temp.assert_eq(res ->> 'writeMode', 'add_only', 'and what is not given stays as it was');
   PERFORM pg_temp.logout(); PERFORM pg_temp.login(bob);
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.set_integration_import_settings(%L, 'machine', '{}'::jsonb)$f$, api)), 5), '42501', 'a viewer cannot change the settings');

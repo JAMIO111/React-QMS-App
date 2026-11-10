@@ -146,6 +146,13 @@ export const ImportSettings = z.object({
   fixed: z.boolean(),
   /** "Make inactive" is possible for this kind of record. */
   canDeactivate: z.boolean(),
+  /** Whether "when a record disappears" applies (not to records of events: NCs, goods receipts, received quantities). */
+  tracksMissing: z.boolean(),
+  /** The import template a daily import uses, and who it acts for (IN8). */
+  template: z.object({ id: z.string().uuid(), name: z.string(), version: z.number().int(), archived: z.boolean() }).nullable(),
+  scheduledBy: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
+  lastScheduledAt: z.string().nullable(),
+  scheduleProblem: z.string().nullable(),
 });
 export const ImportSettingsList = z.object({ data: z.array(ImportSettings) });
 export const SaveImportSettingsBody = z
@@ -155,6 +162,8 @@ export const SaveImportSettingsBody = z
     matchExisting: z.boolean().optional(),
     onMissing: z.enum(ON_MISSING).optional(),
     schedule: z.enum(SCHEDULES).optional(),
+    /** The template a daily import uses; null clears it. */
+    templateId: z.string().uuid().nullable().optional(),
   })
   .strict();
 export type SaveImportSettingsBody = z.infer<typeof SaveImportSettingsBody>;

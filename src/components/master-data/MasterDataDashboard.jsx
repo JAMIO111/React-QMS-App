@@ -6,6 +6,7 @@ import { Card, HBars, Kpi, SINGLE, grid, tick } from "../dashboard/DashboardPart
 import LoadingScreen from "../ui/LoadingScreen";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useMasterDataDashboard } from "../../hooks/useMasterData";
+import { useIntegrationHealth } from "../../hooks/useIntegrations";
 import { describeApiError } from "../../lib/api-client";
 import { KINDS, REVISION_STATUS } from "../../lib/masterData";
 import { formatDate, formatDateTime } from "../../lib/processControl";
@@ -43,6 +44,36 @@ const Check = ({ item }) => {
         <span className="sr-only">{ok ? " (healthy)" : " (needs attention)"}</span>
       </Link>
     </li>
+  );
+};
+
+/** The state of imports (IN8): counts by health and a link to the details, for people who may see integrations. */
+const IntegrationsSummary = () => {
+  const { can } = usePermissions();
+  const allowed = can("integrations.read");
+  const health = useIntegrationHealth({ enabled: allowed });
+  const counts = health.data?.counts;
+  const total = counts ? counts.ok + counts.attention + counts.failing : 0;
+  if (!allowed || total === 0) {
+    return (
+      <p className="flex items-start gap-2 rounded-lg border border-border-color bg-primary-bg p-3 text-sm text-primary-text">
+        <DatabaseIcon className="mt-0.5 h-4 w-4 shrink-0 text-secondary-text" aria-hidden="true" />
+        <span>
+          {allowed ? "No imports have run yet." : "Imports are visible to Controller seat holders."} Key events (part revisions released, inspections, non-conformances, plan approvals and more) are
+          queued below, ready for connectors.
+        </span>
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <dl aria-label="Import health" className="grid grid-cols-3 gap-3 text-sm">
+        <div><dt className="text-secondary-text">Healthy</dt><dd className="text-xl font-semibold text-success-color">{counts.ok}</dd></div>
+        <div><dt className="text-secondary-text">Need a look</dt><dd className="text-xl font-semibold text-warning-color">{counts.attention}</dd></div>
+        <div><dt className="text-secondary-text">Failing</dt><dd className="text-xl font-semibold text-error-color">{counts.failing}</dd></div>
+      </dl>
+      <Link to="/Settings/Integrations" className="text-sm text-link-color hover:underline">Import health in Settings → Integrations</Link>
+    </div>
   );
 };
 
@@ -148,13 +179,7 @@ const MasterDataDashboard = () => {
             </Card>
 
             <Card title="Integrations and change events" subtitle="What is connected, and what is queued for connectors">
-              <p className="flex items-start gap-2 rounded-lg border border-border-color bg-primary-bg p-3 text-sm text-primary-text">
-                <DatabaseIcon className="mt-0.5 h-4 w-4 shrink-0 text-secondary-text" aria-hidden="true" />
-                <span>
-                  No connectors, imports or sync runs are set up yet, so there is nothing to report on them. Master data is entered in Fortress QMS. Key events (part revisions released,
-                  inspections, non-conformances, plan approvals and more) are already queued, ready for connectors when they exist.
-                </span>
-              </p>
+              <IntegrationsSummary />
               {events?.available ? (
                 <>
                   <dl className="grid grid-cols-3 gap-3 text-sm">

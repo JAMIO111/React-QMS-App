@@ -397,3 +397,78 @@ export const useApiSample = (connectionId) => {
   const { organisationId } = useOrganisation();
   return useMutation({ mutationFn: (entityType) => apiFetch(`${BASE}/connections/${connectionId}/sample`, { method: "POST", body: { entityType }, organisationId }) });
 };
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+// Keeping imports healthy (IN8): health, records that disappeared, rows that need a person.
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+
+/** Every connection and kind of record: schedule, last run, last success and what waits for a person. */
+export const useIntegrationHealth = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({ queryKey: key(organisationId, "health"), queryFn: () => apiFetch(`${BASE}/health`, { organisationId }), enabled: !!organisationId && enabled, retry: false });
+};
+
+/** Records a full read no longer contained (open by default). */
+export const useMissingRecords = ({ connectionId, status = "open", runId, enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  const qs = new URLSearchParams({ status, pageSize: "200" });
+  if (connectionId) qs.set("connectionId", connectionId);
+  if (runId) qs.set("runId", runId);
+  return useQuery({ queryKey: key(organisationId, "missing", qs.toString()), queryFn: () => apiFetch(`${BASE}/missing-records?${qs}`, { organisationId }), enabled: !!organisationId && enabled, retry: false });
+};
+
+/** Make records inactive or keep them: they leave the open list at once, and come back with a message if refused. */
+export const useDecideMissing = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  const prefix = key(organisationId, "missing");
+  return useMutation({
+    mutationFn: (body) => apiFetch(`${BASE}/missing-records/decide`, { method: "POST", body, organisationId }),
+    onMutate: async (body) => {
+      await queryClient.cancelQueries({ queryKey: prefix });
+      const previous = queryClient.getQueriesData({ queryKey: prefix });
+      for (const [k, data] of previous) {
+        if (!data?.data || !String(k[k.length - 1]).includes("status=open")) continue;
+        const left = data.data.filter((m) => !body.ids.includes(m.id));
+        queryClient.setQueryData(k, { ...data, data: left, total: left.length, openCount: Math.max(0, data.openCount - (data.data.length - left.length)) });
+      }
+      return { previous };
+    },
+    onError: (_e, _b, ctx) => ctx?.previous?.forEach(([k, data]) => queryClient.setQueryData(k, data)),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** Rows of one kind of record that were rejected or failed and not since imported (or, with ignored = "only", the ignored ones). */
+export const useAttentionRows = (connectionId, entityType, ignored = "exclude") => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "attention", connectionId, entityType, ignored),
+    queryFn: () => apiFetch(`${BASE}/connections/${connectionId}/attention?entityType=${entityType}&ignored=${ignored}`, { organisationId }),
+    enabled: !!organisationId && !!connectionId && !!entityType,
+    retry: false,
+  });
+};
+
+/** Ignore rows with a reason, or bring them back: they move at once, and back with a message if refused. */
+export const useIgnoreRows = (connectionId) => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  const prefix = key(organisationId, "attention", connectionId);
+  return useMutation({
+    mutationFn: ({ action, rowIds, reason }) =>
+      apiFetch(`${BASE}/connections/${connectionId}/rows/${action}`, { method: "POST", body: action === "ignore" ? { rowIds, reason } : { rowIds }, organisationId }),
+    onMutate: async ({ rowIds }) => {
+      await queryClient.cancelQueries({ queryKey: prefix });
+      const previous = queryClient.getQueriesData({ queryKey: prefix });
+      for (const [k, data] of previous) {
+        if (!data?.data) continue;
+        const left = data.data.filter((r) => !rowIds.includes(r.id));
+        queryClient.setQueryData(k, { ...data, data: left, total: left.length });
+      }
+      return { previous };
+    },
+    onError: (_e, _b, ctx) => ctx?.previous?.forEach(([k, data]) => queryClient.setQueryData(k, data)),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};

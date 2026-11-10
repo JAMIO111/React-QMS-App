@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowRightIcon, XIcon } from "@/components/icons";
 import { useAllowedHosts, useIntegrationConflicts, useIntegrationConnections, useIntegrationProviders, useRecentIntegrationRuns, useSetAllowedHosts } from "../../hooks/useIntegrations";
 import ConnectionForm from "../integrations/ConnectionForm";
+import { HealthCard } from "../integrations/KeepHealthy";
 import Field from "../ui/Field";
 import { useOrganisationDetails, usePermissions, useUpdateOrganisation } from "../../hooks/useQmsApi";
 import { useToast } from "../../contexts/ToastProvider";
@@ -174,6 +175,8 @@ const IntegrationsHome = () => {
           Fields set to Review were not changed where a source sent a different value.
         </Callout>
       )}
+
+      <HealthCard />
 
       <AdvancedImports />
 

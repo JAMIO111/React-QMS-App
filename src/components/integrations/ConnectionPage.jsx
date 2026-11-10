@@ -18,6 +18,7 @@ import RowActionsMenu from "../ui/RowActionsMenu";
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import ConnectionForm from "./ConnectionForm";
 import ApiSampleCard from "./ApiSampleCard";
+import { AttentionCard, MissingCard, ScheduleCard } from "./KeepHealthy";
 import FilesCard from "./FilesCard";
 import ImportsCard from "./ImportsCard";
 import ReconciliationCard from "./ReconciliationCard";
@@ -174,6 +175,9 @@ const ConnectionPage = () => {
 
       {c.provider.key === "csv" && <FilesCard connection={c} canUpload={can("integrations.run")} canMap={manage} />}
       {c.provider.kind === "api" && !retired && can("integrations.run") && <ApiSampleCard connection={c} />}
+      {c.provider.kind === "api" && <ScheduleCard connection={c} />}
+      <MissingCard connectionId={c.id} />
+      <AttentionCard connection={c} kinds={c.provider.kind === "api" ? Object.keys(c.config?.entities ?? {}) : (c.importable ?? [])} />
 
       <ImportsCard connection={c} canRun={can("integrations.run")} />
       {can("receiving.read") && <ReconciliationCard connectionId={c.id} />}

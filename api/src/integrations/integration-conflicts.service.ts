@@ -13,7 +13,7 @@ import { Conflict, ConflictListQuery, ConflictPage } from './integration-conflic
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 
 /** Each kind of record's table and the words that name one (read as the caller, so a record they cannot see has no label). */
-const RECORDS: Partial<Record<EntityType, { table: string; label: (r: Record<string, unknown>) => string }>> = {
+export const RECORDS: Partial<Record<EntityType, { table: string; label: (r: Record<string, unknown>) => string }>> = {
   supplier: { table: 'public.suppliers', label: (r) => `${r.code} — ${r.name}` },
   customer: { table: 'public.customers', label: (r) => `${r.code} — ${r.name}` },
   part: { table: 'public.parts', label: (r) => `${r.part_number} — ${r.name}` },

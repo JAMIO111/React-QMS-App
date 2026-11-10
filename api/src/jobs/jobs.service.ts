@@ -1,3 +1,4 @@
+import { writeCustomValues } from '../custom-fields/custom-values';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ApiError } from '../common/api-error';
@@ -63,6 +64,7 @@ export class JobsService {
         ${p.site.id}::uuid, ${body.partId}::uuid, ${p.operationCode}, ${body.machineId}::uuid, NULL, NULL, NULL, ${startTrigger(w.resolver.requirements)},
         NULL, NULL, ${body.lotSize ?? null}::integer) as id`);
       if (body.productionOrderId) await db.execute(sql`select app.set_job_links(${result.rows[0].id}::uuid, ${JSON.stringify({ productionOrderId: body.productionOrderId })}::jsonb)`);
+      await writeCustomValues(db, 'inspection', result.rows[0].id, body.customValues);
       return result.rows[0].id;
     }).then((id) => this.inspections.get(ctx, id));
   }

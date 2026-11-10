@@ -1,3 +1,4 @@
+import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -61,7 +62,7 @@ export class ProductionController {
   @ApiQuery({ name: 'pageSize', required: false, schema: { type: 'integer', minimum: 1, maximum: 200 } })
   @ApiOkResponse({ schema: openApiSchema(OrderPage) })
   listOrders(@Ctx() ctx: RequestContext, @Query() query: unknown) {
-    return this.service.listOrders(ctx, parse(OrderListQuery, query));
+    return this.service.listOrders(ctx, parse(OrderListQuery, query), pickCustomFilters(query));
   }
 
   /** Open orders for pickers (closed and cancelled only with includeClosed=true). */
@@ -159,7 +160,7 @@ export class ProductionController {
   @ApiQuery({ name: 'pageSize', required: false, schema: { type: 'integer', minimum: 1, maximum: 200 } })
   @ApiOkResponse({ schema: openApiSchema(LotPage) })
   listLots(@Ctx() ctx: RequestContext, @Query() query: unknown) {
-    return this.service.listLots(ctx, parse(LotListQuery, query));
+    return this.service.listLots(ctx, parse(LotListQuery, query), pickCustomFilters(query));
   }
 
   @Get('lots/lookup')

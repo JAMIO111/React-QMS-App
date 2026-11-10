@@ -1,3 +1,4 @@
+import { CustomValuesInput } from '../custom-fields/custom-fields.schemas';
 import { z } from 'zod';
 
 const Iso = z.string().datetime({ offset: true });
@@ -108,7 +109,7 @@ export const DispositionBody = z
   .strict();
 export type DispositionBody = z.infer<typeof DispositionBody>;
 export const RaiseNcrBody = z
-  .object({ title: text(200), description: text(4000), severity: z.enum(['minor', 'major', 'critical']).optional(), categoryId: z.string().uuid().nullable().optional(), quantity: z.number().gt(0).nullable().optional() })
+  .object({ title: text(200), description: text(4000), severity: z.enum(['minor', 'major', 'critical']).optional(), categoryId: z.string().uuid().nullable().optional(), quantity: z.number().gt(0).nullable().optional(), customValues: CustomValuesInput.optional() })
   .strict();
 export type RaiseNcrBody = z.infer<typeof RaiseNcrBody>;
 

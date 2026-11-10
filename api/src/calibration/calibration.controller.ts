@@ -1,3 +1,5 @@
+import { CustomValuesOnlyBody } from '../custom-fields/custom-fields.schemas';
+import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -66,7 +68,7 @@ export class GaugesController {
   @ApiQuery({ name: 'pageSize', required: false })
   @ApiOkResponse({ schema: openApiSchema(GaugePage) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
-    return this.service.list(ctx, parse(GaugeListQuery, query));
+    return this.service.list(ctx, parse(GaugeListQuery, query), pickCustomFilters(query));
   }
 
   @Post()
@@ -181,7 +183,7 @@ export class GaugeTypesController {
   @includeInactive()
   @ApiOkResponse({ schema: openApiSchema(z.object({ data: z.array(GaugeType) })) })
   async list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
-    return { data: await this.service.listTypes(ctx, parse(GaugeTypeQuery, query)) };
+    return { data: await this.service.listTypes(ctx, parse(GaugeTypeQuery, query), pickCustomFilters(query)) };
   }
 
   @Post()
@@ -279,8 +281,8 @@ export class CalibrationsController {
   @HttpCode(201)
   @OrganisationScoped('ncr.create', SITE_SCOPED)
   @ApiCreatedResponse({ schema: openApiSchema(RaisedNcr) })
-  raiseNcr(@Ctx() ctx: RequestContext, @Param('id') id: string) {
-    return this.records.raiseNcr(ctx, parse(Uuid, id));
+  raiseNcr(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.records.raiseNcr(ctx, parse(Uuid, id), parse(CustomValuesOnlyBody, body ?? {}).customValues);
   }
 
   @Get(':id/attachments')

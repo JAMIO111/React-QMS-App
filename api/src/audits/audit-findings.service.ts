@@ -1,3 +1,4 @@
+import { writeCustomValues } from '../custom-fields/custom-values';
 import { Injectable } from '@nestjs/common';
 import { SQL, sql } from 'drizzle-orm';
 import { ApiError } from '../common/api-error';
@@ -263,6 +264,7 @@ export class AuditFindingsService {
       const r = await db.execute<{ j: { nonconformanceId: string; created: boolean } }>(
         sql`select app.create_ncr_from_audit_finding(${id}::uuid, ${body.title ?? null}::text, ${body.description ?? null}::text, ${body.severity ?? null}::text) as j`,
       );
+      if (r.rows[0].j.created) await writeCustomValues(db, 'nonconformance', r.rows[0].j.nonconformanceId, body.customValues);
       return { ...r.rows[0].j, finding: await this.load(db, ctx, id) };
     });
   }

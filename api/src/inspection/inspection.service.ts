@@ -1,3 +1,4 @@
+import { attachCustomValues, customFilterSql, customValuesOf, writeCustomValues } from '../custom-fields/custom-values';
 import { Injectable } from '@nestjs/common';
 import { SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -102,7 +103,7 @@ export class InspectionService {
     private readonly spc: SpcService,
   ) {}
 
-  list(ctx: RequestContext, q: InspectionListQuery): Promise<{ data: InspectionSummary[]; page: number; pageSize: number; total: number }> {
+  list(ctx: RequestContext, q: InspectionListQuery, custom: Record<string, string> = {}): Promise<{ data: InspectionSummary[]; page: number; pageSize: number; total: number }> {
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`r.organisation_id = ${orgOf(ctx)}::uuid`];
       // Lists go in as one comma-separated text value (an array parameter would be sent as a row).
@@ -122,12 +123,14 @@ export class InspectionService {
         const like = likePattern(q.q);
         where.push(sql`(r.reference ilike ${like} or p.part_number ilike ${like} or r.work_order ilike ${like} or r.lot ilike ${like} or r.serial ilike ${like})`);
       }
+      const cf = await customFilterSql(db, orgOf(ctx), 'inspection', sql`r.id`, custom);
+      if (cf) where.push(cf);
       const order = sql.raw(`${SORT_SQL[q.sort]} ${q.order} nulls last, r.started_at ${q.order}, r.id ${q.order}`);
       const result = await db.execute<Row>(sql`select * from (${sql.raw(SUMMARY_SELECT)} where ${sql.join(where, sql` and `)}) r
         order by ${order} limit ${q.pageSize} offset ${(q.page - 1) * q.pageSize}`);
       const count = await db.execute<{ n: string }>(sql`select count(*) as n from public.inspection_records r
         join public.parts p on p.id = r.part_id where ${sql.join(where, sql` and `)}`);
-      return { data: result.rows.map(toSummary), page: q.page, pageSize: q.pageSize, total: Number(count.rows[0].n) };
+      return { data: await attachCustomValues(db, 'inspection', result.rows.map(toSummary)), page: q.page, pageSize: q.pageSize, total: Number(count.rows[0].n) };
     });
   }
 
@@ -143,6 +146,7 @@ export class InspectionService {
         ${body.siteId}::uuid, ${body.partId}::uuid, ${body.operationCode ?? null}, ${body.machineId ?? null}::uuid,
         ${body.workOrder ?? null}, ${body.lot ?? null}, ${body.serial ?? null}, ${body.triggerType ?? 'manual'},
         ${body.partRevisionId ?? null}::uuid, ${body.notes ?? null}, ${body.lotSize ?? null}::integer) as id`);
+      await writeCustomValues(db, 'inspection', result.rows[0].id, body.customValues);
       return this.load(db, ctx, result.rows[0].id);
     });
   }
@@ -285,6 +289,7 @@ export class InspectionService {
       const result = await db.execute<{ id: string }>(sql`select app.raise_ncr_from_inspection(
         ${id}::uuid, string_to_array(${ids}, ',')::uuid[] , ${body.title}, ${body.description ?? null}, ${body.severity ?? null},
         ${body.quantityAffected ?? null}::numeric, ${body.requirement ?? null}, ${body.actualResult ?? null}, ${body.open ?? false}, ${body.categoryId ?? null}::uuid) as id`);
+      await writeCustomValues(db, 'nonconformance', result.rows[0].id, body.customValues);
       const ncr = await db.execute<Row>(sql`select id, reference, stage, source from public.nonconformances where id = ${result.rows[0].id}::uuid`);
       const n = ncr.rows[0];
       return {
@@ -457,6 +462,7 @@ export class InspectionService {
     const allNcrs = new Map<string, NcrRef>();
     for (const l of links.rows) allNcrs.set(l.ncr_id as string, ncrOf(l));
     return {
+      customValues: await customValuesOf(db, 'inspection', id),
       ...toSummary(r),
       ncrs: [...allNcrs.values()],
       notes: (r.notes as string) ?? null,

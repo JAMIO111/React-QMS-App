@@ -1,3 +1,4 @@
+import { attachCustomValues, customFilterSql, customValuesOf, writeCustomValues } from '../custom-fields/custom-values';
 import { Injectable } from '@nestjs/common';
 import { sql, SQL } from 'drizzle-orm';
 import { z } from 'zod';
@@ -94,7 +95,7 @@ const HEADER_COLUMNS: Record<string, string> = {
 export class CapaService {
   constructor(private readonly database: DatabaseService) {}
 
-  list(ctx: RequestContext, q: ListQuery): Promise<{ data: CapaSummary[]; page: number; pageSize: number; total: number }> {
+  list(ctx: RequestContext, q: ListQuery, custom: Record<string, string> = {}): Promise<{ data: CapaSummary[]; page: number; pageSize: number; total: number }> {
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`c.organisation_id = ${orgOf(ctx)}::uuid`];
       const stages = q.stage.split(',');
@@ -119,6 +120,8 @@ export class CapaService {
           or exists (select 1 from public.capa_ncr_links l join public.nonconformances n on n.id = l.nonconformance_id
                       where l.capa_id = c.id and l.ended_at is null and (n.reference ilike ${like} or n.title ilike ${like})))`);
       }
+      const cf = await customFilterSql(db, orgOf(ctx), 'capa', sql`c.id`, custom);
+      if (cf) where.push(cf);
       const pageSize = q.pageSize ?? q.limit;
       const order = sql.raw(`${SORT_SQL[q.sort]} ${q.order} nulls last, c.reference desc`);
       const clause = sql.join(where, sql` and `);
@@ -128,7 +131,7 @@ export class CapaService {
         left join public.organisation_users om on om.id = c.owner_membership_id
         left join public.profiles po on po.id = om.user_id
         where ${clause}`);
-      return { data: rows.rows.map(toSummary), page: q.page, pageSize, total: Number(count.rows[0].n) };
+      return { data: await attachCustomValues(db, 'capa', rows.rows.map(toSummary)), page: q.page, pageSize, total: Number(count.rows[0].n) };
     });
   }
 
@@ -140,6 +143,7 @@ export class CapaService {
     return this.database.asUser(ctx, async (db) => {
       const res = await db.execute<{ id: string }>(sql`
         select app.start_capa(${orgOf(ctx)}::uuid, ${body.title ?? null}, ${body.problemStatement ?? null}, ${body.source ?? null}, ${body.severity ?? null}, ${body.fromNcrId ?? null}::uuid) as id`);
+      await writeCustomValues(db, 'capa', res.rows[0].id, body.customValues);
       return this.load(db, ctx, res.rows[0].id);
     });
   }
@@ -543,6 +547,7 @@ export class CapaService {
       }),
     );
     return {
+      customValues: await customValuesOf(db, 'capa', id),
       ...toSummary(r),
       problemStatement: (r.problem_statement as string) ?? null,
       problem: { who: (r.d2_who as string) ?? null, what: (r.d2_what as string) ?? null, where: (r.d2_where as string) ?? null, when: (r.d2_when as string) ?? null, why: (r.d2_why as string) ?? null, how: (r.d2_how as string) ?? null, howMany: (r.d2_how_many as string) ?? null },

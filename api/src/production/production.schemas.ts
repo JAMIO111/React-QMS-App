@@ -1,3 +1,4 @@
+import { CustomValues, CustomValuesInput } from '../custom-fields/custom-fields.schemas';
 import { z } from 'zod';
 
 const Iso = z.string().datetime({ offset: true });
@@ -77,6 +78,7 @@ export const ProductionOrder = z.object({
   operationCount: z.number().int(),
   createdAt: Iso,
   updatedAt: Iso,
+  customValues: CustomValues.optional(),
 });
 export type ProductionOrder = z.infer<typeof ProductionOrder>;
 export const ProductionOrderDetail = ProductionOrder.extend({ operations: z.array(Operation) });
@@ -84,7 +86,7 @@ export type ProductionOrderDetail = z.infer<typeof ProductionOrderDetail>;
 export const OrderPage = pageOf(ProductionOrder);
 
 export const CreateOrderBody = z
-  .object({ orderNumber: number60, partId: z.string().uuid(), partRevisionId: id, customerId: id, siteId: id, quantityPlanned: positive, dueDate: DateOnly.nullable().optional(), notes: text(2000) })
+  .object({ orderNumber: number60, partId: z.string().uuid(), partRevisionId: id, customerId: id, siteId: id, quantityPlanned: positive, dueDate: DateOnly.nullable().optional(), notes: text(2000), customValues: CustomValuesInput.optional() })
   .strict();
 export type CreateOrderBody = z.infer<typeof CreateOrderBody>;
 
@@ -136,6 +138,7 @@ export const Lot = z.object({
   serialCount: z.number().int(),
   createdAt: Iso,
   updatedAt: Iso,
+  customValues: CustomValues.optional(),
 });
 export type Lot = z.infer<typeof Lot>;
 export const LotPage = pageOf(Lot);
@@ -151,6 +154,7 @@ export const CreateLotBody = z
     quantity: positive.nullable().optional(),
     receivedOn: DateOnly.nullable().optional(),
     notes: text(2000),
+    customValues: CustomValuesInput.optional(),
   })
   .strict();
 export type CreateLotBody = z.infer<typeof CreateLotBody>;
@@ -224,7 +228,7 @@ export type UpdateSerialBody = z.infer<typeof UpdateSerialBody>;
 // ---------------------------------------------------------------------------------------------------------------------------------- Inline orders and the backfill
 /** An order made from a job's order picker: by people with production.manage, or by people who may record inspections when the organisation allows it (`allowInlineOrders`). */
 export const InlineOrderBody = z
-  .object({ orderNumber: number60, partId: z.string().uuid(), quantityPlanned: positive, siteId: id, customerId: id, partRevisionId: id, dueDate: DateOnly.nullable().optional(), notes: text(2000) })
+  .object({ orderNumber: number60, partId: z.string().uuid(), quantityPlanned: positive, siteId: id, customerId: id, partRevisionId: id, dueDate: DateOnly.nullable().optional(), notes: text(2000), customValues: CustomValuesInput.optional() })
   .strict();
 export type InlineOrderBody = z.infer<typeof InlineOrderBody>;
 

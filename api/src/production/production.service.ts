@@ -1,3 +1,4 @@
+import { attachCustomValues, customFilterSql, customValuesOf, writeCustomValues } from '../custom-fields/custom-values';
 import { Injectable } from '@nestjs/common';
 import { SQL, sql } from 'drizzle-orm';
 import { ApiError } from '../common/api-error';
@@ -171,7 +172,7 @@ export class ProductionService {
   constructor(private readonly database: DatabaseService) {}
 
   // ---------------------------------------------------------------------------------------------------------------------------- Orders
-  listOrders(ctx: RequestContext, q: OrderListQuery) {
+  listOrders(ctx: RequestContext, q: OrderListQuery, custom: Record<string, string> = {}) {
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`o.organisation_id = ${orgOf(ctx)}::uuid`];
       if (q.status.length) where.push(sql`o.status = any (string_to_array(${q.status.join(',')}, ','))`);
@@ -182,10 +183,12 @@ export class ProductionService {
         const like = likePattern(q.q);
         where.push(sql`(o.order_number ilike ${like} or p.part_number ilike ${like} or p.name ilike ${like} or c.name ilike ${like})`);
       }
+      const cf = await customFilterSql(db, orgOf(ctx), 'production_order', sql`o.id`, custom);
+      if (cf) where.push(cf);
       const order = sql`${sortSql(ORDER_SORT[q.sort], q.order)}, o.id asc`;
       const rows = await db.execute<Row>(sql`${sql.raw(ORDER_SELECT)} where ${sql.join(where, sql` and `)} order by ${order} limit ${q.pageSize} offset ${(q.page - 1) * q.pageSize}`);
       const count = await db.execute<{ n: string }>(sql`select count(*) as n ${sql.raw(ORDER_FROM_WHERE)} where ${sql.join(where, sql` and `)}`);
-      return { data: rows.rows.map(toOrder), page: q.page, pageSize: q.pageSize, total: Number(count.rows[0].n) };
+      return { data: await attachCustomValues(db, 'production_order', rows.rows.map(toOrder)), page: q.page, pageSize: q.pageSize, total: Number(count.rows[0].n) };
     });
   }
 
@@ -214,6 +217,7 @@ export class ProductionService {
         { organisation_id: orgOf(ctx) },
       );
       const result = await db.execute<{ id: string }>(sql`insert into public.production_orders (${parts.columns}) values (${parts.values}) returning id`);
+      await writeCustomValues(db, 'production_order', result.rows[0].id, body.customValues);
       return this.loadOrder(db, ctx, result.rows[0].id);
     });
   }
@@ -259,6 +263,7 @@ export class ProductionService {
       const siteId = body.siteId === undefined ? await this.onlySite(db, ctx) : body.siteId;
       const made = await db.execute<{ id: string }>(sql`select app.create_order_inline(${body.orderNumber}, ${body.partId}::uuid, ${body.quantityPlanned}::numeric, ${siteId ?? null}::uuid,
         ${body.customerId ?? null}::uuid, ${body.partRevisionId ?? null}::uuid, ${body.dueDate ?? null}::date, ${body.notes ?? null}) as id`);
+      await writeCustomValues(db, 'production_order', made.rows[0].id, body.customValues);
       return this.loadOrder(db, ctx, made.rows[0].id);
     });
   }
@@ -273,7 +278,7 @@ export class ProductionService {
   }
 
   // ---------------------------------------------------------------------------------------------------------------------------- Lots
-  listLots(ctx: RequestContext, q: LotListQuery) {
+  listLots(ctx: RequestContext, q: LotListQuery, custom: Record<string, string> = {}) {
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`l.organisation_id = ${orgOf(ctx)}::uuid`];
       if (q.status.length) where.push(sql`l.status = any (string_to_array(${q.status.join(',')}, ','))`);
@@ -283,10 +288,12 @@ export class ProductionService {
       if (q.productionOrderId) where.push(sql`l.production_order_id = ${q.productionOrderId}::uuid`);
       if (q.siteId) where.push(sql`l.site_id = ${q.siteId}::uuid`);
       if (q.q) where.push(sql`(l.lot_number ilike ${likePattern(q.q)} or p.part_number ilike ${likePattern(q.q)} or p.name ilike ${likePattern(q.q)})`);
+      const cf = await customFilterSql(db, orgOf(ctx), 'lot', sql`l.id`, custom);
+      if (cf) where.push(cf);
       const order = sql`${sortSql(LOT_SORT[q.sort], q.order)}, l.id asc`;
       const rows = await db.execute<Row>(sql`${sql.raw(LOT_SELECT)} where ${sql.join(where, sql` and `)} order by ${order} limit ${q.pageSize} offset ${(q.page - 1) * q.pageSize}`);
       const count = await db.execute<{ n: string }>(sql`select count(*) as n from public.lots l join public.parts p on p.id = l.part_id where ${sql.join(where, sql` and `)}`);
-      return { data: rows.rows.map(toLot), page: q.page, pageSize: q.pageSize, total: Number(count.rows[0].n) };
+      return { data: await attachCustomValues(db, 'lot', rows.rows.map(toLot)), page: q.page, pageSize: q.pageSize, total: Number(count.rows[0].n) };
     });
   }
 
@@ -320,6 +327,7 @@ export class ProductionService {
     return this.database.asUser(ctx, async (db) => {
       const parts = insertParts(body, { lotNumber: 'lot_number', partId: 'part_id', origin: 'origin', productionOrderId: 'production_order_id', supplierId: 'supplier_id', siteId: 'site_id', quantity: 'quantity', receivedOn: 'received_on', notes: 'notes' }, { organisation_id: orgOf(ctx) });
       const result = await db.execute<{ id: string }>(sql`insert into public.lots (${parts.columns}) values (${parts.values}) returning id`);
+      await writeCustomValues(db, 'lot', result.rows[0].id, body.customValues);
       return this.loadLot(db, ctx, result.rows[0].id);
     });
   }
@@ -420,13 +428,13 @@ export class ProductionService {
     if (!result.rows.length) throw ApiError.notFound('production_order_not_found', 'Production order not found');
     const ops = await db.execute<Row>(sql`select x.id, x.sequence, x.operation_code, x.description, x.status, m.id as machine_id, m.code as machine_code, m.name as machine_name
       from public.production_operations x left join public.machines m on m.id = x.machine_id where x.production_order_id = ${id}::uuid order by x.sequence`);
-    return { ...toOrder(result.rows[0]), operations: ops.rows.map(toOperation) };
+    return { ...toOrder(result.rows[0]), customValues: await customValuesOf(db, 'production_order', id), operations: ops.rows.map(toOperation) };
   }
 
   private async loadLot(db: Db, ctx: RequestContext, id: string): Promise<Lot> {
     const result = await db.execute<Row>(sql`${sql.raw(LOT_SELECT)} where l.id = ${id}::uuid and l.organisation_id = ${orgOf(ctx)}::uuid`);
     if (!result.rows.length) throw ApiError.notFound('lot_not_found', 'Lot not found');
-    return toLot(result.rows[0]);
+    return { ...toLot(result.rows[0]), customValues: await customValuesOf(db, 'lot', id) };
   }
 
   private async loadSerial(db: Db, ctx: RequestContext, id: string): Promise<Serial> {

@@ -1,3 +1,4 @@
+import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -71,7 +72,7 @@ export class MachinesController {
   @listQueries([ApiQuery({ name: 'siteId', required: false, schema: { type: 'string', format: 'uuid' } })])
   @ApiOkResponse({ schema: openApiSchema(pageSchema(Machine)) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
-    return this.service.listMachines(ctx, parse(MachineListQuery, query));
+    return this.service.listMachines(ctx, parse(MachineListQuery, query), pickCustomFilters(query));
   }
 
   @Post()
@@ -103,7 +104,7 @@ export class PartFamiliesController {
   @listQueries()
   @ApiOkResponse({ schema: openApiSchema(pageSchema(PartFamily)) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
-    return this.service.listFamilies(ctx, parse(PartFamilyListQuery, query));
+    return this.service.listFamilies(ctx, parse(PartFamilyListQuery, query), pickCustomFilters(query));
   }
 
   @Post()

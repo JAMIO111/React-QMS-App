@@ -1,3 +1,4 @@
+import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
@@ -26,7 +27,7 @@ export class CapasController {
   @ApiQuery({ name: 'q', required: false, schema: { type: 'string' } })
   @ApiOkResponse({ schema: openApiSchema(CapaList) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
-    return this.service.list(ctx, parse(ListQuery, query));
+    return this.service.list(ctx, parse(ListQuery, query), pickCustomFilters(query));
   }
 
   /** Active members for the team and owner pickers. Declared before ':id' so it is not read as an id. */

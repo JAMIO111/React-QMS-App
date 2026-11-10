@@ -1,3 +1,4 @@
+import { attachCustomValues, customFilterSql, customValuesOf, writeCustomValues } from '../custom-fields/custom-values';
 import { Injectable } from '@nestjs/common';
 import { sql, SQL } from 'drizzle-orm';
 import { assignments, insertParts, iso, personName, Row } from '../calibration/calibration.service';
@@ -95,7 +96,7 @@ export class SupplierQualityService {
 
   // ---- register ------------------------------------------------------------------------------------
 
-  list(ctx: RequestContext, q: SupplierListQuery): Promise<z.infer<typeof SupplierPage>> {
+  list(ctx: RequestContext, q: SupplierListQuery, custom: Record<string, string> = {}): Promise<z.infer<typeof SupplierPage>> {
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`s.organisation_id = ${orgOf(ctx)}::uuid`];
       if (q.active === 'active') where.push(sql`s.active`);
@@ -112,11 +113,13 @@ export class SupplierQualityService {
           or exists (select 1 from public.supplier_contacts k where k.supplier_id = s.id and (k.name ilike ${like} or k.email ilike ${like}))
           or exists (select 1 from public.supplier_classification_links l join public.supplier_classifications c on c.id = l.classification_id where l.supplier_id = s.id and c.label ilike ${like}))`);
       }
+      const cf = await customFilterSql(db, orgOf(ctx), 'supplier', sql`s.id`, custom);
+      if (cf) where.push(cf);
       const clause = sql.join(where, sql` and `);
       const order = sql.raw(`${SORT_SQL[q.sort]} ${q.order} nulls last, upper(s.code) asc`);
       const rows = await db.execute<Row>(sql`select ${LIST_COLUMNS} from public.suppliers s ${OPEN_NCS} where ${clause} order by ${order} limit ${q.pageSize} offset ${(q.page - 1) * q.pageSize}`);
       const count = await db.execute<{ n: number }>(sql`select count(*)::int as n from public.suppliers s where ${clause}`);
-      return { data: rows.rows.map(toRow), page: q.page, pageSize: q.pageSize, total: Number(count.rows[0].n) };
+      return { data: await attachCustomValues(db, 'supplier', rows.rows.map(toRow)), page: q.page, pageSize: q.pageSize, total: Number(count.rows[0].n) };
     });
   }
 
@@ -147,6 +150,7 @@ export class SupplierQualityService {
     const { primaryContact: _primary, ...base } = toRow(r);
     return {
       ...base,
+      customValues: await customValuesOf(db, 'supplier', id),
       companyNumber: (r.company_number as string) ?? null,
       vatNumber: (r.vat_number as string) ?? null,
       notes: (r.notes as string) ?? null,
@@ -198,11 +202,12 @@ export class SupplierQualityService {
 
   create(ctx: RequestContext, body: CreateSupplierBody): Promise<SupplierDetail> {
     return this.database.asUser(ctx, async (db) => {
-      const { classificationIds, ...fields } = body;
+      const { classificationIds, customValues, ...fields } = body;
       const parts = insertParts(fields, SUPPLIER_COLUMNS, { organisation_id: orgOf(ctx) });
       const res = await db.execute<{ id: string }>(sql`insert into public.suppliers (${parts.columns}) values (${parts.values}) returning id`);
       const id = res.rows[0].id;
       if (classificationIds?.length) await db.execute(sql`select app.set_supplier_classifications(${id}::uuid, string_to_array(${classificationIds.join(',')}, ',')::uuid[])`);
+      await writeCustomValues(db, 'supplier', id, customValues);
       return this.load(db, ctx, id);
     });
   }

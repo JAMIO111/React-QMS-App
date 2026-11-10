@@ -1,3 +1,4 @@
+import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -66,7 +67,7 @@ const partyController = (kind: PartyKind, path: string) => {
     @listQueries()
     @ApiOkResponse({ schema: openApiSchema(pageSchema(Party)) })
     list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
-      return this.service.listParties(ctx, kind, parse(PartyListQuery, query));
+      return this.service.listParties(ctx, kind, parse(PartyListQuery, query), pickCustomFilters(query));
     }
 
     @Post()
@@ -104,7 +105,7 @@ export class PartsController {
   @listQueries([ApiQuery({ name: 'customerId', required: false, schema: { type: 'string', format: 'uuid' } })])
   @ApiOkResponse({ schema: openApiSchema(pageSchema(PartSummary)) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
-    return this.service.listParts(ctx, parse(PartListQuery, query));
+    return this.service.listParts(ctx, parse(PartListQuery, query), pickCustomFilters(query));
   }
 
   @Post()

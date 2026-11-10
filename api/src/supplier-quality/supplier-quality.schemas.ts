@@ -1,3 +1,4 @@
+import { CustomValues, CustomValuesInput } from '../custom-fields/custom-fields.schemas';
 import { z } from 'zod';
 
 const Iso = z.string().datetime({ offset: true });
@@ -73,6 +74,7 @@ export const CreateSupplierBody = z
       .transform((v) => v.toUpperCase()),
     ...supplierFields,
     classificationIds: z.array(z.string().uuid()).max(30).optional(),
+    customValues: CustomValuesInput.optional(),
   })
   .strict();
 export type CreateSupplierBody = z.infer<typeof CreateSupplierBody>;
@@ -167,6 +169,7 @@ export const SupplierRow = z.object({
   /** Live non-conformances naming this supplier that are not closed or cancelled (those the caller may read). */
   openNcCount: z.number().int(),
   createdAt: Iso,
+  customValues: CustomValues.optional(),
 });
 export type SupplierRow = z.infer<typeof SupplierRow>;
 

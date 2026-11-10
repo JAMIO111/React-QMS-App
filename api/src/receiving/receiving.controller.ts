@@ -1,3 +1,4 @@
+import { CustomValuesOnlyBody } from '../custom-fields/custom-fields.schemas';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
@@ -115,8 +116,8 @@ export class ReceivingController {
   @HttpCode(200)
   @OrganisationScoped(MANAGE)
   @ApiOkResponse({ description: 'Starts the incoming inspection of a line through the shared inspection engine (needs inspection.record; the line must need inspection)', schema: openApiSchema(ReceiptDetail) })
-  startInspection(@Ctx() ctx: RequestContext, @Param('id') id: string) {
-    return this.service.startInspection(ctx, parse(Uuid, id));
+  startInspection(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.startInspection(ctx, parse(Uuid, id), parse(CustomValuesOnlyBody, body ?? {}).customValues);
   }
 
   @Post('goods-receipt-lines/:id/disposition')

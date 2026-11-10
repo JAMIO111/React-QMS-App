@@ -1,3 +1,5 @@
+import { writeCustomValues } from '../custom-fields/custom-values';
+import type { CustomValuesInput } from '../custom-fields/custom-fields.schemas';
 import { Injectable } from '@nestjs/common';
 import { sql, SQL } from 'drizzle-orm';
 import { z } from 'zod';
@@ -310,8 +312,11 @@ export class ReceivingService {
       return this.loadReceipt(db, ctx, res.rows[0].goods_receipt_id);
     });
   }
-  startInspection(ctx: RequestContext, lineId: string) {
-    return this.lineCommand(ctx, lineId, (db) => db.execute(sql`select app.start_incoming_inspection(${lineId}::uuid)`));
+  startInspection(ctx: RequestContext, lineId: string, customValues?: CustomValuesInput) {
+    return this.lineCommand(ctx, lineId, async (db) => {
+      const res = await db.execute<{ id: string }>(sql`select app.start_incoming_inspection(${lineId}::uuid) as id`);
+      await writeCustomValues(db, 'inspection', res.rows[0].id, customValues);
+    });
   }
   disposition(ctx: RequestContext, lineId: string, b: DispositionBody) {
     return this.lineCommand(ctx, lineId, (db) => db.execute(sql`select app.disposition_receipt_line(${lineId}::uuid, ${b.decision}, ${b.reason ?? null}, ${b.conditions ?? null}, ${b.quantity ?? null}::numeric)`));
@@ -323,6 +328,7 @@ export class ReceivingService {
       if (res.rows.length === 0) throw ApiError.notFound('goods_receipt_line_not_found', 'Receipt line not found');
       const r = await db.execute<{ r: { nonconformanceId: string; created: boolean } }>(sql`
         select app.raise_ncr_from_receipt_line(${lineId}::uuid, ${b.title ?? null}, ${b.description ?? null}, ${b.severity ?? 'major'}, ${b.categoryId ?? null}::uuid, ${b.quantity ?? null}::numeric) as r`);
+      if (r.rows[0].r.created) await writeCustomValues(db, 'nonconformance', r.rows[0].r.nonconformanceId, b.customValues);
       return r.rows[0].r;
     });
   }

@@ -1,3 +1,4 @@
+import { attachCustomValues, customFilterSql, customValuesOf, writeCustomValues } from '../custom-fields/custom-values';
 import { Injectable } from '@nestjs/common';
 import { SQL, sql } from 'drizzle-orm';
 import { ApiError } from '../common/api-error';
@@ -53,7 +54,7 @@ const toEmployee = (r: Row): Employee => ({
 export class EmployeesService {
   constructor(private readonly database: DatabaseService) {}
 
-  list(ctx: RequestContext, q: EmployeeListQuery): Promise<{ data: Employee[]; page: number; pageSize: number; total: number }> {
+  list(ctx: RequestContext, q: EmployeeListQuery, custom: Record<string, string> = {}): Promise<{ data: Employee[]; page: number; pageSize: number; total: number }> {
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`e.organisation_id = ${orgOf(ctx)}::uuid`];
       // The status filter lists the states wanted: both (or neither) means everyone.
@@ -65,11 +66,13 @@ export class EmployeesService {
         where.push(sql`(e.first_name ilike ${like} or e.surname ilike ${like} or concat_ws(' ', e.first_name, e.surname) ilike ${like}
           or e.job_title ilike ${like} or e.employee_number ilike ${like} or e.email ilike ${like})`);
       }
+      const cf = await customFilterSql(db, orgOf(ctx), 'employee', sql`e.id`, custom);
+      if (cf) where.push(cf);
       const order = sql.raw(`${SORT_SQL[q.sort].map((x) => `${x} ${q.order} nulls last`).join(', ')}, lower(e.surname) asc, e.id asc`);
       const result = await db.execute<Row>(sql`${sql.raw(SELECT)} where ${sql.join(where, sql` and `)} order by ${order}
         limit ${q.pageSize} offset ${(q.page - 1) * q.pageSize}`);
       const count = await db.execute<{ n: string }>(sql`select count(*) as n from public."Employees" e where ${sql.join(where, sql` and `)}`);
-      return { data: result.rows.map(toEmployee), page: q.page, pageSize: q.pageSize, total: Number(count.rows[0].n) };
+      return { data: await attachCustomValues(db, 'employee', result.rows.map(toEmployee)), page: q.page, pageSize: q.pageSize, total: Number(count.rows[0].n) };
     });
   }
 
@@ -94,6 +97,7 @@ export class EmployeesService {
         (organisation_id, first_name, surname, job_title, employee_number, email, site_id, department_id, active)
         values (${orgOf(ctx)}::uuid, ${body.firstName}, ${body.surname}, ${body.jobTitle ?? null}, ${body.employeeNumber ?? null}, ${body.email ?? null},
                 ${body.siteId ?? null}::uuid, ${body.departmentId ?? null}::uuid, true) returning id`);
+      await writeCustomValues(db, 'employee', result.rows[0].id, body.customValues);
       return this.load(db, ctx, result.rows[0].id);
     });
   }
@@ -149,6 +153,6 @@ export class EmployeesService {
   private async load(db: Db, ctx: RequestContext, id: string): Promise<Employee> {
     const result = await db.execute<Row>(sql`${sql.raw(SELECT)} where e.id = ${id}::uuid and e.organisation_id = ${orgOf(ctx)}::uuid`);
     if (!result.rows.length) throw ApiError.notFound('employee_not_found', 'Employee not found');
-    return toEmployee(result.rows[0]);
+    return { ...toEmployee(result.rows[0]), customValues: await customValuesOf(db, 'employee', id) };
   }
 }

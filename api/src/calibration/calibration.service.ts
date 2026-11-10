@@ -1,3 +1,4 @@
+import { attachCustomValues, customFilterSql, customValuesOf, writeCustomValues } from '../custom-fields/custom-values';
 import { Injectable } from '@nestjs/common';
 import { SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -177,7 +178,7 @@ export class CalibrationService {
 
   // ---- gauges --------------------------------------------------------------------------------
 
-  list(ctx: RequestContext, q: GaugeListQuery): Promise<{ data: GaugeSummary[]; page: number; pageSize: number; total: number }> {
+  list(ctx: RequestContext, q: GaugeListQuery, custom: Record<string, string> = {}): Promise<{ data: GaugeSummary[]; page: number; pageSize: number; total: number }> {
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`g.organisation_id = ${ctx.organisationId!}::uuid`];
       if (q.deleted === 'exclude') where.push(sql`g.deleted_at is null`);
@@ -208,6 +209,8 @@ export class CalibrationService {
         where.push(sql`(g.asset_number ilike ${like} or g.description ilike ${like} or g.serial_number ilike ${like}
           or g.manufacturer ilike ${like} or g.model ilike ${like} or g.location ilike ${like} or t.name ilike ${like} or t.code ilike ${like})`);
       }
+      const cf = await customFilterSql(db, ctx.organisationId!, 'gauge', sql`g.id`, custom);
+      if (cf) where.push(cf);
       const order = sql.raw(`${SORT_SQL[q.sort]} ${q.order} nulls last, upper(g.asset_number) ${q.order}`);
       const result = await db.execute<Row>(sql`
         select ${sql.raw(GAUGE_SELECT)}, count(*) over () as total_count
@@ -220,7 +223,7 @@ export class CalibrationService {
         const count = await db.execute<{ n: string }>(sql`select count(*) as n ${sql.raw(GAUGE_FROM)} where ${sql.join(where, sql` and `)}`);
         total = Number(count.rows[0].n);
       }
-      return { data: result.rows.map(toGaugeSummary), page: q.page, pageSize: q.pageSize, total };
+      return { data: await attachCustomValues(db, 'gauge', result.rows.map(toGaugeSummary)), page: q.page, pageSize: q.pageSize, total };
     });
   }
 
@@ -232,6 +235,7 @@ export class CalibrationService {
     return this.database.asUser(ctx, async (db) => {
       const { columns, values } = insertParts(body, GAUGE_COLUMNS, { organisation_id: ctx.organisationId! });
       const result = await db.execute<{ id: string }>(sql`insert into public.gauges (${columns}) values (${values}) returning id`);
+      await writeCustomValues(db, 'gauge', result.rows[0].id, body.customValues);
       return this.loadGauge(db, ctx, result.rows[0].id);
     });
   }
@@ -331,12 +335,13 @@ export class CalibrationService {
 
   // ---- gauge types ---------------------------------------------------------------------------
 
-  listTypes(ctx: RequestContext, q: z.infer<typeof GaugeTypeQuery>): Promise<z.infer<typeof GaugeType>[]> {
+  listTypes(ctx: RequestContext, q: z.infer<typeof GaugeTypeQuery>, custom: Record<string, string> = {}): Promise<z.infer<typeof GaugeType>[]> {
     return this.database.asUser(ctx, async (db) => {
+      const cf = await customFilterSql(db, ctx.organisationId!, 'gauge_type', sql`t.id`, custom);
       const result = await db.execute<Row>(sql`${sql.raw(TYPE_SELECT)}
-        where t.organisation_id = ${ctx.organisationId!}::uuid ${q.includeInactive ? sql`` : sql`and t.active`}
+        where t.organisation_id = ${ctx.organisationId!}::uuid ${q.includeInactive ? sql`` : sql`and t.active`} ${cf ? sql`and ${cf}` : sql``}
         order by lower(t.name)`);
-      return result.rows.map(toType);
+      return attachCustomValues(db, 'gauge_type', result.rows.map(toType));
     });
   }
 
@@ -344,6 +349,7 @@ export class CalibrationService {
     return this.database.asUser(ctx, async (db) => {
       const { columns, values } = insertParts(body, TYPE_COLUMNS, { organisation_id: ctx.organisationId! });
       const result = await db.execute<{ id: string }>(sql`insert into public.gauge_types (${columns}) values (${values}) returning id`);
+      await writeCustomValues(db, 'gauge_type', result.rows[0].id, body.customValues);
       return this.loadType(db, ctx, result.rows[0].id);
     });
   }
@@ -429,7 +435,7 @@ export class CalibrationService {
   private async loadType(db: Db, ctx: RequestContext, id: string): Promise<z.infer<typeof GaugeType>> {
     const result = await db.execute<Row>(sql`${sql.raw(TYPE_SELECT)} where t.id = ${id}::uuid and t.organisation_id = ${ctx.organisationId!}::uuid`);
     if (!result.rows.length) throw ApiError.notFound('gauge_type_not_found', 'Gauge type not found');
-    return toType(result.rows[0]);
+    return { ...toType(result.rows[0]), customValues: await customValuesOf(db, 'gauge_type', id) };
   }
 
   async loadGauge(db: Db, ctx: RequestContext, id: string): Promise<GaugeDetail> {
@@ -446,6 +452,7 @@ export class CalibrationService {
     if (!r) throw ApiError.notFound('gauge_not_found', 'Gauge not found');
     return {
       ...toGaugeSummary(r),
+      customValues: await customValuesOf(db, 'gauge', id),
       commissionedOn: (r.commissioned_on as string) ?? null,
       notes: (r.notes as string) ?? null,
       statusChangedAt: iso(r.status_changed_at),

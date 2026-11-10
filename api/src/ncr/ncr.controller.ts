@@ -1,3 +1,4 @@
+import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -62,7 +63,7 @@ export class NcrController {
   @ApiQuery({ name: 'pageSize', required: false })
   @ApiOkResponse({ schema: openApiSchema(NcrPage) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
-    return this.service.list(ctx, parse(NcrListQuery, query));
+    return this.service.list(ctx, parse(NcrListQuery, query), pickCustomFilters(query));
   }
 
   /** Highest total cost and quantity in the register (for filter sliders). Declared before :id. */

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ListQuery } from '../common/pagination';
+import { CustomValues, CustomValuesInput } from '../custom-fields/custom-fields.schemas';
 
 const booleanFlag = z
   .enum(['true', 'false'])
@@ -34,6 +35,7 @@ export const Party = z.object({
   vatNumber: z.string().nullable(),
   notes: z.string().nullable(),
   active: z.boolean(),
+  customValues: CustomValues.optional(),
 });
 export type Party = z.infer<typeof Party>;
 
@@ -45,7 +47,7 @@ const partyFields = {
   vatNumber: optionalText(40),
   notes: optionalText(2000),
 };
-export const CreatePartyBody = z.object(partyFields).strict();
+export const CreatePartyBody = z.object({ ...partyFields, customValues: CustomValuesInput.optional() }).strict();
 export const UpdatePartyBody = z
   .object({ ...Object.fromEntries(Object.entries(partyFields).map(([k, v]) => [k, v.optional()])), active: z.boolean().optional() })
   .strict()
@@ -85,6 +87,7 @@ export const PartSummary = z.object({
   currentRevision: z.string().nullable(),
   /** Its version (2 or more once it has been corrected). */
   currentVersion: z.number().int().nullable(),
+  customValues: CustomValues.optional(),
 });
 export type PartSummary = z.infer<typeof PartSummary>;
 export const PartCustomer = z.object({
@@ -118,6 +121,7 @@ export const CreatePartBody = z
     partFamilyId: z.string().uuid().nullable().optional(),
     /** Optional first revision, created as a draft. */
     initialRevision: z.object({ revision: RevisionCode, drawingRef: optionalText(100) }).strict().optional(),
+    customValues: CustomValuesInput.optional(),
   })
   .strict();
 export const UpdatePartBody = z

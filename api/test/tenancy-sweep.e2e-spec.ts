@@ -62,6 +62,11 @@ const sampleBody = (op: Op): object | undefined =>
     'DELETE /api/v1/role-assignments/{id}': undefined,
     'PATCH /api/v1/saved-filters/{id}': { name: 'Hijacked' },
     'DELETE /api/v1/saved-filters/{id}': undefined,
+    'PATCH /api/v1/custom-fields/{id}': { label: 'Hijacked' },
+    'POST /api/v1/custom-fields/{id}/retire': { reason: 'Hijacked' },
+    'POST /api/v1/custom-fields/{id}/reactivate': undefined,
+    'GET /api/v1/custom-values/{id}': undefined,
+    'PUT /api/v1/custom-values/{id}': { entityType: 'part', values: {} },
     'PATCH /api/v1/customers/{id}': { name: 'Hijacked' },
     'PATCH /api/v1/suppliers/{id}': { name: 'Hijacked' },
     'GET /api/v1/supplier-quality/suppliers/{id}': undefined,
@@ -382,6 +387,11 @@ const hasSample = (op: Op) =>
     'DELETE /api/v1/role-assignments/{id}',
     'PATCH /api/v1/saved-filters/{id}',
     'DELETE /api/v1/saved-filters/{id}',
+    'PATCH /api/v1/custom-fields/{id}',
+    'POST /api/v1/custom-fields/{id}/retire',
+    'POST /api/v1/custom-fields/{id}/reactivate',
+    'GET /api/v1/custom-values/{id}',
+    'PUT /api/v1/custom-values/{id}',
     'PATCH /api/v1/customers/{id}',
     'PATCH /api/v1/suppliers/{id}',
     'GET /api/v1/supplier-quality/suppliers/{id}',
@@ -751,6 +761,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/quality-alerts/')) return a.qualityAlert;
   if (path.startsWith('/api/v1/quality-alert-attachments/')) return a.qualityAlertAttachment;
   if (path.startsWith('/api/v1/saved-filters/')) return a.savedFilter;
+  if (path.startsWith('/api/v1/custom-fields/')) return a.customField;
+  if (path.startsWith('/api/v1/custom-values/')) return a.part;
   if (path.startsWith('/api/v1/capas/')) return a.capa;
   if (path.startsWith('/api/v1/capa-team/')) return a.capaTeam;
   if (path.startsWith('/api/v1/capa-attachments/')) return a.capaAttachment;
@@ -913,6 +925,7 @@ beforeAll(async () => {
     a.supplierScarExtension = (await q1(`select app.request_scar_extension($1::uuid, current_date + 40, 'Alpha extension') as id`, [a.supplierScar])).id;
     a.supplierProduct = (await q1(`insert into public.supplier_product_links (organisation_id, supplier_id, kind, description) values ($1, $2, 'service', 'Alpha service') returning id`, [ids.orgA, a.supplier])).id;
     await client.query('commit');
+    a.customField = (await admin.query(`insert into public.custom_field_definitions (organisation_id, entity_type, key, label, field_type) values ($1, 'part', 'alpha_note', 'Alpha note', 'text') returning id`, [ids.orgA])).rows[0].id;
   } finally {
     client.release();
   }
@@ -958,7 +971,8 @@ describe('tenancy sweep over every API route', () => {
 
     const results: string[] = [];
     for (const op of idOps) {
-      const res = await call(op, op.path.replace('{id}', foreignIdFor(op.path)!).replace('{version}', '1'), auth, sampleBody(op));
+      const query = op.path === '/api/v1/custom-values/{id}' && op.method === 'GET' ? '?entityType=part' : '';
+      const res = await call(op, op.path.replace('{id}', foreignIdFor(op.path)!).replace('{version}', '1') + query, auth, sampleBody(op));
       if (res.status !== 404) results.push(`${op.method} ${op.path} -> ${res.status} ${JSON.stringify(res.body)}`);
     }
     expect(results).toEqual([]);
@@ -1050,6 +1064,7 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/traceability': `?type=order&id=${b.productionOrder}`,
       '/api/v1/traceability/search': '?q=WO',
       '/api/v1/saved-filters': '?scope=ncr_register',
+      '/api/v1/custom-values': `?entityType=part&ids=${b.part}`,
       '/api/v1/goods-receipt-lines/lookup': `?supplierId=${b.supplier}`,
     };
     for (const op of lists) {

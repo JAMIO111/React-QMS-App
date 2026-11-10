@@ -1,3 +1,4 @@
+import { CustomValuesInput } from '../custom-fields/custom-fields.schemas';
 import { z } from 'zod';
 
 const Iso = z.string().datetime({ offset: true });
@@ -19,7 +20,9 @@ export const JobQuery = z
 export type JobQuery = z.infer<typeof JobQuery>;
 
 /** `productionOrderId` links the job to its production order as it starts (optional; an organisation may require one before the job is completed). */
-export const StartJobBody = z.object({ machineId: z.string().uuid(), partId: z.string().uuid(), operationCode: code.optional(), lotSize: lotSize.optional(), productionOrderId: z.string().uuid().optional() }).strict();
+export const StartJobBody = z
+  .object({ machineId: z.string().uuid(), partId: z.string().uuid(), operationCode: code.optional(), lotSize: lotSize.optional(), productionOrderId: z.string().uuid().optional(), customValues: CustomValuesInput.optional() })
+  .strict();
 export type StartJobBody = z.infer<typeof StartJobBody>;
 
 /** Filled in (or corrected) while the job runs. A missing field is kept; an empty text clears it. */

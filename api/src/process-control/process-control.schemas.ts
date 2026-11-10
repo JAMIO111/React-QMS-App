@@ -1,3 +1,4 @@
+import { CustomValues, CustomValuesInput } from '../custom-fields/custom-fields.schemas';
 import { z } from 'zod';
 import { ListQuery } from '../common/pagination';
 
@@ -62,6 +63,7 @@ export const Machine = z.object({
   workCentre: z.string().nullable(),
   description: z.string().nullable(),
   active: z.boolean(),
+  customValues: CustomValues.optional(),
 });
 export type Machine = z.infer<typeof Machine>;
 const machineFields = {
@@ -71,7 +73,7 @@ const machineFields = {
   workCentre: optionalText(100),
   description: optionalText(1000),
 };
-export const CreateMachineBody = z.object(machineFields).strict();
+export const CreateMachineBody = z.object({ ...machineFields, customValues: CustomValuesInput.optional() }).strict();
 export const UpdateMachineBody = updateOf({
   code: Code.optional(),
   name: machineFields.name.optional(),
@@ -92,6 +94,7 @@ export const PartFamily = z.object({
   active: z.boolean(),
   partCount: z.number().int(),
   planCount: z.number().int(),
+  customValues: CustomValues.optional(),
 });
 export type PartFamily = z.infer<typeof PartFamily>;
 export const FamilyPart = z.object({
@@ -112,7 +115,7 @@ export const FamilyPlan = z.object({
 export const PartFamilyDetail = PartFamily.extend({ parts: z.array(FamilyPart), plans: z.array(FamilyPlan) });
 export type PartFamilyDetail = z.infer<typeof PartFamilyDetail>;
 const familyFields = { code: Code, name: z.string().trim().min(1).max(200), description: optionalText(2000) };
-export const CreatePartFamilyBody = z.object(familyFields).strict();
+export const CreatePartFamilyBody = z.object({ ...familyFields, customValues: CustomValuesInput.optional() }).strict();
 export const UpdatePartFamilyBody = updateOf({
   code: Code.optional(),
   name: familyFields.name.optional(),

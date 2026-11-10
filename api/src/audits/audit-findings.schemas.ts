@@ -1,3 +1,4 @@
+import { CustomValuesInput } from '../custom-fields/custom-fields.schemas';
 import { z } from 'zod';
 
 const dateTime = z.string().datetime({ offset: true });
@@ -155,6 +156,7 @@ export const CreateNcrBody = z
     title: z.string().trim().min(1).max(200).optional(),
     description: z.string().trim().max(5000).optional(),
     severity: z.enum(SEVERITIES).optional(),
+    customValues: CustomValuesInput.optional(),
   })
   .strict();
 export type CreateNcrBody = z.infer<typeof CreateNcrBody>;

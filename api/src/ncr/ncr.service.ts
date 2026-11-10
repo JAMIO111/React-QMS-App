@@ -1,3 +1,4 @@
+import { attachCustomValues, customFilterSql, customValuesOf, writeCustomValues } from '../custom-fields/custom-values';
 import { Injectable } from '@nestjs/common';
 import { and, asc, eq, SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -135,7 +136,7 @@ const toColumns = (body: Partial<z.infer<typeof UpdateNcrBody>>) => {
 export class NcrService {
   constructor(private readonly database: DatabaseService) {}
 
-  list(ctx: RequestContext, q: NcrListQuery): Promise<{ data: NcrSummary[]; page: number; pageSize: number; total: number }> {
+  list(ctx: RequestContext, q: NcrListQuery, custom: Record<string, string> = {}): Promise<{ data: NcrSummary[]; page: number; pageSize: number; total: number }> {
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`n.organisation_id = ${ctx.organisationId!}::uuid`];
       if (q.source.length) where.push(sql`n.source = any(string_to_array(${q.source.join(',')}, ','))`);
@@ -170,6 +171,8 @@ export class NcrService {
           or n.purchase_order ilike ${like} or n.customer_reference ilike ${like} or p.part_number ilike ${like}
           or c.name ilike ${like} or c.display_name ilike ${like} or s.name ilike ${like} or s.display_name ilike ${like} or fm.name ilike ${like})`);
       }
+      const cf = await customFilterSql(db, ctx.organisationId!, 'nonconformance', sql`n.id`, custom);
+      if (cf) where.push(cf);
       const order = sql.raw(`${SORT_SQL[q.sort]} ${q.order} nulls last, n.reference ${q.order}`);
       const result = await db.execute<Row>(sql`
         select ${sql.raw(SELECT_SUMMARY)}, count(*) over () as total_count
@@ -182,7 +185,7 @@ export class NcrService {
         const count = await db.execute<{ n: string }>(sql`select count(*) as n ${sql.raw(FROM)} where ${sql.join(where, sql` and `)}`);
         total = Number(count.rows[0].n);
       }
-      return { data: result.rows.map(toSummary), page: q.page, pageSize: q.pageSize, total };
+      return { data: await attachCustomValues(db, 'nonconformance', result.rows.map(toSummary)), page: q.page, pageSize: q.pageSize, total };
     });
   }
 
@@ -206,11 +209,12 @@ export class NcrService {
 
   create(ctx: RequestContext, body: CreateNcrBody): Promise<NcrDetail> {
     return this.database.asUser(ctx, async (db) => {
-      const { open, source, ...rest } = body;
+      const { open, source, customValues, ...rest } = body;
       const [row] = await db
         .insert(nonconformances)
         .values({ ...toColumns(rest), title: rest.title, organisationId: ctx.organisationId!, source, stage: open ? 'open' : 'draft', detectedBy: ctx.user.id })
         .returning({ id: nonconformances.id });
+      await writeCustomValues(db, 'nonconformance', row.id, customValues);
       return this.load(db, ctx, row.id);
     });
   }
@@ -450,6 +454,7 @@ export class NcrService {
     const person = (idKey: string, nameKey: string) => (r[idKey] ? { id: r[idKey] as string, name: (r[nameKey] as string) ?? 'Unknown user' } : null);
     return {
       ...toSummary(r),
+      customValues: await customValuesOf(db, 'nonconformance', id),
       sourceChangeReason: (r.source_change_reason as string) ?? null,
       stageReason: (r.stage_reason as string) ?? null,
       description: (r.description as string) ?? null,

@@ -1,3 +1,4 @@
+import { CustomValues, CustomValuesInput } from '../custom-fields/custom-fields.schemas';
 import { z } from 'zod';
 import { ProductionLinks } from '../production/production-links';
 
@@ -74,6 +75,7 @@ export const NcrSummary = z.object({
   capa: z.object({ id: z.string().uuid(), reference: z.string() }).nullable(),
   deletedAt: dateTime.nullable(),
   createdAt: dateTime,
+  customValues: CustomValues.optional(),
 });
 export type NcrSummary = z.infer<typeof NcrSummary>;
 
@@ -193,7 +195,7 @@ const fields = {
 };
 
 export const CreateNcrBody = z
-  .object({ source: NcrSource, ...fields, /** Create straight into "open" (needs the minimum content). */ open: z.boolean().optional() })
+  .object({ source: NcrSource, ...fields, /** Create straight into "open" (needs the minimum content). */ open: z.boolean().optional(), customValues: CustomValuesInput.optional() })
   .strict();
 export type CreateNcrBody = z.infer<typeof CreateNcrBody>;
 

@@ -1,3 +1,4 @@
+import { CustomValues, CustomValuesInput } from '../custom-fields/custom-fields.schemas';
 import { z } from 'zod';
 import { ProductionLinks } from '../production/production-links';
 
@@ -80,6 +81,7 @@ export const InspectionSummary = z.object({
   startedBy: Ref.nullable(),
   /** Current readings that failed (corrected readings excluded). */
   failures: z.number().int(),
+  customValues: CustomValues.optional(),
 });
 export type InspectionSummary = z.infer<typeof InspectionSummary>;
 
@@ -190,6 +192,7 @@ export const StartInspectionBody = z
     triggerType: Trigger.optional(),
     partRevisionId: z.string().uuid().optional(),
     notes: optionalText(2000),
+    customValues: CustomValuesInput.optional(),
   })
   .strict();
 
@@ -290,6 +293,7 @@ export const RaiseNcrBody = z
     open: z.boolean().optional(),
     /** What the problem is (one of the organisation's categories); needed to open, so needed here when `open` is set. */
     categoryId: z.string().uuid().nullable().optional(),
+    customValues: CustomValuesInput.optional(),
   })
   .strict();
 /** Add failed readings of this inspection to an NC already raised from it (not closed or cancelled). */

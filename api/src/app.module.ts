@@ -79,6 +79,7 @@ import { StripeGateway, StripeSdkGateway } from './billing/stripe.gateway';
 import { BillingService } from './billing/billing.service';
 import { NotificationsController } from './notifications/notifications.controller';
 import { SavedFiltersController } from './saved-filters/saved-filters.controller';
+import { CustomFieldsController, CustomValuesController } from './custom-fields/custom-fields.controller';
 import { SupplierQualityController } from './supplier-quality/supplier-quality.controller';
 import { SupplierAssessmentController } from './supplier-quality/supplier-assessment.controller';
 import { SupplierAssessmentService } from './supplier-quality/supplier-assessment.service';
@@ -112,6 +113,7 @@ import { RequirementsService } from './receiving/requirements.service';
 import { SupplierScarController } from './supplier-quality/supplier-scar.controller';
 import { SupplierScarService } from './supplier-quality/supplier-scar.service';
 import { SavedFiltersService } from './saved-filters/saved-filters.service';
+import { CustomFieldsService } from './custom-fields/custom-fields.service';
 import { NotificationsService } from './notifications/notifications.service';
 import { CharacteristicTemplatesController } from './process-control/characteristic-templates.controller';
 import { CharacteristicTemplatesService } from './process-control/characteristic-templates.service';
@@ -214,6 +216,8 @@ export class AppModule implements NestModule {
         StripeWebhookController,
         NotificationsController,
         SavedFiltersController,
+        CustomFieldsController,
+        CustomValuesController,
         SupplierQualityController,
         SupplierQualificationController,
         SupplierRiskController,
@@ -283,6 +287,7 @@ export class AppModule implements NestModule {
         { provide: StripeGateway, useClass: StripeSdkGateway },
         NotificationsService,
         SavedFiltersService,
+        CustomFieldsService,
         SupplierQualityService,
         SupplierQualificationService,
         SupplierRiskService,

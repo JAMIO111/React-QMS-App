@@ -6,6 +6,7 @@ import { decodeCursor, Page, toPage } from '../common/pagination';
 import type { RequestContext } from '../common/request-context';
 import { Row, personName } from '../calibration/calibration.service';
 import { DatabaseService, Db } from '../database/database.service';
+import { attachCustomValues, customFilterSql, writeCustomValues } from '../custom-fields/custom-values';
 import { customers, partRevisions, parts, suppliers, units } from '../database/schema';
 import {
   AddPartCustomerBody,
@@ -99,7 +100,7 @@ export class MasterDataService {
 
   // ---- customers / suppliers -------------------------------------------------------------
 
-  listParties(ctx: RequestContext, kind: PartyKind, q: z.infer<typeof PartyListQuery>): Promise<Page<Party>> {
+  listParties(ctx: RequestContext, kind: PartyKind, q: z.infer<typeof PartyListQuery>, custom: Record<string, string> = {}): Promise<Page<Party>> {
     const t = tableFor(kind);
     const cursor = decodeCursor(q.cursor);
     return this.database.asUser(ctx, async (db) => {
@@ -107,19 +108,22 @@ export class MasterDataService {
       if (!q.includeInactive) where.push(eq(t.active, true));
       if (q.q) where.push(sql`(${t.code} ilike ${likePattern(q.q)} or ${t.name} ilike ${likePattern(q.q)} or ${t.displayName} ilike ${likePattern(q.q)})`);
       if (cursor) where.push(sql`(${t.code}, ${t.id}) > (${cursor.k}, ${cursor.id}::uuid)`);
+      const cf = await customFilterSql(db, ctx.organisationId!, kind, sql`${t.id}`, custom);
+      if (cf) where.push(cf);
       const rows = await db.select(partyColumns(t)).from(t).where(and(...where)).orderBy(asc(t.code), asc(t.id)).limit(q.limit + 1);
-      return toPage(rows, q.limit, (r) => ({ k: r.code, id: r.id }));
+      return toPage(await attachCustomValues(db, kind, rows), q.limit, (r) => ({ k: r.code, id: r.id }));
     });
   }
 
   createParty(ctx: RequestContext, kind: PartyKind, body: z.infer<typeof CreatePartyBody>): Promise<Party> {
     const t = tableFor(kind);
+    const { customValues, ...fields } = body;
     return this.database.asUser(ctx, async (db) => {
       const [row] = await db
         .insert(t)
-        .values({ organisationId: ctx.organisationId!, ...body })
+        .values({ organisationId: ctx.organisationId!, ...fields })
         .returning(partyColumns(t));
-      return row;
+      return { ...row, customValues: (await writeCustomValues(db, kind, row.id, customValues)) ?? {} };
     });
   }
 
@@ -138,7 +142,7 @@ export class MasterDataService {
 
   // ---- parts -------------------------------------------------------------------------------
 
-  listParts(ctx: RequestContext, q: z.infer<typeof PartListQuery>): Promise<Page<PartSummary>> {
+  listParts(ctx: RequestContext, q: z.infer<typeof PartListQuery>, custom: Record<string, string> = {}): Promise<Page<PartSummary>> {
     const cursor = decodeCursor(q.cursor);
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`p.organisation_id = ${ctx.organisationId!}::uuid`];
@@ -151,6 +155,8 @@ export class MasterDataService {
           or exists (select 1 from public.part_customers pc where pc.part_id = p.id and pc.customer_part_number ilike ${like}))`);
       }
       if (cursor) where.push(sql`(upper(p.part_number), p.id) > (${cursor.k}, ${cursor.id}::uuid)`);
+      const cf = await customFilterSql(db, ctx.organisationId!, 'part', sql`p.id`, custom);
+      if (cf) where.push(cf);
       const rows = await this.selectParts(db, sql.join(where, sql` and `), q.limit + 1);
       return toPage(rows, q.limit, (r) => ({ k: r.partNumber.toUpperCase(), id: r.id }));
     });
@@ -162,7 +168,7 @@ export class MasterDataService {
 
   createPart(ctx: RequestContext, body: z.infer<typeof CreatePartBody>): Promise<PartDetail> {
     return this.database.asUser(ctx, async (db) => {
-      const { initialRevision, customerId, ...fields } = body;
+      const { initialRevision, customerId, customValues, ...fields } = body;
       const [part] = await db
         .insert(parts)
         .values({ organisationId: ctx.organisationId!, ...fields })
@@ -174,6 +180,7 @@ export class MasterDataService {
       if (initialRevision) {
         await db.insert(partRevisions).values({ organisationId: ctx.organisationId!, partId: part.id, ...initialRevision });
       }
+      await writeCustomValues(db, 'part', part.id, customValues);
       return this.loadPart(db, ctx, part.id);
     });
   }
@@ -348,7 +355,7 @@ export class MasterDataService {
       where ${where}
       order by upper(p.part_number), p.id
       limit ${limit}`);
-    return result.rows.map((r) => ({
+    const items = result.rows.map((r) => ({
       id: r.id,
       partNumber: r.part_number,
       name: r.name,
@@ -359,6 +366,7 @@ export class MasterDataService {
       currentRevision: r.current_revision,
       currentVersion: r.current_version,
     }));
+    return attachCustomValues(db, 'part', items);
   }
 
   private async loadPart(db: Db, ctx: RequestContext, id: string): Promise<PartDetail> {

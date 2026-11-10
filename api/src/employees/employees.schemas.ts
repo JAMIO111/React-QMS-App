@@ -1,3 +1,4 @@
+import { CustomValues, CustomValuesInput } from '../custom-fields/custom-fields.schemas';
 import { z } from 'zod';
 
 const Iso = z.string().datetime({ offset: true });
@@ -62,13 +63,14 @@ export const Employee = z.object({
   login: z.object({ userId: z.string().uuid(), name: z.string() }).nullable(),
   createdAt: Iso,
   updatedAt: Iso,
+  customValues: CustomValues.optional(),
 });
 export type Employee = z.infer<typeof Employee>;
 
 export const EmployeePage = z.object({ data: z.array(Employee), page: z.number().int(), pageSize: z.number().int(), total: z.number().int() });
 
 export const CreateEmployeeBody = z
-  .object({ firstName: name, surname: name, jobTitle: text(100), employeeNumber: text(40), email, siteId: id, departmentId: id })
+  .object({ firstName: name, surname: name, jobTitle: text(100), employeeNumber: text(40), email, siteId: id, departmentId: id, customValues: CustomValuesInput.optional() })
   .strict();
 export type CreateEmployeeBody = z.infer<typeof CreateEmployeeBody>;
 

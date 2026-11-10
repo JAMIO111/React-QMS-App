@@ -1,3 +1,4 @@
+import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
@@ -53,7 +54,7 @@ export class InspectionsController {
   @ApiQuery({ name: 'pageSize', required: false, schema: { type: 'integer', minimum: 1, maximum: 200, default: 25 } })
   @ApiOkResponse({ schema: openApiSchema(InspectionPage) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
-    return this.service.list(ctx, parse(InspectionListQuery, query));
+    return this.service.list(ctx, parse(InspectionListQuery, query), pickCustomFilters(query));
   }
 
   /** Start an inspection: resolves and freezes the requirements, or refuses (409 inspection_rule) with the reasons. */

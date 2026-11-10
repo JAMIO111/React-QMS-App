@@ -1,3 +1,4 @@
+import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -32,7 +33,7 @@ export class SupplierQualityController {
   @ApiQuery({ name: 'q', required: false })
   @ApiOkResponse({ description: 'The register, page-based, with search, filters and sorting', schema: openApiSchema(SupplierPage) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
-    return this.service.list(ctx, parse(SupplierListQuery, query));
+    return this.service.list(ctx, parse(SupplierListQuery, query), pickCustomFilters(query));
   }
 
   @Post('suppliers')

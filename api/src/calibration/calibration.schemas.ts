@@ -1,3 +1,4 @@
+import { CustomValues, CustomValuesInput } from '../custom-fields/custom-fields.schemas';
 import { z } from 'zod';
 
 export const GaugeStatus = z.enum(['active', 'in_calibration', 'quarantined', 'out_of_service', 'retired', 'lost']);
@@ -101,6 +102,7 @@ export const GaugeType = z.object({
   active: z.boolean(),
   characteristicCount: z.number(),
   gaugeCount: z.number(),
+  customValues: CustomValues.optional(),
 });
 export const GaugeTypeQuery = z.object({
   includeInactive: z
@@ -115,6 +117,7 @@ export const CreateGaugeTypeBody = z
     description: text(1000),
     intervalValue: z.number().int().min(1).max(3650).optional(),
     intervalUnit: IntervalUnit.optional(),
+    customValues: CustomValuesInput.optional(),
   })
   .strict();
 export const UpdateGaugeTypeBody = z
@@ -168,6 +171,7 @@ export const GaugeSummary = z.object({
   calibrationCount: z.number(),
   deletedAt: dateTime.nullable(),
   createdAt: dateTime,
+  customValues: CustomValues.optional(),
 });
 export type GaugeSummary = z.infer<typeof GaugeSummary>;
 
@@ -235,7 +239,7 @@ const gaugeFields = {
   commissionedOn: isoDate.nullable().optional(),
   notes: text(5000),
 };
-export const CreateGaugeBody = z.object(gaugeFields).strict();
+export const CreateGaugeBody = z.object({ ...gaugeFields, customValues: CustomValuesInput.optional() }).strict();
 export type CreateGaugeBody = z.infer<typeof CreateGaugeBody>;
 export const UpdateGaugeBody = z
   .object({ ...gaugeFields, assetNumber: gaugeFields.assetNumber.optional(), description: gaugeFields.description.optional() })

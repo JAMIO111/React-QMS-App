@@ -1,3 +1,4 @@
+import { CustomValues, CustomValuesInput } from '../custom-fields/custom-fields.schemas';
 import { z } from 'zod';
 
 const Iso = z.string().datetime({ offset: true });
@@ -25,6 +26,7 @@ export const CreateCapaBody = z
     problemStatement: text(5000).optional(),
     source: Source.optional(),
     severity: Severity.optional(),
+    customValues: CustomValuesInput.optional(),
   })
   .strict()
   .refine((b) => b.fromNcrId !== undefined || b.title !== undefined, { message: 'Give the 8D a title or start it from a non-conformance' });
@@ -242,6 +244,7 @@ export const CapaSummary = z.object({
   ncrCount: z.number().int(),
   createdAt: Iso,
   closedAt: Iso.nullable(),
+  customValues: CustomValues.optional(),
 });
 export type CapaSummary = z.infer<typeof CapaSummary>;
 

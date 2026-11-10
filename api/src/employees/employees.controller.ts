@@ -1,3 +1,4 @@
+import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -29,7 +30,7 @@ export class EmployeesController {
   @ApiQuery({ name: 'pageSize', required: false, schema: { type: 'integer', minimum: 1, maximum: 200, default: 25 } })
   @ApiOkResponse({ schema: openApiSchema(EmployeePage) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
-    return this.service.list(ctx, parse(EmployeeListQuery, query));
+    return this.service.list(ctx, parse(EmployeeListQuery, query), pickCustomFilters(query));
   }
 
   /** Everyone, active or not, for pickers (e.g. the responsible employee on a non-conformance). Declared before `:id`. */

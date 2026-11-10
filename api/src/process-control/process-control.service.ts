@@ -1,3 +1,4 @@
+import { attachCustomValues, customFilterSql, customValuesOf, writeCustomValues } from '../custom-fields/custom-values';
 import { Injectable } from '@nestjs/common';
 import { SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -154,7 +155,7 @@ export class ProcessControlService {
 
   // ---- machines --------------------------------------------------------------------------------
 
-  listMachines(ctx: RequestContext, q: z.infer<typeof MachineListQuery>): Promise<Page<Machine>> {
+  listMachines(ctx: RequestContext, q: z.infer<typeof MachineListQuery>, custom: Record<string, string> = {}): Promise<Page<Machine>> {
     const cursor = decodeCursor(q.cursor);
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`m.organisation_id = ${orgOf(ctx)}::uuid`];
@@ -162,10 +163,12 @@ export class ProcessControlService {
       if (q.siteId) where.push(sql`m.site_id = ${q.siteId}::uuid`);
       if (q.q) where.push(sql`(m.code ilike ${likePattern(q.q)} or m.name ilike ${likePattern(q.q)} or m.work_centre ilike ${likePattern(q.q)})`);
       if (cursor) where.push(sql`(upper(m.code), m.id) > (${cursor.k}, ${cursor.id}::uuid)`);
+      const cf = await customFilterSql(db, orgOf(ctx), 'machine', sql`m.id`, custom);
+      if (cf) where.push(cf);
       const result = await db.execute<Row>(sql`
         select m.*, s.name as site_name from public.machines m left join public.sites s on s.id = m.site_id
         where ${sql.join(where, sql` and `)} order by upper(m.code), m.id limit ${q.limit + 1}`);
-      return toPage(result.rows.map(toMachine), q.limit, (r) => ({ k: r.code.toUpperCase(), id: r.id }));
+      return toPage(await attachCustomValues(db, 'machine', result.rows.map(toMachine)), q.limit, (r) => ({ k: r.code.toUpperCase(), id: r.id }));
     });
   }
 
@@ -173,6 +176,7 @@ export class ProcessControlService {
     return this.database.asUser(ctx, async (db) => {
       const { columns, values } = insertParts(body, MACHINE_COLUMNS, { organisation_id: orgOf(ctx) });
       const result = await db.execute<{ id: string }>(sql`insert into public.machines (${columns}) values (${values}) returning id`);
+      await writeCustomValues(db, 'machine', result.rows[0].id, body.customValues);
       return this.loadMachine(db, result.rows[0].id);
     });
   }
@@ -190,21 +194,23 @@ export class ProcessControlService {
     const result = await db.execute<Row>(sql`select m.*, s.name as site_name from public.machines m
       left join public.sites s on s.id = m.site_id where m.id = ${id}::uuid`);
     if (!result.rows.length) throw ApiError.notFound('machine_not_found', 'Machine not found');
-    return toMachine(result.rows[0]);
+    return { ...toMachine(result.rows[0]), customValues: await customValuesOf(db, 'machine', id) };
   }
 
   // ---- part families ---------------------------------------------------------------------------
 
-  listFamilies(ctx: RequestContext, q: z.infer<typeof PartFamilyListQuery>): Promise<Page<PartFamily>> {
+  listFamilies(ctx: RequestContext, q: z.infer<typeof PartFamilyListQuery>, custom: Record<string, string> = {}): Promise<Page<PartFamily>> {
     const cursor = decodeCursor(q.cursor);
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`f.organisation_id = ${orgOf(ctx)}::uuid`];
       if (!q.includeInactive) where.push(sql`f.active`);
       if (q.q) where.push(sql`(f.code ilike ${likePattern(q.q)} or f.name ilike ${likePattern(q.q)})`);
       if (cursor) where.push(sql`(upper(f.code), f.id) > (${cursor.k}, ${cursor.id}::uuid)`);
+      const cf = await customFilterSql(db, orgOf(ctx), 'part_family', sql`f.id`, custom);
+      if (cf) where.push(cf);
       const result = await db.execute<Row>(sql`${sql.raw(FAMILY_SELECT)} where ${sql.join(where, sql` and `)}
         order by upper(f.code), f.id limit ${q.limit + 1}`);
-      return toPage(result.rows.map(toFamily), q.limit, (r) => ({ k: r.code.toUpperCase(), id: r.id }));
+      return toPage(await attachCustomValues(db, 'part_family', result.rows.map(toFamily)), q.limit, (r) => ({ k: r.code.toUpperCase(), id: r.id }));
     });
   }
 
@@ -216,6 +222,7 @@ export class ProcessControlService {
     return this.database.asUser(ctx, async (db) => {
       const { columns, values } = insertParts(body, FAMILY_COLUMNS, { organisation_id: orgOf(ctx) });
       const result = await db.execute<{ id: string }>(sql`insert into public.part_families (${columns}) values (${values}) returning id`);
+      await writeCustomValues(db, 'part_family', result.rows[0].id, body.customValues);
       return this.loadFamily(db, ctx, result.rows[0].id);
     });
   }
@@ -273,6 +280,7 @@ export class ProcessControlService {
       group by p.id order by upper(p.plan_code)`);
     return {
       ...toFamily(result.rows[0]),
+      customValues: await customValuesOf(db, 'part_family', id),
       parts: parts.rows.map((r) => ({
         id: r.id as string,
         partNumber: r.part_number as string,

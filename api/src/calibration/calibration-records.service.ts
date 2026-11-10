@@ -1,3 +1,5 @@
+import { writeCustomValues } from '../custom-fields/custom-values';
+import type { CustomValuesInput } from '../custom-fields/custom-fields.schemas';
 import { Injectable } from '@nestjs/common';
 import { SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -171,7 +173,7 @@ export class CalibrationRecordsService {
    * Raises a draft NC for a calibration found out of tolerance and links it to the record: source Calibration, and the organisation's Calibration category when it has one
    * (a person can change either). The NC's site and detection date come from the gauge and the calibration.
    */
-  raiseNcr(ctx: RequestContext, id: string): Promise<z.infer<typeof RaisedNcr>> {
+  raiseNcr(ctx: RequestContext, id: string, customValues?: CustomValuesInput): Promise<z.infer<typeof RaisedNcr>> {
     return this.database.asUser(ctx, async (db) => {
       const cal = await this.load(db, ctx, id);
       if (cal.deletedAt) throw new ApiError(409, 'calibration_rule', 'This calibration record is deleted; restore it first');
@@ -202,6 +204,7 @@ export class CalibrationRecordsService {
                 (select id from public.ncr_classifications where organisation_id = ${ctx.organisationId!}::uuid and kind = 'category' and code = 'CALIBRATION' and active))
         returning id, reference, source`);
       const ncr = created.rows[0];
+      await writeCustomValues(db, 'nonconformance', ncr.id as string, customValues);
       await this.update1(db, ctx, id, sql`nonconformance_id = ${ncr.id as string}::uuid`);
       return { id: ncr.id as string, reference: ncr.reference as string, source: ncr.source as string };
     });

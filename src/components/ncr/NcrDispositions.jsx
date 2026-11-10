@@ -204,6 +204,10 @@ const NcrDispositions = ({ ncrId, canEdit }) => {
                   {decisionLabel(x.decision)} · {x.quantity}
                 </span>
                 {x.lot && <span className="rounded-full border border-border-color px-2 py-0.5 text-xs text-secondary-text">Lot {x.lot.lotNumber}</span>}
+                {String(x.id).startsWith("pending-") ? (
+                  // Shown at once while it saves (optimistic): it has no real id yet, so nothing can be done to it.
+                  <span className="ml-auto text-xs text-secondary-text" role="status">Saving…</span>
+                ) : (
                 <span className="ml-auto flex flex-wrap gap-2">
                   {x.status === "proposed" && d.canApprove && (
                     <CTAButton buttonType="button" type="main" size="lg" onClick={() => setApproving(x)}>
@@ -223,6 +227,7 @@ const NcrDispositions = ({ ncrId, canEdit }) => {
                     </CTAButton>
                   )}
                 </span>
+                )}
               </div>
               <p className="text-sm text-primary-text">{x.instructions}</p>
               {x.reference && <p className="text-xs text-secondary-text">Reference: {x.reference}</p>}

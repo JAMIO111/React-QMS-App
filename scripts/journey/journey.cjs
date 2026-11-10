@@ -199,6 +199,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await defineAudit({ page, stack, APP, orgName, see, shot, step, log });
   await carryOutAudit({ page, stack, APP, orgName, see, shot, step, log });
   await workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, log });
+  await importWithTemplate({ page, stack, APP, orgName, see, shot, step, log });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -236,7 +237,7 @@ async function jobHub({ page, stack, APP, orgName, see, shot, step, log, owner }
   const today = new Date().toISOString().slice(0, 10);
   const alert = await api('POST', '/quality-alerts', { title: 'Burr on the bore', category: 'product', severity: 'high' });
   await api('PATCH', `/quality-alerts/${alert.id}`, {
-    description: 'A sharp edge is being left inside the bore.', requiredAction: 'Deburr every part before it leaves the machine.', effectiveDate: today, acknowledgeBy: new Date(Date.now() + 86400_000).toISOString().slice(0, 10),
+    description: 'A sharp edge is being left inside the bore.', actions: [{ description: 'Deburr every part before it leaves the machine.' }], effectiveDate: today, acknowledgeBy: new Date(Date.now() + 86400_000).toISOString().slice(0, 10),
     scope: { parts: [{ partId: part.id }], machines: [], operations: [], departments: [], targets: [{ roleId: role.id }] },
   });
   await api('POST', `/quality-alerts/${alert.id}/issue`);
@@ -642,7 +643,9 @@ async function affectedLots({ page, stack, APP, orgName, see, shot, step, log })
 
   await page.getByRole('button', { name: 'Propose a disposition' }).click();
   const propose = page.getByRole('dialog', { name: 'Propose a disposition' });
-  await propose.getByLabel('Lot').selectOption({ label: 'LOT-9001 (5 affected)' });
+  // The lot is a combo box now (the disposition dialog's drop-downs became combos).
+  await propose.getByRole('combobox', { name: 'Lot' }).click();
+  await page.getByRole('option', { name: /^LOT-9001/ }).click();
   await propose.getByLabel(/Instructions/).fill('Scrap the five oversize pieces from lot 9001');
   await propose.getByRole('button', { name: 'Propose' }).click();
   await see(page.getByRole('list', { name: 'Dispositions' }).getByText('Lot LOT-9001'));
@@ -942,4 +945,65 @@ async function workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, l
     `select md.code as detected, mc.code as causal from public.nonconformances n join public.machines md on md.id = n.detection_process_id join public.machines mc on mc.id = n.causal_process_id where n.title = 'Rod bore burr'`);
   if (!placed || placed.detected !== 'CNC-J1' || placed.causal !== 'CNC-J1') throw new Error(`the machines were not saved on the NC: ${JSON.stringify(placed)}`);
   await shot(page, '72-nc-machines');
+}
+
+/**
+ * Import templates (docs/import-templates-plan.md, UI2d): switch on advanced imports, import machines from a CSV file in the wizard with a step on one field
+ * and a formula on another (the examples come from the server preview), save the mapping as a template on the way, check what was written, then open the
+ * template in the template manager.
+ */
+async function importWithTemplate({ page, stack, APP, orgName, see, shot, step, log }) {
+  const org = (await stack.admin.query(`select id from public.organisations where name = $1`, [orgName])).rows[0];
+  const site = (await stack.admin.query(`select code from public.sites where organisation_id = $1 order by created_at limit 1`, [org.id])).rows[0].code;
+
+  step('owner switches on advanced imports');
+  await page.goto(`${APP}/Settings/Integrations`);
+  const advanced = page.getByRole('switch', { name: 'Advanced imports' });
+  await see(advanced);
+  await page.locator('label', { has: advanced }).click(); // the switch's checkbox is visually hidden inside its label
+  await see(page.getByRole('link', { name: 'Manage templates' }));
+
+  step('owner imports machines from a file with a step and a formula');
+  await page.getByRole('link', { name: /Import a file/ }).click();
+  await page.getByRole('button', { name: /^Machines/ }).click();
+  await page.getByRole('button', { name: 'Next' }).click();
+  await see(page.getByText('How to read the file'));
+  const csv = ['Code,Name,Site,Area', `JT-LATHE-1,big lathe,${site},Bay 1`, `JT-MILL-2,small mill,${site},Bay 2`].join('\n');
+  await page.locator('[data-testid="file-input"]').setInputFiles({ name: 'machines.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await see(page.getByRole('table', { name: 'First rows' }));
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  const name = page.getByRole('listitem', { name: 'Name', exact: true });
+  await see(name);
+  await see(name.getByLabel('Example for Name').getByText('big lathe'));
+  await name.getByRole('button', { name: 'Show settings for Name' }).click();
+  const steps = name.getByRole('region', { name: 'Steps for Name' });
+  await steps.getByRole('combobox', { name: 'Add a step' }).click();
+  await page.getByRole('option', { name: /^Capitals/ }).click();
+  await see(steps.getByLabel('After step 1').getByText('BIG LATHE'));
+
+  const description = page.getByRole('listitem', { name: 'Description', exact: true });
+  await description.getByRole('button', { name: 'Show settings for Description' }).click();
+  await description.locator('label', { has: page.getByRole('switch', { name: 'Use a formula instead of a column' }) }).click();
+  await description.getByLabel('Formula for Description').fill('CONCAT([Name], " in ", [Area])');
+  await see(description.getByText('big lathe in Bay 1'));
+  await shot(page, '60-import-mapping-steps-formula');
+
+  await page.getByRole('button', { name: 'Import 2 rows' }).click();
+  const dialog = page.getByRole('dialog');
+  await see(dialog.getByLabel('Template name'));
+  await dialog.getByRole('button', { name: 'Save and import' }).click();
+  await page.waitForURL(/\/runs\//);
+  await see(page.getByText(/template Machines from machines\.csv version 1/));
+  await shot(page, '61-import-run');
+  const made = (await stack.admin.query(`select code, name, description from public.machines where organisation_id = $1 and code like 'JT-%' order by code`, [org.id])).rows;
+  log(`imported machines: ${JSON.stringify(made)}`);
+  if (made.length !== 2 || made[0].name !== 'BIG LATHE' || made[0].description !== 'big lathe in Bay 1') throw new Error(`the import did not write what the preview showed: ${JSON.stringify(made)}`);
+
+  step('owner opens the template in the template manager');
+  await page.goto(`${APP}/Settings/Integrations/Templates`);
+  await page.getByRole('link', { name: 'Machines from machines.csv' }).click();
+  await see(page.getByRole('button', { name: 'Version 1' }));
+  await see(page.getByText('CONCAT([Name], " in ", [Area])'));
+  await shot(page, '62-template-manager');
 }

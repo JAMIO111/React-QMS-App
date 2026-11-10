@@ -74,7 +74,7 @@ const AdvancedImports = () => {
         <p id="advanced-imports" className="text-sm text-secondary-text">
           When on, a field can be filled by a formula such as <span className="font-mono">CONCAT("M-", UPPER([Code]))</span>, and import templates can be renamed, duplicated, archived and their earlier versions brought back.
         </p>
-        <Switch aria-label="Advanced imports" aria-describedby="advanced-imports" checked={on} disabled={!can("organisation.manage") || !org.data} onClick={toggle} />
+        <Switch aria-label="Advanced imports" aria-describedby="advanced-imports" checked={on} disabled={!can("organisation.manage") || !org.data} onChange={toggle} />
       </div>
     </MenuCard>
   );

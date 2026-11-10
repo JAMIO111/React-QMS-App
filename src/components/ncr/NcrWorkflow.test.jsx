@@ -227,6 +227,23 @@ describe("dispositions", () => {
     expect(sent("/ncrs/n1/dispositions")[0][1].body).toEqual({ decision: "rework", quantity: 4, instructions: "Rework at op 20", reference: null, lotId: null });
   });
 
+  it("offers nothing on a disposition that is still saving, so its placeholder id is never sent", async () => {
+    dispositions = { ...dispositions, data: [disp({ id: "pending-1" }), disp({ id: "d2", instructions: "Saved one" })] };
+    renderIt(<NcrDispositions ncrId="n1" canEdit />);
+    const saving = (await screen.findByText("Scrap 6 and record the lot")).closest("li");
+    expect(within(saving).getByRole("status")).toHaveTextContent("Saving…");
+    expect(within(saving).queryByRole("button")).toBeNull();
+    expect(within(screen.getByText("Saved one").closest("li")).getByRole("button", { name: "Approve…" })).toBeInTheDocument();
+  });
+
+  it("offers nothing on a containment action that is still saving", async () => {
+    containment = { ...containment, actions: [action({ id: "pending-1" })] };
+    renderIt(<NcrContainment ncrId="n1" canEdit />);
+    const saving = (await screen.findByText("Quarantine lot 77 in the cage")).closest("li");
+    expect(within(saving).getByRole("status")).toHaveTextContent("Saving…");
+    expect(within(saving).queryByRole("button")).toBeNull();
+  });
+
   it("asks for the customer's approval reference when the decision is a concession", async () => {
     const user = userEvent.setup();
     renderIt(<NcrDispositions ncrId="n1" canEdit />);

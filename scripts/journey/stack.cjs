@@ -1,7 +1,8 @@
 /**
  * The stack the browser journey runs against (docs/onboarding-plan.md §16): the REAL API (compiled, api/dist) on the REAL migrated database,
  * with two stand-ins for outside services:
- *   - a fake Supabase (auth: sign-up, password sign-in, refresh, user, sign-out; REST: the two reads the app makes; storage: nothing), and
+ *   - a fake Supabase (auth: sign-up, password sign-in, refresh, user, sign-out; REST: the two reads the app makes; storage: uploads kept in memory, which the
+ *     API's file store reads back for file imports), and
  *   - a fake Stripe gateway (Checkout page included) in place of api.stripe.com.
  * Nothing here is used in production. Needs DATABASE_URL and DATABASE_ADMIN_URL (scripts/db-check.sh sets them).
  */
@@ -30,7 +31,24 @@ function sign(user, extra = {}) {
     .sign(new TextEncoder().encode(JWT_SECRET));
 }
 
-async function startFakeSupabase(admin, stripe, log) {
+/** The file of a multipart upload (supabase-js sends a File as form data with one file part). */
+function multipartFile(buf, contentType) {
+  const m = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType ?? '');
+  if (!m) return buf;
+  const boundary = Buffer.from(`--${m[1] ?? m[2]}`);
+  let at = buf.indexOf(boundary);
+  while (at !== -1) {
+    const next = buf.indexOf(boundary, at + boundary.length);
+    if (next === -1) break;
+    const part = buf.subarray(at + boundary.length, next);
+    const headEnd = part.indexOf('\r\n\r\n');
+    if (headEnd !== -1 && /filename=/i.test(part.subarray(0, headEnd).toString())) return part.subarray(headEnd + 4, part.length - 2);
+    at = next;
+  }
+  return buf;
+}
+
+async function startFakeSupabase(admin, stripe, log, storage) {
   const passwords = new Map(); // email -> password
   const refresh = new Map(); // refresh token -> user id
   const userJson = (u) => ({ id: u.id, aud: 'authenticated', role: 'authenticated', email: u.email, email_confirmed_at: u.email_confirmed_at, created_at: u.created_at, app_metadata: {}, user_metadata: u.raw_user_meta_data ?? {}, identities: [{ id: u.id }], factors: [] });
@@ -69,6 +87,16 @@ async function startFakeSupabase(admin, stripe, log) {
         const r = await admin.query('insert into auth.users (email, raw_user_meta_data) values ($1, $2) returning *', [b.email, JSON.stringify(b.data ?? {})]);
         passwords.set(b.email.toLowerCase(), b.password);
         return reply(200, userJson(r.rows[0]));
+      }
+      if (url.pathname.startsWith('/storage/v1/object/')) {
+        const key = decodeURIComponent(url.pathname.slice('/storage/v1/object/'.length));
+        if (req.method === 'POST' || req.method === 'PUT') {
+          const chunks = [];
+          for await (const c of req) chunks.push(c);
+          storage.set(key, multipartFile(Buffer.concat(chunks), req.headers['content-type']));
+          return reply(200, { Key: key, Id: crypto.randomUUID() });
+        }
+        return storage.has(key) ? (res.writeHead(200, cors), res.end(storage.get(key))) : reply(404, { message: 'Object not found' });
       }
       if (url.pathname === '/auth/v1/resend') return reply(200, {});
       if (url.pathname === '/auth/v1/token' && req.method === 'POST') {
@@ -161,14 +189,18 @@ async function startStack({ appUrl, log = console.log }) {
   const { loadEnv } = require('../../api/dist/config/env');
   const { StripeGateway } = require('../../api/dist/billing/stripe.gateway');
   const { ApiError } = require('../../api/dist/common/api-error');
+  const { IntegrationFileStore } = require('../../api/dist/integrations/core/file-store');
   const stripe = makeFakeStripe(StripeGateway, ApiError);
+  // Uploaded import files: the browser stores them in the stand-in, and the API reads them back from the same place.
+  const storage = new Map();
+  const files = { get enabled() { return true; }, download: async (p) => (storage.has(`integration-files/${p}`) ? new Uint8Array(storage.get(`integration-files/${p}`)) : null) };
   const env = loadEnv({ NODE_ENV: 'test', DATABASE_URL: dbUrl, SUPABASE_JWT_SECRET: JWT_SECRET, JWT_ISSUER: ISSUER, LOG_LEVEL: 'silent', PORT: String(PORTS.api), CORS_ORIGINS: appUrl, APP_BASE_URL: appUrl, RATE_LIMIT_PER_MINUTE: '100000' });
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(env)] }).overrideProvider(StripeGateway).useValue(stripe).compile();
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(env)] }).overrideProvider(StripeGateway).useValue(stripe).overrideProvider(IntegrationFileStore).useValue(files).compile();
   const nest = moduleRef.createNestApplication({ bufferLogs: true, rawBody: true });
   const api = configureApp(nest, env);
   await api.init();
   await api.listen(PORTS.api, '127.0.0.1');
-  const fake = await startFakeSupabase(admin, stripe, log);
+  const fake = await startFakeSupabase(admin, stripe, log, storage);
   return {
     admin, api, stripe, passwords: fake.passwords, ports: PORTS, sign,
     stop: async () => { await new Promise((r) => fake.server.close(r)); await api.close(); await admin.end(); },

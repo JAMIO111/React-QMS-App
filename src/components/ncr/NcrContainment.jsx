@@ -193,6 +193,10 @@ const NcrContainment = ({ ncrId, canEdit }) => {
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS[a.status].tone}`}>{STATUS[a.status].label}</span>
                 <span className="text-xs text-secondary-text">{containmentKindLabel(a.kind)}</span>
                 {a.lot && <span className="rounded-full border border-border-color px-2 py-0.5 text-xs text-secondary-text">Lot {a.lot.lotNumber}</span>}
+                {String(a.id).startsWith("pending-") ? (
+                  // Shown at once while it saves (optimistic): it has no real id yet, so nothing can be done to it.
+                  <span className="ml-auto text-xs text-secondary-text" role="status">Saving…</span>
+                ) : (
                 <span className="ml-auto flex flex-wrap gap-2">
                   {canEdit && a.status === "open" && (
                     <>
@@ -215,6 +219,7 @@ const NcrContainment = ({ ncrId, canEdit }) => {
                     </CTAButton>
                   )}
                 </span>
+                )}
               </div>
               <p className="text-sm text-primary-text">{a.description}</p>
               <p className="text-xs text-secondary-text">

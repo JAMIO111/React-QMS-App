@@ -100,8 +100,9 @@ const ManageDialog = ({ saved, describe, onRename, onDelete, onClose }) => (
                 label={`Actions for ${f.name}`}
                 width={192}
                 items={[
-                  { label: "Rename", icon: PencilIcon, onSelect: () => onRename(f) },
-                  { label: "Delete", icon: Trash2Icon, tone: "danger", onSelect: () => onDelete(f) },
+                  // A filter still saving (optimistic) has no real id yet: it can be renamed or deleted once it is saved.
+                  { label: "Rename", icon: PencilIcon, disabled: String(f.id).startsWith("pending-"), onSelect: () => onRename(f) },
+                  { label: "Delete", icon: Trash2Icon, tone: "danger", disabled: String(f.id).startsWith("pending-"), onSelect: () => onDelete(f) },
                 ]}
                 trigger={(props) => (
                   <button {...props} aria-label={`Actions for ${f.name}`} className="shrink-0 rounded-lg p-1.5 text-secondary-text hover:text-brand-primary cursor-pointer active:scale-97 transition-transform">

@@ -45,6 +45,8 @@ export interface SendRequest {
   connectTimeoutMs: number;
   timeoutMs: number;
   maxBytes: number;
+  /** Tests only (a local TLS server); `SafeHttpClient` never sets it, so real calls always go to 443. */
+  port?: number;
 }
 
 export interface SafeHttpOptions {
@@ -182,8 +184,24 @@ const systemResolve = (host: string): Promise<ResolvedAddress[]> =>
     }),
   );
 
+/**
+ * The `lookup` given to the socket: it answers with the checked address only, whatever the host. Node 20+ asks with `{ all: true }`
+ * (happy eyeballs) and then needs a list; older callers want one address. Answering the wrong shape fails before any connection
+ * ("Invalid IP address: undefined"), which is what made every REST connection test fail.
+ */
+export const pinnedLookup =
+  (address: ResolvedAddress) =>
+  (_host: string, opts: unknown, callback: (...args: unknown[]) => void): void => {
+    const cb = typeof opts === 'function' ? (opts as (...args: unknown[]) => void) : callback;
+    if (opts && typeof opts === 'object' && (opts as { all?: boolean }).all) cb(null, [{ address: address.address, family: address.family }]);
+    else cb(null, address.address, address.family);
+  };
+
+/** Which checked address to connect to: IPv4 first (serverless hosts often have no IPv6 route); every address was checked already. */
+export const preferredAddress = (addresses: ResolvedAddress[]): ResolvedAddress => addresses.find((a) => a.family === 4) ?? addresses[0];
+
 /** https with the socket pinned to the address that was checked; the certificate is verified against the host name. No proxy, no redirects, no agent reuse. */
-const pinnedHttpsSend = (req: SendRequest): Promise<SafeResponse> =>
+export const pinnedHttpsSend = (req: SendRequest): Promise<SafeResponse> =>
   new Promise((resolve, reject) => {
     let settled = false;
     const finish = (error: Error | null, value?: SafeResponse) => {
@@ -198,13 +216,13 @@ const pinnedHttpsSend = (req: SendRequest): Promise<SafeResponse> =>
         protocol: 'https:',
         host: req.url.hostname,
         servername: req.url.hostname,
-        port: 443,
+        port: req.port ?? 443,
         method: 'GET',
         path: `${req.url.pathname}${req.url.search}`,
         headers: { ...req.headers, host: req.url.host },
         agent: false,
         // The lookup Node uses for this socket answers with the checked address only.
-        lookup: (_host, _opts, callback) => (callback as (e: Error | null, a: string, f: number) => void)(null, req.address.address, req.address.family),
+        lookup: pinnedLookup(req.address) as never,
         rejectUnauthorized: true,
       },
       (res) => {
@@ -245,7 +263,7 @@ const pinnedHttpsSend = (req: SendRequest): Promise<SafeResponse> =>
       finish(
         e.code && /CERT|SSL|TLS|SELF_SIGNED|UNABLE_TO_VERIFY|HOSTNAME|ERR_TLS/i.test(e.code)
           ? new SafeHttpError('The server\'s certificate could not be trusted', 'blocked')
-          : new SafeHttpError('The server could not be reached', 'network'),
+          : new SafeHttpError(`The server could not be reached${e.code ? ` (${e.code})` : ''}`, 'network'),
       ),
     );
     r.end();
@@ -289,7 +307,7 @@ export class SafeHttpClient {
 
     const timeoutMs = Math.min(Math.max(options.timeoutMs ?? 30_000, 1_000), 60_000);
     const maxBytes = Math.min(options.maxBytes ?? MAX_RESPONSE_BYTES, MAX_RESPONSE_BYTES);
-    const res = await this.send({ url, address: addresses[0], headers, connectTimeoutMs: Math.min(CONNECT_TIMEOUT_MS, timeoutMs), timeoutMs, maxBytes });
+    const res = await this.send({ url, address: preferredAddress(addresses), headers, connectTimeoutMs: Math.min(CONNECT_TIMEOUT_MS, timeoutMs), timeoutMs, maxBytes });
     if (res.body.length > maxBytes) throw new SafeHttpError('The answer is larger than allowed', 'too_large');
     if (res.status >= 300 && res.status < 400) {
       throw new SafeHttpError(`The API answered with a redirect (${res.status}); give the final address in the connection instead. Redirects are never followed.`, 'redirect');

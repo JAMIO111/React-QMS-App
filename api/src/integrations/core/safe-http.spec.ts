@@ -1,4 +1,10 @@
-import { hostAllowed, isPublicAddress, ResolvedAddress, SafeHttpClient, SafeHttpError, SendRequest, urlProblem } from './safe-http';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { createServer } from 'node:https';
+import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { hostAllowed, isPublicAddress, pinnedHttpsSend, pinnedLookup, preferredAddress, ResolvedAddress, SafeHttpClient, SafeHttpError, SendRequest, urlProblem } from './safe-http';
 
 const ok = (body = '[]', status = 200, headers: Record<string, string> = {}) => async () => ({ status, headers, body: Buffer.from(body) });
 
@@ -125,5 +131,44 @@ describe('a guarded request', () => {
     await refused(c.get(new URL('https://127.0.0.1/')), 'blocked');
     await refused(c.get(new URL('https://169.254.169.254/latest/meta-data')), 'blocked');
     await refused(c.get(new URL('https://localhost/')), 'blocked');
+  });
+});
+
+describe('the socket pinned to the checked address', () => {
+  it('answers Node\'s lookup in both shapes: a list when asked for all addresses (Node 20+), else one address', () => {
+    const calls: unknown[][] = [];
+    const lookup = pinnedLookup({ address: '93.184.215.14', family: 4 });
+    lookup('api.example.com', { all: true, hints: 32 }, (...a: unknown[]) => calls.push(a));
+    lookup('api.example.com', { family: 0 }, (...a: unknown[]) => calls.push(a));
+    lookup('api.example.com', ((...a: unknown[]) => calls.push(a)) as unknown, undefined as never);
+    expect(calls).toEqual([
+      [null, [{ address: '93.184.215.14', family: 4 }]],
+      [null, '93.184.215.14', 4],
+      [null, '93.184.215.14', 4],
+    ]);
+  });
+
+  it('connects over IPv4 when the host has an IPv4 address, else uses the first', () => {
+    expect(preferredAddress([{ address: '2606:4700::1', family: 6 }, { address: '93.184.215.14', family: 4 }])).toEqual({ address: '93.184.215.14', family: 4 });
+    expect(preferredAddress([{ address: '2606:4700::1', family: 6 }])).toEqual({ address: '2606:4700::1', family: 6 });
+  });
+
+  it('really opens the connection to the pinned address and checks the certificate against the host name', async () => {
+    // A local TLS server with a self-signed certificate: reaching the TLS handshake proves the socket was opened (the old lookup failed before
+    // connecting); the certificate is then refused because nothing trusts it.
+    const dir = mkdtempSync(join(tmpdir(), 'pin-'));
+    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=api.example.com', '-keyout', join(dir, 'k.pem'), '-out', join(dir, 'c.pem')], { stdio: 'ignore' });
+    const server = createServer({ key: readFileSync(join(dir, 'k.pem')), cert: readFileSync(join(dir, 'c.pem')) }, (_q, r) => r.end('[]'));
+    let connections = 0;
+    server.on('connection', () => (connections += 1));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const req: SendRequest = { url: new URL('https://api.example.com/v1/parts'), address: { address: '127.0.0.1', family: 4 }, headers: {}, connectTimeoutMs: 5_000, timeoutMs: 5_000, maxBytes: 1_000 };
+      await refused(pinnedHttpsSend({ ...req, port }), 'blocked', /certificate could not be trusted/);
+      expect(connections).toBe(1);
+    } finally {
+      server.close();
+    }
   });
 });

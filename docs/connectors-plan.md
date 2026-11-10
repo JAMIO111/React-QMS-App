@@ -1,6 +1,6 @@
 # Connectors and integrations (brief Phase 5) — plan
 
-**Status: decisions D1–D10 agreed (D4 refined as in §3 and §5; D5 and D7 amended and D9–D10 added after IN3, see §6.7–§6.9). IN0–IN7 done (IN7 built, migration not applied live yet); IN8 next.**
+**Status: decisions D1–D10 agreed (D4 refined as in §3 and §5; D5 and D7 amended and D9–D10 added after IN3, see §6.7–§6.9). IN0–IN7 done (IN7 applied live 2026-11-10); IN8 next.**
 
 Source: `docs/design-brief.md` §7 (integration platform), §8 (events), §12 Phase 5, §13 (integration backlog), §14 (definition of done for integrations), §15 (non-goals).
 This is the **planning document**. Nothing here is built. Each slice is agreed before it starts (CLAUDE.md, brief §14).

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { iso, personName, Row } from '../calibration/calibration.service';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
+import { IntegrationsService } from './integrations.service';
 import { DatabaseService, Db } from '../database/database.service';
 import { CatalogueService } from './core/catalogue.service';
 import { checkFormula, runFormula } from './core/formula';
@@ -87,6 +88,7 @@ export class IntegrationTemplatesService {
   constructor(
     private readonly database: DatabaseService,
     private readonly catalogues: CatalogueService,
+    private readonly integrations: IntegrationsService,
   ) {}
 
   private async check(ctx: RequestContext, entityType: string, b: TemplateBody): Promise<string> {
@@ -210,10 +212,17 @@ export class IntegrationTemplatesService {
    * How the first rows of a file come out with an unsaved template: per field the value taken, the value after each step, the imported value and the error;
    * plus the column check. Writes nothing. Links to other records are shown as written (they are matched when the import runs).
    */
+  private async sampleOf(ctx: RequestContext, connectionId: string, entityType: string, wanted?: number[]) {
+    const sample = await this.integrations.sample(ctx, connectionId, entityType);
+    return { headers: sample.columns, rows: wanted?.length ? sample.rows.filter((r) => wanted.includes(r.r)) : sample.rows };
+  }
+
   async preview(ctx: RequestContext, b: PreviewTemplateBody): Promise<TemplatePreview> {
     const catalogue = await this.catalogues.get(b.entityType, orgOf(ctx));
     if (!catalogue) throw new ApiError(409, 'integration_rule', 'There are no Fortress fields to map this kind of record to yet');
-    const { headers, rows } = await this.database.asUser(ctx, async (db) => {
+    const { headers, rows } = b.connectionId
+      ? await this.sampleOf(ctx, b.connectionId, b.entityType, b.rows)
+      : await this.database.asUser(ctx, async (db) => {
       const f = await db.execute<Row>(sql`select headers, status from public.integration_files where id = ${b.fileId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
       if (!f.rows[0]) throw ApiError.notFound('file_not_found', 'File not found');
       if (f.rows[0].status !== 'parsed') throw new ApiError(409, 'integration_rule', 'That file could not be read, or its rows have been cleared');

@@ -25,25 +25,32 @@ const RunDialog = ({ connection, onClose }) => {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const active = connection.status === "active";
-  const [entityType, setEntityType] = useState(connection.runnable[0] ?? null);
-  const [kind, setKind] = useState("preview");
   const isFile = connection.provider?.key === "csv";
+  // An API connection reads only the kinds of record its settings say where to find (IN7).
+  const isApi = connection.provider?.kind === "api";
+  const configured = connection.config?.entities ?? {};
+  const choices = isApi ? connection.runnable.filter((t) => t in configured) : connection.runnable;
+  const [entityType, setEntityType] = useState(choices[0] ?? null);
+  const [kind, setKind] = useState("preview");
   const files = useIntegrationFiles(connection.id, { enabled: isFile });
   const parsed = (files.data ?? []).filter((f) => f.status === "parsed");
   const [fileId, setFileId] = useState(null);
   const chosenFile = fileId ?? parsed[0]?.id ?? null;
   // A file is read with an import template for its kind of record (UI2c); the one used most recently is chosen.
-  const templates = useImportTemplates(entityType, { enabled: isFile && !!entityType });
+  const templates = useImportTemplates(entityType, { enabled: (isFile || isApi) && !!entityType });
   const [templateId, setTemplateId] = useState(null);
   const chosenTemplate = (templates.data ?? []).some((t) => t.id === templateId) ? templateId : (defaultTemplate(templates.data) ?? templates.data?.[0])?.id ?? null;
+  // A file always needs a template; an API connection needs one to write (a preview without one shows what arrives).
   const mapped = !isFile || !!chosenTemplate;
+  const apiNeedsTemplate = isApi && !chosenTemplate;
+  const incrementalSet = !isApi || !!configured[entityType]?.incremental;
   // Writing records needs an importer for that kind of record; a preview only needs the mapping.
   const importable = (connection.importable ?? []).includes(entityType);
   const writable = (connection.writable ?? connection.importable ?? []).includes(entityType);
   const kinds = [
     { value: "preview", label: "Preview" },
-    { value: "full", label: isFile ? "Import" : "Full", disabled: !active || !importable || !writable },
-    ...(isFile ? [] : [{ value: "incremental", label: "Incremental", disabled: !active || !importable || !writable }]),
+    { value: "full", label: isFile ? "Import" : "Full", disabled: !active || !importable || !writable || apiNeedsTemplate },
+    ...(isFile ? [] : [{ value: "incremental", label: "Incremental", disabled: !active || !importable || !writable || apiNeedsTemplate || !incrementalSet }]),
   ];
   const runKind = kinds.some((k) => k.value === kind && !k.disabled) ? kind : "preview";
   const blocked = isFile && (!chosenFile || (!templates.isLoading && !mapped));
@@ -51,7 +58,7 @@ const RunDialog = ({ connection, onClose }) => {
     e.preventDefault();
     if (!entityType) return;
     mutation.mutate(
-      { action: "requestRun", id: connection.id, body: { entityType, kind: runKind, ...(isFile ? { fileId: chosenFile, templateId: chosenTemplate } : {}) } },
+      { action: "requestRun", id: connection.id, body: { entityType, kind: runKind, ...(isFile ? { fileId: chosenFile, templateId: chosenTemplate } : {}), ...(isApi && chosenTemplate ? { templateId: chosenTemplate } : {}) } },
       {
         onSuccess: (run) => {
           onClose();
@@ -64,7 +71,8 @@ const RunDialog = ({ connection, onClose }) => {
   return (
     <Dialog title="Run an import" onClose={onClose}>
       <form noValidate onSubmit={go} className="flex flex-col gap-3">
-        <ComboField label="Records" value={entityType} onChange={setEntityType} options={connection.runnable.map((t) => ({ value: t, label: ENTITY_LABELS[t] ?? t }))} required />
+        <ComboField label="Records" value={entityType} onChange={setEntityType} options={choices.map((t) => ({ value: t, label: ENTITY_LABELS[t] ?? t }))} required />
+        {isApi && choices.length === 0 && <Callout tone="warning">Say in the connection's settings where the API gives each kind of record.</Callout>}
         <div className="flex flex-col gap-1">
           <span className="text-sm font-medium text-primary-text">What to do</span>
           <SlidingToggle ariaLabel="What to do" options={kinds} value={runKind} onChange={setKind} />
@@ -79,7 +87,7 @@ const RunDialog = ({ connection, onClose }) => {
           />
         )}
         {isFile && parsed.length === 0 && <Callout tone="warning">Upload a file first.</Callout>}
-        {isFile && (templates.data ?? []).length > 0 && (
+        {(isFile || isApi) && (templates.data ?? []).length > 0 && (
           <ComboField
             label="Template"
             value={chosenTemplate}
@@ -87,6 +95,11 @@ const RunDialog = ({ connection, onClose }) => {
             options={(templates.data ?? []).map((t) => ({ value: t.id, label: t.name, hint: `version ${t.currentVersion}` }))}
             required
           />
+        )}
+        {isApi && entityType && !templates.isLoading && apiNeedsTemplate && (
+          <Callout tone="info">
+            There is no import template for {ENTITY_LABELS[entityType]?.toLowerCase() ?? "these records"} yet: a preview shows what the API sends, and importing needs a template that maps its fields.
+          </Callout>
         )}
         {isFile && chosenFile && !templates.isLoading && !mapped && (
           <Callout tone="warning" action={<Link to={wizardPath(connection.id, { entity: entityType, file: chosenFile, step: 3 })} className="text-sm font-medium text-link-color hover:underline">Map columns</Link>}>

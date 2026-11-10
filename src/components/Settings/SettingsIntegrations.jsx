@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowRightIcon } from "@/components/icons";
-import { useIntegrationConflicts, useIntegrationConnections, useRecentIntegrationRuns } from "../../hooks/useIntegrations";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowRightIcon, XIcon } from "@/components/icons";
+import { useAllowedHosts, useIntegrationConflicts, useIntegrationConnections, useIntegrationProviders, useRecentIntegrationRuns, useSetAllowedHosts } from "../../hooks/useIntegrations";
+import ConnectionForm from "../integrations/ConnectionForm";
+import Field from "../ui/Field";
 import { useOrganisationDetails, usePermissions, useUpdateOrganisation } from "../../hooks/useQmsApi";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
@@ -80,6 +82,58 @@ const AdvancedImports = () => {
   );
 };
 
+/**
+ * Allowed hosts (IN7): the host names this organisation's API connections may call. Empty means any public host (private and reserved addresses are
+ * always refused). An entry allows the host and its sub-domains. Optimistic: the list changes at once and goes back with a message if refused.
+ */
+const AllowedHosts = () => {
+  const list = useAllowedHosts();
+  const save = useSetAllowedHosts();
+  const { showToast } = useToast();
+  const [draft, setDraft] = useState("");
+  const hosts = list.data?.hosts ?? [];
+  const canManage = !!list.data?.canManage;
+  const send = (next) =>
+    save.mutate(next, { onError: (e) => showToast({ type: "error", title: "Not changed", message: describeApiError(e) }) });
+  const add = (e) => {
+    e.preventDefault();
+    const h = draft.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    if (!h || hosts.includes(h)) return setDraft("");
+    send([...hosts, h]);
+    setDraft("");
+  };
+  return (
+    <MenuCard title="Allowed hosts" subtitle="Which systems API connections may call. Empty: any public host. Private and reserved network addresses are always refused.">
+      <div className="flex flex-col gap-3">
+        {hosts.length === 0 ? (
+          <p className="text-sm text-secondary-text">Any public host may be called.</p>
+        ) : (
+          <ul aria-label="Allowed hosts" className="flex flex-wrap gap-2">
+            {hosts.map((h) => (
+              <li key={h} className="inline-flex items-center gap-1 rounded-full bg-border-color px-3 py-1 text-sm text-primary-text">
+                {h}
+                {canManage && (
+                  <button type="button" aria-label={`Remove ${h}`} className="text-secondary-text hover:text-primary-text" onClick={() => send(hosts.filter((x) => x !== h))}>
+                    <XIcon />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {canManage && (
+          <form noValidate onSubmit={add} className="flex items-end gap-2">
+            <div className="flex-1">
+              <Field label="Add a host" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="erp.example.com" hint="Allows the host and its sub-domains. Connections to a host no longer allowed are paused." />
+            </div>
+            <CTAButton buttonType="submit" type="neutral" size="md" className="mb-6" disabled={!draft.trim()}>Add</CTAButton>
+          </form>
+        )}
+      </div>
+    </MenuCard>
+  );
+};
+
 /** The page itself (only mounted for people who may see integrations, so nothing is fetched for anyone else). */
 const IntegrationsHome = () => {
   const { can } = usePermissions();
@@ -91,10 +145,17 @@ const IntegrationsHome = () => {
   // Every connection (the one file imports use, a REST API set up for later), reachable for its files and history.
   const others = connections.data ?? [];
   const recent = runs.data?.data ?? [];
+  const navigate = useNavigate();
+  const [adding, setAdding] = useState(null);
+  const providers = useIntegrationProviders();
   const actionFor = (item) =>
     item.key === "csv" && canImport ? (
       <CTAButton to="/Settings/Integrations/csv" type="main" size="md">
         <span className="flex items-center gap-1">Import a file <ArrowRightIcon /></span>
+      </CTAButton>
+    ) : item.key === "rest_api" && can("integrations.manage") ? (
+      <CTAButton type="main" size="md" onClick={() => setAdding("rest_api")}>
+        <span className="flex items-center gap-1">Connect an API <ArrowRightIcon /></span>
       </CTAButton>
     ) : null;
   return (
@@ -115,6 +176,8 @@ const IntegrationsHome = () => {
       )}
 
       <AdvancedImports />
+
+      <AllowedHosts />
 
       {recent.length > 0 && (
         <MenuCard title="Recent imports" subtitle="The latest imports and previews, newest first.">
@@ -149,6 +212,14 @@ const IntegrationsHome = () => {
             ))}
           </ul>
         </MenuCard>
+      )}
+      {adding && (
+        <ConnectionForm
+          providers={providers.data ?? []}
+          initialProvider={adding}
+          onClose={() => setAdding(null)}
+          onCreated={(c) => navigate(`/Settings/Integrations/${c.id}`)}
+        />
       )}
     </div>
   );

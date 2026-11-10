@@ -67,8 +67,13 @@ beforeEach(() => {
 });
 
 describe("Settings → Integrations", () => {
-  it("shows every integration as a card with its logo, and only the file import is available", async () => {
-    routeApi({ "GET /integrations/connections": { data: [conn({ status: "active" })] }, "GET /integrations/runs": { data: [run()], page: 1, pageSize: 8, total: 1 } });
+  it("shows every integration as a card with its logo; the file import and the REST API are available", async () => {
+    routeApi({
+      "GET /integrations/connections": { data: [conn({ status: "active" })] },
+      "GET /integrations/runs": { data: [run()], page: 1, pageSize: 8, total: 1 },
+      "GET /integrations/allowed-hosts": { hosts: [], canManage: true },
+      "GET /integrations/providers": { data: providers },
+    });
     renderAt("/Settings/Integrations");
     const grid = await screen.findByRole("list", { name: "Integrations" });
     const cards = within(grid).getAllByRole("listitem");
@@ -78,7 +83,10 @@ describe("Settings → Integrations", () => {
     expect(within(csv).getByText("Available")).toBeInTheDocument();
     expect(within(csv).getByRole("link", { name: /Import a file/ })).toHaveAttribute("href", "/Settings/Integrations/csv");
     expect(within(within(grid).getByRole("listitem", { name: "SAP" })).getByText("Coming soon")).toBeInTheDocument();
-    expect(within(grid).getAllByText("Coming soon")).toHaveLength(cards.length - 1);
+    expect(within(grid).getAllByText("Coming soon")).toHaveLength(cards.length - 2);
+    const rest = within(grid).getByRole("listitem", { name: "REST API" });
+    expect(within(rest).getByText("Available")).toBeInTheDocument();
+    expect(within(rest).getByRole("button", { name: /Connect an API/ })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Sage 200" })).toHaveAttribute("href", "/Settings/Integrations/c1");
     expect(screen.getByRole("link", { name: /Full import · Suppliers/ })).toHaveAttribute("href", "/Settings/Integrations/c1/runs/r1");
   });
@@ -149,9 +157,10 @@ describe("Imports", () => {
 
   it("starts a preview and lists the runs with what they did", async () => {
     routeApi({
-      "GET /integrations/connections/c1": detail({ runnable: ["supplier"] }),
+      "GET /integrations/connections/c1": detail({ runnable: ["supplier", "part"], config: { ...conn().config, entities: { supplier: { path: "/suppliers" } } } }),
       "GET /integrations/providers": { data: providers },
       "GET /integrations/runs": { ...noRuns, data: [run()], total: 1 },
+      "GET /integrations/templates": { data: [] },
       "POST /integrations/connections/c1/runs": run({ id: "r2", kind: "preview" }),
       "GET /integrations/runs/r2": run({ id: "r2", kind: "preview" }),
       "GET /integrations/runs/r2/rows": { data: [], page: 1, pageSize: 50, total: 0 },

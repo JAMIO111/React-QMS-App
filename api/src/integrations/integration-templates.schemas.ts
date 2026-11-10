@@ -85,13 +85,16 @@ export const TemplateVersionList = z.object({ data: z.array(TemplateVersion.omit
 export const PreviewTemplateBody = z
   .object({
     entityType: z.enum(ENTITY_TYPES),
-    fileId: z.string().uuid(),
+    /** The uploaded file to preview against, or (IN7) an API connection whose first page is read for the preview. */
+    fileId: z.string().uuid().optional(),
+    connectionId: z.string().uuid().optional(),
     keyField: z.string().trim().max(200).default(''),
     fields: z.array(FieldMappingBody).max(100),
     /** Source row numbers to show (as the file numbers them); the first 20 rows when left out. */
     rows: z.array(z.number().int().min(1)).max(20).optional(),
   })
-  .strict();
+  .strict()
+  .refine((b) => !!b.fileId !== !!b.connectionId, 'Give a file or a connection to preview against');
 export type PreviewTemplateBody = z.infer<typeof PreviewTemplateBody>;
 
 const PreviewField = z.object({

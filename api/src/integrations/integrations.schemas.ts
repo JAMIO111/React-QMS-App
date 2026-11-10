@@ -7,7 +7,11 @@ export const CONNECTION_STATUSES = ['draft', 'ready', 'active', 'paused', 'retir
 export const CREDENTIAL_KINDS = ['api_key', 'bearer', 'basic', 'oauth_client'] as const;
 
 /** Non-secret settings only; the database checks the keys and values per provider (and refuses unknown or secret-looking keys). */
-const Config = z.record(z.string().max(60), z.union([z.string().max(400), z.number(), z.boolean()])).refine((c) => Object.keys(c).length <= 20, 'Too many settings');
+const Config = z
+  .record(z.string().max(60), z.union([z.string().max(400), z.number(), z.boolean(), z.record(z.string().max(60), z.record(z.string().max(60), z.unknown()))]))
+  .refine((c) => Object.keys(c).length <= 20, 'Too many settings')
+  // Only a REST connection's "entities" (where each kind of record is) is a nested setting; the database checks every key and value in it.
+  .refine((c) => Object.entries(c).every(([k, v]) => k === 'entities' || typeof v !== 'object'), 'Only "entities" holds nested settings');
 
 export const CreateConnectionBody = z
   .object({
@@ -33,6 +37,12 @@ export const ReasonBody = z.object({ reason: z.string().trim().min(3, 'Say why')
 export type ReasonBody = z.infer<typeof ReasonBody>;
 
 export const EmptyBody = z.object({}).strict();
+
+/** The organisation's allow-list of host names its connections may call (empty: any public host). */
+export const AllowedHostsBody = z.object({ hosts: z.array(z.string().trim().max(253)).max(50) }).strict();
+export type AllowedHostsBody = z.infer<typeof AllowedHostsBody>;
+export const AllowedHosts = z.object({ hosts: z.array(z.string()), canManage: z.boolean() });
+export type AllowedHosts = z.infer<typeof AllowedHosts>;
 
 // ---- output --------------------------------------------------------------------------------------
 
@@ -84,3 +94,7 @@ export const ConnectionDetail = z.object({
   events: z.array(z.object({ action: z.string(), fromStatus: z.string().nullable(), toStatus: z.string().nullable(), note: z.string().nullable(), at: Iso, by: Person })),
 });
 export type ConnectionDetail = z.infer<typeof ConnectionDetail>;
+
+export const SampleBody = z.object({ entityType: z.string().regex(/^[a-z_]{2,40}$/) }).strict();
+export type SampleBody = z.infer<typeof SampleBody>;
+export const Sample = z.object({ columns: z.array(z.string()), rows: z.array(z.object({ r: z.number().int(), v: z.record(z.string(), z.string()) })) });

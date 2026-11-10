@@ -1,6 +1,6 @@
 # Connectors and integrations (brief Phase 5) — plan
 
-**Status: decisions D1–D10 agreed (D4 refined as in §3 and §5; D5 and D7 amended and D9–D10 added after IN3, see §6.7–§6.9). IN0–IN6 done; IN7 next.**
+**Status: decisions D1–D10 agreed (D4 refined as in §3 and §5; D5 and D7 amended and D9–D10 added after IN3, see §6.7–§6.9). IN0–IN7 done (IN7 built, migration not applied live yet); IN8 next.**
 
 Source: `docs/design-brief.md` §7 (integration platform), §8 (events), §12 Phase 5, §13 (integration backlog), §14 (definition of done for integrations), §15 (non-goals).
 This is the **planning document**. Nothing here is built. Each slice is agreed before it starts (CLAUDE.md, brief §14).
@@ -194,6 +194,35 @@ One migration, `20260121100000_integration_purchasing.sql`.
 - **IN6c running totals and the check** (`po_receipt_total`, "Received quantities", always *add and update*): one row per order line with the total received so far (and last date). The source's totals are kept in `integration_po_line_totals` (also written by a purchase order import that maps *Received so far* / *Last received on*). When the total is above what Fortress has received on the line (receipts not cancelled), a delivery of the **difference** is recorded, dated the last received date (historical mode); a lower total makes nothing. **The received quantities check** (`app.integration_receipt_reconciliation`, `GET /integrations/connections/{id}/reconciliation?all=`) lists each reported line: Fortress has less / more / same quantity but another last date / agrees; shown on the connection page.
 - **Deviation from D4:** receipt lines are idempotent through the central map like every other kind (no `external_id` column on the line). Volumes from real exports decide whether the column route is needed (§13.2).
 - **Not built:** imported operations of production orders; reconciliation net of returns (the check compares gross received quantities); returns in the running-totals shape (a lower total is only reported); a received-quantities chart or notifications.
+
+### 6.15 As built in IN7 (the generic REST connector)
+
+- **Guarded client** (`api/src/integrations/core/safe-http.ts`, the only way a connector calls out): https, port 443, a host name (no IP literal, no
+  `localhost` or internal suffix, no user name or password); **every address the name resolves to must be public** (loopback, RFC 1918, CGNAT,
+  link-local incl. 169.254.169.254, unique-local incl. fd00:ec2::254, IPv4-mapped/-compatible/NAT64 forms, documentation, multicast, reserved), checked
+  for IPv4 and IPv6; the TLS socket connects to **the checked address** (pinned lookup; the certificate is verified against the name), so DNS cannot
+  change between check and connect; **redirects are never followed**; 10 s connect and 1–60 s overall timeouts; 10 MB per answer (dropped as soon as it
+  is over); no `Host`, hop-by-hop, cookie, proxy or forwarding header can be set, and no header value may hold a line break.
+- **Adapter** (`providers/rest-api/`): sign-in API key header / bearer / basic from Vault; paging by page number, offset, a cursor token in the answer or
+  a next link (in the answer or the `Link` header, **same origin only**); a dotted path to the list (`data`, `@odata.nextLink` works); fixed query
+  parameters; incremental imports send the highest value of a chosen field seen by the last finished import (`{"w": …}` is the saved cursor; "on or
+  after" filters send the boundary record again, which is then unchanged); records are flattened to text with dotted keys so a mapping reads them like a
+  file row; caps 1,000 records a page, 10,000 pages an import; 429 waits for Retry-After (≤ 1 hour), 5xx and 408 and timeouts are tried again, 401/403
+  and other 4xx stop the import with the reason.
+- **Settings** (`entities` per kind of record, `testPath`) are checked by the database (`app.integration_config_problem`,
+  `app.integration_rest_entity_problem`): paths below the address only, no `//`, `.`/`..` or encoded dots, no query or fragment.
+- **Allow-list** (`organisation_settings.integration_allowed_hosts`, `app.set_integration_allowed_hosts`, `integrations.manage`): empty = any public
+  host; an entry allows the host and its sub-domains; a connection outside it cannot be activated or run (not even a preview) and is paused when the list
+  changes; the connector also refuses it before any lookup. API `GET|PUT /integrations/allowed-hosts`.
+- **Runs**: a REST run must name a kind of record the connection configures; incremental needs the parameter and field; a preview may run without a
+  template, a real import needs one (the run dialog asks; without one the records cannot be identified). `POST /integrations/connections/{id}/sample`
+  reads the first page without storing anything; `POST /integrations/templates/preview` takes `connectionId` instead of `fileId`.
+- **UI**: the REST card is available ("Connect an API"), the connection form has a Records section (kind, path, list, paging, incremental) and a test
+  path, Settings → Integrations has an Allowed hosts card, an API connection's page has "What the API sends", and the run dialog offers only configured
+  records and a template.
+- **Not built in IN7**: the mapping editor reading an API sample (templates for REST are made in the template API or from a CSV export with the same
+  dotted column names; the wizard's file step for APIs is IN7d/IN8), schedules (IN8), OAuth client credentials, request bodies/POST queries, per-request
+  custom headers, response formats other than JSON.
 
 ## 7. Entity catalogue (Phase 5)
 

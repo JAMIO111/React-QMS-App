@@ -125,9 +125,13 @@ export class SyncEngine {
           const secret = needsSecret
             ? ((await call((c) => c.query('select app.integration_credential_secret($1::uuid, $2::uuid) as s', [organisationId, lease.connectionId]))).rows[0].s as string | null)
             : null;
+          // An adapter that calls out over the network is held to the organisation's allow-list of hosts (as well as the address rules it always applies).
+          const allowedHosts = adapter.getMetadata().kind === 'api'
+            ? ((await call((c) => c.query('select app.system_integration_allowed_hosts($1::uuid) as h', [organisationId]))).rows[0].h as string[])
+            : undefined;
           let page;
           try {
-            page = await adapter.fetchRecords({ config: lease.config ?? {}, secret, file }, lease.entityType, cursor);
+            page = await adapter.fetchRecords({ config: lease.config ?? {}, secret, file, allowedHosts }, lease.entityType, cursor);
           } catch (error) {
             if (error instanceof ConnectorError) return await runError(error.kind, error.message, error.transient, error.retryAfterSeconds);
             this.log.warn({ runId, err: error instanceof Error ? error.name : 'unknown' }, 'integration fetch failed');

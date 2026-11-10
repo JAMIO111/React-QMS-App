@@ -361,3 +361,39 @@ export const useReceiptReconciliation = (connectionId, { all = false, enabled = 
     retry: false,
   });
 };
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+// REST connections (IN7): the organisation's allow-list of hosts, and a sample of what an API sends.
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+
+/** The host names this organisation's connections may call (empty: any public host), and whether the caller may change them. */
+export const useAllowedHosts = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({ queryKey: key(organisationId, "allowed-hosts"), queryFn: () => apiFetch(`${BASE}/allowed-hosts`, { organisationId }), enabled: !!organisationId && enabled, retry: false });
+};
+
+/** Replace the allow-list. Optimistic: the list changes at once and goes back if the server refuses. */
+export const useSetAllowedHosts = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  const k = key(organisationId, "allowed-hosts");
+  return useMutation({
+    mutationFn: (hosts) => apiFetch(`${BASE}/allowed-hosts`, { method: "PUT", body: { hosts }, organisationId }),
+    onMutate: async (hosts) => {
+      await queryClient.cancelQueries({ queryKey: k });
+      const previous = queryClient.getQueryData(k);
+      if (previous) queryClient.setQueryData(k, { ...previous, hosts });
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(k, ctx.previous);
+    },
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** Read the first page of one kind of record from an API connection (nothing is stored): columns and up to 20 rows. */
+export const useApiSample = (connectionId) => {
+  const { organisationId } = useOrganisation();
+  return useMutation({ mutationFn: (entityType) => apiFetch(`${BASE}/connections/${connectionId}/sample`, { method: "POST", body: { entityType }, organisationId }) });
+};

@@ -5,9 +5,10 @@ import { iso, personName, Row } from '../calibration/calibration.service';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
+import { ConnectorError } from './core/connector.interface';
 import { ConnectorRegistry } from './core/connector.registry';
 import { SyncEngine } from './core/sync.engine';
-import { ConnectionDetail, ConnectionList, CreateConnectionBody, CredentialBody, ProviderList, ReasonBody, UpdateConnectionBody } from './integrations.schemas';
+import { AllowedHosts, AllowedHostsBody, ConnectionDetail, ConnectionList, CreateConnectionBody, CredentialBody, ProviderList, ReasonBody, UpdateConnectionBody } from './integrations.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown user' } : null);
@@ -134,6 +135,60 @@ export class IntegrationsService {
     });
   }
 
+  allowedHosts(ctx: RequestContext): Promise<AllowedHosts> {
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<{ hosts: string[]; can: boolean }>(sql`select coalesce(s.integration_allowed_hosts, '{}') as hosts, app.has_permission(${orgOf(ctx)}::uuid, 'integrations.manage') as can
+        from (select ${orgOf(ctx)}::uuid as id) o left join public.organisation_settings s on s.organisation_id = o.id`);
+      return { hosts: r.rows[0]?.hosts ?? [], canManage: !!r.rows[0]?.can };
+    });
+  }
+
+  async setAllowedHosts(ctx: RequestContext, b: AllowedHostsBody): Promise<AllowedHosts> {
+    await this.database.asUser(ctx, async (_db, client) => {
+      await client.query('select app.set_integration_allowed_hosts($1::uuid, $2::text[])', [orgOf(ctx), b.hosts]);
+    });
+    return this.allowedHosts(ctx);
+  }
+
+  /**
+   * The first page of one kind of record from an API connection, without starting an import (IN7): what the API sends, as columns and rows, so an
+   * import template can be made against it. Nothing is stored. Needs integrations.run; the connector applies the same rules as an import (address
+   * rules, the organisation's allow-list, the stored credential).
+   */
+  async sample(ctx: RequestContext, id: string, entityType: string): Promise<{ columns: string[]; rows: Array<{ r: number; v: Record<string, string> }> }> {
+    const info = await this.database.asUser(ctx, async (db) => {
+      const rows = await db.execute<Row>(sql`select p.key as provider_key, c.config, c.status from public.integration_connections c join public.integration_providers p on p.id = c.provider_id where c.id = ${id}::uuid and c.organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!rows.rows[0]) throw ApiError.notFound('connection_not_found', 'Connection not found');
+      const allowed = await db.execute<{ ok: boolean }>(sql`select app.has_permission(${orgOf(ctx)}::uuid, 'integrations.run') as ok`);
+      if (!allowed.rows[0].ok) throw ApiError.forbidden('You are not allowed to read from integration connections');
+      return rows.rows[0];
+    });
+    if (info.status === 'retired') throw new ApiError(409, 'integration_rule', 'A retired connection cannot be read');
+    const adapter = this.registry.get(info.provider_key as string);
+    const meta = adapter?.getMetadata();
+    if (!adapter?.fetchRecords || meta?.kind !== 'api') throw new ApiError(409, 'integration_rule', 'Only an API connection gives a sample; a file is read when it is uploaded');
+    const { secret, allowedHosts } = await this.database.asApi(
+      async (client) => ({
+        secret: meta.authTypes.length > 0 ? ((await client.query('select app.integration_credential_secret($1::uuid, $2::uuid) as s', [orgOf(ctx), id])).rows[0].s as string | null) : null,
+        allowedHosts: (await client.query('select app.system_integration_allowed_hosts($1::uuid) as h', [orgOf(ctx)])).rows[0].h as string[],
+      }),
+      ctx.correlationId,
+      'integration',
+    );
+    let page;
+    try {
+      page = await adapter.fetchRecords({ config: (info.config as Record<string, unknown>) ?? {}, secret, allowedHosts }, entityType, null);
+    } catch (e) {
+      if (e instanceof ConnectorError) throw new ApiError(409, 'integration_rule', e.message);
+      throw e;
+    }
+    const rows = page.records.slice(0, 20).map((rec, i) => ({ r: i + 1, v: rec.payload as Record<string, string> }));
+    const columns: string[] = [];
+    const seenColumns = new Set<string>();
+    for (const rec of page.records) for (const k of Object.keys(rec.payload)) if (!seenColumns.has(k) && columns.length < 500) { seenColumns.add(k); columns.push(k); }
+    return { columns, rows };
+  }
+
   /** Ask the provider's adapter whether the connection works, and record the result. An adapter that cannot test yet is reported, not recorded. */
   async test(ctx: RequestContext, id: string): Promise<ConnectionDetail> {
     const info = await this.database.asUser(ctx, async (db) => {
@@ -151,7 +206,10 @@ export class IntegrationsService {
     const secret = meta.authTypes.length > 0 && meta.capabilities.testable
       ? await this.database.asApi(async (client) => ((await client.query('select app.integration_credential_secret($1::uuid, $2::uuid) as s', [orgOf(ctx), id])).rows[0].s as string | null), ctx.correlationId, 'integration')
       : null;
-    const result = await adapter.testConnection({ config: (info.config as Record<string, unknown>) ?? {}, secret });
+    const allowedHosts = meta.kind === 'api'
+      ? await this.database.asApi(async (client) => (await client.query('select app.system_integration_allowed_hosts($1::uuid) as h', [orgOf(ctx)])).rows[0].h as string[], ctx.correlationId, 'integration')
+      : undefined;
+    const result = await adapter.testConnection({ config: (info.config as Record<string, unknown>) ?? {}, secret, allowedHosts });
     if (result.notImplemented) throw new ApiError(409, 'integration_rule', result.message);
     return this.database.asUser(ctx, async (db) => {
       await db.execute(sql`select app.record_integration_connection_test(${id}::uuid, ${result.ok}, ${result.message})`);

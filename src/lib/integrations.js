@@ -77,9 +77,88 @@ export const configFromForm = (provider, f) => {
     const c = { baseUrl: (f.baseUrl ?? "").trim(), authType: f.authType || "none" };
     if (c.authType === "api_key") c.apiKeyHeader = (f.apiKeyHeader ?? "").trim();
     if (f.timeoutSeconds !== "" && f.timeoutSeconds != null) c.timeoutSeconds = Number(f.timeoutSeconds);
+    if ((f.testPath ?? "").trim()) c.testPath = f.testPath.trim();
+    const entities = restRowsToEntities(f.records ?? []);
+    if (Object.keys(entities).length) c.entities = entities;
     return c;
   }
   return {};
+};
+
+// ---- REST connections (IN7): where each kind of record is and how the API pages ----------------------------------------------------------
+
+export const PAGING_STYLES = [
+  { value: "none", label: "One answer holds everything" },
+  { value: "page", label: "Page numbers", hint: "?page=1&per_page=100" },
+  { value: "offset", label: "Offset and limit", hint: "?offset=0&limit=100" },
+  { value: "cursor", label: "A cursor in the answer", hint: "The answer says where the next page starts" },
+  { value: "next_link", label: "A link to the next page", hint: "In the answer, or in the Link header" },
+];
+
+const blankRecord = (entityType = null) => ({
+  entityType, path: "", recordsPath: "", style: "none", pageSize: "", pageParam: "", sizeParam: "", firstPage: "1", offsetParam: "", limitParam: "",
+  cursorParam: "", nextCursorPath: "", nextLinkPath: "", linkHeader: false, incremental: false, incParam: "", incField: "",
+});
+export const newRestRecord = (entityType) => blankRecord(entityType);
+
+/** A REST connection's `entities` setting as editable rows, one per kind of record. */
+export const restEntitiesToRows = (entities = {}) =>
+  Object.entries(entities ?? {}).map(([entityType, e]) => {
+    const p = e.paging ?? {};
+    return {
+      ...blankRecord(entityType),
+      path: e.path ?? "", recordsPath: e.recordsPath ?? "", style: p.style ?? "none", pageSize: p.pageSize != null ? String(p.pageSize) : "",
+      pageParam: p.pageParam ?? "", sizeParam: p.sizeParam ?? "", firstPage: p.firstPage != null ? String(p.firstPage) : "1",
+      offsetParam: p.offsetParam ?? "", limitParam: p.limitParam ?? "", cursorParam: p.cursorParam ?? "", nextCursorPath: p.nextCursorPath ?? "",
+      nextLinkPath: p.nextLinkPath === "header" ? "" : (p.nextLinkPath ?? ""), linkHeader: p.nextLinkPath === "header",
+      incremental: !!e.incremental, incParam: e.incremental?.param ?? "", incField: e.incremental?.field ?? "",
+      query: e.query,
+    };
+  });
+
+/** The rows back into the setting the API takes (only what was given). */
+export const restRowsToEntities = (rows) => {
+  const out = {};
+  for (const r of rows) {
+    if (!r.entityType) continue;
+    const t = (v) => (v ?? "").trim();
+    const e = { path: t(r.path) };
+    if (t(r.recordsPath)) e.recordsPath = t(r.recordsPath);
+    if (r.query && Object.keys(r.query).length) e.query = r.query;
+    if (r.style && r.style !== "none") {
+      const p = { style: r.style };
+      if (t(r.pageSize)) p.pageSize = Number(r.pageSize);
+      if (r.style === "page") {
+        if (t(r.pageParam)) p.pageParam = t(r.pageParam);
+        if (t(r.sizeParam)) p.sizeParam = t(r.sizeParam);
+        if (r.firstPage === "0") p.firstPage = 0;
+      } else if (r.style === "offset") {
+        if (t(r.offsetParam)) p.offsetParam = t(r.offsetParam);
+        if (t(r.limitParam)) p.limitParam = t(r.limitParam);
+      } else if (r.style === "cursor") {
+        if (t(r.cursorParam)) p.cursorParam = t(r.cursorParam);
+        if (t(r.nextCursorPath)) p.nextCursorPath = t(r.nextCursorPath);
+        if (t(r.sizeParam)) p.sizeParam = t(r.sizeParam);
+      } else if (r.style === "next_link") {
+        p.nextLinkPath = r.linkHeader ? "header" : t(r.nextLinkPath);
+        if (t(r.sizeParam)) p.sizeParam = t(r.sizeParam);
+      }
+      e.paging = p;
+    }
+    if (r.incremental && (t(r.incParam) || t(r.incField))) e.incremental = { param: t(r.incParam), field: t(r.incField) };
+    out[r.entityType] = e;
+  }
+  return out;
+};
+
+/** What a row still needs before it can be saved (the server checks everything again). */
+export const restRecordProblem = (r) => {
+  if (!r.entityType) return "Choose the kind of record";
+  if (!/^\//.test((r.path ?? "").trim())) return "The path starts with /";
+  if (r.style === "cursor" && !(r.nextCursorPath ?? "").trim()) return "Say where the answer gives the next cursor";
+  if (r.style === "next_link" && !r.linkHeader && !(r.nextLinkPath ?? "").trim()) return "Say where the answer gives the next page's link";
+  if (r.incremental && (!(r.incParam ?? "").trim() || !(r.incField ?? "").trim())) return "An incremental import needs the parameter and the field";
+  return null;
 };
 
 export const ENTITY_LABELS = {
@@ -336,7 +415,7 @@ export const MATCH_OPTIONS = [
  */
 export const INTEGRATION_CATALOGUE = [
   { key: "csv", providerKey: "csv", name: "CSV or Excel file", description: "Import records from a spreadsheet or a file exported from another system, once.", mark: "file", available: true },
-  { key: "rest_api", providerKey: "rest_api", name: "REST API", description: "Read records from a system that offers a REST API, on a schedule.", mark: "api", available: false },
+  { key: "rest_api", providerKey: "rest_api", name: "REST API", description: "Read records from a system that offers a REST API, page by page, with incremental imports.", mark: "api", available: true },
   { key: "dynamics_bc", name: "Microsoft Dynamics 365 Business Central", description: "Items, vendors, customers and production orders from Business Central.", mark: "microsoft", available: false },
   { key: "sap", name: "SAP", description: "Materials, business partners and orders from SAP S/4HANA or Business One.", mark: "sap", available: false },
   { key: "sage", name: "Sage", description: "Suppliers, customers and stock items from Sage 200 or Sage X3.", mark: "sage", available: false },

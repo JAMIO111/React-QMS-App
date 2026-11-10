@@ -92,7 +92,7 @@ describe('import runs', () => {
   let firstRun: string;
 
   it('a preview runs before activation and writes nothing', async () => {
-    connId = (await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'rest_api', name: 'ERP suppliers', externalSystem: 'erp', config: { baseUrl: 'https://erp.example.com' } }).expect(201)).body.id;
+    connId = (await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'rest_api', name: 'ERP suppliers', externalSystem: 'erp', config: { baseUrl: 'https://erp.example.com', entities: { supplier: { path: '/suppliers', incremental: { param: 'since', field: 'code' } } } } }).expect(201)).body.id;
     const conn = (await api().get(`${base}/connections/${connId}`).set(await owner()).expect(200)).body;
     expect(conn.runnable).toEqual(CATALOGUE.map((c) => c.entityType));
     expect(conn.importable).toEqual(['supplier']);

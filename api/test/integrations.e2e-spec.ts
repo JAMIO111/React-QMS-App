@@ -91,17 +91,20 @@ describe('integration connections', () => {
     expect(hist.rows[0].n).toBe(0);
   });
 
-  it('a REST connection cannot be tested or made ready until its connector exists; a file connection has no lifecycle', async () => {
-    const t = await api().post(`${base}/connections/${restId}/test`).set(await owner()).send({}).expect(409);
-    expect(t.body.error.message).toMatch(/not available yet/);
+  it('a REST connection is not ready until a test passes; a file connection has no lifecycle', async () => {
+    // The real connector is tested against a fake server in integration-rest.e2e-spec.ts; here the allow-list stops it before any network call.
+    await api().put(`${base}/allowed-hosts`).set(await owner()).send({ hosts: ['nowhere.example.org'] }).expect(200);
+    const t = (await api().post(`${base}/connections/${restId}/test`).set(await owner()).send({}).expect(200)).body;
+    expect(t.lastTest).toMatchObject({ ok: false, message: 'Your organisation does not allow connections to api.example.com' });
+    await api().put(`${base}/allowed-hosts`).set(await owner()).send({ hosts: [] }).expect(200);
     const r = await api().post(`${base}/connections/${restId}/ready`).set(await owner()).send({}).expect(409);
-    expect(r.body.error.message).toMatch(/Test the connection/);
+    expect(r.body.error.message).toMatch(/last connection test failed/);
     const f = await api().post(`${base}/connections/${csvId}/ready`).set(await owner()).send({}).expect(409);
     expect(f.body.error.message).toMatch(/draft|file connection/);
     await api().post(`${base}/connections/${csvId}/pause`).set(await owner()).send({ reason: 'Not needed' }).expect(409);
     const renamed = (await api().patch(`${base}/connections/${csvId}`).set(await owner()).send({ name: 'ERP parts (file)' }).expect(200)).body;
     expect(renamed).toMatchObject({ name: 'ERP parts (file)', status: 'active' });
-    // an API connection with a passed test (recorded here: the REST connector makes no calls until IN7) can be made ready
+    // an API connection with a passed test (recorded here, so the test makes no network call) can be made ready
     const life = (await api().post(`${base}/connections`).set(await approver()).send({ providerKey: 'rest_api', name: 'Lifecycle API', externalSystem: 'life', config: { baseUrl: 'https://life.example.com', authType: 'none' } }).expect(201)).body;
     lifeId = life.id;
     await admin.query(`update public.integration_connections set last_tested_at = clock_timestamp(), last_test_ok = true, last_test_message = 'ok' where id = $1`, [lifeId]);

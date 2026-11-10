@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiTags } fr
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { ConnectionDetail, ConnectionList, CreateConnectionBody, CredentialBody, EmptyBody, ProviderList, ReasonBody, UpdateConnectionBody } from './integrations.schemas';
+import { AllowedHosts, AllowedHostsBody, Sample, SampleBody, ConnectionDetail, ConnectionList, CreateConnectionBody, CredentialBody, EmptyBody, ProviderList, ReasonBody, UpdateConnectionBody } from './integrations.schemas';
 import { IntegrationsService } from './integrations.service';
 
 const READ = 'integrations.read';
@@ -25,6 +25,21 @@ export class IntegrationsController {
   @ApiOkResponse({ description: 'The connector providers: what each can do and whether it is available yet', schema: openApiSchema(ProviderList) })
   providers(@Ctx() ctx: RequestContext) {
     return this.service.providers(ctx);
+  }
+
+  @Get('allowed-hosts')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'The host names the organisation\'s connections may call (an entry allows the host and its sub-domains; empty: any public host)', schema: openApiSchema(AllowedHosts) })
+  allowedHosts(@Ctx() ctx: RequestContext) {
+    return this.service.allowedHosts(ctx);
+  }
+
+  @Put('allowed-hosts')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(AllowedHostsBody) })
+  @ApiOkResponse({ description: 'Replaces the list. Connections that call a host no longer allowed go back to draft or are paused.', schema: openApiSchema(AllowedHosts) })
+  setAllowedHosts(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.setAllowedHosts(ctx, parse(AllowedHostsBody, body));
   }
 
   @Get('connections')
@@ -73,6 +88,15 @@ export class IntegrationsController {
   @ApiOkResponse({ description: 'Revokes the credential and deletes its secret; an active connection that needs it is paused.', schema: openApiSchema(ConnectionDetail) })
   revokeCredential(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.revokeCredential(ctx, parse(Uuid, id), parse(ReasonBody, body));
+  }
+
+  @Post('connections/:id/sample')
+  @HttpCode(200)
+  @OrganisationScoped('integrations.run')
+  @ApiBody({ schema: openApiSchema(SampleBody) })
+  @ApiOkResponse({ description: 'The first page of one kind of record from an API connection, as columns and up to 20 rows. Nothing is stored.', schema: openApiSchema(Sample) })
+  sample(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.sample(ctx, parse(Uuid, id), parse(SampleBody, body).entityType);
   }
 
   @Post('connections/:id/test')

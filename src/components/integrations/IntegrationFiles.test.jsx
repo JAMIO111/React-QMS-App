@@ -214,7 +214,7 @@ describe("file import wizard", () => {
     const f = new File(["S-1;Acme\n"], "suppliers.csv", { type: "text/csv" });
     await userEvent.upload(screen.getByTestId("file-input"), f);
     await waitFor(() =>
-      expect(calls.find((c) => c.k === "POST /integrations/connections/c1/files").body).toEqual({ path: "org-1/integration/c1/uuid-suppliers.csv", fileName: "suppliers.csv", size: f.size, options: { hasHeader: false, encoding: "utf-8", delimiter: ";" } }),
+      expect(calls.find((c) => c.k === "POST /integrations/connections/c1/files").body).toEqual({ path: "org-1/integration/c1/uuid-suppliers.csv", fileName: "suppliers.csv", size: f.size, options: { hasHeader: false, encoding: "auto", delimiter: ";" } }),
     );
     expect(await screen.findByRole("table", { name: "First rows" })).toHaveTextContent("Acme");
     const card = screen.getByText("Suppliers already in Fortress").closest("section");

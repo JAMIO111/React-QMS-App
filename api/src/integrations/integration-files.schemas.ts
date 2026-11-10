@@ -14,8 +14,8 @@ export const RegisterFileBody = z
     /** How to read this file; anything left out follows the connection's settings. */
     options: z
       .object({
-        delimiter: z.enum([',', ';', 'tab', '|']).optional(),
-        encoding: z.enum(['utf-8', 'windows-1252']).optional(),
+        delimiter: z.enum(['auto', ',', ';', 'tab', '|']).optional(),
+        encoding: z.enum(['auto', 'utf-8', 'windows-1252', 'utf-16le', 'utf-16be']).optional(),
         hasHeader: z.boolean().optional(),
       })
       .strict()

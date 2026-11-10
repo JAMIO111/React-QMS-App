@@ -113,7 +113,7 @@ export const CreateGaugeTypeBody = z
     code: GaugeTypeCode,
     name: z.string().trim().min(1).max(100),
     description: text(1000),
-    intervalValue: z.number().int().min(1).max(1000).optional(),
+    intervalValue: z.number().int().min(1).max(3650).optional(),
     intervalUnit: IntervalUnit.optional(),
   })
   .strict();
@@ -122,7 +122,7 @@ export const UpdateGaugeTypeBody = z
     code: GaugeTypeCode.optional(),
     name: z.string().trim().min(1).max(100).optional(),
     description: text(1000),
-    intervalValue: z.number().int().min(1).max(1000).optional(),
+    intervalValue: z.number().int().min(1).max(3650).optional(),
     intervalUnit: IntervalUnit.optional(),
     active: z.boolean().optional(),
   })
@@ -226,7 +226,7 @@ const gaugeFields = {
   resolution: z.number().finite().positive().max(1e9).nullable().optional(),
   calibrationSource: CalibrationSource.optional(),
   supplierId: id,
-  intervalValue: z.number().int().min(1).max(1000).nullable().optional(),
+  intervalValue: z.number().int().min(1).max(3650).nullable().optional(),
   intervalUnit: IntervalUnit.nullable().optional(),
   status: GaugeStatus.optional(),
   statusReason: text(500),

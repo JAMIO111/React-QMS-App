@@ -154,7 +154,7 @@ export const CATALOGUE: EntityCatalogue[] = [
       { key: 'code', label: 'Code', type: 'text', required: true, maxLength: 40, description: 'Identifies the gauge type; unique in Fortress' },
       { key: 'name', label: 'Name', type: 'text', required: true, maxLength: 100, description: 'Unique in Fortress' },
       { key: 'description', label: 'Description', type: 'text', maxLength: 1000 },
-      { key: 'intervalValue', label: 'Calibration interval', type: 'integer', description: 'A whole number from 1 to 1000; empty means 12' },
+      { key: 'intervalValue', label: 'Calibration interval', type: 'integer', description: 'A whole number from 1 to 3650; empty means 12' },
       { key: 'intervalUnit', label: 'Interval unit', type: 'enum', options: options(INTERVAL_UNITS), description: 'Empty means months' },
       { key: 'active', label: 'Active', type: 'boolean', description: 'Yes / no; empty keeps it active. Characteristics are set up in Fortress' },
     ],

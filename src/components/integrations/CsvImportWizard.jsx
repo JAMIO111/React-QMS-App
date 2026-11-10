@@ -16,8 +16,8 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import {
-  DELIMITERS,
-  ENCODINGS,
+  FILE_DELIMITERS,
+  FILE_ENCODINGS,
   ENTITY_DESCRIPTIONS,
   ENTITY_LABELS,
   fileProblem,
@@ -142,7 +142,7 @@ const ChooseFile = ({ connection, entityType, fileId, onFile, canUpload, canMana
   const files = useIntegrationFiles(connection.id);
   const file = useIntegrationFile(fileId);
   const cfg = connection.config ?? {};
-  const [options, setOptions] = useState({ hasHeader: cfg.hasHeader !== false, encoding: cfg.encoding ?? "utf-8", delimiter: cfg.delimiter ?? "," });
+  const [options, setOptions] = useState({ hasHeader: cfg.hasHeader !== false, encoding: "auto", delimiter: "auto" });
   const [uploaded, setUploaded] = useState(null); // { fileId, path, name, size, options } of the upload made on this screen
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
@@ -189,8 +189,8 @@ const ChooseFile = ({ connection, entityType, fileId, onFile, canUpload, canMana
           <div className="flex flex-col justify-end gap-1 pb-1.5">
             <Switch checked={options.hasHeader} onChange={(e) => setOptions({ ...options, hasHeader: e.target.checked })}>The first row holds column headings</Switch>
           </div>
-          <ComboField label="Character set" value={options.encoding} onChange={(v) => setOptions({ ...options, encoding: v ?? "utf-8" })} options={ENCODINGS} required disabled={isExcel} />
-          <ComboField label="Separator" value={options.delimiter} onChange={(v) => setOptions({ ...options, delimiter: v ?? "," })} options={DELIMITERS} required disabled={isExcel} />
+          <ComboField label="Character set" value={options.encoding} onChange={(v) => setOptions({ ...options, encoding: v ?? "auto" })} options={FILE_ENCODINGS} required disabled={isExcel} />
+          <ComboField label="Separator" value={options.delimiter} onChange={(v) => setOptions({ ...options, delimiter: v ?? "auto" })} options={FILE_DELIMITERS} required disabled={isExcel} />
         </div>
       </MenuCard>
 

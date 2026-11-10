@@ -12,9 +12,14 @@ export interface ParsedFile {
   sheet: string | null;
 }
 
+export type Delimiter = ',' | ';' | 'tab' | '|';
+export type Encoding = 'utf-8' | 'windows-1252' | 'utf-16le' | 'utf-16be';
+
 export interface ParseOptions {
-  delimiter?: ',' | ';' | 'tab' | '|';
-  encoding?: 'utf-8' | 'windows-1252';
+  /** `auto` (or nothing) works the separator out from the first lines. */
+  delimiter?: Delimiter | 'auto';
+  /** `auto` (or nothing) works the encoding out; a byte-order mark always wins. */
+  encoding?: Encoding | 'auto';
   hasHeader?: boolean;
   maxRows?: number;
 }
@@ -39,7 +44,9 @@ function toParsed(table: string[][], hasHeader: boolean, maxRows: number, sheet:
   // Leave out wholly empty lines (spreadsheets often end with some).
   const lines = table.map((cells, i) => ({ cells, row: i + 1 })).filter((l) => l.cells.some((c) => c.trim() !== ''));
   if (lines.length === 0) throw new FileParseError('The file is empty');
-  const width = Math.max(...lines.map((l) => l.cells.length));
+  // Columns at the end with no heading and no values are left out (many exports end every line with a separator).
+  let width = Math.max(...lines.map((l) => l.cells.length));
+  while (width > 1 && lines.every((l) => (l.cells[width - 1] ?? '').trim() === '')) width -= 1;
   if (width > MAX_COLUMNS) throw new FileParseError(`The file has ${width} columns; the most is ${MAX_COLUMNS}`);
   const first = hasHeader ? lines[0] : null;
   const headers = normaliseHeaders(first ? Array.from({ length: width }, (_, i) => first.cells[i] ?? '') : Array.from({ length: width }, (_, i) => `Column ${i + 1}`));
@@ -53,10 +60,86 @@ function toParsed(table: string[][], hasHeader: boolean, maxRows: number, sheet:
   };
 }
 
-/** Text of a file in the chosen encoding, without a byte-order mark. */
-export function decodeText(buf: Uint8Array, encoding: 'utf-8' | 'windows-1252' = 'utf-8'): string {
-  const text = new TextDecoder(encoding === 'windows-1252' ? 'windows-1252' : 'utf-8', { fatal: false }).decode(buf);
-  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+/**
+ * The encoding of a file with no byte-order mark: UTF-16 when every other byte of the start is zero (little- or big-endian by which), else UTF-8 when it is
+ * valid UTF-8, else Windows-1252 (older Excel exports).
+ */
+export function sniffEncoding(buf: Uint8Array): Encoding {
+  const n = Math.min(buf.length, 4096);
+  let evenZero = 0;
+  let oddZero = 0;
+  for (let i = 0; i < n; i += 1) if (buf[i] === 0) (i % 2 === 0 ? (evenZero += 1) : (oddZero += 1));
+  if (n >= 4 && oddZero > n * 0.3 && evenZero < n * 0.05) return 'utf-16le';
+  if (n >= 4 && evenZero > n * 0.3 && oddZero < n * 0.05) return 'utf-16be';
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(buf);
+    return 'utf-8';
+  } catch {
+    return 'windows-1252';
+  }
+}
+
+/** The encoding a file is read with: its byte-order mark when it has one, else the chosen one, else worked out from the bytes. */
+export function detectEncoding(buf: Uint8Array, chosen: Encoding | 'auto' = 'auto'): { encoding: Encoding; bom: number } {
+  if (buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) return { encoding: 'utf-8', bom: 3 };
+  if (buf[0] === 0xff && buf[1] === 0xfe) return { encoding: 'utf-16le', bom: 2 };
+  if (buf[0] === 0xfe && buf[1] === 0xff) return { encoding: 'utf-16be', bom: 2 };
+  return { encoding: chosen === 'auto' ? sniffEncoding(buf) : chosen, bom: 0 };
+}
+
+/** Text of a file without its byte-order mark and without NUL characters (which no text column can hold). */
+export function decodeText(buf: Uint8Array, encoding: Encoding | 'auto' = 'auto'): string {
+  const { encoding: enc, bom } = detectEncoding(buf, encoding);
+  const text = new TextDecoder(enc, { fatal: false }).decode(buf.subarray(bom));
+  return (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text).replace(/\u0000/g, '');
+}
+
+const DELIMITER_CHARS: Record<Delimiter, string> = { ',': ',', ';': ';', tab: '\t', '|': '|' };
+
+/** The separator of a delimited text: the candidate found the same number of times (more than none) on each of the first lines, most often wins; else comma. */
+export function detectDelimiter(text: string): Delimiter {
+  const lines = parseFirstLines(text, 10);
+  let best: Delimiter = ',';
+  let bestScore = 0;
+  for (const d of [',', ';', 'tab', '|'] as Delimiter[]) {
+    const counts = lines.map((l) => countOutsideQuotes(l, DELIMITER_CHARS[d]));
+    const min = Math.min(...counts);
+    const consistent = counts.every((c) => c === counts[0]);
+    const score = min > 0 ? min + (consistent ? 1000 : 0) : 0;
+    if (score > bestScore) {
+      best = d;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+function parseFirstLines(text: string, max: number): string[] {
+  const out: string[] = [];
+  let quoted = false;
+  let start = 0;
+  for (let i = 0; i < text.length && out.length < max; i += 1) {
+    const ch = text[i];
+    if (ch === '"') quoted = !quoted;
+    else if (!quoted && (ch === '\n' || ch === '\r')) {
+      const line = text.slice(start, i);
+      if (line.trim() !== '') out.push(line);
+      if (ch === '\r' && text[i + 1] === '\n') i += 1;
+      start = i + 1;
+    }
+  }
+  if (out.length < max && start < text.length && text.slice(start).trim() !== '') out.push(text.slice(start));
+  return out.length ? out : [''];
+}
+
+function countOutsideQuotes(line: string, ch: string): number {
+  let n = 0;
+  let quoted = false;
+  for (const c of line) {
+    if (c === '"') quoted = !quoted;
+    else if (!quoted && c === ch) n += 1;
+  }
+  return n;
 }
 
 /** RFC 4180 CSV: quoted fields may hold the separator, line breaks and doubled quotes; lines end with CRLF, LF or CR. */
@@ -110,8 +193,9 @@ export function parseCsvText(text: string, delimiter: string): string[][] {
 }
 
 export function parseCsv(buf: Uint8Array, opts: ParseOptions = {}): ParsedFile {
-  const delimiter = opts.delimiter === 'tab' ? '\t' : (opts.delimiter ?? ',');
-  return toParsed(parseCsvText(decodeText(buf, opts.encoding), delimiter), opts.hasHeader !== false, opts.maxRows ?? 100_000, null);
+  const text = decodeText(buf, opts.encoding ?? 'auto');
+  const chosen = !opts.delimiter || opts.delimiter === 'auto' ? detectDelimiter(text) : opts.delimiter;
+  return toParsed(parseCsvText(text, DELIMITER_CHARS[chosen]), opts.hasHeader !== false, opts.maxRows ?? 100_000, null);
 }
 
 // ---- XLSX (the first worksheet) ------------------------------------------------------------------

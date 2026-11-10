@@ -40,6 +40,13 @@ export const ENCODINGS = [
   { value: "utf-8", label: "UTF-8", hint: "The usual choice" },
   { value: "windows-1252", label: "Windows-1252", hint: "Older Excel exports with accents" },
 ];
+/** How to read an uploaded file in the import wizard: "work it out" first, then the explicit choices. */
+export const FILE_DELIMITERS = [{ value: "auto", label: "Work it out from the file" }, ...DELIMITERS];
+export const FILE_ENCODINGS = [
+  { value: "auto", label: "Work it out from the file", hint: "A byte-order mark always wins" },
+  ...ENCODINGS,
+  { value: "utf-16le", label: "UTF-16", hint: "Windows \"export to Excel\" text files" },
+];
 export const AUTH_TYPES = [
   { value: "none", label: "No sign-in" },
   { value: "api_key", label: "API key in a header" },

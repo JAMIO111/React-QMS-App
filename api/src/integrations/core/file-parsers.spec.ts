@@ -1,5 +1,5 @@
 import { strToU8, zipSync } from 'fflate';
-import { columnIndex, excelSerialToIso, FileParseError, normaliseHeaders, parseCsv, parseCsvText, parseFile, parseXlsx } from './file-parsers';
+import { columnIndex, decodeText, detectDelimiter, detectEncoding, excelSerialToIso, FileParseError, normaliseHeaders, parseCsv, parseCsvText, parseFile, parseXlsx } from './file-parsers';
 
 const u8 = (s: string) => new TextEncoder().encode(s);
 
@@ -38,6 +38,41 @@ describe('CSV', () => {
     const f = parseCsv(new Uint8Array([0x53, 0x09, 0x43, 0x61, 0x66, 0xe9]), { delimiter: 'tab', encoding: 'windows-1252', hasHeader: false });
     expect(f.headers).toEqual(['Column 1', 'Column 2']);
     expect(f.rows[0].values).toEqual({ 'Column 1': 'S', 'Column 2': 'Café' });
+  });
+
+  // A Windows "export to Excel" file: UTF-16 little-endian with a byte-order mark, tab-separated, quoted, repeated headings and a tab at the end of every line.
+  const utf16 = (text: string, bom = true, bigEndian = false) => {
+    const out: number[] = bom ? (bigEndian ? [0xfe, 0xff] : [0xff, 0xfe]) : [];
+    for (const ch of text) {
+      const c = ch.charCodeAt(0);
+      out.push(...(bigEndian ? [c >> 8, c & 0xff] : [c & 0xff, c >> 8]));
+    }
+    return new Uint8Array(out);
+  };
+  const EXPORT = '"Device Type"\t"Name"\t"Standard Interval (Days)"\t"Standard Interval (Days)"\t"Instructions"\t\r\n'
+    + '"AGG"\t"Adjustable Gap Gauge"\t365\t365\t"Calibrate as per QP-7.19"\t\r\n'
+    + '"BAR-M"\t"CALIBRATION BAR"\t1,095\t1,095\t"Conductivity Tester µS"\t\r\n';
+
+  it('reads a UTF-16 tab-separated export without being told how, dropping the empty last column', () => {
+    for (const buf of [utf16(EXPORT), utf16(EXPORT, false), utf16(EXPORT, true, true)]) {
+      const f = parseCsv(buf, {});
+      expect(f.headers).toEqual(['Device Type', 'Name', 'Standard Interval (Days)', 'Standard Interval (Days) (2)', 'Instructions']);
+      expect(f.rows[1].values).toEqual({ 'Device Type': 'BAR-M', Name: 'CALIBRATION BAR', 'Standard Interval (Days)': '1,095', 'Standard Interval (Days) (2)': '1,095', Instructions: 'Conductivity Tester µS' });
+    }
+    // A byte-order mark wins over a chosen encoding.
+    expect(parseCsv(utf16(EXPORT), { encoding: 'utf-8', delimiter: 'tab' }).rows).toHaveLength(2);
+  });
+
+  it('works out the encoding and separator of files without a byte-order mark, and never keeps NUL characters', () => {
+    expect(detectEncoding(u8('Code,Name\n')).encoding).toBe('utf-8');
+    expect(detectEncoding(new Uint8Array([0x43, 0x61, 0x66, 0xe9, 0x0a])).encoding).toBe('windows-1252');
+    expect(parseCsv(new Uint8Array([0x4e, 0x0a, 0x43, 0x61, 0x66, 0xe9, 0x0a])).rows[0].values).toEqual({ N: 'Café' });
+    expect(detectDelimiter('Code;Name;Note\nA;B;"x, y, z"\n')).toBe(';');
+    expect(detectDelimiter('Code\tName\nA\tB\n')).toBe('tab');
+    expect(detectDelimiter('Code|Name\nA|B\n')).toBe('|');
+    expect(detectDelimiter('Code,Name\nA,"1;2"\n')).toBe(',');
+    expect(detectDelimiter('Code\nA\n')).toBe(',');
+    expect(decodeText(u8('A\u0000B'))).toBe('AB');
   });
 
   it('refuses empty files, heading-only files and too many rows', () => {

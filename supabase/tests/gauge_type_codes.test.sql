@@ -36,6 +36,12 @@ BEGIN
   PERFORM pg_temp.logout();
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM audit.events WHERE entity_type = 'gauge_types' AND entity_id = t1::text AND action = 'update' AND 'code' = ANY (changed_fields))::text, '1', 'a code change is audited');
 
+  -- Intervals run to ten years in days (exports from other systems keep 1,095 and 1,460 days).
+  PERFORM pg_temp.login('31500000-0000-0000-0000-000000000101');
+  INSERT INTO public.gauge_types (organisation_id, code, name, interval_value, interval_unit) VALUES (org, 'SFT', 'Surface table', 1460, 'days');
+  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.gauge_types (organisation_id, code, name, interval_value, interval_unit) VALUES (%L, 'X', 'X', 3651, 'days')$q$, org), 'intervals stop at 3650');
+  PERFORM pg_temp.logout();
+
   -- Imports find a gauge type by its code, then (older files) by its name.
   PERFORM pg_temp.assert_eq(app.integration_find_by_code(org, 'gauge_type', 'mic-0-25')::text, t1::text, 'found by code ignoring case');
   PERFORM pg_temp.assert_eq(app.integration_find_by_code(org, 'gauge_type', 'Height gauge')::text, t2::text, 'found by name when no code matches');

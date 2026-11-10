@@ -95,6 +95,17 @@ describe('file imports', () => {
     await api().post(`${base}/connections/${connId}/files`).set(await owner()).send({ path: `${folder()}u5-plain.csv`, fileName: 'plain.csv', size: 1, options: { delimiter: '#' } }).expect(400);
   });
 
+  it('reads a UTF-16 tab-separated export without being told how (Windows "export to Excel")', async () => {
+    const text = '"Device Type"\t"Name"\t"Standard Interval (Days)"\t"Standard Interval (Days)"\t\r\n"AGG"\t"Adjustable Gap Gauge"\t365\t365\t\r\n"BAR-M"\t"Calibration bar"\t1,095\t1,095\t\r\n';
+    const bytes = new Uint8Array(2 + text.length * 2);
+    bytes.set([0xff, 0xfe]);
+    for (let i = 0; i < text.length; i += 1) { bytes[2 + i * 2] = text.charCodeAt(i) & 0xff; bytes[3 + i * 2] = text.charCodeAt(i) >> 8; }
+    files.set(`${folder()}u6-types.csv`, bytes);
+    const f = (await api().post(`${base}/connections/${connId}/files`).set(await owner()).send({ path: `${folder()}u6-types.csv`, fileName: 'types.csv', size: bytes.length, options: { encoding: 'auto', delimiter: 'auto', hasHeader: true } }).expect(201)).body;
+    expect(f).toMatchObject({ status: 'parsed', rowCount: 2, headers: ['Device Type', 'Name', 'Standard Interval (Days)', 'Standard Interval (Days) (2)'] });
+    expect(f.sample[1].values).toEqual({ 'Device Type': 'BAR-M', Name: 'Calibration bar', 'Standard Interval (Days)': '1,095', 'Standard Interval (Days) (2)': '1,095' });
+  });
+
   it('reads the first sheet of a workbook, and keeps a file it cannot read as failed with the reason', async () => {
     files.set(`${folder()}u2-parts.xlsx`, xlsx());
     const parts = (await api().post(`${base}/connections/${connId}/files`).set(await owner()).send({ path: `${folder()}u2-parts.xlsx`, fileName: 'parts.xlsx', size: 900 }).expect(201)).body;

@@ -177,4 +177,29 @@ describe("import health", () => {
     expect(within(row).getByText("Needs a look")).toBeInTheDocument();
     expect(within(row).getByText(/2 rows to look at · 3 no longer in the source/)).toBeInTheDocument();
   });
+
+  it("lists the connections, each with its provider's logo, above import health", async () => {
+    const api = { id: "c1", provider: { key: "rest_api", name: "REST API", kind: "api" }, name: "Sage 200", externalSystem: "sage-200", status: "active" };
+    const file = { id: "c2", provider: { key: "csv", name: "CSV / Excel file", kind: "file" }, name: "Supplier file", externalSystem: "files", status: "active" };
+    routeApi({
+      "GET /integrations/connections": { data: [api, file] },
+      "GET /integrations/runs": { data: [], page: 1, pageSize: 8, total: 0 },
+      "GET /integrations/allowed-hosts": { hosts: [], canManage: true },
+      "GET /integrations/providers": { data: providers },
+      "GET /integrations/conflicts": { data: [], page: 1, pageSize: 1, total: 0, openCount: 0 },
+      "GET /integrations/health": {
+        data: [{ connectionId: "c1", connectionName: "Sage 200", connectionStatus: "active", providerKind: "api", entityType: "machine", schedule: "manual", onMissing: "nothing", template: null,
+          lastScheduledAt: null, scheduleProblem: null, lastRun: null, lastSuccessAt: null, failedInARow: 0, rowsNeedingAction: 0, missingWaiting: 0, missingHeld: 0, conflictsOpen: 0, state: "ok" }],
+        counts: { ok: 1, attention: 0, failing: 0 },
+      },
+    });
+    renderAt("/Settings/Integrations");
+    const list = await screen.findByRole("list", { name: "Connections" });
+    const rows = within(list).getAllByRole("listitem");
+    expect(within(rows[0]).getByRole("img", { name: "REST API logo" })).toBeInTheDocument();
+    expect(within(rows[0]).getByRole("link", { name: "Sage 200" })).toBeInTheDocument();
+    const health = await screen.findByRole("listitem", { name: "Sage 200: Machines" });
+    // The connections card comes before the import health card on the page.
+    expect(list.compareDocumentPosition(health) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

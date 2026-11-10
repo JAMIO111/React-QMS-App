@@ -50,6 +50,9 @@ const ProviderCard = ({ item, action }) => (
  * Advanced imports: the formula editor in the file import and the template manager (E6). Shown to everyone who sees integrations; switched by people
  * who manage the organisation. Optimistic: the switch moves at once and goes back with a message if the server refuses.
  */
+/** The logo of a connection's provider, as on its card above. */
+const providerMark = (key) => INTEGRATION_CATALOGUE.find((i) => i.providerKey === key)?.mark ?? null;
+
 const AdvancedImports = () => {
   const { can } = usePermissions();
   const org = useOrganisationDetails();
@@ -176,6 +179,23 @@ const IntegrationsHome = () => {
         </Callout>
       )}
 
+      {others.length > 0 && (
+        <MenuCard title="Connections" subtitle="Where imported records came from. Open one to see its files and history.">
+          <ul aria-label="Connections" className="flex flex-col divide-y divide-border-color">
+            {others.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center gap-3 py-2">
+                <ProviderLogo size="sm" mark={providerMark(c.provider?.key)} name={c.provider?.name ?? c.name} />
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <Link to={`/Settings/Integrations/${c.id}`} className="text-sm font-medium text-link-color hover:underline">{c.name}</Link>
+                  <span className="text-xs text-secondary-text">{c.provider.name} · {c.externalSystem}</span>
+                </div>
+                <StatusPill status={c.status} />
+              </li>
+            ))}
+          </ul>
+        </MenuCard>
+      )}
+
       <HealthCard />
 
       <AdvancedImports />
@@ -201,21 +221,6 @@ const IntegrationsHome = () => {
         </MenuCard>
       )}
 
-      {others.length > 0 && (
-        <MenuCard title="Connections" subtitle="Where imported records came from. Open one to see its files and history.">
-          <ul aria-label="Connections" className="flex flex-col divide-y divide-border-color">
-            {others.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center gap-3 py-2">
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <Link to={`/Settings/Integrations/${c.id}`} className="text-sm font-medium text-link-color hover:underline">{c.name}</Link>
-                  <span className="text-xs text-secondary-text">{c.provider.name} · {c.externalSystem}</span>
-                </div>
-                <StatusPill status={c.status} />
-              </li>
-            ))}
-          </ul>
-        </MenuCard>
-      )}
       {adding && (
         <ConnectionForm
           providers={providers.data ?? []}

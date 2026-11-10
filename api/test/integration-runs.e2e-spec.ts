@@ -11,6 +11,7 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { configureApp } from '../src/app.factory';
 import { AppModule } from '../src/app.module';
+import { CATALOGUE } from '../src/integrations/core/catalogue';
 import { AdapterContext, ConnectorAdapter, ConnectorError, ConnectorMetadata, FetchResult } from '../src/integrations/core/connector.interface';
 import { ConnectorRegistry } from '../src/integrations/core/connector.registry';
 import { EntityImporter, EntityImporterRegistry, StagedRow } from '../src/integrations/core/entity-importer';
@@ -93,7 +94,7 @@ describe('import runs', () => {
   it('a preview runs before activation and writes nothing', async () => {
     connId = (await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'rest_api', name: 'ERP suppliers', externalSystem: 'erp', config: { baseUrl: 'https://erp.example.com' } }).expect(201)).body.id;
     const conn = (await api().get(`${base}/connections/${connId}`).set(await owner()).expect(200)).body;
-    expect(conn.runnable).toEqual(['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge', 'nonconformance', 'production_order']);
+    expect(conn.runnable).toEqual(CATALOGUE.map((c) => c.entityType));
     expect(conn.importable).toEqual(['supplier']);
     await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'goods_receipt', kind: 'preview' }).expect(409);
     await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'supplier', kind: 'full' }).expect(409);

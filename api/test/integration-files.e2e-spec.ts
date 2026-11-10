@@ -10,6 +10,7 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { configureApp } from '../src/app.factory';
 import { AppModule } from '../src/app.module';
+import { CATALOGUE } from '../src/integrations/core/catalogue';
 import { IntegrationFileStore } from '../src/integrations/core/file-store';
 import { giveControllerSeats, makeIds, requireDb, seed, testEnv, token } from './helpers';
 
@@ -68,7 +69,7 @@ describe('file imports', () => {
 
   it('lists the kinds of record and their fields', async () => {
     const res = (await api().get(`${base}/entities`).set(await owner()).expect(200)).body.data;
-    expect(res.map((e: { entityType: string }) => e.entityType)).toEqual(['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge', 'nonconformance', 'production_order']);
+    expect(res.map((e: { entityType: string }) => e.entityType)).toEqual(CATALOGUE.map((c) => c.entityType));
     const code = res[0].fields.find((f: { key: string }) => f.key === 'code');
     expect(code).toMatchObject({ required: true, type: 'text', maxLength: 20, pattern: '^[A-Z0-9][A-Z0-9_-]{0,19}$' }); // read from the database's own rule
   });

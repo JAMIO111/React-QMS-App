@@ -53,6 +53,8 @@ export interface EntityCatalogue {
   label: string;
   /** What the key column usually is, to help a person choose it. */
   keyHint: string;
+  /** A field added to the key column's value to identify a record (E4: an order line is "order number/line number"). */
+  keySuffix?: string;
   fields: CatalogueField[];
 }
 
@@ -240,6 +242,26 @@ export const CATALOGUE: EntityCatalogue[] = [
       },
       { key: 'statusReason', label: 'Reason cancelled', type: 'text', maxLength: 1000, description: 'Kept when the order is cancelled; "Cancelled in the source system" when empty' },
       { key: 'notes', label: 'Notes', type: 'text', maxLength: 2000 },
+    ],
+  },
+  {
+    entityType: 'purchase_order',
+    label: 'Purchase orders',
+    keyHint: 'The order number; Fortress adds the line number, so each order line is one row',
+    keySuffix: 'lineNumber',
+    fields: [
+      { key: 'poNumber', label: 'Order number', type: 'text', required: true, maxLength: 40, noReview: true, description: 'Lines with the same number belong to one order' },
+      { key: 'lineNumber', label: 'Line number', type: 'integer', required: true, min: 1, noReview: true, description: 'The line on the order; with the order number it identifies the line' },
+      ref('supplier', 'Supplier', 'supplier', 'supplier code', { required: true, noReview: true, description: 'The supplier code in Fortress, or the id your source gave it when it was imported here; an order\'s supplier never changes' }),
+      { key: 'orderedOn', label: 'Ordered on', type: 'date', description: 'Empty means the requested date of its first line' },
+      ref('part', 'Part number', 'part', 'part number', { description: 'A part of ours, or give the material instead' }),
+      { key: 'material', label: 'Material or service', type: 'text', maxLength: 200, description: 'In words, when the line is not one of our parts' },
+      { key: 'quantityOrdered', label: 'Quantity ordered', type: 'number', required: true, description: 'Greater than 0' },
+      { key: 'unit', label: 'Unit', type: 'text', maxLength: 20 },
+      { key: 'requestedOn', label: 'Requested date', type: 'date', required: true, noReview: true, description: 'The date first asked for. Set when the line is created and never changed by a later import (on-time delivery can be measured against it)' },
+      { key: 'agreedOn', label: 'Agreed date', type: 'date', description: 'The latest date agreed with the supplier; follows the source' },
+      { key: 'lineStatus', label: 'Line status', type: 'enum', options: options(['open', 'closed', 'cancelled']), description: 'Empty means open. The order follows its lines: open while any line is open, else closed (cancelled when every line is)' },
+      { key: 'orderNotes', label: 'Order notes', type: 'text', maxLength: 2000 },
     ],
   },
 ];

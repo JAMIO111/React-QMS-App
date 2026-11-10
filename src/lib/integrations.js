@@ -293,6 +293,7 @@ export const recordPath = (entityType, id) =>
     gauge: `/Calibration/Gauges/${id}`,
     nonconformance: `/Non-Conformance/Register/${id}`,
     production_order: `/Production/Orders/${id}`,
+    purchase_order: "/Supplier-Quality/Purchase-Orders",
     customer: "/Customers",
     machine: "/Machines",
     employee: "/Employees",

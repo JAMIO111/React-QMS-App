@@ -142,6 +142,19 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
       source_change_reason: 'Changing the source is a person\'s step with a reason',
     },
   },
+  purchase_order: {
+    table: 'purchase_order_lines',
+    fields: {
+      poNumber: { column: 'po_number', table: 'purchase_orders' }, supplier: { column: 'supplier_id', table: 'purchase_orders' },
+      orderedOn: { column: 'ordered_on', table: 'purchase_orders' }, orderNotes: { column: 'notes', table: 'purchase_orders' },
+      lineNumber: { column: 'line_number' }, part: { column: 'part_id' }, material: { column: 'material' }, quantityOrdered: { column: 'quantity_ordered' },
+      unit: { column: 'unit' }, requestedOn: { column: 'requested_on' }, agreedOn: { column: 'agreed_on' }, lineStatus: { column: 'status' },
+    },
+    excluded: {
+      ...SYSTEM,
+      purchase_order_id: 'The order is found by its number, or made from the line',
+    },
+  },
   production_order: {
     table: 'production_orders',
     fields: {

@@ -23,6 +23,11 @@ const RECORDS: Partial<Record<EntityType, { table: string; label: (r: Record<str
   gauge: { table: 'public.gauges', label: (r) => `${r.asset_number} — ${r.description}` },
   nonconformance: { table: 'public.nonconformances', label: (r) => `${r.reference} — ${r.title}` },
   production_order: { table: 'public.production_orders', label: (r) => String(r.order_number) },
+  // An order line, named by its order's number.
+  purchase_order: {
+    table: '(select l.*, o.po_number from public.purchase_order_lines l join public.purchase_orders o on o.id = l.purchase_order_id)',
+    label: (r) => `${r.po_number} line ${r.line_number}`,
+  },
 };
 
 /** Where a link's code lives, to show a linked record by its code rather than its id. Units are stored by their code already. */

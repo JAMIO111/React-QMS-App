@@ -223,5 +223,8 @@ export function applyMapping(catalogue: EntityCatalogue, spec: MappingSpec, reco
     else canonical[f.key] = out.value;
   }
   for (const f of catalogue.fields) if (f.required && !(f.key in canonical)) errors.push({ field: f.key, message: `${f.label} is required` });
-  return { externalId, canonical, errors };
+  // E4: some records are identified by the key column plus a field (an order line: order number + line number).
+  const suffix = catalogue.keySuffix ? canonical[catalogue.keySuffix] : undefined;
+  const id = externalId && catalogue.keySuffix ? (suffix === null || suffix === undefined || suffix === '' ? null : `${externalId}/${suffix}`) : externalId;
+  return { externalId: id, canonical, errors };
 }

@@ -174,6 +174,17 @@ Migration `20260120100000_integration_ownership_production_orders.sql`.
 - **API:** `GET /integrations/conflicts?status=open|decided|all|<status>&entityType&connectionId&runId&recordId&page&pageSize` (`openCount` for badges; values in words, links by their code), `POST /integrations/conflicts/{id}/accept {note?}`, `POST …/reject {reason}`. **UI:** the mapping editor asks "When the record is already in Fortress" (Source wins / Fortress wins / Review) for each field when the import updates records; `/Settings/Integrations/Review` (Waiting / Decided / All, Accept and Keep Fortress's, optimistic); a notice on Settings → Integrations and a "To review" figure on the run page.
 - **Not built:** reviewing custom fields, bulk accept or reject, notifications for waiting values, importing production operations.
 
+### 6.13 IN6 decisions (agreed 2026-11-10) and sub-slices
+
+| # | Decision |
+|---|---|
+| **E1** | A **return** to the supplier in the source (a negative quantity or a return transaction) becomes a **rejected decision with that quantity** on the matching earlier receipt line (same order line, and lot when given), never a negative line; it then counts in supplier PPM like a rejection made in Fortress |
+| **E2** | **Both source shapes in IN6**: one row per delivery (inventory transactions), and running totals per order line ("received so far"), turned into a delivery of the increase since the last import, dated the source's last received date |
+| **E3** | A historical delivery that names a lot number **creates the lot, released**: never on hold, never sent for incoming inspection (D6) |
+| **E4** | An order line is identified by **order number + line number**: the key column is the order number and Fortress adds the line number |
+
+Sub-slices: **IN6a** purchase orders (import function, statuses, requested date fixed on create); **IN6b** goods receipts from delivery rows (historical mode, grouping into receipts, lots, returns as rejections, leaving rows out by a mapped condition); **IN6c** running totals per order line and the reconciliation report.
+
 ## 7. Entity catalogue (Phase 5)
 
 | Entity | Canonical target | Match key | Notes |

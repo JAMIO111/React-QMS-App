@@ -17,26 +17,44 @@ const MicrosoftMark = () => (
 );
 
 /** The logo tile of an integration card: a brand mark or logo picture on a white tile, so its colours hold in dark mode. */
-const SIZES = { md: "h-12 w-12 rounded-xl", sm: "h-9 w-9 rounded-lg" };
+const SIZES = { md: "h-16 w-16 rounded-xl", sm: "h-9 w-9 rounded-lg" };
 const ProviderLogo = ({ mark, name, className = "", size = "md" }) => {
   const small = size === "sm";
   const base = `flex shrink-0 items-center justify-center ${SIZES[size] ?? SIZES.md} ${className}`;
   if (IMAGES[mark]) {
     return (
-      <span className={`${base} border border-border-color bg-white ${small ? "p-1" : "p-1.5"}`} role="img" aria-label={`${name} logo`}>
-        <img src={IMAGES[mark]} alt="" className="max-h-full max-w-full object-contain" />
+      <span
+        className={`${base} border border-border-color bg-white ${small ? "p-1" : "p-1.5"}`}
+        role="img"
+        aria-label={`${name} logo`}>
+        <img
+          src={IMAGES[mark]}
+          alt=""
+          className="max-h-full max-w-full object-contain"
+        />
       </span>
     );
   }
   const brand = BRAND_MARKS[mark];
   return (
-    <span className={`${base} border border-border-color bg-white`} role="img" aria-label={`${name} logo`}>
+    <span
+      className={`${base} border border-border-color bg-white`}
+      role="img"
+      aria-label={`${name} logo`}>
       {mark === "microsoft" ? (
         <MicrosoftMark />
       ) : brand ? (
-        <svg viewBox="0 0 24 24" className={small ? "h-5 w-5" : "h-7 w-7"} aria-hidden="true"><path fill={brand.hex} d={brand.path} /></svg>
+        <svg
+          viewBox="0 0 24 24"
+          className={small ? "h-5 w-5" : "h-7 w-7"}
+          aria-hidden="true">
+          <path fill={brand.hex} d={brand.path} />
+        </svg>
       ) : (
-        <span className={`${small ? "text-xs" : "text-sm"} font-semibold text-gray-700`}>{name.slice(0, 2)}</span>
+        <span
+          className={`${small ? "text-xs" : "text-sm"} font-semibold text-gray-700`}>
+          {name.slice(0, 2)}
+        </span>
       )}
     </span>
   );

@@ -100,7 +100,7 @@ const Dialog = ({ title, onClose, children, width = "max-w-lg" }) => {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`w-full ${width} dialog-panel relative overflow-hidden rounded-2xl border border-border-color bg-primary-bg shadow-lg shadow-shadow-color`}
+        className={`w-full ${width} dialog-panel relative overflow-clip rounded-2xl border border-border-color bg-primary-bg shadow-lg shadow-shadow-color`}
       >
         <div
           ref={head}

@@ -1,10 +1,12 @@
 /**
  * iOS-style toggle switch. Renders a real checkbox (role="switch"), so `onChange` receives the
- * normal change event (`e.target.checked`). Children become the label text.
+ * normal change event (`e.target.checked`). Children become the label text. The label is `relative` so the visually hidden
+ * checkbox stays inside it: otherwise it is placed against the nearest positioned ancestor (a dialog frame) and focusing it
+ * scrolls that ancestor, shifting the whole dialog.
  */
 const Switch = ({ checked, onChange, disabled = false, children, className = "", ...rest }) => (
   <label
-    className={`inline-flex items-center gap-2 ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${className}`}>
+    className={`relative inline-flex items-center gap-2 ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${className}`}>
     <input
       type="checkbox"
       role="switch"

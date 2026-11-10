@@ -4,8 +4,14 @@ import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
+import { FUNCTION_LIST } from './core/formula';
 import {
   ArchiveTemplateBody,
+  CheckFormulaBody,
+  FormulaCheckResult,
+  FunctionList,
+  PreviewTemplateBody,
+  TemplatePreview,
   CreateTemplateBody,
   DuplicateTemplateBody,
   RestoreTemplateVersionBody,
@@ -20,6 +26,7 @@ import {
 import { IntegrationTemplatesService } from './integration-templates.service';
 
 const READ = 'integrations.read';
+const RUN = 'integrations.run';
 const MANAGE = 'integrations.manage';
 const VersionNumber = z.coerce.number().int().min(1).max(100000);
 
@@ -44,6 +51,15 @@ export class IntegrationTemplatesController {
   @ApiCreatedResponse({ description: 'A new template with its first version. 409 lists what is wrong with the mapping.', schema: openApiSchema(TemplateDetail) })
   create(@Ctx() ctx: RequestContext, @Body() body: unknown) {
     return this.service.create(ctx, parse(CreateTemplateBody, body));
+  }
+
+  @Post('preview')
+  @HttpCode(200)
+  @OrganisationScoped(RUN)
+  @ApiBody({ schema: openApiSchema(PreviewTemplateBody) })
+  @ApiOkResponse({ description: 'How the first rows of an uploaded file come out with an unsaved template (value taken, after each step, imported value, errors) and the column check. Writes nothing.', schema: openApiSchema(TemplatePreview) })
+  preview(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.preview(ctx, parse(PreviewTemplateBody, body));
   }
 
   @Get(':id')
@@ -118,5 +134,29 @@ export class IntegrationTemplatesController {
   restoreVersion(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     const b = parse(RestoreTemplateVersionBody, body);
     return this.service.restoreVersion(ctx, parse(Uuid, id), b.version, b.reason);
+  }
+}
+
+/** The formula language (UI2b): read and check a formula, and the function list for suggestions. Nothing is saved. */
+@ApiTags('integrations')
+@ApiBearerAuth()
+@Controller('integrations/formulas')
+export class IntegrationFormulasController {
+  constructor(private readonly service: IntegrationTemplatesService) {}
+
+  @Get('functions')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'Every function a formula can use, with how to call it', schema: openApiSchema(FunctionList) })
+  functions() {
+    return { data: FUNCTION_LIST };
+  }
+
+  @Post('check')
+  @HttpCode(200)
+  @OrganisationScoped(READ)
+  @ApiBody({ schema: openApiSchema(CheckFormulaBody) })
+  @ApiOkResponse({ description: 'Reads a formula: the first problem with its position, the columns and functions it uses, and the result for a sample row', schema: openApiSchema(FormulaCheckResult) })
+  check(@Body() body: unknown) {
+    return this.service.checkFormula(parse(CheckFormulaBody, body));
   }
 }

@@ -80,3 +80,60 @@ export const TemplateList = z.object({ data: z.array(Template) });
 export const TemplateDetail = Template.extend({ current: TemplateVersion.nullable(), canManage: z.boolean() });
 export type TemplateDetail = z.infer<typeof TemplateDetail>;
 export const TemplateVersionList = z.object({ data: z.array(TemplateVersion.omit({ fields: true, sourceSettings: true, expectedColumns: true }).extend({ fieldCount: z.number().int() })) });
+
+/** Preview an unsaved template against an uploaded file (T3: the screen and the import always agree because both run here). */
+export const PreviewTemplateBody = z
+  .object({
+    entityType: z.enum(ENTITY_TYPES),
+    fileId: z.string().uuid(),
+    keyField: z.string().trim().max(200).default(''),
+    fields: z.array(FieldMappingBody).max(100),
+    /** Source row numbers to show (as the file numbers them); the first 20 rows when left out. */
+    rows: z.array(z.number().int().min(1)).max(20).optional(),
+  })
+  .strict();
+export type PreviewTemplateBody = z.infer<typeof PreviewTemplateBody>;
+
+const PreviewField = z.object({
+  target: z.string(),
+  label: z.string(),
+  /** The value taken from the column or formula, then the value after each step. */
+  taken: z.string().nullable(),
+  steps: z.array(z.string()),
+  /** The value as it would be imported (null when empty or wrong). */
+  value: z.unknown(),
+  error: z.string().nullable(),
+});
+export const TemplatePreview = z.object({
+  columns: z.array(z.string()),
+  columnCheck: z.object({
+    /** Columns the template reads that the file lacks; `blocking` when a required field or the key column needs it. */
+    missing: z.array(z.object({ column: z.string(), fields: z.array(z.string()), blocking: z.boolean() })),
+    /** Columns of the file the template does not use. */
+    unused: z.array(z.string()),
+  }),
+  /** What is wrong with the template itself (the same check as when it is saved). */
+  problems: z.array(z.string()),
+  rows: z.array(z.object({ row: z.number().int(), externalId: z.string().nullable(), fields: z.array(PreviewField), errors: z.array(z.object({ field: z.string().nullable(), message: z.string() })) })),
+});
+export type TemplatePreview = z.infer<typeof TemplatePreview>;
+
+export const CheckFormulaBody = z
+  .object({
+    formula: z.string().max(2000),
+    /** The file's columns, to check the formula's column names (and suggest the closest). */
+    columns: z.array(z.string().max(200)).max(1000).optional(),
+    /** One row to work the formula out on. */
+    sample: z.record(z.string().max(200), z.string().max(10000)).optional(),
+  })
+  .strict();
+export type CheckFormulaBody = z.infer<typeof CheckFormulaBody>;
+export const FormulaCheckResult = z.object({
+  ok: z.boolean(),
+  error: z.object({ message: z.string(), position: z.number().int().nullable() }).nullable(),
+  columns: z.array(z.string()),
+  functions: z.array(z.string()),
+  /** The result for the sample row, when one was given and the formula could be read. */
+  result: z.object({ value: z.string().nullable(), error: z.string().nullable() }).nullable(),
+});
+export const FunctionList = z.object({ data: z.array(z.object({ name: z.string(), usage: z.string(), description: z.string(), minArgs: z.number().int(), maxArgs: z.number().int() })) });

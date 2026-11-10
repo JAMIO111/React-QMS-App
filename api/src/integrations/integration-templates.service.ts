@@ -6,15 +6,20 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { CatalogueService } from './core/catalogue.service';
-import { mappingProblems } from './core/mapping';
+import { checkFormula, runFormula } from './core/formula';
+import { applyMapping, cell, fieldColumns, mappingProblems, rawValue } from './core/mapping';
 import {
+  CheckFormulaBody,
   CreateTemplateBody,
+  FormulaCheckResult,
+  PreviewTemplateBody,
   SaveTemplateVersionBody,
   Template,
   TemplateBody,
   TemplateDetail,
   TemplateList,
   TemplateListQuery,
+  TemplatePreview,
   TemplateVersion,
   TemplateVersionList,
   UpdateTemplateBody,
@@ -199,5 +204,82 @@ export class IntegrationTemplatesService {
       const copy = (await client.query('select app.duplicate_integration_template($1::uuid, $2) as id', [id, name ?? null])).rows[0].id as string;
       return this.load(db, ctx, copy);
     });
+  }
+
+  /**
+   * How the first rows of a file come out with an unsaved template: per field the value taken, the value after each step, the imported value and the error;
+   * plus the column check. Writes nothing. Links to other records are shown as written (they are matched when the import runs).
+   */
+  async preview(ctx: RequestContext, b: PreviewTemplateBody): Promise<TemplatePreview> {
+    const catalogue = await this.catalogues.get(b.entityType, orgOf(ctx));
+    if (!catalogue) throw new ApiError(409, 'integration_rule', 'There are no Fortress fields to map this kind of record to yet');
+    const { headers, rows } = await this.database.asUser(ctx, async (db) => {
+      const f = await db.execute<Row>(sql`select headers, status from public.integration_files where id = ${b.fileId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!f.rows[0]) throw ApiError.notFound('file_not_found', 'File not found');
+      if (f.rows[0].status !== 'parsed') throw new ApiError(409, 'integration_rule', 'That file could not be read, or its rows have been cleared');
+      const wanted = b.rows?.length ? b.rows : null;
+      const found = await db.execute<{ v: { r: number; v: Record<string, string> } }>(sql`
+        select x.v from public.integration_file_chunks c cross join lateral jsonb_array_elements(c.rows) as x(v)
+         where c.file_id = ${b.fileId}::uuid
+           and (${wanted === null} or (x.v ->> 'r')::int = any(string_to_array(${(wanted ?? []).join(',')}, ',')::int[]))
+         order by c.seq, (x.v ->> 'r')::int limit 20`);
+      return { headers: (f.rows[0].headers as string[]) ?? [], rows: found.rows.map((r) => r.v) };
+    });
+    const byKey = new Map(catalogue.fields.map((f) => [f.key, f]));
+    const spec = { keyField: b.keyField, fields: b.fields };
+    const headerSet = new Set(headers);
+    const used = new Map<string, { fields: string[]; blocking: boolean }>();
+    const use = (column: string, label: string, blocking: boolean) => {
+      const u = used.get(column) ?? { fields: [], blocking: false };
+      if (!u.fields.includes(label)) u.fields.push(label);
+      u.blocking ||= blocking;
+      used.set(column, u);
+    };
+    if (b.keyField) use(b.keyField, 'Key column', true);
+    for (const m of b.fields) {
+      const f = byKey.get(m.target);
+      for (const c of fieldColumns(m)) use(c, f?.label ?? m.target, !!f?.required);
+    }
+    return {
+      columns: headers,
+      columnCheck: {
+        missing: [...used].filter(([c]) => !headerSet.has(c)).map(([column, u]) => ({ column, fields: u.fields, blocking: u.blocking })),
+        unused: headers.filter((h) => !used.has(h)),
+      },
+      problems: mappingProblems(catalogue, spec, headers),
+      rows: rows.map((r) => {
+        const out = applyMapping(catalogue, spec, r.v);
+        return {
+          row: r.r,
+          externalId: out.externalId,
+          errors: out.errors,
+          fields: b.fields.filter((m) => byKey.has(m.target)).map((m) => {
+            const trail: string[] = [];
+            const taken = rawValue(m, r.v, trail);
+            const err = 'error' in taken ? taken.error : out.errors.find((e) => e.field === m.target)?.message ?? null;
+            return {
+              target: m.target,
+              label: byKey.get(m.target)!.label,
+              taken: trail.length ? trail[0] : null,
+              steps: trail.slice(1),
+              value: err ? null : (out.canonical[m.target] ?? null),
+              error: err,
+            };
+          }),
+        };
+      }),
+    };
+  }
+
+  /** Read a formula (and check its columns when the file's are given); work it out on a sample row when one is given. */
+  checkFormula(b: CheckFormulaBody): z.infer<typeof FormulaCheckResult> {
+    const { tree: _tree, ...check } = checkFormula(b.formula, b.columns ?? null);
+    let result: z.infer<typeof FormulaCheckResult>['result'] = null;
+    if (b.sample && !check.error?.position) {
+      const sample = b.sample;
+      const r = runFormula(b.formula, (c) => cell(sample, c));
+      result = 'error' in r ? { value: null, error: r.error } : { value: r.value, error: null };
+    }
+    return { ...check, result };
   }
 }

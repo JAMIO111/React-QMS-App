@@ -1,6 +1,7 @@
 import { CatalogueField, EntityCatalogue } from './catalogue';
 import { DATE_FORMATS, DateFormat, parseDate } from './mapping-dates';
-import { applySteps, Step, stepProblems, stepsGive } from './steps';
+import { checkFormula, runFormula } from './formula';
+import { applySteps, Step, stepColumns, stepProblems, stepsGive } from './steps';
 
 export { DATE_FORMATS, parseDate };
 export type { DateFormat };
@@ -39,6 +40,8 @@ export interface FieldMapping {
   match?: (typeof REF_MATCH)[number];
   /** Steps applied in order after the value is taken (core/steps.ts). */
   steps?: Step[];
+  /** A formula (core/formula) used instead of the column and the original transforms; the steps still follow it. */
+  formula?: string | null;
 }
 
 export interface MappingSpec {
@@ -67,6 +70,15 @@ export function mappingProblems(catalogue: EntityCatalogue, spec: MappingSpec, h
     }
     if (seen.has(m.target)) problems.push(`${f.label} is mapped twice`);
     seen.add(m.target);
+    if (m.formula) {
+      const check = checkFormula(m.formula, columns);
+      if (check.error) problems.push(`${f.label}: ${check.error.message}`);
+      problems.push(...stepProblems(m.steps, f.label, columns));
+      if (m.match && !REF_MATCH.includes(m.match)) problems.push(`${f.label}: unknown way of matching`);
+      else if (m.match && !f.ref) problems.push(`${f.label} is not a link to another record`);
+      else if (m.match === 'source' && !f.ref?.source) problems.push(`${f.label} can only be matched by its Fortress code`);
+      continue;
+    }
     const kind = m.transform ?? 'none';
     if (!TRANSFORMS.includes(kind)) problems.push(`${f.label}: unknown transform "${kind}"`);
     const cols = kind === 'concat' ? (m.sources ?? []) : kind === 'constant' ? [] : m.source ? [m.source] : [];
@@ -137,16 +149,37 @@ export function convert(field: CatalogueField, raw: string, m: FieldMapping): { 
   }
 }
 
+/** One cell of a source record, trimmed ('' when absent). Only the record's own columns are read, never inherited properties such as "constructor". */
+export function cell(record: Record<string, unknown>, column: string): string {
+  return Object.prototype.hasOwnProperty.call(record, column) ? String(record[column] ?? '').trim() : '';
+}
+
 /** The raw text a mapping takes for one field from one source record (before conversion), after its steps. */
 export function rawValue(m: FieldMapping, record: Record<string, unknown>, trail?: string[]): { value: string } | { error: string } {
-  const taken = legacyValue(m, record);
+  const get = (c: string) => cell(record, c);
+  let taken: string;
+  if (m.formula) {
+    const r = runFormula(m.formula, get);
+    if ('error' in r) return r;
+    taken = r.value;
+  } else taken = legacyValue(m, record);
   trail?.push(taken);
-  return applySteps(m.steps, taken, (c) => String(record[c] ?? '').trim(), trail);
+  return applySteps(m.steps, taken, get, trail);
+}
+
+/** Every source column one field row reads (its column, joined columns, formula columns and step columns). */
+export function fieldColumns(m: FieldMapping): string[] {
+  const cols = new Set<string>();
+  if (m.formula) for (const c of checkFormula(m.formula).columns) cols.add(c);
+  else if ((m.transform ?? 'none') === 'concat') for (const c of m.sources ?? []) cols.add(c);
+  else if (m.transform !== 'constant' && m.source) cols.add(m.source);
+  for (const c of stepColumns(m.steps)) cols.add(c);
+  return [...cols];
 }
 
 /** What the original transforms give (none, upper, lower, map, constant, concat, then the default when empty). */
 function legacyValue(m: FieldMapping, record: Record<string, unknown>): string {
-  const get = (c: string | null | undefined) => (c ? String(record[c] ?? '').trim() : '');
+  const get = (c: string | null | undefined) => (c ? cell(record, c) : '');
   const kind = m.transform ?? 'none';
   let v: string;
   if (kind === 'constant') v = m.value ?? '';
@@ -166,7 +199,7 @@ export function applyMapping(catalogue: EntityCatalogue, spec: MappingSpec, reco
   const byKey = new Map(catalogue.fields.map((f) => [f.key, f]));
   const canonical: Record<string, unknown> = {};
   const errors: FieldError[] = [];
-  const externalId = String(record[spec.keyField] ?? '').trim() || null;
+  const externalId = cell(record, spec.keyField) || null;
   for (const m of spec.fields) {
     const f = byKey.get(m.target);
     if (!f) continue;

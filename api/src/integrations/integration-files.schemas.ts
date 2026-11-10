@@ -42,6 +42,8 @@ export const FieldMappingBody = z
     match: z.enum(REF_MATCH).optional(),
     /** Steps applied in order after the value is taken (core/steps.ts). */
     steps: StepsBody.optional(),
+    /** A formula used instead of the column (core/formula); checked before saving. */
+    formula: z.string().max(2000).nullable().optional(),
   })
   .strict();
 

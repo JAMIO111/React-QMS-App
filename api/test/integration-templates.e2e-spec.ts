@@ -176,3 +176,87 @@ describe('import templates', () => {
     expect(rejected[0].errors[0]).toMatchObject({ field: 'code', message: 'Code: "mill9" is not in the translation list' });
   });
 });
+
+describe('formulas and the preview (UI2b)', () => {
+  let connId: string;
+  let fileId: string;
+  let site: string;
+  beforeAll(async () => {
+    site = (await admin.query(`select code from public.sites where organisation_id = $1 order by created_at limit 1`, [ids.orgA])).rows[0].code;
+    connId = (await api().get(`${base}/connections`).set(await owner()).expect(200)).body.data.find((c: { name: string }) => c.name === 'File imports').id;
+    const text = ['Ref;Description;Site;Qty;Status', ` p1 ;big LATHE;${site};3;In use`, `p2;small mill;${site};x;Scrapped`, `p3;;${site};4;In use`].join('\n');
+    const path = `${ids.orgA}/integration/${connId}/x-preview.csv`;
+    files.set(path, strToU8(text));
+    fileId = (await api().post(`${base}/connections/${connId}/files`).set(await owner()).send({ path, fileName: 'preview.csv', size: text.length, options: { delimiter: ';' } }).expect(201)).body.id;
+  });
+
+  it('lists the functions and checks a formula: position, columns, did-you-mean, sample result', async () => {
+    const fns = (await api().get(`${base}/formulas/functions`).set(await owner()).expect(200)).body.data;
+    expect(fns.find((f: { name: string }) => f.name === 'IF')).toMatchObject({ usage: 'IF(test, then, else)', minArgs: 2, maxArgs: 3 });
+    const ok = (await api().post(`${base}/formulas/check`).set(await owner()).send({ formula: 'IF([Status] = "Scrapped", "no", "yes")', columns: ['Status'], sample: { Status: 'Scrapped' } }).expect(200)).body;
+    expect(ok).toEqual({ ok: true, error: null, columns: ['Status'], functions: ['IF'], result: { value: 'no', error: null } });
+    const typo = (await api().post(`${base}/formulas/check`).set(await owner()).send({ formula: '[Stauts]', columns: ['Status'] }).expect(200)).body;
+    expect(typo.error).toEqual({ message: 'Column [Stauts] is not in the file — did you mean [Status]?', position: null });
+    const syntax = (await api().post(`${base}/formulas/check`).set(await owner()).send({ formula: 'IF(1, 2', sample: {} }).expect(200)).body;
+    expect(syntax).toMatchObject({ ok: false, error: { position: 8 }, result: null });
+    const failing = (await api().post(`${base}/formulas/check`).set(await owner()).send({ formula: '[Qty] * 2', sample: { Qty: 'x' } }).expect(200)).body;
+    expect(failing.result).toEqual({ value: null, error: '* needs a number, got "x"' });
+    await api().post(`${base}/formulas/check`).set(await owner()).send({ formula: 'x'.repeat(2001) }).expect(400);
+    await api().post(`${base}/formulas/check`).set(await inspector()).send({ formula: '1' }).expect(403);
+  });
+
+  it('previews an unsaved template row by row: value taken, after each step, imported value and errors', async () => {
+    const res = (await api().post(`${base}/templates/preview`).set(await owner()).send({
+      entityType: 'machine', fileId, keyField: 'Ref',
+      fields: [
+        { target: 'code', formula: 'CONCAT("P-", [Ref])', steps: [{ kind: 'trim' }, { kind: 'upper' }] },
+        { target: 'name', source: 'Description', steps: [{ kind: 'title' }] },
+        { target: 'site', source: 'Site', match: 'code' },
+        { target: 'active', formula: '[Status] <> "Scrapped"' },
+        { target: 'description', formula: 'IF(ISEMPTY([Qty]), "", "Qty " & ([Qty] * 2))' },
+      ],
+    }).expect(200)).body;
+    expect(res.columns).toEqual(['Ref', 'Description', 'Site', 'Qty', 'Status']);
+    expect(res.columnCheck).toEqual({ missing: [], unused: [] });
+    expect(res.problems).toEqual([]);
+    expect(res.rows).toHaveLength(3);
+    const [r1, r2, r3] = res.rows;
+    expect(r1.externalId).toBe('p1');
+    expect(r1.fields[0]).toEqual({ target: 'code', label: 'Code', taken: 'P-p1', steps: ['P-p1', 'P-P1'], value: 'P-P1', error: null });
+    expect(r1.fields[1]).toMatchObject({ taken: 'big LATHE', steps: ['Big Lathe'], value: 'Big Lathe' });
+    expect(r1.fields[3]).toMatchObject({ value: true });
+    expect(r1.errors).toEqual([]);
+    expect(r2.fields[3]).toMatchObject({ value: false });
+    expect(r2.fields[4]).toMatchObject({ taken: null, value: null, error: '* needs a number, got "x"' });
+    expect(r2.errors).toEqual([expect.objectContaining({ field: 'description' })]);
+    expect(r3.fields[1]).toMatchObject({ taken: '', value: null, error: 'Name is required' });
+
+    const one = (await api().post(`${base}/templates/preview`).set(await owner()).send({ entityType: 'machine', fileId, keyField: 'Ref', fields: [{ target: 'code', source: 'Ref' }], rows: [3] }).expect(200)).body;
+    expect(one.rows.map((r: { row: number }) => r.row)).toEqual([3]);
+  });
+
+  it('reports the column check: missing columns (blocking for required fields) and unused ones, and the template problems', async () => {
+    const res = (await api().post(`${base}/templates/preview`).set(await owner()).send({
+      entityType: 'machine', fileId, keyField: 'Ref',
+      fields: [{ target: 'code', formula: '[Reference] & [Ref]' }, { target: 'name', source: 'Descr' }, { target: 'site', source: 'Site', match: 'code' }],
+    }).expect(200)).body;
+    expect(res.columnCheck.missing).toEqual([{ column: 'Reference', fields: ['Code'], blocking: true }, { column: 'Descr', fields: ['Name'], blocking: true }]);
+    expect(res.columnCheck.unused).toEqual(['Description', 'Qty', 'Status']);
+    expect(res.problems).toEqual(expect.arrayContaining(['Code: Column [Reference] is not in the file', 'Name: the column "Descr" is not in the file']));
+  });
+
+  it('a template with a formula saves, imports and is refused when the formula is wrong; nothing for another organisation', async () => {
+    const bad = await api().post(`${base}/templates`).set(await owner()).send({ entityType: 'machine', name: 'Formula machines', keyField: 'Ref', fields: [{ target: 'code', formula: 'UPPPER([Ref])' }, { target: 'name', source: 'Description' }, { target: 'site', source: 'Site', match: 'code' }] }).expect(409);
+    expect(bad.body.error.message).toBe('Code: Position 1: there is no function UPPPER — did you mean UPPER?');
+    const t = (await api().post(`${base}/templates`).set(await owner()).send({
+      entityType: 'machine', name: 'Formula machines', keyField: 'Ref',
+      fields: [{ target: 'code', formula: 'UPPER("F-" & [Ref])' }, { target: 'name', formula: 'COALESCE([Description], "Unnamed " & [Ref])' }, { target: 'site', source: 'Site', match: 'code' }],
+    }).expect(201)).body;
+    const run = (await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'machine', kind: 'full', fileId, templateId: t.id }).expect(201)).body;
+    expect(run.counts).toMatchObject({ total: 3, created: 3 });
+    const rows = (await admin.query(`select code, name from public.machines where organisation_id = $1 and code like 'F-%' order by code`, [ids.orgA])).rows;
+    expect(rows).toEqual([{ code: 'F-P1', name: 'big LATHE' }, { code: 'F-P2', name: 'small mill' }, { code: 'F-P3', name: 'Unnamed p3' }]);
+    await api().post(`${base}/templates/preview`).set(await other()).send({ entityType: 'machine', fileId, keyField: 'Ref', fields: [] }).expect(404);
+    await api().post(`${base}/templates/preview`).set(await inspector()).send({ entityType: 'machine', fileId, keyField: 'Ref', fields: [] }).expect(403);
+  });
+});

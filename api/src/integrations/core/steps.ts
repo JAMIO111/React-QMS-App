@@ -290,3 +290,13 @@ export function stepProblems(steps: Step[] | undefined, label: string, columns?:
 /** Whether the steps already turn the text into a plain number / an ISO date (so the field's own decimal mark / date format must not be applied again). */
 export const stepsGive = (steps: Step[] | undefined, kind: 'number' | 'date') =>
   (steps ?? []).some((s) => (kind === 'number' ? ['number', 'round', 'multiply', 'divide', 'convert'] : ['date', 'add_days']).includes(s.kind));
+
+/** The source columns the steps read (coalesce and join). */
+export function stepColumns(steps: Step[] | undefined): string[] {
+  const out: string[] = [];
+  for (const s of steps ?? []) {
+    if (s.kind === 'coalesce') out.push(...(s.columns ?? []));
+    if (s.kind === 'join') for (const p of s.parts ?? []) if ('column' in p && p.column) out.push(p.column);
+  }
+  return out;
+}

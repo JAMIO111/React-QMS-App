@@ -102,7 +102,7 @@ import { IntegrationsService } from './integrations/integrations.service';
 import { IntegrationRunsController } from './integrations/integration-runs.controller';
 import { IntegrationFilesController } from './integrations/integration-files.controller';
 import { IntegrationFilesService } from './integrations/integration-files.service';
-import { IntegrationTemplatesController } from './integrations/integration-templates.controller';
+import { IntegrationFormulasController, IntegrationTemplatesController } from './integrations/integration-templates.controller';
 import { IntegrationTemplatesService } from './integrations/integration-templates.service';
 import { IntegrationFileStore, SupabaseIntegrationFileStore } from './integrations/core/file-store';
 import { IntegrationRunsService } from './integrations/integration-runs.service';
@@ -233,6 +233,7 @@ export class AppModule implements NestModule {
         IntegrationRunsController,
         IntegrationFilesController,
         IntegrationTemplatesController,
+        IntegrationFormulasController,
         MaterialCertificatesController,
         InspectionsController,
         InspectionMeasurementsController,

@@ -68,6 +68,7 @@ const ImportTemplatePage = lazy(() => import("./components/integrations/Template
 const ConnectionPage = lazy(() => import("./components/integrations/ConnectionPage.jsx"));
 const IntegrationRunPage = lazy(() => import("./components/integrations/RunPage.jsx"));
 const IntegrationMappingPage = lazy(() => import("./components/integrations/MappingPage.jsx"));
+const ApiMappingPage = lazy(() => import("./components/integrations/ApiMappingPage.jsx"));
 const MachinesPage = lazy(() => import("./components/master-data/MachinesPage.jsx"));
 const ProductionOrdersPage = lazy(() => import("./components/production/OrdersPage.jsx"));
 const ProductionOrderPage = lazy(() => import("./components/production/OrderPage.jsx"));
@@ -218,6 +219,7 @@ const router = createBrowserRouter([
               { path: "Integrations/:id", element: <ConnectionPage /> },
               { path: "Integrations/:id/runs/:runId", element: <IntegrationRunPage /> },
               { path: "Integrations/:id/mapping", element: <IntegrationMappingPage /> },
+              { path: "Integrations/:id/map", element: <ApiMappingPage /> },
               {
                 path: "Notifications",
                 element: <SettingsNotifications />,

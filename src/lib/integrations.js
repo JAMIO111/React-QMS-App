@@ -506,3 +506,12 @@ export const missingSummary = (m) => {
   ].filter(Boolean);
   return parts.length ? `No longer in the source: ${parts.join(" · ")}` : null;
 };
+
+/** The address of the page that maps an API connection's fields for one kind of record. */
+export const apiMappingPath = (connectionId, entityType, templateId) => {
+  const q = new URLSearchParams();
+  if (entityType) q.set("entity", entityType);
+  if (templateId) q.set("template", templateId);
+  const s = q.toString();
+  return `/Settings/Integrations/${connectionId}/map${s ? `?${s}` : ""}`;
+};

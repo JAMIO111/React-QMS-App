@@ -53,7 +53,7 @@ const STEPS = [
   { n: 3, label: "Map columns" },
 ];
 const ACCEPT = ".csv,.txt,.xlsx";
-const KEY_GUESS = /^(id|code|number|no|ref|reference|key)$/i;
+export const KEY_GUESS = /^(id|code|number|no|ref|reference|key)$/i;
 
 /** The step rail: done steps can be gone back to, later ones cannot be jumped to. */
 const Steps = ({ step, reachable, onGo }) => (
@@ -248,7 +248,7 @@ const ChooseFile = ({ connection, fileId, onFile, canUpload, options, setOptions
  * Saving the mapping on screen: as the next version of the chosen template (a reason is needed: every import says which version it used) or as a new
  * template (a name). Only people who manage integrations save templates (T4).
  */
-const SaveTemplateDialog = ({ template, defaultName, onCancel, onSave, busy, action = "Save and continue" }) => {
+export const SaveTemplateDialog = ({ template, defaultName, onCancel, onSave, busy, action = "Save and continue" }) => {
   const [mode, setMode] = useState(template ? "version" : "new");
   const [reason, setReason] = useState("");
   const [name, setName] = useState(defaultName);
@@ -283,7 +283,7 @@ const SaveTemplateDialog = ({ template, defaultName, onCancel, onSave, busy, act
 };
 
 /** What importing may do to records already in Fortress: kept on the template (NCs are always added, never matched). */
-const TemplateSettingsCard = ({ entityType, settings, onChange, readOnly }) => {
+export const TemplateSettingsCard = ({ entityType, settings, onChange, readOnly }) => {
   const fixed = ADD_ONLY_KINDS.includes(entityType) || ADD_UPDATE_KINDS.includes(entityType);
   const why = {
     goods_receipt: "Deliveries are always added: one already imported is never changed by a later file.",

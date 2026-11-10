@@ -5,7 +5,7 @@ import { useIntegrationConnection, useIntegrationMutation, useIntegrationRun, us
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
-import { ENTITY_LABELS, ROW_STATUS, RUN_KINDS, WRITE_MODE_LABELS, drainMessage, isLive, missingSummary, wizardPath } from "../../lib/integrations";
+import { ENTITY_LABELS, ROW_STATUS, RUN_KINDS, WRITE_MODE_LABELS, drainMessage, isLive, missingSummary, apiMappingPath, wizardPath } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
 import Dialog from "../ui/Dialog";
@@ -122,9 +122,10 @@ const RunPage = () => {
       },
     );
   // After a preview of a file: the same file and template (its current version) or mapping, written this time.
+  const apiRun = connection.data?.provider?.key === "rest_api";
   const importFile = () =>
     mutation.mutate(
-      { action: "requestRun", id, body: { entityType: run.entityType, kind: "full", fileId: run.file.id, ...(run.template ? { templateId: run.template.id } : {}) } },
+      { action: "requestRun", id, body: { entityType: run.entityType, kind: "full", ...(run.file ? { fileId: run.file.id } : {}), ...(run.template ? { templateId: run.template.id } : {}) } },
       {
         onSuccess: (r) => navigate(`/Settings/Integrations/${id}/runs/${r.id}`),
         onError: (err) => showToast({ type: "error", title: "Import not started", message: describeApiError(err) }),
@@ -170,12 +171,18 @@ const RunPage = () => {
             {!live && run.rowsNow.failed > 0 && connection.data?.status === "active" && (
               <CTAButton type="main" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => act("retryRows", { entityType: run.entityType })}>{mutation.isPending ? "Retrying…" : "Retry failed rows"}</CTAButton>
             )}
-            {preview && run.file && !live && run.status !== "cancelled" && connection.data?.status === "active" && (
+            {preview && (run.file || apiRun) && !live && run.status !== "cancelled" && (
               <>
-                {(connection.data.importable ?? []).includes(run.entityType) && (connection.data.writable ?? []).includes(run.entityType) && (
+                {/* An API preview may run before the connection is active and without a template; importing needs both. */}
+                {connection.data?.status === "active" && (run.file || run.template) && (connection.data.importable ?? []).includes(run.entityType) && (connection.data.writable ?? []).includes(run.entityType) && (
                   <CTAButton type="main" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={importFile}>{mutation.isPending ? "Starting…" : "Import these records"}</CTAButton>
                 )}
-                <CTAButton to={wizardPath(id, { entity: run.entityType, file: run.file.id, step: 3, template: run.template?.id })} type="secondary" size="md">Change the mapping</CTAButton>
+                <CTAButton
+                  to={run.file ? wizardPath(id, { entity: run.entityType, file: run.file.id, step: 3, template: run.template?.id }) : apiMappingPath(id, run.entityType, run.template?.id)}
+                  type="secondary"
+                  size="md">
+                  {run.template ? "Change the mapping" : "Map fields"}
+                </CTAButton>
               </>
             )}
           </div>

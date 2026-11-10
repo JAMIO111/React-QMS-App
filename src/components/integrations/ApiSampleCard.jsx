@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApiSample } from "../../hooks/useIntegrations";
 import { describeApiError } from "../../lib/api-client";
-import { ENTITY_LABELS } from "../../lib/integrations";
+import { ENTITY_LABELS, apiMappingPath } from "../../lib/integrations";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
 import MenuCard from "../ui/MenuCard";
@@ -18,7 +18,8 @@ const ApiSampleCard = ({ connection }) => {
   const chosen = kinds.includes(entityType) ? entityType : kinds[0] ?? null;
   const data = sample.data;
   return (
-    <MenuCard title="What the API sends" subtitle="Reads the first page of one kind of record, without importing anything. Map these columns in an import template.">
+    <MenuCard title="What the API sends" subtitle="Reads the first page of one kind of record, without importing anything. Map fields turns these into an import template."
+      action={kinds.length > 0 && <CTAButton to={apiMappingPath(connection.id, chosen)} type="main" size="md">Map fields</CTAButton>}>
       {kinds.length === 0 ? (
         <p className="text-sm text-secondary-text">Say in the connection's settings where the API gives each kind of record.</p>
       ) : (

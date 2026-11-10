@@ -4,7 +4,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useImportTemplates, useIntegrationFiles, useIntegrationMutation, useIntegrationRuns } from "../../hooks/useIntegrations";
 import { defaultTemplate } from "../../lib/importTemplates";
 import { describeApiError } from "../../lib/api-client";
-import { ENTITY_LABELS, RUN_KINDS, RUN_STATUS, runSummary, wizardPath } from "../../lib/integrations";
+import { ENTITY_LABELS, RUN_KINDS, RUN_STATUS, apiMappingPath, runSummary, wizardPath } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
@@ -97,7 +97,7 @@ const RunDialog = ({ connection, onClose }) => {
           />
         )}
         {isApi && entityType && !templates.isLoading && apiNeedsTemplate && (
-          <Callout tone="info">
+          <Callout tone="info" action={<Link to={apiMappingPath(connection.id, entityType)} className="text-sm font-medium text-link-color hover:underline">Map fields</Link>}>
             There is no import template for {ENTITY_LABELS[entityType]?.toLowerCase() ?? "these records"} yet: a preview shows what the API sends, and importing needs a template that maps its fields.
           </Callout>
         )}

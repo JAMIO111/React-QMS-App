@@ -247,7 +247,7 @@ One migration, `20260121100000_integration_purchasing.sql`.
   failures in a row, rows needing a person, records waiting, values to review, scheduler problem; state ok / attention / failing); the import health
   card on Settings → Integrations and counts on the master data overview's integrations card.
 - **Not built in IN8:** a time per connection (needs an hourly cron), email/push when an import fails or records wait, editing a rejected row in
-  Fortress, reactivating a record that comes back (an import that maps Active does it), the wizard reading an API sample.
+  Fortress, reactivating a record that comes back (an import that maps Active does it). (Mapping an API connection's fields from a sample was built after IN8: `ApiMappingPage.jsx`, "Map fields".)
 
 ## 7. Entity catalogue (Phase 5)
 

@@ -393,6 +393,22 @@ export const useSetAllowedHosts = () => {
 };
 
 /** Read the first page of one kind of record from an API connection (nothing is stored): columns and up to 20 rows. */
+/**
+ * The first page an API connection sends for one kind of record, read when a mapping page opens (nothing is stored). Kept for the session so
+ * mapping does not call the API again; "Read again" refetches.
+ */
+export const useApiSampleQuery = (connectionId, entityType) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "api-sample", connectionId, entityType),
+    queryFn: () => apiFetch(`${BASE}/connections/${connectionId}/sample`, { method: "POST", body: { entityType }, organisationId }),
+    enabled: !!organisationId && !!connectionId && !!entityType,
+    retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+};
+
 export const useApiSample = (connectionId) => {
   const { organisationId } = useOrganisation();
   return useMutation({ mutationFn: (entityType) => apiFetch(`${BASE}/connections/${connectionId}/sample`, { method: "POST", body: { entityType }, organisationId }) });

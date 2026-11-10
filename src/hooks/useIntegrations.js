@@ -350,3 +350,14 @@ export const useDecideConflict = () => {
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };
+
+/** The received quantities check of a connection (IN6c): order lines where Fortress and the source disagree (`all` adds the ones that agree). */
+export const useReceiptReconciliation = (connectionId, { all = false, enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "reconciliation", connectionId, all),
+    queryFn: () => apiFetch(`${BASE}/connections/${connectionId}/reconciliation${all ? "?all=true" : ""}`, { organisationId }),
+    enabled: !!organisationId && !!connectionId && enabled,
+    retry: false,
+  });
+};

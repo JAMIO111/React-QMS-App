@@ -158,6 +158,29 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
       ...SYSTEM,
       purchase_order_id: 'The order is found by its number, or made from the line',
     },
+    virtual: {
+      quantityReceived: 'The source\'s received total, kept in integration_po_line_totals for the received quantities check',
+      lastReceivedOn: 'The source\'s last received date, kept with the total',
+    },
+  },
+  po_receipt_total: {
+    table: 'integration_po_line_totals',
+    fields: {
+      poNumber: { column: 'po_line_id' }, poLine: { column: 'po_line_id' }, quantityReceived: { column: 'quantity_received' },
+      deliveryNote: { column: 'delivery_note', table: 'goods_receipts' },
+    },
+    excluded: {
+      id: 'Fortress assigns the id',
+      organisation_id: 'The organisation of the connection',
+      connection_id: 'The connection the total came through',
+      run_id: 'The import that last reported it',
+      created_at: 'Set by the database',
+      updated_at: 'Set by the database',
+      last_received_on: 'Written with the total, from Last received on',
+    },
+    virtual: {
+      lastReceivedOn: 'Kept with the total (last_received_on) and dates the delivery of the difference',
+    },
   },
   goods_receipt: {
     table: 'goods_receipt_lines',

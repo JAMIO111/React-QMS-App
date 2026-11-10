@@ -9,7 +9,7 @@ import { CatalogueService } from './core/catalogue.service';
 import { FileParseError, ParsedFile, parseFile, ParseOptions } from './core/file-parsers';
 import { IntegrationFileStore } from './core/file-store';
 import { mappingProblems, MappingSpec } from './core/mapping';
-import { CatalogueResponse, ImportSettings, ImportSettingsList, IntegrationFile, IntegrationFileDetail, IntegrationFileList, MappingList, RegisterFileBody, SaveImportSettingsBody, SaveMappingBody } from './integration-files.schemas';
+import { CatalogueResponse, ImportSettings, ImportSettingsList, IntegrationFile, IntegrationFileDetail, IntegrationFileList, MappingList, Reconciliation, RegisterFileBody, SaveImportSettingsBody, SaveMappingBody } from './integration-files.schemas';
 import { ENTITY_TYPES, EntityType } from './core/entity-importer';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -176,6 +176,40 @@ export class IntegrationFilesService {
     });
   }
 
+  /**
+   * The received quantities check (IN6c): each order line a source reported totals for (a received-quantities import, or a purchase order import that
+   * carries them), what Fortress has received against what the source says. Mismatches first; `all` adds the lines that agree.
+   */
+  reconciliation(ctx: RequestContext, connectionId: string, all: boolean): Promise<Reconciliation> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.connection(db, ctx, connectionId);
+      const rows = (await db.execute<Row>(sql`select * from app.integration_receipt_reconciliation(${connectionId}::uuid)
+        order by case state when 'short' then 0 when 'over' then 1 when 'date' then 2 else 3 end, po_number, line_number`)).rows;
+      const counts = { short: 0, over: 0, date: 0, match: 0 };
+      for (const r of rows) counts[r.state as keyof typeof counts] += 1;
+      const day = (v: unknown) => (v ? String(v instanceof Date ? v.toISOString() : v).slice(0, 10) : null);
+      return {
+        data: rows
+          .filter((r) => all || r.state !== 'match')
+          .slice(0, 500)
+          .map((r) => ({
+            poLineId: r.po_line_id as string,
+            poNumber: r.po_number as string,
+            lineNumber: Number(r.line_number),
+            supplier: r.supplier_code as string,
+            item: ((r.part_number ?? r.material) as string) ?? null,
+            sourceQuantity: Number(r.source_quantity),
+            sourceLastReceivedOn: day(r.source_last_received_on),
+            fortressQuantity: Number(r.fortress_quantity),
+            fortressLastReceivedOn: day(r.fortress_last_received_on),
+            recordedAt: new Date(r.recorded_at as string).toISOString(),
+            state: r.state as Reconciliation['data'][number]['state'],
+          })),
+        counts,
+      };
+    });
+  }
+
   saveSettings(ctx: RequestContext, connectionId: string, b: SaveImportSettingsBody): Promise<z.infer<typeof ImportSettings>> {
     return this.database.asUser(ctx, async (db, client) => {
       await this.connection(db, ctx, connectionId);
@@ -190,11 +224,13 @@ export class IntegrationFilesService {
 const HAS_ACTIVE = new Set<EntityType>(['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type']);
 /** Kinds of record an import only ever adds: non-conformances (managed in Fortress once in) and goods receipts (a delivery is never changed afterwards). */
 export const ADD_ONLY_KINDS = new Set<EntityType>(['nonconformance', 'goods_receipt']);
+/** Received totals are always "add and update": a changed total is what records a delivery of the increase. */
+export const ADD_UPDATE_KINDS = new Set<EntityType>(['po_receipt_total']);
 function toSettings(t: EntityType, r: Row | undefined): z.infer<typeof ImportSettings> {
-  const fixed = ADD_ONLY_KINDS.has(t);
+  const fixed = ADD_ONLY_KINDS.has(t) || ADD_UPDATE_KINDS.has(t);
   return {
     entityType: t,
-    writeMode: fixed ? 'add_only' : ((r?.write_mode as z.infer<typeof ImportSettings>['writeMode']) ?? 'add_only'),
+    writeMode: ADD_ONLY_KINDS.has(t) ? 'add_only' : ADD_UPDATE_KINDS.has(t) ? 'add_update' : ((r?.write_mode as z.infer<typeof ImportSettings>['writeMode']) ?? 'add_only'),
     matchExisting: fixed ? false : !!r?.match_existing,
     onMissing: (r?.on_missing as z.infer<typeof ImportSettings>['onMissing']) ?? 'nothing',
     schedule: (r?.schedule as z.infer<typeof ImportSettings>['schedule']) ?? 'manual',

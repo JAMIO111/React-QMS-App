@@ -31,7 +31,7 @@ import {
   rowsInUse,
   rowsToFields,
 } from "../../lib/integrations";
-import { ADD_ONLY_KINDS, defaultTemplate, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
+import { ADD_ONLY_KINDS, ADD_UPDATE_KINDS, defaultTemplate, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
 import { formatDateTime } from "../../lib/processControl";
 import { CheckIcon } from "@/components/icons";
 import Callout from "../ui/Callout";
@@ -284,11 +284,14 @@ const SaveTemplateDialog = ({ template, defaultName, onCancel, onSave, busy, act
 
 /** What importing may do to records already in Fortress: kept on the template (NCs are always added, never matched). */
 const TemplateSettingsCard = ({ entityType, settings, onChange, readOnly }) => {
-  const fixed = ADD_ONLY_KINDS.includes(entityType);
+  const fixed = ADD_ONLY_KINDS.includes(entityType) || ADD_UPDATE_KINDS.includes(entityType);
+  const why = {
+    goods_receipt: "Deliveries are always added: one already imported is never changed by a later file.",
+    po_receipt_total: "Totals are always added and updated: a higher total records a delivery of the increase.",
+    nonconformance: "Non-conformances are always added as new drafts, never matched or updated.",
+  };
   return (
-    <MenuCard
-      title="What importing may do"
-      subtitle={!fixed ? "Saved with the template." : entityType === "goods_receipt" ? "Deliveries are always added: one already imported is never changed by a later file." : "Non-conformances are always added as new drafts, never matched or updated."}>
+    <MenuCard title="What importing may do" subtitle={fixed ? why[entityType] : "Saved with the template."}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <ComboField label="Records" value={settings.writeMode} onChange={(v) => onChange({ ...settings, writeMode: v ?? "add_only" })} options={WRITE_MODES} required disabled={readOnly || fixed} />
         <div className="flex items-end pb-1.5">
@@ -507,7 +510,7 @@ const CsvImportWizard = () => {
                 readOnly={!canRun}
                 advanced={advanced}
                 problems={problems}
-                updates={!ADD_ONLY_KINDS.includes(entityType) && (form.settings?.writeMode ?? "add_only") !== "add_only"}
+                updates={!ADD_ONLY_KINDS.includes(entityType) && !ADD_UPDATE_KINDS.includes(entityType) && (form.settings?.writeMode ?? "add_only") !== "add_only"}
               />
             </MenuCard>
           </>

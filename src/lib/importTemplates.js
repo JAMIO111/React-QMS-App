@@ -170,9 +170,12 @@ export const cleanSteps = (steps) =>
 /** Kinds an import only ever adds: non-conformances and goods receipts (never matched, never updated). */
 export const ADD_ONLY_KINDS = ["nonconformance", "goods_receipt"];
 
-/** Settings a template keeps for an import (NCs and goods receipts are always add only and never matched). */
+/** Kinds an import always adds and updates: received totals (a changed total records a delivery of the increase). */
+export const ADD_UPDATE_KINDS = ["po_receipt_total"];
+
+/** Settings a template keeps for an import (NCs and goods receipts are always add only, received totals always add and update; none are matched). */
 export const templateSettings = (entityType, s) =>
-  ADD_ONLY_KINDS.includes(entityType) ? { writeMode: "add_only", matchExisting: false } : { writeMode: s?.writeMode ?? "add_only", matchExisting: !!s?.matchExisting };
+  ADD_UPDATE_KINDS.includes(entityType) ? { writeMode: "add_update", matchExisting: false } : ADD_ONLY_KINDS.includes(entityType) ? { writeMode: "add_only", matchExisting: false } : { writeMode: s?.writeMode ?? "add_only", matchExisting: !!s?.matchExisting };
 
 const norm = (v) =>
   JSON.stringify(v, (_k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).filter(([, y]) => y !== undefined && y !== null && y !== "").sort(([a], [b]) => a.localeCompare(b))) : x));

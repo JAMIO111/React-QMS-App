@@ -325,6 +325,10 @@ BEGIN
     SELECT a, connection_id, 'supplier' FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001';
   INSERT INTO public.integration_run_errors (organisation_id, run_id, attempt, kind, message, transient)
     VALUES (a, '5f000000-0000-0000-0000-00000000c001', 1, 'transient', 'Sweep error', true);
+  -- IN6c: a source's received total for an order line (written only by the import functions).
+  INSERT INTO public.integration_po_line_totals (organisation_id, connection_id, po_line_id, quantity_received)
+    SELECT a, (SELECT connection_id FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001'), l.id, 1
+      FROM public.purchase_order_lines l WHERE l.organisation_id = a LIMIT 1;
   -- IN5: a value parked for review (written only by the runner).
   INSERT INTO public.integration_conflicts (organisation_id, connection_id, run_id, entity_type, internal_id, external_id, field, source_data, fortress_change)
     SELECT a, connection_id, id, 'supplier', gen_random_uuid(), 'SW-EXT-1', 'name', '{"name": "Sweep"}'::jsonb, '{"name": {"from": "A", "to": "Sweep"}}'::jsonb

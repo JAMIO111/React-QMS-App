@@ -169,4 +169,29 @@ describe('purchase orders from a file', () => {
     const perf = (await api().get(`/api/v1/supplier-quality/suppliers/${supplier}/performance`).set(await owner()).expect(200)).body;
     expect(perf.metrics.ppm).toMatchObject({ receivedUnits: 550, rejectedUnits: 20, value: 36364 });
   });
+
+  it('received totals record the increase as a delivery; the check lists where Fortress and the source disagree', async () => {
+    const day = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+    const totals = (await api().post(`${base}/templates`).set(await owner()).send({
+      entityType: 'po_receipt_total', name: 'ERP received totals', keyField: 'PO',
+      fields: [{ target: 'poNumber', source: 'PO' }, { target: 'poLine', source: 'Line' }, { target: 'quantityReceived', source: 'Received' }, { target: 'lastReceivedOn', source: 'Last' }],
+    }).expect(201)).body;
+    expect(totals.current.settings).toEqual({ writeMode: 'add_update', matchExisting: false });
+    const fileId = await upload('totals.csv', ['PO,Line,Received,Last', `PO-1,1,150,${day(2)}`, `PO-1,2,380,${day(10)}`]);
+    const res = (await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'po_receipt_total', kind: 'full', fileId, templateId: totals.id }).expect(201)).body;
+    expect(res).toMatchObject({ status: 'succeeded', counts: { created: 2 } });
+    const line1 = (await admin.query(
+      `select string_agg(g.received_on::text || ':' || gl.quantity_received::int, ',' order by g.received_on) as d from public.goods_receipt_lines gl
+         join public.goods_receipts g on g.id = gl.goods_receipt_id join public.purchase_order_lines l on l.id = gl.po_line_id
+         join public.purchase_orders o on o.id = l.purchase_order_id where o.organisation_id = $1 and o.po_number = 'PO-1' and l.line_number = 1`, [ids.orgA])).rows[0].d;
+    expect(line1).toBe(`${day(10)}:100,${day(2)}:50`);
+
+    const check = (await api().get(`${base}/connections/${connId}/reconciliation`).set(await owner()).expect(200)).body;
+    expect(check.counts).toEqual({ short: 0, over: 1, date: 0, match: 1 });
+    expect(check.data).toEqual([expect.objectContaining({ poNumber: 'PO-1', lineNumber: 2, supplier: 'ACME', item: 'Bolts', sourceQuantity: 380, fortressQuantity: 400, state: 'over' })]);
+    const everything = (await api().get(`${base}/connections/${connId}/reconciliation?all=true`).set(await owner()).expect(200)).body;
+    expect(everything.data).toHaveLength(2);
+    await api().get(`${base}/connections/${connId}/reconciliation`).set(await as(ids.ownerB, ids.orgB)).expect(404);
+  });
 });
+

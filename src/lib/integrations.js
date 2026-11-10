@@ -94,6 +94,7 @@ export const ENTITY_LABELS = {
   production_order: "Production orders",
   purchase_order: "Purchase orders",
   goods_receipt: "Goods receipts",
+  po_receipt_total: "Received quantities",
 };
 
 export const RUN_KINDS = {
@@ -295,11 +296,20 @@ export const recordPath = (entityType, id) =>
     production_order: `/Production/Orders/${id}`,
     purchase_order: "/Supplier-Quality/Purchase-Orders",
     goods_receipt: "/Supplier-Quality/Goods-Receipts",
+    po_receipt_total: "/Supplier-Quality/Purchase-Orders",
     customer: "/Customers",
     machine: "/Machines",
     employee: "/Employees",
     gauge_type: "/Settings/Data-Management?tab=calibration",
   })[entityType] ?? null;
+
+/** The received quantities check (IN6c): what each state means. */
+export const RECONCILIATION_STATES = {
+  short: { label: "Fortress has less", tone: "bg-warning-color/15 text-warning-color" },
+  over: { label: "Fortress has more", tone: "bg-error-color/15 text-error-color" },
+  date: { label: "Last date differs", tone: "bg-border-color text-secondary-text" },
+  match: { label: "Agrees", tone: "bg-success-color/15 text-success-color" },
+};
 
 /** Who owns a field once the record exists (IN5): what a later import may do to it. "Review" is not offered for fields that only ever add or custom fields. */
 export const OWNERSHIP_OPTIONS = [
@@ -350,8 +360,9 @@ export const ENTITY_DESCRIPTIONS = {
   gauge: "Individual gauges. Calibration dates are recorded in Fortress.",
   nonconformance: "Historical non-conformances, added as drafts.",
   production_order: "Works orders.",
-  purchase_order: "Orders placed with suppliers.",
-  goods_receipt: "Deliveries received.",
+  purchase_order: "Order lines placed with suppliers, one row per line.",
+  goods_receipt: "Deliveries and returns, one row per transaction. Old deliveries are never sent for inspection.",
+  po_receipt_total: "Received so far per order line; Fortress records the increase as a delivery.",
 };
 
 /** Whether a mapping row takes its value from somewhere (a column, joined columns, a fixed value or a value for empty cells). */

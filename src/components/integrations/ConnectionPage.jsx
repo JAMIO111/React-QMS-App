@@ -19,6 +19,7 @@ import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import ConnectionForm from "./ConnectionForm";
 import FilesCard from "./FilesCard";
 import ImportsCard from "./ImportsCard";
+import ReconciliationCard from "./ReconciliationCard";
 import CTAButton from "@/components/CTAButton";
 
 /** Paste a credential once. It is sent in one request, stored encrypted and never shown again. */
@@ -173,6 +174,7 @@ const ConnectionPage = () => {
       {c.provider.key === "csv" && <FilesCard connection={c} canUpload={can("integrations.run")} canMap={manage} />}
 
       <ImportsCard connection={c} canRun={can("integrations.run")} />
+      {can("receiving.read") && <ReconciliationCard connectionId={c.id} />}
 
       <MenuCard title="History" subtitle="Every change to this connection, newest first.">
         <details open={!isFile}>

@@ -158,3 +158,29 @@ export const SaveImportSettingsBody = z
   })
   .strict();
 export type SaveImportSettingsBody = z.infer<typeof SaveImportSettingsBody>;
+
+// ---- received quantities check (IN6c) ----------------------------------------------------------------
+export const ReconciliationQuery = z.object({ all: z.enum(['true', 'false']).default('false') }).strict();
+export const RECONCILIATION_STATES = ['short', 'over', 'date', 'match'] as const;
+export const Reconciliation = z.object({
+  data: z.array(
+    z.object({
+      poLineId: z.string().uuid(),
+      poNumber: z.string(),
+      lineNumber: z.number().int(),
+      supplier: z.string(),
+      item: z.string().nullable(),
+      /** What the source says it has received, and its last date. */
+      sourceQuantity: z.number(),
+      sourceLastReceivedOn: z.string().nullable(),
+      /** What Fortress has received on the line (receipts not cancelled), and its latest date. */
+      fortressQuantity: z.number(),
+      fortressLastReceivedOn: z.string().nullable(),
+      recordedAt: z.string(),
+      /** short: Fortress has less; over: more; date: the same quantity but another last date; match. */
+      state: z.enum(RECONCILIATION_STATES),
+    }),
+  ),
+  counts: z.object({ short: z.number().int(), over: z.number().int(), date: z.number().int(), match: z.number().int() }),
+});
+export type Reconciliation = z.infer<typeof Reconciliation>;

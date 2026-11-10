@@ -262,6 +262,8 @@ export const CATALOGUE: EntityCatalogue[] = [
       { key: 'agreedOn', label: 'Agreed date', type: 'date', description: 'The latest date agreed with the supplier; follows the source' },
       { key: 'lineStatus', label: 'Line status', type: 'enum', options: options(['open', 'closed', 'cancelled']), description: 'Empty means open. The order follows its lines: open while any line is open, else closed (cancelled when every line is)' },
       { key: 'orderNotes', label: 'Order notes', type: 'text', maxLength: 2000 },
+      { key: 'quantityReceived', label: 'Received so far', type: 'number', min: 0, noReview: true, description: 'The source\'s own total received on the line; kept for the received quantities check, nothing is recorded as received from it' },
+      { key: 'lastReceivedOn', label: 'Last received on', type: 'date', noReview: true, description: 'The source\'s last delivery date for the line, for the same check' },
     ],
   },
   {
@@ -283,6 +285,19 @@ export const CATALOGUE: EntityCatalogue[] = [
       ref('site', 'Site', 'site', 'site code', { noReview: true, description: 'Empty means the organisation\'s only site' }),
       { key: 'notes', label: 'Notes', type: 'text', maxLength: 1000 },
       { key: 'leaveOut', label: 'Leave this row out', type: 'boolean', noReview: true, description: 'Yes leaves the row out of the import, listed as skipped (for example transfers or adjustments in an inventory export); a formula such as IN([Type], "TRF", "ADJ") fits' },
+    ],
+  },
+  {
+    entityType: 'po_receipt_total',
+    label: 'Received quantities',
+    keyHint: 'The order number; Fortress adds the line number, so each order line is one row',
+    keySuffix: 'poLine',
+    fields: [
+      { key: 'poNumber', label: 'Order number', type: 'text', required: true, maxLength: 40, noReview: true, description: 'The purchase order, already in Fortress (import purchase orders first)' },
+      { key: 'poLine', label: 'Order line', type: 'integer', required: true, min: 1, noReview: true },
+      { key: 'quantityReceived', label: 'Received so far', type: 'number', required: true, min: 0, noReview: true, description: 'The total received on the line. When it is more than Fortress has, a delivery of the difference is recorded; when less, nothing is, and the received quantities check lists it' },
+      { key: 'lastReceivedOn', label: 'Last received on', type: 'date', noReview: true, description: 'Dates the delivery of the difference; needed when the total goes up' },
+      { key: 'deliveryNote', label: 'Delivery note', type: 'text', maxLength: 100, noReview: true },
     ],
   },
 ];

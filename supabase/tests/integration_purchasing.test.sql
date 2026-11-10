@@ -122,7 +122,7 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT quantity_ordered::int || '/' || requested_on::text FROM public.purchase_order_lines WHERE id = hand_line), '60/2026-11-30', 'keeping its requested date');
 
   -- ---- permissions and tenancy ----
-  PERFORM pg_temp.assert_eq(has_function_privilege('authenticated', 'app.import_purchase_order(uuid, uuid, jsonb)', 'EXECUTE'), false, 'nobody signed in calls the import directly');
+  PERFORM pg_temp.assert_eq(has_function_privilege('authenticated', 'app.import_purchase_order(uuid, uuid, jsonb, uuid, uuid)', 'EXECUTE'), false, 'nobody signed in calls the import directly');
   PERFORM pg_temp.assert_eq(app.integration_find_by_code(org2, 'purchase_order', 'PO-100/1'), NULL::uuid, 'another organisation finds none of it');
 END $$;
 
@@ -213,6 +213,68 @@ BEGIN
     'skipped:row-7:Left out by the mapping,skipped:X1:Left out by the mapping', 'left-out rows are skipped, even without an identifier');
   PERFORM pg_temp.assert_eq((SELECT skipped || '/' || rejected FROM public.integration_sync_runs WHERE id = run), '2/0', 'and counted as skipped, not rejected');
   PERFORM app.system_finish_integration_run(org, run, owner);
+END $$;
+
+-- ---- IN6c: received totals per order line (E2) and the reconciliation check ----
+DO $$
+DECLARE
+  ann uuid := '5f600000-0000-0000-0000-000000000a01'; eve uuid := '5f600000-0000-0000-0000-000000000a04';
+  org uuid; api uuid; acme uuid; res jsonb; line uuid; rec record; n int;
+BEGIN
+  SELECT id INTO org FROM public.organisations WHERE name = 'Purchasing Alpha';
+  SELECT id INTO api FROM public.integration_connections WHERE organisation_id = org AND external_system = 'erp';
+  SELECT id INTO acme FROM public.suppliers WHERE organisation_id = org AND code = 'ACME';
+  PERFORM pg_temp.assert_eq(app.integration_settings_for(api, 'po_receipt_total') ->> 'writeMode', 'add_update', 'received totals are always added and updated');
+
+  -- the purchase order import can carry the source's totals too
+  res := pg_temp.import_one(org, api, ann, 'purchase_order', 'PO-300/1', pg_temp.po_line('PO-300', 1, acme, '{"quantityReceived": 0}'::jsonb));
+  PERFORM pg_temp.assert_eq(res ->> 'status' || coalesce(' ' || (res -> 'errors' -> 0 ->> 'message'), ''), 'applied', 'an order line with its received total is imported');
+  line := (res ->> 'internal')::uuid;
+  PERFORM pg_temp.assert_eq((SELECT quantity_received::int || '/' || (run_id IS NOT NULL)::text FROM public.integration_po_line_totals WHERE po_line_id = line), '0/true',
+    'an order line import keeps the source''s received total');
+
+  -- a total above what Fortress has becomes a delivery of the increase
+  res := pg_temp.import_one(org, api, ann, 'po_receipt_total', 'PO-300/1', '{"poNumber": "PO-300", "poLine": 1, "quantityReceived": 30, "lastReceivedOn": "2026-10-20"}'::jsonb);
+  PERFORM pg_temp.assert_eq(res ->> 'status' || '/' || (res ->> 'internal'), 'applied/' || line::text, 'a total is imported against its order line');
+  PERFORM pg_temp.assert_eq((SELECT string_agg(g.received_on::text || ':' || gl.quantity_received::int, ',' ORDER BY g.received_on) FROM public.goods_receipt_lines gl
+    JOIN public.goods_receipts g ON g.id = gl.goods_receipt_id WHERE gl.po_line_id = line), '2026-10-20:30', 'as one delivery of 30 on the last received date');
+  PERFORM pg_temp.assert_eq((SELECT bool_and(NOT d.required) FROM public.incoming_inspection_determinations d JOIN public.goods_receipt_lines gl ON gl.id = d.receipt_line_id WHERE gl.po_line_id = line), true,
+    'not sent for inspection');
+  res := pg_temp.import_one(org, api, ann, 'po_receipt_total', 'PO-300/1', '{"poNumber": "PO-300", "poLine": 1, "quantityReceived": 30, "lastReceivedOn": "2026-10-20"}'::jsonb);
+  PERFORM pg_temp.assert_eq(res ->> 'status', 'unchanged', 'the same total again writes nothing');
+  res := pg_temp.import_one(org, api, ann, 'po_receipt_total', 'PO-300/1', '{"poNumber": "PO-300", "poLine": 1, "quantityReceived": 50, "lastReceivedOn": "2026-10-25"}'::jsonb);
+  PERFORM pg_temp.assert_eq(res ->> 'action', 'update', 'a higher total is an update');
+  PERFORM pg_temp.assert_eq((SELECT string_agg(g.received_on::text || ':' || gl.quantity_received::int, ',' ORDER BY g.received_on) FROM public.goods_receipt_lines gl
+    JOIN public.goods_receipts g ON g.id = gl.goods_receipt_id WHERE gl.po_line_id = line), '2026-10-20:30,2026-10-25:20', 'which records only the increase');
+
+  -- a lower total makes nothing; the reconciliation check shows it
+  res := pg_temp.import_one(org, api, ann, 'po_receipt_total', 'PO-300/1', '{"poNumber": "PO-300", "poLine": 1, "quantityReceived": 40, "lastReceivedOn": "2026-10-25"}'::jsonb);
+  PERFORM pg_temp.assert_eq((SELECT count(*)::int FROM public.goods_receipt_lines WHERE po_line_id = line), 2, 'a lower total adds nothing');
+  res := pg_temp.import_one(org, api, ann, 'po_receipt_total', 'PO-404/1', '{"poNumber": "PO-404", "poLine": 1, "quantityReceived": 1, "lastReceivedOn": "2026-10-25"}'::jsonb);
+  PERFORM pg_temp.assert_eq(res -> 'errors' -> 0 ->> 'message', 'Order PO-404 is not in Fortress: import the purchase orders first', 'an unknown order fails');
+  res := pg_temp.import_one(org, api, ann, 'po_receipt_total', 'PO-100/2', '{"poNumber": "PO-100", "poLine": 2, "quantityReceived": 20}'::jsonb);
+
+  PERFORM pg_temp.login(ann);
+  SELECT * INTO rec FROM app.integration_receipt_reconciliation(api) WHERE po_line_id = line;
+  PERFORM pg_temp.assert_eq(rec.state || '/' || rec.source_quantity::int || '/' || rec.fortress_quantity::int || '/' || rec.po_number || '/' || rec.supplier_code, 'over/40/50/PO-300/ACME',
+    'the check says Fortress has received more than the source reports');
+  SELECT state INTO rec FROM app.integration_receipt_reconciliation(api) WHERE po_number = 'PO-100' AND line_number = 2;
+  PERFORM pg_temp.assert_eq(rec.state, 'match', 'and a line where they agree as matching');
+  PERFORM pg_temp.logout();
+  UPDATE public.integration_po_line_totals SET last_received_on = '2026-10-21' WHERE po_line_id = line;
+  UPDATE public.integration_po_line_totals SET quantity_received = 50 WHERE po_line_id = line;
+  PERFORM pg_temp.login(ann);
+  PERFORM pg_temp.assert_eq((SELECT state FROM app.integration_receipt_reconciliation(api) WHERE po_line_id = line), 'date', 'the same quantity on another last date is a date mismatch');
+  PERFORM pg_temp.logout();
+  UPDATE public.integration_po_line_totals SET quantity_received = 60 WHERE po_line_id = line;
+  PERFORM pg_temp.login(ann);
+  PERFORM pg_temp.assert_eq((SELECT state FROM app.integration_receipt_reconciliation(api) WHERE po_line_id = line), 'short', 'fewer received in Fortress is short');
+  PERFORM pg_temp.logout();
+  PERFORM pg_temp.login(eve);
+  PERFORM pg_temp.assert_eq((SELECT count(*)::int FROM app.integration_receipt_reconciliation(api)), 0, 'another organisation sees none of it');
+  PERFORM pg_temp.assert_eq((SELECT count(*)::int FROM public.integration_po_line_totals), 0, 'nor the totals');
+  PERFORM pg_temp.logout();
+  PERFORM pg_temp.assert_eq(has_function_privilege('authenticated', 'app.import_po_receipt_total(uuid, uuid, jsonb, uuid, uuid)', 'EXECUTE'), false, 'nobody signed in imports totals directly');
 END $$;
 
 ROLLBACK;

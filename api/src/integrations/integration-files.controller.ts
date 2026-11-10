@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiTags } fr
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { CatalogueResponse, ImportSettings, ImportSettingsList, IntegrationFileDetail, IntegrationFileList, MappingList, MappingQuery, RegisterFileBody, SaveImportSettingsBody, SaveMappingBody } from './integration-files.schemas';
+import { CatalogueResponse, ImportSettings, ImportSettingsList, IntegrationFileDetail, IntegrationFileList, MappingList, MappingQuery, Reconciliation, ReconciliationQuery, RegisterFileBody, SaveImportSettingsBody, SaveMappingBody } from './integration-files.schemas';
 import { IntegrationFilesService } from './integration-files.service';
 
 const READ = 'integrations.read';
@@ -75,5 +75,12 @@ export class IntegrationFilesController {
   @ApiOkResponse({ description: 'Saves the import settings of one kind of record (what is not given stays as it was). 409 when not allowed (e.g. NCs are only ever added, a file cannot run on a schedule).', schema: openApiSchema(ImportSettings) })
   saveSettings(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.saveSettings(ctx, parse(Uuid, id), parse(SaveImportSettingsBody, body));
+  }
+
+  @Get('connections/:id/reconciliation')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'Received quantities check: per order line, what Fortress has received against what the source reports (mismatches; all=true adds the matches)', schema: openApiSchema(Reconciliation) })
+  reconciliation(@Ctx() ctx: RequestContext, @Param('id') id: string, @Query() query: unknown) {
+    return this.service.reconciliation(ctx, parse(Uuid, id), parse(ReconciliationQuery, query).all === 'true');
   }
 }

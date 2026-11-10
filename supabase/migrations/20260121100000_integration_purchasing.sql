@@ -33,7 +33,7 @@ BEGIN
    WHERE id = p_po;
 END $$;
 
-CREATE FUNCTION app.import_purchase_order(p_org uuid, p_id uuid, d jsonb) RETURNS uuid
+CREATE FUNCTION app.import_purchase_order(p_org uuid, p_id uuid, d jsonb, p_connection uuid DEFAULT NULL, p_run uuid DEFAULT NULL) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE
   o public.purchase_orders%ROWTYPE; l public.purchase_order_lines%ROWTYPE; v_po uuid; v_line uuid; v_number text := app.imp_text(d, 'poNumber');
@@ -66,6 +66,7 @@ BEGIN
             app.imp_date(d, 'requestedOn'), app.imp_date(d, 'agreedOn'), coalesce(v_status, 'open'))
     RETURNING id INTO v_line;
     PERFORM app.po_follow_lines(v_po);
+    PERFORM app.record_po_line_total(p_org, p_connection, v_line, d, p_run);
     RETURN v_line;
   END IF;
 
@@ -104,6 +105,7 @@ BEGIN
     updated_by = auth.uid()
   WHERE id = l.id;
   PERFORM app.po_follow_lines(o.id);
+  PERFORM app.record_po_line_total(p_org, p_connection, l.id, d, p_run);
   RETURN l.id;
 END $$;
 
@@ -124,6 +126,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
     WHEN 'production_order' THEN app.has_permission(p_org, 'production.manage')
     WHEN 'purchase_order' THEN app.has_permission(p_org, 'receiving.manage')
     WHEN 'goods_receipt' THEN app.has_permission(p_org, 'receiving.manage')
+    WHEN 'po_receipt_total' THEN app.has_permission(p_org, 'receiving.manage')
     ELSE false END
 $$;
 
@@ -255,7 +258,8 @@ BEGIN
     WHEN 'gauge' THEN app.import_gauge(p_org, p_internal, v_data)
     WHEN 'nonconformance' THEN app.import_nonconformance(p_org, p_internal, v_data)
     WHEN 'production_order' THEN app.import_production_order(p_org, p_internal, v_data, v_system, i.external_id)
-    WHEN 'purchase_order' THEN app.import_purchase_order(p_org, p_internal, v_data)
+    WHEN 'purchase_order' THEN app.import_purchase_order(p_org, p_internal, v_data, r.connection_id, r.id)
+    WHEN 'po_receipt_total' THEN app.import_po_receipt_total(p_org, p_internal, v_data, r.connection_id, r.id)
     WHEN 'goods_receipt' THEN app.import_goods_receipt(p_org, p_internal, v_data, r.connection_id, i.external_id)
     ELSE app.integration_no_importer(r.entity_type) END;
   PERFORM app.import_custom_values(p_org, r.entity_type, v_id, v_data);
@@ -516,12 +520,13 @@ BEGIN
   RETURN jsonb_build_object('received', n_total, 'rejected', n_rejected, 'unchanged', n_unchanged, 'skipped', n_skipped, 'toCreate', n_create, 'toUpdate', n_update);
 END $$;
 
--- Goods receipts, like non-conformances, are only ever added (a delivery is never changed by a later import) and never matched.
+-- Goods receipts, like non-conformances, are only ever added (a delivery is never changed by a later import) and never matched. Received totals
+-- (IN6c) are always "add and update": a changed total is what makes a delivery of the increase.
 CREATE OR REPLACE FUNCTION app.integration_settings_for(p_connection uuid, p_entity text) RETURNS jsonb
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
   SELECT jsonb_build_object(
-    'writeMode', CASE WHEN p_entity IN ('nonconformance', 'goods_receipt') THEN 'add_only' ELSE coalesce(s.write_mode, 'add_only') END,
-    'matchExisting', CASE WHEN p_entity IN ('nonconformance', 'goods_receipt') THEN false ELSE coalesce(s.match_existing, false) END,
+    'writeMode', CASE WHEN p_entity IN ('nonconformance', 'goods_receipt') THEN 'add_only' WHEN p_entity = 'po_receipt_total' THEN 'add_update' ELSE coalesce(s.write_mode, 'add_only') END,
+    'matchExisting', CASE WHEN p_entity IN ('nonconformance', 'goods_receipt', 'po_receipt_total') THEN false ELSE coalesce(s.match_existing, false) END,
     'onMissing', coalesce(s.on_missing, 'nothing'),
     'schedule', coalesce(s.schedule, 'manual'))
     FROM (SELECT 1) one
@@ -531,9 +536,134 @@ $$;
 CREATE OR REPLACE FUNCTION app.integration_template_settings(p_entity text, p_settings jsonb) RETURNS jsonb
 LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
   SELECT jsonb_build_object(
-    'writeMode', CASE WHEN p_entity IN ('nonconformance', 'goods_receipt') THEN 'add_only' ELSE coalesce(p_settings ->> 'writeMode', 'add_only') END,
-    'matchExisting', CASE WHEN p_entity IN ('nonconformance', 'goods_receipt') THEN false ELSE coalesce((p_settings ->> 'matchExisting')::boolean, false) END)
+    'writeMode', CASE WHEN p_entity IN ('nonconformance', 'goods_receipt') THEN 'add_only' WHEN p_entity = 'po_receipt_total' THEN 'add_update' ELSE coalesce(p_settings ->> 'writeMode', 'add_only') END,
+    'matchExisting', CASE WHEN p_entity IN ('nonconformance', 'goods_receipt', 'po_receipt_total') THEN false ELSE coalesce((p_settings ->> 'matchExisting')::boolean, false) END)
 $$;
 
-REVOKE ALL ON FUNCTION app.po_follow_lines(uuid), app.import_purchase_order(uuid, uuid, jsonb), app.import_po_line(uuid, jsonb),
-  app.import_goods_receipt(uuid, uuid, jsonb, uuid, text) FROM PUBLIC, anon, authenticated;
+-- ---------------------------------------------------------------------------
+-- IN6c — received totals per order line (E2) and the reconciliation check
+-- ---------------------------------------------------------------------------
+-- A new kind of record: "received quantities", one row per order line with the source's total received so far.
+CREATE OR REPLACE FUNCTION app.integration_entity_types() RETURNS text[]
+LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
+  SELECT ARRAY['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge', 'nonconformance',
+               'production_order', 'purchase_order', 'goods_receipt', 'po_receipt_total']
+$$;
+
+CREATE OR REPLACE FUNCTION app.integration_assert_entity(p_entity text) RETURNS void
+LANGUAGE plpgsql IMMUTABLE SET search_path = '' AS $$
+BEGIN
+  IF p_entity IS NULL OR NOT (p_entity = ANY (app.integration_entity_types())) THEN
+    RAISE EXCEPTION 'Choose what to import: suppliers, customers, parts, machines, employees, gauge types, gauges, non-conformances, production orders, purchase orders, goods receipts or received quantities'
+      USING ERRCODE = 'QM022';
+  END IF;
+END $$;
+
+-- What a source last said it had received on an order line (from a received-totals import, or the purchase order import), for the reconciliation check.
+CREATE TABLE public.integration_po_line_totals (
+  id uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+  organisation_id uuid NOT NULL REFERENCES public.organisations (id),
+  connection_id uuid NOT NULL,
+  po_line_id uuid NOT NULL,
+  quantity_received numeric(14, 3) NOT NULL CHECK (quantity_received >= 0),
+  last_received_on date,
+  run_id uuid,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (connection_id, po_line_id),
+  CONSTRAINT integration_po_line_totals_connection_fkey FOREIGN KEY (connection_id, organisation_id) REFERENCES public.integration_connections (id, organisation_id),
+  CONSTRAINT integration_po_line_totals_line_fkey FOREIGN KEY (po_line_id, organisation_id) REFERENCES public.purchase_order_lines (id, organisation_id),
+  CONSTRAINT integration_po_line_totals_run_fkey FOREIGN KEY (run_id, organisation_id) REFERENCES public.integration_sync_runs (id, organisation_id)
+);
+CREATE INDEX integration_po_line_totals_org_idx ON public.integration_po_line_totals (organisation_id);
+CREATE INDEX integration_po_line_totals_line_idx ON public.integration_po_line_totals (po_line_id);
+CREATE INDEX integration_po_line_totals_run_idx ON public.integration_po_line_totals (run_id);
+CREATE TRIGGER audit_changes AFTER INSERT OR UPDATE OR DELETE ON public.integration_po_line_totals FOR EACH ROW EXECUTE FUNCTION audit.record_change('organisation_id');
+ALTER TABLE public.integration_po_line_totals ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.integration_po_line_totals FROM anon, authenticated;
+GRANT SELECT ON public.integration_po_line_totals TO authenticated;
+CREATE POLICY integration_po_line_totals_select ON public.integration_po_line_totals FOR SELECT TO authenticated
+  USING (app.has_permission(organisation_id, 'integrations.read') AND app.has_permission(organisation_id, 'receiving.read'));
+
+-- Keep the source's totals for a line when the row gives them (quantityReceived, optionally lastReceivedOn).
+CREATE FUNCTION app.record_po_line_total(p_org uuid, p_connection uuid, p_line uuid, d jsonb, p_run uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_qty numeric := app.imp_num(d, 'quantityReceived');
+BEGIN
+  IF p_connection IS NULL OR v_qty IS NULL THEN RETURN; END IF;
+  IF v_qty < 0 THEN RAISE EXCEPTION 'Quantity received: not below zero' USING ERRCODE = 'QM022'; END IF;
+  INSERT INTO public.integration_po_line_totals AS t (organisation_id, connection_id, po_line_id, quantity_received, last_received_on, run_id)
+  VALUES (p_org, p_connection, p_line, v_qty, app.imp_date(d, 'lastReceivedOn'), p_run)
+  ON CONFLICT (connection_id, po_line_id) DO UPDATE
+     SET quantity_received = EXCLUDED.quantity_received, last_received_on = EXCLUDED.last_received_on, run_id = EXCLUDED.run_id, updated_at = now()
+   WHERE (t.quantity_received, t.last_received_on) IS DISTINCT FROM (EXCLUDED.quantity_received, EXCLUDED.last_received_on);
+END $$;
+
+-- A received total for one order line (E2): the source's total is kept, and when it is more than Fortress has received on that line a delivery of the
+-- increase is recorded, dated the source's last received date (historical mode, as IN6b). A total below Fortress's makes nothing: the reconciliation
+-- check lists it. The internal record is the order line, so a later total for it is an update.
+CREATE FUNCTION app.import_po_receipt_total(p_org uuid, p_id uuid, d jsonb, p_connection uuid DEFAULT NULL, p_run uuid DEFAULT NULL) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE
+  pl public.purchase_order_lines%ROWTYPE; o public.purchase_orders%ROWTYPE; v_total numeric := app.imp_num(d, 'quantityReceived');
+  v_on date := app.imp_date(d, 'lastReceivedOn'); v_have numeric; v_delta numeric; v_year integer; v_n integer; v_receipt uuid; v_line uuid; v_site uuid;
+BEGIN
+  IF v_total IS NULL OR v_total < 0 THEN RAISE EXCEPTION 'Quantity received: give the total received so far (not below zero)' USING ERRCODE = 'QM022'; END IF;
+  pl := app.import_po_line(p_org, d);
+  IF pl.id IS NULL THEN RAISE EXCEPTION 'Order number: say which order line the total is for' USING ERRCODE = 'QM022'; END IF;
+  IF p_id IS NOT NULL AND p_id <> pl.id THEN RAISE EXCEPTION 'This total was imported for another order line' USING ERRCODE = 'QM022'; END IF;
+  SELECT * INTO o FROM public.purchase_orders WHERE id = pl.purchase_order_id;
+  PERFORM 1 FROM public.purchase_order_lines WHERE id = pl.id FOR UPDATE;
+  SELECT coalesce(sum(gl.quantity_received), 0) INTO v_have
+    FROM public.goods_receipt_lines gl JOIN public.goods_receipts g ON g.id = gl.goods_receipt_id
+   WHERE gl.po_line_id = pl.id AND g.status = 'received';
+  v_delta := v_total - v_have;
+  PERFORM app.record_po_line_total(p_org, p_connection, pl.id, d, p_run);
+  IF v_delta <= 0 THEN RETURN pl.id; END IF;
+  IF v_on IS NULL OR v_on > current_date THEN RAISE EXCEPTION 'Last received on: give the date (not in the future) so the delivery can be dated' USING ERRCODE = 'QM022'; END IF;
+  IF (SELECT count(*) FROM public.sites WHERE organisation_id = p_org AND active) = 1 THEN SELECT id INTO v_site FROM public.sites WHERE organisation_id = p_org AND active; END IF;
+  v_year := extract(year FROM v_on)::int;
+  INSERT INTO app.goods_receipt_counters AS k (organisation_id, year, last_value) VALUES (p_org, v_year, 1)
+  ON CONFLICT (organisation_id, year) DO UPDATE SET last_value = k.last_value + 1 RETURNING last_value INTO v_n;
+  INSERT INTO public.goods_receipts (organisation_id, reference, supplier_id, purchase_order_id, site_id, received_on, delivery_note, source_connection_id, notes)
+  VALUES (p_org, 'GR-' || to_char(make_date(v_year, 1, 1), 'YY') || '-' || lpad(v_n::text, 4, '0'), o.supplier_id, o.id, v_site, v_on, app.imp_text(d, 'deliveryNote'), p_connection,
+          'Made from the received total the source reported (' || trim(to_char(v_total, 'FM999999999990.###')) || '), as the increase since the last import')
+  RETURNING id INTO v_receipt;
+  INSERT INTO public.goods_receipt_lines (organisation_id, goods_receipt_id, line_number, po_line_id, part_id, material, quantity_received)
+  VALUES (p_org, v_receipt, 1, pl.id, pl.part_id, pl.material, v_delta)
+  RETURNING id INTO v_line;
+  INSERT INTO public.incoming_inspection_determinations (organisation_id, receipt_line_id, strategy, level, required, basis)
+  VALUES (p_org, v_line, 'none', 'normal', false, 'Imported delivery: inspection on arrival is not recorded in Fortress');
+  RETURN pl.id;
+END $$;
+
+-- The reconciliation check: for each order line a source reported totals for, what Fortress has received (not cancelled) against what the source says.
+-- Read as the caller (RLS on every table it reads), so it shows only what they may see.
+CREATE FUNCTION app.integration_receipt_reconciliation(p_connection uuid) RETURNS TABLE (
+  po_line_id uuid, po_number text, line_number integer, supplier_code text, part_number text, material text,
+  source_quantity numeric, source_last_received_on date, fortress_quantity numeric, fortress_last_received_on date, recorded_at timestamptz, state text)
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path = '' AS $$
+  SELECT t.po_line_id, o.po_number, l.line_number, s.code, p.part_number, l.material,
+         t.quantity_received, t.last_received_on, coalesce(r.qty, 0), r.last_on, t.updated_at,
+         CASE WHEN coalesce(r.qty, 0) < t.quantity_received THEN 'short'
+              WHEN coalesce(r.qty, 0) > t.quantity_received THEN 'over'
+              WHEN t.last_received_on IS NOT NULL AND r.last_on IS DISTINCT FROM t.last_received_on THEN 'date'
+              ELSE 'match' END
+    FROM public.integration_po_line_totals t
+    JOIN public.purchase_order_lines l ON l.id = t.po_line_id
+    JOIN public.purchase_orders o ON o.id = l.purchase_order_id
+    JOIN public.suppliers s ON s.id = o.supplier_id
+    LEFT JOIN public.parts p ON p.id = l.part_id
+    LEFT JOIN LATERAL (
+      SELECT sum(gl.quantity_received) AS qty, max(g.received_on) AS last_on
+        FROM public.goods_receipt_lines gl JOIN public.goods_receipts g ON g.id = gl.goods_receipt_id
+       WHERE gl.po_line_id = l.id AND g.status = 'received') r ON true
+   WHERE t.connection_id = p_connection
+$$;
+
+REVOKE ALL ON FUNCTION app.po_follow_lines(uuid), app.import_purchase_order(uuid, uuid, jsonb, uuid, uuid), app.import_po_line(uuid, jsonb),
+  app.import_goods_receipt(uuid, uuid, jsonb, uuid, text), app.record_po_line_total(uuid, uuid, uuid, jsonb, uuid),
+  app.import_po_receipt_total(uuid, uuid, jsonb, uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION app.integration_receipt_reconciliation(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION app.integration_receipt_reconciliation(uuid) TO authenticated;
+REVOKE ALL ON FUNCTION app.integration_entity_types(), app.integration_assert_entity(text) FROM PUBLIC, anon, authenticated;

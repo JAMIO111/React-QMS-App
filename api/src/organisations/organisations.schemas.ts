@@ -30,6 +30,8 @@ export const OrganisationResponse = z.object({
     allowInlineOrders: z.boolean(),
     /** A job cannot be completed without a production order. */
     requireProductionOrder: z.boolean(),
+    /** The formula editor and the import template manager are shown (UI2c). */
+    advancedImports: z.boolean(),
     /** Path of the logo in the private org-logos bucket (<organisation id>/logo/...), or null. */
     logoPath: z.string().nullable(),
   }),
@@ -71,6 +73,7 @@ export const UpdateOrganisationBody = z
         useLotsAndSerials: z.boolean().optional(),
         allowInlineOrders: z.boolean().optional(),
         requireProductionOrder: z.boolean().optional(),
+        advancedImports: z.boolean().optional(),
         /** Set after uploading to org-logos at <organisation id>/logo/...; null removes the logo. */
         logoPath: z.string().trim().max(300).nullable().optional(),
       })

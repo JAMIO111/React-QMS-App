@@ -35,6 +35,7 @@ export const organisationSettings = pgTable('organisation_settings', {
   useLotsAndSerials: boolean('use_lots_and_serials').notNull(),
   allowInlineOrders: boolean('allow_inline_orders').notNull(),
   requireProductionOrder: boolean('require_production_order').notNull(),
+  advancedImports: boolean('advanced_imports').notNull(),
 });
 
 export const organisationUsers = pgTable('organisation_users', {

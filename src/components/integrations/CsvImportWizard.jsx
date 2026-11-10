@@ -9,10 +9,13 @@ import {
   useIntegrationEntities,
   useIntegrationFile,
   useIntegrationFiles,
-  useIntegrationMappings,
+  useImportTemplate,
+  useImportTemplates,
   useIntegrationMutation,
+  useTemplateMutation,
+  useTemplatePreview,
 } from "../../hooks/useIntegrations";
-import { usePermissions } from "../../hooks/useQmsApi";
+import { useOrganisationDetails, usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import {
@@ -20,14 +23,15 @@ import {
   FILE_ENCODINGS,
   ENTITY_DESCRIPTIONS,
   ENTITY_LABELS,
+  WRITE_MODES,
   fileProblem,
   freeSystemCode,
-  mappingChanged,
   mappingToRows,
   rowHasSource,
   rowsInUse,
   rowsToFields,
 } from "../../lib/integrations";
+import { defaultTemplate, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
 import { formatDateTime } from "../../lib/processControl";
 import { CheckIcon } from "@/components/icons";
 import Callout from "../ui/Callout";
@@ -37,8 +41,8 @@ import { FileIcon } from "../ui/FileDrop";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import Switch from "../ui/Switch";
+import Field from "../ui/Field";
 import { ErrorNotice, TextAreaField } from "../master-data/shared";
-import ImportSettingsCard from "./ImportSettingsCard";
 import MappingStep from "./MappingStep";
 import ProviderLogo from "./ProviderLogo";
 import CTAButton from "@/components/CTAButton";
@@ -122,7 +126,7 @@ const ChooseRecords = ({ entities, value, onChange, connection, mapped }) => (
             className={`flex h-full w-full flex-col items-start gap-1 rounded-xl border p-3 text-left transition-colors ${selected ? "border-theme bg-theme/10 ring-2 ring-theme/30" : "border-border-color bg-primary-bg hover:border-theme"} ${disabled ? "cursor-not-allowed opacity-50 hover:border-border-color" : ""}`}>
             <span className="flex w-full items-center justify-between gap-2">
               <span className="text-sm font-semibold text-primary-text">{e.label}</span>
-              {mapped.has(e.entityType) && !disabled && <span className="rounded-full bg-success-color/15 px-2 py-0.5 text-xs font-medium text-success-color">Mapping saved</span>}
+              {mapped.has(e.entityType) && !disabled && <span className="rounded-full bg-success-color/15 px-2 py-0.5 text-xs font-medium text-success-color">Template saved</span>}
             </span>
             <span className="text-xs text-secondary-text">
               {notBuilt ? "Not available yet." : noRight ? "You do not have the permission to add these." : ENTITY_DESCRIPTIONS[e.entityType] ?? e.keyHint}
@@ -135,14 +139,12 @@ const ChooseRecords = ({ entities, value, onChange, connection, mapped }) => (
 );
 
 /** Step 2: how to read the file, the file itself (or one uploaded before), and what importing may do to records already there. */
-const ChooseFile = ({ connection, entityType, fileId, onFile, canUpload, canManage }) => {
+const ChooseFile = ({ connection, fileId, onFile, canUpload, options, setOptions }) => {
   const { organisationId } = useOrganisation();
   const { showToast } = useToast();
   const mutation = useIntegrationMutation();
   const files = useIntegrationFiles(connection.id);
   const file = useIntegrationFile(fileId);
-  const cfg = connection.config ?? {};
-  const [options, setOptions] = useState({ hasHeader: cfg.hasHeader !== false, encoding: "auto", delimiter: "auto" });
   const [uploaded, setUploaded] = useState(null); // { fileId, path, name, size, options } of the upload made on this screen
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
@@ -238,33 +240,69 @@ const ChooseFile = ({ connection, entityType, fileId, onFile, canUpload, canMana
           </div>
         )}
       </MenuCard>
-
-      {entityType && <ImportSettingsCard connection={connection} entityType={entityType} readOnly={!canManage} />}
     </div>
   );
 };
 
-/** Asked when finishing changes a mapping that already has a version: every later version needs a reason. */
-const ReasonDialog = ({ version, onCancel, onSave, busy }) => {
+/**
+ * Saving the mapping on screen: as the next version of the chosen template (a reason is needed: every import says which version it used) or as a new
+ * template (a name). Only people who manage integrations save templates (T4).
+ */
+const SaveTemplateDialog = ({ template, defaultName, onCancel, onSave, busy, action = "Save and continue" }) => {
+  const [mode, setMode] = useState(template ? "version" : "new");
   const [reason, setReason] = useState("");
+  const [name, setName] = useState(defaultName);
+  const ok = mode === "version" ? reason.trim().length >= 3 : name.trim().length > 0;
   return (
-    <Dialog title="Why is the mapping changing?" onClose={onCancel}>
-      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); onSave(reason.trim()); }}>
-        <p className="text-sm text-secondary-text">The mapping is saved as version {version + 1}. Every import says which version it used.</p>
-        <TextAreaField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={1000} required autoFocus />
+    <Dialog title="Save the mapping as a template" onClose={onCancel}>
+      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (ok) onSave(mode === "version" ? { mode, reason: reason.trim() } : { mode, name: name.trim() }); }}>
+        {template && (
+          <div className="flex flex-col gap-2" role="radiogroup" aria-label="How to save">
+            <label className="flex items-start gap-2 text-sm">
+              <input type="radio" name="save-mode" checked={mode === "version"} onChange={() => setMode("version")} className="mt-1" />
+              <span><span className="font-medium text-primary-text">Version {template.currentVersion + 1} of “{template.name}”</span><br /><span className="text-xs text-secondary-text">Imports that used earlier versions keep them.</span></span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="radio" name="save-mode" checked={mode === "new"} onChange={() => setMode("new")} className="mt-1" />
+              <span><span className="font-medium text-primary-text">A new template</span><br /><span className="text-xs text-secondary-text">“{template.name}” stays as it is.</span></span>
+            </label>
+          </div>
+        )}
+        {mode === "version" ? (
+          <TextAreaField label="Why is it changing?" value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={1000} required autoFocus />
+        ) : (
+          <Field label="Template name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required autoFocus />
+        )}
         <div className="flex justify-end gap-2">
           <CTAButton type="neutral" size="md" onClick={onCancel}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={busy || reason.trim().length < 3} loading={busy}>Save and continue</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={busy || !ok} loading={busy}>{action}</CTAButton>
         </div>
       </form>
     </Dialog>
   );
 };
 
+/** What importing may do to records already in Fortress: kept on the template (NCs are always added, never matched). */
+const TemplateSettingsCard = ({ entityType, settings, onChange, readOnly }) => {
+  const fixed = entityType === "nonconformance";
+  return (
+    <MenuCard title="What importing may do" subtitle={fixed ? "Non-conformances are always added as new drafts, never matched or updated." : "Saved with the template."}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ComboField label="Records" value={settings.writeMode} onChange={(v) => onChange({ ...settings, writeMode: v ?? "add_only" })} options={WRITE_MODES} required disabled={readOnly || fixed} />
+        <div className="flex items-end pb-1.5">
+          <Switch checked={!!settings.matchExisting} onChange={(e) => onChange({ ...settings, matchExisting: e.target.checked })} disabled={readOnly || fixed}>Match records made by hand, by code</Switch>
+        </div>
+      </div>
+    </MenuCard>
+  );
+};
+
 /**
  * Settings → Integrations → CSV or Excel file: a one-time import in three steps — the kind of record, the file and how to read it, then the columns
- * mapped to Fortress fields (kept as a reusable, versioned mapping). Uses the organisation's file connection, made on first use. Finishing saves the
- * mapping if it changed and starts a preview or an import; the run page shows what happened.
+ * mapped to Fortress fields. The mapping is an organisation-wide import template (UI2c): step 3 starts from the template last used for the kind of
+ * record (or another, or a new one); a change is saved as the template's next version (with a reason) or as a new template before importing, by
+ * people who manage integrations. Every import is pinned to the template version it used. The examples, the steps' values and the column check all
+ * come from the server (T3).
  */
 const CsvImportWizard = () => {
   const [params, setParams] = useSearchParams();
@@ -272,42 +310,55 @@ const CsvImportWizard = () => {
   const { can } = usePermissions();
   const { showToast } = useToast();
   const mutation = useIntegrationMutation();
+  const templateMutation = useTemplateMutation();
   const connections = useIntegrationConnections();
   const entities = useIntegrationEntities();
+  const org = useOrganisationDetails();
+  const advanced = !!org.data?.settings?.advancedImports;
   const fileConnections = (connections.data ?? []).filter((c) => c.provider?.key === "csv" && c.status !== "retired");
   const connId = params.get("connection") ?? fileConnections[0]?.id ?? null;
   const connection = useIntegrationConnection(connId);
   const entityType = params.get("entity");
   const fileId = params.get("file");
   const file = useIntegrationFile(fileId);
-  const allMappings = useIntegrationMappings(connId);
+  const allTemplates = useImportTemplates(undefined);
+  const templates = (allTemplates.data ?? []).filter((t) => t.entityType === entityType);
+  const fallback = defaultTemplate(templates);
+  const templateParam = params.get("template");
+  const templateId = templateParam === "new" ? null : templateParam ?? fallback?.id ?? null;
+  const template = useImportTemplate(templateId);
+  const version = templateId ? template.data?.current ?? null : null;
   const catalogue = entities.data?.find((e) => e.entityType === entityType);
-  const versions = (allMappings.data ?? []).filter((m) => m.entityType === entityType);
-  const current = versions.find((v) => v.current) ?? null;
-  const mapped = useMemo(() => new Set((allMappings.data ?? []).filter((m) => m.current).map((m) => m.entityType)), [allMappings.data]);
+  const mapped = useMemo(() => new Set((allTemplates.data ?? []).map((t) => t.entityType)), [allTemplates.data]);
   const headers = file.data?.headers ?? [];
   const parsedOk = file.data?.status === "parsed";
   const reachable = !entityType ? 1 : !parsedOk ? 2 : 3;
   const step = Math.min(Number(params.get("step")) || 1, reachable);
 
+  const [options, setOptions] = useState({ hasHeader: true, encoding: "auto", delimiter: "auto" });
   const [form, setForm] = useState(null);
   const [problems, setProblems] = useState([]);
-  const [asking, setAsking] = useState(null); // the run kind waiting for a reason
+  const [saving, setSaving] = useState(null); // { kind: "preview" | "full" | null } while the save dialog is open
   const [creating, setCreating] = useState(false);
-  const formKey = `${entityType}|${current?.id ?? "none"}|${fileId ?? "none"}|${catalogue ? 1 : 0}|${file.data ? 1 : 0}|${allMappings.isSuccess ? 1 : 0}`;
+  const templateReady = !templateId || !!template.data;
+  const formKey = `${entityType}|${templateId ?? "new"}|${version?.version ?? 0}|${fileId ?? "none"}|${catalogue ? 1 : 0}|${file.data ? 1 : 0}|${allTemplates.isSuccess ? 1 : 0}|${templateReady ? 1 : 0}`;
   useEffect(() => {
-    if (!catalogue || !allMappings.isSuccess || !file.data) return;
-    const keyField = current?.keyField && headers.includes(current.keyField) ? current.keyField : headers.find((h) => KEY_GUESS.test(h.trim())) ?? headers[0] ?? null;
-    const rows = mappingToRows(catalogue.fields, current, headers);
+    if (!catalogue || !allTemplates.isSuccess || !file.data || !templateReady) return;
+    const keyField = version?.keyField && headers.includes(version.keyField) ? version.keyField : headers.find((h) => KEY_GUESS.test(h.trim())) ?? headers[0] ?? null;
+    const rows = mappingToRows(catalogue.fields, version, headers);
     // A first mapping: the record's own code usually is the column that identifies it.
-    if (!current && keyField) {
+    if (!version && keyField) {
       const i = catalogue.fields.findIndex((f, j) => f.required && !f.ref && /^(code|reference)$|Number$/.test(f.key) && !rows[j].source);
       if (i >= 0 && !rows.some((r) => r.source === keyField)) rows[i] = { ...rows[i], on: true, source: keyField };
     }
-    setForm({ keyField, rows });
+    setForm({ keyField, rows, settings: templateSettings(entityType, version?.settings) });
     setProblems([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formKey]);
+
+  const fields = catalogue?.fields ?? [];
+  const body = form ? rowsToFields(rowsInUse(form.rows), fields) : null;
+  const preview = useTemplatePreview(form && parsedOk && step === 3 ? { entityType, fileId, keyField: form.keyField ?? "", fields: body } : null, { enabled: step === 3 });
 
   useBreadcrumbNames([{ path: "/Settings/Integrations/csv", label: "CSV or Excel file" }]);
   if (connections.isLoading || entities.isLoading || (connId && connection.isLoading) || (fileId && file.isLoading)) return <LoadingScreen />;
@@ -345,28 +396,56 @@ const CsvImportWizard = () => {
 
   const importable = !!conn && (conn.importable ?? []).includes(entityType);
   const writable = !!conn && (conn.writable ?? []).includes(entityType);
-  const fields = catalogue?.fields ?? [];
   const missing = form ? fields.filter((f, i) => f.required && !rowHasSource(form.rows[i])).length : 0;
   const used = form ? form.rows.filter(rowHasSource).length : 0;
-  const busy = mutation.isPending;
+  const stepProblems = form ? form.rows.flatMap((r) => (rowHasSource(r) ? (r.steps ?? []).map(stepProblem).filter(Boolean) : [])) : [];
+  const settings = form ? templateSettings(entityType, form.settings) : null;
+  const changed = form ? templateChanged(version, { keyField: form.keyField, fields: body, settings }) : false;
+  const blocking = preview.data?.columnCheck?.missing?.some((m) => m.blocking);
+  const busy = mutation.isPending || templateMutation.isPending;
+  const cannotSave = changed && !canManage;
 
-  const start = async (kind, reason) => {
-    const body = rowsToFields(rowsInUse(form.rows), fields);
+  const templateBody = () => ({ keyField: form.keyField ?? "", fields: body, settings, sourceSettings: options, expectedColumns: headers });
+  /** Save what is on screen as the template's next version or a new template; returns the template id. */
+  const saveTemplate = async (choice) => {
+    if (choice.mode === "version") {
+      await templateMutation.mutateAsync({ action: "saveVersion", id: templateId, body: { ...templateBody(), reason: choice.reason } });
+      return templateId;
+    }
+    const made = await templateMutation.mutateAsync({ action: "create", body: { entityType, name: choice.name, ...templateBody() } });
+    return made.id;
+  };
+  const run = async (kind, id) => {
+    const r = await mutation.mutateAsync({ action: "requestRun", id: conn.id, body: { entityType, kind, fileId, templateId: id } });
+    navigate(`/Settings/Integrations/${conn.id}/runs/${r.id}`);
+  };
+  const start = async (kind) => {
+    if (changed || !templateId) return setSaving({ kind });
     try {
-      if (mappingChanged(current, form.keyField, body)) {
-        if (!canManage) throw new Error("Changing the mapping needs the permission to manage integrations");
-        if (current && !reason) return setAsking(kind);
-        await mutation.mutateAsync({ action: "saveMapping", id: conn.id, body: { entityType, keyField: form.keyField ?? "", fields: body, fileId, ...(reason ? { reason } : {}) } });
-      }
-      setAsking(null);
-      const run = await mutation.mutateAsync({ action: "requestRun", id: conn.id, body: { entityType, kind, fileId } });
-      navigate(`/Settings/Integrations/${conn.id}/runs/${run.id}`);
+      await run(kind, templateId);
     } catch (e) {
-      setAsking(null);
-      if (e.details?.problems) setProblems(e.details.problems);
-      else showToast({ type: "error", title: kind === "preview" ? "Preview not started" : "Import not started", message: describeApiError(e) });
+      showToast({ type: "error", title: kind === "preview" ? "Preview not started" : "Import not started", message: describeApiError(e) });
     }
   };
+  const onSave = async (choice) => {
+    const kind = saving?.kind;
+    try {
+      const id = await saveTemplate(choice);
+      setSaving(null);
+      set({ template: id }, true);
+      if (kind) await run(kind, id);
+      else showToast({ type: "success", title: "Template saved", message: choice.mode === "version" ? "Saved as a new version." : `Saved as “${choice.name}”.` });
+    } catch (e) {
+      setSaving(null);
+      if (e.details?.problems) setProblems(e.details.problems);
+      else showToast({ type: "error", title: "Not saved", message: describeApiError(e) });
+    }
+  };
+  const templateOptions = [
+    ...templates.map((t) => ({ value: t.id, label: t.name, hint: `version ${t.currentVersion}${t.lastUsedAt ? ` · last used ${formatDateTime(t.lastUsedAt)}` : ""}` })),
+    { value: "new", label: "Start a new mapping", hint: "Columns with matching names are chosen for you" },
+  ];
+  const disabledReason = missing > 0 ? null : !form?.keyField ? "Choose the column that identifies each record" : blocking ? "Columns the mapping needs are not in this file" : stepProblems[0] ?? (cannotSave ? "Ask someone who manages integrations to save these changes" : null);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -387,29 +466,48 @@ const CsvImportWizard = () => {
             {!conn && !canManage ? (
               <Callout tone="info">Nobody has imported a file here yet. Someone who manages integrations has to start the first import.</Callout>
             ) : (
-              <ChooseRecords entities={entities.data ?? []} value={entityType} onChange={(v) => set({ entity: v, step: 1 }, true)} connection={conn} mapped={mapped} />
+              <ChooseRecords entities={entities.data ?? []} value={entityType} onChange={(v) => set({ entity: v, template: null, step: 1 }, true)} connection={conn} mapped={mapped} />
             )}
           </MenuCard>
         )}
 
         {step === 2 && conn && (
-          <ChooseFile connection={conn} entityType={entityType} fileId={fileId} onFile={(id) => set({ file: id }, true)} canUpload={canRun} canManage={canManage} />
+          <ChooseFile connection={conn} fileId={fileId} onFile={(id) => set({ file: id }, true)} canUpload={canRun} options={options} setOptions={setOptions} />
         )}
 
         {step === 3 && conn && catalogue && form && (
-          <MenuCard title={`Map columns to ${catalogue.label.toLowerCase()}`} subtitle={current ? `Starting from the saved mapping (version ${current.version}). Open a row to change how its value is read.` : "Columns with matching names are chosen for you. Open a row to change how its value is read."}>
-            <MappingStep
-              fields={fields}
-              columns={[...new Set([...headers, ...(current ? [current.keyField] : [])].filter(Boolean))]}
-              sample={file.data?.sample ?? []}
-              keyField={form.keyField}
-              onKeyField={(v) => setForm({ ...form, keyField: v })}
-              rows={form.rows}
-              onRows={(rows) => setForm({ ...form, rows })}
-              readOnly={!canManage}
-              problems={problems}
-            />
-          </MenuCard>
+          <>
+            <MenuCard
+              title="Template"
+              subtitle="A template remembers how a file's columns become Fortress fields, for everyone in the organisation."
+              action={canManage && <CTAButton type="secondary" size="md" disabled={busy || !changed} onClick={() => setSaving({ kind: null })}>{templateId ? "Save a new version" : "Save as template"}</CTAButton>}>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <ComboField label="Start from" value={templateId ?? "new"} onChange={(v) => set({ template: v ?? "new" }, true)} options={templateOptions} required />
+                <div className="flex items-end pb-1.5 text-sm text-secondary-text" role="status">
+                  {templateId && version
+                    ? changed ? <span className="font-medium text-warning-color">Changed from version {version.version}{canManage ? ": save it before importing" : ""}</span> : `Version ${version.version}, unchanged`
+                    : templateId ? "Loading…" : "Not saved yet"}
+                </div>
+              </div>
+            </MenuCard>
+            <TemplateSettingsCard entityType={entityType} settings={form.settings} onChange={(s) => setForm({ ...form, settings: s })} readOnly={!canRun} />
+            <MenuCard title={`Map columns to ${catalogue.label.toLowerCase()}`} subtitle="Open a row to change how its value is read. The examples are worked out by Fortress exactly as the import will.">
+              <MappingStep
+                fields={fields}
+                columns={[...new Set([...headers, ...(version ? [version.keyField] : [])].filter(Boolean))]}
+                sample={file.data?.sample ?? []}
+                preview={preview.data}
+                previewing={preview.isFetching}
+                keyField={form.keyField}
+                onKeyField={(v) => setForm({ ...form, keyField: v })}
+                rows={form.rows}
+                onRows={(rows) => setForm({ ...form, rows })}
+                readOnly={!canRun}
+                advanced={advanced}
+                problems={problems}
+              />
+            </MenuCard>
+          </>
         )}
       </div>
 
@@ -420,7 +518,9 @@ const CsvImportWizard = () => {
             {step === 2 && (parsedOk ? `${file.data.rowCount} rows ready to map` : "Upload a file to continue")}
             {step === 3 && form && (missing > 0
               ? <span className="font-medium text-error-color">{missing === 1 ? "1 required field is not matched" : `${missing} required fields are not matched`}</span>
-              : <span className="font-medium text-success-color">All required fields matched · {used} of {fields.length} fields used</span>)}
+              : disabledReason
+                ? <span className="font-medium text-error-color">{disabledReason}</span>
+                : <span className="font-medium text-success-color">All required fields matched · {used} of {fields.length} fields used</span>)}
           </p>
           <div className="flex flex-wrap gap-2">
             {step === 1 ? (
@@ -434,8 +534,8 @@ const CsvImportWizard = () => {
             {step === 2 && <CTAButton type="main" size="md" disabled={!parsedOk} onClick={() => set({ step: 3 })}>Next</CTAButton>}
             {step === 3 && canRun && (
               <>
-                <CTAButton type="secondary" size="md" disabled={busy || missing > 0 || !form?.keyField} loading={busy} onClick={() => start("preview")}>Preview</CTAButton>
-                <CTAButton type="main" size="md" disabled={busy || missing > 0 || !form?.keyField || !importable || !writable} loading={busy} onClick={() => start("full")}>
+                <CTAButton type="secondary" size="md" disabled={busy || missing > 0 || !!disabledReason} loading={busy} onClick={() => start("preview")}>Preview</CTAButton>
+                <CTAButton type="main" size="md" disabled={busy || missing > 0 || !!disabledReason || !importable || !writable} loading={busy} onClick={() => start("full")}>
                   {busy ? "Working…" : `Import ${file.data?.rowCount ?? ""} rows`.replace("  ", " ")}
                 </CTAButton>
               </>
@@ -443,7 +543,16 @@ const CsvImportWizard = () => {
           </div>
         </div>
       </div>
-      {asking && current && <ReasonDialog version={current.version} busy={busy} onCancel={() => setAsking(null)} onSave={(r) => start(asking, r)} />}
+      {saving && (
+        <SaveTemplateDialog
+          template={templateId ? template.data : null}
+          defaultName={`${ENTITY_LABELS[entityType] ?? entityType} from ${file.data?.fileName ?? "a file"}`}
+          busy={busy}
+          action={saving.kind ? (saving.kind === "preview" ? "Save and preview" : "Save and import") : "Save"}
+          onCancel={() => setSaving(null)}
+          onSave={onSave}
+        />
+      )}
     </div>
   );
 };

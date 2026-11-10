@@ -8,7 +8,11 @@ let permissions;
 const apiFetch = vi.fn();
 vi.mock("../../lib/api-client", async (importOriginal) => ({ ...(await importOriginal()), apiFetch: (...a) => apiFetch(...a) }));
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "org-1" }) }));
-vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }) }));
+vi.mock("../../hooks/useQmsApi", () => ({
+  usePermissions: () => ({ can: (p) => permissions.includes(p) }),
+  useOrganisationDetails: () => ({ data: { settings: { advancedImports: false } } }),
+  useUpdateOrganisation: () => ({ mutate: vi.fn(), isPending: false }),
+}));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 
 import SettingsIntegrations from "../Settings/SettingsIntegrations";

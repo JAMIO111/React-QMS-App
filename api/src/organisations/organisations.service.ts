@@ -59,6 +59,7 @@ export class OrganisationsService {
             ...(s.useLotsAndSerials !== undefined ? { useLotsAndSerials: s.useLotsAndSerials } : {}),
             ...(s.allowInlineOrders !== undefined ? { allowInlineOrders: s.allowInlineOrders } : {}),
             ...(s.requireProductionOrder !== undefined ? { requireProductionOrder: s.requireProductionOrder } : {}),
+            ...(s.advancedImports !== undefined ? { advancedImports: s.advancedImports } : {}),
             ...(s.logoPath !== undefined ? { logoPath: s.logoPath } : {}),
           })
           .where(eq(organisationSettings.organisationId, organisationId))
@@ -92,6 +93,7 @@ export class OrganisationsService {
         useLotsAndSerials: row.settings.useLotsAndSerials,
         allowInlineOrders: row.settings.allowInlineOrders,
         requireProductionOrder: row.settings.requireProductionOrder,
+        advancedImports: row.settings.advancedImports,
         logoPath: row.settings.logoPath ?? null,
       },
     };

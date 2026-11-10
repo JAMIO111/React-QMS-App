@@ -27,6 +27,7 @@ import { useBackfillProduction, useCreateInlineOrder } from "../hooks/useProduct
 import { useSavedFilterMutation } from "../hooks/useSavedFilters";
 import { useAnswerAudit, useAuditMutation, useSetAuditTargets, useUpdateClassification } from "../hooks/useAudits";
 import { useCustomFieldMutation, useSetCustomValues } from "../hooks/useCustomFields";
+import { useIntegrationMutation, useTemplateMutation } from "../hooks/useIntegrations";
 
 /** What other modules have on screen: each must be marked stale by an action in any module. */
 const watched = [
@@ -123,6 +124,10 @@ describe("every action refreshes every module's data", () => {
     ["CAPA / 8D action", useCapaMutation, { action: "completeAction", id: "a1", body: {} }],
     ["add a custom field", useCustomFieldMutation, { action: "create", body: { entityType: "part", fieldType: "text", label: "Finish" } }],
     ["reorder custom fields", useCustomFieldMutation, { action: "reorder", entityType: "part", ids: ["f1"] }],
+    ["import connection", useIntegrationMutation, { action: "requestRun", id: "c1", body: { entityType: "part", kind: "preview" } }],
+    ["save an import template", useTemplateMutation, { action: "create", body: { entityType: "part", name: "x", keyField: "Code", fields: [] } }],
+    ["new template version", useTemplateMutation, { action: "saveVersion", id: "t1", body: { reason: "Why" } }],
+    ["bring back a template version", useTemplateMutation, { action: "restoreVersion", id: "t1", body: { version: 1, reason: "Why" } }],
     ["fill in custom values", () => useSetCustomValues("part", "11111111-1111-1111-1111-111111111111"), { values: { finish: "Ra 0.8" }, current: {} }],
   ];
 

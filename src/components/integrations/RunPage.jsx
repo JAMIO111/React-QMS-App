@@ -120,10 +120,10 @@ const RunPage = () => {
         onError: (err) => showToast({ type: "error", title: "Not done", message: describeApiError(err) }),
       },
     );
-  // After a preview of a file: the same file, mapping and settings, written this time.
+  // After a preview of a file: the same file and template (its current version) or mapping, written this time.
   const importFile = () =>
     mutation.mutate(
-      { action: "requestRun", id, body: { entityType: run.entityType, kind: "full", fileId: run.file.id } },
+      { action: "requestRun", id, body: { entityType: run.entityType, kind: "full", fileId: run.file.id, ...(run.template ? { templateId: run.template.id } : {}) } },
       {
         onSuccess: (r) => navigate(`/Settings/Integrations/${id}/runs/${r.id}`),
         onError: (err) => showToast({ type: "error", title: "Import not started", message: describeApiError(err) }),
@@ -133,7 +133,7 @@ const RunPage = () => {
     <div className="flex flex-col gap-4 p-4">
       <MenuCard
         title={`${RUN_KINDS[run.kind]} · ${ENTITY_LABELS[run.entityType] ?? run.entityType}`}
-        subtitle={`${run.connection.name} · asked for ${formatDateTime(run.requestedAt)}${run.requestedBy ? ` by ${run.requestedBy.name}` : ""}${run.finishedAt ? ` · finished ${formatDateTime(run.finishedAt)}` : ""}${run.file ? ` · file ${run.file.name}` : ""}${run.mappingVersion ? ` · mapping version ${run.mappingVersion}` : ""}${run.settings ? ` · ${WRITE_MODE_LABELS[run.settings.writeMode]?.toLowerCase() ?? run.settings.writeMode}` : ""}`}
+        subtitle={`${run.connection.name} · asked for ${formatDateTime(run.requestedAt)}${run.requestedBy ? ` by ${run.requestedBy.name}` : ""}${run.finishedAt ? ` · finished ${formatDateTime(run.finishedAt)}` : ""}${run.file ? ` · file ${run.file.name}` : ""}${run.template ? ` · template ${run.template.name} version ${run.template.version}` : run.mappingVersion ? ` · mapping version ${run.mappingVersion}` : ""}${run.settings ? ` · ${WRITE_MODE_LABELS[run.settings.writeMode]?.toLowerCase() ?? run.settings.writeMode}` : ""}`}
         action={<RunStatusPill status={run.status} />}>
         <div className="flex flex-wrap gap-3">
           <StatTile label="Rows read" value={run.counts.total} />
@@ -161,7 +161,7 @@ const RunPage = () => {
                 {(connection.data.importable ?? []).includes(run.entityType) && (connection.data.writable ?? []).includes(run.entityType) && (
                   <CTAButton type="main" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={importFile}>{mutation.isPending ? "Starting…" : "Import these records"}</CTAButton>
                 )}
-                <CTAButton to={wizardPath(id, { entity: run.entityType, file: run.file.id, step: 3 })} type="secondary" size="md">Change the mapping</CTAButton>
+                <CTAButton to={wizardPath(id, { entity: run.entityType, file: run.file.id, step: 3, template: run.template?.id })} type="secondary" size="md">Change the mapping</CTAButton>
               </>
             )}
           </div>

@@ -143,7 +143,7 @@ describe('organisation scope', () => {
       status: 'active',
       legalName: null,
       country: null,
-      settings: { baseCurrency: 'GBP', vatRate: 0.2, ncrReferencePrefix: 'NCM', themeColour: 'purple', requireMfa: false, useLotsAndSerials: true, allowInlineOrders: false, requireProductionOrder: false, logoPath: null },
+      settings: { baseCurrency: 'GBP', vatRate: 0.2, ncrReferencePrefix: 'NCM', themeColour: 'purple', requireMfa: false, useLotsAndSerials: true, allowInlineOrders: false, requireProductionOrder: false, advancedImports: false, logoPath: null },
     });
   });
 

@@ -5,17 +5,21 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 let permissions;
+let advanced = false;
 const apiFetch = vi.fn();
 const upload = vi.fn();
 const toast = vi.fn();
 vi.mock("../../lib/api-client", async (importOriginal) => ({ ...(await importOriginal()), apiFetch: (...a) => apiFetch(...a) }));
 vi.mock("../../api/supabaseApi", () => ({ uploadFileToSupabase: (...a) => upload(...a) }));
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "org-1" }) }));
-vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }) }));
+vi.mock("../../hooks/useQmsApi", () => ({
+  usePermissions: () => ({ can: (p) => permissions.includes(p) }),
+  useOrganisationDetails: () => ({ data: { settings: { advancedImports: advanced } } }),
+}));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: toast }) }));
 
 import { ApiClientError } from "../../lib/api-client";
-import { exampleValue, fileProblem, freeSystemCode, mappingChanged, mappingToRows, parseValueMap, readDate, rowsInUse, rowsToFields, suggestColumns } from "../../lib/integrations";
+import { fileProblem, freeSystemCode, mappingChanged, mappingToRows, parseValueMap, rowsInUse, rowsToFields, suggestColumns } from "../../lib/integrations";
 import CsvImportWizard from "./CsvImportWizard";
 import ConnectionPage from "./ConnectionPage";
 import MappingPage from "./MappingPage";
@@ -50,10 +54,37 @@ const version = (over = {}) => ({
   reason: null, current: true, createdBy: { id: "u1", name: "Ada Owner" }, createdAt: "2026-11-09T09:10:00Z", ...over,
 });
 
-const settings = (over = {}) => [
-  { entityType: "supplier", writeMode: "add_only", matchExisting: false, onMissing: "nothing", schedule: "manual", saved: false, fixed: false, canDeactivate: true, ...over },
-  { entityType: "nonconformance", writeMode: "add_only", matchExisting: false, onMissing: "nothing", schedule: "manual", saved: false, fixed: true, canDeactivate: false },
-];
+const template = (over = {}) => ({
+  id: "t1", entityType: "supplier", name: "Sage suppliers", description: null, currentVersion: 1, archived: null, createdBy: { id: "u1", name: "Ada Owner" },
+  createdAt: "2026-11-09T09:10:00Z", updatedAt: "2026-11-09T09:10:00Z", runCount: 2, lastUsedAt: "2026-11-09T10:00:00Z", ...over,
+});
+const templateDetail = (over = {}, current = {}) => ({
+  ...template(over), canManage: true,
+  current: {
+    version: over.currentVersion ?? 1, keyField: "Account", fields: [{ target: "code", source: "Account" }, { target: "name", source: "Supplier Name" }], sourceSettings: {},
+    expectedColumns: ["Account", "Supplier Name", "E-mail", "Country"], settings: { writeMode: "add_only", matchExisting: false }, reason: null, current: true,
+    createdBy: { id: "u1", name: "Ada Owner" }, createdAt: "2026-11-09T09:10:00Z", runCount: 2, ...current,
+  },
+});
+/** What the server's preview answers for a body: the sample row's value per column, "<value>:<step>" after each step, and missing columns. */
+const previewFor = (_path, { body }) => {
+  const values = fileDetail.sample[0].values;
+  const headers = Object.keys(values);
+  const missing = body.fields.flatMap((f) => (f.source && !headers.includes(f.source) ? [{ column: f.source, fields: [f.target], blocking: f.target === "code" }] : []));
+  return {
+    columns: headers,
+    columnCheck: { missing, unused: headers.filter((h) => !body.fields.some((f) => f.source === h) && h !== body.keyField) },
+    problems: [],
+    rows: [{
+      row: 2, externalId: values[body.keyField] ?? null, errors: [],
+      fields: body.fields.map((f) => {
+        const taken = f.formula ? "FORMULA" : values[f.source] ?? "";
+        const steps = (f.steps ?? []).map((s) => `${taken}:${s.kind}`);
+        return { target: f.target, label: f.target, taken, steps, value: steps.at(-1) ?? taken, error: null };
+      }),
+    }],
+  };
+};
 const calls = [];
 const routeApi = (routes) =>
   apiFetch.mockImplementation(async (path, opts = {}) => {
@@ -83,6 +114,7 @@ const choose = async (label, option, scope = document.body) => {
 
 beforeEach(() => {
   permissions = ["integrations.read", "integrations.manage", "integrations.run", "integrations.approve"];
+  advanced = false;
   calls.length = 0;
   apiFetch.mockReset();
   upload.mockReset();
@@ -138,7 +170,7 @@ describe("file connection page", () => {
       "GET /integrations/providers": { data: [] },
       "GET /integrations/runs": { data: [], page: 1, pageSize: 20, total: 0 },
       "GET /integrations/connections/c1/files": { data: [file()] },
-      "GET /integrations/connections/c1/mappings": { data: [version()] },
+      "GET /integrations/templates": { data: [template()] },
       "POST /integrations/connections/c1/runs": { id: "r9" },
       "GET /integrations/runs/r9": { id: "r9", connection: { id: "c1", name: "Supplier file" }, entityType: "supplier", kind: "preview", trigger: "user", status: "succeeded", requestedBy: null, requestedAt: "2026-11-09T10:00:00Z", startedAt: null, finishedAt: null, counts: { total: 3, rejected: 1, unchanged: 0, created: 2, updated: 0, failed: 0, superseded: 0 }, attempts: 0, nextAttemptAt: null, errorSummary: null, cancelReason: null, cancelledBy: null, fetchDone: true, file: { id: "f1", name: "suppliers.csv" }, mappingVersion: 1, cursorStart: null, cursorNext: null, errors: [], rowsNow: {}, drain: null },
       "GET /integrations/runs/r9/rows": { data: [], page: 1, pageSize: 50, total: 0 },
@@ -150,7 +182,7 @@ describe("file connection page", () => {
     expect(screen.getByText(/not available yet: preview only/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toBeEnabled());
     await userEvent.click(screen.getByRole("button", { name: "Run" }));
-    await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body).toEqual({ entityType: "supplier", kind: "preview", fileId: "f1" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body).toEqual({ entityType: "supplier", kind: "preview", fileId: "f1", templateId: "t1" }));
     expect(await screen.findByText(/file suppliers.csv · mapping version 1/)).toBeInTheDocument();
   });
 
@@ -160,7 +192,7 @@ describe("file connection page", () => {
       "GET /integrations/providers": { data: [] },
       "GET /integrations/runs": { data: [], page: 1, pageSize: 20, total: 0 },
       "GET /integrations/connections/c1/files": { data: [file()] },
-      "GET /integrations/connections/c1/mappings": { data: [] },
+      "GET /integrations/templates": { data: [] },
     });
     renderAt("/Settings/Integrations/c1");
     await userEvent.click(await screen.findByRole("button", { name: "Run an import" }));
@@ -170,22 +202,25 @@ describe("file connection page", () => {
 });
 
 describe("file import wizard", () => {
-  const base = (mappings, over = {}) => ({
+  const base = (templates = [], over = {}) => ({
     "GET /integrations/connections": { data: [conn({ status: "active", importable: ["supplier"], writable: ["supplier"] })] },
     "GET /integrations/connections/c1": conn({ status: "active", importable: ["supplier"], writable: ["supplier"] }),
     "GET /integrations/entities": catalogue,
     "GET /integrations/connections/c1/files": { data: [file()] },
     "GET /integrations/files/f1": fileDetail,
-    "GET /integrations/connections/c1/mappings": { data: mappings },
-    "GET /integrations/connections/c1/settings": { data: settings() },
+    "GET /integrations/templates": { data: templates },
+    "GET /integrations/templates/t1": templateDetail(),
+    "POST /integrations/templates/preview": previewFor,
     ...over,
   });
-  const run = (over = {}) => ({ id: "r9", connection: { id: "c1", name: "Supplier file" }, entityType: "supplier", kind: "preview", trigger: "user", status: "succeeded", requestedBy: null, requestedAt: "2026-11-09T10:00:00Z", startedAt: null, finishedAt: null, counts: { total: 3, rejected: 0, unchanged: 0, created: 3, updated: 0, failed: 0, superseded: 0, skipped: 0 }, attempts: 0, nextAttemptAt: null, errorSummary: null, cancelReason: null, cancelledBy: null, fetchDone: true, file: { id: "f1", name: "suppliers.csv" }, mappingVersion: 1, settings: null, cursorStart: null, cursorNext: null, errors: [], rowsNow: {}, drain: null, ...over });
+  const run = (over = {}) => ({ id: "r9", connection: { id: "c1", name: "Supplier file" }, entityType: "supplier", kind: "preview", trigger: "user", status: "succeeded", requestedBy: null, requestedAt: "2026-11-09T10:00:00Z", startedAt: null, finishedAt: null, counts: { total: 3, rejected: 0, unchanged: 0, created: 3, updated: 0, failed: 0, superseded: 0, skipped: 0 }, attempts: 0, nextAttemptAt: null, errorSummary: null, cancelReason: null, cancelledBy: null, fetchDone: true, file: { id: "f1", name: "suppliers.csv" }, mappingVersion: null, template: { id: "t1", name: "Sage suppliers", version: 1 }, settings: null, cursorStart: null, cursorNext: null, errors: [], rowsNow: {}, drain: null, ...over });
+  const runRoutes = { "POST /integrations/connections/c1/runs": { id: "r9" }, "GET /integrations/runs/r9": run(), "GET /integrations/runs/r9/rows": { data: [], page: 1, pageSize: 50, total: 0 } };
   const step3 = "/Settings/Integrations/csv?connection=c1&entity=supplier&file=f1&step=3";
+  const lastPreview = () => calls.filter((c) => c.k === "POST /integrations/templates/preview").at(-1)?.body;
 
   it("step 1: makes the organisation's file connection when none exists yet, then moves on", async () => {
     routeApi({
-      ...base([]),
+      ...base(),
       "GET /integrations/connections": { data: [{ ...conn({ id: "r1", provider: { key: "rest_api", name: "REST API" }, externalSystem: "files" }) }] },
       "POST /integrations/connections": { id: "c1" },
     });
@@ -198,15 +233,15 @@ describe("file import wizard", () => {
     expect(await screen.findByText("How to read the file")).toBeInTheDocument();
   });
 
-  it("step 1: kinds that cannot be imported, or that the person may not write, cannot be chosen", async () => {
-    routeApi(base([version()], { "GET /integrations/entities": { data: [catalogue.data[0], { ...catalogue.data[0], entityType: "customer", label: "Customers" }] } }));
+  it("step 1: kinds that cannot be imported, or that the person may not write, cannot be chosen; a saved template is shown", async () => {
+    routeApi(base([template()], { "GET /integrations/entities": { data: [catalogue.data[0], { ...catalogue.data[0], entityType: "customer", label: "Customers" }] } }));
     renderAt("/Settings/Integrations/csv");
     expect(await screen.findByRole("button", { name: /^Customers/ })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /^Suppliers/ })).toHaveTextContent("Mapping saved");
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Suppliers/ })).toHaveTextContent("Template saved"));
   });
 
-  it("step 2: reads the file with the options chosen, shows its first rows and the import settings", async () => {
-    routeApi({ ...base([]), "GET /integrations/connections/c1/files": { data: [] }, "POST /integrations/connections/c1/files": fileDetail, "PUT /integrations/connections/c1/settings": settings({ writeMode: "add_update", saved: true })[0] });
+  it("step 2: reads the file with the options chosen and shows its first rows", async () => {
+    routeApi({ ...base(), "GET /integrations/connections/c1/files": { data: [] }, "POST /integrations/connections/c1/files": fileDetail });
     upload.mockResolvedValue({ path: "org-1/integration/c1/uuid-suppliers.csv" });
     renderAt("/Settings/Integrations/csv?connection=c1&entity=supplier&step=2");
     await userEvent.click(await screen.findByRole("switch", { name: "The first row holds column headings" }));
@@ -217,90 +252,110 @@ describe("file import wizard", () => {
       expect(calls.find((c) => c.k === "POST /integrations/connections/c1/files").body).toEqual({ path: "org-1/integration/c1/uuid-suppliers.csv", fileName: "suppliers.csv", size: f.size, options: { hasHeader: false, encoding: "auto", delimiter: ";" } }),
     );
     expect(await screen.findByRole("table", { name: "First rows" })).toHaveTextContent("Acme");
-    const card = screen.getByText("Suppliers already in Fortress").closest("section");
-    expect(within(card).queryByRole("combobox", { name: "Runs" })).toBeNull();
-    await choose("What an import may do", "Add new and update existing", card);
-    await waitFor(() => expect(calls.find((c) => c.k === "PUT /integrations/connections/c1/settings").body).toEqual({ entityType: "supplier", writeMode: "add_update" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
   });
 
-  it("step 3: suggests columns, shows examples, flags a missing required field, then saves the first version and imports", async () => {
-    routeApi({ ...base([]), "PUT /integrations/connections/c1/mapping": { data: [version()] }, "POST /integrations/connections/c1/runs": { id: "r9" }, "GET /integrations/runs/r9": run({ kind: "full" }), "GET /integrations/runs/r9/rows": { data: [], page: 1, pageSize: 50, total: 0 } });
+  it("step 3 with no template: suggests columns, shows the server's examples, flags a missing field, then saves a new template and imports with it", async () => {
+    routeApi({ ...base(), "POST /integrations/templates": { id: "t2" }, ...runRoutes });
     renderAt(step3);
     const code = await screen.findByRole("listitem", { name: "Code" });
-    // A first mapping takes the record's code from the column that identifies it.
     expect(within(code).getByRole("combobox", { name: "Column for Code" })).toHaveValue("Account");
-    expect(within(screen.getByRole("listitem", { name: "Name" })).getByLabelText("Example for Name")).toHaveTextContent("Acme");
+    await waitFor(() => expect(within(screen.getByRole("listitem", { name: "Name" })).getByLabelText("Example for Name")).toHaveTextContent("Acme"));
+    expect(lastPreview()).toMatchObject({ entityType: "supplier", fileId: "f1", keyField: "Account" });
+    expect(screen.getByRole("combobox", { name: "Start from" })).toHaveValue("Start a new mapping");
     expect(screen.getByText(/All required fields matched · 4 of 4 fields used/)).toBeInTheDocument();
     await userEvent.click(within(code).getByRole("button", { name: "Clear Column for Code" }));
     expect(code).toHaveAttribute("data-missing");
-    expect(screen.getAllByText("1 required field is not matched").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Import 3 rows" })).toBeDisabled();
     await choose("Column for Code", "Account", code);
     await userEvent.click(screen.getByRole("button", { name: "Import 3 rows" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByLabelText("Template name")).toHaveValue("Suppliers from suppliers.csv");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save and import" }));
     await waitFor(() =>
-      expect(calls.find((c) => c.k === "PUT /integrations/connections/c1/mapping").body).toEqual({
-        entityType: "supplier", keyField: "Account", fileId: "f1",
+      expect(calls.find((c) => c.k === "POST /integrations/templates").body).toEqual({
+        entityType: "supplier", name: "Suppliers from suppliers.csv", keyField: "Account",
         fields: [{ target: "code", source: "Account" }, { target: "name", source: "Supplier Name" }, { target: "email", source: "E-mail" }, { target: "country", source: "Country" }],
+        settings: { writeMode: "add_only", matchExisting: false }, sourceSettings: { hasHeader: true, encoding: "auto", delimiter: "auto" }, expectedColumns: ["Account", "Supplier Name", "E-mail", "Country"],
       }),
     );
-    await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body).toEqual({ entityType: "supplier", kind: "full", fileId: "f1" }));
-    expect(await screen.findByText(/file suppliers.csv/)).toBeInTheDocument();
+    await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body).toEqual({ entityType: "supplier", kind: "full", fileId: "f1", templateId: "t2" }));
   });
 
-  it("step 3: an unchanged mapping is not saved again; a changed one asks why, and the server's problems are listed", async () => {
+  it("step 3 starts from the template used last; unchanged, a preview runs with it and nothing is saved", async () => {
+    routeApi({ ...base([template(), template({ id: "t0", name: "Old", lastUsedAt: null })]), ...runRoutes });
+    renderAt(step3);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Start from" })).toHaveValue("Sage suppliers"));
+    expect(await screen.findByText("Version 1, unchanged")).toBeInTheDocument();
+    expect(within(screen.getByRole("listitem", { name: "Email" })).getByRole("combobox", { name: "Column for Email" })).toHaveValue("");
+    await userEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body).toEqual({ entityType: "supplier", kind: "preview", fileId: "f1", templateId: "t1" }));
+    expect(calls.some((c) => c.k.startsWith("POST /integrations/templates/t1"))).toBe(false);
+  });
+
+  it("step 3: a change is saved as the template's next version with a reason, or as a new template; the server's problems are listed", async () => {
     let fail = true;
     routeApi({
-      ...base([version()]),
-      "PUT /integrations/connections/c1/mapping": () => {
+      ...base([template()]),
+      "POST /integrations/templates/t1/versions": () => {
         if (fail) throw new ApiClientError({ status: 409, code: "integration_rule", message: "x", details: { problems: ["Name: the column \"Gone\" is not in the file"] } });
-        return { data: [version({ id: "m2", version: 2 })] };
+        return templateDetail({ currentVersion: 2 });
       },
-      "POST /integrations/connections/c1/runs": { id: "r9" },
-      "GET /integrations/runs/r9": run(),
-      "GET /integrations/runs/r9/rows": { data: [], page: 1, pageSize: 50, total: 0 },
+      "POST /integrations/templates": { id: "t3" },
+      ...runRoutes,
     });
     renderAt(step3);
     const email = await screen.findByRole("listitem", { name: "Email" });
-    expect(within(email).getByRole("combobox", { name: "Column for Email" })).toHaveValue("");
+    await screen.findByText("Version 1, unchanged");
     await choose("Column for Email", "E-mail", email);
+    expect(screen.getByText(/Changed from version 1: save it before importing/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Preview" }));
     const dialog = await screen.findByRole("dialog");
-    await userEvent.type(within(dialog).getByLabelText("Reason"), "Email column added");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Save and continue" }));
+    expect(within(dialog).getByRole("radio", { name: /Version 2 of “Sage suppliers”/ })).toBeChecked();
+    await userEvent.type(within(dialog).getByLabelText("Why is it changing?"), "Email column added");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save and preview" }));
     expect(await screen.findByText("Name: the column \"Gone\" is not in the file")).toBeInTheDocument();
-    expect(calls.find((c) => c.k === "PUT /integrations/connections/c1/mapping").body.reason).toBe("Email column added");
+    expect(calls.find((c) => c.k === "POST /integrations/templates/t1/versions").body).toMatchObject({ reason: "Email column added", keyField: "Account" });
     expect(calls.some((c) => c.k === "POST /integrations/connections/c1/runs")).toBe(false);
-  });
-
-  it("step 3: previews with the saved mapping without saving it again", async () => {
-    routeApi({ ...base([version()]), "POST /integrations/connections/c1/runs": { id: "r9" }, "GET /integrations/runs/r9": run(), "GET /integrations/runs/r9/rows": { data: [], page: 1, pageSize: 50, total: 0 } });
-    renderAt(step3);
-    await screen.findByRole("listitem", { name: "Code" });
+    fail = false;
     await userEvent.click(screen.getByRole("button", { name: "Preview" }));
-    await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body).toEqual({ entityType: "supplier", kind: "preview", fileId: "f1" }));
-    expect(calls.some((c) => c.k === "PUT /integrations/connections/c1/mapping")).toBe(false);
+    const again = await screen.findByRole("dialog");
+    await userEvent.click(within(again).getByRole("radio", { name: /A new template/ }));
+    await userEvent.clear(within(again).getByLabelText("Template name"));
+    await userEvent.type(within(again).getByLabelText("Template name"), "Sage with email");
+    await userEvent.click(within(again).getByRole("button", { name: "Save and preview" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/templates").body).toMatchObject({ name: "Sage with email", entityType: "supplier" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body.templateId).toBe("t3"));
   });
 
-  it("step 3: is read-only without integrations.manage", async () => {
+  it("step 3: without managing rights changes can be tried, but importing needs them saved by someone who may", async () => {
     permissions = ["integrations.read", "integrations.run"];
-    routeApi(base([version()]));
+    routeApi({ ...base([template()]), ...runRoutes });
     renderAt(step3);
-    expect(await screen.findByRole("combobox", { name: "Column that identifies each record" })).toBeDisabled();
-    expect(within(screen.getByRole("listitem", { name: "Name" })).getByRole("combobox", { name: "Column for Name" })).toBeDisabled();
+    const email = await screen.findByRole("listitem", { name: "Email" });
+    await screen.findByText("Version 1, unchanged");
+    expect(screen.queryByRole("button", { name: "Save a new version" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled();
+    await choose("Column for Email", "E-mail", email);
+    expect(screen.getAllByText("Ask someone who manages integrations to save these changes").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
   });
 
-  it("step 3: a row opens to show its settings, with Match by only for links that can be matched by an earlier import", async () => {
-    const withRef = { data: [{ ...catalogue.data[0], fields: [...catalogue.data[0].fields, { key: "since", label: "Supplier since", type: "date", required: false, maxLength: null, options: null, description: null }, { key: "site", label: "Site", type: "text", required: false, maxLength: 100, options: null, description: null, ref: { kind: "site", source: false } }, { key: "machine", label: "Machine", type: "text", required: false, maxLength: 100, options: null, description: null, ref: { kind: "machine", source: true } }] }] };
-    const detail = { ...fileDetail, headers: [...fileDetail.headers, "Since"], sample: [{ row: 2, values: { ...fileDetail.sample[0].values, Since: "03/04/2021" } }] };
-    routeApi({ ...base([version()]), "GET /integrations/entities": withRef, "GET /integrations/files/f1": detail, "PUT /integrations/connections/c1/mapping": { data: [version({ id: "m2", version: 2 })] }, "POST /integrations/connections/c1/runs": { id: "r9" }, "GET /integrations/runs/r9": run(), "GET /integrations/runs/r9/rows": { data: [], page: 1, pageSize: 50, total: 0 } });
+  it("step 3: a row's steps are edited and the value after each comes from the server; Match by only for links matched by an earlier import", async () => {
+    const withRef = { data: [{ ...catalogue.data[0], fields: [...catalogue.data[0].fields, { key: "site", label: "Site", type: "text", required: false, maxLength: 100, options: null, description: null, ref: { kind: "site", source: false } }, { key: "machine", label: "Machine", type: "text", required: false, maxLength: 100, options: null, description: null, ref: { kind: "machine", source: true } }] }] };
+    routeApi({ ...base([template()]), "GET /integrations/entities": withRef, "POST /integrations/templates/t1/versions": templateDetail({ currentVersion: 2 }), ...runRoutes });
     renderAt(step3);
-    const since = await screen.findByRole("listitem", { name: "Supplier since" });
-    await choose("Column for Supplier since", "Since", since);
-    expect(within(since).getByLabelText("Example for Supplier since")).toHaveTextContent("Not a date written this way");
-    await userEvent.click(within(since).getByRole("button", { name: "Show settings for Supplier since" }));
-    await choose("Dates written as", "Day/month/year", since);
-    expect(within(since).getByLabelText("Example for Supplier since")).toHaveTextContent("2021-04-03");
+    const name = await screen.findByRole("listitem", { name: "Name" });
+    await screen.findByText("Version 1, unchanged");
+    await userEvent.click(within(name).getByRole("button", { name: "Show settings for Name" }));
+    const steps = within(name).getByRole("region", { name: "Steps for Name" });
+    await choose("Add a step", "Capitals", steps);
+    await waitFor(() => expect(lastPreview().fields.find((f) => f.target === "name")).toEqual({ target: "name", source: "Supplier Name", steps: [{ kind: "upper" }] }), { timeout: 3000 });
+    await waitFor(() => expect(within(steps).getByLabelText("After step 1")).toHaveTextContent("Acme:upper"), { timeout: 3000 });
+    await choose("Add a step", "Add before", steps);
+    expect(within(steps).getByText("Add before: text is needed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
+    await userEvent.type(within(steps).getByLabelText("Text"), "S-");
     const machine = screen.getByRole("listitem", { name: "Machine" });
     await choose("Column for Machine", "Account", machine);
     await userEvent.click(within(machine).getByRole("button", { name: "Show settings for Machine" }));
@@ -308,23 +363,62 @@ describe("file import wizard", () => {
     const site = screen.getByRole("listitem", { name: "Site" });
     await userEvent.click(within(site).getByRole("button", { name: "Show settings for Site" }));
     expect(within(site).queryByRole("combobox", { name: "Match by" })).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Preview" }));
-    await userEvent.type(within(await screen.findByRole("dialog")).getByLabelText("Reason"), "Machine link");
-    await userEvent.click(screen.getByRole("button", { name: "Save and continue" }));
-    await waitFor(() => expect(calls.find((c) => c.k === "PUT /integrations/connections/c1/mapping").body.fields).toEqual(expect.arrayContaining([{ target: "machine", source: "Account", match: "source" }, { target: "since", source: "Since", dateFormat: "dmy" }])));
+    await userEvent.click(screen.getByRole("button", { name: "Save a new version" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("Why is it changing?"), "Names in capitals");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.k === "POST /integrations/templates/t1/versions").body.fields).toEqual(
+        expect.arrayContaining([{ target: "name", source: "Supplier Name", steps: [{ kind: "upper" }, { kind: "prefix", text: "S-" }] }, { target: "machine", source: "Account", match: "source" }]),
+      ),
+    );
+    expect(calls.some((c) => c.k === "POST /integrations/connections/c1/runs")).toBe(false);
   });
 
-  it("after a preview of a file, imports the same file in one click or goes back to the mapping", async () => {
-    routeApi({ ...base([version()]), "GET /integrations/runs/r9": run(), "GET /integrations/runs/r9/rows": { data: [], page: 1, pageSize: 50, total: 0 }, "POST /integrations/connections/c1/runs": { id: "r10" }, "GET /integrations/runs/r10": run({ id: "r10", kind: "full" }), "GET /integrations/runs/r10/rows": { data: [], page: 1, pageSize: 50, total: 0 } });
+  it("step 3: the formula editor is offered only with advanced imports; the server checks the formula and works out the example", async () => {
+    routeApi({ ...base([template()]), "POST /integrations/formulas/check": { ok: true, error: null, columns: ["Account"], functions: ["CONCAT"], result: { value: "M-S-1", error: null } }, "GET /integrations/formulas/functions": { data: [{ name: "CONCAT", usage: "CONCAT(value, value, …)", description: "Joins the values", minArgs: 1, maxArgs: 50 }] } });
+    const { unmount } = renderAt(step3);
+    const code = await screen.findByRole("listitem", { name: "Code" });
+    await userEvent.click(within(code).getByRole("button", { name: "Show settings for Code" }));
+    expect(within(code).queryByRole("switch", { name: "Use a formula instead of a column" })).toBeNull();
+    unmount();
+    advanced = true;
+    renderAt(step3);
+    const code2 = await screen.findByRole("listitem", { name: "Code" });
+    await screen.findByText("Version 1, unchanged");
+    await userEvent.click(within(code2).getByRole("button", { name: "Show settings for Code" }));
+    await userEvent.click(within(code2).getByRole("switch", { name: "Use a formula instead of a column" }));
+    const box = within(code2).getByLabelText("Formula for Code");
+    await userEvent.type(box, "CON");
+    await userEvent.click(await within(code2).findByRole("button", { name: /CONCAT\(value, value, …\)/ }));
+    await waitFor(() => expect(box).toHaveValue("CONCAT("));
+    await userEvent.type(box, '"M-", [[Account])');
+    await waitFor(() => expect(calls.filter((c) => c.k === "POST /integrations/formulas/check").at(-1).body).toEqual({ formula: 'CONCAT("M-", [Account])', columns: ["Account", "Supplier Name", "E-mail", "Country"], sample: fileDetail.sample[0].values }), { timeout: 3000 });
+    expect(await within(code2).findByText("M-S-1", {}, { timeout: 3000 })).toBeInTheDocument();
+    await waitFor(() => expect(lastPreview().fields.find((f) => f.target === "code")).toEqual({ target: "code", formula: 'CONCAT("M-", [Account])' }), { timeout: 3000 });
+  });
+
+  it("step 3: the server's column check is shown above the fields and blocks an import that needs a missing column", async () => {
+    routeApi({ ...base([template()]), "GET /integrations/templates/t1": templateDetail({}, { keyField: "Account", fields: [{ target: "code", source: "Ref" }, { target: "name", source: "Supplier Name" }] }) });
+    renderAt(step3);
+    expect(await screen.findByText("Columns the mapping uses are not in this file")).toBeInTheDocument();
+    expect(screen.getByText(/\[Ref\] — code \(needed\)/)).toBeInTheDocument();
+    expect(screen.getByText(/2 columns of the file are not used/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled());
+  });
+
+  it("after a preview of a file, imports the same file with the same template in one click or goes back to the mapping", async () => {
+    routeApi({ ...base([template()]), "GET /integrations/runs/r9": run(), "GET /integrations/runs/r9/rows": { data: [], page: 1, pageSize: 50, total: 0 }, "POST /integrations/connections/c1/runs": { id: "r10" }, "GET /integrations/runs/r10": run({ id: "r10", kind: "full" }), "GET /integrations/runs/r10/rows": { data: [], page: 1, pageSize: 50, total: 0 } });
     renderAt("/Settings/Integrations/c1/runs/r9");
-    expect(await screen.findByRole("link", { name: "Change the mapping" })).toHaveAttribute("href", "/Settings/Integrations/csv?connection=c1&entity=supplier&file=f1&step=3");
+    expect(await screen.findByText(/template Sage suppliers version 1/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Change the mapping" })).toHaveAttribute("href", "/Settings/Integrations/csv?connection=c1&entity=supplier&template=t1&file=f1&step=3");
     await userEvent.click(screen.getByRole("button", { name: "Import these records" }));
-    await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body).toEqual({ entityType: "supplier", kind: "full", fileId: "f1" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body).toEqual({ entityType: "supplier", kind: "full", fileId: "f1", templateId: "t1" }));
     expect(await screen.findByText("Full import · Suppliers", { exact: false })).toBeInTheDocument();
   });
 
   it("the old mapping address opens step 3 of the wizard", async () => {
-    routeApi(base([version()]));
+    routeApi(base([template()]));
     renderAt("/Settings/Integrations/c1/mapping?entity=supplier&file=f1");
     expect(await screen.findByRole("listitem", { name: "Code" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Map columns/ })).toHaveAttribute("aria-current", "step");
@@ -334,17 +428,6 @@ describe("file import wizard", () => {
 describe("file import helpers", () => {
   const fields = catalogue.data[0].fields;
   const row = (over) => ({ ...mappingToRows(fields, null, [])[0], ...over });
-  it("works out examples the way the server reads them", () => {
-    expect(exampleValue(row({ source: "A", transform: "upper" }), fields[0], { A: " s-1 " })).toEqual({ value: "S-1", problem: null });
-    expect(exampleValue(row({ transform: "concat", sources: ["A", "B"], separator: "-" }), fields[0], { A: "x", B: "" })).toEqual({ value: "x", problem: null });
-    expect(exampleValue(row({ source: "A", transform: "map", valuesText: "uk=GB" }), fields[0], { A: "UK" }).value).toBe("GB");
-    expect(exampleValue(row({ source: "A", default: "N/A" }), fields[0], { A: "" }).value).toBe("N/A");
-    expect(exampleValue(row({ source: "A" }), { type: "number" }, { A: "12 kg" }).problem).toBe("Not a number");
-    expect(exampleValue(row({ source: "A", decimal: "," }), { type: "number" }, { A: "1.234,5" }).value).toBe("1234.5");
-    expect(exampleValue(row({ source: "A" }), { type: "text", maxLength: 2 }, { A: "abc" }).problem).toMatch(/Longer than 2/);
-    expect(readDate("45000", "iso")).toBe("2023-03-15");
-    expect(readDate("31/02/2024", "dmy")).toBeNull();
-  });
   it("knows when a mapping differs from the saved version, and picks a free system code", () => {
     expect(mappingChanged(version(), "Account", [{ target: "name", source: "Supplier Name" }, { target: "code", source: "Account" }])).toBe(false);
     expect(mappingChanged(version(), "Account", [{ target: "code", source: "Account" }])).toBe(true);
@@ -375,7 +458,7 @@ describe("file connection page", () => {
       "GET /integrations/providers": { data: [] },
       "GET /integrations/runs": { data: [], page: 1, pageSize: 20, total: 0 },
       "GET /integrations/connections/c1/files": { data: [file()] },
-      "GET /integrations/connections/c1/mappings": { data: [version()] },
+      "GET /integrations/templates": { data: [template()] },
       "POST /integrations/connections/c1/runs": { id: "r9" },
       "GET /integrations/runs/r9": { id: "r9", connection: { id: "c1", name: "Supplier file" }, entityType: "supplier", kind: "full", trigger: "user", status: "succeeded", requestedBy: null, requestedAt: "2026-11-09T10:00:00Z", startedAt: null, finishedAt: null, counts: { total: 3, rejected: 0, unchanged: 0, created: 2, updated: 0, failed: 0, superseded: 0, skipped: 1 }, attempts: 0, nextAttemptAt: null, errorSummary: null, cancelReason: null, cancelledBy: null, fetchDone: true, file: { id: "f1", name: "suppliers.csv" }, mappingVersion: 1, settings: { writeMode: "add_only", matchExisting: false, onMissing: "nothing", schedule: "manual" }, cursorStart: null, cursorNext: null, errors: [], rowsNow: {}, drain: null },
       "GET /integrations/runs/r9/rows": { data: [], page: 1, pageSize: 50, total: 0 },
@@ -386,7 +469,7 @@ describe("file connection page", () => {
     await userEvent.click(screen.getByRole("button", { name: "Import" }));
     expect(screen.getByText(/You approve this import yourself/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Run" }));
-    await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body).toEqual({ entityType: "supplier", kind: "full", fileId: "f1" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body).toEqual({ entityType: "supplier", kind: "full", fileId: "f1", templateId: "t1" }));
     expect(await screen.findByText(/add new records only/)).toBeInTheDocument();
     expect(screen.getByText("Skipped")).toBeInTheDocument();
   });

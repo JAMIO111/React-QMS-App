@@ -1,3 +1,4 @@
+import { cleanSteps } from "./importTemplates";
 /** Shared definitions for integration connections (IN1). */
 
 export const STATUS = {
@@ -221,6 +222,9 @@ export const mappingToRows = (fields, saved, headers = []) => {
       decimal: m?.decimal ?? ".",
       default: m?.default ?? "",
       match: m?.match ?? "code",
+      steps: m?.steps ?? [],
+      formula: m?.formula ?? "",
+      useFormula: !!m?.formula,
     };
   });
 };
@@ -232,6 +236,12 @@ export const rowsToFields = (rows, catalogueFields) =>
     .map((r) => {
       const field = catalogueFields.find((f) => f.key === r.target);
       const out = { target: r.target };
+      if (r.useFormula) {
+        out.formula = r.formula;
+        if (r.steps?.length) out.steps = cleanSteps(r.steps);
+        if (field?.ref && r.match === "source" && field.ref.source) out.match = "source";
+        return out;
+      }
       if (r.transform !== "none") out.transform = r.transform;
       if (r.transform === "concat") {
         out.sources = r.sources.filter(Boolean);
@@ -243,6 +253,7 @@ export const rowsToFields = (rows, catalogueFields) =>
       if ((field?.type === "number" || field?.type === "integer") && r.decimal !== ".") out.decimal = r.decimal;
       if (r.default?.trim() && r.transform !== "constant") out.default = r.default.trim();
       if (field?.ref && r.match === "source" && field.ref.source) out.match = "source";
+      if (r.steps?.length) out.steps = cleanSteps(r.steps);
       return out;
     });
 
@@ -311,70 +322,16 @@ export const ENTITY_DESCRIPTIONS = {
 };
 
 /** Whether a mapping row takes its value from somewhere (a column, joined columns, a fixed value or a value for empty cells). */
-export const rowHasSource = (row) =>
-  row.transform === "constant" ? row.value !== "" : row.transform === "concat" ? row.sources.length > 0 : !!row.source || !!row.default?.trim();
+export const rowHasSource = (row) => {
+  if (row.useFormula) return !!row.formula?.trim();
+  if ((row.steps ?? []).some((s) => ["join", "coalesce", "default"].includes(s.kind))) return true;
+  if (row.transform === "constant") return row.value !== "";
+  if (row.transform === "concat") return row.sources.length > 0;
+  return !!row.source || !!row.default?.trim();
+};
 
 /** Rows for saving: a field is used when it takes a value from somewhere. */
 export const rowsInUse = (rows) => rows.map((r) => ({ ...r, on: rowHasSource(r) }));
-
-const pad2 = (n) => String(n).padStart(2, "0");
-/** The same reading of dates the server uses (yyyy-mm-dd, or null when it is not a date written that way). */
-export const readDate = (raw, format = "iso") => {
-  const s = String(raw ?? "").trim();
-  const iso = (y, m, d) => {
-    const dt = new Date(Date.UTC(y, m - 1, d));
-    return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d ? `${y}-${pad2(m)}-${pad2(d)}` : null;
-  };
-  if (format === "excel" || /^\d{5}(\.\d+)?$/.test(s)) {
-    const n = Number(s);
-    return Number.isFinite(n) && s !== "" ? new Date(Math.round((n - 25569) * 86_400_000)).toISOString().slice(0, 10) : null;
-  }
-  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ].*)?$/);
-  if (m) return iso(+m[1], +m[2], +m[3]);
-  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/);
-  if (!m || format === "iso") return null;
-  const year = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
-  return format === "dmy" ? iso(year, +m[2], +m[1]) : iso(year, +m[1], +m[2]);
-};
-
-/**
- * What one mapping row makes of one record of the file, the way the server will (column, joining, fixed value, upper / lower case, translation,
- * value for empty cells, then dates and decimal marks). `{ value, problem }`: problem is set when the value cannot be read for its field.
- */
-export const exampleValue = (row, field, values) => {
-  if (!values) return { value: "", problem: null };
-  const get = (c) => (c ? String(values[c] ?? "").trim() : "");
-  let v;
-  if (row.transform === "constant") v = row.value ?? "";
-  else if (row.transform === "concat") v = row.sources.map(get).filter(Boolean).join(row.separator ?? " ");
-  else v = get(row.source);
-  if (row.transform === "upper") v = v.toUpperCase();
-  if (row.transform === "lower") v = v.toLowerCase();
-  if (row.transform === "map" && v !== "") {
-    const hit = Object.entries(parseValueMap(row.valuesText)).find(([from]) => from.trim().toLowerCase() === v.toLowerCase());
-    if (hit) v = hit[1];
-  }
-  if (v === "") v = (row.default ?? "").trim();
-  if (v === "") return { value: "", problem: null };
-  if (field?.type === "date") {
-    const d = readDate(v, row.dateFormat);
-    return d ? { value: d, problem: null } : { value: v, problem: "Not a date written this way" };
-  }
-  if (field?.type === "number" || field?.type === "integer") {
-    const s = v.replace(/\s/g, "");
-    const normal = row.decimal === "," ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
-    if (!/^-?\d+(\.\d+)?$/.test(normal)) return { value: v, problem: "Not a number" };
-    if (field.type === "integer" && !Number.isInteger(Number(normal))) return { value: v, problem: "Not a whole number" };
-    return { value: normal, problem: null };
-  }
-  if (field?.type === "enum" && field.options) {
-    const s = v.toLowerCase().replace(/[\s-]+/g, "_");
-    const opt = field.options.find((o) => o.value === s || o.label.toLowerCase() === v.toLowerCase());
-    return opt ? { value: opt.label, problem: null } : { value: v, problem: `Not one of: ${field.options.map((o) => o.label).join(", ")}` };
-  }
-  if (field?.maxLength && v.length > field.maxLength) return { value: v, problem: `Longer than ${field.maxLength} characters` };
-  return { value: v, problem: null };
-};
 
 /** Whether the mapping on screen differs from the saved version (so finishing must save a new version first). */
 export const mappingChanged = (saved, keyField, fields) => {
@@ -391,9 +348,10 @@ export const freeSystemCode = (connections, base = "files") => {
 };
 
 /** The file import wizard's address (Settings → Integrations → CSV or Excel file), at a step with what is already chosen. */
-export const wizardPath = (connectionId, { entity, file, step } = {}) => {
+export const wizardPath = (connectionId, { entity, file, step, template } = {}) => {
   const q = new URLSearchParams({ connection: connectionId });
   if (entity) q.set("entity", entity);
+  if (template) q.set("template", template);
   if (file) q.set("file", file);
   if (step) q.set("step", String(step));
   return `/Settings/Integrations/csv?${q}`;

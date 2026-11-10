@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "../../contexts/ToastProvider";
-import { useIntegrationFiles, useIntegrationMappings, useIntegrationMutation, useIntegrationRuns } from "../../hooks/useIntegrations";
+import { useImportTemplates, useIntegrationFiles, useIntegrationMutation, useIntegrationRuns } from "../../hooks/useIntegrations";
+import { defaultTemplate } from "../../lib/importTemplates";
 import { describeApiError } from "../../lib/api-client";
 import { ENTITY_LABELS, RUN_KINDS, RUN_STATUS, runSummary, wizardPath } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
@@ -31,8 +32,11 @@ const RunDialog = ({ connection, onClose }) => {
   const parsed = (files.data ?? []).filter((f) => f.status === "parsed");
   const [fileId, setFileId] = useState(null);
   const chosenFile = fileId ?? parsed[0]?.id ?? null;
-  const mappings = useIntegrationMappings(isFile ? connection.id : null, entityType);
-  const mapped = !isFile || (mappings.data ?? []).some((m) => m.current);
+  // A file is read with an import template for its kind of record (UI2c); the one used most recently is chosen.
+  const templates = useImportTemplates(entityType, { enabled: isFile && !!entityType });
+  const [templateId, setTemplateId] = useState(null);
+  const chosenTemplate = (templates.data ?? []).some((t) => t.id === templateId) ? templateId : (defaultTemplate(templates.data) ?? templates.data?.[0])?.id ?? null;
+  const mapped = !isFile || !!chosenTemplate;
   // Writing records needs an importer for that kind of record; a preview only needs the mapping.
   const importable = (connection.importable ?? []).includes(entityType);
   const writable = (connection.writable ?? connection.importable ?? []).includes(entityType);
@@ -42,12 +46,12 @@ const RunDialog = ({ connection, onClose }) => {
     ...(isFile ? [] : [{ value: "incremental", label: "Incremental", disabled: !active || !importable || !writable }]),
   ];
   const runKind = kinds.some((k) => k.value === kind && !k.disabled) ? kind : "preview";
-  const blocked = isFile && (!chosenFile || (!mappings.isLoading && !mapped));
+  const blocked = isFile && (!chosenFile || (!templates.isLoading && !mapped));
   const go = (e) => {
     e.preventDefault();
     if (!entityType) return;
     mutation.mutate(
-      { action: "requestRun", id: connection.id, body: { entityType, kind: runKind, ...(isFile ? { fileId: chosenFile } : {}) } },
+      { action: "requestRun", id: connection.id, body: { entityType, kind: runKind, ...(isFile ? { fileId: chosenFile, templateId: chosenTemplate } : {}) } },
       {
         onSuccess: (run) => {
           onClose();
@@ -75,7 +79,16 @@ const RunDialog = ({ connection, onClose }) => {
           />
         )}
         {isFile && parsed.length === 0 && <Callout tone="warning">Upload a file first.</Callout>}
-        {isFile && chosenFile && !mappings.isLoading && !mapped && (
+        {isFile && (templates.data ?? []).length > 0 && (
+          <ComboField
+            label="Template"
+            value={chosenTemplate}
+            onChange={setTemplateId}
+            options={(templates.data ?? []).map((t) => ({ value: t.id, label: t.name, hint: `version ${t.currentVersion}` }))}
+            required
+          />
+        )}
+        {isFile && chosenFile && !templates.isLoading && !mapped && (
           <Callout tone="warning" action={<Link to={wizardPath(connection.id, { entity: entityType, file: chosenFile, step: 3 })} className="text-sm font-medium text-link-color hover:underline">Map columns</Link>}>
             Map the file's columns to {ENTITY_LABELS[entityType]?.toLowerCase() ?? "these records"} first.
           </Callout>

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
@@ -185,5 +186,115 @@ export const useIntegrationMutation = () => {
       }
     },
     onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+// Import templates (UI2c): organisation-wide, versioned mappings; the server preview; the formula language.
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+
+/** Import templates (archived ones only when asked for), by kind of record and name. */
+export const useImportTemplates = (entityType, { archived = "exclude", enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  const qs = new URLSearchParams({ archived });
+  if (entityType) qs.set("entityType", entityType);
+  return useQuery({
+    queryKey: key(organisationId, "templates", entityType ?? "all", archived),
+    queryFn: () => apiFetch(`${BASE}/templates?${qs}`, { organisationId }).then((r) => r.data),
+    enabled: !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+/** One template with its current version and whether the caller may change it. */
+export const useImportTemplate = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({ queryKey: key(organisationId, "template", id), queryFn: () => apiFetch(`${BASE}/templates/${id}`, { organisationId }), enabled: !!organisationId && !!id, retry: false });
+};
+
+/** Every version of a template, newest first. */
+export const useTemplateVersions = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({ queryKey: key(organisationId, "template-versions", id), queryFn: () => apiFetch(`${BASE}/templates/${id}/versions`, { organisationId }).then((r) => r.data), enabled: !!organisationId && !!id, retry: false });
+};
+
+/** One version of a template as it was saved (frozen: cached for long). */
+export const useTemplateVersion = (id, version) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "template-version", id, version),
+    queryFn: () => apiFetch(`${BASE}/templates/${id}/versions/${version}`, { organisationId }),
+    enabled: !!organisationId && !!id && !!version,
+    retry: false,
+    staleTime: 60 * 60_000,
+  });
+};
+
+/** Every command on a template; everything is marked stale afterwards. */
+export const useTemplateMutation = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, id, body }) => {
+      const send = (path, method = "POST") => apiFetch(`${BASE}/templates${path}`, { method, body: body ?? {}, organisationId });
+      switch (action) {
+        case "create": return send("");
+        case "update": return send(`/${id}`, "PATCH");
+        case "saveVersion": return send(`/${id}/versions`);
+        case "duplicate": return send(`/${id}/duplicate`);
+        case "archive": return send(`/${id}/archive`);
+        case "restore": return send(`/${id}/restore`);
+        case "restoreVersion": return send(`/${id}/restore-version`);
+        default: throw new Error(`Unknown action ${action}`);
+      }
+    },
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/**
+ * How the first rows of a file come out with the mapping on screen (T3: only the server works values out). Asked again ~300 ms after the mapping
+ * stops changing; the last answer stays on screen while the next one comes.
+ */
+export const useTemplatePreview = (body, { enabled = true, delay = 300 } = {}) => {
+  const { organisationId } = useOrganisation();
+  const text = body ? JSON.stringify(body) : null;
+  const [debounced, setDebounced] = useState(text);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(text), delay);
+    return () => clearTimeout(t);
+  }, [text, delay]);
+  return useQuery({
+    queryKey: key(organisationId, "template-preview", debounced),
+    queryFn: () => apiFetch(`${BASE}/templates/preview`, { method: "POST", body: JSON.parse(debounced), organisationId }),
+    enabled: !!organisationId && enabled && !!debounced,
+    retry: false,
+    placeholderData: (prev) => prev,
+    staleTime: 60_000,
+  });
+};
+
+/** Every function a formula can use (fixed; cached for long). */
+export const useFormulaFunctions = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({ queryKey: key(organisationId, "formula-functions"), queryFn: () => apiFetch(`${BASE}/formulas/functions`, { organisationId }).then((r) => r.data), enabled: !!organisationId && enabled, retry: false, staleTime: 60 * 60_000 });
+};
+
+/** The server's reading of a formula (its first problem with the position, and its result for a sample row), ~300 ms after typing stops. */
+export const useFormulaCheck = (formula, columns, sample, { delay = 300 } = {}) => {
+  const { organisationId } = useOrganisation();
+  const text = formula?.trim() ? JSON.stringify({ formula, columns, ...(sample ? { sample } : {}) }) : null;
+  const [debounced, setDebounced] = useState(text);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(text), delay);
+    return () => clearTimeout(t);
+  }, [text, delay]);
+  return useQuery({
+    queryKey: key(organisationId, "formula-check", debounced),
+    queryFn: () => apiFetch(`${BASE}/formulas/check`, { method: "POST", body: JSON.parse(debounced), organisationId }),
+    enabled: !!organisationId && !!debounced,
+    retry: false,
+    placeholderData: (prev) => prev,
+    staleTime: 60_000,
   });
 };

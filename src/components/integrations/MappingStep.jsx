@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { ArrowRightIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, CircleAlertIcon, CircleCheckIcon, MinusIcon } from "@/components/icons";
-import { DATE_FORMAT_OPTIONS, MATCH_OPTIONS, TRANSFORM_OPTIONS, exampleValue, rowHasSource } from "../../lib/integrations";
+import { DATE_FORMAT_OPTIONS, MATCH_OPTIONS, TRANSFORM_OPTIONS, rowHasSource } from "../../lib/integrations";
+import FormulaEditor from "./FormulaEditor";
+import StepEditor from "./StepEditor";
+import Switch from "../ui/Switch";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
 import Field from "../ui/Field";
@@ -21,14 +24,32 @@ const fieldLimits = (f) => {
 
 /** What goes in the middle of a row when it is not a single column. */
 const SourceSummary = ({ row }) => (
-  <span className="block truncate rounded-lg border border-dashed border-border-color px-2 py-1.5 text-sm text-secondary-text">
-    {row.transform === "constant" ? `Always "${row.value}"` : `${row.sources.join(" + ") || "No columns yet"}`}
+  <span className="block truncate rounded-lg border border-dashed border-border-color px-2 py-1.5 text-sm text-secondary-text" title={row.useFormula ? row.formula : undefined}>
+    {row.useFormula ? <span className="font-mono">{row.formula || "No formula yet"}</span> : row.transform === "constant" ? `Always "${row.value}"` : `${row.sources.join(" + ") || "No columns yet"}`}
   </span>
 );
 
 /** The settings under a row: how the value is cleaned, what to use when the cell is empty, dates, decimals and how a link is matched. */
-const RowSettings = ({ field, row, set, colOptions, readOnly }) => (
+const RowSettings = ({ field, row, set, colOptions, readOnly, advanced, example, sample }) => (
   <div className="flex flex-col gap-3 border-t border-border-color px-3 pb-3 pt-3 sm:pl-11">
+    {(advanced || row.useFormula) && (
+      <Switch checked={!!row.useFormula} onChange={(e) => set({ useFormula: e.target.checked })} disabled={readOnly || (!advanced && row.useFormula)}>Use a formula instead of a column</Switch>
+    )}
+    {row.useFormula ? (
+      <FormulaEditor value={row.formula ?? ""} onChange={(formula) => set({ formula })} columns={colOptions.map((o) => o.value)} sample={sample} readOnly={readOnly || !advanced} label={`Formula for ${field.label}`} />
+    ) : (
+      <LegacySettings field={field} row={row} set={set} colOptions={colOptions} readOnly={readOnly} />
+    )}
+    {field.ref?.source && row.useFormula && (
+      <ComboField label="Match by" value={row.match} onChange={(v) => set({ match: v ?? "code" })} options={MATCH_OPTIONS} required disabled={readOnly} />
+    )}
+    <StepEditor steps={row.steps ?? []} onChange={(steps) => set({ steps })} columns={colOptions.map((o) => o.value)} after={example?.steps ?? []} error={example?.stepError ?? null} readOnly={readOnly} label={`Steps for ${field.label}`} />
+  </div>
+);
+
+/** How the original transforms read a column (kept for mappings made before steps and formulas). */
+const LegacySettings = ({ field, row, set, colOptions, readOnly }) => (
+  <div className="flex flex-col gap-3">
     {(field.description || field.options || fieldLimits(field)) && (
       <div className="flex flex-col gap-0.5 text-xs text-secondary-text">
         {field.description && <span>{field.description}</span>}
@@ -96,13 +117,16 @@ const RowSettings = ({ field, row, set, colOptions, readOnly }) => (
 );
 
 /** One Fortress field: where its value comes from, what the chosen record makes of it, and (opened) how it is cleaned. */
-const MappingRow = ({ field, row, onChange, colOptions, values, readOnly }) => {
+const MappingRow = ({ field, row, onChange, colOptions, preview, sample, readOnly, advanced }) => {
   const [open, setOpen] = useState(false);
   const set = (patch) => onChange({ ...row, ...patch });
   const matched = rowHasSource(row);
   const missing = field.required && !matched;
-  const example = matched ? exampleValue(row, field, values) : { value: "", problem: null };
-  const simple = row.transform !== "constant" && row.transform !== "concat";
+  // What the server makes of this field on the example row (T3): taken value, after each step, the imported value or the error.
+  const p = preview?.fields?.find((f) => f.target === field.key) ?? null;
+  const stepError = p?.error && p.taken !== null && (row.steps?.length ?? 0) > (p.steps?.length ?? 0) ? p.error : null;
+  const example = p ? { value: p.value === null || p.value === undefined ? p.taken ?? "" : String(p.value), problem: p.error, steps: p.steps, stepError } : { value: "", problem: null };
+  const simple = !row.useFormula && row.transform !== "constant" && row.transform !== "concat";
   const settingsId = `map-settings-${field.key}`;
   return (
     <li
@@ -130,7 +154,7 @@ const MappingRow = ({ field, row, onChange, colOptions, values, readOnly }) => {
           <div className="flex min-w-0 flex-col">
             <span className="truncate text-sm font-medium text-primary-text" data-required={field.required || undefined}>{field.label}</span>
             <span className="truncate text-xs text-secondary-text">
-              {[field.custom ? "custom field" : null, TYPE_HINTS[field.type], field.ref ? "link to another record" : null, row.transform !== "none" ? TRANSFORM_OPTIONS.find((t) => t.value === row.transform)?.label.toLowerCase() : null].filter(Boolean).join(" · ") || "text"}
+              {[field.custom ? "custom field" : null, TYPE_HINTS[field.type], field.ref ? "link to another record" : null, row.useFormula ? "formula" : row.transform !== "none" ? TRANSFORM_OPTIONS.find((t) => t.value === row.transform)?.label.toLowerCase() : null, row.steps?.length ? `${row.steps.length} step${row.steps.length === 1 ? "" : "s"}` : null].filter(Boolean).join(" · ") || "text"}
             </span>
           </div>
         </div>
@@ -156,13 +180,13 @@ const MappingRow = ({ field, row, onChange, colOptions, values, readOnly }) => {
           <span
             title={example.problem ?? example.value}
             className={`block truncate rounded-lg px-2 py-1.5 text-sm ${example.problem ? "bg-error-color/10 text-error-color" : example.value ? "bg-secondary-bg text-primary-text" : "bg-secondary-bg text-tertiary-text"}`}>
-            {example.problem ? `${example.value} · ${example.problem}` : example.value || (matched ? "(empty)" : "—")}
+            {!matched ? "—" : !p ? "…" : example.problem ? `${example.value ? `${example.value} · ` : ""}${example.problem}` : example.value || "(empty)"}
           </span>
         </div>
       </div>
       {open && (
         <div id={settingsId}>
-          <RowSettings field={field} row={row} set={set} colOptions={colOptions} readOnly={readOnly} />
+          <RowSettings field={field} row={row} set={set} colOptions={colOptions} readOnly={readOnly} advanced={advanced} example={example} sample={sample} />
         </div>
       )}
     </li>
@@ -173,10 +197,13 @@ const MappingRow = ({ field, row, onChange, colOptions, values, readOnly }) => {
  * Reusable mapping editor: one row per Fortress field — field → column of the source = what the chosen record becomes. A row opens to show how the
  * value is cleaned. Required fields with no source are shown in red and counted in the banner. The caller keeps `rows` and `keyField`.
  */
-const MappingStep = ({ fields, columns, sample = [], keyField, onKeyField, rows, onRows, readOnly = false, problems = [] }) => {
+const MappingStep = ({ fields, columns, sample = [], preview = null, previewing = false, keyField, onKeyField, rows, onRows, readOnly = false, advanced = false, problems = [] }) => {
   const [at, setAt] = useState(0);
   const colOptions = columns.map((c) => ({ value: c, label: c }));
-  const values = sample[at]?.values ?? null;
+  const previewRows = preview?.rows ?? [];
+  const here = previewRows[Math.min(at, Math.max(0, previewRows.length - 1))] ?? null;
+  const values = (here ? sample.find((s) => s.row === here.row)?.values : sample[at]?.values) ?? null;
+  const check = preview?.columnCheck;
   const missing = fields.filter((f, i) => f.required && !rowHasSource(rows[i]));
   return (
     <div className="flex flex-col gap-3">
@@ -190,17 +217,29 @@ const MappingStep = ({ fields, columns, sample = [], keyField, onKeyField, rows,
           required
           disabled={readOnly}
         />
-        {sample.length > 0 && (
+        {previewRows.length > 0 && (
           <div className="flex items-end justify-end gap-2 text-sm text-secondary-text">
-            <span>Examples from row {sample[at].row}</span>
+            <span aria-live="polite">{previewing ? "Working it out…" : `Examples from row ${here?.row}`}{here?.errors?.length ? ` · ${here.errors.length} problem${here.errors.length === 1 ? "" : "s"}` : ""}</span>
             <button type="button" aria-label="Previous row" disabled={at === 0} onClick={() => setAt((a) => a - 1)} className="rounded-lg p-1.5 hover:bg-border-color disabled:opacity-40"><ChevronLeftIcon /></button>
-            <button type="button" aria-label="Next row" disabled={at >= sample.length - 1} onClick={() => setAt((a) => a + 1)} className="rounded-lg p-1.5 hover:bg-border-color disabled:opacity-40"><ChevronRightIcon /></button>
+            <button type="button" aria-label="Next row" disabled={at >= previewRows.length - 1} onClick={() => setAt((a) => a + 1)} className="rounded-lg p-1.5 hover:bg-border-color disabled:opacity-40"><ChevronRightIcon /></button>
           </div>
         )}
       </div>
       {missing.length > 0 && (
         <Callout tone="error" title={missing.length === 1 ? "1 required field is not matched" : `${missing.length} required fields are not matched`}>
           Choose a column for {missing.map((f) => f.label).join(", ")}, or open the row to give a fixed value.
+        </Callout>
+      )}
+      {check?.missing?.length > 0 && (
+        <Callout tone={check.missing.some((m) => m.blocking) ? "error" : "warning"} title="Columns the mapping uses are not in this file">
+          <ul className="list-disc pl-5">
+            {check.missing.map((m) => <li key={m.column}>[{m.column}] — {m.fields.join(", ")}{m.blocking ? " (needed)" : ""}</li>)}
+          </ul>
+        </Callout>
+      )}
+      {check?.unused?.length > 0 && (
+        <Callout tone="info" title={check.unused.length === 1 ? "1 column of the file is not used" : `${check.unused.length} columns of the file are not used`}>
+          {check.unused.join(", ")}
         </Callout>
       )}
       {problems.length > 0 && (
@@ -223,8 +262,10 @@ const MappingStep = ({ fields, columns, sample = [], keyField, onKeyField, rows,
             field={f}
             row={rows[i]}
             colOptions={colOptions}
-            values={values}
+            preview={here}
+            sample={values}
             readOnly={readOnly}
+            advanced={advanced}
             onChange={(row) => onRows(rows.map((r, j) => (j === i ? row : r)))}
           />
         ))}

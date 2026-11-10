@@ -9,6 +9,8 @@ import { useMachines, useProcessControlMutation } from "../../hooks/useProcessCo
 import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
 import { ActiveBadge, DataList, FormError, SearchBox, SelectField } from "./shared";
 import CTAButton from "@/components/CTAButton";
+import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 
 const MachineForm = ({ machine, onDone }) => {
   const mutation = useProcessControlMutation();
@@ -22,6 +24,7 @@ const MachineForm = ({ machine, onDone }) => {
     description: machine?.description ?? "",
     active: machine?.active ?? true,
   });
+  const [customValues, setCustomValues] = useState({});
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
 
   const submit = (e) => {
@@ -32,7 +35,7 @@ const MachineForm = ({ machine, onDone }) => {
       siteId: form.siteId,
       workCentre: form.workCentre.trim(),
       description: form.description.trim(),
-      ...(machine ? { active: form.active } : {}),
+      ...(machine ? { active: form.active } : withCustomValues(customValues)),
     };
     mutation.mutate(
       { path: machine ? `/machines/${machine.id}` : "/machines", method: machine ? "PATCH" : "POST", body },
@@ -65,6 +68,7 @@ const MachineForm = ({ machine, onDone }) => {
           Active (inactive machines are hidden from pickers)
         </Switch>
       )}
+      {!machine && <CustomFieldInputs entityType="machine" values={customValues} onChange={setCustomValues} />}
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
@@ -131,7 +135,7 @@ const MachinesPage = () => {
           Show inactive
         </Switch>
       </div>
-      <DataList
+      <DataList entityType="machine"
         storageKey="master:machines"
         columns={columns}
         query={query}
@@ -142,6 +146,14 @@ const MachinesPage = () => {
       {editing && (
         <Dialog title={editing === "new" ? "Add machine" : `Edit ${editing.code}`} onClose={() => setEditing(null)}>
           <MachineForm machine={editing === "new" ? null : editing} onDone={() => setEditing(null)} />
+          {editing !== "new" && (
+            <CustomFieldsCard
+              entityType="machine"
+              record={query.data?.items?.find((m) => m.id === editing.id) ?? editing}
+              editable={canManage}
+              className="mt-4"
+            />
+          )}
         </Dialog>
       )}
     </div>

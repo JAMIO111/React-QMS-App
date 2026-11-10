@@ -126,6 +126,15 @@ export class CustomFieldsService {
     return this.list(ctx, entityType, true);
   }
 
+  /** Active members a person field can name (every member may read them), by name. */
+  people(ctx: RequestContext) {
+    return this.database.asUser(ctx, async (db) => {
+      // A function: row security on memberships shows people without members.read only themselves.
+      const res = await db.execute<Row>(sql`select user_id, name from app.custom_field_people(${ctx.organisationId}::uuid)`);
+      return { data: res.rows.map((r) => ({ id: r.user_id as string, name: r.name as string })) };
+    });
+  }
+
   values(ctx: RequestContext, entityType: CustomFieldEntity, recordId: string) {
     return this.database.asUser(ctx, async (db) => {
       const res = await db.execute<{ v: CustomValues }>(sql`select app.get_custom_values(${entityType}, ${recordId}::uuid) as v`);

@@ -9,6 +9,11 @@ import { useMasterDataMutation, useParties } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
 import { ActiveBadge, DataList, SearchBox } from "./shared";
 import CTAButton from "@/components/CTAButton";
+import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
+
+/** The custom-field kind of record for each register. */
+const ENTITY_TYPES = { customers: "customer", suppliers: "supplier" };
 
 const LABELS = {
   customers: { title: "Customers", one: "customer", intro: "Organisations you supply. Parts and customer complaints link to them." },
@@ -21,6 +26,7 @@ const PartyForm = ({ kind, party, onDone }) => {
   const mutation = useMasterDataMutation();
   const { showToast } = useToast();
   const [form, setForm] = useState(party ? { ...emptyForm, ...Object.fromEntries(Object.entries(party).map(([k, v]) => [k, v ?? ""])) } : emptyForm);
+  const [customValues, setCustomValues] = useState({});
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const label = LABELS[kind].one;
 
@@ -33,7 +39,7 @@ const PartyForm = ({ kind, party, onDone }) => {
       companyNumber: form.companyNumber.trim(),
       vatNumber: form.vatNumber.trim(),
       notes: form.notes.trim(),
-      ...(party ? { active: form.active } : {}),
+      ...(party ? { active: form.active } : withCustomValues(customValues)),
     };
     mutation.mutate(
       { path: party ? `/${kind}/${party.id}` : `/${kind}`, method: party ? "PATCH" : "POST", body },
@@ -70,6 +76,7 @@ const PartyForm = ({ kind, party, onDone }) => {
           Active (inactive {label}s are hidden from pickers)
         </Switch>
       )}
+      {!party && <CustomFieldInputs entityType={ENTITY_TYPES[kind]} values={customValues} onChange={setCustomValues} />}
       {mutation.error && (
         <p role="alert" className="text-sm text-error-color">
           {describeApiError(mutation.error)}
@@ -141,7 +148,7 @@ const PartiesPage = ({ kind }) => {
           Show inactive
         </Switch>
       </div>
-      <DataList
+      <DataList entityType={ENTITY_TYPES[kind]}
         storageKey={`master:${kind}`}
         columns={columns}
         query={query}
@@ -152,6 +159,14 @@ const PartiesPage = ({ kind }) => {
       {editing && (
         <Dialog title={editing === "new" ? `Add ${label.one}` : `Edit ${editing.code}`} onClose={() => setEditing(null)}>
           <PartyForm kind={kind} party={editing === "new" ? null : editing} onDone={() => setEditing(null)} />
+          {editing !== "new" && (
+            <CustomFieldsCard
+              entityType={ENTITY_TYPES[kind]}
+              record={query.data?.items?.find((p) => p.id === editing.id) ?? editing}
+              editable={canManage}
+              className="mt-4"
+            />
+          )}
         </Dialog>
       )}
     </div>

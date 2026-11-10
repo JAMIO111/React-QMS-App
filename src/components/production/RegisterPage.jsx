@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import CustomFieldFilters from "../custom-fields/CustomFieldFilters";
+import { customCsvValues, useCustomColumns, useCustomFilterChips } from "../custom-fields/customColumns";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { PencilIcon, PlusIcon, ShareIcon, XIcon } from "@/components/icons";
 import { useGlobalSearch } from "../../contexts/SearchProvider";
@@ -18,8 +20,9 @@ import ColumnVisibilityMenu from "../ui/ColumnVisibilityMenu";
 const RegisterPage = ({
   noun,
   nounPlural,
-  columns,
-  defaultHidden = {},
+  columns: baseColumns,
+  defaultHidden: baseHidden = {},
+  entityType,
   prefsKey,
   defaultSort,
   useRegister,
@@ -46,7 +49,11 @@ const RegisterPage = ({
   const [selectedRows, setSelectedRows] = useState([]);
   const [editing, setEditing] = useState(undefined); // undefined: closed, null: new, record: edit
   const prefs = useTablePreferences(prefsKey);
-  const columnVisibility = { ...defaultHidden, ...prefs.columnVisibility };
+  // The kind of record's custom fields: extra columns (hidden until shown), filters in the address (cf_<key>) and CSV values.
+  const custom = useCustomColumns(entityType);
+  const customFilters = useCustomFilterChips(entityType);
+  const columns = useMemo(() => [...baseColumns, ...custom.columns], [baseColumns, custom.columns]);
+  const columnVisibility = { ...baseHidden, ...custom.defaultHidden, ...prefs.columnVisibility };
 
   const setPage = useCallback(
     (p) =>
@@ -71,6 +78,7 @@ const RegisterPage = ({
     order: sorting[0]?.desc ? "desc" : "asc",
     page,
     pageSize,
+    ...(entityType ? customFilters.params : {}),
   });
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -92,8 +100,10 @@ const RegisterPage = ({
   const activeFilters = [
     ...(filters.search ? [{ key: "search", label: `Search: “${filters.search}”`, clear: { search: "" } }] : []),
     ...scopes.filter((s) => filters[s.key]).map((s) => ({ key: s.key, label: s.label, clear: { [s.key]: "" } })),
+    ...(entityType ? customFilters.chips : []),
   ];
   const clearAll = () => {
+    if (entityType) customFilters.clearAll();
     updateFilters(Object.fromEntries(filterKeys.map((k) => [k, ""])));
     setSearchTerm?.("");
   };
@@ -112,7 +122,7 @@ const RegisterPage = ({
           </p>
         </div>
         <div className="flex flex-row items-center justify-end gap-3">
-          {selectedRows.length > 0 && <CTAButton callbackFn={() => exportCSV(selectedRows.map(toCsvRow), csvName)} text="Export CSV" type="success" title={`Export the selected ${nounPlural} to a CSV file`} icon={ShareIcon} iconSize="h-6 w-6" />}
+          {selectedRows.length > 0 && <CTAButton callbackFn={() => exportCSV(selectedRows.map((r) => ({ ...toCsvRow(r), ...customCsvValues(custom.fields, r) })), csvName)} text="Export CSV" type="success" title={`Export the selected ${nounPlural} to a CSV file`} icon={ShareIcon} iconSize="h-6 w-6" />}
           <ColumnVisibilityMenu columns={columns} columnVisibility={columnVisibility} onColumnVisibilityChange={prefs.setColumnVisibility} columnOrder={prefs.columnOrder} onColumnOrderChange={prefs.setColumnOrder} onReset={prefs.resetColumns} />
           {canManage && <CTAButton callbackFn={() => setEditing(null)} text={newLabel} type="main" icon={PlusIcon} iconSize="h-6 w-6" title={newLabel} />}
         </div>
@@ -147,13 +157,21 @@ const RegisterPage = ({
             </select>
           </label>
         ))}
+        {entityType && custom.fields.length > 0 && (
+          <details className="relative text-sm">
+            <summary className="cursor-pointer select-none rounded-full border border-border-color px-3 py-1 text-secondary-text hover:border-border-dark-color">More filters</summary>
+            <div className="absolute z-30 mt-2 w-80 rounded-xl border border-border-color bg-secondary-bg p-4 shadow-lg">
+              <CustomFieldFilters entityType={entityType} />
+            </div>
+          </details>
+        )}
       </div>
       {activeFilters.length > 0 && (
         <div aria-label="Active filters" className="flex flex-wrap items-center gap-2 px-1 text-sm">
           {activeFilters.map((f) => (
             <span key={f.key} className="flex items-center gap-1 rounded-full border border-brand-primary/50 bg-brand-primary/10 py-0.5 pl-3 pr-1 text-primary-text">
               {f.label}
-              <button type="button" aria-label={`Remove filter ${f.label}`} onClick={() => updateFilters(f.clear)} className="rounded-full p-0.5 hover:bg-brand-primary/20 cursor-pointer">
+              <button type="button" aria-label={`Remove filter ${f.label}`} onClick={() => (f.clearCustom ? f.clearCustom() : updateFilters(f.clear))} className="rounded-full p-0.5 hover:bg-brand-primary/20 cursor-pointer">
                 <XIcon className="h-3.5 w-3.5" />
               </button>
             </span>
@@ -190,7 +208,7 @@ const RegisterPage = ({
           rowLabel={rowLabel}
         />
       </div>
-      {editing !== undefined && dialog(editing, () => setEditing(undefined))}
+      {editing !== undefined && dialog(editing ? (rows.find((r) => r.id === editing.id) ?? editing) : editing, () => setEditing(undefined))}
     </div>
   );
 };

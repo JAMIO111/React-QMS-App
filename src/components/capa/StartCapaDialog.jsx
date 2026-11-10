@@ -7,12 +7,15 @@ import { useCapaMutation } from "../../hooks/useCapa";
 import { SEVERITIES, SOURCES } from "../../lib/capa";
 import { FormError, TextAreaField } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
+import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 
 /** Starts an 8D that is not tied to a non-conformance (to start one from an NC, use the button on the NC page). */
 const StartCapaDialog = ({ onClose }) => {
   const navigate = useNavigate();
   const mutation = useCapaMutation();
   const [form, setForm] = useState({ title: "", problemStatement: "", source: "internal", severity: null });
+  const [customValues, setCustomValues] = useState({});
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   return (
     <Dialog title="Start an 8D" onClose={onClose} width="max-w-xl">
@@ -22,7 +25,7 @@ const StartCapaDialog = ({ onClose }) => {
         onSubmit={(e) => {
           e.preventDefault();
           mutation.mutate(
-            { action: "create", body: { title: form.title.trim(), ...(form.problemStatement.trim() ? { problemStatement: form.problemStatement.trim() } : {}), source: form.source, ...(form.severity ? { severity: form.severity } : {}) } },
+            { action: "create", body: { title: form.title.trim(), ...(form.problemStatement.trim() ? { problemStatement: form.problemStatement.trim() } : {}), source: form.source, ...(form.severity ? { severity: form.severity } : {}), ...withCustomValues(customValues) } },
             { onSuccess: (capa) => navigate(`/CAPA/${capa.id}/d0`) },
           );
         }}>
@@ -32,6 +35,7 @@ const StartCapaDialog = ({ onClose }) => {
           <RHFComboBox label="Source" value={form.source} onChange={(v) => setForm((f) => ({ ...f, source: v ?? "internal" }))} options={SOURCES} sort={false} clearable={false} />
           <RHFComboBox label="Severity" value={form.severity} onChange={(v) => setForm((f) => ({ ...f, severity: v }))} options={SEVERITIES} sort={false} placeholder="Not set" />
         </div>
+        <CustomFieldInputs entityType="capa" values={customValues} onChange={setCustomValues} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>

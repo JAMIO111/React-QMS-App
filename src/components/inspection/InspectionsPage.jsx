@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { customCsvValues, useCustomColumns, useCustomFilterChips } from "../custom-fields/customColumns";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FolderOpenIcon, PlusIcon, ShareIcon, SlidersHorizontalIcon, XIcon } from "@/components/icons";
 import { useGlobalSearch } from "../../contexts/SearchProvider";
@@ -59,8 +60,10 @@ const InspectionsPage = () => {
   const prefs = useTablePreferences("inspection-register");
   const { useLotsAndSerials } = useProductionSettings();
   // With lots and serial numbers switched off the lot column has nothing to show.
-  const columnVisibility = { ...DEFAULT_HIDDEN, ...prefs.columnVisibility, ...(useLotsAndSerials ? {} : { context: false }) };
-  const columns = useLotsAndSerials ? inspectionColumns : inspectionColumns.filter((c) => c.id !== "context");
+  const custom = useCustomColumns("inspection");
+  const customFilters = useCustomFilterChips("inspection");
+  const columnVisibility = { ...DEFAULT_HIDDEN, ...custom.defaultHidden, ...prefs.columnVisibility, ...(useLotsAndSerials ? {} : { context: false }) };
+  const columns = useMemo(() => [...(useLotsAndSerials ? inspectionColumns : inspectionColumns.filter((c) => c.id !== "context")), ...custom.columns], [useLotsAndSerials, custom.columns]);
 
   const setPage = useCallback(
     (p) =>
@@ -76,7 +79,7 @@ const InspectionsPage = () => {
     setSortingState(updater);
     if (page !== 1) setPage(1);
   };
-  const sortColumn = sorting[0] ? inspectionColumns.find((c) => c.id === sorting[0].id)?.meta?.sortKey : undefined;
+  const sortColumn = sorting[0] ? columns.find((c) => c.id === sorting[0].id)?.meta?.sortKey : undefined;
 
   const { data, isLoading, isFetching, error, refetch } = useInspections({
     q: filters.search,
@@ -93,6 +96,7 @@ const InspectionsPage = () => {
     order: sorting[0]?.desc ? "desc" : "asc",
     page,
     pageSize,
+    ...customFilters.params,
   });
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -125,6 +129,7 @@ const InspectionsPage = () => {
     ...(filters.site ? [{ key: "site", label: "Site", clear: { site: "" } }] : []),
     ...(filters.order ? [{ key: "order", label: `Order: ${filters.orderLabel || "selected"}`, clear: { order: "", orderLabel: "" } }] : []),
     ...(filters.machine ? [{ key: "machine", label: `Machine: ${filters.machineLabel || "selected"}`, clear: { machine: "", machineLabel: "" } }] : []),
+    ...customFilters.chips,
   ];
   const filterCount = activeFilters.filter((f) => f.key !== "search").length;
   const clearFilters = (values) => {
@@ -145,7 +150,7 @@ const InspectionsPage = () => {
         </div>
         <div className="flex flex-row items-center justify-end gap-3">
           {selectedRows.length > 0 && (
-            <CTAButton callbackFn={() => exportCSV(selectedRows.map(toCsvRow), "inspections.csv")} text="Export CSV" type="success" title="Export the selected inspections to a CSV file" icon={ShareIcon} iconSize="h-6 w-6" />
+            <CTAButton callbackFn={() => exportCSV(selectedRows.map((r) => ({ ...toCsvRow(r), ...customCsvValues(custom.fields, r) })), "inspections.csv")} text="Export CSV" type="success" title="Export the selected inspections to a CSV file" icon={ShareIcon} iconSize="h-6 w-6" />
           )}
           <ColumnVisibilityMenu
             columns={columns}
@@ -168,12 +173,15 @@ const InspectionsPage = () => {
           {activeFilters.map((f) => (
             <span key={f.key} className="flex items-center gap-1 rounded-full border border-brand-primary/50 bg-brand-primary/10 py-0.5 pl-3 pr-1 text-primary-text">
               {f.label}
-              <button type="button" aria-label={`Remove filter ${f.label}`} onClick={() => clearFilters(f.clear)} className="rounded-full p-0.5 hover:bg-brand-primary/20 cursor-pointer">
+              <button type="button" aria-label={`Remove filter ${f.label}`} onClick={() => (f.clearCustom ? f.clearCustom() : clearFilters(f.clear))} className="rounded-full p-0.5 hover:bg-brand-primary/20 cursor-pointer">
                 <XIcon className="h-3.5 w-3.5" />
               </button>
             </span>
           ))}
-          <button type="button" onClick={() => clearFilters(Object.fromEntries(INSPECTION_FILTER_KEYS.map((k) => [k, ""])))} className="text-link-color hover:underline cursor-pointer">
+          <button type="button" onClick={() => {
+            customFilters.clearAll();
+            (() => clearFilters(Object.fromEntries(INSPECTION_FILTER_KEYS.map((k) => [k, ""]))))();
+          }} className="text-link-color hover:underline cursor-pointer">
             Clear all
           </button>
         </div>

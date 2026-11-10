@@ -18,6 +18,7 @@ import { ErrorNotice } from "../master-data/shared";
 import { ContactDialog, ProductDialog } from "./ContactProductDialogs";
 import StatusChangeDialog from "./StatusChangeDialog";
 import SupplierDialog from "./SupplierDialog";
+import CustomFieldsCard from "../custom-fields/CustomFieldsCard";
 import { ActivityBadge, ApprovalPill, RiskBadge } from "./SupplierBadges";
 import { CertificationsCard, DocumentsCard } from "./Qualification";
 import { RiskCard } from "./RiskAssessment";
@@ -65,7 +66,7 @@ const Tile = ({ label, value, to }) => {
   );
 };
 
-const Overview = ({ supplier, canManage, onEditContact, onAddContact }) => {
+const Overview = ({ supplier, canManage, canEditCustom, onEditContact, onAddContact }) => {
   const s = supplier;
   const ncLink = `/Non-Conformance/Register?supplier=${s.id}&supplierLabel=${encodeURIComponent(s.displayName || s.name)}`;
   return (
@@ -119,6 +120,7 @@ const Overview = ({ supplier, canManage, onEditContact, onAddContact }) => {
           <Row label="Notes">{s.notes}</Row>
         </dl>
       </MenuCard>
+      <CustomFieldsCard entityType="supplier" record={s} editable={canEditCustom} />
       <MenuCard
         title="Contacts"
         action={canManage && (
@@ -241,6 +243,7 @@ const SupplierProfilePage = () => {
   const tab = TABS.some((t) => t.value === params.get("tab")) ? params.get("tab") : "overview";
   const canManage = can("supplier_quality.manage");
   const canApprove = can("supplier_quality.approve");
+  const canEditCustom = canManage || can("master_data.manage");
 
   if (supplier.isLoading) return <LoadingScreen />;
   if (supplier.error)
@@ -285,7 +288,7 @@ const SupplierProfilePage = () => {
 
       <SlidingToggle ariaLabel="Supplier sections" mode="tabs" options={TABS} value={tab} onChange={(v) => setParams((p) => { const n = new URLSearchParams(p); if (v === "overview") n.delete("tab"); else n.set("tab", v); return n; })} />
 
-      {tab === "overview" && <Overview supplier={s} canManage={canManage} onAddContact={() => setDialog({ kind: "contact" })} onEditContact={(c) => setDialog({ kind: "contact", contact: c })} />}
+      {tab === "overview" && <Overview supplier={s} canManage={canManage} canEditCustom={canEditCustom} onAddContact={() => setDialog({ kind: "contact" })} onEditContact={(c) => setDialog({ kind: "contact", contact: c })} />}
       {tab === "products" && <Products supplier={s} canManage={canManage} onAdd={() => setDialog({ kind: "product" })} />}
       {tab === "history" && <History id={s.id} />}
       {tab === "nonconformities" && <SupplierNcs supplier={s} />}

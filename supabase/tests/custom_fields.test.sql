@@ -115,12 +115,14 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.custom_field_values WHERE record_id = part)::text, '1', 'whoever can see a part sees its values');
   PERFORM pg_temp.assert_eq(app.get_custom_values('part', part) ->> 'coating', 'zinc', 'values are read through the function');
   PERFORM pg_temp.assert_eq(app.get_custom_values('part', part2)::text, '{}', 'a record without values reads as empty');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.custom_field_people(org) WHERE user_id IN (owner_id, engineer_id))::text, '2', 'a viewer can list the people a person field can name');
   PERFORM pg_temp.assert_fails(format($q$SELECT app.set_custom_values('part', %L, '{"coating": "paint"}')$q$, part), 'a viewer cannot fill them in');
   PERFORM pg_temp.login(engineer_id);
   PERFORM pg_temp.assert_ok(format($q$SELECT app.set_custom_values('part', %L, '{"coating": "paint"}')$q$, part), 'whoever can edit the part can fill them in');
   PERFORM pg_temp.login('31600000-0000-0000-0000-000000000103');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.custom_field_values WHERE record_id = part)::text, '0', 'another organisation sees nothing');
   PERFORM pg_temp.assert_fails(format($q$SELECT app.get_custom_values('part', %L)$q$, part), 'reading another organisation''s record is not found');
+  PERFORM pg_temp.assert_fails(format($q$SELECT * FROM app.custom_field_people(%L)$q$, org), 'nor its people');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.custom_field_definitions WHERE organisation_id = org)::text, '0', 'nor the fields');
   PERFORM pg_temp.assert_fails(format($q$SELECT app.set_custom_values('part', %L, '{"coating": "paint"}')$q$, part), 'nor writes them');
   PERFORM pg_temp.assert_fails(format($q$SELECT app.retire_custom_field(%L, 'Not mine')$q$, f_text), 'nor retires a field');

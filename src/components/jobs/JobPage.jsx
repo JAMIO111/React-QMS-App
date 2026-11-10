@@ -19,6 +19,7 @@ import {
   SampleEntry,
   SamplePlan,
 } from "../inspection/recording";
+import CustomFieldsCard from "../custom-fields/CustomFieldsCard";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useGauges } from "../../hooks/useCalibration";
 import { useInspection } from "../../hooks/useInspection";
@@ -338,6 +339,7 @@ const JobPage = () => {
             )}
 
             <JobInfo inspection={inspection} editable={open && canRecord} />
+            <CustomFieldsCard entityType="inspection" record={inspection} editable={open && canRecord} />
 
             {open && <SamplePlan inspection={inspection} />}
             {open && canRecord && (

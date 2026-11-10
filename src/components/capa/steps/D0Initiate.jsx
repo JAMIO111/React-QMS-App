@@ -8,7 +8,9 @@ import Dialog from "../../ui/Dialog";
 import ReasonDialog from "../../ncr/ReasonDialog";
 import { NcrPicker } from "../../ncr/Pickers";
 import { useCapaMutation, useCapaPeople } from "../../../hooks/useCapa";
-import { SEVERITIES, SOURCES, ncrHref } from "../../../lib/capa";
+import { SEVERITIES, SOURCES, isRunning, ncrHref } from "../../../lib/capa";
+import { usePermissions } from "../../../hooks/useQmsApi";
+import CustomFieldsCard from "../../custom-fields/CustomFieldsCard";
 import { formatDay } from "../../../lib/qualityAlerts";
 import { stageOf as ncrStageOf } from "../../../lib/ncr";
 import { FormError, TextAreaField } from "../../master-data/shared";
@@ -133,11 +135,16 @@ const NcrLinks = ({ capa, editable }) => {
 };
 
 /** D0: the problem and the non-conformances this 8D addresses. */
-const D0Initiate = ({ capa, editable }) => (
-  <div className="flex flex-col gap-4">
-    <HeaderForm key={capa.updatedAt} capa={capa} editable={editable} />
-    <NcrLinks capa={capa} editable={editable} />
-  </div>
-);
+const D0Initiate = ({ capa, editable }) => {
+  const { can } = usePermissions();
+  return (
+    <div className="flex flex-col gap-4">
+      <HeaderForm key={capa.updatedAt} capa={capa} editable={editable} />
+      {/* Custom fields are not part of D0's step lock: they stay editable while the 8D runs. */}
+      <CustomFieldsCard entityType="capa" record={capa} editable={can("capa.manage") && isRunning(capa.stage)} />
+      <NcrLinks capa={capa} editable={editable} />
+    </div>
+  );
+};
 
 export default D0Initiate;

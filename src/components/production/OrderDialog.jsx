@@ -11,6 +11,8 @@ import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { FormError } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
+import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 
 
 /**
@@ -34,6 +36,7 @@ const OrderDialog = ({ order, onClose, readOnly = false, onSaved }) => {
     dueDate: order?.dueDate ?? "",
     notes: order?.notes ?? "",
   });
+  const [customValues, setCustomValues] = useState({});
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const disabled = readOnly || frozen;
   const quantity = Number(form.quantityPlanned);
@@ -42,7 +45,7 @@ const OrderDialog = ({ order, onClose, readOnly = false, onSaved }) => {
   const submit = (e) => {
     e.preventDefault();
     const shared = { partRevisionId: form.partRevisionId, customerId: form.customerId, quantityPlanned: quantity, dueDate: form.dueDate || null, notes: form.notes.trim() || null };
-    const body = creating ? { orderNumber: form.orderNumber.trim(), partId: form.partId, siteId: form.siteId, ...shared } : shared;
+    const body = creating ? { orderNumber: form.orderNumber.trim(), partId: form.partId, siteId: form.siteId, ...shared, ...withCustomValues(customValues) } : shared;
     mutation.mutate(
       { path: creating ? "/production-orders" : `/production-orders/${order.id}`, method: creating ? "POST" : "PATCH", body },
       {
@@ -79,6 +82,7 @@ const OrderDialog = ({ order, onClose, readOnly = false, onSaved }) => {
           </div>
           <TextAreaField label="Notes" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} maxLength={2000} />
         </fieldset>
+        {creating && <CustomFieldInputs entityType="production_order" values={customValues} onChange={setCustomValues} />}
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">

@@ -37,6 +37,8 @@ import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import RHFTextArea from "../ui/RHFTextArea";
 import TextInput from "../ui/TextInput";
 import CharacteristicsEditor from "./CharacteristicsEditor";
+import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 import GaugeHistory from "./GaugeHistory";
 import PeoplePicker from "./PeoplePicker";
 import { DuePill, GaugeStatusPill, OutcomePill } from "./Pills";
@@ -167,6 +169,7 @@ const GaugePage = () => {
   const [showInactive, setShowInactive] = useState(false);
   const characteristics = useGaugeCharacteristics(isNew ? null : routeId, { includeInactive: showInactive });
   const [dialog, setDialog] = useState(null); // "delete"
+  const [customValues, setCustomValues] = useState({});
   const scrollRef = useRef(null);
   const refs = { details: useRef(null), characteristics: useRef(null), calibrations: useRef(null), history: useRef(null) };
 
@@ -187,7 +190,7 @@ const GaugePage = () => {
     if (!valid) return;
     if (isNew) {
       mutation.mutate(
-        { path: "/gauges", body: changes },
+        { path: "/gauges", body: { ...changes, ...withCustomValues(customValues) } },
         {
           onSuccess: (created) => {
             showToast({ type: "success", title: "Gauge added", message: `${created.assetNumber} was added${created.type ? " with its type's characteristics" : ""}.` });
@@ -409,8 +412,15 @@ const GaugePage = () => {
                   <RHFTextArea label="Notes" icon={AlignCenterIcon} value={form.notes} onChange={set("notes")} disabled={!canEdit} max={5000} rows={3} placeholder="Anything else about this gauge" />
                 </div>
               </div>
+              {isNew && (
+                <div className="w-full">
+                  <CustomFieldInputs entityType="gauge" values={customValues} onChange={setCustomValues} />
+                </div>
+              )}
             </Card>
           </form>
+
+          {!isNew && <CustomFieldsCard entityType="gauge" record={gauge} editable={canEdit} />}
 
           {!isNew && (
             <>

@@ -9,17 +9,20 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { usePartFamilies, useProcessControlMutation } from "../../hooks/useProcessControl";
 import { ActiveBadge, DataList, FormError, SearchBox } from "./shared";
 import CTAButton from "@/components/CTAButton";
+import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 
 /** Add or edit a part family (code, name, description, active). */
 export const PartFamilyForm = ({ family, onDone, onCreated }) => {
   const mutation = useProcessControlMutation();
   const { showToast } = useToast();
   const [form, setForm] = useState({ code: family?.code ?? "", name: family?.name ?? "", description: family?.description ?? "", active: family?.active ?? true });
+  const [customValues, setCustomValues] = useState({});
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
 
   const submit = (e) => {
     e.preventDefault();
-    const body = { code: form.code.trim(), name: form.name.trim(), description: form.description.trim(), ...(family ? { active: form.active } : {}) };
+    const body = { code: form.code.trim(), name: form.name.trim(), description: form.description.trim(), ...(family ? { active: form.active } : withCustomValues(customValues)) };
     mutation.mutate(
       { path: family ? `/part-families/${family.id}` : "/part-families", method: family ? "PATCH" : "POST", body },
       {
@@ -50,6 +53,7 @@ export const PartFamilyForm = ({ family, onDone, onCreated }) => {
           Active
         </Switch>
       )}
+      {!family && <CustomFieldInputs entityType="part_family" values={customValues} onChange={setCustomValues} />}
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
@@ -114,7 +118,7 @@ const PartFamiliesPage = () => {
           Show inactive
         </Switch>
       </div>
-      <DataList
+      <DataList entityType="part_family"
         storageKey="master:part-families"
         columns={columns}
         query={query}

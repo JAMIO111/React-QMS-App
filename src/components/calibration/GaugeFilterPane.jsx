@@ -1,3 +1,4 @@
+import CustomFieldFilters from "../custom-fields/CustomFieldFilters";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FactoryIcon, HouseIcon, TagIcon, Trash2Icon, UsersIcon, XIcon } from "@/components/icons";
@@ -130,6 +131,7 @@ const GaugeFilterPane = ({ onClose }) => {
           <PartyPicker kind="suppliers" label="Calibration supplier" icon={UsersIcon} value={supplier?.id ?? null} current={supplier?.id ? { id: supplier.id, name: supplier.name ?? "" } : undefined}
             onChange={(id, item) => setSupplier(id ? { id, name: item?.name ?? supplier?.name } : null)} />
           <RHFComboBox label="Deleted gauges" icon={Trash2Icon} options={DELETED_OPTIONS} value={deleted} onChange={(v) => setDeleted(v ?? "exclude")} sort={false} clearable={false} />
+          <CustomFieldFilters entityType="gauge" />
         </div>
         <div className="flex shrink-0 justify-between gap-2 border-t border-border-color bg-secondary-bg px-4 py-3">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={resetAll}>

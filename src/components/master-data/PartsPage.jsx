@@ -1,3 +1,5 @@
+import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 import { useCallback, useMemo, useState } from "react";
 import Switch from "@/components/ui/Switch";
 import { Link, useNavigate } from "react-router-dom";
@@ -34,6 +36,7 @@ const NewPartForm = ({ onDone }) => {
   const mutation = useMasterDataMutation();
   const navigate = useNavigate();
   const [form, setForm] = useState({ partNumber: "", name: "", description: "", customerId: null, revision: "A", drawingRef: "" });
+  const [customValues, setCustomValues] = useState({});
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = (e) => {
@@ -47,6 +50,7 @@ const NewPartForm = ({ onDone }) => {
           description: form.description.trim(),
           customerId: form.customerId,
           ...(form.revision.trim() ? { initialRevision: { revision: form.revision.trim(), drawingRef: form.drawingRef.trim() } } : {}),
+          ...withCustomValues(customValues),
         },
       },
       { onSuccess: (part) => navigate(`/Parts/${part.id}`) }
@@ -71,6 +75,7 @@ const NewPartForm = ({ onDone }) => {
         <Field label="Revision" value={form.revision} onChange={set("revision")} maxLength={10} hint="Leave empty to add revisions later" />
         <Field label="Drawing reference" value={form.drawingRef} onChange={set("drawingRef")} maxLength={100} />
       </fieldset>
+      <CustomFieldInputs entityType="part" values={customValues} onChange={setCustomValues} />
       {mutation.error && (
         <p role="alert" className="text-sm text-error-color">
           {describeApiError(mutation.error)}
@@ -152,7 +157,7 @@ const PartsPage = () => {
           Show inactive
         </Switch>
       </div>
-      <DataList
+      <DataList entityType="part"
         storageKey="master:parts"
         columns={columns}
         query={query}

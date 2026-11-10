@@ -16,6 +16,7 @@ import { ActiveBadge, ErrorNotice, FormError, SearchBox } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
 import { currentRevisionLabel } from "../../lib/partRevisions";
 import CTAButton from "@/components/CTAButton";
+import CustomFieldsCard from "../custom-fields/CustomFieldsCard";
 
 /** Choose parts to add to the family; parts in another family are moved (shown with their family). */
 const AddPartsForm = ({ family, onDone }) => {
@@ -127,6 +128,7 @@ const PartFamilyPage = () => {
           </div>
           {family.description && <p className="max-w-3xl text-sm text-primary-text">{family.description}</p>}
           <ActiveAlertsBanner partFamilyId={family.id} />
+          <CustomFieldsCard entityType="part_family" record={family} editable={canManage} />
 
           <MenuCard
             title="Parts"

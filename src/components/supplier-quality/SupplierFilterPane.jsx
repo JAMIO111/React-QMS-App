@@ -1,3 +1,4 @@
+import CustomFieldFilters from "../custom-fields/CustomFieldFilters";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { XIcon } from "@/components/icons";
@@ -103,6 +104,7 @@ const SupplierFilterPane = ({ onClose }) => {
             <SlidingToggle ariaLabel="Activity" mode="radio" options={ACTIVITY_OPTIONS} value={activity} onChange={setActivity} />
             <p className="mt-1 text-xs text-secondary-text">Whether the supplier is in use, separate from its approval.</p>
           </div>
+          <CustomFieldFilters entityType="supplier" />
         </div>
         <div className="flex shrink-0 justify-between gap-2 border-t border-border-color bg-secondary-bg px-4 py-3">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={resetAll}>

@@ -10,6 +10,7 @@ vi.mock("./SettingsCalibration", () => ({ default: () => <p>Gauge types</p> }));
 vi.mock("./SettingsProcessControl", () => ({ default: () => <p>Characteristic templates</p> }));
 vi.mock("./SettingsAudits", () => ({ default: () => <p>Finding classifications</p> }));
 vi.mock("./SettingsSupplierQuality", () => ({ default: () => <p>Supplier classifications</p> }));
+vi.mock("../custom-fields/CustomFieldsSettings", () => ({ default: () => <p>Custom field list</p> }));
 
 import SettingsDataManagement from "./SettingsDataManagement";
 
@@ -52,5 +53,15 @@ describe("Settings → Data Management", () => {
     permissions = [];
     renderAt("/Settings/Data-Management");
     expect(screen.getByText(/no access to any module/)).toBeInTheDocument();
+  });
+
+  it("shows Custom fields only to people who may manage them", async () => {
+    permissions = ["ncr.read"];
+    const { unmount } = renderAt("/Settings/Data-Management");
+    expect(screen.queryByRole("tab", { name: "Custom fields" })).toBeNull();
+    unmount();
+    permissions = ["custom_fields.manage"];
+    renderAt("/Settings/Data-Management?tab=custom-fields");
+    expect(await screen.findByText("Custom field list")).toBeInTheDocument();
   });
 });

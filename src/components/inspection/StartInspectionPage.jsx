@@ -13,6 +13,8 @@ import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
 import ResolutionView from "../process-control/ResolutionView";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
+import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 
 /**
  * Start an in-process inspection: production context (site, part, operation, machine, work order,
@@ -37,6 +39,7 @@ const StartInspectionPage = () => {
     serial: "",
     lotSize: "",
   });
+  const [customValues, setCustomValues] = useState({});
   const siteId = form.siteId ?? (siteList.length === 1 ? siteList[0].id : null);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const [appliedOp, setAppliedOp] = useState(form.operationCode.trim());
@@ -61,6 +64,7 @@ const StartInspectionPage = () => {
           serial: form.serial,
           ...(form.lotSize.trim() ? { lotSize: Number(form.lotSize) } : {}),
           triggerType: startTrigger(requirements),
+          ...withCustomValues(customValues),
         },
       },
       { onSuccess: (rec) => navigate(`/Inspections/${rec.id}`, { replace: true }) }
@@ -113,6 +117,7 @@ const StartInspectionPage = () => {
             hint={lotSizeNeeded ? "Required — the plan samples every N parts" : "Optional"}
           />
         </div>
+        <CustomFieldInputs entityType="inspection" values={customValues} onChange={setCustomValues} />
         <FormError error={mutation.error} />
         <CTAButton buttonType="submit" type="main" size="lg" className="self-start" disabled={!ready || mutation.isPending} loading={mutation.isPending}>
           {mutation.isPending ? "Starting…" : "Start inspection"}

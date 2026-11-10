@@ -10,6 +10,8 @@ import RHFComboBox from "../ui/RHFComboBox";
 import Switch from "../ui/Switch";
 import { FormError } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
+import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 
 const emptyForm = {
   code: "", name: "", displayName: "", supplierType: null, country: null, addressLine1: "", addressLine2: "", city: "", region: "", postcode: "",
@@ -26,6 +28,7 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
   const editing = !!supplier;
   const [form, setForm] = useState(editing ? { ...emptyForm, ...Object.fromEntries(Object.entries(supplier).filter(([k]) => k in emptyForm).map(([k, v]) => [k, v ?? emptyForm[k]])) } : emptyForm);
   const [classIds, setClassIds] = useState(editing ? supplier.classifications.map((c) => c.id) : []);
+  const [customValues, setCustomValues] = useState({});
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const pick = (k) => (v) => setForm((f) => ({ ...f, [k]: v ?? null }));
   const options = classifications.data?.data ?? [];
@@ -72,7 +75,7 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
         }
       );
     } else {
-      mutation.mutate({ action: "create", body: { ...body, classificationIds: classIds } }, { onSuccess: done, onError: fail });
+      mutation.mutate({ action: "create", body: { ...body, classificationIds: classIds, ...withCustomValues(customValues) } }, { onSuccess: done, onError: fail });
     }
   };
 
@@ -122,6 +125,7 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
             Active (inactive suppliers are hidden from pickers; this is separate from approval)
           </Switch>
         )}
+        {!editing && <CustomFieldInputs entityType="supplier" values={customValues} onChange={setCustomValues} />}
         {!editing && <p className="text-xs text-secondary-text">A new supplier is Pending Approval. Approval is decided separately, by someone who may approve, with a reason.</p>}
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">

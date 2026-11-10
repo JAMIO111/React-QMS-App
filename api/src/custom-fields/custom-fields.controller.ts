@@ -38,6 +38,13 @@ export class CustomFieldsController {
     return this.fields.list(ctx, q.entityType, q.includeRetired ?? false);
   }
 
+  @Get('people')
+  @OrganisationScoped()
+  @ApiOkResponse({ description: 'Active members a person field can name: { data: [{ id (user id), name }] }' })
+  people(@Ctx() ctx: RequestContext) {
+    return this.fields.people(ctx);
+  }
+
   @Post()
   @OrganisationScoped('custom_fields.manage')
   @ApiBody({ schema: openApiSchema(CreateCustomFieldBody) })

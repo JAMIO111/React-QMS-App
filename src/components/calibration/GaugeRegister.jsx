@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { customCsvValues, useCustomColumns, useCustomFilterChips } from "../custom-fields/customColumns";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ClipboardCheckIcon, FolderOpenIcon, PlusIcon, RotateCcwIcon, ShareIcon, SlidersHorizontalIcon, Trash2Icon, XIcon } from "@/components/icons";
 import { useGlobalSearch } from "../../contexts/SearchProvider";
@@ -69,7 +70,10 @@ const GaugeRegister = () => {
   const deleteMutation = useCalibrationMutation();
   const headerRef = useRef(null);
   const prefs = useTablePreferences("gauge-register");
-  const columnVisibility = { ...DEFAULT_HIDDEN, ...prefs.columnVisibility };
+  const custom = useCustomColumns("gauge");
+  const customFilters = useCustomFilterChips("gauge");
+  const columnVisibility = { ...DEFAULT_HIDDEN, ...custom.defaultHidden, ...prefs.columnVisibility };
+  const columns = useMemo(() => [...gaugeColumns, ...custom.columns], [custom.columns]);
 
   const setPage = useCallback(
     (p) =>
@@ -84,7 +88,7 @@ const GaugeRegister = () => {
     setSortingState(updater);
     if (page !== 1) setPage(1);
   };
-  const sortColumn = sorting[0] ? gaugeColumns.find((c) => c.id === sorting[0].id)?.meta?.sortKey : undefined;
+  const sortColumn = sorting[0] ? columns.find((c) => c.id === sorting[0].id)?.meta?.sortKey : undefined;
 
   const { data, isLoading, isFetching, error, refetch } = useGauges({
     q: filters.search,
@@ -102,6 +106,7 @@ const GaugeRegister = () => {
     order: sorting[0]?.desc ? "desc" : "asc",
     page,
     pageSize,
+    ...customFilters.params,
   });
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -149,6 +154,7 @@ const GaugeRegister = () => {
     ...(filters.source ? [{ key: "source", label: filters.source === "external" ? "Calibrated externally" : "Calibrated in-house", clear: { source: "" } }] : []),
     ...(filters.supplier ? [{ key: "supplier", label: `Supplier: ${filters.supplierLabel || "selected"}`, clear: { supplier: "", supplierLabel: "" } }] : []),
     ...(filters.deleted ? [{ key: "deleted", label: filters.deleted === "only" ? "Deleted only" : "Including deleted", clear: { deleted: "" } }] : []),
+    ...customFilters.chips,
   ];
   const filterCount = activeFilters.filter((f) => f.key !== "search").length;
   const clearFilters = (values) => {
@@ -169,10 +175,10 @@ const GaugeRegister = () => {
         </div>
         <div className="flex flex-row items-center justify-end gap-3">
           {selectedRows.length > 0 && (
-            <CTAButton callbackFn={() => exportCSV(selectedRows.map(toCsvRow), "gauges.csv")} text="Export CSV" type="success" title="Export the selected gauges to a CSV file" icon={ShareIcon} iconSize="h-6 w-6" />
+            <CTAButton callbackFn={() => exportCSV(selectedRows.map((r) => ({ ...toCsvRow(r), ...customCsvValues(custom.fields, r) })), "gauges.csv")} text="Export CSV" type="success" title="Export the selected gauges to a CSV file" icon={ShareIcon} iconSize="h-6 w-6" />
           )}
           <ColumnVisibilityMenu
-            columns={gaugeColumns}
+            columns={columns}
             columnVisibility={columnVisibility}
             onColumnVisibilityChange={prefs.setColumnVisibility}
             columnOrder={prefs.columnOrder}
@@ -192,12 +198,15 @@ const GaugeRegister = () => {
           {activeFilters.map((f) => (
             <span key={f.key} className="flex items-center gap-1 rounded-full border border-brand-primary/50 bg-brand-primary/10 py-0.5 pl-3 pr-1 text-primary-text">
               {f.label}
-              <button type="button" aria-label={`Remove filter ${f.label}`} onClick={() => clearFilters(f.clear)} className="rounded-full p-0.5 hover:bg-brand-primary/20 cursor-pointer">
+              <button type="button" aria-label={`Remove filter ${f.label}`} onClick={() => (f.clearCustom ? f.clearCustom() : clearFilters(f.clear))} className="rounded-full p-0.5 hover:bg-brand-primary/20 cursor-pointer">
                 <XIcon className="h-3.5 w-3.5" />
               </button>
             </span>
           ))}
-          <button type="button" onClick={() => clearFilters(Object.fromEntries(GAUGE_FILTER_KEYS.map((k) => [k, ""])))} className="text-link-color hover:underline cursor-pointer">
+          <button type="button" onClick={() => {
+            customFilters.clearAll();
+            (() => clearFilters(Object.fromEntries(GAUGE_FILTER_KEYS.map((k) => [k, ""]))))();
+          }} className="text-link-color hover:underline cursor-pointer">
             Clear all
           </button>
         </div>
@@ -215,7 +224,7 @@ const GaugeRegister = () => {
           onRefresh={refetch}
           sorting={sorting}
           setSorting={setSorting}
-          columns={gaugeColumns}
+          columns={columns}
           columnVisibility={columnVisibility}
           onColumnVisibilityChange={prefs.setColumnVisibility}
           columnSizing={prefs.columnSizing}

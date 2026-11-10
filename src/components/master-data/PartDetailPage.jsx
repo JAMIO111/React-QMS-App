@@ -1,3 +1,4 @@
+import CustomFieldsCard from "../custom-fields/CustomFieldsCard";
 import { useEffect, useState } from "react";
 import Switch from "@/components/ui/Switch";
 import { Link, useParams } from "react-router-dom";
@@ -306,6 +307,7 @@ const PartDetailPage = () => {
           </div>
           <ActiveAlertsBanner partId={part.id} />
           <PartDetails part={part} canManage={canManage} />
+          <CustomFieldsCard entityType="part" record={part} editable={canManage} />
           <PartCustomers part={part} canManage={canManage} />
           <Revisions part={part} canManage={canManage} />
           <CorrectionImpactCard part={part} />

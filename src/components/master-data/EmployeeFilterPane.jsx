@@ -1,3 +1,4 @@
+import CustomFieldFilters from "../custom-fields/CustomFieldFilters";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FactoryIcon, HouseIcon, XIcon } from "@/components/icons";
@@ -95,6 +96,7 @@ const EmployeeFilterPane = ({ onClose }) => {
             }}
           />
           <RHFComboBox label="Department" icon={FactoryIcon} placeholder="All departments" options={departmentOptions} value={department} onChange={setDepartment} />
+          <CustomFieldFilters entityType="employee" />
         </div>
         <div className="flex shrink-0 justify-between gap-2 border-t border-border-color bg-secondary-bg px-4 py-3">
           <CTAButton

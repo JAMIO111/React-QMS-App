@@ -31,6 +31,7 @@ const LotsPage = () => {
       noun="lot"
       nounPlural="lots"
       columns={lotColumns}
+      entityType="lot"
       defaultHidden={LOT_HIDDEN}
       prefsKey="lot-register"
       defaultSort={{ id: "createdAt", desc: true }}

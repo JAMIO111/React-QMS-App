@@ -1,4 +1,5 @@
-import { useEffect, useId, useState } from "react";
+import { useCustomColumns } from "../custom-fields/customColumns";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import Table from "../Table";
 import CTAButton from "../CTAButton";
@@ -41,20 +42,29 @@ const NO_ROWS = [];
  * A master-data list: the shared Table with resizable, hideable, reorderable columns remembered under
  * `storageKey`, rows from a paged query, and "Load more".
  */
-export const DataList = ({ storageKey, columns, query, onOpen, emptyMessage, ariaLabel }) => {
+export const DataList = ({ storageKey, columns, query, onOpen, emptyMessage, ariaLabel, entityType }) => {
   const prefs = useTablePreferences(storageKey);
   const sizingInfo = useColumnSizingInfo();
+  // The kind of record's custom fields as extra columns, hidden until someone shows them.
+  const custom = useCustomColumns(entityType);
+  const allColumns = useMemo(() => (entityType ? [...columns, ...custom.columns] : columns), [columns, custom.columns, entityType]);
+  const visibility = useMemo(() => ({ ...custom.defaultHidden, ...prefs.columnVisibility }), [custom.defaultHidden, prefs.columnVisibility]);
+  const { setColumnVisibility } = prefs;
+  const onVisibility = useCallback(
+    (updater) => setColumnVisibility((saved) => (typeof updater === "function" ? updater({ ...custom.defaultHidden, ...saved }) : updater)),
+    [setColumnVisibility, custom.defaultHidden],
+  );
   const table = useReactTable({
     data: query.data?.items ?? NO_ROWS, // a stable fallback: a fresh [] each render re-triggers TanStack's page reset in a loop
-    columns,
+    columns: allColumns,
     getRowId: (row) => row.id,
     state: {
-      columnVisibility: prefs.columnVisibility,
+      columnVisibility: visibility,
       columnSizing: prefs.columnSizing,
       columnOrder: prefs.columnOrder,
       columnSizingInfo: sizingInfo.columnSizingInfo,
     },
-    onColumnVisibilityChange: prefs.setColumnVisibility,
+    onColumnVisibilityChange: onVisibility,
     onColumnSizingChange: prefs.setColumnSizing,
     onColumnOrderChange: prefs.setColumnOrder,
     enableColumnReordering: true,

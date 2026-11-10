@@ -99,6 +99,12 @@ describe('custom field definitions', () => {
     expect((await api().put('/api/v1/custom-fields/order').set(h).send({ entityType: 'part', ids: all.slice(1) })).status).toBe(409);
   });
 
+  it('list the members a person field can name, for every member', async () => {
+    const body = (await api().get('/api/v1/custom-fields/people').set(await as(ids.inspectorA)).expect(200)).body;
+    expect(body.data.map((p: { id: string }) => p.id)).toEqual(expect.arrayContaining([ids.ownerA, ids.inspectorA]));
+    expect(body.data.map((p: { id: string }) => p.id)).not.toContain(ids.ownerB);
+  });
+
   it('keep definitions inside their organisation', async () => {
     const h = await as(ids.ownerB, ids.orgB);
     expect((await api().get('/api/v1/custom-fields').set(h)).body.data).toEqual([]);

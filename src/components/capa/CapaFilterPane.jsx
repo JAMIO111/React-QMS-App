@@ -1,3 +1,4 @@
+import CustomFieldFilters from "../custom-fields/CustomFieldFilters";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { XIcon } from "@/components/icons";
@@ -106,6 +107,7 @@ const CapaFilterPane = ({ onClose }) => {
             <RHFDatePickerPopout label="Started from" placeholder="Any date" valueFormat="iso" clearable value={from} onChange={setFrom} maxDate={to ?? undefined} />
             <RHFDatePickerPopout label="Started to" placeholder="Any date" valueFormat="iso" clearable value={to} onChange={setTo} minDate={from ?? undefined} />
           </div>
+          <CustomFieldFilters entityType="capa" />
         </div>
         <div className="flex shrink-0 justify-between gap-2 border-t border-border-color bg-secondary-bg px-4 py-3">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={resetAll}>

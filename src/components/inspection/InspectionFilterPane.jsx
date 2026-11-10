@@ -1,3 +1,4 @@
+import CustomFieldFilters from "../custom-fields/CustomFieldFilters";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FactoryIcon, HouseIcon, QrCodeIcon, XIcon } from "@/components/icons";
@@ -131,6 +132,7 @@ const InspectionFilterPane = ({ onClose }) => {
             onChange={(id, item) => setOrder(id ? { id, name: item?.name ?? order?.name } : null)} />
           <RHFComboBox label="Site" icon={HouseIcon} placeholder="All sites" options={(sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))} value={site} onChange={setSite} />
           <RHFComboBox label="Machine" icon={FactoryIcon} placeholder="All machines" options={machineItems.map((m) => ({ id: m.id, name: `${m.code} · ${m.name}` }))} value={machine} onChange={setMachine} />
+          <CustomFieldFilters entityType="inspection" />
         </div>
         <div className="flex shrink-0 justify-between gap-2 border-t border-border-color bg-secondary-bg px-4 py-3">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={resetAll}>

@@ -15,6 +15,7 @@ import OrderDialog from "./OrderDialog";
 import { StatusBadge, StatusMoves } from "./shared";
 import { tracePath } from "../../lib/production";
 import CTAButton from "@/components/CTAButton";
+import CustomFieldsCard from "../custom-fields/CustomFieldsCard";
 
 const Fact = ({ label, children }) => (
   <div className="flex min-w-0 flex-col gap-0.5">
@@ -110,6 +111,8 @@ const OrderPage = () => {
         </dl>
         {o.notes && <p className="mt-4 whitespace-pre-wrap text-sm text-primary-text">{o.notes}</p>}
       </MenuCard>
+
+      <CustomFieldsCard entityType="production_order" record={o} editable={canManage && !["closed", "cancelled"].includes(o.status)} />
 
       <MenuCard title="Operations" subtitle="The route, in order. An order cannot be completed while an operation is pending or in progress.">
         {o.operations.length === 0 ? (

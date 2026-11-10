@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { customCsvValues, useCustomColumns, useCustomFilterChips } from "../custom-fields/customColumns";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FolderOpenIcon, PlusIcon, ShareIcon, SlidersHorizontalIcon, XIcon } from "@/components/icons";
 import { useGlobalSearch } from "../../contexts/SearchProvider";
@@ -68,7 +69,10 @@ const SuppliersRegisterPage = () => {
   const [activeModalType, setActiveModalType] = useState(null);
   const [adding, setAdding] = useState(false);
   const prefs = useTablePreferences("supplier-register");
-  const columnVisibility = { ...DEFAULT_HIDDEN, ...prefs.columnVisibility };
+  const custom = useCustomColumns("supplier");
+  const customFilters = useCustomFilterChips("supplier");
+  const columnVisibility = { ...DEFAULT_HIDDEN, ...custom.defaultHidden, ...prefs.columnVisibility };
+  const columns = useMemo(() => [...supplierColumns, ...custom.columns], [custom.columns]);
   const classificationList = useSupplierClassifications({ all: true }).data?.data ?? [];
 
   const setPage = useCallback(
@@ -84,7 +88,7 @@ const SuppliersRegisterPage = () => {
     setSortingState(updater);
     if (page !== 1) setPage(1);
   };
-  const sortColumn = sorting[0] ? supplierColumns.find((c) => c.id === sorting[0].id)?.meta?.sortKey : undefined;
+  const sortColumn = sorting[0] ? columns.find((c) => c.id === sorting[0].id)?.meta?.sortKey : undefined;
 
   const { data, isLoading, isFetching, error, refetch } = useSupplierRegister({
     q: filters.search,
@@ -97,6 +101,7 @@ const SuppliersRegisterPage = () => {
     order: sorting[0]?.desc ? "desc" : "asc",
     page,
     pageSize,
+    ...customFilters.params,
   });
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -125,6 +130,7 @@ const SuppliersRegisterPage = () => {
     ...(filters.classification ? [{ key: "classification", label: `Classification: ${list(filters.classification).map((id) => classificationList.find((c) => c.id === id)?.label ?? "…").join(", ")}`, clear: { classification: "" } }] : []),
     ...(filters.risk ? [{ key: "risk", label: `Risk: ${list(filters.risk).map((k) => nameOf(RISK_RATINGS, k)).join(", ")}`, clear: { risk: "" } }] : []),
     ...(filters.active ? [{ key: "active", label: filters.active === "inactive" ? "Inactive suppliers" : "Active and inactive", clear: { active: "" } }] : []),
+    ...customFilters.chips,
   ];
   const filterCount = activeFilters.filter((f) => f.key !== "search").length;
   const clearFilters = (values) => {
@@ -144,10 +150,10 @@ const SuppliersRegisterPage = () => {
         </div>
         <div className="flex flex-row items-center justify-end gap-3">
           {selectedRows.length > 0 && (
-            <CTAButton callbackFn={() => exportCSV(selectedRows.map(toCsvRow), "suppliers.csv")} text="Export CSV" type="success" title="Export the selected suppliers to a CSV file" icon={ShareIcon} iconSize="h-6 w-6" />
+            <CTAButton callbackFn={() => exportCSV(selectedRows.map((r) => ({ ...toCsvRow(r), ...customCsvValues(custom.fields, r) })), "suppliers.csv")} text="Export CSV" type="success" title="Export the selected suppliers to a CSV file" icon={ShareIcon} iconSize="h-6 w-6" />
           )}
           <ColumnVisibilityMenu
-            columns={supplierColumns}
+            columns={columns}
             columnVisibility={columnVisibility}
             onColumnVisibilityChange={prefs.setColumnVisibility}
             columnOrder={prefs.columnOrder}
@@ -176,12 +182,15 @@ const SuppliersRegisterPage = () => {
           {activeFilters.map((f) => (
             <span key={f.key} className="flex items-center gap-1 rounded-full border border-brand-primary/50 bg-brand-primary/10 py-0.5 pl-3 pr-1 text-primary-text">
               {f.label}
-              <button type="button" aria-label={`Remove filter ${f.label}`} onClick={() => clearFilters(f.clear)} className="rounded-full p-0.5 hover:bg-brand-primary/20 cursor-pointer">
+              <button type="button" aria-label={`Remove filter ${f.label}`} onClick={() => (f.clearCustom ? f.clearCustom() : clearFilters(f.clear))} className="rounded-full p-0.5 hover:bg-brand-primary/20 cursor-pointer">
                 <XIcon className="h-3.5 w-3.5" />
               </button>
             </span>
           ))}
-          <button type="button" onClick={() => clearFilters(Object.fromEntries(SUPPLIER_FILTER_KEYS.map((k) => [k, ""])))} className="text-link-color hover:underline cursor-pointer">
+          <button type="button" onClick={() => {
+            customFilters.clearAll();
+            (() => clearFilters(Object.fromEntries(SUPPLIER_FILTER_KEYS.map((k) => [k, ""]))))();
+          }} className="text-link-color hover:underline cursor-pointer">
             Clear all
           </button>
         </div>
@@ -199,7 +208,7 @@ const SuppliersRegisterPage = () => {
           onRefresh={refetch}
           sorting={sorting}
           setSorting={setSorting}
-          columns={supplierColumns}
+          columns={columns}
           columnVisibility={columnVisibility}
           onColumnVisibilityChange={prefs.setColumnVisibility}
           columnSizing={prefs.columnSizing}

@@ -26,6 +26,7 @@ import ViewToggle from "./ViewToggle";
 import IconButton from "./IconButton";
 import SavedFilterBar from "./ncr/SavedFilterBar";
 import { NC_SCOPE } from "../lib/savedFilters";
+import { customCsvValues, useCustomColumns, useCustomFilterChips } from "./custom-fields/customColumns";
 
 /** Flat rows for CSV export. */
 const toCsvRow = (n) => ({
@@ -76,7 +77,9 @@ const NonConformance = () => {
   const { data: lists } = useClassifications();
   const { updateFilters } = filters;
 
-  const allColumns = useMemo(() => getNcColumns(), []);
+  const custom = useCustomColumns("nonconformance");
+  const customFilters = useCustomFilterChips("nonconformance");
+  const allColumns = useMemo(() => [...getNcColumns(), ...custom.columns], [custom.columns]);
   const prefs = useTablePreferences("nc-register");
   const {
     columnSizing,
@@ -87,18 +90,18 @@ const NonConformance = () => {
   } = prefs;
   // Some columns only apply to some sources and start hidden; a saved choice wins.
   const columnVisibility = useMemo(
-    () => ({ ...NC_DEFAULT_HIDDEN, ...prefs.columnVisibility }),
-    [prefs.columnVisibility],
+    () => ({ ...NC_DEFAULT_HIDDEN, ...custom.defaultHidden, ...prefs.columnVisibility }),
+    [prefs.columnVisibility, custom.defaultHidden],
   );
   const setColumnVisibility = useCallback(
     (updater) =>
       prefs.setColumnVisibility((saved) =>
         typeof updater === "function"
-          ? updater({ ...NC_DEFAULT_HIDDEN, ...saved })
+          ? updater({ ...NC_DEFAULT_HIDDEN, ...custom.defaultHidden, ...saved })
           : updater,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [prefs.setColumnVisibility],
+    [prefs.setColumnVisibility, custom.defaultHidden],
   );
 
   const setPage = useCallback(
@@ -145,6 +148,7 @@ const NonConformance = () => {
     order: sorting[0]?.desc ? "desc" : "asc",
     page,
     pageSize,
+    ...customFilters.params,
   });
   const rows = data?.data ?? [];
   const totalCount = data?.total ?? 0;
@@ -177,7 +181,7 @@ const NonConformance = () => {
   const totalCost = selectedRows.reduce((acc, r) => acc + (Number(r.totalCost) || 0), 0);
   const filterCount = [
     "source", "category", "uncategorised", "stage", "severity", "failureMode", "subFailureMode", "deleted", "part", "customer", "supplier",
-  ].filter((k) => filters[k]).length + (filters.from || filters.to ? 1 : 0) + (filters.costMin || filters.costMax ? 1 : 0) + (filters.qtyMin || filters.qtyMax ? 1 : 0);
+  ].filter((k) => filters[k]).length + customFilters.count + (filters.from || filters.to ? 1 : 0) + (filters.costMin || filters.costMax ? 1 : 0) + (filters.qtyMin || filters.qtyMax ? 1 : 0);
   const between = (lo, hi, fmt = (v) => v) => (lo && hi ? `${fmt(lo)} – ${fmt(hi)}` : lo ? `from ${fmt(lo)}` : `up to ${fmt(hi)}`);
   const nameOf = (id) => (lists?.all ?? []).find((c) => c.id === id)?.name ?? "…";
   // What the register is currently filtered by, each removable on its own.
@@ -199,6 +203,7 @@ const NonConformance = () => {
     ...(filters.failureMode ? [{ key: "failureMode", label: `Failure mode: ${nameOf(filters.failureMode)}`, clear: { failureMode: "", subFailureMode: "" } }] : []),
     ...(filters.subFailureMode ? [{ key: "subFailureMode", label: `Sub-failure mode: ${nameOf(filters.subFailureMode)}`, clear: { subFailureMode: "" } }] : []),
     ...(filters.deleted ? [{ key: "deleted", label: filters.deleted === "only" ? "Deleted only" : "Including deleted", clear: { deleted: "" } }] : []),
+    ...customFilters.chips,
   ];
   const clearFilters = (values) => {
     updateFilters(values);
@@ -224,7 +229,7 @@ const NonConformance = () => {
                 <CTAButton
                   callbackFn={() =>
                     exportCSV(
-                      selectedRows.map(toCsvRow),
+                      selectedRows.map((r) => ({ ...toCsvRow(r), ...customCsvValues(custom.fields, r) })),
                       "non-conformances.csv",
                     )
                   }
@@ -299,7 +304,7 @@ const NonConformance = () => {
               <button
                 type="button"
                 aria-label={`Remove filter ${f.label}`}
-                onClick={() => clearFilters(f.clear)}
+                onClick={() => (f.clearCustom ? f.clearCustom() : clearFilters(f.clear))}
                 className="rounded-full p-0.5 hover:bg-brand-primary/20 cursor-pointer">
                 <XIcon className="h-3.5 w-3.5" />
               </button>
@@ -307,9 +312,10 @@ const NonConformance = () => {
           ))}
           <button
             type="button"
-            onClick={() =>
-              clearFilters(Object.fromEntries(FILTER_KEYS.map((k) => [k, ""])))
-            }
+            onClick={() => {
+              customFilters.clearAll();
+              clearFilters(Object.fromEntries(FILTER_KEYS.map((k) => [k, ""])));
+            }}
             className="text-link-color hover:underline cursor-pointer">
             Clear all
           </button>

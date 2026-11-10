@@ -16,6 +16,7 @@ import { ReadingDialog, ReadingsGrid, RunControls, SampleEntry, SamplePlan } fro
 import { ResultBadge, StatusPill } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
 import RHFComboBox from "../ui/RHFComboBox";
+import CustomFieldsCard from "../custom-fields/CustomFieldsCard";
 
 /** One in-process inspection: context, due checks, sample entry, readings, completion. */
 const InspectionPage = () => {
@@ -70,6 +71,7 @@ const InspectionPage = () => {
             </dl>
             {inspection.abandonReason && <p className="mt-2 text-sm text-primary-text">Reason: “{inspection.abandonReason}”</p>}
           </MenuCard>
+          <CustomFieldsCard entityType="inspection" record={inspection} editable={canRecord && open} />
 
           {open && <SamplePlan inspection={inspection} />}
           {open && canRecord && <SampleEntry key={inspection.samples.length} inspection={inspection} gauges={gauges} canOverride={can("inspection.override_gauge")} />}

@@ -13,6 +13,8 @@ import { useJobMutation, useJobPreview } from "../../hooks/useJobs";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { lastMachine, rememberMachine } from "../../lib/jobs";
 import CTAButton from "@/components/CTAButton";
+import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 
 const useDebounced = (value, delay = 300) => {
   const [v, setV] = useState(value);
@@ -38,6 +40,7 @@ const StartJobDialog = ({ onClose }) => {
   const [search, setSearch] = useState("");
   const [quantity, setQuantity] = useState("");
   const [order, setOrder] = useState({ id: null, item: null });
+  const [customValues, setCustomValues] = useState({});
   const { can } = usePermissions();
   const settings = useProductionSettings();
   const canPickOrder = can("production.read");
@@ -62,7 +65,7 @@ const StartJobDialog = ({ onClose }) => {
     e.preventDefault();
     const machine = options.find((o) => o.id === machineId) ?? current;
     mutation.mutate(
-      { machineId, partId: part.id, operationCode: chosen, ...(quantity.trim() ? { lotSize: Number(quantity) } : {}), ...(order.id ? { productionOrderId: order.id } : {}) },
+      { machineId, partId: part.id, operationCode: chosen, ...(quantity.trim() ? { lotSize: Number(quantity) } : {}), ...(order.id ? { productionOrderId: order.id } : {}), ...withCustomValues(customValues) },
       {
         onSuccess: (job) => {
           if (machine) rememberMachine(organisationId, { id: machineId, name: machine.name.replace(/^.*? · /, "") });
@@ -166,6 +169,7 @@ const StartJobDialog = ({ onClose }) => {
             {p.siteProblem}
           </p>
         )}
+        <CustomFieldInputs entityType="inspection" values={customValues} onChange={setCustomValues} />
         {single.error && <FormError error={single.error} />}
         {preview.error && <FormError error={preview.error} />}
         <FormError error={mutation.error} />

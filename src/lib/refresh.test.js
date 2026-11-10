@@ -26,6 +26,7 @@ import { useJobLinks, useJobMutation } from "../hooks/useJobs";
 import { useBackfillProduction, useCreateInlineOrder } from "../hooks/useProduction";
 import { useSavedFilterMutation } from "../hooks/useSavedFilters";
 import { useAnswerAudit, useAuditMutation, useSetAuditTargets, useUpdateClassification } from "../hooks/useAudits";
+import { useCustomFieldMutation, useSetCustomValues } from "../hooks/useCustomFields";
 
 /** What other modules have on screen: each must be marked stale by an action in any module. */
 const watched = [
@@ -120,6 +121,9 @@ describe("every action refreshes every module's data", () => {
     ["rename a saved filter", () => useSavedFilterMutation("ncr_register"), { action: "update", id: "f1", body: { name: "New name" } }],
     ["delete a saved filter", () => useSavedFilterMutation("ncr_register"), { action: "delete", id: "f1" }],
     ["CAPA / 8D action", useCapaMutation, { action: "completeAction", id: "a1", body: {} }],
+    ["add a custom field", useCustomFieldMutation, { action: "create", body: { entityType: "part", fieldType: "text", label: "Finish" } }],
+    ["reorder custom fields", useCustomFieldMutation, { action: "reorder", entityType: "part", ids: ["f1"] }],
+    ["fill in custom values", () => useSetCustomValues("part", "11111111-1111-1111-1111-111111111111"), { values: { finish: "Ra 0.8" }, current: {} }],
   ];
 
   it.each(cases)("%s", async (_name, useHook, variables) => {

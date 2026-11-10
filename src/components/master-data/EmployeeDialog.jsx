@@ -9,6 +9,8 @@ import Field from "../ui/Field";
 import RHFComboBox from "../ui/RHFComboBox";
 import { FormError } from "./shared";
 import CTAButton from "@/components/CTAButton";
+import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 
 /**
  * The employee's sign-in account: who they are linked to, and (for people with a Controller seat only) link or unlink. The database enforces
@@ -87,6 +89,7 @@ const EmployeeDialog = ({ employee, onClose, readOnly = false }) => {
     departmentId: employee?.department?.id ?? null,
     active: employee?.active ?? true,
   });
+  const [customValues, setCustomValues] = useState({});
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const allDepartments = departments?.data ?? [];
   const departmentOptions = allDepartments
@@ -108,7 +111,7 @@ const EmployeeDialog = ({ employee, onClose, readOnly = false }) => {
       email: form.email.trim() || null,
       siteId: form.siteId,
       departmentId: form.departmentId,
-      ...(creating ? {} : { active: form.active }),
+      ...(creating ? withCustomValues(customValues) : { active: form.active }),
     };
     mutation.mutate(
       { path: creating ? "/employees" : `/employees/${employee.id}`, method: creating ? "POST" : "PATCH", body },
@@ -142,6 +145,7 @@ const EmployeeDialog = ({ employee, onClose, readOnly = false }) => {
           <RHFComboBox label="Department" icon={FactoryIcon} placeholder="No department" options={departmentOptions} value={form.departmentId} onChange={chooseDepartment} />
         </div>
         </fieldset>
+        {creating && <CustomFieldInputs entityType="employee" values={customValues} onChange={setCustomValues} />}
         {!creating && <SignInLink employee={employee} readOnly={readOnly} />}
         {!creating && (
           <Switch className="text-sm text-primary-text" disabled={readOnly} checked={form.active} onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}>
@@ -163,6 +167,7 @@ const EmployeeDialog = ({ employee, onClose, readOnly = false }) => {
           )}
         </div>
       </form>
+      {!creating && <CustomFieldsCard entityType="employee" record={employee} editable={!readOnly} className="mt-4" />}
     </Dialog>
   );
 };

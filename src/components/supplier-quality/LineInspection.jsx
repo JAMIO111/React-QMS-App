@@ -12,6 +12,8 @@ import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import { FormError, TextAreaField } from "../master-data/shared";
+import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 
 export const LineStatusPill = ({ status }) => {
   const s = LINE_STATUS[status] ?? LINE_STATUS.not_required;
@@ -55,10 +57,11 @@ const RaiseNcrDialog = ({ line, onClose }) => {
   const [description, setDescription] = useState("");
   const [severity, setSeverity] = useState("minor");
   const [quantity, setQuantity] = useState(String(line.quantityReceived ?? ""));
+  const [customValues, setCustomValues] = useState({});
   const ok = title.trim() && description.trim();
   return (
     <Dialog title="Raise a non-conformance" onClose={onClose} width="max-w-lg">
-      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (ok && !mutation.isPending) mutation.mutate({ action: "raiseNcr", id: line.id, body: { title: title.trim(), description: description.trim(), severity, quantity: quantity ? Number(quantity) : null } }, { onSuccess: onClose }); }}>
+      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (ok && !mutation.isPending) mutation.mutate({ action: "raiseNcr", id: line.id, body: { title: title.trim(), description: description.trim(), severity, quantity: quantity ? Number(quantity) : null, ...withCustomValues(customValues) } }, { onSuccess: onClose }); }}>
         <p className="text-sm text-secondary-text">A draft non-conformance is made, naming the supplier, the part and the lot, with source goods receiving. Pick its category on the non-conformance before opening it.</p>
         <Field label="Title" required value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
         <TextAreaField label="What is wrong" required value={description} onChange={(e) => setDescription(e.target.value)} maxLength={4000} rows={4} />
@@ -66,6 +69,7 @@ const RaiseNcrDialog = ({ line, onClose }) => {
           <ComboField label="Severity" required value={severity} onChange={setSeverity} options={[{ value: "minor", label: "Minor" }, { value: "major", label: "Major" }, { value: "critical", label: "Critical" }]} />
           <Field label="Quantity affected" type="number" min="0" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
         </div>
+        <CustomFieldInputs entityType="nonconformance" values={customValues} onChange={setCustomValues} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>

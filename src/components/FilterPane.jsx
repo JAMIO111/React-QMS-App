@@ -1,3 +1,4 @@
+import CustomFieldFilters from "./custom-fields/CustomFieldFilters";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { XIcon, TagIcon, TagsIcon, Trash2Icon, QrCodeIcon, UsersIcon } from "@/components/icons";
@@ -235,6 +236,7 @@ const FilterPane = ({ onClose }) => {
         />
         <RHFComboBox label="Sub-failure mode" icon={TagsIcon} placeholder="All sub-failure modes" options={subs} value={subFailureMode} onChange={setSubFailureMode} />
         <RHFComboBox label="Deleted records" icon={Trash2Icon} options={DELETED_OPTIONS} value={deleted} onChange={(v) => setDeleted(v ?? "exclude")} sort={false} clearable={false} />
+        <CustomFieldFilters entityType="nonconformance" />
       </div>
       <div className="flex shrink-0 justify-between gap-2 border-t border-border-color bg-secondary-bg px-4 py-3">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={resetAll}>

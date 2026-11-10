@@ -14,6 +14,8 @@ import {
   TextAreaField,
 } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
+import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 
 const SEVERITIES = [
   { value: "critical", label: "Critical" },
@@ -116,6 +118,7 @@ const NcFields = ({ inspection, draft, measurementIds, onClose }) => {
   const [open, setOpen] = useState(false);
   const { data: lists } = useClassifications();
   const [categoryId, setCategoryId] = useState("");
+  const [customValues, setCustomValues] = useState({});
   const linked = draft.readings.filter((r) => r.alreadyLinked.length > 0);
 
   const submit = (e) => {
@@ -133,6 +136,7 @@ const NcFields = ({ inspection, draft, measurementIds, onClose }) => {
           requirement: draft.requirement || undefined,
           actualResult: draft.actualResult || undefined,
           open,
+          ...withCustomValues(customValues),
         },
       },
       {
@@ -262,6 +266,7 @@ const NcFields = ({ inspection, draft, measurementIds, onClose }) => {
         />
         Open the NC now (otherwise it starts as a draft)
       </label>
+      <CustomFieldInputs entityType="nonconformance" values={customValues} onChange={setCustomValues} />
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>

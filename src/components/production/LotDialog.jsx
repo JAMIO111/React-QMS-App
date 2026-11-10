@@ -2,7 +2,7 @@ import { useState } from "react";
 import { HouseIcon } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
 import { useMasterDataMutation } from "../../hooks/useMasterData";
-import { useSites } from "../../hooks/useQmsApi";
+import { usePermissions, useSites } from "../../hooks/useQmsApi";
 import { LOT_MOVES, LOT_ORIGIN, LOT_STATUS, lotEditable, partLabel } from "../../lib/production";
 import { PartPicker, PartyPicker, TextAreaField } from "../ncr/Pickers";
 import Dialog from "../ui/Dialog";
@@ -13,6 +13,8 @@ import { FormError, SelectField } from "../master-data/shared";
 import { OrderPicker } from "./pickers";
 import { StatusBadge, StatusMoves } from "./shared";
 import CTAButton from "@/components/CTAButton";
+import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 
 /**
  * Add or edit a lot. A lot is *produced* (optionally from a production order) or *received* from a supplier. Its number, part, origin and order are fixed once it exists;
@@ -25,7 +27,9 @@ const LotDialog = ({ lot, onClose, readOnly = false }) => {
   const { showToast } = useToast();
   const { data: sites } = useSites();
   const siteList = sites?.data ?? [];
+  const { can } = usePermissions();
   const [current, setCurrent] = useState(lot);
+  const [customValues, setCustomValues] = useState({});
   const [form, setForm] = useState({
     lotNumber: lot?.lotNumber ?? "",
     partId: lot?.part?.id ?? null,
@@ -57,6 +61,7 @@ const LotDialog = ({ lot, onClose, readOnly = false }) => {
           quantity,
           receivedOn: received ? form.receivedOn || null : null,
           notes: form.notes.trim() || null,
+          ...withCustomValues(customValues),
         }
       : { quantity, notes: form.notes.trim() || null, ...(received ? { supplierId: form.supplierId, receivedOn: form.receivedOn || null } : {}) };
     mutation.mutate(
@@ -105,6 +110,7 @@ const LotDialog = ({ lot, onClose, readOnly = false }) => {
           </div>
           <TextAreaField label="Notes" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} maxLength={2000} />
         </fieldset>
+        {creating && <CustomFieldInputs entityType="lot" values={customValues} onChange={setCustomValues} />}
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
@@ -117,6 +123,11 @@ const LotDialog = ({ lot, onClose, readOnly = false }) => {
           )}
         </div>
       </form>
+      {!creating && (
+        <div className="mt-4">
+          <CustomFieldsCard entityType="lot" record={{ ...current, customValues: lot.customValues ?? current.customValues }} editable={!readOnly && can("production.manage") && current.status !== "closed"} />
+        </div>
+      )}
     </Dialog>
   );
 };

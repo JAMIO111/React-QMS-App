@@ -9,6 +9,7 @@ const SettingsCalibration = lazy(() => import("./SettingsCalibration"));
 const SettingsProcessControl = lazy(() => import("./SettingsProcessControl"));
 const SettingsAudits = lazy(() => import("./SettingsAudits"));
 const SettingsSupplierQuality = lazy(() => import("./SettingsSupplierQuality"));
+const CustomFieldsSettings = lazy(() => import("../custom-fields/CustomFieldsSettings"));
 
 /**
  * The module lists and set-up, one tab per module. A tab shows only to people who may read that module; `manage` decides whether the
@@ -56,6 +57,14 @@ const DATA_TABS = [
     manage: "supplier_quality.configure",
     description: "Supplier classifications, qualification questionnaires, the risk model and the performance scoring model.",
     Component: SettingsSupplierQuality,
+  },
+  {
+    value: "custom-fields",
+    label: "Custom fields",
+    read: "custom_fields.manage",
+    manage: "custom_fields.manage",
+    description: "Your organisation's own fields on parts, machines, gauges, suppliers, non-conformances, 8Ds and other records. Everyone who can see a record sees its fields.",
+    Component: CustomFieldsSettings,
   },
 ];
 

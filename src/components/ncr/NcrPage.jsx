@@ -69,6 +69,8 @@ import NcrDispositions from "./NcrDispositions";
 import { useNcrGates } from "../../hooks/useNcr";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
+import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 
 /** Section title with a rule, as in the original NC entry form. */
 const SectionHeading = ({ id, title, sectionRef }) => (
@@ -111,6 +113,7 @@ const NcrPage = () => {
   const canLinkProduction = can("production.read");
   const { control, reset, watch, setValue } = useForm({ defaultValues: EMPTY });
   const form = watch();
+  const [customValues, setCustomValues] = useState({});
   const [dialog, setDialog] = useState(null); // "cancel" | "reopen" | "delete" | "source"
   const scrollRef = useRef(null);
   const refs = { details: useRef(null), cost: useRef(null), lots: useRef(null), containment: useRef(null), investigation: useRef(null), disposition: useRef(null), info: useRef(null), history: useRef(null) };
@@ -141,7 +144,7 @@ const NcrPage = () => {
   const save = (open) => {
     if (isNew) {
       mutation.mutate(
-        { path: "/ncrs", body: { source, ...body, ...(open ? { open: true } : {}) } },
+        { path: "/ncrs", body: { source, ...body, ...withCustomValues(customValues), ...(open ? { open: true } : {}) } },
         {
           onSuccess: (created) => {
             showToast({ type: "success", title: "Saved", message: `${created.reference} was ${open ? "raised" : "saved as a draft"}.` });
@@ -407,7 +410,9 @@ const NcrPage = () => {
                 <RHFTextArea label="Requirement / specification" icon={ClipboardListIcon} value={form.requirement} onChange={set("requirement")} disabled={!canEdit} max={2000} rows={3} placeholder="What it should have been" />
                 <RHFTextArea label="Actual result" icon={AlignCenterIcon} value={form.actualResult} onChange={set("actualResult")} disabled={!canEdit} max={2000} rows={3} placeholder="What was found" />
               </div>
+              {isNew && <CustomFieldInputs entityType="nonconformance" values={customValues} onChange={setCustomValues} />}
             </Card>
+            {!isNew && <CustomFieldsCard entityType="nonconformance" record={ncr} editable={can("ncr.update") && !locked} />}
 
             {!isNew && inspectionSource?.inspections?.length > 0 && (
               <>

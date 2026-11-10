@@ -10,6 +10,7 @@ vi.mock("../../lib/api-client", async (importOriginal) => ({ ...(await importOri
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "org-1" }) }));
 vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }) }));
 vi.mock("../../contexts/SearchProvider", () => ({ useGlobalSearch: () => ({ debouncedSearchTerm: "" }) }));
+vi.mock("../../contexts/ToastProvider", async (importOriginal) => ({ ...(await importOriginal()), useToast: () => ({ showToast: () => {} }) }));
 vi.mock("../ncr/Pickers", () => ({
   TextAreaField: ({ label, value, onChange }) => <textarea aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />,
   NcrPicker: ({ label, onChange }) => <button type="button" onClick={() => onChange("n9", { id: "n9", name: "NC-26-009 · Burrs" })}>{label}: pick NC-26-009</button>,

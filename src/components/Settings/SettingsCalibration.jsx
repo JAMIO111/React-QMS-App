@@ -15,6 +15,8 @@ import StatTile from "../ui/StatTile";
 import CharacteristicsEditor from "../calibration/CharacteristicsEditor";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
+import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 
 const input =
   "rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary";
@@ -32,6 +34,7 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
   const [intervalUnit, setIntervalUnit] = useState(
     initial?.intervalUnit ?? "months",
   );
+  const [customValues, setCustomValues] = useState({});
   const ok =
     name.trim() &&
     shownCode.trim() &&
@@ -49,6 +52,7 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
             description: description.trim() || null,
             intervalValue: Number(intervalValue),
             intervalUnit,
+            ...(initial ? {} : withCustomValues(customValues)),
           });
       }}>
       <label className="flex flex-col gap-1 text-xs text-secondary-text">
@@ -108,6 +112,11 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
           placeholder="Optional"
         />
       </label>
+      {!initial && (
+        <div className="basis-full">
+          <CustomFieldInputs entityType="gauge_type" values={customValues} onChange={setCustomValues} />
+        </div>
+      )}
       <CTAButton type="main" size="md" buttonType="submit" disabled={!ok || pending} loading={pending}>
         {submitText}
       </CTAButton>
@@ -154,13 +163,16 @@ const TypeCard = ({ type, canManage }) => {
     <li
       className={`flex flex-col gap-3 rounded-xl border border-border-color bg-primary-bg p-4 ${type.active ? "" : "opacity-70"}`}>
       {editing ? (
-        <TypeForm
-          initial={type}
-          pending={mutation.isPending}
-          submitText="Save"
-          onCancel={() => setEditing(false)}
-          onSubmit={(body) => patch(body, `${body.name} saved.`)}
-        />
+        <>
+          <TypeForm
+            initial={type}
+            pending={mutation.isPending}
+            submitText="Save"
+            onCancel={() => setEditing(false)}
+            onSubmit={(body) => patch(body, `${body.name} saved.`)}
+          />
+          <CustomFieldsCard entityType="gauge_type" record={type} editable={canManage} />
+        </>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-5">
           <div className="min-w-0 flex-1">

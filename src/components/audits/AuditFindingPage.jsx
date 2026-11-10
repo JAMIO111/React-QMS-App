@@ -16,6 +16,8 @@ import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import FindingDialog from "./FindingDialog";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
+import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { withCustomValues } from "../../lib/customFields";
 
 const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm font-normal text-primary-text focus:outline-none focus:border-brand-primary";
 
@@ -34,6 +36,7 @@ const CreateNcrDialog = ({ finding, onClose }) => {
   const [title, setTitle] = useState(finding.title);
   const [description, setDescription] = useState(`Raised from audit ${finding.record.reference}, finding ${finding.reference}.`);
   const [severity, setSeverity] = useState(null);
+  const [customValues, setCustomValues] = useState({});
   return (
     <Dialog title="Raise a non-conformance" onClose={onClose} width="max-w-2xl">
       <form
@@ -42,7 +45,7 @@ const CreateNcrDialog = ({ finding, onClose }) => {
         onSubmit={(e) => {
           e.preventDefault();
           mutation.mutate(
-            { path: `/audit-findings/${finding.id}/create-ncr`, body: { title: title.trim() || undefined, description: description.trim() || undefined, severity: severity ?? undefined } },
+            { path: `/audit-findings/${finding.id}/create-ncr`, body: { title: title.trim() || undefined, description: description.trim() || undefined, severity: severity ?? undefined, ...withCustomValues(customValues) } },
             {
               onSuccess: (res) => {
                 showToast(res.created ? { type: "success", title: "Draft non-conformance raised", message: "Review it and open it when it is ready." } : { type: "info", title: "Already raised", message: "This finding already has a non-conformance; here it is." });
@@ -59,6 +62,7 @@ const CreateNcrDialog = ({ finding, onClose }) => {
         </label>
         <ComboField label="Severity" value={severity} onChange={setSeverity} options={SEVERITIES} placeholder="Use the classification's" />
         <TextAreaField label="Description" rows={4} value={description} maxLength={5000} onChange={(e) => setDescription(e.target.value)} />
+        <CustomFieldInputs entityType="nonconformance" values={customValues} onChange={setCustomValues} />
         <p className="text-sm text-secondary-text">It is created as a draft internal non-conformance. Nothing else happens until someone opens it.</p>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">

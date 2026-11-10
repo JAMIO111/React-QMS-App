@@ -32,6 +32,7 @@ const OrdersPage = () => {
       noun="order"
       nounPlural="orders"
       columns={orderColumns}
+      entityType="production_order"
       defaultHidden={ORDER_HIDDEN}
       prefsKey="production-order-register"
       defaultSort={{ id: "createdAt", desc: true }}

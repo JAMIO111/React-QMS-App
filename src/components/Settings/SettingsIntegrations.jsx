@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRightIcon } from "@/components/icons";
-import { useIntegrationConnections, useRecentIntegrationRuns } from "../../hooks/useIntegrations";
+import { useIntegrationConflicts, useIntegrationConnections, useRecentIntegrationRuns } from "../../hooks/useIntegrations";
 import { useOrganisationDetails, usePermissions, useUpdateOrganisation } from "../../hooks/useQmsApi";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
@@ -85,6 +85,8 @@ const IntegrationsHome = () => {
   const { can } = usePermissions();
   const connections = useIntegrationConnections();
   const runs = useRecentIntegrationRuns();
+  const waiting = useIntegrationConflicts({ pageSize: 1 });
+  const toReview = waiting.data?.openCount ?? 0;
   const canImport = can("integrations.run");
   // Every connection (the one file imports use, a REST API set up for later), reachable for its files and history.
   const others = connections.data ?? [];
@@ -102,6 +104,15 @@ const IntegrationsHome = () => {
           {INTEGRATION_CATALOGUE.map((item) => <ProviderCard key={item.key} item={item} action={actionFor(item)} />)}
         </ul>
       </MenuCard>
+
+      {toReview > 0 && (
+        <Callout
+          tone="warning"
+          title={toReview === 1 ? "1 imported value is waiting for review" : `${toReview} imported values are waiting for review`}
+          action={<CTAButton to="/Settings/Integrations/Review" type="secondary" size="md">Review values</CTAButton>}>
+          Fields set to Review were not changed where a source sent a different value.
+        </Callout>
+      )}
 
       <AdvancedImports />
 

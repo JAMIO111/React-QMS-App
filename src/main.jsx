@@ -63,6 +63,7 @@ const ScarPage = lazy(() => import("./components/supplier-quality/ScarPage.jsx")
 const SettingsIntegrations = lazy(() => import("./components/Settings/SettingsIntegrations.jsx"));
 const CsvImportWizard = lazy(() => import("./components/integrations/CsvImportWizard.jsx"));
 const ImportTemplatesPage = lazy(() => import("./components/integrations/TemplatesPage.jsx"));
+const IntegrationReviewPage = lazy(() => import("./components/integrations/ReviewPage.jsx"));
 const ImportTemplatePage = lazy(() => import("./components/integrations/TemplatesPage.jsx").then((m) => ({ default: m.TemplatePage })));
 const ConnectionPage = lazy(() => import("./components/integrations/ConnectionPage.jsx"));
 const IntegrationRunPage = lazy(() => import("./components/integrations/RunPage.jsx"));
@@ -212,6 +213,7 @@ const router = createBrowserRouter([
               { path: "Integrations", element: <SettingsIntegrations /> },
               { path: "Integrations/csv", element: <CsvImportWizard /> },
               { path: "Integrations/Templates", element: <ImportTemplatesPage /> },
+              { path: "Integrations/Review", element: <IntegrationReviewPage /> },
               { path: "Integrations/Templates/:templateId", element: <ImportTemplatePage /> },
               { path: "Integrations/:id", element: <ConnectionPage /> },
               { path: "Integrations/:id/runs/:runId", element: <IntegrationRunPage /> },

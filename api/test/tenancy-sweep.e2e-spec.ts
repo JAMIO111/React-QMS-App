@@ -124,6 +124,8 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/integrations/templates/{id}/archive': { reason: 'Hijacked' },
     'POST /api/v1/integrations/templates/{id}/restore': {},
     'POST /api/v1/integrations/templates/{id}/restore-version': { version: 1, reason: 'Hijacked' },
+    'POST /api/v1/integrations/conflicts/{id}/accept': {},
+    'POST /api/v1/integrations/conflicts/{id}/reject': { reason: 'Hijacked' },
     'GET /api/v1/integrations/connections/{id}/settings': undefined,
     'PUT /api/v1/integrations/connections/{id}/settings': { entityType: 'supplier', writeMode: 'add_update' },
     'POST /api/v1/ncrs/{id}/receipt-link': { receiptLineId: '11111111-1111-4111-8111-111111111111' },
@@ -458,6 +460,8 @@ const hasSample = (op: Op) =>
     'POST /api/v1/integrations/templates/{id}/archive',
     'POST /api/v1/integrations/templates/{id}/restore',
     'POST /api/v1/integrations/templates/{id}/restore-version',
+    'POST /api/v1/integrations/conflicts/{id}/accept',
+    'POST /api/v1/integrations/conflicts/{id}/reject',
     'GET /api/v1/integrations/connections/{id}/settings',
     'PUT /api/v1/integrations/connections/{id}/settings',
     'POST /api/v1/ncrs/{id}/receipt-link',
@@ -745,6 +749,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/integrations/runs/')) return a.integrationRun;
   if (path.startsWith('/api/v1/integrations/files/')) return a.integrationFile;
   if (path.startsWith('/api/v1/integrations/templates/')) return a.integrationTemplate;
+  if (path.startsWith('/api/v1/integrations/conflicts/')) return a.integrationConflict;
   if (path.startsWith('/api/v1/material-certificates/')) return a.materialCertificate;
   if (path.startsWith('/api/v1/supplier-quality/scorecards/')) return a.scorecard;
   if (path.startsWith('/api/v1/supplier-quality/scar-items/')) return a.supplierScarItem;
@@ -946,6 +951,14 @@ beforeAll(async () => {
     a.supplierProduct = (await q1(`insert into public.supplier_product_links (organisation_id, supplier_id, kind, description) values ($1, $2, 'service', 'Alpha service') returning id`, [ids.orgA, a.supplier])).id;
     await client.query('commit');
     a.customField = (await admin.query(`insert into public.custom_field_definitions (organisation_id, entity_type, key, label, field_type) values ($1, 'part', 'alpha_note', 'Alpha note', 'text') returning id`, [ids.orgA])).rows[0].id;
+    // IN5: a value parked for review (written only by the import runner, so seeded directly).
+    a.integrationConflict = (
+      await admin.query(
+        `insert into public.integration_conflicts (organisation_id, connection_id, run_id, entity_type, internal_id, external_id, field, source_data, fortress_change)
+         values ($1, $2, $3, 'supplier', $4, 'A-1', 'name', '{"name": "Hijacked"}', '{"name": {"from": "Alpha", "to": "Hijacked"}}') returning id`,
+        [ids.orgA, a.integrationConnection, a.integrationRun, a.supplier],
+      )
+    ).rows[0].id;
   } finally {
     client.release();
   }

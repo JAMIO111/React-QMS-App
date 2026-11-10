@@ -38,7 +38,7 @@ const toRun = (r: Row): z.infer<typeof Run> => ({
   finishedAt: iso(r.finished_at),
   counts: {
     total: Number(r.records_total), rejected: Number(r.rejected), unchanged: Number(r.unchanged), created: Number(r.created), updated: Number(r.updated),
-    failed: Number(r.failed), superseded: Number(r.superseded), skipped: Number(r.skipped ?? 0),
+    failed: Number(r.failed), superseded: Number(r.superseded), skipped: Number(r.skipped ?? 0), parked: Number(r.parked ?? 0),
   },
   attempts: Number(r.attempts),
   nextAttemptAt: ['queued', 'running'].includes(r.status as string) && r.next_attempt_at && new Date(r.next_attempt_at as string) > new Date() ? iso(r.next_attempt_at) : null,

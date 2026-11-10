@@ -298,3 +298,55 @@ export const useFormulaCheck = (formula, columns, sample, { delay = 300 } = {}) 
     staleTime: 60_000,
   });
 };
+
+/**
+ * The review queue (IN5): values an import held back because their field is set to "Review". `status` open (default) | decided | all;
+ * filters `entityType`, `connectionId`, `runId`, `recordId`; `openCount` is the organisation's waiting total (for badges).
+ */
+export const useIntegrationConflicts = ({ status = "open", entityType, connectionId, runId, recordId, page = 1, pageSize = 50, enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  const params = new URLSearchParams({ status, page: String(page), pageSize: String(pageSize) });
+  if (entityType) params.set("entityType", entityType);
+  if (connectionId) params.set("connectionId", connectionId);
+  if (runId) params.set("runId", runId);
+  if (recordId) params.set("recordId", recordId);
+  return useQuery({
+    queryKey: key(organisationId, "conflicts", params.toString()),
+    queryFn: () => apiFetch(`${BASE}/conflicts?${params}`, { organisationId }),
+    enabled: !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+/**
+ * Accept (the value is written, as the person) or reject (Fortress keeps its own; a reason is needed) a value waiting for review. Optimistic: the value
+ * leaves every open list and the counts drop at once; on an error the lists are put back.
+ */
+export const useDecideConflict = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  const lists = key(organisationId, "conflicts");
+  return useMutation({
+    mutationFn: ({ id, accept, note }) =>
+      apiFetch(`${BASE}/conflicts/${id}/${accept ? "accept" : "reject"}`, { method: "POST", body: accept ? (note ? { note } : {}) : { reason: note }, organisationId }),
+    onMutate: async ({ id }) => {
+      await queryClient.cancelQueries({ queryKey: lists });
+      const previous = queryClient.getQueriesData({ queryKey: lists });
+      for (const [k, data] of previous) {
+        if (!data?.data || !String(k.at(-1)).includes("status=open")) continue;
+        const had = data.data.some((c) => c.id === id);
+        queryClient.setQueryData(k, {
+          ...data,
+          data: data.data.filter((c) => c.id !== id),
+          total: had ? Math.max(0, data.total - 1) : data.total,
+          openCount: Math.max(0, data.openCount - 1),
+        });
+      }
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      for (const [k, data] of ctx?.previous ?? []) queryClient.setQueryData(k, data);
+    },
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};

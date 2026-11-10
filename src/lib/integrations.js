@@ -135,6 +135,7 @@ export const runSummary = (run) => {
     c.rejected && `${c.rejected} rejected`,
     c.failed && `${c.failed} failed`,
     c.superseded && `${c.superseded} superseded`,
+    c.parked && `${c.parked} to review`,
   ].filter(Boolean);
   return parts.length ? parts.join(" · ") : c.total ? `${c.total} rows` : "No rows";
 };
@@ -225,6 +226,7 @@ export const mappingToRows = (fields, saved, headers = []) => {
       steps: m?.steps ?? [],
       formula: m?.formula ?? "",
       useFormula: !!m?.formula,
+      ownership: m?.ownership ?? "source_wins",
     };
   });
 };
@@ -236,6 +238,7 @@ export const rowsToFields = (rows, catalogueFields) =>
     .map((r) => {
       const field = catalogueFields.find((f) => f.key === r.target);
       const out = { target: r.target };
+      if (r.ownership && r.ownership !== "source_wins") out.ownership = r.ownership;
       if (r.useFormula) {
         out.formula = r.formula;
         if (r.steps?.length) out.steps = cleanSteps(r.steps);
@@ -282,6 +285,34 @@ export const SCHEDULES = [
   { value: "manual", label: "By hand" },
   { value: "daily", label: "Daily" },
 ];
+/** Where a record an import wrote is shown (a page of its own where there is one, else its register). */
+export const recordPath = (entityType, id) =>
+  ({
+    supplier: `/Suppliers/${id}`,
+    part: `/Parts/${id}`,
+    gauge: `/Calibration/Gauges/${id}`,
+    nonconformance: `/Non-Conformance/Register/${id}`,
+    production_order: `/Production/Orders/${id}`,
+    customer: "/Customers",
+    machine: "/Machines",
+    employee: "/Employees",
+    gauge_type: "/Settings/Data-Management?tab=calibration",
+  })[entityType] ?? null;
+
+/** Who owns a field once the record exists (IN5): what a later import may do to it. "Review" is not offered for fields that only ever add or custom fields. */
+export const OWNERSHIP_OPTIONS = [
+  { value: "source_wins", label: "Source wins", title: "A later import overwrites it" },
+  { value: "qms_wins", label: "Fortress wins", title: "Set when the record is created; after that only people change it" },
+  { value: "manual_review", label: "Review", title: "A different value waits for someone to accept or reject it" },
+];
+export const OWNERSHIP_HINTS = {
+  source_wins: "A later import overwrites this field with the source's value.",
+  qms_wins: "Set when the record is created. After that only people change it in Fortress; imports leave it alone.",
+  manual_review: "When a later import brings a different value it is not written: it waits under Values to review for someone to accept or reject it.",
+};
+/** The ownership choices for a field (`reviewable` false removes Review). */
+export const ownershipOptions = (field) => OWNERSHIP_OPTIONS.filter((o) => o.value !== "manual_review" || field?.reviewable !== false);
+
 export const MATCH_OPTIONS = [
   { value: "code", label: "Fortress code" },
   { value: "source", label: "Id from an earlier import" },

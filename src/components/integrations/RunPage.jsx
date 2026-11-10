@@ -143,7 +143,17 @@ const RunPage = () => {
           {run.counts.skipped > 0 && <StatTile label="Skipped" value={run.counts.skipped} note="Left alone by the settings" />}
           <StatTile label="Rejected" value={run.counts.rejected} note="Problems in the source" />
           {!preview && <StatTile label="Failed" value={run.counts.failed} note="Can be retried" />}
+          {run.counts.parked > 0 && <StatTile label="To review" value={run.counts.parked} note="Values held back" />}
         </div>
+        {run.counts.parked > 0 && (
+          <Callout
+            tone="warning"
+            className="mt-3"
+            title={run.counts.parked === 1 ? "1 value is waiting for review" : `${run.counts.parked} values are waiting for review`}
+            action={<CTAButton to={`/Settings/Integrations/Review?run=${run.id}`} type="secondary" size="md">Review values</CTAButton>}>
+            Fields set to Review were not changed where the source sent a different value. Accept a value to write it, or keep Fortress's.
+          </Callout>
+        )}
         {preview && <Callout tone="info" className="mt-3">A preview writes nothing. It shows what a real import would do now.</Callout>}
         {run.nextAttemptAt && <Callout tone="warning" className="mt-3" title="Waiting to try again">{run.errorSummary} It will be tried again from {formatDateTime(run.nextAttemptAt)}.</Callout>}
         {run.status === "failed" && run.errorSummary && <Callout tone="error" className="mt-3" title="The import failed">{run.errorSummary}</Callout>}

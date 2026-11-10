@@ -64,7 +64,13 @@ describe.each(CATALOGUE.map((c) => [c.entityType, c] as const))('the %s import',
   it('maps every catalogue field to a column, and its import function writes each one', async () => {
     const unmapped = catalogue.fields.map((f) => f.key).filter((k) => !map.fields[k]);
     expect(unmapped).toEqual([]);
-    const fn = (await admin.query<{ def: string }>(`select pg_get_functiondef(('app.import_' || $1 || '(uuid, uuid, jsonb)')::regprocedure) as def`, [entity])).rows[0].def;
+    // By name: a production order's import also takes the connection's system code and the source id.
+    const fn = (
+      await admin.query<{ def: string }>(
+        `select pg_get_functiondef(p.oid) as def from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'app' and p.proname = 'import_' || $1`,
+        [entity],
+      )
+    ).rows[0].def;
     const notWritten = Object.entries(map.fields)
       .filter(([, f]) => !new RegExp(`\\b${f.column}\\b`).test(fn))
       .map(([k, f]) => `${k} → ${f.table ?? map.table}.${f.column}`);

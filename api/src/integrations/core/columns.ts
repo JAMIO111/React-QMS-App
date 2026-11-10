@@ -142,4 +142,17 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
       source_change_reason: 'Changing the source is a person\'s step with a reason',
     },
   },
+  production_order: {
+    table: 'production_orders',
+    fields: {
+      orderNumber: { column: 'order_number' }, part: { column: 'part_id' }, partRevision: { column: 'part_revision_id' }, customer: { column: 'customer_id' },
+      site: { column: 'site_id' }, quantityPlanned: { column: 'quantity_planned' }, dueDate: { column: 'due_date' }, status: { column: 'status' },
+      statusReason: { column: 'status_reason' }, notes: { column: 'notes' },
+    },
+    excluded: {
+      ...SYSTEM,
+      external_system: 'Filled by the import from the connection\'s system code',
+      external_id: 'Filled by the import from the key column',
+    },
+  },
 };

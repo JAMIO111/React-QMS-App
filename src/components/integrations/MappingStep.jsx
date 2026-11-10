@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowRightIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, CircleAlertIcon, CircleCheckIcon, MinusIcon } from "@/components/icons";
-import { DATE_FORMAT_OPTIONS, MATCH_OPTIONS, TRANSFORM_OPTIONS, rowHasSource } from "../../lib/integrations";
+import { DATE_FORMAT_OPTIONS, MATCH_OPTIONS, OWNERSHIP_HINTS, TRANSFORM_OPTIONS, ownershipOptions, rowHasSource } from "../../lib/integrations";
+import SlidingToggle from "../ui/SlidingToggle";
 import FormulaEditor from "./FormulaEditor";
 import StepEditor from "./StepEditor";
 import Switch from "../ui/Switch";
@@ -30,7 +31,7 @@ const SourceSummary = ({ row }) => (
 );
 
 /** The settings under a row: how the value is cleaned, what to use when the cell is empty, dates, decimals and how a link is matched. */
-const RowSettings = ({ field, row, set, colOptions, readOnly, advanced, example, sample }) => (
+const RowSettings = ({ field, row, set, colOptions, readOnly, advanced, example, sample, updates }) => (
   <div className="flex flex-col gap-3 border-t border-border-color px-3 pb-3 pt-3 sm:pl-11">
     {(advanced || row.useFormula) && (
       <Switch checked={!!row.useFormula} onChange={(e) => set({ useFormula: e.target.checked })} disabled={readOnly || (!advanced && row.useFormula)}>Use a formula instead of a column</Switch>
@@ -44,8 +45,26 @@ const RowSettings = ({ field, row, set, colOptions, readOnly, advanced, example,
       <ComboField label="Match by" value={row.match} onChange={(v) => set({ match: v ?? "code" })} options={MATCH_OPTIONS} required disabled={readOnly} />
     )}
     <StepEditor steps={row.steps ?? []} onChange={(steps) => set({ steps })} columns={colOptions.map((o) => o.value)} after={example?.steps ?? []} error={example?.stepError ?? null} readOnly={readOnly} label={`Steps for ${field.label}`} />
+    {updates && <OwnershipChoice field={field} row={row} set={set} readOnly={readOnly} />}
   </div>
 );
+
+/** What a later import may do to this field once the record exists (only when the import updates records). */
+const OwnershipChoice = ({ field, row, set, readOnly }) => {
+  const value = row.ownership ?? "source_wins";
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-sm font-medium text-secondary-text">When the record is already in Fortress</span>
+      <SlidingToggle
+        ariaLabel={`Who owns ${field.label}`}
+        options={ownershipOptions(field).map((o) => ({ ...o, disabled: readOnly }))}
+        value={value}
+        onChange={(v) => set({ ownership: v })}
+      />
+      <span className="text-xs text-secondary-text">{OWNERSHIP_HINTS[value]}</span>
+    </div>
+  );
+};
 
 /** How the original transforms read a column (kept for mappings made before steps and formulas). */
 const LegacySettings = ({ field, row, set, colOptions, readOnly }) => (
@@ -117,7 +136,7 @@ const LegacySettings = ({ field, row, set, colOptions, readOnly }) => (
 );
 
 /** One Fortress field: where its value comes from, what the chosen record makes of it, and (opened) how it is cleaned. */
-const MappingRow = ({ field, row, onChange, colOptions, preview, sample, readOnly, advanced }) => {
+const MappingRow = ({ field, row, onChange, colOptions, preview, sample, readOnly, advanced, updates }) => {
   const [open, setOpen] = useState(false);
   const set = (patch) => onChange({ ...row, ...patch });
   const matched = rowHasSource(row);
@@ -154,7 +173,7 @@ const MappingRow = ({ field, row, onChange, colOptions, preview, sample, readOnl
           <div className="flex min-w-0 flex-col">
             <span className="truncate text-sm font-medium text-primary-text" data-required={field.required || undefined}>{field.label}</span>
             <span className="truncate text-xs text-secondary-text">
-              {[field.custom ? "custom field" : null, TYPE_HINTS[field.type], field.ref ? "link to another record" : null, row.useFormula ? "formula" : row.transform !== "none" ? TRANSFORM_OPTIONS.find((t) => t.value === row.transform)?.label.toLowerCase() : null, row.steps?.length ? `${row.steps.length} step${row.steps.length === 1 ? "" : "s"}` : null].filter(Boolean).join(" · ") || "text"}
+              {[field.custom ? "custom field" : null, TYPE_HINTS[field.type], field.ref ? "link to another record" : null, row.useFormula ? "formula" : row.transform !== "none" ? TRANSFORM_OPTIONS.find((t) => t.value === row.transform)?.label.toLowerCase() : null, row.steps?.length ? `${row.steps.length} step${row.steps.length === 1 ? "" : "s"}` : null, updates && row.ownership === "qms_wins" ? "Fortress wins" : null, updates && row.ownership === "manual_review" ? "changes reviewed" : null].filter(Boolean).join(" · ") || "text"}
             </span>
           </div>
         </div>
@@ -186,7 +205,7 @@ const MappingRow = ({ field, row, onChange, colOptions, preview, sample, readOnl
       </div>
       {open && (
         <div id={settingsId}>
-          <RowSettings field={field} row={row} set={set} colOptions={colOptions} readOnly={readOnly} advanced={advanced} example={example} sample={sample} />
+          <RowSettings field={field} row={row} set={set} colOptions={colOptions} readOnly={readOnly} advanced={advanced} example={example} sample={sample} updates={updates} />
         </div>
       )}
     </li>
@@ -197,7 +216,7 @@ const MappingRow = ({ field, row, onChange, colOptions, preview, sample, readOnl
  * Reusable mapping editor: one row per Fortress field — field → column of the source = what the chosen record becomes. A row opens to show how the
  * value is cleaned. Required fields with no source are shown in red and counted in the banner. The caller keeps `rows` and `keyField`.
  */
-const MappingStep = ({ fields, columns, sample = [], preview = null, previewing = false, keyField, onKeyField, rows, onRows, readOnly = false, advanced = false, problems = [] }) => {
+const MappingStep = ({ fields, columns, sample = [], preview = null, previewing = false, keyField, onKeyField, rows, onRows, readOnly = false, advanced = false, problems = [], updates = false }) => {
   const [at, setAt] = useState(0);
   const colOptions = columns.map((c) => ({ value: c, label: c }));
   const previewRows = preview?.rows ?? [];
@@ -266,6 +285,7 @@ const MappingStep = ({ fields, columns, sample = [], preview = null, previewing 
             sample={values}
             readOnly={readOnly}
             advanced={advanced}
+            updates={updates}
             onChange={(row) => onRows(rows.map((r, j) => (j === i ? row : r)))}
           />
         ))}

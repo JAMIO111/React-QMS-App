@@ -108,6 +108,8 @@ export const CatalogueResponse = z.object({
           minExclusive: z.boolean(),
           /** One of the organisation's custom fields (key `cf_<field key>`). */
           custom: z.boolean(),
+          /** Its new values cannot be held for review (IN5): "Source wins" or "Fortress wins" only. */
+          reviewable: z.boolean(),
         }),
       ),
     }),

@@ -505,6 +505,7 @@ const CsvImportWizard = () => {
                 readOnly={!canRun}
                 advanced={advanced}
                 problems={problems}
+                updates={entityType !== "nonconformance" && (form.settings?.writeMode ?? "add_only") !== "add_only"}
               />
             </MenuCard>
           </>

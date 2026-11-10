@@ -17,6 +17,19 @@ describe('mapping problems', () => {
     expect(mappingProblems(suppliers, { keyField: '', fields: [] })).toContain('Choose the column that identifies each record');
   });
 
+  it('refuses "Review" on a field that only ever adds, and accepts the other ownerships', () => {
+    const parts = catalogueFor('part')!;
+    const spec = (ownership: 'source_wins' | 'qms_wins' | 'manual_review') => ({
+      keyField: 'No',
+      fields: [{ target: 'partNumber', source: 'No' }, { target: 'name', source: 'Name', ownership }, { target: 'revision', source: 'Rev', ownership }],
+    });
+    expect(mappingProblems(parts, spec('manual_review'))).toEqual(['Revision: its new values cannot be held for review; choose "Source wins" or "Fortress wins"']);
+    expect(mappingProblems(parts, spec('qms_wins'))).toEqual([]);
+    expect(mappingProblems(parts, spec('source_wins'))).toEqual([]);
+    const orders = catalogueFor('production_order')!;
+    expect(mappingProblems(orders, { keyField: 'Id', fields: [{ target: 'orderNumber', source: 'No' }, { target: 'part', source: 'P' }, { target: 'quantityPlanned', source: 'Q', ownership: 'manual_review' }] })).toEqual([]);
+  });
+
   it('checks each transform has what it needs', () => {
     const p = mappingProblems(suppliers, {
       keyField: 'A',

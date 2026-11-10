@@ -28,6 +28,8 @@ export interface CatalogueField {
   ref?: { kind: RefKind; source: boolean };
   /** One of the organisation's custom fields (key `cf_<field key>`), written to its custom values, not a column. */
   custom?: boolean;
+  /** A field whose new value cannot be held for review (IN5): it only ever adds (a part's revision). Custom fields cannot be reviewed either. */
+  noReview?: boolean;
 }
 
 /** What a reference can point at. The importable kinds can also be matched by the source's own id (the map of an earlier import). */
@@ -58,6 +60,7 @@ const SUPPLIER_TYPES = ['manufacturer', 'distributor', 'subcontractor', 'service
 const words = (v: string) => v.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 const options = (values: readonly string[], label: (v: string) => string = words) => values.map((v) => ({ value: v, label: label(v) }));
 const INTERVAL_UNITS = ['days', 'weeks', 'months', 'years'];
+const PRODUCTION_STATUSES = ['planned', 'released', 'in_progress', 'completed', 'closed', 'cancelled'];
 
 /** A link to another Fortress record, given in the file by its code (matched ignoring case when the record is imported). */
 const ref = (key: string, label: string, kind: RefKind, what: string, extra: Partial<CatalogueField> = {}): CatalogueField => ({
@@ -116,7 +119,7 @@ export const CATALOGUE: EntityCatalogue[] = [
       { key: 'partNumber', label: 'Part number', type: 'text', required: true, maxLength: 60 },
       { key: 'name', label: 'Name', type: 'text', required: true, maxLength: 200 },
       { key: 'description', label: 'Description', type: 'text', maxLength: 2000 },
-      { key: 'revision', label: 'Revision', type: 'text', maxLength: 20, description: 'Arrives as a draft revision; releasing it stays a person\'s decision' },
+      { key: 'revision', label: 'Revision', type: 'text', maxLength: 20, noReview: true, description: 'Arrives as a draft revision; releasing it stays a person\'s decision' },
       { key: 'active', label: 'Active', type: 'boolean', description: 'Yes / no; empty keeps it active' },
     ],
   },
@@ -214,6 +217,29 @@ export const CATALOGUE: EntityCatalogue[] = [
       { key: 'customerReference', label: 'Customer reference', type: 'text', maxLength: 60 },
       { key: 'lotNumber', label: 'Lot number', type: 'text', maxLength: 60 },
       { key: 'serialNumber', label: 'Serial number', type: 'text', maxLength: 60, description: 'Imported non-conformances arrive as drafts with a Fortress reference; opening, moving and closing them stay a person\'s steps' },
+    ],
+  },
+  {
+    entityType: 'production_order',
+    label: 'Production orders',
+    keyHint: 'The order number in your ERP',
+    fields: [
+      { key: 'orderNumber', label: 'Order number', type: 'text', required: true, maxLength: 60, description: 'Unique in Fortress' },
+      ref('part', 'Part number', 'part', 'part number', { required: true }),
+      { key: 'partRevision', label: 'Part revision', type: 'text', maxLength: 20, description: 'The revision letter of the part as it is in Fortress (the released version is used)' },
+      ref('customer', 'Customer', 'customer', 'customer code'),
+      ref('site', 'Site', 'site', 'site code'),
+      { key: 'quantityPlanned', label: 'Quantity planned', type: 'number', required: true, description: 'Greater than 0' },
+      { key: 'dueDate', label: 'Due date', type: 'date' },
+      {
+        key: 'status',
+        label: 'Status',
+        type: 'enum',
+        options: options(PRODUCTION_STATUSES),
+        description: 'Translate your system\'s statuses to these. A new order keeps it; a later import moves the order one allowed step at a time, so an order with open operations cannot complete and a closed or cancelled one never changes',
+      },
+      { key: 'statusReason', label: 'Reason cancelled', type: 'text', maxLength: 1000, description: 'Kept when the order is cancelled; "Cancelled in the source system" when empty' },
+      { key: 'notes', label: 'Notes', type: 'text', maxLength: 2000 },
     ],
   },
 ];

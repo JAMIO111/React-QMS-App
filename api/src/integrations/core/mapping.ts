@@ -34,7 +34,10 @@ export interface FieldMapping {
   decimal?: '.' | ',';
   /** Used when the source value is empty. */
   default?: string | null;
-  /** Who owns the field once the record exists (IN5); stored now, source_wins by default. */
+  /**
+   * Who owns the field once the record exists (IN5, plan §6.5): `source_wins` (default) an update writes it; `qms_wins` it is set when the record is created
+   * and never again by an import; `manual_review` a value that would change the record is parked for a person to accept or reject. The database enforces it.
+   */
   ownership?: (typeof OWNERSHIP)[number];
   /** A reference field (D10): matched by the Fortress code (default) or by the id the source gave the record in an earlier import. */
   match?: (typeof REF_MATCH)[number];
@@ -91,6 +94,7 @@ export function mappingProblems(catalogue: EntityCatalogue, spec: MappingSpec, h
     if (columns) for (const c of cols) if (!columns.has(c)) problems.push(`${f.label}: the column "${c}" is not in the file`);
     if (m.dateFormat && !DATE_FORMATS.includes(m.dateFormat)) problems.push(`${f.label}: unknown date format`);
     if (m.ownership && !OWNERSHIP.includes(m.ownership)) problems.push(`${f.label}: unknown ownership`);
+    else if (m.ownership === 'manual_review' && (f.custom || f.noReview)) problems.push(`${f.label}: its new values cannot be held for review; choose "Source wins" or "Fortress wins"`);
     if (m.match && !REF_MATCH.includes(m.match)) problems.push(`${f.label}: unknown way of matching`);
     else if (m.match && !f.ref) problems.push(`${f.label} is not a link to another record`);
     else if (m.match === 'source' && !f.ref?.source) problems.push(`${f.label} can only be matched by its Fortress code`);

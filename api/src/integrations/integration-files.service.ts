@@ -51,7 +51,7 @@ export class IntegrationFilesService {
         entityType: c.entityType,
         label: c.label,
         keyHint: c.keyHint,
-        fields: c.fields.map((f) => ({ key: f.key, label: f.label, type: f.type, required: !!f.required, maxLength: f.maxLength ?? null, options: f.options ?? null, description: f.description ?? null, ref: f.ref ?? null, pattern: f.pattern ?? null, min: f.min ?? null, max: f.max ?? null, minExclusive: !!f.minExclusive, custom: !!f.custom })),
+        fields: c.fields.map((f) => ({ key: f.key, label: f.label, type: f.type, required: !!f.required, maxLength: f.maxLength ?? null, options: f.options ?? null, description: f.description ?? null, ref: f.ref ?? null, pattern: f.pattern ?? null, min: f.min ?? null, max: f.max ?? null, minExclusive: !!f.minExclusive, custom: !!f.custom, reviewable: !f.custom && !f.noReview })),
       })),
     };
   }

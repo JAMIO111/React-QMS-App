@@ -1,8 +1,8 @@
 import type { PoolClient } from 'pg';
 import { EntityImporter, EntityType, ImportContext, StagedRow } from './entity-importer';
 
-/** The kinds of record IN4 imports, each through its database import function (app.system_import_record). */
-export const IMPORTED_TYPES: EntityType[] = ['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge', 'nonconformance'];
+/** The kinds of record imported (IN4; production orders IN5), each through its database import function (app.system_import_record). */
+export const IMPORTED_TYPES: EntityType[] = ['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge', 'nonconformance', 'production_order'];
 
 /**
  * Writes one staged row through app.system_import_record, which re-checks the run, the lease and the row, refuses what the run's frozen settings do not allow

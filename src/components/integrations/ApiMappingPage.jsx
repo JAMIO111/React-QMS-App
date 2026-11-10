@@ -232,6 +232,7 @@ const ApiMappingPage = () => {
                     readOnly={!canRun}
                     advanced={advanced}
                     problems={problems}
+                    source="api"
                     updates={!ADD_ONLY_KINDS.includes(entityType) && !ADD_UPDATE_KINDS.includes(entityType) && (form.settings?.writeMode ?? "add_only") !== "add_only"}
                   />
                 </MenuCard>

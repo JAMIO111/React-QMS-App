@@ -23,23 +23,42 @@ const fieldLimits = (f) => {
   return f.maxLength ? `Up to ${f.maxLength} characters` : null;
 };
 
+/**
+ * The words the editor uses for where values come from: a file has columns and cells, an API sends records whose fields (nested ones with dots) are the
+ * columns. The data is the same shape either way; only the wording differs.
+ */
+const SOURCE_WORDS = {
+  file: {
+    column: "column", columns: "columns", Column: "Column", cell: "cell", header: "Column in your file",
+    keyLabel: "Column that identifies each record", keyHint: "The same record keeps the same value in every file, so importing again updates it instead of adding another",
+    missingTitle: "Columns the mapping uses are not in this file", unused: (n) => (n === 1 ? "1 column of the file is not used" : `${n} columns of the file are not used`),
+    translate: "Translate (one per line: value in the file=value in Fortress)", matchSource: "The id it was given when it was imported from this file source",
+  },
+  api: {
+    column: "field", columns: "fields", Column: "API field", cell: "field", header: "Field the API sends",
+    keyLabel: "Field that identifies each record", keyHint: "The same record keeps the same value every time it is read, so importing again updates it instead of adding another",
+    missingTitle: "Fields the mapping uses are not in what the API sends", unused: (n) => (n === 1 ? "1 field the API sends is not used" : `${n} fields the API sends are not used`),
+    translate: "Translate (one per line: value the API sends=value in Fortress)", matchSource: "The id it was given when it was imported through this connection",
+  },
+};
+
 /** What goes in the middle of a row when it is not a single column. */
-const SourceSummary = ({ row }) => (
+const SourceSummary = ({ row, words }) => (
   <span className="block truncate rounded-lg border border-dashed border-border-color px-2 py-1.5 text-sm text-secondary-text" title={row.useFormula ? row.formula : undefined}>
-    {row.useFormula ? <span className="font-mono">{row.formula || "No formula yet"}</span> : row.transform === "constant" ? `Always "${row.value}"` : `${row.sources.join(" + ") || "No columns yet"}`}
+    {row.useFormula ? <span className="font-mono">{row.formula || "No formula yet"}</span> : row.transform === "constant" ? `Always "${row.value}"` : `${row.sources.join(" + ") || `No ${words.columns} yet`}`}
   </span>
 );
 
 /** The settings under a row: how the value is cleaned, what to use when the cell is empty, dates, decimals and how a link is matched. */
-const RowSettings = ({ field, row, set, colOptions, readOnly, advanced, example, sample, updates }) => (
+const RowSettings = ({ field, row, set, colOptions, readOnly, advanced, example, sample, updates, words }) => (
   <div className="flex flex-col gap-3 border-t border-border-color px-3 pb-3 pt-3 sm:pl-11">
     {(advanced || row.useFormula) && (
-      <Switch checked={!!row.useFormula} onChange={(e) => set({ useFormula: e.target.checked })} disabled={readOnly || (!advanced && row.useFormula)}>Use a formula instead of a column</Switch>
+      <Switch checked={!!row.useFormula} onChange={(e) => set({ useFormula: e.target.checked })} disabled={readOnly || (!advanced && row.useFormula)}>Use a formula instead of a {words.column}</Switch>
     )}
     {row.useFormula ? (
       <FormulaEditor value={row.formula ?? ""} onChange={(formula) => set({ formula })} columns={colOptions.map((o) => o.value)} sample={sample} readOnly={readOnly || !advanced} label={`Formula for ${field.label}`} />
     ) : (
-      <LegacySettings field={field} row={row} set={set} colOptions={colOptions} readOnly={readOnly} />
+      <LegacySettings field={field} row={row} set={set} colOptions={colOptions} readOnly={readOnly} words={words} />
     )}
     {field.ref?.source && row.useFormula && (
       <ComboField label="Match by" value={row.match} onChange={(v) => set({ match: v ?? "code" })} options={MATCH_OPTIONS} required disabled={readOnly} />
@@ -67,7 +86,7 @@ const OwnershipChoice = ({ field, row, set, readOnly }) => {
 };
 
 /** How the original transforms read a column (kept for mappings made before steps and formulas). */
-const LegacySettings = ({ field, row, set, colOptions, readOnly }) => (
+const LegacySettings = ({ field, row, set, colOptions, readOnly, words }) => (
   <div className="flex flex-col gap-3">
     {(field.description || field.options || fieldLimits(field)) && (
       <div className="flex flex-col gap-0.5 text-xs text-secondary-text">
@@ -82,7 +101,7 @@ const LegacySettings = ({ field, row, set, colOptions, readOnly }) => (
       {row.transform === "concat" && (
         <>
           <ComboField
-            label="Add a column"
+            label={`Add a ${words.column}`}
             value={null}
             onChange={(v) => v && set({ sources: [...row.sources, v] })}
             options={colOptions.filter((o) => !row.sources.includes(o.value))}
@@ -92,7 +111,7 @@ const LegacySettings = ({ field, row, set, colOptions, readOnly }) => (
         </>
       )}
       {row.transform !== "constant" && row.transform !== "concat" && (
-        <Field label="When the cell is empty, use" value={row.default} onChange={(e) => set({ default: e.target.value })} disabled={readOnly} />
+        <Field label={`When the ${words.cell} is empty, use`} value={row.default} onChange={(e) => set({ default: e.target.value })} disabled={readOnly} />
       )}
       {field.type === "date" && row.transform !== "constant" && (
         <ComboField label="Dates written as" value={row.dateFormat} onChange={(v) => set({ dateFormat: v ?? "iso" })} options={DATE_FORMAT_OPTIONS} required disabled={readOnly} />
@@ -106,7 +125,7 @@ const LegacySettings = ({ field, row, set, colOptions, readOnly }) => (
           value={row.match}
           onChange={(v) => set({ match: v ?? "code" })}
           options={MATCH_OPTIONS}
-          hint={row.match === "source" ? "The id it was given when it was imported from this file source" : "The code as it is in Fortress"}
+          hint={row.match === "source" ? words.matchSource : "The code as it is in Fortress"}
           required
           disabled={readOnly}
         />
@@ -124,7 +143,7 @@ const LegacySettings = ({ field, row, set, colOptions, readOnly }) => (
     )}
     {row.transform === "map" && (
       <TextAreaField
-        label="Translate (one per line: value in the file=value in Fortress)"
+        label={words.translate}
         value={row.valuesText}
         onChange={(e) => set({ valuesText: e.target.value })}
         rows={3}
@@ -136,7 +155,7 @@ const LegacySettings = ({ field, row, set, colOptions, readOnly }) => (
 );
 
 /** One Fortress field: where its value comes from, what the chosen record makes of it, and (opened) how it is cleaned. */
-const MappingRow = ({ field, row, onChange, colOptions, preview, sample, readOnly, advanced, updates }) => {
+const MappingRow = ({ field, row, onChange, colOptions, preview, sample, readOnly, advanced, updates, words }) => {
   const [open, setOpen] = useState(false);
   const set = (patch) => onChange({ ...row, ...patch });
   const matched = rowHasSource(row);
@@ -181,17 +200,17 @@ const MappingRow = ({ field, row, onChange, colOptions, preview, sample, readOnl
         <div className="col-span-2 min-w-0 sm:col-span-1">
           {simple ? (
             <ComboField
-              ariaLabel={`Column for ${field.label}`}
+              ariaLabel={`${words.Column} for ${field.label}`}
               value={row.source}
               onChange={(v) => set({ source: v })}
               options={colOptions}
-              placeholder={field.required ? "Choose a column" : "Not imported"}
+              placeholder={field.required ? `Choose a ${words.column}` : "Not imported"}
               disabled={readOnly}
               error={missing && !row.source ? true : undefined}
               clearable
             />
           ) : (
-            <SourceSummary row={row} />
+            <SourceSummary row={row} words={words} />
           )}
         </div>
         <span className="hidden text-tertiary-text sm:block" aria-hidden="true">=</span>
@@ -205,7 +224,7 @@ const MappingRow = ({ field, row, onChange, colOptions, preview, sample, readOnl
       </div>
       {open && (
         <div id={settingsId}>
-          <RowSettings field={field} row={row} set={set} colOptions={colOptions} readOnly={readOnly} advanced={advanced} example={example} sample={sample} updates={updates} />
+          <RowSettings field={field} row={row} set={set} colOptions={colOptions} readOnly={readOnly} advanced={advanced} example={example} sample={sample} updates={updates} words={words} />
         </div>
       )}
     </li>
@@ -216,7 +235,8 @@ const MappingRow = ({ field, row, onChange, colOptions, preview, sample, readOnl
  * Reusable mapping editor: one row per Fortress field — field → column of the source = what the chosen record becomes. A row opens to show how the
  * value is cleaned. Required fields with no source are shown in red and counted in the banner. The caller keeps `rows` and `keyField`.
  */
-const MappingStep = ({ fields, columns, sample = [], preview = null, previewing = false, keyField, onKeyField, rows, onRows, readOnly = false, advanced = false, problems = [], updates = false }) => {
+const MappingStep = ({ fields, columns, sample = [], preview = null, previewing = false, keyField, onKeyField, rows, onRows, readOnly = false, advanced = false, problems = [], updates = false, source = "file" }) => {
+  const words = SOURCE_WORDS[source] ?? SOURCE_WORDS.file;
   const [at, setAt] = useState(0);
   const colOptions = columns.map((c) => ({ value: c, label: c }));
   const previewRows = preview?.rows ?? [];
@@ -228,11 +248,11 @@ const MappingStep = ({ fields, columns, sample = [], preview = null, previewing 
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <ComboField
-          label="Column that identifies each record"
+          label={words.keyLabel}
           value={keyField}
           onChange={onKeyField}
           options={colOptions}
-          hint="The same record keeps the same value in every file, so importing again updates it instead of adding another"
+          hint={words.keyHint}
           required
           disabled={readOnly}
         />
@@ -246,18 +266,18 @@ const MappingStep = ({ fields, columns, sample = [], preview = null, previewing 
       </div>
       {missing.length > 0 && (
         <Callout tone="error" title={missing.length === 1 ? "1 required field is not matched" : `${missing.length} required fields are not matched`}>
-          Choose a column for {missing.map((f) => f.label).join(", ")}, or open the row to give a fixed value.
+          Choose a {words.column} for {missing.map((f) => f.label).join(", ")}, or open the row to give a fixed value.
         </Callout>
       )}
       {check?.missing?.length > 0 && (
-        <Callout tone={check.missing.some((m) => m.blocking) ? "error" : "warning"} title="Columns the mapping uses are not in this file">
+        <Callout tone={check.missing.some((m) => m.blocking) ? "error" : "warning"} title={words.missingTitle}>
           <ul className="list-disc pl-5">
             {check.missing.map((m) => <li key={m.column}>[{m.column}] — {m.fields.join(", ")}{m.blocking ? " (needed)" : ""}</li>)}
           </ul>
         </Callout>
       )}
       {check?.unused?.length > 0 && (
-        <Callout tone="info" title={check.unused.length === 1 ? "1 column of the file is not used" : `${check.unused.length} columns of the file are not used`}>
+        <Callout tone="info" title={words.unused(check.unused.length)}>
           {check.unused.join(", ")}
         </Callout>
       )}
@@ -270,7 +290,7 @@ const MappingStep = ({ fields, columns, sample = [], preview = null, previewing 
         <span />
         <span>Fortress field</span>
         <span />
-        <span>Column in your file</span>
+        <span>{words.header}</span>
         <span />
         <span>Example</span>
       </div>
@@ -286,6 +306,7 @@ const MappingStep = ({ fields, columns, sample = [], preview = null, previewing 
             readOnly={readOnly}
             advanced={advanced}
             updates={updates}
+            words={words}
             onChange={(row) => onRows(rows.map((r, j) => (j === i ? row : r)))}
           />
         ))}

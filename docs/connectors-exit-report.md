@@ -79,6 +79,7 @@ Screenshots `80`–`85` in the journey output folder.
   the same default for API connections. Now an API connection starts from the template its own latest import of that kind used, and otherwise from
   a new mapping (`connectionTemplate` in `src/lib/importTemplates.js`); other templates are still offered to choose. Tests in `ApiMapping.test.jsx`
   and `RestConnector.test.jsx`.
+- **The mapping editor spoke of files on an API page** ("column in your file"): it now takes `source="api"` and says "field the API sends" throughout (`SOURCE_WORDS` in `MappingStep.jsx`).
 - **The journey had fallen behind IN8:** the master data overview no longer says "No connectors…" (the import health summary replaced it).
 - Found just before IN9, from use of the dev environment: every REST call failed before connecting (the pinned socket answered Node's address lookup
   in the wrong shape) — fixed and covered by a real-socket test in `safe-http.spec.ts`; dialogs jumped when a switch was pressed — fixed in `Switch`
@@ -91,7 +92,6 @@ Screenshots `80`–`85` in the journey output folder.
 - OAuth client credentials, POST queries, custom headers, non-JSON answers; webhooks; writing back to a source.
 - Editing a rejected row in Fortress (by design, F2), reactivating a returned record, bulk decisions in the review queue, reviewing custom fields.
 - Production order operations, reconciliation net of returns.
-- The shared mapping editor still says "column in your file" on an API connection's page.
 - Bespoke SAP, Dynamics, Sage, Odoo, database agents (brief §7.3: after the generic connectors are proven — they are shown as "Coming soon").
 - `IntegrationFiles.test.jsx` (the formula editor test) and `SetPassword` have each failed once under full-suite load and pass on their own; timing,
   not behaviour, but worth hardening.

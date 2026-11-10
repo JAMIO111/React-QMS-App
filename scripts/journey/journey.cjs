@@ -1073,7 +1073,7 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
   await see(code);
   await see(page.getByText(/4 fields in the first 2 records/));
   const siteRow = page.getByRole('listitem', { name: 'Site', exact: true });
-  await siteRow.getByRole('combobox', { name: 'Column for Site' }).click();
+  await siteRow.getByRole('combobox', { name: 'API field for Site' }).click();
   await page.getByRole('option', { name: /^plant/ }).click();
   await see(code.getByLabel('Example for Code').getByText('ERP-M1'));
   await shot(page, '82-api-map-fields');
@@ -1122,7 +1122,12 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
   await why.getByLabel(/Why are they ignored/).fill('Test record in the ERP; it will never get a code');
   await why.getByRole('button', { name: 'Ignore' }).click();
   await see(page.getByText(/Nothing needs a person|No rows/).first());
-  const ignored = (await stack.admin.query(`select ignore_reason from public.integration_inbox where connection_id = $1 and status = 'ignored'`, [connId])).rows;
+  // Ignoring is optimistic: the screen changes at once, so wait for the save to land before reading the database.
+  let ignored = [];
+  for (let i = 0; i < 40 && ignored.length === 0; i += 1) {
+    ignored = (await stack.admin.query(`select ignore_reason from public.integration_inbox where connection_id = $1 and status = 'ignored'`, [connId])).rows;
+    if (ignored.length === 0) await page.waitForTimeout(250);
+  }
   if (ignored.length !== 1) throw new Error(`the row was not ignored with its reason: ${JSON.stringify(ignored)}`);
   await shot(page, '84-api-rows-ignored');
 

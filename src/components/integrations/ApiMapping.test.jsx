@@ -125,9 +125,13 @@ describe("mapping an API connection's fields", () => {
     routeApi(base());
     renderAt(page);
     const code = await screen.findByRole("listitem", { name: "Code" });
-    expect(within(code).getByRole("combobox", { name: "Column for Code" })).toHaveValue("code");
+    expect(within(code).getByRole("combobox", { name: "API field for Code" })).toHaveValue("code");
     expect(calls.find((c) => c.k === "POST /integrations/connections/c1/sample").body).toEqual({ entityType: "machine" });
     expect(screen.getByText(/4 fields in the first 2 records/)).toBeInTheDocument();
+    // Worded for an API: fields it sends, not columns of a file.
+    expect(screen.getByText("Field the API sends")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Field that identifies each record" })).toBeInTheDocument();
+    expect(screen.queryByText(/your file|this file|of the file/)).toBeNull();
     // The preview reads the API on the server, against the connection rather than a file.
     await waitFor(() => expect(lastPreview()).toMatchObject({ entityType: "machine", connectionId: "c1", keyField: "id" }), { timeout: 3000 });
     expect(lastPreview().fileId).toBeUndefined();
@@ -136,7 +140,7 @@ describe("mapping an API connection's fields", () => {
     const name = screen.getByRole("listitem", { name: "Name" });
     expect(name).toHaveAttribute("data-missing");
     expect(screen.getByRole("button", { name: "Import" })).toBeDisabled();
-    await userEvent.click(within(name).getByRole("combobox", { name: "Column for Name" }));
+    await userEvent.click(within(name).getByRole("combobox", { name: "API field for Name" }));
     await userEvent.click(await screen.findByRole("option", { name: /^title/ }));
     await userEvent.click(screen.getByRole("button", { name: "Import" }));
     const dialog = await screen.findByRole("dialog");
@@ -156,7 +160,7 @@ describe("mapping an API connection's fields", () => {
     renderAt(page);
     await waitFor(() => expect(screen.getByRole("combobox", { name: "Start from" })).toHaveValue("Machines from Mock API"));
     expect(await screen.findByText("Version 1, unchanged")).toBeInTheDocument();
-    expect(within(screen.getByRole("listitem", { name: "Name" })).getByRole("combobox", { name: "Column for Name" })).toHaveValue("title");
+    expect(within(screen.getByRole("listitem", { name: "Name" })).getByRole("combobox", { name: "API field for Name" })).toHaveValue("title");
     await userEvent.click(screen.getByRole("button", { name: "Preview" }));
     await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body).toEqual({ entityType: "machine", kind: "preview", templateId: "t1" }));
     expect(calls.some((c) => c.k === "POST /integrations/templates" || c.k.startsWith("POST /integrations/templates/t1"))).toBe(false);
@@ -167,7 +171,7 @@ describe("mapping an API connection's fields", () => {
     routeApi(base([template({ id: "tf", name: "Machines from a file", lastUsedAt: "2026-11-10T12:00:00Z" })], { "GET /integrations/runs": { data: [], page: 1, pageSize: 20, total: 0 } }));
     renderAt(page);
     await waitFor(() => expect(screen.getByRole("combobox", { name: "Start from" })).toHaveValue("Start a new mapping"));
-    expect(within(await screen.findByRole("listitem", { name: "Code" })).getByRole("combobox", { name: "Column for Code" })).toHaveValue("code");
+    expect(within(await screen.findByRole("listitem", { name: "Code" })).getByRole("combobox", { name: "API field for Code" })).toHaveValue("code");
     expect(calls.some((c) => c.k === "GET /integrations/templates/tf")).toBe(false);
   });
 

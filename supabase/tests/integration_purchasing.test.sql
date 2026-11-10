@@ -126,4 +126,93 @@ BEGIN
   PERFORM pg_temp.assert_eq(app.integration_find_by_code(org2, 'purchase_order', 'PO-100/1'), NULL::uuid, 'another organisation finds none of it');
 END $$;
 
+-- ---- IN6b: goods receipts from delivery rows ----
+CREATE FUNCTION pg_temp.delivery(p_doc text, p_po text, p_line int, p_qty numeric, p_on text, p_extra jsonb DEFAULT '{}'::jsonb) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT jsonb_strip_nulls(jsonb_build_object('documentNumber', p_doc, 'poNumber', p_po, 'poLine', p_line, 'quantity', p_qty, 'receivedOn', p_on)) || p_extra
+$$;
+
+DO $$
+DECLARE
+  ann uuid := '5f600000-0000-0000-0000-000000000a01';
+  org uuid; api uuid; acme uuid; part uuid; res jsonb; t1 uuid; t2 uuid; g1 uuid; lot uuid; run uuid; owner uuid := gen_random_uuid(); n int;
+BEGIN
+  SELECT id INTO org FROM public.organisations WHERE name = 'Purchasing Alpha';
+  SELECT id INTO api FROM public.integration_connections WHERE organisation_id = org AND external_system = 'erp';
+  SELECT id INTO acme FROM public.suppliers WHERE organisation_id = org AND code = 'ACME';
+  SELECT id INTO part FROM public.parts WHERE organisation_id = org AND part_number = 'P-1';
+  PERFORM pg_temp.login(ann); PERFORM pg_temp.assert_eq(app.integration_may_write(org, 'goods_receipt'), true, 'an owner may import goods receipts'); PERFORM pg_temp.logout();
+
+  -- a delivery against a closed order line (historical mode), with a lot that is made released and never inspected
+  res := pg_temp.import_one(org, api, ann, 'goods_receipt', 'T1', pg_temp.delivery('GRN-1', 'PO-100', 1, 40, '2026-10-03', jsonb_build_object('lotNumber', 'L-1', 'deliveryNote', 'DN-77')));
+  PERFORM pg_temp.assert_eq(res ->> 'status' || coalesce(' ' || (res -> 'errors' -> 0 ->> 'message'), ''), 'applied', 'a delivery is imported');
+  t1 := (res ->> 'internal')::uuid;
+  SELECT goods_receipt_id, lot_id INTO g1, lot FROM public.goods_receipt_lines WHERE id = t1;
+  PERFORM pg_temp.assert_eq((SELECT l.status FROM public.purchase_order_lines l JOIN public.purchase_orders o ON o.id = l.purchase_order_id WHERE o.organisation_id = org AND upper(o.po_number) = 'PO-100' AND l.line_number = 1),
+    'closed', 'against an order line that is already closed');
+  PERFORM pg_temp.assert_eq((SELECT received_on::text || '/' || delivery_note || '/' || source_document || '/' || (reference LIKE 'GR-26-%')::text || '/' || (site_id IS NOT NULL)::text FROM public.goods_receipts WHERE id = g1),
+    '2026-10-03/DN-77/GRN-1/true/true', 'the receipt keeps the real date, the delivery note and the document, numbered in the year it arrived, at the only site');
+  PERFORM pg_temp.assert_eq((SELECT status || '/' || origin || '/' || supplier_id::text || '/' || quantity::int FROM public.lots WHERE id = lot),
+    'released/received/' || acme::text || '/40', 'the lot is made released (E3)');
+  PERFORM pg_temp.assert_eq((SELECT required::text || '/' || strategy FROM public.incoming_inspection_determinations WHERE receipt_line_id = t1), 'false/none', 'and no inspection is required');
+  PERFORM pg_temp.assert_eq((SELECT part_id FROM public.goods_receipt_lines WHERE id = t1), part, 'the part comes from the order line');
+
+  -- a second row with the same document joins the same receipt
+  res := pg_temp.import_one(org, api, ann, 'goods_receipt', 'T2', pg_temp.delivery('GRN-1', 'po-100', 2, 10, '2026-10-03'));
+  t2 := (res ->> 'internal')::uuid;
+  PERFORM pg_temp.assert_eq((SELECT goods_receipt_id::text || '/' || line_number FROM public.goods_receipt_lines WHERE id = t2), g1::text || '/2', 'the same document is the same receipt (next line)');
+  res := pg_temp.import_one(org, api, ann, 'goods_receipt', 'T3', pg_temp.delivery('GRN-1', 'PO-100', 2, 5, '2026-10-04'));
+  PERFORM pg_temp.assert_eq(res -> 'errors' -> 0 ->> 'message', 'Document GRN-1 was received on 2026-10-03; this row says 2026-10-04', 'one document arrives on one date');
+  res := pg_temp.import_one(org, api, ann, 'goods_receipt', 'T4', pg_temp.delivery('GRN-2', NULL, NULL, 5, '2026-10-05', jsonb_build_object('supplier', 'ACME', 'supplierId', acme, 'material', 'Grease')));
+  PERFORM pg_temp.assert_eq((SELECT material || '/' || (po_line_id IS NULL)::text FROM public.goods_receipt_lines WHERE id = (res ->> 'internal')::uuid), 'Grease/true', 'a delivery without an order names its supplier and material');
+  res := pg_temp.import_one(org, api, ann, 'goods_receipt', 'T5', pg_temp.delivery('GRN-3', 'PO-404', 1, 5, '2026-10-05'));
+  PERFORM pg_temp.assert_eq(res -> 'errors' -> 0 ->> 'message', 'Order PO-404 is not in Fortress: import the purchase orders first', 'an unknown order fails with what to do');
+  res := pg_temp.import_one(org, api, ann, 'goods_receipt', 'T6', pg_temp.delivery('GRN-3', 'PO-100', NULL, 5, '2026-10-05'));
+  PERFORM pg_temp.assert_eq(res -> 'errors' -> 0 ->> 'message', 'Order PO-100 has several lines: say which line was delivered', 'an order with several lines needs the line');
+  res := pg_temp.import_one(org, api, ann, 'goods_receipt', 'T7', pg_temp.delivery('GRN-3', 'PO-100', 1, 5, (current_date + 1)::text));
+  PERFORM pg_temp.assert_eq(res ->> 'status', 'failed', 'a delivery in the future fails');
+  -- the same lot delivered again is the same lot
+  res := pg_temp.import_one(org, api, ann, 'goods_receipt', 'T8', pg_temp.delivery('GRN-4', 'PO-100', 1, 5, '2026-10-06', '{"lotNumber": "l-1"}'::jsonb));
+  PERFORM pg_temp.assert_eq((SELECT lot_id FROM public.goods_receipt_lines WHERE id = (res ->> 'internal')::uuid), lot, 'a lot delivered again (any case) is the same lot');
+
+  -- returns become rejections of the matching earlier delivery (E1): T1 has 40 of lot L-1, T8 (later) has 5
+  res := pg_temp.import_one(org, api, ann, 'goods_receipt', 'R1', pg_temp.delivery('RTN-1', 'PO-100', 1, -15, '2026-10-10', '{"lotNumber": "L-1"}'::jsonb));
+  PERFORM pg_temp.assert_eq(res ->> 'status', 'applied', 'a return is imported');
+  PERFORM pg_temp.assert_eq((SELECT receipt_line_id::text || '/' || decision || '/' || quantity_rejected::int FROM public.receipt_line_dispositions WHERE id = (res ->> 'internal')::uuid),
+    t1::text || '/rejected/15', 'as a rejection of that quantity on the latest delivery with enough left (the later one has only 5)');
+  PERFORM pg_temp.assert_eq((SELECT count(*)::int FROM public.goods_receipt_lines WHERE quantity_received < 0), 0, 'never a negative line');
+  res := pg_temp.import_one(org, api, ann, 'goods_receipt', 'R2', pg_temp.delivery('RTN-2', 'PO-100', 1, 20, '2026-10-11', '{"movement": "Return", "lotNumber": "L-1"}'::jsonb));
+  PERFORM pg_temp.assert_eq((SELECT receipt_line_id::text || '/' || quantity_rejected::int FROM public.receipt_line_dispositions WHERE id = (res ->> 'internal')::uuid), t1::text || '/35',
+    'a return movement with a plain quantity is a return too, and adds to what the delivery already rejected');
+  res := pg_temp.import_one(org, api, ann, 'goods_receipt', 'R3', pg_temp.delivery('RTN-3', 'PO-100', 1, -20, '2026-10-12', '{"lotNumber": "L-1"}'::jsonb));
+  PERFORM pg_temp.assert_eq(res ->> 'status', 'failed', 'nothing has 20 left to return');
+  res := pg_temp.import_one(org, api, ann, 'goods_receipt', 'R4', pg_temp.delivery('RTN-4', 'PO-100', 1, -5, '2026-10-12', '{"lotNumber": "L-1"}'::jsonb));
+  PERFORM pg_temp.assert_eq((SELECT receipt_line_id <> t1 AND quantity_rejected = 5 FROM public.receipt_line_dispositions WHERE id = (res ->> 'internal')::uuid), true,
+    'a return the latest delivery can take goes to it');
+  res := pg_temp.import_one(org, api, ann, 'goods_receipt', 'R5', pg_temp.delivery('RTN-5', 'PO-100', 1, -1, '2026-10-01', '{"lotNumber": "L-1"}'::jsonb));
+  PERFORM pg_temp.assert_eq(res ->> 'status', 'failed', 'a return dated before any delivery matches nothing');
+  PERFORM pg_temp.assert_eq((SELECT status FROM public.lots WHERE id = lot), 'released', 'an imported return never holds the lot');
+
+  -- a delivery already imported is never changed: goods receipts are always "add new only", and the import function refuses an update anyway
+  PERFORM pg_temp.login(ann); PERFORM app.set_integration_import_settings(api, 'goods_receipt', '{"writeMode": "add_update", "matchExisting": true}'::jsonb); PERFORM pg_temp.logout();
+  PERFORM pg_temp.assert_eq(app.integration_settings_for(api, 'goods_receipt') ->> 'writeMode' || '/' || (app.integration_settings_for(api, 'goods_receipt') ->> 'matchExisting'), 'add_only/false',
+    'goods receipts are only ever added, never matched');
+  res := pg_temp.import_one(org, api, ann, 'goods_receipt', 'T1', pg_temp.delivery('GRN-1', 'PO-100', 1, 41, '2026-10-03', '{"lotNumber": "L-1"}'::jsonb));
+  PERFORM pg_temp.assert_eq(res ->> 'status', 'skipped', 'a changed delivery is skipped');
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.import_goods_receipt(%L, %L, '{"quantity": 41, "receivedOn": "2026-10-03"}'::jsonb)$f$, org, t1)), 5), 'QM022',
+    'and the import function refuses to change one');
+  PERFORM pg_temp.assert_eq(app.integration_template_settings('goods_receipt', '{"writeMode": "update_only"}'::jsonb) ->> 'writeMode', 'add_only', 'a template cannot say otherwise');
+
+  -- a row the mapping leaves out is skipped with the reason, whatever else is wrong with it
+  PERFORM pg_temp.login(ann); run := app.request_integration_run(api, 'goods_receipt', 'full'); PERFORM pg_temp.logout();
+  PERFORM app.system_lease_integration_run(org, run, owner, 30);
+  PERFORM app.system_stage_integration_records(org, run, owner, jsonb_build_array(
+    jsonb_build_object('externalId', 'X1', 'payload', '{"t": "TRF"}'::jsonb, 'canonical', '{"leaveOut": true}'::jsonb, 'skip', 'Left out by the mapping',
+                       'errors', '[{"field": "quantity", "message": "Quantity is required"}]'::jsonb),
+    jsonb_build_object('payload', '{"t": "ADJ"}'::jsonb, 'skip', 'Left out by the mapping', 'sourceRow', 7)), NULL, true);
+  PERFORM pg_temp.assert_eq((SELECT string_agg(status || ':' || external_id || ':' || (errors -> 0 ->> 'message'), ',' ORDER BY external_id COLLATE "C" DESC) FROM public.integration_inbox WHERE run_id = run),
+    'skipped:row-7:Left out by the mapping,skipped:X1:Left out by the mapping', 'left-out rows are skipped, even without an identifier');
+  PERFORM pg_temp.assert_eq((SELECT skipped || '/' || rejected FROM public.integration_sync_runs WHERE id = run), '2/0', 'and counted as skipped, not rejected');
+  PERFORM app.system_finish_integration_run(org, run, owner);
+END $$;
+
 ROLLBACK;

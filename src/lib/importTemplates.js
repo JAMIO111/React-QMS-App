@@ -167,9 +167,12 @@ export const cleanSteps = (steps) =>
     return out;
   });
 
-/** Settings a template keeps for an import (NCs are always add only and never matched). */
+/** Kinds an import only ever adds: non-conformances and goods receipts (never matched, never updated). */
+export const ADD_ONLY_KINDS = ["nonconformance", "goods_receipt"];
+
+/** Settings a template keeps for an import (NCs and goods receipts are always add only and never matched). */
 export const templateSettings = (entityType, s) =>
-  entityType === "nonconformance" ? { writeMode: "add_only", matchExisting: false } : { writeMode: s?.writeMode ?? "add_only", matchExisting: !!s?.matchExisting };
+  ADD_ONLY_KINDS.includes(entityType) ? { writeMode: "add_only", matchExisting: false } : { writeMode: s?.writeMode ?? "add_only", matchExisting: !!s?.matchExisting };
 
 const norm = (v) =>
   JSON.stringify(v, (_k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).filter(([, y]) => y !== undefined && y !== null && y !== "").sort(([a], [b]) => a.localeCompare(b))) : x));

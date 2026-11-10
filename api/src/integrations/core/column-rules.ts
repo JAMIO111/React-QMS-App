@@ -85,7 +85,7 @@ export function applyRules(catalogue: EntityCatalogue, rules: TableRules): Entit
   if (!map) return catalogue;
   const fields = catalogue.fields.map((f): CatalogueField => {
     const target = map.fields[f.key];
-    if (!target || f.ref) return f;
+    if (!target || f.ref || target.ownRules) return f;
     const r = rules[target.table ?? map.table]?.[target.column];
     if (!r) return f;
     const next: CatalogueField = { ...f };

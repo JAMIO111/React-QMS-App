@@ -264,6 +264,27 @@ export const CATALOGUE: EntityCatalogue[] = [
       { key: 'orderNotes', label: 'Order notes', type: 'text', maxLength: 2000 },
     ],
   },
+  {
+    entityType: 'goods_receipt',
+    label: 'Goods receipts',
+    keyHint: 'The transaction id of each delivery (or return) in your system',
+    fields: [
+      { key: 'documentNumber', label: 'Receipt document', type: 'text', maxLength: 100, noReview: true, description: 'Rows with the same document from the same supplier are one delivery; empty makes each row its own' },
+      ref('supplier', 'Supplier', 'supplier', 'supplier code', { noReview: true, description: 'The supplier code in Fortress, or the id your source gave it when it was imported here; not needed when the order is given' }),
+      { key: 'poNumber', label: 'Order number', type: 'text', maxLength: 40, noReview: true, description: 'The purchase order, already in Fortress (import purchase orders first)' },
+      { key: 'poLine', label: 'Order line', type: 'integer', min: 1, noReview: true, description: 'Not needed when the order has one line' },
+      { key: 'receivedOn', label: 'Received on', type: 'date', required: true, noReview: true, description: 'The real date it arrived (or went back); not in the future' },
+      { key: 'deliveryNote', label: 'Delivery note', type: 'text', maxLength: 100 },
+      ref('part', 'Part number', 'part', 'part number', { noReview: true, description: 'Taken from the order line when empty' }),
+      { key: 'material', label: 'Material or service', type: 'text', maxLength: 200, noReview: true },
+      { key: 'quantity', label: 'Quantity', type: 'number', required: true, noReview: true, description: 'What arrived. Below zero (or with movement Return) it is a return: it becomes a rejection of that quantity on the latest earlier delivery it matches' },
+      { key: 'movement', label: 'Movement', type: 'enum', options: options(['receipt', 'return']), noReview: true, description: 'Empty follows the sign of the quantity' },
+      { key: 'lotNumber', label: 'Lot number', type: 'text', maxLength: 60, noReview: true, description: 'Makes the lot of the part, already released; the same lot delivered again is the same lot' },
+      ref('site', 'Site', 'site', 'site code', { noReview: true, description: 'Empty means the organisation\'s only site' }),
+      { key: 'notes', label: 'Notes', type: 'text', maxLength: 1000 },
+      { key: 'leaveOut', label: 'Leave this row out', type: 'boolean', noReview: true, description: 'Yes leaves the row out of the import, listed as skipped (for example transfers or adjustments in an inventory export); a formula such as IN([Type], "TRF", "ADJ") fits' },
+    ],
+  },
 ];
 
 export const catalogueFor = (entity: string): EntityCatalogue | undefined => CATALOGUE.find((c) => c.entityType === entity);

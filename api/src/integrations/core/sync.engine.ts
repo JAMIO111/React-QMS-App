@@ -137,9 +137,11 @@ export class SyncEngine {
           const records = page.records.map((r) => {
             if (lease.mapping && catalogue) {
               const mapped = applyMapping(catalogue, lease.mapping, r.payload);
-              return { externalId: mapped.externalId, sourceRow: r.sourceRow ?? null, payload: r.payload, canonical: mapped.canonical as Record<string, unknown> | null, errors: mapped.errors };
+              // A row the mapping marks "leave this row out" is staged as skipped, whatever else is wrong with it.
+              const skip = mapped.canonical.leaveOut === true ? 'Left out by the mapping' : undefined;
+              return { externalId: mapped.externalId, sourceRow: r.sourceRow ?? null, payload: r.payload, canonical: mapped.canonical as Record<string, unknown> | null, errors: mapped.errors, skip };
             }
-            return { externalId: importer!.externalIdOf(r.payload), sourceRow: r.sourceRow ?? null, payload: r.payload } as { externalId: string | null; sourceRow: number | null; payload: Record<string, unknown>; canonical: Record<string, unknown> | null; errors: { field: string | null; message: string }[] };
+            return { externalId: importer!.externalIdOf(r.payload), sourceRow: r.sourceRow ?? null, payload: r.payload } as { externalId: string | null; sourceRow: number | null; payload: Record<string, unknown>; canonical: Record<string, unknown> | null; errors: { field: string | null; message: string }[]; skip?: string };
           });
           // Links to other records (D10) are resolved before staging, so a preview shows a row that cannot be linked as rejected, with the reason.
           if (lease.mapping && catalogue) {

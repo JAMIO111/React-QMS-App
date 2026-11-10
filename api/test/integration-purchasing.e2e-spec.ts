@@ -1,6 +1,8 @@
 /**
  * Integrations IN6 through the API: purchase orders from a file with one row per order line (the key column is the order number; Fortress adds the line
- * number), the same file again writing nothing, and a later file changing what the source owns while the requested date stays as it was.
+ * number), the same file again writing nothing, and a later file changing what the source owns while the requested date stays as it was. Then goods
+ * receipts from an inventory-transaction export: rows left out by a formula, deliveries grouped by document, a released lot, a return becoming a
+ * rejection, the same file again writing nothing, and supplier performance worked out from what was imported.
  */
 import { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -118,5 +120,53 @@ describe('purchase orders from a file', () => {
     const fileId = await upload('po-3.csv', ['PO,Line,Vendor,Item,Qty,Need by,Promised,State', 'PO-3,,ACME,Nuts,5,2026-11-01,,O']);
     const res = await run('purchase_order', fileId, 'preview');
     expect(res.counts).toMatchObject({ rejected: 1 });
+  });
+
+  it('imports deliveries from inventory transactions; a return becomes a rejection; supplier performance follows', async () => {
+    const day = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+    const receipts = (await api().post(`${base}/templates`).set(await owner()).send({
+      entityType: 'goods_receipt', name: 'ERP inventory transactions', keyField: 'Tx',
+      fields: [
+        { target: 'documentNumber', source: 'Doc' }, { target: 'poNumber', source: 'PO' }, { target: 'poLine', source: 'Line' },
+        { target: 'supplier', source: 'Vendor' }, { target: 'part', source: 'Part' },
+        { target: 'receivedOn', source: 'Date' }, { target: 'quantity', source: 'Qty' }, { target: 'lotNumber', source: 'Lot' },
+        { target: 'leaveOut', formula: 'IN([Type], "TRF", "ADJ")' },
+      ],
+    }).expect(201)).body.id;
+    await admin.query(`insert into public.parts (organisation_id, part_number, name) values ($1, 'P-LOT', 'Casting')`, [ids.orgA]);
+    const header = 'Tx,Type,Doc,PO,Line,Vendor,Part,Date,Qty,Lot';
+    const fileId = await upload('transactions.csv', [
+      header,
+      `9001,RCV,GRN-1,PO-1,1,,,${day(10)},100,`,
+      `9002,RCV,GRN-1,PO-1,2,,,${day(10)},400,`,
+      `9003,TRF,,,,,,${day(9)},50,`,
+      `9004,RTN,RTN-1,PO-1,1,,,${day(5)},-20,`,
+      `9005,RCV,GRN-2,,,ACME,P-LOT,${day(4)},50,LOT-A`,
+    ]);
+    const run = async () =>
+      (await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'goods_receipt', kind: 'full', fileId, templateId: receipts }).expect(201)).body;
+    const first = await run();
+    expect(first).toMatchObject({ status: 'succeeded', counts: { total: 5, created: 4, skipped: 1, rejected: 0 } });
+    const skipped = (await api().get(`${base}/runs/${first.id}/rows?status=skipped`).set(await owner()).expect(200)).body.data;
+    expect(skipped[0].errors[0].message).toBe('Left out by the mapping');
+
+    const grn = (await admin.query(
+      `select g.received_on::text as on, count(l.*)::int as lines, bool_and(d.required = false) as not_inspected
+         from public.goods_receipts g join public.goods_receipt_lines l on l.goods_receipt_id = g.id join public.incoming_inspection_determinations d on d.receipt_line_id = l.id
+        where g.organisation_id = $1 and g.source_document = 'GRN-1' group by g.received_on`, [ids.orgA])).rows;
+    expect(grn).toEqual([{ on: day(10), lines: 2, not_inspected: true }]);
+    expect((await admin.query(`select status from public.lots where organisation_id = $1 and lot_number = 'LOT-A'`, [ids.orgA])).rows[0].status).toBe('released');
+    const rejection = (await admin.query(
+      `select d.decision, d.quantity_rejected::float as qty, l.quantity_received::float as received from public.receipt_line_dispositions d
+         join public.goods_receipt_lines l on l.id = d.receipt_line_id where l.organisation_id = $1`, [ids.orgA])).rows;
+    expect(rejection).toEqual([{ decision: 'rejected', qty: 20, received: 100 }]);
+
+    const again = await run();
+    expect(again).toMatchObject({ counts: { unchanged: 4, skipped: 1, created: 0 } });
+    expect((await admin.query(`select count(*)::int as n from public.goods_receipt_lines where organisation_id = $1`, [ids.orgA])).rows[0].n).toBe(3);
+
+    const supplier = (await admin.query(`select id from public.suppliers where organisation_id = $1 and code = 'ACME'`, [ids.orgA])).rows[0].id;
+    const perf = (await api().get(`/api/v1/supplier-quality/suppliers/${supplier}/performance`).set(await owner()).expect(200)).body;
+    expect(perf.metrics.ppm).toMatchObject({ receivedUnits: 550, rejectedUnits: 20, value: 36364 });
   });
 });

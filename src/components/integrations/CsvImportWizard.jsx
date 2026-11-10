@@ -31,7 +31,7 @@ import {
   rowsInUse,
   rowsToFields,
 } from "../../lib/integrations";
-import { defaultTemplate, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
+import { ADD_ONLY_KINDS, defaultTemplate, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
 import { formatDateTime } from "../../lib/processControl";
 import { CheckIcon } from "@/components/icons";
 import Callout from "../ui/Callout";
@@ -284,9 +284,11 @@ const SaveTemplateDialog = ({ template, defaultName, onCancel, onSave, busy, act
 
 /** What importing may do to records already in Fortress: kept on the template (NCs are always added, never matched). */
 const TemplateSettingsCard = ({ entityType, settings, onChange, readOnly }) => {
-  const fixed = entityType === "nonconformance";
+  const fixed = ADD_ONLY_KINDS.includes(entityType);
   return (
-    <MenuCard title="What importing may do" subtitle={fixed ? "Non-conformances are always added as new drafts, never matched or updated." : "Saved with the template."}>
+    <MenuCard
+      title="What importing may do"
+      subtitle={!fixed ? "Saved with the template." : entityType === "goods_receipt" ? "Deliveries are always added: one already imported is never changed by a later file." : "Non-conformances are always added as new drafts, never matched or updated."}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <ComboField label="Records" value={settings.writeMode} onChange={(v) => onChange({ ...settings, writeMode: v ?? "add_only" })} options={WRITE_MODES} required disabled={readOnly || fixed} />
         <div className="flex items-end pb-1.5">
@@ -505,7 +507,7 @@ const CsvImportWizard = () => {
                 readOnly={!canRun}
                 advanced={advanced}
                 problems={problems}
-                updates={entityType !== "nonconformance" && (form.settings?.writeMode ?? "add_only") !== "add_only"}
+                updates={!ADD_ONLY_KINDS.includes(entityType) && (form.settings?.writeMode ?? "add_only") !== "add_only"}
               />
             </MenuCard>
           </>

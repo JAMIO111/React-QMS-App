@@ -188,8 +188,10 @@ export class IntegrationFilesService {
 }
 
 const HAS_ACTIVE = new Set<EntityType>(['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type']);
+/** Kinds of record an import only ever adds: non-conformances (managed in Fortress once in) and goods receipts (a delivery is never changed afterwards). */
+export const ADD_ONLY_KINDS = new Set<EntityType>(['nonconformance', 'goods_receipt']);
 function toSettings(t: EntityType, r: Row | undefined): z.infer<typeof ImportSettings> {
-  const fixed = t === 'nonconformance';
+  const fixed = ADD_ONLY_KINDS.has(t);
   return {
     entityType: t,
     writeMode: fixed ? 'add_only' : ((r?.write_mode as z.infer<typeof ImportSettings>['writeMode']) ?? 'add_only'),

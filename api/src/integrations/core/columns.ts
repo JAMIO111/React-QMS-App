@@ -10,6 +10,8 @@ import { EntityType } from './entity-importer';
 export interface FieldColumn {
   column: string;
   table?: string;
+  /** The column's own rules do not apply to the source value (a delivery quantity below zero is a return, which never reaches the column). */
+  ownRules?: boolean;
 }
 export interface EntityColumns {
   table: string;
@@ -17,6 +19,8 @@ export interface EntityColumns {
   fields: Record<string, FieldColumn>;
   /** Columns never imported, with why. */
   excluded: Record<string, string>;
+  /** Catalogue fields that fill no column, with what they do instead. */
+  virtual?: Record<string, string>;
 }
 
 const SYSTEM = {
@@ -153,6 +157,25 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
     excluded: {
       ...SYSTEM,
       purchase_order_id: 'The order is found by its number, or made from the line',
+    },
+  },
+  goods_receipt: {
+    table: 'goods_receipt_lines',
+    fields: {
+      documentNumber: { column: 'source_document', table: 'goods_receipts' }, supplier: { column: 'supplier_id', table: 'goods_receipts' },
+      poNumber: { column: 'purchase_order_id', table: 'goods_receipts' }, receivedOn: { column: 'received_on', table: 'goods_receipts' },
+      deliveryNote: { column: 'delivery_note', table: 'goods_receipts' }, site: { column: 'site_id', table: 'goods_receipts' },
+      poLine: { column: 'po_line_id' }, part: { column: 'part_id' }, material: { column: 'material' }, quantity: { column: 'quantity_received', ownRules: true },
+      lotNumber: { column: 'lot_id' }, notes: { column: 'notes' },
+    },
+    excluded: {
+      ...SYSTEM,
+      goods_receipt_id: 'The receipt is found by its document, or made from the row',
+      line_number: 'Numbered in Fortress, in the order the rows arrive',
+    },
+    virtual: {
+      movement: 'Says whether the row is a delivery or a return (a return becomes a rejection decision, never a line)',
+      leaveOut: 'Rows marked are skipped before anything is written',
     },
   },
   production_order: {

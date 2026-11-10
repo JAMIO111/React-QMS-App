@@ -62,7 +62,7 @@ describe.each(CATALOGUE.map((c) => [c.entityType, c] as const))('the %s import',
   });
 
   it('maps every catalogue field to a column, and its import function writes each one', async () => {
-    const unmapped = catalogue.fields.map((f) => f.key).filter((k) => !map.fields[k]);
+    const unmapped = catalogue.fields.map((f) => f.key).filter((k) => !map.fields[k] && !map.virtual?.[k]);
     expect(unmapped).toEqual([]);
     // By name: a production order's import also takes the connection's system code and the source id.
     const fn = (
@@ -87,7 +87,7 @@ describe.each(CATALOGUE.map((c) => [c.entityType, c] as const))('the %s import',
 
   it('offers only values the database allows, and finds the limits the API will read', () => {
     const effective = applyRules(catalogue, rules);
-    for (const f of catalogue.fields.filter((x) => x.type === 'enum' && !x.ref)) {
+    for (const f of catalogue.fields.filter((x) => x.type === 'enum' && !x.ref && !map.virtual?.[x.key])) {
       const target = map.fields[f.key];
       const allowed = rules[target.table ?? map.table]?.[target.column]?.options;
       expect({ field: f.key, hasRule: !!allowed }).toEqual({ field: f.key, hasRule: true });

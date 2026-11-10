@@ -294,6 +294,7 @@ export const recordPath = (entityType, id) =>
     nonconformance: `/Non-Conformance/Register/${id}`,
     production_order: `/Production/Orders/${id}`,
     purchase_order: "/Supplier-Quality/Purchase-Orders",
+    goods_receipt: "/Supplier-Quality/Goods-Receipts",
     customer: "/Customers",
     machine: "/Machines",
     employee: "/Employees",

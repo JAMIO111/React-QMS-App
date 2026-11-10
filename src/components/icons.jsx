@@ -13,10 +13,7 @@ import {
   ArrowDownWideNarrow as LucideArrowDownWideNarrow,
   ArrowLeft as LucideArrowLeft,
   Plug as LucidePlug,
-  FileSpreadsheet as LucideFileSpreadsheet,
-  Webhook as LucideWebhook,
   ArrowRight as LucideArrowRight,
-  Sparkles as LucideSparkles,
   Play as LucidePlay,
   ArrowUp as LucideArrowUp,
   ArrowUp01 as LucideArrowUp01,
@@ -235,10 +232,7 @@ export const FileTextIcon = withDefaults(LucideFileText);
 export const HashIcon = withDefaults(LucideHash);
 export const HistoryIcon = withDefaults(LucideHistory);
 export const InboxIcon = withDefaults(LucideInbox);
-export const FileSpreadsheetIcon = withDefaults(LucideFileSpreadsheet);
-export const WebhookIcon = withDefaults(LucideWebhook);
 export const ArrowRightIcon = withDefaults(LucideArrowRight);
-export const SparklesIcon = withDefaults(LucideSparkles);
 export const PaperclipIcon = withDefaults(LucidePaperclip);
 export const CreditCardIcon = withDefaults(LucideCreditCard);
 export const ReceiptIcon = withDefaults(LucideReceipt);

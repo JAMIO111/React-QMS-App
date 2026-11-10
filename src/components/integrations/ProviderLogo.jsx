@@ -1,11 +1,10 @@
-import { DatabaseIcon, FileSpreadsheetIcon, WebhookIcon } from "@/components/icons";
+import excelLogo from "@/assets/integrations/excel.webp";
+import restApiLogo from "@/assets/integrations/rest-api.webp";
+import sqlServerLogo from "@/assets/integrations/sql-server.webp";
 import { BRAND_MARKS } from "./brandMarks";
 
-const ICONS = {
-  file: { Icon: FileSpreadsheetIcon, tone: "bg-success-color/15 text-success-color" },
-  api: { Icon: WebhookIcon, tone: "bg-theme/15 text-theme" },
-  database: { Icon: DatabaseIcon, tone: "bg-[#CC2927]/10 text-[#CC2927]" },
-};
+/** Logos kept as pictures (bundled with the app). */
+const IMAGES = { file: excelLogo, api: restApiLogo, database: sqlServerLogo };
 
 /** Microsoft's four squares (drawn here: it is four coloured rectangles). */
 const MicrosoftMark = () => (
@@ -17,13 +16,15 @@ const MicrosoftMark = () => (
   </svg>
 );
 
-/** The logo tile of an integration card: a brand mark on a white tile (so its colours hold in dark mode), or one of our icons. */
+/** The logo tile of an integration card: a brand mark or logo picture on a white tile, so its colours hold in dark mode. */
 const ProviderLogo = ({ mark, name, className = "" }) => {
   const base = `flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${className}`;
-  const icon = ICONS[mark];
-  if (icon) {
-    const { Icon, tone } = icon;
-    return <span className={`${base} ${tone}`} role="img" aria-label={`${name} logo`}><Icon className="h-6 w-6" /></span>;
+  if (IMAGES[mark]) {
+    return (
+      <span className={`${base} border border-border-color bg-white p-1.5`} role="img" aria-label={`${name} logo`}>
+        <img src={IMAGES[mark]} alt="" className="max-h-full max-w-full object-contain" />
+      </span>
+    );
   }
   const brand = BRAND_MARKS[mark];
   return (

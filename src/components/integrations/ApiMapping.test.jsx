@@ -93,6 +93,8 @@ const base = (templates = [], over = {}) => ({
   "POST /integrations/connections/c1/runs": { id: "r9" },
   "GET /integrations/runs/r9": run(),
   "GET /integrations/runs/r9/rows": { data: [], page: 1, pageSize: 50, total: 0 },
+  // This connection's earlier imports: the one with template t1 is what the page starts from.
+  "GET /integrations/runs": { data: templates.length ? [run({ kind: "full" })] : [], page: 1, pageSize: 20, total: templates.length ? 1 : 0 },
   ...over,
 });
 const renderAt = (at) =>
@@ -158,6 +160,15 @@ describe("mapping an API connection's fields", () => {
     await userEvent.click(screen.getByRole("button", { name: "Preview" }));
     await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body).toEqual({ entityType: "machine", kind: "preview", templateId: "t1" }));
     expect(calls.some((c) => c.k === "POST /integrations/templates" || c.k.startsWith("POST /integrations/templates/t1"))).toBe(false);
+  });
+
+  it("never starts from a template made for another source: a file's template is offered, not chosen", async () => {
+    // "Machines from a file" was used most recently, but never by this connection: its columns are a file's, not what the API sends.
+    routeApi(base([template({ id: "tf", name: "Machines from a file", lastUsedAt: "2026-11-10T12:00:00Z" })], { "GET /integrations/runs": { data: [], page: 1, pageSize: 20, total: 0 } }));
+    renderAt(page);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Start from" })).toHaveValue("Start a new mapping"));
+    expect(within(await screen.findByRole("listitem", { name: "Code" })).getByRole("combobox", { name: "Column for Code" })).toHaveValue("code");
+    expect(calls.some((c) => c.k === "GET /integrations/templates/tf")).toBe(false);
   });
 
   it("previews before the connection is active, but importing waits for it", async () => {

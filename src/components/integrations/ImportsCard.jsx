@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "../../contexts/ToastProvider";
 import { useImportTemplates, useIntegrationFiles, useIntegrationMutation, useIntegrationRuns } from "../../hooks/useIntegrations";
-import { defaultTemplate } from "../../lib/importTemplates";
+import { connectionTemplate, defaultTemplate } from "../../lib/importTemplates";
 import { describeApiError } from "../../lib/api-client";
 import { ENTITY_LABELS, RUN_KINDS, RUN_STATUS, apiMappingPath, runSummary, wizardPath } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
@@ -20,7 +20,7 @@ export const RunStatusPill = ({ status }) => {
 };
 
 /** Ask for a preview (nothing written; allowed before activation) or a full / incremental import of one kind of record. */
-const RunDialog = ({ connection, onClose }) => {
+const RunDialog = ({ connection, runs, onClose }) => {
   const mutation = useIntegrationMutation();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -39,7 +39,9 @@ const RunDialog = ({ connection, onClose }) => {
   // A file is read with an import template for its kind of record (UI2c); the one used most recently is chosen.
   const templates = useImportTemplates(entityType, { enabled: (isFile || isApi) && !!entityType });
   const [templateId, setTemplateId] = useState(null);
-  const chosenTemplate = (templates.data ?? []).some((t) => t.id === templateId) ? templateId : (defaultTemplate(templates.data) ?? templates.data?.[0])?.id ?? null;
+  // A file starts from the template used most recently; an API connection only from one it imported this kind with before (another source's columns differ).
+  const fallback = isApi ? connectionTemplate(runs, entityType, templates.data) : defaultTemplate(templates.data) ?? templates.data?.[0];
+  const chosenTemplate = (templates.data ?? []).some((t) => t.id === templateId) ? templateId : fallback?.id ?? null;
   // A file always needs a template; an API connection needs one to write (a preview without one shows what arrives).
   const mapped = !isFile || !!chosenTemplate;
   const apiNeedsTemplate = isApi && !chosenTemplate;
@@ -159,7 +161,7 @@ const ImportsCard = ({ connection, canRun }) => {
           ))}
         </ul>
       )}
-      {open && <RunDialog connection={connection} onClose={() => setOpen(false)} />}
+      {open && <RunDialog connection={connection} runs={runs.data?.data} onClose={() => setOpen(false)} />}
     </MenuCard>
   );
 };

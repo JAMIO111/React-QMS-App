@@ -200,6 +200,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await carryOutAudit({ page, stack, APP, orgName, see, shot, step, log });
   await workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, log });
   await importWithTemplate({ page, stack, APP, orgName, see, shot, step, log });
+  await importFromApi({ page, stack, APP, orgName, see, shot, step, log });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -316,7 +317,8 @@ async function masterDataOverview({ page, stack, APP, orgName, see, shot, step, 
   const totals = page.getByLabel('Totals');
   await see(totals.getByRole('link', { name: /Parts/ }));
   await see(page.getByRole('list', { name: 'Data quality checks' }));
-  await see(page.getByText(/No connectors, imports or sync runs are set up yet/));
+  // No import has run yet at this point of the journey (the owner holds a Controller seat, so may see imports); IN8 replaced the old "no connectors" sentence.
+  await see(page.getByText(/No imports have run yet/));
   await see(page.getByRole('list', { name: 'Latest events' }));
   await page.waitForTimeout(600); // charts animate in
   await shot(page, '28-master-data-overview');
@@ -1007,3 +1009,133 @@ async function importWithTemplate({ page, stack, APP, orgName, see, shot, step, 
   await see(page.getByText('CONCAT([Name], " in ", [Area])'));
   await shot(page, '62-template-manager');
 }
+
+/**
+ * Integrations exit check (IN9, connectors plan): a REST connection to the fake ERP set up in the browser — address, bearer token, records with paging —
+ * tested, marked ready and activated; its fields mapped from what the API sends; imported; imported again without writing anything; a rejected record
+ * fixed in the source and imported, another ignored with a reason; then the credential revoked, after which the connection can no longer be tested.
+ */
+async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }) {
+  const org = (await stack.admin.query(`select id from public.organisations where name = $1`, [orgName])).rows[0];
+  const site = (await stack.admin.query(`select code from public.sites where organisation_id = $1 order by created_at limit 1`, [org.id])).rows[0].code;
+  const { erp } = stack;
+  erp.machines = [
+    { id: '1', code: 'ERP-M1', name: 'Erp lathe', plant: site },
+    { id: '2', code: 'ERP-M2', name: 'Erp mill', plant: site },
+    { id: '3', code: 'ERP-M3', name: 'Erp grinder', plant: site },
+    { id: '4', code: 'ERP-M4', name: '', plant: site }, // no name: rejected until the ERP is fixed
+  ];
+  const machines = async () => (await stack.admin.query(`select code, name from public.machines where organisation_id = $1 and code like 'ERP-%' order by code`, [org.id])).rows;
+  const latestRun = async () => (await stack.admin.query(`select id, kind, status, jsonb_build_object('total', records_total, 'created', created, 'updated', updated, 'unchanged', unchanged, 'rejected', rejected, 'failed', failed) as counts from public.integration_sync_runs where organisation_id = $1 and entity_type = 'machine' and connection_id = (select id from public.integration_connections where organisation_id = $1 and name = 'Plant ERP') order by requested_at desc limit 1`, [org.id])).rows[0];
+
+  step('owner connects the plant ERP through its REST API');
+  await page.goto(`${APP}/Settings/Integrations`);
+  await page.getByRole('button', { name: /Connect an API/ }).click();
+  const form = page.getByRole('dialog', { name: 'Add a connection' });
+  await form.getByLabel('Name', { exact: true }).fill('Plant ERP');
+  await form.getByLabel('Address').fill('https://erp.journey-erp.com/api');
+  await form.getByRole('combobox', { name: 'How we sign in' }).click();
+  await page.getByRole('option', { name: /^Bearer token/ }).click();
+  await form.getByLabel('Test path').fill('/health');
+  await form.getByRole('button', { name: /Add a kind of record/ }).click();
+  await form.getByRole('combobox', { name: 'Kind of record' }).click();
+  await page.getByRole('option', { name: /^Machines/ }).click();
+  await form.getByLabel('Path', { exact: true }).fill('/v1/machines');
+  await form.getByLabel('Where the list is in the answer').fill('data');
+  await form.getByRole('combobox', { name: 'Paging' }).click();
+  await page.getByRole('option', { name: /^Page numbers/ }).click();
+  await form.getByLabel('Records per page').fill('2');
+  await form.getByLabel('Page parameter').fill('page');
+  await form.getByLabel('Page size parameter').fill('per_page');
+  await shot(page, '80-api-connection-form');
+  await form.getByRole('button', { name: 'Save' }).click();
+  await page.waitForURL(/\/Settings\/Integrations\/[0-9a-f-]{36}$/);
+
+  step('owner stores the token, tests the connection, marks it ready and activates it');
+  await page.getByRole('button', { name: 'Store a credential' }).click();
+  const cred = page.getByRole('dialog', { name: 'Store a credential' });
+  await cred.getByLabel('Bearer token').fill(erp.token);
+  await cred.getByRole('button', { name: 'Store' }).click();
+  await see(page.getByText(/Bearer token stored/));
+  await page.getByRole('button', { name: 'Test connection' }).click();
+  await see(page.getByText(/The API answered 200 at \/api\/health/));
+  await page.getByRole('button', { name: 'Mark ready' }).click();
+  await page.getByRole('button', { name: 'Activate' }).click();
+  await see(page.getByRole('button', { name: 'Pause' }));
+  const secretShown = (await page.content()).includes(erp.token);
+  if (secretShown) throw new Error('the stored token appears in the page');
+  await shot(page, '81-api-connection-active');
+
+  step('owner maps the fields from what the API sends and imports');
+  await page.getByRole('link', { name: 'Map fields' }).click();
+  await page.waitForURL(/\/map\?/);
+  const code = page.getByRole('listitem', { name: 'Code', exact: true });
+  await see(code);
+  await see(page.getByText(/4 fields in the first 2 records/));
+  const siteRow = page.getByRole('listitem', { name: 'Site', exact: true });
+  await siteRow.getByRole('combobox', { name: 'Column for Site' }).click();
+  await page.getByRole('option', { name: /^plant/ }).click();
+  await see(code.getByLabel('Example for Code').getByText('ERP-M1'));
+  await shot(page, '82-api-map-fields');
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  const save = page.getByRole('dialog');
+  await see(save.getByLabel('Template name'));
+  await save.getByRole('button', { name: 'Save and import' }).click();
+  await page.waitForURL(/\/runs\//);
+  await see(page.getByText(/Machines from Plant ERP/).first());
+  await shot(page, '83-api-import-run');
+  let made = await machines();
+  let run = await latestRun();
+  log(`first import: ${JSON.stringify(run.counts)} machines ${JSON.stringify(made)}`);
+  if (made.length !== 3 || run.counts.created !== 3 || run.counts.rejected !== 1) throw new Error(`the first import did not write the three good records and reject the fourth: ${JSON.stringify({ made, counts: run.counts })}`);
+  if (!erp.requests.some((r) => r.query.page === '2')) throw new Error('the import did not read the second page');
+
+  step('the same import again writes nothing');
+  const connId = (await stack.admin.query(`select id from public.integration_connections where organisation_id = $1 and name = 'Plant ERP'`, [org.id])).rows[0].id;
+  await page.goto(`${APP}/Settings/Integrations/${connId}/map?entity=machine`);
+  await see(page.getByText('Version 1, unchanged'));
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await page.waitForURL(/\/runs\//);
+  run = await latestRun();
+  const mapped = Number((await stack.admin.query(`select count(*) from public.integration_external_records where connection_id = $1`, [connId])).rows[0].count);
+  log(`second import: ${JSON.stringify(run.counts)}`);
+  if ((await machines()).length !== 3 || mapped !== 3 || run.counts.created || run.counts.updated || run.counts.unchanged !== 3) throw new Error(`the second import was not a no-op: ${JSON.stringify(run.counts)}`);
+
+  step('the rejected record is fixed in the ERP and imported; a new bad one is ignored with a reason');
+  erp.machines[3].name = 'Erp drill';
+  erp.machines.push({ id: '5', code: '', name: 'No code', plant: site });
+  await page.goto(`${APP}/Settings/Integrations/${connId}/map?entity=machine`);
+  await see(page.getByText('Version 1, unchanged'));
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await page.waitForURL(/\/runs\//);
+  run = await latestRun();
+  made = await machines();
+  log(`third import: ${JSON.stringify(run.counts)} machines ${JSON.stringify(made)}`);
+  if (made.length !== 4 || !made.some((m) => m.code === 'ERP-M4' && m.name === 'Erp drill') || run.counts.rejected !== 1) throw new Error(`the fixed record was not imported: ${JSON.stringify({ made, counts: run.counts })}`);
+  await page.goto(`${APP}/Settings/Integrations/${connId}`);
+  const rows = page.getByRole('list', { name: 'Rows' });
+  await see(rows.getByText(/No code|Code/).first());
+  if (await rows.getByLabel('Choose 4').count()) throw new Error('the fixed record still needs a person');
+  await rows.getByLabel('Choose 5').check();
+  await page.getByRole('button', { name: 'Ignore 1' }).click();
+  const why = page.getByRole('dialog', { name: 'Ignore these rows' });
+  await why.getByLabel(/Why are they ignored/).fill('Test record in the ERP; it will never get a code');
+  await why.getByRole('button', { name: 'Ignore' }).click();
+  await see(page.getByText(/Nothing needs a person|No rows/).first());
+  const ignored = (await stack.admin.query(`select ignore_reason from public.integration_inbox where connection_id = $1 and status = 'ignored'`, [connId])).rows;
+  if (ignored.length !== 1) throw new Error(`the row was not ignored with its reason: ${JSON.stringify(ignored)}`);
+  await shot(page, '84-api-rows-ignored');
+
+  step('owner revokes the credential; the connection can no longer be tested');
+  await page.getByRole('button', { name: 'Revoke' }).click();
+  const revoke = page.getByRole('dialog', { name: 'Revoke the credential' });
+  await revoke.getByLabel('Reason').fill('Token rotated in the ERP');
+  await revoke.getByRole('button', { name: 'Revoke' }).click();
+  await see(page.getByText('No credential stored'));
+  const before = erp.requests.length;
+  await page.getByRole('button', { name: 'Test connection' }).click();
+  await see(page.getByText(/Store the credential for this connection first/).first());
+  if (erp.requests.length !== before) throw new Error('the test called the ERP without a credential');
+  await shot(page, '85-api-credential-revoked');
+}
+

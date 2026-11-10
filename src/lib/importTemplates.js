@@ -194,6 +194,16 @@ export const defaultTemplate = (templates) => {
   return used[0] ?? (live.length === 1 ? live[0] : null);
 };
 
+/**
+ * The template an API connection imports a kind of record with: the one its latest run of that kind used, while it is still in use. An API
+ * connection never falls back to another source's template (a file's columns are not what an API sends); with none, a new mapping is started.
+ */
+export const connectionTemplate = (runs, entityType, templates) => {
+  const live = new Set((templates ?? []).filter((t) => !t.archived).map((t) => t.id));
+  const run = (runs ?? []).filter((r) => r.entityType === entityType && r.template?.id && live.has(r.template.id)).sort((a, b) => (b.requestedAt ?? "").localeCompare(a.requestedAt ?? ""))[0];
+  return run ? (templates ?? []).find((t) => t.id === run.template.id) ?? null : null;
+};
+
 const fieldSummary = (f) => {
   if (f.formula) return `formula ${f.formula}`;
   const base = f.transform === "constant" ? `always "${f.value}"` : f.transform === "concat" ? (f.sources ?? []).join(" + ") : f.source ?? "—";

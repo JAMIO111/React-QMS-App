@@ -170,6 +170,59 @@ function makeFakeStripe(StripeGateway, ApiError) {
   return new FakeStripe();
 }
 
+/**
+ * A fake ERP for the integrations step (IN9): a REST API at "erp.journey-erp.com" that needs a bearer token and pages its machines. The journey changes
+ * `erp.machines` between imports (fix a rejected record, add one). The API's connector is the real one (RestApiAdapter over SafeHttpClient, every rule
+ * applied); only DNS (that one name → 127.0.0.1, which is allowed here and nowhere else) and the last hop (plain HTTP to this server) are swapped.
+ */
+async function startFakeErp(log) {
+  const erp = { token: 'journey-erp-token', machines: [], requests: [] };
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://erp');
+    erp.requests.push({ path: url.pathname, query: Object.fromEntries(url.searchParams), auth: req.headers.authorization });
+    const send = (status, body) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+    if (req.headers.authorization !== `Bearer ${erp.token}`) return send(401, { error: 'unauthorised' });
+    if (url.pathname === '/api/health') return send(200, { ok: true });
+    if (url.pathname === '/api/v1/machines') {
+      const page = Number(url.searchParams.get('page') || 1), size = Number(url.searchParams.get('per_page') || 100);
+      return send(200, { data: erp.machines.slice((page - 1) * size, page * size), total: erp.machines.length });
+    }
+    log(`fake erp: nothing for ${url.pathname}`);
+    return send(404, {});
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  erp.port = server.address().port;
+  erp.server = server;
+  return erp;
+}
+
+function erpConnectors(erp) {
+  const { ConnectorRegistry } = require('../../api/dist/integrations/core/connector.registry');
+  const { SafeHttpClient, isPublicAddress } = require('../../api/dist/integrations/core/safe-http');
+  const { CsvAdapter } = require('../../api/dist/integrations/providers/csv/csv.adapter');
+  const { RestApiAdapter } = require('../../api/dist/integrations/providers/rest-api/rest-api.adapter');
+  const lastHop = (req) =>
+    new Promise((resolve, reject) => {
+      const r = http.request({ host: '127.0.0.1', port: erp.port, path: `${req.url.pathname}${req.url.search}`, method: 'GET', headers: { ...req.headers, host: req.url.host } }, (res) => {
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => {
+          const headers = {};
+          for (const [k, v] of Object.entries(res.headers)) if (typeof v === 'string') headers[k] = v;
+          resolve({ status: res.statusCode ?? 0, headers, body: Buffer.concat(chunks) });
+        });
+      });
+      r.on('error', reject);
+      r.end();
+    });
+  const client = new SafeHttpClient({
+    resolve: async (host) => { if (host !== 'erp.journey-erp.com') throw new Error('ENOTFOUND'); return [{ address: '127.0.0.1', family: 4 }]; },
+    addressAllowed: (a) => a === '127.0.0.1' || isPublicAddress(a),
+    send: lastHop,
+  });
+  return new ConnectorRegistry().register(new CsvAdapter()).register(new RestApiAdapter(client));
+}
+
 /** Starts everything but the web app. Returns { admin, api, stripe, passwords, stop }. */
 async function startStack({ appUrl, log = console.log }) {
   const dbUrl = process.env.DATABASE_URL, adminUrl = process.env.DATABASE_ADMIN_URL;
@@ -195,15 +248,21 @@ async function startStack({ appUrl, log = console.log }) {
   const storage = new Map();
   const files = { get enabled() { return true; }, download: async (p) => (storage.has(`integration-files/${p}`) ? new Uint8Array(storage.get(`integration-files/${p}`)) : null) };
   const env = loadEnv({ NODE_ENV: 'test', DATABASE_URL: dbUrl, SUPABASE_JWT_SECRET: JWT_SECRET, JWT_ISSUER: ISSUER, LOG_LEVEL: 'silent', PORT: String(PORTS.api), CORS_ORIGINS: appUrl, APP_BASE_URL: appUrl, RATE_LIMIT_PER_MINUTE: '100000' });
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(env)] }).overrideProvider(StripeGateway).useValue(stripe).overrideProvider(IntegrationFileStore).useValue(files).compile();
+  const erp = await startFakeErp(log);
+  const { ConnectorRegistry } = require('../../api/dist/integrations/core/connector.registry'); // the provider token to replace
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(env)] })
+    .overrideProvider(StripeGateway).useValue(stripe)
+    .overrideProvider(IntegrationFileStore).useValue(files)
+    .overrideProvider(ConnectorRegistry).useValue(erpConnectors(erp))
+    .compile();
   const nest = moduleRef.createNestApplication({ bufferLogs: true, rawBody: true });
   const api = configureApp(nest, env);
   await api.init();
   await api.listen(PORTS.api, '127.0.0.1');
   const fake = await startFakeSupabase(admin, stripe, log, storage);
   return {
-    admin, api, stripe, passwords: fake.passwords, ports: PORTS, sign,
-    stop: async () => { await new Promise((r) => fake.server.close(r)); await api.close(); await admin.end(); },
+    admin, api, stripe, erp, passwords: fake.passwords, ports: PORTS, sign,
+    stop: async () => { await new Promise((r) => fake.server.close(r)); await new Promise((r) => erp.server.close(r)); await api.close(); await admin.end(); },
   };
 }
 

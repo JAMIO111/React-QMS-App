@@ -186,6 +186,12 @@ describe("An API connection's page", () => {
     expect(within(dialog).getByRole("button", { name: "Incremental" })).toBeDisabled();
     await userEvent.click(within(dialog).getByRole("combobox", { name: /Records/ }));
     await userEvent.click(await screen.findByRole("option", { name: "Machines" }));
+    // The connection has never imported machines, so no template is chosen for it: one is offered and the person picks it.
+    const template = await within(dialog).findByRole("combobox", { name: /Template/ });
+    expect(template).toHaveValue("");
+    expect(within(dialog).getByRole("button", { name: "Incremental" })).toBeDisabled();
+    await userEvent.click(template);
+    await userEvent.click(await screen.findByRole("option", { name: /ERP machines/ }));
     await waitFor(() => expect(within(dialog).getByRole("button", { name: "Incremental" })).toBeEnabled());
     await userEvent.click(within(dialog).getByRole("button", { name: "Incremental" }));
     await userEvent.click(within(dialog).getByRole("button", { name: "Run" }));

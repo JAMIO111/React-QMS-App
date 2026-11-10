@@ -7,6 +7,7 @@ import {
   useImportTemplates,
   useIntegrationConnection,
   useIntegrationEntities,
+  useIntegrationRuns,
   useIntegrationMutation,
   useTemplateMutation,
   useTemplatePreview,
@@ -15,7 +16,7 @@ import { useOrganisationDetails, usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import { ENTITY_LABELS, mappingToRows, rowHasSource, rowsInUse, rowsToFields } from "../../lib/integrations";
-import { ADD_ONLY_KINDS, ADD_UPDATE_KINDS, defaultTemplate, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
+import { ADD_ONLY_KINDS, ADD_UPDATE_KINDS, connectionTemplate, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
@@ -54,7 +55,9 @@ const ApiMappingPage = () => {
   const sample = useApiSampleQuery(conn?.provider?.key === "rest_api" ? id : null, entityType);
   const allTemplates = useImportTemplates(undefined);
   const templates = (allTemplates.data ?? []).filter((t) => t.entityType === entityType);
-  const fallback = defaultTemplate(templates);
+  const runs = useIntegrationRuns(id);
+  // Start from what this connection last imported with; never from a template made for another source (e.g. a file's columns).
+  const fallback = connectionTemplate(runs.data?.data, entityType, templates);
   const templateParam = params.get("template");
   const templateId = templateParam === "new" ? null : templateParam ?? fallback?.id ?? null;
   const template = useImportTemplate(templateId);
@@ -65,7 +68,7 @@ const ApiMappingPage = () => {
   const [form, setForm] = useState(null);
   const [problems, setProblems] = useState([]);
   const [saving, setSaving] = useState(null); // { kind } while the save dialog is open
-  const templateReady = !templateId || !!template.data;
+  const templateReady = (!templateId || !!template.data) && !runs.isLoading;
   const formKey = `${entityType}|${templateId ?? "new"}|${version?.version ?? 0}|${catalogue ? 1 : 0}|${sample.data ? headers.join("\u0001") : "-"}|${allTemplates.isSuccess ? 1 : 0}|${templateReady ? 1 : 0}`;
   useEffect(() => {
     if (!catalogue || !allTemplates.isSuccess || !sample.data || !templateReady) return;

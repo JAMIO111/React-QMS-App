@@ -1,6 +1,6 @@
 # Connectors and integrations (brief Phase 5) — plan
 
-**Status: decisions D1–D10 agreed (D4 refined as in §3 and §5; D5 and D7 amended and D9–D10 added after IN3, see §6.7–§6.9). IN0–IN8 done (IN8 applied live 2026-11-10); IN9 next.**
+**Status: decisions D1–D10 agreed (D4 refined as in §3 and §5; D5 and D7 amended and D9–D10 added after IN3, see §6.7–§6.9). IN0–IN9 done; Phase 5 is complete — exit report `docs/connectors-exit-report.md`.**
 
 Source: `docs/design-brief.md` §7 (integration platform), §8 (events), §12 Phase 5, §13 (integration backlog), §14 (definition of done for integrations), §15 (non-goals).
 This is the **planning document**. Nothing here is built. Each slice is agreed before it starts (CLAUDE.md, brief §14).
@@ -302,7 +302,7 @@ Each entity module declares: canonical fields (type, required, allowed values), 
 | **IN6** ✅ | Purchase orders, lines and **goods receipts** (historical mode, both source shapes, reconciliation) (§6.13–§6.14) | Inventory-transaction export → receipts; supplier performance computed; mismatches reported |
 | **IN7** ✅ | Generic REST adapter: auth types, pagination styles, incremental cursor, rate limits/backoff, **SSRF defence** | A fake REST server (in tests) imports with pagination and cursor; private targets refused |
 | **IN8** ✅ | Schedules (D9: daily cron for fetchable sources), records that disappeared (list / make inactive), retries, rejected-record resolution UI, monitoring, integration card on the overview | Scheduled incremental sync recovers from a failure without duplicates |
-| **IN9** | Exit check: browser journey (set up → preview → approve → sync → run twice → no duplicates → fix a rejected row), live guardrails, exit report | Brief §14 integration checklist all verified |
+| **IN9** ✅ | Exit check: browser journey (set up → preview → approve → sync → run twice → no duplicates → fix a rejected row), live guardrails, exit report | Brief §14 integration checklist all verified |
 
 Each slice ends with: migration + SQL tests, API + e2e, UI + component tests, sweeps updated, CLAUDE.md updated, nothing pushed until you say so.
 

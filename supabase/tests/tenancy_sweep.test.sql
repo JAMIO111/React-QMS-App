@@ -324,6 +324,11 @@ BEGIN
     VALUES (a, '5f000000-0000-0000-0000-00000000c001', 1, 'transient', 'Sweep error', true);
   INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id FROM public.notifications WHERE organisation_id = a LIMIT 1;
+  -- Custom fields (CF1): a definition and a part's values (seeded directly; people write through functions).
+  INSERT INTO public.custom_field_definitions (organisation_id, entity_type, key, label, field_type)
+    VALUES (a, 'part', 'sweep_note', 'Sweep note', 'text');
+  INSERT INTO public.custom_field_values (record_id, organisation_id, entity_type, "values")
+    VALUES ((SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'), a, 'part', '{"sweep_note": "x"}');
   INSERT INTO sweep VALUES ('pc_part', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'));
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));

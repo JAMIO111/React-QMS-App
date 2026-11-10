@@ -330,21 +330,6 @@ BEGIN
   RETURN app.write_custom_values(p_entity, p_record, r.org, p_values);
 END $$;
 
--- A record's custom values for the caller: not found when there is no such record or the caller may not read it; {} when it has none.
-CREATE FUNCTION app.get_custom_values(p_entity text, p_record uuid) RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
-DECLARE r record;
-BEGIN
-  IF NOT (p_entity = ANY (app.custom_field_entities())) THEN
-    RAISE EXCEPTION 'Custom fields are not available on %', p_entity USING ERRCODE = 'QM023';
-  END IF;
-  SELECT * INTO r FROM app.custom_field_record(p_entity, p_record);
-  IF r.org IS NULL OR NOT app.custom_values_readable(r.org, p_entity) THEN
-    RAISE EXCEPTION 'Record not found' USING ERRCODE = 'P0002';
-  END IF;
-  RETURN coalesce((SELECT "values" FROM public.custom_field_values WHERE record_id = p_record AND entity_type = p_entity), '{}'::jsonb);
-END $$;
-
 -- Whether writing p_values would change anything (a locked record accepts a save that changes nothing).
 CREATE FUNCTION app.write_custom_values_dry(p_entity text, p_record uuid, p_org uuid, p_values jsonb) RETURNS boolean
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
@@ -625,10 +610,10 @@ REVOKE ALL ON FUNCTION app.custom_field_record(text, uuid), app.custom_field_val
   app.custom_values_missing(text, uuid, uuid, text), app.custom_values_required_on_create(), app.custom_values_stage_check(),
   app.custom_field_key_from(uuid, text, text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION app.save_custom_field(uuid, text, jsonb, uuid), app.retire_custom_field(uuid, text), app.reactivate_custom_field(uuid),
-  app.reorder_custom_fields(uuid, text, uuid[]), app.set_custom_values(text, uuid, jsonb), app.get_custom_values(text, uuid),
+  app.reorder_custom_fields(uuid, text, uuid[]), app.set_custom_values(text, uuid, jsonb),
   app.custom_values_readable(uuid, text), app.custom_values_writable(uuid, text), app.custom_field_options_problem(jsonb),
   app.custom_field_entities(), app.custom_field_stages(text), app.custom_field_definition_guard() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION app.save_custom_field(uuid, text, jsonb, uuid), app.retire_custom_field(uuid, text), app.reactivate_custom_field(uuid),
-  app.reorder_custom_fields(uuid, text, uuid[]), app.set_custom_values(text, uuid, jsonb), app.get_custom_values(text, uuid),
+  app.reorder_custom_fields(uuid, text, uuid[]), app.set_custom_values(text, uuid, jsonb),
   app.custom_values_readable(uuid, text), app.custom_values_writable(uuid, text), app.custom_field_options_problem(jsonb),
   app.custom_field_entities(), app.custom_field_stages(text) TO authenticated;

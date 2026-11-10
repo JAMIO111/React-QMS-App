@@ -81,7 +81,7 @@ const FindingDialog = ({ record, question, finding, onClose, onSaved }) => {
           <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" disabled={!ok || mutation.isPending} type="main" size="lg">
+          <CTAButton buttonType="submit" disabled={!ok || mutation.isPending} loading={mutation.isPending} type="main" size="lg">
             {mutation.isPending ? "Saving…" : editing ? "Save finding" : "Raise finding"}
           </CTAButton>
         </div>

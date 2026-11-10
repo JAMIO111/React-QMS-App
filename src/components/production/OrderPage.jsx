@@ -49,7 +49,7 @@ const AddOperation = ({ orderId }) => {
       </div>
       <FormError error={mutation.error} />
       <div>
-        <CTAButton buttonType="submit" type="secondary" size="md" disabled={mutation.isPending || !form.operationCode.trim()}>
+        <CTAButton buttonType="submit" type="secondary" size="md" disabled={mutation.isPending || !form.operationCode.trim()} loading={mutation.isPending}>
           {mutation.isPending ? "Adding…" : "Add operation"}
         </CTAButton>
       </div>

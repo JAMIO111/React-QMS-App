@@ -292,7 +292,7 @@ const CalibrationRecordPage = () => {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!isNew && outOfTolerance && !c.nonconformance && !c.deletedAt && can("ncr.create") && can("calibration.record") && (
-            <CTAButton buttonType="button" onClick={raiseNcr} disabled={mutation.isPending || dirty} type="danger" size="default" className="px-3" title={dirty ? "Save your changes first" : "Raise a draft internal NC for this calibration"}>
+            <CTAButton buttonType="button" onClick={raiseNcr} disabled={mutation.isPending || dirty} loading={mutation.isPending} type="danger" size="default" className="px-3" title={dirty ? "Save your changes first" : "Raise a draft internal NC for this calibration"}>
               <TriangleAlertIcon className="h-4 w-4" /> Raise NC
             </CTAButton>
           )}
@@ -307,7 +307,7 @@ const CalibrationRecordPage = () => {
             </CTAButton>
           )}
           {canEdit && (
-            <CTAButton buttonType="button" onClick={save} disabled={mutation.isPending || !valid || (!isNew && !dirty)} type="success" size="default" className="px-3">
+            <CTAButton buttonType="button" onClick={save} disabled={mutation.isPending || !valid || (!isNew && !dirty)} loading={mutation.isPending} type="success" size="default" className="px-3">
               <SaveIcon className="h-4 w-4" /> {mutation.isPending ? "Saving…" : isNew ? "Save calibration" : "Save changes"}
             </CTAButton>
           )}
@@ -331,7 +331,7 @@ const CalibrationRecordPage = () => {
           <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
             Deleted {formatDate(c.deletedAt)} by {c.deletedBy?.name ?? "—"}: “{c.deleteReason}”. It no longer counts towards the gauge's dates.
             {can("calibration.record") && !g.deletedAt && (
-              <CTAButton buttonType="button" onClick={restore} disabled={mutation.isPending} type="neutral" size="default" className="px-3">
+              <CTAButton buttonType="button" onClick={restore} disabled={mutation.isPending} loading={mutation.isPending} type="neutral" size="default" className="px-3">
                 <RotateCcwIcon className="h-4 w-4" /> Restore
               </CTAButton>
             )}

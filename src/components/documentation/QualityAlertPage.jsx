@@ -58,7 +58,7 @@ const ReasonDialog = ({ title, intro, confirmText, action, alert, onClose, onDon
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!reason.trim() || mutation.isPending}>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!reason.trim() || mutation.isPending} loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : confirmText}
           </CTAButton>
         </div>
@@ -89,7 +89,7 @@ const ReopenDialog = ({ alert, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!expiry || !reason.trim() || mutation.isPending}>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!expiry || !reason.trim() || mutation.isPending} loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : "Reopen alert"}
           </CTAButton>
         </div>
@@ -212,7 +212,7 @@ const Tracking = ({ alert, canAdd }) => {
                 <option value="">Add a person…</option>
                 {candidates.map((m) => <option key={m.membershipId} value={m.membershipId}>{[m.firstName, m.surname].filter(Boolean).join(" ") || m.email}</option>)}
               </select>
-              <CTAButton buttonType="submit" type="neutral" size="md" disabled={!person || mutation.isPending}>Add</CTAButton>
+              <CTAButton buttonType="submit" type="neutral" size="md" disabled={!person || mutation.isPending} loading={mutation.isPending}>Add</CTAButton>
             </form>
           )}
         </div>
@@ -308,11 +308,11 @@ const QualityAlertPage = () => {
           {isDraft && manage && (
             <>
               <CTAButton buttonType="button" type="neutral" size="md" onClick={() => navigate(`/Documentation/Quality-Alerts/${a.id}/edit`)}>Edit</CTAButton>
-              <CTAButton buttonType="button" type="neutral" size="md" disabled={mutation.isPending} onClick={doDiscard}>Discard</CTAButton>
+              <CTAButton buttonType="button" type="neutral" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={doDiscard}>Discard</CTAButton>
             </>
           )}
           {isDraft && issue && (
-            <CTAButton buttonType="button" type="main" size="lg" disabled={mutation.isPending} onClick={doIssue}>Issue alert</CTAButton>
+            <CTAButton buttonType="button" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending} onClick={doIssue}>Issue alert</CTAButton>
           )}
           {current && issue && (
             <>

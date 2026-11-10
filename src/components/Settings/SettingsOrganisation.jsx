@@ -200,7 +200,7 @@ const SettingsOrganisation = () => {
         {canManage && (
           <CTAButton
             buttonType="submit"
-            disabled={update.isPending}
+            disabled={update.isPending} loading={update.isPending}
             type="main" size="lg" className="self-start">
             {update.isPending ? "Saving…" : "Save changes"}
           </CTAButton>

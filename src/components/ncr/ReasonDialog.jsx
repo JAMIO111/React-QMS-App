@@ -25,7 +25,7 @@ const ReasonDialog = ({ title, label, confirmText, onConfirm, onClose, pending, 
           <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             Back
           </CTAButton>
-          <CTAButton buttonType="submit" disabled={pending || reason.trim().length < 3} type="main" size="md">
+          <CTAButton buttonType="submit" disabled={pending || reason.trim().length < 3} loading={pending} type="main" size="md">
             {pending ? "Saving…" : confirmText}
           </CTAButton>
         </div>

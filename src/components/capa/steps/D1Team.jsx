@@ -39,7 +39,7 @@ const ExternalDialog = ({ capa, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !form.externalName.trim()}>{mutation.isPending ? "Adding…" : "Add contact"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !form.externalName.trim()} loading={mutation.isPending}>{mutation.isPending ? "Adding…" : "Add contact"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -101,7 +101,7 @@ const D1Team = ({ capa, editable }) => {
           }}>
           <RHFComboBox label="Add a member of the organisation" required value={adding.membershipId} onChange={(v) => setAdding((a) => ({ ...a, membershipId: v }))} options={choices} placeholder="Choose a person" />
           <RHFComboBox label="Role" value={adding.role} onChange={(v) => setAdding((a) => ({ ...a, role: v ?? "member" }))} options={MEMBER_ROLES} sort={false} clearable={false} />
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!adding.membershipId || mutation.isPending}>Add</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!adding.membershipId || mutation.isPending} loading={mutation.isPending}>Add</CTAButton>
         </form>
       )}
       {left.length > 0 && (

@@ -68,7 +68,7 @@ const CreateOrganisationForm = ({ onCreated }) => {
       )}
       <CTAButton
         buttonType="submit"
-        disabled={create.isPending || name.trim().length < 2}
+        disabled={create.isPending || name.trim().length < 2} loading={create.isPending}
         type="main" size="lg" className="self-start">
         {create.isPending ? "Creating…" : "Create organisation"}
       </CTAButton>

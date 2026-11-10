@@ -41,7 +41,7 @@ const StageBar = ({ ncr, gates, canUpdate, dirty, onMove, onCancel, onReopen, pe
       {!blocked && (
         <div className="flex flex-wrap items-center gap-2">
           {options.forward.slice(0, 1).map((to) => (
-            <CTAButton key={to} buttonType="button" disabled={pending || dirty} onClick={() => onMove(to)}
+            <CTAButton key={to} buttonType="button" disabled={pending || dirty} loading={pending} onClick={() => onMove(to)}
               type="main" size="md">
               {to === "open" ? "Open this NC" : `Move to ${stageOf(to).label}`}
             </CTAButton>
@@ -58,12 +58,12 @@ const StageBar = ({ ncr, gates, canUpdate, dirty, onMove, onCancel, onReopen, pe
             </select>
           )}
           {options.cancel && (
-            <CTAButton buttonType="button" disabled={pending || dirty} onClick={onCancel} type="neutral" size="md">
+            <CTAButton buttonType="button" disabled={pending || dirty} loading={pending} onClick={onCancel} type="neutral" size="md">
               Cancel NC
             </CTAButton>
           )}
           {options.reopen && (
-            <CTAButton buttonType="button" disabled={pending} onClick={onReopen} type="neutral" size="md" className="flex items-center gap-1">
+            <CTAButton buttonType="button" disabled={pending} loading={pending} onClick={onReopen} type="neutral" size="md" className="flex items-center gap-1">
               <RotateCcwIcon className="h-4 w-4" /> Reopen
             </CTAButton>
           )}

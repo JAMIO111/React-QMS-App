@@ -83,7 +83,7 @@ const StatusChangeDialog = ({ supplier, initial, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type={status === "disqualified" || status === "suspended" ? "danger" : "main"} size="md" disabled={!ok || mutation.isPending}>
+          <CTAButton buttonType="submit" type={status === "disqualified" || status === "suspended" ? "danger" : "main"} size="md" disabled={!ok || mutation.isPending} loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : status ? MOVE_VERB[status] : "Change"}
           </CTAButton>
         </div>

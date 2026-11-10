@@ -827,7 +827,7 @@ const CharacteristicForm = ({
         <CTAButton
           buttonType="submit"
           type="main" size="lg"
-          disabled={mutation.isPending}
+          disabled={mutation.isPending} loading={mutation.isPending}
         >
           {mutation.isPending
             ? "Saving…"

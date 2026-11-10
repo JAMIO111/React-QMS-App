@@ -23,7 +23,7 @@ const PendingInvitations = () => {
             </div>
             <CTAButton
               buttonType="button"
-              disabled={accept.isPending || inv.expired}
+              disabled={accept.isPending || inv.expired} loading={accept.isPending}
               onClick={() => accept.mutate(inv.membershipId)}
               type="main" size="md">
               Accept

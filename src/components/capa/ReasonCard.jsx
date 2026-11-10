@@ -16,7 +16,7 @@ const ReasonCard = ({ capa, editable, field, value, title, subtitle, label, hint
       <FormError error={mutation.error} />
       {editable && (
         <div className="flex justify-end">
-          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty || mutation.isPending}>{mutation.isPending ? "Saving…" : saveLabel}</CTAButton>
+          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : saveLabel}</CTAButton>
         </div>
       )}
     </MenuCard>

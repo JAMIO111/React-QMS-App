@@ -30,7 +30,7 @@ const CauseDialog = ({ capa, cause, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !form.description.trim()}>{mutation.isPending ? "Saving…" : cause ? "Save" : "Add root cause"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !form.description.trim()} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : cause ? "Save" : "Add root cause"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -57,7 +57,7 @@ const VerifyDialog = ({ cause, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !method.trim()}>{mutation.isPending ? "Saving…" : cause.verified ? "Save verification" : "Mark as verified"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !method.trim()} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : cause.verified ? "Save verification" : "Mark as verified"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -71,7 +71,7 @@ const ConfirmRemove = ({ title, text, pending, error, onConfirm, onClose }) => (
       <FormError error={error} />
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Keep it</CTAButton>
-        <CTAButton buttonType="button" type="danger" size="md" disabled={pending} onClick={onConfirm}>{pending ? "Removing…" : "Remove"}</CTAButton>
+        <CTAButton buttonType="button" type="danger" size="md" disabled={pending} loading={pending} onClick={onConfirm}>{pending ? "Removing…" : "Remove"}</CTAButton>
       </div>
     </div>
   </Dialog>
@@ -125,7 +125,7 @@ const D4RootCause = ({ capa, editable }) => {
                   <div className="flex flex-wrap gap-2">
                     <CTAButton type={c.verified ? "neutral" : "main"} size={c.verified ? "md" : "lg"} aria-label={`${c.verified ? "Edit verification of" : "Verify"}: ${c.description}`} onClick={() => { mutation.reset(); setDialog({ type: "verify", cause: c }); }}>{c.verified ? "Edit verification" : "Verify"}</CTAButton>
                     <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Edit: ${c.description}`} onClick={() => { mutation.reset(); setDialog({ type: "cause", cause: c }); }}>Edit</CTAButton>
-                    {c.verified && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Withdraw verification of: ${c.description}`} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "updateRootCause", id: c.id, body: { verified: false } })}>Withdraw verification</CTAButton>}
+                    {c.verified && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Withdraw verification of: ${c.description}`} disabled={mutation.isPending} loading={mutation.isPending} onClick={() => mutation.mutate({ action: "updateRootCause", id: c.id, body: { verified: false } })}>Withdraw verification</CTAButton>}
                     <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Remove: ${c.description}`} onClick={() => { mutation.reset(); setDialog({ type: "remove-cause", cause: c }); }}>Remove</CTAButton>
                   </div>
                 )}

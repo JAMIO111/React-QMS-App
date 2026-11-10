@@ -172,7 +172,7 @@ const FiveWhysDialog = ({ capa, analysis, onClose }) => {
           <CTAButton
             buttonType="submit"
             type="neutral" size="md"
-            disabled={mutation.isPending || !title.trim()}>
+            disabled={mutation.isPending || !title.trim()} loading={mutation.isPending}>
             Save analysis
           </CTAButton>
           <CTAButton
@@ -183,7 +183,7 @@ const FiveWhysDialog = ({ capa, analysis, onClose }) => {
               !title.trim() ||
               !rootCause.trim() ||
               alreadyRecorded
-            }
+            } loading={mutation.isPending}
             onClick={run(true)}>
             {alreadyRecorded
               ? "Already a root cause"

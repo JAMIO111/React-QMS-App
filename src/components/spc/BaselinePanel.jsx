@@ -234,7 +234,7 @@ const BaselinePanel = ({ chart, params, rules, decimals }) => {
               <CTAButton
                 buttonType="submit"
                 type="main" size="lg"
-                disabled={create.isPending}
+                disabled={create.isPending} loading={create.isPending}
               >
                 {active
                   ? "Calculate and replace baseline"

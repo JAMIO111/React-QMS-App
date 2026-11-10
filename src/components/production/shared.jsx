@@ -37,7 +37,7 @@ export const StatusMoves = ({ moves = [], path, noun, onDone, disabled }) => {
     <>
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label={`Change ${noun} status`}>
         {moves.map((m) => (
-          <CTAButton key={m.to} type={m.danger ? "danger" : "secondary"} size="md" disabled={disabled || mutation.isPending} onClick={() => (m.reason ? setAsking(m) : run(m))}>
+          <CTAButton key={m.to} type={m.danger ? "danger" : "secondary"} size="md" disabled={disabled || mutation.isPending} loading={mutation.isPending} onClick={() => (m.reason ? setAsking(m) : run(m))}>
             {m.label}
           </CTAButton>
         ))}

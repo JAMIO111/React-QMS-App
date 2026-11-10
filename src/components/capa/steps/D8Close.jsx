@@ -26,7 +26,7 @@ const CloseDialog = ({ capa, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>{mutation.isPending ? "Closing…" : "Close 8D"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Closing…" : "Close 8D"}</CTAButton>
         </div>
       </form>
     </Dialog>

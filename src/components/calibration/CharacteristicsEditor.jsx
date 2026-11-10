@@ -148,7 +148,7 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
                     <Fields form={editForm} setForm={setEditForm} units={units.data} idPrefix={c.id} />
                     <td className="p-1">
                       <div className="flex gap-1">
-                        <CTAButton buttonType="button" disabled={!valid(editForm) || mutation.isPending} onClick={() => patch(c.id, toBody(editForm), () => setEditing(null))}
+                        <CTAButton buttonType="button" disabled={!valid(editForm) || mutation.isPending} loading={mutation.isPending} onClick={() => patch(c.id, toBody(editForm), () => setEditing(null))}
                           type="main" size="md" className="px-2 py-1">Save</CTAButton>
                         <button type="button" onClick={() => setEditing(null)} className="px-1 text-sm text-secondary-text hover:underline cursor-pointer">Cancel</button>
                       </div>
@@ -203,7 +203,7 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
                   <Fields form={newForm} setForm={setNewForm} units={units.data} idPrefix="new" />
                   <td className="p-1">
                     <div className="flex gap-1">
-                      <CTAButton buttonType="button" disabled={!valid(newForm) || mutation.isPending} onClick={create}
+                      <CTAButton buttonType="button" disabled={!valid(newForm) || mutation.isPending} loading={mutation.isPending} onClick={create}
                         type="main" size="md" className="px-2 py-1">Add</CTAButton>
                       <button type="button" onClick={() => setAdding(false)} className="px-1 text-sm text-secondary-text hover:underline cursor-pointer">Cancel</button>
                     </div>

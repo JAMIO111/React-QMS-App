@@ -66,7 +66,7 @@ const AuditPage = () => {
             <CTAButton
               buttonType="button"
               type="secondary" size="md"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending} loading={mutation.isPending}
               onClick={() =>
                 mutation.mutate(
                   { path: "/audit-records", body: { auditId: a.id } },
@@ -90,7 +90,7 @@ const AuditPage = () => {
               <CTAButton
                 buttonType="button"
                 type="neutral" size="md"
-                disabled={mutation.isPending}
+                disabled={mutation.isPending} loading={mutation.isPending}
                 onClick={() =>
                   mutation.mutate({ path: `/audits/${a.id}/reactivate` }, { onSuccess: () => showToast({ type: "success", title: "Reactivated", message: `${a.reference} is active again.` }) })
                 }>

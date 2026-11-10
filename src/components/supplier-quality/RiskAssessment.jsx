@@ -123,7 +123,7 @@ const AssessDialog = ({ supplier, model, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!all || rationale.trim().length < 3 || mutation.isPending}>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!all || rationale.trim().length < 3 || mutation.isPending} loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : "Record assessment"}
           </CTAButton>
         </div>

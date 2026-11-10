@@ -48,7 +48,7 @@ const CodeForm = ({ onSubmit, submitLabel = "Verify", describeError, autoFocus =
       )}
       <CTAButton
         buttonType="submit"
-        disabled={!ready || busy}
+        disabled={!ready || busy} loading={busy}
         type="main" size="lg" className="self-start">
         {busy ? "Checking…" : submitLabel}
       </CTAButton>

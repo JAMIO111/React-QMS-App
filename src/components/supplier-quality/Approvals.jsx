@@ -59,7 +59,7 @@ const ProposeDialog = ({ supplier, assessments, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!ok || mutation.isPending}>{mutation.isPending ? "Saving…" : "Propose"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!ok || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Propose"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -80,7 +80,7 @@ const DecideDialog = ({ decision, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type={approve === "approve" ? "main" : "danger"} size="lg" disabled={note.trim().length < 3 || mutation.isPending}>{mutation.isPending ? "Saving…" : approve === "approve" ? "Approve" : "Reject"}</CTAButton>
+          <CTAButton buttonType="submit" type={approve === "approve" ? "main" : "danger"} size="lg" disabled={note.trim().length < 3 || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : approve === "approve" ? "Approve" : "Reject"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -97,7 +97,7 @@ const WithdrawDialog = ({ decision, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="danger" size="lg" disabled={reason.trim().length < 3 || mutation.isPending}>{mutation.isPending ? "Saving…" : "Withdraw"}</CTAButton>
+          <CTAButton buttonType="submit" type="danger" size="lg" disabled={reason.trim().length < 3 || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Withdraw"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -209,7 +209,7 @@ export const AssessmentsCard = ({ supplier, canManage, onOpen }) => {
             <FormError error={mutation.error} />
             <div className="flex justify-end gap-2">
               <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setOpen(false)}>Cancel</CTAButton>
-              <CTAButton buttonType="submit" type="main" size="lg" disabled={!chosen || mutation.isPending}>{mutation.isPending ? "Starting…" : "Start"}</CTAButton>
+              <CTAButton buttonType="submit" type="main" size="lg" disabled={!chosen || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Starting…" : "Start"}</CTAButton>
             </div>
           </form>
         </Dialog>

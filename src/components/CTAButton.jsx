@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { twMerge } from "tailwind-merge";
+import { LoaderCircleIcon } from "@/components/icons";
 
 /**
  * The app's one button. Every main, secondary, neutral, danger and success button uses it, so they all look, scale when pressed,
@@ -14,6 +15,8 @@ import { twMerge } from "tailwind-merge";
  * - `size`: "default" (toolbar), "md" (forms and dialogs), "lg" (the main action of a form).
  * - `buttonType`: the HTML type (button, submit, reset); it is "button" unless you say otherwise.
  * - `to`: renders a router link instead of a button. `className` adds to (and wins over) the defaults, e.g. `w-full`.
+ * - `loading`: something is loading or saving — a spinner takes the icon's place (or comes first), clicks are ignored and the button says it is busy.
+ *   Pass it wherever the button waits on a request (`loading={mutation.isPending}`); `loadingText` replaces the label meanwhile.
  * - Any other attribute (aria-label, form, id, data-*, onClick, ref …) goes to the element.
  */
 const VARIANTS = {
@@ -52,19 +55,24 @@ const CTAButton = ({
   textSize = "text-sm",
   borderRadius = "rounded-lg",
   disabled = false,
+  loading = false,
+  loadingText,
   buttonType = "button",
   ...rest
 }) => {
-  const content = children ?? text;
+  const content = loading && loadingText ? loadingText : (children ?? text);
+  const inactive = disabled || loading;
   const classes = twMerge(
     "flex flex-row gap-2 items-center justify-center transition-transform duration-200 ease-in-out",
     children === undefined && "truncate",
     SIZES[size] ?? SIZES.default,
     textSize,
     VARIANTS[ALIASES[type] ?? type] ?? VARIANTS.main,
-    disabled
-      ? "opacity-50 cursor-not-allowed"
-      : "cursor-pointer active:scale-97",
+    loading
+      ? "opacity-80 cursor-wait"
+      : disabled
+        ? "opacity-50 cursor-not-allowed"
+        : "cursor-pointer active:scale-97",
     width,
     height,
     borderRadius,
@@ -72,12 +80,16 @@ const CTAButton = ({
   );
   const inner = (
     <>
-      {Icon && <Icon className={iconSize} />}
+      {loading ? (
+        <LoaderCircleIcon className={twMerge("shrink-0 animate-spin", Icon ? iconSize : "h-4 w-4")} aria-hidden="true" data-testid="button-spinner" />
+      ) : (
+        Icon && <Icon className={iconSize} />
+      )}
       {content}
     </>
   );
 
-  if (to && !disabled) {
+  if (to && !inactive) {
     return (
       <Link
         to={to}
@@ -92,7 +104,8 @@ const CTAButton = ({
   return (
     <button
       type={buttonType}
-      disabled={disabled}
+      disabled={inactive}
+      aria-busy={loading || undefined}
       title={title}
       onClick={onClick ?? callbackFn}
       className={classes}

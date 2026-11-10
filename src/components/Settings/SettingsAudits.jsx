@@ -72,7 +72,7 @@ const ClassificationDialog = ({ existing, onClose }) => {
           <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" disabled={!ok || mutation.isPending || update.isPending} type="main" size="lg">
+          <CTAButton buttonType="submit" disabled={!ok || mutation.isPending || update.isPending} loading={mutation.isPending || update.isPending} type="main" size="lg">
             {existing ? "Save" : "Add classification"}
           </CTAButton>
         </div>

@@ -101,7 +101,7 @@ const PartDetails = ({ part, canManage }) => {
         </p>
       )}
       {canManage && (
-        <CTAButton buttonType="submit" type="main" size="lg" className="self-start" disabled={mutation.isPending}>
+        <CTAButton buttonType="submit" type="main" size="lg" className="self-start" disabled={mutation.isPending} loading={mutation.isPending}>
           {mutation.isPending ? "Saving…" : "Save changes"}
         </CTAButton>
       )}
@@ -145,7 +145,7 @@ const RevisionForm = ({ part, revision, onDone }) => {
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>
           {mutation.isPending ? "Saving…" : revision ? "Save draft" : "Add draft revision"}
         </CTAButton>
       </div>
@@ -237,14 +237,14 @@ const Revisions = ({ part, canManage }) => {
                             </CTAButton>
                             {r.correctsId ? (
                               canApprove ? (
-                                <CTAButton buttonType="button" type="main" size="lg" onClick={() => setApproving(r)} disabled={mutation.isPending}>
+                                <CTAButton buttonType="button" type="main" size="lg" onClick={() => setApproving(r)} disabled={mutation.isPending} loading={mutation.isPending}>
                                   Approve and release
                                 </CTAButton>
                               ) : (
                                 <span className="self-center text-xs text-secondary-text">Needs approval</span>
                               )
                             ) : (
-                              <CTAButton buttonType="button" type="main" size="lg" onClick={() => transition(r, "release")} disabled={mutation.isPending}>
+                              <CTAButton buttonType="button" type="main" size="lg" onClick={() => transition(r, "release")} disabled={mutation.isPending} loading={mutation.isPending}>
                                 Release
                               </CTAButton>
                             )}
@@ -256,7 +256,7 @@ const Revisions = ({ part, canManage }) => {
                           </CTAButton>
                         )}
                         {r.status !== "obsolete" && r.status !== "corrected" && (
-                          <CTAButton buttonType="button" type="danger" size="md" onClick={() => transition(r, "obsolete")} disabled={mutation.isPending} aria-label={`${r.correctsId && r.status === "draft" ? "Discard correction" : "Make revision"} ${revisionLabel(r)}${r.correctsId && r.status === "draft" ? "" : " obsolete"}`}>
+                          <CTAButton buttonType="button" type="danger" size="md" onClick={() => transition(r, "obsolete")} disabled={mutation.isPending} loading={mutation.isPending} aria-label={`${r.correctsId && r.status === "draft" ? "Discard correction" : "Make revision"} ${revisionLabel(r)}${r.correctsId && r.status === "draft" ? "" : " obsolete"}`}>
                             {r.correctsId && r.status === "draft" ? "Discard" : "Obsolete"}
                           </CTAButton>
                         )}

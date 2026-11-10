@@ -27,7 +27,7 @@ export const LinkReceiptDialog = ({ ncr, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!lineId || mutation.isPending}>{mutation.isPending ? "Linking…" : "Link"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!lineId || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Linking…" : "Link"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -46,7 +46,7 @@ const UnlinkDialog = ({ item, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="danger" size="lg" disabled={!ok || mutation.isPending}>{mutation.isPending ? "Saving…" : "End the link"}</CTAButton>
+          <CTAButton buttonType="submit" type="danger" size="lg" disabled={!ok || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "End the link"}</CTAButton>
         </div>
       </form>
     </Dialog>

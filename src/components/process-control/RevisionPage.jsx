@@ -69,7 +69,7 @@ const OperationForm = ({ revision, operation, onDone }) => {
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>
           {mutation.isPending ? "Saving…" : operation ? "Save operation" : "Add operation"}
         </CTAButton>
       </div>
@@ -125,7 +125,7 @@ const RevisionReactionsForm = ({ revision, onDone }) => {
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>
           {mutation.isPending ? "Saving…" : "Save reactions"}
         </CTAButton>
       </div>
@@ -167,7 +167,7 @@ const Operation = ({ operation, editable, onEdit, onAddCharacteristic, onEditCha
             <CTAButton buttonType="button" type="neutral" size="md" onClick={() => onEdit(operation)} aria-label={`Edit ${operation.operationCode}`}>
               <PencilIcon className="h-4 w-4" />
             </CTAButton>
-            <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} onClick={removeOperation} aria-label={`Remove ${operation.operationCode}`}>
+            <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={removeOperation} aria-label={`Remove ${operation.operationCode}`}>
               <Trash2Icon className="h-4 w-4" />
             </CTAButton>
           </div>
@@ -219,7 +219,7 @@ const Operation = ({ operation, editable, onEdit, onAddCharacteristic, onEditCha
                       <CTAButton buttonType="button" type="neutral" size="md" onClick={() => onEditCharacteristic(ch)} aria-label={`Edit ${ch.characteristicKey}`}>
                         <PencilIcon className="h-4 w-4" />
                       </CTAButton>
-                      <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} onClick={() => removeCharacteristic(ch)} aria-label={`Remove ${ch.characteristicKey}`}>
+                      <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => removeCharacteristic(ch)} aria-label={`Remove ${ch.characteristicKey}`}>
                         <Trash2Icon className="h-4 w-4" />
                       </CTAButton>
                     </div>

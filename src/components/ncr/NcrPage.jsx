@@ -245,10 +245,10 @@ const NcrPage = () => {
         <div className="flex flex-wrap items-center gap-2">
           {isNew && canEdit && (
             <>
-              <CTAButton type="neutral" size="default" className="px-3" buttonType="submit" form="ncr-form" disabled={mutation.isPending || !form.title.trim()}>
+              <CTAButton type="neutral" size="default" className="px-3" buttonType="submit" form="ncr-form" disabled={mutation.isPending || !form.title.trim()} loading={mutation.isPending}>
                 Save as draft
               </CTAButton>
-              <CTAButton buttonType="button" onClick={() => save(true)} disabled={mutation.isPending || !form.title.trim()} type="success" size="default" className="px-3">
+              <CTAButton buttonType="button" onClick={() => save(true)} disabled={mutation.isPending || !form.title.trim()} loading={mutation.isPending} type="success" size="default" className="px-3">
                 <SaveIcon className="h-4 w-4" /> {mutation.isPending ? "Saving…" : "Raise NC"}
               </CTAButton>
             </>
@@ -260,7 +260,7 @@ const NcrPage = () => {
                   <Undo2Icon className="h-4 w-4" /> Discard changes
                 </CTAButton>
               )}
-              <CTAButton type="success" size="default" className="px-3" buttonType="submit" form="ncr-form" disabled={mutation.isPending || !dirty || !form.title.trim()}>
+              <CTAButton type="success" size="default" className="px-3" buttonType="submit" form="ncr-form" disabled={mutation.isPending || !dirty || !form.title.trim()} loading={mutation.isPending}>
                 <SaveIcon className="h-4 w-4" /> {mutation.isPending ? "Saving…" : "Save changes"}
               </CTAButton>
             </>
@@ -291,7 +291,7 @@ const NcrPage = () => {
             <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
               Deleted {formatDate(ncr.deletedAt)} by {ncr.deletedBy?.name ?? "—"}: “{ncr.deleteReason}”.
               {can("ncr.delete") && (
-                <CTAButton type="neutral" size="default" className="px-3" buttonType="button" onClick={restore} disabled={mutation.isPending}>
+                <CTAButton type="neutral" size="default" className="px-3" buttonType="button" onClick={restore} disabled={mutation.isPending} loading={mutation.isPending}>
                   <RotateCcwIcon className="h-4 w-4" /> Restore
                 </CTAButton>
               )}

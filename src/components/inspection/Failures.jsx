@@ -94,7 +94,7 @@ const AcknowledgeDialog = ({ reading, requirement, onClose }) => {
           <CTAButton
             buttonType="submit"
             type="main" size="lg"
-            disabled={!note.trim() || mutation.isPending}
+            disabled={!note.trim() || mutation.isPending} loading={mutation.isPending}
           >
             Acknowledge
           </CTAButton>
@@ -270,7 +270,7 @@ const NcFields = ({ inspection, draft, measurementIds, onClose }) => {
         <CTAButton
           buttonType="submit"
           type="main" size="lg"
-          disabled={!title.trim() || mutation.isPending}
+          disabled={!title.trim() || mutation.isPending} loading={mutation.isPending}
         >
           Raise non-conformance
         </CTAButton>
@@ -454,7 +454,7 @@ const AddToNcrDialog = ({
           <CTAButton
             buttonType="submit"
             type="main" size="lg"
-            disabled={mutation.isPending}
+            disabled={mutation.isPending} loading={mutation.isPending}
           >
             Add to {ncr.reference}
           </CTAButton>

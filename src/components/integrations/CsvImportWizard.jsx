@@ -232,7 +232,7 @@ const ChooseFile = ({ connection, entityType, fileId, onFile, canUpload, canMana
                   {file.data.status === "failed" ? file.data.error : `${file.data.rowCount} rows · ${file.data.headers.length} columns${file.data.sheet ? ` · sheet ${file.data.sheet}` : ""}`}
                 </span>
               </div>
-              {stale && <CTAButton type="secondary" size="md" disabled={busy} onClick={again}>Read again with these settings</CTAButton>}
+              {stale && <CTAButton type="secondary" size="md" disabled={busy} loading={busy} onClick={again}>Read again with these settings</CTAButton>}
             </div>
             {file.data.status === "failed" ? <Callout tone="error" title="The file could not be read">{file.data.error}</Callout> : <Sample file={file.data} />}
           </div>
@@ -254,7 +254,7 @@ const ReasonDialog = ({ version, onCancel, onSave, busy }) => {
         <TextAreaField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={1000} required autoFocus />
         <div className="flex justify-end gap-2">
           <CTAButton type="neutral" size="md" onClick={onCancel}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={busy || reason.trim().length < 3}>Save and continue</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={busy || reason.trim().length < 3} loading={busy}>Save and continue</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -429,13 +429,13 @@ const CsvImportWizard = () => {
               <CTAButton type="neutral" size="md" onClick={() => set({ step: step - 1 })}>Back</CTAButton>
             )}
             {step === 1 && (
-              <CTAButton type="main" size="md" disabled={!entityType || creating || (!conn && !canManage)} onClick={next1}>{creating ? "Starting…" : "Next"}</CTAButton>
+              <CTAButton type="main" size="md" disabled={!entityType || creating || (!conn && !canManage)} loading={creating} onClick={next1}>{creating ? "Starting…" : "Next"}</CTAButton>
             )}
             {step === 2 && <CTAButton type="main" size="md" disabled={!parsedOk} onClick={() => set({ step: 3 })}>Next</CTAButton>}
             {step === 3 && canRun && (
               <>
-                <CTAButton type="secondary" size="md" disabled={busy || missing > 0 || !form?.keyField} onClick={() => start("preview")}>Preview</CTAButton>
-                <CTAButton type="main" size="md" disabled={busy || missing > 0 || !form?.keyField || !importable || !writable} onClick={() => start("full")}>
+                <CTAButton type="secondary" size="md" disabled={busy || missing > 0 || !form?.keyField} loading={busy} onClick={() => start("preview")}>Preview</CTAButton>
+                <CTAButton type="main" size="md" disabled={busy || missing > 0 || !form?.keyField || !importable || !writable} loading={busy} onClick={() => start("full")}>
                   {busy ? "Working…" : `Import ${file.data?.rowCount ?? ""} rows`.replace("  ", " ")}
                 </CTAButton>
               </>

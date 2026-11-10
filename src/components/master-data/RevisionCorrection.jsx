@@ -43,7 +43,7 @@ export const CorrectDialog = ({ revision, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!reason.trim() || mutation.isPending}>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!reason.trim() || mutation.isPending} loading={mutation.isPending}>
             {mutation.isPending ? "Starting…" : "Start correction"}
           </CTAButton>
         </div>
@@ -103,7 +103,7 @@ export const ReleaseCorrectionDialog = ({ revision, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="button" type="main" size="lg" onClick={approve} disabled={mutation.isPending || impact.isLoading}>
+          <CTAButton buttonType="button" type="main" size="lg" onClick={approve} disabled={mutation.isPending || impact.isLoading} loading={mutation.isPending}>
             {mutation.isPending ? "Releasing…" : "Approve and release"}
           </CTAButton>
         </div>

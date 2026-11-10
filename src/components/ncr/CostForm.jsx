@@ -132,7 +132,7 @@ const CostForm = ({ cost, baseCurrency = "GBP", defaultCurrency, vatRate = 0.2, 
         <CTAButton type="neutral" text="Cancel" callbackFn={onCancel} />
         <CTAButton
           buttonType="submit"
-          disabled={pending}
+          disabled={pending} loading={pending}
           type="success" size="md" className="flex items-center gap-2 px-3 py-1">
           <SaveIcon className="h-4 w-4" /> {pending ? "Saving…" : cost ? "Save cost" : "Add cost"}
         </CTAButton>

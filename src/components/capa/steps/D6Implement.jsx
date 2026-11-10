@@ -40,7 +40,7 @@ const VerifyDialog = ({ capa, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !method.trim() || (!effective && !notes.trim())}>{mutation.isPending ? "Saving…" : "Record verification"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !method.trim() || (!effective && !notes.trim())} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Record verification"}</CTAButton>
         </div>
       </form>
     </Dialog>

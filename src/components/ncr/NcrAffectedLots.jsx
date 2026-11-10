@@ -74,7 +74,7 @@ const LotDialog = ({ ncrId, partId, row, lot, remaining, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !qtyOk || !picked}>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !qtyOk || !picked} loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : row ? "Save" : "Add lot"}
           </CTAButton>
         </div>
@@ -172,7 +172,7 @@ const NcrAffectedLots = ({ ncrId, partId, canEdit }) => {
                   removed {formatDate(a.removedAt)} by {a.removedBy?.name ?? "—"}: {a.removedReason}
                 </span>
                 {canEdit && (
-                  <CTAButton buttonType="button" type="neutral" size="md" className="ml-auto" onClick={() => mutation.mutate({ path: `/ncr-affected-lots/${a.id}/restore` })} disabled={mutation.isPending} aria-label={`Restore lot ${a.lot.lotNumber}`}>
+                  <CTAButton buttonType="button" type="neutral" size="md" className="ml-auto" onClick={() => mutation.mutate({ path: `/ncr-affected-lots/${a.id}/restore` })} disabled={mutation.isPending} loading={mutation.isPending} aria-label={`Restore lot ${a.lot.lotNumber}`}>
                     <RotateCcwIcon className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
                     Restore
                   </CTAButton>

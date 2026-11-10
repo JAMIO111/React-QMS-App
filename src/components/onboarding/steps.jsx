@@ -39,7 +39,7 @@ export const OrganisationStep = () => {
         <Field label="Organisation name" required minLength={2} maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
         <FormError error={update.error} />
         <div className="flex justify-end">
-          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty || update.isPending}>{update.isPending ? "Saving…" : "Save name"}</CTAButton>
+          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty || update.isPending} loading={update.isPending}>{update.isPending ? "Saving…" : "Save name"}</CTAButton>
         </div>
       </MenuCard>
       {first && (
@@ -76,7 +76,7 @@ export const SubscriptionSummary = ({ overview, canManage }) => {
         <p>The owner holds a Controller seat, so everything is available.</p>
         {canManage && sub.billingProvider === "stripe" && (
           <div>
-            <CTAButton buttonType="button" type="neutral" size="md" disabled={portal.isPending} onClick={openPortal}>
+            <CTAButton buttonType="button" type="neutral" size="md" disabled={portal.isPending} loading={portal.isPending} onClick={openPortal}>
               {portal.isPending ? "Opening…" : "Manage billing"}
             </CTAButton>
           </div>
@@ -142,7 +142,7 @@ export const PlanStep = ({ state }) => {
                 </p>
                 {canManage && sub.billingProvider === "stripe" && (
                   <div>
-                    <CTAButton buttonType="button" type="main" size="lg" disabled={portal.isPending} onClick={openPortal}>
+                    <CTAButton buttonType="button" type="main" size="lg" disabled={portal.isPending} loading={portal.isPending} onClick={openPortal}>
                       {portal.isPending ? "Opening…" : "Manage billing"}
                     </CTAButton>
                   </div>
@@ -165,7 +165,7 @@ export const PlanStep = ({ state }) => {
                     <SeatPicker plans={catalogue.data.plans} value={choice} onChange={update} disabled={start.isPending} />
                     <FormError error={start.error} />
                     <div className="flex justify-end">
-                      <CTAButton buttonType="button" type="main" size="lg" disabled={start.isPending} onClick={checkoutNow}>
+                      <CTAButton buttonType="button" type="main" size="lg" disabled={start.isPending} loading={start.isPending} onClick={checkoutNow}>
                         {start.isPending ? "Opening checkout…" : "Continue to secure checkout"}
                       </CTAButton>
                     </div>
@@ -201,7 +201,7 @@ export const DetailsStep = () => {
         <RHFComboBox label="Country" value={country} onChange={(v) => setCountry(v ?? null)} options={countryOptions()} placeholder="Choose a country" clearable />
         <FormError error={update.error} />
         <div className="flex justify-end">
-          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty || update.isPending}>{update.isPending ? "Saving…" : "Save details"}</CTAButton>
+          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty || update.isPending} loading={update.isPending}>{update.isPending ? "Saving…" : "Save details"}</CTAButton>
         </div>
       </MenuCard>
       <OrganisationLogo logoPath={org?.settings.logoPath ?? null} canManage />

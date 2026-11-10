@@ -96,7 +96,7 @@ const OrganisationLogo = ({ logoPath, canManage }) => {
             <div className="flex flex-wrap gap-2">
               <CTAButton
                 buttonType="button"
-                disabled={busy}
+                disabled={busy} loading={busy}
                 onClick={() => inputRef.current?.click()}
                 type="main" size="md" className="flex items-center gap-2">
                 <CloudUploadIcon className="h-4 w-4" />{" "}
@@ -105,7 +105,7 @@ const OrganisationLogo = ({ logoPath, canManage }) => {
               {logoPath && (
                 <CTAButton
                   buttonType="button"
-                  disabled={busy}
+                  disabled={busy} loading={busy}
                   onClick={remove}
                   type="neutral" size="md" className="flex items-center gap-2">
                   <Trash2Icon className="h-4 w-4" /> Remove

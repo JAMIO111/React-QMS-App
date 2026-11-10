@@ -181,7 +181,7 @@ const InviteForm = ({ roles, sites, departments }) => {
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p role="status" className="text-sm text-secondary-text">{note}</p>
-        <CTAButton buttonType="submit" disabled={mutation.isPending} type="main" size="md">
+        <CTAButton buttonType="submit" disabled={mutation.isPending} loading={mutation.isPending} type="main" size="md">
           {mutation.isPending ? "Inviting…" : "Send invitation"}
         </CTAButton>
       </div>

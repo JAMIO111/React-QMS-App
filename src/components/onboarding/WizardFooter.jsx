@@ -20,11 +20,11 @@ const WizardFooter = ({ prev, onBack, onSkip, onContinue, continueLabel = "Conti
       )}
       <div className="flex flex-wrap items-center gap-2">
         {canSkip && (
-          <CTAButton buttonType="button" type="neutral" size="md" disabled={pending} onClick={onSkip}>
+          <CTAButton buttonType="button" type="neutral" size="md" disabled={pending} loading={pending} onClick={onSkip}>
             Skip for now
           </CTAButton>
         )}
-        <CTAButton buttonType="button" type="main" size="lg" className="inline-flex items-center gap-1" disabled={pending || !!blocked} onClick={onContinue}>
+        <CTAButton buttonType="button" type="main" size="lg" className="inline-flex items-center gap-1" disabled={pending || !!blocked} loading={pending} onClick={onContinue}>
           {pending ? "Saving…" : continueLabel} <ChevronRightIcon className="h-4 w-4" />
         </CTAButton>
       </div>

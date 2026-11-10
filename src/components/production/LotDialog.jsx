@@ -111,7 +111,7 @@ const LotDialog = ({ lot, onClose, readOnly = false }) => {
             {disabled ? "Close" : "Cancel"}
           </CTAButton>
           {!disabled && (
-            <CTAButton buttonType="submit" disabled={mutation.isPending || !valid} type="main" size="md">
+            <CTAButton buttonType="submit" disabled={mutation.isPending || !valid} loading={mutation.isPending} type="main" size="md">
               {mutation.isPending ? "Saving…" : creating ? "Create lot" : "Save changes"}
             </CTAButton>
           )}

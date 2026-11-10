@@ -114,7 +114,7 @@ const StartInspectionPage = () => {
           />
         </div>
         <FormError error={mutation.error} />
-        <CTAButton buttonType="submit" type="main" size="lg" className="self-start" disabled={!ready || mutation.isPending}>
+        <CTAButton buttonType="submit" type="main" size="lg" className="self-start" disabled={!ready || mutation.isPending} loading={mutation.isPending}>
           {mutation.isPending ? "Starting…" : "Start inspection"}
         </CTAButton>
       </MenuCard>

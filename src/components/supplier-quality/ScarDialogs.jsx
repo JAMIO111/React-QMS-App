@@ -38,7 +38,7 @@ const CommandDialog = ({ title, intro, mutation, ok, submitLabel, pendingLabel, 
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={!ok || mutation.isPending}>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={!ok || mutation.isPending} loading={mutation.isPending}>
           {mutation.isPending ? (pendingLabel ?? "Saving…") : submitLabel}
         </CTAButton>
       </div>

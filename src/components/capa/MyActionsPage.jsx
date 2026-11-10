@@ -60,7 +60,7 @@ const MyActionsPage = () => {
                 <div className="flex flex-wrap gap-2">
                   {a.status === "open" && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Update findings: ${a.description}`} onClick={() => { mutation.reset(); setDialog({ action: a, closing: false }); }}>Update findings</CTAButton>}
                   {a.status === "open" && <CTAButton buttonType="button" type="main" size="lg" aria-label={`Close action: ${a.description}`} onClick={() => { mutation.reset(); setDialog({ action: a, closing: true }); }}>Close action</CTAButton>}
-                  {a.status === "done" && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
+                  {a.status === "done" && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} loading={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
                 </div>
               )}
             </li>

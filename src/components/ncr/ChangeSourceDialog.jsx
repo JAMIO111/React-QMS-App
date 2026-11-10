@@ -63,7 +63,7 @@ const ChangeSourceDialog = ({ ncr, onClose }) => {
           <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             Back
           </CTAButton>
-          <CTAButton buttonType="submit" disabled={mutation.isPending || !ready} type="main" size="md">
+          <CTAButton buttonType="submit" disabled={mutation.isPending || !ready} loading={mutation.isPending} type="main" size="md">
             {mutation.isPending ? "Saving…" : "Change source"}
           </CTAButton>
         </div>

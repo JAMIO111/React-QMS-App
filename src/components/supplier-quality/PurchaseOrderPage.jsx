@@ -118,7 +118,7 @@ const ReasonDialogClose = ({ order, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="button" type="main" size="lg" disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "closeOrder", id: order.id }, { onSuccess: onClose })}>{mutation.isPending ? "Saving…" : "Close order"}</CTAButton>
+          <CTAButton buttonType="button" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => mutation.mutate({ action: "closeOrder", id: order.id }, { onSuccess: onClose })}>{mutation.isPending ? "Saving…" : "Close order"}</CTAButton>
         </div>
       </div>
     </Dialog>

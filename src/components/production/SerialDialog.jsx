@@ -119,7 +119,7 @@ const SerialDialog = ({ serial, onClose, readOnly = false }) => {
             {disabled ? "Close" : "Cancel"}
           </CTAButton>
           {!disabled && (
-            <CTAButton buttonType="submit" disabled={mutation.isPending || !valid} type="main" size="md">
+            <CTAButton buttonType="submit" disabled={mutation.isPending || !valid} loading={mutation.isPending} type="main" size="md">
               {mutation.isPending ? "Saving…" : creating ? `Add ${numbers.length || ""} serial number${numbers.length === 1 ? "" : "s"}`.replace("  ", " ") : "Save changes"}
             </CTAButton>
           )}

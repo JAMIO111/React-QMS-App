@@ -41,7 +41,7 @@ const ClassificationDialog = ({ existing, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !label.trim()}>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !label.trim()} loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : "Save"}
           </CTAButton>
         </div>
@@ -119,7 +119,7 @@ const RiskModelDialog = ({ model, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save new version"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save new version"}</CTAButton>
         </div>
       </form>
     </Dialog>

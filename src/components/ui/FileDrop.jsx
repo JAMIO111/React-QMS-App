@@ -167,12 +167,12 @@ export const AttachmentDrop = ({ recordId, bucket, folder, attachments, mutation
             )}
             {newFiles.length > 0 && (
               <>
-                <CTAButton text="Discard" type="neutral" icon={Undo2Icon} callbackFn={() => setNewFiles([])} disabled={isSaving} />
+                <CTAButton text="Discard" type="neutral" icon={Undo2Icon} callbackFn={() => setNewFiles([])} disabled={isSaving} loading={isSaving} />
                 <CTAButton
                   icon={SaveIcon}
                   iconSize="h-4 w-4"
                   text={isSaving ? "Saving…" : newFiles.length === 1 ? "Save upload" : `Save ${newFiles.length} uploads`}
-                  disabled={isSaving}
+                  disabled={isSaving} loading={isSaving}
                   type="success"
                   callbackFn={handleSave}
                 />

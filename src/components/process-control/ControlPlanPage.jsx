@@ -68,7 +68,7 @@ const PlanDetails = ({ plan, canManage }) => {
       </div>
       <FormError error={mutation.error} />
       {canManage && (
-        <CTAButton buttonType="submit" type="main" size="lg" className="self-start" disabled={mutation.isPending}>
+        <CTAButton buttonType="submit" type="main" size="lg" className="self-start" disabled={mutation.isPending} loading={mutation.isPending}>
           {mutation.isPending ? "Saving…" : "Save changes"}
         </CTAButton>
       )}
@@ -143,7 +143,7 @@ const AddScopeForm = ({ plan, onDone }) => {
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !ready}>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !ready} loading={mutation.isPending}>
           {mutation.isPending ? "Adding…" : "Add scope"}
         </CTAButton>
       </div>
@@ -229,7 +229,7 @@ const Scope = ({ plan, canManage }) => {
                 {canManage && (
                   <td className={td}>
                     <div className="flex justify-end">
-                      <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} onClick={() => remove(a)} aria-label="Remove scope entry">
+                      <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => remove(a)} aria-label="Remove scope entry">
                         <Trash2Icon className="h-4 w-4" />
                       </CTAButton>
                     </div>
@@ -293,7 +293,7 @@ const RevisionForm = ({ plan, revision, onDone }) => {
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>
           {mutation.isPending ? "Saving…" : revision ? "Save draft" : "Create draft"}
         </CTAButton>
       </div>
@@ -357,7 +357,7 @@ const ActionDialog = ({ plan, revision, action, onDone }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type={a.style} size="md" disabled={mutation.isPending || (a.required && !text.trim())}>
+          <CTAButton buttonType="submit" type={a.style} size="md" disabled={mutation.isPending || (a.required && !text.trim())} loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : a.label}
           </CTAButton>
         </div>

@@ -281,7 +281,7 @@ const AuditFormBody = ({ audit }) => {
           <CTAButton to={audit ? `/Documentation/Audits/${audit.id}` : "/Documentation/Audits"} type="neutral" size="md">
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : audit ? "Save changes" : "Define audit"}
           </CTAButton>
         </div>

@@ -335,7 +335,7 @@ const ConfirmCommand = ({ kind, pending, error, onConfirm, onClose }) => (
       <FormError error={error} />
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-        <CTAButton buttonType="button" type="main" size="lg" disabled={pending} onClick={onConfirm}>{pending ? "Saving…" : kind === "issue" ? "Issue" : "Start review"}</CTAButton>
+        <CTAButton buttonType="button" type="main" size="lg" disabled={pending} loading={pending} onClick={onConfirm}>{pending ? "Saving…" : kind === "issue" ? "Issue" : "Start review"}</CTAButton>
       </div>
     </div>
   </Dialog>

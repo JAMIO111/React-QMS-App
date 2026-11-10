@@ -101,7 +101,7 @@ const ConnectionForm = ({ providers, existing, onClose, onCreated }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !ok}>{mutation.isPending ? "Saving…" : "Save"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !ok} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save"}</CTAButton>
         </div>
       </form>
     </Dialog>

@@ -95,7 +95,7 @@ const CompleteDialog = ({ assessment, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Complete assessment"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Complete assessment"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -113,7 +113,7 @@ const AbandonDialog = ({ assessment, onClose, onDone }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="danger" size="lg" disabled={reason.trim().length < 3 || mutation.isPending}>{mutation.isPending ? "Saving…" : "Abandon"}</CTAButton>
+          <CTAButton buttonType="submit" type="danger" size="lg" disabled={reason.trim().length < 3 || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Abandon"}</CTAButton>
         </div>
       </form>
     </Dialog>

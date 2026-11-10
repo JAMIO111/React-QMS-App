@@ -35,7 +35,7 @@ const CancelDialog = ({ run, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Keep it</CTAButton>
-          <CTAButton buttonType="submit" type="danger" size="md" disabled={mutation.isPending || reason.trim().length < 3}>Cancel import</CTAButton>
+          <CTAButton buttonType="submit" type="danger" size="md" disabled={mutation.isPending || reason.trim().length < 3} loading={mutation.isPending}>Cancel import</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -151,15 +151,15 @@ const RunPage = () => {
         {notice && <Callout tone="info" className="mt-3" role="status">{notice}</Callout>}
         {canRun && (
           <div className="mt-3 flex flex-wrap gap-2">
-            {live && !run.nextAttemptAt && <CTAButton type="main" size="md" disabled={mutation.isPending} onClick={() => act("continueRun", {})}>{mutation.isPending ? "Working…" : "Continue"}</CTAButton>}
+            {live && !run.nextAttemptAt && <CTAButton type="main" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => act("continueRun", {})}>{mutation.isPending ? "Working…" : "Continue"}</CTAButton>}
             {live && <CTAButton type="danger" size="md" onClick={() => setCancelling(true)}>Cancel import</CTAButton>}
             {!live && run.rowsNow.failed > 0 && connection.data?.status === "active" && (
-              <CTAButton type="main" size="md" disabled={mutation.isPending} onClick={() => act("retryRows", { entityType: run.entityType })}>{mutation.isPending ? "Retrying…" : "Retry failed rows"}</CTAButton>
+              <CTAButton type="main" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => act("retryRows", { entityType: run.entityType })}>{mutation.isPending ? "Retrying…" : "Retry failed rows"}</CTAButton>
             )}
             {preview && run.file && !live && run.status !== "cancelled" && connection.data?.status === "active" && (
               <>
                 {(connection.data.importable ?? []).includes(run.entityType) && (connection.data.writable ?? []).includes(run.entityType) && (
-                  <CTAButton type="main" size="md" disabled={mutation.isPending} onClick={importFile}>{mutation.isPending ? "Starting…" : "Import these records"}</CTAButton>
+                  <CTAButton type="main" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={importFile}>{mutation.isPending ? "Starting…" : "Import these records"}</CTAButton>
                 )}
                 <CTAButton to={wizardPath(id, { entity: run.entityType, file: run.file.id, step: 3 })} type="secondary" size="md">Change the mapping</CTAButton>
               </>

@@ -49,7 +49,7 @@ export const ActionDialog = ({ capa, phase, action, withCause, limited = false, 
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || (!limited && !form.description.trim())}>{mutation.isPending ? "Saving…" : action ? "Save" : "Add action"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || (!limited && !form.description.trim())} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : action ? "Save" : "Add action"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -79,7 +79,7 @@ export const FindingsDialog = ({ action, closing = false, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || (closing && !text)}>{mutation.isPending ? "Saving…" : closing ? "Close action" : "Save findings"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || (closing && !text)} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : closing ? "Close action" : "Save findings"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -113,8 +113,8 @@ export const ActionButtons = ({ action: a, rights, setDialog, mutation }) => {
       {rights.plan && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Edit: ${a.description}`} onClick={open("edit")}>Edit</CTAButton>}
       {!rights.plan && rights.manage && rights.work && a.status === "open" && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reassign: ${a.description}`} onClick={open("reassign")}>Reassign</CTAButton>}
       {a.status === "open" && rights.manage && rights.work && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Cancel: ${a.description}`} onClick={open("cancel")}>Cancel action</CTAButton>}
-      {a.status === "done" && canWork && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
-      {a.status === "cancelled" && rights.manage && rights.work && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
+      {a.status === "done" && canWork && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} loading={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
+      {a.status === "cancelled" && rights.manage && rights.work && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} loading={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
     </div>
   );
 };

@@ -67,7 +67,7 @@ const AddPartsForm = ({ family, onDone }) => {
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || chosen.length === 0}>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || chosen.length === 0} loading={mutation.isPending}>
           {mutation.isPending ? "Adding…" : chosen.length ? `Add ${chosen.length} part${chosen.length === 1 ? "" : "s"}` : "Add parts"}
         </CTAButton>
       </div>
@@ -168,7 +168,7 @@ const PartFamilyPage = () => {
                       {canManage && (
                         <td className={td}>
                           <div className="flex justify-end">
-                            <CTAButton buttonType="button" type="danger" size="md" disabled={membership.isPending} onClick={() => removePart(p)} aria-label={`Remove ${p.partNumber} from the family`}>
+                            <CTAButton buttonType="button" type="danger" size="md" disabled={membership.isPending} loading={membership.isPending} onClick={() => removePart(p)} aria-label={`Remove ${p.partNumber} from the family`}>
                               <Trash2Icon className="h-4 w-4" />
                             </CTAButton>
                           </div>

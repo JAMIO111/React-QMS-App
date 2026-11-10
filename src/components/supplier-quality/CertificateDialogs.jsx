@@ -61,7 +61,7 @@ export const RecordCertificateDialog = ({ line = null, supplier = null, certific
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!ok || mutation.isPending}>{mutation.isPending ? "Saving…" : certificate ? "Save changes" : "Record certificate"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!ok || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : certificate ? "Save changes" : "Record certificate"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -94,7 +94,7 @@ export const CertificateDecisionDialog = ({ certificate, mode, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type={withdraw || !accept ? "danger" : "main"} size="lg" disabled={text.trim().length < need || mutation.isPending}>{mutation.isPending ? "Saving…" : withdraw ? "Withdraw" : accept ? "Accept" : "Reject"}</CTAButton>
+          <CTAButton buttonType="submit" type={withdraw || !accept ? "danger" : "main"} size="lg" disabled={text.trim().length < need || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : withdraw ? "Withdraw" : accept ? "Accept" : "Reject"}</CTAButton>
         </div>
       </form>
     </Dialog>

@@ -72,7 +72,7 @@ const ManageBillingButton = ({ className = "px-2 py-1" }) => {
       type="neutral"
       size="md"
       className={className}
-      disabled={portal.isPending}
+      disabled={portal.isPending} loading={portal.isPending}
       onClick={() =>
         portal.mutate(undefined, {
           onSuccess: ({ url }) => window.location.assign(url),
@@ -369,7 +369,7 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
                           owned?.assigned ?? 0,
                           managed && plan.slug === "controller" ? 1 : 0,
                         )
-                    }
+                    } loading={mutation.isPending || preview.isPending}
                     onClick={() => step(plan, -1)}>
                     −
                   </CTAButton>
@@ -382,7 +382,7 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
                     buttonType="button"
                     aria-label={`Add ${plan.name} seat`}
                     type="neutral" size="md" className="w-8 px-2 py-1"
-                    disabled={mutation.isPending}
+                    disabled={mutation.isPending} loading={mutation.isPending}
                     onClick={() => step(plan, 1)}>
                     +
                   </CTAButton>
@@ -397,7 +397,7 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
           <CTAButton
             buttonType="button"
             type="neutral" size="md" className="px-2 py-1"
-            disabled={mutation.isPending}
+            disabled={mutation.isPending} loading={mutation.isPending}
             onClick={() => setDraft({})}>
             Discard
           </CTAButton>

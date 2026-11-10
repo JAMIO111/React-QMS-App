@@ -96,7 +96,7 @@ const TemplateDialog = ({ template, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : template ? "Save new version" : "Create template"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : template ? "Save new version" : "Create template"}</CTAButton>
         </div>
       </form>
     </Dialog>

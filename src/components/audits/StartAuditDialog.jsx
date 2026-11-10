@@ -47,7 +47,7 @@ const StartAuditDialog = ({ onClose, supplier = null }) => {
           <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" disabled={!auditId || mutation.isPending} type="main" size="lg">
+          <CTAButton buttonType="submit" disabled={!auditId || mutation.isPending} loading={mutation.isPending} type="main" size="lg">
             {mutation.isPending ? "Starting…" : "Start audit"}
           </CTAButton>
         </div>

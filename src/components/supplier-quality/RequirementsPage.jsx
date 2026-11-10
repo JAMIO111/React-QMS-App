@@ -34,7 +34,7 @@ const NoteDialog = ({ requirement, kind, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type={approve ? "main" : "danger"} size="lg" disabled={text.trim().length < need || mutation.isPending}>{mutation.isPending ? "Saving…" : approve ? "Approve" : "Retire"}</CTAButton>
+          <CTAButton buttonType="submit" type={approve ? "main" : "danger"} size="lg" disabled={text.trim().length < need || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : approve ? "Approve" : "Retire"}</CTAButton>
         </div>
       </form>
     </Dialog>

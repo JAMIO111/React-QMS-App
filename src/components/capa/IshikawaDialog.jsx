@@ -82,7 +82,7 @@ const IshikawaDialog = ({ capa, analysis, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Close</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !title.trim()}>{mutation.isPending ? "Saving…" : "Save diagram"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !title.trim()} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save diagram"}</CTAButton>
         </div>
       </form>
     </Dialog>

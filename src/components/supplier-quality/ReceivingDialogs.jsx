@@ -28,7 +28,7 @@ const Shell = ({ title, intro, mutation, ok, submitLabel, onClose, onSubmit, wid
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={!ok || mutation.isPending}>{mutation.isPending ? "Saving…" : submitLabel}</CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={!ok || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : submitLabel}</CTAButton>
       </div>
     </form>
   </Dialog>

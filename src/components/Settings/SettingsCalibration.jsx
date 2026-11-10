@@ -108,7 +108,7 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
           placeholder="Optional"
         />
       </label>
-      <CTAButton type="main" size="md" buttonType="submit" disabled={!ok || pending}>
+      <CTAButton type="main" size="md" buttonType="submit" disabled={!ok || pending} loading={pending}>
         {submitText}
       </CTAButton>
       {onCancel && (

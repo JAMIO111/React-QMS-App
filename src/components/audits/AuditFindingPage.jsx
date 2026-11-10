@@ -65,7 +65,7 @@ const CreateNcrDialog = ({ finding, onClose }) => {
           <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" disabled={!title.trim() || mutation.isPending} type="main" size="lg">
+          <CTAButton buttonType="submit" disabled={!title.trim() || mutation.isPending} loading={mutation.isPending} type="main" size="lg">
             {mutation.isPending ? "Raising…" : "Raise non-conformance"}
           </CTAButton>
         </div>

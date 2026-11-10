@@ -254,7 +254,7 @@ export const SampleEntry = ({ inspection, gauges, canOverride }) => {
         </p>
       )}
       <FormError error={mutation.error} />
-      <CTAButton buttonType="submit" type="main" size="lg" className="min-h-11 self-start" disabled={mutation.isPending || nothingToDo}>
+      <CTAButton buttonType="submit" type="main" size="lg" className="min-h-11 self-start" disabled={mutation.isPending || nothingToDo} loading={mutation.isPending}>
         {mutation.isPending ? "Saving…" : "Save sample"}
       </CTAButton>
     </MenuCard>
@@ -374,7 +374,7 @@ export const ReadingDialog = ({ inspection, requirement, reading, gauges, canCor
               <CTAButton
                 buttonType="submit"
                 type="main" size="lg"
-                disabled={mutation.isPending || value === null || value === "" || (mode === "correct" && !reason.trim())}>
+                disabled={mutation.isPending || value === null || value === "" || (mode === "correct" && !reason.trim())} loading={mutation.isPending}>
                 {mutation.isPending ? "Saving…" : mode === "correct" ? "Save correction" : "Save retest"}
               </CTAButton>
             </div>
@@ -480,7 +480,7 @@ export const RunControls = ({ inspection }) => {
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        <CTAButton buttonType="button" type="main" size="lg" className="min-h-11" disabled={mutation.isPending || plannedLeft > 0} onClick={() => mutation.mutate({ path: `/inspections/${inspection.id}/complete` })}>
+        <CTAButton buttonType="button" type="main" size="lg" className="min-h-11" disabled={mutation.isPending || plannedLeft > 0} loading={mutation.isPending} onClick={() => mutation.mutate({ path: `/inspections/${inspection.id}/complete` })}>
           Complete inspection
         </CTAButton>
         {plannedLeft > 0 && <p className="self-center text-sm text-secondary-text">{plannedLeft} planned {plannedLeft === 1 ? "sample" : "samples"} still to record. Abandon the inspection to stop early.</p>}
@@ -504,7 +504,7 @@ export const RunControls = ({ inspection }) => {
               <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setAbandoning(false)}>
                 Cancel
               </CTAButton>
-              <CTAButton buttonType="submit" type="danger" size="md" disabled={!reason.trim() || mutation.isPending}>
+              <CTAButton buttonType="submit" type="danger" size="md" disabled={!reason.trim() || mutation.isPending} loading={mutation.isPending}>
                 Abandon inspection
               </CTAButton>
             </div>

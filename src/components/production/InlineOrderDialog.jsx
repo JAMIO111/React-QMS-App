@@ -44,7 +44,7 @@ const InlineOrderDialog = ({ part, siteId, initialNumber = "", onClose, onCreate
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !valid}>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !valid} loading={mutation.isPending}>
             {mutation.isPending ? "Making…" : "Make order"}
           </CTAButton>
         </div>

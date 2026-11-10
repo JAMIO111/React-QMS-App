@@ -133,7 +133,7 @@ const DoneDialog = ({ action, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !note.trim() || !qtyValid}>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !note.trim() || !qtyValid} loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : "Mark done"}
           </CTAButton>
         </div>
@@ -209,7 +209,7 @@ const NcrContainment = ({ ncrId, canEdit }) => {
                     </>
                   )}
                   {canEdit && a.status !== "open" && (
-                    <CTAButton buttonType="button" type="neutral" size="md" onClick={() => run({ path: `/ncr-containment-actions/${a.id}/reopen` })} disabled={mutation.isPending}>
+                    <CTAButton buttonType="button" type="neutral" size="md" onClick={() => run({ path: `/ncr-containment-actions/${a.id}/reopen` })} disabled={mutation.isPending} loading={mutation.isPending}>
                       <RotateCcwIcon className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
                       Reopen
                     </CTAButton>
@@ -253,7 +253,7 @@ const NcrContainment = ({ ncrId, canEdit }) => {
                 {c.notNeededReason}
               </p>
               {canEdit && (
-                <CTAButton buttonType="button" type="neutral" size="md" onClick={() => saveReason(null)} disabled={mutation.isPending}>
+                <CTAButton buttonType="button" type="neutral" size="md" onClick={() => saveReason(null)} disabled={mutation.isPending} loading={mutation.isPending}>
                   Clear
                 </CTAButton>
               )}
@@ -274,7 +274,7 @@ const NcrContainment = ({ ncrId, canEdit }) => {
                 maxLength={500}
                 className="min-w-64 flex-1"
               />
-              <CTAButton buttonType="button" type="neutral" size="md" onClick={submitReason} disabled={!reason.trim() || mutation.isPending}>
+              <CTAButton buttonType="button" type="neutral" size="md" onClick={submitReason} disabled={!reason.trim() || mutation.isPending} loading={mutation.isPending}>
                 Save reason
               </CTAButton>
             </div>

@@ -45,7 +45,7 @@ const Row = ({ item, canManage, meta, children }) => {
             }}>
             <input aria-label="Code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={20} placeholder="Code" className={`${inputClass} w-24`} />
             <input aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required className={`${inputClass} w-64 max-w-full`} />
-            <CTAButton buttonType="submit" disabled={mutation.isPending} type="main" size="md">
+            <CTAButton buttonType="submit" disabled={mutation.isPending} loading={mutation.isPending} type="main" size="md">
               Save
             </CTAButton>
             <button
@@ -117,7 +117,7 @@ const AddForm = ({ kind, parentId, label }) => {
       }}>
       {!parentId && <input aria-label={`${label} code`} value={code} onChange={(e) => setCode(e.target.value)} maxLength={20} placeholder="Code" className={`${inputClass} w-24`} />}
       <input aria-label={`New ${label.toLowerCase()}`} value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder={`Add ${label.toLowerCase()}…`} className={`${inputClass} w-64 max-w-full`} />
-      <CTAButton buttonType="submit" disabled={!name.trim() || mutation.isPending} type="main" size="md" className="gap-1">
+      <CTAButton buttonType="submit" disabled={!name.trim() || mutation.isPending} loading={mutation.isPending} type="main" size="md" className="gap-1">
         <PlusIcon /> Add
       </CTAButton>
     </form>

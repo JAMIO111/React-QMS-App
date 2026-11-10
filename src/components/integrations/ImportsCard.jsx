@@ -94,7 +94,7 @@ const RunDialog = ({ connection, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !entityType || blocked}>{mutation.isPending ? "Running…" : "Run"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !entityType || blocked} loading={mutation.isPending}>{mutation.isPending ? "Running…" : "Run"}</CTAButton>
         </div>
       </form>
     </Dialog>

@@ -295,7 +295,7 @@ const QualityAlertForm = () => {
       <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={() => navigate(id ? `/Documentation/Quality-Alerts/${id}` : "/Documentation/Quality-Alerts")}>Cancel</CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save draft"}</CTAButton>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save draft"}</CTAButton>
       </div>
     </form>
   );

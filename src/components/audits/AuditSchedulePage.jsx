@@ -57,7 +57,7 @@ const SlotActions = ({ item, canPerform, canManage, onSkip, onChanged }) => {
   return (
     <div className="flex flex-wrap items-center gap-2">
       {open && canPerform && (
-        <CTAButton buttonType="button" type="secondary" size="md" disabled={mutation.isPending} onClick={start} aria-label={`Start ${item.audit.reference} due ${item.dueOn}`}>
+        <CTAButton buttonType="button" type="secondary" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={start} aria-label={`Start ${item.audit.reference} due ${item.dueOn}`}>
           <PlayIcon className="mr-1 inline" aria-hidden="true" /> Start audit
         </CTAButton>
       )}
@@ -75,7 +75,7 @@ const SlotActions = ({ item, canPerform, canManage, onSkip, onChanged }) => {
         <CTAButton
           buttonType="button"
           type="neutral" size="md"
-          disabled={mutation.isPending}
+          disabled={mutation.isPending} loading={mutation.isPending}
           onClick={() => mutation.mutate({ path: `/audit-occurrences/${item.id}/unskip` }, { onSuccess: onChanged })}
           aria-label={`Put back ${item.audit.reference} due ${item.dueOn}`}>
           Put back

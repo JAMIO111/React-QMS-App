@@ -444,7 +444,7 @@ const AuditRecordPage = () => {
               <CTAButton
                 buttonType="button"
                 type="main" size="lg"
-                disabled={r.problems.length > 0 || mutation.isPending}
+                disabled={r.problems.length > 0 || mutation.isPending} loading={mutation.isPending}
                 onClick={() => mutation.mutate({ path: `/audit-records/${r.id}/complete` }, { onSuccess: (done) => showToast({ type: done.result === "pass" ? "success" : "warning", title: `Audit ${done.result === "pass" ? "passed" : "failed"}`, message: `${done.reference}: ${formatScore(done.score)}` }) })}>
                 {mutation.isPending ? "Completing…" : "Complete audit"}
               </CTAButton>

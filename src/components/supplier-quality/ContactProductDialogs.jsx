@@ -59,7 +59,7 @@ export const ContactDialog = ({ supplierId, contact, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !form.name.trim()}>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !form.name.trim()} loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : "Save"}
           </CTAButton>
         </div>
@@ -105,7 +105,7 @@ export const ProductDialog = ({ supplierId, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !ok}>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !ok} loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : "Add"}
           </CTAButton>
         </div>

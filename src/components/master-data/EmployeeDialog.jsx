@@ -46,7 +46,7 @@ const SignInLink = ({ employee, readOnly }) => {
       <p className="text-sm text-primary-text">{login ? `Linked to ${login.name}.` : "Not linked to a sign-in account."}</p>
       {canLink && login && (
         <div>
-          <CTAButton buttonType="button" type="neutral" size="md" disabled={mutation.isPending} onClick={() => change(null)}>
+          <CTAButton buttonType="button" type="neutral" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => change(null)}>
             Unlink sign-in
           </CTAButton>
         </div>
@@ -56,7 +56,7 @@ const SignInLink = ({ employee, readOnly }) => {
           <div className="min-w-56 flex-1">
             <RHFComboBox label="Member" icon={KeyRoundIcon} placeholder="Choose a member" options={people} value={userId} onChange={setUserId} />
           </div>
-          <CTAButton buttonType="button" type="secondary" size="md" disabled={!userId || mutation.isPending} onClick={() => change(userId)}>
+          <CTAButton buttonType="button" type="secondary" size="md" disabled={!userId || mutation.isPending} loading={mutation.isPending} onClick={() => change(userId)}>
             Link sign-in
           </CTAButton>
         </div>
@@ -156,7 +156,7 @@ const EmployeeDialog = ({ employee, onClose, readOnly = false }) => {
           {!readOnly && (
           <CTAButton
             buttonType="submit"
-            disabled={mutation.isPending || form.firstName.trim().length === 0 || form.surname.trim().length === 0}
+            disabled={mutation.isPending || form.firstName.trim().length === 0 || form.surname.trim().length === 0} loading={mutation.isPending}
             type="main" size="md">
             {mutation.isPending ? "Saving…" : creating ? "Add employee" : "Save changes"}
           </CTAButton>

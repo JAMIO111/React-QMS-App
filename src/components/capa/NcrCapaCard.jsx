@@ -25,7 +25,7 @@ const LinkExistingDialog = ({ ncr, linkedIds, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!picked || mutation.isPending}>{mutation.isPending ? "Linking…" : "Link"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!picked || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Linking…" : "Link"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -49,7 +49,7 @@ const NcrCapaCard = ({ ncr }) => {
   const start = () => mutation.mutate({ action: "create", body: { fromNcrId: ncr.id } }, { onSuccess: (capa) => navigate(`/CAPA/${capa.id}/d0`) });
   const buttons = (
     <div className="flex flex-wrap gap-3">
-      <CTAButton buttonType="button" type="main" size="lg" disabled={mutation.isPending} onClick={start}>{list.length ? "Start another 8D" : "Start a new 8D"}</CTAButton>
+      <CTAButton buttonType="button" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending} onClick={start}>{list.length ? "Start another 8D" : "Start a new 8D"}</CTAButton>
       <CTAButton buttonType="button" type="neutral" size="md" onClick={() => { mutation.reset(); setLinking(true); }}>Link to an existing 8D</CTAButton>
     </div>
   );

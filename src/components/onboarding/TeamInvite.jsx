@@ -228,7 +228,7 @@ const TeamInvite = () => {
             </ul>
           )}
           <div className="flex justify-end">
-            <CTAButton buttonType="button" type="main" size="lg" disabled={mutation.isPending || problems.length > 0} onClick={send}>
+            <CTAButton buttonType="button" type="main" size="lg" disabled={mutation.isPending || problems.length > 0} loading={mutation.isPending} onClick={send}>
               {mutation.isPending ? "Sending…" : `Send ${rows.length} invitation${rows.length === 1 ? "" : "s"}`}
             </CTAButton>
           </div>
@@ -281,10 +281,10 @@ export const PendingInvitations = () => {
             </div>
             {can("members.manage") && (
               <div className="flex gap-2">
-                <CTAButton buttonType="button" type="neutral" size="md" disabled={mutation.isPending} aria-label={`Resend to ${m.email}`} onClick={() => run({ action: "resend", membershipId: m.membershipId }, "Invitation sent again")}>
+                <CTAButton buttonType="button" type="neutral" size="md" disabled={mutation.isPending} loading={mutation.isPending} aria-label={`Resend to ${m.email}`} onClick={() => run({ action: "resend", membershipId: m.membershipId }, "Invitation sent again")}>
                   Resend
                 </CTAButton>
-                <CTAButton buttonType="button" type="neutral" size="md" disabled={mutation.isPending} aria-label={`Revoke ${m.email}`} onClick={() => run({ action: "revoke", membershipId: m.membershipId }, "Invitation revoked")}>
+                <CTAButton buttonType="button" type="neutral" size="md" disabled={mutation.isPending} loading={mutation.isPending} aria-label={`Revoke ${m.email}`} onClick={() => run({ action: "revoke", membershipId: m.membershipId }, "Invitation revoked")}>
                   Revoke
                 </CTAButton>
               </div>

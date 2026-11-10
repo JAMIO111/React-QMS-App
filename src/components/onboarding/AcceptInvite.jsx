@@ -53,7 +53,7 @@ const InvitationCard = ({ invitation: inv, onAccept, pending, disabled }) => (
     ) : (
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-secondary-text">{inv.expiresAt ? `Expires in ${expiresIn(inv.expiresAt)}` : ""}</span>
-        <CTAButton buttonType="button" type="main" size="lg" disabled={pending || disabled} onClick={() => onAccept(inv)}>
+        <CTAButton buttonType="button" type="main" size="lg" disabled={pending || disabled} loading={pending} onClick={() => onAccept(inv)}>
           {pending ? "Joining…" : `Join ${inv.organisationName}`}
         </CTAButton>
       </div>

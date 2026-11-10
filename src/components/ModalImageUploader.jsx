@@ -145,18 +145,18 @@ const ModalImageUploader = ({
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
           <div className="flex gap-2">
             {(source || existingUrl) && (
-              <CTAButton buttonType="button" onClick={() => inputRef.current?.click()} disabled={busy} type="neutral" size="md">
+              <CTAButton buttonType="button" onClick={() => inputRef.current?.click()} disabled={busy} loading={busy} type="neutral" size="md">
                 <ImageIcon className="h-4 w-4" /> {source ? "Choose another" : "Replace"}
               </CTAButton>
             )}
             {!source && existingPath && (
-              <CTAButton type="danger" size="md" buttonType="button" onClick={remove} disabled={busy}>
+              <CTAButton type="danger" size="md" buttonType="button" onClick={remove} disabled={busy} loading={busy}>
                 <Trash2Icon className="h-4 w-4" /> Remove
               </CTAButton>
             )}
           </div>
           {source && (
-            <CTAButton type="success" size="md" buttonType="button" onClick={save} disabled={busy || !crop}>
+            <CTAButton type="success" size="md" buttonType="button" onClick={save} disabled={busy || !crop} loading={busy}>
               <SaveIcon className="h-4 w-4" /> {busy ? "Saving…" : "Save"}
             </CTAButton>
           )}

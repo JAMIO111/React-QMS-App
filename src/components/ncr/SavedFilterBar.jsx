@@ -60,7 +60,7 @@ const NameDialog = ({ title, saveText, initial = "", summary = [], existing = []
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={!trimmed || full || refusedName || pending}>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={!trimmed || full || refusedName || pending} loading={pending}>
             {pending ? "Saving…" : !rename && same ? "Replace" : saveText}
           </CTAButton>
         </div>

@@ -8,6 +8,21 @@ import { MemoryRouter } from "react-router-dom";
 import CTAButton from "./CTAButton";
 
 describe("CTAButton", () => {
+  it("shows a spinner, says it is busy and ignores clicks while loading, keeping its name", async () => {
+    const click = vi.fn();
+    const { rerender } = render(<CTAButton onClick={click}>Save</CTAButton>);
+    expect(screen.queryByTestId("button-spinner")).toBeNull();
+    rerender(<CTAButton onClick={click} loading>Save</CTAButton>);
+    const button = screen.getByRole("button", { name: "Save" });
+    expect(screen.getByTestId("button-spinner")).toBeInTheDocument();
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-busy", "true");
+    await userEvent.click(button);
+    expect(click).not.toHaveBeenCalled();
+    rerender(<CTAButton onClick={click} loading loadingText="Saving…">Save</CTAButton>);
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeInTheDocument();
+  });
+
   it("is a plain button that does not submit a form unless asked", () => {
     render(<CTAButton text="Go" />);
     expect(screen.getByRole("button", { name: "Go" })).toHaveAttribute("type", "button");
@@ -137,6 +152,27 @@ describe("button styling", () => {
     const offenders = files.filter(
       (f) => !NOT_BUTTONS.some((n) => f.endsWith(n)) && /(cta|neutral|error|success|secondary)-btn-(border|bg)/.test(readFileSync(f, "utf8"))
     );
+    expect(offenders).toEqual([]);
+  });
+
+  it("every button that waits on a request shows the spinner (disabled on isPending also passes loading)", () => {
+    const offenders = [];
+    for (const f of files.filter((x) => x.endsWith(".jsx"))) {
+      const src = readFileSync(f, "utf8");
+      for (const m of src.matchAll(/<CTAButton\b/g)) {
+        // The opening tag: up to the first ">" that is not part of "=>" and not inside braces.
+        let depth = 0;
+        let end = m.index;
+        for (let i = m.index; i < src.length; i += 1) {
+          const c = src[i];
+          if (c === "{") depth += 1;
+          else if (c === "}") depth -= 1;
+          else if (c === ">" && depth === 0 && src[i - 1] !== "=") { end = i; break; }
+        }
+        const tag = src.slice(m.index, end);
+        if (/disabled=\{[^}]*[^!]\b\w+\.isPending/.test(tag) && !/\bloading=/.test(tag)) offenders.push(`${f}: ${tag.slice(0, 80)}`);
+      }
+    }
     expect(offenders).toEqual([]);
   });
 

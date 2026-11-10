@@ -60,7 +60,7 @@ const StepFooter = ({ capa, step, editable }) => {
             <CTAButton
               buttonType="button"
               type="main" size="lg"
-              disabled={!ready || mutation.isPending}
+              disabled={!ready || mutation.isPending} loading={mutation.isPending}
               onClick={() => mutation.mutate({ action: "completeStep", id: capa.id, body: { step } }, { onSuccess: () => next && navigate(`/CAPA/${capa.id}/${next.key}`) })}>
               {mutation.isPending ? "Saving…" : next ? `Complete ${code} and continue` : `Complete ${code}`}
             </CTAButton>

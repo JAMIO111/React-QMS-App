@@ -270,7 +270,7 @@ const GaugePage = () => {
             </CTAButton>
           )}
           {canEdit && (
-            <CTAButton buttonType="submit" form="gauge-form" disabled={mutation.isPending || !valid || (!isNew && !dirty)} type="success" size="default" className="px-3">
+            <CTAButton buttonType="submit" form="gauge-form" disabled={mutation.isPending || !valid || (!isNew && !dirty)} loading={mutation.isPending} type="success" size="default" className="px-3">
               <SaveIcon className="h-4 w-4" /> {mutation.isPending ? "Saving…" : isNew ? "Add gauge" : "Save changes"}
             </CTAButton>
           )}
@@ -311,7 +311,7 @@ const GaugePage = () => {
             <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
               Deleted {formatDate(gauge.deletedAt)} by {gauge.deletedBy?.name ?? "—"}: “{gauge.deleteReason}”. Deleted gauges are read-only.
               {can("calibration.manage") && (
-                <CTAButton buttonType="button" onClick={restore} disabled={mutation.isPending} type="neutral" size="default" className="px-3">
+                <CTAButton buttonType="button" onClick={restore} disabled={mutation.isPending} loading={mutation.isPending} type="neutral" size="default" className="px-3">
                   <RotateCcwIcon className="h-4 w-4" /> Restore
                 </CTAButton>
               )}

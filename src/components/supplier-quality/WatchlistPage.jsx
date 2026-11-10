@@ -39,7 +39,7 @@ const WatchlistPage = () => {
             { label: "Supplier performance (CSV)", hint: "Every active supplier, with the period and definitions", icon: DownloadIcon, onSelect: () => exportReport("performance", "supplier-performance") },
             can("audits.read") && { label: "Supplier audits (CSV)", hint: "Audit records carried out on suppliers", icon: DownloadIcon, onSelect: () => exportReport("audits", "supplier-audits") },
           ]}
-          trigger={(props) => <CTAButton {...props} type="secondary" size="default" icon={DownloadIcon} disabled={report.isPending}>{report.isPending ? "Preparing…" : "Export a report"}</CTAButton>}
+          trigger={(props) => <CTAButton {...props} type="secondary" size="default" icon={DownloadIcon} disabled={report.isPending} loading={report.isPending}>{report.isPending ? "Preparing…" : "Export a report"}</CTAButton>}
         />
       </div>
       {query.error && <ErrorNotice error={query.error} />}

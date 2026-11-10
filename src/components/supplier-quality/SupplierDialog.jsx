@@ -128,7 +128,7 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !form.name.trim() || (!editing && !form.code.trim())}>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !form.name.trim() || (!editing && !form.code.trim())} loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : editing ? "Save" : "Add supplier"}
           </CTAButton>
         </div>

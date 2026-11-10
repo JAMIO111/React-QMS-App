@@ -231,7 +231,7 @@ const SiteDialog = ({ site, onClose }) => {
           <CTAButton
             buttonType="submit"
             form={formId}
-            disabled={mutation.isPending || !timezone || !currency || name.trim().length === 0 || (creating && code.trim().length === 0)}
+            disabled={mutation.isPending || !timezone || !currency || name.trim().length === 0 || (creating && code.trim().length === 0)} loading={mutation.isPending}
             type="main" size="md">
             {mutation.isPending ? "Saving…" : creating ? "Add site" : "Save changes"}
           </CTAButton>

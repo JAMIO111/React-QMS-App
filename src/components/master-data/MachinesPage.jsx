@@ -70,7 +70,7 @@ const MachineForm = ({ machine, onDone }) => {
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>
           {mutation.isPending ? "Saving…" : machine ? "Save changes" : "Add machine"}
         </CTAButton>
       </div>

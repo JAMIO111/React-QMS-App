@@ -53,7 +53,7 @@ const HeaderForm = ({ capa, editable }) => {
       <FormError error={mutation.error} />
       {editable && (
         <div className="flex justify-end">
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!dirty || mutation.isPending || !form.title.trim()}>{mutation.isPending ? "Saving…" : "Save changes"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!dirty || mutation.isPending || !form.title.trim()} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save changes"}</CTAButton>
         </div>
       )}
     </MenuCard>
@@ -71,7 +71,7 @@ const LinkNcrDialog = ({ capa, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!picked || mutation.isPending}>{mutation.isPending ? "Linking…" : "Link"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!picked || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Linking…" : "Link"}</CTAButton>
         </div>
       </form>
     </Dialog>

@@ -39,7 +39,7 @@ const AcknowledgeDialog = ({ alert, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!note.trim() || mutation.isPending}>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!note.trim() || mutation.isPending} loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : "Acknowledge"}
           </CTAButton>
         </div>

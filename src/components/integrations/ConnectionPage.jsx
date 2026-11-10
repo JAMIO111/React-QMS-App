@@ -43,7 +43,7 @@ const CredentialDialog = ({ connection, kind, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !ok}>{mutation.isPending ? "Storing…" : "Store"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !ok} loading={mutation.isPending}>{mutation.isPending ? "Storing…" : "Store"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -67,7 +67,7 @@ const ReasonDialog = ({ title, action, connection, confirm, tone = "danger", onC
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type={tone} size="md" disabled={mutation.isPending || reason.trim().length < 3}>{confirm}</CTAButton>
+          <CTAButton buttonType="submit" type={tone} size="md" disabled={mutation.isPending || reason.trim().length < 3} loading={mutation.isPending}>{confirm}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -102,7 +102,7 @@ const ConnectionPage = () => {
   const retired = c.status === "retired";
   const run = (action, message) => mutation.mutate({ action, id: c.id }, { onSuccess: () => message && showToast({ type: "success", title: message }), onError: (err) => showToast({ type: "error", title: "Not done", message: describeApiError(err) }) });
   const button = (label, onClick, type = "neutral", disabled = false) => (
-    <CTAButton key={label} buttonType="button" type={type} size="md" onClick={onClick} disabled={disabled || mutation.isPending}>{label}</CTAButton>
+    <CTAButton key={label} buttonType="button" type={type} size="md" onClick={onClick} disabled={disabled || mutation.isPending} loading={mutation.isPending}>{label}</CTAButton>
   );
   const isFile = !!c.fileConnection;
   const actions = [];

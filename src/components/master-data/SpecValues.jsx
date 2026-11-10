@@ -89,7 +89,7 @@ const SpecValueForm = ({ revision, value, onDone }) => {
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>
           {mutation.isPending ? "Saving…" : "Save value"}
         </CTAButton>
       </div>
@@ -200,7 +200,7 @@ const SpecValues = ({ part, canManage }) => {
                             <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setEditing(v)} aria-label={`Edit ${v.characteristicKey}`}>
                               <PencilIcon className="h-4 w-4" />
                             </CTAButton>
-                            <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} onClick={() => remove(v)} aria-label={`Remove ${v.characteristicKey}`}>
+                            <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => remove(v)} aria-label={`Remove ${v.characteristicKey}`}>
                               <Trash2Icon className="h-4 w-4" />
                             </CTAButton>
                           </div>

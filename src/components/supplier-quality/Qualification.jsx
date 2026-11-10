@@ -62,7 +62,7 @@ const NoteDialog = ({ title, intro, label, required, confirmText, tone = "main",
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type={tone} size="lg" disabled={mutation.isPending || (required && text.trim().length < 3)}>
+          <CTAButton buttonType="submit" type={tone} size="lg" disabled={mutation.isPending || (required && text.trim().length < 3)} loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : confirmText}
           </CTAButton>
         </div>
@@ -161,7 +161,7 @@ export const DocumentDialog = ({ supplierId, document, replaces, onClose, onSave
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={busy || mutation.isPending}>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={busy || mutation.isPending} loading={busy || mutation.isPending}>
             {busy || mutation.isPending ? "Saving…" : editing ? "Save" : "Add document"}
           </CTAButton>
         </div>
@@ -347,7 +347,7 @@ const CertificationDialog = ({ supplierId, certification, renew, documents, onCl
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : renew ? "Renew" : editing ? "Save" : "Add certification"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : renew ? "Renew" : editing ? "Save" : "Add certification"}</CTAButton>
         </div>
       </form>
     </Dialog>

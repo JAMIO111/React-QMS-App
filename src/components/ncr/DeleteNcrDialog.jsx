@@ -54,7 +54,7 @@ const DeleteNcrDialog = ({ ncr, onClose, onDeleted }) => {
           </CTAButton>
           <CTAButton
             buttonType="submit"
-            disabled={mutation.isPending || reason.trim().length < 3}
+            disabled={mutation.isPending || reason.trim().length < 3} loading={mutation.isPending}
             type="danger" size="md">
             {mutation.isPending ? "Deleting…" : "Delete"}
           </CTAButton>

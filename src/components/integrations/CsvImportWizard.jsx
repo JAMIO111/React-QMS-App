@@ -511,7 +511,7 @@ const CsvImportWizard = () => {
         )}
       </div>
 
-      <div className="sticky bottom-0 z-10 mt-auto border-t border-border-color bg-secondary-bg/95 px-4 py-3 backdrop-blur">
+      <div className="sticky -bottom-5 z-10 -mx-5 -mb-5 mt-auto border-t border-border-color bg-secondary-bg/95 px-9 py-3 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-secondary-text" role="status">
             {step === 1 && (entityType ? `${ENTITY_LABELS[entityType]} chosen` : "Choose what the file holds")}

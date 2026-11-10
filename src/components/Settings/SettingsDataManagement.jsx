@@ -91,7 +91,7 @@ const SettingsDataManagement = () => {
 
   return (
     <div className="flex w-full flex-col">
-      <header className="sticky top-0 z-20 -mx-5 -mt-5 mb-4 flex flex-col gap-3 border-b border-border-color bg-primary-bg/95 px-5 pb-3 pt-5 backdrop-blur">
+      <header className="sticky -top-5 z-20 -mx-5 -mt-5 mb-4 flex flex-col gap-3 border-b border-border-color bg-primary-bg/95 px-5 pb-3 pt-5 backdrop-blur">
         <div>
           <h2 className="text-2xl font-semibold text-primary-text">Data Management</h2>
           <p className="text-sm text-secondary-text">

@@ -289,6 +289,29 @@ describe("settings", () => {
     renderAt("/Settings/Calibration");
     expect(await screen.findByTitle("Code")).toHaveTextContent("CAL-150");
   });
+
+  it("searches gauge types by code, name or description", async () => {
+    routeApi({
+      "GET /gauge-types": {
+        data: [
+          { id: "t1", code: "CAL-150", name: "Digital caliper", description: null, intervalValue: 6, intervalUnit: "months", active: true, characteristicCount: 2, gaugeCount: 1 },
+          { id: "t2", code: "MIC-25", name: "Micrometer", description: "Outside 0-25 mm", intervalValue: 1, intervalUnit: "years", active: true, characteristicCount: 1, gaugeCount: 0 },
+        ],
+      },
+    });
+    renderAt("/Settings/Calibration");
+    expect(await screen.findByText("Digital caliper")).toBeInTheDocument();
+    const search = screen.getByRole("searchbox", { name: "Search gauge types" });
+    await userEvent.type(search, "mic");
+    expect(screen.queryByText("Digital caliper")).not.toBeInTheDocument();
+    expect(screen.getByText("Micrometer")).toBeInTheDocument();
+    await userEvent.clear(search);
+    await userEvent.type(search, "outside");
+    expect(screen.getByText("Micrometer")).toBeInTheDocument();
+    await userEvent.clear(search);
+    await userEvent.type(search, "nothing like it");
+    expect(screen.getByText(/No gauge type matches/)).toBeInTheDocument();
+  });
 });
 
 describe("pass/fail checks", () => {

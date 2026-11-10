@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDownIcon, PencilIcon, PlusIcon } from "@/components/icons";
+import { ChevronDownIcon, PencilIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
 import {
   useCalibrationMutation,
@@ -273,6 +273,11 @@ const SettingsCalibration = () => {
   const mutation = useCalibrationMutation();
   const { showToast } = useToast();
   const [adding, setAdding] = useState(false);
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const shown = (types ?? []).filter(
+    (t) => !q || [t.code, t.name, t.description].some((v) => v?.toLowerCase().includes(q)),
+  );
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -349,16 +354,34 @@ const SettingsCalibration = () => {
             />
           </div>
         )}
+        {!!types?.length && (
+          <label className="relative self-start">
+            <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary-text" />
+            <input
+              type="search"
+              aria-label="Search gauge types"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search code, name or description…"
+              className="w-72 max-w-full rounded-lg border border-border-color bg-text-input-color py-1.5 pl-8 pr-3 text-sm text-primary-text placeholder:text-tertiary-text focus:border-brand-primary focus:outline-none"
+            />
+          </label>
+        )}
         {isLoading ? (
           <LoadingScreen size="sm" />
         ) : (
           <ul className="flex flex-col gap-3" aria-label="Gauge types">
-            {(types ?? []).map((t) => (
+            {shown.map((t) => (
               <TypeCard key={t.id} type={t} canManage={canManage} />
             ))}
             {!types?.length && (
               <li className="rounded-lg border-2 border-dashed border-border-dark-color p-4 text-center text-sm text-secondary-text">
                 No gauge types yet.
+              </li>
+            )}
+            {!!types?.length && !shown.length && (
+              <li className="rounded-lg border-2 border-dashed border-border-dark-color p-4 text-center text-sm text-secondary-text">
+                No gauge type matches “{query.trim()}”.
               </li>
             )}
           </ul>

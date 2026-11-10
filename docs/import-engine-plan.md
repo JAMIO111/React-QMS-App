@@ -24,7 +24,7 @@ compensating (deactivate untouched created records, revert untouched updated fie
 | Slice | Content |
 |---|---|
 | **CF** | Custom fields (separate plan). |
-| **UI2** | Templates and transform pipelines: per-field ordered steps (text, number, date, logic), the formula language, conditional mappings, templates bundling source settings + mapping + matching + import settings (duplicate, archive, restore a version), a warning when a reused template meets different columns. |
+| **UI2** | Planned in `docs/import-templates-plan.md` (decisions T1–T5). Templates and transform pipelines: per-field ordered steps (text, number, date, logic), the formula language, conditional mappings, templates bundling source settings + mapping + matching + import settings (duplicate, archive, restore a version), a warning when a reused template meets different columns. |
 | **UI4** | Relationships and multi-file imports: several files and kinds of record in one import, dependency order from the catalogue's links, links resolved inside the import before writing, multi-field / composite matching, "create the missing linked record" where allowed, cycles and missing links reported in the preview. |
 | **UI5** | Duplicates and overwrite rules (E3, E4): strategies, per-field rules, the review queue for flagged conflicts. |
 | **UI6** | Validation report and execution: errors vs warnings, duplicates inside the file, error report download, "import valid rows only", the pg_cron worker (E1) with live progress, cancel, history, undo of an import. |

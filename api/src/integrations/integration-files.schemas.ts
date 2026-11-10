@@ -11,6 +11,15 @@ export const RegisterFileBody = z
     path: z.string().min(10).max(600),
     fileName: z.string().trim().min(1).max(255),
     size: z.number().int().min(0).max(26_214_400),
+    /** How to read this file; anything left out follows the connection's settings. */
+    options: z
+      .object({
+        delimiter: z.enum([',', ';', 'tab', '|']).optional(),
+        encoding: z.enum(['utf-8', 'windows-1252']).optional(),
+        hasHeader: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type RegisterFileBody = z.infer<typeof RegisterFileBody>;

@@ -61,6 +61,7 @@ const RequirementsPage = lazy(() => import("./components/supplier-quality/Requir
 const ScarsPage = lazy(() => import("./components/supplier-quality/ScarsPage.jsx"));
 const ScarPage = lazy(() => import("./components/supplier-quality/ScarPage.jsx"));
 const SettingsIntegrations = lazy(() => import("./components/Settings/SettingsIntegrations.jsx"));
+const CsvImportWizard = lazy(() => import("./components/integrations/CsvImportWizard.jsx"));
 const ConnectionPage = lazy(() => import("./components/integrations/ConnectionPage.jsx"));
 const IntegrationRunPage = lazy(() => import("./components/integrations/RunPage.jsx"));
 const IntegrationMappingPage = lazy(() => import("./components/integrations/MappingPage.jsx"));
@@ -207,6 +208,7 @@ const router = createBrowserRouter([
               { path: "Audits", element: <Navigate to="../Data-Management?tab=audits" replace /> },
               { path: "Supplier-Quality", element: <Navigate to="../Data-Management?tab=supplier-quality" replace /> },
               { path: "Integrations", element: <SettingsIntegrations /> },
+              { path: "Integrations/csv", element: <CsvImportWizard /> },
               { path: "Integrations/:id", element: <ConnectionPage /> },
               { path: "Integrations/:id/runs/:runId", element: <IntegrationRunPage /> },
               { path: "Integrations/:id/mapping", element: <IntegrationMappingPage /> },

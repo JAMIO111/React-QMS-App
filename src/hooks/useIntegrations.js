@@ -35,6 +35,18 @@ export const useIntegrationRuns = (connectionId) => {
   });
 };
 
+/** The latest import runs across every connection (Settings → Integrations). Polls while one is queued or running. */
+export const useRecentIntegrationRuns = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "runs", "recent"),
+    queryFn: () => apiFetch(`${BASE}/runs?pageSize=8`, { organisationId }),
+    enabled: !!organisationId && enabled,
+    retry: false,
+    refetchInterval: (q) => (q.state.data?.data?.some((r) => r.status === "queued" || r.status === "running") ? 10_000 : false),
+  });
+};
+
 /** One run with its errors and its rows by status now. Polls while it is queued or running. */
 export const useIntegrationRun = (runId) => {
   const { organisationId } = useOrganisation();

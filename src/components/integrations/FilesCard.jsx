@@ -5,7 +5,7 @@ import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useToast } from "../../contexts/ToastProvider";
 import { useIntegrationFiles, useIntegrationMutation } from "../../hooks/useIntegrations";
 import { describeApiError } from "../../lib/api-client";
-import { FILE_STATUS, fileProblem } from "../../lib/integrations";
+import { FILE_STATUS, fileProblem, wizardPath } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
 import { FileIcon } from "../ui/FileDrop";
@@ -86,7 +86,7 @@ const FilesCard = ({ connection, canUpload, canMap }) => {
               </div>
               <FileStatusPill status={f.status} />
               {f.status === "parsed" && (
-                <Link to={`/Settings/Integrations/${connection.id}/mapping?file=${f.id}`} className="text-sm font-medium text-link-color hover:underline">
+                <Link to={wizardPath(connection.id, { file: f.id, step: 2 })} className="text-sm font-medium text-link-color hover:underline">
                   {canMap ? "Map columns" : "View columns"}
                 </Link>
               )}

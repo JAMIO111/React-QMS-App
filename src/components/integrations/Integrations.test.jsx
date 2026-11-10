@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -63,12 +63,20 @@ beforeEach(() => {
 });
 
 describe("Settings → Integrations", () => {
-  it("lists connections with their status and offers Add only to managers", async () => {
-    routeApi({ "GET /integrations/connections": { data: [conn({ status: "active" })] }, "GET /integrations/providers": { data: providers } });
+  it("shows every integration as a card with its logo, and only the file import is available", async () => {
+    routeApi({ "GET /integrations/connections": { data: [conn({ status: "active" })] }, "GET /integrations/runs": { data: [run()], page: 1, pageSize: 8, total: 1 } });
     renderAt("/Settings/Integrations");
+    const grid = await screen.findByRole("list", { name: "Integrations" });
+    const cards = within(grid).getAllByRole("listitem");
+    expect(cards.map((c) => c.getAttribute("aria-label"))).toEqual(expect.arrayContaining(["CSV or Excel file", "REST API", "MySQL", "Microsoft Dynamics 365 Business Central", "Sage", "SAP"]));
+    for (const c of cards) expect(within(c).getByRole("img", { name: /logo$/ })).toBeInTheDocument();
+    const csv = within(grid).getByRole("listitem", { name: "CSV or Excel file" });
+    expect(within(csv).getByText("Available")).toBeInTheDocument();
+    expect(within(csv).getByRole("link", { name: /Import a file/ })).toHaveAttribute("href", "/Settings/Integrations/csv");
+    expect(within(within(grid).getByRole("listitem", { name: "SAP" })).getByText("Coming soon")).toBeInTheDocument();
+    expect(within(grid).getAllByText("Coming soon")).toHaveLength(cards.length - 1);
     expect(await screen.findByRole("link", { name: "Sage 200" })).toHaveAttribute("href", "/Settings/Integrations/c1");
-    expect(screen.getByText("Active")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Add connection/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Full import · Suppliers/ })).toHaveAttribute("href", "/Settings/Integrations/c1/runs/r1");
   });
 
   it("tells someone without a Controller seat that integrations need one", async () => {
@@ -79,12 +87,12 @@ describe("Settings → Integrations", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("hides Add without the manage permission", async () => {
+  it("offers Import a file only to people who may run imports", async () => {
     permissions = ["integrations.read"];
-    routeApi({ "GET /integrations/connections": { data: [] }, "GET /integrations/providers": { data: providers } });
+    routeApi({ "GET /integrations/connections": { data: [] }, "GET /integrations/runs": noRuns });
     renderAt("/Settings/Integrations");
-    expect(await screen.findByText("No connections yet")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Add connection/ })).toBeNull();
+    expect(await screen.findByRole("listitem", { name: "CSV or Excel file" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Import a file/ })).toBeNull();
   });
 });
 

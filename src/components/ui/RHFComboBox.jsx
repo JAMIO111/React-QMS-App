@@ -45,6 +45,7 @@ const RHFComboBox = ({
   secondaryFieldOptions,
   error,
   className = "",
+  ariaLabel,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -260,6 +261,7 @@ const RHFComboBox = ({
                 name={name}
                 type="text"
                 role="combobox"
+                aria-label={label ? undefined : ariaLabel}
                 autoComplete="off"
                 aria-expanded={isOpen}
                 aria-controls={listId}
@@ -297,7 +299,7 @@ const RHFComboBox = ({
                 tabIndex={-1}
                 onClick={clearSelection}
                 className="flex items-center justify-center p-0.5 text-primary-text hover:bg-secondary-bg mx-1 rounded-sm cursor-pointer"
-                aria-label={label ? `Clear ${label}` : "Clear"}>
+                aria-label={label || ariaLabel ? `Clear ${label ?? ariaLabel}` : "Clear"}>
                 <XIcon className="w-5 h-5" />
               </button>
             )}
@@ -322,7 +324,7 @@ const RHFComboBox = ({
               }}
               id={listId}
               role="listbox"
-              aria-label={label}
+              aria-label={label ?? ariaLabel}
               className={`fixed z-[9500] border border-border-color rounded-lg shadow-md max-h-60 overflow-y-auto py-1 bg-secondary-bg`}>
               {filteredOptions.length > 0 ? (
                 filteredOptions.map((option, index) => (

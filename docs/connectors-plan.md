@@ -193,7 +193,8 @@ Each entity module declares: canonical fields (type, required, allowed values), 
 
 ## 9. UI (Settings → Integrations, plus links where records are shown)
 
-1. **Catalogue** of providers (csv, rest_api).
+1. **Catalogue** of providers: a two-column grid of cards with each system's logo; only what is built is usable, the rest say **Coming soon** (as built after IN4: CSV or Excel file available; REST API, Dynamics 365 Business Central, SAP, Sage, MySQL, PostgreSQL, SQL Server, Odoo, Google Sheets, Xero, QuickBooks coming soon).
+   **A file import is a one-time wizard** (as built): (1) the kind of record, (2) the file and how to read it (headings, character set, separator, per upload) with what an import may do to records already there, (3) the reusable mapping step (field → column = example, unmatched required fields in red, each row opens for its transform, empty-cell value, date format, decimal mark and Match by), then Preview or Import. The mapping is a saved version, reused next time; a changed mapping asks why.
 2. **Connections** list with health (last success, frequency, records processed, rejected) and a status pill.
 3. **Setup** wizard as in §6.1.
 4. **Mapping** screen: source column ↔ canonical field, transform picker, required markers, ownership per field, saved as a new version with a reason.

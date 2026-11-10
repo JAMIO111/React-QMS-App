@@ -22,7 +22,9 @@ const ImportSettingsCard = ({ connection, entityType, readOnly }) => {
   const locked = readOnly || s.fixed;
   const label = ENTITY_LABELS[entityType]?.toLowerCase() ?? "these records";
   return (
-    <MenuCard title="Import settings" subtitle={`What an import of ${label} may do. Every import records the settings it used.`}>
+    <MenuCard
+      title={isFile ? `${ENTITY_LABELS[entityType] ?? "Records"} already in Fortress` : "Import settings"}
+      subtitle={isFile ? "What importing this file may do to records that are already there. Every import records the settings it used." : `What an import of ${label} may do. Every import records the settings it used.`}>
       {s.fixed && (
         <Callout tone="info" className="mb-3">
           Non-conformances are only ever added: once in Fortress their investigation, containment and stage are managed there, so a later import never changes them.
@@ -52,6 +54,7 @@ const ImportSettingsCard = ({ connection, entityType, readOnly }) => {
           </label>
           {s.writeMode === "add_only" && !s.fixed && <span className="text-xs text-secondary-text">Not used while an import only adds new records.</span>}
         </div>
+        {!isFile && (
         <ComboField
           label="When a record disappears from the source"
           value={s.onMissing}
@@ -61,6 +64,8 @@ const ImportSettingsCard = ({ connection, entityType, readOnly }) => {
           required
           disabled={readOnly}
         />
+        )}
+        {!isFile && (
         <ComboField
           label="Runs"
           value={s.schedule}
@@ -70,6 +75,7 @@ const ImportSettingsCard = ({ connection, entityType, readOnly }) => {
           required
           disabled={readOnly || isFile}
         />
+        )}
       </div>
     </MenuCard>
   );

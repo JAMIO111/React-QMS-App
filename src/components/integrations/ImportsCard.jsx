@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "../../contexts/ToastProvider";
 import { useIntegrationFiles, useIntegrationMappings, useIntegrationMutation, useIntegrationRuns } from "../../hooks/useIntegrations";
 import { describeApiError } from "../../lib/api-client";
-import { ENTITY_LABELS, RUN_KINDS, RUN_STATUS, runSummary } from "../../lib/integrations";
+import { ENTITY_LABELS, RUN_KINDS, RUN_STATUS, runSummary, wizardPath } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
@@ -76,7 +76,7 @@ const RunDialog = ({ connection, onClose }) => {
         )}
         {isFile && parsed.length === 0 && <Callout tone="warning">Upload a file first.</Callout>}
         {isFile && chosenFile && !mappings.isLoading && !mapped && (
-          <Callout tone="warning" action={<Link to={`/Settings/Integrations/${connection.id}/mapping?entity=${entityType}&file=${chosenFile}`} className="text-sm font-medium text-link-color hover:underline">Map columns</Link>}>
+          <Callout tone="warning" action={<Link to={wizardPath(connection.id, { entity: entityType, file: chosenFile, step: 3 })} className="text-sm font-medium text-link-color hover:underline">Map columns</Link>}>
             Map the file's columns to {ENTITY_LABELS[entityType]?.toLowerCase() ?? "these records"} first.
           </Callout>
         )}

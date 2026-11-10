@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useToast } from "../../contexts/ToastProvider";
 import { useIntegrationConnection, useIntegrationMutation, useIntegrationRun, useIntegrationRunRows } from "../../hooks/useIntegrations";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
-import { ENTITY_LABELS, ROW_STATUS, RUN_KINDS, WRITE_MODE_LABELS, drainMessage, isLive } from "../../lib/integrations";
+import { ENTITY_LABELS, ROW_STATUS, RUN_KINDS, WRITE_MODE_LABELS, drainMessage, isLive, wizardPath } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
 import Dialog from "../ui/Dialog";
@@ -98,6 +98,7 @@ const RunPage = () => {
   const mutation = useIntegrationMutation();
   const { can } = usePermissions();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [cancelling, setCancelling] = useState(false);
   const [notice, setNotice] = useState(null);
   useBreadcrumbNames([
@@ -117,6 +118,15 @@ const RunPage = () => {
       {
         onSuccess: (r) => setNotice(drainMessage(r?.drain)),
         onError: (err) => showToast({ type: "error", title: "Not done", message: describeApiError(err) }),
+      },
+    );
+  // After a preview of a file: the same file, mapping and settings, written this time.
+  const importFile = () =>
+    mutation.mutate(
+      { action: "requestRun", id, body: { entityType: run.entityType, kind: "full", fileId: run.file.id } },
+      {
+        onSuccess: (r) => navigate(`/Settings/Integrations/${id}/runs/${r.id}`),
+        onError: (err) => showToast({ type: "error", title: "Import not started", message: describeApiError(err) }),
       },
     );
   return (
@@ -145,6 +155,14 @@ const RunPage = () => {
             {live && <CTAButton type="danger" size="md" onClick={() => setCancelling(true)}>Cancel import</CTAButton>}
             {!live && run.rowsNow.failed > 0 && connection.data?.status === "active" && (
               <CTAButton type="main" size="md" disabled={mutation.isPending} onClick={() => act("retryRows", { entityType: run.entityType })}>{mutation.isPending ? "Retrying…" : "Retry failed rows"}</CTAButton>
+            )}
+            {preview && run.file && !live && run.status !== "cancelled" && connection.data?.status === "active" && (
+              <>
+                {(connection.data.importable ?? []).includes(run.entityType) && (connection.data.writable ?? []).includes(run.entityType) && (
+                  <CTAButton type="main" size="md" disabled={mutation.isPending} onClick={importFile}>{mutation.isPending ? "Starting…" : "Import these records"}</CTAButton>
+                )}
+                <CTAButton to={wizardPath(id, { entity: run.entityType, file: run.file.id, step: 3 })} type="secondary" size="md">Change the mapping</CTAButton>
+              </>
             )}
           </div>
         )}

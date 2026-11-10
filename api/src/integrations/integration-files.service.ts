@@ -83,9 +83,9 @@ export class IntegrationFilesService {
       const bytes = await this.store.download(b.path);
       if (!bytes) throw new FileParseError('The uploaded file was not found in storage: upload it again');
       const opts: ParseOptions = {
-        delimiter: (config.delimiter as ParseOptions['delimiter']) ?? ',',
-        encoding: (config.encoding as ParseOptions['encoding']) ?? 'utf-8',
-        hasHeader: config.hasHeader !== false,
+        delimiter: b.options?.delimiter ?? (config.delimiter as ParseOptions['delimiter']) ?? ',',
+        encoding: b.options?.encoding ?? (config.encoding as ParseOptions['encoding']) ?? 'utf-8',
+        hasHeader: b.options?.hasHeader ?? config.hasHeader !== false,
       };
       parsed = parseFile(b.fileName, bytes, opts);
     } catch (e) {

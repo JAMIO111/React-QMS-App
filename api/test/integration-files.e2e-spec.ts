@@ -85,6 +85,16 @@ describe('file imports', () => {
     expect((await api().get(`${base}/connections/${connId}/files`).set(await owner()).expect(200)).body.data).toHaveLength(1);
   });
 
+  it('reads a file with the options sent with it, over the connection settings', async () => {
+    const plain = 'S-9,Zeta Ltd\nS-10,Eta Ltd\n';
+    files.set(`${folder()}u5-plain.csv`, strToU8(plain));
+    const f = (await api().post(`${base}/connections/${connId}/files`).set(await owner()).send({ path: `${folder()}u5-plain.csv`, fileName: 'plain.csv', size: plain.length, options: { delimiter: ',', hasHeader: false } }).expect(201)).body;
+    expect(f).toMatchObject({ status: 'parsed', rowCount: 2 });
+    expect(f.headers).toHaveLength(2);
+    expect(Object.values(f.sample[0].values)).toEqual(['S-9', 'Zeta Ltd']);
+    await api().post(`${base}/connections/${connId}/files`).set(await owner()).send({ path: `${folder()}u5-plain.csv`, fileName: 'plain.csv', size: 1, options: { delimiter: '#' } }).expect(400);
+  });
+
   it('reads the first sheet of a workbook, and keeps a file it cannot read as failed with the reason', async () => {
     files.set(`${folder()}u2-parts.xlsx`, xlsx());
     const parts = (await api().post(`${base}/connections/${connId}/files`).set(await owner()).send({ path: `${folder()}u2-parts.xlsx`, fileName: 'parts.xlsx', size: 900 }).expect(201)).body;

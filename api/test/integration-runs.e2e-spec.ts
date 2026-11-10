@@ -96,7 +96,7 @@ describe('import runs', () => {
     const conn = (await api().get(`${base}/connections/${connId}`).set(await owner()).expect(200)).body;
     expect(conn.runnable).toEqual(CATALOGUE.map((c) => c.entityType));
     expect(conn.importable).toEqual(['supplier']);
-    await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'goods_receipt', kind: 'preview' }).expect(409);
+    await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'invoice', kind: 'preview' }).expect(400);
     await api().post(`${base}/connections/${connId}/runs`).set(await owner()).send({ entityType: 'supplier', kind: 'full' }).expect(409);
     await api().post(`${base}/connections/${connId}/runs`).set(await inspector()).send({ entityType: 'supplier', kind: 'preview' }).expect(403);
 

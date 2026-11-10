@@ -136,3 +136,13 @@ export const statusAfterCalibration = (status, outcome) => {
 
 /** A fail always asks; a pass only asks when the gauge is not active (for example it was lost and has turned up). */
 export const shouldPromptForStatus = (status, outcome) => outcome === "fail" || statusAfterCalibration(status, outcome) !== "active";
+
+/** A code for a new gauge type suggested from its name, the way the database makes one: capitals, anything else becomes "-", at most 36 characters. */
+export const gaugeTypeCodeFromName = (name) =>
+  String(name ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 36)
+    .replace(/-+$/, "");

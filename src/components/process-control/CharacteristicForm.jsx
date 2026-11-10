@@ -577,6 +577,7 @@ const CharacteristicForm = ({
             options={(gaugeTypes.data ?? []).map((t) => ({
               value: t.id,
               label: t.name,
+              hint: t.code,
             }))}
             hint="Required equipment (from Calibration)"
           />

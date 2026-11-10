@@ -75,7 +75,7 @@ const routeApi = (routes) =>
     calls.push({ k, path, body: opts.body });
     const all = {
       "GET /units": { data: [{ code: "mm", name: "Millimetre" }, { code: "µm", name: "Micrometre" }] },
-      "GET /gauge-types": { data: [{ id: "t1", name: "Digital caliper", description: null, intervalValue: 6, intervalUnit: "months", active: true, characteristicCount: 2, gaugeCount: 1 }] },
+      "GET /gauge-types": { data: [{ id: "t1", code: "CAL-150", name: "Digital caliper", description: null, intervalValue: 6, intervalUnit: "months", active: true, characteristicCount: 2, gaugeCount: 1 }] },
       "GET /gauges/g1": gauge(),
       "GET /gauges/g1/characteristics": { data: characteristics },
       "GET /gauges/g1/calibrations": { data: [] },
@@ -273,11 +273,21 @@ describe("settings", () => {
     expect(await screen.findByText("Digital caliper")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Add gauge type" }));
     await userEvent.type(screen.getByPlaceholderText(/e.g. Digital caliper/), "Micrometer 0-25");
+    // The code is suggested from the name until it is typed.
+    expect(screen.getByRole("textbox", { name: "Code" })).toHaveValue("MICROMETER-0-25");
+    await userEvent.clear(screen.getByRole("textbox", { name: "Code" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Code" }), "mic-25");
     await userEvent.clear(screen.getByRole("textbox", { name: "Interval" }));
     await userEvent.type(screen.getByRole("textbox", { name: "Interval" }), "1");
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Interval unit" }), "years");
     await userEvent.click(screen.getByRole("button", { name: "Add type" }));
-    await waitFor(() => expect(lastCall("POST /gauge-types").body).toEqual({ name: "Micrometer 0-25", description: null, intervalValue: 1, intervalUnit: "years" }));
+    await waitFor(() => expect(lastCall("POST /gauge-types").body).toEqual({ code: "MIC-25", name: "Micrometer 0-25", description: null, intervalValue: 1, intervalUnit: "years" }));
+  });
+
+  it("shows each gauge type's code", async () => {
+    routeApi({});
+    renderAt("/Settings/Calibration");
+    expect(await screen.findByTitle("Code")).toHaveTextContent("CAL-150");
   });
 });
 

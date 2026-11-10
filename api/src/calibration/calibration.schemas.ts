@@ -89,8 +89,11 @@ export const UpdateCharacteristicBody = z
     path: ['nominal'],
   });
 
+/** A gauge type's code: what identifies it in the app and in imports (unique per organisation, any case). */
+const GaugeTypeCode = z.string().trim().min(1).max(40);
 export const GaugeType = z.object({
   id: z.string().uuid(),
+  code: z.string(),
   name: z.string(),
   description: z.string().nullable(),
   intervalValue: z.number(),
@@ -107,6 +110,7 @@ export const GaugeTypeQuery = z.object({
 });
 export const CreateGaugeTypeBody = z
   .object({
+    code: GaugeTypeCode,
     name: z.string().trim().min(1).max(100),
     description: text(1000),
     intervalValue: z.number().int().min(1).max(1000).optional(),
@@ -115,6 +119,7 @@ export const CreateGaugeTypeBody = z
   .strict();
 export const UpdateGaugeTypeBody = z
   .object({
+    code: GaugeTypeCode.optional(),
     name: z.string().trim().min(1).max(100).optional(),
     description: text(1000),
     intervalValue: z.number().int().min(1).max(1000).optional(),

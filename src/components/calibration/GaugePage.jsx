@@ -344,7 +344,7 @@ const GaugePage = () => {
                 {controlled("gaugeTypeId", (f) => (
                   <RHFComboBox {...f} label="Gauge type" icon={TagIcon} placeholder="Select a type"
                     hint={isNew ? "A new gauge gets the type's characteristics and interval" : undefined}
-                    options={(types ?? []).filter((t) => t.active || t.id === form.gaugeTypeId).map((t) => ({ id: t.id, name: t.name, hint: formatInterval(t.intervalValue, t.intervalUnit) }))} />
+                    options={(types ?? []).filter((t) => t.active || t.id === form.gaugeTypeId).map((t) => ({ id: t.id, name: t.name, hint: `${t.code} · ${formatInterval(t.intervalValue, t.intervalUnit)}` }))} />
                 ))}
                 {text("manufacturer", "Manufacturer", { maxLength: 100, icon: FactoryIcon })}
                 {text("model", "Model", { maxLength: 100, icon: FactoryIcon })}

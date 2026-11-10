@@ -22,7 +22,7 @@ beforeAll(async () => {
   await seed(admin, ids, '-ipn');
   app = await startApp({ RATE_LIMIT_PER_MINUTE: '10000' });
   const h = await as(ids.ownerA);
-  const type = (await api().post('/api/v1/gauge-types').set(h).send({ name: 'Micrometer 0-25' }).expect(201)).body;
+  const type = (await api().post('/api/v1/gauge-types').set(h).send({ code: 'MIC-25', name: 'Micrometer 0-25' }).expect(201)).body;
   ctx.mic = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'MIC-1', description: 'Mic', gaugeTypeId: type.id, siteId: ids.siteA, nextDueOn: day(30) }).expect(201)).body.id;
   const fam = (await api().post('/api/v1/part-families').set(h).send({ code: 'HCR', name: 'Rods' }).expect(201)).body;
   const part = (await api().post('/api/v1/parts').set(h).send({ partNumber: 'HCR-100', name: 'Rod 100', partFamilyId: fam.id, initialRevision: { revision: 'A' } }).expect(201)).body;

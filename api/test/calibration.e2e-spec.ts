@@ -44,15 +44,23 @@ afterAll(async () => {
 describe('gauge types', () => {
   it('creates a type with template characteristics', async () => {
     const h = await as(ids.ownerA);
-    const t = await api().post('/api/v1/gauge-types').set(h).send({ name: 'Digital caliper 0-150', intervalValue: 6, intervalUnit: 'months' }).expect(201);
+    const t = await api().post('/api/v1/gauge-types').set(h).send({ code: 'CAL-150', name: 'Digital caliper 0-150', intervalValue: 6, intervalUnit: 'months' }).expect(201);
     typeId = t.body.id;
-    expect(t.body).toMatchObject({ name: 'Digital caliper 0-150', intervalValue: 6, intervalUnit: 'months', active: true, characteristicCount: 0 });
+    expect(t.body).toMatchObject({ code: 'CAL-150', name: 'Digital caliper 0-150', intervalValue: 6, intervalUnit: 'months', active: true, characteristicCount: 0 });
     await api().post(`/api/v1/gauge-types/${typeId}/characteristics`).set(h)
       .send({ name: '25 mm block', nominal: 25, toleranceMinus: 0.02, tolerancePlus: 0.02, unitCode: 'mm' }).expect(201);
     const second = await api().post(`/api/v1/gauge-types/${typeId}/characteristics`).set(h)
       .send({ name: '100 mm block', nominal: 100, toleranceMinus: 0.03, tolerancePlus: 0.03, unitCode: 'mm', method: 'Gauge block, jaws' }).expect(201);
     expect(second.body).toMatchObject({ sortOrder: 2, lower: 99.97, upper: 100.03, method: 'Gauge block, jaws' });
-    await api().post('/api/v1/gauge-types').set(h).send({ name: 'digital caliper 0-150' }).expect(409);
+    await api().post('/api/v1/gauge-types').set(h).send({ code: 'CAL-151', name: 'digital caliper 0-150' }).expect(409);
+    // The code identifies the type: required, unique ignoring case, and it can be changed.
+    await api().post('/api/v1/gauge-types').set(h).send({ name: 'Height gauge' }).expect(400);
+    const dup = await api().post('/api/v1/gauge-types').set(h).send({ code: 'cal-150', name: 'Height gauge' }).expect(409);
+    expect(dup.body.error.message).toBe('A gauge type with this code already exists');
+    const other = await api().post('/api/v1/gauge-types').set(h).send({ code: 'HG-300', name: 'Height gauge' }).expect(201);
+    expect((await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ code: 'HG-600' }).expect(200)).body.code).toBe('HG-600');
+    await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ code: 'Cal-150' }).expect(409);
+    await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ active: false }).expect(200);
     await api().post(`/api/v1/gauge-types/${typeId}/characteristics`).set(h)
       .send({ name: 'Bad', nominal: 1, toleranceMinus: -1, tolerancePlus: 0, unitCode: 'mm' }).expect(400);
     const list = await api().get('/api/v1/gauge-types').set(h).expect(200);
@@ -62,7 +70,7 @@ describe('gauge types', () => {
   it('lets only calibration managers change types', async () => {
     const h = await as(ids.inspectorA);
     await api().get('/api/v1/gauge-types').set(h).expect(200);
-    await api().post('/api/v1/gauge-types').set(h).send({ name: 'Mine' }).expect(403);
+    await api().post('/api/v1/gauge-types').set(h).send({ code: 'MINE', name: 'Mine' }).expect(403);
     await api().patch(`/api/v1/gauge-types/${typeId}`).set(h).send({ name: 'Mine' }).expect(403);
   });
 });

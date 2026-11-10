@@ -149,8 +149,9 @@ export const CATALOGUE: EntityCatalogue[] = [
   {
     entityType: 'gauge_type',
     label: 'Gauge types',
-    keyHint: 'The gauge type name, or its code in your system',
+    keyHint: 'The gauge type code',
     fields: [
+      { key: 'code', label: 'Code', type: 'text', required: true, maxLength: 40, description: 'Identifies the gauge type; unique in Fortress' },
       { key: 'name', label: 'Name', type: 'text', required: true, maxLength: 100, description: 'Unique in Fortress' },
       { key: 'description', label: 'Description', type: 'text', maxLength: 1000 },
       { key: 'intervalValue', label: 'Calibration interval', type: 'integer', description: 'A whole number from 1 to 1000; empty means 12' },
@@ -165,7 +166,7 @@ export const CATALOGUE: EntityCatalogue[] = [
     fields: [
       { key: 'assetNumber', label: 'Asset number', type: 'text', required: true, maxLength: 40, description: 'Unique in Fortress' },
       { key: 'description', label: 'Description', type: 'text', required: true, maxLength: 200 },
-      ref('gaugeType', 'Gauge type', 'gauge_type', 'gauge type name', { description: 'The gauge type name in Fortress, or the id your source gave it when it was imported here; it gives the gauge its characteristics' }),
+      ref('gaugeType', 'Gauge type', 'gauge_type', 'gauge type code', { description: 'The gauge type code in Fortress, or the id your source gave it when it was imported here; it gives the gauge its characteristics' }),
       { key: 'manufacturer', label: 'Manufacturer', type: 'text', maxLength: 100 },
       { key: 'model', label: 'Model', type: 'text', maxLength: 100 },
       { key: 'serialNumber', label: 'Serial number', type: 'text', maxLength: 100 },

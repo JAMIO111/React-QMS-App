@@ -32,6 +32,7 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   ncr_classifications_name_key: 'An entry with this name already exists',
   gauges_org_asset_number_key: 'A gauge with this asset number already exists',
   gauge_types_name_key: 'A gauge type with this name already exists',
+  gauge_types_org_code_key: 'A gauge type with this code already exists',
   calibration_readings_one_per_characteristic: 'This characteristic already has a reading',
   inspection_measurements_supersedes_key: 'This reading has already been corrected; correct the latest reading instead',
   part_customers_key: 'This customer is already linked to the part',

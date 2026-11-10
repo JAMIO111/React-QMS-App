@@ -8,7 +8,7 @@ import {
 } from "../../hooks/useCalibration";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
-import { INTERVAL_UNITS, formatInterval } from "../../lib/calibration";
+import { INTERVAL_UNITS, formatInterval, gaugeTypeCodeFromName } from "../../lib/calibration";
 import MenuCard from "../ui/MenuCard";
 import Switch from "../ui/Switch";
 import StatTile from "../ui/StatTile";
@@ -19,9 +19,12 @@ import CTAButton from "@/components/CTAButton";
 const input =
   "rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary";
 
-/** Name, description and default interval of a gauge type. */
+/** Code, name, description and default interval of a gauge type. A new type's code is suggested from its name until it is typed. */
 const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
   const [name, setName] = useState(initial?.name ?? "");
+  const [code, setCode] = useState(initial?.code ?? "");
+  const [codeTouched, setCodeTouched] = useState(!!initial);
+  const shownCode = codeTouched ? code : gaugeTypeCodeFromName(name);
   const [description, setDescription] = useState(initial?.description ?? "");
   const [intervalValue, setIntervalValue] = useState(
     String(initial?.intervalValue ?? 12),
@@ -31,6 +34,7 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
   );
   const ok =
     name.trim() &&
+    shownCode.trim() &&
     Number.isInteger(Number(intervalValue)) &&
     Number(intervalValue) >= 1;
   return (
@@ -40,12 +44,27 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
         e.preventDefault();
         if (ok)
           onSubmit({
+            code: shownCode.trim(),
             name: name.trim(),
             description: description.trim() || null,
             intervalValue: Number(intervalValue),
             intervalUnit,
           });
       }}>
+      <label className="flex flex-col gap-1 text-xs text-secondary-text">
+        <span data-required>Code</span>
+        <input
+          className={`${input} w-40 font-mono uppercase`}
+          value={shownCode}
+          onChange={(e) => {
+            setCodeTouched(true);
+            setCode(e.target.value.toUpperCase());
+          }}
+          maxLength={40}
+          placeholder="e.g. CAL-150"
+          title="Identifies the gauge type in Fortress and in imports; unique"
+        />
+      </label>
       <label className="flex flex-col gap-1 text-xs text-secondary-text">
         <span data-required>Name</span>
         <input
@@ -146,6 +165,7 @@ const TypeCard = ({ type, canManage }) => {
         <div className="flex flex-wrap items-center justify-between gap-5">
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-2 font-semibold text-primary-text">
+              <span className="rounded-md bg-border-color/60 px-1.5 py-0.5 font-mono text-xs font-medium text-secondary-text" title="Code">{type.code}</span>
               {type.name}
               <span className="rounded-full border border-border-color px-2 py-0.5 text-xs font-normal text-secondary-text">
                 Every {formatInterval(type.intervalValue, type.intervalUnit)}

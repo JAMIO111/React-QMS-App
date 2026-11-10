@@ -124,7 +124,7 @@ const GaugeFilterPane = ({ onClose }) => {
             <RHFDatePickerPopout label="Next due from" placeholder="Any date" valueFormat="iso" clearable value={from} onChange={setFrom} maxDate={to ?? undefined} />
             <RHFDatePickerPopout label="Next due to" placeholder="Any date" valueFormat="iso" clearable value={to} onChange={setTo} minDate={from ?? undefined} />
           </div>
-          <RHFComboBox label="Gauge type" icon={TagIcon} placeholder="All types" options={(types ?? []).map((t) => ({ id: t.id, name: t.name, hint: t.active ? undefined : "Inactive" }))} value={type} onChange={setType} />
+          <RHFComboBox label="Gauge type" icon={TagIcon} placeholder="All types" options={(types ?? []).map((t) => ({ id: t.id, name: t.name, hint: t.active ? t.code : `${t.code} · Inactive` }))} value={type} onChange={setType} />
           <RHFComboBox label="Site" icon={HouseIcon} placeholder="All sites" options={(sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))} value={site} onChange={setSite} />
           <RHFComboBox label="Calibrated" icon={FactoryIcon} placeholder="In-house or external" options={SOURCES} value={source} onChange={setSource} sort={false} />
           <PartyPicker kind="suppliers" label="Calibration supplier" icon={UsersIcon} value={supplier?.id ?? null} current={supplier?.id ? { id: supplier.id, name: supplier.name ?? "" } : undefined}

@@ -86,7 +86,7 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
   gauge_type: {
     table: 'gauge_types',
     fields: {
-      name: { column: 'name' }, description: { column: 'description' }, intervalValue: { column: 'interval_value' }, intervalUnit: { column: 'interval_unit' },
+      code: { column: 'code' }, name: { column: 'name' }, description: { column: 'description' }, intervalValue: { column: 'interval_value' }, intervalUnit: { column: 'interval_unit' },
       active: { column: 'active' },
     },
     excluded: { ...SYSTEM },

@@ -68,7 +68,7 @@ const CHARACTERISTIC_COLUMNS: Record<string, string> = {
   unitCode: 'unit_code', method: 'method', active: 'active',
 };
 const TYPE_COLUMNS: Record<string, string> = {
-  name: 'name', description: 'description', intervalValue: 'interval_value', intervalUnit: 'interval_unit', active: 'active',
+  code: 'code', name: 'name', description: 'description', intervalValue: 'interval_value', intervalUnit: 'interval_unit', active: 'active',
 };
 
 const SORT_SQL: Record<GaugeListQuery['sort'], string> = {
@@ -93,7 +93,7 @@ const GAUGE_SELECT = `
   to_char(g.last_calibrated_on, 'YYYY-MM-DD') as last_calibrated_on, to_char(g.next_due_on, 'YYYY-MM-DD') as next_due_on,
   (g.next_due_on - current_date) as days_until_due, ${DUE_STATE} as due_state,
   g.deleted_at, g.created_at,
-  t.id as type_id, t.name as type_name, s.id as site_id, s.code as site_code, s.name as site_name,
+  t.id as type_id, t.name as type_name, t.code as type_code, s.id as site_id, s.code as site_code, s.name as site_name,
   d.id as department_id, d.name as department_name,
   g.custodian_id, ${personName('cu')} as custodian_name,
   sp.id as supplier_id, coalesce(sp.display_name, sp.name) as supplier_name,
@@ -206,7 +206,7 @@ export class CalibrationService {
       if (q.q) {
         const like = likePattern(q.q);
         where.push(sql`(g.asset_number ilike ${like} or g.description ilike ${like} or g.serial_number ilike ${like}
-          or g.manufacturer ilike ${like} or g.model ilike ${like} or g.location ilike ${like} or t.name ilike ${like})`);
+          or g.manufacturer ilike ${like} or g.model ilike ${like} or g.location ilike ${like} or t.name ilike ${like} or t.code ilike ${like})`);
       }
       const order = sql.raw(`${SORT_SQL[q.sort]} ${q.order} nulls last, upper(g.asset_number) ${q.order}`);
       const result = await db.execute<Row>(sql`
@@ -465,6 +465,7 @@ const TYPE_SELECT = `
 
 const toType = (r: Row): z.infer<typeof GaugeType> => ({
   id: r.id as string,
+  code: r.code as string,
   name: r.name as string,
   description: (r.description as string) ?? null,
   intervalValue: Number(r.interval_value),

@@ -93,7 +93,7 @@ example shown and the "after each step" view), the formula editor (live result) 
 
 | Slice | Content |
 |---|---|
-| **UI2a** | Migration: templates, versions, runs pinned to versions, existing mappings carried over, advanced import setting; SQL tests, guardrails, sweeps. API: step engine (`core/steps.ts`, unit tests incl. old-engine equivalence), templates endpoints, runs with a template; e2e. |
+| **UI2a** (done) | Migration: templates, versions, runs pinned to versions, existing mappings carried over, advanced import setting; SQL tests, guardrails, sweeps. API: step engine (`core/steps.ts`, unit tests incl. old-engine equivalence), templates endpoints, runs with a template; e2e. |
 | **UI2b** | Formula language (`core/formula/` parser, evaluator, functions, messages; unit tests incl. hostile input), formulas in field rows, preview endpoint, formula check; e2e. |
 | **UI2c** | Screens: template picker / save in the wizard, step editor, formula editor, column check, template manager; component tests. |
 | **UI2d** | Exit check: full suites, CLAUDE.md, this plan's status. |

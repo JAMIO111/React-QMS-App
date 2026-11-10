@@ -15,11 +15,13 @@ const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (
 
 const SELECT = `
   select r.*, c.name as connection_name, ${personName('pq')} as requested_by_name, ${personName('px')} as cancelled_by_name,
-         f.file_name, m.version as mapping_version
+         f.file_name, m.version as mapping_version, tv.version as template_version, tt.id as template_id, tt.name as template_name
   from public.integration_sync_runs r
   join public.integration_connections c on c.id = r.connection_id
   left join public.integration_files f on f.id = r.file_id
   left join public.integration_mappings m on m.id = r.mapping_id
+  left join public.integration_template_versions tv on tv.id = r.template_version_id
+  left join public.integration_templates tt on tt.id = tv.template_id
   left join public.profiles pq on pq.id = r.requested_by
   left join public.profiles px on px.id = r.cancelled_by`;
 
@@ -46,6 +48,7 @@ const toRun = (r: Row): z.infer<typeof Run> => ({
   fetchDone: !!r.fetch_done,
   file: r.file_id ? { id: r.file_id as string, name: r.file_name as string } : null,
   mappingVersion: r.mapping_version === null || r.mapping_version === undefined ? null : Number(r.mapping_version),
+  template: r.template_id ? { id: r.template_id as string, name: r.template_name as string, version: Number(r.template_version) } : null,
   settings: (r.settings as z.infer<typeof Run>['settings']) ?? null,
 });
 
@@ -81,7 +84,7 @@ export class IntegrationRunsService {
 
   async request(ctx: RequestContext, connectionId: string, b: RequestRunBody): Promise<RunDetail> {
     await this.assertRunnable(ctx, connectionId, b.entityType, b.kind);
-    const id = await this.database.asUser(ctx, async (db) => (await db.execute<{ id: string }>(sql`select app.request_integration_run(${connectionId}::uuid, ${b.entityType}, ${b.kind}, ${b.fileId ?? null}::uuid) as id`)).rows[0].id);
+    const id = await this.database.asUser(ctx, async (db) => (await db.execute<{ id: string }>(sql`select app.request_integration_run(${connectionId}::uuid, ${b.entityType}, ${b.kind}, ${b.fileId ?? null}::uuid, ${b.templateId ?? null}::uuid) as id`)).rows[0].id);
     return this.drainAndLoad(ctx, id);
   }
 

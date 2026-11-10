@@ -102,6 +102,8 @@ import { IntegrationsService } from './integrations/integrations.service';
 import { IntegrationRunsController } from './integrations/integration-runs.controller';
 import { IntegrationFilesController } from './integrations/integration-files.controller';
 import { IntegrationFilesService } from './integrations/integration-files.service';
+import { IntegrationTemplatesController } from './integrations/integration-templates.controller';
+import { IntegrationTemplatesService } from './integrations/integration-templates.service';
 import { IntegrationFileStore, SupabaseIntegrationFileStore } from './integrations/core/file-store';
 import { IntegrationRunsService } from './integrations/integration-runs.service';
 import { ConnectorRegistry } from './integrations/core/connector.registry';
@@ -230,6 +232,7 @@ export class AppModule implements NestModule {
         IntegrationsController,
         IntegrationRunsController,
         IntegrationFilesController,
+        IntegrationTemplatesController,
         MaterialCertificatesController,
         InspectionsController,
         InspectionMeasurementsController,
@@ -300,6 +303,7 @@ export class AppModule implements NestModule {
         IntegrationsService,
         IntegrationRunsService,
         IntegrationFilesService,
+        IntegrationTemplatesService,
         { provide: IntegrationFileStore, useClass: SupabaseIntegrationFileStore },
         SyncEngine,
         CatalogueService,

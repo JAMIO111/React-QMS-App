@@ -1,3 +1,4 @@
+import { StepsBody } from './integration-steps.schemas';
 import { z } from 'zod';
 import { ENTITY_TYPES } from './core/entity-importer';
 import { DATE_FORMATS, OWNERSHIP, REF_MATCH, TRANSFORMS } from './core/mapping';
@@ -39,6 +40,8 @@ export const FieldMappingBody = z
     ownership: z.enum(OWNERSHIP).optional(),
     /** A reference field: by the Fortress code (default) or by the id the source gave the record in an earlier import (D10). */
     match: z.enum(REF_MATCH).optional(),
+    /** Steps applied in order after the value is taken (core/steps.ts). */
+    steps: StepsBody.optional(),
   })
   .strict();
 

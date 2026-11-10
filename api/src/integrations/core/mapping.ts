@@ -1,4 +1,9 @@
 import { CatalogueField, EntityCatalogue } from './catalogue';
+import { DATE_FORMATS, DateFormat, parseDate } from './mapping-dates';
+import { applySteps, Step, stepProblems, stepsGive } from './steps';
+
+export { DATE_FORMATS, parseDate };
+export type { DateFormat };
 
 /**
  * The mapping engine (plan §8: a closed set of transforms — no expressions, no code). A mapping names the key column (the record's identifier at the source)
@@ -6,8 +11,6 @@ import { CatalogueField, EntityCatalogue } from './catalogue';
  */
 export const TRANSFORMS = ['none', 'upper', 'lower', 'map', 'constant', 'concat'] as const;
 export type TransformKind = (typeof TRANSFORMS)[number];
-export const DATE_FORMATS = ['iso', 'dmy', 'mdy', 'excel'] as const;
-export type DateFormat = (typeof DATE_FORMATS)[number];
 export const OWNERSHIP = ['source_wins', 'qms_wins', 'manual_review'] as const;
 export const REF_MATCH = ['code', 'source'] as const;
 
@@ -34,6 +37,8 @@ export interface FieldMapping {
   ownership?: (typeof OWNERSHIP)[number];
   /** A reference field (D10): matched by the Fortress code (default) or by the id the source gave the record in an earlier import. */
   match?: (typeof REF_MATCH)[number];
+  /** Steps applied in order after the value is taken (core/steps.ts). */
+  steps?: Step[];
 }
 
 export interface MappingSpec {
@@ -67,7 +72,9 @@ export function mappingProblems(catalogue: EntityCatalogue, spec: MappingSpec, h
     const cols = kind === 'concat' ? (m.sources ?? []) : kind === 'constant' ? [] : m.source ? [m.source] : [];
     if (kind === 'concat' && cols.length < 2) problems.push(`${f.label}: join at least two columns`);
     if (kind === 'constant' && (m.value ?? '') === '') problems.push(`${f.label}: give the value every record gets`);
-    if (kind !== 'constant' && kind !== 'concat' && !m.source && (m.default ?? '') === '') problems.push(`${f.label}: choose a column or a default`);
+    const fillsItself = (m.steps ?? []).some((s) => s.kind === 'join' || s.kind === 'coalesce' || s.kind === 'default' || (s.kind === 'if' && (s.test === 'empty' || (s.test === 'not_empty' && s.else != null))));
+    if (kind !== 'constant' && kind !== 'concat' && !m.source && (m.default ?? '') === '' && !fillsItself) problems.push(`${f.label}: choose a column or a default`);
+    problems.push(...stepProblems(m.steps, f.label, columns));
     if (kind === 'map' && (!m.values || Object.keys(m.values).length === 0)) problems.push(`${f.label}: list the values to translate`);
     if (columns) for (const c of cols) if (!columns.has(c)) problems.push(`${f.label}: the column "${c}" is not in the file`);
     if (m.dateFormat && !DATE_FORMATS.includes(m.dateFormat)) problems.push(`${f.label}: unknown date format`);
@@ -78,28 +85,6 @@ export function mappingProblems(catalogue: EntityCatalogue, spec: MappingSpec, h
   }
   for (const f of catalogue.fields) if (f.required && !seen.has(f.key)) problems.push(`${f.label} is required: map a column to it`);
   return problems;
-}
-
-const pad = (n: number) => String(n).padStart(2, '0');
-const isoDate = (y: number, m: number, d: number): string | null => {
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d ? `${y}-${pad(m)}-${pad(d)}` : null;
-};
-
-/** A date written in the given way, as yyyy-mm-dd (null when it is not a real date). */
-export function parseDate(raw: string, format: DateFormat = 'iso'): string | null {
-  const s = raw.trim();
-  if (format === 'excel' || /^\d{5}(\.\d+)?$/.test(s)) {
-    const n = Number(s);
-    if (!Number.isFinite(n)) return null;
-    return new Date(Math.round((n - 25569) * 86_400_000)).toISOString().slice(0, 10);
-  }
-  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ].*)?$/);
-  if (m) return isoDate(+m[1], +m[2], +m[3]);
-  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/);
-  if (!m || format === 'iso') return null;
-  const year = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
-  return format === 'dmy' ? isoDate(year, +m[2], +m[1]) : isoDate(year, +m[1], +m[2]);
 }
 
 const YES = new Set(['yes', 'y', 'true', 't', '1', 'active', 'on']);
@@ -152,8 +137,15 @@ export function convert(field: CatalogueField, raw: string, m: FieldMapping): { 
   }
 }
 
-/** The raw text a mapping takes for one field from one source record (before conversion). */
-function rawValue(m: FieldMapping, record: Record<string, unknown>): string {
+/** The raw text a mapping takes for one field from one source record (before conversion), after its steps. */
+export function rawValue(m: FieldMapping, record: Record<string, unknown>, trail?: string[]): { value: string } | { error: string } {
+  const taken = legacyValue(m, record);
+  trail?.push(taken);
+  return applySteps(m.steps, taken, (c) => String(record[c] ?? '').trim(), trail);
+}
+
+/** What the original transforms give (none, upper, lower, map, constant, concat, then the default when empty). */
+function legacyValue(m: FieldMapping, record: Record<string, unknown>): string {
   const get = (c: string | null | undefined) => (c ? String(record[c] ?? '').trim() : '');
   const kind = m.transform ?? 'none';
   let v: string;
@@ -178,13 +170,18 @@ export function applyMapping(catalogue: EntityCatalogue, spec: MappingSpec, reco
   for (const m of spec.fields) {
     const f = byKey.get(m.target);
     if (!f) continue;
-    const raw = rawValue(m, record);
+    const taken = rawValue(m, record);
+    if ('error' in taken) {
+      errors.push({ field: f.key, message: `${f.label}: ${taken.error}` });
+      continue;
+    }
+    const raw = taken.value;
     if (raw === '') {
       canonical[f.key] = null;
       if (f.required) errors.push({ field: f.key, message: `${f.label} is required` });
       continue;
     }
-    const out = convert(f, raw, m);
+    const out = convert(f, raw, { ...m, ...(stepsGive(m.steps, 'number') ? { decimal: undefined } : {}), ...(stepsGive(m.steps, 'date') ? { dateFormat: undefined } : {}) });
     if ('error' in out) errors.push({ field: f.key, message: `${f.label}: ${out.error}` });
     else canonical[f.key] = out.value;
   }

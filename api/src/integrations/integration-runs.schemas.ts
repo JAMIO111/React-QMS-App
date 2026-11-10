@@ -9,7 +9,7 @@ export const RUN_STATUSES = ['queued', 'running', 'succeeded', 'partial', 'faile
 export const ROW_STATUSES = ['staged', 'previewed', 'unchanged', 'skipped', 'applied', 'rejected', 'failed', 'superseded'] as const;
 
 /** A file connection names the uploaded file (`fileId`); other connections leave it out. */
-export const RequestRunBody = z.object({ entityType: z.enum(ENTITY_TYPES), kind: z.enum(['preview', 'full', 'incremental']), fileId: z.string().uuid().optional() }).strict();
+export const RequestRunBody = z.object({ entityType: z.enum(ENTITY_TYPES), kind: z.enum(['preview', 'full', 'incremental']), fileId: z.string().uuid().optional(), templateId: z.string().uuid().optional() }).strict();
 export type RequestRunBody = z.infer<typeof RequestRunBody>;
 
 /** Retry the failed rows of a kind of record on the connection (all of them, or the ones named). */
@@ -76,6 +76,8 @@ export const Run = z.object({
   /** The file a file connection imported, and the mapping version applied. */
   file: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
   mappingVersion: z.number().int().nullable(),
+  /** The import template and the version this run was pinned to (UI2a); null when it used a connection mapping. */
+  template: z.object({ id: z.string().uuid(), name: z.string(), version: z.number().int() }).nullable(),
   /** The import settings this run used (frozen when it was asked for); null for runs from before IN4. */
   settings: z.object({ writeMode: z.string(), matchExisting: z.boolean(), onMissing: z.string(), schedule: z.string() }).nullable(),
 });

@@ -244,6 +244,15 @@ BEGIN
   -- Competence (CO2): the employee holds the position and has been assessed (as owner A; the employee has no sign-in, so it is not a self-assessment).
   PERFORM app.assign_employee_position(emp, (SELECT id FROM public.competence_positions WHERE organisation_id = a AND code = 'SWEEP'), current_date - 30);
   PERFORM app.record_competence_assessment(emp, (SELECT id FROM public.competence_skills WHERE organisation_id = a AND code = 'SWEEP'), 2, current_date - 10);
+  -- Competence (CO3): a training session with the employee on it (completed), and a file on the session and on the attendee.
+  PERFORM app.create_training_session(a, jsonb_build_object('title', 'Sweep session', 'kind', 'course', 'providerType', 'external', 'providerName', 'Sweep Trainers', 'startsOn', current_date - 20,
+      'skillIds', jsonb_build_array((SELECT id FROM public.competence_skills WHERE organisation_id = a AND code = 'SWEEP'))), ARRAY[emp]);
+  PERFORM app.record_session_attendees((SELECT id FROM public.competence_training_sessions WHERE organisation_id = a),
+    ARRAY[(SELECT id FROM public.competence_session_attendees WHERE employee_id = emp)], 'completed', current_date - 5);
+  PERFORM app.add_competence_attachment((SELECT id FROM public.competence_training_sessions WHERE organisation_id = a), NULL,
+    a || '/competence/session/' || (SELECT id FROM public.competence_training_sessions WHERE organisation_id = a) || '/sweep.pdf', 'sweep.pdf', 'application/pdf', 1);
+  PERFORM app.add_competence_attachment(NULL, (SELECT id FROM public.competence_session_attendees WHERE employee_id = emp),
+    a || '/competence/attendee/' || (SELECT id FROM public.competence_session_attendees WHERE employee_id = emp) || '/cert.pdf', 'cert.pdf', 'application/pdf', 1);
   PERFORM pg_temp.logout();
   -- Supplier quality (SQ1): the supplier's first status row exists already; classifications are seeded per organisation.
   INSERT INTO public.supplier_classification_links (organisation_id, supplier_id, classification_id)

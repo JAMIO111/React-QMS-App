@@ -165,3 +165,62 @@ export const MatrixQuery = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
 export type MatrixQuery = z.infer<typeof MatrixQuery>;
+
+// ---- training sessions, attendees, files (CO3) -----------------------------------------------------
+export const SESSION_KINDS = ['course', 'on_the_job', 'external', 'induction', 'other'] as const;
+const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
+
+const SessionFields = {
+  title: z.string().trim().min(1).max(200),
+  kind: z.enum(SESSION_KINDS),
+  providerType: z.enum(['internal', 'external']),
+  trainerEmployeeId: z.string().uuid().nullable().optional(),
+  providerName: optionalText(200),
+  providerContact: optionalText(300),
+  startsOn: IsoDay,
+  endsOn: IsoDay.nullable().optional(),
+  hours: z.number().positive().max(1000).nullable().optional(),
+  location: optionalText(200),
+  notes: optionalText(2000),
+  skillIds: z.array(z.string().uuid()).max(50).optional(),
+};
+export const CreateSessionBody = z.object({ ...SessionFields, employeeIds: z.array(z.string().uuid()).max(500).optional() }).strict();
+export type CreateSessionBody = z.infer<typeof CreateSessionBody>;
+export const UpdateSessionBody = z
+  .object({ ...SessionFields })
+  .partial()
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, 'Nothing to change');
+export type UpdateSessionBody = z.infer<typeof UpdateSessionBody>;
+
+export const AddAttendeeBody = z.object({ employeeId: z.string().uuid() }).strict();
+export type AddAttendeeBody = z.infer<typeof AddAttendeeBody>;
+export const RecordAttendeesBody = z
+  .object({ attendeeIds: z.array(z.string().uuid()).min(1).max(500), outcome: z.enum(['completed', 'failed', 'absent']), completedOn: IsoDay.optional(), note: optionalText(1000) })
+  .strict();
+export type RecordAttendeesBody = z.infer<typeof RecordAttendeesBody>;
+export const SessionAttachmentBody = z
+  .object({
+    attendeeId: z.string().uuid().optional(),
+    storagePath: z.string().min(1).max(600),
+    fileName: z.string().trim().min(1).max(255),
+    contentType: z.string().max(200).nullable().optional(),
+    sizeBytes: z.number().int().min(0).max(26_214_400),
+    description: optionalText(500),
+  })
+  .strict();
+export type SessionAttachmentBody = z.infer<typeof SessionAttachmentBody>;
+
+export const SessionListQuery = z.object({
+  q: z.string().trim().max(100).optional(),
+  status: z.string().regex(/^(all|open|closed|cancelled)(,(open|closed|cancelled))*$/).default('all'),
+  skillId: z.string().uuid().optional(),
+  employeeId: z.string().uuid().optional(),
+  from: IsoDay.optional(),
+  to: IsoDay.optional(),
+  sort: z.enum(['reference', 'title', 'startsOn', 'status', 'attendees']).default('startsOn'),
+  order: z.enum(['asc', 'desc']).default('desc'),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type SessionListQuery = z.infer<typeof SessionListQuery>;

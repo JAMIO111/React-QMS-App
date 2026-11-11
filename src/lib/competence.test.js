@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeCell, groupByCategory, levelLabel, LEVELS, refreshLabel, requirementSummary, statusClass, statusLabel } from "./competence";
+import { attendeeStatusLabel, kindLabel, providerLine, sessionDates, sessionNextStep, describeCell, groupByCategory, levelLabel, LEVELS, refreshLabel, requirementSummary, statusClass, statusLabel } from "./competence";
 
 describe("competence helpers", () => {
   it("has the five levels, 0 to 4", () => {
@@ -36,5 +36,18 @@ describe("competence helpers", () => {
     expect(describeCell({ level: 3, required: 3, expiresOn: "2027-01-05", expiry: "valid" })).toBe("Competent (3) · needs 3 · expires 2027-01-05");
     expect(describeCell({ level: null, required: 2, expiresOn: null, expiry: "none" })).toBe("Not assessed · needs 2");
     expect(describeCell({ level: 2, required: null, expiresOn: "2026-01-01", expiry: "expired" })).toBe("Supervised (2) · expired 2026-01-01");
+  });
+
+  it("describes training sessions in words", () => {
+    expect(kindLabel("on_the_job")).toBe("On the job");
+    expect(attendeeStatusLabel("absent")).toBe("Did not attend");
+    expect(providerLine({ providerType: "internal", trainer: { name: "Tina" } })).toBe("Tina");
+    expect(providerLine({ providerType: "external", providerName: "Acme", providerContact: "info@acme.test" })).toBe("Acme · info@acme.test");
+    expect(sessionDates({ startsOn: "2026-01-05", endsOn: null })).toBe("2026-01-05");
+    expect(sessionDates({ startsOn: "2026-01-05", endsOn: "2026-01-07" })).toBe("2026-01-05 to 2026-01-07");
+    expect(sessionNextStep({ status: "open", enrolledCount: 2, attendeeCount: 3 })).toMatch(/2 people are still enrolled/);
+    expect(sessionNextStep({ status: "open", enrolledCount: 0, attendeeCount: 0 })).toMatch(/No one is on this session/);
+    expect(sessionNextStep({ status: "open", enrolledCount: 0, attendeeCount: 3 })).toMatch(/Close the session/);
+    expect(sessionNextStep({ status: "cancelled" })).toBeNull();
   });
 });

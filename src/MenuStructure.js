@@ -112,6 +112,7 @@ export const menuStructure = [
     path: "/Competence",
     subMenu: [
       { name: "Skills matrix", path: "/Competence/Matrix", permission: "competence.read" },
+      { name: "Training sessions", path: "/Competence/Training", permission: ["competence.read", "competence.own"] },
       { name: "My competence", path: "/Competence/Mine", permission: "competence.own" },
       { name: "Skills and positions", path: "/Competence", end: true, permission: "competence.read" },
     ],

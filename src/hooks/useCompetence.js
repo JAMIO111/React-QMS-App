@@ -50,6 +50,18 @@ export const useMyCompetence = () => {
   });
 };
 
+/** Training sessions (page-based list) and one session with its attendees and files. */
+export const useTrainingSessions = (params) => useList("training", "training-sessions", params);
+export const useTrainingSession = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "training-session", id),
+    queryFn: () => apiFetch(`/competence/training-sessions/${id}`, { organisationId }),
+    enabled: !!organisationId && !!id,
+    retry: false,
+  });
+};
+
 /** One command at a time: { action, id, body }. Every one refreshes the organisation's cached data. */
 export const useCompetenceMutation = () => {
   const { organisationId } = useOrganisation();
@@ -86,6 +98,28 @@ export const useCompetenceMutation = () => {
           return send(`/competence/employee-positions/${id}/end`);
         case "assess":
           return send(`/competence/people/${id}/assessments`);
+        case "createSession":
+          return send("/competence/training-sessions");
+        case "updateSession":
+          return send(`/competence/training-sessions/${id}`, "PATCH");
+        case "addAttendee":
+          return send(`/competence/training-sessions/${id}/attendees`);
+        case "recordAttendees":
+          return send(`/competence/training-sessions/${id}/record`);
+        case "removeAttendee":
+          return send(`/competence/session-attendees/${id}/remove`);
+        case "voidAttendee":
+          return send(`/competence/session-attendees/${id}/void`);
+        case "closeSession":
+          return send(`/competence/training-sessions/${id}/close`);
+        case "reopenSession":
+          return send(`/competence/training-sessions/${id}/reopen`);
+        case "cancelSession":
+          return send(`/competence/training-sessions/${id}/cancel`);
+        case "removeFile":
+          return send(`/competence/competence-attachments/${id}/delete`);
+        case "restoreFile":
+          return send(`/competence/competence-attachments/${id}/restore`);
         default:
           throw new Error(`Unknown action ${action}`);
       }

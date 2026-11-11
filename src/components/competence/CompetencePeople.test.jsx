@@ -19,6 +19,7 @@ const profile = {
     { skill: skillVis, level: null, required: 2, requiredBy: [], gap: 2, status: "not_assessed", expiry: "none", assessedOn: null, expiresOn: null, assessor: null, note: null, history: [] },
   ],
   summary: { required: 2, gaps: 2, expired: 0, expiring: 0, ok: 0 },
+  training: [{ id: "t1", sessionId: "ts1", reference: "TS-26-0001", title: "CMM basics", kind: "course", startsOn: "2026-10-01", sessionStatus: "closed", status: "completed", completedOn: "2026-10-03", note: null }],
 };
 const matrix = {
   skills: [skillCmm, skillVis],
@@ -86,6 +87,13 @@ describe("person page", () => {
     expect(skills.getByText("Not assessed", { selector: "span.rounded-full" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Show history for CMM operation" }));
     expect(screen.getByRole("list", { name: "Assessment history" })).toHaveTextContent("Supervised (2) · 2026-10-01 · until 2027-10-01 · by Ann Assessor · current");
+  });
+
+  it("lists the training they were on, linked to the session", () => {
+    open();
+    const training = within(screen.getByRole("list", { name: "Training" }));
+    expect(training.getByRole("link", { name: "CMM basics" })).toHaveAttribute("href", "/Competence/Training/ts1");
+    expect(training.getByText(/TS-26-0001 · Course · completed 2026-10-03/)).toBeInTheDocument();
   });
 
   it("records an assessment with the level, date and note", async () => {

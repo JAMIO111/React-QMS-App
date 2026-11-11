@@ -38,10 +38,13 @@ const CompetenceHome = () => {
       </header>
 
       <Callout tone="info" title="Where people stand">
-        The skills matrix shows everyone against what their positions need, and each person's page records assessments. Training sessions are the next step.
+        The skills matrix shows everyone against what their positions need, and each person's page records assessments. Training sessions record who attended what, each on their own day.
         <span className="mt-2 flex flex-wrap gap-2">
           <CTAButton type="secondary" to="/Competence/Matrix">
             Open the skills matrix
+          </CTAButton>
+          <CTAButton type="secondary" to="/Competence/Training">
+            Training sessions
           </CTAButton>
           <CTAButton type="neutral" to="/Competence/Mine">
             My competence

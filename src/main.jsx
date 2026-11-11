@@ -64,6 +64,8 @@ const ExpiryWatchlistPage = lazy(() => import("./components/supplier-quality/Exp
 const CompetenceHome = lazy(() => import("./components/competence/CompetenceHome.jsx"));
 const CompetenceMatrix = lazy(() => import("./components/competence/MatrixPage.jsx"));
 const CompetencePerson = lazy(() => import("./components/competence/PersonPage.jsx"));
+const CompetenceTraining = lazy(() => import("./components/competence/TrainingPage.jsx"));
+const CompetenceTrainingSession = lazy(() => import("./components/competence/TrainingSessionPage.jsx"));
 const MyCompetence = lazy(() => import("./components/competence/MyCompetencePage.jsx"));
 const PurchaseOrdersPage = lazy(() => import("./components/supplier-quality/PurchaseOrdersPage.jsx"));
 const PurchaseOrderPage = lazy(() => import("./components/supplier-quality/PurchaseOrderPage.jsx"));
@@ -255,6 +257,8 @@ const router = createBrowserRouter([
           { path: "Competence", element: <CompetenceHome /> },
           { path: "Competence/Matrix", element: <CompetenceMatrix /> },
           { path: "Competence/People/:employeeId", element: <CompetencePerson /> },
+          { path: "Competence/Training", element: <CompetenceTraining /> },
+          { path: "Competence/Training/:id", element: <CompetenceTrainingSession /> },
           { path: "Competence/Mine", element: <MyCompetence /> },
           { path: "Supplier-Quality/Purchase-Orders", element: <PurchaseOrdersPage /> },
           { path: "Supplier-Quality/Purchase-Orders/:id", element: <PurchaseOrderPage /> },

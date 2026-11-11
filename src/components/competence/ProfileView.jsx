@@ -4,13 +4,14 @@ import CTAButton from "@/components/CTAButton";
 import { describeApiError } from "../../lib/api-client";
 import { useToast } from "../../contexts/ToastProvider";
 import { useCompetenceMutation, useCompetencePositions, useCompetenceSkills } from "../../hooks/useCompetence";
-import { LEVELS, levelLabel, refreshLabel, statusClass, statusLabel } from "../../lib/competence";
+import { ATTENDEE_STATUS, attendeeStatusLabel, kindLabel, LEVELS, levelLabel, pillClass, refreshLabel, statusClass, statusLabel } from "../../lib/competence";
 import { todayIso } from "../../lib/localDate";
 import { FormError } from "../master-data/shared";
 import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import MenuCard from "../ui/MenuCard";
+import { Link } from "react-router-dom";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import StatTile from "../ui/StatTile";
 
@@ -270,6 +271,26 @@ const ProfileView = ({ profile, canAssess = false, canManage = false }) => {
           </ul>
         )}
       </MenuCard>
+
+      {profile.training?.length > 0 && (
+        <MenuCard title="Training" subtitle="Sessions they were on. Training is evidence; it does not set a level by itself.">
+          <ul aria-label="Training" className="flex flex-col divide-y divide-border-color">
+            {profile.training.map((t) => (
+              <li key={t.id} className="flex flex-wrap items-center gap-3 py-2">
+                <div className="min-w-48 flex-1">
+                  <Link to={`/Competence/Training/${t.sessionId}`} className="text-sm font-medium text-primary-text hover:underline">
+                    {t.title}
+                  </Link>
+                  <p className="text-xs text-secondary-text">
+                    {t.reference} · {kindLabel(t.kind)} · {t.completedOn ? `${t.status === "failed" ? "failed" : "completed"} ${t.completedOn}` : `started ${t.startsOn}`}
+                  </p>
+                </div>
+                <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${pillClass(ATTENDEE_STATUS, t.status)}`}>{attendeeStatusLabel(t.status)}</span>
+              </li>
+            ))}
+          </ul>
+        </MenuCard>
+      )}
 
       {dialog?.type === "assess" && <AssessDialog employee={employee} skill={dialog.row?.skill} current={dialog.row ? { level: dialog.row.level } : null} onClose={() => setDialog(null)} />}
       {dialog?.type === "position" && <GivePositionDialog employee={employee} held={positions} onClose={() => setDialog(null)} />}

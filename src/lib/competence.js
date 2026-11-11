@@ -73,3 +73,53 @@ export const MATRIX_STATUS_OPTIONS = [
   { value: "expiring", label: "Expiring" },
   { value: "expired", label: "Expired" },
 ];
+
+/** Training sessions: kinds, states and the words for them. */
+export const SESSION_KINDS = [
+  { value: "course", label: "Course" },
+  { value: "on_the_job", label: "On the job" },
+  { value: "external", label: "External" },
+  { value: "induction", label: "Induction" },
+  { value: "other", label: "Other" },
+];
+export const kindLabel = (kind) => SESSION_KINDS.find((k) => k.value === kind)?.label ?? kind;
+
+export const SESSION_STATUS = {
+  open: { label: "Open", tone: "warning" },
+  closed: { label: "Closed", tone: "success" },
+  cancelled: { label: "Cancelled", tone: "neutral" },
+};
+export const ATTENDEE_STATUS = {
+  enrolled: { label: "Enrolled", tone: "warning" },
+  completed: { label: "Completed", tone: "success" },
+  failed: { label: "Failed", tone: "error" },
+  absent: { label: "Did not attend", tone: "neutral" },
+  removed: { label: "Removed", tone: "neutral" },
+  voided: { label: "Voided", tone: "neutral" },
+};
+export const sessionStatusLabel = (s) => SESSION_STATUS[s]?.label ?? s;
+export const attendeeStatusLabel = (s) => ATTENDEE_STATUS[s]?.label ?? s;
+/** Classes for a status pill from either table above. */
+export const pillClass = (table, status) => STATUS_CLASS[table[status]?.tone ?? "neutral"];
+
+/** Who runs a session, in one line: the trainer, or the outside provider. */
+export const providerLine = (session) => (session.providerType === "internal" ? (session.trainer?.name ?? "—") : [session.providerName, session.providerContact].filter(Boolean).join(" · ") || "—");
+
+/** "5 Jan 2026" or "5 to 7 Jan 2026" style range of a session, as given (yyyy-MM-dd). */
+export const sessionDates = (session) => (session.endsOn && session.endsOn !== session.startsOn ? `${session.startsOn} to ${session.endsOn}` : session.startsOn);
+
+export const SESSION_STATUS_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "open", label: "Open" },
+  { value: "closed", label: "Closed" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+/** What is still to do on a session, in words, for the page's notice. */
+export const sessionNextStep = (session) => {
+  if (session.status === "cancelled") return null;
+  if (session.status === "closed") return "This session is closed. Reopen it to change who attended.";
+  if (session.enrolledCount > 0) return `${session.enrolledCount} ${session.enrolledCount === 1 ? "person is" : "people are"} still enrolled. Record a result or remove them, then close the session.`;
+  if (session.attendeeCount === 0) return "No one is on this session yet.";
+  return "Everyone has a result. Close the session when you are done.";
+};

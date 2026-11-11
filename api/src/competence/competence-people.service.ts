@@ -202,6 +202,13 @@ export class CompetencePeopleService {
          where a.employee_id = ${employeeId}::uuid and a.organisation_id = ${org}::uuid
          order by a.assessed_on desc, a.created_at desc`)
     ).rows;
+    const training = (
+      await db.execute<Row>(sql`
+        select a.id, a.status, a.completed_on::text as completed_on, a.note, s.id as session_id, s.reference, s.title, s.kind, s.starts_on::text as starts_on, s.status as session_status
+          from public.competence_session_attendees a join public.competence_training_sessions s on s.id = a.session_id
+         where a.employee_id = ${employeeId}::uuid and a.organisation_id = ${org}::uuid and a.status not in ('removed', 'voided')
+         order by s.starts_on desc, s.reference desc limit 50`)
+    ).rows;
     const skillIds = [...new Set([...required.map((r) => r.skill_id as string), ...history.map((h) => h.skill_id as string)])];
     const skills = skillIds.length
       ? (
@@ -257,6 +264,18 @@ export class CompetencePeopleService {
         endedOn: day(p.ended_on),
       })),
       skills: rows,
+      training: training.map((t) => ({
+        id: t.id as string,
+        sessionId: t.session_id as string,
+        reference: t.reference as string,
+        title: t.title as string,
+        kind: t.kind as string,
+        startsOn: day(t.starts_on) as string,
+        sessionStatus: t.session_status as string,
+        status: t.status as string,
+        completedOn: day(t.completed_on),
+        note: (t.note as string) ?? null,
+      })),
       summary: { required: rows.filter((r) => r.required !== null).length, gaps: count('gap') + count('not_assessed'), expired: count('expired'), expiring: count('expiring'), ok: count('ok') },
       today,
     };

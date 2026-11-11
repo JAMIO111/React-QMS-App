@@ -9,15 +9,24 @@ import { UserProvider } from "./contexts/UserProvider.jsx";
 import { OrganisationProvider } from "./contexts/OrganisationProvider.jsx";
 import { ModalProvider } from "./contexts/ModalContext";
 import LoadingScreen from "./components/ui/LoadingScreen.jsx";
+import RouteError from "./components/RouteError.jsx";
+import { reloadPage, shouldReloadForChunkError } from "./lib/chunkErrors";
 import "./index.css";
 import { applyStoredThemeColour } from "./lib/theme-colours";
 
 applyStoredThemeColour();
 
+// A page file that cannot be loaded because the app was updated while this tab was open: reload once to get the new version.
+window.addEventListener("vite:preloadError", (event) => {
+  if (shouldReloadForChunkError()) {
+    event.preventDefault();
+    reloadPage();
+  }
+});
+
 const App = lazy(() => import("./App.jsx"));
 const NonConformance = lazy(() => import("./components/NonConformance.jsx"));
 const Dashboard = lazy(() => import("./components/dashboard/Dashboard.jsx"));
-const NotFound = lazy(() => import("./components/NotFound.jsx"));
 const Settings = lazy(() => import("./components/Settings/Settings.jsx"));
 const SettingsSystemPreferences = lazy(() =>
   import("./components/Settings/SettingsSystemPreferences.jsx")
@@ -133,7 +142,7 @@ const router = createBrowserRouter([
   {
     path: "/", // base route
     element: <HomeRedirect />,
-    errorElement: <NotFound />,
+    errorElement: <RouteError />,
   },
   {
     element: <AuthPage />,
@@ -154,7 +163,7 @@ const router = createBrowserRouter([
   {
     path: "/", // base path for protected routes
     element: <ProtectedRoute />, // MUST render <Outlet /> inside!
-    errorElement: <NotFound />,
+    errorElement: <RouteError />,
     children: [
       // The operator area spans organisations, so it lives outside <App /> (which needs one) and checks access itself.
       { path: "platform", element: <PlatformPage /> },

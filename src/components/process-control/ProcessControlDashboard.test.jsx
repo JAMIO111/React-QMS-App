@@ -178,7 +178,7 @@ describe("Process control dashboard", () => {
     expect(
       await screen.findByRole("heading", { name: "Process control dashboard" }),
     ).toBeInTheDocument();
-    const tile = (label) => screen.getAllByText(label)[0].closest("a, .rounded-2xl"); // the KPI tiles come first on the page
+    const tile = (label) => document.querySelector(`[data-tile="${label}"]`);
     expect(
       within(tile("Awaiting approval")).getByText("2"),
     ).toBeInTheDocument();

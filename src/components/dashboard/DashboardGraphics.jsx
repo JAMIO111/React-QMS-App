@@ -281,6 +281,18 @@ export const RankList = ({ items, label, color = ACCENT, colorOf, to, format = (
   );
 };
 
+/** The names of a chart's series beside their colours, for a chart whose figures are on its axis. */
+export const SeriesLegend = ({ series, label = "Legend" }) => (
+  <ul aria-label={label} className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-secondary-text">
+    {series.map((s) => (
+      <li key={s.key} className="flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: s.color }} aria-hidden="true" />
+        {s.label}
+      </li>
+    ))}
+  </ul>
+);
+
 /** Words for a card with nothing in it. */
 export const Empty = ({ children }) => <p className="py-6 text-center text-sm text-secondary-text">{children}</p>;
 /** A "see all" link in the corner of a card. */

@@ -30,6 +30,9 @@ const NewDocumentDialog = ({ onClose, onCreated }) => {
   const [existing, setExisting] = useState(false);
   const [number, setNumber] = useState("");
   const [letter, setLetter] = useState("");
+  const [external, setExternal] = useState(false);
+  const [issuer, setIssuer] = useState("");
+  const [reference, setReference] = useState("");
 
   const typeList = types.data?.data ?? [];
   const typeOptions = typeList.map((t) => ({ value: t.id, label: t.name, hint: t.prefix }));
@@ -37,19 +40,22 @@ const NewDocumentDialog = ({ onClose, onCreated }) => {
   const personOptions = (people.data ?? []).map((p) => ({ value: p.id, label: p.name }));
   const owner = ownerId ?? user?.id ?? null;
   const letterOk = /^[A-Za-z]{1,3}$/.test(letter.trim());
-  const ready = typeId && title.trim() && kind && (!existing || (number.trim() && letterOk));
+  const contentKind = external ? "file" : kind;
+  const ready = typeId && title.trim() && contentKind && (!existing || (number.trim() && letterOk)) && (!external || issuer.trim());
 
   const chooseType = (id) => {
     setTypeId(id);
     const t = typeList.find((x) => x.id === id);
     if (t && !kind) setKind(t.contentHint);
+    if (t?.prefix === "EXT") setExternal(true);
   };
 
   const save = (e) => {
     e.preventDefault();
     if (!ready) return;
-    const body = { typeId, title: title.trim(), contentKind: kind, description: description.trim() || null };
+    const body = { typeId, title: title.trim(), contentKind, description: description.trim() || null };
     if (owner) body.ownerId = owner;
+    if (external) Object.assign(body, { origin: "external", issuer: issuer.trim(), ...(reference.trim() ? { externalReference: reference.trim() } : {}) });
     if (existing) Object.assign(body, { number: number.trim(), startLetter: letter.trim().toUpperCase() });
     mutation.mutate(
       { action: "createDocument", body },
@@ -68,8 +74,26 @@ const NewDocumentDialog = ({ onClose, onCreated }) => {
       <form noValidate onSubmit={save} className="flex flex-col gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <ComboField label="Type" required value={typeId} onChange={chooseType} options={typeOptions} placeholder="Choose a type" hint={chosenType && !existing ? `Numbered ${chosenType.prefix}-…` : undefined} />
-          <ComboField label="Content" required value={kind} onChange={setKind} options={CONTENT_KINDS} placeholder="A file, or written here" hint="Fixed once the document is created" />
+          <ComboField
+            label="Content"
+            required
+            value={contentKind}
+            onChange={setKind}
+            options={CONTENT_KINDS}
+            disabled={external}
+            placeholder="A file, or written here"
+            hint={external ? "An external document is always a file" : "Fixed once the document is created"}
+          />
         </div>
+        <Switch checked={external} onChange={(e) => setExternal(e.target.checked)}>
+          External: issued by someone else (a customer specification, a standard, a supplier's manual)
+        </Switch>
+        {external && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Issued by" value={issuer} onChange={(e) => setIssuer(e.target.value)} required maxLength={200} placeholder="e.g. Acme Ltd, ISO" />
+            <Field label="Their reference" value={reference} onChange={(e) => setReference(e.target.value)} maxLength={120} placeholder="e.g. ACS-1001" hint="Optional: the number they give it" />
+          </div>
+        )}
         <Field label="Title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} placeholder="e.g. Control of nonconforming product" />
         <ComboField label="Owner" value={owner} onChange={setOwnerId} options={personOptions} placeholder="Who looks after it" hint="Whoever keeps it up to date. You, unless you choose someone else." />
         <Field label="Description" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} hint="Optional: scope or purpose" />

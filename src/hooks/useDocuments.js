@@ -113,6 +113,8 @@ export const useDocumentMutation = () => {
           return send(`/document-change-requests/${id}/decline`);
         case "withdrawChangeRequest":
           return send(`/document-change-requests/${id}/withdraw`);
+        case "issueExternal":
+          return send(`/document-revisions/${id}/issue-external`);
         default:
           throw new Error(`Unknown action ${action}`);
       }
@@ -300,5 +302,42 @@ export const useDocumentsInForce = ({ partId, partFamilyId, machineId, operation
     queryFn: () => apiFetch(`/documents-in-force?${qs(params)}`, { organisationId }).then((r) => r.data),
     enabled: !!organisationId && enabled && any,
     retry: false,
+  });
+};
+
+/** The documents dashboard (DC5): as of today and for the period. */
+export const useDocumentsDashboard = ({ from, to }) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "dashboard", from, to),
+    queryFn: () => apiFetch(`/documents-dashboard?from=${from}&to=${to}`, { organisationId }),
+    enabled: !!organisationId && !!from && !!to,
+    retry: false,
+    placeholderData: keepPreviousData,
+  });
+};
+
+/**
+ * A controlled copy of a PDF (DC5): the API stamps every page with who printed it and when, so it is fetched each time (never cached) and
+ * opened in a new tab. Returns `{ open, isPending, error }`.
+ */
+export const useControlledCopy = () => {
+  const { organisationId } = useOrganisation();
+  return useMutation({
+    mutationFn: async (fileId) => {
+      // Open the tab first (inside the click) so a pop-up blocker allows it, then point it at the stamped file.
+      const tab = typeof window !== "undefined" ? window.open("", "_blank") : null;
+      try {
+        const blob = await apiFetch(`/document-files/${fileId}/controlled-copy`, { organisationId, as: "blob" });
+        const url = URL.createObjectURL(blob);
+        if (tab) tab.location.href = url;
+        else window.location.assign(url);
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        return true;
+      } catch (err) {
+        tab?.close();
+        throw err;
+      }
+    },
   });
 };

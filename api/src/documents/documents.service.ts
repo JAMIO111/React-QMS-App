@@ -5,9 +5,10 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { blocksOf, diffFiles, diffLines, summarise } from './document-compare';
+import { copyState, DocumentFileStore, isPdf, stampLines, stampPdf } from './controlled-copy';
 import {
   ChangeRequestBody, ChangeRequestListQuery, InForceQuery, LinksBody, PeriodicReviewBody,
-  AcknowledgeBody, ApproveBody, CreateDocumentBody, ReadersBody, CreateTypeBody, DocumentFileBody, DocumentListQuery, ReviewBody, SignersBody, TypeListQuery, UpdateDocumentBody, UpdateRevisionBody,
+  AcknowledgeBody, ApproveBody, CreateDocumentBody, IssueExternalBody, ReadersBody, CreateTypeBody, DocumentFileBody, DocumentListQuery, ReviewBody, SignersBody, TypeListQuery, UpdateDocumentBody, UpdateRevisionBody,
   UpdateTypeBody,
 } from './documents.schemas';
 
@@ -34,7 +35,7 @@ const DOCUMENT_SELECT = sql`
          (d.status = 'active' and d.next_review_on < current_date) as review_overdue,
          ${sql.raw(personName('po'))} as owner_name,
          ip.id as ip_id, ip.status as ip_status, ip.sequence as ip_sequence, ip.letter as ip_letter, ip.effective_from::text as ip_effective_from,
-         cr.letter as current_letter, cr.effective_from::text as current_effective_from,
+         cr.letter as current_letter, cr.effective_from::text as current_effective_from, cr.issuer_revision as current_issuer_revision,
          (select count(*)::int from public.document_recipients x where x.revision_id = d.current_revision_id) as readers_total,
          (select count(*)::int from public.document_recipients x where x.revision_id = d.current_revision_id and x.acknowledged_at is not null) as readers_done,
          (select count(*)::int from public.document_recipients x where x.revision_id = d.current_revision_id and x.acknowledged_at is null and x.due_on < current_date) as readers_overdue,
@@ -69,13 +70,22 @@ const toDocument = (r: Row) => ({
   startLetter: r.start_letter as string,
   lastLetter: (r.last_letter as string) ?? null,
   numberTyped: r.number_typed as boolean,
+  /** External (DC5): issued by someone else; revisions are recorded as issued, not reviewed here. */
+  origin: (r.origin as 'internal' | 'external') ?? 'internal',
+  issuer: (r.issuer as string) ?? null,
+  externalReference: (r.external_reference as string) ?? null,
   /** The revision being written or reviewed (null when none, or when the caller may not see it). */
   inProgress: r.ip_id
     ? { id: r.ip_id as string, status: r.ip_status as string, sequence: Number(r.ip_sequence), letter: (r.ip_letter as string) ?? null, effectiveFrom: (r.ip_effective_from as string) ?? null }
     : null,
   /** The revision in force (or, once withdrawn, the one that was). */
   currentRevision: r.current_revision_id
-    ? { id: r.current_revision_id as string, letter: r.current_letter as string, effectiveFrom: (r.current_effective_from as string) ?? null }
+    ? {
+        id: r.current_revision_id as string,
+        letter: r.current_letter as string,
+        effectiveFrom: (r.current_effective_from as string) ?? null,
+        issuerRevision: (r.current_issuer_revision as string) ?? null,
+      }
     : null,
   withdrawReason: (r.withdraw_reason as string) ?? null,
   withdrawnAt: r.withdrawn_at ? (iso(r.withdrawn_at) as string) : null,
@@ -231,7 +241,7 @@ export class DocumentsService {
     const revisions = (
       await db.execute<Row>(sql`
         select r.id, r.sequence, r.letter, r.status, r.change_summary, r.discard_reason, r.discarded_at, r.created_at, r.updated_at,
-               r.effective_from::text as effective_from, r.approved_at, r.withdraw_reason,
+               r.effective_from::text as effective_from, r.approved_at, r.withdraw_reason, r.issuer_revision,
                r.author_id, ${sql.raw(personName('pa'))} as author_name
           from public.document_revisions r left join public.profiles pa on pa.id = r.author_id
          where r.document_id = ${id}::uuid and r.organisation_id = ${org}::uuid
@@ -307,6 +317,7 @@ export class DocumentsService {
         effectiveFrom: (r.effective_from as string) ?? null,
         approvedAt: r.approved_at ? (iso(r.approved_at) as string) : null,
         withdrawReason: (r.withdraw_reason as string) ?? null,
+        issuerRevision: (r.issuer_revision as string) ?? null,
         createdAt: iso(r.created_at) as string,
         updatedAt: iso(r.updated_at) as string,
       })),
@@ -331,7 +342,11 @@ export class DocumentsService {
 
   create(ctx: RequestContext, body: CreateDocumentBody) {
     return this.database.asUser(ctx, async (db) => {
-      const res = await db.execute<{ id: string }>(sql`select app.create_document(${orgOf(ctx)}::uuid, ${json(body)}::jsonb) as id`);
+      const { origin, ...data } = body;
+      const res =
+        origin === 'external'
+          ? await db.execute<{ id: string }>(sql`select app.create_external_document(${orgOf(ctx)}::uuid, ${json(data)}::jsonb) as id`)
+          : await db.execute<{ id: string }>(sql`select app.create_document(${orgOf(ctx)}::uuid, ${json(data)}::jsonb) as id`);
       return this.document(db, ctx, res.rows[0].id);
     });
   }
@@ -339,7 +354,12 @@ export class DocumentsService {
   update(ctx: RequestContext, id: string, body: UpdateDocumentBody) {
     return this.database.asUser(ctx, async (db) => {
       await this.document(db, ctx, id);
-      await db.execute(sql`select app.update_document(${id}::uuid, ${json(body)}::jsonb)`);
+      const { issuer, externalReference, ...rest } = body;
+      const external: Record<string, unknown> = {};
+      if (issuer !== undefined) external.issuer = issuer;
+      if (externalReference !== undefined) external.externalReference = externalReference;
+      if (Object.keys(external).length > 0) await db.execute(sql`select app.update_external_details(${id}::uuid, ${json(external)}::jsonb)`);
+      if (Object.keys(rest).length > 0) await db.execute(sql`select app.update_document(${id}::uuid, ${json(rest)}::jsonb)`);
       return this.document(db, ctx, id);
     });
   }
@@ -423,6 +443,10 @@ export class DocumentsService {
       discardedAt: r.discarded_at ? (iso(r.discarded_at) as string) : null,
       discardedBy: (r.discarded_by_name as string) ?? null,
       canEdit: status === 'draft' && document.canManage,
+      /** The issuer's own revision label (external documents). */
+      issuerRevision: (r.issuer_revision as string) ?? null,
+      /** An external draft is recorded as issued (documentation.issue) instead of being reviewed. */
+      canRecordIssue: status === 'draft' && document.origin === 'external' && document.canIssue && document.status !== 'discarded',
       /** What the draft still needs before it can be submitted (drafts only). */
       problems: status === 'draft' ? ((r.problems as string[]) ?? []) : [],
       reviewers,
@@ -530,6 +554,61 @@ export class DocumentsService {
 
   approve(ctx: RequestContext, id: string, body: ApproveBody) {
     return this.onRevision(ctx, id, (db) => db.execute(sql`select app.approve_document_revision(${id}::uuid, ${body.effectiveFrom}::date, ${body.comment ?? null})`));
+  }
+
+  /** An external document's revision is recorded as issued: letter, the issuer's revision, effective date (DC5). */
+  issueExternal(ctx: RequestContext, id: string, body: IssueExternalBody) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.revision(db, ctx, id);
+      await db.execute(sql`select app.issue_external_revision(${id}::uuid, ${body.issuerRevision}, ${body.effectiveFrom}::date, ${body.changeSummary ?? null})`);
+      return this.revision(db, ctx, id);
+    });
+  }
+
+  /**
+   * A stamped copy of a PDF file (DC5): the caller must be able to read the revision (RLS), the bytes come from storage with the service key,
+   * and every page says whether it is the controlled copy in force or not for use, who printed it and when.
+   */
+  async controlledCopy(ctx: RequestContext, fileId: string, store: DocumentFileStore) {
+    const meta = await this.database.asUser(ctx, async (db) => {
+      const rows = (
+        await db.execute<Row>(sql`
+          select f.storage_path, f.file_name, f.content_type, f.deleted_at, f.revision_id, r.status, r.letter, r.effective_from::text as effective_from, r.issuer_revision,
+                 d.number, d.title, (select ${sql.raw(personName('pm'))} from public.profiles pm where pm.id = auth.uid()) as me,
+                 to_char(now(), 'DD Mon YYYY HH24:MI') as printed_at, to_char(r.effective_from, 'DD Mon YYYY') as effective_words
+            from public.document_revision_files f
+            join public.document_revisions r on r.id = f.revision_id
+            join public.documents d on d.id = r.document_id
+           where f.id = ${fileId}::uuid and f.organisation_id = ${orgOf(ctx)}::uuid`)
+      ).rows;
+      if (rows.length === 0) throw ApiError.notFound('document_file_not_found', 'File not found');
+      return rows[0];
+    });
+    if (meta.deleted_at) throw new ApiError(409, 'document_rule', 'This file was removed');
+    if (!isPdf(meta.file_name as string, (meta.content_type as string) ?? null)) {
+      throw new ApiError(409, 'document_rule', 'Only a PDF can be stamped as a controlled copy. Other files are uncontrolled when printed or saved.');
+    }
+    if (!store.enabled) throw new ApiError(503, 'file_storage_unavailable', 'Controlled copies are not set up on this server yet');
+    const bytes = await store.download(meta.storage_path as string);
+    if (!bytes) throw ApiError.notFound('document_file_not_found', 'The stored file is missing');
+    const state = copyState(meta.status as string);
+    const letter = meta.letter ? `${meta.letter}${meta.issuer_revision ? ` (${meta.issuer_revision})` : ''}` : null;
+    const lines = stampLines({
+      state,
+      number: meta.number as string,
+      letter,
+      effectiveFrom: (meta.effective_words as string) ?? null,
+      printedAt: meta.printed_at as string,
+      printedBy: (meta.me as string) || 'Unknown',
+    });
+    let stamped: Uint8Array;
+    try {
+      stamped = await stampPdf(bytes, lines, state);
+    } catch {
+      throw new ApiError(409, 'document_rule', 'This PDF cannot be stamped (it may be protected or damaged). Download the file itself instead.');
+    }
+    const base = (meta.file_name as string).replace(/\.pdf$/i, '');
+    return { bytes: stamped, fileName: `${base} - ${state === 'controlled' ? 'controlled copy' : 'not for use'}.pdf`, state };
   }
 
   sendBack(ctx: RequestContext, id: string, comment: string) {

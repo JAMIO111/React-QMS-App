@@ -17,6 +17,54 @@ import MenuCard from "../ui/MenuCard";
 import DocumentEditor from "./DocumentEditor";
 import { CompareCard, MyTurnCard, SignersCard, SignoffsCard, SubmitButton } from "./ReviewPanels";
 import { AcknowledgeCard, AcknowledgeDaysField, RecipientsCard } from "./ReadersPanels";
+import CopiesCard from "./ControlledCopy";
+import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import { todayIso } from "../../lib/localDate";
+
+/** An external document's revision is recorded as issued (DC5): the issuer's own revision, and when it takes effect here. */
+const IssueExternalDialog = ({ revision, onClose }) => {
+  const mutation = useDocumentMutation();
+  const { showToast } = useToast();
+  const [issuerRevision, setIssuerRevision] = useState("");
+  const [effectiveFrom, setEffectiveFrom] = useState(todayIso());
+  const [summary, setSummary] = useState(revision.changeSummary ?? "");
+  const needsSummary = ["active", "withdrawn"].includes(revision.document.status);
+  const ready = issuerRevision.trim() && /^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom) && (!needsSummary || summary.trim().length >= 3);
+  const save = (e) => {
+    e.preventDefault();
+    if (!ready) return;
+    const body = { issuerRevision: issuerRevision.trim(), effectiveFrom };
+    if (summary.trim()) body.changeSummary = summary.trim();
+    mutation.mutate(
+      { action: "issueExternal", id: revision.id, body },
+      { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Not recorded", message: describeApiError(err) }) },
+    );
+  };
+  return (
+    <Dialog title="Record this issue" onClose={onClose}>
+      <form noValidate onSubmit={save} className="flex flex-col gap-3">
+        <p className="text-sm text-secondary-text">
+          {revision.document.issuer} issued this document, so it is not reviewed here. Record it as rev {revision.plannedLetter}; from the date given it is the revision in force
+          {needsSummary ? " and the one before is superseded" : ""}.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Their revision" value={issuerRevision} onChange={(e) => setIssuerRevision(e.target.value)} required maxLength={40} placeholder="e.g. Issue 4, 2024-03" />
+          <RHFDatePickerPopout label="In force from" required value={effectiveFrom} onChange={(v) => setEffectiveFrom(v ?? "")} valueFormat="iso" hint="A past date (when it applied) or a future one" />
+        </div>
+        <Field label="What changed" value={summary} onChange={(e) => setSummary(e.target.value)} required={needsSummary} maxLength={2000} hint={needsSummary ? "Readers see it with the new revision" : "Optional for the first issue"} />
+        <FormError error={mutation.error} />
+        <div className="flex justify-end gap-2">
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
+            Cancel
+          </CTAButton>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={!ready || mutation.isPending} loading={mutation.isPending}>
+            Record as issued
+          </CTAButton>
+        </div>
+      </form>
+    </Dialog>
+  );
+};
 
 const DiscardDialog = ({ revision, onClose }) => {
   const mutation = useDocumentMutation();
@@ -94,6 +142,7 @@ const RevisionPage = () => {
   const saveBody = useSaveDraft(revisionId);
   const { showToast } = useToast();
   const [discarding, setDiscarding] = useState(false);
+  const [issuing, setIssuing] = useState(false);
   const rev = query.data;
   const label = rev ? revisionLabel(rev, rev.plannedLetter) : null;
   useBreadcrumbNames([
@@ -109,6 +158,7 @@ const RevisionPage = () => {
   const canEdit = rev.canEdit;
   const problems = rev.problems;
   const files = rev.files;
+  const external = doc.origin === "external";
   const asList = (list) => ({ data: list, isLoading: false });
   const saveText = (json) =>
     saveBody.mutate({ body: json }, { onError: (err) => showToast({ type: "error", title: "Text not saved", message: describeApiError(err) }) });
@@ -124,7 +174,7 @@ const RevisionPage = () => {
             <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusPill(REVISION_STATUS, rev.status)}`}>{statusLabel(REVISION_STATUS, rev.status)}</span>
           </div>
           <p className="text-sm text-secondary-text">
-            {doc.title} · written by {rev.author?.name ?? "Unknown"}
+            {doc.title} · {external ? `issued by ${doc.issuer}${doc.externalReference ? ` (${doc.externalReference})` : ""}, recorded by` : "written by"} {rev.author?.name ?? "Unknown"}
             {canEdit && (saveBody.isPending ? " · saving…" : " · saved")}
           </p>
         </div>
@@ -132,7 +182,12 @@ const RevisionPage = () => {
           <CTAButton type="neutral" to={documentPath(doc.id)}>
             Back to the document
           </CTAButton>
-          <SubmitButton revision={rev} />
+          {!external && <SubmitButton revision={rev} />}
+          {rev.canRecordIssue && (
+            <CTAButton type="main" disabled={problems.length > 0} onClick={() => setIssuing(true)}>
+              Record this issue
+            </CTAButton>
+          )}
           {canEdit && (
             <CTAButton type="danger" icon={Trash2Icon} onClick={() => setDiscarding(true)}>
               Discard draft
@@ -150,7 +205,7 @@ const RevisionPage = () => {
       {rev.status === "draft" && !canEdit && <Callout tone="info">This draft is being written. Only document managers can change it.</Callout>}
       {canEdit &&
         (problems.length ? (
-          <Callout tone="warning" title="Still needed before it can be sent for review">
+          <Callout tone="warning" title={external ? "Still needed before it can be recorded as issued" : "Still needed before it can be sent for review"}>
             <ul className="list-disc pl-5">
               {problems.map((p) => (
                 <li key={p}>{p}</li>
@@ -158,14 +213,24 @@ const RevisionPage = () => {
             </ul>
           </Callout>
         ) : (
-          <Callout tone="success">The draft has what it needs. Send it for review when it is ready.</Callout>
+          <Callout tone="success">
+            {external
+              ? rev.canRecordIssue
+                ? "The draft has what it needs. Record it as issued when it is ready."
+                : "The draft has what it needs. Someone who can issue documents records it as issued."
+              : "The draft has what it needs. Send it for review when it is ready."}
+          </Callout>
         ))}
       <AcknowledgeCard revision={rev} />
       <MyTurnCard revision={rev} />
       {rev.status === "in_review" && !rev.myTurn && <Callout tone="info">In review: waiting for {rev.signoffs.filter((x) => x.round === rev.reviewRound && x.decision === "pending").map((x) => x.person.name).join(", ") || "the reviewers"}.</Callout>}
       {rev.status === "awaiting_approval" && !rev.myTurn && <Callout tone="info">Every reviewer has accepted it. Waiting for {rev.approver?.name ?? "the approver"} to approve it.</Callout>}
       {rev.status === "approved" && <Callout tone="info" title="Approved">Approved by {rev.approvedBy ?? "the approver"}; it takes effect on {formatDay(rev.effectiveFrom)}. Until then the revision in force stays in force.</Callout>}
-      {rev.status === "effective" && <Callout tone="success" title="In force">In force since {formatDay(rev.effectiveFrom)}, approved by {rev.approvedBy ?? "the approver"}.</Callout>}
+      {rev.status === "effective" && (
+        <Callout tone="success" title="In force">
+          In force since {formatDay(rev.effectiveFrom)}, {external ? "recorded as issued" : "approved"} by {rev.approvedBy ?? "the approver"}.
+        </Callout>
+      )}
       {rev.status === "superseded" && <Callout tone="warning" title="Superseded">Replaced on {formatDay(rev.supersededAt)}. Kept for the record; not for use.</Callout>}
       {rev.status === "withdrawn" && <Callout tone="error" title="Withdrawn">{rev.withdrawReason}{rev.withdrawnBy ? ` (${rev.withdrawnBy}, ${formatDay(rev.withdrawnAt)})` : ""}</Callout>}
       {rev.status === "draft" && rev.signoffs.some((x) => x.decision === "returned") && (
@@ -175,8 +240,9 @@ const RevisionPage = () => {
       )}
 
       <RecipientsCard revision={rev} />
-      <SignersCard revision={rev} canEdit={canEdit} />
-      <SignoffsCard revision={rev} />
+      {!external && <SignersCard revision={rev} canEdit={canEdit} />}
+      {!external && <SignoffsCard revision={rev} />}
+      <CopiesCard revision={rev} />
       <CompareCard revision={rev} />
 
       <MenuCard title="Change summary">
@@ -229,6 +295,7 @@ const RevisionPage = () => {
       </MenuCard>
 
       {discarding && <DiscardDialog revision={rev} onClose={() => setDiscarding(false)} />}
+      {issuing && <IssueExternalDialog revision={rev} onClose={() => setIssuing(false)} />}
     </div>
   );
 };

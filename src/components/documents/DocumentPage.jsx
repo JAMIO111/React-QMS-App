@@ -35,13 +35,18 @@ const EditDialog = ({ doc, onClose }) => {
   const [title, setTitle] = useState(doc.title);
   const [description, setDescription] = useState(doc.description ?? "");
   const [ownerId, setOwnerId] = useState(doc.owner?.id ?? null);
+  const [issuer, setIssuer] = useState(doc.issuer ?? "");
+  const [reference, setReference] = useState(doc.externalReference ?? "");
+  const external = doc.origin === "external";
   const options = (people.data ?? []).map((p) => ({ value: p.id, label: p.name }));
-  const ready = title.trim() && ownerId;
+  const ready = title.trim() && ownerId && (!external || issuer.trim());
   const save = (e) => {
     e.preventDefault();
     if (!ready) return;
+    const body = { title: title.trim(), description: description.trim() || null, ownerId };
+    if (external) Object.assign(body, { issuer: issuer.trim(), externalReference: reference.trim() || null });
     mutation.mutate(
-      { action: "updateDocument", id: doc.id, body: { title: title.trim(), description: description.trim() || null, ownerId } },
+      { action: "updateDocument", id: doc.id, body },
       { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) },
     );
   };
@@ -51,6 +56,12 @@ const EditDialog = ({ doc, onClose }) => {
         <Field label="Title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
         <ComboField label="Owner" required value={ownerId} onChange={setOwnerId} options={options} placeholder="Who looks after it" />
         <Field label="Description" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} hint="Optional: scope or purpose" />
+        {external && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Issued by" value={issuer} onChange={(e) => setIssuer(e.target.value)} required maxLength={200} />
+            <Field label="Their reference" value={reference} onChange={(e) => setReference(e.target.value)} maxLength={120} />
+          </div>
+        )}
         <p className="text-sm text-secondary-text">The number, type and whether it is a file or written here never change.</p>
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
@@ -158,7 +169,7 @@ const DocumentPage = () => {
       {doc.status === "active" && doc.currentRevision && (
         <Callout
           tone="success"
-          title={`Rev ${doc.currentRevision.letter} is in force`}
+          title={`${revisionLabel(doc.currentRevision)} is in force`}
           action={
             <CTAButton type="secondary" to={revisionPath(doc.id, doc.currentRevision.id)}>
               Read it
@@ -191,7 +202,7 @@ const DocumentPage = () => {
             ? `Rev ${draft.letter} is approved and takes effect on ${formatDay(draft.effectiveFrom)}.`
             : draft.letter
               ? `Rev ${draft.letter} is ${statusLabel(REVISION_STATUS, draft.status).toLowerCase()}.`
-              : `It becomes rev ${doc.nextLetter} when it is sent for review.`}
+              : `It becomes rev ${doc.nextLetter} when it is ${doc.origin === "external" ? "recorded as issued" : "sent for review"}.`}
         </Callout>
       )}
 
@@ -201,6 +212,12 @@ const DocumentPage = () => {
             {doc.type.name} ({doc.type.prefix})
           </Fact>
           <Fact label="Content">{contentKindLabel(doc.contentKind)}</Fact>
+          {doc.origin === "external" && (
+            <Fact label="External">
+              Issued by {doc.issuer}
+              {doc.externalReference ? ` · their reference ${doc.externalReference}` : ""}
+            </Fact>
+          )}
           <Fact label="Owner">{doc.owner?.name ?? "—"}</Fact>
           <Fact label="Created">{formatDate(doc.createdAt)}</Fact>
           {doc.restricted && <Fact label="Access">Restricted to its readers</Fact>}
@@ -221,7 +238,13 @@ const DocumentPage = () => {
       </div>
       <ChangeRequestsCard doc={doc} />
 
-      <MenuCard title="Revisions" subtitle="Each revision is written, reviewed, approved and then frozen. A change is always a new revision.">
+      <MenuCard
+        title="Revisions"
+        subtitle={
+          doc.origin === "external"
+            ? "Each issue from the issuer is recorded as a revision here, with their own revision beside our letter. A new issue is always a new revision."
+            : "Each revision is written, reviewed, approved and then frozen. A change is always a new revision."
+        }>
         <ul className="-my-3 divide-y divide-border-color" aria-label="Revisions">
           {doc.revisions.map((r) => (
             <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-3">

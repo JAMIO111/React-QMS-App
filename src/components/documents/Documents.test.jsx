@@ -2,13 +2,15 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { revisionLabel } from "../../lib/documents";
+import { copyStamp, revisionLabel } from "../../lib/documents";
 import { notificationLink } from "../../lib/notifications";
 
 let permissions = [];
 const mutate = vi.fn();
 const saveDraft = vi.fn();
 const setSigners = vi.fn();
+const openCopy = vi.fn();
+let dashboard = null;
 let waiting = [];
 const listCalls = [];
 const types = [
@@ -72,11 +74,18 @@ vi.mock("../../hooks/useDocuments", () => ({
   useDocumentRecipients: () => ({ data: recipients, isLoading: false }),
   useChangeRequests: () => ({ data: changeRequests, isLoading: false }),
   useDocumentsInForce: () => ({ data: inForce }),
+  useControlledCopy: () => ({ mutate: openCopy, isPending: false }),
+  useDocumentsDashboard: () => ({ data: dashboard, isLoading: false, isFetching: false, error: null }),
   useDocumentCompare: () => ({
     data: { against: { id: "r0", label: "Rev A" }, text: [{ kind: "same", text: "Purpose", block: "Heading 1" }, { kind: "removed", text: "Old step", block: "Paragraph" }, { kind: "added", text: "New step", block: "Paragraph" }], textSummary: { added: 1, removed: 1, same: 1 }, files: [] },
     isLoading: false,
   }),
 }));
+vi.mock("recharts", async (importOriginal) => {
+  const mod = await importOriginal();
+  const { cloneElement } = await import("react");
+  return { ...mod, ResponsiveContainer: ({ children }) => cloneElement(children, { width: 600, height: 300 }) };
+});
 vi.mock("../ui/FileDrop", () => ({ AttachmentDrop: ({ title, extraBody }) => <div data-testid={`drop-${extraBody.role}`}>{title}</div> }));
 
 import DocumentsPage from "./DocumentsPage";
@@ -86,11 +95,13 @@ import SettingsDocuments from "../Settings/SettingsDocuments";
 import MyDocumentsPage from "./MyDocumentsPage";
 import ChangeRequestsPage from "./ChangeRequestsPage";
 import DocumentsInForce from "./DocumentsInForce";
+import DocumentsDashboard from "./DocumentsDashboard";
 
 beforeEach(() => {
   mutate.mockReset();
   saveDraft.mockReset();
   setSigners.mockReset();
+  openCopy.mockReset();
   waiting = [];
   myDocs = { toRead: [], acknowledged: [], reviews: 0 };
   recipients = [];
@@ -150,7 +161,7 @@ describe("documents register", () => {
     await userEvent.click(within(dialog).getByRole("combobox", { name: /Type/ }));
     await userEvent.click(screen.getByRole("option", { name: /Form/ }));
     await userEvent.type(within(dialog).getByLabelText("Title"), "Calibration record");
-    await userEvent.click(within(dialog).getByRole("switch"));
+    await userEvent.click(within(dialog).getByRole("switch", { name: /Bringing an existing/ }));
     const create = within(dialog).getByRole("button", { name: "Create document" });
     expect(create).toBeDisabled();
     await userEvent.type(within(dialog).getByLabelText("Its number"), "FRM-020");
@@ -519,9 +530,96 @@ describe("periodic review, change requests and links", () => {
   });
 });
 
+const PDF = { id: "f1", role: "main", fileName: "spec.pdf", contentType: "application/pdf", sizeBytes: 10, deletedAt: null, createdAt: "2026-11-10T08:00:00Z" };
+const externalDoc = { ...textRevision.document, number: "EXT-001", contentKind: "file", origin: "external", issuer: "Acme Ltd", externalReference: "ACS-1001", status: "draft" };
+
+describe("external documents and controlled copies", () => {
+  it("creates an external document with who issues it, always a file", async () => {
+    render(<MemoryRouter><DocumentsPage /></MemoryRouter>);
+    await userEvent.click(screen.getByRole("button", { name: "New document" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Type/ }));
+    await userEvent.click(screen.getByRole("option", { name: /Procedure/ }));
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Customer specification");
+    await userEvent.click(within(dialog).getByRole("switch", { name: /External/ }));
+    const create = within(dialog).getByRole("button", { name: "Create document" });
+    expect(create).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("Issued by"), "Acme Ltd");
+    await userEvent.type(within(dialog).getByLabelText("Their reference"), "ACS-1001");
+    await userEvent.click(create);
+    expect(mutate.mock.calls[0][0].body).toMatchObject({ contentKind: "file", origin: "external", issuer: "Acme Ltd", externalReference: "ACS-1001" });
+  });
+
+  it("records an external draft as issued instead of sending it for review", async () => {
+    revision = { ...textRevision, document: externalDoc, body: null, files: [PDF], reviewers: [], approver: null, canRecordIssue: true };
+    at("/Documentation/Documents/d1/revisions/r1", "/Documentation/Documents/:id/revisions/:revisionId", <RevisionPage />);
+    expect(screen.getByText(/issued by Acme Ltd \(ACS-1001\)/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send for review" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Reviewers and approver")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Record this issue" }));
+    const dialog = screen.getByRole("dialog");
+    const save = within(dialog).getByRole("button", { name: "Record as issued" });
+    expect(save).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("Their revision"), "Issue 3");
+    await userEvent.click(save);
+    expect(mutate.mock.calls[0][0]).toMatchObject({ action: "issueExternal", id: "r1", body: { issuerRevision: "Issue 3" } });
+    expect(mutate.mock.calls[0][0].body.effectiveFrom).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("opens a stamped controlled copy of a PDF, and says other files are uncontrolled", async () => {
+    revision = { ...textRevision, status: "effective", letter: "A", canEdit: false, body: null, files: [PDF], document: { ...textRevision.document, contentKind: "file", status: "active" } };
+    const { unmount } = at("/Documentation/Documents/d1/revisions/r1", "/Documentation/Documents/:id/revisions/:revisionId", <RevisionPage />);
+    await userEvent.click(screen.getByRole("button", { name: "Open a controlled copy" }));
+    expect(openCopy).toHaveBeenCalledWith("f1", expect.anything());
+    unmount();
+    revision = { ...revision, files: [{ ...PDF, fileName: "spec.docx", contentType: "application/msword" }] };
+    at("/Documentation/Documents/d1/revisions/r1", "/Documentation/Documents/:id/revisions/:revisionId", <RevisionPage />);
+    expect(screen.getByText("Uncontrolled when printed or saved")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /controlled copy/ })).not.toBeInTheDocument();
+  });
+
+  it("prints a written document with the stamp", async () => {
+    let printed = "";
+    const print = vi.spyOn(window, "print").mockImplementation(() => (printed = globalThis.document.getElementById("document-print")?.textContent ?? ""));
+    at("/Documentation/Documents/d1/revisions/r1", "/Documentation/Documents/:id/revisions/:revisionId", <RevisionPage />);
+    expect(screen.queryByText(/NOT FOR USE/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Print or save as PDF" }));
+    expect(print).toHaveBeenCalled();
+    expect(printed).toMatch(/NOT ISSUED - NOT FOR USE - SOP-001 draft/);
+    expect(printed).toMatch(/Quarantine suspect parts/);
+    expect(screen.queryByText(/NOT FOR USE/)).not.toBeInTheDocument();
+    print.mockRestore();
+  });
+});
+
+describe("documents dashboard", () => {
+  it("shows what is in force, what is waiting and what is due", () => {
+    dashboard = {
+      period: { from: "2026-08-13", to: "2026-11-11", bucket: "week" },
+      kpis: { inForce: 12, external: 3, withdrawn: 1, drafts: 2, inReview: 1, awaitingApproval: 1, approvedWaiting: 1, reviewsOverdue: 2, reviewsDue30: 1, readersOverdue: 4, readersPending: 9, changeRequestsOpen: 3, madeEffective: 5, acknowledgements: 20, changeRequestsRaised: 2 },
+      byType: [{ typeId: "t1", name: "Procedure", prefix: "SOP", inForce: 9, inProgress: 2 }],
+      activity: [],
+      waiting: [{ documentId: "d1", number: "SOP-001", title: "Control of nonconforming product", revisionId: "r1", letter: "B", status: "in_review", since: "2026-10-01", days: 41 }],
+      reviewsDue: [{ documentId: "d2", number: "SOP-002", title: "Purchasing", nextReviewOn: "2026-11-01", days: -10 }],
+      readersBehind: [],
+      effectiveSoon: [],
+    };
+    render(<MemoryRouter><DocumentsDashboard /></MemoryRouter>);
+    expect(screen.getByRole("link", { name: /In force\s*12/ })).toHaveAttribute("href", "/Documentation/Documents?status=active");
+    expect(screen.getByText("3 external · 1 withdrawn")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Reviews overdue\s*2/ })).toHaveAttribute("href", "/Documentation/Documents?review=true");
+    expect(within(screen.getByRole("table", { name: "Revisions waiting" })).getByRole("link", { name: /SOP-001 rev B/ })).toHaveAttribute("href", "/Documentation/Documents/d1/revisions/r1");
+    expect(within(screen.getByRole("table", { name: "Periodic reviews due" })).getByText(/10 days ago/)).toBeInTheDocument();
+    expect(screen.getByText("Every reader is up to date.")).toBeInTheDocument();
+  });
+});
+
 describe("helpers", () => {
   it("labels revisions and links a sign-off notice to its revision", () => {
     expect(revisionLabel({ letter: "B", status: "effective" })).toBe("Rev B");
+    expect(revisionLabel({ letter: "A", status: "effective", issuerRevision: "Issue 3" })).toBe("Rev A (Issue 3)");
+    expect(copyStamp({ status: "effective", letter: "B", effectiveFrom: "2026-11-01" }, "SOP-001").head).toBe("CONTROLLED COPY - SOP-001 rev B");
+    expect(copyStamp({ status: "superseded", letter: "A" }, "SOP-001")).toMatchObject({ usable: false, head: "SUPERSEDED - NOT FOR USE - SOP-001 rev A" });
     expect(revisionLabel({ letter: null, status: "draft" }, "C")).toBe("Draft (will be rev C)");
     expect(revisionLabel({ letter: null, status: "discarded", sequence: 2 })).toBe("Draft 2 (discarded)");
     expect(notificationLink({ entityType: "document_signoffs", details: { document_id: "d1", revision_id: "r1" } })).toBe("/Documentation/Documents/d1/revisions/r1");

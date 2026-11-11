@@ -8,7 +8,7 @@ document has an identity (`SOP-001`) separate from its revisions (rev A, B, C). 
 becomes effective on a date, and is then **frozen**. A change is always a new revision. The people who must read a document
 acknowledge each new revision. Like quality alerts, **nothing here blocks work**.
 
-**DC1–DC4 are built** (see §12–§15); DC5 and DC6 are not. It is delivered as complete, tested vertical slices (§9), each with SQL tests, API e2e tests (both sweeps),
+**DC1–DC5 are built** (see §12–§16); DC6 is not. It is delivered as complete, tested vertical slices (§9), each with SQL tests, API e2e tests (both sweeps),
 frontend tests, lint and build, and finished by an exit check with a browser journey step.
 
 ## 1. What it reuses
@@ -238,3 +238,36 @@ Migration `20260205100000_document_control_periodic_links.sql` (applied live 202
 - **Links** (`document_links`): parts, part families, machines, operation codes. **Documents in force** are shown where work happens: part, part family
   and machine pages, Start inspection, and a "Docs" pane on the job hub (`GET /documents-in-force`, a part also matches its family; restricted
   documents only for their readers; "To read" marks those the person still has to acknowledge). Information only.
+
+## 16. DC5 as built (2026-11-11)
+
+Migration `20260206100000_document_control_external.sql` (not applied live yet; pushing the API before it breaks the documents endpoints, which select `origin`, `issuer`, `issuer_revision`).
+
+- **External documents:** `documents.origin` internal | external (fixed once created; only `app.create_external_document` turns a new document external, through the transaction-local
+  setting `app.document_external_create`), `issuer` (required for external, ≤ 200), `external_reference` (≤ 120); an external document is always a file
+  (`documents_external_state_check`). Revisions gain `issuer_revision` (their own label, ≤ 40, frozen with the revision). **An external revision is not reviewed here:**
+  it cannot be submitted (`app.document_revision_rules` refuses draft → in review), and `app.issue_external_revision(revision, issuer_revision, effective_from, change_summary?)`
+  (`documentation.issue`; main file needed; what changed needed after the first issue; any effective date, past or future) gives it our next letter, marks it approved and
+  settles it (in force at once when the date has come, superseding the revision before). `app.update_external_details(document, {issuer, externalReference})` (manage).
+  `app.document_revision_problems` no longer asks an external draft for reviewers or an approver.
+- **Controlled copies:** `GET /document-files/{id}/controlled-copy` (membership; the database decides who may read the revision): the API reads the PDF from the private
+  bucket with the service key (`DocumentFileStore` / `SupabaseDocumentFileStore`, `503 file_storage_unavailable` without `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`),
+  stamps **every page** with pdf-lib (`api/src/documents/controlled-copy.ts`: "CONTROLLED COPY - SOP-001 rev B" + effective date, who printed it and when, "check it is still
+  the current revision"; superseded / withdrawn / not issued revisions are stamped "NOT FOR USE" in red) and answers `application/pdf`, `Cache-Control: no-store`; the
+  headline is also the PDF's subject. Only PDFs (`409 document_rule` otherwise, and for a PDF pdf-lib cannot open). A written (text) document prints from the browser with the same
+  stamp (`copyStamp` in `lib/documents.js`; the print view exists only while printing). Other files say "Uncontrolled when printed or saved".
+- **Dashboard:** `GET /documents-dashboard?from&to` (`documentation.read`, `api/src/documents/documents-dashboard.ts`, read as the caller so restricted documents count only for
+  those who may read them; settles first): in force (external, withdrawn), drafts, in review, awaiting approval, approved waiting, periodic reviews overdue / due in 30 days,
+  readers overdue / pending, change requests open; for the period revisions that took effect, acknowledgements, change requests raised; in force by type; activity per week
+  or month; lists of revisions waiting (oldest first), reviews due, readers behind and approved revisions taking effect soon.
+- **API:** `POST /documents` takes `origin: external`, `issuer`, `externalReference`; `PATCH /documents/{id}` takes `issuer`, `externalReference`; `POST /document-revisions/{id}/issue-external`
+  `{issuerRevision, effectiveFrom, changeSummary?}`; documents carry `origin`, `issuer`, `externalReference`, `currentRevision.issuerRevision`; revisions `issuerRevision`, `canRecordIssue`.
+  `apiFetch(…, { as: "blob" })` returns a Blob.
+- **UI:** New document → **External** switch (issued by, their reference; content fixed to a file; switched on for the EXT type), the revision page of an external draft offers
+  **Record this issue** (their revision, in force from, what changed) instead of reviewers and Send for review, `CopiesCard` (`documents/ControlledCopy.jsx`: Open a controlled
+  copy / a copy marked not for use, or the uncontrolled notice; Print or save as PDF for written documents), "Rev A (Issue 3)" labels, issuer on the document page and in Edit
+  details, **Documents dashboard** at `/Documentation` (menu "Dashboard", `DocumentsDashboard.jsx`, `useDocumentsDashboard`, shared period picker `?period=`).
+- **Tests:** `supabase/tests/document_control_external.test.sql`, `api/src/documents/controlled-copy.spec.ts`, `api/test/document-external.e2e-spec.ts` (fake file store; + API
+  sweep), `Documents.test.jsx`, `MenuStructure.test.js`.
+- **Not built:** watermarks across the page, copy registers (who holds which numbered paper copy), stamping Word or Excel files, images inside the text.
+

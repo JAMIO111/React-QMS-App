@@ -80,13 +80,20 @@ export const CreateDocumentBody = z
       .toUpperCase()
       .regex(/^[A-Z]{1,3}$/, 'A letter, A to ZZZ')
       .optional(),
+    /** An external document (DC5): issued by someone else, always a file, revisions recorded as issued. */
+    origin: z.enum(['internal', 'external']).default('internal'),
+    issuer: z.string().trim().min(1).max(200).optional(),
+    externalReference: z.string().trim().max(120).optional(),
   })
   .strict()
-  .refine((b) => (b.number === undefined) === (b.startLetter === undefined), 'Give both the number and the current revision letter, or neither');
+  .refine((b) => (b.number === undefined) === (b.startLetter === undefined), 'Give both the number and the current revision letter, or neither')
+  .refine((b) => b.origin === 'internal' || (b.issuer !== undefined && b.contentKind === 'file'), 'An external document names who issues it and is a file')
+  .refine((b) => b.origin === 'external' || (b.issuer === undefined && b.externalReference === undefined), 'Only an external document has an issuer');
 export type CreateDocumentBody = z.infer<typeof CreateDocumentBody>;
 
 export const UpdateDocumentBody = z
-  .object({ title: z.string().trim().min(1).max(200).optional(), description: text(1000), ownerId: z.string().uuid().optional(), restricted: z.boolean().optional(), reviewMonths: z.number().int().min(1).max(120).nullable().optional() })
+  .object({ title: z.string().trim().min(1).max(200).optional(), description: text(1000), ownerId: z.string().uuid().optional(), restricted: z.boolean().optional(), reviewMonths: z.number().int().min(1).max(120).nullable().optional(),
+    issuer: z.string().trim().min(1).max(200).optional(), externalReference: text(120) })
   .strict()
   .refine(nothingToChange, 'Nothing to change');
 export type UpdateDocumentBody = z.infer<typeof UpdateDocumentBody>;
@@ -210,3 +217,9 @@ export const InForceQuery = z
   })
   .refine((q) => q.partId || q.partFamilyId || q.machineId || q.operationCode, 'Give a part, part family, machine or operation');
 export type InForceQuery = z.infer<typeof InForceQuery>;
+
+// ---- external documents, dashboard (DC5) --------------------------------------------------------
+export const IssueExternalBody = z
+  .object({ issuerRevision: z.string().trim().min(1).max(40), effectiveFrom: IsoDay, changeSummary: z.string().trim().min(3).max(2000).optional() })
+  .strict();
+export type IssueExternalBody = z.infer<typeof IssueExternalBody>;

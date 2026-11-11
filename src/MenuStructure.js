@@ -84,6 +84,7 @@ export const menuStructure = [
     // badge: "documentation" = alerts to acknowledge + documents to read + reviews waiting for the signed-in person (see Navbar)
     badge: "documentation",
     subMenu: [
+      { name: "Dashboard", path: "/Documentation", end: true },
       { name: "My documents", path: "/Documentation/My-Documents", badge: "my-documents" },
       { name: "Documents", path: "/Documentation/Documents" },
       { name: "Change requests", path: "/Documentation/Change-Requests" },

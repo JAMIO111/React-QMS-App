@@ -30,13 +30,14 @@ const newId = () =>
  * @param {string} [options.organisationId] sent as X-Organisation-Id
  * @param {string} [options.reason] sent as X-Change-Reason (recorded in the audit trail)
  * @param {string} [options.idempotencyKey] sent as Idempotency-Key
+ * @param {"json"|"blob"} [options.as] "blob" returns the answer as a Blob (a file such as a stamped PDF); errors are still the API's JSON
  */
-export async function apiFetch(path, { method = "GET", body, organisationId, reason, idempotencyKey } = {}) {
+export async function apiFetch(path, { method = "GET", body, organisationId, reason, idempotencyKey, as = "json" } = {}) {
   const { data } = await supabase.auth.getSession();
   const accessToken = data?.session?.access_token;
   const correlationId = newId();
 
-  const headers = { Accept: "application/json", "X-Correlation-Id": correlationId };
+  const headers = { Accept: as === "blob" ? "*/*" : "application/json", "X-Correlation-Id": correlationId };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   // Tells the API which calendar day it is for this person, so "not in the future" and "overdue" use their today, not UTC.
   const timeZone = browserTimeZone();
@@ -62,6 +63,7 @@ export async function apiFetch(path, { method = "GET", body, organisationId, rea
     });
   }
 
+  if (as === "blob" && response.ok) return response.blob();
   const payload = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) {
     const error = payload?.error ?? {};

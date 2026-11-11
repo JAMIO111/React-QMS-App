@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, Header, HttpCode, Param, Patch, Post, Put, Query, StreamableFile } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
@@ -7,8 +7,9 @@ import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
   ChangeRequestBody, ChangeRequestListQuery, InForceQuery, LinksBody, PeriodicReviewBody,
   AcknowledgeBody, AddRecipientBody, ReadersBody, SkillsBody, ApproveBody, CommentBody, CompareQuery, CreateDocumentBody, CreateTypeBody, DocumentFileBody, DocumentListQuery, DocumentType, ReasonBody, ReviewBody, SignersBody,
-  TypeListQuery, UpdateDocumentBody, UpdateRevisionBody, UpdateTypeBody,
+  TypeListQuery, UpdateDocumentBody, UpdateRevisionBody, UpdateTypeBody, IssueExternalBody,
 } from './documents.schemas';
+import { DocumentFileStore } from './controlled-copy';
 import { DocumentsService } from './documents.service';
 
 const READ = 'documentation.read';
@@ -22,7 +23,10 @@ const MANAGE = 'documentation.manage';
 @ApiBearerAuth()
 @Controller()
 export class DocumentsController {
-  constructor(private readonly service: DocumentsService) {}
+  constructor(
+    private readonly service: DocumentsService,
+    private readonly store: DocumentFileStore,
+  ) {}
 
   // ---- types ---------------------------------------------------------------------------------------
 
@@ -144,6 +148,29 @@ export class DocumentsController {
   }
 
   // ---- review, approval and effect (DC2) -------------------------------------------------------------
+
+  // ---- external documents and controlled copies (DC5) ----------------------------------------------
+
+  @Post('document-revisions/:id/issue-external')
+  @HttpCode(200)
+  @OrganisationScoped('documentation.issue')
+  @ApiBody({ schema: openApiSchema(IssueExternalBody) })
+  @ApiOkResponse({ description: "Records an external document's revision as issued: our letter, the issuer's revision and the effective date (no internal review)" })
+  issueExternal(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.issueExternal(ctx, parse(Uuid, id), parse(IssueExternalBody, body));
+  }
+
+  @Get('document-files/:id/controlled-copy')
+  @OrganisationScoped()
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ description: 'The PDF stamped on every page: controlled copy (number, revision, effective date, who printed it and when) or not for use. Only PDFs.' })
+  async controlledCopy(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    const copy = await this.service.controlledCopy(ctx, parse(Uuid, id), this.store);
+    return new StreamableFile(Buffer.from(copy.bytes), {
+      type: 'application/pdf',
+      disposition: `inline; filename="${copy.fileName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, "'")}"`,
+    });
+  }
 
   @Get('document-signers')
   @OrganisationScoped(MANAGE)

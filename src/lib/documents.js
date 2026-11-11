@@ -43,7 +43,7 @@ export const DOCUMENT_STATUS_OPTIONS = [
 
 /** "Rev B", or "Draft (will be rev C)" while it has no letter yet. */
 export const revisionLabel = (revision, plannedLetter) => {
-  if (revision.letter) return `Rev ${revision.letter}`;
+  if (revision.letter) return revision.issuerRevision ? `Rev ${revision.letter} (${revision.issuerRevision})` : `Rev ${revision.letter}`;
   if (revision.status === "discarded") return `Draft ${revision.sequence} (discarded)`;
   return plannedLetter ? `Draft (will be rev ${plannedLetter})` : "Draft";
 };
@@ -84,3 +84,23 @@ export const linkBody = (l) =>
 
 /** An empty editor document. */
 export const EMPTY_DOC = { type: "doc", content: [{ type: "paragraph" }] };
+
+/** A file the API can stamp as a controlled copy (DC5). */
+export const isPdfFile = (file) => (file?.contentType ?? "").toLowerCase() === "application/pdf" || /\.pdf$/i.test(file?.fileName ?? "");
+
+/** What a printed copy says (the same words the API stamps on a PDF): a headline, a detail line and whether it may be used. */
+export const copyStamp = (revision, documentNumber, printedAt = new Date()) => {
+  const letter = revision.letter ? `rev ${revision.letter}${revision.issuerRevision ? ` (${revision.issuerRevision})` : ""}` : "draft";
+  const who = `${documentNumber} ${letter}`;
+  const printed = `Printed ${printedAt.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}`;
+  switch (revision.status) {
+    case "effective":
+      return { usable: true, head: `CONTROLLED COPY - ${who}`, detail: `Effective ${formatDay(revision.effectiveFrom)}. ${printed}. Check it is still the current revision before use.` };
+    case "superseded":
+      return { usable: false, head: `SUPERSEDED - NOT FOR USE - ${who}`, detail: `${printed}. A later revision is in force.` };
+    case "withdrawn":
+      return { usable: false, head: `WITHDRAWN - NOT FOR USE - ${who}`, detail: `${printed}. This document is no longer in force.` };
+    default:
+      return { usable: false, head: `NOT ISSUED - NOT FOR USE - ${who}`, detail: `${printed}. This revision has not been approved.` };
+  }
+};

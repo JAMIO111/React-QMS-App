@@ -93,6 +93,7 @@ import {
   ArrowRightLeft as LucideArrowRightLeft,
   ClipboardList as LucideClipboardList,
   ChartNoAxesCombined as LucideChartNoAxesCombined,
+  GraduationCap as LucideGraduationCap,
   ScanSearch as LucideScanSearch,
   Truck as LucideTruck,
   Factory as LucideFactory,
@@ -232,6 +233,7 @@ export const ClipboardListIcon = withDefaults(LucideClipboardList);
 export const ChartNoAxesCombinedIcon = withDefaults(LucideChartNoAxesCombined);
 export const ScanSearchIcon = withDefaults(LucideScanSearch);
 export const TruckIcon = withDefaults(LucideTruck);
+export const GraduationCapIcon = withDefaults(LucideGraduationCap);
 export const FactoryIcon = withDefaults(LucideFactory);
 export const GlobeIcon = withDefaults(LucideGlobe);
 export const KeyRoundIcon = withDefaults(LucideKeyRound);

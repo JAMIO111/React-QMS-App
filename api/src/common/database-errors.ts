@@ -127,6 +127,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'integration_rule', pg.message ?? 'That change is not allowed for this connection');
     case 'QM023': // custom field rules: definitions, values, locked records, required fields (messages are written for users)
       return new ApiError(409, 'custom_field_rule', pg.message ?? 'That custom field change is not allowed');
+    case 'QM024': // competence rules: skills, positions, assessments, training (messages are written for users)
+      return new ApiError(409, 'competence_rule', pg.message ?? 'That competence change is not allowed');
     case 'QM010': // notification type the caller cannot choose
       return new ApiError(404, 'notification_type_not_found', 'That notification type does not exist');
     case 'P0002': // no_data_found raised by app functions

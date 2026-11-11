@@ -61,6 +61,7 @@ const SuppliersRegisterPage = lazy(() => import("./components/supplier-quality/S
 const SupplierProfilePage = lazy(() => import("./components/supplier-quality/SupplierProfilePage.jsx"));
 const AssessmentPage = lazy(() => import("./components/supplier-quality/AssessmentPage.jsx"));
 const ExpiryWatchlistPage = lazy(() => import("./components/supplier-quality/ExpiryWatchlistPage.jsx"));
+const CompetenceHome = lazy(() => import("./components/competence/CompetenceHome.jsx"));
 const PurchaseOrdersPage = lazy(() => import("./components/supplier-quality/PurchaseOrdersPage.jsx"));
 const PurchaseOrderPage = lazy(() => import("./components/supplier-quality/PurchaseOrderPage.jsx"));
 const GoodsReceiptsPage = lazy(() => import("./components/supplier-quality/GoodsReceiptsPage.jsx"));
@@ -248,6 +249,7 @@ const router = createBrowserRouter([
           { path: "Suppliers/:id", element: <SupplierProfilePage /> },
           { path: "Suppliers/:supplierId/assessments/:id", element: <AssessmentPage /> },
           { path: "Supplier-Quality/Expiry", element: <ExpiryWatchlistPage /> },
+          { path: "Competence", element: <CompetenceHome /> },
           { path: "Supplier-Quality/Purchase-Orders", element: <PurchaseOrdersPage /> },
           { path: "Supplier-Quality/Purchase-Orders/:id", element: <PurchaseOrderPage /> },
           { path: "Supplier-Quality/Material-Certificates", element: <MaterialCertificatesPage /> },

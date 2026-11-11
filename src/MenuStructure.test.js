@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { menuStructure } from "./MenuStructure";
-import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, GaugeIcon, ScanSearchIcon, TruckIcon } from "@/components/icons";
+import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, GaugeIcon, GraduationCapIcon, ScanSearchIcon, TruckIcon } from "@/components/icons";
 
 describe("menuStructure", () => {
   it("opens the NC dashboard and exposes the one non-conformance register", () => {
@@ -54,5 +54,6 @@ describe("menuStructure", () => {
     expect(icon("Calibration")).toBe(GaugeIcon);
     expect(icon("Audits")).toBe(ClipboardCheckIcon);
     expect(icon("Supplier Quality")).toBe(TruckIcon);
+    expect(icon("Competence")).toBe(GraduationCapIcon);
   });
 });

@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { usePermissions } from "../../hooks/useQmsApi";
 import LoadingScreen from "../ui/LoadingScreen";
-import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, GaugeIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
+import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, GaugeIcon, GraduationCapIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
 import SlidingToggle from "../ui/SlidingToggle";
 
 const SettingsNonConformance = lazy(() => import("./SettingsNonConformance"));
@@ -10,6 +10,7 @@ const SettingsCalibration = lazy(() => import("./SettingsCalibration"));
 const SettingsProcessControl = lazy(() => import("./SettingsProcessControl"));
 const SettingsAudits = lazy(() => import("./SettingsAudits"));
 const SettingsSupplierQuality = lazy(() => import("./SettingsSupplierQuality"));
+const SettingsCompetence = lazy(() => import("./SettingsCompetence"));
 const CustomFieldsSettings = lazy(() => import("../custom-fields/CustomFieldsSettings"));
 
 /**
@@ -63,6 +64,15 @@ const DATA_TABS = [
     manage: "supplier_quality.configure",
     description: "Supplier classifications, qualification questionnaires, the risk model and the performance scoring model.",
     Component: SettingsSupplierQuality,
+  },
+  {
+    value: "competence",
+    icon: GraduationCapIcon,
+    label: "Competence",
+    read: "competence.read",
+    manage: "competence.manage",
+    description: "Skill categories, the skills people can be assessed on, and the positions that say which skills at which level each one needs.",
+    Component: SettingsCompetence,
   },
   {
     value: "custom-fields",

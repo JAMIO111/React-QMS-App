@@ -69,6 +69,15 @@ const sampleBody = (op: Op): object | undefined =>
     'PUT /api/v1/custom-values/{id}': { entityType: 'part', values: {} },
     'PATCH /api/v1/customers/{id}': { name: 'Hijacked' },
     'PATCH /api/v1/suppliers/{id}': { name: 'Hijacked' },
+    'PATCH /api/v1/competence/categories/{id}': { label: 'Hijacked' },
+    'PATCH /api/v1/competence/skills/{id}': { name: 'Hijacked' },
+    'POST /api/v1/competence/skills/{id}/retire': { reason: 'Hijacked' },
+    'POST /api/v1/competence/skills/{id}/reactivate': {},
+    'GET /api/v1/competence/positions/{id}': undefined,
+    'PATCH /api/v1/competence/positions/{id}': { name: 'Hijacked' },
+    'PUT /api/v1/competence/positions/{id}/skills': { skills: [] },
+    'POST /api/v1/competence/positions/{id}/retire': { reason: 'Hijacked' },
+    'POST /api/v1/competence/positions/{id}/reactivate': {},
     'GET /api/v1/supplier-quality/suppliers/{id}': undefined,
     'PATCH /api/v1/supplier-quality/suppliers/{id}': { city: 'Hijacked' },
     'POST /api/v1/supplier-quality/suppliers/{id}/status': { status: 'approved', reason: 'Hijacked' },
@@ -395,6 +404,15 @@ const hasSample = (op: Op) =>
     'PATCH /api/v1/members/{id}',
     'POST /api/v1/members/{id}/role-assignments',
     'POST /api/v1/members/{id}/departments',
+    'PATCH /api/v1/competence/categories/{id}',
+    'PATCH /api/v1/competence/skills/{id}',
+    'POST /api/v1/competence/skills/{id}/retire',
+    'POST /api/v1/competence/skills/{id}/reactivate',
+    'GET /api/v1/competence/positions/{id}',
+    'PATCH /api/v1/competence/positions/{id}',
+    'PUT /api/v1/competence/positions/{id}/skills',
+    'POST /api/v1/competence/positions/{id}/retire',
+    'POST /api/v1/competence/positions/{id}/reactivate',
     'POST /api/v1/members/{id}/invitation/resend',
     'POST /api/v1/members/{id}/invitation/revoke',
     'PATCH /api/v1/department-memberships/{id}',
@@ -765,6 +783,9 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/supplier-quality/scar-extensions/')) return a.supplierScarExtension;
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
   if (path.startsWith('/api/v1/supplier-quality/classifications/')) return a.supplierClassification;
+  if (path.startsWith('/api/v1/competence/categories/')) return a.competenceCategory;
+  if (path.startsWith('/api/v1/competence/skills/')) return a.competenceSkill;
+  if (path.startsWith('/api/v1/competence/positions/')) return a.competencePosition;
   if (path.startsWith('/api/v1/parts/')) return a.part;
   if (path.startsWith('/api/v1/part-revisions/')) return a.draftRevision;
   if (path.startsWith('/api/v1/ncrs/')) return a.ncr;
@@ -929,6 +950,9 @@ beforeAll(async () => {
     a.capaRootCause = (await q1(`insert into public.capa_root_causes (organisation_id, capa_id, kind, description) values ($1, $2, 'occurrence', 'Alpha root cause') returning id`, [ids.orgA, a.capa])).id;
     a.capaAction = (await q1(`insert into public.capa_actions (organisation_id, capa_id, phase, description) values ($1, $2, 'interim', 'Alpha containment') returning id`, [ids.orgA, a.capa])).id;
     a.savedFilter = (await q1(`insert into public.saved_filters (organisation_id, user_id, scope, name, filters) values ($1, $2, 'ncr_register', 'Alpha filter', '{"stage":"open"}') returning id`, [ids.orgA, ids.ownerA])).id;
+    a.competenceCategory = (await q1(`select id from public.competence_categories where organisation_id = $1 and key = 'inspection'`, [ids.orgA])).id;
+    a.competenceSkill = (await q1(`select app.save_competence_skill($1::uuid, jsonb_build_object('code', 'ALPHA', 'name', 'Alpha skill', 'categoryId', $2::text)) as id`, [ids.orgA, a.competenceCategory])).id;
+    a.competencePosition = (await q1(`select app.save_competence_position($1::uuid, '{"code":"ALPHA","name":"Alpha position"}'::jsonb) as id`, [ids.orgA])).id;
     a.supplierClassification = (await q1(`select id from public.supplier_classifications where organisation_id = $1 and key = 'welding'`, [ids.orgA])).id;
     a.supplierContact = (await q1(`insert into public.supplier_contacts (organisation_id, supplier_id, name) values ($1, $2, 'Alpha contact') returning id`, [ids.orgA, a.supplier])).id;
     a.supplierDocument = (await q1(`select app.add_supplier_document($1::uuid, 'other', 'Alpha doc', null, null, null, null, $2, 'a.pdf', null, 1) as id`, [a.supplier, `${ids.orgA}/supplier/${a.supplier}/a.pdf`])).id;

@@ -1,4 +1,4 @@
-import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, LayoutDashboardIcon, ScanSearchIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
+import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GraduationCapIcon, LayoutDashboardIcon, ScanSearchIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
@@ -103,6 +103,13 @@ export const menuStructure = [
       { name: "Supplier corrective actions", path: "/Supplier-Quality/SCARs" },
       { name: "Expiry watchlist", path: "/Supplier-Quality/Expiry" },
     ],
+  },
+  {
+    name: "Competence",
+    icon: GraduationCapIcon,
+    permission: "competence.read",
+    path: "/Competence",
+    subMenu: [{ name: "Skills and positions", path: "/Competence", end: true }],
   },
   {
     name: "Production",

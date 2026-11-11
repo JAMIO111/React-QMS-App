@@ -234,6 +234,14 @@ BEGIN
   INSERT INTO public.notification_preferences (organisation_id, user_id, event_type_id, enabled)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id, false FROM public.notification_event_types WHERE key = 'parts.created';
   INSERT INTO public.saved_filters (organisation_id, user_id, scope, name, filters) VALUES (a, '50000000-0000-0000-0000-0000000000a1', 'ncr_register', 'Sweep filter', '{"stage":"open"}');
+  -- Competence (CO1): a skill, a position and what it requires (categories are seeded per organisation); written by the functions as the organisation's owner.
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
+  PERFORM app.set_position_skills(
+    app.save_competence_position(a, '{"code":"SWEEP","name":"Sweep position"}'::jsonb),
+    jsonb_build_array(jsonb_build_object('skillId',
+      app.save_competence_skill(a, jsonb_build_object('code', 'SWEEP', 'name', 'Sweep skill', 'categoryId', (SELECT id FROM public.competence_categories WHERE organisation_id = a AND key = 'inspection'))),
+      'requiredLevel', 3)));
+  PERFORM pg_temp.logout();
   -- Supplier quality (SQ1): the supplier's first status row exists already; classifications are seeded per organisation.
   INSERT INTO public.supplier_classification_links (organisation_id, supplier_id, classification_id)
     SELECT a, (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), id FROM public.supplier_classifications WHERE organisation_id = a AND key = 'welding';

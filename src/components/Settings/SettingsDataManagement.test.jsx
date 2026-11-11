@@ -10,6 +10,7 @@ vi.mock("./SettingsCalibration", () => ({ default: () => <p>Gauge types</p> }));
 vi.mock("./SettingsProcessControl", () => ({ default: () => <p>Characteristic templates</p> }));
 vi.mock("./SettingsAudits", () => ({ default: () => <p>Finding classifications</p> }));
 vi.mock("./SettingsSupplierQuality", () => ({ default: () => <p>Supplier classifications</p> }));
+vi.mock("./SettingsCompetence", () => ({ default: () => <p>Skills and positions</p> }));
 vi.mock("../custom-fields/CustomFieldsSettings", () => ({ default: () => <p>Custom field list</p> }));
 
 import SettingsDataManagement from "./SettingsDataManagement";
@@ -53,6 +54,14 @@ describe("Settings → Data Management", () => {
     permissions = [];
     renderAt("/Settings/Data-Management");
     expect(screen.getByText(/no access to any module/)).toBeInTheDocument();
+  });
+
+  it("shows Competence to people who may read it, with the graduation cap", async () => {
+    permissions = ["competence.read", "competence.manage"];
+    renderAt("/Settings/Data-Management?tab=competence");
+    expect(await screen.findByText("Skills and positions")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Competence" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByText(/You can view these/)).toBeNull();
   });
 
   it("shows Custom fields only to people who may manage them", async () => {

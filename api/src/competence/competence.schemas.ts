@@ -132,3 +132,36 @@ export const Position = z.object({
   createdAt: Iso,
 });
 export type Position = z.infer<typeof Position>;
+
+// ---- people: positions held, assessments, the matrix (CO2) -----------------------------------------
+const IsoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use yyyy-MM-dd');
+
+export const AssignPositionBody = z.object({ positionId: z.string().uuid(), startedOn: IsoDay }).strict();
+export type AssignPositionBody = z.infer<typeof AssignPositionBody>;
+
+export const EndPositionBody = z.object({ endedOn: IsoDay.optional() }).strict();
+export type EndPositionBody = z.infer<typeof EndPositionBody>;
+
+export const AssessBody = z
+  .object({
+    skillId: z.string().uuid(),
+    level: z.number().int().min(0).max(4),
+    assessedOn: IsoDay.optional(),
+    expiresOn: IsoDay.nullable().optional(),
+    note: z.string().trim().max(1000).nullable().optional(),
+  })
+  .strict();
+export type AssessBody = z.infer<typeof AssessBody>;
+
+export const MatrixQuery = z.object({
+  positionId: z.string().uuid().optional(),
+  departmentId: z.string().uuid().optional(),
+  siteId: z.string().uuid().optional(),
+  categoryId: z.string().uuid().optional(),
+  skillId: z.string().uuid().optional(),
+  status: z.enum(['all', 'gap', 'expiring', 'expired', 'attention']).default('all'),
+  q: z.string().trim().max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type MatrixQuery = z.infer<typeof MatrixQuery>;

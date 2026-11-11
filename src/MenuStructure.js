@@ -107,9 +107,14 @@ export const menuStructure = [
   {
     name: "Competence",
     icon: GraduationCapIcon,
-    permission: "competence.read",
+    // Anyone with a record of their own sees at least "My competence"; reading everyone needs competence.read.
+    permission: ["competence.read", "competence.own"],
     path: "/Competence",
-    subMenu: [{ name: "Skills and positions", path: "/Competence", end: true }],
+    subMenu: [
+      { name: "Skills matrix", path: "/Competence/Matrix", permission: "competence.read" },
+      { name: "My competence", path: "/Competence/Mine", permission: "competence.own" },
+      { name: "Skills and positions", path: "/Competence", end: true, permission: "competence.read" },
+    ],
   },
   {
     name: "Production",

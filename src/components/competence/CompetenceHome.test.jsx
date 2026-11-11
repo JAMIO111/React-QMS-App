@@ -26,7 +26,7 @@ describe("Competence home", () => {
     expect(screen.getByRole("heading", { name: "Competence" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Inspection" })).toHaveTextContent("CMM operation");
     expect(screen.getByText("CMM operation 3")).toBeInTheDocument();
-    expect(screen.getByText("More is coming")).toBeInTheDocument();
+    expect(screen.getByText("Where people stand")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Set up skills and positions" })).not.toBeInTheDocument();
   });
 

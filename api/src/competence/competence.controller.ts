@@ -5,9 +5,10 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
-  AllQuery, Category, CreateCategoryBody, CreatePositionBody, CreateSkillBody, Position, ReasonBody, SetPositionSkillsBody, Skill, SkillListQuery, UpdateCategoryBody,
+  AllQuery, AssessBody, AssignPositionBody, EndPositionBody, MatrixQuery, Category, CreateCategoryBody, CreatePositionBody, CreateSkillBody, Position, ReasonBody, SetPositionSkillsBody, Skill, SkillListQuery, UpdateCategoryBody,
   UpdatePositionBody, UpdateSkillBody,
 } from './competence.schemas';
+import { CompetencePeopleService } from './competence-people.service';
 import { CompetenceService } from './competence.service';
 
 const READ = 'competence.read';
@@ -18,7 +19,10 @@ const MANAGE = 'competence.manage';
 @ApiBearerAuth()
 @Controller('competence')
 export class CompetenceController {
-  constructor(private readonly service: CompetenceService) {}
+  constructor(
+    private readonly service: CompetenceService,
+    private readonly people: CompetencePeopleService,
+  ) {}
 
   // ---- categories ----------------------------------------------------------------------------------
 
@@ -150,5 +154,55 @@ export class CompetenceController {
   @ApiOkResponse({ schema: openApiSchema(Position) })
   reactivatePosition(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.reactivatePosition(ctx, parse(Uuid, id));
+  }
+
+  // ---- people: the matrix, a person's standing, positions held, assessments (CO2) -------------------
+
+  @Get('matrix')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'Employees by skills: level, what their positions require, the gap and the expiry, worked out on read' })
+  matrix(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.people.matrix(ctx, parse(MatrixQuery, query));
+  }
+
+  @Get('me')
+  @OrganisationScoped()
+  @ApiOkResponse({ description: "The caller's own competence record, when their sign-in is linked to an employee (`linked: false` otherwise)" })
+  me(@Ctx() ctx: RequestContext) {
+    return this.people.me(ctx);
+  }
+
+  @Get('people/:id')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: "One person's positions, skills with level, requirement, gap, expiry and assessment history" })
+  person(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.people.person(ctx, parse(Uuid, id));
+  }
+
+  @Post('people/:id/positions')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(AssignPositionBody) })
+  @ApiCreatedResponse({ description: 'Gives the person a position from a date; answers with their profile' })
+  assignPosition(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.people.assignPosition(ctx, parse(Uuid, id), parse(AssignPositionBody, body));
+  }
+
+  @Post('employee-positions/:id/end')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(EndPositionBody) })
+  @ApiOkResponse({ description: 'Ends a position held (kept for history); answers with the profile' })
+  endPosition(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.people.endPosition(ctx, parse(Uuid, id), parse(EndPositionBody, body ?? {}));
+  }
+
+  @Post('people/:id/assessments')
+  @HttpCode(201)
+  @OrganisationScoped('competence.assess')
+  @ApiBody({ schema: openApiSchema(AssessBody) })
+  @ApiCreatedResponse({ description: 'Records an assessment (never your own; level 4 needs competence.manage); answers with the profile' })
+  assess(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.people.assess(ctx, parse(Uuid, id), parse(AssessBody, body));
   }
 }

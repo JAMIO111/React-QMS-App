@@ -9,8 +9,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 
 /**
- * Competence (CO1): the organisation's skills and positions for reading. Managers set them up in Settings → Data Management → Competence. The skills matrix, assessments
- * and training sessions arrive in the next slices.
+ * Competence (CO1): the organisation's skills and positions for reading. Managers set them up in Settings → Data Management → Competence. The matrix, person pages and assessments are CO2.
  */
 const CompetenceHome = () => {
   const { can } = usePermissions();
@@ -38,8 +37,16 @@ const CompetenceHome = () => {
         )}
       </header>
 
-      <Callout tone="info" title="More is coming">
-        The skills matrix, assessments and training sessions are the next steps. For now this page shows what has been set up.
+      <Callout tone="info" title="Where people stand">
+        The skills matrix shows everyone against what their positions need, and each person's page records assessments. Training sessions are the next step.
+        <span className="mt-2 flex flex-wrap gap-2">
+          <CTAButton type="secondary" to="/Competence/Matrix">
+            Open the skills matrix
+          </CTAButton>
+          <CTAButton type="neutral" to="/Competence/Mine">
+            My competence
+          </CTAButton>
+        </span>
       </Callout>
 
       <MenuCard title="Skills" subtitle={`${skills.data.data.length} active`}>

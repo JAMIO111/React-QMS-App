@@ -78,6 +78,10 @@ const sampleBody = (op: Op): object | undefined =>
     'PUT /api/v1/competence/positions/{id}/skills': { skills: [] },
     'POST /api/v1/competence/positions/{id}/retire': { reason: 'Hijacked' },
     'POST /api/v1/competence/positions/{id}/reactivate': {},
+    'GET /api/v1/competence/people/{id}': undefined,
+    'POST /api/v1/competence/people/{id}/positions': { positionId: '00000000-0000-4000-8000-000000000001', startedOn: '2026-01-01' },
+    'POST /api/v1/competence/people/{id}/assessments': { skillId: '00000000-0000-4000-8000-000000000001', level: 2 },
+    'POST /api/v1/competence/employee-positions/{id}/end': {},
     'GET /api/v1/supplier-quality/suppliers/{id}': undefined,
     'PATCH /api/v1/supplier-quality/suppliers/{id}': { city: 'Hijacked' },
     'POST /api/v1/supplier-quality/suppliers/{id}/status': { status: 'approved', reason: 'Hijacked' },
@@ -413,6 +417,10 @@ const hasSample = (op: Op) =>
     'PUT /api/v1/competence/positions/{id}/skills',
     'POST /api/v1/competence/positions/{id}/retire',
     'POST /api/v1/competence/positions/{id}/reactivate',
+    'GET /api/v1/competence/people/{id}',
+    'POST /api/v1/competence/people/{id}/positions',
+    'POST /api/v1/competence/people/{id}/assessments',
+    'POST /api/v1/competence/employee-positions/{id}/end',
     'POST /api/v1/members/{id}/invitation/resend',
     'POST /api/v1/members/{id}/invitation/revoke',
     'PATCH /api/v1/department-memberships/{id}',
@@ -786,6 +794,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/competence/categories/')) return a.competenceCategory;
   if (path.startsWith('/api/v1/competence/skills/')) return a.competenceSkill;
   if (path.startsWith('/api/v1/competence/positions/')) return a.competencePosition;
+  if (path.startsWith('/api/v1/competence/people/')) return a.employee;
+  if (path.startsWith('/api/v1/competence/employee-positions/')) return a.competenceHeld;
   if (path.startsWith('/api/v1/parts/')) return a.part;
   if (path.startsWith('/api/v1/part-revisions/')) return a.draftRevision;
   if (path.startsWith('/api/v1/ncrs/')) return a.ncr;
@@ -953,6 +963,7 @@ beforeAll(async () => {
     a.competenceCategory = (await q1(`select id from public.competence_categories where organisation_id = $1 and key = 'inspection'`, [ids.orgA])).id;
     a.competenceSkill = (await q1(`select app.save_competence_skill($1::uuid, jsonb_build_object('code', 'ALPHA', 'name', 'Alpha skill', 'categoryId', $2::text)) as id`, [ids.orgA, a.competenceCategory])).id;
     a.competencePosition = (await q1(`select app.save_competence_position($1::uuid, '{"code":"ALPHA","name":"Alpha position"}'::jsonb) as id`, [ids.orgA])).id;
+    a.competenceHeld = (await q1(`select app.assign_employee_position($1::uuid, $2::uuid, current_date - 30) as id`, [a.employee, a.competencePosition])).id;
     a.supplierClassification = (await q1(`select id from public.supplier_classifications where organisation_id = $1 and key = 'welding'`, [ids.orgA])).id;
     a.supplierContact = (await q1(`insert into public.supplier_contacts (organisation_id, supplier_id, name) values ($1, $2, 'Alpha contact') returning id`, [ids.orgA, a.supplier])).id;
     a.supplierDocument = (await q1(`select app.add_supplier_document($1::uuid, 'other', 'Alpha doc', null, null, null, null, $2, 'a.pdf', null, 1) as id`, [a.supplier, `${ids.orgA}/supplier/${a.supplier}/a.pdf`])).id;

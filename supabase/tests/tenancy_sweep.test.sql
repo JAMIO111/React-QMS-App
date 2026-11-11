@@ -241,6 +241,9 @@ BEGIN
     jsonb_build_array(jsonb_build_object('skillId',
       app.save_competence_skill(a, jsonb_build_object('code', 'SWEEP', 'name', 'Sweep skill', 'categoryId', (SELECT id FROM public.competence_categories WHERE organisation_id = a AND key = 'inspection'))),
       'requiredLevel', 3)));
+  -- Competence (CO2): the employee holds the position and has been assessed (as owner A; the employee has no sign-in, so it is not a self-assessment).
+  PERFORM app.assign_employee_position(emp, (SELECT id FROM public.competence_positions WHERE organisation_id = a AND code = 'SWEEP'), current_date - 30);
+  PERFORM app.record_competence_assessment(emp, (SELECT id FROM public.competence_skills WHERE organisation_id = a AND code = 'SWEEP'), 2, current_date - 10);
   PERFORM pg_temp.logout();
   -- Supplier quality (SQ1): the supplier's first status row exists already; classifications are seeded per organisation.
   INSERT INTO public.supplier_classification_links (organisation_id, supplier_id, classification_id)

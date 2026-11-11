@@ -34,3 +34,42 @@ export const groupByCategory = (skills) => {
 /** What a position requires, in one line: "CMM operation 3, Visual inspection 2". */
 export const requirementSummary = (position) =>
   position.skills.length === 0 ? "Requires no skills yet" : position.skills.map((s) => `${s.name} ${s.requiredLevel}`).join(", ");
+
+/** How a skill stands for a person (worked out by the server). Tones are the app's: success / warning / error / neutral. */
+export const STATUS = {
+  ok: { label: "On track", tone: "success" },
+  gap: { label: "Below required", tone: "error" },
+  not_assessed: { label: "Not assessed", tone: "warning" },
+  expired: { label: "Assessment expired", tone: "error" },
+  expiring: { label: "Expiring soon", tone: "warning" },
+  extra: { label: "Not required", tone: "neutral" },
+};
+export const statusLabel = (status) => STATUS[status]?.label ?? "—";
+
+/** Tailwind classes for a status pill / matrix cell (tint plus the matching text colour, which the light-mode overrides in index.css rely on). */
+export const STATUS_CLASS = {
+  success: "bg-success-color/15 text-success-color",
+  warning: "bg-warning-color/15 text-warning-color",
+  error: "bg-error-color/15 text-error-color",
+  neutral: "bg-secondary-bg text-secondary-text",
+};
+export const statusClass = (status) => STATUS_CLASS[STATUS[status]?.tone ?? "neutral"];
+
+/** A matrix cell in words: "Level 2 of 3 needed, expires 2027-01-05". */
+export const describeCell = (cell) => {
+  if (!cell) return "";
+  const parts = [];
+  parts.push(cell.level === null ? "Not assessed" : `${levelLabel(cell.level)} (${cell.level})`);
+  if (cell.required !== null) parts.push(`needs ${cell.required}`);
+  if (cell.expiresOn) parts.push(`${cell.expiry === "expired" ? "expired" : "expires"} ${cell.expiresOn}`);
+  return parts.join(" · ");
+};
+
+/** Matrix status filter choices. */
+export const MATRIX_STATUS_OPTIONS = [
+  { value: "all", label: "Everyone" },
+  { value: "attention", label: "Needs attention" },
+  { value: "gap", label: "Gaps" },
+  { value: "expiring", label: "Expiring" },
+  { value: "expired", label: "Expired" },
+];

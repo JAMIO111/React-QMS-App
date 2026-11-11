@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Post, Put, Query } from '@nestjs/common';
+import { ENV, Env } from '../config/env';
 import { ApiBearerAuth, ApiBody, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
@@ -7,14 +8,22 @@ import { OrganisationScoped } from '../tenancy/organisation.guard';
 import { MarkReadBody, NotificationList, NotificationPreference, NotificationsQuery, SetPreferenceBody } from './notifications.schemas';
 import { NotificationsService } from './notifications.service';
 
-const Preferences = z.object({ data: z.array(NotificationPreference) });
+const Preferences = z.object({ email: z.object({ sending: z.boolean() }), data: z.array(NotificationPreference) });
 
 /** The signed-in member's own notifications and preferences; every member may use them. */
 @ApiTags('notifications')
 @ApiBearerAuth()
 @Controller()
 export class NotificationsController {
-  constructor(private readonly notifications: NotificationsService) {}
+  constructor(
+    private readonly notifications: NotificationsService,
+    @Inject(ENV) private readonly env: Env,
+  ) {}
+
+  /** Whether this server sends email at all (MAIL_PROVIDER); without a provider, emails are queued and marked not sent. */
+  private get emailInfo() {
+    return { sending: this.env.MAIL_PROVIDER !== 'none' };
+  }
 
   @Get('notifications')
   @OrganisationScoped()
@@ -37,21 +46,21 @@ export class NotificationsController {
   @OrganisationScoped()
   @ApiOkResponse({ description: 'Events the caller may choose from, with the effective setting and its default (which follows their role and package)', schema: openApiSchema(Preferences) })
   async preferences(@Ctx() ctx: RequestContext) {
-    return { data: await this.notifications.preferences(ctx) };
+    return { email: this.emailInfo, data: await this.notifications.preferences(ctx) };
   }
 
   @Put('notification-preferences')
   @OrganisationScoped()
   @ApiBody({ schema: openApiSchema(SetPreferenceBody) })
-  @ApiOkResponse({ description: 'Sets one event on or off; enabled null returns it to the default', schema: openApiSchema(Preferences) })
+  @ApiOkResponse({ description: 'Sets one event on or off in the app (enabled) and/or by email (email); null returns that choice to the default', schema: openApiSchema(Preferences) })
   async setPreference(@Ctx() ctx: RequestContext, @Body() body: unknown) {
-    return { data: await this.notifications.setPreference(ctx, parse(SetPreferenceBody, body)) };
+    return { email: this.emailInfo, data: await this.notifications.setPreference(ctx, parse(SetPreferenceBody, body)) };
   }
 
   @Delete('notification-preferences')
   @OrganisationScoped()
   @ApiOkResponse({ description: 'Removes every override: all events return to their defaults', schema: openApiSchema(Preferences) })
   async reset(@Ctx() ctx: RequestContext) {
-    return { data: await this.notifications.resetPreferences(ctx) };
+    return { email: this.emailInfo, data: await this.notifications.resetPreferences(ctx) };
   }
 }

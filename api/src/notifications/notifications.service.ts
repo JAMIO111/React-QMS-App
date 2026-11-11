@@ -60,14 +60,18 @@ export class NotificationsService {
         enabled: r.enabled as boolean,
         defaultEnabled: r.default_enabled as boolean,
         overridden: r.overridden as boolean,
+        email: r.email as boolean,
+        emailDefault: r.email_default as boolean,
+        emailOverridden: r.email_overridden as boolean,
       }));
     });
   }
 
   async setPreference(ctx: RequestContext, body: SetPreferenceBody): Promise<NotificationPreference[]> {
-    await this.database.asUser(ctx, (db) =>
-      db.execute(sql`select app.set_notification_preference(${ctx.organisationId}::uuid, ${body.eventKey}, ${body.enabled}::boolean)`),
-    );
+    await this.database.asUser(ctx, async (db) => {
+      if (body.enabled !== undefined) await db.execute(sql`select app.set_notification_preference(${ctx.organisationId}::uuid, ${body.eventKey}, ${body.enabled}::boolean)`);
+      if (body.email !== undefined) await db.execute(sql`select app.set_notification_email(${ctx.organisationId}::uuid, ${body.eventKey}, ${body.email}::boolean)`);
+    });
     return this.preferences(ctx);
   }
 

@@ -2,7 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse } from '../common/validation';
-import { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformMe, PlatformOrganisations, PlatformPayments, PlatformRevenue, PlatformWebhooks } from './platform.schemas';
+import { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformMe, PlatformOrganisations, PlatformPayments, PlatformEmail, PlatformRevenue, PlatformWebhooks } from './platform.schemas';
 import { PlatformService } from './platform.service';
 
 /**
@@ -44,6 +44,12 @@ export class PlatformController {
   @ApiOkResponse({ description: 'Latest invoices across organisations, failed payments and 30-day totals', schema: openApiSchema(PlatformPayments) })
   payments(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.payments(ctx, parse(LimitQuery, query));
+  }
+
+  @Get('email')
+  @ApiOkResponse({ description: 'Email notifications: the mail provider in use, emails by status, waiting, last sent and failures with their error (never content or addresses). 404 for non-operators, 403 mfa_required without MFA.', schema: openApiSchema(PlatformEmail) })
+  email(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.email(ctx, parse(HoursQuery, query));
   }
 
   @Get('webhooks')

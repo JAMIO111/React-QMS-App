@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ApiError } from '../common/api-error';
+import { ENV, Env } from '../config/env';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import type { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformOrganisations } from './platform.schemas';
@@ -10,7 +11,10 @@ type Status = 'none' | 'needs_mfa' | 'ok';
 /** The operator's monitor: what is happening to sign-ups. Reads only the platform's own tables through admin-only database functions. */
 @Injectable()
 export class PlatformService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    @Inject(ENV) private readonly env: Env,
+  ) {}
 
   me(ctx: RequestContext): Promise<{ status: Status }> {
     return this.database.asUser(ctx, async (db) => ({ status: await this.status(db) }));
@@ -62,6 +66,11 @@ export class PlatformService {
 
   payments(ctx: RequestContext, q: LimitQuery): Promise<Record<string, unknown>> {
     return this.json(ctx, (db) => db.execute<{ r: Record<string, unknown> }>(sql`select app.platform_payments(${q.limit}::int) as r`));
+  }
+
+  async email(ctx: RequestContext, q: HoursQuery): Promise<Record<string, unknown>> {
+    const r = await this.json(ctx, (db) => db.execute<{ r: Record<string, unknown> }>(sql`select app.platform_email_outbox(${q.hours}::int) as r`));
+    return { provider: this.env.MAIL_PROVIDER, sending: this.env.MAIL_PROVIDER !== 'none', ...r };
   }
 
   webhooks(ctx: RequestContext, q: HoursQuery): Promise<Record<string, unknown>> {

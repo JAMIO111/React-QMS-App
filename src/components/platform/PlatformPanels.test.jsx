@@ -24,6 +24,7 @@ const routes = () => ({
   "/platform/revenue": { currency: "GBP", mrrPence: 10500, arrPence: 126000, trialMrrPence: 2083, trialsEndingSoon: 2, pastDue: 1, cancelling: 3, cancelledLast30Days: 1, newLast30Days: 4, byStatus: { active: 5, trialing: 2, past_due: 1 }, payingByInterval: { month: 4, year: 2 }, seats: [{ slug: "observer", name: "Observer", purchased: 4, assigned: 3 }, { slug: "controller", name: "Controller", purchased: 6, assigned: 6 }] },
   "/platform/organisations": { total: 2, data: [org(), org({ organisationId: "o2", name: "Beta Co", ownerEmails: [], subscriptionStatus: null, billingProvider: null, billingInterval: null, currentPeriodEnd: null, setupFinishedAt: null, mrrPence: 0, seatsPurchased: 0, seatsAssigned: 0, status: "archived", cancelAtPeriodEnd: null })] },
   "/platform/payments": { invoices: [{ id: "i1", organisationId: "o1", organisation: "Acme Ltd", number: "FQ-1", status: "paid", currency: "gbp", subtotal: 8000, tax: 1600, total: 9600, invoiceDate: "2026-11-01", paidAt: "2026-11-01T10:00:00Z" }], failedPayments: [{ organisationId: "o3", organisation: "Gamma Ltd", invoice: "FQ-9", amount: 3000, currency: "gbp", at: "2026-11-05T10:00:00Z" }], paidLast30DaysPence: 9600, taxLast30DaysPence: 1600, failedLast30Days: 1 },
+  "/platform/email": { provider: "none", sending: false, counts: { sent: 0, unsent: 7, failed: 1 }, waiting: 0, oldestWaiting: null, lastSent: null, problems: [{ organisation: "Acme Ltd", event: "parts.created", status: "failed", attempts: 5, error: "Resend refused it (422): Invalid `to` field", at: "2026-11-06T10:00:00Z" }], byEvent: [{ event: "parts.created", count: 8 }] },
   "/platform/webhooks": { hours: 24, lastReceivedAt: iso(5 * 60 * 1000), lastProcessedAt: iso(5 * 60 * 1000), counts: { received: 12, processed: 9, ignored: 2, failed: 1 }, stuck: 0, failed: [{ eventId: "evt_1", type: "invoice.paid", error: "Unknown Stripe price price_x", attempts: 3, organisation: "Acme Ltd", receivedAt: "2026-11-06T10:00:00Z" }], types: [{ type: "invoice.paid", count: 5 }] },
   "/platform/activity": { data: [{ at: "2026-11-06T10:00:00Z", kind: "billing", event: "seats_added", organisationId: "o1", organisation: "Acme Ltd", details: { plan: "controller", from: 0, to: 2 } }, { at: "2026-11-06T09:00:00Z", kind: "organisation", event: "organisation_archived", organisationId: "o2", organisation: "Beta Co", details: { reason: "unpaid_setup" } }] },
 });
@@ -47,10 +48,10 @@ beforeEach(() => {
 });
 
 describe("the platform tabs", () => {
-  it("offers six tabs, opens the overview, and keeps the chosen tab in the address", async () => {
+  it("offers seven tabs, opens the overview, and keeps the chosen tab in the address", async () => {
     renderAt("/platform");
     const tabs = await screen.findByRole("tablist", { name: "Platform" });
-    expect(within(tabs).getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Revenue", "Organisations", "Payments", "Webhooks", "Activity"]);
+    expect(within(tabs).getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Revenue", "Organisations", "Payments", "Webhooks", "Email", "Activity"]);
     expect(within(tabs).getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
     await userEvent.click(within(tabs).getByRole("tab", { name: "Revenue" }));
     expect(within(tabs).getByRole("tab", { name: "Revenue" })).toHaveAttribute("aria-selected", "true");
@@ -234,5 +235,17 @@ describe("formatting", () => {
     expect(describeEvent({ event: "payment_failed" })).toBe("Payment failed");
     expect(describeEvent({ event: "admin_override", details: { overAssigned: 2, plan: "contributor" } })).toContain("2 over");
     expect(describeEvent({ event: "something_new" })).toBe("something new");
+  });
+});
+
+describe("email", () => {
+  it("shows the provider, counts and problems, and says when there is no provider", async () => {
+    renderAt("/platform?tab=email");
+    const tiles = await screen.findByRole("group", { name: "Email health" });
+    expect(tiles).toHaveTextContent("None");
+    expect(tiles).toHaveTextContent("7");
+    expect(screen.getByText("No mail provider")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Email problems" })).toHaveTextContent("Invalid `to` field");
+    expect(screen.getByRole("list", { name: "Emails by event" })).toHaveTextContent("parts.created8");
   });
 });

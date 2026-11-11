@@ -1,5 +1,5 @@
 import { DynamicModule, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import type { NextFunction, Response } from 'express';
@@ -119,6 +119,8 @@ import { ConnectorRegistry } from './integrations/core/connector.registry';
 import { EntityImporterRegistry } from './integrations/core/entity-importer';
 import { CatalogueService } from './integrations/core/catalogue.service';
 import { SyncEngine } from './integrations/core/sync.engine';
+import { EmailKickInterceptor, EmailService } from './email/email.service';
+import { MailTransport, mailTransportFor } from './email/mail-transport';
 import { defaultConnectorRegistry, defaultImporterRegistry } from './integrations/core/defaults';
 import { RequirementsService } from './receiving/requirements.service';
 import { SupplierScarController } from './supplier-quality/supplier-scar.controller';
@@ -327,6 +329,9 @@ export class AppModule implements NestModule {
         { provide: IntegrationFileStore, useClass: SupabaseIntegrationFileStore },
         SyncEngine,
         CatalogueService,
+        EmailService,
+        { provide: MailTransport, useFactory: (e: Env) => mailTransportFor(e), inject: [ENV] },
+        { provide: APP_INTERCEPTOR, useClass: EmailKickInterceptor },
         { provide: ConnectorRegistry, useFactory: defaultConnectorRegistry },
         { provide: EntityImporterRegistry, useFactory: defaultImporterRegistry },
         MaterialCertificatesService,

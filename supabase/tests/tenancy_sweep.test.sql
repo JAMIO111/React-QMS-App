@@ -359,6 +359,11 @@ BEGIN
       FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001';
   INSERT INTO public.notification_reads (organisation_id, user_id, notification_id)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id FROM public.notifications WHERE organisation_id = a LIMIT 1;
+  -- EM1: an import alert (written by the run's trigger) and an email waiting to be sent (written only by the API login's fan-out).
+  INSERT INTO public.integration_alerts (organisation_id, connection_id, run_id, entity_type, kind, summary)
+    SELECT a, connection_id, id, 'supplier', 'needs_attention', 'Sweep alert' FROM public.integration_sync_runs WHERE id = '5f000000-0000-0000-0000-00000000c001';
+  INSERT INTO public.email_outbox (organisation_id, notification_id, user_id, to_address)
+    SELECT a, id, '50000000-0000-0000-0000-0000000000a1', 'sweep@example.test' FROM public.notifications WHERE organisation_id = a LIMIT 1;
   -- Custom fields (CF1): a definition and a part's values (seeded directly; people write through functions).
   INSERT INTO public.custom_field_definitions (organisation_id, entity_type, key, label, field_type)
     VALUES (a, 'part', 'sweep_note', 'Sweep note', 'text');

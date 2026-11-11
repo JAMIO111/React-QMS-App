@@ -41,6 +41,18 @@ export const useNotificationPreferences = () => {
   });
 };
 
+/** `{ sending }`: whether this server sends email at all (without a mail provider choices are saved but nothing is emailed). */
+export const useEmailDelivery = () => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "preferences"),
+    queryFn: () => apiFetch("/notification-preferences", { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+    select: (r) => r.email ?? null,
+  });
+};
+
 const usePreferenceMutation = (request, optimistic) => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
@@ -64,20 +76,32 @@ const usePreferenceMutation = (request, optimistic) => {
   });
 };
 
-/** `{ eventKey, enabled }`; enabled null returns the event to its default. */
+/** `{ eventKey, enabled?, email? }`: in the app and/or by email; null returns that choice to its default. */
 export const useSetNotificationPreference = () =>
   usePreferenceMutation(
     (body, organisationId) => apiFetch("/notification-preferences", { method: "PUT", body, organisationId }),
-    (rows, { eventKey, enabled }) =>
-      rows.map((p) =>
-        p.eventKey !== eventKey
-          ? p
-          : { ...p, enabled: enabled === null ? p.defaultEnabled : enabled, overridden: enabled !== null },
-      ),
+    (rows, arg) => rows.map((p) => (p.eventKey !== arg.eventKey ? p : applyPreference(p, arg))),
   );
+
+/** What the screen shows straight after a choice (the server's answer replaces it): email is only ever on while the event is shown in the app. */
+export function applyPreference(p, { enabled, email }) {
+  const next = { ...p };
+  if (enabled !== undefined) {
+    next.enabled = enabled === null ? p.defaultEnabled : enabled;
+    next.overridden = enabled !== null;
+  }
+  if (email !== undefined) {
+    next.emailOverridden = email !== null;
+    next.email = email === null ? p.emailDefault : email;
+  } else if (enabled !== undefined && !next.enabled) {
+    next.email = false;
+  }
+  next.email = Boolean(next.enabled && next.email);
+  return next;
+}
 
 export const useResetNotificationPreferences = () =>
   usePreferenceMutation(
     (_, organisationId) => apiFetch("/notification-preferences", { method: "DELETE", organisationId }),
-    (rows) => rows.map((p) => ({ ...p, enabled: p.defaultEnabled, overridden: false })),
+    (rows) => rows.map((p) => ({ ...p, enabled: p.defaultEnabled, overridden: false, email: p.defaultEnabled && p.emailDefault, emailOverridden: false })),
   );

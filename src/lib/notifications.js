@@ -33,6 +33,8 @@ export function notificationLink(n) {
       return "/Settings/Subscription";
     case "organisation_users":
       return "/Settings/Users";
+    case "integration_alerts":
+      return d.connection_id && d.run_id ? `/Settings/Integrations/${d.connection_id}/runs/${d.run_id}` : "/Settings/Integrations";
     default:
       return null;
   }

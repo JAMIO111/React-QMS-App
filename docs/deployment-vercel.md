@@ -42,6 +42,7 @@ them or paste them into chat.
 | `CORS_ORIGINS` | `https://qms-*-jamie-drydens-projects.vercel.app` — every address of this Vercel team: the branch alias, the production alias and per-deployment URLs (`qms-<hash>-…`, which is what the dashboard's *Visit* button opens). Only this team can own names ending in `-jamie-drydens-projects.vercel.app`; `*` never matches `.` or `/`. |
 | `NODE_ENV` | `production` |
 | `SUPABASE_SERVICE_ROLE_KEY`, `INVITE_REDIRECT_URL` | Optional: lets the API email invitations and read uploaded integration files (without it file imports answer `503 file_storage_unavailable`). `INVITE_REDIRECT_URL` = `https://qms-web-git-dev-jamie-drydens-projects.vercel.app/set-password?mode=invite`. The service-role key is sensitive. People who already have an account get a sign-in link to `/accept-invite` instead (built from `APP_BASE_URL`, else beside `INVITE_REDIRECT_URL`). |
+| `MAIL_PROVIDER`, `RESEND_API_KEY`, `MAIL_FROM` | Optional: email notifications. Unset (or `none`) = **outbox only**: emails are built and queued as they would be sent and marked not sent (the operator panel's Email tab shows them). `resend` sends through Resend (key server-side only; `MAIL_FROM` like `Fortress QMS <alerts@your-domain>` on a domain verified with Resend). Links in the emails use `APP_BASE_URL`. The queue is worked after every change; the daily cron `/internal/cron/email` is a safety net (on Vercel Pro it can run every few minutes). |
 
 **qms-web**
 

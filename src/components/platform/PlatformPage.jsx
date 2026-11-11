@@ -9,6 +9,7 @@ import OrganisationsPanel from "./OrganisationsPanel";
 import PaymentsPanel from "./PaymentsPanel";
 import RevenuePanel from "./RevenuePanel";
 import WebhooksPanel from "./WebhooksPanel";
+import EmailPanel from "./EmailPanel";
 import SlidingToggle from "../ui/SlidingToggle";
 
 const PERIODS = [
@@ -112,6 +113,7 @@ const TABS = [
   { key: "organisations", label: "Organisations", Panel: OrganisationsPanel },
   { key: "payments", label: "Payments", Panel: PaymentsPanel },
   { key: "webhooks", label: "Webhooks", Panel: WebhooksPanel },
+  { key: "email", label: "Email", Panel: EmailPanel },
   { key: "activity", label: "Activity", Panel: ActivityPanel },
 ];
 

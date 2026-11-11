@@ -90,6 +90,17 @@ export class CronController {
     return this.cron.integrationRuns(parse(IntegrationRunsQuery, query).limit, resolveCorrelationId(req));
   }
 
+  @Get('email')
+  emailGet(@Req() req: ApiRequest) {
+    return this.cron.emailDrain(resolveCorrelationId(req));
+  }
+
+  @Post('email')
+  @HttpCode(200)
+  emailPost(@Req() req: ApiRequest) {
+    return this.cron.emailDrain(resolveCorrelationId(req));
+  }
+
   private reconcile(req: ApiRequest, query: unknown) {
     const q = parse(ReconcileQuery, query);
     return this.cron.reconcile(q.limit, q.staleMinutes, resolveCorrelationId(req));

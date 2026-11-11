@@ -17,6 +17,10 @@
     {
       "path": "/api/v1/internal/cron/integration-schedule",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/v1/internal/cron/email",
+      "schedule": "20 5 * * *"
     }
   ]
 }

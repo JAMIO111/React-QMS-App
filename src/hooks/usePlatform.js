@@ -35,5 +35,6 @@ export const usePlatformOrganisations = ({ search = "", limit = 25, offset = 0 }
 };
 export const usePlatformRevenue = () => useMonitor(["revenue"], "/platform/revenue");
 export const usePlatformPayments = (limit = 50) => useMonitor(["payments", limit], `/platform/payments?limit=${limit}`);
+export const usePlatformEmail = (hours = 24) => useMonitor(["email", hours], `/platform/email?hours=${hours}`, { refetch: 30_000 });
 export const usePlatformWebhooks = (hours = 24) => useMonitor(["webhooks", hours], `/platform/webhooks?hours=${hours}`, { refetch: 30_000 });
 export const usePlatformActivity = (limit = 100) => useMonitor(["activity", limit], `/platform/activity?limit=${limit}`);

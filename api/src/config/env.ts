@@ -24,6 +24,12 @@ const EnvSchema = z
     APP_BASE_URL: z.string().url().optional(),
     /** Protects the scheduled jobs (/internal/cron/*): sent by Vercel Cron as `Authorization: Bearer <CRON_SECRET>`. Unset: the jobs answer 503. Server-side only. */
     CRON_SECRET: z.string().min(20, 'must be at least 20 characters').optional(),
+    /** Email notifications (docs/email-oauth-plan.md, E1): unset / none = outbox only (built and queued, marked not sent); resend = Resend's HTTPS API. */
+    MAIL_PROVIDER: z.enum(['none', 'resend']).default('none'),
+    /** Resend API key (server-side only), needed when MAIL_PROVIDER=resend. */
+    RESEND_API_KEY: z.string().regex(/^re_[A-Za-z0-9_]{10,}$/, 'must be a Resend API key').optional(),
+    /** The sender, e.g. `Fortress QMS <alerts@example.com>`; the domain must be verified with the provider. */
+    MAIL_FROM: z.string().max(200).regex(/^([^<>\r\n]+<)?[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>?$/, 'must be an address, optionally with a name: Name <address>').optional(),
     JWT_AUDIENCE: z.string().default('authenticated'),
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
@@ -35,6 +41,9 @@ const EnvSchema = z
   })
   .refine((e) => e.SUPABASE_URL || e.SUPABASE_JWT_SECRET, {
     message: 'Set SUPABASE_URL (JWKS) and/or SUPABASE_JWT_SECRET (legacy HS256)',
+  })
+  .refine((e) => e.MAIL_PROVIDER !== 'resend' || (e.RESEND_API_KEY && e.MAIL_FROM), {
+    message: 'MAIL_PROVIDER=resend needs RESEND_API_KEY and MAIL_FROM',
   });
 
 export type Env = z.infer<typeof EnvSchema>;

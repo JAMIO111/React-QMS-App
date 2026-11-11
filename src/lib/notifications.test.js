@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { notificationLink, timeAgo } from "./notifications";
 import { groupPreferences } from "../components/Settings/SettingsNotifications";
+import { applyPreference } from "../hooks/useNotifications";
 
 describe("notificationLink", () => {
   it("routes records and settings", () => {
@@ -36,5 +37,20 @@ describe("groupPreferences", () => {
     ]);
     expect(g).toHaveLength(1);
     expect(Object.keys(g[0].rows[0].actions)).toEqual(["created", "updated"]);
+  });
+});
+
+describe("import alerts and email choices", () => {
+  it("leads an import alert to its run", () => {
+    expect(notificationLink({ entityType: "integration_alerts", entityId: "a", details: { connection_id: "c", run_id: "r" } })).toBe("/Settings/Integrations/c/runs/r");
+    expect(notificationLink({ entityType: "integration_alerts", entityId: "a", details: {} })).toBe("/Settings/Integrations");
+  });
+
+  it("shows email on only while the event is shown in the app", () => {
+    const p = { eventKey: "parts.created", enabled: true, defaultEnabled: true, overridden: false, email: false, emailDefault: false, emailOverridden: false };
+    expect(applyPreference(p, { email: true })).toMatchObject({ enabled: true, email: true, emailOverridden: true, overridden: false });
+    expect(applyPreference({ ...p, email: true, emailOverridden: true }, { enabled: false })).toMatchObject({ enabled: false, overridden: true, email: false });
+    expect(applyPreference({ ...p, emailDefault: true }, { email: null })).toMatchObject({ email: true, emailOverridden: false });
+    expect(applyPreference({ ...p, enabled: false, overridden: true }, { email: true })).toMatchObject({ email: false });
   });
 });

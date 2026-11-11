@@ -4,6 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { StripeBillingService } from '../billing/stripe-billing.service';
 import { StripeGateway } from '../billing/stripe.gateway';
 import { SyncEngine } from '../integrations/core/sync.engine';
+import { EmailService } from '../email/email.service';
 
 export interface ArchiveOutcome {
   dryRun: boolean;
@@ -27,7 +28,13 @@ export class CronService {
     private readonly billing: StripeBillingService,
     private readonly gateway: StripeGateway,
     private readonly sync: SyncEngine,
+    private readonly email: EmailService,
   ) {}
+
+  /** Email notifications (E3): fans out new notices and sends what is due — the safety net for emails the after-request kick did not finish. */
+  emailDrain(correlationId: string) {
+    return this.email.drain({ budgetMs: 45_000, correlationId });
+  }
 
   /**
    * Re-reads Stripe-billed subscriptions that have not been synced for `staleMinutes` (oldest first, up to `limit`) and applies them through the same idempotent

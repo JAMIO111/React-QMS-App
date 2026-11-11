@@ -37,6 +37,22 @@ describe('loadEnv', () => {
     expect(pattern.test('https://qms-web-xvercel.app')).toBe(false);
   });
 
+  it('keeps email in the outbox unless Resend is fully set up, and never echoes the key', () => {
+    const base = { DATABASE_URL: 'postgres://x', SUPABASE_URL: 'https://p.supabase.co' };
+    expect(loadEnv(base).MAIL_PROVIDER).toBe('none');
+    expect(() => loadEnv({ ...base, MAIL_PROVIDER: 'resend' })).toThrow(/RESEND_API_KEY and MAIL_FROM/);
+    const ok = loadEnv({ ...base, MAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_abcdefghij123', MAIL_FROM: 'Fortress QMS <alerts@example.com>' });
+    expect(ok).toMatchObject({ MAIL_PROVIDER: 'resend', MAIL_FROM: 'Fortress QMS <alerts@example.com>' });
+    expect(loadEnv({ ...base, MAIL_FROM: 'alerts@example.com' }).MAIL_FROM).toBe('alerts@example.com');
+    expect(() => loadEnv({ ...base, MAIL_FROM: 'not an address' })).toThrow(/MAIL_FROM/);
+    expect(() => loadEnv({ ...base, MAIL_FROM: 'A <a@b.co>\r\nBcc: x@y.z' })).toThrow(/MAIL_FROM/);
+    try {
+      loadEnv({ ...base, RESEND_API_KEY: 'secret-value-not-resend' });
+    } catch (e) {
+      expect((e as Error).message).not.toContain('secret-value-not-resend');
+    }
+  });
+
   it('takes an optional CRON_SECRET of at least 20 characters, and never echoes it', () => {
     const base = { DATABASE_URL: 'x', SUPABASE_URL: 'https://p.supabase.co' };
     expect(loadEnv(base).CRON_SECRET).toBeUndefined();

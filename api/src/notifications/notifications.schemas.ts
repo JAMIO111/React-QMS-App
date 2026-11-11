@@ -12,9 +12,11 @@ export const MarkReadBody = z
   .refine((b) => b.all === true || (b.ids?.length ?? 0) > 0, { message: 'Provide ids or all: true' });
 export type MarkReadBody = z.infer<typeof MarkReadBody>;
 
+/** In the app (`enabled`) and/or by email (`email`); null puts that choice back to the default. At least one of the two. */
 export const SetPreferenceBody = z
-  .object({ eventKey: z.string().regex(/^[a-z_]+\.(created|updated|deleted)$/), enabled: z.boolean().nullable() })
-  .strict();
+  .object({ eventKey: z.string().regex(/^[a-z_]+\.(created|updated|deleted)$/), enabled: z.boolean().nullable().optional(), email: z.boolean().nullable().optional() })
+  .strict()
+  .refine((b) => b.enabled !== undefined || b.email !== undefined, { message: 'Give enabled and/or email' });
 export type SetPreferenceBody = z.infer<typeof SetPreferenceBody>;
 
 export const NotificationItem = z.object({
@@ -42,5 +44,9 @@ export const NotificationPreference = z.object({
   enabled: z.boolean(),
   defaultEnabled: z.boolean(),
   overridden: z.boolean(),
+  /** Also by email (only ever true while it is shown in the app). */
+  email: z.boolean(),
+  emailDefault: z.boolean(),
+  emailOverridden: z.boolean(),
 });
 export type NotificationPreference = z.infer<typeof NotificationPreference>;

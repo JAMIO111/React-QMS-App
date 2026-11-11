@@ -19,7 +19,7 @@ import {
   XIcon,
 } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
-import { useCalibration, useCalibrationAttachments, useCalibrationMutation, useGauge, useGaugeCharacteristics } from "../../hooks/useCalibration";
+import { useCalibration, useCalibrationAttachments, useCalibrationMutation, useGauge, useGaugeCharacteristics, useGaugeTypes } from "../../hooks/useCalibration";
 import { useMe, usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { OUTCOMES, shouldPromptForStatus, statusAfterCalibration, statusOf, formatInterval, formatNumber, inTolerance, outcomeFromReadings, outcomeOf } from "../../lib/calibration";
@@ -220,6 +220,12 @@ const CalibrationRecordPage = () => {
   const [readings, setReadings] = useState(originalReadings);
   useEffect(() => setForm(original), [original]);
   useEffect(() => setReadings(originalReadings), [originalReadings]);
+  // A new calibration starts with its gauge type's procedure (the type's default); it can be changed for this record, which keeps its own copy.
+  const gaugeTypes = useGaugeTypes({ includeInactive: true, enabled: isNew });
+  const typeProcedure = isNew ? ((gaugeTypes.data ?? []).find((t) => t.id === gauge.data?.type?.id)?.procedureRef ?? "") : "";
+  useEffect(() => {
+    if (typeProcedure) setForm((f) => (f.procedureRef ? f : { ...f, procedureRef: typeProcedure }));
+  }, [typeProcedure, original]);
 
   // Rows: the saved readings (with the limits as they were), then active characteristics not yet read.
   const rows = useMemo(() => {
@@ -523,8 +529,9 @@ const CalibrationRecordPage = () => {
             ) : (
               <PartyPicker kind="suppliers" label="Calibration supplier" icon={UsersIcon} value={form.supplierId} onChange={(id) => set("supplierId")(id)} current={c?.supplier ?? g.supplier} disabled={!canEdit} />
             )}
-            {text("certificateNumber", "Certificate number", { maxLength: 100, icon: HashIcon })}
-            {text("procedureRef", "Procedure", { maxLength: 200, icon: ClipboardListIcon, placeholder: "e.g. WI-CAL-004" })}
+            {/* A certificate number is the supplier's document number: an in-house calibration has its own reference, so the field shows only when one was recorded. */}
+            {(form.performedBy === "external" || form.certificateNumber || original.certificateNumber) && text("certificateNumber", "Certificate number", { maxLength: 100, icon: HashIcon })}
+            {text("procedureRef", "Procedure", { maxLength: 200, icon: ClipboardListIcon, placeholder: "e.g. WI-CAL-004", title: typeProcedure && form.procedureRef === typeProcedure ? "From the gauge type; change it if this calibration followed another procedure" : undefined })}
             {text("referenceStandards", "Reference standards used", { maxLength: 1000, icon: FlaskConicalIcon, placeholder: "e.g. Gauge block set GB-01 (cert 1234)" })}
             <div className="flex w-full items-start gap-4">
               {text("temperatureC", "Temperature (°C)", { inputMode: "decimal", icon: ThermometerIcon, error: isNum(form.temperatureC) ? undefined : "Enter a number" })}

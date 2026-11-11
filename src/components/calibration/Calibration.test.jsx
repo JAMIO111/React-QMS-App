@@ -75,7 +75,7 @@ const routeApi = (routes) =>
     calls.push({ k, path, body: opts.body });
     const all = {
       "GET /units": { data: [{ code: "mm", name: "Millimetre" }, { code: "µm", name: "Micrometre" }] },
-      "GET /gauge-types": { data: [{ id: "t1", code: "CAL-150", name: "Digital caliper", description: null, intervalValue: 6, intervalUnit: "months", active: true, characteristicCount: 2, gaugeCount: 1 }] },
+      "GET /gauge-types": { data: [{ id: "t1", code: "CAL-150", name: "Digital caliper", description: null, procedureRef: "WI-CAL-004", intervalValue: 6, intervalUnit: "months", active: true, characteristicCount: 2, gaugeCount: 1 }] },
       "GET /gauges/g1": gauge(),
       "GET /gauges/g1/characteristics": { data: characteristics },
       "GET /gauges/g1/calibrations": { data: [] },
@@ -275,6 +275,22 @@ describe("calibration record", () => {
     expect(lastCall("POST /calibrations/c9/attachments").body).toMatchObject({ storagePath: "org-1/calibration/c9/x-cert.pdf", fileName: "cert.pdf", contentType: "application/pdf" });
   });
 
+  it("starts a new calibration with the gauge type's procedure, and asks for a certificate number only when it is external", async () => {
+    routeApi({ "GET /gauges/g1/characteristics": { data: [] }, "GET /suppliers": { data: [] }, "POST /gauges/g1/calibrations": () => record({ id: "c9", readings: [], outcome: "pass" }), "GET /calibrations/c9": record({ id: "c9", readings: [], outcome: "pass" }), "GET /calibrations/c9/attachments": { data: [] } });
+    renderAt("/Calibration/Gauges/g1/calibrations/new");
+    await waitFor(() => expect(screen.getByLabelText("Procedure")).toHaveValue("WI-CAL-004"));
+    expect(screen.queryByLabelText("Certificate number")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("combobox", { name: "Performed" }));
+    await userEvent.click(await screen.findByRole("option", { name: /External/ }));
+    expect(screen.getByLabelText("Certificate number")).toBeInTheDocument();
+    // The procedure can be changed for this record.
+    await userEvent.clear(screen.getByLabelText("Procedure"));
+    await userEvent.type(screen.getByLabelText("Procedure"), "WI-CAL-009");
+    await userEvent.click(screen.getByRole("radio", { name: "Pass" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save calibration" }));
+    await waitFor(() => expect(lastCall("POST /gauges/g1/calibrations").body).toMatchObject({ procedureRef: "WI-CAL-009" }));
+  });
+
   it("raises an NC for a failed calibration", async () => {
     routeApi({ "GET /calibrations/c1": record(), "POST /calibrations/c1/raise-ncr": { id: "n7", reference: "NCM-26-007", source: "internal" } });
     renderAt("/Calibration/Gauges/g1/calibrations/c1");
@@ -308,7 +324,7 @@ describe("settings", () => {
     await userEvent.type(screen.getByRole("textbox", { name: "Interval" }), "1");
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Interval unit" }), "years");
     await userEvent.click(screen.getByRole("button", { name: "Add type" }));
-    await waitFor(() => expect(lastCall("POST /gauge-types").body).toEqual({ code: "MIC-25", name: "Micrometer 0-25", description: null, intervalValue: 1, intervalUnit: "years" }));
+    await waitFor(() => expect(lastCall("POST /gauge-types").body).toEqual({ code: "MIC-25", name: "Micrometer 0-25", description: null, procedureRef: null, intervalValue: 1, intervalUnit: "years" }));
   });
 
   it("shows each gauge type's code", async () => {

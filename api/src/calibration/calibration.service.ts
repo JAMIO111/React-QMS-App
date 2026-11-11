@@ -70,7 +70,7 @@ const CHARACTERISTIC_COLUMNS: Record<string, string> = {
   unitCode: 'unit_code', method: 'method', active: 'active',
 };
 const TYPE_COLUMNS: Record<string, string> = {
-  code: 'code', name: 'name', description: 'description', intervalValue: 'interval_value', intervalUnit: 'interval_unit', active: 'active',
+  code: 'code', name: 'name', description: 'description', intervalValue: 'interval_value', intervalUnit: 'interval_unit', active: 'active', procedureRef: 'procedure_ref',
 };
 
 const SORT_SQL: Record<GaugeListQuery['sort'], string> = {
@@ -516,6 +516,7 @@ const toType = (r: Row): z.infer<typeof GaugeType> => ({
   code: r.code as string,
   name: r.name as string,
   description: (r.description as string) ?? null,
+  procedureRef: (r.procedure_ref as string) ?? null,
   intervalValue: Number(r.interval_value),
   intervalUnit: r.interval_unit as z.infer<typeof GaugeType>['intervalUnit'],
   active: r.active as boolean,

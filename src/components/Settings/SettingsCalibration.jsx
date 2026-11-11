@@ -29,6 +29,7 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
   const [codeTouched, setCodeTouched] = useState(!!initial);
   const shownCode = codeTouched ? code : gaugeTypeCodeFromName(name);
   const [description, setDescription] = useState(initial?.description ?? "");
+  const [procedureRef, setProcedureRef] = useState(initial?.procedureRef ?? "");
   const [intervalValue, setIntervalValue] = useState(
     String(initial?.intervalValue ?? 12),
   );
@@ -51,6 +52,7 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
             code: shownCode.trim(),
             name: name.trim(),
             description: description.trim() || null,
+            procedureRef: procedureRef.trim() || null,
             intervalValue: Number(intervalValue),
             intervalUnit,
             ...(initial ? {} : withCustomValues(customValues)),
@@ -102,6 +104,17 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
             ))}
           </select>
         </span>
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-secondary-text">
+        Procedure
+        <input
+          className={`${input} w-44`}
+          value={procedureRef}
+          onChange={(e) => setProcedureRef(e.target.value)}
+          maxLength={200}
+          placeholder="e.g. WI-CAL-004"
+          title="The calibration procedure for gauges of this type; a new calibration starts with it"
+        />
       </label>
       <label className="flex min-w-48 flex-1 flex-col gap-1 text-xs text-secondary-text">
         Description
@@ -216,6 +229,7 @@ const TypeCard = ({ type, canManage }) => {
                 ? "characteristic"
                 : "characteristics"}{" "}
               · {type.gaugeCount} {type.gaugeCount === 1 ? "gauge" : "gauges"}
+              {type.procedureRef ? ` · Procedure ${type.procedureRef}` : ""}
               {type.description ? ` · ${type.description}` : ""}
             </p>
           </div>

@@ -7,7 +7,7 @@ import { useSites } from "../../hooks/useQmsApi";
 import { INSPECTION_FILTER_KEYS, useInspectionFilters } from "../../hooks/useUrlFilters";
 import { STATUS, TRIGGER_LABEL } from "../../lib/inspection";
 import RHFComboBox from "../ui/RHFComboBox";
-import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import DateRangeFilter from "../ui/DateRangeFilter";
 import { PartPicker } from "../ncr/Pickers";
 import { OrderPicker } from "../production/pickers";
 import CTAButton from "@/components/CTAButton";
@@ -122,10 +122,7 @@ const InspectionFilterPane = ({ onClose }) => {
           <Pills legend="Status" options={STATUS_OPTIONS} selected={statuses} onToggle={toggle(setStatuses)} />
           <Pills legend="Result" options={RESULT_OPTIONS} selected={results} onToggle={toggle(setResults)} />
           <Pills legend="Trigger" options={TRIGGER_OPTIONS} selected={triggers} onToggle={toggle(setTriggers)} />
-          <div className="grid grid-cols-2 gap-2">
-            <RHFDatePickerPopout label="Started from" placeholder="Any date" valueFormat="iso" clearable value={from} onChange={setFrom} maxDate={to ?? undefined} />
-            <RHFDatePickerPopout label="Started to" placeholder="Any date" valueFormat="iso" clearable value={to} onChange={setTo} minDate={from ?? undefined} />
-          </div>
+          <DateRangeFilter label="Started" from={from} to={to} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
           <PartPicker label="Part number" icon={QrCodeIcon} value={part?.id ?? null} current={part?.id ? { id: part.id, partNumber: part.name ?? "" } : undefined}
             onChange={(id, item) => setPart(id ? { id, name: item?.name ?? part?.name } : null)} />
           <OrderPicker label="Production order" value={order?.id ?? null} current={order?.id ? { id: order.id, orderNumber: order.name ?? "" } : undefined}

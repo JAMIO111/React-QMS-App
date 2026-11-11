@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { XIcon } from "@/components/icons";
 import { CAPA_FILTER_KEYS, useCapaFilters } from "../../hooks/useUrlFilters";
 import { SEVERITIES, SOURCES, STAGES } from "../../lib/capa";
-import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import DateRangeFilter from "../ui/DateRangeFilter";
 import CTAButton from "@/components/CTAButton";
 
 const STAGE_OPTIONS = STAGES.map((s) => ({ key: s.key, label: s.label }));
@@ -103,10 +103,7 @@ const CapaFilterPane = ({ onClose }) => {
             <Check label="Only 8Ds I own" checked={mine} onChange={setMine} />
             <Check label="Overdue only" checked={overdue} onChange={setOverdue} />
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <RHFDatePickerPopout label="Started from" placeholder="Any date" valueFormat="iso" clearable value={from} onChange={setFrom} maxDate={to ?? undefined} />
-            <RHFDatePickerPopout label="Started to" placeholder="Any date" valueFormat="iso" clearable value={to} onChange={setTo} minDate={from ?? undefined} />
-          </div>
+          <DateRangeFilter label="Started" from={from} to={to} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
           <CustomFieldFilters entityType="capa" />
         </div>
         <div className="flex shrink-0 justify-between gap-2 border-t border-border-color bg-secondary-bg px-4 py-3">

@@ -480,16 +480,16 @@ describe("NC registers", () => {
     fireEvent.change(within(pane).getByRole("slider", { name: "Quantity affected minimum" }), { target: { value: "5" } });
     expect(within(pane).getByText("£100 – £500")).toBeInTheDocument();
 
-    // Detected from: the 1st of this month.
+    // Detected: the "This month" preset, from the 1st to today.
     const first = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    await userEvent.click(within(pane).getByRole("button", { name: /^Detected from/ }));
-    await userEvent.click(within(screen.getByRole("dialog", { name: "Choose detected from" })).getByRole("button", { name: format(first, "EEEE d MMMM yyyy") }));
+    await userEvent.click(within(pane).getByRole("button", { name: /^Detected/ }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Choose detected" })).getByRole("button", { name: /^This month/ }));
     expect(screen.getByRole("dialog", { name: "Filter non-conformances" })).toBeInTheDocument();
 
     await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
     await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("severity=critical%2Cmajor"));
     const path = lastCall("GET /ncrs").path;
-    for (const part of ["partId=p1", "customerId=c1", "costMin=100", "costMax=500", "qtyMin=5", `from=${format(first, "yyyy-MM-dd")}`]) expect(path).toContain(part);
+    for (const part of ["partId=p1", "customerId=c1", "costMin=100", "costMax=500", "qtyMin=5", `from=${format(first, "yyyy-MM-dd")}`, `to=${format(new Date(), "yyyy-MM-dd")}`]) expect(path).toContain(part);
     expect(path).not.toContain("qtyMax");
     const active = screen.getByLabelText("Active filters");
     for (const text of ["Severity: Critical, Major", "Part: BRK-100 · Bracket", "Customer: Acme", "Total cost £100 – £500", "Quantity from 5"]) expect(active).toHaveTextContent(text);

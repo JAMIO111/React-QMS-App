@@ -34,6 +34,30 @@ export const RANGE_PRESETS = {
   last7: { label: "Last 7 days", range: (t) => [startOfDay(subDays(t, 6)), startOfDay(t)] },
   last30: { label: "Last 30 days", range: (t) => [startOfDay(subDays(t, 29)), startOfDay(t)] },
   last90: { label: "Last 90 days", range: (t) => [startOfDay(subDays(t, 89)), startOfDay(t)] },
+  next7: { label: "Next 7 days", range: (t) => [startOfDay(t), startOfDay(addDays(t, 6))] },
+  next30: { label: "Next 30 days", range: (t) => [startOfDay(t), startOfDay(addDays(t, 29))] },
+  next90: { label: "Next 90 days", range: (t) => [startOfDay(t), startOfDay(addDays(t, 89))] },
+  nextWeek: {
+    label: "Next week",
+    range: (t) => {
+      const d = addDays(t, 7);
+      return [startOfWeek(d, WEEK), startOfDay(endOfWeek(d, WEEK))];
+    },
+  },
+  nextMonth: {
+    label: "Next month",
+    range: (t) => {
+      const d = addMonths(t, 1);
+      return [startOfMonth(d), startOfDay(endOfMonth(d))];
+    },
+  },
+  nextQuarter: {
+    label: "Next quarter",
+    range: (t) => {
+      const d = addMonths(t, 3);
+      return [startOfQuarter(d), startOfDay(endOfQuarter(d))];
+    },
+  },
   thisWeek: { label: "This week", range: (t) => [startOfWeek(t, WEEK), startOfDay(endOfWeek(t, WEEK))] },
   lastWeek: {
     label: "Last week",

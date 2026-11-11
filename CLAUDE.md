@@ -102,6 +102,10 @@ Summary of the brief:
   address: `?period=<preset id>` (ids `30d 90d 12m ytd 24m` are the older ones, so old links work; the dashboard's own default leaves the address clean) or `?from=yyyy-MM-dd&to=yyyy-MM-dd`
   for a custom range (an invalid one falls back to the default). A new dashboard calls `useDashboardPeriod(defaultId)`, sends `fromIso` / `toIso` to its API and renders `<DashboardPeriodPicker period={period} />`.
   The Platform operator page keeps its own day-count toggle (its API takes `days`).
+  **Registers' filters use it too** (`ui/DateRangeFilter.jsx`: one field for from and to together, opens on the presets, **Custom range** for any two days; `direction="past"` (default: no days
+  after today, look-back presets) or `"future"` (due dates: look-ahead presets such as Next 30 days, Next quarter)): NC (Detected), inspections (Started), 8Ds (Started), gauges (Next due) and the
+  audit records page (Carried out). The URL keys stay `from` / `to`, so links and saved filters still work; a link with only one end shows as "From …" / "Until …" until changed. An open-ended
+  range can no longer be typed in the picker (choose a range up to today, or clear it).
   The calendar opens in a portal (`data-popover`), so panes that close on outside clicks must ignore
   `[data-popover]`. Ranges: `src/components/ui/RangeSlider.jsx` (two handles, `value=[lo, hi]`, `format`).
 - Calibration (Phase 4, brought forward; `docs/calibration-plan.md`):

@@ -73,7 +73,7 @@ const RHFDatePickerPopout = ({
   const popRef = useRef(null);
 
   const date = range ? toRange(value) : toDate(value);
-  const hasValue = range ? !!date.from : !!date;
+  const hasValue = range ? !!(date.from || date.to) : !!date;
   const errorMessage = typeof error === "string" ? error : error?.message;
 
   const close = (refocus) => {
@@ -136,9 +136,13 @@ const RHFDatePickerPopout = ({
   const show = (d, pattern) => format(d, stamp ? `${pattern}, ${stamp}` : pattern);
   const custom = hasValue ? formatValue?.(value) : null;
   const text = custom ? custom : range
-    ? date.from
-      ? `${show(date.from, "d MMM yyyy")} – ${date.to ? show(date.to, "d MMM yyyy") : "…"}`
-      : null
+    ? date.from && date.to
+      ? `${show(date.from, "d MMM yyyy")} – ${show(date.to, "d MMM yyyy")}`
+      : date.from
+        ? `From ${show(date.from, "d MMM yyyy")}`
+        : date.to
+          ? `Until ${show(date.to, "d MMM yyyy")}`
+          : null
     : date
       ? show(date, "EEE d MMMM yyyy")
       : null;

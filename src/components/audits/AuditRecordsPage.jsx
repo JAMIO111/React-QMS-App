@@ -13,7 +13,7 @@ import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import TableWrapper from "../TableWrapper";
 import ColumnVisibilityMenu from "../ui/ColumnVisibilityMenu";
-import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import DateRangeFilter from "../ui/DateRangeFilter";
 import { SelectField } from "../master-data/shared";
 import { auditRecordColumns, DEFAULT_HIDDEN } from "./auditRecordColumns";
 import StartAuditDialog from "./StartAuditDialog";
@@ -148,8 +148,7 @@ const AuditRecordsPage = () => {
         <SelectField label="Result" value={filters.result} onChange={(v) => updateFilters({ result: v ?? "" })} options={RECORD_RESULTS} placeholder="Any result" />
         <SelectField label="Status" value={filters.status} onChange={(v) => updateFilters({ status: v ?? "" })} options={RECORD_STATUSES} placeholder="Any status" />
         <SelectField label="Machine" value={filters.machine} onChange={(v) => updateFilters({ machine: v ?? "", machineLabel: "" })} options={machineItems.map((m) => ({ value: m.id, label: `${m.code} · ${m.name}` }))} placeholder="Any machine" />
-        <RHFDatePickerPopout label="Carried out from" valueFormat="iso" clearable value={filters.from || null} onChange={(d) => updateFilters({ from: d ?? "" })} />
-        <RHFDatePickerPopout label="Carried out to" valueFormat="iso" clearable value={filters.to || null} onChange={(d) => updateFilters({ to: d ?? "" })} />
+        <DateRangeFilter className="sm:col-span-2" label="Carried out" from={filters.from || null} to={filters.to || null} onChange={(r) => updateFilters({ from: r.from ?? "", to: r.to ?? "" })} />
       </div>
       <label className="flex w-fit cursor-pointer items-center gap-2 px-1 text-sm text-primary-text">
         <input type="checkbox" checked={filters.mine === "true"} onChange={(e) => updateFilters({ mine: e.target.checked ? "true" : "" })} />

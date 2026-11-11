@@ -7,7 +7,7 @@ import { useClassifications, useNcrRanges } from "../hooks/useNcr";
 import { NC_SOURCES, SEVERITIES, STAGES } from "../lib/ncr";
 import { formatMoney } from "../lib/costs";
 import RHFComboBox from "./ui/RHFComboBox";
-import RHFDatePickerPopout from "./ui/RHFDatePickerPopout";
+import DateRangeFilter from "./ui/DateRangeFilter";
 import RangeSlider from "./ui/RangeSlider";
 import { PartPicker, PartyPicker } from "./ncr/Pickers";
 import { LotPicker, OrderPicker } from "./production/pickers";
@@ -180,10 +180,7 @@ const FilterPane = ({ onClose }) => {
         </button>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
-        <div className="grid grid-cols-2 gap-2">
-          <RHFDatePickerPopout label="Detected from" placeholder="Any date" valueFormat="iso" clearable value={from} onChange={setFrom} maxDate={to ?? new Date()} />
-          <RHFDatePickerPopout label="Detected to" placeholder="Any date" valueFormat="iso" clearable value={to} onChange={setTo} minDate={from ?? undefined} maxDate={new Date()} />
-        </div>
+        <DateRangeFilter label="Detected" from={from} to={to} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
         <Pills legend="Source" options={NC_SOURCES} selected={sources} onToggle={toggle(setSources)} />
         <RHFComboBox label="Category" icon={TagsIcon} placeholder="All categories" options={categoryOptions} value={category} onChange={setCategory} sort={false} />
         <Pills legend="Stage" options={STAGES} selected={stages} onToggle={toggle(setStages)} />

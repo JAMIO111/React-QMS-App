@@ -7,7 +7,7 @@ import { useSites } from "../../hooks/useQmsApi";
 import { useGaugeFilters } from "../../hooks/useUrlFilters";
 import { DUE_FILTERS, GAUGE_STATUSES, OUTCOMES } from "../../lib/calibration";
 import RHFComboBox from "../ui/RHFComboBox";
-import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import DateRangeFilter from "../ui/DateRangeFilter";
 import { PartyPicker } from "../ncr/Pickers";
 import CTAButton from "@/components/CTAButton";
 
@@ -121,10 +121,7 @@ const GaugeFilterPane = ({ onClose }) => {
           <Pills legend="Due" options={DUE_FILTERS} selected={due} onToggle={toggle(setDue)} />
           <Pills legend="Status" options={GAUGE_STATUSES} selected={statuses} onToggle={toggle(setStatuses)} />
           <Pills legend="Last result" options={OUTCOMES} selected={outcomes} onToggle={toggle(setOutcomes)} />
-          <div className="grid grid-cols-2 gap-2">
-            <RHFDatePickerPopout label="Next due from" placeholder="Any date" valueFormat="iso" clearable value={from} onChange={setFrom} maxDate={to ?? undefined} />
-            <RHFDatePickerPopout label="Next due to" placeholder="Any date" valueFormat="iso" clearable value={to} onChange={setTo} minDate={from ?? undefined} />
-          </div>
+          <DateRangeFilter label="Next due" direction="future" from={from} to={to} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
           <RHFComboBox label="Gauge type" icon={TagIcon} placeholder="All types" options={(types ?? []).map((t) => ({ id: t.id, name: t.name, hint: t.active ? t.code : `${t.code} · Inactive` }))} value={type} onChange={setType} />
           <RHFComboBox label="Site" icon={HouseIcon} placeholder="All sites" options={(sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))} value={site} onChange={setSite} />
           <RHFComboBox label="Calibrated" icon={FactoryIcon} placeholder="In-house or external" options={SOURCES} value={source} onChange={setSource} sort={false} />

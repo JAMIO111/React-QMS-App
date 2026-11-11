@@ -177,7 +177,7 @@
   --theme-dark: var(--tc-800);
   --brand-primary: var(--tc-700);
   --brand-secondary: var(--color-orange-700);
-  --primary-bg: 238, 238, 242;
+  --primary-bg: 238, 238, 239;
   --secondary-bg: 248, 248, 248;
   --tertiary-bg: 251, 251, 251;
   --bg-dark: 0.92, 0, 264;
@@ -251,8 +251,8 @@
   --theme-dark: var(--tc-900);
   --brand-primary: var(--tc-400);
   --brand-secondary: var(--color-orange-400);
-  --primary-bg: 20, 20, 22;
-  --secondary-bg: 24, 24, 24;
+  --primary-bg: 18, 18, 20;
+  --secondary-bg: 26, 26, 26;
   --tertiary-bg: 30, 30, 30;
   --bg-dark: 0.1, 0, 264;
   --bg: 0.2, 0, 264;
@@ -793,19 +793,45 @@ html.dark {
  * transparent background and a heavily saturated, dark version of its colour for the text. Dark mode is unchanged. Only elements that carry
  * both the tint and the matching text colour are touched, so notice cards (tint with ordinary text) are not affected.
  */
-html:not(.dark) :is(.bg-success-color\/10, .bg-success-color\/15, .bg-success-color\/20, .bg-success-color\/25, .bg-green-500\/15):is(.text-success-color, .text-green-700) {
+html:not(.dark)
+  :is(
+    .bg-success-color\/10,
+    .bg-success-color\/15,
+    .bg-success-color\/20,
+    .bg-success-color\/25,
+    .bg-green-500\/15
+  ):is(.text-success-color, .text-green-700) {
   background-color: var(--color-green-200);
   color: var(--color-green-800);
 }
-html:not(.dark) :is(.bg-error-color\/10, .bg-error-color\/15, .bg-error-color\/20, .bg-error-color\/25, .bg-red-500\/15):is(.text-error-color, .text-red-700) {
+html:not(.dark)
+  :is(
+    .bg-error-color\/10,
+    .bg-error-color\/15,
+    .bg-error-color\/20,
+    .bg-error-color\/25,
+    .bg-red-500\/15
+  ):is(.text-error-color, .text-red-700) {
   background-color: var(--color-red-200);
   color: var(--color-red-800);
 }
-html:not(.dark) :is(.bg-info-color\/10, .bg-info-color\/15, .bg-info-color\/20, .bg-blue-500\/15):is(.text-info-color, .text-blue-700) {
+html:not(.dark)
+  :is(
+    .bg-info-color\/10,
+    .bg-info-color\/15,
+    .bg-info-color\/20,
+    .bg-blue-500\/15
+  ):is(.text-info-color, .text-blue-700) {
   background-color: var(--color-blue-200);
   color: var(--color-blue-800);
 }
-html:not(.dark) :is(.bg-warning-color\/10, .bg-warning-color\/15, .bg-warning-color\/20, .bg-amber-500\/15):is(.text-warning-color, .text-amber-700) {
+html:not(.dark)
+  :is(
+    .bg-warning-color\/10,
+    .bg-warning-color\/15,
+    .bg-warning-color\/20,
+    .bg-amber-500\/15
+  ):is(.text-warning-color, .text-amber-700) {
   background-color: var(--color-amber-200);
   color: var(--color-amber-900);
 }

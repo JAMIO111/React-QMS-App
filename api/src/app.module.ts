@@ -84,6 +84,7 @@ import { CompetenceController } from './competence/competence.controller';
 import { DocumentsController } from './documents/documents.controller';
 import { DocumentsService } from './documents/documents.service';
 import { CompetenceDashboardController, CompetenceDashboardService } from './competence/competence-dashboard';
+import { SupplierDashboardController, SupplierDashboardService } from './supplier-quality/supplier-dashboard';
 import { CompetencePeopleService } from './competence/competence-people.service';
 import { CompetenceTrainingService } from './competence/competence-training.service';
 import { CompetenceService } from './competence/competence.service';
@@ -236,6 +237,7 @@ export class AppModule implements NestModule {
         SupplierQualityController,
         CompetenceController,
         CompetenceDashboardController,
+        SupplierDashboardController,
         DocumentsController,
         SupplierQualificationController,
         SupplierRiskController,
@@ -314,6 +316,7 @@ export class AppModule implements NestModule {
         CompetenceService,
         CompetencePeopleService,
         CompetenceDashboardService,
+        SupplierDashboardService,
         CompetenceTrainingService,
         DocumentsService,
         SupplierQualificationService,

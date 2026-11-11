@@ -1226,6 +1226,7 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/process-control-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/audits-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/competence-dashboard': '?from=2025-01-01&to=2027-12-31',
+      '/api/v1/supplier-quality/dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/traceability': `?type=order&id=${b.productionOrder}`,
       '/api/v1/traceability/search': '?q=WO',
       '/api/v1/saved-filters': '?scope=ncr_register',

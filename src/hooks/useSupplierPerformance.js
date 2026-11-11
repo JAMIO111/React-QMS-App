@@ -19,6 +19,18 @@ export const usePerformance = (id, { from, to } = {}, { enabled = true } = {}) =
   });
 };
 
+/** The supplier quality dashboard: the base as of today, and non-conformances, deliveries and performance for the period. */
+export const useSupplierDashboard = ({ from, to }) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "dashboard", from, to),
+    queryFn: () => apiFetch(`${BASE}/dashboard?from=${from}&to=${to}`, { organisationId }),
+    enabled: !!organisationId && !!from && !!to,
+    retry: false,
+    placeholderData: (previous) => previous,
+  });
+};
+
 export const useScorecards = (id, { enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
   return useQuery({

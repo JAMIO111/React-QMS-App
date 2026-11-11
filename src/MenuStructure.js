@@ -94,8 +94,9 @@ export const menuStructure = [
     name: "Supplier Quality",
     icon: TruckIcon,
     permission: "supplier_quality.read",
-    path: "/Suppliers",
+    path: "/Supplier-Quality",
     subMenu: [
+      { name: "Dashboard", path: "/Supplier-Quality", end: true },
       { name: "Supplier register", path: "/Suppliers" },
       { name: "Supplier watchlist", path: "/Supplier-Quality/Watchlist", permission: "receiving.read" },
       { name: "Purchase orders", path: "/Supplier-Quality/Purchase-Orders", permission: "receiving.read" },

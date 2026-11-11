@@ -111,3 +111,7 @@ Tenant isolation and permission checks on every endpoint → sweeps; status tran
 
 ## 8. Proposed first step
 SQ1 (register and profile) is self-contained, needs no decision except D4/D6, and lays the status/history/permissions groundwork everything else uses.
+
+## Dashboard (after SQ6)
+
+Built 2026-11-11, no migration: `/Supplier-Quality` and `GET /supplier-quality/dashboard?from&to`. The supplier base as of today (approval, risk, expiring records, corrective action requests, approvals waiting, risk reviews overdue), and for the period supplier non-conformances, deliveries and performance. Performance is each supplier's own database score added up (bands, on-time %, PPM, in full %, suppliers needing attention), so it agrees with the Performance tab, scorecards and the watchlist. Sections needing `ncr.read` or `receiving.read` say `available: false` rather than zero. Not built: per-bucket PPM / on-time trends, change on the previous period, a browser journey step.

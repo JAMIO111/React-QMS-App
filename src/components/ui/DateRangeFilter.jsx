@@ -30,7 +30,7 @@ const DateRangeFilter = ({ label, from, to, onChange, direction = "past", placeh
       quickPresets={0}
       allowFuture={ahead}
       showMonth={ahead ? "start" : "end"}
-      panelWidth="25.2rem"
+      panelWidth="28rem"
     />
   );
 };

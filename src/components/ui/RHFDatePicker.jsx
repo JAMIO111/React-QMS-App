@@ -83,7 +83,7 @@ const TimeBox = ({ label, value, onChange, max, seconds, invalid }) => {
  *   confirm         single day without a time but still wanting Cancel / Done
  *   markedDates     Dates that get a small dot (events, due dates)
  *   weekStartsOn    0–6, default 1 (Monday)
- *   width           CSS width of the panel, default "19.8rem" (wider when preset dates must not be cut off)
+ *   width           CSS width of the panel, default "22rem" (wider when preset dates must not be cut off)
  *   showMonth       which month a range opens on: "start" (default) or "end" (dashboards, where the recent days matter)
  *
  * With a time the chosen time is kept when the day changes. A range's end time defaults to 23:59 so a whole day is covered.
@@ -106,7 +106,7 @@ const RHFDatePicker = ({
   markedDates,
   weekStartsOn = 1,
   showMonth = "start",
-  width = "19.8rem",
+  width = "22rem",
   className = "",
 }) => {
   const range = mode === "range";

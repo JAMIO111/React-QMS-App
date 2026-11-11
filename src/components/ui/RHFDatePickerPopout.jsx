@@ -24,7 +24,7 @@ const toRange = (value) => ({ from: toDate(value?.from), to: toDate(value?.to) }
  *   minDate, maxDate                      block everything outside them
  *   presets, quickPresets, presetsOpen    shortcuts such as This month or Last year, chosen per field (see lib/datePresets.js)
  *   confirm, markedDates                  Cancel / Done for a single day; dots on days
- *   panelWidth                            CSS width of the calendar (default 19.8rem)
+ *   panelWidth                            CSS width of the calendar (default 22rem)
  *   showMonth "start" | "end"               which month a range opens on
  *   formatValue(value)                    the words shown in the field instead of the dates (return null to show the dates)
  *

@@ -35,6 +35,7 @@ import {
   CircleDashed as LucideCircleDashed,
   CircleHelp as LucideCircleHelp,
   CircleUser as LucideCircleUser,
+  CircleX as LucideCircleX,
   CloudUpload as LucideCloudUpload,
   Columns3 as LucideColumns3,
   Database as LucideDatabase,
@@ -181,6 +182,7 @@ export const ChevronDownIcon = withDefaults(LucideChevronDown);
 export const ChevronsUpDownIcon = withDefaults(LucideChevronsUpDown);
 export const CircleAlertIcon = withDefaults(LucideCircleAlert);
 export const CircleCheckIcon = withDefaults(LucideCircleCheck);
+export const CircleXIcon = withDefaults(LucideCircleX);
 export const CircleDashedIcon = withDefaults(LucideCircleDashed);
 export const CircleHelpIcon = withDefaults(LucideCircleHelp);
 export const CircleUserIcon = withDefaults(LucideCircleUser);

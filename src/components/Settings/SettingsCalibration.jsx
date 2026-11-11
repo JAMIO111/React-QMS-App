@@ -9,6 +9,9 @@ import {
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { INTERVAL_UNITS, formatInterval, gaugeTypeCodeFromName } from "../../lib/calibration";
+import { Link } from "react-router-dom";
+import { documentPath } from "../../lib/documents";
+import ProcedureDocumentPicker from "../calibration/ProcedureDocumentPicker";
 import MenuCard from "../ui/MenuCard";
 import Callout from "../ui/Callout";
 import Switch from "../ui/Switch";
@@ -29,7 +32,7 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
   const [codeTouched, setCodeTouched] = useState(!!initial);
   const shownCode = codeTouched ? code : gaugeTypeCodeFromName(name);
   const [description, setDescription] = useState(initial?.description ?? "");
-  const [procedureRef, setProcedureRef] = useState(initial?.procedureRef ?? "");
+  const [procedureDocumentId, setProcedureDocumentId] = useState(initial?.procedureDocumentId ?? null);
   const [intervalValue, setIntervalValue] = useState(
     String(initial?.intervalValue ?? 12),
   );
@@ -52,7 +55,7 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
             code: shownCode.trim(),
             name: name.trim(),
             description: description.trim() || null,
-            procedureRef: procedureRef.trim() || null,
+            procedureDocumentId: procedureDocumentId ?? null,
             intervalValue: Number(intervalValue),
             intervalUnit,
             ...(initial ? {} : withCustomValues(customValues)),
@@ -105,17 +108,9 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
           </select>
         </span>
       </label>
-      <label className="flex flex-col gap-1 text-xs text-secondary-text">
-        Procedure
-        <input
-          className={`${input} w-44`}
-          value={procedureRef}
-          onChange={(e) => setProcedureRef(e.target.value)}
-          maxLength={200}
-          placeholder="e.g. WI-CAL-004"
-          title="The calibration procedure for gauges of this type; a new calibration starts with it"
-        />
-      </label>
+      <div className="w-72" title="The controlled document gauges of this type are calibrated to; a new calibration starts with its number">
+        <ProcedureDocumentPicker value={procedureDocumentId} onChange={(id) => setProcedureDocumentId(id ?? null)} current={initial?.procedureDocument} />
+      </div>
       <label className="flex min-w-48 flex-1 flex-col gap-1 text-xs text-secondary-text">
         Description
         <input
@@ -229,7 +224,15 @@ const TypeCard = ({ type, canManage }) => {
                 ? "characteristic"
                 : "characteristics"}{" "}
               · {type.gaugeCount} {type.gaugeCount === 1 ? "gauge" : "gauges"}
-              {type.procedureRef ? ` · Procedure ${type.procedureRef}` : ""}
+              {type.procedureDocument && (
+                <>
+                  {" · Procedure "}
+                  <Link to={documentPath(type.procedureDocument.id)} className="text-link-color hover:underline">
+                    {type.procedureDocument.number}
+                  </Link>
+                </>
+              )}
+              {!type.procedureDocument && type.procedureDocumentId ? " · Procedure: a document you may not read" : ""}
               {type.description ? ` · ${type.description}` : ""}
             </p>
           </div>

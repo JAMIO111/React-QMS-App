@@ -97,8 +97,10 @@ export const GaugeType = z.object({
   code: z.string(),
   name: z.string(),
   description: z.string().nullable(),
-  /** Default calibration procedure for gauges of this type; a new calibration starts with it. */
-  procedureRef: z.string().nullable(),
+  /** The controlled document that is the calibration procedure for gauges of this type; a new calibration starts with its number. */
+  procedureDocumentId: z.string().uuid().nullable(),
+  /** The document in words; null when there is none, or when the caller may not read it. */
+  procedureDocument: z.object({ id: z.string().uuid(), number: z.string(), title: z.string(), status: z.string() }).nullable(),
   intervalValue: z.number(),
   intervalUnit: IntervalUnit,
   active: z.boolean(),
@@ -127,7 +129,7 @@ export const CreateGaugeTypeBody = z
     code: GaugeTypeCode,
     name: z.string().trim().min(1).max(100),
     description: text(1000),
-    procedureRef: text(200),
+    procedureDocumentId: z.string().uuid().nullable().optional(),
     intervalValue: z.number().int().min(1).max(3650).optional(),
     intervalUnit: IntervalUnit.optional(),
     customValues: CustomValuesInput.optional(),
@@ -138,7 +140,7 @@ export const UpdateGaugeTypeBody = z
     code: GaugeTypeCode.optional(),
     name: z.string().trim().min(1).max(100).optional(),
     description: text(1000),
-    procedureRef: text(200),
+    procedureDocumentId: z.string().uuid().nullable().optional(),
     intervalValue: z.number().int().min(1).max(3650).optional(),
     intervalUnit: IntervalUnit.optional(),
     active: z.boolean().optional(),

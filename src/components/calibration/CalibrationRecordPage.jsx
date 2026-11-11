@@ -3,7 +3,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   AlignCenterIcon,
   ArrowLeftIcon,
-  CheckIcon,
+  CircleCheckIcon,
+  CircleXIcon,
   ClipboardListIcon,
   DropletsIcon,
   FactoryIcon,
@@ -24,6 +25,7 @@ import { useMe, usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { OUTCOMES, shouldPromptForStatus, statusAfterCalibration, statusOf, formatInterval, formatNumber, inTolerance, outcomeFromReadings, outcomeOf } from "../../lib/calibration";
 import { formatDate, ncrPath } from "../../lib/ncr";
+import { documentPath } from "../../lib/documents";
 import GaugeUsage from "../inspection/GaugeUsage";
 import { PartyPicker } from "../ncr/Pickers";
 import ReasonDialog from "../ncr/ReasonDialog";
@@ -115,7 +117,24 @@ const PendingCertificates = ({ files, onChange, disabled }) => {
   );
 };
 
-const readingInput = "w-28 rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-right text-sm text-primary-text focus:outline-none focus:border-brand-primary disabled:opacity-60";
+// The border is always 2 px and the icon's space always kept, so judging a reading never moves anything.
+const readingInput = "w-28 rounded-lg border-2 bg-text-input-color py-1 pl-7 pr-2 text-right text-sm text-primary-text focus:outline-none disabled:opacity-60";
+
+/**
+ * A reading's box, judged as it is typed: a green border and a tick inside on the left when it is within the limits, a red border and a cross
+ * when it is not, and the plain border while there is nothing to judge. The verdict is also said in words for screen readers.
+ */
+const ReadingInput = ({ ok, ...props }) => {
+  const judged = ok === true || ok === false;
+  const Icon = ok ? CircleCheckIcon : CircleXIcon;
+  return (
+    <span className="relative inline-block">
+      {judged && <Icon aria-hidden="true" data-verdict={ok ? "in" : "out"} className={`pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 ${ok ? "text-success-color" : "text-error-color"}`} />}
+      <input inputMode="decimal" className={`${readingInput} ${!judged ? "border-border-color focus:border-brand-primary" : ok ? "border-success-color" : "border-error-color"}`} {...props} />
+      {judged && <span className="sr-only">{ok ? "In tolerance" : "Out of tolerance"}</span>}
+    </span>
+  );
+};
 
 const Card = ({ title, subtitle, children, action }) => (
   <section aria-label={title} className="flex flex-col gap-4 rounded-2xl bg-secondary-bg p-6 shadow-lg shadow-shadow-color">
@@ -129,15 +148,6 @@ const Card = ({ title, subtitle, children, action }) => (
     {children}
   </section>
 );
-
-const Verdict = ({ ok }) =>
-  ok === undefined || ok === null ? (
-    <span className="inline-block w-12 text-xs text-secondary-text">—</span>
-  ) : ok ? (
-    <span className="inline-flex w-12 items-center gap-1 text-xs font-medium text-success-color"><CheckIcon aria-hidden="true" /> In</span>
-  ) : (
-    <span className="inline-flex w-12 items-center gap-1 text-xs font-medium text-error-color"><XIcon aria-hidden="true" /> Out</span>
-  );
 
 const fieldsOf = (c) => ({
   calibratedOn: c.calibratedOn,
@@ -222,7 +232,8 @@ const CalibrationRecordPage = () => {
   useEffect(() => setReadings(originalReadings), [originalReadings]);
   // A new calibration starts with its gauge type's procedure (the type's default); it can be changed for this record, which keeps its own copy.
   const gaugeTypes = useGaugeTypes({ includeInactive: true, enabled: isNew });
-  const typeProcedure = isNew ? ((gaugeTypes.data ?? []).find((t) => t.id === gauge.data?.type?.id)?.procedureRef ?? "") : "";
+  const procedureDocument = isNew ? ((gaugeTypes.data ?? []).find((t) => t.id === gauge.data?.type?.id)?.procedureDocument ?? null) : null;
+  const typeProcedure = procedureDocument?.number ?? "";
   useEffect(() => {
     if (typeProcedure) setForm((f) => (f.procedureRef ? f : { ...f, procedureRef: typeProcedure }));
   }, [typeProcedure, original]);
@@ -433,14 +444,12 @@ const CalibrationRecordPage = () => {
           ) : (
             <div className="overflow-x-auto">
               {/* Fixed column widths: typing a reading or choosing pass / fail must never move the columns or the rows. */}
-              <table className="w-full min-w-[900px] table-fixed text-left text-sm" aria-label="Readings">
+              <table className="w-full min-w-[820px] table-fixed text-left text-sm" aria-label="Readings">
                 <colgroup>
                   <col />
                   <col className="w-44" />
-                  <col className="w-32" />
-                  <col className="w-16" />
-                  <col className="w-32" />
-                  <col className="w-16" />
+                  <col className="w-36" />
+                  <col className="w-36" />
                   <col className="w-56" />
                 </colgroup>
                 <thead className="text-secondary-text">
@@ -448,9 +457,7 @@ const CalibrationRecordPage = () => {
                     <th className="py-1 pr-2 font-medium">Characteristic</th>
                     <th className="py-1 pr-2 font-medium">Limits</th>
                     <th className="py-1 pr-2 text-right font-medium">As found</th>
-                    <th className="py-1 pr-2 font-medium"><span className="sr-only">As found result</span></th>
                     <th className="py-1 pr-2 text-right font-medium">As left</th>
-                    <th className="py-1 pr-2 font-medium"><span className="sr-only">As left result</span></th>
                     <th className="py-1 font-medium">Notes</th>
                   </tr>
                 </thead>
@@ -469,27 +476,23 @@ const CalibrationRecordPage = () => {
                           <td className="py-1.5 pr-2 text-right">
                             <PassFail label={`${r.name} as found`} value={r.input.asFoundPass ?? null} onChange={setReading(r.key, "asFoundPass")} disabled={!canEdit} />
                           </td>
-                          <td className="py-1.5 pr-2"><Verdict ok={r.asFoundOk} /></td>
                           <td className="py-1.5 pr-2 text-right">
                             {/* Always there, so the row keeps its size; shown once the check failed as found (or already has an as-left result). */}
                             <span className={asLeftOffered(r) ? "" : "invisible"} aria-hidden={asLeftOffered(r) ? undefined : true}>
                               <PassFail label={`${r.name} as left`} value={r.input.asLeftPass ?? null} onChange={setReading(r.key, "asLeftPass")} disabled={!canEdit || !asLeftOffered(r)} allowClear />
                             </span>
                           </td>
-                          <td className="py-1.5 pr-2"><Verdict ok={r.asLeftOk} /></td>
                         </>
                       ) : (
                       <>
                       <td className="py-1.5 pr-2 text-right">
-                        <input aria-label={`${r.name} as found`} inputMode="decimal" className={readingInput} value={r.input.asFound ?? ""} onChange={setReading(r.key, "asFound")} disabled={!canEdit}
+                        <ReadingInput ok={r.input.asFound === "" || r.input.asFound == null ? undefined : r.asFoundOk} aria-label={`${r.name} as found`} value={r.input.asFound ?? ""} onChange={setReading(r.key, "asFound")} disabled={!canEdit}
                           aria-invalid={!isNum(r.input.asFound) || undefined} />
                       </td>
-                      <td className="py-1.5 pr-2"><Verdict ok={r.asFoundOk} /></td>
                       <td className="py-1.5 pr-2 text-right">
-                        <input aria-label={`${r.name} as left`} inputMode="decimal" className={readingInput} value={r.input.asLeft ?? ""} onChange={setReading(r.key, "asLeft")} disabled={!canEdit}
+                        <ReadingInput ok={r.input.asLeft === "" || r.input.asLeft == null ? undefined : r.asLeftOk} aria-label={`${r.name} as left`} value={r.input.asLeft ?? ""} onChange={setReading(r.key, "asLeft")} disabled={!canEdit}
                           placeholder={r.asFoundOk === false ? "After adjustment" : ""} aria-invalid={!isNum(r.input.asLeft) || undefined} />
                       </td>
-                      <td className="py-1.5 pr-2"><Verdict ok={r.asLeftOk} /></td>
                       </>
                       )}
                       <td className="py-1.5">
@@ -531,7 +534,14 @@ const CalibrationRecordPage = () => {
             )}
             {/* A certificate number is the supplier's document number: an in-house calibration has its own reference, so the field shows only when one was recorded. */}
             {(form.performedBy === "external" || form.certificateNumber || original.certificateNumber) && text("certificateNumber", "Certificate number", { maxLength: 100, icon: HashIcon })}
+            <div className="flex flex-col gap-1">
             {text("procedureRef", "Procedure", { maxLength: 200, icon: ClipboardListIcon, placeholder: "e.g. WI-CAL-004", title: typeProcedure && form.procedureRef === typeProcedure ? "From the gauge type; change it if this calibration followed another procedure" : undefined })}
+              {procedureDocument && form.procedureRef === typeProcedure && (
+                <Link to={documentPath(procedureDocument.id)} className="self-start pl-1 text-sm text-link-color hover:underline">
+                  Open {procedureDocument.number} · {procedureDocument.title}
+                </Link>
+              )}
+            </div>
             {text("referenceStandards", "Reference standards used", { maxLength: 1000, icon: FlaskConicalIcon, placeholder: "e.g. Gauge block set GB-01 (cert 1234)" })}
             <div className="flex w-full items-start gap-4">
               {text("temperatureC", "Temperature (°C)", { inputMode: "decimal", icon: ThermometerIcon, error: isNum(form.temperatureC) ? undefined : "Enter a number" })}

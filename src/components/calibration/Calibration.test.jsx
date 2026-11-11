@@ -75,7 +75,7 @@ const routeApi = (routes) =>
     calls.push({ k, path, body: opts.body });
     const all = {
       "GET /units": { data: [{ code: "mm", name: "Millimetre" }, { code: "µm", name: "Micrometre" }] },
-      "GET /gauge-types": { data: [{ id: "t1", code: "CAL-150", name: "Digital caliper", description: null, procedureRef: "WI-CAL-004", intervalValue: 6, intervalUnit: "months", active: true, characteristicCount: 2, gaugeCount: 1 }] },
+      "GET /gauge-types": { data: [{ id: "t1", code: "CAL-150", name: "Digital caliper", description: null, procedureDocumentId: "d1", procedureDocument: { id: "d1", number: "WI-CAL-004", title: "Caliper calibration", status: "active" }, intervalValue: 6, intervalUnit: "months", active: true, characteristicCount: 2, gaugeCount: 1 }] },
       "GET /gauges/g1": gauge(),
       "GET /gauges/g1/characteristics": { data: characteristics },
       "GET /gauges/g1/calibrations": { data: [] },
@@ -216,8 +216,14 @@ describe("calibration record", () => {
     await userEvent.type(found25, "25.01");
     await userEvent.type(screen.getByRole("textbox", { name: "100 mm block as found" }), "100.05");
     const readings = screen.getByRole("table", { name: "Readings" });
-    expect(within(readings).getAllByText("In")).toHaveLength(1);
-    expect(within(readings).getAllByText("Out")).toHaveLength(1);
+    // The box itself says so: green border and tick in tolerance, red border and cross out of it (and in words for screen readers).
+    expect(within(readings).getAllByText("In tolerance")).toHaveLength(1);
+    expect(within(readings).getAllByText("Out of tolerance")).toHaveLength(1);
+    expect(found25).toHaveClass("border-2", "border-success-color");
+    expect(screen.getByRole("textbox", { name: "100 mm block as found" })).toHaveClass("border-2", "border-error-color");
+    expect(screen.getByRole("textbox", { name: "25 mm block as left" })).toHaveClass("border-2", "border-border-color");
+    expect(readings.querySelectorAll('[data-verdict="in"]')).toHaveLength(1);
+    expect(readings.querySelectorAll('[data-verdict="out"]')).toHaveLength(1);
     expect(screen.getByText("Saving quarantines G-001.")).toBeInTheDocument();
     // Adjusted back into tolerance: outcome "Adjusted".
     await userEvent.type(screen.getByRole("textbox", { name: "100 mm block as left" }), "100.01");
@@ -279,6 +285,7 @@ describe("calibration record", () => {
     routeApi({ "GET /gauges/g1/characteristics": { data: [] }, "GET /suppliers": { data: [] }, "POST /gauges/g1/calibrations": () => record({ id: "c9", readings: [], outcome: "pass" }), "GET /calibrations/c9": record({ id: "c9", readings: [], outcome: "pass" }), "GET /calibrations/c9/attachments": { data: [] } });
     renderAt("/Calibration/Gauges/g1/calibrations/new");
     await waitFor(() => expect(screen.getByLabelText("Procedure")).toHaveValue("WI-CAL-004"));
+    expect(screen.getByRole("link", { name: "Open WI-CAL-004 · Caliper calibration" })).toHaveAttribute("href", "/Documentation/Documents/d1");
     expect(screen.queryByLabelText("Certificate number")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("combobox", { name: "Performed" }));
     await userEvent.click(await screen.findByRole("option", { name: /External/ }));
@@ -324,7 +331,22 @@ describe("settings", () => {
     await userEvent.type(screen.getByRole("textbox", { name: "Interval" }), "1");
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Interval unit" }), "years");
     await userEvent.click(screen.getByRole("button", { name: "Add type" }));
-    await waitFor(() => expect(lastCall("POST /gauge-types").body).toEqual({ code: "MIC-25", name: "Micrometer 0-25", description: null, procedureRef: null, intervalValue: 1, intervalUnit: "years" }));
+    await waitFor(() => expect(lastCall("POST /gauge-types").body).toEqual({ code: "MIC-25", name: "Micrometer 0-25", description: null, procedureDocumentId: null, intervalValue: 1, intervalUnit: "years" }));
+  });
+
+  it("links a gauge type's procedure to a controlled document chosen from a list", async () => {
+    routeApi({
+      "GET /documents": { data: [{ id: "d2", number: "WI-CAL-009", title: "Micrometer calibration", status: "active" }], page: 1, pageSize: 20, total: 1 },
+      "PATCH /gauge-types/t1": (path, { body }) => ({ id: "t1", code: "CAL-150", name: "Digital caliper", ...body }),
+    });
+    renderAt("/Settings/Calibration");
+    // The type shows its procedure as a link to the document.
+    expect(await screen.findByRole("link", { name: "WI-CAL-004" })).toHaveAttribute("href", "/Documentation/Documents/d1");
+    await userEvent.click(screen.getByRole("button", { name: "Edit Digital caliper" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Procedure" }));
+    await userEvent.click(await screen.findByRole("option", { name: /WI-CAL-009/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(lastCall("PATCH /gauge-types/t1").body).toMatchObject({ procedureDocumentId: "d2" }));
   });
 
   it("shows each gauge type's code", async () => {

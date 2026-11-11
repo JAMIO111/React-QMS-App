@@ -59,13 +59,18 @@ describe('gauge types', () => {
     expect(dup.body.error.message).toBe('A gauge type with this code already exists');
     const other = await api().post('/api/v1/gauge-types').set(h).send({ code: 'HG-300', name: 'Height gauge' }).expect(201);
     expect((await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ code: 'HG-600' }).expect(200)).body.code).toBe('HG-600');
-    // The type's default calibration procedure.
-    expect(other.body.procedureRef).toBeNull();
-    expect((await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ procedureRef: ' WI-CAL-004 ' }).expect(200)).body.procedureRef).toBe('WI-CAL-004');
-    expect((await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ procedureRef: null }).expect(200)).body.procedureRef).toBeNull();
-    await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ procedureRef: 'x'.repeat(201) }).expect(400);
-    const withProcedure = await api().post('/api/v1/gauge-types').set(h).send({ code: 'PRC-1', name: 'With a procedure', procedureRef: 'WI-CAL-010' }).expect(201);
-    expect(withProcedure.body.procedureRef).toBe('WI-CAL-010');
+    // The type's calibration procedure is one of the organisation's documents.
+    expect(other.body).toMatchObject({ procedureDocumentId: null, procedureDocument: null });
+    const docType = (await api().get('/api/v1/document-types').set(h).expect(200)).body.data[0];
+    const doc = (await api().post('/api/v1/documents').set(h).send({ typeId: docType.id, title: 'Caliper calibration', contentKind: 'text' }).expect(201)).body;
+    const linked = (await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ procedureDocumentId: doc.id }).expect(200)).body;
+    expect(linked).toMatchObject({ procedureDocumentId: doc.id, procedureDocument: { id: doc.id, number: doc.number, title: 'Caliper calibration' } });
+    await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ procedureDocumentId: 'not-an-id' }).expect(400);
+    // A document of another organisation (or one that does not exist) cannot be linked.
+    expect((await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ procedureDocumentId: '00000000-0000-4000-8000-000000000000' })).status).toBeGreaterThanOrEqual(400);
+    expect((await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ procedureDocumentId: null }).expect(200)).body.procedureDocument).toBeNull();
+    const withProcedure = await api().post('/api/v1/gauge-types').set(h).send({ code: 'PRC-1', name: 'With a procedure', procedureDocumentId: doc.id }).expect(201);
+    expect(withProcedure.body.procedureDocument.number).toBe(doc.number);
     await api().patch(`/api/v1/gauge-types/${withProcedure.body.id}`).set(h).send({ active: false }).expect(200);
     await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ code: 'Cal-150' }).expect(409);
     await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ active: false }).expect(200);

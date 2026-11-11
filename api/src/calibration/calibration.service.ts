@@ -70,7 +70,7 @@ const CHARACTERISTIC_COLUMNS: Record<string, string> = {
   unitCode: 'unit_code', method: 'method', active: 'active',
 };
 const TYPE_COLUMNS: Record<string, string> = {
-  code: 'code', name: 'name', description: 'description', intervalValue: 'interval_value', intervalUnit: 'interval_unit', active: 'active', procedureRef: 'procedure_ref',
+  code: 'code', name: 'name', description: 'description', intervalValue: 'interval_value', intervalUnit: 'interval_unit', active: 'active', procedureDocumentId: 'procedure_document_id',
 };
 
 const SORT_SQL: Record<GaugeListQuery['sort'], string> = {
@@ -506,6 +506,8 @@ const TYPE_SELECT = `
   select t.*,
     (select count(*) from public.gauge_type_characteristics k where k.gauge_type_id = t.id and k.active) as characteristic_count,
     (select count(*) from public.gauges g where g.gauge_type_id = t.id and g.deleted_at is null) as gauge_count,
+    (select jsonb_build_object('id', d.id, 'number', d.number, 'title', d.title, 'status', d.status)
+       from public.documents d where d.id = t.procedure_document_id) as procedure_document,
     (select count(*) from public.gauges g where g.gauge_type_id = t.id and ${GAUGE_TAKES_CHECKS}
        and exists (select 1 from public.gauge_type_characteristics k where k.gauge_type_id = t.id and k.active
                      and not exists (select 1 from public.gauge_characteristics c where c.gauge_id = g.id and c.template_id = k.id))) as gauges_missing_checks
@@ -516,7 +518,8 @@ const toType = (r: Row): z.infer<typeof GaugeType> => ({
   code: r.code as string,
   name: r.name as string,
   description: (r.description as string) ?? null,
-  procedureRef: (r.procedure_ref as string) ?? null,
+  procedureDocumentId: (r.procedure_document_id as string) ?? null,
+  procedureDocument: (r.procedure_document as { id: string; number: string; title: string; status: string } | null) ?? null,
   intervalValue: Number(r.interval_value),
   intervalUnit: r.interval_unit as z.infer<typeof GaugeType>['intervalUnit'],
   active: r.active as boolean,

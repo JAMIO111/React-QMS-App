@@ -93,7 +93,7 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
       code: { column: 'code' }, name: { column: 'name' }, description: { column: 'description' }, intervalValue: { column: 'interval_value' }, intervalUnit: { column: 'interval_unit' },
       active: { column: 'active' },
     },
-    excluded: { ...SYSTEM, procedure_ref: 'The default calibration procedure is set on the type in Fortress' },
+    excluded: { ...SYSTEM, procedure_document_id: 'The calibration procedure is a Fortress document, chosen on the type in Fortress' },
   },
   gauge: {
     table: 'gauges',

@@ -38,6 +38,8 @@ decides nothing about who may do a task (see CP3).
 | CP12 | **One training session, an attendee list, each attendee completed on their own date** (CP14 for the states). A session is not "done" on one day. |
 | CP13 | **Dates are kept as history**: positions have `started_on` / `ended_on` and are ended, never overwritten. |
 | CP14 | **Attendee states:** enrolled → completed (with `completed_on`) \| failed (with `completed_on`) \| did not attend; an attendee can be removed with a reason. A completed attendee is frozen (correct it by voiding with a reason and re-adding). The session is open → closed (when nobody is still enrolled) \| cancelled (with a reason). |
+| CP16 | **Who runs a session depends on its provider type.** A session has `provider_type` **internal** or **external**: internal names a trainer from the Employees register (`trainer_employee_id`, required); external names the outside provider or trainer as text (`provider_name`, required, optional contact). Exactly one of the two is filled. |
+| CP17 | **No new roles for now.** No built-in "Department manager" role is added; people who should see everyone's competence are given a custom role carrying `competence.read` (CP11). Roles and department-scoped reading are revisited later. |
 | CP15 | **Seeding: none.** A new organisation starts with empty skills, positions and training; categories are seeded (they are lists, not content). Example content can be added later. |
 
 ## 3. Data model (all tenant tables: `organisation_id`, RLS, audit trigger, no table writes except where stated)
@@ -50,7 +52,7 @@ decides nothing about who may do a task (see CP3).
 | `competence_position_skills` | Position ↔ skill with `required_level` 1–4; replaced as a whole by a function, history kept in the audit trail. |
 | `competence_employee_positions` | Employee ↔ position with `started_on`, `ended_on`; ended, never deleted. |
 | `competence_assessments` | **Append-only.** Employee, skill, `level` 0–4, `assessed_on` (not in the future, in the person's time zone), assessor, optional `expires_on`, note, `status` current / superseded, link to what it supersedes. Written only by `app.record_competence_assessment`. |
-| `competence_training_sessions` | `TS-YY-NNNN` per organisation; title, kind (course / on the job / external / induction / other), provider or trainer (a person or free text), `starts_on`, optional `ends_on`, hours, location, notes; skills it supports (`competence_session_skills`); status open / closed / cancelled (reason). Written only by functions. |
+| `competence_training_sessions` | `TS-YY-NNNN` per organisation; title, kind (course / on the job / external / induction / other), **`provider_type` internal / external with `trainer_employee_id` or `provider_name`** (CP16), `starts_on`, optional `ends_on`, hours, location, notes; skills it supports (`competence_session_skills`); status open / closed / cancelled (reason). Written only by functions. |
 | `competence_session_attendees` | One row per employee per session: status enrolled / completed / failed / did not attend / removed (reason), **`completed_on`** (own date, not in the future, not before the session started), outcome note, who recorded it. Unique per session and employee while not removed. Written only by functions. |
 | `competence_attachments` | Evidence files on an assessment, a training session (shared) or an attendee (their certificate); functions only, removed with a reason, never deleted; private `competence-files` bucket at `<org>/competence/<employee id>/<uuid>-<name>`, uploads via `app.competence_file_allowed`. |
 
@@ -147,10 +149,7 @@ CP5's positions); appraisals, pay or contracts; supplier or customer personnel; 
 ## 10. Questions answered, and what is left
 
 Answered on 2026-11-11: department management see everyone's and Controllers see everything (CP11; narrowing deferred); one training session
-with an attendee list completed on different days (CP12, CP14); dates kept for position history (CP13); start empty (CP15).
+with an attendee list completed on different days (CP12, CP14); dates kept for position history (CP13); start empty (CP15); the session's
+trainer follows its internal / external provider type (CP16); roles are left for now (CP17).
 
-Left to confirm before CO1:
-
-1. **CP11 wording:** I read "department management see everyone's" as "anyone given `competence.read` sees everyone", because no department-manager
-   role exists yet. Is that what you want for now, or should I add a built-in "Department manager" role carrying `competence.read`?
-2. **Session provider:** a person from the Employees register, a free-text name (an outside trainer), or either?
+Nothing is left open. Next step: agree the plan, then start CO1.

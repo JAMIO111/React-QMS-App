@@ -320,7 +320,7 @@ Each slice ends with: migration + SQL tests, API + e2e, UI + component tests, sw
 
 ## 12. Not building in Phase 5 (brief §15 and Phase 6)
 
-Local SQL agent, SQL Server, SAP, Dynamics, PC-DMIS and any CMM ingestion; webhooks and write-back; two-way sync; a connector marketplace/SDK; Kafka, Redis, a separate worker (unless D2 changes); an arbitrary entity/field/value store; AI mapping suggestions beyond simple header matching; email/SFTP drop folders (scheduled file ingestion arrives as "REST connector that fetches a CSV URL").
+Local SQL agent (proposed in §14), SQL Server, SAP, Dynamics, PC-DMIS and any CMM ingestion; webhooks and write-back; two-way sync; a connector marketplace/SDK; Kafka, Redis, a separate worker (unless D2 changes); an arbitrary entity/field/value store; AI mapping suggestions beyond simple header matching; email/SFTP drop folders (scheduled file ingestion arrives as "REST connector that fetches a CSV URL").
 
 ## 13. Risks and open points
 
@@ -333,3 +333,78 @@ Local SQL agent, SQL Server, SAP, Dynamics, PC-DMIS and any CMM ingestion; webho
 5. **Audit actor for scheduled runs** (§6.6) needs the audit trigger to accept an integration source and initiating user; small change, tested in IN2.
 6. **XLSX parsing library:** decided in IN3: no spreadsheet library. `fflate` (small, no dependencies) unzips the workbook and a few lines read the shared strings, inline strings and date styles of the first worksheet (`api/src/integrations/core/file-parsers.ts`); formulas give their cached value. Large or unusual workbooks (pivot caches, several sheets) are out of scope.
 7. **File size and storage (IN3):** a Vercel function accepts at most 4.5 MB per request, so the browser uploads to the private `integration-files` bucket and the API downloads and parses it, then keeps its rows in `integration_file_chunks` (1,000 rows each) for the runner. Files up to 25 MB.
+
+## 14. Phase 6 proposal — the on-site SQL agent (SQL Server first)
+
+**Status: proposed, not agreed. Nothing here is built.** Section 12 defers it; this is the shape to agree before slice AG0.
+
+### 14.1 Why an agent, and its one rule
+Fortress runs on Vercel and must never connect into a customer's network. A database inside a factory is usually unreachable from outside, so a small program on the customer's network **opens an outbound HTTPS connection to Fortress** (port 443, one host name), reads the database and posts the rows. **The agent is a dumb pipe: it reads and delivers rows. Mapping, validation, matching, field ownership, the review queue, schedules and health stay in Fortress** (the IN2–IN8 engine), so there is no second copy of business logic on customer machines. To the engine the agent is one more source adapter feeding `integration_inbox`.
+
+### 14.2 Decisions needed
+
+| # | Decision | Options | Recommendation |
+|---|---|---|---|
+| **A1** | Who defines the SQL | (a) our team writes it per customer into the agent's local config; (b) the customer's admin writes it in a Fortress editor that pushes it to the agent | (a) first. **Whichever is chosen, Fortress only ever sends "run job X"; it never sends SQL text to the agent** (a stolen Fortress login must not run arbitrary SQL on the customer's database). With (b) later, definitions are pushed, shown to the customer's IT and applied only after they approve locally |
+| **A2** | Agent technology | .NET worker service / Node packaged executable / Python | **.NET worker service**: native SQL Server driver, installs as a Windows Service from one signed MSI. Node is acceptable if one language matters more than installer polish |
+| **A3** | Direction | read-only import / also write-back | **Read-only.** Write-back is a different risk level and stays a non-goal |
+| **A4** | How fresh | daily / every few minutes | Poll for jobs every 30–60 s; a run is requested by the existing schedule (daily) or by hand. Sub-daily needs the schedule worker (§13 risk 1) |
+| **A5** | Update policy | automatic / notify only | Notify-only by default, automatic opt-in per connection; the server accepts the previous version for a grace period |
+| **A6** | Licensing | Controller seat only / own feature flag | Same as every `integrations.*` permission: needs a Controller seat. No subscription feature mapped yet |
+| **A7** | Code signing | EV / standard certificate | Needed before the first customer install (SmartScreen and IT policy block unsigned installers); start the purchase early, it has lead time |
+| **A8** | Volume | the 100,000 rows per run limit (D8) | Agent runs lift it (it is the reason D8 points here); set a new cap per run and per batch after a real sample |
+
+### 14.3 Architecture
+```
+Customer network                                  Fortress
+  SQL Server ◄── read-only login                   API  /agent/v1/*
+        ▲                                           enrol · heartbeat · jobs · rows · complete
+  Fortress Agent (Windows service)  ── HTTPS 443 ─►  integration engine (IN2–IN8)
+   poller · query runner · batcher                   inbox → map → import → audit
+   local queue · encrypted local config
+```
+- **Poller:** `GET /agent/v1/jobs` every 30–60 s. Plain polling, so proxies and firewalls do not break it.
+- **Query runner:** runs only queries defined in the agent's local config, with parameters (cursor value). The cursor column and SQL live on the customer side.
+- **Batcher and local queue:** pages of about 1,000 rows (the file chunk size), retry with backoff, a small on-disk queue so a network drop does not lose a run; each batch carries a sequence number so a repeated batch is ignored.
+- **Cursors:** the agent reports the high-water mark with each batch; `integration_sync_cursors` moves only when the run finishes, as today.
+- **Local config and secrets:** the database connection string stays on the customer's machine, encrypted with the OS credential store. **Fortress never holds the customer's database credentials.**
+- **Logs and status:** rotating local logs, a localhost status page, a diagnostics bundle (version, config with secrets removed, recent errors) the customer can send us.
+
+### 14.4 Trust and security (non-negotiable list for the agent)
+- **Enrolment:** a person with `integrations.manage` creates an agent for one connection and receives a **one-time enrolment code** (expires in an hour, shown once). The agent swaps it for a long-lived **per-agent credential** scoped to one organisation and one connection; stored hashed, never returned again.
+- **Revocation:** one action in Fortress; every agent call checks it; a revoked agent gets 401 at once.
+- **Authorisation:** the agent credential is checked by its own guard (not the user JWT path) and acts only as the system on that organisation, like the cron and Stripe routes. It can post rows for its own connection and nothing else; it cannot read Fortress data.
+- **Customer side:** a read-only SQL login limited to named views (documented in the install guide); a service account that is not an administrator; certificate validation always on; proxy support.
+- **Server limits:** batch size, rows per run, body size and rate per agent; a bad query cannot flood the inbox.
+- **No arbitrary code path:** no SQL text from the server (A1), no shell, no file access from a job.
+- **Audit:** enrolment, revocation, version changes, every run and every refused call are recorded (`integration_connection_events` plus a new agent event table, append-only).
+
+### 14.5 Data model (new; tenant tables, RLS by `integrations.read`, no table writes, functions only, audit trigger, never deleted)
+- Provider `sql_agent` in `integration_providers` (and `sqlserver` as the first database kind).
+- `integration_agents` (connection, name, status enrolling / active / revoked, version, last seen, host label, hashed credential, revoked reason) and `integration_agent_enrolments` (hashed one-time code, expiry, used).
+- `integration_agent_batches` (run, sequence number, row count, received at) for idempotent batches.
+- Functions: `app.create_integration_agent`, `app.revoke_integration_agent(id, reason)`; **API-login-only** `app.system_enrol_agent(code, …)`, `system_agent_heartbeat`, `system_agent_next_job`, `system_agent_accept_batch(run, sequence, rows)`, `system_agent_complete`. These re-check the agent, the run and the lease on every call, like the other `app.system_*` runners.
+- The file chunk path (`integration_file_chunks`) is the model for how a run's rows are held until the engine drains them.
+
+### 14.6 API and screens
+- `api/src/integrations/agent/` with `/agent/v1/enrol|heartbeat|jobs|rows|complete`, `@Public` plus its own agent guard, excluded from OpenAPI and added to the sweep allowlist deliberately (as `/internal/cron/*` is). A `providers/sql-agent` adapter whose `fetchRecords` reads the rows the agent posted.
+- Settings → Integrations: a **SQL Server** card (currently "Coming soon"), an **Agents** card on the connection page (status, last seen, version, enrolment code, revoke, download link with version and SHA-256), the existing template mapping page for the posted columns, schedule and health unchanged.
+- The installer is served from a private bucket by a short-lived signed link, only to people who can manage integrations.
+
+### 14.7 Slices
+
+| Slice | Content | Exit |
+|---|---|---|
+| **AG0** | Agree A1–A8; one real SQL Server and sample tables from a customer; a customer-like network test (outbound 443 only, proxy); order the code-signing certificate | Plan signed off, environment known |
+| **AG1** | Migration (agents, enrolments, batches, system functions) + SQL tests; enrolment and revocation; agent guard; tenancy sweep and guardrails updated | An agent can enrol and be revoked; a revoked or foreign credential is refused everywhere |
+| **AG2** | `/agent/v1` jobs and rows, idempotent batches, the `sql-agent` adapter feeding the existing engine; a fake agent in the e2e tests | A fake agent's rows import once; a repeated batch writes nothing; a lost connection resumes |
+| **AG3** | The agent itself (proof of concept): enrol, heartbeat, one fixed query, cursor, batches, local queue, logs | Reads a real SQL Server and delivers rows into a preview run |
+| **AG4** | Settings UI (card, agents, enrolment, download), template mapping on posted columns, schedule through the agent, health and "agent offline" state | A customer admin can set it up without us |
+| **AG5** | Installer (MSI), code signing, versioning and update policy, install guide and diagnostics bundle | A clean Windows Server installs, enrols and syncs |
+| **AG6** | Exit check: browser journey with the fake agent, live guardrails, a real-customer trial, exit report | Brief §14 integration checklist verified for the agent |
+
+### 14.8 Tests that make it safe
+Credential rules (expired or reused enrolment code, revoked agent, agent of another organisation or connection, replayed batch, out-of-order sequence, oversize batch), no SQL text accepted from the server, the agent credential never appears in responses, logs or audit payloads, and the agent routes are the only unscoped routes added.
+
+### 14.9 Not in this proposal
+Write-back, other databases (MySQL, PostgreSQL, Oracle share the agent and get new drivers later), machine and CMM file ingestion, a query editor in Fortress (A1 option b), push notifications to the agent, high-availability agents.

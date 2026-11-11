@@ -132,7 +132,7 @@ Menu group **Competence** (`GraduationCapIcon`, `/Competence`): **Dashboard** (d
 | Slice | Content |
 |---|---|
 | **CO1 (done 2026-11-11, migration `20260127100000_competence_core.sql`, applied live)** | Migration: categories, skills, positions, position skills, permissions and role defaults, menu and Settings tab shell. API + Settings UI for categories, skills, positions. |
-| **CO2 (done 2026-11-11, migration `20260128100000_competence_assessments.sql`, applied live once you run it)** | Employee positions (with dates), assessments (append-only), current level, gap and expiry worked out on read, skills matrix, person profile, My competence. |
+| **CO2 (done 2026-11-11, migration `20260128100000_competence_assessments.sql`, applied live)** | Employee positions (with dates), assessments (append-only), current level, gap and expiry worked out on read, skills matrix, person profile, My competence. |
 | **CO3** | Training sessions with attendee lists, per-attendee completion dates, evidence files and the bucket, Training sessions register and session page. |
 | **CO4** | Dashboard, expiry lists, CSV export of the matrix, in-app notice to an employee when assessed (event `competence_assessments.created`, to the linked sign-in only). |
 | **CO5** | Exit check: live guardrails, advisors, browser journey step, `docs/competence-exit-report.md`, `CLAUDE.md`. |

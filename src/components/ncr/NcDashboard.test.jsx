@@ -68,7 +68,7 @@ describe("NC dashboard", () => {
     expect(raised).toHaveTextContent("24");
     expect(raised).toHaveTextContent("Up 20% on previous period");
     expect(screen.getByRole("link", { name: /Open now/ })).toHaveTextContent("2 critical");
-    expect(screen.getByText("Cost of non-conformance", { selector: "span" }).closest("div").parentElement).toHaveTextContent("Down 10% on previous period");
+    expect(document.querySelector('[data-tile="Cost of non-conformance"]')).toHaveTextContent("Down 10% on previous period");
     expect(screen.getByText("£18k")).toBeInTheDocument();
     expect(screen.getByText("12.5")).toBeInTheDocument();
   });
@@ -102,8 +102,20 @@ describe("NC dashboard", () => {
     expect(within(table).getByText("Oct 26")).toBeInTheDocument();
     expect(within(table).getByText("£4,300.50")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Failure modes" })).toHaveTextContent("Dimensional");
-    expect(screen.getByRole("region", { name: "Severity" })).toHaveTextContent("Critical");
+    expect(within(screen.getByRole("list", { name: "Severity" })).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Critical28%", "Major1042%", "Minor1250%", "Not set00%"]);
     expect(within(screen.getByRole("table", { name: "Parts with the most NCs" })).getByText("£5,200.00")).toBeInTheDocument();
+  });
+
+  it("draws the open non-conformances as the stages in order, each a link to the register, and the trend by where they came from", async () => {
+    renderAt("/Non-Conformance");
+    await screen.findByRole("link", { name: /NCs raised/ });
+    const stages = within(screen.getByRole("list", { name: "Open NCs by stage" })).getAllByRole("link");
+    expect(stages.map((a) => a.textContent)).toEqual(["6Open", "3Investigating"]);
+    expect(stages[1]).toHaveAttribute("href", "/Non-Conformance/Register?stage=investigating");
+    // the period's totals by origin are the trend chart's legend: internal 8, customer 3, supplier 1
+    expect(within(screen.getByRole("list", { name: "NCs raised by where they came from" })).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Internal867%", "Customer325%", "Supplier18%"]);
+    // a source is a link to the register for the period
+    expect(within(screen.getByRole("list", { name: "NCs by source" })).getByRole("link", { name: "Calibration" }).getAttribute("href")).toMatch(/^\/Non-Conformance\/Register\?source=calibration&from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}$/);
   });
 
   it("lists where the non-conformances came from and what kind of problem they are, as separate breakdowns", async () => {

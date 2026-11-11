@@ -16,7 +16,7 @@ import { SCAR_REGISTER, SCAR_STATUSES, scarPath } from "../../lib/supplierScars"
 import Callout from "../ui/Callout";
 import { BandPill } from "./PerformanceParts";
 import { RiskBadge } from "./SupplierBadges";
-import { ACCENT, ArcGauge, Chip, Initial, Meter, Pipeline, ScoreRing, SplitBar, StatTile, Tile } from "./SupplierDashboardParts";
+import { ArcGauge, Chip, Empty, HeroCard, Initial, Meter, Pipeline, ScoreRing, SplitBar, StatTile, Tile, cardLink, headerLink as linkClass } from "../dashboard/DashboardGraphics";
 
 const NC_SERIES = [
   { key: "critical", label: "Critical", color: "var(--chart-critical)" },
@@ -35,8 +35,6 @@ const STATUS_COLOUR = { approved: "var(--chart-series-3)", conditional: "var(--c
 
 const th = "py-1 pr-3 text-left text-xs font-medium uppercase tracking-wide";
 const td = "py-2 pr-3 align-middle";
-const Empty = ({ children }) => <p className="py-6 text-center text-sm text-secondary-text">{children}</p>;
-const linkClass = "inline-flex min-h-9.5 shrink-0 items-center whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50";
 const nameLink = "font-medium text-primary-text hover:underline";
 const supplierPath = (id, tab) => `/Suppliers/${id}${tab ? `?tab=${tab}` : ""}`;
 const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
@@ -61,7 +59,6 @@ const StackedBars = ({ data, series, label, bucketLabel }) => (
 );
 /** The period's totals of a stacked series, as the parts of a split bar. */
 const totals = (trend, series) => series.map((s) => ({ key: s.key, label: s.label, color: s.color, count: trend.reduce((n, b) => n + (b[s.key] ?? 0), 0) }));
-const cardLink = "inline-flex items-center gap-1 whitespace-nowrap text-sm text-link-color hover:underline";
 const row = "flex items-center gap-3 py-2";
 
 /**
@@ -121,34 +118,20 @@ const SupplierDashboard = () => {
 
       {/* The supplier base beside how deliveries went. */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12" aria-busy={isLoading || undefined}>
-        <section
-          aria-label="Supplier base"
-          data-tile="Suppliers"
-          className="relative flex min-w-0 flex-col justify-between gap-5 overflow-hidden rounded-3xl border border-border-color bg-secondary-bg p-6 xl:col-span-5"
-          style={{ backgroundImage: `linear-gradient(135deg, color-mix(in srgb, ${ACCENT} 18%, transparent), transparent 62%)` }}>
-          <svg aria-hidden="true" viewBox="0 0 200 200" className="pointer-events-none absolute -right-14 -top-16 h-64 w-64" style={{ color: ACCENT }}>
-            <circle cx="100" cy="100" r="96" fill="none" stroke="currentColor" strokeOpacity="0.14" strokeWidth="1.5" />
-            <circle cx="100" cy="100" r="68" fill="none" stroke="currentColor" strokeOpacity="0.18" strokeWidth="1.5" />
-            <circle cx="100" cy="100" r="40" fill="currentColor" fillOpacity="0.08" />
-          </svg>
-          <div className="relative flex items-start justify-between gap-3">
-            <div className="flex flex-col gap-1">
-              <span className="flex items-center gap-2 text-sm text-secondary-text">
-                <UsersIcon className="h-4 w-4" aria-hidden="true" />
-                Suppliers
-              </span>
-              <p className="text-6xl font-semibold leading-none text-primary-text">{k ? k.suppliers : "—"}</p>
-              <p className="text-sm text-secondary-text">{k ? `${k.approved} approved · ${k.pendingApproval} pending approval` : "In use, as of today"}</p>
-            </div>
-            <Link to="/Suppliers" className={`${cardLink} relative`}>
+        <HeroCard
+          label="Suppliers"
+          icon={UsersIcon}
+          value={k ? k.suppliers : "—"}
+          note={k ? `${k.approved} approved · ${k.pendingApproval} pending approval` : "In use, as of today"}
+          action={
+            <Link to="/Suppliers" className={cardLink}>
               Supplier register <ArrowRightIcon aria-hidden="true" />
             </Link>
-          </div>
-          <div className="relative flex flex-col gap-2">
-            <h2 className="text-sm font-semibold text-primary-text">Approval status</h2>
-            {statusParts.some((s) => s.count) ? <SplitBar parts={statusParts} label="Approval status" tall /> : <Empty>No suppliers yet.</Empty>}
-          </div>
-        </section>
+          }
+          className="xl:col-span-5">
+          <h2 className="text-sm font-semibold text-primary-text">Approval status</h2>
+          {statusParts.some((s) => s.count) ? <SplitBar parts={statusParts} label="Approval status" tall /> : <Empty>No suppliers yet.</Empty>}
+        </HeroCard>
 
         {rec && !rec.available ? (
           <div className="xl:col-span-7">

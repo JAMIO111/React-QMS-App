@@ -1,119 +1,30 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import {
-  CalendarIcon,
-  CircleCheckIcon,
-  ClipboardListIcon,
-  HourglassIcon,
-  LayersIcon,
-  PoundSterlingIcon,
-  TableIcon,
-  TrendingDownIcon,
-  TrendingUpIcon,
-  TriangleAlertIcon,
-} from "@/components/icons";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CircleCheckIcon, ClipboardListIcon, HourglassIcon, LayersIcon, PoundSterlingIcon, TableIcon, TriangleAlertIcon } from "@/components/icons";
 import Breadcrumb from "../Breadcrumb";
-import RHFComboBox from "../ui/RHFComboBox";
+import CTAButton from "../CTAButton";
+import Callout from "../ui/Callout";
+import SlidingToggle from "../ui/SlidingToggle";
+import { DashboardPeriodPicker } from "../dashboard/DashboardPeriod";
+import { ACCENT, ChangeNote, Chip, Empty, HeroCard, Pipeline, RankList, SplitBar, StatTile } from "../dashboard/DashboardGraphics";
+import { Card, ChartTooltip, grid, pctChange, stackedBarShape, tick } from "../dashboard/DashboardParts";
+import { useDashboardPeriod } from "../../hooks/useDashboardPeriod";
 import { useNcDashboard } from "../../hooks/useNcr";
 import { describeApiError } from "../../lib/api-client";
 import { formatMoney } from "../../lib/costs";
 import { NCR_REGISTER, NC_TABS, formatDate } from "../../lib/ncr";
-import SlidingToggle from "../ui/SlidingToggle";
-import { DashboardPeriodPicker } from "../dashboard/DashboardPeriod";
-import { useDashboardPeriod } from "../../hooks/useDashboardPeriod";
 
 const SEVERITY_COLOR = { critical: "var(--chart-critical)", major: "var(--chart-serious)", minor: "var(--chart-warning)", unset: "var(--chart-neutral)" };
-const SINGLE = "var(--brand-primary)";
-
-const tick = { className: "fill-secondary-text", fontSize: 12 };
-const grid = { stroke: "var(--chart-grid)", vertical: false };
-const pct = (now, before) => (before ? Math.round(((now - before) / before) * 100) : null);
-
-/** Themed tooltip: values in text colours, the series swatch carries identity. */
-const ChartTooltip = ({ active, payload, label, valueFormat = (v) => v, labelFormat = (l) => l }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-lg border border-border-color bg-primary-bg px-3 py-2 text-xs text-primary-text shadow-lg shadow-shadow-color">
-      <p className="mb-1 font-semibold">{labelFormat(label)}</p>
-      {payload.map((p) => (
-        <p key={p.dataKey} className="flex items-center gap-2">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: p.payload?.fill ?? p.color }} aria-hidden="true" />
-          <span className="text-secondary-text">{p.name}</span>
-          <span className="ml-auto font-medium">{valueFormat(p.value)}</span>
-        </p>
-      ))}
-    </div>
-  );
-};
-
-const Card = ({ title, subtitle, action, children, className = "" }) => (
-  <section aria-label={title} className={`flex min-w-0 flex-col gap-3 rounded-2xl border border-border-color bg-secondary-bg p-4 ${className}`}>
-    <div className="flex items-start justify-between gap-2">
-      <div>
-        <h2 className="text-base font-semibold text-primary-text">{title}</h2>
-        {subtitle && <p className="text-xs text-secondary-text">{subtitle}</p>}
-      </div>
-      {action}
-    </div>
-    {children}
-  </section>
-);
-
-/** KPI tile: one number, its label, and (optionally) the change on the previous period. */
-const Kpi = ({ icon: Icon, label, value, note, change, higherIsWorse = true, to }) => {
-  const worse = change !== null && change !== undefined && (higherIsWorse ? change > 0 : change < 0);
-  const body = (
-    <>
-      <div className="flex items-center justify-between text-secondary-text">
-        <span className="text-sm">{label}</span>
-        <Icon className="h-5 w-5" aria-hidden="true" />
-      </div>
-      <p className="text-3xl font-semibold text-primary-text">{value}</p>
-      <p className="min-h-4 text-xs text-secondary-text">
-        {change !== null && change !== undefined ? (
-          <span className={`inline-flex items-center gap-1 ${change === 0 ? "" : worse ? "text-error-color" : "text-success-color"}`}>
-            {change > 0 ? <TrendingUpIcon aria-hidden="true" /> : change < 0 ? <TrendingDownIcon aria-hidden="true" /> : null}
-            {change === 0 ? "No change" : `${change > 0 ? "Up" : "Down"} ${Math.abs(change)}%`} on previous period
-          </span>
-        ) : (
-          note
-        )}
-      </p>
-    </>
-  );
-  const cls = "flex flex-col gap-1 rounded-2xl border border-border-color bg-secondary-bg p-4";
-  return to ? (
-    <Link to={to} className={`${cls} hover:border-brand-primary transition-colors`}>
-      {body}
-    </Link>
-  ) : (
-    <div className={cls}>{body}</div>
-  );
-};
-
-/** Horizontal bars for a ranked or ordered list; every bar carries its value label. */
-const HBars = ({ data, colorOf = () => SINGLE, name = "NCs", height }) => (
-  <div style={{ height: height ?? Math.max(120, data.length * 34 + 20) }}>
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} layout="vertical" margin={{ top: 0, right: 36, bottom: 0, left: 0 }} barCategoryGap={6}>
-        <XAxis type="number" hide allowDecimals={false} />
-        <YAxis type="category" dataKey="label" width={130} tick={tick} axisLine={false} tickLine={false} />
-        <Tooltip cursor={{ fill: "var(--chart-grid)" }} content={<ChartTooltip />} />
-        <Bar dataKey="count" name={name} radius={[0, 4, 4, 0]} maxBarSize={22} label={{ position: "right", className: "fill-primary-text", fontSize: 12 }}>
-          {data.map((d) => (
-            <Cell key={d.key} fill={colorOf(d)} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  </div>
-);
+/** Where a non-conformance came from, as the three groups of the tabs; each keeps its colour whichever tab is chosen. */
+const ORIGINS = NC_TABS.filter((t) => t.source).map((t, i) => ({ key: t.key, label: t.label, sources: t.source.split(","), color: `var(--chart-series-${i + 1})` }));
+const OPEN_STAGES = "draft,open,contained,investigating,dispositioned,awaiting_closure";
+const whole = (v) => v.toLocaleString("en-GB");
 
 /**
- * Non-conformance dashboard (/Non-Conformance): KPI tiles and charts for a period, for every source or one quick tab
- * (All / Customer / Supplier). Period and tab live in the URL, so a view can be bookmarked or shared. Source and
+ * Non-conformance dashboard (/Non-Conformance): how many were raised and what they cost over a period, and where the open ones stand today, for every
+ * source or one quick tab (All / Internal / Customer / Supplier). Period and tab live in the URL, so a view can be bookmarked or shared. Source and
  * category are separate breakdowns: where the non-conformances came from, and what kind of problem they are.
  */
 const NcDashboard = () => {
@@ -136,23 +47,43 @@ const NcDashboard = () => {
   const currency = data?.baseCurrency ?? "GBP";
   const money = (v) => formatMoney(v, currency);
   const shortMoney = (v) => (v >= 10000 ? `${formatMoney(v / 1000, currency).replace(/\.\d+$/, "")}k` : formatMoney(v, currency).replace(/\.00$/, ""));
-  const bucketLabel = (start) => (data?.period.bucket === "month" ? format(new Date(`${start}T00:00:00`), "MMM yy") : format(new Date(`${start}T00:00:00`), "d MMM"));
+  const bucket = data?.period.bucket ?? "month";
+  const bucketLabel = (start) => format(new Date(`${start}T00:00:00`), bucket === "month" ? "MMM yy" : "d MMM");
   // Links into the register keep the tab's sources and the period.
   const registerLink = (extra = "") => `${NCR_REGISTER}?${[tab.source && `source=${tab.source}`, extra].filter(Boolean).join("&")}`;
   const k = data?.kpis;
+  const raisedChange = k ? pctChange(k.raised, k.raisedPrevious) : null;
+
+  // Each period's count split by where the non-conformances came from; a source outside the three groups counts as internal.
+  const trend = (data?.trend ?? []).map((b) => {
+    const row = { start: b.start, total: b.total, cost: b.cost };
+    let placed = 0;
+    for (const o of ORIGINS) {
+      row[o.key] = o.sources.reduce((n, s) => n + (b.bySource?.[s] ?? 0), 0);
+      placed += row[o.key];
+    }
+    row.internal += Math.max(0, b.total - placed);
+    return row;
+  });
+  const originParts = ORIGINS.map((o) => ({ key: o.key, label: o.label, color: o.color, count: trend.reduce((n, b) => n + b[o.key], 0) }));
+  const severityParts = (data?.bySeverity ?? []).map((s) => ({ key: s.key, label: s.label, color: SEVERITY_COLOR[s.key], count: s.count }));
+  const mostParts = Math.max(1, ...(data?.topParts ?? []).map((p) => p.count));
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-primary-bg p-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-2">
           <Breadcrumb />
-          <h1 className="text-2xl font-semibold text-primary-text">Non-conformance dashboard</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold text-primary-text">
+            <TriangleAlertIcon className="h-6 w-6" aria-hidden="true" />
+            Non-conformance dashboard
+          </h1>
           <p className="text-sm text-secondary-text" aria-live="polite">
-            {formatDate(from)} – {formatDate(to)}
+            {formatDate(from)} – {formatDate(to)} · open non-conformances as of today
             {isFetching && !isLoading ? " · updating…" : ""}
           </p>
         </div>
-        {/* Filters: one row above the charts. */}
+        {/* Filters: one row above everything they scope. */}
         <div className="flex flex-nowrap items-end gap-3 max-sm:flex-wrap">
           <SlidingToggle
             ariaLabel="NC source"
@@ -167,132 +98,194 @@ const NcDashboard = () => {
       </div>
 
       {error && (
-        <p role="alert" className="rounded-lg border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
+        <Callout tone="error" role="alert">
           {describeApiError(error)}
-        </p>
+        </Callout>
       )}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6" aria-busy={isLoading || undefined}>
-        <Kpi icon={ClipboardListIcon} label="NCs raised" value={k ? k.raised.toLocaleString("en-GB") : "—"} change={k ? pct(k.raised, k.raisedPrevious) : null}
-          note={k && !k.raisedPrevious ? "None in the previous period" : ""} to={registerLink(`from=${from}&to=${to}`)} />
-        <Kpi icon={TriangleAlertIcon} label="Open now" value={k ? k.open.toLocaleString("en-GB") : "—"}
-          note={k ? `${k.criticalOpen} critical` : ""} to={registerLink("stage=draft,open,contained,investigating,dispositioned,awaiting_closure")} />
-        <Kpi icon={CircleCheckIcon} label="Closed in period" value={k ? k.closed.toLocaleString("en-GB") : "—"} note="By closing date" to={registerLink("stage=closed")} />
-        <Kpi icon={HourglassIcon} label="Average days to close" value={k?.avgDaysToClose !== null && k?.avgDaysToClose !== undefined ? k.avgDaysToClose.toLocaleString("en-GB") : "—"} note="Detected to closed" />
-        <Kpi icon={PoundSterlingIcon} label="Cost of non-conformance" value={k ? shortMoney(k.cost) : "—"} change={k ? pct(k.cost, k.costPrevious) : null}
-          note={k && !k.costPrevious ? "Nothing in the previous period" : ""} />
-        <Kpi icon={LayersIcon} label="Quantity affected" value={k ? k.quantity.toLocaleString("en-GB") : "—"} note="Parts or units" />
+      {/* What was raised in the period beside where the open ones stand today. */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12" aria-busy={isLoading || undefined}>
+        <HeroCard
+          label="NCs raised"
+          icon={ClipboardListIcon}
+          value={k ? whole(k.raised) : "—"}
+          note={raisedChange !== null ? <ChangeNote change={raisedChange} higherIsWorse /> : k && !k.raisedPrevious ? "None in the previous period" : "In the period"}
+          to={registerLink(`from=${from}&to=${to}`)}
+          className="xl:col-span-5">
+          <span className="text-sm font-semibold text-primary-text">Severity</span>
+          {severityParts.some((s) => s.count) ? <SplitBar parts={severityParts} label="Severity" unit="non-conformance" tall showZero /> : <Empty>No NCs in this period.</Empty>}
+        </HeroCard>
+
+        <Card
+          title="Open non-conformances"
+          subtitle="Where each one stands, right now"
+          className="justify-between rounded-3xl xl:col-span-7">
+          <Link
+            to={registerLink(`stage=${OPEN_STAGES}`)}
+            data-tile="Open now"
+            className="flex w-fit items-end gap-4 rounded-2xl outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-brand-primary">
+            <span className="flex flex-col">
+              <span className="text-sm text-secondary-text">Open now</span>
+              <span className="text-5xl font-semibold leading-none text-primary-text">{k ? whole(k.open) : "—"}</span>
+            </span>
+            {k && <Chip tone={k.criticalOpen > 0 ? "error" : "neutral"}>{k.criticalOpen} critical</Chip>}
+          </Link>
+          {data?.byStage?.length ? (
+            <Pipeline steps={data.byStage} label="Open NCs by stage" layout="six" to={(s) => registerLink(`stage=${s.key}`)} />
+          ) : (
+            <Empty>No stages to show.</Empty>
+          )}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-busy={isLoading || undefined}>
+        <StatTile icon={CircleCheckIcon} label="Closed in period" value={k ? whole(k.closed) : "—"} note="By closing date" to={registerLink("stage=closed")} />
+        <StatTile
+          icon={HourglassIcon}
+          label="Average days to close"
+          value={k?.avgDaysToClose !== null && k?.avgDaysToClose !== undefined ? whole(k.avgDaysToClose) : "—"}
+          note="Detected to closed"
+        />
+        <StatTile
+          icon={PoundSterlingIcon}
+          label="Cost of non-conformance"
+          value={k ? shortMoney(k.cost) : "—"}
+          change={k ? pctChange(k.cost, k.costPrevious) : null}
+          higherIsWorse
+          note={k && !k.costPrevious ? "Nothing in the previous period" : ""}
+        />
+        <StatTile icon={LayersIcon} label="Quantity affected" value={k ? whole(k.quantity) : "—"} note="Parts or units" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card
           title="NCs raised"
-          subtitle={`Per ${data?.period.bucket ?? "month"}, by detection date`}
+          subtitle={`Per ${bucket}, by detection date and where they came from`}
           action={
-            <button type="button" onClick={() => setTrendAsTable((v) => !v)} aria-pressed={trendAsTable}
-              className="flex items-center gap-1 rounded-lg border border-border-color px-2 py-1 text-xs text-primary-text hover:bg-border-color/50 cursor-pointer">
-              <TableIcon className="h-3.5 w-3.5" /> {trendAsTable ? "Show chart" : "Show table"}
-            </button>
+            <CTAButton type="neutral" icon={TableIcon} iconSize="h-4 w-4" onClick={() => setTrendAsTable((v) => !v)} aria-pressed={trendAsTable}>
+              {trendAsTable ? "Show chart" : "Show table"}
+            </CTAButton>
           }>
           {trendAsTable ? (
-            <div className="max-h-72 overflow-auto">
+            <div className="max-h-80 overflow-auto">
               <table className="w-full text-sm" aria-label="NCs raised per period">
                 <thead className="sticky top-0 bg-secondary-bg text-left text-secondary-text">
                   <tr>
-                    <th className="py-1 pr-2 font-medium">{data?.period.bucket === "week" ? "Week of" : "Month"}</th>
+                    <th className="py-1 pr-2 font-medium">{bucket === "week" ? "Week of" : "Month"}</th>
                     <th className="py-1 pr-2 text-right font-medium">NCs</th>
                     <th className="py-1 text-right font-medium">Cost</th>
                   </tr>
                 </thead>
                 <tbody className="text-primary-text">
-                  {(data?.trend ?? []).map((b) => (
+                  {trend.map((b) => (
                     <tr key={b.start} className="border-t border-border-color">
                       <td className="py-1 pr-2">{bucketLabel(b.start)}</td>
-                      <td className="py-1 pr-2 text-right">{b.total}</td>
-                      <td className="py-1 text-right">{money(b.cost)}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums">{b.total}</td>
+                      <td className="py-1 text-right tabular-nums">{money(b.cost)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data?.trend ?? []} margin={{ top: 8, right: 8, bottom: 0, left: -16 }} barCategoryGap="20%">
-                  <CartesianGrid {...grid} />
-                  <XAxis dataKey="start" tickFormatter={bucketLabel} tick={tick} axisLine={false} tickLine={false} minTickGap={12} />
-                  <YAxis allowDecimals={false} tick={tick} axisLine={false} tickLine={false} />
-                  <Tooltip cursor={{ fill: "var(--chart-grid)" }} content={<ChartTooltip labelFormat={bucketLabel} />} />
-                  <Bar dataKey="total" name="NCs raised" fill={SINGLE} radius={[4, 4, 0, 0]} maxBarSize={36} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <>
+              <SplitBar parts={originParts} label="NCs raised by where they came from" unit="non-conformance" />
+              <div className="h-60">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={trend} margin={{ top: 8, right: 8, bottom: 0, left: -16 }} barCategoryGap="20%" aria-label="NCs raised per period">
+                    <CartesianGrid {...grid} />
+                    <XAxis dataKey="start" tickFormatter={bucketLabel} tick={tick} axisLine={false} tickLine={false} minTickGap={12} />
+                    <YAxis allowDecimals={false} tick={tick} axisLine={false} tickLine={false} />
+                    <Tooltip cursor={{ fill: "var(--chart-grid)" }} content={<ChartTooltip labelFormat={bucketLabel} />} />
+                    {ORIGINS.map((o) => (
+                      <Bar key={o.key} dataKey={o.key} name={o.label} stackId="s" fill={o.color} stroke="rgb(var(--secondary-bg))" strokeWidth={2} shape={stackedBarShape(ORIGINS.map((x) => x.key))} maxBarSize={24} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </>
           )}
         </Card>
 
-        <Card title="Cost of non-conformance" subtitle={`Per ${data?.period.bucket ?? "month"}, gross, in ${currency}`}>
+        <Card title="Cost of non-conformance" subtitle={`Per ${bucket}, gross, in ${currency}`} action={k && <span className="text-2xl font-semibold text-primary-text">{money(k.cost)}</span>}>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data?.trend ?? []} margin={{ top: 8, right: 8, bottom: 0, left: 4 }} barCategoryGap="20%">
+              <AreaChart data={trend} margin={{ top: 8, right: 8, bottom: 0, left: 4 }} aria-label="Cost of non-conformance per period">
+                <defs>
+                  <linearGradient id="nc-cost-wash" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={ACCENT} stopOpacity={0.28} />
+                    <stop offset="100%" stopColor={ACCENT} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid {...grid} />
                 <XAxis dataKey="start" tickFormatter={bucketLabel} tick={tick} axisLine={false} tickLine={false} minTickGap={12} />
                 <YAxis tickFormatter={shortMoney} tick={tick} axisLine={false} tickLine={false} width={56} />
-                <Tooltip cursor={{ fill: "var(--chart-grid)" }} content={<ChartTooltip labelFormat={bucketLabel} valueFormat={money} />} />
-                <Bar dataKey="cost" name="Cost" fill={SINGLE} radius={[4, 4, 0, 0]} maxBarSize={36} />
-              </BarChart>
+                <Tooltip cursor={{ stroke: "var(--chart-grid)" }} content={<ChartTooltip labelFormat={bucketLabel} valueFormat={money} />} />
+                <Area
+                  type="monotone"
+                  dataKey="cost"
+                  name="Cost"
+                  stroke={ACCENT}
+                  strokeWidth={2}
+                  fill="url(#nc-cost-wash)"
+                  dot={{ r: 3, fill: ACCENT, stroke: "rgb(var(--secondary-bg))", strokeWidth: 2 }}
+                  activeDot={{ r: 5, fill: ACCENT, stroke: "rgb(var(--secondary-bg))", strokeWidth: 2 }}
+                />
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         </Card>
+      </div>
 
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <Card title="By source" subtitle="Where they came from or were detected, raised in the period">
-          {data?.bySource?.some((x) => x.count) ? <HBars data={data.bySource} height={11 * 30 + 20} /> : <p className="py-8 text-center text-sm text-secondary-text">No NCs in this period.</p>}
+          {data?.bySource?.some((x) => x.count) ? (
+            <RankList items={data.bySource} label="NCs by source" to={(s) => `${NCR_REGISTER}?source=${s.key}&from=${from}&to=${to}`} />
+          ) : (
+            <Empty>No NCs in this period.</Empty>
+          )}
         </Card>
-
         <Card title="By category" subtitle="What kind of problem, raised in the period">
-          {data?.byCategory?.length ? <HBars data={data.byCategory} /> : <p className="py-8 text-center text-sm text-secondary-text">No NCs in this period.</p>}
+          {data?.byCategory?.length ? <RankList items={data.byCategory} label="NCs by category" /> : <Empty>No NCs in this period.</Empty>}
         </Card>
-
-        <Card title="Failure modes" subtitle="NCs raised in the period">
-          {data?.byFailureMode.length ? <HBars data={data.byFailureMode} /> : <p className="py-8 text-center text-sm text-secondary-text">No NCs in this period.</p>}
+        <Card title="Failure modes" subtitle="NCs raised in the period" className="lg:col-span-2 xl:col-span-1">
+          {data?.byFailureMode.length ? <RankList items={data.byFailureMode} label="NCs by failure mode" /> : <Empty>No NCs in this period.</Empty>}
         </Card>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Card title="Open NCs by stage" subtitle="Right now">
-            <HBars data={data?.byStage ?? []} height={230} />
-          </Card>
-          <Card title="Severity" subtitle="NCs raised in the period">
-            <HBars data={data?.bySeverity ?? []} colorOf={(d) => SEVERITY_COLOR[d.key]} height={170} />
-          </Card>
-        </div>
       </div>
 
       <Card title="Parts with the most NCs" subtitle="Raised in the period">
         {data?.topParts.length ? (
           <table className="w-full text-sm" aria-label="Parts with the most NCs">
-            <thead className="text-left text-secondary-text">
+            <thead className="text-left text-xs uppercase tracking-wide text-secondary-text">
               <tr>
-                <th className="py-1 pr-2 font-medium">Part</th>
-                <th className="py-1 pr-2 text-right font-medium">NCs</th>
+                <th className="py-1 pr-3 font-medium">Part</th>
+                <th className="py-1 pr-3 font-medium">
+                  <span className="sr-only">Share of the most raised</span>
+                </th>
+                <th className="py-1 pr-3 text-right font-medium">NCs</th>
                 <th className="py-1 text-right font-medium">Cost</th>
               </tr>
             </thead>
             <tbody className="text-primary-text">
               {data.topParts.map((p) => (
                 <tr key={p.id} className="border-t border-border-color">
-                  <td className="py-1.5 pr-2">
-                    <Link className="text-link-color hover:underline" to={registerLink(`part=${p.id}&partLabel=${encodeURIComponent(`${p.partNumber} · ${p.name}`)}&from=${from}&to=${to}`)}>
+                  <td className="py-2 pr-3">
+                    <Link className="font-medium text-link-color hover:underline" to={registerLink(`part=${p.id}&partLabel=${encodeURIComponent(`${p.partNumber} · ${p.name}`)}&from=${from}&to=${to}`)}>
                       {p.partNumber}
                     </Link>{" "}
                     <span className="text-secondary-text">{p.name}</span>
                   </td>
-                  <td className="py-1.5 pr-2 text-right">{p.count}</td>
-                  <td className="py-1.5 text-right">{money(p.cost)}</td>
+                  <td className="w-1/3 py-2 pr-3" aria-hidden="true">
+                    <span className="block h-2.5 rounded-full" style={{ width: `${(p.count / mostParts) * 100}%`, minWidth: 6, background: ACCENT }} />
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums">{p.count}</td>
+                  <td className="py-2 text-right tabular-nums">{money(p.cost)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         ) : (
-          <p className="py-4 text-center text-sm text-secondary-text">No NCs with a part in this period.</p>
+          <Empty>No NCs with a part in this period.</Empty>
         )}
       </Card>
     </div>

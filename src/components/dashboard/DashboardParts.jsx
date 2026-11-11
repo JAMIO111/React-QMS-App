@@ -43,6 +43,7 @@ export const ChartTooltip = ({
   payload,
   label,
   labelFormat = (l) => l,
+  valueFormat = (v) => v,
 }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -56,7 +57,7 @@ export const ChartTooltip = ({
             aria-hidden="true"
           />
           <span className="text-secondary-text">{p.name}</span>
-          <span className="ml-auto font-medium">{p.value}</span>
+          <span className="ml-auto font-medium">{valueFormat(p.value)}</span>
         </p>
       ))}
     </div>

@@ -39,7 +39,7 @@ export class MeService {
       onboarding: string;
     }>(sql`
       select m.id as membership_id, o.id as organisation_id, o.name, o.slug,
-             array(select p from app.my_permissions(o.id) p order by p) as permissions,
+             array(select p from app.my_visible_permissions(o.id) p order by p) as permissions,
              app.organisation_access_state(o.id) as access_state,
              case when o.onboarding_completed_at is not null then 'complete'
                   when exists (select 1 from public.organisation_onboarding w where w.organisation_id = o.id) then 'in_progress'

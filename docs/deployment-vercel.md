@@ -50,7 +50,6 @@ them or paste them into chat.
 | `VITE_SUPABASE_URL` | `https://xvpgrmujayytbbmhnoan.supabase.co` |
 | `VITE_SUPABASE_KEY` | Publishable / anon key (public by design) |
 | `VITE_API_URL` | `https://qms-api-git-dev-jamie-drydens-projects.vercel.app` (no `/api/v1`; the client adds it) |
-| `VITE_UNIRATE_API_KEY` | Optional |
 
 `VITE_*` values are compiled into the bundle, so change them and then redeploy.
 

@@ -6,6 +6,8 @@ BEGIN;
 \ir helpers.sql
 -- Judge each statement as it runs (the API flushes the deferred gauge refresh the same way).
 SET CONSTRAINTS ALL IMMEDIATE;
+-- The "a reading for every check" rule is judged when a calibration is saved (see calibration_integrity.test.sql); these tests add readings one at a time.
+SET CONSTRAINTS calibration_readings_complete DEFERRED;
 
 INSERT INTO auth.users (id, email) VALUES
   ('31000000-0000-0000-0000-000000000101', 'owner@cal.test'),

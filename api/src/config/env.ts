@@ -27,6 +27,10 @@ const EnvSchema = z
     JWT_AUDIENCE: z.string().default('authenticated'),
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
+    /** Serves the API reference (/api/v1/docs and /openapi.json). Unset: on everywhere except production, so the route map is not public. */
+    API_DOCS: z.enum(['true', 'false']).optional(),
+    /** How many proxies sit in front of the API (Vercel: 1), so rate limits see the real client address. Unset: 1 in production, else 0. */
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).optional(),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   })
   .refine((e) => e.SUPABASE_URL || e.SUPABASE_JWT_SECRET, {
@@ -34,6 +38,9 @@ const EnvSchema = z
   });
 
 export type Env = z.infer<typeof EnvSchema>;
+
+export const docsEnabled = (env: Env): boolean => (env.API_DOCS ? env.API_DOCS === 'true' : env.NODE_ENV !== 'production');
+export const trustProxyHops = (env: Env): number => env.TRUST_PROXY_HOPS ?? (env.NODE_ENV === 'production' ? 1 : 0);
 
 /** Validates configuration at start-up; secrets are never echoed in the error. */
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {

@@ -50,6 +50,11 @@ export class ApiExceptionFilter implements ExceptionFilter {
           ? body.message
           : exception.message;
       if (status === HttpStatus.TOO_MANY_REQUESTS) message = 'Too many requests, please slow down';
+    } else if ((exception as { type?: string } | null)?.type === 'entity.too.large') {
+      // The body parser refused a request over the size limit (before any route ran).
+      status = HttpStatus.PAYLOAD_TOO_LARGE;
+      code = 'payload_too_large';
+      message = 'The request is too large';
     } else {
       this.logger.error({ err: exception, correlationId }, 'Unhandled error');
     }

@@ -143,7 +143,7 @@ export class CalibrationRecordsService {
       const result = await db.execute<{ id: string }>(sql`insert into public.calibrations (${columns}) values (${values}) returning id`);
       const id = result.rows[0].id;
       await this.saveReadings(db, ctx, id, readings ?? []);
-      await db.execute(sql`set constraints calibrations_after immediate`);
+      await db.execute(sql`set constraints calibrations_after, calibration_readings_complete immediate`);
       return this.load(db, ctx, id);
     });
   }
@@ -156,7 +156,7 @@ export class CalibrationRecordsService {
       if (sets.length) await this.update1(db, ctx, id, sql.join(sets, sql`, `));
       else await this.assertVisible(db, ctx, id);
       await this.saveReadings(db, ctx, id, readings ?? []);
-      await db.execute(sql`set constraints calibrations_after immediate`);
+      await db.execute(sql`set constraints calibrations_after, calibration_readings_complete immediate`);
       return this.load(db, ctx, id);
     });
   }
@@ -178,7 +178,8 @@ export class CalibrationRecordsService {
       const cal = await this.load(db, ctx, id);
       if (cal.deletedAt) throw new ApiError(409, 'calibration_rule', 'This calibration record is deleted; restore it first');
       if (cal.outcome === 'pass') throw new ApiError(409, 'calibration_rule', 'Only a calibration found out of tolerance can raise an NC');
-      const linked = await db.execute<Row>(sql`select nonconformance_id from public.calibrations where id = ${id}::uuid`);
+      // Locked while we decide, so two clicks (or two people) at once raise one NC, not several.
+      const linked = await db.execute<Row>(sql`select nonconformance_id from public.calibrations where id = ${id}::uuid for update`);
       if (linked.rows[0]?.nonconformance_id) throw new ApiError(409, 'calibration_rule', 'An NC has already been raised for this calibration');
       const gauge = await db.execute<Row>(sql`select site_id from public.gauges where id = ${cal.gauge.id}::uuid`);
 
@@ -286,7 +287,7 @@ export class CalibrationRecordsService {
   private change(ctx: RequestContext, id: string, set: SQL): Promise<CalibrationDetail> {
     return this.database.asUser(ctx, async (db) => {
       await this.update1(db, ctx, id, set);
-      await db.execute(sql`set constraints calibrations_after immediate`);
+      await db.execute(sql`set constraints calibrations_after, calibration_readings_complete immediate`);
       return this.load(db, ctx, id);
     });
   }

@@ -118,6 +118,10 @@ describe('gauges', () => {
     expect(list.body.data.map((g: { id: string }) => g.id)).toEqual([gaugeB]);
     await api().get(`/api/v1/gauges/${gauge}`).set(h).expect(404);
     await api().patch(`/api/v1/gauges/${gaugeB}`).set(h).send({ location: 'Bench' }).expect(403);
+    // /me tells the menus what a site-limited person holds somewhere, so they are not shown an empty app (the server still decides per site).
+    const me = await api().get('/api/v1/me').set(h).expect(200);
+    const membership = me.body.memberships.find((x: { organisation: { id: string } }) => x.organisation.id === ids.orgA);
+    expect(membership.permissions).toEqual(expect.arrayContaining(['calibration.read', 'calibration.record']));
   });
 });
 
@@ -273,5 +277,60 @@ describe('pass/fail (attribute) characteristics', () => {
       .send({ kind: 'variable', nominal: 1, toleranceMinus: 0, tolerancePlus: 0, unitCode: 'mm' }).expect(200);
     expect(back.body).toMatchObject({ kind: 'variable', lower: 1, upper: 1 });
     await api().patch(`/api/v1/gauge-type-characteristics/${t.body.id}`).set(h).send({ kind: 'attribute' }).expect(200);
+  });
+});
+
+// Last, with a gauge of their own, so the figures the other tests check are not disturbed.
+describe('calibration integrity (audit report H1 to H3)', () => {
+  let own: string;
+  let checks: { id: string; name: string }[];
+
+  beforeAll(async () => {
+    const h = await as(ids.ownerA);
+    const type = await api().post('/api/v1/gauge-types').set(h).send({ code: 'INT-1', name: 'Integrity caliper', intervalValue: 6, intervalUnit: 'months' }).expect(201);
+    for (const [name, nominal] of [['25 mm', 25], ['100 mm', 100]] as const) {
+      await api().post(`/api/v1/gauge-types/${type.body.id}/characteristics`).set(h).send({ name, nominal, toleranceMinus: 0.05, tolerancePlus: 0.05, unitCode: 'mm' }).expect(201);
+    }
+    const g = await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-INT', description: 'Integrity gauge', gaugeTypeId: type.body.id, siteId: ids.siteA }).expect(201);
+    own = g.body.id;
+    checks = (await api().get(`/api/v1/gauges/${own}/characteristics`).set(h).expect(200)).body.data;
+  });
+
+  it('needs a reading for every check, so one in-tolerance reading cannot make a pass', async () => {
+    const h = await as(ids.ownerA);
+    const ch = checks;
+    expect(ch.length).toBeGreaterThan(1);
+    const res = await api().post(`/api/v1/gauges/${own}/calibrations`).set(h).send({ readings: [{ characteristicId: ch[0].id, asFound: 25.0 }] }).expect(409);
+    expect(res.body.error.code).toBe('calibration_rule');
+    expect(res.body.error.message).toContain('Enter a reading for every check');
+    expect(res.body.error.message).toContain(ch[1].name);
+  });
+
+  it('raises one NC when several requests arrive at once', async () => {
+    const h = await as(ids.ownerA);
+    const ch = checks;
+    const cal = await api().post(`/api/v1/gauges/${own}/calibrations`).set(h)
+      .send({ readings: ch.map((c: { id: string }) => ({ characteristicId: c.id, asFound: 1000 })) }).expect(201);
+    const before = (await admin.query(`select count(*)::int c from public.nonconformances where organisation_id = $1 and source = 'calibration'`, [ids.orgA])).rows[0].c;
+    const results = await Promise.all([1, 2, 3, 4].map(() => api().post(`/api/v1/calibrations/${cal.body.id}/raise-ncr`).set(h)));
+    expect(results.map((r) => r.status).sort()).toEqual([201, 409, 409, 409]);
+    const after = (await admin.query(`select count(*)::int c from public.nonconformances where organisation_id = $1 and source = 'calibration'`, [ids.orgA])).rows[0].c;
+    expect(after - before).toBe(1);
+  });
+
+  it('lets only a calibration manager correct a saved calibration', async () => {
+    const owner = await as(ids.ownerA);
+    const insp = await as(ids.inspectorA);
+    const ch = checks;
+    const bad = ch.map((c: { id: string }) => ({ characteristicId: c.id, asFound: 1000 }));
+    const cal = await api().post(`/api/v1/gauges/${own}/calibrations`).set(insp).send({ readings: bad }).expect(201);
+    expect(cal.body.outcome).toBe('fail');
+    // The inspector tries to turn the failure into a pass afterwards.
+    const fix = ch.map((c: { id: string }, i: number) => ({ characteristicId: c.id, asFound: i === 0 ? 25 : 100 }));
+    const refused = await api().patch(`/api/v1/calibrations/${cal.body.id}`).set(insp).send({ readings: fix }).expect(409);
+    expect(refused.body.error.message).toContain('calibration.manage');
+    expect((await api().get(`/api/v1/calibrations/${cal.body.id}`).set(owner).expect(200)).body.outcome).toBe('fail');
+    await api().patch(`/api/v1/calibrations/${cal.body.id}`).set(insp).send({ notes: 'Rechecked with the second set of blocks' }).expect(200);
+    await api().patch(`/api/v1/calibrations/${cal.body.id}`).set(owner).send({ readings: fix }).expect(200);
   });
 });

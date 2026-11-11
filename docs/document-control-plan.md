@@ -203,7 +203,7 @@ Migration `20260203100000_document_control_review.sql` (applied live 2026-11-11)
 
 ## 14. DC3 as built (2026-11-11)
 
-Migration `20260204100000_document_control_readers.sql`; SQL test `supabase/tests/document_control_readers.test.sql`; API e2e `api/test/document-readers.e2e-spec.ts`
+Migration `20260204100000_document_control_readers.sql` (applied live 2026-11-11); SQL test `supabase/tests/document_control_readers.test.sql`; API e2e `api/test/document-readers.e2e-spec.ts`
 (+ both sweeps).
 
 - **Readers** (`document_targets`: departments, roles, named people) are kept on the document; `document_recipients` are fixed on each revision when

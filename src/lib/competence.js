@@ -123,3 +123,55 @@ export const sessionNextStep = (session) => {
   if (session.attendeeCount === 0) return "No one is on this session yet.";
   return "Everyone has a result. Close the session when you are done.";
 };
+
+/**
+ * The matrix as a report for `downloadReport` (lib/reportCsv.js): one row per person, and per skill the level and how it stands, with what the file means in its first lines.
+ * `result` is the matrix answer (skills, data, today); `statusFilter` and `today` say what it was made with.
+ */
+export const matrixReport = (result, { statusFilter = "all", today } = {}) => {
+  const on = today ?? result.today;
+  const columns = [
+    { key: "name", label: "Person" },
+    { key: "number", label: "Employee number" },
+    { key: "department", label: "Department" },
+    { key: "positions", label: "Positions" },
+    ...result.skills.flatMap((s) => [
+      { key: `l_${s.id}`, label: `${s.name} — level` },
+      { key: `r_${s.id}`, label: `${s.name} — needs` },
+      { key: `s_${s.id}`, label: `${s.name} — standing` },
+      { key: `e_${s.id}`, label: `${s.name} — expires` },
+    ]),
+  ];
+  const rows = result.data.map((r) => {
+    const row = { name: r.employee.name, number: r.employee.employeeNumber ?? "", department: r.employee.department?.name ?? "", positions: r.positions.map((p) => p.name).join("; ") };
+    for (const s of result.skills) {
+      const c = r.cells[s.id];
+      row[`l_${s.id}`] = c.level === null ? "" : c.level;
+      row[`r_${s.id}`] = c.required === null ? "" : c.required;
+      row[`s_${s.id}`] = statusLabel(c.status);
+      row[`e_${s.id}`] = c.expiresOn ?? "";
+    }
+    return row;
+  });
+  return {
+    meta: {
+      title: "Skills matrix",
+      from: on,
+      to: on,
+      generatedAt: new Date().toISOString(),
+      rowCount: rows.length,
+      basis: [
+        { label: "As at", value: on },
+        { label: "People shown", value: statusFilter === "all" ? "Every active person matching the filters" : `Only those with: ${MATRIX_STATUS_OPTIONS.find((o) => o.value === statusFilter)?.label ?? statusFilter}` },
+      ],
+      definitions: [
+        "Level: 0 none, 1 learning, 2 supervised, 3 competent, 4 can train others; empty means not assessed.",
+        "Needs: the highest level required by the positions the person holds now; empty means nothing requires it.",
+        "Standing: Below required, Not assessed (required), Assessment expired, Expiring soon (within 60 days), On track, Not required.",
+        "Expiry never lowers a level: an expired assessment is flagged, not changed.",
+      ],
+    },
+    columns,
+    rows,
+  };
+};

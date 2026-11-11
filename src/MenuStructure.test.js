@@ -56,4 +56,16 @@ describe("menuStructure", () => {
     expect(icon("Supplier Quality")).toBe(TruckIcon);
     expect(icon("Competence")).toBe(GraduationCapIcon);
   });
+
+  it("opens Competence on its dashboard and shows an own-record member only their own pages", () => {
+    const comp = menuStructure.find((m) => m.name === "Competence");
+    expect(comp.permission).toEqual(["competence.read", "competence.own"]);
+    expect(comp.subMenu.map((s) => [s.name, s.path, s.permission])).toEqual([
+      ["Dashboard", "/Competence", "competence.read"],
+      ["Skills matrix", "/Competence/Matrix", "competence.read"],
+      ["Training sessions", "/Competence/Training", ["competence.read", "competence.own"]],
+      ["My competence", "/Competence/Mine", "competence.own"],
+      ["Skills and positions", "/Competence/Skills", "competence.read"],
+    ]);
+  });
 });

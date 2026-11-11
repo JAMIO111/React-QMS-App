@@ -1,9 +1,13 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { GraduationCapIcon } from "@/components/icons";
 import CTAButton from "@/components/CTAButton";
-import { useCompetenceCategories, useCompetenceMatrix, useCompetencePositions } from "../../hooks/useCompetence";
+import { useCompetenceCategories, useCompetenceMatrix, useCompetencePositions, useMatrixExport } from "../../hooks/useCompetence";
+import { useToast } from "../../contexts/ToastProvider";
+import { describeApiError } from "../../lib/api-client";
+import { downloadReport } from "../../lib/reportCsv";
 import { useUrlFilters } from "../../hooks/useUrlFilters";
-import { describeCell, MATRIX_STATUS_OPTIONS, statusClass } from "../../lib/competence";
+import { describeCell, MATRIX_STATUS_OPTIONS, matrixReport, statusClass } from "../../lib/competence";
 import { ErrorNotice, SearchBox } from "../master-data/shared";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
@@ -31,12 +35,26 @@ const Cell = ({ cell, skill, person }) => (
  */
 const MatrixPage = () => {
   const f = useUrlFilters(MATRIX_FILTER_KEYS);
+  const { showToast } = useToast();
+  const exportMatrix = useMatrixExport();
+  const [exporting, setExporting] = useState(false);
   const positions = useCompetencePositions();
   const categories = useCompetenceCategories();
   const matrix = useCompetenceMatrix({
     q: f.search, positionId: f.position, categoryId: f.category, status: f.status && f.status !== "all" ? f.status : undefined, page: f.page || undefined,
   });
   const page = Number(f.page) || 1;
+  const filters = { q: f.search, positionId: f.position, categoryId: f.category, status: f.status && f.status !== "all" ? f.status : undefined };
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      downloadReport(matrixReport(await exportMatrix(filters), { statusFilter: f.status || "all" }), "skills-matrix");
+    } catch (err) {
+      showToast({ type: "error", title: "Not exported", message: describeApiError(err) });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="flex w-full min-h-0 flex-col gap-4">
@@ -48,6 +66,9 @@ const MatrixPage = () => {
             <p className="text-sm text-secondary-text">Who can do what, against what their positions need. Open a person to assess them.</p>
           </div>
         </div>
+        <CTAButton buttonType="button" type="secondary" onClick={exportCsv} disabled={exporting || !matrix.data?.data.length} loading={exporting}>
+          Export CSV
+        </CTAButton>
       </header>
 
       <div className="flex flex-wrap items-end gap-3">

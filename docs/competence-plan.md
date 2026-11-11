@@ -134,7 +134,7 @@ Menu group **Competence** (`GraduationCapIcon`, `/Competence`): **Dashboard** (d
 | **CO1 (done 2026-11-11, migration `20260127100000_competence_core.sql`, applied live)** | Migration: categories, skills, positions, position skills, permissions and role defaults, menu and Settings tab shell. API + Settings UI for categories, skills, positions. |
 | **CO2 (done 2026-11-11, migration `20260128100000_competence_assessments.sql`, applied live)** | Employee positions (with dates), assessments (append-only), current level, gap and expiry worked out on read, skills matrix, person profile, My competence. |
 | **CO3 (done 2026-11-11, migration `20260129100000_competence_training.sql`, applied live)** | Training sessions with attendee lists, per-attendee completion dates, evidence files on a session or an attendee (private `competence-files` bucket), Training sessions register and session page, training on the person profile. Evidence files on an assessment are not built. |
-| **CO4** | Dashboard, expiry lists, CSV export of the matrix, in-app notice to an employee when assessed (event `competence_assessments.created`, to the linked sign-in only). |
+| **CO4 (done 2026-11-11, migration `20260130100000_competence_notice.sql`, applied live once you run it)** | Dashboard at `/Competence` (gaps, expiring and expired, never assessed, training for the period), CSV export of the matrix, in-app notice to an employee when assessed (event `competence_assessments.created`, to the linked sign-in only). |
 | **CO5** | Exit check: live guardrails, advisors, browser journey step, `docs/competence-exit-report.md`, `CLAUDE.md`. |
 
 Each slice ships with SQL tests (rules above with deliberate mutants), API e2e (both sweeps), frontend tests and, as always, lint, build,

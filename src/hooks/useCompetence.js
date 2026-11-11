@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
@@ -60,6 +60,35 @@ export const useTrainingSession = (id) => {
     enabled: !!organisationId && !!id,
     retry: false,
   });
+};
+
+/** Dashboard figures for a period ({ from, to } — YYYY-MM-DD). Gaps and expiry are as of today; training is for the period. */
+export const useCompetenceDashboard = ({ from, to }) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "dashboard", from, to),
+    queryFn: () => apiFetch(`/competence-dashboard?from=${from}&to=${to}`, { organisationId }),
+    enabled: !!organisationId && !!from && !!to,
+    retry: false,
+    placeholderData: keepPreviousData,
+  });
+};
+
+/** Every page of the matrix for the current filters (≤ 100 people a page), for the CSV export. */
+export const useMatrixExport = () => {
+  const { organisationId } = useOrganisation();
+  return async (params) => {
+    let page = 1;
+    let first = null;
+    const data = [];
+    for (;;) {
+      const res = await apiFetch(`/competence/matrix?${qs({ ...params, page, pageSize: 100 })}`, { organisationId });
+      first ??= res;
+      data.push(...res.data);
+      if (page * res.pageSize >= res.total || page >= 10) return { ...first, data };
+      page += 1;
+    }
+  };
 };
 
 /** One command at a time: { action, id, body }. Every one refreshes the organisation's cached data. */

@@ -33,13 +33,17 @@ const matrix = {
 };
 let mine = { linked: true, ...profile };
 const matrixCalls = [];
+const exportMatrix = vi.fn();
+const downloadReport = vi.fn();
 
+vi.mock("../../lib/reportCsv", () => ({ downloadReport: (...a) => downloadReport(...a) }));
 vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }) }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock("../../hooks/useCompetence", () => ({
   useCompetenceSkills: () => ({ data: { data: [skillCmm, skillVis] }, isLoading: false }),
   useCompetencePositions: () => ({ data: { data: [{ id: "p1", name: "Inspector", code: "INSP" }, { id: "p3", name: "Auditor", code: "AUD" }] }, isLoading: false }),
   useCompetenceCategories: () => ({ data: { data: [{ id: "c1", label: "Inspection" }] }, isLoading: false }),
+  useMatrixExport: () => exportMatrix,
   useCompetenceMatrix: (params) => (matrixCalls.push(params), { data: matrix, isLoading: false }),
   useCompetencePerson: () => ({ data: profile, isLoading: false }),
   useMyCompetence: () => ({ data: mine, isLoading: false }),
@@ -53,6 +57,8 @@ import MyCompetencePage from "./MyCompetencePage";
 beforeEach(() => {
   mutate.mockReset();
   matrixCalls.length = 0;
+  exportMatrix.mockReset();
+  downloadReport.mockReset();
   permissions = ["competence.read", "competence.manage", "competence.assess"];
   mine = { linked: true, ...profile };
 });
@@ -71,6 +77,21 @@ describe("skills matrix", () => {
     render(<MemoryRouter><MatrixPage /></MemoryRouter>);
     await userEvent.click(screen.getByRole("button", { name: "Gaps" }));
     expect(matrixCalls.at(-1)).toMatchObject({ status: "gap" });
+  });
+});
+
+describe("matrix export", () => {
+  it("fetches every page for the current filters and downloads them as a report", async () => {
+    exportMatrix.mockResolvedValue(matrix);
+    render(<MemoryRouter initialEntries={["/Competence/Matrix?status=gap&position=p1"]}><MatrixPage /></MemoryRouter>);
+    await userEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+    expect(exportMatrix).toHaveBeenCalledWith(expect.objectContaining({ positionId: "p1", status: "gap" }));
+    expect(downloadReport).toHaveBeenCalledTimes(1);
+    const [report, slug] = downloadReport.mock.calls[0];
+    expect(slug).toBe("skills-matrix");
+    expect(report.meta.title).toBe("Skills matrix");
+    expect(report.rows).toHaveLength(1);
+    expect(report.rows[0]).toMatchObject({ name: "Xavier Xu", s_s1: "Below required" });
   });
 });
 

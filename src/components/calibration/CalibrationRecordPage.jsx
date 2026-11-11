@@ -28,7 +28,10 @@ import GaugeUsage from "../inspection/GaugeUsage";
 import { PartyPicker } from "../ncr/Pickers";
 import ReasonDialog from "../ncr/ReasonDialog";
 import GaugeStatusPrompt from "./GaugeStatusPrompt";
-import { AttachmentDrop } from "../ui/FileDrop";
+import { AttachmentDrop, FileIcon } from "../ui/FileDrop";
+import { uploadFileToSupabase } from "../../api/supabaseApi";
+import { useOrganisation } from "../../contexts/OrganisationProvider";
+import { apiFetch } from "../../lib/api-client";
 import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import RHFTextArea from "../ui/RHFTextArea";
@@ -63,6 +66,54 @@ const PassFail = ({ label, value, onChange, disabled, allowClear }) => (
 
 /** A check's as-left result is offered once it failed as found (or already has one). */
 const asLeftOffered = (r) => r.input.asFoundPass === false || r.input.asLeftPass != null;
+
+const MAX_CERTIFICATE_MB = 25;
+const sameFile = (a, b) => a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
+
+/**
+ * Certificates chosen before a new calibration is saved (an external calibration usually arrives with its certificate).
+ * The files wait here; saving the calibration uploads them to its folder and records them.
+ */
+const PendingCertificates = ({ files, onChange, disabled }) => {
+  const [over, setOver] = useState(false);
+  const [refused, setRefused] = useState([]);
+  const add = (list) => {
+    const chosen = Array.from(list ?? []);
+    const tooBig = chosen.filter((f) => f.size > MAX_CERTIFICATE_MB * 1024 * 1024);
+    setRefused(tooBig.map((f) => f.name));
+    const fresh = chosen.filter((f) => !tooBig.includes(f) && !files.some((x) => sameFile(x, f)));
+    if (fresh.length) onChange([...files, ...fresh]);
+  };
+  return (
+    <div className="flex flex-col gap-3">
+      <label
+        onDragOver={(e) => { e.preventDefault(); if (!disabled) setOver(true); }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => { e.preventDefault(); setOver(false); if (!disabled) add(e.dataTransfer.files); }}
+        className={`flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 border-dashed p-6 text-center text-sm ${over ? "border-brand-primary bg-brand-primary/5" : "border-border-dark-color"} ${disabled ? "cursor-default opacity-60" : ""}`}>
+        <span className="font-medium text-primary-text">Drop the certificate here, or choose a file</span>
+        <span className="text-secondary-text">Up to {MAX_CERTIFICATE_MB} MB each. Uploaded when you save the calibration.</span>
+        <input type="file" multiple className="sr-only" aria-label="Choose certificate files" disabled={disabled} onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
+      </label>
+      {refused.length > 0 && <Callout tone="error" role="alert">Over {MAX_CERTIFICATE_MB} MB, so not added: {refused.join(", ")}.</Callout>}
+      {files.length > 0 && (
+        <ul aria-label="Certificates to upload" className="flex flex-col divide-y divide-border-color rounded-xl border border-border-color">
+          {files.map((f) => (
+            <li key={`${f.name}-${f.size}-${f.lastModified}`} className="flex items-center gap-3 px-3 py-2 text-sm">
+              <FileIcon name={f.name} type={f.type} className="h-7 w-7" />
+              <span className="min-w-0 flex-1 truncate text-primary-text">{f.name}</span>
+              <span className="text-xs text-secondary-text">{(f.size / 1024 / 1024).toFixed(1)} MB</span>
+              <button type="button" disabled={disabled} onClick={() => onChange(files.filter((x) => x !== f))} aria-label={`Remove ${f.name}`}
+                className="cursor-pointer rounded-md p-1 text-secondary-text hover:bg-border-color/60 hover:text-primary-text disabled:cursor-default">
+                <XIcon aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 const readingInput = "w-28 rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-right text-sm text-primary-text focus:outline-none focus:border-brand-primary disabled:opacity-60";
 
@@ -135,6 +186,9 @@ const CalibrationRecordPage = () => {
   const mutation = useCalibrationMutation();
   const [dialog, setDialog] = useState(null); // "delete"
   const [statusPrompt, setStatusPrompt] = useState(null); // the calibration just recorded
+  const [pendingFiles, setPendingFiles] = useState([]); // certificates chosen before a new external calibration is saved
+  const [uploading, setUploading] = useState(false);
+  const { organisationId } = useOrganisation();
 
   // Depend on values, not objects, so a refetch does not wipe what is being typed.
   const defaultSource = gauge.data?.calibrationSource ?? "internal";
@@ -212,6 +266,23 @@ const CalibrationRecordPage = () => {
   if (!liveOutcome && form.outcome !== original.outcome) changedFields.outcome = form.outcome;
   const dirty = !isNew && (Object.keys(changedFields).length > 0 || changedReadings.length > 0);
 
+  /** Upload the certificates chosen before saving into the new calibration's folder; the calibration is already saved, so a failure is only reported. */
+  const uploadPending = async (created) => {
+    if (!pendingFiles.length || form.performedBy !== "external") return;
+    setUploading(true);
+    const failed = [];
+    for (const file of pendingFiles) {
+      try {
+        const { path } = await uploadFileToSupabase(file, "calibration-files", organisationId, created.id, "calibration");
+        await apiFetch(`/calibrations/${created.id}/attachments`, { method: "POST", organisationId, body: { storagePath: path, fileName: file.name, contentType: file.type || null, sizeBytes: file.size } });
+      } catch {
+        failed.push(file.name);
+      }
+    }
+    setUploading(false);
+    setPendingFiles([]);
+    if (failed.length) showToast({ type: "error", title: "Certificate not uploaded", message: `${failed.join(", ")} could not be uploaded. The calibration is saved: attach ${failed.length === 1 ? "it" : "them"} again from its page.` });
+  };
   const goToRecord = (created) => navigate(`/Calibration/Gauges/${gaugeId}/calibrations/${created.id}`, { replace: true });
   const applyGaugeStatus = (created, status, statusReason) => {
     setStatusPrompt(null);
@@ -235,7 +306,8 @@ const CalibrationRecordPage = () => {
       mutation.mutate(
         { path: `/gauges/${gaugeId}/calibrations`, body: { ...body, ...(readingsBody.length ? { readings: readingsBody } : { outcome: form.outcome }) } },
         {
-          onSuccess: (created) => {
+          onSuccess: async (created) => {
+            await uploadPending(created);
             const o = outcomeOf(created.outcome);
             showToast({
               type: created.outcome === "fail" ? "error" : "success",
@@ -305,15 +377,14 @@ const CalibrationRecordPage = () => {
               <TriangleAlertIcon className="h-4 w-4" /> {c.nonconformance.reference}
             </CTAButton>
           )}
-          {/* Always shown to editors (switched off until something changed), so the first keystroke does not move the buttons. */}
-          {canEdit && (
-            <CTAButton buttonType="button" onClick={() => { setForm(original); setReadings(originalReadings); }} disabled={!dirty} type="neutral" size="default" className="px-3">
+          {canEdit && dirty && (
+            <CTAButton buttonType="button" onClick={() => { setForm(original); setReadings(originalReadings); }} type="neutral" size="default" className="px-3">
               <Undo2Icon className="h-4 w-4" /> Discard changes
             </CTAButton>
           )}
           {canEdit && (
-            <CTAButton buttonType="button" onClick={save} disabled={mutation.isPending || !valid || (!isNew && !dirty)} loading={mutation.isPending} type="success" size="default" className="px-3">
-              <SaveIcon className="h-4 w-4" /> {mutation.isPending ? "Saving…" : isNew ? "Save calibration" : "Save changes"}
+            <CTAButton buttonType="button" onClick={save} disabled={mutation.isPending || uploading || !valid || (!isNew && !dirty)} loading={mutation.isPending || uploading} type="success" size="default" className="px-3">
+              <SaveIcon className="h-4 w-4" /> {uploading ? "Uploading certificates…" : mutation.isPending ? "Saving…" : isNew ? "Save calibration" : "Save changes"}
             </CTAButton>
           )}
           {!isNew && can("calibration.record") && !c.deletedAt && !g.deletedAt && (
@@ -492,7 +563,12 @@ const CalibrationRecordPage = () => {
             </p>
           </Card>
         )}
-        {isNew && <p className="text-sm text-secondary-text">Certificates can be attached once the calibration is saved.</p>}
+        {isNew && form.performedBy === "external" && (
+          <Card title="Certificates" subtitle="Attach the supplier's certificate now; it is uploaded when you save the calibration.">
+            <PendingCertificates files={pendingFiles} onChange={setPendingFiles} disabled={mutation.isPending || uploading} />
+          </Card>
+        )}
+        {isNew && form.performedBy !== "external" && <p className="text-sm text-secondary-text">Certificates can be attached once the calibration is saved.</p>}
       </div>
 
       {statusPrompt && (

@@ -248,6 +248,33 @@ describe("calibration record", () => {
     expect(lastCall("POST /gauges/g1/calibrations").body).not.toHaveProperty("readings");
   });
 
+  it("attaches a certificate before saving an external calibration, and uploads it once saved", async () => {
+    const { uploadFileToSupabase } = await import("@/api/supabaseApi");
+    uploadFileToSupabase.mockResolvedValue({ path: "org-1/calibration/c9/x-cert.pdf" });
+    routeApi({
+      "GET /gauges/g1/characteristics": { data: [] },
+      "GET /suppliers": { data: [] },
+      "POST /gauges/g1/calibrations": () => record({ id: "c9", readings: [], outcome: "pass" }),
+      "POST /calibrations/c9/attachments": { id: "a1" },
+      "GET /calibrations/c9": record({ id: "c9", readings: [], outcome: "pass" }),
+      "GET /calibrations/c9/attachments": { data: [] },
+    });
+    renderAt("/Calibration/Gauges/g1/calibrations/new");
+    await screen.findByRole("button", { name: "Save calibration" });
+    // In-house: certificates wait until the record exists.
+    expect(screen.queryByLabelText("Choose certificate files")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("combobox", { name: "Performed" }));
+    await userEvent.click(await screen.findByRole("option", { name: /External/ }));
+    const file = new File(["%PDF"], "cert.pdf", { type: "application/pdf" });
+    await userEvent.upload(screen.getByLabelText("Choose certificate files"), file);
+    expect(within(screen.getByRole("list", { name: "Certificates to upload" })).getByText("cert.pdf")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "Pass" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save calibration" }));
+    await waitFor(() => expect(lastCall("POST /calibrations/c9/attachments")).toBeTruthy());
+    expect(uploadFileToSupabase).toHaveBeenCalledWith(file, "calibration-files", "org-1", "c9", "calibration");
+    expect(lastCall("POST /calibrations/c9/attachments").body).toMatchObject({ storagePath: "org-1/calibration/c9/x-cert.pdf", fileName: "cert.pdf", contentType: "application/pdf" });
+  });
+
   it("raises an NC for a failed calibration", async () => {
     routeApi({ "GET /calibrations/c1": record(), "POST /calibrations/c1/raise-ncr": { id: "n7", reference: "NCM-26-007", source: "internal" } });
     renderAt("/Calibration/Gauges/g1/calibrations/c1");

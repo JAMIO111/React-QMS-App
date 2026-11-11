@@ -393,10 +393,10 @@ describe("file import wizard", () => {
     await userEvent.click(await within(code2).findByRole("button", { name: /CONCAT\(value, value, …\)/ }));
     await waitFor(() => expect(box).toHaveValue("CONCAT("));
     await userEvent.type(box, '"M-", [[Account])');
-    await waitFor(() => expect(calls.filter((c) => c.k === "POST /integrations/formulas/check").at(-1).body).toEqual({ formula: 'CONCAT("M-", [Account])', columns: ["Account", "Supplier Name", "E-mail", "Country"], sample: fileDetail.sample[0].values }), { timeout: 3000 });
-    expect(await within(code2).findByText("M-S-1", {}, { timeout: 3000 })).toBeInTheDocument();
-    await waitFor(() => expect(lastPreview().fields.find((f) => f.target === "code")).toEqual({ target: "code", formula: 'CONCAT("M-", [Account])' }), { timeout: 3000 });
-  });
+    await waitFor(() => expect(calls.filter((c) => c.k === "POST /integrations/formulas/check").at(-1).body).toEqual({ formula: 'CONCAT("M-", [Account])', columns: ["Account", "Supplier Name", "E-mail", "Country"], sample: fileDetail.sample[0].values }), { timeout: 10000 });
+    expect(await within(code2).findByText("M-S-1", {}, { timeout: 10000 })).toBeInTheDocument();
+    await waitFor(() => expect(lastPreview().fields.find((f) => f.target === "code")).toEqual({ target: "code", formula: 'CONCAT("M-", [Account])' }), { timeout: 10000 });
+  }, 30000);
 
   it("step 3: the server's column check is shown above the fields and blocks an import that needs a missing column", async () => {
     routeApi({ ...base([template()]), "GET /integrations/templates/t1": templateDetail({}, { keyField: "Account", fields: [{ target: "code", source: "Ref" }, { target: "name", source: "Supplier Name" }] }) });

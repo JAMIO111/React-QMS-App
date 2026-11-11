@@ -1,6 +1,6 @@
 # Email notifications and OAuth client credentials — plan
 
-Date: 2026-11-11. Two independent features, agreed decisions below. Migrations `20260131100000_integration_oauth_client.sql` and `20260131200000_email_notifications.sql` were applied live on 2026-11-11 (live guardrails 0 violations); they were renamed from `20260124…`/`20260125…` after parallel migrations took those numbers. `20260201100000_notifications_merge.sql` restores the competence notice branch the email migration overwrote.
+Date: 2026-11-11. Two independent features, agreed decisions below. Migrations `20260131100000_integration_oauth_client.sql` and `20260131200000_email_notifications.sql` were applied live on 2026-11-11 (live guardrails 0 violations); they were renamed from `20260124…`/`20260125…` after parallel migrations took those numbers. `20260201100000_notifications_merge.sql` restores the competence notice branch the email migration overwrote (applied live 2026-11-11).
 
 ## Decisions (agreed)
 

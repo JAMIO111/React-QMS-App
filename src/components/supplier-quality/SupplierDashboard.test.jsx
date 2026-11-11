@@ -64,7 +64,8 @@ const show = (data) => {
     </QueryClientProvider>
   );
 };
-const kpi = (label) => screen.getAllByText(label).map((el) => el.closest("a.rounded-2xl, div.rounded-2xl")).find(Boolean);
+/** A figure's tile (the hero card, a gauge, a meter or a stat tile), by its label. */
+const kpi = (label) => document.querySelector(`[data-tile="${label}"]`);
 
 beforeEach(() => {
   apiFetch.mockReset();
@@ -105,6 +106,27 @@ describe("supplier quality dashboard", () => {
     expect(rows[0]).toHaveTextContent("1 critical non-conformance(s) in the period · and 2 more");
     expect(within(rows[0]).getByRole("link", { name: "Acme Metals" })).toHaveAttribute("href", "/Suppliers/s1?tab=performance");
     expect(rows[1]).toHaveTextContent("Watch");
+  });
+
+  it("draws the splits as bars whose parts are named with their counts, and the corrective actions as steps in order", async () => {
+    show(dashboard());
+    await screen.findByText("7 approved · 3 pending approval");
+    // approval status: a bar that says what it shows, and a list with every part that has something in it
+    expect(screen.getByRole("img", { name: "Approval status: Pending approval 3, Approved 7, Conditional approval 1, Suspended 1" })).toBeInTheDocument();
+    const status = screen.getByRole("list", { name: "Approval status" });
+    expect(within(status).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Pending approval325%", "Approved758%", "Conditional approval18%", "Suspended18%"]);
+    // risk and performance bands keep the parts at zero in their lists
+    expect(within(screen.getByRole("list", { name: "Risk" })).getAllByRole("listitem")).toHaveLength(5);
+    expect(screen.getByRole("list", { name: "Performance bands" })).toHaveTextContent("Not enough data325%");
+    // the period's totals sit above each chart and are its legend
+    expect(screen.getByRole("list", { name: "Delivered lines in the period" })).toHaveTextContent("Accepted1878%Waiting for a decision313%Rejected29%");
+    expect(screen.getByRole("list", { name: "Non-conformances raised in the period" })).toHaveTextContent("Critical133%");
+    // gauges and meters say what they measure
+    expect(screen.getByRole("img", { name: "Units rejected, of units received" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Requests with a response overdue, of those running" })).toBeInTheDocument();
+    // corrective action requests: every step in order, with its count
+    const steps = within(screen.getByRole("list", { name: "Corrective action requests by status" })).getAllByRole("listitem");
+    expect(steps.map((li) => li.textContent)).toEqual(["1Draft", "2Issued", "0Acknowledged", "1Response received", "0Under review", "0Revision requested", "0Accepted", "0Verifying effectiveness"]);
   });
 
   it("lists what is overdue or waiting with links to each record", async () => {

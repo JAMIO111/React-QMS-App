@@ -202,6 +202,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await importWithTemplate({ page, stack, APP, orgName, see, shot, step, log });
   await importFromApi({ page, stack, APP, orgName, see, shot, step, log });
   await competence({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
+  await documentControl({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -1258,3 +1259,120 @@ async function competence({ browser, page, stack, APP, orgName, see, shot, step,
   await shot(own, '95-competence-my-record');
   await ctx.close();
 }
+
+/**
+ * Document control (DC6): the owner writes a procedure in the editor, names Colin as reviewer and approver and inspectors as readers, sends it;
+ * Colin sends it back, the owner fixes it and sends it again, Colin accepts and approves it for today, it is in force and Colin acknowledges it;
+ * the owner starts revision B and the dashboard counts it.
+ */
+async function documentControl({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch }) {
+  const org = (await stack.admin.query(`select id from public.organisations where name = $1`, [orgName])).rows[0];
+  // Colin approves as well as reviews: give him the quality manager role (the author may not approve their own document).
+  await stack.admin.query(
+    `insert into public.user_role_assignments (organisation_id, membership_id, role_id)
+     select $1, m.id, r.id from public.organisation_users m join auth.users u on u.id = m.user_id, public.roles r
+      where m.organisation_id = $1 and lower(u.email) = lower($2) and r.organisation_id = $1 and r.key = 'quality_manager'`,
+    [org.id, colleague.email],
+  );
+
+  step('owner writes a procedure, names the reviewer, approver and readers, and sends it for review');
+  await page.goto(`${APP}/Documentation/Documents`);
+  await page.getByRole('button', { name: 'New document' }).click();
+  const create = page.getByRole('dialog', { name: 'New document' });
+  await create.getByRole('combobox', { name: /Type/ }).click();
+  await page.getByRole('option', { name: /^Procedure/ }).click();
+  await create.getByRole('combobox', { name: /Content/ }).click();
+  await page.getByRole('option', { name: /Written here/i }).click();
+  await create.getByLabel('Title').fill('Control of nonconforming product');
+  await create.getByRole('button', { name: 'Create document' }).click();
+  await see(page.getByRole('heading', { name: /^SOP-\d{3}$/ }));
+  const number = (await page.getByRole('heading', { level: 1 }).first().textContent()).trim();
+  await page.getByRole('combobox', { name: 'Add a role' }).click();
+  await page.getByRole('option', { name: /Inspector/ }).click();
+  await see(page.getByRole('list', { name: 'Readers' }).getByText(/Inspector/));
+  await page.getByRole('link', { name: 'Open the draft' }).click();
+  await page.waitForURL(/\/revisions\/[0-9a-f-]{36}$/);
+  const editor = page.getByLabel('Document text');
+  await editor.click();
+  await page.keyboard.type('Quarantine suspect parts.');
+  await see(page.getByText(/· saved/));
+  await page.getByRole('combobox', { name: 'Reviewers' }).click();
+  await page.getByRole('option', { name: /Colin Colleague/ }).click();
+  await see(page.getByRole('list', { name: 'Reviewers' }).getByText('Colin Colleague'));
+  await page.getByRole('combobox', { name: 'Approver' }).click();
+  await page.getByRole('option', { name: /Colin Colleague/ }).click();
+  await see(page.getByText(/has what it needs/));
+  await page.getByRole('button', { name: 'Send for review' }).click();
+  await see(page.getByText(/In review: waiting for Colin Colleague/));
+  await shot(page, '96-document-in-review');
+  const revisionUrl = page.url();
+
+  step('Colin finds it waiting and sends it back with what needs changing');
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const colin = await ctx.newPage();
+  colin.setDefaultTimeout(15000);
+  watch(colin, 'colin');
+  await signIn(colin, APP, colleague.email);
+  await see(colin.getByRole('heading', { level: 1, name: /good (morning|afternoon|evening), Colin/i }));
+  await colin.goto(revisionUrl);
+  await see(colin.getByText('Your review is needed'));
+  await colin.getByRole('button', { name: 'Send back' }).click();
+  const back = colin.getByRole('dialog', { name: 'Send it back' });
+  await back.getByLabel('What needs changing?').fill('Say how suspect parts are labelled');
+  await back.getByRole('button', { name: 'Send back' }).click();
+  await see(colin.getByText(/Thank you|Sent back|draft/i));
+
+  step('owner fixes it and sends it again; Colin accepts and approves it for today');
+  await page.reload();
+  await see(page.getByText(/Say how suspect parts are labelled/));
+  await page.getByLabel('Document text').click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' Label them with a red tag.');
+  await see(page.getByText(/· saved/));
+  await page.getByRole('button', { name: 'Send for review' }).click();
+  await see(page.getByText(/In review: waiting for Colin Colleague/));
+  await colin.goto(revisionUrl);
+  await see(colin.getByText('Your review is needed'));
+  await colin.getByRole('button', { name: 'Accept' }).click();
+  await see(colin.getByText('Your approval is needed'));
+  await colin.getByRole('button', { name: 'Approve' }).click();
+  await colin.getByRole('dialog', { name: /^Approve/ }).getByRole('button', { name: 'Approve' }).click();
+  await see(colin.getByRole('heading', { name: /rev A/i }));
+  await see(colin.getByText('In force', { exact: true }));
+  await shot(colin, '97-document-in-force');
+
+  step('Colin, an inspector and so a reader, acknowledges the revision in force');
+  await colin.goto(`${APP}/Documentation/My-Documents`);
+  await see(colin.getByRole('link', { name: new RegExp(number) }));
+  await colin.goto(revisionUrl);
+  await see(colin.getByText('Please read and acknowledge it'));
+  await colin.getByRole('button', { name: 'Acknowledge' }).click();
+  await colin.getByRole('dialog').getByRole('button', { name: 'I have read it' }).click();
+  await see(colin.getByText('You acknowledged it'));
+  await shot(colin, '98-document-acknowledged');
+  await ctx.close();
+  const reader = (await stack.admin.query(
+    `select x.acknowledged_at is not null as done, r.status, r.letter, r.review_round from public.document_recipients x
+       join public.document_revisions r on r.id = x.revision_id join public.documents d on d.id = r.document_id
+       join auth.users u on u.id = x.user_id where d.organisation_id = $1 and d.number = $2 and lower(u.email) = lower($3)`,
+    [org.id, number, colleague.email],
+  )).rows;
+  log(`reader: ${JSON.stringify(reader)}`);
+  if (reader.length !== 1 || !reader[0].done || reader[0].status !== 'effective' || reader[0].letter !== 'A' || reader[0].review_round !== 2) {
+    throw new Error(`the revision was not reviewed twice, approved and acknowledged: ${JSON.stringify(reader)}`);
+  }
+
+  step('owner starts revision B, and the dashboard counts the document in force');
+  await page.goto(`${APP}/Documentation/Documents`);
+  await page.getByRole('link', { name: new RegExp(number) }).first().click();
+  await see(page.getByText('Rev A is in force'));
+  await page.getByRole('button', { name: 'Start a new revision' }).click();
+  await page.waitForURL(/\/revisions\/[0-9a-f-]{36}$/);
+  await see(page.getByRole('heading', { name: /Draft \(will be rev B\)/ }));
+  await see(page.getByLabel('Document text').getByText(/red tag/));
+  await page.goto(`${APP}/Documentation`);
+  await see(page.getByRole('heading', { name: 'Documents dashboard' }));
+  await see(page.getByRole('link', { name: /In force\s*1/ }));
+  await shot(page, '99-documents-dashboard');
+}
+

@@ -103,10 +103,12 @@ const Toolbar = ({ editor }) => {
  * The text of a text document, in TipTap. Editable for a draft (with a toolbar; `onChange(json)` is called once typing pauses),
  * read-only otherwise. What is stored is the editor's JSON, and it is shown through the same schema, so no HTML is ever stored or injected.
  */
-const DocumentEditor = ({ value, editable = false, onChange, label = "Document text" }) => {
+const DocumentEditor = ({ value, editable = false, onChange, label = "Document text", flushRef, onPendingChange }) => {
   const timer = useRef(null);
   const latest = useRef(onChange);
   latest.current = onChange;
+  const pendingCb = useRef(onPendingChange);
+  pendingCb.current = onPendingChange;
   const editor = useEditor({
     extensions,
     content: value ?? EMPTY_DOC,
@@ -114,23 +116,47 @@ const DocumentEditor = ({ value, editable = false, onChange, label = "Document t
     immediatelyRender: true,
     editorProps: { attributes: { "aria-label": label, class: "document-text min-h-64 px-4 py-3 outline-none" } },
     onUpdate: ({ editor: e }) => {
+      if (!e.isEditable) return; // a read-only editor never saves (switching to read-only also fires an update)
       clearTimeout(timer.current);
-      timer.current = setTimeout(() => latest.current?.(e.getJSON()), SAVE_DELAY_MS);
+      pendingCb.current?.(true);
+      timer.current = setTimeout(() => {
+        timer.current = null;
+        pendingCb.current?.(false);
+        Promise.resolve(latest.current?.(e.getJSON())).catch(() => {}); // the page reports a failed save itself
+      }, SAVE_DELAY_MS);
     },
   });
+
+  // Saves at once whatever is waiting for the pause (before sending the draft on), returning what onChange returns.
+  useEffect(() => {
+    if (!flushRef) return undefined;
+    flushRef.current = () => {
+      if (!timer.current || !editor || editor.isDestroyed) return undefined;
+      clearTimeout(timer.current);
+      timer.current = null;
+      pendingCb.current?.(false);
+      return latest.current?.(editor.getJSON());
+    };
+    return () => {
+      flushRef.current = null;
+    };
+  }, [editor, flushRef]);
 
   // Save what is pending when the page closes the editor.
   useEffect(
     () => () => {
       if (timer.current && editor && !editor.isDestroyed) {
         clearTimeout(timer.current);
-        latest.current?.(editor.getJSON());
+        Promise.resolve(latest.current?.(editor.getJSON())).catch(() => {});
       }
     },
     [editor],
   );
   useEffect(() => {
-    if (editor && editor.isEditable !== editable) editor.setEditable(editable);
+    if (editor && editor.isEditable !== editable) {
+      // Leaving edit mode drops nothing typed: anything waiting is saved first (the page has already waited for it before moving the draft on).
+      editor.setEditable(editable, false);
+    }
   }, [editor, editable]);
 
   if (!editor) return null;

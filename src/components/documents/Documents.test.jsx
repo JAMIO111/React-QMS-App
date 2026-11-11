@@ -64,7 +64,7 @@ vi.mock("../../hooks/useDocuments", () => ({
   useDocumentRevision: () => ({ data: revision, isLoading: false }),
   useDocumentMutation: () => ({ mutate, isPending: false, error: null, reset: vi.fn() }),
   useDocumentFileMutation: () => ({ mutate, isPending: false, error: null, reset: vi.fn() }),
-  useSaveDraft: () => ({ mutate: saveDraft, isPending: false }),
+  useSaveDraft: () => ({ mutate: saveDraft, mutateAsync: (b) => Promise.resolve(saveDraft(b)), isPending: false }),
   useToggleDocumentType: () => ({ mutate }),
   useWaitingReviews: () => ({ data: waiting }),
   useDocumentSigners: () => ({ data: [{ id: "u1", name: "Ann Owner", canApprove: true }, { id: "u2", name: "Bob Bloggs", canApprove: false }, { id: "u3", name: "Quinn Manager", canApprove: true }, { id: "u4", name: "Dee Doe", canApprove: false }] }),

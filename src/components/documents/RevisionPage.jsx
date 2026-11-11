@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Trash2Icon } from "@/components/icons";
 import CTAButton from "@/components/CTAButton";
@@ -143,6 +143,9 @@ const RevisionPage = () => {
   const { showToast } = useToast();
   const [discarding, setDiscarding] = useState(false);
   const [issuing, setIssuing] = useState(false);
+  const [unsaved, setUnsaved] = useState(false);
+  const flushText = useRef(null);
+  const inflight = useRef(null);
   const rev = query.data;
   const label = rev ? revisionLabel(rev, rev.plannedLetter) : null;
   useBreadcrumbNames([
@@ -160,8 +163,19 @@ const RevisionPage = () => {
   const files = rev.files;
   const external = doc.origin === "external";
   const asList = (list) => ({ data: list, isLoading: false });
-  const saveText = (json) =>
-    saveBody.mutate({ body: json }, { onError: (err) => showToast({ type: "error", title: "Text not saved", message: describeApiError(err) }) });
+  const saveText = (json) => {
+    const p = saveBody.mutateAsync({ body: json }).catch((err) => {
+      showToast({ type: "error", title: "Text not saved", message: describeApiError(err) });
+      throw err;
+    });
+    inflight.current = p.finally(() => inflight.current === p && (inflight.current = null));
+    return p;
+  };
+  // Before the draft moves on, the text typed in the last moments is saved first (else it would reach the server after the draft is no longer editable).
+  const settleText = async () => {
+    await flushText.current?.();
+    await inflight.current;
+  };
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-primary-bg p-4">
@@ -175,16 +189,16 @@ const RevisionPage = () => {
           </div>
           <p className="text-sm text-secondary-text">
             {doc.title} · {external ? `issued by ${doc.issuer}${doc.externalReference ? ` (${doc.externalReference})` : ""}, recorded by` : "written by"} {rev.author?.name ?? "Unknown"}
-            {canEdit && (saveBody.isPending ? " · saving…" : " · saved")}
+            {canEdit && (saveBody.isPending ? " · saving…" : unsaved ? " · unsaved changes" : " · saved")}
           </p>
         </div>
         <div className="flex gap-2">
           <CTAButton type="neutral" to={documentPath(doc.id)}>
             Back to the document
           </CTAButton>
-          {!external && <SubmitButton revision={rev} />}
+          {!external && <SubmitButton revision={rev} beforeSubmit={settleText} />}
           {rev.canRecordIssue && (
-            <CTAButton type="main" disabled={problems.length > 0} onClick={() => setIssuing(true)}>
+            <CTAButton type="main" disabled={problems.length > 0} onClick={() => settleText().then(() => setIssuing(true), () => {})}>
               Record this issue
             </CTAButton>
           )}
@@ -255,7 +269,7 @@ const RevisionPage = () => {
       {doc.contentKind === "text" ? (
         <MenuCard title="Text" subtitle={canEdit ? "Saved as you type." : undefined}>
           <div>
-            <DocumentEditor key={rev.id} value={rev.body} editable={canEdit} onChange={saveText} />
+            <DocumentEditor key={rev.id} value={rev.body} editable={canEdit} onChange={saveText} flushRef={flushText} onPendingChange={setUnsaved} />
           </div>
         </MenuCard>
       ) : (

@@ -8,7 +8,7 @@ document has an identity (`SOP-001`) separate from its revisions (rev A, B, C). 
 becomes effective on a date, and is then **frozen**. A change is always a new revision. The people who must read a document
 acknowledge each new revision. Like quality alerts, **nothing here blocks work**.
 
-**DC1–DC5 are built** (see §12–§16); DC6 is not. It is delivered as complete, tested vertical slices (§9), each with SQL tests, API e2e tests (both sweeps),
+**DC1–DC6 are built** (see §12–§16 and `docs/document-control-exit-report.md`); the module is complete. It is delivered as complete, tested vertical slices (§9), each with SQL tests, API e2e tests (both sweeps),
 frontend tests, lint and build, and finished by an exit check with a browser journey step.
 
 ## 1. What it reuses

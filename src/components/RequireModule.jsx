@@ -44,10 +44,11 @@ export const RestrictedModule = ({ moduleName, access, requiredPlan }) => {
 const RequireModule = ({ module: moduleSlug }) => {
   const { data: access, isLoading, error } = useSubscriptionAccess();
   const { can } = usePermissions();
-  const catalogue = usePlanCatalogue();
-  if (isLoading || error || !access || !access.enforced) return <Outlet />;
-  const level = access.modules?.[moduleSlug];
-  if (level && level !== "none") return <Outlet />;
+  const level = access?.modules?.[moduleSlug];
+  const restricted = !!access?.enforced && !(level && level !== "none");
+  // The catalogue (which package would unlock it) is only for someone who may read subscriptions, and only when the module is locked.
+  const catalogue = usePlanCatalogue({ enabled: restricted && can("subscription.read") });
+  if (isLoading || error || !access || !restricted) return <Outlet />;
 
   const mod = catalogue.data?.modules.find((m) => m.slug === moduleSlug);
   const required = can("subscription.read")

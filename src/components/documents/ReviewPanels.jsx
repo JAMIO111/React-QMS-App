@@ -293,11 +293,23 @@ export const CompareCard = ({ revision }) => {
 };
 
 /** Submit a draft for review once nothing is still needed. */
-export const SubmitButton = ({ revision }) => {
+export const SubmitButton = ({ revision, beforeSubmit }) => {
   const { mutation, run } = useRun();
+  const [settling, setSettling] = useState(false);
   if (!revision.canEdit) return null;
+  const submit = async () => {
+    setSettling(true);
+    try {
+      await beforeSubmit?.();
+    } catch {
+      return; // the save failed and said so; nothing is sent
+    } finally {
+      setSettling(false);
+    }
+    run({ action: "submit", id: revision.id });
+  };
   return (
-    <CTAButton type="main" disabled={revision.problems.length > 0} loading={mutation.isPending} onClick={() => run({ action: "submit", id: revision.id })}>
+    <CTAButton type="main" disabled={revision.problems.length > 0} loading={mutation.isPending || settling} onClick={submit}>
       Send for review
     </CTAButton>
   );

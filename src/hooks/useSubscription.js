@@ -18,7 +18,8 @@ const useOrgQuery = (parts, path, { enabled = true, select, staleTime } = {}) =>
 };
 const dataOf = (r) => r.data;
 
-export const usePlanCatalogue = () => useOrgQuery(["plans"], "/subscription-plans", { staleTime: 1000 * 60 * 5 });
+/** The packages on sale (needs `subscription.read`: pass `enabled` where someone without it may be looking). */
+export const usePlanCatalogue = ({ enabled = true } = {}) => useOrgQuery(["plans"], "/subscription-plans", { enabled, staleTime: 1000 * 60 * 5 });
 export const useSubscriptionOverview = ({ enabled = true } = {}) => useOrgQuery(["overview"], "/subscription", { enabled });
 export const useSeatAssignments = ({ enabled = true } = {}) => useOrgQuery(["assignments"], "/subscription/assignments", { enabled, select: dataOf });
 export const useInvoices = ({ enabled = true } = {}) => useOrgQuery(["invoices"], "/billing/invoices", { enabled, select: dataOf });

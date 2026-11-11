@@ -56,7 +56,7 @@ const AuditsDashboard = () => {
   const { data, isLoading, isFetching, error } = useAuditsDashboard({ from, to });
   const k = data?.kpis;
   const bucketLabel = (start) => format(new Date(`${start}T00:00:00`), data?.period.bucket === "month" ? "MMM yy" : "d MMM");
-  const linkClass = "rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50";
+  const linkClass = "shrink-0 whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50";
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-primary-bg p-4">
@@ -69,7 +69,7 @@ const AuditsDashboard = () => {
             {isFetching && !isLoading ? " · updating…" : ""}
           </p>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-nowrap items-end gap-3 max-sm:flex-wrap">
           <Link to="/Documentation/Audit-Schedule" className={linkClass}>Audit schedule</Link>
           <Link to="/Documentation/Audit-Records" className={linkClass}>Audit records</Link>
           <DashboardPeriodPicker period={period} />

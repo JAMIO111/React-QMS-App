@@ -143,8 +143,8 @@ const CalibrationDashboard = () => {
             {isFetching && !isLoading ? " · updating…" : ""}
           </p>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <Link to="/Calibration/Gauges" className="rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50">
+        <div className="flex flex-nowrap items-end gap-3 max-sm:flex-wrap">
+          <Link to="/Calibration/Gauges" className="shrink-0 whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50">
             Gauge register
           </Link>
           <DashboardPeriodPicker period={period} />

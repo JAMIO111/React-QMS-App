@@ -153,13 +153,14 @@ const NcDashboard = () => {
           </p>
         </div>
         {/* Filters: one row above the charts. */}
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-nowrap items-end gap-3 max-sm:flex-wrap">
           <SlidingToggle
             ariaLabel="NC source"
             mode="radio"
             options={NC_TABS.map((t) => ({ value: t.key, label: t.label }))}
             value={tabKey}
             onChange={(key) => set("tab", key === "all" ? "" : key)}
+            className="shrink-0"
           />
           <DashboardPeriodPicker period={period} />
         </div>

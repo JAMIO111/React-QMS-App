@@ -112,17 +112,17 @@ const ProcessControlDashboard = () => {
             {isFetching && !isLoading ? " · updating…" : ""}
           </p>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-nowrap items-end gap-3 max-sm:flex-wrap">
           <Link
             to="/Process-Control/Plans"
-            className="rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50"
+            className="shrink-0 whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50"
           >
             Control plans
           </Link>
           {spc?.available !== false && (
             <Link
               to="/Process-Control/SPC"
-              className="rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50"
+              className="shrink-0 whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50"
             >
               SPC charts
             </Link>

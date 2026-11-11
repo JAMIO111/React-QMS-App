@@ -1,6 +1,6 @@
 # Competence module — plan
 
-**Status:** draft for agreement (decisions CP1–CP4 taken 2026-11-11, the rest proposed) · **Branch:** `Dev`
+**Status:** draft for agreement (decisions CP1–CP4 and CP11–CP14 taken 2026-11-11, the rest proposed) · **Branch:** `Dev`
 **Menu name:** Competence · **Icon:** graduation cap (`GraduationCapIcon`, Lucide `GraduationCap`)
 
 Per `docs/design-brief.md` §6.7 and Phase 4 ("Training and competency matrices"), this module records **who is competent at what**,
@@ -10,13 +10,14 @@ alerts and supplier quality, **informs and never blocks**. Nothing here is built
 ## 1. What it is for
 
 - A **skills matrix**: people × skills, each cell a level 0–4 with who signed it off, when, on what evidence, and when it expires.
-- **Training records**: what training someone had, when, from whom, with the certificate or sign-in sheet attached, and which skills it
-  supports. A training record is evidence; it does not by itself make anyone competent.
+- **Training sessions**: one session (what, who ran it, which skills it supports) with an **attendee list**; each attendee is marked
+  completed on **their own day**, so one session can finish for different people on different days. Certificates and sign-in sheets are
+  attached as evidence. Training is evidence; it does not by itself make anyone competent.
 - **Positions**: the organisation says "a CMM inspector needs these skills at these levels"; the matrix then shows gaps against the
   positions each person holds.
 - A **dashboard**: gaps against position, assessments expiring or expired, people with nothing recorded.
 
-It is *not* a learning platform (no courses, quizzes, scheduled sessions or booking), not HR (no pay, appraisals or contracts) and it
+It is *not* a learning platform (no course catalogue, quizzes, calendar booking or e-learning), not HR (no pay, appraisals or contracts) and it
 decides nothing about who may do a task (see CP3).
 
 ## 2. Decisions
@@ -33,6 +34,11 @@ decides nothing about who may do a task (see CP3).
 | CP8 | **Dashboard in the first slice.** |
 | CP9 | Nothing is deleted. Skills and positions are retired with a reason; assessments are append-only (a new one supersedes); a training record is voided with a reason. |
 | CP10 | Not subscription-gated in this slice (no feature mapped), like CAPA, audits and supplier quality. |
+| CP11 | **Who sees what.** Anyone holding `competence.read` sees **everyone's** competence (given to owner, admin, quality manager, quality engineer, and to whatever "department management" role the organisation sets up with that permission); **Controller-seat holders see everything in the module** whatever their role. Seeing only your own department, and role-based narrowing, are **deferred** (to be designed later); until then there is no department-scoped read. |
+| CP12 | **One training session, an attendee list, each attendee completed on their own date** (CP14 for the states). A session is not "done" on one day. |
+| CP13 | **Dates are kept as history**: positions have `started_on` / `ended_on` and are ended, never overwritten. |
+| CP14 | **Attendee states:** enrolled → completed (with `completed_on`) \| failed (with `completed_on`) \| did not attend; an attendee can be removed with a reason. A completed attendee is frozen (correct it by voiding with a reason and re-adding). The session is open → closed (when nobody is still enrolled) \| cancelled (with a reason). |
+| CP15 | **Seeding: none.** A new organisation starts with empty skills, positions and training; categories are seeded (they are lists, not content). Example content can be added later. |
 
 ## 3. Data model (all tenant tables: `organisation_id`, RLS, audit trigger, no table writes except where stated)
 
@@ -44,8 +50,9 @@ decides nothing about who may do a task (see CP3).
 | `competence_position_skills` | Position ↔ skill with `required_level` 1–4; replaced as a whole by a function, history kept in the audit trail. |
 | `competence_employee_positions` | Employee ↔ position with `started_on`, `ended_on`; ended, never deleted. |
 | `competence_assessments` | **Append-only.** Employee, skill, `level` 0–4, `assessed_on` (not in the future, in the person's time zone), assessor, optional `expires_on`, note, `status` current / superseded, link to what it supersedes. Written only by `app.record_competence_assessment`. |
-| `competence_training_records` | Employee, title, kind (course / on the job / external / induction / other), provider or trainer, `trained_on`, hours, outcome (passed / attended / failed), notes, skills it supports (`competence_training_skills`), status recorded / voided (reason). Written only by functions. |
-| `competence_attachments` | Evidence files on an assessment or a training record; functions only, removed with a reason, never deleted; private `competence-files` bucket at `<org>/competence/<employee id>/<uuid>-<name>`, uploads via `app.competence_file_allowed`. |
+| `competence_training_sessions` | `TS-YY-NNNN` per organisation; title, kind (course / on the job / external / induction / other), provider or trainer (a person or free text), `starts_on`, optional `ends_on`, hours, location, notes; skills it supports (`competence_session_skills`); status open / closed / cancelled (reason). Written only by functions. |
+| `competence_session_attendees` | One row per employee per session: status enrolled / completed / failed / did not attend / removed (reason), **`completed_on`** (own date, not in the future, not before the session started), outcome note, who recorded it. Unique per session and employee while not removed. Written only by functions. |
+| `competence_attachments` | Evidence files on an assessment, a training session (shared) or an attendee (their certificate); functions only, removed with a reason, never deleted; private `competence-files` bucket at `<org>/competence/<employee id>/<uuid>-<name>`, uploads via `app.competence_file_allowed`. |
 
 **Worked out, never stored:** an employee's current level per skill (latest current assessment); required level (highest across the
 positions they hold); gap (required minus level); expiry state (valid / expiring within 60 days / expired / none, reusing the supplier
@@ -59,8 +66,14 @@ expiry rules).
 - `app.set_position_skills(position, jsonb)`, `app.assign_employee_position(employee, position, started_on)`,
   `app.end_employee_position(id, ended_on)`, `app.save_competence_skill / retire / reactivate`, `app.save_competence_position / retire /
   reactivate` (all `competence.manage`).
-- `app.record_training(employee(s), …)`, `app.void_training(id, reason)` (`competence.assess`), evidence functions as for other modules.
+- `app.create_training_session(…, employees[])`, `app.update_training_session` (until closed), `app.add_session_attendee`, `app.remove_session_attendee(id, reason)`,
+  `app.complete_session_attendees(session, attendees[], completed_on, outcome, note?)` (several people on one day, or call again on another day),
+  `app.fail_session_attendee`, `app.mark_session_attendee_absent`, `app.void_session_attendee(id, reason)`, `app.close_training_session`,
+  `app.cancel_training_session(id, reason)`; all need `competence.assess`; a completed attendee cannot be changed except by voiding; `completed_on`
+  cannot be in the future (the caller's time zone) or before the session started; a session closes only when nobody is still enrolled.
+  Completing an attendee **does not create an assessment**: the assessor decides the level separately.
 - Inactive employees are left out of the matrix and dashboard by default; their history stays readable.
+- Positions held keep their dates: assigning the same position again after it ended starts a new row; an overlapping duplicate is refused.
 
 ## 5. Permissions
 
@@ -72,8 +85,12 @@ expiry rules).
 | Quality engineer | yes | no | yes |
 | Inspector, viewer | no (own record only) | no | no |
 
-**Every active member with a linked employee record can always see their own competence**, whatever their role (personal data: see
-open question Q1). Site scoping is not applied in this slice (organisation-wide, like supplier quality).
+- **Controller-seat holders see everything** in the module whatever their role (`app.competence_can_read(org)` = `competence.read` **or**
+  `app.holds_controller_seat(org)`; RLS, API guard and menu all use it). Reading only: managing and assessing still need their permissions.
+- **"Department management":** there is no such role today. Until department-scoped reading is designed, give the people you mean a custom
+  role carrying `competence.read`; they then see everyone's.
+- **Every active member with a linked employee record can always see their own competence**, whatever their role. Site scoping is not applied
+  in this slice (organisation-wide, like supplier quality).
 
 ## 6. API (`api/src/competence/`, everything through `DatabaseService.asUser`)
 
@@ -82,13 +99,14 @@ open question Q1). Site scoping is not applied in this slice (organisation-wide,
 `GET /competence/matrix` (page-based: `positionId`, `departmentId`, `siteId`, `categoryId`, `skillId`, `status` gap|expiring|expired|all,
 `q`, `page`, `pageSize`; cells carry level, required, gap, expiry, assessor, date), `GET /competence/people/{employeeId}` (profile: positions,
 every skill with level, required, history, training records), `POST …/assessments`, `POST …/positions`, `POST /competence/positions-assignments/{id}/end`,
-`GET|POST /competence/training-records` (one record for several employees creates one row each), `POST …/{id}/void`,
+`GET|POST /competence/training-sessions` (list: `q`, `status`, `from|to`, `skillId`, `employeeId`; a session is created with its attendee list), `GET|PATCH /competence/training-sessions/{id}` (the session with its attendees),
+`POST …/{id}/attendees` (add), `POST /competence/session-attendees/{id}/remove|void|fail|absent`, `POST …/{id}/complete-attendees {attendeeIds, completedOn, outcome, note}`, `POST …/{id}/close|cancel`,
 `GET|POST …/{id}/attachments`, `POST /competence/attachments/{id}/delete|restore`, `GET /competence-dashboard?from&to`, `GET /competence/me`
-(own record, any member with a linked employee). New routes are `@OrganisationScoped` and get sample bodies in the tenancy sweep.
+(own record, any member with a linked employee), `GET /competence/people/{employeeId}` also lists the sessions the person attended. New routes are `@OrganisationScoped` and get sample bodies in the tenancy sweep.
 
 ## 7. UI (`src/components/competence/`, hooks `useCompetence.js`, helpers `lib/competence.js`)
 
-Menu group **Competence** (`GraduationCapIcon`, `/Competence`): **Dashboard** (default), **Matrix**, **Training records**, **My competence**
+Menu group **Competence** (`GraduationCapIcon`, `/Competence`): **Dashboard** (default), **Matrix**, **Training sessions**, **My competence**
 (shown to anyone with a linked employee record). Skills, positions and categories are set-up lists and live in
 **Settings → Data Management → Competence** (a new tab with the same icon), as for the other modules.
 
@@ -97,7 +115,11 @@ Menu group **Competence** (`GraduationCapIcon`, `/Competence`): **Dashboard** (d
   CSV export, click a cell or person to open the profile.
 - **Person profile** (`/Competence/People/:employeeId`): positions held, each skill with level, required, expiry and history, **Assess**
   dialog (skill combo, level, date, expiry, note, evidence), training records with files, link back to the Employees record.
-- **Training records** register (`TableWrapper`, server paging, URL filters) with a record dialog (several employees at once, skills supported, files).
+- **Training sessions** (`/Competence/Training`, register with server paging and URL filters; `/Competence/Training/:id`): the session page shows its
+  facts, supported skills, files and the **attendee list** with a status pill each, a **completed on** date per person, and actions: **Mark
+  completed** (tick several people, choose the date, outcome: they can be completed on different days by repeating it), Failed, Did not
+  attend, Remove with a reason, Void with a reason, **Close** and **Cancel**. A completed attendee can be given an evidence file (certificate).
+  The person profile lists the sessions they attended.
 - **Dashboard** (`/Competence`, shared period picker): people with gaps, assessments expiring in 30/60/90 days, expired, nobody-assessed
   employees, training recorded in the period, lists of the worst gaps and next expiries.
 - Optimistic saves for small edits, `CTAButton` / `RHFComboBox` / `RHFDatePickerPopout` / `Callout` / `DropdownMenu` as elsewhere, required
@@ -108,8 +130,8 @@ Menu group **Competence** (`GraduationCapIcon`, `/Competence`): **Dashboard** (d
 | Slice | Content |
 |---|---|
 | **CO1** | Migration: categories, skills, positions, position skills, permissions and role defaults, menu and Settings tab shell. API + Settings UI for categories, skills, positions. |
-| **CO2** | Employee positions, assessments, current level and gap computed, matrix and person profile, My competence. |
-| **CO3** | Training records, evidence files and the bucket, Training records register. |
+| **CO2** | Employee positions (with dates), assessments, current level and gap computed, matrix and person profile, My competence. |
+| **CO3** | Training sessions with attendee lists, per-attendee completion dates, evidence files and the bucket, Training sessions register and session page. |
 | **CO4** | Dashboard, expiry lists, CSV export of the matrix, in-app notice to an employee when assessed (event `competence_assessments.created`, to the linked sign-in only). |
 | **CO5** | Exit check: live guardrails, advisors, browser journey step, `docs/competence-exit-report.md`, `CLAUDE.md`. |
 
@@ -118,16 +140,17 @@ Each slice ships with SQL tests (rules above with deliberate mutants), API e2e (
 
 ## 9. Out of scope (stated so it is not assumed)
 
-Blocking or gating work on competence; a course catalogue, sessions, quizzes or e-learning; reminders by email or push (expiry is shown, not
+Blocking or gating work on competence; a course catalogue, quizzes, calendar booking or e-learning; department-scoped and role-narrowed visibility (deferred, CP11); reminders by email or push (expiry is shown, not
 pushed); scheduled worker; linking skills to machines or control-plan operations (the job hub warning is a later slice and would build on
 CP5's positions); appraisals, pay or contracts; supplier or customer personnel; importing skills or assessments (a later integrations entity).
 
-## 10. Open questions for you
+## 10. Questions answered, and what is left
 
-1. **Who may see everyone's levels?** I proposed quality roles only; inspectors and viewers see only their own. Skill levels about named
-   people are personal data. Do you want supervisors (department managers) to see their own department's people, which needs a
-   department-scoped read?
-2. **Group training:** is "one record per employee, created together" enough, or do you need a single session record with an attendee list?
-3. **Position history:** keep dates on who held which position (proposed), or just the current positions?
-4. **Seeding:** start empty, or seed a few example skills and positions (e.g. Visual inspection, CMM operation, Gauge handling) that the
-   organisation can edit or retire?
+Answered on 2026-11-11: department management see everyone's and Controllers see everything (CP11; narrowing deferred); one training session
+with an attendee list completed on different days (CP12, CP14); dates kept for position history (CP13); start empty (CP15).
+
+Left to confirm before CO1:
+
+1. **CP11 wording:** I read "department management see everyone's" as "anyone given `competence.read` sees everyone", because no department-manager
+   role exists yet. Is that what you want for now, or should I add a built-in "Department manager" role carrying `competence.read`?
+2. **Session provider:** a person from the Employees register, a free-text name (an outside trainer), or either?

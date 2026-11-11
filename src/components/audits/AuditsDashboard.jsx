@@ -1,20 +1,16 @@
-import { Link, useSearchParams } from "react-router-dom";
-import { format, startOfYear, subDays, subMonths } from "date-fns";
+import { Link } from "react-router-dom";
+import { format } from "date-fns";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CalendarIcon, CircleCheckIcon, ClipboardCheckIcon, ClipboardListIcon, HistoryIcon, HourglassIcon, TriangleAlertIcon } from "@/components/icons";
 import Breadcrumb from "../Breadcrumb";
+import { DashboardPeriodPicker } from "../dashboard/DashboardPeriod";
+import { useDashboardPeriod } from "../../hooks/useDashboardPeriod";
 import RHFComboBox from "../ui/RHFComboBox";
 import { Card, ChartTooltip, HBars, Kpi, grid, percent, pctChange, tick } from "../dashboard/DashboardParts";
 import { useAuditsDashboard } from "../../hooks/useAudits";
 import { describeApiError } from "../../lib/api-client";
 import { formatDate, formatDateTime } from "../../lib/processControl";
 
-const PERIODS = [
-  { id: "30d", name: "Last 30 days", from: (t) => subDays(t, 29) },
-  { id: "90d", name: "Last 90 days", from: (t) => subDays(t, 89) },
-  { id: "12m", name: "Last 12 months", from: (t) => subDays(subMonths(t, 12), -1) },
-  { id: "ytd", name: "Year to date", from: (t) => startOfYear(t) },
-];
 // Fixed colour per state (never by rank), from the validated chart palette.
 const PLANNED_SERIES = [
   { key: "done", label: "Done on time", color: "var(--chart-series-3)" },
@@ -55,21 +51,11 @@ const Stacked = ({ data, series, bucketLabel, name }) => (
  * department was covered, and the latest changes to audit templates. Findings and coverage are as of today. The period is in the URL.
  */
 const AuditsDashboard = () => {
-  const [params, setParams] = useSearchParams();
-  const periodId = PERIODS.some((p) => p.id === params.get("period")) ? params.get("period") : "90d";
-  const now = new Date();
-  const from = format(PERIODS.find((p) => p.id === periodId).from(now), "yyyy-MM-dd");
-  const to = format(now, "yyyy-MM-dd");
+  const period = useDashboardPeriod("90d");
+  const { fromIso: from, toIso: to } = period;
   const { data, isLoading, isFetching, error } = useAuditsDashboard({ from, to });
   const k = data?.kpis;
   const bucketLabel = (start) => format(new Date(`${start}T00:00:00`), data?.period.bucket === "month" ? "MMM yy" : "d MMM");
-  const setPeriod = (v) =>
-    setParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (v && v !== "90d") next.set("period", v);
-      else next.delete("period");
-      return next;
-    });
   const linkClass = "rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50";
 
   return (
@@ -86,9 +72,7 @@ const AuditsDashboard = () => {
         <div className="flex flex-wrap items-end gap-3">
           <Link to="/Documentation/Audit-Schedule" className={linkClass}>Audit schedule</Link>
           <Link to="/Documentation/Audit-Records" className={linkClass}>Audit records</Link>
-          <div className="w-48">
-            <RHFComboBox label="Period" icon={CalendarIcon} options={PERIODS} value={periodId} onChange={setPeriod} sort={false} clearable={false} />
-          </div>
+          <DashboardPeriodPicker period={period} />
         </div>
       </div>
 

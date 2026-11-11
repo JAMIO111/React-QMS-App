@@ -1,5 +1,5 @@
-import { Link, useSearchParams } from "react-router-dom";
-import { format, startOfYear, subDays, subMonths } from "date-fns";
+import { Link } from "react-router-dom";
+import { format } from "date-fns";
 import {
   Bar,
   BarChart,
@@ -20,6 +20,8 @@ import {
   TriangleAlertIcon,
 } from "@/components/icons";
 import Breadcrumb from "../Breadcrumb";
+import { DashboardPeriodPicker } from "../dashboard/DashboardPeriod";
+import { useDashboardPeriod } from "../../hooks/useDashboardPeriod";
 import RHFComboBox from "../ui/RHFComboBox";
 import {
   Card,
@@ -37,16 +39,6 @@ import { describeApiError } from "../../lib/api-client";
 import { formatDate, formatDateTime } from "../../lib/processControl";
 import { RULE_LABEL } from "../../lib/spc";
 
-const PERIODS = [
-  { id: "30d", name: "Last 30 days", from: (t) => subDays(t, 29) },
-  { id: "90d", name: "Last 90 days", from: (t) => subDays(t, 89) },
-  {
-    id: "12m",
-    name: "Last 12 months",
-    from: (t) => subDays(subMonths(t, 12), -1),
-  },
-  { id: "ytd", name: "Year to date", from: (t) => startOfYear(t) },
-];
 const RESULT_SERIES = [
   { key: "pass", label: "Passed", color: "var(--chart-series-3)" },
   { key: "fail", label: "Failed", color: "var(--chart-critical)" },
@@ -91,16 +83,8 @@ const age = (hours) =>
  */
 const ProcessControlDashboard = () => {
   const { can } = usePermissions();
-  const [params, setParams] = useSearchParams();
-  const periodId = PERIODS.some((p) => p.id === params.get("period"))
-    ? params.get("period")
-    : "90d";
-  const now = new Date();
-  const from = format(
-    PERIODS.find((p) => p.id === periodId).from(now),
-    "yyyy-MM-dd",
-  );
-  const to = format(now, "yyyy-MM-dd");
+  const period = useDashboardPeriod("90d");
+  const { fromIso: from, toIso: to } = period;
   const { data, isLoading, isFetching, error } = useProcessControlDashboard({
     from,
     to,
@@ -113,13 +97,6 @@ const ProcessControlDashboard = () => {
       new Date(`${start}T00:00:00`),
       data?.period.bucket === "month" ? "MMM yy" : "d MMM",
     );
-  const setPeriod = (v) =>
-    setParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (v && v !== "90d") next.set("period", v);
-      else next.delete("period");
-      return next;
-    });
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-primary-bg p-4">
@@ -150,17 +127,7 @@ const ProcessControlDashboard = () => {
               SPC charts
             </Link>
           )}
-          <div className="w-48">
-            <RHFComboBox
-              label="Period"
-              icon={CalendarIcon}
-              options={PERIODS}
-              value={periodId}
-              onChange={setPeriod}
-              sort={false}
-              clearable={false}
-            />
-          </div>
+          <DashboardPeriodPicker period={period} />
         </div>
       </div>
 

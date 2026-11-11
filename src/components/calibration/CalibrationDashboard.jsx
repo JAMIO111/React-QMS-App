@@ -1,5 +1,5 @@
-import { Link, useSearchParams } from "react-router-dom";
-import { format, startOfYear, subDays, subMonths } from "date-fns";
+import { Link } from "react-router-dom";
+import { format } from "date-fns";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   CalendarClockIcon,
@@ -20,14 +20,9 @@ import { describeDue } from "../../lib/calibration";
 import { formatDate } from "../../lib/ncr";
 import { GaugeStatusPill } from "./Pills";
 import Callout from "../ui/Callout";
+import { DashboardPeriodPicker } from "../dashboard/DashboardPeriod";
+import { useDashboardPeriod } from "../../hooks/useDashboardPeriod";
 
-const PERIODS = [
-  { id: "30d", name: "Last 30 days", from: (t) => subDays(t, 29) },
-  { id: "90d", name: "Last 90 days", from: (t) => subDays(t, 89) },
-  { id: "12m", name: "Last 12 months", from: (t) => subDays(subMonths(t, 12), -1) },
-  { id: "ytd", name: "Year to date", from: (t) => startOfYear(t) },
-  { id: "24m", name: "Last 24 months", from: (t) => subDays(subMonths(t, 24), -1) },
-];
 // Fixed colour per outcome and status (never by rank), from the validated chart palette.
 const OUTCOME_SERIES = [
   { key: "pass", label: "Pass", color: "var(--chart-series-3)" },
@@ -128,22 +123,12 @@ const HBars = ({ data, colorOf = () => SINGLE, height }) => (
  * schedule for the next twelve months and the gauges that need attention. The period lives in the URL.
  */
 const CalibrationDashboard = () => {
-  const [params, setParams] = useSearchParams();
-  const periodId = PERIODS.some((p) => p.id === params.get("period")) ? params.get("period") : "12m";
-  const now = new Date();
-  const from = format(PERIODS.find((p) => p.id === periodId).from(now), "yyyy-MM-dd");
-  const to = format(now, "yyyy-MM-dd");
+  const period = useDashboardPeriod("12m");
+  const { fromIso: from, toIso: to } = period;
   const { data, isLoading, isFetching, error } = useCalibrationDashboard({ from, to });
   const k = data?.kpis;
   const bucketLabel = (start) => (data?.period.bucket === "month" ? format(new Date(`${start}T00:00:00`), "MMM yy") : format(new Date(`${start}T00:00:00`), "d MMM"));
   const monthLabel = (start) => format(new Date(`${start}T00:00:00`), "MMM yy");
-  const setPeriod = (v) =>
-    setParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (v && v !== "12m") next.set("period", v);
-      else next.delete("period");
-      return next;
-    });
   // The first month of the schedule also holds the overdue gauges.
   const schedule = (data?.dueSchedule ?? []).map((m, i) => ({ ...m, label: i === 0 ? `${monthLabel(m.start)} *` : monthLabel(m.start) }));
 
@@ -162,9 +147,7 @@ const CalibrationDashboard = () => {
           <Link to="/Calibration/Gauges" className="rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50">
             Gauge register
           </Link>
-          <div className="w-48">
-            <RHFComboBox label="Period" icon={CalendarIcon} options={PERIODS} value={periodId} onChange={setPeriod} sort={false} clearable={false} />
-          </div>
+          <DashboardPeriodPicker period={period} />
         </div>
       </div>
 

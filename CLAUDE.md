@@ -94,6 +94,14 @@ Summary of the brief:
   and your own `{ label, range: (today) => [from, to] }` / `{ label, date: (today) => Date }`; a preset is clamped to the days allowed and switched off when none are
   (`resolvePresets`, `clampRange`). Clicking the month title opens a month / year chooser. Tests `ui/DatePicker.test.jsx`, `ui/Pickers.test.jsx`.
   The older `ui/DatePicker.jsx`, `DatePickerPopout.jsx` and `DateRangePicker.jsx` are not used by the app; do not build on them.
+  Also: `showMonth="end"` opens a range on its last month, `formatValue(value)` puts words (a preset's name) in the field instead of the dates; the toggle reads
+  **Presets / Custom range** when `quickPresets={0}`.
+  **Dashboards use it for the period** (`components/dashboard/DashboardPeriod.jsx` `DashboardPeriodPicker`, hook `hooks/useDashboardPeriod.js`, presets and address rules in
+  `lib/dashboardPeriod.js`): NC, Calibration, Process control and Audits dashboards. It opens on the preset list (This month, Last month, This quarter, Last quarter, This year,
+  Last year, Last 30 / 90 days, Last 12 / 24 months); **Custom range** switches to the calendar (no days after today, at most three years back, the API limit). The period is in the
+  address: `?period=<preset id>` (ids `30d 90d 12m ytd 24m` are the older ones, so old links work; the dashboard's own default leaves the address clean) or `?from=yyyy-MM-dd&to=yyyy-MM-dd`
+  for a custom range (an invalid one falls back to the default). A new dashboard calls `useDashboardPeriod(defaultId)`, sends `fromIso` / `toIso` to its API and renders `<DashboardPeriodPicker period={period} />`.
+  The Platform operator page keeps its own day-count toggle (its API takes `days`).
   The calendar opens in a portal (`data-popover`), so panes that close on outside clicks must ignore
   `[data-popover]`. Ranges: `src/components/ui/RangeSlider.jsx` (two handles, `value=[lo, hi]`, `format`).
 - Calibration (Phase 4, brought forward; `docs/calibration-plan.md`):

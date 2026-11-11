@@ -24,6 +24,8 @@ const toRange = (value) => ({ from: toDate(value?.from), to: toDate(value?.to) }
  *   minDate, maxDate                      block everything outside them
  *   presets, quickPresets, presetsOpen    shortcuts such as This month or Last year, chosen per field (see lib/datePresets.js)
  *   confirm, markedDates                  Cancel / Done for a single day; dots on days
+ *   showMonth "start" | "end"               which month a range opens on
+ *   formatValue(value)                    the words shown in the field instead of the dates (return null to show the dates)
  *
  * valueFormat: "date" (default) gives onChange a Date; "iso" gives "yyyy-MM-dd" ("yyyy-MM-dd'T'HH:mm", plus ":ss" with
  * showSeconds, when there is a time; local time, no zone) — use it for date-only API fields so no time zone shifts the day.
@@ -55,6 +57,8 @@ const RHFDatePickerPopout = ({
   presetsOpen,
   confirm,
   markedDates,
+  formatValue,
+  showMonth,
   className = "",
 }) => {
   const range = mode === "range";
@@ -128,7 +132,8 @@ const RHFDatePickerPopout = ({
 
   const stamp = withTime ? (showSeconds ? "HH:mm:ss" : "HH:mm") : null;
   const show = (d, pattern) => format(d, stamp ? `${pattern}, ${stamp}` : pattern);
-  const text = range
+  const custom = hasValue ? formatValue?.(value) : null;
+  const text = custom ? custom : range
     ? date.from
       ? `${show(date.from, "d MMM yyyy")} – ${date.to ? show(date.to, "d MMM yyyy") : "…"}`
       : null
@@ -212,6 +217,7 @@ const RHFDatePickerPopout = ({
             presetsOpen={presetsOpen}
             confirm={confirm}
             markedDates={markedDates}
+            showMonth={showMonth}
             onCancel={() => close(true)}
             onChange={(d) => {
               emit(d);

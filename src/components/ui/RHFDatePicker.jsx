@@ -83,6 +83,7 @@ const TimeBox = ({ label, value, onChange, max, seconds, invalid }) => {
  *   confirm         single day without a time but still wanting Cancel / Done
  *   markedDates     Dates that get a small dot (events, due dates)
  *   weekStartsOn    0–6, default 1 (Monday)
+ *   showMonth       which month a range opens on: "start" (default) or "end" (dashboards, where the recent days matter)
  *
  * With a time the chosen time is kept when the day changes. A range's end time defaults to 23:59 so a whole day is covered.
  */
@@ -103,6 +104,7 @@ const RHFDatePicker = ({
   confirm = false,
   markedDates,
   weekStartsOn = 1,
+  showMonth = "start",
   className = "",
 }) => {
   const range = mode === "range";
@@ -120,7 +122,8 @@ const RHFDatePicker = ({
   const [draft, setDraft] = useState({ from, to });
   const [startTime, setStartTime] = useState(timeText(from, showSeconds, showSeconds ? "00:00:00" : "00:00"));
   const [endTime, setEndTime] = useState(timeText(to, showSeconds, showSeconds ? "23:59:59" : "23:59"));
-  const [month, setMonth] = useState(startOfMonth(from ?? new Date()));
+  const shown = showMonth === "end" ? (to ?? from) : from;
+  const [month, setMonth] = useState(startOfMonth(shown ?? new Date()));
   const [view, setView] = useState("days"); // days | months | presets
   const [hover, setHover] = useState(null);
 
@@ -128,7 +131,7 @@ const RHFDatePicker = ({
   useEffect(() => {
     setDraft({ from, to });
     if (from) {
-      setMonth(startOfMonth(from));
+      setMonth(startOfMonth(shown ?? from));
       setStartTime(timeText(from, showSeconds, showSeconds ? "00:00:00" : "00:00"));
     }
     if (to) setEndTime(timeText(to, showSeconds, showSeconds ? "23:59:59" : "23:59"));
@@ -261,7 +264,7 @@ const RHFDatePicker = ({
               aria-expanded={view === "presets"}
               onClick={() => setView(view === "presets" ? "days" : "presets")}
               className="ml-auto flex items-center gap-1 rounded-md px-2 py-1 font-medium text-primary-text transition-colors hover:bg-border-color/50 cursor-pointer">
-              {view === "presets" ? "Calendar" : "More"}
+              {quick.length === 0 ? (view === "presets" ? "Custom range" : "Presets") : view === "presets" ? "Calendar" : "More"}
               <ChevronDownIcon className={`h-4 w-4 transition-transform ${view === "presets" ? "rotate-180" : ""}`} />
             </button>
           )}

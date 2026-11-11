@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { format, startOfYear, subDays, subMonths } from "date-fns";
+import { format } from "date-fns";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   CalendarIcon,
@@ -21,14 +21,9 @@ import { describeApiError } from "../../lib/api-client";
 import { formatMoney } from "../../lib/costs";
 import { NCR_REGISTER, NC_TABS, formatDate } from "../../lib/ncr";
 import SlidingToggle from "../ui/SlidingToggle";
+import { DashboardPeriodPicker } from "../dashboard/DashboardPeriod";
+import { useDashboardPeriod } from "../../hooks/useDashboardPeriod";
 
-const PERIODS = [
-  { id: "30d", name: "Last 30 days", from: (t) => subDays(t, 29) },
-  { id: "90d", name: "Last 90 days", from: (t) => subDays(t, 89) },
-  { id: "12m", name: "Last 12 months", from: (t) => subDays(subMonths(t, 12), -1) },
-  { id: "ytd", name: "Year to date", from: (t) => startOfYear(t) },
-  { id: "24m", name: "Last 24 months", from: (t) => subDays(subMonths(t, 24), -1) },
-];
 const SEVERITY_COLOR = { critical: "var(--chart-critical)", major: "var(--chart-serious)", minor: "var(--chart-warning)", unset: "var(--chart-neutral)" };
 const SINGLE = "var(--brand-primary)";
 
@@ -123,12 +118,10 @@ const HBars = ({ data, colorOf = () => SINGLE, name = "NCs", height }) => (
  */
 const NcDashboard = () => {
   const [params, setParams] = useSearchParams();
-  const periodId = PERIODS.some((p) => p.id === params.get("period")) ? params.get("period") : "12m";
+  const period = useDashboardPeriod("12m");
   const tabKey = NC_TABS.some((t) => t.key === params.get("tab")) ? params.get("tab") : "all";
   const tab = NC_TABS.find((t) => t.key === tabKey);
-  const today = new Date();
-  const from = format(PERIODS.find((p) => p.id === periodId).from(today), "yyyy-MM-dd");
-  const to = format(today, "yyyy-MM-dd");
+  const { fromIso: from, toIso: to } = period;
   const { data, isLoading, isFetching, error } = useNcDashboard({ source: tab.source, from, to });
   const [trendAsTable, setTrendAsTable] = useState(false);
 
@@ -168,9 +161,7 @@ const NcDashboard = () => {
             value={tabKey}
             onChange={(key) => set("tab", key === "all" ? "" : key)}
           />
-          <div className="w-48">
-            <RHFComboBox label="Period" icon={CalendarIcon} options={PERIODS} value={periodId} onChange={(v) => set("period", v === "12m" ? "" : v)} sort={false} clearable={false} />
-          </div>
+          <DashboardPeriodPicker period={period} />
         </div>
       </div>
 

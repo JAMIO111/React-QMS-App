@@ -118,8 +118,8 @@ describe("audits dashboard", () => {
   it("changes the period and keeps it in the URL", async () => {
     renderAt();
     await screen.findByRole("link", { name: /Done as planned/ });
-    await userEvent.click(screen.getByRole("combobox", { name: "Period" }));
-    await userEvent.click(screen.getByRole("option", { name: "Last 12 months" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Period/ }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Choose period" })).getByRole("button", { name: /^Last 12 months/ }));
     const today = new Date();
     await waitFor(() => expect(apiFetch.mock.calls.at(-1)[0]).toContain(`from=${format(subDays(subMonths(today, 12), -1), "yyyy-MM-dd")}`));
     expect(screen.getByTestId("where")).toHaveTextContent("/Documentation/Audit-Dashboard?period=12m");

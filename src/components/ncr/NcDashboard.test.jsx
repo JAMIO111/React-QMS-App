@@ -84,8 +84,8 @@ describe("NC dashboard", () => {
     await screen.findByRole("link", { name: /NCs raised/ });
     await userEvent.click(screen.getByRole("radio", { name: "Customer" }));
     await waitFor(() => expect(apiFetch.mock.calls.at(-1)[0]).toContain("source=customer"));
-    await userEvent.click(screen.getByRole("combobox", { name: "Period" }));
-    await userEvent.click(screen.getByRole("option", { name: "Last 30 days" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Period/ }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Choose period" })).getByRole("button", { name: /^Last 30 days/ }));
     await waitFor(() => expect(apiFetch.mock.calls.at(-1)[0]).toContain(`from=${format(subDays(new Date(), 29), "yyyy-MM-dd")}`));
     expect(screen.getByTestId("where").textContent).toBe("/Non-Conformance?tab=customer&period=30d");
     // A part link goes to the register with that tab's source.

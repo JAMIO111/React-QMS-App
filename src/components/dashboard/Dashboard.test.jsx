@@ -22,6 +22,9 @@ vi.mock("../../hooks/useOnboarding", () => ({
   useGoLiveChecklist: ({ enabled }) => ({ data: enabled ? checklist : undefined }),
 }));
 
+// What needs attention has its own tests (HomeAttention.test.jsx); here it would only ask for data.
+vi.mock("./HomeAttention", () => ({ default: () => null }));
+
 import Dashboard from "./Dashboard";
 import { deferSetup, setupDeferred } from "../../lib/onboarding";
 

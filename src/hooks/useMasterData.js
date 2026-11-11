@@ -91,12 +91,12 @@ export const useEmployeeLoginCandidates = ({ enabled = true } = {}) => {
 };
 
 /** The master data overview: totals, data-quality checks, growth, shape, recent changes and the change-event stream. */
-export const useMasterDataDashboard = () => {
+export const useMasterDataDashboard = ({ enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
   return useQuery({
     queryKey: key(organisationId, "dashboard"),
     queryFn: () => apiFetch("/master-data-dashboard", { organisationId }),
-    enabled: !!organisationId,
+    enabled: !!organisationId && enabled,
     retry: false,
   });
 };

@@ -68,12 +68,12 @@ export const useCreateBaseline = () => {
 };
 
 /** Alerts raised by control-chart signals: `status` open | acknowledged | all. */
-export const useSpcAlerts = (status = "open", partId) => {
+export const useSpcAlerts = (status = "open", partId, { enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
   return useQuery({
     queryKey: key(organisationId, "alerts", status, partId),
     queryFn: () => apiFetch(`/spc/alerts?${qs({ status, partId })}`, { organisationId }),
-    enabled: !!organisationId,
+    enabled: !!organisationId && enabled,
     retry: false,
   });
 };

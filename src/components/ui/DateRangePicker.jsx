@@ -265,7 +265,7 @@ export default function DateRangePicker({
                 callbackFn={() => onChange({ startDate: null, endDate: null })}
               />
               {rangeCounter && startDate && (
-                <div className="font-semibold bg-cta-btn-bg border rounded-lg border-cta-btn-border flex items-center justify-center text-primary-text px-2 py-1">
+                <div className="font-semibold bg-cta-btn-bg border rounded-lg border-cta-btn-border flex items-center justify-center text-cta-btn-text px-2 py-1">
                   {Math.abs(
                     Math.round(
                       ((endDate || hoverDate || startDate) - startDate) /

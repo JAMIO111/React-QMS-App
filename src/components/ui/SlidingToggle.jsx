@@ -124,7 +124,7 @@ const SlidingToggle = ({
                 ? "cursor-not-allowed opacity-50"
                 : "cursor-pointer active:scale-97",
               isOn
-                ? "text-primary-text"
+                ? "text-cta-btn-text"
                 : "text-secondary-text hover:text-primary-text hover:bg-border-color/40",
             )}>
             {Icon && <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />}

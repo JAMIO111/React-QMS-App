@@ -21,12 +21,12 @@ import { LoaderCircleIcon } from "@/components/icons";
  */
 const VARIANTS = {
   cancel:
-    "border border-error-btn-border bg-error-btn-bg text-primary-text hover:bg-error-btn-bg-hover hover:border-error-btn-border-hover",
-  main: "border border-cta-btn-border bg-cta-btn-bg text-primary-text hover:bg-cta-btn-bg-hover hover:border-cta-btn-border-hover",
+    "border border-error-btn-border bg-error-btn-bg text-error-btn-text hover:bg-error-btn-bg-hover hover:border-error-btn-border-hover",
+  main: "border border-cta-btn-border bg-cta-btn-bg text-cta-btn-text hover:bg-cta-btn-bg-hover hover:border-cta-btn-border-hover",
   secondary:
     "border border-secondary-btn-border bg-secondary-btn-bg text-secondary-btn-text hover:bg-secondary-btn-bg-hover hover:border-secondary-btn-border-hover",
   success:
-    "border border-success-btn-border bg-success-btn-bg text-primary-text hover:bg-success-btn-bg-hover hover:border-success-btn-border-hover",
+    "border border-success-btn-border bg-success-btn-bg text-success-btn-text hover:bg-success-btn-bg-hover hover:border-success-btn-border-hover",
   neutral:
     "border border-neutral-btn-border bg-neutral-btn-bg text-primary-text hover:bg-neutral-btn-bg-hover hover:border-neutral-btn-border-hover",
 };

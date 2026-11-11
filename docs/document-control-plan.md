@@ -241,7 +241,7 @@ Migration `20260205100000_document_control_periodic_links.sql` (applied live 202
 
 ## 16. DC5 as built (2026-11-11)
 
-Migration `20260206100000_document_control_external.sql` (not applied live yet; pushing the API before it breaks the documents endpoints, which select `origin`, `issuer`, `issuer_revision`).
+Migration `20260206100000_document_control_external.sql` (applied live 2026-11-11; pushing the API before it breaks the documents endpoints, which select `origin`, `issuer`, `issuer_revision`).
 
 - **External documents:** `documents.origin` internal | external (fixed once created; only `app.create_external_document` turns a new document external, through the transaction-local
   setting `app.document_external_create`), `issuer` (required for external, ≤ 200), `external_reference` (≤ 120); an external document is always a file

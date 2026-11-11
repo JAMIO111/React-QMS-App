@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { usePermissions } from "../../hooks/useQmsApi";
 import LoadingScreen from "../ui/LoadingScreen";
+import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, GaugeIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
 import SlidingToggle from "../ui/SlidingToggle";
 
 const SettingsNonConformance = lazy(() => import("./SettingsNonConformance"));
@@ -18,6 +19,7 @@ const CustomFieldsSettings = lazy(() => import("../custom-fields/CustomFieldsSet
 const DATA_TABS = [
   {
     value: "non-conformance",
+    icon: TriangleAlertIcon,
     label: "Non-conformance",
     read: "ncr.read",
     manage: "lookups.manage",
@@ -26,6 +28,7 @@ const DATA_TABS = [
   },
   {
     value: "calibration",
+    icon: GaugeIcon,
     label: "Calibration",
     read: "calibration.read",
     manage: "calibration.manage",
@@ -35,6 +38,7 @@ const DATA_TABS = [
   },
   {
     value: "process-control",
+    icon: ChartNoAxesCombinedIcon,
     label: "Process control",
     read: "process_control.read",
     manage: "process_control.manage",
@@ -44,6 +48,7 @@ const DATA_TABS = [
   },
   {
     value: "audits",
+    icon: ClipboardCheckIcon,
     label: "Audits",
     read: "audits.read",
     manage: "audits.manage",
@@ -52,6 +57,7 @@ const DATA_TABS = [
   },
   {
     value: "supplier-quality",
+    icon: TruckIcon,
     label: "Supplier quality",
     read: "supplier_quality.read",
     manage: "supplier_quality.configure",
@@ -105,7 +111,7 @@ const SettingsDataManagement = () => {
             ariaLabel="Data Management sections"
             value={current.value}
             onChange={choose}
-            options={tabs.map((t) => ({ value: t.value, label: t.label, id: `data-tab-${t.value}`, controls: "data-tab-panel" }))}
+            options={tabs.map((t) => ({ value: t.value, label: t.label, icon: t.icon, id: `data-tab-${t.value}`, controls: "data-tab-panel" }))}
           />
         </div>
       </header>

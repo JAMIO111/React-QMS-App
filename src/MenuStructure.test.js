@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { menuStructure } from "./MenuStructure";
+import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, GaugeIcon, ScanSearchIcon, TruckIcon } from "@/components/icons";
 
 describe("menuStructure", () => {
   it("opens the NC dashboard and exposes the one non-conformance register", () => {
@@ -43,5 +44,15 @@ describe("menuStructure", () => {
     const master = menuStructure.find((m) => m.name === "Master Data");
     expect(master.subMenu.map((s) => s.path)).toContain("/Employees");
     expect(master.permission).toBe("master_data.read");
+  });
+
+  it("uses the agreed icon for each module", () => {
+    const icon = (name) => menuStructure.find((m) => m.name === name)?.icon;
+    expect(icon("Corrective Actions (8D)")).toBe(ClipboardListIcon);
+    expect(icon("Process Control")).toBe(ChartNoAxesCombinedIcon);
+    expect(icon("In-Process Inspection")).toBe(ScanSearchIcon);
+    expect(icon("Calibration")).toBe(GaugeIcon);
+    expect(icon("Audits")).toBe(ClipboardCheckIcon);
+    expect(icon("Supplier Quality")).toBe(TruckIcon);
   });
 });

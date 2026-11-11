@@ -1,4 +1,4 @@
-import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, LayoutDashboardIcon, ListChecksIcon, SearchCheckIcon, ShieldCheckIcon, TriangleAlertIcon } from "@/components/icons";
+import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, LayoutDashboardIcon, ScanSearchIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
@@ -20,7 +20,7 @@ export const menuStructure = [
   },
   {
     name: "Corrective Actions (8D)",
-    icon: ListChecksIcon,
+    icon: ClipboardListIcon,
     permission: "capa.read",
     path: "/CAPA",
     // badge: "my-actions" = how many 8D actions assigned to the signed-in person are still open (see Navbar)
@@ -32,7 +32,7 @@ export const menuStructure = [
   },
   {
     name: "In-Process Inspection",
-    icon: ClipboardListIcon,
+    icon: ScanSearchIcon,
     permission: "inspection.read",
     module: "inspections",
     path: "/Inspections",
@@ -40,7 +40,7 @@ export const menuStructure = [
   },
   {
     name: "Process Control",
-    icon: ClipboardCheckIcon,
+    icon: ChartNoAxesCombinedIcon,
     permission: "process_control.read",
     module: "control_plans",
     path: "/Process-Control",
@@ -65,7 +65,7 @@ export const menuStructure = [
   },
   {
     name: "Audits",
-    icon: SearchCheckIcon,
+    icon: ClipboardCheckIcon,
     permission: "audits.read",
     path: "/Audits",
     subMenu: [
@@ -90,7 +90,7 @@ export const menuStructure = [
   },
   {
     name: "Supplier Quality",
-    icon: ShieldCheckIcon,
+    icon: TruckIcon,
     permission: "supplier_quality.read",
     path: "/Suppliers",
     subMenu: [

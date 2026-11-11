@@ -29,7 +29,7 @@ export const DashboardPeriodPicker = ({ period, className = "w-60" }) => {
         showMonth="end"
         minDate={subDays(today, MAX_PERIOD_DAYS)}
         formatValue={() => period.label}
-        panelWidth="28rem"
+        panelWidth="25.2rem"
       />
     </div>
   );

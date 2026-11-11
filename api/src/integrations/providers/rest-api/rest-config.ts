@@ -65,7 +65,7 @@ export type RestEntity = z.infer<typeof RestEntity>;
 export const RestConfig = z
   .object({
     baseUrl: z.string().max(300),
-    authType: z.enum(['none', 'api_key', 'bearer', 'basic']).optional(),
+    authType: z.enum(['none', 'api_key', 'bearer', 'basic', 'oauth_client']).optional(),
     apiKeyHeader: z
       .string()
       .optional()
@@ -77,8 +77,16 @@ export const RestConfig = z
     timeoutSeconds: z.number().int().min(1).max(60).optional(),
     testPath: Path.optional(),
     entities: z.record(z.string().regex(/^[a-z_]{2,40}$/), RestEntity).optional(),
+    /** OAuth 2.0 client credentials: where the token is asked for (https on 443, any allowed public host), what it is for, and how the client proves itself. */
+    oauthTokenUrl: z.string().max(300).optional(),
+    oauthScope: z.string().max(500).regex(/^[\x21-\x7e]+( [\x21-\x7e]+)*$/, 'The scope is words separated by single spaces').optional(),
+    oauthAudience: z.string().max(300).regex(/^[\x21-\x7e]+$/, 'The audience has no spaces').optional(),
+    oauthClientAuth: z.enum(['body', 'basic']).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((c, ctx) => {
+    if (c.authType === 'oauth_client' && !c.oauthTokenUrl) ctx.addIssue({ code: 'custom', path: ['oauthTokenUrl'], message: 'Give the address the access token is asked for' });
+  });
 export type RestConfig = z.infer<typeof RestConfig>;
 
 /** The connection's settings, or the first problem in words. */

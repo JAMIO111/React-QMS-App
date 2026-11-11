@@ -86,6 +86,17 @@ describe('a guarded request', () => {
     await refused(c.get(new URL('https://api.example.com/'), { headers: { 'X-Api-Key': 'a\r\nHost: evil' } }), 'blocked', /line break/);
   });
 
+  it('posts a form under the same rules (OAuth token requests)', async () => {
+    const { c, sent } = client({ 'login.example.net': ['93.184.216.34'], 'inside.example.net': ['10.0.0.9'] });
+    await c.postForm(new URL('https://login.example.net/token'), { grant_type: 'client_credentials', scope: 'a b' }, { headers: { Accept: 'application/json' } });
+    expect(sent[0]).toMatchObject({ method: 'POST', address: { address: '93.184.216.34', family: 4 }, headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' } });
+    expect(sent[0].body!.toString()).toBe('grant_type=client_credentials&scope=a+b');
+    await refused(c.postForm(new URL('https://inside.example.net/token'), {}), 'blocked', /private or reserved/);
+    await refused(c.postForm(new URL('https://login.example.net/token'), {}, { allowedHosts: ['example.com'] }), 'blocked', /does not allow/);
+    await refused(c.postForm(new URL('https://login.example.net/token'), { x: 'y'.repeat(17_000) }), 'blocked', /larger/);
+    expect(sent).toHaveLength(1);
+  });
+
   it('refuses loopback, private ranges and the metadata address behind a public-looking name, before sending anything', async () => {
     const { c, sent } = client({
       'loop.example.com': ['127.0.0.1'],

@@ -166,3 +166,108 @@ describe('reading records', () => {
     expect(await denied.a.testConnection({ config: { ...base, baseUrl: 'https://erp.example.com' }, secret: null, allowedHosts: ['other.com'] })).toMatchObject({ ok: false, message: expect.stringMatching(/does not allow/) });
   });
 });
+
+describe('OAuth client credentials', () => {
+  const oauth = (over: Record<string, unknown> = {}) => ({
+    ...parts(), authType: 'oauth_client', oauthTokenUrl: 'https://login.example.net/tenant/oauth2/v2.0/token', oauthScope: 'api://erp/.default', ...over,
+  });
+  const client = JSON.stringify({ clientId: 'app id', clientSecret: 's3cr+t' });
+  /** A fake identity provider and API: tokens tok-1, tok-2 …; the API accepts only the latest token unless told otherwise. */
+  function idp(options: { tokenAnswer?: (n: number) => Partial<SafeResponse> & { json?: unknown }; apiRefuses?: (token: string) => boolean } = {}) {
+    let issued = 0;
+    let clock = 1_000_000;
+    const seen: SendRequest[] = [];
+    const http = new SafeHttpClient({
+      resolve: async () => [{ address: '93.184.216.34', family: 4 }],
+      send: async (req) => {
+        seen.push(req);
+        if (req.url.hostname === 'login.example.net') {
+          issued += 1;
+          const a = options.tokenAnswer?.(issued) ?? { json: { access_token: `tok-${issued}`, token_type: 'Bearer', expires_in: 3600 } };
+          return { status: a.status ?? 200, headers: {}, body: a.body ?? Buffer.from(JSON.stringify(a.json ?? {})) };
+        }
+        const token = (req.headers.Authorization ?? '').replace(/^Bearer /, '');
+        if (options.apiRefuses?.(token)) return { status: 401, headers: {}, body: Buffer.from('{}') };
+        return { status: 200, headers: {}, body: Buffer.from('[]') };
+      },
+    });
+    return { a: new RestApiAdapter(http, () => clock), seen, tick: (ms: number) => (clock += ms), issued: () => issued };
+  }
+
+  it('asks for a token with the client in the body, then calls the API with it', async () => {
+    const { a, seen } = idp();
+    await a.fetchRecords({ config: oauth({ oauthAudience: 'https://erp' }), secret: client }, 'part', null);
+    expect(seen[0].method).toBe('POST');
+    expect(seen[0].url.toString()).toBe('https://login.example.net/tenant/oauth2/v2.0/token');
+    expect(seen[0].headers['Content-Type']).toBe('application/x-www-form-urlencoded');
+    expect(seen[0].headers.Authorization).toBeUndefined();
+    expect(Object.fromEntries(new URLSearchParams(seen[0].body!.toString()))).toEqual({
+      grant_type: 'client_credentials', scope: 'api://erp/.default', audience: 'https://erp', client_id: 'app id', client_secret: 's3cr+t',
+    });
+    expect(seen[1].method).toBe('GET');
+    expect(seen[1].headers.Authorization).toBe('Bearer tok-1');
+  });
+
+  it('can send the client with HTTP basic, each part form-encoded', async () => {
+    const { a, seen } = idp();
+    await a.fetchRecords({ config: oauth({ oauthClientAuth: 'basic' }), secret: client }, 'part', null);
+    expect(seen[0].headers.Authorization).toBe(`Basic ${Buffer.from('app+id:s3cr%2Bt').toString('base64')}`);
+    expect(new URLSearchParams(seen[0].body!.toString()).has('client_secret')).toBe(false);
+  });
+
+  it('reuses the token until a minute before it expires, and a changed secret never reuses it', async () => {
+    const { a, tick, issued } = idp();
+    await a.fetchRecords({ config: oauth(), secret: client }, 'part', null);
+    await a.fetchRecords({ config: oauth(), secret: client }, 'part', null);
+    expect(issued()).toBe(1);
+    tick(3600_000 - 61_000);
+    await a.fetchRecords({ config: oauth(), secret: client }, 'part', null);
+    expect(issued()).toBe(1);
+    tick(2_000);
+    await a.fetchRecords({ config: oauth(), secret: client }, 'part', null);
+    expect(issued()).toBe(2);
+    await a.fetchRecords({ config: oauth(), secret: JSON.stringify({ clientId: 'app id', clientSecret: 'other' }) }, 'part', null);
+    expect(issued()).toBe(3);
+  });
+
+  it('asks again once when the API refuses a cached token', async () => {
+    const { a, issued } = idp({ apiRefuses: (t) => t === 'tok-1' });
+    await expect(a.fetchRecords({ config: oauth(), secret: client }, 'part', null)).resolves.toMatchObject({ done: true });
+    expect(issued()).toBe(2);
+    const always = idp({ apiRefuses: () => true });
+    await expect(always.a.fetchRecords({ config: oauth(), secret: client }, 'part', null)).rejects.toMatchObject({ kind: 'auth' });
+    expect(always.issued()).toBe(2);
+  });
+
+  it('names what the sign-in server said, and retries only its own outages', async () => {
+    const refused = idp({ tokenAnswer: () => ({ status: 401, json: { error: 'invalid_client', error_description: 'AADSTS7000215: Invalid client secret provided.\r\nTrace' } }) });
+    await expect(refused.a.fetchRecords({ config: oauth(), secret: client }, 'part', null)).rejects.toMatchObject({
+      kind: 'auth', transient: false, message: 'The sign-in server refused the client (401 invalid_client): AADSTS7000215: Invalid client secret provided. Trace',
+    });
+    const down = idp({ tokenAnswer: () => ({ status: 503 }) });
+    await expect(down.a.fetchRecords({ config: oauth(), secret: client }, 'part', null)).rejects.toMatchObject({ kind: 'transient', transient: true });
+    for (const json of [{}, { access_token: 'x', token_type: 'mac' }, { access_token: 'a\r\nb' }]) {
+      const odd = idp({ tokenAnswer: () => ({ json }) });
+      await expect(odd.a.fetchRecords({ config: oauth(), secret: client }, 'part', null)).rejects.toMatchObject({ kind: 'auth' });
+    }
+  });
+
+  it('needs a client id and secret, and keeps the token address to allowed public hosts', async () => {
+    const { a, seen } = idp();
+    for (const secret of [null, 'not json', JSON.stringify({ clientId: 'x' })]) {
+      await expect(a.fetchRecords({ config: oauth(), secret }, 'part', null)).rejects.toMatchObject({ kind: 'auth' });
+    }
+    await expect(a.fetchRecords({ config: oauth(), secret: client, allowedHosts: ['example.com'] }, 'part', null)).rejects.toMatchObject({ kind: 'auth', message: expect.stringMatching(/does not allow connections to login\.example\.net/) });
+    await expect(a.fetchRecords({ config: oauth({ oauthTokenUrl: 'http://login.example.net/token' }), secret: client }, 'part', null)).rejects.toMatchObject({ kind: 'auth' });
+    expect(seen).toHaveLength(0);
+    expect(readRestConfig({ ...base, authType: 'oauth_client' })).toEqual({ ok: false, problem: expect.stringMatching(/token is asked for/) });
+    expect(readRestConfig({ ...base, authType: 'oauth_client', oauthTokenUrl: 'https://x.example/t', oauthScope: 'a  b' })).toMatchObject({ ok: false });
+  });
+
+  it('says where it signed in when the connection test passes', async () => {
+    const { a } = idp();
+    expect(await a.testConnection({ config: oauth(), secret: client })).toEqual({ ok: true, message: 'Signed in at login.example.net; The API answered 200 at /api' });
+    const refused = idp({ tokenAnswer: () => ({ status: 400, json: { error: 'invalid_scope' } }) });
+    expect(await refused.a.testConnection({ config: oauth(), secret: client })).toEqual({ ok: false, message: 'The sign-in server refused the client (400 invalid_scope)' });
+  });
+});

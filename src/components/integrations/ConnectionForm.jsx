@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
-import { AUTH_TYPES, DELIMITERS, ENCODINGS, ENTITY_LABELS, PAGING_STYLES, configFromForm, newRestRecord, restEntitiesToRows, restRecordProblem, systemCodeFrom } from "../../lib/integrations";
+import { AUTH_TYPES, OAUTH_CLIENT_AUTH, DELIMITERS, ENCODINGS, ENTITY_LABELS, PAGING_STYLES, configFromForm, newRestRecord, restEntitiesToRows, restRecordProblem, systemCodeFrom } from "../../lib/integrations";
 import { PlusIcon, XIcon } from "@/components/icons";
 import { useIntegrationMutation } from "../../hooks/useIntegrations";
 import ComboField from "../ui/ComboField";
@@ -19,6 +19,10 @@ const toForm = (provider, c = {}) => ({
   baseUrl: c.baseUrl ?? "",
   authType: c.authType ?? "none",
   apiKeyHeader: c.apiKeyHeader ?? "",
+  oauthTokenUrl: c.oauthTokenUrl ?? "",
+  oauthScope: c.oauthScope ?? "",
+  oauthAudience: c.oauthAudience ?? "",
+  oauthClientAuth: c.oauthClientAuth ?? "body",
   timeoutSeconds: c.timeoutSeconds ?? "",
   testPath: c.testPath ?? "",
   records: restEntitiesToRows(c.entities),
@@ -127,6 +131,14 @@ export const ConfigFields = ({ provider, form, set, disabled }) => {
         <Field label="Address" value={form.baseUrl} onChange={(e) => set({ baseUrl: e.target.value })} required disabled={disabled} placeholder="https://erp.example.com/api" hint="Must start with https://. Addresses on a private network are not allowed." />
         <ComboField label="How we sign in" value={form.authType} onChange={(v) => set({ authType: v ?? "none" })} options={AUTH_TYPES} required disabled={disabled} />
         {form.authType === "api_key" && <Field label="Header name" value={form.apiKeyHeader} onChange={(e) => set({ apiKeyHeader: e.target.value })} required disabled={disabled} placeholder="X-Api-Key" />}
+        {form.authType === "oauth_client" && (
+          <>
+            <Field label="Token address" value={form.oauthTokenUrl} onChange={(e) => set({ oauthTokenUrl: e.target.value })} required disabled={disabled} placeholder="https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token" hint="Where the access token is asked for. It may be another host, but it must be allowed under Allowed hosts." />
+            <Field label="Scope" value={form.oauthScope} onChange={(e) => set({ oauthScope: e.target.value })} disabled={disabled} placeholder="api://erp/.default" hint="Optional. Words separated by spaces." />
+            <Field label="Audience" value={form.oauthAudience} onChange={(e) => set({ oauthAudience: e.target.value })} disabled={disabled} hint="Optional. Some sign-in servers (Auth0, for example) ask for it." />
+            <ComboField label="How the client is sent" value={form.oauthClientAuth} onChange={(v) => set({ oauthClientAuth: v ?? "body" })} options={OAUTH_CLIENT_AUTH} required disabled={disabled} />
+          </>
+        )}
         <Field label="Time allowed per request (seconds)" type="number" value={form.timeoutSeconds} onChange={(e) => set({ timeoutSeconds: e.target.value })} disabled={disabled} hint="Optional, up to 60" />
         <Field label="Test path" value={form.testPath} onChange={(e) => set({ testPath: e.target.value })} disabled={disabled} placeholder="/health" hint="Optional: what Test the connection asks for. Empty: the address itself." />
         <RestRecords rows={form.records ?? []} onChange={(records) => set({ records })} disabled={disabled} />

@@ -1,5 +1,6 @@
 import { AdapterContext, ConnectionTestResult, ConnectorAdapter, ConnectorError, ConnectorMetadata, FetchResult } from '../../core/connector.interface';
 import { SafeHttpClient, SafeHttpError, SafeResponse } from '../../core/safe-http';
+import { OAuthTokens } from './oauth';
 import { atPath, joinUrl, readRestConfig, RestConfig, RestEntity } from './rest-config';
 
 /** Most records taken from one answer, and most pages in one import (a guard against an API that never says it is done). */
@@ -108,18 +109,23 @@ const RUN_ERROR = (e: SafeHttpError): ConnectorError => {
  * tried again later (Retry-After honoured); 401 and 403 stop the import. Every record is flattened to text so the mapping reads it like a file's row.
  */
 export class RestApiAdapter implements ConnectorAdapter {
-  constructor(private readonly http: SafeHttpClient = new SafeHttpClient()) {}
+  private readonly tokens: OAuthTokens;
 
-  getMetadata(): ConnectorMetadata {
-    return { key: 'rest_api', name: 'REST API', kind: 'api', authTypes: ['api_key', 'bearer', 'basic'], capabilities: { testable: true, incremental: true, webhooks: false, writeBack: false } };
+  constructor(private readonly http: SafeHttpClient = new SafeHttpClient(), now: () => number = Date.now) {
+    this.tokens = new OAuthTokens(http, now);
   }
 
-  private headers(config: RestConfig, secret: string | null): Record<string, string> {
+  getMetadata(): ConnectorMetadata {
+    return { key: 'rest_api', name: 'REST API', kind: 'api', authTypes: ['api_key', 'bearer', 'basic', 'oauth_client'], capabilities: { testable: true, incremental: true, webhooks: false, writeBack: false } };
+  }
+
+  private async headers(config: RestConfig, secret: string | null, allowedHosts?: string[]): Promise<Record<string, string>> {
     const headers: Record<string, string> = { Accept: 'application/json', 'User-Agent': 'Fortress-QMS-Connector/1' };
     const auth = config.authType ?? 'none';
     if (auth === 'none') return headers;
     if (!secret) throw new ConnectorError('Store the credential for this connection first', 'auth', false);
-    if (auth === 'api_key') headers[config.apiKeyHeader ?? 'X-Api-Key'] = secret;
+    if (auth === 'oauth_client') headers.Authorization = `Bearer ${await this.tokens.token(config, secret, allowedHosts)}`;
+    else if (auth === 'api_key') headers[config.apiKeyHeader ?? 'X-Api-Key'] = secret;
     else if (auth === 'bearer') headers.Authorization = `Bearer ${secret}`;
     else {
       let u: { username?: string; password?: string } = {};
@@ -134,24 +140,24 @@ export class RestApiAdapter implements ConnectorAdapter {
     return headers;
   }
 
-  private async get(config: RestConfig, url: URL, headers: Record<string, string>, allowedHosts?: string[]): Promise<SafeResponse> {
-    return this.http.get(url, { headers, timeoutMs: (config.timeoutSeconds ?? 30) * 1000, allowedHosts });
+  /** GET with the connection's sign-in. With OAuth, a 401 means the token was withdrawn early: it is forgotten and asked for once more. */
+  private async get(config: RestConfig, url: URL, secret: string | null, allowedHosts?: string[]): Promise<SafeResponse> {
+    const send = async () => this.http.get(url, { headers: await this.headers(config, secret, allowedHosts), timeoutMs: (config.timeoutSeconds ?? 30) * 1000, allowedHosts });
+    const res = await send();
+    if (res.status !== 401 || config.authType !== 'oauth_client') return res;
+    this.tokens.drop(config, secret);
+    return send();
   }
 
   async testConnection(ctx: AdapterContext): Promise<ConnectionTestResult> {
     const read = readRestConfig(ctx.config);
     if (!read.ok) return { ok: false, message: read.problem };
     const config = read.config;
-    let headers: Record<string, string>;
-    try {
-      headers = this.headers(config, ctx.secret);
-    } catch (e) {
-      return { ok: false, message: (e as Error).message };
-    }
     try {
       const url = joinUrl(config.baseUrl, config.testPath);
-      const res = await this.get(config, url, headers, ctx.allowedHosts);
-      if (res.status >= 200 && res.status < 300) return { ok: true, message: `The API answered ${res.status} at ${url.pathname}` };
+      const res = await this.get(config, url, ctx.secret, ctx.allowedHosts);
+      const signedIn = config.authType === 'oauth_client' ? `Signed in at ${new URL(config.oauthTokenUrl!).host}; ` : '';
+      if (res.status >= 200 && res.status < 300) return { ok: true, message: `${signedIn}The API answered ${res.status} at ${url.pathname}` };
       if (res.status === 401 || res.status === 403) return { ok: false, message: `The API refused the credential (${res.status})` };
       return { ok: false, message: `The API answered ${res.status} at ${url.pathname}` };
     } catch (e) {
@@ -165,7 +171,6 @@ export class RestApiAdapter implements ConnectorAdapter {
     const config = read.config;
     const spec: RestEntity | undefined = config.entities && Object.prototype.hasOwnProperty.call(config.entities, entity) ? config.entities[entity] : undefined;
     if (!spec) throw new ConnectorError(`This connection does not say where to read ${entity.replace(/_/g, ' ')} records`, 'mapping', false);
-    const headers = this.headers(config, ctx.secret);
     const state = readCursor(cursor);
     const n = state.n ?? 0;
     if (n >= MAX_PAGES) throw new ConnectorError(`An import reads at most ${MAX_PAGES.toLocaleString('en-GB')} pages`, 'limit', false);
@@ -202,7 +207,7 @@ export class RestApiAdapter implements ConnectorAdapter {
 
     let res: SafeResponse;
     try {
-      res = await this.get(config, url, headers, ctx.allowedHosts);
+      res = await this.get(config, url, ctx.secret, ctx.allowedHosts);
     } catch (e) {
       if (e instanceof SafeHttpError) throw RUN_ERROR(e);
       throw e;

@@ -53,7 +53,19 @@ export const AUTH_TYPES = [
   { value: "api_key", label: "API key in a header" },
   { value: "bearer", label: "Bearer token" },
   { value: "basic", label: "User name and password" },
+  { value: "oauth_client", label: "OAuth client credentials", hint: "Microsoft Entra, Auth0, Okta…" },
 ];
+export const OAUTH_CLIENT_AUTH = [
+  { value: "body", label: "In the request", hint: "client_id and client_secret in the form (the usual choice)" },
+  { value: "basic", label: "With basic sign-in", hint: "An Authorization header" },
+];
+
+/** What is stored for each credential kind: the text the API's sign-in reads (JSON for user name + password and for an OAuth client). */
+export const credentialSecret = (kind, { user = "", secret = "" }) => {
+  if (kind === "basic") return JSON.stringify({ username: user.trim(), password: secret });
+  if (kind === "oauth_client") return JSON.stringify({ clientId: user.trim(), clientSecret: secret });
+  return secret;
+};
 
 /** The credential kind a REST connection's sign-in type needs (none: no credential). */
 export const credentialKindFor = (provider, config) => (provider === "rest_api" ? ((config?.authType ?? "none") === "none" ? null : config.authType) : null);
@@ -76,6 +88,13 @@ export const configFromForm = (provider, f) => {
   if (provider === "rest_api") {
     const c = { baseUrl: (f.baseUrl ?? "").trim(), authType: f.authType || "none" };
     if (c.authType === "api_key") c.apiKeyHeader = (f.apiKeyHeader ?? "").trim();
+    if (c.authType === "oauth_client") {
+      c.oauthTokenUrl = (f.oauthTokenUrl ?? "").trim();
+      const scope = (f.oauthScope ?? "").trim().replace(/\s+/g, " ");
+      if (scope) c.oauthScope = scope;
+      if ((f.oauthAudience ?? "").trim()) c.oauthAudience = f.oauthAudience.trim();
+      c.oauthClientAuth = f.oauthClientAuth || "body";
+    }
     if (f.timeoutSeconds !== "" && f.timeoutSeconds != null) c.timeoutSeconds = Number(f.timeoutSeconds);
     if ((f.testPath ?? "").trim()) c.testPath = f.testPath.trim();
     const entities = restRowsToEntities(f.records ?? []);

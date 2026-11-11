@@ -5,7 +5,7 @@ import { useIntegrationConnection, useIntegrationMutation, useIntegrationProvide
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
-import { CREDENTIAL_KINDS, EVENT_LABELS, credentialKindFor } from "../../lib/integrations";
+import { CREDENTIAL_KINDS, EVENT_LABELS, credentialKindFor, credentialSecret } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
 import { StatusPill } from "../Settings/SettingsIntegrations";
 import Callout from "../ui/Callout";
@@ -30,8 +30,9 @@ const CredentialDialog = ({ connection, kind, onClose }) => {
   const { showToast } = useToast();
   const [secret, setSecret] = useState("");
   const [user, setUser] = useState("");
-  const value = kind === "basic" ? `${user}:${secret}` : secret;
-  const ok = secret.trim() && (kind !== "basic" || user.trim());
+  const twoPart = kind === "basic" || kind === "oauth_client";
+  const value = credentialSecret(kind, { user, secret });
+  const ok = secret.trim() && (!twoPart || user.trim());
   const save = (e) => {
     e.preventDefault();
     if (!ok) return;
@@ -41,8 +42,8 @@ const CredentialDialog = ({ connection, kind, onClose }) => {
     <Dialog title={connection.credential ? "Replace the credential" : "Store a credential"} onClose={onClose}>
       <form noValidate onSubmit={save} autoComplete="off" className="flex flex-col gap-3">
         <Callout tone="info">It is stored encrypted and cannot be read back. To change it later, replace it.</Callout>
-        {kind === "basic" && <Field label="User name" value={user} onChange={(e) => setUser(e.target.value)} required autoComplete="off" />}
-        <Field label={kind === "basic" ? "Password" : CREDENTIAL_KINDS[kind] ?? "Secret"} type="password" value={secret} onChange={(e) => setSecret(e.target.value)} required autoComplete="new-password" />
+        {twoPart && <Field label={kind === "basic" ? "User name" : "Client id"} value={user} onChange={(e) => setUser(e.target.value)} required autoComplete="off" />}
+        <Field label={kind === "basic" ? "Password" : kind === "oauth_client" ? "Client secret" : CREDENTIAL_KINDS[kind] ?? "Secret"} type="password" value={secret} onChange={(e) => setSecret(e.target.value)} required autoComplete="new-password" />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>

@@ -47,6 +47,9 @@ export interface SendRequest {
   maxBytes: number;
   /** Tests only (a local TLS server); `SafeHttpClient` never sets it, so real calls always go to 443. */
   port?: number;
+  /** GET unless given; POST carries `body` (an OAuth token request, form-encoded). */
+  method?: 'GET' | 'POST';
+  body?: Buffer;
 }
 
 export interface SafeHttpOptions {
@@ -217,9 +220,9 @@ export const pinnedHttpsSend = (req: SendRequest): Promise<SafeResponse> =>
         host: req.url.hostname,
         servername: req.url.hostname,
         port: req.port ?? 443,
-        method: 'GET',
+        method: req.method ?? 'GET',
         path: `${req.url.pathname}${req.url.search}`,
-        headers: { ...req.headers, host: req.url.host },
+        headers: { ...req.headers, host: req.url.host, ...(req.body ? { 'content-length': String(req.body.length) } : {}) },
         agent: false,
         // The lookup Node uses for this socket answers with the checked address only.
         lookup: pinnedLookup(req.address) as never,
@@ -266,7 +269,7 @@ export const pinnedHttpsSend = (req: SendRequest): Promise<SafeResponse> =>
           : new SafeHttpError(`The server could not be reached${e.code ? ` (${e.code})` : ''}`, 'network'),
       ),
     );
-    r.end();
+    r.end(req.body);
   });
 
 // ---- the call -----------------------------------------------------------------------------------------------------------------
@@ -284,6 +287,17 @@ export class SafeHttpClient {
 
   /** GET a URL under the rules above. Throws `SafeHttpError`; any HTTP status (other than a redirect) is returned for the caller to judge. */
   async get(url: URL, options: SafeFetchOptions = {}): Promise<SafeResponse> {
+    return this.request('GET', url, undefined, options);
+  }
+
+  /** POST a form (`application/x-www-form-urlencoded`) under the same rules: used for OAuth token requests. The body is at most 16 kB. */
+  async postForm(url: URL, form: Record<string, string>, options: SafeFetchOptions = {}): Promise<SafeResponse> {
+    const body = Buffer.from(new URLSearchParams(form).toString(), 'utf8');
+    if (body.length > 16 * 1024) throw new SafeHttpError('The request is larger than allowed', 'blocked');
+    return this.request('POST', url, body, { ...options, headers: { ...(options.headers ?? {}), 'Content-Type': 'application/x-www-form-urlencoded' } });
+  }
+
+  private async request(method: 'GET' | 'POST', url: URL, body: Buffer | undefined, options: SafeFetchOptions): Promise<SafeResponse> {
     const problem = urlProblem(url);
     if (problem) throw new SafeHttpError(problem, 'blocked');
     if (!hostAllowed(url.hostname, options.allowedHosts)) throw new SafeHttpError(`Your organisation does not allow connections to ${url.hostname}`, 'blocked');
@@ -307,7 +321,7 @@ export class SafeHttpClient {
 
     const timeoutMs = Math.min(Math.max(options.timeoutMs ?? 30_000, 1_000), 60_000);
     const maxBytes = Math.min(options.maxBytes ?? MAX_RESPONSE_BYTES, MAX_RESPONSE_BYTES);
-    const res = await this.send({ url, address: preferredAddress(addresses), headers, connectTimeoutMs: Math.min(CONNECT_TIMEOUT_MS, timeoutMs), timeoutMs, maxBytes });
+    const res = await this.send({ url, method, body, address: preferredAddress(addresses), headers, connectTimeoutMs: Math.min(CONNECT_TIMEOUT_MS, timeoutMs), timeoutMs, maxBytes });
     if (res.body.length > maxBytes) throw new SafeHttpError('The answer is larger than allowed', 'too_large');
     if (res.status >= 300 && res.status < 400) {
       throw new SafeHttpError(`The API answered with a redirect (${res.status}); give the final address in the connection instead. Redirects are never followed.`, 'redirect');

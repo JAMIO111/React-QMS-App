@@ -112,6 +112,33 @@ describe("REST connection settings", () => {
       config: { baseUrl: "https://erp.example.com/api", authType: "none", entities: { machine: { path: "/v1/machines", recordsPath: "data", incremental: { param: "updated_since", field: "updatedAt" } } } },
     }));
   });
+
+  it("signs in with OAuth client credentials: token address, scope and how the client is sent", async () => {
+    routeApi({
+      "GET /integrations/connections": { data: [] },
+      "GET /integrations/runs": { data: [], page: 1, pageSize: 8, total: 0 },
+      "GET /integrations/allowed-hosts": { hosts: [], canManage: true },
+      "GET /integrations/providers": { data: providers },
+      "GET /integrations/conflicts": { data: [], page: 1, pageSize: 1, total: 0, openCount: 0 },
+      "POST /integrations/connections": conn({ id: "c9" }),
+    });
+    renderAt("/Settings/Integrations");
+    await userEvent.click(await screen.findByRole("button", { name: /Connect an API/ }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Name/ }), "Entra ERP");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Address/ }), "https://erp.example.com/api");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /How we sign in/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /OAuth client credentials/ }));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Token address/ }), "https://login.example.net/t/oauth2/v2.0/token");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Scope/ }), "api://erp/.default   openid");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /How the client is sent/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /With basic sign-in/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections")?.body?.config).toEqual({
+      baseUrl: "https://erp.example.com/api", authType: "oauth_client",
+      oauthTokenUrl: "https://login.example.net/t/oauth2/v2.0/token", oauthScope: "api://erp/.default openid", oauthClientAuth: "basic",
+    }));
+  });
 });
 
 describe("Allowed hosts", () => {

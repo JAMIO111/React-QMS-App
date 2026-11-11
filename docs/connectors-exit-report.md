@@ -89,7 +89,7 @@ Screenshots `80`–`85` in the journey output folder.
 
 - Email or push when an import fails or records wait; a time of day per connection (Vercel runs the daily cron once, in production only — on dev the
   cron is called by hand).
-- OAuth client credentials, POST queries, custom headers, non-JSON answers; webhooks; writing back to a source.
+- POST queries, custom headers, non-JSON answers; webhooks; writing back to a source (OAuth client credentials were added afterwards, `docs/email-oauth-plan.md` OA1).
 - Editing a rejected row in Fortress (by design, F2), reactivating a returned record, bulk decisions in the review queue, reviewing custom fields.
 - Production order operations, reconciliation net of returns.
 - Bespoke SAP, Dynamics, Sage, Odoo, database agents (brief §7.3: after the generic connectors are proven — they are shown as "Coming soon").

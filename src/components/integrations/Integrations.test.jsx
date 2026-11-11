@@ -133,6 +133,27 @@ describe("Connection page", () => {
     expect(screen.queryByText("s3cret-value")).toBeNull();
   });
 
+  it.each([
+    ["basic", "User name", "Password", { username: "ada", password: "pw" }],
+    ["oauth_client", "Client id", "Client secret", { clientId: "ada", clientSecret: "pw" }],
+  ])("stores a %s credential as the JSON the server reads", async (kind, first, second, expected) => {
+    routeApi({
+      "GET /integrations/connections/c1": detail({ config: { baseUrl: "https://erp.example.com/api", authType: kind, oauthTokenUrl: "https://login.example.net/t" } }),
+      "GET /integrations/providers": { data: providers },
+      "GET /integrations/runs": noRuns,
+      "PUT /integrations/connections/c1/credential": detail({ credential: { kind, setAt: "2026-11-09T10:00:00Z", setBy: { id: "u1", name: "Ada Owner" } }, problems: [] }),
+    });
+    renderAt("/Settings/Integrations/c1");
+    await userEvent.click(await screen.findByRole("button", { name: "Store a credential" }));
+    await userEvent.type(await screen.findByLabelText(new RegExp(`^${first}`)), " ada ");
+    await userEvent.type(screen.getByLabelText(new RegExp(`^${second}`)), "pw");
+    await userEvent.click(screen.getByRole("button", { name: "Store" }));
+    await waitFor(() => expect(calls.some((c) => c.k === "PUT /integrations/connections/c1/credential")).toBe(true));
+    const body = calls.find((c) => c.k.startsWith("PUT")).body;
+    expect(body.kind).toBe(kind);
+    expect(JSON.parse(body.secret)).toEqual(expected);
+  });
+
   it("offers Activate when the API says the caller may activate it", async () => {
     routeApi({ "GET /integrations/connections/c1": detail({ status: "ready", problems: [], canActivate: true }), "GET /integrations/providers": { data: providers }, "GET /integrations/runs": noRuns });
     renderAt("/Settings/Integrations/c1");

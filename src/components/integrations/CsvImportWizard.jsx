@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { uploadFileToSupabase } from "../../api/supabaseApi";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useToast } from "../../contexts/ToastProvider";
@@ -16,6 +16,7 @@ import {
   useTemplatePreview,
 } from "../../hooks/useIntegrations";
 import { useOrganisationDetails, usePermissions } from "../../hooks/useQmsApi";
+import { useGaugeTypes } from "../../hooks/useCalibration";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import {
@@ -248,6 +249,34 @@ const ChooseFile = ({ connection, fileId, onFile, canUpload, options, setOptions
  * Saving the mapping on screen: as the next version of the chosen template (a reason is needed: every import says which version it used) or as a new
  * template (a name). Only people who manage integrations save templates (T4).
  */
+/**
+ * Gauges get their type's checks only when they are created, so gauges imported while their type has no checks have none (and their calibrations
+ * cannot record readings). Lists the active gauge types without checks before a gauge import; nothing is blocked.
+ */
+export const GaugeChecksNotice = ({ enabled }) => {
+  const types = useGaugeTypes({ enabled });
+  const empty = (types.data ?? []).filter((t) => t.active && (t.characteristicCount ?? 0) === 0);
+  if (!enabled || empty.length === 0) return null;
+  const names = empty.slice(0, 8).map((t) => t.code ?? t.name);
+  const more = empty.length - names.length;
+  return (
+    <Callout tone="warning" title={`${empty.length === 1 ? "A gauge type has" : `${empty.length} gauge types have`} no checks yet`}>
+      <p>
+        {names.join(", ")}
+        {more > 0 ? ` and ${more} more` : ""}. A gauge gets its type&apos;s checks when it is created, so gauges of {empty.length === 1 ? "this type" : "these types"} imported
+        now will have none, and their calibrations will have no readings to record.
+      </p>
+      <p className="mt-1">
+        Add the checks to the type first in{" "}
+        <Link className="font-medium text-brand-primary underline" to="/Settings/Data-Management?tab=calibration">
+          Settings → Data Management → Calibration
+        </Link>
+        , or import now and use <strong>Apply the checks</strong> on the type there afterwards.
+      </p>
+    </Callout>
+  );
+};
+
 export const SaveTemplateDialog = ({ template, defaultName, onCancel, onSave, busy, action = "Save and continue" }) => {
   const [mode, setMode] = useState(template ? "version" : "new");
   const [reason, setReason] = useState("");
@@ -482,6 +511,7 @@ const CsvImportWizard = () => {
 
         {step === 3 && conn && catalogue && form && (
           <>
+            <GaugeChecksNotice enabled={entityType === "gauge" && can("calibration.read")} />
             <MenuCard
               title="Template"
               subtitle="A template remembers how a file's columns become Fortress fields, for everyone in the organisation."

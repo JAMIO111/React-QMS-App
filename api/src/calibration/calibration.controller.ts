@@ -24,6 +24,7 @@ import {
   GaugeDetail,
   GaugeListQuery,
   GaugePage,
+  ApplyTypeCharacteristicsResult,
   GaugeType,
   GaugeTypeQuery,
   HistoryEntry,
@@ -201,6 +202,15 @@ export class GaugeTypesController {
   @ApiOkResponse({ schema: openApiSchema(GaugeType) })
   update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.updateType(ctx, parse(Uuid, id), parse(UpdateGaugeTypeBody, body));
+  }
+
+  /** Copy the type's active checks onto its gauges that do not have them yet (gauges made or imported before the checks existed). */
+  @Post(':id/apply-characteristics')
+  @HttpCode(200)
+  @OrganisationScoped('calibration.manage')
+  @ApiOkResponse({ schema: openApiSchema(ApplyTypeCharacteristicsResult) })
+  applyCharacteristics(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.applyTypeCharacteristics(ctx, parse(Uuid, id));
   }
 
   /** Template characteristics, copied onto new gauges of this type. */

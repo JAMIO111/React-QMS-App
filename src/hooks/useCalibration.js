@@ -40,8 +40,8 @@ export const useGaugeHistory = (id) => useOrgQuery(["gauge", id, "history"], `/g
 export const useCalibration = (id) => useOrgQuery(["record", id], `/calibrations/${id}`, { enabled: !!id });
 export const useCalibrationAttachments = (id) => useOrgQuery(["record", id, "attachments"], `/calibrations/${id}/attachments?deleted=include`, { enabled: !!id, select: dataOf });
 
-export const useGaugeTypes = ({ includeInactive = false } = {}) =>
-  useOrgQuery(["types", includeInactive], `/gauge-types${includeInactive ? "?includeInactive=true" : ""}`, { select: dataOf, staleTime: 60_000 });
+export const useGaugeTypes = ({ includeInactive = false, enabled = true } = {}) =>
+  useOrgQuery(["types", includeInactive], `/gauge-types${includeInactive ? "?includeInactive=true" : ""}`, { select: dataOf, staleTime: 60_000, enabled });
 export const useGaugeTypeCharacteristics = (id, { includeInactive = false } = {}) =>
   useOrgQuery(["types", id, "characteristics", includeInactive], `/gauge-types/${id}/characteristics${includeInactive ? "?includeInactive=true" : ""}`, {
     enabled: !!id,

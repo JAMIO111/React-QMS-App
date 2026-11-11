@@ -1,5 +1,5 @@
 import { attachCustomValues, customFilterSql, customValuesOf, writeCustomValues } from '../custom-fields/custom-values';
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
@@ -16,6 +16,7 @@ import {
   GaugeSummary,
   GaugeType,
   GaugeTypeQuery,
+  ApplyTypeCharacteristicsResult,
   HistoryEntry,
   UpdateCharacteristicBody,
   UpdateGaugeBody,
@@ -387,6 +388,40 @@ export class CalibrationService {
     });
   }
 
+  /**
+   * Copy the type's active checks onto its gauges that do not have them yet (a gauge gets a type's checks only when it is created, so gauges made or
+   * imported before a check was added have none). Matched by the check they came from: a check already on the gauge — even one switched off there — is
+   * never added again or changed. Runs as the person: only gauges at sites where they manage calibration are touched; the others are counted as skipped.
+   */
+  applyTypeCharacteristics(ctx: RequestContext, typeId: string): Promise<z.infer<typeof ApplyTypeCharacteristicsResult>> {
+    return this.database.asUser(ctx, async (db) => {
+      const type = await this.loadType(db, ctx, typeId);
+      if (!type.active) throw new ApiError(HttpStatus.CONFLICT, 'calibration_rule', 'This gauge type is switched off; switch it on first');
+      const missing = sql`
+        from public.gauges g
+        join public.gauge_type_characteristics k on k.gauge_type_id = g.gauge_type_id and k.active
+        where g.gauge_type_id = ${typeId}::uuid and g.organisation_id = ${ctx.organisationId!}::uuid and ${sql.raw(GAUGE_TAKES_CHECKS)}
+          and not exists (select 1 from public.gauge_characteristics c where c.gauge_id = g.id and c.template_id = k.id)`;
+      const skipped = await db.execute<{ n: number }>(sql`
+        select count(distinct g.id) as n ${missing}
+          and not app.has_permission(g.organisation_id, 'calibration.manage', g.site_id)`);
+      const added = await db.execute<{ gauge_id: string }>(sql`
+        insert into public.gauge_characteristics (organisation_id, gauge_id, template_id, sort_order, kind, name, nominal,
+                                                  tolerance_minus, tolerance_plus, unit_code, method)
+        select g.organisation_id, g.id, k.id, k.sort_order, k.kind, k.name, k.nominal, k.tolerance_minus, k.tolerance_plus, k.unit_code, k.method
+        ${missing}
+          and app.has_permission(g.organisation_id, 'calibration.manage', g.site_id)
+        order by g.id, k.sort_order
+        returning gauge_id`);
+      return {
+        gaugesUpdated: new Set(added.rows.map((r) => r.gauge_id)).size,
+        characteristicsAdded: added.rows.length,
+        gaugesSkipped: Number(skipped.rows[0].n),
+        type: await this.loadType(db, ctx, typeId),
+      };
+    });
+  }
+
   updateTypeCharacteristic(ctx: RequestContext, id: string, body: z.infer<typeof UpdateCharacteristicBody>): Promise<Characteristic> {
     return this.changeCharacteristic(ctx, 'gauge_type_characteristics', id, body);
   }
@@ -464,10 +499,16 @@ export class CalibrationService {
   }
 }
 
+/** Gauges a type's checks are applied to: not deleted, still in use (retired and lost gauges are left as they are). */
+const GAUGE_TAKES_CHECKS = `g.deleted_at is null and g.status not in ('retired', 'lost')`;
+
 const TYPE_SELECT = `
   select t.*,
     (select count(*) from public.gauge_type_characteristics k where k.gauge_type_id = t.id and k.active) as characteristic_count,
-    (select count(*) from public.gauges g where g.gauge_type_id = t.id and g.deleted_at is null) as gauge_count
+    (select count(*) from public.gauges g where g.gauge_type_id = t.id and g.deleted_at is null) as gauge_count,
+    (select count(*) from public.gauges g where g.gauge_type_id = t.id and ${GAUGE_TAKES_CHECKS}
+       and exists (select 1 from public.gauge_type_characteristics k where k.gauge_type_id = t.id and k.active
+                     and not exists (select 1 from public.gauge_characteristics c where c.gauge_id = g.id and c.template_id = k.id))) as gauges_missing_checks
   from public.gauge_types t`;
 
 const toType = (r: Row): z.infer<typeof GaugeType> => ({
@@ -480,4 +521,5 @@ const toType = (r: Row): z.infer<typeof GaugeType> => ({
   active: r.active as boolean,
   characteristicCount: Number(r.characteristic_count ?? 0),
   gaugeCount: Number(r.gauge_count ?? 0),
+  gaugesMissingChecks: Number(r.gauges_missing_checks ?? 0),
 });

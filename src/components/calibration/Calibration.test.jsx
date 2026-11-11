@@ -29,7 +29,7 @@ import CalibrationRecordPage from "./CalibrationRecordPage";
 import GaugePage from "./GaugePage";
 import GaugeRegister from "./GaugeRegister";
 import { shouldPromptForStatus, statusAfterCalibration } from "../../lib/calibration";
-import SettingsCalibration from "../Settings/SettingsCalibration";
+import SettingsCalibration, { appliedMessage } from "../Settings/SettingsCalibration";
 
 const ALL = ["calibration.read", "calibration.manage", "calibration.record", "ncr.create"];
 
@@ -311,6 +311,42 @@ describe("settings", () => {
     await userEvent.clear(search);
     await userEvent.type(search, "nothing like it");
     expect(screen.getByText(/No gauge type matches/)).toBeInTheDocument();
+  });
+});
+
+describe("applying a type's checks to existing gauges", () => {
+  const typeWith = (over) => ({ id: "t1", code: "CAL-150", name: "Digital caliper", description: null, intervalValue: 6, intervalUnit: "months", active: true, characteristicCount: 2, gaugeCount: 3, ...over });
+
+  it("warns when gauges miss checks and applies them", async () => {
+    routeApi({
+      "GET /gauge-types": { data: [typeWith({ gaugesMissingChecks: 2 })] },
+      "POST /gauge-types/t1/apply-characteristics": { gaugesUpdated: 2, characteristicsAdded: 4, gaugesSkipped: 1, type: typeWith({ gaugesMissingChecks: 0 }) },
+    });
+    renderAt("/Settings/Calibration");
+    expect(await screen.findByText("2 gauges are missing some of these checks")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Apply the checks to them" }));
+    await waitFor(() => expect(lastCall("POST /gauge-types/t1/apply-characteristics")).toBeTruthy());
+  });
+
+  it("says what applying did", () => {
+    expect(appliedMessage({ gaugesUpdated: 2, characteristicsAdded: 4, gaugesSkipped: 1 })).toBe(
+      "4 checks added to 2 gauges. 1 gauge was left: at a site where you do not manage calibration.",
+    );
+    expect(appliedMessage({ gaugesUpdated: 1, characteristicsAdded: 1, gaugesSkipped: 0 })).toBe("1 check added to 1 gauge.");
+    expect(appliedMessage({ gaugesUpdated: 0, characteristicsAdded: 0, gaugesSkipped: 0 })).toBe("Every gauge already had these checks.");
+  });
+
+  it("says nothing when every gauge has them, and offers no button without calibration.manage", async () => {
+    routeApi({ "GET /gauge-types": { data: [typeWith({ gaugesMissingChecks: 0 })] } });
+    const { unmount } = renderAt("/Settings/Calibration");
+    expect(await screen.findByText("Digital caliper")).toBeInTheDocument();
+    expect(screen.queryByText(/missing some of these checks/)).not.toBeInTheDocument();
+    unmount();
+    permissions = ALL.filter((p) => p !== "calibration.manage");
+    routeApi({ "GET /gauge-types": { data: [typeWith({ gaugesMissingChecks: 1 })] } });
+    renderAt("/Settings/Calibration");
+    expect(await screen.findByText("1 gauge is missing some of these checks")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Apply the checks/ })).not.toBeInTheDocument();
   });
 });
 

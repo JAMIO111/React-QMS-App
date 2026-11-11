@@ -10,6 +10,7 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { INTERVAL_UNITS, formatInterval, gaugeTypeCodeFromName } from "../../lib/calibration";
 import MenuCard from "../ui/MenuCard";
+import Callout from "../ui/Callout";
 import Switch from "../ui/Switch";
 import StatTile from "../ui/StatTile";
 import CharacteristicsEditor from "../calibration/CharacteristicsEditor";
@@ -133,6 +134,17 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
 };
 
 /** One gauge type: summary, edit, switch off, and its template characteristics. */
+/** What applying a type's checks did, in words. */
+export const appliedMessage = (r) => {
+  if (!r || r.characteristicsAdded === 0) return "Every gauge already had these checks.";
+  const gauges = `${r.gaugesUpdated} ${r.gaugesUpdated === 1 ? "gauge" : "gauges"}`;
+  const checks = `${r.characteristicsAdded} ${r.characteristicsAdded === 1 ? "check" : "checks"}`;
+  const skipped = r.gaugesSkipped
+    ? ` ${r.gaugesSkipped} ${r.gaugesSkipped === 1 ? "gauge was" : "gauges were"} left: at a site where you do not manage calibration.`
+    : "";
+  return `${checks} added to ${gauges}.${skipped}`;
+};
+
 const TypeCard = ({ type, canManage }) => {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -141,7 +153,17 @@ const TypeCard = ({ type, canManage }) => {
     includeInactive: showInactive,
   });
   const mutation = useCalibrationMutation();
+  const apply = useCalibrationMutation();
   const { showToast } = useToast();
+  const applyChecks = () =>
+    apply.mutate(
+      { path: `/gauge-types/${type.id}/apply-characteristics`, method: "POST" },
+      {
+        onSuccess: (r) => showToast({ type: "success", title: "Checks applied", message: appliedMessage(r) }),
+        onError: (err) => showToast({ type: "error", title: "Not applied", message: describeApiError(err) }),
+      },
+    );
+  const missing = type.active && type.characteristicCount > 0 ? (type.gaugesMissingChecks ?? 0) : 0;
   const patch = (body, message) =>
     mutation.mutate(
       { path: `/gauge-types/${type.id}`, method: "PATCH", body },
@@ -238,11 +260,29 @@ const TypeCard = ({ type, canManage }) => {
           </div>
         </div>
       )}
+      {!editing && missing > 0 && (
+        <Callout
+          tone="warning"
+          title={`${missing} ${missing === 1 ? "gauge is" : "gauges are"} missing some of these checks`}
+          action={
+            canManage && (
+              <CTAButton type="main" size="md" onClick={applyChecks} loading={apply.isPending} loadingText="Applying…">
+                Apply the checks to {missing === 1 ? "it" : "them"}
+              </CTAButton>
+            )
+          }>
+          A gauge gets its type&apos;s checks when it is created, so gauges made or imported before a check was added do not have it.
+          {canManage
+            ? " Applying adds only the checks a gauge does not have; nothing already on a gauge changes."
+            : " Someone who manages calibration can apply them."}
+        </Callout>
+      )}
       {open && (
         <div className="border-t border-border-color pt-3">
           <p className="mb-2 text-sm text-secondary-text">
-            Copied onto each new gauge of this type. Existing gauges keep their
-            own copies.
+            Copied onto each new gauge of this type. Gauges made before a check
+            was added get it when you apply the checks; each gauge keeps its own
+            copies.
           </p>
           <CharacteristicsEditor
             items={characteristics.data}

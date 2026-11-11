@@ -102,7 +102,17 @@ export const GaugeType = z.object({
   active: z.boolean(),
   characteristicCount: z.number(),
   gaugeCount: z.number(),
+  /** Gauges of this type in use (not deleted, retired or lost) missing at least one of its active checks. */
+  gaugesMissingChecks: z.number(),
   customValues: CustomValues.optional(),
+});
+/** What applying a type's checks to its gauges did. */
+export const ApplyTypeCharacteristicsResult = z.object({
+  gaugesUpdated: z.number(),
+  characteristicsAdded: z.number(),
+  /** Gauges missing checks at sites where the caller does not manage calibration (left as they are). */
+  gaugesSkipped: z.number(),
+  type: GaugeType,
 });
 export const GaugeTypeQuery = z.object({
   includeInactive: z

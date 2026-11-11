@@ -20,7 +20,7 @@ vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: t
 
 import { ApiClientError } from "../../lib/api-client";
 import { fileProblem, freeSystemCode, mappingChanged, mappingToRows, parseValueMap, rowsInUse, rowsToFields, suggestColumns } from "../../lib/integrations";
-import CsvImportWizard from "./CsvImportWizard";
+import CsvImportWizard, { GaugeChecksNotice } from "./CsvImportWizard";
 import ConnectionPage from "./ConnectionPage";
 import MappingPage from "./MappingPage";
 import RunPage from "./RunPage";
@@ -422,6 +422,43 @@ describe("file import wizard", () => {
     renderAt("/Settings/Integrations/c1/mapping?entity=supplier&file=f1");
     expect(await screen.findByRole("listitem", { name: "Code" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Map columns/ })).toHaveAttribute("aria-current", "step");
+  });
+});
+
+describe("gauge types without checks before a gauge import", () => {
+  const show = (enabled) =>
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter>
+          <GaugeChecksNotice enabled={enabled} />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+  it("names the active types with no checks and links to where they are added", async () => {
+    apiFetch.mockImplementation(async (path) => {
+      if (path.startsWith("/gauge-types")) {
+        return {
+          data: [
+            { id: "t1", code: "CAL-150", name: "Caliper", active: true, characteristicCount: 0 },
+            { id: "t2", code: "MIC-25", name: "Micrometer", active: true, characteristicCount: 2 },
+            { id: "t3", code: "OLD", name: "Old", active: false, characteristicCount: 0 },
+          ],
+        };
+      }
+      throw new Error(`unexpected ${path}`);
+    });
+    show(true);
+    expect(await screen.findByText("A gauge type has no checks yet")).toBeInTheDocument();
+    expect(screen.getByText(/CAL-150\./)).toBeInTheDocument();
+    expect(screen.queryByText(/MIC-25|OLD/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Settings → Data Management → Calibration/ })).toHaveAttribute("href", "/Settings/Data-Management?tab=calibration");
+  });
+
+  it("asks nothing when not importing gauges (or without calibration.read)", () => {
+    show(false);
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(screen.queryByText(/no checks yet/)).not.toBeInTheDocument();
   });
 });
 

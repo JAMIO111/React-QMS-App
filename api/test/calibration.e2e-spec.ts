@@ -334,3 +334,37 @@ describe('calibration integrity (audit report H1 to H3)', () => {
     await api().patch(`/api/v1/calibrations/${cal.body.id}`).set(owner).send({ readings: fix }).expect(200);
   });
 });
+
+describe("applying a type's checks to gauges made before them", () => {
+  it('adds only the missing checks, never twice, and leaves retired gauges and switched-off checks alone', async () => {
+    const h = await as(ids.ownerA);
+    // Gauges made (or imported) before the type had any checks get none.
+    const type = (await api().post('/api/v1/gauge-types').set(h).send({ code: 'LATE-1', name: 'Late checks', intervalValue: 12, intervalUnit: 'months' }).expect(201)).body;
+    const g1 = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-LATE-1', description: 'Late 1', gaugeTypeId: type.id, siteId: ids.siteA }).expect(201)).body.id;
+    const g2 = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-LATE-2', description: 'Late 2', gaugeTypeId: type.id, siteId: ids.siteA }).expect(201)).body.id;
+    const g3 = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-LATE-3', description: 'Late 3', gaugeTypeId: type.id, siteId: ids.siteA }).expect(201)).body.id;
+    await api().patch(`/api/v1/gauges/${g3}`).set(h).send({ status: 'retired', statusReason: 'Scrapped' }).expect(200);
+    const a = (await api().post(`/api/v1/gauge-types/${type.id}/characteristics`).set(h).send({ name: '10 mm', nominal: 10, toleranceMinus: 0.01, tolerancePlus: 0.01, unitCode: 'mm' }).expect(201)).body;
+    await api().post(`/api/v1/gauge-types/${type.id}/characteristics`).set(h).send({ name: '50 mm', nominal: 50, toleranceMinus: 0.01, tolerancePlus: 0.01, unitCode: 'mm' }).expect(201);
+    expect((await api().get('/api/v1/gauge-types').set(h).expect(200)).body.data.find((t: { id: string }) => t.id === type.id)).toMatchObject({ characteristicCount: 2, gaugeCount: 3, gaugesMissingChecks: 2 });
+
+    // Only calibration managers may apply them; retired gauges are left as they are.
+    await api().post(`/api/v1/gauge-types/${type.id}/apply-characteristics`).set(await as(ids.inspectorA)).expect(403);
+    const r = await api().post(`/api/v1/gauge-types/${type.id}/apply-characteristics`).set(h).expect(200);
+    expect(r.body).toMatchObject({ gaugesUpdated: 2, characteristicsAdded: 4, gaugesSkipped: 0, type: { gaugesMissingChecks: 0 } });
+    const onG1 = (await api().get(`/api/v1/gauges/${g1}/characteristics`).set(h).expect(200)).body.data;
+    expect(onG1.map((c: { name: string }) => c.name)).toEqual(['10 mm', '50 mm']);
+    expect(onG1[0].templateId).toBe(a.id);
+    expect((await api().get(`/api/v1/gauges/${g3}/characteristics`).set(h).expect(200)).body.data).toEqual([]);
+
+    // A check switched off on a gauge is never added back.
+    const g2a = (await api().get(`/api/v1/gauges/${g2}/characteristics`).set(h).expect(200)).body.data.find((c: { templateId: string }) => c.templateId === a.id);
+    await api().patch(`/api/v1/gauge-characteristics/${g2a.id}`).set(h).send({ active: false }).expect(200);
+    const again = await api().post(`/api/v1/gauge-types/${type.id}/apply-characteristics`).set(h).expect(200);
+    expect(again.body).toMatchObject({ gaugesUpdated: 0, characteristicsAdded: 0 });
+    expect((await api().get(`/api/v1/gauges/${g2}/characteristics?includeInactive=true`).set(h).expect(200)).body.data).toHaveLength(2);
+
+    await api().patch(`/api/v1/gauge-types/${type.id}`).set(h).send({ active: false }).expect(200);
+    expect((await api().post(`/api/v1/gauge-types/${type.id}/apply-characteristics`).set(h).expect(409)).body.error.code).toBe('calibration_rule');
+  });
+});

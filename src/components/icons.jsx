@@ -116,6 +116,7 @@ import {
   ClipboardCheck as LucideClipboardCheck,
   ShieldAlert as LucideShieldAlert,
   CalendarClock as LucideCalendarClock,
+  Clock as LucideClock,
   Thermometer as LucideThermometer,
   Droplets as LucideDroplets,
   FlaskConical as LucideFlaskConical,
@@ -250,6 +251,7 @@ export const RulerIcon = withDefaults(LucideRuler);
 export const ClipboardCheckIcon = withDefaults(LucideClipboardCheck);
 export const ShieldAlertIcon = withDefaults(LucideShieldAlert);
 export const CalendarClockIcon = withDefaults(LucideCalendarClock);
+export const ClockIcon = withDefaults(LucideClock);
 export const ThermometerIcon = withDefaults(LucideThermometer);
 export const DropletsIcon = withDefaults(LucideDroplets);
 export const FlaskConicalIcon = withDefaults(LucideFlaskConical);

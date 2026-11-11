@@ -84,6 +84,16 @@ Summary of the brief:
   `sort={false}` keeps your order; server search via `filterLocally={false}` + `onSearchChange`
   (see `RemoteComboBox`, `PartPicker`, `PartyPicker` in `src/components/ncr/Pickers.jsx`). Dates:
   `valueFormat="iso"` for date-only API fields, `minDate`/`maxDate`, `clearable`.
+  **`RHFDatePickerPopout` / `RHFDatePicker` are the one date picker for every kind of date entry** (options per instance): `mode="single"|"range"`
+  (a range's value is `{ from, to }`, Cancel / Done, "N days"), `withTime` + `showSeconds` (Time, or Start time / End time; `valueFormat="iso"` then gives
+  `yyyy-MM-dd'T'HH:mm[:ss]` local, a range's end time defaults to 23:59, end must be after start on one day), `allowPast={false}` / `allowFuture={false}`
+  (block days and times before / after now, on top of `minDate`/`maxDate`), `presets` (shortcuts above the calendar: the first `quickPresets` (default 2) in a row,
+  **More** opens the full list; `presetsOpen` starts on it), `confirm` (Cancel / Done for a single day), `markedDates` (dots), `weekStartsOn` (default Monday).
+  Presets are chosen **per field** in `src/lib/datePresets.js`: `true`, `"ranges"`, `"dates"`, or an array mixing built-in keys (`today yesterday last7 last30 last90 thisWeek
+  lastWeek thisMonth lastMonth thisQuarter lastQuarter thisYear lastYear` for ranges; `today tomorrow yesterday nextWeek nextMonth endOfMonth endOfYear` for single dates)
+  and your own `{ label, range: (today) => [from, to] }` / `{ label, date: (today) => Date }`; a preset is clamped to the days allowed and switched off when none are
+  (`resolvePresets`, `clampRange`). Clicking the month title opens a month / year chooser. Tests `ui/DatePicker.test.jsx`, `ui/Pickers.test.jsx`.
+  The older `ui/DatePicker.jsx`, `DatePickerPopout.jsx` and `DateRangePicker.jsx` are not used by the app; do not build on them.
   The calendar opens in a portal (`data-popover`), so panes that close on outside clicks must ignore
   `[data-popover]`. Ranges: `src/components/ui/RangeSlider.jsx` (two handles, `value=[lo, hi]`, `format`).
 - Calibration (Phase 4, brought forward; `docs/calibration-plan.md`):

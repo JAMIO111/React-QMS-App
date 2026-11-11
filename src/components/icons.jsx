@@ -131,6 +131,13 @@ import {
   Link as LucideLink,
   ListChecks as LucideListChecks,
   Activity as LucideActivity,
+  Bold as LucideBold,
+  Italic as LucideItalic,
+  Heading1 as LucideHeading1,
+  Heading2 as LucideHeading2,
+  Heading3 as LucideHeading3,
+  ListOrdered as LucideListOrdered,
+  Redo2 as LucideRedo2,
 } from "lucide-react";
 
 const withDefaults = (Icon) => {
@@ -255,6 +262,13 @@ export const CoinsIcon = withDefaults(LucideCoins);
 export const ImageIcon = withDefaults(LucideImage);
 export const HourglassIcon = withDefaults(LucideHourglass);
 export const TableIcon = withDefaults(LucideTable);
+export const BoldIcon = withDefaults(LucideBold);
+export const ItalicIcon = withDefaults(LucideItalic);
+export const Heading1Icon = withDefaults(LucideHeading1);
+export const Heading2Icon = withDefaults(LucideHeading2);
+export const Heading3Icon = withDefaults(LucideHeading3);
+export const ListOrderedIcon = withDefaults(LucideListOrdered);
+export const Redo2Icon = withDefaults(LucideRedo2);
 export const GripVerticalIcon = withDefaults(LucideGripVertical);
 export const GaugeIcon = withDefaults(LucideGauge);
 export const RulerIcon = withDefaults(LucideRuler);

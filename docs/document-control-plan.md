@@ -8,7 +8,7 @@ document has an identity (`SOP-001`) separate from its revisions (rev A, B, C). 
 becomes effective on a date, and is then **frozen**. A change is always a new revision. The people who must read a document
 acknowledge each new revision. Like quality alerts, **nothing here blocks work**.
 
-Nothing is built yet. It is delivered as complete, tested vertical slices (§9), each with SQL tests, API e2e tests (both sweeps),
+**DC1 is built** (see §12); the rest is not. It is delivered as complete, tested vertical slices (§9), each with SQL tests, API e2e tests (both sweeps),
 frontend tests, lint and build, and finished by an exit check with a browser journey step.
 
 ## 1. What it reuses
@@ -142,7 +142,7 @@ Menu **Documentation**: **Dashboard**, **Documents** (register), **My documents*
 
 | Slice | Content |
 |---|---|
-| **DC1** | Types, documents and draft revisions (file and text kinds, editor), numbering, register, document page, revision page for drafts, files bucket. |
+| **DC1** (done) | Types, documents and draft revisions (file and text kinds, editor), numbering, register, document page, revision page for drafts, files bucket. |
 | **DC2** | Review and approval rounds, effective date and supersession (settle on read and cron), frozen revisions, withdraw, discard, revision compare, notices to reviewers and approver. |
 | **DC3** | Readers: targets, recipients fixed at effect, acknowledge, My documents and badge, overdue, restricted access, reading notices, competence evidence link. |
 | **DC4** | Periodic review (intervals, outcomes, overdue), change requests, links to parts, families, machines and operations, and "in force" panels on the job hub, part and machine pages. |
@@ -166,3 +166,19 @@ integrations entity), documents that block work (CP3-style: information only), a
 
 Bringing existing documents across: a manager types the number and current revision letter for each document (DC3). A CSV import
 belongs to a later integrations slice.
+
+## 12. DC1 as built (2026-11-11)
+
+Migration `20260202100000_document_control_core.sql` (applied live 2026-11-11); SQL test `supabase/tests/document_control_core.test.sql`; API `api/src/documents/` (e2e
+`api/test/documents.e2e-spec.ts`, both sweeps); UI `src/components/documents/` and Settings → Data Management → Documents.
+
+- **Document status** has a fourth value, `draft` = never yet in force (the plan listed active / withdrawn); a document whose only draft is discarded is
+  `discarded`, and its number is kept and never reused.
+- **Text bodies are stored as TipTap JSON only**, with a plain-text copy worked out by the database for search. There is **no stored HTML**: the body is
+  shown through the editor's own schema, so nothing can be injected. This replaces "a sanitised HTML copy" in DC13; comparing revisions (DC2) works on the
+  JSON. **Images inside the text are not built yet** (attach them as files); headings, lists, tables, bold, italic and links are.
+- **Who reads a draft:** its author, the document's owner and `documentation.manage`. Reviewers and approvers are added in DC2.
+- **The register** is a simple sortable table with search, type, content, owner and status filters; the shared table with column choice and saved filters
+  comes with the reader columns in DC3.
+- Files: one live main file per revision (a new one replaces the old, which is kept as removed with "Replaced by …"); the bucket allows 50 MB, the drop
+  zone 25 MB as everywhere else.

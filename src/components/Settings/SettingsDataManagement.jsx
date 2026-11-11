@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { usePermissions } from "../../hooks/useQmsApi";
 import LoadingScreen from "../ui/LoadingScreen";
-import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, GaugeIcon, GraduationCapIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
+import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, FileTextIcon, GaugeIcon, GraduationCapIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
 import SlidingToggle from "../ui/SlidingToggle";
 
 const SettingsNonConformance = lazy(() => import("./SettingsNonConformance"));
@@ -11,6 +11,7 @@ const SettingsProcessControl = lazy(() => import("./SettingsProcessControl"));
 const SettingsAudits = lazy(() => import("./SettingsAudits"));
 const SettingsSupplierQuality = lazy(() => import("./SettingsSupplierQuality"));
 const SettingsCompetence = lazy(() => import("./SettingsCompetence"));
+const SettingsDocuments = lazy(() => import("./SettingsDocuments"));
 const CustomFieldsSettings = lazy(() => import("../custom-fields/CustomFieldsSettings"));
 
 /**
@@ -73,6 +74,15 @@ const DATA_TABS = [
     manage: "competence.manage",
     description: "Skill categories, the skills people can be assessed on, and the positions that say which skills at which level each one needs.",
     Component: SettingsCompetence,
+  },
+  {
+    value: "documents",
+    icon: FileTextIcon,
+    label: "Documents",
+    read: "documentation.manage",
+    manage: "documentation.manage",
+    description: "Document types: each has a prefix and its own numbering (SOP-001, WI-014), a review interval and whether its documents are usually a file or written here.",
+    Component: SettingsDocuments,
   },
   {
     value: "custom-fields",

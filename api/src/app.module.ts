@@ -81,6 +81,8 @@ import { NotificationsController } from './notifications/notifications.controlle
 import { SavedFiltersController } from './saved-filters/saved-filters.controller';
 import { CustomFieldsController, CustomValuesController } from './custom-fields/custom-fields.controller';
 import { CompetenceController } from './competence/competence.controller';
+import { DocumentsController } from './documents/documents.controller';
+import { DocumentsService } from './documents/documents.service';
 import { CompetenceDashboardController, CompetenceDashboardService } from './competence/competence-dashboard';
 import { CompetencePeopleService } from './competence/competence-people.service';
 import { CompetenceTrainingService } from './competence/competence-training.service';
@@ -234,6 +236,7 @@ export class AppModule implements NestModule {
         SupplierQualityController,
         CompetenceController,
         CompetenceDashboardController,
+        DocumentsController,
         SupplierQualificationController,
         SupplierRiskController,
         SupplierPerformanceController,
@@ -312,6 +315,7 @@ export class AppModule implements NestModule {
         CompetencePeopleService,
         CompetenceDashboardService,
         CompetenceTrainingService,
+        DocumentsService,
         SupplierQualificationService,
         SupplierRiskService,
         SupplierPerformanceService,

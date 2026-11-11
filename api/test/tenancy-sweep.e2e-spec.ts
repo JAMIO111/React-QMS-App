@@ -83,6 +83,16 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/competence/people/{id}/positions': { positionId: '00000000-0000-4000-8000-000000000001', startedOn: '2026-01-01' },
     'POST /api/v1/competence/people/{id}/assessments': { skillId: '00000000-0000-4000-8000-000000000001', level: 2 },
     'POST /api/v1/competence/employee-positions/{id}/end': {},
+    'PATCH /api/v1/document-types/{id}': { name: 'Hijacked' },
+    'GET /api/v1/documents/{id}': undefined,
+    'PATCH /api/v1/documents/{id}': { title: 'Hijacked' },
+    'GET /api/v1/document-revisions/{id}': undefined,
+    'PATCH /api/v1/document-revisions/{id}': { changeSummary: 'Hijacked' },
+    'POST /api/v1/document-revisions/{id}/discard': { reason: 'Hijacked' },
+    'GET /api/v1/document-revisions/{id}/files': undefined,
+    'POST /api/v1/document-revisions/{id}/files': { role: 'attachment', storagePath: 'x/document/y/z.pdf', fileName: 'z.pdf', sizeBytes: 1 },
+    'POST /api/v1/document-files/{id}/delete': { reason: 'Hijacked' },
+    'POST /api/v1/document-files/{id}/restore': {},
     'GET /api/v1/competence/training-sessions/{id}': undefined,
     'PATCH /api/v1/competence/training-sessions/{id}': { title: 'Hijacked' },
     'POST /api/v1/competence/training-sessions/{id}/attendees': { employeeId: '00000000-0000-4000-8000-000000000001' },
@@ -435,6 +445,16 @@ const hasSample = (op: Op) =>
     'POST /api/v1/competence/people/{id}/assessments',
     'POST /api/v1/competence/employee-positions/{id}/end',
     'GET /api/v1/competence/training-sessions/{id}',
+    'PATCH /api/v1/document-types/{id}',
+    'GET /api/v1/documents/{id}',
+    'PATCH /api/v1/documents/{id}',
+    'GET /api/v1/document-revisions/{id}',
+    'PATCH /api/v1/document-revisions/{id}',
+    'POST /api/v1/document-revisions/{id}/discard',
+    'GET /api/v1/document-revisions/{id}/files',
+    'POST /api/v1/document-revisions/{id}/files',
+    'POST /api/v1/document-files/{id}/delete',
+    'POST /api/v1/document-files/{id}/restore',
     'PATCH /api/v1/competence/training-sessions/{id}',
     'POST /api/v1/competence/training-sessions/{id}/attendees',
     'POST /api/v1/competence/training-sessions/{id}/record',
@@ -824,6 +844,10 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/competence/training-sessions/')) return a.competenceSession;
   if (path.startsWith('/api/v1/competence/session-attendees/')) return a.competenceAttendee;
   if (path.startsWith('/api/v1/competence/competence-attachments/')) return a.competenceFile;
+  if (path.startsWith('/api/v1/document-types/')) return a.documentType;
+  if (path.startsWith('/api/v1/documents/')) return a.document;
+  if (path.startsWith('/api/v1/document-revisions/')) return a.documentRevision;
+  if (path.startsWith('/api/v1/document-files/')) return a.documentFile;
   if (path.startsWith('/api/v1/parts/')) return a.part;
   if (path.startsWith('/api/v1/part-revisions/')) return a.draftRevision;
   if (path.startsWith('/api/v1/ncrs/')) return a.ncr;
@@ -995,6 +1019,10 @@ beforeAll(async () => {
     a.competenceSession = (await q1(`select app.create_training_session($1::uuid, '{"title":"Alpha session","kind":"course","providerType":"external","providerName":"Alpha Trainers","startsOn":"2026-01-05"}'::jsonb, ARRAY[$2]::uuid[]) as id`, [ids.orgA, a.employee])).id;
     a.competenceAttendee = (await q1(`select id from public.competence_session_attendees where session_id = $1`, [a.competenceSession])).id;
     a.competenceFile = (await q1(`select app.add_competence_attachment($1::uuid, null, $2::text || '/competence/session/' || $1::text || '/a.pdf', 'a.pdf', 'application/pdf', 1) as id`, [a.competenceSession, ids.orgA])).id;
+    a.documentType = (await q1(`select id from public.document_types where organisation_id = $1 and prefix = 'FRM'`, [ids.orgA])).id;
+    a.document = (await q1(`select app.create_document($1::uuid, jsonb_build_object('typeId', $2::text, 'title', 'Alpha form', 'contentKind', 'file')) as id`, [ids.orgA, a.documentType])).id;
+    a.documentRevision = (await q1(`select id from public.document_revisions where document_id = $1`, [a.document])).id;
+    a.documentFile = (await q1(`select app.add_document_file($1::uuid, 'main', $2::text || '/document/' || $1::text || '/a.pdf', 'a.pdf', 'application/pdf', 1) as id`, [a.documentRevision, ids.orgA])).id;
     a.supplierClassification = (await q1(`select id from public.supplier_classifications where organisation_id = $1 and key = 'welding'`, [ids.orgA])).id;
     a.supplierContact = (await q1(`insert into public.supplier_contacts (organisation_id, supplier_id, name) values ($1, $2, 'Alpha contact') returning id`, [ids.orgA, a.supplier])).id;
     a.supplierDocument = (await q1(`select app.add_supplier_document($1::uuid, 'other', 'Alpha doc', null, null, null, null, $2, 'a.pdf', null, 1) as id`, [a.supplier, `${ids.orgA}/supplier/${a.supplier}/a.pdf`])).id;

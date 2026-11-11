@@ -84,6 +84,7 @@ export const menuStructure = [
     // badge: "my-alerts" = how many alerts addressed to the signed-in person still need acknowledging (see Navbar)
     badge: "my-alerts",
     subMenu: [
+      { name: "Documents", path: "/Documentation/Documents" },
       { name: "My alerts", path: "/Documentation/My-Alerts", badge: "my-alerts" },
       { name: "Quality alerts", path: "/Documentation/Quality-Alerts" },
     ],

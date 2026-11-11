@@ -253,6 +253,11 @@ BEGIN
     a || '/competence/session/' || (SELECT id FROM public.competence_training_sessions WHERE organisation_id = a) || '/sweep.pdf', 'sweep.pdf', 'application/pdf', 1);
   PERFORM app.add_competence_attachment(NULL, (SELECT id FROM public.competence_session_attendees WHERE employee_id = emp),
     a || '/competence/attendee/' || (SELECT id FROM public.competence_session_attendees WHERE employee_id = emp) || '/cert.pdf', 'cert.pdf', 'application/pdf', 1);
+  -- Document control (DC1): a text document with a draft, and a file document with a main file (types are seeded per organisation).
+  PERFORM app.create_document(a, jsonb_build_object('typeId', (SELECT id FROM public.document_types WHERE organisation_id = a AND prefix = 'SOP'), 'title', 'Sweep procedure', 'contentKind', 'text'));
+  PERFORM app.create_document(a, jsonb_build_object('typeId', (SELECT id FROM public.document_types WHERE organisation_id = a AND prefix = 'FRM'), 'title', 'Sweep form', 'contentKind', 'file'));
+  PERFORM app.add_document_file(r.id, 'main', a || '/document/' || r.id || '/sweep.pdf', 'sweep.pdf', 'application/pdf', 1)
+     FROM public.document_revisions r JOIN public.documents d ON d.id = r.document_id WHERE d.organisation_id = a AND d.title = 'Sweep form';
   PERFORM pg_temp.logout();
   -- Supplier quality (SQ1): the supplier's first status row exists already; classifications are seeded per organisation.
   INSERT INTO public.supplier_classification_links (organisation_id, supplier_id, classification_id)

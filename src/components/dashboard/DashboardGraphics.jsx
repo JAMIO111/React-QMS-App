@@ -43,7 +43,7 @@ export const ChangeNote = ({ change, higherIsWorse = false }) => {
 
 /**
  * A headline number on a card with its icon in a tinted square and a soft circle behind it; `alert` turns the tint and the number red.
- * `change` (a percentage on the previous period) is shown in place of the note when there is one.
+ * `change` (a percentage on the previous period) is shown above the note.
  */
 export const StatTile = ({ icon: Icon, label, value, note, to, alert = false, change, higherIsWorse = false, children }) => {
   const color = alert ? "var(--color-error-color)" : ACCENT;
@@ -60,7 +60,10 @@ export const StatTile = ({ icon: Icon, label, value, note, to, alert = false, ch
       </span>
       <p className={`text-3xl font-semibold ${alert ? "text-error-color" : "text-primary-text"}`}>{value}</p>
       {children}
-      <p className="min-h-4 text-xs text-secondary-text">{hasChange ? <ChangeNote change={change} higherIsWorse={higherIsWorse} /> : note}</p>
+      <p className="min-h-4 text-xs text-secondary-text">
+        {hasChange && <ChangeNote change={change} higherIsWorse={higherIsWorse} />}
+        {note && <span className="block">{note}</span>}
+      </p>
     </Tile>
   );
 };

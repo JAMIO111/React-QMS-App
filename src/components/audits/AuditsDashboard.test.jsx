@@ -93,7 +93,11 @@ describe("audits dashboard", () => {
     const raised = screen.getByRole("link", { name: /Findings raised/ });
     expect(raised).toHaveTextContent("6");
     expect(raised).toHaveTextContent("3 became a non-conformance");
-    expect(screen.getByText("Template changes").closest("div").parentElement).toHaveTextContent("2");
+    expect(document.querySelector('[data-tile="Template changes"]')).toHaveTextContent("2");
+    // the three rates are drawn as gauges, each saying what it is a share of
+    expect(document.querySelector('[data-tile="On time"]')).toHaveTextContent("60%");
+    expect(document.querySelector('[data-tile="Passed"]')).toHaveTextContent("70%");
+    expect(document.querySelector('[data-tile="Average score"]')).toHaveTextContent("88.4%");
   });
 
   it("links the figures to the registers they come from", async () => {
@@ -173,9 +177,11 @@ describe("audits dashboard", () => {
     expect(findings).toHaveTextContent("Grace Hopper");
     const failed = screen.getByRole("list", { name: "Latest failed audits" });
     expect(within(failed).getByRole("link", { name: "AR-26-0002" })).toHaveAttribute("href", "/Audits/Records/r1");
-    expect(failed).toHaveTextContent("50% · 1 critical");
+    expect(failed).toHaveTextContent("· 50%");
+    expect(within(failed).getByText("1 critical")).toBeInTheDocument();
     const versions = screen.getByRole("list", { name: "Recent changes to audits" });
-    expect(versions).toHaveTextContent("AUD-002 · Grinding audit · version 3");
+    expect(versions).toHaveTextContent("AUD-002 · Grinding audit");
+    expect(within(versions).getByText("version 3")).toBeInTheDocument();
     expect(versions).toHaveTextContent("Added a purpose");
     expect(versions).toHaveTextContent("Ada Owner");
   });

@@ -185,7 +185,7 @@ Migration `20260202100000_document_control_core.sql` (applied live 2026-11-11); 
 
 ## 13. DC2 as built (2026-11-11)
 
-Migration `20260203100000_document_control_review.sql`; SQL test `supabase/tests/document_control_review.test.sql`; API e2e `api/test/document-review.e2e-spec.ts`
+Migration `20260203100000_document_control_review.sql` (applied live 2026-11-11); SQL test `supabase/tests/document_control_review.test.sql`; API e2e `api/test/document-review.e2e-spec.ts`
 (+ both sweeps, cron test); unit test `api/src/documents/document-compare.spec.ts`.
 
 - Reviewers are kept in `document_revision_reviewers` and the approver on the revision; each submission starts a **round** of `document_signoffs`

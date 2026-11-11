@@ -13,7 +13,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import SlidingToggle from "../ui/SlidingToggle";
 import NewDocumentDialog from "./NewDocumentDialog";
 
-const DOCUMENT_FILTER_KEYS = ["search", "status", "type", "kind", "owner", "sort", "order", "page"];
+const DOCUMENT_FILTER_KEYS = ["search", "status", "type", "kind", "owner", "review", "sort", "order", "page"];
 
 const COLUMNS = [
   ["number", "Number"],
@@ -23,6 +23,7 @@ const COLUMNS = [
   [null, "Content"],
   ["owner", "Owner"],
   [null, "In progress"],
+  ["nextReview", "Next review"],
   ["status", "Status"],
 ];
 
@@ -37,7 +38,7 @@ const DocumentsPage = () => {
   const sort = f.sort || "number";
   const order = f.order || "asc";
   const waiting = useWaitingReviews();
-  const docs = useDocuments({ q: f.search, status: f.status, type: f.type, kind: f.kind, owner: f.owner, sort, order, page: f.page || undefined });
+  const docs = useDocuments({ q: f.search, status: f.status, type: f.type, kind: f.kind, owner: f.owner, reviewOverdue: f.review || undefined, sort, order, page: f.page || undefined });
   const typeOptions = (types.data?.data ?? []).map((t) => ({ value: t.id, label: t.name, hint: t.prefix }));
 
   const sortBy = (key) => f.updateFilters({ sort: key, order: sort === key && order === "asc" ? "desc" : "asc", page: "" });
@@ -89,6 +90,7 @@ const DocumentsPage = () => {
           />
         </div>
         <SlidingToggle ariaLabel="Owner" options={[{ value: "", label: "Everyone's" }, { value: "me", label: "Mine" }]} value={f.owner || ""} onChange={(v) => f.updateFilters({ owner: v, page: "" })} />
+        <SlidingToggle ariaLabel="Review" options={[{ value: "", label: "Any review date" }, { value: "true", label: "Review overdue" }]} value={f.review || ""} onChange={(v) => f.updateFilters({ review: v, page: "" })} />
       </div>
       <SlidingToggle ariaLabel="Status" options={DOCUMENT_STATUS_OPTIONS} value={f.status || ""} onChange={(v) => f.updateFilters({ status: v, page: "" })} />
 
@@ -97,7 +99,7 @@ const DocumentsPage = () => {
       ) : docs.error ? (
         <ErrorNotice error={docs.error} />
       ) : docs.data.data.length === 0 ? (
-        <p className="text-sm text-secondary-text">No documents {f.search || f.status || f.type || f.kind || f.owner ? "match" : "yet"}.</p>
+        <p className="text-sm text-secondary-text">No documents {f.search || f.status || f.type || f.kind || f.owner || f.review ? "match" : "yet"}.</p>
       ) : (
         <div className="min-h-0 overflow-auto rounded-2xl border border-border-color bg-secondary-bg">
           <table className="min-w-full text-sm" aria-label="Documents">
@@ -133,6 +135,10 @@ const DocumentsPage = () => {
                   <td className="px-3 py-2 text-secondary-text">{contentKindLabel(d.contentKind)}</td>
                   <td className="px-3 py-2 text-secondary-text">{d.owner?.name ?? "—"}</td>
                   <td className="px-3 py-2 text-secondary-text">{d.inProgress ? statusLabel(REVISION_STATUS, d.inProgress.status) : "—"}</td>
+                  <td className={`whitespace-nowrap px-3 py-2 ${d.reviewOverdue ? "font-medium text-error-color" : "text-secondary-text"}`}>
+                    {d.nextReviewOn ? formatDay(d.nextReviewOn) : "—"}
+                    {d.reviewOverdue ? " (overdue)" : ""}
+                  </td>
                   <td className="px-3 py-2">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusPill(DOCUMENT_STATUS, d.status)}`}>{statusLabel(DOCUMENT_STATUS, d.status)}</span>
                   </td>

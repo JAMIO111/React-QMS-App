@@ -8,7 +8,7 @@ document has an identity (`SOP-001`) separate from its revisions (rev A, B, C). 
 becomes effective on a date, and is then **frozen**. A change is always a new revision. The people who must read a document
 acknowledge each new revision. Like quality alerts, **nothing here blocks work**.
 
-**DC1–DC3 are built** (see §12–§14); the rest is not. It is delivered as complete, tested vertical slices (§9), each with SQL tests, API e2e tests (both sweeps),
+**DC1–DC4 are built** (see §12–§15); DC5 and DC6 are not. It is delivered as complete, tested vertical slices (§9), each with SQL tests, API e2e tests (both sweeps),
 frontend tests, lint and build, and finished by an exit check with a browser journey step.
 
 ## 1. What it reuses
@@ -145,7 +145,7 @@ Menu **Documentation**: **Dashboard**, **Documents** (register), **My documents*
 | **DC1** (done) | Types, documents and draft revisions (file and text kinds, editor), numbering, register, document page, revision page for drafts, files bucket. |
 | **DC2** (done) | Review and approval rounds, effective date and supersession (settle on read and cron), frozen revisions, withdraw, discard, revision compare, notices to reviewers and approver. |
 | **DC3** (done) | Readers: targets, recipients fixed at effect, acknowledge, My documents and badge, overdue, restricted access, reading notices, competence evidence link. |
-| **DC4** | Periodic review (intervals, outcomes, overdue), change requests, links to parts, families, machines and operations, and "in force" panels on the job hub, part and machine pages. |
+| **DC4** (done) | Periodic review (intervals, outcomes, overdue), change requests, links to parts, families, machines and operations, and "in force" panels on the job hub, part and machine pages. |
 | **DC5** | External documents, controlled PDF copies, the dashboard. |
 | **DC6** | Exit check: live guardrails, advisors, browser journey step (write → review → send back → approve → effective → acknowledge → revise), `docs/document-control-exit-report.md`, `CLAUDE.md`. |
 
@@ -219,3 +219,22 @@ Migration `20260204100000_document_control_readers.sql` (applied live 2026-11-11
 - **Competence:** a document names the skills it trains; acknowledgements of such documents appear as "Documents read" on the person's competence
   record (evidence only), through `app.competence_document_evidence` (competence.read or the person themselves).
 - The "a document for you to read" notice has **no actor**, so the person whose own read settled the revision is still told.
+
+## 15. DC4 as built (2026-11-11)
+
+Migration `20260205100000_document_control_periodic_links.sql` (applied live 2026-11-11); SQL test `supabase/tests/document_control_periodic_links.test.sql`; API e2e
+`api/test/document-periodic-links.e2e-spec.ts` (+ both sweeps).
+
+- **Next review date** (`documents.next_review_on`): effective date + the interval (the document's own `review_months`, else the type's) when a
+  revision takes effect; today + interval after a "no change needed" review; moved when the document's own interval changes; empty while not in
+  force or withdrawn. Documents already in force got theirs from the revision in force.
+- **Periodic reviews** are append-only (`document_periodic_reviews`): "no change needed" needs a note of what was checked; "revision started" starts a
+  draft from the revision in force (refused while one is in progress). Overdue = next review date before today, worked out on read; the register
+  filters by it and shows the date.
+- **Change requests** (`DCR-YY-NNNN`): any reader asks (what, why); a manager accepts (a new draft, or the draft already in progress; refused while a
+  revision is in review or approved and waiting) or declines with a reason; the person who asked withdraws theirs while open. Readers see their own,
+  managers all. The person who asked is told of an acceptance or a decline. **A change request does not yet appear on the revision page** (it links to
+  the revision it went into).
+- **Links** (`document_links`): parts, part families, machines, operation codes. **Documents in force** are shown where work happens: part, part family
+  and machine pages, Start inspection, and a "Docs" pane on the job hub (`GET /documents-in-force`, a part also matches its family; restricted
+  documents only for their readers; "To read" marks those the person still has to acknowledge). Information only.

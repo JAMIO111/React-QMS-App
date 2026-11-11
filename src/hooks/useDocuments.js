@@ -101,6 +101,18 @@ export const useDocumentMutation = () => {
           return send(`/document-revisions/${id}/acknowledge`);
         case "addRecipient":
           return send(`/document-revisions/${id}/recipients`);
+        case "recordReview":
+          return send(`/documents/${id}/reviews`);
+        case "setLinks":
+          return send(`/documents/${id}/links`, "PUT");
+        case "raiseChangeRequest":
+          return send(`/documents/${id}/change-requests`);
+        case "acceptChangeRequest":
+          return send(`/document-change-requests/${id}/accept`);
+        case "declineChangeRequest":
+          return send(`/document-change-requests/${id}/decline`);
+        case "withdrawChangeRequest":
+          return send(`/document-change-requests/${id}/withdraw`);
         default:
           throw new Error(`Unknown action ${action}`);
       }
@@ -264,5 +276,29 @@ export const useSetRestricted = (documentId) => {
     },
     onError: (_err, _vars, context) => context?.previous && queryClient.setQueryData(docKey, context.previous),
     onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** Change requests: the person's own, or all of them for document managers. */
+export const useChangeRequests = (params) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "change-requests", params),
+    queryFn: () => apiFetch(`/document-change-requests?${qs(params)}`, { organisationId }).then((r) => r.data),
+    enabled: !!organisationId,
+    retry: false,
+  });
+};
+
+/** Documents in force for a part (and its family), part family, machine or operation, where work happens. */
+export const useDocumentsInForce = ({ partId, partFamilyId, machineId, operationCode } = {}, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  const params = { partId, partFamilyId, machineId, operationCode };
+  const any = Boolean(partId || partFamilyId || machineId || operationCode);
+  return useQuery({
+    queryKey: key(organisationId, "in-force", params),
+    queryFn: () => apiFetch(`/documents-in-force?${qs(params)}`, { organisationId }).then((r) => r.data),
+    enabled: !!organisationId && enabled && any,
+    retry: false,
   });
 };

@@ -28,7 +28,7 @@ describe("menuStructure", () => {
 
   it("keeps documents and alerts under Documentation", () => {
     const docs = menuStructure.find((m) => m.name === "Documentation");
-    expect(docs.subMenu.map((s) => s.name)).toEqual(["My documents", "Documents", "My alerts", "Quality alerts"]);
+    expect(docs.subMenu.map((s) => s.name)).toEqual(["My documents", "Documents", "Change requests", "My alerts", "Quality alerts"]);
     expect(JSON.stringify(docs)).not.toMatch(/Audit/);
   });
 

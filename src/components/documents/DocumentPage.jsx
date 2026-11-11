@@ -16,6 +16,7 @@ import Field from "../ui/Field";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { ReadersCard, SkillsCard } from "./ReadersPanels";
+import { ChangeRequestsCard, LinksCard, PeriodicReviewCard } from "./LifecyclePanels";
 
 const Fact = ({ label, children }) => (
   <div className="flex flex-col">
@@ -215,7 +216,10 @@ const DocumentPage = () => {
       <div className="grid gap-4 lg:grid-cols-2">
         <ReadersCard doc={doc} />
         <SkillsCard doc={doc} />
+        <PeriodicReviewCard doc={doc} />
+        <LinksCard doc={doc} />
       </div>
+      <ChangeRequestsCard doc={doc} />
 
       <MenuCard title="Revisions" subtitle="Each revision is written, reviewed, approved and then frozen. A change is always a new revision.">
         <ul className="-my-3 divide-y divide-border-color" aria-label="Revisions">

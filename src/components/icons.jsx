@@ -140,6 +140,7 @@ import {
   Redo2 as LucideRedo2,
   FilePlus as LucideFilePlus,
   UserPlus as LucideUserPlus,
+  MessageSquarePlus as LucideMessageSquarePlus,
 } from "lucide-react";
 
 const withDefaults = (Icon) => {
@@ -266,6 +267,7 @@ export const HourglassIcon = withDefaults(LucideHourglass);
 export const TableIcon = withDefaults(LucideTable);
 export const FilePlusIcon = withDefaults(LucideFilePlus);
 export const UserPlusIcon = withDefaults(LucideUserPlus);
+export const MessageSquarePlusIcon = withDefaults(LucideMessageSquarePlus);
 export const BoldIcon = withDefaults(LucideBold);
 export const ItalicIcon = withDefaults(LucideItalic);
 export const Heading1Icon = withDefaults(LucideHeading1);

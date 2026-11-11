@@ -14,6 +14,7 @@ import { ActiveBadge, ErrorNotice, SelectField } from "./shared";
 import { usePartFamilies } from "../../hooks/useProcessControl";
 import SpecValues from "./SpecValues";
 import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
+import DocumentsInForce from "../documents/DocumentsInForce";
 
 import PartCustomers from "./PartCustomers";
 import { CorrectDialog, CorrectionImpactCard, ReleaseCorrectionDialog } from "./RevisionCorrection";
@@ -306,6 +307,7 @@ const PartDetailPage = () => {
             </span>
           </div>
           <ActiveAlertsBanner partId={part.id} />
+          <DocumentsInForce partId={part.id} />
           <PartDetails part={part} canManage={canManage} />
           <CustomFieldsCard entityType="part" record={part} editable={canManage} />
           <PartCustomers part={part} canManage={canManage} />

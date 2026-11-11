@@ -5,6 +5,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
+  ChangeRequestBody, ChangeRequestListQuery, InForceQuery, LinksBody, PeriodicReviewBody,
   AcknowledgeBody, AddRecipientBody, ReadersBody, SkillsBody, ApproveBody, CommentBody, CompareQuery, CreateDocumentBody, CreateTypeBody, DocumentFileBody, DocumentListQuery, DocumentType, ReasonBody, ReviewBody, SignersBody,
   TypeListQuery, UpdateDocumentBody, UpdateRevisionBody, UpdateTypeBody,
 } from './documents.schemas';
@@ -281,5 +282,72 @@ export class DocumentsController {
   @ApiCreatedResponse({ description: 'Asks one more person to read the revision in force' })
   addRecipient(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.addRecipient(ctx, parse(Uuid, id), parse(AddRecipientBody, body).userId);
+  }
+
+  // ---- periodic review, change requests, links (DC4) ------------------------------------------------
+
+  @Get('documents-in-force')
+  @OrganisationScoped()
+  @ApiOkResponse({ description: 'Documents in force linked to a part (or its family), part family, machine or operation; information only' })
+  inForce(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.inForce(ctx, parse(InForceQuery, query));
+  }
+
+  @Post('documents/:id/reviews')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(PeriodicReviewBody) })
+  @ApiCreatedResponse({ description: 'Records a periodic review: no change needed (with what was checked), or a revision started' })
+  recordReview(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.recordReview(ctx, parse(Uuid, id), parse(PeriodicReviewBody, body));
+  }
+
+  @Put('documents/:id/links')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(LinksBody) })
+  @ApiOkResponse({ description: 'The parts, part families, machines and operations the document applies to, replaced as a whole' })
+  setLinks(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setLinks(ctx, parse(Uuid, id), parse(LinksBody, body));
+  }
+
+  @Get('document-change-requests')
+  @OrganisationScoped()
+  @ApiOkResponse({ description: 'Change requests: your own, or all of them for document managers (`status`, `documentId`, `mine=true`)' })
+  changeRequests(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.changeRequests(ctx, parse(ChangeRequestListQuery, query));
+  }
+
+  @Post('documents/:id/change-requests')
+  @HttpCode(201)
+  @OrganisationScoped('documentation.read')
+  @ApiBody({ schema: openApiSchema(ChangeRequestBody) })
+  @ApiCreatedResponse({ description: 'Asks for a change to a document the caller may read' })
+  raiseChangeRequest(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.raiseChangeRequest(ctx, parse(Uuid, id), parse(ChangeRequestBody, body));
+  }
+
+  @Post('document-change-requests/:id/accept')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'Accepts it: a draft is started, or the draft in progress is used, and the request points at it' })
+  acceptChangeRequest(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.acceptChangeRequest(ctx, parse(Uuid, id));
+  }
+
+  @Post('document-change-requests/:id/decline')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ description: 'Declines it with a reason' })
+  declineChangeRequest(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.declineChangeRequest(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
+  }
+
+  @Post('document-change-requests/:id/withdraw')
+  @HttpCode(200)
+  @OrganisationScoped()
+  @ApiOkResponse({ description: 'The person who asked withdraws it while it is open' })
+  withdrawChangeRequest(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.withdrawChangeRequest(ctx, parse(Uuid, id));
   }
 }

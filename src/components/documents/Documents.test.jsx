@@ -23,6 +23,7 @@ const docRow = {
 const document = {
   ...docRow, nextLetter: "A", canManage: true, canIssue: true, canStartRevision: false, currentRevision: null, withdrawReason: null, withdrawnAt: null,
   restricted: false, targets: [], skills: [], readers: { total: 0, acknowledged: 0, overdue: 0 },
+  reviewMonths: null, reviewMonthsEffective: 24, nextReviewOn: null, reviewOverdue: false, reviews: [], links: [], changeRequests: [],
   revisions: [{ id: "r1", sequence: 1, letter: null, status: "draft", author: { id: "u1", name: "Ann Owner" }, changeSummary: null, discardReason: null, discardedAt: null, createdAt: "2026-11-10T08:00:00Z" }],
 };
 const BODY = { type: "doc", content: [{ type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "Purpose" }] }, { type: "paragraph", content: [{ type: "text", text: "Quarantine suspect parts." }] }] };
@@ -35,6 +36,8 @@ const textRevision = {
 };
 let myDocs = { toRead: [], acknowledged: [], reviews: 0 };
 let recipients = [];
+let changeRequests = [];
+let inForce = [];
 let revision = textRevision;
 
 vi.mock("../../hooks/useQmsApi", () => ({
@@ -42,6 +45,11 @@ vi.mock("../../hooks/useQmsApi", () => ({
   useAllDepartments: () => ({ data: { data: [{ id: "dep1", code: "ASM", name: "Assembly" }] } }),
   useRoles: () => ({ data: { data: [{ id: "role1", name: "Inspector" }] } }),
   useMembers: () => ({ data: { data: [{ membershipId: "m4", firstName: "Dee", surname: "Doe", status: "active" }] } }),
+}));
+vi.mock("../../hooks/useProcessControl", () => ({ usePartFamilies: () => ({ data: { items: [{ id: "f1", code: "BRK", name: "Brackets" }] } }) }));
+vi.mock("../ncr/Pickers", () => ({
+  PartPicker: ({ label, onChange }) => <button type="button" onClick={() => onChange("p1", { id: "p1", name: "P-100 · Bracket" })}>{label}</button>,
+  MachinePicker: ({ label, onChange }) => <button type="button" onClick={() => onChange("m1", { id: "m1", name: "Deburr cell" })}>{label}</button>,
 }));
 vi.mock("../../hooks/useCompetence", () => ({ useCompetenceSkills: () => ({ data: { data: [{ id: "k1", code: "TORQ", name: "Torque tightening" }] } }) }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
@@ -62,6 +70,8 @@ vi.mock("../../hooks/useDocuments", () => ({
   useSetRestricted: () => ({ mutate: (v, o) => mutate({ action: "restricted", body: v }, o) }),
   useMyDocuments: () => ({ data: myDocs, isLoading: false }),
   useDocumentRecipients: () => ({ data: recipients, isLoading: false }),
+  useChangeRequests: () => ({ data: changeRequests, isLoading: false }),
+  useDocumentsInForce: () => ({ data: inForce }),
   useDocumentCompare: () => ({
     data: { against: { id: "r0", label: "Rev A" }, text: [{ kind: "same", text: "Purpose", block: "Heading 1" }, { kind: "removed", text: "Old step", block: "Paragraph" }, { kind: "added", text: "New step", block: "Paragraph" }], textSummary: { added: 1, removed: 1, same: 1 }, files: [] },
     isLoading: false,
@@ -74,6 +84,8 @@ import DocumentPage from "./DocumentPage";
 import RevisionPage from "./RevisionPage";
 import SettingsDocuments from "../Settings/SettingsDocuments";
 import MyDocumentsPage from "./MyDocumentsPage";
+import ChangeRequestsPage from "./ChangeRequestsPage";
+import DocumentsInForce from "./DocumentsInForce";
 
 beforeEach(() => {
   mutate.mockReset();
@@ -82,6 +94,8 @@ beforeEach(() => {
   waiting = [];
   myDocs = { toRead: [], acknowledged: [], reviews: 0 };
   recipients = [];
+  changeRequests = [];
+  inForce = [];
   listCalls.length = 0;
   revision = textRevision;
   permissions = ["documentation.read", "documentation.manage"];
@@ -404,6 +418,104 @@ describe("readers and acknowledgement", () => {
     expect(within(toRead).getByText(/Overdue since/)).toBeInTheDocument();
     expect(within(screen.getByRole("list", { name: "Read lately" })).getByText(/WI-003 rev C/)).toBeInTheDocument();
     expect(screen.getByText("Nothing waiting for you.")).toBeInTheDocument();
+  });
+});
+
+describe("periodic review, change requests and links", () => {
+  const inForceDoc = (extra) => Object.assign(document, { status: "active", inProgress: null, currentRevision: { id: "r1", letter: "A", effectiveFrom: "2026-11-10" }, ...extra });
+  const reset = () => Object.assign(document, { status: "draft", inProgress: { id: "r1", status: "draft", sequence: 1 }, currentRevision: null, nextReviewOn: null, reviewOverdue: false, reviews: [], links: [], changeRequests: [], reviewMonths: null });
+
+  it("shows when the review is due, flags it overdue, and records 'no change needed' with what was checked", async () => {
+    inForceDoc({ nextReviewOn: "2020-01-01", reviewOverdue: true });
+    try {
+      at("/Documentation/Documents/d1", "/Documentation/Documents/:id", <DocumentPage />);
+      expect(screen.getByText("Review overdue")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Record a review" }));
+      const dialog = screen.getByRole("dialog");
+      expect(within(dialog).getByRole("button", { name: "Record the review" })).toBeDisabled();
+      await userEvent.type(within(dialog).getByLabelText("What was checked"), "Checked against the drawing");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Record the review" }));
+      expect(mutate).toHaveBeenCalledWith({ action: "recordReview", id: "d1", body: { outcome: "no_change", note: "Checked against the drawing" } }, expect.anything());
+    } finally {
+      reset();
+    }
+  });
+
+  it("saves the document's own review interval when the field is left", async () => {
+    inForceDoc({ nextReviewOn: "2027-11-10" });
+    try {
+      at("/Documentation/Documents/d1", "/Documentation/Documents/:id", <DocumentPage />);
+      await userEvent.type(screen.getByLabelText("Its own interval in months"), "6");
+      await userEvent.tab();
+      expect(mutate).toHaveBeenCalledWith({ action: "updateDocument", id: "d1", body: { reviewMonths: 6 } }, expect.anything());
+    } finally {
+      reset();
+    }
+  });
+
+  it("links the document to a part, family, machine and operation", async () => {
+    inForceDoc({ links: [{ id: "l1", kind: "operation", refId: "OP-20", label: "OP-20" }] });
+    try {
+      at("/Documentation/Documents/d1", "/Documentation/Documents/:id", <DocumentPage />);
+      expect(within(screen.getByRole("list", { name: "Where it applies" })).getByText("OP-20")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Add a machine" }));
+      expect(mutate).toHaveBeenLastCalledWith({ action: "setLinks", id: "d1", body: { links: [{ operationCode: "OP-20" }, { machineId: "m1" }] } }, expect.anything());
+      await userEvent.type(screen.getByLabelText("Add an operation"), "op-20");
+      await userEvent.click(screen.getByRole("button", { name: "Add the operation" }));
+      expect(mutate).toHaveBeenCalledTimes(1);
+    } finally {
+      reset();
+    }
+  });
+
+  it("asks for a change, and lets a manager accept or decline one with a reason", async () => {
+    const open = { id: "c1", reference: "DCR-26-0001", document: { id: "d1", number: "SOP-001", title: "Control" }, what: "Add the label", why: "Complaint", status: "open",
+      requestedBy: { id: "u9", name: "Dee Doe" }, decidedBy: null, decidedAt: null, decisionReason: null, revision: null, createdAt: "2026-11-10T09:00:00Z" };
+    inForceDoc({ changeRequests: [open] });
+    try {
+      at("/Documentation/Documents/d1", "/Documentation/Documents/:id", <DocumentPage />);
+      await userEvent.click(screen.getByRole("button", { name: "Ask for a change" }));
+      let dialog = screen.getByRole("dialog");
+      await userEvent.type(within(dialog).getByLabelText("What should change"), "Fix step 2");
+      await userEvent.type(within(dialog).getByLabelText("Why"), "Reads badly");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Send the request" }));
+      expect(mutate).toHaveBeenLastCalledWith({ action: "raiseChangeRequest", id: "d1", body: { what: "Fix step 2", why: "Reads badly" } }, expect.anything());
+      await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+      const list = screen.getByRole("list", { name: "Change requests" });
+      await userEvent.click(within(list).getByRole("button", { name: "Accept into a revision" }));
+      expect(mutate).toHaveBeenLastCalledWith({ action: "acceptChangeRequest", id: "c1" }, expect.anything());
+      await userEvent.click(within(list).getByRole("button", { name: "Decline" }));
+      dialog = screen.getByRole("dialog");
+      await userEvent.type(within(dialog).getByLabelText("Why?"), "Covered elsewhere");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Decline" }));
+      expect(mutate).toHaveBeenLastCalledWith({ action: "declineChangeRequest", id: "c1", body: { reason: "Covered elsewhere" } }, expect.anything());
+      expect(within(list).queryByRole("button", { name: "Withdraw" })).not.toBeInTheDocument();
+    } finally {
+      reset();
+    }
+  });
+
+  it("lists change requests and lets the person who asked withdraw theirs", async () => {
+    permissions = ["documentation.read"];
+    changeRequests = [{ id: "c2", reference: "DCR-26-0002", document: { id: "d1", number: "SOP-001", title: "Control" }, what: "Fix step 2", why: "Reads badly", status: "open",
+      requestedBy: { id: "u1", name: "Ann Owner" }, decidedBy: null, decidedAt: null, decisionReason: null, revision: null, createdAt: "2026-11-10T09:00:00Z" }];
+    render(<MemoryRouter><ChangeRequestsPage /></MemoryRouter>);
+    const list = screen.getByRole("list", { name: "Change requests" });
+    expect(within(list).getByRole("link", { name: /SOP-001 Control/ })).toHaveAttribute("href", "/Documentation/Documents/d1");
+    expect(within(list).queryByRole("button", { name: "Accept into a revision" })).not.toBeInTheDocument();
+    await userEvent.click(within(list).getByRole("button", { name: "Withdraw" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "withdrawChangeRequest", id: "c2" }, expect.anything());
+  });
+
+  it("shows the documents in force where work happens, and nothing when there are none", () => {
+    const { container, unmount } = render(<MemoryRouter><DocumentsInForce partId="p1" /></MemoryRouter>);
+    expect(container).toBeEmptyDOMElement();
+    unmount();
+    inForce = [{ id: "d1", number: "SOP-001", title: "Deburring", type: "Procedure", revision: { id: "r1", letter: "A", effectiveFrom: "2026-11-10" }, matched: ["part family"], toAcknowledge: true }];
+    render(<MemoryRouter><DocumentsInForce partId="p1" /></MemoryRouter>);
+    expect(screen.getByText("1 document applies to this work")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /SOP-001 rev A/ })).toHaveAttribute("href", "/Documentation/Documents/d1/revisions/r1");
+    expect(screen.getByText("To read")).toBeInTheDocument();
   });
 });
 

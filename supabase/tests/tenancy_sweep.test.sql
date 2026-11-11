@@ -270,6 +270,13 @@ BEGIN
     SELECT a, r.id, '50000000-0000-0000-0000-0000000000a1', ARRAY['Named'] FROM public.document_revisions r JOIN public.documents d ON d.id = r.document_id WHERE d.organisation_id = a AND d.title = 'Sweep procedure';
   INSERT INTO public.document_skills (organisation_id, document_id, skill_id)
     SELECT a, d.id, (SELECT id FROM public.competence_skills WHERE organisation_id = a AND code = 'SWEEP') FROM public.documents d WHERE d.organisation_id = a AND d.title = 'Sweep procedure';
+  -- Document control (DC4): a periodic review, a change request and a link (seeded directly; people write through the functions).
+  INSERT INTO public.document_periodic_reviews (organisation_id, document_id, revision_id, outcome, note)
+    SELECT a, d.id, r.id, 'no_change', 'Sweep review' FROM public.documents d JOIN public.document_revisions r ON r.document_id = d.id WHERE d.organisation_id = a AND d.title = 'Sweep procedure';
+  INSERT INTO public.document_change_requests (organisation_id, reference, document_id, what, why, requested_by)
+    SELECT a, 'DCR-00-0001', d.id, 'Sweep change', 'Sweep reason', '50000000-0000-0000-0000-0000000000a1' FROM public.documents d WHERE d.organisation_id = a AND d.title = 'Sweep procedure';
+  INSERT INTO public.document_links (organisation_id, document_id, operation_code)
+    SELECT a, d.id, 'OP-SWEEP' FROM public.documents d WHERE d.organisation_id = a AND d.title = 'Sweep procedure';
   INSERT INTO public.document_signoffs (organisation_id, revision_id, round, role, user_id)
     SELECT a, r.id, 1, 'reviewer', '50000000-0000-0000-0000-0000000000a1' FROM public.document_revisions r JOIN public.documents d ON d.id = r.document_id WHERE d.organisation_id = a AND d.title = 'Sweep procedure';
   -- Supplier quality (SQ1): the supplier's first status row exists already; classifications are seeded per organisation.

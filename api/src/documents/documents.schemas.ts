@@ -86,7 +86,7 @@ export const CreateDocumentBody = z
 export type CreateDocumentBody = z.infer<typeof CreateDocumentBody>;
 
 export const UpdateDocumentBody = z
-  .object({ title: z.string().trim().min(1).max(200).optional(), description: text(1000), ownerId: z.string().uuid().optional(), restricted: z.boolean().optional() })
+  .object({ title: z.string().trim().min(1).max(200).optional(), description: text(1000), ownerId: z.string().uuid().optional(), restricted: z.boolean().optional(), reviewMonths: z.number().int().min(1).max(120).nullable().optional() })
   .strict()
   .refine(nothingToChange, 'Nothing to change');
 export type UpdateDocumentBody = z.infer<typeof UpdateDocumentBody>;
@@ -106,7 +106,8 @@ export const DocumentListQuery = z.object({
   status: csv(DOCUMENT_STATUSES),
   kind: z.enum(CONTENT_KINDS).optional(),
   owner: z.enum(['me']).optional(),
-  sort: z.enum(['number', 'title', 'type', 'status', 'owner', 'updatedAt']).default('number'),
+  reviewOverdue: z.enum(['true']).optional(),
+  sort: z.enum(['number', 'title', 'type', 'status', 'owner', 'updatedAt', 'nextReview']).default('number'),
   order: z.enum(['asc', 'desc']).default('asc'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
@@ -173,3 +174,39 @@ export type AcknowledgeBody = z.infer<typeof AcknowledgeBody>;
 
 export const AddRecipientBody = z.object({ userId: z.string().uuid() }).strict();
 export type AddRecipientBody = z.infer<typeof AddRecipientBody>;
+
+// ---- periodic review, change requests, links (DC4) ----------------------------------------------
+export const PeriodicReviewBody = z
+  .object({ outcome: z.enum(['no_change', 'revision_started']), note: z.string().trim().max(2000).optional() })
+  .strict()
+  .refine((b) => b.outcome !== 'no_change' || (b.note ?? '').length >= 3, 'Say what was checked (a note of at least 3 characters)');
+export type PeriodicReviewBody = z.infer<typeof PeriodicReviewBody>;
+
+export const ChangeRequestBody = z.object({ what: z.string().trim().min(3).max(2000), why: z.string().trim().min(3).max(2000) }).strict();
+export type ChangeRequestBody = z.infer<typeof ChangeRequestBody>;
+
+export const ChangeRequestListQuery = z.object({
+  status: z.enum(['open', 'accepted', 'declined', 'withdrawn', 'all']).default('open'),
+  documentId: z.string().uuid().optional(),
+  mine: z.enum(['true']).optional(),
+});
+export type ChangeRequestListQuery = z.infer<typeof ChangeRequestListQuery>;
+
+const Link = z.union([
+  z.object({ partId: z.string().uuid() }).strict(),
+  z.object({ partFamilyId: z.string().uuid() }).strict(),
+  z.object({ machineId: z.string().uuid() }).strict(),
+  z.object({ operationCode: z.string().trim().min(1).max(40) }).strict(),
+]);
+export const LinksBody = z.object({ links: z.array(Link).max(200) }).strict();
+export type LinksBody = z.infer<typeof LinksBody>;
+
+export const InForceQuery = z
+  .object({
+    partId: z.string().uuid().optional(),
+    partFamilyId: z.string().uuid().optional(),
+    machineId: z.string().uuid().optional(),
+    operationCode: z.string().trim().min(1).max(40).optional(),
+  })
+  .refine((q) => q.partId || q.partFamilyId || q.machineId || q.operationCode, 'Give a part, part family, machine or operation');
+export type InForceQuery = z.infer<typeof InForceQuery>;

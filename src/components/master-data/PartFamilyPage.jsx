@@ -11,6 +11,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
 import { PartFamilyForm } from "./PartFamiliesPage";
 import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
+import DocumentsInForce from "../documents/DocumentsInForce";
 
 import { ActiveBadge, ErrorNotice, FormError, SearchBox } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
@@ -128,6 +129,7 @@ const PartFamilyPage = () => {
           </div>
           {family.description && <p className="max-w-3xl text-sm text-primary-text">{family.description}</p>}
           <ActiveAlertsBanner partFamilyId={family.id} />
+          <DocumentsInForce partFamilyId={family.id} />
           <CustomFieldsCard entityType="part_family" record={family} editable={canManage} />
 
           <MenuCard

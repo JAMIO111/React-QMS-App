@@ -86,6 +86,7 @@ export const menuStructure = [
     subMenu: [
       { name: "My documents", path: "/Documentation/My-Documents", badge: "my-documents" },
       { name: "Documents", path: "/Documentation/Documents" },
+      { name: "Change requests", path: "/Documentation/Change-Requests" },
       { name: "My alerts", path: "/Documentation/My-Alerts", badge: "my-alerts" },
       { name: "Quality alerts", path: "/Documentation/Quality-Alerts" },
     ],

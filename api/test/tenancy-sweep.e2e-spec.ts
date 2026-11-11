@@ -106,6 +106,12 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/document-revisions/{id}/acknowledge': {},
     'GET /api/v1/document-revisions/{id}/recipients': undefined,
     'POST /api/v1/document-revisions/{id}/recipients': { userId: '00000000-0000-4000-8000-000000000001' },
+    'POST /api/v1/documents/{id}/reviews': { outcome: 'no_change', note: 'Hijacked' },
+    'PUT /api/v1/documents/{id}/links': { links: [] },
+    'POST /api/v1/documents/{id}/change-requests': { what: 'Hijacked', why: 'Hijacked' },
+    'POST /api/v1/document-change-requests/{id}/accept': {},
+    'POST /api/v1/document-change-requests/{id}/decline': { reason: 'Hijacked' },
+    'POST /api/v1/document-change-requests/{id}/withdraw': {},
     'GET /api/v1/competence/training-sessions/{id}': undefined,
     'PATCH /api/v1/competence/training-sessions/{id}': { title: 'Hijacked' },
     'POST /api/v1/competence/training-sessions/{id}/attendees': { employeeId: '00000000-0000-4000-8000-000000000001' },
@@ -482,6 +488,12 @@ const hasSample = (op: Op) =>
     'POST /api/v1/document-revisions/{id}/acknowledge',
     'GET /api/v1/document-revisions/{id}/recipients',
     'POST /api/v1/document-revisions/{id}/recipients',
+    'POST /api/v1/documents/{id}/reviews',
+    'PUT /api/v1/documents/{id}/links',
+    'POST /api/v1/documents/{id}/change-requests',
+    'POST /api/v1/document-change-requests/{id}/accept',
+    'POST /api/v1/document-change-requests/{id}/decline',
+    'POST /api/v1/document-change-requests/{id}/withdraw',
     'PATCH /api/v1/competence/training-sessions/{id}',
     'POST /api/v1/competence/training-sessions/{id}/attendees',
     'POST /api/v1/competence/training-sessions/{id}/record',
@@ -876,6 +888,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/documents/')) return a.document;
   if (path.startsWith('/api/v1/document-revisions/')) return a.documentRevision;
   if (path.startsWith('/api/v1/document-files/')) return a.documentFile;
+  if (path.startsWith('/api/v1/document-change-requests/')) return a.documentChangeRequest;
   if (path.startsWith('/api/v1/parts/')) return a.part;
   if (path.startsWith('/api/v1/part-revisions/')) return a.draftRevision;
   if (path.startsWith('/api/v1/ncrs/')) return a.ncr;
@@ -1050,6 +1063,7 @@ beforeAll(async () => {
     a.documentType = (await q1(`select id from public.document_types where organisation_id = $1 and prefix = 'FRM'`, [ids.orgA])).id;
     a.document = (await q1(`select app.create_document($1::uuid, jsonb_build_object('typeId', $2::text, 'title', 'Alpha form', 'contentKind', 'file')) as id`, [ids.orgA, a.documentType])).id;
     a.documentRevision = (await q1(`select id from public.document_revisions where document_id = $1`, [a.document])).id;
+    a.documentChangeRequest = (await q1(`select app.raise_document_change_request($1::uuid, 'Alpha change', 'Alpha reason') as id`, [a.document])).id;
     a.documentFile = (await q1(`select app.add_document_file($1::uuid, 'main', $2::text || '/document/' || $1::text || '/a.pdf', 'a.pdf', 'application/pdf', 1) as id`, [a.documentRevision, ids.orgA])).id;
     a.supplierClassification = (await q1(`select id from public.supplier_classifications where organisation_id = $1 and key = 'welding'`, [ids.orgA])).id;
     a.supplierContact = (await q1(`insert into public.supplier_contacts (organisation_id, supplier_id, name) values ($1, $2, 'Alpha contact') returning id`, [ids.orgA, a.supplier])).id;
@@ -1217,6 +1231,7 @@ describe('tenancy sweep over every API route', () => {
     // Routes that need query parameters get a valid set, so the tenant check is what is tested.
     const listQuery: Record<string, string> = {
       '/api/v1/quality-alerts/active': '?operationCode=OP-1',
+      '/api/v1/documents-in-force': '?operationCode=OP-1',
       '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/calibration-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/control-plan-resolution': `?partId=${b.part}`,

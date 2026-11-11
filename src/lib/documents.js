@@ -70,5 +70,17 @@ export const formatDay = (value) => {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 };
 
+export const CHANGE_REQUEST_STATUS = {
+  open: { label: "Open", tone: "warning" },
+  accepted: { label: "Accepted", tone: "success" },
+  declined: { label: "Declined", tone: "error" },
+  withdrawn: { label: "Withdrawn", tone: "neutral" },
+};
+
+export const LINK_KIND = { part: "Part", part_family: "Part family", machine: "Machine", operation: "Operation" };
+/** A link as the API body takes it. */
+export const linkBody = (l) =>
+  l.kind === "part" ? { partId: l.refId } : l.kind === "part_family" ? { partFamilyId: l.refId } : l.kind === "machine" ? { machineId: l.refId } : { operationCode: l.refId };
+
 /** An empty editor document. */
 export const EMPTY_DOC = { type: "doc", content: [{ type: "paragraph" }] };

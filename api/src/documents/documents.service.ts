@@ -6,6 +6,7 @@ import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { blocksOf, diffFiles, diffLines, summarise } from './document-compare';
 import {
+  ChangeRequestBody, ChangeRequestListQuery, InForceQuery, LinksBody, PeriodicReviewBody,
   AcknowledgeBody, ApproveBody, CreateDocumentBody, ReadersBody, CreateTypeBody, DocumentFileBody, DocumentListQuery, ReviewBody, SignersBody, TypeListQuery, UpdateDocumentBody, UpdateRevisionBody,
   UpdateTypeBody,
 } from './documents.schemas';
@@ -29,7 +30,8 @@ const toType = (r: Row) => ({
 
 /** Every document the caller may read (RLS), with its type, owner and the revision in progress, if any. */
 const DOCUMENT_SELECT = sql`
-  select d.*, t.name as type_name, t.prefix as type_prefix,
+  select d.*, t.name as type_name, t.prefix as type_prefix, d.next_review_on::text as next_review_day, coalesce(d.review_months, t.review_months) as review_months_effective,
+         (d.status = 'active' and d.next_review_on < current_date) as review_overdue,
          ${sql.raw(personName('po'))} as owner_name,
          ip.id as ip_id, ip.status as ip_status, ip.sequence as ip_sequence, ip.letter as ip_letter, ip.effective_from::text as ip_effective_from,
          cr.letter as current_letter, cr.effective_from::text as current_effective_from,
@@ -52,6 +54,7 @@ const SORT: Record<DocumentListQuery['sort'], string> = {
   status: 'd.status',
   owner: 'lower(d.owner_name)',
   updatedAt: 'd.updated_at',
+  nextReview: 'd.next_review_on',
 };
 
 const toDocument = (r: Row) => ({
@@ -77,6 +80,11 @@ const toDocument = (r: Row) => ({
   withdrawReason: (r.withdraw_reason as string) ?? null,
   withdrawnAt: r.withdrawn_at ? (iso(r.withdrawn_at) as string) : null,
   restricted: Boolean(r.restricted),
+  /** The document's own review interval (null = its type's), the one that applies, the next review date and whether it is past. */
+  reviewMonths: r.review_months === null || r.review_months === undefined ? null : Number(r.review_months),
+  reviewMonthsEffective: Number(r.review_months_effective),
+  nextReviewOn: (r.next_review_day as string) ?? null,
+  reviewOverdue: Boolean(r.review_overdue),
   /** Readers of the revision in force (as the caller may see them: managers see everyone, others only themselves). */
   readers: { total: Number(r.readers_total ?? 0), acknowledged: Number(r.readers_done ?? 0), overdue: Number(r.readers_overdue ?? 0) },
   /** The caller has the revision in force still to acknowledge. */
@@ -97,6 +105,42 @@ const toFile = (f: Row) => ({
   deletedAt: f.deleted_at ? (iso(f.deleted_at) as string) : null,
   deleteReason: (f.delete_reason as string) ?? null,
   createdAt: iso(f.created_at) as string,
+});
+
+const toLink = (l: Row) => {
+  const kind = l.part_id ? 'part' : l.part_family_id ? 'part_family' : l.machine_id ? 'machine' : 'operation';
+  const label =
+    kind === 'part'
+      ? [l.part_number, l.part_name].filter(Boolean).join(' · ')
+      : kind === 'part_family'
+        ? [l.family_code, l.family_name].filter(Boolean).join(' · ')
+        : kind === 'machine'
+          ? [l.machine_code, l.machine_name].filter(Boolean).join(' · ')
+          : (l.operation_code as string);
+  return { id: l.id as string, kind, refId: ((l.part_id ?? l.part_family_id ?? l.machine_id ?? l.operation_code) as string) ?? null, label: label || 'Unknown' };
+};
+
+const CHANGE_REQUEST_SELECT = sql`
+  select c.*, d.number, d.title, r.letter as revision_letter, r.status as revision_status, ${sql.raw(personName('pq'))} as requester_name, ${sql.raw(personName('pd'))} as decider_name
+    from public.document_change_requests c
+    join public.documents d on d.id = c.document_id
+    left join public.document_revisions r on r.id = c.revision_id
+    left join public.profiles pq on pq.id = c.requested_by
+    left join public.profiles pd on pd.id = c.decided_by`;
+
+const toChangeRequest = (c: Row) => ({
+  id: c.id as string,
+  reference: c.reference as string,
+  document: { id: c.document_id as string, number: c.number as string, title: c.title as string },
+  what: c.what as string,
+  why: c.why as string,
+  status: c.status as 'open' | 'accepted' | 'declined' | 'withdrawn',
+  requestedBy: person(c.requested_by, c.requester_name),
+  decidedBy: (c.decider_name as string) ?? null,
+  decidedAt: c.decided_at ? (iso(c.decided_at) as string) : null,
+  decisionReason: (c.decision_reason as string) ?? null,
+  revision: c.revision_id ? { id: c.revision_id as string, letter: (c.revision_letter as string) ?? null, status: c.revision_status as string } : null,
+  createdAt: iso(c.created_at) as string,
 });
 
 /** Document control (DC1): types, documents and their draft revisions. Every write is a database function; reading is by RLS. */
@@ -160,6 +204,7 @@ export class DocumentsService {
       where.push(q.status ? sql`d.status = any(string_to_array(${q.status}, ','))` : sql`d.status <> 'discarded'`);
       if (q.kind) where.push(sql`d.content_kind = ${q.kind}`);
       if (q.owner === 'me') where.push(sql`d.owner_user_id = auth.uid()`);
+      if (q.reviewOverdue) where.push(sql`d.review_overdue`);
       if (q.q) {
         const p = likePattern(q.q);
         where.push(sql`(d.number ilike ${p} escape '\\' or d.title ilike ${p} escape '\\' or d.description ilike ${p} escape '\\'
@@ -213,6 +258,34 @@ export class DocumentsService {
       refId: (t.department_id ?? t.role_id ?? t.membership_id) as string,
       label: ((t.department_name ?? t.role_name ?? t.person_name) as string) ?? 'Unknown',
     }));
+    const reviews = (
+      await db.execute<Row>(sql`
+        select p.id, p.outcome, p.note, p.was_due_on::text as was_due_on, p.next_review_on::text as next_review_on, p.created_at, p.started_revision_id,
+               r.letter, ${sql.raw(personName('pr'))} as by_name
+          from public.document_periodic_reviews p join public.document_revisions r on r.id = p.revision_id left join public.profiles pr on pr.id = p.created_by
+         where p.document_id = ${id}::uuid order by p.created_at desc`)
+    ).rows.map((p) => ({
+      id: p.id as string,
+      outcome: p.outcome as 'no_change' | 'revision_started',
+      note: (p.note as string) ?? null,
+      revisionLetter: (p.letter as string) ?? null,
+      wasDueOn: (p.was_due_on as string) ?? null,
+      nextReviewOn: (p.next_review_on as string) ?? null,
+      startedRevisionId: (p.started_revision_id as string) ?? null,
+      by: (p.by_name as string) ?? null,
+      at: iso(p.created_at) as string,
+    }));
+    const links = (
+      await db.execute<Row>(sql`
+        select l.id, l.part_id, l.part_family_id, l.machine_id, l.operation_code, pa.part_number, pa.name as part_name, pf.code as family_code, pf.name as family_name,
+               m.code as machine_code, m.name as machine_name
+          from public.document_links l
+          left join public.parts pa on pa.id = l.part_id
+          left join public.part_families pf on pf.id = l.part_family_id
+          left join public.machines m on m.id = l.machine_id
+         where l.document_id = ${id}::uuid order by l.created_at`)
+    ).rows.map(toLink);
+    const changeRequests = (await this.changeRequestRows(db, ctx, { documentId: id, status: 'all' })).map(toChangeRequest);
     const skills = (
       await db.execute<Row>(sql`
         select k.id, k.code, k.name from public.document_skills ds join public.competence_skills k on k.id = ds.skill_id
@@ -243,6 +316,9 @@ export class DocumentsService {
       canStartRevision: Boolean(can.manage) && ['active', 'withdrawn'].includes(doc.status) && !doc.inProgress,
       targets,
       skills,
+      reviews,
+      links,
+      changeRequests,
     };
   }
 
@@ -639,6 +715,117 @@ export class DocumentsService {
       ).rows[0];
       const reviews = (await this.waitingIn(db, ctx)).length;
       return { toRead: Number(c.to_read), overdue: Number(c.overdue), reviews, total: Number(c.to_read) + reviews };
+    });
+  }
+
+  // ---- periodic review, change requests, links (DC4) ------------------------------------------------
+
+  recordReview(ctx: RequestContext, documentId: string, body: PeriodicReviewBody) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.document(db, ctx, documentId);
+      const res = await db.execute<Row>(sql`select app.record_document_review(${documentId}::uuid, ${body.outcome}, ${body.note ?? null}) as revision_id`);
+      return { ...(await this.document(db, ctx, documentId)), startedRevisionId: (res.rows[0].revision_id as string) ?? null };
+    });
+  }
+
+  setLinks(ctx: RequestContext, documentId: string, body: LinksBody) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.document(db, ctx, documentId);
+      await db.execute(sql`select app.set_document_links(${documentId}::uuid, ${json(body.links)}::jsonb)`);
+      return this.document(db, ctx, documentId);
+    });
+  }
+
+  private async changeRequestRows(db: Db, ctx: RequestContext, q: Partial<ChangeRequestListQuery>) {
+    const where: SQL[] = [sql`c.organisation_id = ${orgOf(ctx)}::uuid`];
+    if (q.status && q.status !== 'all') where.push(sql`c.status = ${q.status}`);
+    if (q.documentId) where.push(sql`c.document_id = ${q.documentId}::uuid`);
+    if (q.mine) where.push(sql`c.requested_by = auth.uid()`);
+    return (
+      await db.execute<Row>(sql`select * from (${CHANGE_REQUEST_SELECT}) c where ${sql.join(where, sql` and `)} order by (c.status = 'open') desc, c.created_at desc limit 500`)
+    ).rows;
+  }
+
+  /** Change requests the caller may read: their own, or all of them for document managers. */
+  changeRequests(ctx: RequestContext, q: ChangeRequestListQuery) {
+    return this.database.asUser(ctx, async (db) => ({ data: (await this.changeRequestRows(db, ctx, q)).map(toChangeRequest) }));
+  }
+
+  private async changeRequest(db: Db, ctx: RequestContext, id: string) {
+    const rows = (await db.execute<Row>(sql`select * from (${CHANGE_REQUEST_SELECT}) c where c.id = ${id}::uuid and c.organisation_id = ${orgOf(ctx)}::uuid`)).rows;
+    if (rows.length === 0) throw ApiError.notFound('document_change_request_not_found', 'Change request not found');
+    return toChangeRequest(rows[0]);
+  }
+
+  raiseChangeRequest(ctx: RequestContext, documentId: string, body: ChangeRequestBody) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.document(db, ctx, documentId);
+      const res = await db.execute<{ id: string }>(sql`select app.raise_document_change_request(${documentId}::uuid, ${body.what}, ${body.why}) as id`);
+      return this.changeRequest(db, ctx, res.rows[0].id);
+    });
+  }
+
+  private async onChangeRequest(ctx: RequestContext, id: string, run: (db: Db) => Promise<unknown>) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.changeRequest(db, ctx, id);
+      await run(db);
+      return this.changeRequest(db, ctx, id);
+    });
+  }
+
+  acceptChangeRequest(ctx: RequestContext, id: string) {
+    return this.onChangeRequest(ctx, id, (db) => db.execute(sql`select app.accept_document_change_request(${id}::uuid)`));
+  }
+  declineChangeRequest(ctx: RequestContext, id: string, reason: string) {
+    return this.onChangeRequest(ctx, id, (db) => db.execute(sql`select app.decline_document_change_request(${id}::uuid, ${reason})`));
+  }
+  withdrawChangeRequest(ctx: RequestContext, id: string) {
+    return this.onChangeRequest(ctx, id, (db) => db.execute(sql`select app.withdraw_document_change_request(${id}::uuid)`));
+  }
+
+  /**
+   * Documents in force where work happens: linked to the part (or its family), the family, the machine or the operation. Information only; the caller
+   * sees only what they may read (restricted documents included only for their readers). Each says what it matched and whether the caller still has to read it.
+   */
+  inForce(ctx: RequestContext, q: InForceQuery) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.settle(db, ctx);
+      const org = orgOf(ctx);
+      const family = q.partId
+        ? ((await db.execute<Row>(sql`select part_family_id from public.parts where id = ${q.partId}::uuid and organisation_id = ${org}::uuid`)).rows[0]?.part_family_id as string | undefined)
+        : undefined;
+      const families = [q.partFamilyId, family].filter(Boolean) as string[];
+      const rows = (
+        await db.execute<Row>(sql`
+          select d.id, d.number, d.title, t.name as type_name, cr.id as revision_id, cr.letter, cr.effective_from::text as effective_from,
+                 array_agg(distinct case when l.part_id is not null then 'part' when l.part_family_id is not null then 'part family'
+                                         when l.machine_id is not null then 'machine' else 'operation ' || l.operation_code end) as matched,
+                 bool_or(x.id is not null and x.acknowledged_at is null) as to_acknowledge
+            from public.document_links l
+            join public.documents d on d.id = l.document_id and d.status = 'active'
+            join public.document_types t on t.id = d.type_id
+            join public.document_revisions cr on cr.id = d.current_revision_id
+            left join public.document_recipients x on x.revision_id = cr.id and x.user_id = auth.uid()
+           where l.organisation_id = ${org}::uuid and (
+                 (${q.partId ?? null}::uuid is not null and l.part_id = ${q.partId ?? null}::uuid)
+              or (l.part_family_id = any(string_to_array(${families.join(',')}, ',')::uuid[]))
+              or (${q.machineId ?? null}::uuid is not null and l.machine_id = ${q.machineId ?? null}::uuid)
+              or (${q.operationCode ?? null}::text is not null and upper(l.operation_code) = upper(${q.operationCode ?? null}::text)))
+           group by d.id, d.number, d.title, t.name, cr.id, cr.letter, cr.effective_from
+           order by bool_or(x.id is not null and x.acknowledged_at is null) desc, d.number
+           limit 100`)
+      ).rows;
+      return {
+        data: rows.map((r) => ({
+          id: r.id as string,
+          number: r.number as string,
+          title: r.title as string,
+          type: r.type_name as string,
+          revision: { id: r.revision_id as string, letter: r.letter as string, effectiveFrom: (r.effective_from as string) ?? null },
+          matched: r.matched as string[],
+          toAcknowledge: Boolean(r.to_acknowledge),
+        })),
+      };
     });
   }
 }

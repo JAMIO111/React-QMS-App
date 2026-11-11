@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeftIcon,
   ClipboardListIcon,
+  FileTextIcon,
   HistoryIcon,
   TriangleAlertIcon,
 } from "@/components/icons";
@@ -34,6 +35,8 @@ import LinkNotices from "../production/LinkNotices";
 import TraceLinks from "../production/TraceLinks";
 import { LotPicker, OrderPickerWithCreate, SerialPicker } from "../production/pickers";
 import { useActiveAlerts } from "../../hooks/useDocumentation";
+import { useDocumentsInForce } from "../../hooks/useDocuments";
+import { DocumentsInForceList } from "../documents/DocumentsInForce";
 import SidePanes from "./panes/SidePanes";
 import AlertsPane from "./panes/AlertsPane";
 import NcrsPane from "./panes/NcrsPane";
@@ -256,6 +259,15 @@ const JobPage = () => {
   const revisionsQuery = useJobRevisions(id, {
     enabled: !!inspection && canRecord,
   });
+  const documentsQuery = useDocumentsInForce(
+    {
+      partId: inspection?.part.id,
+      machineId: inspection?.machine?.id,
+      operationCode: inspection?.operationCode ?? undefined,
+    },
+    { enabled: !!inspection && can("documentation.read") },
+  );
+  const documents = documentsQuery.data ?? [];
   const alerts = alertsQuery.data ?? [];
   const ncrs = ncrsQuery.data;
   const revisions = revisionsQuery.data;
@@ -268,6 +280,15 @@ const JobPage = () => {
       count: alerts.length,
       attention: alerts.some((a) => a.acknowledged === false),
       content: <AlertsPane alerts={alerts} />,
+    },
+    can("documentation.read") && {
+      key: "documents",
+      label: "Docs",
+      title: "Documents in force",
+      icon: FileTextIcon,
+      count: documents.length,
+      attention: documents.some((d) => d.toAcknowledge),
+      content: <DocumentsInForceList documents={documents} />,
     },
     can("ncr.read") &&
       ncrs?.canRead && {

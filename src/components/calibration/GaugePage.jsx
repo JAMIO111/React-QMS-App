@@ -239,8 +239,8 @@ const GaugePage = () => {
 
   const sections = [
     { key: "details", title: "Gauge details", subtitle: "Identification, location, calibration", icon: GaugeIcon },
-    { key: "characteristics", title: "Characteristics", subtitle: "What is checked at calibration", icon: RulerIcon, needsRecord: true },
     { key: "calibrations", title: "Calibrations", subtitle: "Records and certificates", icon: ClipboardCheckIcon, needsRecord: true },
+    { key: "characteristics", title: "Characteristics", subtitle: "What is checked at calibration", icon: RulerIcon, needsRecord: true },
     { key: "history", title: "History", subtitle: "Who changed what", icon: HistoryIcon, needsRecord: true },
   ];
   const goTo = (key) => {
@@ -424,6 +424,14 @@ const GaugePage = () => {
 
           {!isNew && (
             <>
+              <SectionHeading title="Calibrations" sectionRef={refs.calibrations} />
+              <Card>
+                <CalibrationList gaugeId={gauge.id} canRecord={can("calibration.record") && !deleted} />
+                <p className="pl-1 text-sm italic text-secondary-text">
+                  {gauge.assetNumber} added by {gauge.createdBy?.name ?? "Unknown"} on {formatDate(gauge.createdAt)}.
+                </p>
+              </Card>
+
               <SectionHeading title="Characteristics" sectionRef={refs.characteristics} />
               <Card>
                 <p className="text-sm text-secondary-text">
@@ -441,14 +449,6 @@ const GaugePage = () => {
                   onShowInactive={setShowInactive}
                   emptyText="No characteristics. Add the checks made at calibration, or record pass/fail results without readings."
                 />
-              </Card>
-
-              <SectionHeading title="Calibrations" sectionRef={refs.calibrations} />
-              <Card>
-                <CalibrationList gaugeId={gauge.id} canRecord={can("calibration.record") && !deleted} />
-                <p className="pl-1 text-sm italic text-secondary-text">
-                  {gauge.assetNumber} added by {gauge.createdBy?.name ?? "Unknown"} on {formatDate(gauge.createdAt)}.
-                </p>
               </Card>
 
               <SectionHeading title="History" sectionRef={refs.history} />

@@ -61,6 +61,9 @@ const PassFail = ({ label, value, onChange, disabled, allowClear }) => (
   </div>
 );
 
+/** A check's as-left result is offered once it failed as found (or already has one). */
+const asLeftOffered = (r) => r.input.asFoundPass === false || r.input.asLeftPass != null;
+
 const readingInput = "w-28 rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-right text-sm text-primary-text focus:outline-none focus:border-brand-primary disabled:opacity-60";
 
 const Card = ({ title, subtitle, children, action }) => (
@@ -78,11 +81,11 @@ const Card = ({ title, subtitle, children, action }) => (
 
 const Verdict = ({ ok }) =>
   ok === undefined || ok === null ? (
-    <span className="text-xs text-secondary-text">—</span>
+    <span className="inline-block w-12 text-xs text-secondary-text">—</span>
   ) : ok ? (
-    <span className="inline-flex items-center gap-1 text-xs font-medium text-success-color"><CheckIcon aria-hidden="true" /> In</span>
+    <span className="inline-flex w-12 items-center gap-1 text-xs font-medium text-success-color"><CheckIcon aria-hidden="true" /> In</span>
   ) : (
-    <span className="inline-flex items-center gap-1 text-xs font-medium text-error-color"><XIcon aria-hidden="true" /> Out</span>
+    <span className="inline-flex w-12 items-center gap-1 text-xs font-medium text-error-color"><XIcon aria-hidden="true" /> Out</span>
   );
 
 const fieldsOf = (c) => ({
@@ -302,8 +305,9 @@ const CalibrationRecordPage = () => {
               <TriangleAlertIcon className="h-4 w-4" /> {c.nonconformance.reference}
             </CTAButton>
           )}
-          {canEdit && dirty && (
-            <CTAButton buttonType="button" onClick={() => { setForm(original); setReadings(originalReadings); }} type="neutral" size="default" className="px-3">
+          {/* Always shown to editors (switched off until something changed), so the first keystroke does not move the buttons. */}
+          {canEdit && (
+            <CTAButton buttonType="button" onClick={() => { setForm(original); setReadings(originalReadings); }} disabled={!dirty} type="neutral" size="default" className="px-3">
               <Undo2Icon className="h-4 w-4" /> Discard changes
             </CTAButton>
           )}
@@ -351,7 +355,17 @@ const CalibrationRecordPage = () => {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] text-left text-sm" aria-label="Readings">
+              {/* Fixed column widths: typing a reading or choosing pass / fail must never move the columns or the rows. */}
+              <table className="w-full min-w-[900px] table-fixed text-left text-sm" aria-label="Readings">
+                <colgroup>
+                  <col />
+                  <col className="w-44" />
+                  <col className="w-32" />
+                  <col className="w-16" />
+                  <col className="w-32" />
+                  <col className="w-16" />
+                  <col className="w-56" />
+                </colgroup>
                 <thead className="text-secondary-text">
                   <tr>
                     <th className="py-1 pr-2 font-medium">Characteristic</th>
@@ -380,9 +394,10 @@ const CalibrationRecordPage = () => {
                           </td>
                           <td className="py-1.5 pr-2"><Verdict ok={r.asFoundOk} /></td>
                           <td className="py-1.5 pr-2 text-right">
-                            {(r.input.asFoundPass === false || r.input.asLeftPass != null) && (
-                              <PassFail label={`${r.name} as left`} value={r.input.asLeftPass ?? null} onChange={setReading(r.key, "asLeftPass")} disabled={!canEdit} allowClear />
-                            )}
+                            {/* Always there, so the row keeps its size; shown once the check failed as found (or already has an as-left result). */}
+                            <span className={asLeftOffered(r) ? "" : "invisible"} aria-hidden={asLeftOffered(r) ? undefined : true}>
+                              <PassFail label={`${r.name} as left`} value={r.input.asLeftPass ?? null} onChange={setReading(r.key, "asLeftPass")} disabled={!canEdit || !asLeftOffered(r)} allowClear />
+                            </span>
                           </td>
                           <td className="py-1.5 pr-2"><Verdict ok={r.asLeftOk} /></td>
                         </>
@@ -410,7 +425,7 @@ const CalibrationRecordPage = () => {
               </table>
             </div>
           )}
-          <div className="flex flex-wrap items-center gap-3 border-t border-border-color pt-3 text-sm">
+          <div className="flex min-h-12 flex-wrap items-center gap-3 border-t border-border-color pt-3 text-sm">
             <span className="text-secondary-text">Outcome</span>
             {liveOutcome ? (
               <>

@@ -86,7 +86,7 @@ const MyAlertsPage = () => {
                     <td className={td}><StateCell a={a} /></td>
                     <td className={td}>
                       {a.state === "open" && (
-                        <button type="button" className="rounded-lg border border-border-color px-2 py-1 text-sm text-primary-text hover:border-border-dark-color cursor-pointer" onClick={() => setAcknowledging(a)}>
+                        <button type="button" className="min-h-9.5 rounded-lg border border-border-color px-2 py-1 text-sm text-primary-text hover:border-border-dark-color cursor-pointer" onClick={() => setAcknowledging(a)}>
                           Acknowledge
                         </button>
                       )}

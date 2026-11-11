@@ -25,7 +25,7 @@ const codeProps = {
 };
 
 const smallButton =
-  "rounded-lg border border-border-color px-2 py-1 text-sm text-primary-text hover:border-border-dark-color disabled:opacity-50 cursor-pointer";
+  "min-h-9.5 rounded-lg border border-border-color px-2 py-1 text-sm text-primary-text hover:border-border-dark-color disabled:opacity-50 cursor-pointer";
 
 /** Inline "add" form shared by sites and departments. */
 const AddForm = ({ label, onSubmit, pending, error, extra }) => {

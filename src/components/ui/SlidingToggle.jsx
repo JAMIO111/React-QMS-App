@@ -87,7 +87,7 @@ const SlidingToggle = ({
       onKeyDown={onKeyDown}
       {...group}
       className={clsx(
-        "group bg-secondary-bg relative inline-flex w-fit max-w-full items-stretch overflow-hidden rounded-lg gap-0.5 p-0.5 min-h-[34px] border border-border-color",
+        "group bg-secondary-bg relative inline-flex w-fit max-w-full items-stretch overflow-hidden rounded-lg gap-0.5 p-0.5 min-h-9.5 border border-border-color",
         className,
       )}>
       {/* Sliding highlight */}

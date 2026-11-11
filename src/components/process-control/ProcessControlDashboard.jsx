@@ -116,14 +116,14 @@ const ProcessControlDashboard = () => {
         <div className="flex flex-nowrap items-end gap-3 max-sm:flex-wrap">
           <Link
             to="/Process-Control/Plans"
-            className="shrink-0 whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50"
+            className="inline-flex min-h-9.5 shrink-0 items-center whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50"
           >
             Control plans
           </Link>
           {spc?.available !== false && (
             <Link
               to="/Process-Control/SPC"
-              className="shrink-0 whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50"
+              className="inline-flex min-h-9.5 shrink-0 items-center whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50"
             >
               SPC charts
             </Link>

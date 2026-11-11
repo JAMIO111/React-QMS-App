@@ -118,7 +118,7 @@ const PendingCertificates = ({ files, onChange, disabled }) => {
 };
 
 // The border is always 2 px and the icon's space always kept, so judging a reading never moves anything.
-const readingInput = "w-28 rounded-lg border-2 bg-text-input-color py-1 pl-7 pr-2 text-right text-sm text-primary-text focus:outline-none disabled:opacity-60";
+const readingInput = "w-28 rounded-lg border-2 bg-text-input-color min-h-9.5 py-1 pl-7 pr-2 text-right text-sm text-primary-text focus:outline-none disabled:opacity-60";
 
 /**
  * A reading's box, judged as it is typed: a green border and a tick inside on the left when it is within the limits, a red border and a cross
@@ -496,7 +496,7 @@ const CalibrationRecordPage = () => {
                       </>
                       )}
                       <td className="py-1.5">
-                        <input aria-label={`${r.name} notes`} className="w-full rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-sm focus:outline-none focus:border-brand-primary disabled:opacity-60"
+                        <input aria-label={`${r.name} notes`} className="w-full rounded-lg border border-border-color bg-text-input-color px-2 min-h-9.5 py-1 text-sm focus:outline-none focus:border-brand-primary disabled:opacity-60"
                           value={r.input.notes ?? ""} onChange={setReading(r.key, "notes")} disabled={!canEdit} maxLength={500} />
                       </td>
                     </tr>

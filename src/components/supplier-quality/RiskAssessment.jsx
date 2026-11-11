@@ -101,7 +101,7 @@ const AssessDialog = ({ supplier, model, onClose }) => {
                 value={notes[f.key] ?? ""}
                 onChange={(e) => setNotes((n) => ({ ...n, [f.key]: e.target.value }))}
                 maxLength={1000}
-                className="rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary"
+                className="rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary"
               />
             </li>
           ))}

@@ -49,7 +49,7 @@ const OptionsEditor = ({ options, onChange }) => {
           <li key={o.key} className="flex items-center gap-2">
             <input
               aria-label={`Option ${i + 1}`}
-              className="min-w-0 flex-1 rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary"
+              className="min-w-0 flex-1 rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary"
               value={o.label}
               maxLength={80}
               onChange={(e) => set(i, { label: e.target.value })}
@@ -68,7 +68,7 @@ const OptionsEditor = ({ options, onChange }) => {
         <input
           aria-label="New option"
           placeholder="Add an option"
-          className="min-w-0 flex-1 rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary"
+          className="min-w-0 flex-1 rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary"
           value={draft}
           maxLength={80}
           onChange={(e) => setDraft(e.target.value)}

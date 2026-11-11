@@ -50,7 +50,7 @@ const QuestionRow = ({ q, editable, supplierId, documents, onSave }) => {
             maxLength={2000}
             onChange={(e) => setNote(e.target.value)}
             onBlur={() => (note.trim() || null) !== (r?.note ?? null) && (r || q.answerType === "text") && send({})}
-            className="rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary"
+            className="rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary"
           />
           {q.evidenceRequired && r && r.result !== "na" && (
             <DocumentPicker supplierId={supplierId} documents={documents} label="Evidence" value={r.document?.id ?? null} onChange={(v) => send({ documentId: v })} placeholder="Choose a document" clearable={false} hint="A current document of this supplier, or add a new one here" />

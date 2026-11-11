@@ -44,7 +44,7 @@ const SOURCE_WORDS = {
 
 /** What goes in the middle of a row when it is not a single column. */
 const SourceSummary = ({ row, words }) => (
-  <span className="block truncate rounded-lg border border-dashed border-border-color px-2 py-1.5 text-sm text-secondary-text" title={row.useFormula ? row.formula : undefined}>
+  <span className="block truncate rounded-lg border border-dashed border-border-color px-2 py-2 text-sm text-secondary-text" title={row.useFormula ? row.formula : undefined}>
     {row.useFormula ? <span className="font-mono">{row.formula || "No formula yet"}</span> : row.transform === "constant" ? `Always "${row.value}"` : `${row.sources.join(" + ") || `No ${words.columns} yet`}`}
   </span>
 );

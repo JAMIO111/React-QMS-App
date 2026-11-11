@@ -10,7 +10,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
 
-const input = "w-full rounded-lg border border-border-color bg-text-input-color px-2 py-1 text-sm text-primary-text focus:outline-none focus:border-brand-primary disabled:opacity-60";
+const input = "w-full rounded-lg border border-border-color bg-text-input-color px-2 min-h-9.5 py-1 text-sm text-primary-text focus:outline-none focus:border-brand-primary disabled:opacity-60";
 const EMPTY = { kind: "variable", name: "", nominal: "", toleranceMinus: "", tolerancePlus: "", unitCode: "mm", method: "" };
 const str = (v) => (v === null || v === undefined ? "" : String(v));
 const toForm = (c) => ({

@@ -33,9 +33,9 @@ const VARIANTS = {
 const ALIASES = { primary: "main", danger: "cancel" };
 
 const SIZES = {
-  default: "py-1 px-2 text-md",
-  md: "py-1.5 px-3 text-sm",
-  lg: "py-2 px-4 text-sm",
+  default: "min-h-9.5 py-1 px-2 text-md",
+  md: "min-h-9.5 py-1.5 px-3 text-sm",
+  lg: "min-h-9.5 py-2 px-4 text-sm",
 };
 
 const CTAButton = ({

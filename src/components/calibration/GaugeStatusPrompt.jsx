@@ -67,7 +67,7 @@ const GaugeStatusPrompt = ({ gauge, calibration, onApply, onSkip }) => {
               onChange={(e) => setReason(e.target.value)}
               maxLength={500}
               placeholder="e.g. damaged anvil"
-              className="rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary"
+              className="rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary"
             />
           </label>
         )}

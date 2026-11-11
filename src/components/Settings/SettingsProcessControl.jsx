@@ -13,7 +13,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 
 const inputClass =
-  "rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text placeholder:text-tertiary-text focus:outline-none focus:border-brand-primary";
+  "rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm text-primary-text placeholder:text-tertiary-text focus:outline-none focus:border-brand-primary";
 
 const describe = (t) => {
   if (t.dataType === "attribute") return "Pass / fail";

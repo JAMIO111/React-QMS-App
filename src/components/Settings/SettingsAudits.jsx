@@ -13,7 +13,7 @@ import Switch from "../ui/Switch";
 import { FormError } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
 
-const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm font-normal text-primary-text focus:outline-none focus:border-brand-primary";
+const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm font-normal text-primary-text focus:outline-none focus:border-brand-primary";
 
 /** Add a classification (key, name, kind, default severity) or rename / re-severity one. The key and kind never change once it exists. */
 const ClassificationDialog = ({ existing, onClose }) => {

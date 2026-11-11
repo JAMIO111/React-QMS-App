@@ -12,7 +12,7 @@ const SearchBar = () => {
         name="search-bar"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
-        className="w-full h-9 text-sm shadow-s hover:shadow-m bg-text-input-color text-primary-text placeholder-muted hover:border-border-dark-color focus:border-blue-300 focus:ring focus:ring-blue-200 focus:outline-none rounded-lg pl-12"
+        className="w-full h-9.5 text-sm shadow-s hover:shadow-m bg-text-input-color text-primary-text placeholder-muted hover:border-border-dark-color focus:border-blue-300 focus:ring focus:ring-blue-200 focus:outline-none rounded-lg pl-12"
         type="text"
         placeholder="Search..."
       />

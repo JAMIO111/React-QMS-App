@@ -27,7 +27,7 @@ export const RestrictedModule = ({ moduleName, access, requiredPlan }) => {
         {requiredPlan ? `. Required package: ${requiredPlan}.` : "."}
       </p>
       {manager ? (
-        <Link to="/Settings/Subscription" className="rounded-lg border border-border-color px-3 py-1.5 text-sm text-primary-text hover:border-border-dark-color">
+        <Link to="/Settings/Subscription" className="rounded-lg border border-border-color px-3 py-2 text-sm text-primary-text hover:border-border-dark-color">
           Manage subscription
         </Link>
       ) : (

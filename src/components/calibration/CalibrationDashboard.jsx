@@ -145,7 +145,7 @@ const CalibrationDashboard = () => {
           </p>
         </div>
         <div className="flex flex-nowrap items-end gap-3 max-sm:flex-wrap">
-          <Link to="/Calibration/Gauges" className="shrink-0 whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50">
+          <Link to="/Calibration/Gauges" className="inline-flex min-h-9.5 shrink-0 items-center whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50">
             Gauge register
           </Link>
           <DashboardPeriodPicker period={period} />

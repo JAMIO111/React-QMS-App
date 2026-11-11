@@ -23,7 +23,7 @@ import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFiel
 import { withCustomValues } from "../../lib/customFields";
 
 const input =
-  "rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary";
+  "rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary";
 
 /** Code, name, description and default interval of a gauge type. A new type's code is suggested from its name until it is typed. */
 const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
@@ -241,7 +241,7 @@ const TypeCard = ({ type, canManage }) => {
               type="button"
               aria-expanded={open}
               onClick={() => setOpen((v) => !v)}
-              className="flex items-center gap-1 rounded-lg border border-border-color px-2.5 py-1 text-sm text-primary-text hover:border-border-dark-color cursor-pointer">
+              className="flex items-center gap-1 min-h-9.5 rounded-lg border border-border-color px-2.5 py-1 text-sm text-primary-text hover:border-border-dark-color cursor-pointer">
               {open ? "Hide characteristics" : "Characteristics"}
               <ChevronDownIcon
                 className={`transition-transform ${open ? "rotate-180" : ""}`}
@@ -420,7 +420,7 @@ const SettingsCalibration = () => {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search code, name or description…"
-              className="w-72 max-w-full rounded-lg border border-border-color bg-text-input-color py-1.5 pl-8 pr-3 text-sm text-primary-text placeholder:text-tertiary-text focus:border-brand-primary focus:outline-none"
+              className="w-72 max-w-full rounded-lg border border-border-color bg-text-input-color min-h-9.5 py-1.5 pl-8 pr-3 text-sm text-primary-text placeholder:text-tertiary-text focus:border-brand-primary focus:outline-none"
             />
           </label>
         )}

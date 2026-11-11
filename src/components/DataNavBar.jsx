@@ -47,7 +47,7 @@ const DataNavBar = ({
             page <= 1
               ? "text-border-color"
               : "text-primary-text cursor-pointer active:scale-97 hover:border-border-dark-color"
-          } rounded-lg border border-border-color p-1.5`}>
+          } flex h-8 w-8 items-center justify-center rounded-lg border border-border-color`}>
           <ArrowLeftIcon className="h-4 w-4" />
         </button>
         <span>Page</span>
@@ -58,7 +58,7 @@ const DataNavBar = ({
             type="number"
             min="1"
             max={String(maxPage)}
-            className="w-12 h-7 border border-border-color rounded-md px-2 bg-text-input-color appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="w-12 h-8 border border-border-color rounded-lg px-2 bg-text-input-color appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             placeholder="1"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
@@ -74,13 +74,13 @@ const DataNavBar = ({
             page >= maxPage
               ? "text-border-color"
               : "text-primary-text cursor-pointer active:scale-97 hover:border-border-dark-color"
-          } rounded-lg border border-border-color p-1.5`}>
+          } flex h-8 w-8 items-center justify-center rounded-lg border border-border-color`}>
           <ArrowLeftIcon className="rotate-180 h-4 w-4" />
         </button>
         <select
           value={String(pageSize)}
           onChange={(e) => setPageSize(e.target.value)}
-          className="w-26 h-7 border border-border-color rounded-md px-2 bg-text-input-color"
+          className="w-26 h-8 border border-border-color rounded-lg px-2 bg-text-input-color"
           name="page-size"
           id="page-size">
           <option value="10">10 rows</option>
@@ -93,7 +93,7 @@ const DataNavBar = ({
       </div>
       <button
         onClick={handleClick}
-        className="flex flex-row items-center gap-2 rounded-lg border border-border-color cursor-pointer py-1 px-2 hover:border-border-dark-color active:scale-97">
+        className="flex h-8 flex-row items-center gap-2 rounded-lg border border-border-color cursor-pointer px-2 hover:border-border-dark-color active:scale-97">
         <RefreshCwIcon
           className={isSpinning ? "rotate-90 animate-spin" : "rotate-90"}
         />

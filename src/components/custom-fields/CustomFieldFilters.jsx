@@ -4,7 +4,7 @@ import { useCustomFieldPeople, useCustomFields } from "../../hooks/useCustomFiel
 import ComboField from "../ui/ComboField";
 import { describeCustomFilter, useCustomFilterParams } from "./customColumns";
 
-const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text outline-none focus:border-brand-primary";
+const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm text-primary-text outline-none focus:border-brand-primary";
 
 /** A text box that applies its value after a pause (filters re-query the register). */
 const DebouncedInput = ({ value, onChange, ...rest }) => {

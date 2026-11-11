@@ -17,7 +17,7 @@ const ACTIVITY = [
 const th = "py-1 pr-2 text-left font-medium";
 const td = "py-1.5 pr-2 align-top";
 const Empty = ({ children }) => <p className="py-6 text-center text-sm text-secondary-text">{children}</p>;
-const linkClass = "shrink-0 whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50";
+const linkClass = "inline-flex min-h-9.5 shrink-0 items-center whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50";
 const daysWords = (days) => (days < 0 ? `${-days} ${days === -1 ? "day" : "days"} ago` : days === 0 ? "today" : `in ${days} ${days === 1 ? "day" : "days"}`);
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 

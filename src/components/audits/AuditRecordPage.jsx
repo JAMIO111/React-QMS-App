@@ -51,7 +51,7 @@ const Choice = ({ label, options, value, onChange, disabled }) => (
           aria-checked={on}
           disabled={disabled}
           onClick={() => onChange(on ? null : o.value)}
-          className={`rounded-lg border px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${on ? (TONE[o.value] ?? SELECTED) : "border-border-color bg-text-input-color text-primary-text hover:border-border-dark-color"} ${disabled ? "" : "cursor-pointer"}`}>
+          className={`rounded-lg border px-3 min-h-9.5 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${on ? (TONE[o.value] ?? SELECTED) : "border-border-color bg-text-input-color text-primary-text hover:border-border-dark-color"} ${disabled ? "" : "cursor-pointer"}`}>
           {o.label}
         </button>
       );

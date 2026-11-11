@@ -9,7 +9,7 @@ import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { FormError, TextAreaField } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
 
-const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm font-normal text-primary-text placeholder:text-tertiary-text focus:outline-none focus:border-brand-primary";
+const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm font-normal text-primary-text placeholder:text-tertiary-text focus:outline-none focus:border-brand-primary";
 
 /**
  * Create a finding (from an answer, or on its own) or edit an open one. `record` is the audit record (id, reference); `question` is the question whose answer the finding is raised from

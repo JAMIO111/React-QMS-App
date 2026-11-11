@@ -48,7 +48,7 @@ const StageBar = ({ ncr, gates, canUpdate, dirty, onMove, onCancel, onReopen, pe
           ))}
           {options.forward.length > 1 && (
             <select aria-label="Move to a later stage" disabled={pending || dirty} value="" onChange={(e) => e.target.value && onMove(e.target.value)}
-              className="rounded-lg border border-border-color bg-text-input-color px-2 py-1.5 text-sm text-primary-text">
+              className="rounded-lg border border-border-color bg-text-input-color px-2 min-h-9.5 py-1.5 text-sm text-primary-text">
               <option value="">Skip to…</option>
               {options.forward.slice(1).map((to) => (
                 <option key={to} value={to}>

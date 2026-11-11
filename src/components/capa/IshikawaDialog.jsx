@@ -40,7 +40,7 @@ const Category = ({ cat, causes, canRecord, recorded, busy, onChange, onRecord }
       <div className="flex gap-2">
         <input aria-label={`Add a cause under ${cat.label}`} value={draft} maxLength={300} placeholder="A possible cause…" onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
-          className="min-w-0 flex-1 rounded-lg border border-border-color bg-text-input-color px-2 py-1.5 text-sm text-primary-text focus:border-brand-primary focus:outline-none" />
+          className="min-w-0 flex-1 rounded-lg border border-border-color bg-text-input-color px-2 min-h-9.5 py-1.5 text-sm text-primary-text focus:border-brand-primary focus:outline-none" />
         <CTAButton buttonType="button" type="neutral" size="md" onClick={add} disabled={!draft.trim()} aria-label={`Add to ${cat.label}`}>Add</CTAButton>
       </div>
     </section>

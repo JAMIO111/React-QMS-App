@@ -11,7 +11,7 @@ const OrganisationSwitcher = () => {
         aria-label="Organisation"
         value={organisationId ?? ""}
         onChange={(e) => selectOrganisation(e.target.value)}
-        className="max-w-56 truncate rounded-lg border border-border-color bg-primary-bg px-2 py-1.5 text-sm text-primary-text cursor-pointer">
+        className="max-w-56 truncate rounded-lg border border-border-color bg-primary-bg h-9.5 px-2 py-1.5 text-sm text-primary-text cursor-pointer">
         {organisations.map((o) => (
           <option key={o.id} value={o.id}>
             {o.name}

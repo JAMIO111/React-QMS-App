@@ -10,7 +10,7 @@ import { useSubscriptionOverview } from "../../hooks/useSubscription";
 import CTAButton from "@/components/CTAButton";
 
 const field =
-  "rounded-lg border border-border-color bg-text-input-color px-2 py-1.5 text-sm text-primary-text disabled:opacity-60";
+  "rounded-lg border border-border-color bg-text-input-color px-2 min-h-9.5 py-1.5 text-sm text-primary-text disabled:opacity-60";
 const PACKAGES = [
   { slug: "controller", label: "Controller" },
   { slug: "contributor", label: "Contributor" },

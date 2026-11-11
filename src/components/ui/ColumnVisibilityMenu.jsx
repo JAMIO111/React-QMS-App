@@ -75,7 +75,7 @@ const ColumnVisibilityMenu = ({ columns, columnVisibility, onColumnVisibilityCha
         aria-controls={open ? menuId : undefined}
         title={canReorder ? "Show, hide or reorder columns" : "Show or hide columns"}
         onClick={() => (open ? setOpen(false) : openMenu())}
-        type="neutral" size="md" className="relative flex h-8.5 items-center gap-1.5 px-2">
+        type="neutral" size="md" className="relative flex h-9.5 items-center gap-1.5 px-2">
         <Columns3Icon className="h-5 w-5" />
         <span className="sr-only">Columns</span>
         {hiddenCount > 0 && (

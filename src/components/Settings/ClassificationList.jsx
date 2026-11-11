@@ -7,7 +7,7 @@ import { describeApiError } from "../../lib/api-client";
 import CTAButton from "@/components/CTAButton";
 
 const inputClass =
-  "rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm text-primary-text placeholder:text-tertiary-text focus:outline-none focus:border-brand-primary";
+  "rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm text-primary-text placeholder:text-tertiary-text focus:outline-none focus:border-brand-primary";
 
 const CodeBadge = ({ children }) => (
   <span className="rounded-md bg-border-color/60 px-1.5 py-0.5 font-mono text-xs text-secondary-text">{children}</span>

@@ -16,7 +16,7 @@ const PartsEditor = ({ parts, onChange, columns, readOnly }) => (
       {parts.map((p, i) => (
         <li key={i} className="flex items-center gap-2">
           {p.current ? (
-            <span className="flex-1 rounded-lg border border-dashed border-border-color px-2 py-1.5 text-sm text-secondary-text">The value so far</span>
+            <span className="flex-1 rounded-lg border border-dashed border-border-color px-2 py-2 text-sm text-secondary-text">The value so far</span>
           ) : "column" in p ? (
             <ComboField ariaLabel={`Piece ${i + 1} column`} className="flex-1" value={p.column} onChange={(v) => onChange(parts.map((x, j) => (j === i ? { column: v ?? "" } : x)))} options={columns.map((c) => ({ value: c, label: c }))} disabled={readOnly} required />
           ) : (

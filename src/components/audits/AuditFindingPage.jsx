@@ -19,7 +19,7 @@ import Callout from "../ui/Callout";
 import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 
-const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 py-1.5 text-sm font-normal text-primary-text focus:outline-none focus:border-brand-primary";
+const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm font-normal text-primary-text focus:outline-none focus:border-brand-primary";
 
 const Fact = ({ label, children }) => (
   <div className="flex min-w-0 flex-col gap-0.5">

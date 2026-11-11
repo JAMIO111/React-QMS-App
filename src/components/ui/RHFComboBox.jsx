@@ -236,7 +236,7 @@ const RHFComboBox = ({
           <div
             onClick={() => (isOpen ? close() : open())}
             // Same frame as TextInput: border, darker on hover, brand border + soft ring when focused or open.
-            className={`flex items-center justify-between rounded-lg border bg-text-input-color py-1.5 pl-2 pr-2 transition-all duration-150 ${
+            className={`flex items-center justify-between rounded-lg border bg-text-input-color min-h-9.5 py-1.5 pl-2 pr-2 transition-all duration-150 ${
               error
                 ? "border-error-color hover:border-error-color focus-within:ring-3 focus-within:ring-error-color/20"
                 : isOpen

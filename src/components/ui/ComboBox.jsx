@@ -112,7 +112,7 @@ const ComboBox = ({
               isOpen
                 ? "border-brand-primary hover:border-brand-primary"
                 : "border-border-color hover:border-border-dark-color"
-            } border rounded-lg px-2 py-1.5 cursor-pointer bg-text-input-color hover:border-border-dark-color flex items-center justify-between ${
+            } border rounded-lg px-2 min-h-9.5 py-1.5 cursor-pointer bg-text-input-color hover:border-border-dark-color flex items-center justify-between ${
               (dependentValue === undefined || dependentValue === null) &&
               dependentKey
                 ? "pointer-events-none cursor-not-allowed"

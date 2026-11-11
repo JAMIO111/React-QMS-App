@@ -35,7 +35,7 @@ const STATUS_COLOUR = { approved: "var(--chart-series-3)", conditional: "var(--c
 const th = "py-1 pr-2 text-left font-medium";
 const td = "py-1.5 pr-2 align-top";
 const Empty = ({ children }) => <p className="py-6 text-center text-sm text-secondary-text">{children}</p>;
-const linkClass = "shrink-0 whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50";
+const linkClass = "inline-flex min-h-9.5 shrink-0 items-center whitespace-nowrap rounded-lg border border-border-color bg-secondary-bg px-3 py-1.5 text-sm text-primary-text hover:bg-border-color/50";
 const nameLink = "font-medium text-primary-text hover:underline";
 const supplierPath = (id, tab) => `/Suppliers/${id}${tab ? `?tab=${tab}` : ""}`;
 const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;

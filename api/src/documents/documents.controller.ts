@@ -5,7 +5,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
-  ApproveBody, CommentBody, CompareQuery, CreateDocumentBody, CreateTypeBody, DocumentFileBody, DocumentListQuery, DocumentType, ReasonBody, ReviewBody, SignersBody,
+  AcknowledgeBody, AddRecipientBody, ReadersBody, SkillsBody, ApproveBody, CommentBody, CompareQuery, CreateDocumentBody, CreateTypeBody, DocumentFileBody, DocumentListQuery, DocumentType, ReasonBody, ReviewBody, SignersBody,
   TypeListQuery, UpdateDocumentBody, UpdateRevisionBody, UpdateTypeBody,
 } from './documents.schemas';
 import { DocumentsService } from './documents.service';
@@ -224,5 +224,62 @@ export class DocumentsController {
   @ApiOkResponse({ description: 'Withdraws a document in force (reason kept); a draft in progress is left alone' })
   withdraw(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.withdraw(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
+  }
+
+  // ---- readers and acknowledgement (DC3) ------------------------------------------------------------
+
+  @Get('my-documents')
+  @OrganisationScoped()
+  @ApiOkResponse({ description: 'The caller\'s reading: revisions in force to acknowledge (overdue first), recent acknowledgements, and reviews waiting' })
+  myDocuments(@Ctx() ctx: RequestContext) {
+    return this.service.mine(ctx);
+  }
+
+  @Get('my-documents/count')
+  @OrganisationScoped()
+  @ApiOkResponse({ description: 'For the menu badge: `{ toRead, overdue, reviews, total }`' })
+  myDocumentsCount(@Ctx() ctx: RequestContext) {
+    return this.service.mineCount(ctx);
+  }
+
+  @Put('documents/:id/readers')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReadersBody) })
+  @ApiOkResponse({ description: 'Who must read the document (departments, roles, people), replaced as a whole; fixed on each revision when it takes effect' })
+  setReaders(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setReaders(ctx, parse(Uuid, id), parse(ReadersBody, body));
+  }
+
+  @Put('documents/:id/skills')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(SkillsBody) })
+  @ApiOkResponse({ description: 'The skills the document trains (acknowledging it shows as evidence on the competence record)' })
+  setSkills(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setSkills(ctx, parse(Uuid, id), parse(SkillsBody, body).skillIds);
+  }
+
+  @Post('document-revisions/:id/acknowledge')
+  @HttpCode(200)
+  @OrganisationScoped()
+  @ApiBody({ schema: openApiSchema(AcknowledgeBody) })
+  @ApiOkResponse({ description: 'The caller acknowledges the revision in force they were asked to read (once)' })
+  acknowledge(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.acknowledge(ctx, parse(Uuid, id), parse(AcknowledgeBody, body));
+  }
+
+  @Get('document-revisions/:id/recipients')
+  @OrganisationScoped()
+  @ApiOkResponse({ description: 'Who was asked to read it: viewed, acknowledged, due, overdue (managers see everyone)' })
+  recipients(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.recipients(ctx, parse(Uuid, id));
+  }
+
+  @Post('document-revisions/:id/recipients')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(AddRecipientBody) })
+  @ApiCreatedResponse({ description: 'Asks one more person to read the revision in force' })
+  addRecipient(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addRecipient(ctx, parse(Uuid, id), parse(AddRecipientBody, body).userId);
   }
 }

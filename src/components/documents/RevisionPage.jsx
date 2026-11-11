@@ -16,6 +16,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import DocumentEditor from "./DocumentEditor";
 import { CompareCard, MyTurnCard, SignersCard, SignoffsCard, SubmitButton } from "./ReviewPanels";
+import { AcknowledgeCard, AcknowledgeDaysField, RecipientsCard } from "./ReadersPanels";
 
 const DiscardDialog = ({ revision, onClose }) => {
   const mutation = useDocumentMutation();
@@ -159,6 +160,7 @@ const RevisionPage = () => {
         ) : (
           <Callout tone="success">The draft has what it needs. Send it for review when it is ready.</Callout>
         ))}
+      <AcknowledgeCard revision={rev} />
       <MyTurnCard revision={rev} />
       {rev.status === "in_review" && !rev.myTurn && <Callout tone="info">In review: waiting for {rev.signoffs.filter((x) => x.round === rev.reviewRound && x.decision === "pending").map((x) => x.person.name).join(", ") || "the reviewers"}.</Callout>}
       {rev.status === "awaiting_approval" && !rev.myTurn && <Callout tone="info">Every reviewer has accepted it. Waiting for {rev.approver?.name ?? "the approver"} to approve it.</Callout>}
@@ -172,12 +174,16 @@ const RevisionPage = () => {
         </Callout>
       )}
 
+      <RecipientsCard revision={rev} />
       <SignersCard revision={rev} canEdit={canEdit} />
       <SignoffsCard revision={rev} />
       <CompareCard revision={rev} />
 
       <MenuCard title="Change summary">
-        <ChangeSummary key={rev.id} revision={rev} canEdit={canEdit} />
+        <div className="flex flex-col gap-3">
+          <ChangeSummary key={rev.id} revision={rev} canEdit={canEdit} />
+          <AcknowledgeDaysField key={`days-${rev.id}`} revision={rev} />
+        </div>
       </MenuCard>
 
       {doc.contentKind === "text" ? (

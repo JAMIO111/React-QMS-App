@@ -81,9 +81,10 @@ export const menuStructure = [
     icon: FileTextIcon,
     permission: "documentation.read",
     path: "/Documentation",
-    // badge: "my-alerts" = how many alerts addressed to the signed-in person still need acknowledging (see Navbar)
-    badge: "my-alerts",
+    // badge: "documentation" = alerts to acknowledge + documents to read + reviews waiting for the signed-in person (see Navbar)
+    badge: "documentation",
     subMenu: [
+      { name: "My documents", path: "/Documentation/My-Documents", badge: "my-documents" },
       { name: "Documents", path: "/Documentation/Documents" },
       { name: "My alerts", path: "/Documentation/My-Alerts", badge: "my-alerts" },
       { name: "Quality alerts", path: "/Documentation/Quality-Alerts" },

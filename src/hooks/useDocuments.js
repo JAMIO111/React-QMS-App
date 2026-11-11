@@ -93,6 +93,14 @@ export const useDocumentMutation = () => {
           return send(`/documents/${id}/revisions`);
         case "withdraw":
           return send(`/documents/${id}/withdraw`);
+        case "setReaders":
+          return send(`/documents/${id}/readers`, "PUT");
+        case "setSkills":
+          return send(`/documents/${id}/skills`, "PUT");
+        case "acknowledge":
+          return send(`/document-revisions/${id}/acknowledge`);
+        case "addRecipient":
+          return send(`/document-revisions/${id}/recipients`);
         default:
           throw new Error(`Unknown action ${action}`);
       }
@@ -202,6 +210,59 @@ export const useSetSigners = (revisionId) => {
     },
     onError: (_err, _vars, context) => context?.previous && queryClient.setQueryData(revKey, context.previous),
     onSuccess: (data) => queryClient.setQueryData(revKey, data),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** The signed-in person's reading: to acknowledge (overdue first), acknowledged recently, and reviews waiting. */
+export const useMyDocuments = () => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "mine"),
+    queryFn: () => apiFetch("/my-documents", { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+  });
+};
+
+/** For the menu badge (polled every 5 minutes, like My alerts). */
+export const useMyDocumentCount = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "mine-count"),
+    queryFn: () => apiFetch("/my-documents/count", { organisationId }),
+    enabled: !!organisationId && enabled,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+    retry: false,
+  });
+};
+
+/** Who was asked to read a revision (managers see everyone). */
+export const useDocumentRecipients = (revisionId, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "recipients", revisionId),
+    queryFn: () => apiFetch(`/document-revisions/${revisionId}/recipients`, { organisationId }).then((r) => r.data),
+    enabled: !!organisationId && !!revisionId && enabled,
+    retry: false,
+  });
+};
+
+/** Restricting a document: shown at once, put back on error. */
+export const useSetRestricted = (documentId) => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  const docKey = key(organisationId, "document", documentId);
+  return useMutation({
+    mutationFn: (restricted) => apiFetch(`/documents/${documentId}`, { method: "PATCH", body: { restricted }, organisationId }),
+    onMutate: async (restricted) => {
+      await queryClient.cancelQueries({ queryKey: docKey });
+      const previous = queryClient.getQueryData(docKey);
+      if (previous) queryClient.setQueryData(docKey, { ...previous, restricted });
+      return { previous };
+    },
+    onError: (_err, _vars, context) => context?.previous && queryClient.setQueryData(docKey, context.previous),
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };

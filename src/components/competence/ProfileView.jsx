@@ -292,6 +292,26 @@ const ProfileView = ({ profile, canAssess = false, canManage = false }) => {
         </MenuCard>
       )}
 
+      {profile.documentsRead?.length > 0 && (
+        <MenuCard title="Documents read" subtitle="Documents that train a skill, read and acknowledged. Evidence only; it does not set a level.">
+          <ul aria-label="Documents read" className="flex flex-col divide-y divide-border-color">
+            {profile.documentsRead.map((d) => (
+              <li key={`${d.documentId}-${d.letter}`} className="flex flex-wrap items-center gap-3 py-2">
+                <div className="min-w-48 flex-1">
+                  <Link to={`/Documentation/Documents/${d.documentId}`} className="text-sm font-medium text-primary-text hover:underline">
+                    {d.number} rev {d.letter} · {d.title}
+                  </Link>
+                  <p className="text-xs text-secondary-text">
+                    Acknowledged {new Date(d.acknowledgedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })} · {d.skills.map((k) => k.name).join(", ")}
+                    {d.revisionStatus !== "effective" ? " · since replaced" : ""}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </MenuCard>
+      )}
+
       {dialog?.type === "assess" && <AssessDialog employee={employee} skill={dialog.row?.skill} current={dialog.row ? { level: dialog.row.level } : null} onClose={() => setDialog(null)} />}
       {dialog?.type === "position" && <GivePositionDialog employee={employee} held={positions} onClose={() => setDialog(null)} />}
       {dialog?.type === "end" && <EndPositionDialog held={dialog.held} onClose={() => setDialog(null)} />}

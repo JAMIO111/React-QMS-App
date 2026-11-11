@@ -112,6 +112,7 @@ const AnalysisPage = lazy(() => import("./components/spc/AnalysisPage.jsx"));
 const AlertsPage = lazy(() => import("./components/spc/AlertsPage.jsx"));
 const QualityAlertsPage = lazy(() => import("./components/documentation/QualityAlertsPage.jsx"));
 const DocumentsPage = lazy(() => import("./components/documents/DocumentsPage.jsx"));
+const MyDocumentsPage = lazy(() => import("./components/documents/MyDocumentsPage.jsx"));
 const DocumentPage = lazy(() => import("./components/documents/DocumentPage.jsx"));
 const DocumentRevisionPage = lazy(() => import("./components/documents/RevisionPage.jsx"));
 const QualityAlertPage = lazy(() => import("./components/documentation/QualityAlertPage.jsx"));
@@ -312,6 +313,7 @@ const router = createBrowserRouter([
             { path: "CAPA/:id", element: <CapaPage /> },
             { path: "CAPA/:id/report", element: <CapaReportPage /> },
             { path: "CAPA/:id/:step", element: <CapaPage /> },
+            { path: "Documentation/My-Documents", element: <MyDocumentsPage /> },
             { path: "Documentation/Documents", element: <DocumentsPage /> },
             { path: "Documentation/Documents/:id", element: <DocumentPage /> },
             { path: "Documentation/Documents/:id/revisions/:revisionId", element: <DocumentRevisionPage /> },

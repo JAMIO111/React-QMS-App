@@ -262,6 +262,14 @@ BEGIN
   -- Document control (DC2): a named reviewer and a sign-off (one member in A, so seeded directly; people write through the functions).
   INSERT INTO public.document_revision_reviewers (organisation_id, revision_id, user_id)
     SELECT a, r.id, '50000000-0000-0000-0000-0000000000a1' FROM public.document_revisions r JOIN public.documents d ON d.id = r.document_id WHERE d.organisation_id = a AND d.title = 'Sweep procedure';
+  -- Document control (DC3): readers, a recipient and a skill trained (seeded directly; people write through the functions).
+  INSERT INTO public.document_targets (organisation_id, document_id, membership_id)
+    SELECT a, d.id, (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1')
+      FROM public.documents d WHERE d.organisation_id = a AND d.title = 'Sweep procedure';
+  INSERT INTO public.document_recipients (organisation_id, revision_id, user_id, reached_via)
+    SELECT a, r.id, '50000000-0000-0000-0000-0000000000a1', ARRAY['Named'] FROM public.document_revisions r JOIN public.documents d ON d.id = r.document_id WHERE d.organisation_id = a AND d.title = 'Sweep procedure';
+  INSERT INTO public.document_skills (organisation_id, document_id, skill_id)
+    SELECT a, d.id, (SELECT id FROM public.competence_skills WHERE organisation_id = a AND code = 'SWEEP') FROM public.documents d WHERE d.organisation_id = a AND d.title = 'Sweep procedure';
   INSERT INTO public.document_signoffs (organisation_id, revision_id, round, role, user_id)
     SELECT a, r.id, 1, 'reviewer', '50000000-0000-0000-0000-0000000000a1' FROM public.document_revisions r JOIN public.documents d ON d.id = r.document_id WHERE d.organisation_id = a AND d.title = 'Sweep procedure';
   -- Supplier quality (SQ1): the supplier's first status row exists already; classifications are seeded per organisation.

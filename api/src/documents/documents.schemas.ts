@@ -86,7 +86,7 @@ export const CreateDocumentBody = z
 export type CreateDocumentBody = z.infer<typeof CreateDocumentBody>;
 
 export const UpdateDocumentBody = z
-  .object({ title: z.string().trim().min(1).max(200).optional(), description: text(1000), ownerId: z.string().uuid().optional() })
+  .object({ title: z.string().trim().min(1).max(200).optional(), description: text(1000), ownerId: z.string().uuid().optional(), restricted: z.boolean().optional() })
   .strict()
   .refine(nothingToChange, 'Nothing to change');
 export type UpdateDocumentBody = z.infer<typeof UpdateDocumentBody>;
@@ -118,7 +118,7 @@ export type DocumentListQuery = z.infer<typeof DocumentListQuery>;
 const EditorDoc = z.object({ type: z.literal('doc') }).passthrough();
 
 export const UpdateRevisionBody = z
-  .object({ changeSummary: text(2000), body: EditorDoc.nullable().optional() })
+  .object({ changeSummary: text(2000), body: EditorDoc.nullable().optional(), acknowledgeWithinDays: z.number().int().min(1).max(365).nullable().optional() })
   .strict()
   .refine(nothingToChange, 'Nothing to change');
 export type UpdateRevisionBody = z.infer<typeof UpdateRevisionBody>;
@@ -155,3 +155,21 @@ export type CommentBody = z.infer<typeof CommentBody>;
 
 export const CompareQuery = z.object({ with: z.string().uuid().optional() });
 export type CompareQuery = z.infer<typeof CompareQuery>;
+
+// ---- readers (DC3) -------------------------------------------------------------------------------
+const Target = z.union([
+  z.object({ departmentId: z.string().uuid() }).strict(),
+  z.object({ roleId: z.string().uuid() }).strict(),
+  z.object({ membershipId: z.string().uuid() }).strict(),
+]);
+export const ReadersBody = z.object({ targets: z.array(Target).max(100) }).strict();
+export type ReadersBody = z.infer<typeof ReadersBody>;
+
+export const SkillsBody = z.object({ skillIds: z.array(z.string().uuid()).max(50) }).strict();
+export type SkillsBody = z.infer<typeof SkillsBody>;
+
+export const AcknowledgeBody = z.object({ note: z.string().trim().max(1000).optional() }).strict();
+export type AcknowledgeBody = z.infer<typeof AcknowledgeBody>;
+
+export const AddRecipientBody = z.object({ userId: z.string().uuid() }).strict();
+export type AddRecipientBody = z.infer<typeof AddRecipientBody>;

@@ -22,6 +22,7 @@ const docRow = {
 };
 const document = {
   ...docRow, nextLetter: "A", canManage: true, canIssue: true, canStartRevision: false, currentRevision: null, withdrawReason: null, withdrawnAt: null,
+  restricted: false, targets: [], skills: [], readers: { total: 0, acknowledged: 0, overdue: 0 },
   revisions: [{ id: "r1", sequence: 1, letter: null, status: "draft", author: { id: "u1", name: "Ann Owner" }, changeSummary: null, discardReason: null, discardedAt: null, createdAt: "2026-11-10T08:00:00Z" }],
 };
 const BODY = { type: "doc", content: [{ type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "Purpose" }] }, { type: "paragraph", content: [{ type: "text", text: "Quarantine suspect parts." }] }] };
@@ -29,11 +30,20 @@ const textRevision = {
   id: "r1", document: { ...docRow, nextLetter: "A", canManage: true }, sequence: 1, letter: null, plannedLetter: "A", status: "draft", author: { id: "u1", name: "Ann Owner" },
   changeSummary: null, body: BODY, files: [], discardReason: null, discardedAt: null, discardedBy: null, canEdit: true,
   problems: [], reviewers: [{ id: "u2", name: "Bob Bloggs" }], approver: { id: "u3", name: "Quinn Manager" }, reviewRound: 0, signoffs: [], myTurn: null,
-  previousRevisionId: null, effectiveFrom: null, approvedBy: null,
+  previousRevisionId: null, effectiveFrom: null, approvedBy: null, acknowledgeWithinDays: null, myReading: null,
+  readers: { total: 0, acknowledged: 0, viewed: 0, overdue: 0 },
 };
+let myDocs = { toRead: [], acknowledged: [], reviews: 0 };
+let recipients = [];
 let revision = textRevision;
 
-vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p), isLoading: false }) }));
+vi.mock("../../hooks/useQmsApi", () => ({
+  usePermissions: () => ({ can: (p) => permissions.includes(p), isLoading: false }),
+  useAllDepartments: () => ({ data: { data: [{ id: "dep1", code: "ASM", name: "Assembly" }] } }),
+  useRoles: () => ({ data: { data: [{ id: "role1", name: "Inspector" }] } }),
+  useMembers: () => ({ data: { data: [{ membershipId: "m4", firstName: "Dee", surname: "Doe", status: "active" }] } }),
+}));
+vi.mock("../../hooks/useCompetence", () => ({ useCompetenceSkills: () => ({ data: { data: [{ id: "k1", code: "TORQ", name: "Torque tightening" }] } }) }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock("../../contexts/AuthProvider", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 vi.mock("../../hooks/useCustomFields", () => ({ useCustomFieldPeople: () => ({ data: [{ id: "u1", name: "Ann Owner" }, { id: "u2", name: "Bob Bloggs" }] }) }));
@@ -49,6 +59,9 @@ vi.mock("../../hooks/useDocuments", () => ({
   useWaitingReviews: () => ({ data: waiting }),
   useDocumentSigners: () => ({ data: [{ id: "u1", name: "Ann Owner", canApprove: true }, { id: "u2", name: "Bob Bloggs", canApprove: false }, { id: "u3", name: "Quinn Manager", canApprove: true }, { id: "u4", name: "Dee Doe", canApprove: false }] }),
   useSetSigners: () => ({ mutate: setSigners }),
+  useSetRestricted: () => ({ mutate: (v, o) => mutate({ action: "restricted", body: v }, o) }),
+  useMyDocuments: () => ({ data: myDocs, isLoading: false }),
+  useDocumentRecipients: () => ({ data: recipients, isLoading: false }),
   useDocumentCompare: () => ({
     data: { against: { id: "r0", label: "Rev A" }, text: [{ kind: "same", text: "Purpose", block: "Heading 1" }, { kind: "removed", text: "Old step", block: "Paragraph" }, { kind: "added", text: "New step", block: "Paragraph" }], textSummary: { added: 1, removed: 1, same: 1 }, files: [] },
     isLoading: false,
@@ -60,12 +73,15 @@ import DocumentsPage from "./DocumentsPage";
 import DocumentPage from "./DocumentPage";
 import RevisionPage from "./RevisionPage";
 import SettingsDocuments from "../Settings/SettingsDocuments";
+import MyDocumentsPage from "./MyDocumentsPage";
 
 beforeEach(() => {
   mutate.mockReset();
   saveDraft.mockReset();
   setSigners.mockReset();
   waiting = [];
+  myDocs = { toRead: [], acknowledged: [], reviews: 0 };
+  recipients = [];
   listCalls.length = 0;
   revision = textRevision;
   permissions = ["documentation.read", "documentation.manage"];
@@ -308,11 +324,95 @@ describe("document in force", () => {
   });
 });
 
+describe("readers and acknowledgement", () => {
+  it("adds readers by department, role or person, restricts the document and names the skills it trains", async () => {
+    permissions = ["documentation.read", "documentation.manage", "members.read", "competence.read"];
+    Object.assign(document, { targets: [{ id: "t1", kind: "role", refId: "role1", label: "Inspector" }], skills: [] });
+    try {
+      at("/Documentation/Documents/d1", "/Documentation/Documents/:id", <DocumentPage />);
+      expect(within(screen.getByRole("list", { name: "Readers" })).getByText("Inspector")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("combobox", { name: /Add a department/ }));
+      await userEvent.click(screen.getByRole("option", { name: /Assembly/ }));
+      expect(mutate).toHaveBeenLastCalledWith({ action: "setReaders", id: "d1", body: { targets: [{ roleId: "role1" }, { departmentId: "dep1" }] } }, expect.anything());
+      await userEvent.click(screen.getByRole("button", { name: "Remove Inspector" }));
+      expect(mutate).toHaveBeenLastCalledWith({ action: "setReaders", id: "d1", body: { targets: [] } }, expect.anything());
+      await userEvent.click(screen.getByRole("switch", { name: "Restricted" }));
+      expect(mutate).toHaveBeenLastCalledWith({ action: "restricted", body: true }, expect.anything());
+      await userEvent.click(screen.getByRole("combobox", { name: /Add a skill/ }));
+      await userEvent.click(screen.getByRole("option", { name: /Torque tightening/ }));
+      expect(mutate).toHaveBeenLastCalledWith({ action: "setSkills", id: "d1", body: { skillIds: ["k1"] } }, expect.anything());
+    } finally {
+      Object.assign(document, { targets: [], skills: [] });
+    }
+  });
+
+  it("asks a reader to acknowledge the revision in force, with an optional note", async () => {
+    revision = { ...textRevision, status: "effective", letter: "A", canEdit: false, myReading: { dueOn: "2099-01-01", viewedAt: "2026-11-10T09:00:00Z", acknowledgedAt: null, note: null } };
+    at("/Documentation/Documents/d1/revisions/r1", "/Documentation/Documents/:id/revisions/:revisionId", <RevisionPage />);
+    expect(screen.getByText("Please read and acknowledge it")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Acknowledge" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("Note"), "Read at the briefing");
+    await userEvent.click(within(dialog).getByRole("button", { name: "I have read it" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "acknowledge", id: "r1", body: { note: "Read at the briefing" } }, expect.anything());
+  });
+
+  it("shows an overdue request in red, and a done one with its date", () => {
+    revision = { ...textRevision, status: "effective", letter: "A", canEdit: false, myReading: { dueOn: "2020-01-01", viewedAt: null, acknowledgedAt: null, note: null } };
+    const { unmount } = at("/Documentation/Documents/d1/revisions/r1", "/Documentation/Documents/:id/revisions/:revisionId", <RevisionPage />);
+    expect(screen.getByText(/Overdue: please read/)).toBeInTheDocument();
+    unmount();
+    revision = { ...textRevision, status: "effective", letter: "A", canEdit: false, myReading: { dueOn: null, viewedAt: "2026-11-10T09:00:00Z", acknowledgedAt: "2026-11-10T10:00:00Z", note: "OK" } };
+    at("/Documentation/Documents/d1/revisions/r1", "/Documentation/Documents/:id/revisions/:revisionId", <RevisionPage />);
+    expect(screen.getByText("You acknowledged it")).toBeInTheDocument();
+  });
+
+  it("shows managers who has read it, flags the overdue and adds a reader", async () => {
+    revision = { ...textRevision, status: "effective", letter: "A", canEdit: false, readers: { total: 2, acknowledged: 1, viewed: 2, overdue: 1 } };
+    recipients = [
+      { id: "x1", person: { id: "u2", name: "Bob Bloggs" }, reachedVia: ["Role: Inspector"], dueOn: "2020-01-01", viewedAt: "2026-11-10T09:00:00Z", acknowledgedAt: null, note: null, overdue: true },
+      { id: "x2", person: { id: "u4", name: "Dee Doe" }, reachedVia: ["Named"], dueOn: null, viewedAt: "2026-11-10T09:00:00Z", acknowledgedAt: "2026-11-10T10:00:00Z", note: null, overdue: false },
+    ];
+    at("/Documentation/Documents/d1/revisions/r1", "/Documentation/Documents/:id/revisions/:revisionId", <RevisionPage />);
+    expect(screen.getByText(/1 of 2 acknowledged · 2 viewed · 1 overdue/)).toBeInTheDocument();
+    expect(within(screen.getByRole("table", { name: "Readers" })).getByText(/\(overdue\)/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Add a reader" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Person/ }));
+    expect(screen.queryByRole("option", { name: /Dee Doe/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("option", { name: /Quinn Manager/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "addRecipient", id: "r1", body: { userId: "u3" } }, expect.anything());
+  });
+
+  it("saves how many days readers have when the field is left", async () => {
+    at("/Documentation/Documents/d1/revisions/r1", "/Documentation/Documents/:id/revisions/:revisionId", <RevisionPage />);
+    await userEvent.type(screen.getByLabelText("Days readers have to acknowledge it"), "14");
+    await userEvent.tab();
+    expect(saveDraft).toHaveBeenCalledWith({ acknowledgeWithinDays: 14 }, expect.anything());
+  });
+
+  it("lists my documents to read, overdue first, and what I read lately", () => {
+    myDocs = {
+      toRead: [{ document: { id: "d1", number: "SOP-001", title: "Torque" }, revision: { id: "r1", letter: "A" }, dueOn: "2020-01-01", overdue: true, viewedAt: null }],
+      acknowledged: [{ document: { id: "d2", number: "WI-003", title: "Packing" }, revision: { id: "r9", letter: "C" }, acknowledgedAt: "2026-11-01T10:00:00Z" }],
+      reviews: 0,
+    };
+    render(<MemoryRouter><MyDocumentsPage /></MemoryRouter>);
+    const toRead = screen.getByRole("list", { name: "To read" });
+    expect(within(toRead).getByRole("link", { name: /SOP-001 rev A/ })).toHaveAttribute("href", "/Documentation/Documents/d1/revisions/r1");
+    expect(within(toRead).getByText(/Overdue since/)).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Read lately" })).getByText(/WI-003 rev C/)).toBeInTheDocument();
+    expect(screen.getByText("Nothing waiting for you.")).toBeInTheDocument();
+  });
+});
+
 describe("helpers", () => {
   it("labels revisions and links a sign-off notice to its revision", () => {
     expect(revisionLabel({ letter: "B", status: "effective" })).toBe("Rev B");
     expect(revisionLabel({ letter: null, status: "draft" }, "C")).toBe("Draft (will be rev C)");
     expect(revisionLabel({ letter: null, status: "discarded", sequence: 2 })).toBe("Draft 2 (discarded)");
     expect(notificationLink({ entityType: "document_signoffs", details: { document_id: "d1", revision_id: "r1" } })).toBe("/Documentation/Documents/d1/revisions/r1");
+    expect(notificationLink({ entityType: "document_recipients", details: { document_id: "d1", revision_id: "r2" } })).toBe("/Documentation/Documents/d1/revisions/r2");
   });
 });

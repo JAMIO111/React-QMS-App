@@ -8,7 +8,7 @@ document has an identity (`SOP-001`) separate from its revisions (rev A, B, C). 
 becomes effective on a date, and is then **frozen**. A change is always a new revision. The people who must read a document
 acknowledge each new revision. Like quality alerts, **nothing here blocks work**.
 
-**DC1 and DC2 are built** (see §12 and §13); the rest is not. It is delivered as complete, tested vertical slices (§9), each with SQL tests, API e2e tests (both sweeps),
+**DC1–DC3 are built** (see §12–§14); the rest is not. It is delivered as complete, tested vertical slices (§9), each with SQL tests, API e2e tests (both sweeps),
 frontend tests, lint and build, and finished by an exit check with a browser journey step.
 
 ## 1. What it reuses
@@ -144,7 +144,7 @@ Menu **Documentation**: **Dashboard**, **Documents** (register), **My documents*
 |---|---|
 | **DC1** (done) | Types, documents and draft revisions (file and text kinds, editor), numbering, register, document page, revision page for drafts, files bucket. |
 | **DC2** (done) | Review and approval rounds, effective date and supersession (settle on read and cron), frozen revisions, withdraw, discard, revision compare, notices to reviewers and approver. |
-| **DC3** | Readers: targets, recipients fixed at effect, acknowledge, My documents and badge, overdue, restricted access, reading notices, competence evidence link. |
+| **DC3** (done) | Readers: targets, recipients fixed at effect, acknowledge, My documents and badge, overdue, restricted access, reading notices, competence evidence link. |
 | **DC4** | Periodic review (intervals, outcomes, overdue), change requests, links to parts, families, machines and operations, and "in force" panels on the job hub, part and machine pages. |
 | **DC5** | External documents, controlled PDF copies, the dashboard. |
 | **DC6** | Exit check: live guardrails, advisors, browser journey step (write → review → send back → approve → effective → acknowledge → revise), `docs/document-control-exit-report.md`, `CLAUDE.md`. |
@@ -200,3 +200,22 @@ Migration `20260203100000_document_control_review.sql` (applied live 2026-11-11)
 - Notices: `document_signoffs.created` ("A document is waiting for you", addressed to the reviewer or approver, emailed by default like the other
   personal notices). Nobody is told when a revision is sent back or approved yet.
 - The approver list offers members holding `documentation.issue` through any role; the check that counts is made again when they approve.
+
+## 14. DC3 as built (2026-11-11)
+
+Migration `20260204100000_document_control_readers.sql`; SQL test `supabase/tests/document_control_readers.test.sql`; API e2e `api/test/document-readers.e2e-spec.ts`
+(+ both sweeps).
+
+- **Readers** (`document_targets`: departments, roles, named people) are kept on the document; `document_recipients` are fixed on each revision when
+  it takes effect (inside `app.settle_document`), with how each was reached. An effective revision that reaches nobody is allowed.
+- **The deadline is a number of days, not a date** (`document_revisions.acknowledge_within_days`, 1–365, set on the draft): the effective date is not
+  known while drafting, so the due date is worked out as effective date + days and stored on each recipient. Someone added later gets today + days.
+- **Opening the revision records the first view** (the API calls `app.mark_document_viewed` on every open; a no-op for anyone else). Acknowledging
+  is the revision in force only, once, with an optional note.
+- **Restricted** documents open only for the people they reach (targets now, or recipients of any revision) and document managers, plus the owner,
+  authors and signers as before; hidden from the register, the revision page and storage for everyone else.
+- **My documents** (`/Documentation/My-Documents`) and the badge: documents to acknowledge, overdue first, plus reviews waiting; the Documentation menu
+  badge adds this to the alerts count.
+- **Competence:** a document names the skills it trains; acknowledgements of such documents appear as "Documents read" on the person's competence
+  record (evidence only), through `app.competence_document_evidence` (competence.read or the person themselves).
+- The "a document for you to read" notice has **no actor**, so the person whose own read settled the revision is still told.

@@ -15,6 +15,7 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
+import { ReadersCard, SkillsCard } from "./ReadersPanels";
 
 const Fact = ({ label, children }) => (
   <div className="flex flex-col">
@@ -201,6 +202,7 @@ const DocumentPage = () => {
           <Fact label="Content">{contentKindLabel(doc.contentKind)}</Fact>
           <Fact label="Owner">{doc.owner?.name ?? "—"}</Fact>
           <Fact label="Created">{formatDate(doc.createdAt)}</Fact>
+          {doc.restricted && <Fact label="Access">Restricted to its readers</Fact>}
           {doc.numberTyped && <Fact label="Brought across">Numbered by hand; revisions continue from {doc.startLetter}</Fact>}
           {doc.description && (
             <div className="sm:col-span-2 lg:col-span-4">
@@ -209,6 +211,11 @@ const DocumentPage = () => {
           )}
         </dl>
       </MenuCard>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ReadersCard doc={doc} />
+        <SkillsCard doc={doc} />
+      </div>
 
       <MenuCard title="Revisions" subtitle="Each revision is written, reviewed, approved and then frozen. A change is always a new revision.">
         <ul className="-my-3 divide-y divide-border-color" aria-label="Revisions">

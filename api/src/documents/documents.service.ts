@@ -6,7 +6,7 @@ import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { blocksOf, diffFiles, diffLines, summarise } from './document-compare';
 import {
-  ApproveBody, CreateDocumentBody, CreateTypeBody, DocumentFileBody, DocumentListQuery, ReviewBody, SignersBody, TypeListQuery, UpdateDocumentBody, UpdateRevisionBody,
+  AcknowledgeBody, ApproveBody, CreateDocumentBody, ReadersBody, CreateTypeBody, DocumentFileBody, DocumentListQuery, ReviewBody, SignersBody, TypeListQuery, UpdateDocumentBody, UpdateRevisionBody,
   UpdateTypeBody,
 } from './documents.schemas';
 
@@ -33,6 +33,11 @@ const DOCUMENT_SELECT = sql`
          ${sql.raw(personName('po'))} as owner_name,
          ip.id as ip_id, ip.status as ip_status, ip.sequence as ip_sequence, ip.letter as ip_letter, ip.effective_from::text as ip_effective_from,
          cr.letter as current_letter, cr.effective_from::text as current_effective_from,
+         (select count(*)::int from public.document_recipients x where x.revision_id = d.current_revision_id) as readers_total,
+         (select count(*)::int from public.document_recipients x where x.revision_id = d.current_revision_id and x.acknowledged_at is not null) as readers_done,
+         (select count(*)::int from public.document_recipients x where x.revision_id = d.current_revision_id and x.acknowledged_at is null and x.due_on < current_date) as readers_overdue,
+         (select x.due_on::text from public.document_recipients x where x.revision_id = d.current_revision_id and x.user_id = auth.uid() and x.acknowledged_at is null) as my_due,
+         (select true from public.document_recipients x where x.revision_id = d.current_revision_id and x.user_id = auth.uid() and x.acknowledged_at is null) as my_pending,
          (select count(*)::int from public.document_revisions x where x.document_id = d.id and x.status <> 'discarded') as revision_count
     from public.documents d
     join public.document_types t on t.id = d.type_id
@@ -71,6 +76,11 @@ const toDocument = (r: Row) => ({
     : null,
   withdrawReason: (r.withdraw_reason as string) ?? null,
   withdrawnAt: r.withdrawn_at ? (iso(r.withdrawn_at) as string) : null,
+  restricted: Boolean(r.restricted),
+  /** Readers of the revision in force (as the caller may see them: managers see everyone, others only themselves). */
+  readers: { total: Number(r.readers_total ?? 0), acknowledged: Number(r.readers_done ?? 0), overdue: Number(r.readers_overdue ?? 0) },
+  /** The caller has the revision in force still to acknowledge. */
+  toAcknowledge: r.my_pending ? { dueOn: (r.my_due as string) ?? null } : null,
   revisionCount: Number(r.revision_count ?? 0),
   createdAt: iso(r.created_at) as string,
   updatedAt: iso(r.updated_at) as string,
@@ -188,6 +198,26 @@ export class DocumentsService {
                app.document_letter_after(${found[0].last_letter ?? null}::text) as after`)
     ).rows[0];
     const doc = toDocument(found[0]);
+    const targets = (
+      await db.execute<Row>(sql`
+        select t.id, t.department_id, t.role_id, t.membership_id, dp.name as department_name, ro.name as role_name, ${sql.raw(personName('pt'))} as person_name
+          from public.document_targets t
+          left join public.departments dp on dp.id = t.department_id
+          left join public.roles ro on ro.id = t.role_id
+          left join public.organisation_users om on om.id = t.membership_id
+          left join public.profiles pt on pt.id = om.user_id
+         where t.document_id = ${id}::uuid order by t.created_at`)
+    ).rows.map((t) => ({
+      id: t.id as string,
+      kind: t.department_id ? 'department' : t.role_id ? 'role' : 'person',
+      refId: (t.department_id ?? t.role_id ?? t.membership_id) as string,
+      label: ((t.department_name ?? t.role_name ?? t.person_name) as string) ?? 'Unknown',
+    }));
+    const skills = (
+      await db.execute<Row>(sql`
+        select k.id, k.code, k.name from public.document_skills ds join public.competence_skills k on k.id = ds.skill_id
+         where ds.document_id = ${id}::uuid order by lower(k.name)`)
+    ).rows.map((k) => ({ id: k.id as string, code: k.code as string, name: k.name as string }));
     return {
       ...doc,
       /** The letter the next submitted revision will get. */
@@ -211,6 +241,8 @@ export class DocumentsService {
       /** documentation.issue: withdraw it (and approve, when named as approver). */
       canIssue: Boolean(can.issue),
       canStartRevision: Boolean(can.manage) && ['active', 'withdrawn'].includes(doc.status) && !doc.inProgress,
+      targets,
+      skills,
     };
   }
 
@@ -287,6 +319,16 @@ export class DocumentsService {
     const status = r.status as string;
     const round = Number(r.review_round);
     const mine = signoffs.find((x) => x.round === round && x.person.id === me && x.decision === 'pending');
+    const myReading = (
+      await db.execute<Row>(sql`
+        select due_on::text as due_on, first_viewed_at, acknowledged_at, acknowledge_note from public.document_recipients where revision_id = ${id}::uuid and user_id = auth.uid()`)
+    ).rows[0];
+    const readers = (
+      await db.execute<Row>(sql`
+        select count(*)::int as total, count(acknowledged_at)::int as acknowledged, count(first_viewed_at)::int as viewed,
+               count(*) filter (where acknowledged_at is null and due_on < current_date)::int as overdue
+          from public.document_recipients where revision_id = ${id}::uuid`)
+    ).rows[0];
     const { revisions: _revisions, ...header } = document;
     void _revisions;
     return {
@@ -323,6 +365,18 @@ export class DocumentsService {
       withdrawnBy: (r.withdrawn_by_name as string) ?? null,
       withdrawReason: (r.withdraw_reason as string) ?? null,
       previousRevisionId: (r.previous_revision_id as string) ?? null,
+      acknowledgeWithinDays: r.acknowledge_within_days === null || r.acknowledge_within_days === undefined ? null : Number(r.acknowledge_within_days),
+      /** The caller as a reader of this revision, if they were asked. */
+      myReading: myReading
+        ? {
+            dueOn: (myReading.due_on as string) ?? null,
+            viewedAt: myReading.first_viewed_at ? (iso(myReading.first_viewed_at) as string) : null,
+            acknowledgedAt: myReading.acknowledged_at ? (iso(myReading.acknowledged_at) as string) : null,
+            note: (myReading.acknowledge_note as string) ?? null,
+          }
+        : null,
+      /** Readers (managers see everyone; others only themselves). */
+      readers: { total: Number(readers.total), acknowledged: Number(readers.acknowledged), viewed: Number(readers.viewed), overdue: Number(readers.overdue) },
       createdAt: iso(r.created_at) as string,
       updatedAt: iso(r.updated_at) as string,
     };
@@ -331,6 +385,9 @@ export class DocumentsService {
   getRevision(ctx: RequestContext, id: string) {
     return this.database.asUser(ctx, async (db) => {
       await this.settle(db, ctx);
+      await this.revision(db, ctx, id);
+      // Opening it is the first view for a reader asked to read it (no-op for anyone else).
+      await db.execute(sql`select app.mark_document_viewed(${id}::uuid)`);
       return this.revision(db, ctx, id);
     });
   }
@@ -431,6 +488,12 @@ export class DocumentsService {
   waiting(ctx: RequestContext) {
     return this.database.asUser(ctx, async (db) => {
       await this.settle(db, ctx);
+      return { data: await this.waitingIn(db, ctx) };
+    });
+  }
+
+  private async waitingIn(db: Db, ctx: RequestContext) {
+    {
       const rows = (
         await db.execute<Row>(sql`
           select s.role, s.created_at, r.id as revision_id, r.letter, r.status, d.id as document_id, d.number, d.title, ${sql.raw(personName('pa'))} as author_name
@@ -442,16 +505,14 @@ export class DocumentsService {
              and r.status = case s.role when 'reviewer' then 'in_review' else 'awaiting_approval' end
            order by s.created_at`)
       ).rows;
-      return {
-        data: rows.map((r) => ({
-          role: r.role as 'reviewer' | 'approver',
-          since: iso(r.created_at) as string,
-          revision: { id: r.revision_id as string, letter: (r.letter as string) ?? null, status: r.status as string },
-          document: { id: r.document_id as string, number: r.number as string, title: r.title as string },
-          author: (r.author_name as string) ?? null,
-        })),
-      };
-    });
+      return rows.map((r) => ({
+        role: r.role as 'reviewer' | 'approver',
+        since: iso(r.created_at) as string,
+        revision: { id: r.revision_id as string, letter: (r.letter as string) ?? null, status: r.status as string },
+        document: { id: r.document_id as string, number: r.number as string, title: r.title as string },
+        author: (r.author_name as string) ?? null,
+      }));
+    }
   }
 
   /** A revision against another (default: the one it was started from, else the revision in force). Text: blocks; files: which changed. */
@@ -474,6 +535,110 @@ export class DocumentsService {
         files,
         filesSummary: summarise(files),
       };
+    });
+  }
+
+  // ---- readers (DC3) -----------------------------------------------------------------------------------
+
+  setReaders(ctx: RequestContext, documentId: string, body: ReadersBody) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.document(db, ctx, documentId);
+      await db.execute(sql`select app.set_document_targets(${documentId}::uuid, ${json(body.targets)}::jsonb)`);
+      return this.document(db, ctx, documentId);
+    });
+  }
+
+  setSkills(ctx: RequestContext, documentId: string, skillIds: string[]) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.document(db, ctx, documentId);
+      await db.execute(sql`select app.set_document_skills(${documentId}::uuid, string_to_array(${skillIds.join(',')}, ',')::uuid[])`);
+      return this.document(db, ctx, documentId);
+    });
+  }
+
+  acknowledge(ctx: RequestContext, id: string, body: AcknowledgeBody) {
+    return this.onRevision(ctx, id, (db) => db.execute(sql`select app.acknowledge_document(${id}::uuid, ${body.note ?? null})`));
+  }
+
+  /** Who was asked to read a revision and where each stands (document managers see everyone; others only themselves). */
+  recipients(ctx: RequestContext, id: string) {
+    return this.database.asUser(ctx, (db) => this.recipientsIn(db, ctx, id));
+  }
+
+  private async recipientsIn(db: Db, ctx: RequestContext, id: string) {
+    {
+      await this.revision(db, ctx, id);
+      const rows = (
+        await db.execute<Row>(sql`
+          select x.id, x.user_id, x.reached_via, x.due_on::text as due_on, x.first_viewed_at, x.acknowledged_at, x.acknowledge_note, ${sql.raw(personName('px'))} as name
+            from public.document_recipients x left join public.profiles px on px.id = x.user_id
+           where x.revision_id = ${id}::uuid
+           order by (x.acknowledged_at is not null), x.due_on nulls last, 8`)
+      ).rows;
+      const today = (await db.execute<Row>(sql`select current_date::text as d`)).rows[0].d as string;
+      return {
+        data: rows.map((x) => ({
+          id: x.id as string,
+          person: { id: x.user_id as string, name: (x.name as string) ?? 'Unknown' },
+          reachedVia: x.reached_via as string[],
+          dueOn: (x.due_on as string) ?? null,
+          viewedAt: x.first_viewed_at ? (iso(x.first_viewed_at) as string) : null,
+          acknowledgedAt: x.acknowledged_at ? (iso(x.acknowledged_at) as string) : null,
+          note: (x.acknowledge_note as string) ?? null,
+          overdue: !x.acknowledged_at && Boolean(x.due_on) && (x.due_on as string) < today,
+        })),
+      };
+    }
+  }
+
+  addRecipient(ctx: RequestContext, id: string, userId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.revision(db, ctx, id);
+      await db.execute(sql`select app.add_document_recipient(${id}::uuid, ${userId}::uuid)`);
+      return this.recipientsIn(db, ctx, id);
+    });
+  }
+
+  /** The caller's reading: revisions in force still to acknowledge (overdue first), recent acknowledgements, and reviews waiting for them. */
+  mine(ctx: RequestContext) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.settle(db, ctx);
+      const rows = (
+        await db.execute<Row>(sql`
+          select x.due_on::text as due_on, x.acknowledged_at, x.first_viewed_at, x.created_at, r.id as revision_id, r.letter, r.effective_from::text as effective_from,
+                 d.id as document_id, d.number, d.title, (x.acknowledged_at is null and x.due_on < current_date) as overdue
+            from public.document_recipients x
+            join public.document_revisions r on r.id = x.revision_id
+            join public.documents d on d.id = r.document_id
+           where x.organisation_id = ${orgOf(ctx)}::uuid and x.user_id = auth.uid() and r.status = 'effective'
+             and (x.acknowledged_at is null or x.acknowledged_at > now() - interval '90 days')
+           order by (x.acknowledged_at is not null), (x.acknowledged_at is null and x.due_on < current_date) desc, x.due_on nulls last, x.acknowledged_at desc, d.number`)
+      ).rows.map((x) => ({
+        document: { id: x.document_id as string, number: x.number as string, title: x.title as string },
+        revision: { id: x.revision_id as string, letter: x.letter as string, effectiveFrom: (x.effective_from as string) ?? null },
+        dueOn: (x.due_on as string) ?? null,
+        overdue: Boolean(x.overdue),
+        viewedAt: x.first_viewed_at ? (iso(x.first_viewed_at) as string) : null,
+        acknowledgedAt: x.acknowledged_at ? (iso(x.acknowledged_at) as string) : null,
+        askedAt: iso(x.created_at) as string,
+      }));
+      const reviews = (await this.waitingIn(db, ctx)).length;
+      return { toRead: rows.filter((x) => !x.acknowledgedAt), acknowledged: rows.filter((x) => x.acknowledgedAt), reviews };
+    });
+  }
+
+  /** For the menu badge: documents to acknowledge, how many overdue, and reviews or approvals waiting. */
+  mineCount(ctx: RequestContext) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.settle(db, ctx);
+      const c = (
+        await db.execute<Row>(sql`
+          select count(*)::int as to_read, count(*) filter (where x.due_on < current_date)::int as overdue
+            from public.document_recipients x join public.document_revisions r on r.id = x.revision_id
+           where x.organisation_id = ${orgOf(ctx)}::uuid and x.user_id = auth.uid() and x.acknowledged_at is null and r.status = 'effective'`)
+      ).rows[0];
+      const reviews = (await this.waitingIn(db, ctx)).length;
+      return { toRead: Number(c.to_read), overdue: Number(c.overdue), reviews, total: Number(c.to_read) + reviews };
     });
   }
 }

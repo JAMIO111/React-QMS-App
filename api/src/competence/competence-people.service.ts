@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { sql, SQL } from 'drizzle-orm';
-import { personName, Row } from '../calibration/calibration.service';
+import { iso, personName, Row } from '../calibration/calibration.service';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
@@ -255,6 +255,17 @@ export class CompetencePeopleService {
     rows.sort((a, b) => rank[a.status] - rank[b.status] || b.gap - a.gap);
     const count = (s: CellStatus) => rows.filter((r) => r.status === s && (s !== 'not_assessed' || r.required !== null)).length;
 
+    // Documents the person acknowledged that train a skill: evidence, never an assessment (DC3).
+    const documentsRead = (await db.execute<Row>(sql`select * from app.competence_document_evidence(${employeeId}::uuid)`)).rows.map((d) => ({
+      documentId: d.document_id as string,
+      number: d.number as string,
+      title: d.title as string,
+      letter: d.letter as string,
+      revisionStatus: d.revision_status as string,
+      acknowledgedAt: iso(d.acknowledged_at) as string,
+      skills: (d.skills as { id: string; code: string; name: string }[]) ?? [],
+    }));
+
     return {
       employee: toEmployee(emp[0]),
       positions: positions.map((p) => ({
@@ -276,6 +287,7 @@ export class CompetencePeopleService {
         completedOn: day(t.completed_on),
         note: (t.note as string) ?? null,
       })),
+      documentsRead,
       summary: { required: rows.filter((r) => r.required !== null).length, gaps: count('gap') + count('not_assessed'), expired: count('expired'), expiring: count('expiring'), ok: count('ok') },
       today,
     };

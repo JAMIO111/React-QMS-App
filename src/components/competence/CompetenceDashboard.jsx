@@ -10,6 +10,7 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useCompetenceDashboard } from "../../hooks/useCompetence";
 import { describeApiError } from "../../lib/api-client";
 import { formatDate } from "../../lib/processControl";
+import LoadingScreen from "../ui/LoadingScreen";
 
 const TRAINING_SERIES = [
   { key: "completed", label: "Completed", color: "var(--chart-series-3)" },
@@ -27,11 +28,13 @@ const daysWords = (days) => (days < 0 ? `${-days} ${days === -1 ? "day" : "days"
  * Gaps and expiry are as of today; training follows the period in the address. People without `competence.read` are sent to their own record.
  */
 const CompetenceDashboard = () => {
-  const { can } = usePermissions();
+  const { can, isLoading: loadingPermissions } = usePermissions();
   const period = useDashboardPeriod("90d");
   const { fromIso: from, toIso: to } = period;
-  const readable = can("competence.read");
+  const readable = !loadingPermissions && can("competence.read");
   const { data, isLoading, isFetching, error } = useCompetenceDashboard({ from: readable ? from : undefined, to });
+  // Wait for the permissions: on a direct visit they are not known yet, and "no permission" must not be guessed.
+  if (loadingPermissions) return <LoadingScreen />;
   if (!readable) return <Navigate to="/Competence/Mine" replace />;
   const k = data?.kpis;
   const bucketLabel = (start) => format(new Date(`${start}T00:00:00`), data?.period.bucket === "month" ? "MMM yy" : "d MMM");

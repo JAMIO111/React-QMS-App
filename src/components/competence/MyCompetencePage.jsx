@@ -11,7 +11,7 @@ const MyCompetencePage = () => {
   if (mine.isLoading) return <LoadingScreen />;
   if (mine.error) return <ErrorNotice error={mine.error} />;
   return (
-    <div className="flex w-full flex-col gap-4">
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-primary-bg p-4">
       <header className="flex items-center gap-3">
         <GraduationCapIcon className="h-7 w-7 text-primary-text" aria-hidden="true" />
         <div>

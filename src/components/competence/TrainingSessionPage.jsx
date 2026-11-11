@@ -78,7 +78,7 @@ const TrainingSessionPage = () => {
     mutation.mutate(payload, { onError: (err) => showToast({ type: "error", title: "Not done", message: describeApiError(err) }) });
 
   return (
-    <div className="flex w-full flex-col gap-4">
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-primary-bg p-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm text-secondary-text">{s.reference}</p>

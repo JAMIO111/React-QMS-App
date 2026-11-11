@@ -201,6 +201,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await workOrderOnlyShop({ page, stack, APP, orgName, see, shot, step, log });
   await importWithTemplate({ page, stack, APP, orgName, see, shot, step, log });
   await importFromApi({ page, stack, APP, orgName, see, shot, step, log });
+  await competence({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -1144,3 +1145,116 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
   await shot(page, '85-api-credential-revoked');
 }
 
+
+/**
+ * Competence exit check (CO5, competence plan): the organisation sets up a skill and a position that requires it; a person is given the position and assessed one level
+ * short; they are put on a training session and completed; the dashboard and the matrix show the gap, the matrix exports as a CSV; and the person assessed, who holds no
+ * competence permission, sees only their own record and was told they were assessed.
+ */
+async function competence({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch }) {
+  const org = (await stack.admin.query(`select id from public.organisations where name = $1`, [orgName])).rows[0];
+  const ada = (await stack.admin.query(`select id from public."Employees" where organisation_id = $1 and first_name = 'Ada'`, [org.id])).rows[0];
+
+  step('owner sets up a skill and a position that requires it');
+  await page.goto(`${APP}/Settings/Data-Management?tab=competence`);
+  await see(page.getByRole('button', { name: /Add skill/ }));
+  await page.getByRole('button', { name: /Add skill/ }).click();
+  const skill = page.getByRole('dialog', { name: 'Add a skill' });
+  await skill.getByLabel('Code').fill('CMM');
+  await skill.getByLabel('Name', { exact: true }).fill('CMM operation');
+  await skill.getByLabel('Category').click();
+  await page.getByRole('option', { name: /^Inspection/ }).click();
+  await skill.getByLabel('Reassess every (months)').fill('12');
+  await skill.getByRole('button', { name: 'Save' }).click();
+  await see(page.getByRole('region', { name: 'Inspection' }).getByText(/CMM operation/));
+  await page.getByRole('button', { name: /Add position/ }).click();
+  const position = page.getByRole('dialog', { name: 'Add a position' });
+  await position.getByLabel('Code').fill('INSP');
+  await position.getByLabel('Name', { exact: true }).fill('CMM inspector');
+  await position.getByRole('button', { name: 'Save' }).click();
+  const positions = page.getByRole('list', { name: 'Positions' });
+  await see(positions.getByText('CMM inspector'));
+  await positions.getByRole('button', { name: /Required skills/ }).click();
+  const required = page.getByRole('dialog', { name: /Skills required by CMM inspector/ });
+  await required.getByRole('combobox', { name: 'Add a skill' }).click();
+  await page.getByRole('option', { name: /CMM operation/ }).click();
+  await required.getByRole('button', { name: 'Save' }).click();
+  await see(positions.getByText('CMM operation 3'));
+  await shot(page, '90-competence-setup');
+
+  step('owner gives Ada the position and assesses her one level short');
+  await page.goto(`${APP}/Competence/People/${ada.id}`);
+  await see(page.getByRole('heading', { name: 'Ada Lovelace' }));
+  await page.getByRole('button', { name: 'Give a position' }).click();
+  const give = page.getByRole('dialog', { name: /Give Ada Lovelace a position/ });
+  await give.getByRole('combobox', { name: 'Position' }).click();
+  await page.getByRole('option', { name: /CMM inspector/ }).click();
+  await give.getByRole('button', { name: 'Give position' }).click();
+  await see(page.getByRole('button', { name: 'Assess CMM operation' }));
+  await page.getByRole('button', { name: 'Assess CMM operation' }).click();
+  const assess = page.getByRole('dialog', { name: /Assess Ada Lovelace/ });
+  await assess.getByRole('combobox', { name: 'Level' }).click();
+  await page.getByRole('option', { name: /2 · Supervised/ }).click();
+  await assess.getByRole('button', { name: 'Record assessment' }).click();
+  await see(page.getByText('Below required').first());
+  await shot(page, '91-competence-person-gap');
+  const made = (await stack.admin.query(`select level, expires_on is not null as has_expiry, status from public.competence_assessments where employee_id = $1`, [ada.id])).rows;
+  log(`assessments: ${JSON.stringify(made)}`);
+  if (made.length !== 1 || made[0].level !== 2 || !made[0].has_expiry || made[0].status !== 'current') throw new Error(`the assessment was not recorded as expected: ${JSON.stringify(made)}`);
+
+  step('owner records a training session and completes Ada on her own day');
+  await page.goto(`${APP}/Competence/Training`);
+  await page.getByRole('button', { name: /New session/ }).click();
+  const create = page.getByRole('dialog', { name: 'New training session' });
+  await create.getByLabel('Title').fill('CMM basics');
+  await create.getByRole('combobox', { name: 'Kind' }).click();
+  await page.getByRole('option', { name: 'Course', exact: true }).click();
+  await create.getByRole('combobox', { name: 'Run by' }).click();
+  await page.getByRole('option', { name: /External \(an outside provider\)/ }).click();
+  await create.getByLabel('Provider or trainer').fill('Zeiss Academy');
+  await create.getByRole('combobox', { name: 'Attendees' }).click();
+  await page.getByRole('option', { name: /Ada Lovelace/ }).click();
+  await create.getByRole('button', { name: 'Create session' }).click();
+  await page.waitForURL(/\/Competence\/Training\/[0-9a-f-]{36}$/);
+  await see(page.getByRole('heading', { name: 'CMM basics' }));
+  await page.getByLabel('Select Ada Lovelace').check();
+  await page.getByRole('button', { name: 'Record a result (1)' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Record', exact: true }).click();
+  await see(page.getByText(/Completed on/));
+  await page.getByRole('button', { name: 'Close session' }).click();
+  await see(page.getByRole('button', { name: 'Reopen' }));
+  await shot(page, '92-competence-training-session');
+  const attendee = (await stack.admin.query(`select status, completed_on is not null as dated from public.competence_session_attendees where employee_id = $1`, [ada.id])).rows;
+  if (attendee.length !== 1 || attendee[0].status !== 'completed' || !attendee[0].dated) throw new Error(`the attendee was not completed with a date: ${JSON.stringify(attendee)}`);
+
+  step('the dashboard and the matrix show the gap, and the matrix exports');
+  await page.goto(`${APP}/Competence`);
+  await see(page.getByRole('heading', { name: /Competence dashboard/ }));
+  await see(page.getByRole('link', { name: /People with gaps/ }).getByText('1', { exact: true }));
+  await see(page.getByRole('table', { name: 'People furthest short' }).getByRole('link', { name: 'Ada Lovelace' }));
+  await shot(page, '93-competence-dashboard');
+  await page.goto(`${APP}/Competence/Matrix`);
+  const cell = page.getByLabel(/Ada Lovelace, CMM operation: Supervised \(2\) · needs 3/);
+  await see(cell);
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export CSV' }).click()]);
+  const text = await require('node:fs/promises').readFile(await download.path(), 'utf8');
+  log(`matrix export: ${download.suggestedFilename()} (${text.split('\n').length} lines)`);
+  if (!/^skills-matrix-/.test(download.suggestedFilename()) || !text.includes('Below required') || !text.includes('Ada Lovelace')) throw new Error('the matrix export is missing what the screen shows');
+  await shot(page, '94-competence-matrix');
+
+  step('Ada, who holds no competence permission, sees only her own record and was told she was assessed');
+  const notices = (await stack.admin.query(`select count(*)::int n from public.notifications n join auth.users u on u.id = n.recipient_user_id where n.entity_type = 'competence_assessments' and lower(u.email) = lower($1)`, [colleague.email])).rows[0];
+  if (notices.n !== 1) throw new Error(`the person assessed was not told: ${JSON.stringify(notices)}`);
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const own = await ctx.newPage();
+  own.setDefaultTimeout(15000);
+  watch(own, 'ada');
+  await signIn(own, APP, colleague.email);
+  await see(own.getByRole('heading', { level: 1, name: /good (morning|afternoon|evening), Colin/i }));
+  await own.goto(`${APP}/Competence`);
+  await see(own.getByRole('heading', { name: 'My competence' }));
+  await see(own.getByText('Below required').first());
+  if (await own.getByRole('button', { name: /Assess|Record an assessment|Give a position/ }).count()) throw new Error('someone without the right is offered an action on their own record');
+  await shot(own, '95-competence-my-record');
+  await ctx.close();
+}

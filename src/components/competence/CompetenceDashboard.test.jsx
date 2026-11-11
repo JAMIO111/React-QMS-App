@@ -3,9 +3,10 @@ import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 let permissions = [];
+let loadingPermissions = false;
 let result;
 const calls = [];
-vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }) }));
+vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p), isLoading: loadingPermissions }) }));
 vi.mock("../../hooks/useCompetence", () => ({ useCompetenceDashboard: (params) => (calls.push(params), { data: result, isLoading: false, isFetching: false, error: null }) }));
 vi.mock("../Breadcrumb", () => ({ default: () => null }));
 vi.mock("../dashboard/DashboardPeriod", () => ({ DashboardPeriodPicker: () => <div>Period picker</div> }));
@@ -45,6 +46,7 @@ const open = () =>
 
 beforeEach(() => {
   permissions = ["competence.read"];
+  loadingPermissions = false;
   result = dashboard();
   calls.length = 0;
 });
@@ -88,6 +90,14 @@ describe("competence dashboard", () => {
     permissions = [];
     open();
     expect(screen.getByText("My competence page")).toBeInTheDocument();
+    expect(calls.every((c) => c.from === undefined)).toBe(true);
+  });
+
+  it("does not redirect while permissions are still loading (a direct visit)", () => {
+    permissions = [];
+    loadingPermissions = true;
+    open();
+    expect(screen.queryByText("My competence page")).not.toBeInTheDocument();
     expect(calls.every((c) => c.from === undefined)).toBe(true);
   });
 });

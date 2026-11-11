@@ -23,7 +23,7 @@ const TrainingPage = () => {
   const sessions = useTrainingSessions({ q: f.search, status: f.status || undefined, page: f.page || undefined });
 
   return (
-    <div className="flex w-full min-h-0 flex-col gap-4">
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-primary-bg p-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-primary-text">Training sessions</h1>

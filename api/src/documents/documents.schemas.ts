@@ -136,3 +136,22 @@ export const DocumentFileBody = z
   })
   .strict();
 export type DocumentFileBody = z.infer<typeof DocumentFileBody>;
+
+// ---- review and approval (DC2) -------------------------------------------------------------------
+export const SignersBody = z
+  .object({ reviewerIds: z.array(z.string().uuid()).max(20), approverId: z.string().uuid().nullable() })
+  .strict();
+export type SignersBody = z.infer<typeof SignersBody>;
+
+export const ReviewBody = z.object({ accept: z.boolean(), comment: z.string().trim().max(2000).optional() }).strict();
+export type ReviewBody = z.infer<typeof ReviewBody>;
+
+const IsoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use yyyy-MM-dd');
+export const ApproveBody = z.object({ effectiveFrom: IsoDay, comment: z.string().trim().max(2000).optional() }).strict();
+export type ApproveBody = z.infer<typeof ApproveBody>;
+
+export const CommentBody = z.object({ comment: z.string().trim().min(3).max(2000) }).strict();
+export type CommentBody = z.infer<typeof CommentBody>;
+
+export const CompareQuery = z.object({ with: z.string().uuid().optional() });
+export type CompareQuery = z.infer<typeof CompareQuery>;

@@ -8,7 +8,7 @@ document has an identity (`SOP-001`) separate from its revisions (rev A, B, C). 
 becomes effective on a date, and is then **frozen**. A change is always a new revision. The people who must read a document
 acknowledge each new revision. Like quality alerts, **nothing here blocks work**.
 
-**DC1 is built** (see §12); the rest is not. It is delivered as complete, tested vertical slices (§9), each with SQL tests, API e2e tests (both sweeps),
+**DC1 and DC2 are built** (see §12 and §13); the rest is not. It is delivered as complete, tested vertical slices (§9), each with SQL tests, API e2e tests (both sweeps),
 frontend tests, lint and build, and finished by an exit check with a browser journey step.
 
 ## 1. What it reuses
@@ -143,7 +143,7 @@ Menu **Documentation**: **Dashboard**, **Documents** (register), **My documents*
 | Slice | Content |
 |---|---|
 | **DC1** (done) | Types, documents and draft revisions (file and text kinds, editor), numbering, register, document page, revision page for drafts, files bucket. |
-| **DC2** | Review and approval rounds, effective date and supersession (settle on read and cron), frozen revisions, withdraw, discard, revision compare, notices to reviewers and approver. |
+| **DC2** (done) | Review and approval rounds, effective date and supersession (settle on read and cron), frozen revisions, withdraw, discard, revision compare, notices to reviewers and approver. |
 | **DC3** | Readers: targets, recipients fixed at effect, acknowledge, My documents and badge, overdue, restricted access, reading notices, competence evidence link. |
 | **DC4** | Periodic review (intervals, outcomes, overdue), change requests, links to parts, families, machines and operations, and "in force" panels on the job hub, part and machine pages. |
 | **DC5** | External documents, controlled PDF copies, the dashboard. |
@@ -182,3 +182,21 @@ Migration `20260202100000_document_control_core.sql` (applied live 2026-11-11); 
   comes with the reader columns in DC3.
 - Files: one live main file per revision (a new one replaces the old, which is kept as removed with "Replaced by …"); the bucket allows 50 MB, the drop
   zone 25 MB as everywhere else.
+
+## 13. DC2 as built (2026-11-11)
+
+Migration `20260203100000_document_control_review.sql`; SQL test `supabase/tests/document_control_review.test.sql`; API e2e `api/test/document-review.e2e-spec.ts`
+(+ both sweeps, cron test); unit test `api/src/documents/document-compare.spec.ts`.
+
+- Reviewers are kept in `document_revision_reviewers` and the approver on the revision; each submission starts a **round** of `document_signoffs`
+  (one per reviewer, then the approver's once all accepted). A send-back closes the other pending sign-offs of the round.
+- **Settling** (approved → effective, the previous one superseded) runs on every documents read (`app.settle_documents`), at approval when the date
+  is today, and in the daily cron `/internal/cron/settle-documents` (00:15 UTC, production only). Settling on read is recorded in the audit trail
+  as the person whose read caused it.
+- **Comparing** is done in the API from the stored JSON (blocks of text by a longest-common-subsequence diff; files by the stored file), not from HTML.
+- **Withdrawing** withdraws the revision in force and any approved one waiting; a draft in progress is left alone. A withdrawn document is revised
+  back into use the normal way, and the document is active again when that revision takes effect.
+- A new revision copies the text and the live file rows of the revision in force (or the last one issued), pointing at the same stored files.
+- Notices: `document_signoffs.created` ("A document is waiting for you", addressed to the reviewer or approver, emailed by default like the other
+  personal notices). Nobody is told when a revision is sent back or approved yet.
+- The approver list offers members holding `documentation.issue` through any role; the check that counts is made again when they approve.

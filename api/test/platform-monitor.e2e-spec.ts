@@ -159,7 +159,7 @@ describe('the scheduled jobs', () => {
   });
 
   it('need the secret: none, wrong, or of a different length is 401', async () => {
-    for (const route of ['reconcile', 'abandoned-setups', 'expire-quality-alerts']) {
+    for (const route of ['reconcile', 'abandoned-setups', 'expire-quality-alerts', 'settle-documents']) {
       await cron().get(`/api/v1/internal/cron/${route}`).expect(401);
       await cron().get(`/api/v1/internal/cron/${route}`).set(bearer('wrong')).expect(401);
       await cron().get(`/api/v1/internal/cron/${route}`).set(bearer(SECRET.replace(/.$/, 'x'))).expect(401);
@@ -183,6 +183,14 @@ describe('the scheduled jobs', () => {
       expect((await admin.query(`select status from public.quality_alerts where organisation_id = $1 order by alert_number`, [org])).rows.map((r: { status: string }) => r.status)).toEqual(['expired', 'active']);
       expect((await admin.query(`select kind from public.quality_alert_events where alert_id = $1`, [past])).rows).toEqual([{ kind: 'expired' }]);
       expect((await cron().post('/api/v1/internal/cron/expire-quality-alerts').set(bearer()).expect(200)).body).toEqual({ expired: 0 });
+    });
+  });
+
+  describe('document settling', () => {
+    it('answers how many approved revisions took effect, and nothing the second time', async () => {
+      const first = (await cron().get('/api/v1/internal/cron/settle-documents').set(bearer()).expect(200)).body;
+      expect(first.settled).toBeGreaterThanOrEqual(0);
+      expect((await cron().post('/api/v1/internal/cron/settle-documents').set(bearer()).expect(200)).body).toEqual({ settled: 0 });
     });
   });
 

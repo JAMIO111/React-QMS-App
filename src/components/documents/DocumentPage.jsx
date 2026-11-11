@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { PencilIcon } from "@/components/icons";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { BanIcon, FilePlusIcon, PencilIcon } from "@/components/icons";
 import CTAButton from "@/components/CTAButton";
 import { describeApiError } from "../../lib/api-client";
 import { useToast } from "../../contexts/ToastProvider";
 import { useCustomFieldPeople } from "../../hooks/useCustomFields";
 import { useDocument, useDocumentMutation } from "../../hooks/useDocuments";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
-import { contentKindLabel, DOCUMENT_STATUS, revisionLabel, revisionPath, REVISION_STATUS, statusLabel, statusPill } from "../../lib/documents";
+import { contentKindLabel, DOCUMENT_STATUS, formatDay, revisionLabel, revisionPath, REVISION_STATUS, statusLabel, statusPill } from "../../lib/documents";
 import { ErrorNotice, FormError } from "../master-data/shared";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
@@ -64,11 +64,47 @@ const EditDialog = ({ doc, onClose }) => {
   );
 };
 
-/** A document (`/Documentation/Documents/:id`): what it is, who owns it, and its revisions. Review, approval and the revision in force arrive in DC2. */
+/** Withdrawing a document in force: documentation.issue, with a reason. */
+const WithdrawDialog = ({ doc, onClose }) => {
+  const mutation = useDocumentMutation();
+  const { showToast } = useToast();
+  const [reason, setReason] = useState("");
+  const ok = reason.trim().length >= 3;
+  const save = (e) => {
+    e.preventDefault();
+    if (!ok) return;
+    mutation.mutate({ action: "withdraw", id: doc.id, body: { reason: reason.trim() } }, { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Not withdrawn", message: describeApiError(err) }) });
+  };
+  return (
+    <Dialog title={`Withdraw ${doc.number}`} onClose={onClose}>
+      <form noValidate onSubmit={save} className="flex flex-col gap-3">
+        <p className="text-sm text-secondary-text">
+          The revision in force is withdrawn and the document is no longer in force anywhere. A draft in progress is left as it is. It can be revised back into use later.
+        </p>
+        <Field label="Why?" value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={500} />
+        <FormError error={mutation.error} />
+        <div className="flex justify-end gap-2">
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
+            Cancel
+          </CTAButton>
+          <CTAButton buttonType="submit" type="danger" size="md" disabled={!ok || mutation.isPending} loading={mutation.isPending}>
+            Withdraw
+          </CTAButton>
+        </div>
+      </form>
+    </Dialog>
+  );
+};
+
+/** A document (`/Documentation/Documents/:id`): what it is, the revision in force, who owns it, and its revisions. */
 const DocumentPage = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const query = useDocument(id);
+  const start = useDocumentMutation();
+  const { showToast } = useToast();
   const [editing, setEditing] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
   const doc = query.data;
   useBreadcrumbNames([
     { path: `/Documentation/Documents/${id}`, label: doc ? `${doc.number} · ${doc.title}` : null },
@@ -89,12 +125,51 @@ const DocumentPage = () => {
           </div>
           <p className="text-lg text-primary-text">{doc.title}</p>
         </div>
-        {doc.canManage && (
-          <CTAButton type="secondary" icon={PencilIcon} onClick={() => setEditing(true)}>
-            Edit details
-          </CTAButton>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {doc.canStartRevision && (
+            <CTAButton
+              type="main"
+              icon={FilePlusIcon}
+              loading={start.isPending}
+              onClick={() =>
+                start.mutate(
+                  { action: "startRevision", id: doc.id },
+                  { onSuccess: (rev) => navigate(revisionPath(doc.id, rev.id)), onError: (err) => showToast({ type: "error", title: "Not started", message: describeApiError(err) }) },
+                )
+              }>
+              Start a new revision
+            </CTAButton>
+          )}
+          {doc.canManage && (
+            <CTAButton type="secondary" icon={PencilIcon} onClick={() => setEditing(true)}>
+              Edit details
+            </CTAButton>
+          )}
+          {doc.canIssue && doc.status === "active" && (
+            <CTAButton type="danger" icon={BanIcon} onClick={() => setWithdrawing(true)}>
+              Withdraw
+            </CTAButton>
+          )}
+        </div>
       </header>
+
+      {doc.status === "active" && doc.currentRevision && (
+        <Callout
+          tone="success"
+          title={`Rev ${doc.currentRevision.letter} is in force`}
+          action={
+            <CTAButton type="secondary" to={revisionPath(doc.id, doc.currentRevision.id)}>
+              Read it
+            </CTAButton>
+          }>
+          In force since {formatDay(doc.currentRevision.effectiveFrom)}.
+        </Callout>
+      )}
+      {doc.status === "withdrawn" && (
+        <Callout tone="error" title="Withdrawn">
+          {doc.withdrawReason} ({formatDay(doc.withdrawnAt)}). It is not in force anywhere.
+        </Callout>
+      )}
 
       {doc.status === "discarded" && (
         <Callout tone="warning" title="Discarded">
@@ -110,7 +185,11 @@ const DocumentPage = () => {
               {draft.status === "draft" && doc.canManage ? "Open the draft" : "Open it"}
             </CTAButton>
           }>
-          {doc.status === "draft" ? `The first revision will be rev ${doc.nextLetter} once it is submitted and approved.` : `The next revision will be rev ${doc.nextLetter}.`}
+          {draft.status === "approved"
+            ? `Rev ${draft.letter} is approved and takes effect on ${formatDay(draft.effectiveFrom)}.`
+            : draft.letter
+              ? `Rev ${draft.letter} is ${statusLabel(REVISION_STATUS, draft.status).toLowerCase()}.`
+              : `It becomes rev ${doc.nextLetter} when it is sent for review.`}
         </Callout>
       )}
 
@@ -141,6 +220,7 @@ const DocumentPage = () => {
                 </Link>
                 <span className="text-sm text-secondary-text">
                   {r.author?.name ?? "Unknown"} · started {formatDate(r.createdAt)}
+                  {r.effectiveFrom ? ` · effective ${formatDay(r.effectiveFrom)}` : ""}
                   {r.changeSummary ? ` · ${r.changeSummary}` : ""}
                   {r.discardReason ? ` · discarded: ${r.discardReason}` : ""}
                 </span>
@@ -152,6 +232,7 @@ const DocumentPage = () => {
       </MenuCard>
 
       {editing && <EditDialog doc={doc} onClose={() => setEditing(false)} />}
+      {withdrawing && <WithdrawDialog doc={doc} onClose={() => setWithdrawing(false)} />}
     </div>
   );
 };

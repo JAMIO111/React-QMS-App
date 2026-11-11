@@ -259,6 +259,11 @@ BEGIN
   PERFORM app.add_document_file(r.id, 'main', a || '/document/' || r.id || '/sweep.pdf', 'sweep.pdf', 'application/pdf', 1)
      FROM public.document_revisions r JOIN public.documents d ON d.id = r.document_id WHERE d.organisation_id = a AND d.title = 'Sweep form';
   PERFORM pg_temp.logout();
+  -- Document control (DC2): a named reviewer and a sign-off (one member in A, so seeded directly; people write through the functions).
+  INSERT INTO public.document_revision_reviewers (organisation_id, revision_id, user_id)
+    SELECT a, r.id, '50000000-0000-0000-0000-0000000000a1' FROM public.document_revisions r JOIN public.documents d ON d.id = r.document_id WHERE d.organisation_id = a AND d.title = 'Sweep procedure';
+  INSERT INTO public.document_signoffs (organisation_id, revision_id, round, role, user_id)
+    SELECT a, r.id, 1, 'reviewer', '50000000-0000-0000-0000-0000000000a1' FROM public.document_revisions r JOIN public.documents d ON d.id = r.document_id WHERE d.organisation_id = a AND d.title = 'Sweep procedure';
   -- Supplier quality (SQ1): the supplier's first status row exists already; classifications are seeded per organisation.
   INSERT INTO public.supplier_classification_links (organisation_id, supplier_id, classification_id)
     SELECT a, (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), id FROM public.supplier_classifications WHERE organisation_id = a AND key = 'welding';

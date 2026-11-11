@@ -3,10 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { PlusIcon } from "@/components/icons";
 import CTAButton from "@/components/CTAButton";
 import { usePermissions } from "../../hooks/useQmsApi";
-import { useDocuments, useDocumentTypes } from "../../hooks/useDocuments";
+import { useDocuments, useDocumentTypes, useWaitingReviews } from "../../hooks/useDocuments";
 import { useUrlFilters } from "../../hooks/useUrlFilters";
-import { contentKindLabel, DOCUMENT_STATUS, DOCUMENT_STATUS_OPTIONS, documentPath, REVISION_STATUS, statusLabel, statusPill } from "../../lib/documents";
+import { contentKindLabel, DOCUMENT_STATUS, DOCUMENT_STATUS_OPTIONS, documentPath, formatDay, REVISION_STATUS, revisionPath, statusLabel, statusPill } from "../../lib/documents";
 import { ErrorNotice, SearchBox } from "../master-data/shared";
+import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
 import LoadingScreen from "../ui/LoadingScreen";
 import SlidingToggle from "../ui/SlidingToggle";
@@ -18,6 +19,7 @@ const COLUMNS = [
   ["number", "Number"],
   ["title", "Title"],
   ["type", "Type"],
+  [null, "In force"],
   [null, "Content"],
   ["owner", "Owner"],
   [null, "In progress"],
@@ -34,6 +36,7 @@ const DocumentsPage = () => {
   const page = Number(f.page) || 1;
   const sort = f.sort || "number";
   const order = f.order || "asc";
+  const waiting = useWaitingReviews();
   const docs = useDocuments({ q: f.search, status: f.status, type: f.type, kind: f.kind, owner: f.owner, sort, order, page: f.page || undefined });
   const typeOptions = (types.data?.data ?? []).map((t) => ({ value: t.id, label: t.name, hint: t.prefix }));
 
@@ -52,6 +55,23 @@ const DocumentsPage = () => {
           </CTAButton>
         )}
       </header>
+
+      {waiting.data?.length > 0 && (
+        <Callout tone="info" title={`${waiting.data.length} waiting for you`}>
+          <ul aria-label="Waiting for you" className="flex flex-col gap-1">
+            {waiting.data.map((w) => (
+              <li key={w.revision.id}>
+                <Link to={revisionPath(w.document.id, w.revision.id)} className="font-medium hover:underline">
+                  {w.document.number} rev {w.revision.letter} · {w.document.title}
+                </Link>{" "}
+                <span className="text-secondary-text">
+                  — {w.role === "reviewer" ? "review it" : "approve it"} (since {formatDay(w.since)})
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Callout>
+      )}
 
       <div className="flex flex-wrap items-end gap-3">
         <SearchBox label="Search documents" onSearch={(v) => f.updateFilters({ search: v, page: "" })} />
@@ -107,6 +127,9 @@ const DocumentsPage = () => {
                   </td>
                   <td className="px-3 py-2 text-primary-text">{d.title}</td>
                   <td className="px-3 py-2 text-secondary-text">{d.type.name}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-secondary-text">
+                    {d.currentRevision && d.status === "active" ? `Rev ${d.currentRevision.letter} · ${formatDay(d.currentRevision.effectiveFrom)}` : "—"}
+                  </td>
                   <td className="px-3 py-2 text-secondary-text">{contentKindLabel(d.contentKind)}</td>
                   <td className="px-3 py-2 text-secondary-text">{d.owner?.name ?? "—"}</td>
                   <td className="px-3 py-2 text-secondary-text">{d.inProgress ? statusLabel(REVISION_STATUS, d.inProgress.status) : "—"}</td>

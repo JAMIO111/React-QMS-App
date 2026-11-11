@@ -21,6 +21,8 @@ export function notificationLink(n) {
       return "/CAPA/My-Actions";
     case "competence_assessments":
       return "/Competence/Mine";
+    case "document_signoffs":
+      return d.document_id && d.revision_id ? `/Documentation/Documents/${d.document_id}/revisions/${d.revision_id}` : "/Documentation/Documents";
     case "spc_alerts":
       return "/Process-Control/Alerts";
     case "parts":

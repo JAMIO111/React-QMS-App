@@ -2,11 +2,14 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { draftProblems, revisionLabel } from "../../lib/documents";
+import { revisionLabel } from "../../lib/documents";
+import { notificationLink } from "../../lib/notifications";
 
 let permissions = [];
 const mutate = vi.fn();
 const saveDraft = vi.fn();
+const setSigners = vi.fn();
+let waiting = [];
 const listCalls = [];
 const types = [
   { id: "t1", name: "Procedure", prefix: "SOP", description: null, reviewMonths: 24, contentHint: "text", sequence: 1, active: true, documents: 2 },
@@ -18,13 +21,15 @@ const docRow = {
   revisionCount: 1, createdAt: "2026-11-10T08:00:00Z", updatedAt: "2026-11-10T08:00:00Z",
 };
 const document = {
-  ...docRow, nextLetter: "A", canManage: true,
+  ...docRow, nextLetter: "A", canManage: true, canIssue: true, canStartRevision: false, currentRevision: null, withdrawReason: null, withdrawnAt: null,
   revisions: [{ id: "r1", sequence: 1, letter: null, status: "draft", author: { id: "u1", name: "Ann Owner" }, changeSummary: null, discardReason: null, discardedAt: null, createdAt: "2026-11-10T08:00:00Z" }],
 };
 const BODY = { type: "doc", content: [{ type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "Purpose" }] }, { type: "paragraph", content: [{ type: "text", text: "Quarantine suspect parts." }] }] };
 const textRevision = {
   id: "r1", document: { ...docRow, nextLetter: "A", canManage: true }, sequence: 1, letter: null, plannedLetter: "A", status: "draft", author: { id: "u1", name: "Ann Owner" },
   changeSummary: null, body: BODY, files: [], discardReason: null, discardedAt: null, discardedBy: null, canEdit: true,
+  problems: [], reviewers: [{ id: "u2", name: "Bob Bloggs" }], approver: { id: "u3", name: "Quinn Manager" }, reviewRound: 0, signoffs: [], myTurn: null,
+  previousRevisionId: null, effectiveFrom: null, approvedBy: null,
 };
 let revision = textRevision;
 
@@ -41,6 +46,13 @@ vi.mock("../../hooks/useDocuments", () => ({
   useDocumentFileMutation: () => ({ mutate, isPending: false, error: null, reset: vi.fn() }),
   useSaveDraft: () => ({ mutate: saveDraft, isPending: false }),
   useToggleDocumentType: () => ({ mutate }),
+  useWaitingReviews: () => ({ data: waiting }),
+  useDocumentSigners: () => ({ data: [{ id: "u1", name: "Ann Owner", canApprove: true }, { id: "u2", name: "Bob Bloggs", canApprove: false }, { id: "u3", name: "Quinn Manager", canApprove: true }, { id: "u4", name: "Dee Doe", canApprove: false }] }),
+  useSetSigners: () => ({ mutate: setSigners }),
+  useDocumentCompare: () => ({
+    data: { against: { id: "r0", label: "Rev A" }, text: [{ kind: "same", text: "Purpose", block: "Heading 1" }, { kind: "removed", text: "Old step", block: "Paragraph" }, { kind: "added", text: "New step", block: "Paragraph" }], textSummary: { added: 1, removed: 1, same: 1 }, files: [] },
+    isLoading: false,
+  }),
 }));
 vi.mock("../ui/FileDrop", () => ({ AttachmentDrop: ({ title, extraBody }) => <div data-testid={`drop-${extraBody.role}`}>{title}</div> }));
 
@@ -52,6 +64,8 @@ import SettingsDocuments from "../Settings/SettingsDocuments";
 beforeEach(() => {
   mutate.mockReset();
   saveDraft.mockReset();
+  setSigners.mockReset();
+  waiting = [];
   listCalls.length = 0;
   revision = textRevision;
   permissions = ["documentation.read", "documentation.manage"];
@@ -120,7 +134,7 @@ describe("document page", () => {
   it("shows the details, the draft in progress and the revisions", () => {
     at("/Documentation/Documents/d1", "/Documentation/Documents/:id", <DocumentPage />);
     expect(screen.getByRole("heading", { name: "SOP-001" })).toBeInTheDocument();
-    expect(screen.getByText(/first revision will be rev A/)).toBeInTheDocument();
+    expect(screen.getByText(/becomes rev A when it is sent for review/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open the draft" })).toHaveAttribute("href", "/Documentation/Documents/d1/revisions/r1");
     expect(within(screen.getByRole("list", { name: "Revisions" })).getByRole("link", { name: "Draft (will be rev A)" })).toBeInTheDocument();
   });
@@ -143,6 +157,7 @@ describe("revision page", () => {
     expect(screen.getByRole("toolbar", { name: "Formatting" })).toBeInTheDocument();
     expect(screen.getByLabelText("Document text")).toHaveTextContent("Quarantine suspect parts.");
     expect(screen.getByText(/has what it needs/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send for review" })).toBeEnabled();
     await userEvent.type(screen.getByRole("textbox", { name: "Change summary" }), "First issue");
     await userEvent.tab();
     expect(saveDraft).toHaveBeenCalledWith({ changeSummary: "First issue" }, expect.anything());
@@ -151,7 +166,7 @@ describe("revision page", () => {
   });
 
   it("asks for a main file on a file draft and shows it read-only to someone who cannot edit", () => {
-    revision = { ...textRevision, body: null, document: { ...textRevision.document, contentKind: "file" } };
+    revision = { ...textRevision, body: null, problems: ["Upload the main file"], document: { ...textRevision.document, contentKind: "file" } };
     const { unmount } = at("/Documentation/Documents/d1/revisions/r1", "/Documentation/Documents/:id/revisions/:revisionId", <RevisionPage />);
     expect(screen.getByText("Upload the main file")).toBeInTheDocument();
     expect(screen.getByTestId("drop-main")).toBeInTheDocument();
@@ -199,13 +214,105 @@ describe("settings: document types", () => {
   });
 });
 
+describe("review and approval", () => {
+  const open = () => at("/Documentation/Documents/d1/revisions/r1", "/Documentation/Documents/:id/revisions/:revisionId", <RevisionPage />);
+
+  it("names reviewers and the approver (not the author; only those who can approve) and sends it for review", async () => {
+    open();
+    await userEvent.click(screen.getByRole("combobox", { name: /Reviewers/ }));
+    expect(screen.queryByRole("option", { name: /Ann Owner/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("option", { name: /Dee Doe/ }));
+    expect(setSigners).toHaveBeenCalledWith(expect.objectContaining({ reviewerIds: ["u2", "u4"], approverId: "u3" }), expect.anything());
+    await userEvent.click(screen.getByRole("button", { name: "Remove Bob Bloggs" }));
+    expect(setSigners.mock.calls[1][0]).toMatchObject({ reviewerIds: [], approverId: "u3" });
+    await userEvent.click(screen.getByRole("combobox", { name: /Approver/ }));
+    expect(screen.getByRole("option", { name: /Bob Bloggs/ })).toHaveAttribute("aria-disabled", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Send for review" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "submit", id: "r1" }, expect.anything());
+  });
+
+  it("keeps Send for review off while something is still needed", () => {
+    revision = { ...textRevision, problems: ["Name the approver"] };
+    open();
+    expect(screen.getByText("Name the approver")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send for review" })).toBeDisabled();
+  });
+
+  it("lets a reviewer accept, or send back with what needs changing", async () => {
+    revision = {
+      ...textRevision, status: "in_review", letter: "A", canEdit: false, reviewRound: 1, myTurn: "review",
+      signoffs: [{ id: "s1", round: 1, role: "reviewer", person: { id: "u2", name: "Bob Bloggs" }, decision: "pending", comment: null, decidedAt: null }],
+    };
+    open();
+    expect(screen.getByText("Your review is needed")).toBeInTheDocument();
+    expect(screen.queryByRole("toolbar")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Accept" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "review", id: "r1", body: { accept: true } }, expect.anything());
+    await userEvent.click(screen.getByRole("button", { name: "Send back" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Send back" })).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("What needs changing?"), "Add the label");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Send back" }));
+    expect(mutate).toHaveBeenLastCalledWith({ action: "review", id: "r1", body: { accept: false, comment: "Add the label" } }, expect.anything());
+  });
+
+  it("lets the approver approve with the date it takes effect", async () => {
+    revision = { ...textRevision, status: "awaiting_approval", letter: "A", canEdit: false, reviewRound: 1, myTurn: "approve" };
+    open();
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/in force as soon as you approve it/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Approve" }));
+    expect(mutate.mock.calls[0][0]).toMatchObject({ action: "approve", id: "r1", body: { effectiveFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) } });
+  });
+
+  it("shows the sign-offs of every round and what changed against the last revision", async () => {
+    revision = {
+      ...textRevision, status: "draft", letter: "B", sequence: 2, reviewRound: 1, previousRevisionId: "r0",
+      signoffs: [{ id: "s1", round: 1, role: "reviewer", person: { id: "u2", name: "Bob Bloggs" }, decision: "returned", comment: "Add the label", decidedAt: "2026-11-10T09:00:00Z" }],
+    };
+    open();
+    expect(screen.getByText("Sent back")).toBeInTheDocument();
+    expect(screen.getByText(/Bob Bloggs: Add the label/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Compare" }));
+    const changes = screen.getByRole("list", { name: "Text changes" });
+    expect(within(changes).getByText("New step").closest("li")).toHaveTextContent("Added:");
+    expect(within(changes).getByText("Old step").closest("li")).toHaveTextContent("Removed:");
+  });
+
+  it("lists what is waiting for the person on the register", () => {
+    waiting = [{ role: "approver", since: "2026-11-10T09:00:00Z", revision: { id: "r1", letter: "A", status: "awaiting_approval" }, document: { id: "d1", number: "SOP-001", title: "Control" }, author: "Ann" }];
+    render(<MemoryRouter><DocumentsPage /></MemoryRouter>);
+    const list = screen.getByRole("list", { name: "Waiting for you" });
+    expect(within(list).getByRole("link", { name: /SOP-001 rev A/ })).toHaveAttribute("href", "/Documentation/Documents/d1/revisions/r1");
+    expect(within(list).getByText(/approve it/)).toBeInTheDocument();
+  });
+});
+
+describe("document in force", () => {
+  it("shows the revision in force, starts a new revision and withdraws with a reason", async () => {
+    Object.assign(document, { status: "active", inProgress: null, canStartRevision: true, currentRevision: { id: "r1", letter: "A", effectiveFrom: "2026-11-10" } });
+    try {
+      at("/Documentation/Documents/d1", "/Documentation/Documents/:id", <DocumentPage />);
+      expect(screen.getByText("Rev A is in force")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Start a new revision" }));
+      expect(mutate).toHaveBeenCalledWith({ action: "startRevision", id: "d1" }, expect.anything());
+      await userEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+      const dialog = screen.getByRole("dialog");
+      await userEvent.type(within(dialog).getByLabelText("Why?"), "Replaced by the manual");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Withdraw" }));
+      expect(mutate).toHaveBeenLastCalledWith({ action: "withdraw", id: "d1", body: { reason: "Replaced by the manual" } }, expect.anything());
+    } finally {
+      Object.assign(document, { status: "draft", inProgress: { id: "r1", status: "draft", sequence: 1 }, canStartRevision: false, currentRevision: null });
+    }
+  });
+});
+
 describe("helpers", () => {
-  it("labels revisions and lists what a draft still needs", () => {
+  it("labels revisions and links a sign-off notice to its revision", () => {
     expect(revisionLabel({ letter: "B", status: "effective" })).toBe("Rev B");
     expect(revisionLabel({ letter: null, status: "draft" }, "C")).toBe("Draft (will be rev C)");
     expect(revisionLabel({ letter: null, status: "discarded", sequence: 2 })).toBe("Draft 2 (discarded)");
-    expect(draftProblems({ ...textRevision, body: { type: "doc", content: [{ type: "paragraph" }] } })).toEqual(["Write the document's text"]);
-    expect(draftProblems({ ...textRevision, sequence: 2 })).toEqual(["Say what changed and why"]);
-    expect(draftProblems({ ...textRevision, status: "in_review" })).toEqual([]);
+    expect(notificationLink({ entityType: "document_signoffs", details: { document_id: "d1", revision_id: "r1" } })).toBe("/Documentation/Documents/d1/revisions/r1");
   });
 });

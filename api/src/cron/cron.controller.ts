@@ -68,6 +68,17 @@ export class CronController {
     return this.cron.expireQualityAlerts(resolveCorrelationId(req));
   }
 
+  @Get('settle-documents')
+  settleDocumentsGet(@Req() req: ApiRequest) {
+    return this.cron.settleDocuments(resolveCorrelationId(req));
+  }
+
+  @Post('settle-documents')
+  @HttpCode(200)
+  settleDocumentsPost(@Req() req: ApiRequest) {
+    return this.cron.settleDocuments(resolveCorrelationId(req));
+  }
+
   @Get('integration-schedule')
   integrationScheduleGet(@Req() req: ApiRequest, @Query() query: unknown) {
     return this.cron.integrationSchedule(parse(IntegrationRunsQuery, query).limit, resolveCorrelationId(req));

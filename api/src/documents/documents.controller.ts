@@ -1,11 +1,12 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
-  CreateDocumentBody, CreateTypeBody, DocumentFileBody, DocumentListQuery, DocumentType, ReasonBody, TypeListQuery, UpdateDocumentBody, UpdateRevisionBody, UpdateTypeBody,
+  ApproveBody, CommentBody, CompareQuery, CreateDocumentBody, CreateTypeBody, DocumentFileBody, DocumentListQuery, DocumentType, ReasonBody, ReviewBody, SignersBody,
+  TypeListQuery, UpdateDocumentBody, UpdateRevisionBody, UpdateTypeBody,
 } from './documents.schemas';
 import { DocumentsService } from './documents.service';
 
@@ -139,5 +140,89 @@ export class DocumentsController {
   @ApiOkResponse({ description: 'Brings a removed file back' })
   restoreFile(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.restoreFile(ctx, parse(Uuid, id));
+  }
+
+  // ---- review, approval and effect (DC2) -------------------------------------------------------------
+
+  @Get('document-signers')
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'Active members who may be named as reviewers or approver (`canApprove`: holds documentation.issue)' })
+  signers(@Ctx() ctx: RequestContext) {
+    return this.service.signerCandidates(ctx);
+  }
+
+  @Get('document-reviews/mine')
+  @OrganisationScoped()
+  @ApiOkResponse({ description: 'Revisions waiting for the caller to review or approve' })
+  waiting(@Ctx() ctx: RequestContext) {
+    return this.service.waiting(ctx);
+  }
+
+  @Put('document-revisions/:id/signers')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(SignersBody) })
+  @ApiOkResponse({ description: 'Names the reviewers (replaced as a whole) and the approver of a draft; none of them the author' })
+  setSigners(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setSigners(ctx, parse(Uuid, id), parse(SignersBody, body));
+  }
+
+  @Post('document-revisions/:id/submit')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'Sends a draft for review: gives it its letter (the first time) and starts a review round' })
+  submit(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.submit(ctx, parse(Uuid, id));
+  }
+
+  @Post('document-revisions/:id/review')
+  @HttpCode(200)
+  @OrganisationScoped()
+  @ApiBody({ schema: openApiSchema(ReviewBody) })
+  @ApiOkResponse({ description: 'A named reviewer accepts, or sends it back with a comment (back to draft; every review starts again)' })
+  review(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.review(ctx, parse(Uuid, id), parse(ReviewBody, body));
+  }
+
+  @Post('document-revisions/:id/approve')
+  @HttpCode(200)
+  @OrganisationScoped('documentation.issue')
+  @ApiBody({ schema: openApiSchema(ApproveBody) })
+  @ApiOkResponse({ description: 'The named approver approves with the date it takes effect (today or later); never the author' })
+  approve(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.approve(ctx, parse(Uuid, id), parse(ApproveBody, body));
+  }
+
+  @Post('document-revisions/:id/send-back')
+  @HttpCode(200)
+  @OrganisationScoped()
+  @ApiBody({ schema: openApiSchema(CommentBody) })
+  @ApiOkResponse({ description: 'The named approver returns it to draft with a comment' })
+  sendBack(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.sendBack(ctx, parse(Uuid, id), parse(CommentBody, body).comment);
+  }
+
+  @Get('document-revisions/:id/compare')
+  @OrganisationScoped()
+  @ApiQuery({ name: 'with', required: false, description: 'Another revision of the same document (default: the one it was started from)' })
+  @ApiOkResponse({ description: 'Blocks of text added, removed and kept; files added, removed and kept' })
+  compare(@Ctx() ctx: RequestContext, @Param('id') id: string, @Query() query: unknown) {
+    return this.service.compare(ctx, parse(Uuid, id), parse(CompareQuery, query).with);
+  }
+
+  @Post('documents/:id/revisions')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiCreatedResponse({ description: 'Starts a new draft from the revision in force (text and files copied)' })
+  startRevision(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.startRevision(ctx, parse(Uuid, id));
+  }
+
+  @Post('documents/:id/withdraw')
+  @HttpCode(200)
+  @OrganisationScoped('documentation.issue')
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ description: 'Withdraws a document in force (reason kept); a draft in progress is left alone' })
+  withdraw(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.withdraw(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
   }
 }

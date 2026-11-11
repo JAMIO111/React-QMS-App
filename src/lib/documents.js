@@ -55,18 +55,19 @@ export const revisionPath = (documentId, revisionId) => `/Documentation/Document
 export const cleanPrefix = (value) => (value ?? "").toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 10);
 export const prefixProblem = (prefix) => (!prefix ? "Give a prefix" : /^[A-Z0-9][A-Z0-9-]{0,9}$/.test(prefix) ? null : "Start with a letter or a digit");
 
-/** What still stops a draft being ready for review (shown on the revision page; submitting arrives in DC2). */
-export const draftProblems = (revision) => {
-  if (!revision || revision.status !== "draft") return [];
-  const problems = [];
-  if (revision.document.contentKind === "text") {
-    const hasText = JSON.stringify(revision.body ?? {}).includes('"text":"');
-    if (!hasText) problems.push("Write the document's text");
-  } else if (!revision.files.some((f) => f.role === "main" && !f.deletedAt)) {
-    problems.push("Upload the main file");
-  }
-  if (revision.sequence > 1 && !revision.changeSummary) problems.push("Say what changed and why");
-  return problems;
+export const SIGNOFF_DECISION = {
+  pending: { label: "Waiting", tone: "warning" },
+  accepted: { label: "Accepted", tone: "success" },
+  approved: { label: "Approved", tone: "success" },
+  returned: { label: "Sent back", tone: "error" },
+  closed: { label: "Not needed", tone: "neutral" },
+};
+
+/** "11 Nov 2026" from an ISO date or timestamp. */
+export const formatDay = (value) => {
+  if (!value) return "—";
+  const d = new Date(value.length === 10 ? `${value}T00:00:00` : value);
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 };
 
 /** An empty editor document. */

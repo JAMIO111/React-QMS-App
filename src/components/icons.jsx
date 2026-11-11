@@ -138,6 +138,7 @@ import {
   Heading3 as LucideHeading3,
   ListOrdered as LucideListOrdered,
   Redo2 as LucideRedo2,
+  FilePlus as LucideFilePlus,
 } from "lucide-react";
 
 const withDefaults = (Icon) => {
@@ -262,6 +263,7 @@ export const CoinsIcon = withDefaults(LucideCoins);
 export const ImageIcon = withDefaults(LucideImage);
 export const HourglassIcon = withDefaults(LucideHourglass);
 export const TableIcon = withDefaults(LucideTable);
+export const FilePlusIcon = withDefaults(LucideFilePlus);
 export const BoldIcon = withDefaults(LucideBold);
 export const ItalicIcon = withDefaults(LucideItalic);
 export const Heading1Icon = withDefaults(LucideHeading1);

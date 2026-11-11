@@ -79,6 +79,20 @@ export const useDocumentMutation = () => {
           return send(`/document-files/${id}/delete`);
         case "restoreFile":
           return send(`/document-files/${id}/restore`);
+        case "setSigners":
+          return send(`/document-revisions/${id}/signers`, "PUT");
+        case "submit":
+          return send(`/document-revisions/${id}/submit`);
+        case "review":
+          return send(`/document-revisions/${id}/review`);
+        case "approve":
+          return send(`/document-revisions/${id}/approve`);
+        case "sendBack":
+          return send(`/document-revisions/${id}/send-back`);
+        case "startRevision":
+          return send(`/documents/${id}/revisions`);
+        case "withdraw":
+          return send(`/documents/${id}/withdraw`);
         default:
           throw new Error(`Unknown action ${action}`);
       }
@@ -136,6 +150,58 @@ export const useToggleDocumentType = () => {
       return { previous };
     },
     onError: (_err, _vars, context) => context?.previous?.forEach(([k, v]) => queryClient.setQueryData(k, v)),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** Members who may be named as reviewers or approver (`canApprove`), for document managers. */
+export const useDocumentSigners = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "signers"),
+    queryFn: () => apiFetch("/document-signers", { organisationId }).then((r) => r.data),
+    enabled: !!organisationId && enabled,
+    staleTime: 1000 * 60 * 5,
+  });
+};
+
+/** Revisions waiting for the signed-in person to review or approve. */
+export const useWaitingReviews = () => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "waiting"),
+    queryFn: () => apiFetch("/document-reviews/mine", { organisationId }).then((r) => r.data),
+    enabled: !!organisationId,
+    retry: false,
+  });
+};
+
+/** A revision compared with the one it was started from (or `withId`). */
+export const useDocumentCompare = (revisionId, { withId, enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "compare", revisionId, withId ?? null),
+    queryFn: () => apiFetch(`/document-revisions/${revisionId}/compare${withId ? `?with=${withId}` : ""}`, { organisationId }),
+    enabled: !!organisationId && !!revisionId && enabled,
+    retry: false,
+  });
+};
+
+/** Naming the reviewers and approver of a draft: shown at once, put back on error. */
+export const useSetSigners = (revisionId) => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  const revKey = key(organisationId, "revision", revisionId);
+  return useMutation({
+    mutationFn: ({ reviewerIds, approverId }) => apiFetch(`/document-revisions/${revisionId}/signers`, { method: "PUT", body: { reviewerIds, approverId }, organisationId }),
+    onMutate: async ({ reviewers, approver }) => {
+      await queryClient.cancelQueries({ queryKey: revKey });
+      const previous = queryClient.getQueryData(revKey);
+      if (previous) queryClient.setQueryData(revKey, { ...previous, reviewers, approver });
+      return { previous };
+    },
+    onError: (_err, _vars, context) => context?.previous && queryClient.setQueryData(revKey, context.previous),
+    onSuccess: (data) => queryClient.setQueryData(revKey, data),
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };

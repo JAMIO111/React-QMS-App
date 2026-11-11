@@ -66,6 +66,12 @@ export class CronService {
   }
 
   /** Expires every active quality alert past its expiry date, in every organisation, and logs each in the alert's history. Safe to run as often as you like. */
+  /** Approved document revisions whose effective date has come take effect, for organisations nobody opened today (DC2). */
+  async settleDocuments(correlationId: string): Promise<{ settled: number }> {
+    const settled = await this.database.asApi(async (client) => Number((await client.query(`select app.system_settle_documents() as n`)).rows[0].n), correlationId);
+    return { settled };
+  }
+
   async expireQualityAlerts(correlationId: string): Promise<{ expired: number }> {
     const expired = await this.database.asApi(async (client) => Number((await client.query(`select app.system_expire_quality_alerts() as n`)).rows[0].n), correlationId);
     return { expired };

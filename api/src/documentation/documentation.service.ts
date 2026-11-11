@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { todayIn } from '../supplier-quality/expiry';
 import { sql, SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
@@ -218,7 +219,7 @@ export class DocumentationService {
         left join public.profiles p on p.id = r.user_id
         where r.alert_id = ${id}::uuid and r.organisation_id = ${orgOf(ctx)}::uuid
         order by (r.acknowledged_at is not null), name`);
-      const overdueOn = alert.status === 'active' && !!alert.acknowledgeBy && alert.acknowledgeBy < new Date().toISOString().slice(0, 10);
+      const overdueOn = alert.status === 'active' && !!alert.acknowledgeBy && alert.acknowledgeBy < todayIn(ctx.timeZone);
       const data = rows.rows.map((r) => ({
         id: r.id as string,
         membershipId: r.membership_id as string,
@@ -273,7 +274,7 @@ export class DocumentationService {
           if (!a) return [];
           const summary = toSummary(a);
           const acknowledged = !!m.acknowledged_at;
-          const overdue = !acknowledged && summary.status === 'active' && !!summary.acknowledgeBy && summary.acknowledgeBy < new Date().toISOString().slice(0, 10);
+          const overdue = !acknowledged && summary.status === 'active' && !!summary.acknowledgeBy && summary.acknowledgeBy < todayIn(ctx.timeZone);
           const state: 'open' | 'acknowledged' | 'closed' = summary.status !== 'active' ? 'closed' : acknowledged ? 'acknowledged' : 'open';
           return [{ ...summary, state, me: { firstViewedAt: iso(m.first_viewed_at), acknowledgedAt: iso(m.acknowledged_at), note: (m.acknowledgement_note as string) ?? null, reachedVia: m.reached_via as string[], overdue } }];
         })
@@ -470,7 +471,7 @@ export class DocumentationService {
             acknowledgedAt: iso(m.acknowledged_at),
             note: (m.acknowledgement_note as string) ?? null,
             reachedVia: m.reached_via as string[],
-            overdue: !m.acknowledged_at && summary.status === 'active' && !!summary.acknowledgeBy && summary.acknowledgeBy < new Date().toISOString().slice(0, 10),
+            overdue: !m.acknowledged_at && summary.status === 'active' && !!summary.acknowledgeBy && summary.acknowledgeBy < todayIn(ctx.timeZone),
           }
         : null,
       description: (r.description as string) ?? null,

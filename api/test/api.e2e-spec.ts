@@ -7,6 +7,7 @@ import { sql } from 'drizzle-orm';
 import { Pool } from 'pg';
 import request from 'supertest';
 import { DatabaseService } from '../src/database/database.service';
+import { todayIn } from '../src/supplier-quality/expiry';
 import { ids, requireDb, seed, startApp, token } from './helpers';
 
 let app: INestApplication;
@@ -182,6 +183,18 @@ describe('database access runs as the caller (RLS + audit context)', () => {
       return r.rows[0];
     });
     expect(row).toEqual({ role: 'authenticated', uid: ids.ownerA });
+  });
+
+  it('runs the request in the caller’s time zone, so current_date is their today (audit M14)', async () => {
+    const db = app.get(DatabaseService);
+    const today = async (timeZone?: string) =>
+      db.asUser({ ...ctx(ids.ownerA), timeZone }, async (tx) => (await tx.execute<{ d: string; tz: string }>(sql`select current_date::text as d, current_setting('TimeZone') as tz`)).rows[0]);
+    const kiritimati = await today('Pacific/Kiritimati');
+    expect(kiritimati.tz).toBe('Pacific/Kiritimati');
+    expect(kiritimati.d).toBe(todayIn('Pacific/Kiritimati'));
+    const samoa = await today('Pacific/Pago_Pago');
+    expect(samoa.d).toBe(todayIn('Pacific/Pago_Pago'));
+    expect((await today()).tz).toBe('UTC');
   });
 
   it('only sees the caller’s tenant data', async () => {

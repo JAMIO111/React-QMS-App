@@ -5,7 +5,7 @@ import { iso, personName, Row } from '../calibration/calibration.service';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
-import { expiryOf, todayUtc } from './expiry';
+import { expiryOf, todayIn } from './expiry';
 import {
   CreateCertificationBody, CreateDocumentBody, ReasonBody, RenewCertificationBody, SupplierCertification, SupplierDocument, UpdateCertificationBody, UpdateDocumentBody, VerifyBody,
   Watchlist, WatchlistQuery,
@@ -98,7 +98,7 @@ export class SupplierQualificationService {
       await this.assertSupplier(db, ctx, supplierId);
       const rows = await db.execute<Row>(sql`${DOCUMENT_SELECT} where d.supplier_id = ${supplierId}::uuid and d.organisation_id = ${orgOf(ctx)}::uuid
         order by (d.status = 'current') desc, d.created_at desc`);
-      const today = todayUtc();
+      const today = todayIn(ctx.timeZone);
       return { data: rows.rows.map((r) => toDocument(r, today)) };
     });
   }
@@ -106,7 +106,7 @@ export class SupplierQualificationService {
   private async loadDocument(db: Db, ctx: RequestContext, id: string): Promise<SupplierDocument> {
     const rows = await db.execute<Row>(sql`${DOCUMENT_SELECT} where d.id = ${id}::uuid and d.organisation_id = ${orgOf(ctx)}::uuid`);
     if (!rows.rows.length) throw ApiError.notFound('supplier_document_not_found', 'Document not found');
-    return toDocument(rows.rows[0], todayUtc());
+    return toDocument(rows.rows[0], todayIn(ctx.timeZone));
   }
 
   createDocument(ctx: RequestContext, supplierId: string, b: CreateDocumentBody): Promise<SupplierDocument> {
@@ -150,7 +150,7 @@ export class SupplierQualificationService {
       await this.assertSupplier(db, ctx, supplierId);
       const rows = await db.execute<Row>(sql`${CERT_SELECT} where c.supplier_id = ${supplierId}::uuid and c.organisation_id = ${orgOf(ctx)}::uuid
         order by (c.status = 'current') desc, c.expires_on nulls last, c.created_at desc`);
-      const today = todayUtc();
+      const today = todayIn(ctx.timeZone);
       return { data: rows.rows.map((r) => toCertification(r, today)) };
     });
   }
@@ -158,7 +158,7 @@ export class SupplierQualificationService {
   private async loadCertification(db: Db, ctx: RequestContext, id: string): Promise<SupplierCertification> {
     const rows = await db.execute<Row>(sql`${CERT_SELECT} where c.id = ${id}::uuid and c.organisation_id = ${orgOf(ctx)}::uuid`);
     if (!rows.rows.length) throw ApiError.notFound('supplier_certification_not_found', 'Certification not found');
-    return toCertification(rows.rows[0], todayUtc());
+    return toCertification(rows.rows[0], todayIn(ctx.timeZone));
   }
 
   createCertification(ctx: RequestContext, supplierId: string, b: CreateCertificationBody): Promise<SupplierCertification> {
@@ -209,7 +209,7 @@ export class SupplierQualificationService {
    */
   watchlist(ctx: RequestContext, q: WatchlistQuery): Promise<z.infer<typeof Watchlist>> {
     return this.database.asUser(ctx, async (db) => {
-      const today = todayUtc();
+      const today = todayIn(ctx.timeZone);
       const wantCerts = q.kind !== 'document';
       const wantDocs = q.kind !== 'certification';
       const certs = wantCerts

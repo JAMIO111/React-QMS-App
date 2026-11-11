@@ -4,7 +4,7 @@ import { iso, personName, Row } from '../calibration/calibration.service';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
-import { todayUtc } from './expiry';
+import { todayIn } from './expiry';
 import { RecordRiskAssessmentBody, RiskAssessment, RiskModel, RiskScoresBody, RiskScoring, SaveRiskModelBody } from './supplier-risk.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -92,7 +92,7 @@ export class SupplierRiskService {
       from public.supplier_risk_assessments a left join public.profiles p on p.id = a.assessed_by
       where a.supplier_id = ${supplierId}::uuid and a.organisation_id = ${orgOf(ctx)}::uuid ${onlyId ? sql`and a.id = ${onlyId}::uuid` : sql``}
       order by (a.status = 'current') desc, a.assessed_at desc, a.id`);
-    const today = todayUtc();
+    const today = todayIn(ctx.timeZone);
     return rows.rows.map((a) => ({
       ...toScoring({ modelVersion: a.model_version, index: a.risk_index, band: a.band, rating: a.rating, escalatedBy: a.escalated_by, factors: a.factors }),
       id: a.id as string,

@@ -1,4 +1,5 @@
 import { ncrPath } from "./ncr";
+import { localDay } from "./localDate";
 
 /** Shared definitions for supplier performance (SQ5). */
 export const METRIC_LABELS = {
@@ -27,12 +28,11 @@ export const PERIODS = [
 ];
 export const DEFAULT_PERIOD = "90";
 
-const day = (d) => d.toISOString().slice(0, 10);
-/** The period ending today (UTC) and covering `days` days. */
+/** The period ending today (the person's own calendar day) and covering `days` days. */
 export const periodFor = (days, now = new Date()) => {
-  const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const from = new Date(to.getTime() - (Number(days) - 1) * 86_400_000);
-  return { from: day(from), to: day(to) };
+  const to = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const from = new Date(to.getFullYear(), to.getMonth(), to.getDate() - (Number(days) - 1));
+  return { from: localDay(from), to: localDay(to) };
 };
 
 /** The two ways of measuring PPM. Both are always worked out; the model says which one scores. */

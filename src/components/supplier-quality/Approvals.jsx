@@ -15,6 +15,7 @@ import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import SlidingToggle from "../ui/SlidingToggle";
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import { ApprovalPill } from "./SupplierBadges";
+import { todayIso } from "@/lib/localDate";
 
 
 /** Propose approving a supplier (or approving it conditionally). Someone else decides. Without a passing assessment, the reason it is an exception is needed. */
@@ -49,7 +50,7 @@ const ProposeDialog = ({ supplier, assessments, onClose }) => {
         <ComboField label="Based on the assessment" value={assessmentId} onChange={setAssessmentId} placeholder="No assessment" options={completed.map((a) => ({ value: a.id, label: `${a.reference} · ${a.templateName}`, hint: `${a.result === "pass" ? "Pass" : "Fail"} · score ${a.score}` }))} hint={completed.length ? undefined : "No completed assessment yet. Start one on this tab, or give an exception reason below."} />
         <TextAreaField label="Rationale" required value={rationale} onChange={(e) => setRationale(e.target.value)} maxLength={1000} rows={3} hint="Why the supplier should be approved. It is kept in the status history." />
         {target === "conditional" && <TextAreaField label="Conditions or restrictions" required value={conditions} onChange={(e) => setConditions(e.target.value)} maxLength={2000} rows={2} hint="What the approval depends on, for example inspect every delivery" />}
-        <RHFDatePickerPopout label="Review on" valueFormat="iso" clearable value={reviewOn} onChange={(v) => setReviewOn(v ?? "")} minDate={new Date(Date.now() + 86400000).toISOString().slice(0, 10)} placeholder="No date set" />
+        <RHFDatePickerPopout label="Review on" valueFormat="iso" clearable value={reviewOn} onChange={(v) => setReviewOn(v ?? "")} minDate={todayIso(1)} placeholder="No date set" />
         {needsException && (
           <Callout tone="warning" title={chosen ? "The assessment did not pass" : "No assessment is linked"}>
             This approval is an exception and will be marked as one. Say why it should go ahead.

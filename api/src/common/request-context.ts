@@ -22,11 +22,26 @@ export interface RequestContext {
   /** Optional free-text reason for a change (X-Change-Reason), recorded in the audit trail. */
   reason?: string;
   organisationId?: string;
+  /** The person's IANA time zone (X-Time-Zone), validated; "UTC" when absent or unknown. Postgres runs the request in it, so current_date is their today. */
+  timeZone?: string;
 }
 
 export const CORRELATION_HEADER = 'x-correlation-id';
 const CORRELATION_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 const REASON_MAX = 500;
+const ZONE_PATTERN = /^[A-Za-z0-9_+\-/]{1,64}$/;
+
+/** A time zone name the runtime knows, else UTC. Never throws: a bad header must not break a request. */
+export function validTimeZone(value: unknown): string {
+  const zone = Array.isArray(value) ? value[0] : value;
+  if (typeof zone !== 'string' || !ZONE_PATTERN.test(zone)) return 'UTC';
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: zone });
+    return zone;
+  } catch {
+    return 'UTC';
+  }
+}
 
 /** Accepts a well-formed X-Correlation-Id or generates one; idempotent per request; echoes it back. */
 export function resolveCorrelationId(req: ApiRequest, res?: Response): string {
@@ -48,6 +63,7 @@ export function contextFrom(req: ApiRequest): RequestContext {
     correlationId: resolveCorrelationId(req),
     reason: reason || undefined,
     organisationId: req.organisationId,
+    timeZone: validTimeZone(req.headers['x-time-zone']),
   };
 }
 

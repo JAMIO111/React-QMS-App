@@ -23,3 +23,19 @@ describe('expiryOf', () => {
     expect(expiryOf('2026-11-14', today, 5).state).toBe('expiring');
   });
 });
+
+import { todayIn } from './expiry';
+
+describe('todayIn', () => {
+  const at = new Date('2026-11-10T22:30:00Z');
+  it('is the date in the zone, not in UTC', () => {
+    expect(todayIn('UTC', at)).toBe('2026-11-10');
+    expect(todayIn('Asia/Kolkata', at)).toBe('2026-11-11');
+    expect(todayIn('Pacific/Pago_Pago', at)).toBe('2026-11-10');
+    expect(todayIn('Pacific/Kiritimati', at)).toBe('2026-11-11');
+  });
+  it('uses UTC when the zone is missing or unknown', () => {
+    expect(todayIn(undefined, at)).toBe('2026-11-10');
+    expect(todayIn('Mars/Olympus', at)).toBe('2026-11-10');
+  });
+});

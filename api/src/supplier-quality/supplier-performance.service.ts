@@ -5,7 +5,7 @@ import { iso, personName, Row } from '../calibration/calibration.service';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
-import { todayUtc } from './expiry';
+import { todayIn } from './expiry';
 import { recommendInspection } from './inspection-recommendation';
 import { InspectionRecommendation, Performance, PerformanceOverrides, PerformanceQuery, RecommendationQuery, SaveModelBody, SaveScorecardBody, Scorecard, ScorecardConfig, ScorecardModel, ScorecardSummary, SupplierSettings, SupplierSettingsBody, Watchlist, WatchlistQuery } from './supplier-performance.schemas';
 
@@ -104,7 +104,7 @@ export class SupplierPerformanceService {
 
   /** The live figures for a period (default: the last 90 days). */
   performance(ctx: RequestContext, supplierId: string, q: PerformanceQuery): Promise<Performance> {
-    const to = q.to ?? todayUtc();
+    const to = q.to ?? todayIn(ctx.timeZone);
     const from = q.from ?? addDays(to, -89);
     return this.database.asUser(ctx, async (db) => {
       await this.assertSupplier(db, ctx, supplierId);
@@ -218,7 +218,7 @@ export class SupplierPerformanceService {
    * days, set beside the level its supplier-wide approved requirement gives today. INFORMATION ONLY: nothing is written.
    */
   recommendation(ctx: RequestContext, supplierId: string, q: RecommendationQuery): Promise<InspectionRecommendation> {
-    const to = todayUtc();
+    const to = todayIn(ctx.timeZone);
     const from = addDays(to, -(q.days - 1));
     return this.database.asUser(ctx, async (db) => {
       const sup = await db.execute<Row>(sql`select approval_status, risk_rating from public.suppliers where id = ${supplierId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);

@@ -16,8 +16,9 @@ import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import FindingDialog from "./FindingDialog";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
+import { todayIso } from "@/lib/localDate";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 
 const Fact = ({ label, children }) => (
   <div className="flex min-w-0 flex-col gap-0.5">

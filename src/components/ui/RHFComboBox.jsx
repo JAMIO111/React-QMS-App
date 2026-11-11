@@ -10,7 +10,7 @@ import { ChevronDownIcon, CircleAlertIcon, XIcon } from "@/components/icons";
  *   <Controller name="failureModeId" control={control}
  *     render={({ field, fieldState }) => <RHFComboBox {...field} error={fieldState.error} label="Failure mode" options={…} />} />
  *
- * Options: [{ id, name, hint?, disabled? }]. `name` is shown and searched; `hint` is a muted second
+ * Options: [{ id, name, hint?, keywords?, disabled? }] (`keywords` are extra words the search matches). `name` is shown and searched; `hint` is a muted second
  * line in the list. Options are sorted by name unless `sort={false}`.
  *
  * Server-side search: pass `onSearchChange(term)` and `filterLocally={false}`; keep the selected
@@ -75,8 +75,10 @@ const RHFComboBox = ({
       a.name.localeCompare(b.name),
     );
   if (filterLocally && term)
-    filteredOptions = filteredOptions.filter((opt) =>
-      opt.name.toLowerCase().includes(term),
+    filteredOptions = filteredOptions.filter(
+      (opt) =>
+        opt.name.toLowerCase().includes(term) ||
+        (opt.keywords && opt.keywords.toLowerCase().includes(term)),
     );
 
   const selectedOption =

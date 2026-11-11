@@ -14,9 +14,10 @@ import Field from "../ui/Field";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { PartPicker } from "../ncr/Pickers";
 import { FormError, TextAreaField } from "../master-data/shared";
+import { todayIso } from "@/lib/localDate";
 
-const today = () => new Date().toISOString().slice(0, 10);
-const inDays = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+const today = () => todayIso();
+const inDays = (n) => todayIso(n);
 let rowId = 0;
 const newRow = (over = {}) => ({ id: ++rowId, partId: null, material: "", quantity: "", unit: "", requestedOn: inDays(14), agreedOn: "", lotNumber: "", poLineId: null, label: null, include: true, ...over });
 

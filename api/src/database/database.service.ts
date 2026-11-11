@@ -38,8 +38,9 @@ export class DatabaseService implements OnModuleDestroy {
         `select set_config('request.jwt.claims', $1, true),
                 set_config('app.source', 'api', true),
                 set_config('app.correlation_id', $2, true),
-                set_config('app.reason', $3, true)`,
-        [JSON.stringify({ ...ctx.user.claims, role: 'authenticated' }), ctx.correlationId, ctx.reason ?? ''],
+                set_config('app.reason', $3, true),
+                set_config('TimeZone', $4, true)`,
+        [JSON.stringify({ ...ctx.user.claims, role: 'authenticated' }), ctx.correlationId, ctx.reason ?? '', ctx.timeZone || 'UTC'],
       );
       const result = await work(drizzle(client, { schema }), client);
       await client.query('COMMIT');

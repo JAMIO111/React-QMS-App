@@ -54,7 +54,7 @@ describe("sites", () => {
     const zone = within(dialog).getByRole("combobox", { name: "Time zone" });
     await userEvent.click(zone);
     await userEvent.type(zone, "Asia/Tokyo");
-    await userEvent.click(await screen.findByRole("option", { name: "Asia/Tokyo" }));
+    await userEvent.click(await screen.findByRole("option", { name: /^Asia\/Tokyo/ }));
     const currency = within(dialog).getByRole("combobox", { name: "Currency" });
     await userEvent.click(currency);
     await userEvent.type(currency, "JPY");

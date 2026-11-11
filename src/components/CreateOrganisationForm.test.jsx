@@ -52,7 +52,7 @@ describe("CreateOrganisationForm", () => {
     const zone = screen.getByRole("combobox", { name: "Time zone" });
     await userEvent.click(zone);
     await userEvent.type(zone, "Europe/Paris");
-    await userEvent.click(await screen.findByRole("option", { name: "Europe/Paris" }));
+    await userEvent.click(await screen.findByRole("option", { name: /^Europe\/Paris/ }));
     await userEvent.click(screen.getByRole("button", { name: "Create organisation" }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     expect(apiFetch.mock.calls[0][1].body.timeZone).toBe("Europe/Paris");

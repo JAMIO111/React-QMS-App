@@ -16,6 +16,7 @@ import { ActionsList, SeverityBadge, StatusPill } from "./shared";
 import AlertFiles from "./AlertFiles";
 import { LinkList } from "./AlertLinks";
 import CTAButton from "@/components/CTAButton";
+import { todayIso } from "@/lib/localDate";
 
 const Facts = ({ items }) => (
   <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
@@ -72,7 +73,7 @@ const ReopenDialog = ({ alert, onClose }) => {
   const mutation = useAlertMutation();
   const [expiry, setExpiry] = useState("");
   const [reason, setReason] = useState("");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   return (
     <Dialog title={`Reopen ${referenceText(alert)}`} onClose={onClose}>
       <form

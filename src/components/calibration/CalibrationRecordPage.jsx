@@ -39,8 +39,9 @@ import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import SlidingToggle from "../ui/SlidingToggle";
 import Callout from "../ui/Callout";
+import { todayIso } from "@/lib/localDate";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 const str = (v) => (v === null || v === undefined ? "" : String(v));
 const num = (v) => (v === "" || v === null || v === undefined ? null : Number(v));
 const isNum = (v) => v === "" || v === null || v === undefined || !Number.isNaN(Number(v));

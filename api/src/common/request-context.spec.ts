@@ -36,3 +36,17 @@ describe('contextFrom', () => {
     expect(() => contextFrom(req())).toThrow();
   });
 });
+
+describe('time zone', () => {
+  const zoneOf = (value?: string) => contextFrom({ user: { id: 'u', claims: {} }, headers: value === undefined ? {} : { 'x-time-zone': value } } as never).timeZone;
+  it('accepts a known zone, including the current names', () => {
+    expect(zoneOf('Asia/Kolkata')).toBe('Asia/Kolkata');
+    expect(zoneOf('Pacific/Auckland')).toBe('Pacific/Auckland');
+  });
+  it('falls back to UTC for nothing, rubbish or a name that is not a zone', () => {
+    expect(zoneOf()).toBe('UTC');
+    expect(zoneOf('Mars/Olympus')).toBe('UTC');
+    expect(zoneOf("UTC'; drop table x; --")).toBe('UTC');
+    expect(zoneOf('x'.repeat(200))).toBe('UTC');
+  });
+});

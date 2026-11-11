@@ -10,6 +10,7 @@ import { formatDate, formatDateTime } from "../../lib/processControl";
 import { FormError, SelectField, TextAreaField } from "../master-data/shared";
 import { ResultBadge } from "./shared";
 import CTAButton from "@/components/CTAButton";
+import { todayIso } from "@/lib/localDate";
 
 /**
  * The recording pieces of an in-process inspection, shared by the inspection page (/Inspections/:id) and the operator job hub (/Jobs/:id) so the two
@@ -18,7 +19,7 @@ import CTAButton from "@/components/CTAButton";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 
 /** Whether a gauge may be used for a requirement now, and why not. */
 const gaugeProblem = (gauge, requirement) => {

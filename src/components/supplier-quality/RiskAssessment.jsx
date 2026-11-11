@@ -12,6 +12,7 @@ import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import SlidingToggle from "../ui/SlidingToggle";
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import { RiskBadge } from "./SupplierBadges";
+import { todayIso } from "@/lib/localDate";
 
 const levelName = (n) => RISK_LEVELS.find((l) => l.value === n)?.label ?? String(n);
 
@@ -65,7 +66,7 @@ const AssessDialog = ({ supplier, model, onClose }) => {
   const [reviewOn, setReviewOn] = useState("");
   const all = model.factors.every((f) => scores[f.key]);
   const body = useMemo(() => model.factors.map((f) => ({ key: f.key, score: scores[f.key], note: notes[f.key]?.trim() || null })), [model, scores, notes]);
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const tomorrow = todayIso(1);
 
   useEffect(() => {
     if (!all) return undefined;

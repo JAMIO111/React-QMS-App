@@ -4,7 +4,7 @@ import { Row } from '../calibration/calibration.service';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService } from '../database/database.service';
-import { todayUtc } from './expiry';
+import { todayIn } from './expiry';
 import { Report, ReportQuery } from './supplier-reports.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -51,8 +51,8 @@ const AUDIT_DEFINITIONS = [
 export class SupplierReportsService {
   constructor(private readonly database: DatabaseService) {}
 
-  private period(q: ReportQuery) {
-    const to = q.to ?? todayUtc();
+  private period(ctx: RequestContext, q: ReportQuery) {
+    const to = q.to ?? todayIn(ctx.timeZone);
     const from = q.from ?? addDays(to, -89);
     if (Date.parse(to) - Date.parse(from) > 366 * 86_400_000) throw ApiError.badRequest('report_period', 'A report covers at most a year');
     return { from, to };
@@ -60,7 +60,7 @@ export class SupplierReportsService {
 
   /** Every active supplier scored over the period under the organisation's current model, in code order. */
   performance(ctx: RequestContext, q: ReportQuery): Promise<Report> {
-    const { from, to } = this.period(q);
+    const { from, to } = this.period(ctx, q);
     return this.database.asUser(ctx, async (db) => {
       const suppliers = await db.execute<Row>(sql`
         select id, code, name, approval_status, risk_rating from public.suppliers
@@ -110,7 +110,7 @@ export class SupplierReportsService {
 
   /** Audit records carried out on suppliers during the period, one row per record and supplier. */
   audits(ctx: RequestContext, q: ReportQuery): Promise<Report> {
-    const { from, to } = this.period(q);
+    const { from, to } = this.period(ctx, q);
     return this.database.asUser(ctx, async (db) => {
       const res = await db.execute<Row>(sql`
         select s.code as supplier, s.name as supplier_name, r.reference as record, r.audit_reference as audit, r.audit_title, r.audit_version, to_char(r.performed_on, 'YYYY-MM-DD') as performed_on,

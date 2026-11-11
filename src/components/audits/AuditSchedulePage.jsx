@@ -15,6 +15,7 @@ import Dialog from "../ui/Dialog";
 import { ErrorNotice, SelectField } from "../master-data/shared";
 import StartAuditDialog from "./StartAuditDialog";
 import SlidingToggle from "../ui/SlidingToggle";
+import { thisMonthIso } from "@/lib/localDate";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -206,7 +207,7 @@ const AuditSchedulePage = () => {
   const [starting, setStarting] = useState(false);
 
   const view = filters.view === "calendar" ? "calendar" : "list";
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  const thisMonth = thisMonthIso();
   const month = /^\d{4}-\d{2}$/.test(filters.month) ? filters.month : view === "calendar" ? thisMonth : "";
   const bounds = month ? monthBounds(month) : {};
   const { data, isLoading, error } = useAuditSchedule({

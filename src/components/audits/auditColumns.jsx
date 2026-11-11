@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { CalendarIcon, CircleCheckIcon, ClipboardListIcon, FactoryIcon, HashIcon, HistoryIcon, ListChecksIcon, TagIcon, UsersIcon } from "@/components/icons";
 import { formatDate } from "../../lib/ncr";
 import { auditTypeLabel, auditorLabel, frequencyLabel, RESULT_PILL, resultLabel } from "../../lib/audits";
+import { todayIso } from "@/lib/localDate";
 
 /** Audits register columns. `meta.sortKey` is the API sort field; columns without one cannot be sorted (the register is sorted and paged on the server). */
 const head = (Icon, label, cls = "table-header") => (
@@ -73,7 +74,7 @@ export const auditColumns = [
     (i) => {
       const due = i.row.original.nextDueOn;
       if (!due) return <div className="table-row-item text-secondary-text">—</div>;
-      const late = due < new Date().toISOString().slice(0, 10);
+      const late = due < todayIso();
       return <div className={`table-row-item ${late ? "font-medium text-warning-color" : ""}`}>{formatDate(due)}{late ? " (overdue)" : ""}</div>;
     },
     { size: 150, accessor: (r) => r.nextDueOn ?? "" }

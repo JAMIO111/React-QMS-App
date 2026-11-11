@@ -1,4 +1,5 @@
 import supabase from "../supabase-client";
+import { browserTimeZone } from "./timeZones";
 
 /** Base URL of the QMS API (see api/README.md). */
 export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
@@ -37,6 +38,9 @@ export async function apiFetch(path, { method = "GET", body, organisationId, rea
 
   const headers = { Accept: "application/json", "X-Correlation-Id": correlationId };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  // Tells the API which calendar day it is for this person, so "not in the future" and "overdue" use their today, not UTC.
+  const timeZone = browserTimeZone();
+  if (timeZone) headers["X-Time-Zone"] = timeZone;
   if (organisationId) headers["X-Organisation-Id"] = organisationId;
   if (reason) headers["X-Change-Reason"] = reason;
   if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;

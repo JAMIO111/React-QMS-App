@@ -8,6 +8,7 @@ import Dialog from "../ui/Dialog";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { ApprovalPill } from "./SupplierBadges";
 import CTAButton from "@/components/CTAButton";
+import { todayIso } from "@/lib/localDate";
 
 const field = "rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm font-normal text-primary-text focus:outline-none focus:border-brand-primary";
 
@@ -71,7 +72,7 @@ const StatusChangeDialog = ({ supplier, initial, onClose }) => {
           </label>
         )}
         {(conditional || status === "suspended") && (
-          <RHFDatePickerPopout label="Review on" valueFormat="iso" clearable value={reviewOn} onChange={setReviewOn} minDate={new Date().toISOString().slice(0, 10)} placeholder="No date set" />
+          <RHFDatePickerPopout label="Review on" valueFormat="iso" clearable value={reviewOn} onChange={setReviewOn} minDate={todayIso()} placeholder="No date set" />
         )}
         {approvalPossible && (
           <p className="text-xs text-secondary-text">

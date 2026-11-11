@@ -26,3 +26,12 @@ export const expiryOf = (expiresOn: string | null | undefined, today: string, wa
 };
 
 export const todayUtc = (now = new Date()) => now.toISOString().slice(0, 10);
+
+/** Today's date (yyyy-MM-dd) in an IANA time zone, e.g. the caller's (`ctx.timeZone`); UTC when the zone is missing or unknown. */
+export const todayIn = (timeZone?: string, now = new Date()): string => {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: timeZone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  } catch {
+    return todayUtc(now);
+  }
+};

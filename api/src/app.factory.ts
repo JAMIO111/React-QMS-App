@@ -30,7 +30,7 @@ export function configureApp(app: NestExpressApplication, env: Env): INestApplic
   app.enableCors({
     origin: corsOrigins(env),
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
-    allowedHeaders: ['Authorization', 'Content-Type', 'X-Organisation-Id', 'X-Correlation-Id', 'X-Change-Reason', 'Idempotency-Key'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-Organisation-Id', 'X-Correlation-Id', 'X-Change-Reason', 'X-Time-Zone', 'Idempotency-Key'],
     exposedHeaders: ['X-Correlation-Id'],
     maxAge: 600,
   });

@@ -16,10 +16,11 @@ import { PartPicker } from "../ncr/Pickers";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import SlidingToggle from "../ui/SlidingToggle";
 import { FormError, TextAreaField } from "../master-data/shared";
+import { todayIso } from "@/lib/localDate";
 
-const today = () => new Date().toISOString().slice(0, 10);
-const tomorrow = () => new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
-const inDays = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+const today = () => todayIso();
+const tomorrow = () => todayIso(1);
+const inDays = (n) => todayIso(n);
 
 /** The shell every SCAR command dialog uses: a form, the error line, Cancel and the main button. Nothing is sent until the form is valid. */
 const CommandDialog = ({ title, intro, mutation, ok, submitLabel, pendingLabel, onClose, onSubmit, width, children }) => (

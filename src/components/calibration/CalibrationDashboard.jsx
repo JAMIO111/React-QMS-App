@@ -20,6 +20,7 @@ import { describeDue } from "../../lib/calibration";
 import { formatDate } from "../../lib/ncr";
 import { GaugeStatusPill } from "./Pills";
 import Callout from "../ui/Callout";
+import { stackedBarShape } from "../dashboard/DashboardParts";
 import { DashboardPeriodPicker } from "../dashboard/DashboardPeriod";
 import { useDashboardPeriod } from "../../hooks/useDashboardPeriod";
 
@@ -191,9 +192,9 @@ const CalibrationDashboard = () => {
                 <YAxis allowDecimals={false} tick={tick} axisLine={false} tickLine={false} />
                 <Tooltip cursor={{ fill: "var(--chart-grid)" }} content={<ChartTooltip labelFormat={bucketLabel} />} />
                 <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} formatter={(v) => <span className="text-secondary-text">{v}</span>} />
-                {OUTCOME_SERIES.map((s, i) => (
+                {OUTCOME_SERIES.map((s) => (
                   <Bar key={s.key} dataKey={s.key} name={s.label} stackId="outcomes" fill={s.color} stroke="rgb(var(--secondary-bg))" strokeWidth={1}
-                    radius={i === OUTCOME_SERIES.length - 1 ? [4, 4, 0, 0] : 0} maxBarSize={36} />
+                    shape={stackedBarShape(OUTCOME_SERIES.map((x) => x.key))} maxBarSize={36} />
                 ))}
               </BarChart>
             </ResponsiveContainer>

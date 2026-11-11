@@ -6,7 +6,7 @@ import Breadcrumb from "../Breadcrumb";
 import { DashboardPeriodPicker } from "../dashboard/DashboardPeriod";
 import { useDashboardPeriod } from "../../hooks/useDashboardPeriod";
 import RHFComboBox from "../ui/RHFComboBox";
-import { Card, ChartTooltip, HBars, Kpi, grid, percent, pctChange, tick } from "../dashboard/DashboardParts";
+import { Card, ChartTooltip, HBars, Kpi, grid, percent, pctChange, stackedBarShape, tick } from "../dashboard/DashboardParts";
 import { useAuditsDashboard } from "../../hooks/useAudits";
 import { describeApiError } from "../../lib/api-client";
 import { formatDate, formatDateTime } from "../../lib/processControl";
@@ -38,8 +38,8 @@ const Stacked = ({ data, series, bucketLabel, name }) => (
         <YAxis allowDecimals={false} tick={tick} axisLine={false} tickLine={false} />
         <Tooltip cursor={{ fill: "var(--chart-grid)" }} content={<ChartTooltip labelFormat={bucketLabel} />} />
         <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} formatter={(v) => <span className="text-secondary-text">{v}</span>} />
-        {series.map((s, i) => (
-          <Bar key={s.key} dataKey={s.key} name={s.label} stackId="s" fill={s.color} stroke="rgb(var(--secondary-bg))" strokeWidth={1} radius={i === series.length - 1 ? [4, 4, 0, 0] : 0} maxBarSize={36} />
+        {series.map((s) => (
+          <Bar key={s.key} dataKey={s.key} name={s.label} stackId="s" fill={s.color} stroke="rgb(var(--secondary-bg))" strokeWidth={1} shape={stackedBarShape(series.map((x) => x.key))} maxBarSize={36} />
         ))}
       </BarChart>
     </ResponsiveContainer>

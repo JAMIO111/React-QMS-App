@@ -31,6 +31,7 @@ import {
   grid,
   percent,
   pctChange,
+  stackedBarShape,
   tick,
 } from "../dashboard/DashboardParts";
 import { usePermissions } from "../../hooks/useQmsApi";
@@ -243,7 +244,7 @@ const ProcessControlDashboard = () => {
                       <span className="text-secondary-text">{v}</span>
                     )}
                   />
-                  {RESULT_SERIES.map((s, i) => (
+                  {RESULT_SERIES.map((s) => (
                     <Bar
                       key={s.key}
                       dataKey={s.key}
@@ -252,7 +253,7 @@ const ProcessControlDashboard = () => {
                       fill={s.color}
                       stroke="rgb(var(--secondary-bg))"
                       strokeWidth={1}
-                      radius={i === RESULT_SERIES.length - 1 ? [4, 4, 0, 0] : 0}
+                      shape={stackedBarShape(RESULT_SERIES.map((x) => x.key))}
                       maxBarSize={36}
                     />
                   ))}

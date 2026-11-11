@@ -97,7 +97,7 @@ const Evidence = ({ finding, editable }) => {
   );
 };
 
-/** One finding (/Documentation/Audit-Findings/:id): what was found, who owns it, the evidence, and the non-conformance raised from it. */
+/** One finding (/Audits/Findings/:id): what was found, who owns it, the evidence, and the non-conformance raised from it. */
 const AuditFindingPage = () => {
   const { id } = useParams();
   const { can } = usePermissions();
@@ -122,7 +122,7 @@ const AuditFindingPage = () => {
     <div className="flex w-full min-w-0 flex-1 min-h-0 flex-col gap-4 overflow-auto bg-primary-bg p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-2">
-          <Link to="/Documentation/Audit-Findings" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
+          <Link to="/Audits/Findings" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
             <ArrowLeftIcon /> Audit findings
           </Link>
           <div className="flex flex-wrap items-center gap-3">
@@ -133,7 +133,7 @@ const AuditFindingPage = () => {
             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${FINDING_STATUS_PILL[f.status]}`}>{findingStatusLabel(f.status)}</span>
             {f.overdue && <span className="rounded-full bg-error-color/15 px-2 py-0.5 text-xs font-medium text-error-color">Overdue</span>}
           </div>
-          <Link to={`/Documentation/Audit-Records/${f.record.id}`} className="w-fit text-sm text-link-color hover:underline">
+          <Link to={`/Audits/Records/${f.record.id}`} className="w-fit text-sm text-link-color hover:underline">
             {f.record.reference} · {f.record.audit.title}
           </Link>
         </div>

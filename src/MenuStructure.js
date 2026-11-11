@@ -1,4 +1,4 @@
-import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, LayoutDashboardIcon, ListChecksIcon, ShieldCheckIcon, TriangleAlertIcon } from "@/components/icons";
+import { BoxesIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, LayoutDashboardIcon, ListChecksIcon, SearchCheckIcon, ShieldCheckIcon, TriangleAlertIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
@@ -64,6 +64,19 @@ export const menuStructure = [
     ],
   },
   {
+    name: "Audits",
+    icon: SearchCheckIcon,
+    permission: "audits.read",
+    path: "/Audits",
+    subMenu: [
+      { name: "Dashboard", path: "/Audits", end: true },
+      { name: "Audit schedule", path: "/Audits/Schedule" },
+      { name: "Audit templates", path: "/Audits/Templates" },
+      { name: "Audit records", path: "/Audits/Records" },
+      { name: "Audit findings", path: "/Audits/Findings" },
+    ],
+  },
+  {
     name: "Documentation",
     icon: FileTextIcon,
     permission: "documentation.read",
@@ -73,11 +86,6 @@ export const menuStructure = [
     subMenu: [
       { name: "My alerts", path: "/Documentation/My-Alerts", badge: "my-alerts" },
       { name: "Quality alerts", path: "/Documentation/Quality-Alerts" },
-      { name: "Audit dashboard", path: "/Documentation/Audit-Dashboard", permission: "audits.read" },
-      { name: "Audits", path: "/Documentation/Audits", permission: "audits.read" },
-      { name: "Audit schedule", path: "/Documentation/Audit-Schedule", permission: "audits.read" },
-      { name: "Audit records", path: "/Documentation/Audit-Records", permission: "audits.read" },
-      { name: "Audit findings", path: "/Documentation/Audit-Findings", permission: "audits.read" },
     ],
   },
   {

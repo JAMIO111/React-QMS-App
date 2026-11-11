@@ -86,11 +86,11 @@ const renderAt = (url) =>
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[url]}>
         <Routes>
-          <Route path="/Documentation/Audits" element={<><AuditsPage /><Where /></>} />
-          <Route path="/Documentation/Audits/new" element={<><AuditForm /><Where /></>} />
-          <Route path="/Documentation/Audits/:id" element={<><AuditPage /><Where /></>} />
-          <Route path="/Documentation/Audits/:id/edit" element={<><AuditForm /><Where /></>} />
-          <Route path="/Documentation/Audit-Records/:id" element={<Where />} />
+          <Route path="/Audits/Templates" element={<><AuditsPage /><Where /></>} />
+          <Route path="/Audits/Templates/new" element={<><AuditForm /><Where /></>} />
+          <Route path="/Audits/Templates/:id" element={<><AuditPage /><Where /></>} />
+          <Route path="/Audits/Templates/:id/edit" element={<><AuditForm /><Where /></>} />
+          <Route path="/Audits/Records/:id" element={<Where />} />
         </Routes>
         <div id="modal-root" />
       </MemoryRouter>
@@ -106,9 +106,9 @@ beforeEach(() => {
 describe("audits register", () => {
   it("lists the audits with what each is relevant to, its frequency and questions, and a count", async () => {
     routeApi({ "GET /audits": { data: [summary(), summary({ id: "a2", reference: "AUD-002", title: "Monthly 5S", auditType: "housekeeping", frequency: { kind: "every_n_days", interval: 10, firstDueOn: "2026-11-16" }, status: "retired", questionCount: 5, criticalCount: 0, targets: { machines: 0, operations: 0, departments: 0, preview: [] } })], page: 1, pageSize: 25, total: 2 } });
-    renderAt("/Documentation/Audits");
+    renderAt("/Audits/Templates");
     const table = await screen.findByRole("region", { name: "Audits" });
-    expect(await within(table).findByRole("link", { name: "AUD-001" })).toHaveAttribute("href", "/Documentation/Audits/a1");
+    expect(await within(table).findByRole("link", { name: "AUD-001" })).toHaveAttribute("href", "/Audits/Templates/a1");
     expect(within(table).getByText("1 machine, 1 operation (CNC-1, OP-20)")).toBeInTheDocument();
     expect(within(table).getByText("Every week")).toBeInTheDocument();
     expect(within(table).getByText("Every 10 days")).toBeInTheDocument();
@@ -131,11 +131,11 @@ describe("audits register", () => {
         total: 3,
       },
     });
-    renderAt("/Documentation/Audits");
+    renderAt("/Audits/Templates");
     const table = await screen.findByRole("region", { name: "Audits" });
     const rows = await within(table).findAllByRole("row");
     const body = rows.slice(1);
-    expect(within(body[0]).getByRole("link", { name: /Nov 2026/ })).toHaveAttribute("href", "/Documentation/Audit-Records/r1");
+    expect(within(body[0]).getByRole("link", { name: /Nov 2026/ })).toHaveAttribute("href", "/Audits/Records/r1");
     expect(within(body[0]).getByText("Fail")).toBeInTheDocument();
     expect(within(body[0]).getByText(/Jan 2099$/)).toBeInTheDocument();
     expect(within(body[0]).queryByText(/overdue/)).toBeNull();
@@ -146,18 +146,18 @@ describe("audits register", () => {
 
   it("offers New audit only to people who manage audits", async () => {
     routeApi({ "GET /audits": { data: [], page: 1, pageSize: 25, total: 0 } });
-    const { unmount } = renderAt("/Documentation/Audits");
+    const { unmount } = renderAt("/Audits/Templates");
     expect(await screen.findByRole("button", { name: /New audit/ })).toBeInTheDocument();
     unmount();
     permissions = ["audits.read"];
-    renderAt("/Documentation/Audits");
+    renderAt("/Audits/Templates");
     await screen.findByText("0 audits");
     expect(screen.queryByRole("button", { name: /New audit/ })).toBeNull();
   });
 
   it("filters by type, status and machine, kept in the URL with chips that clear them", async () => {
     routeApi({ "GET /audits": { data: [], page: 1, pageSize: 25, total: 0 } });
-    renderAt("/Documentation/Audits");
+    renderAt("/Audits/Templates");
     await screen.findByText("0 audits");
     await userEvent.selectOptions(screen.getByLabelText("Type"), "housekeeping");
     await userEvent.selectOptions(screen.getByLabelText("Status"), "retired");
@@ -180,7 +180,7 @@ describe("audits register", () => {
 describe("audit page", () => {
   it("shows the facts, what it is relevant to, the procedure and the checklist with critical questions and limits", async () => {
     routeApi({ "GET /audits/a1": detail() });
-    renderAt("/Documentation/Audits/a1");
+    renderAt("/Audits/Templates/a1");
     expect(await screen.findByRole("heading", { name: /AUD-001 · Layered process audit, CNC cell/ })).toBeInTheDocument();
     expect(screen.getByText("Every week")).toBeInTheDocument();
     expect(screen.getByText("2 days, weekdays only")).toBeInTheDocument();
@@ -200,32 +200,32 @@ describe("audit page", () => {
       "GET /audits/a1": detail({ lastRecord: { id: "r1", reference: "AR-26-0001", performedOn: "2026-11-02", result: "pass" }, nextDueOn: "2026-11-16" }),
       "POST /audit-records": { id: "r7", reference: "AR-26-0007" },
     });
-    const { unmount } = renderAt("/Documentation/Audits/a1");
-    expect(await screen.findByRole("link", { name: /Nov 2026: Pass/ })).toHaveAttribute("href", "/Documentation/Audit-Records/r1");
+    const { unmount } = renderAt("/Audits/Templates/a1");
+    expect(await screen.findByRole("link", { name: /Nov 2026: Pass/ })).toHaveAttribute("href", "/Audits/Records/r1");
     expect(screen.getByText(/16 Nov 2026/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Audit records" })).toHaveAttribute("href", "/Documentation/Audit-Records?audit=a1");
-    expect(screen.getByRole("link", { name: "Schedule" })).toHaveAttribute("href", "/Documentation/Audit-Schedule?audit=a1");
+    expect(screen.getByRole("link", { name: "Audit records" })).toHaveAttribute("href", "/Audits/Records?audit=a1");
+    expect(screen.getByRole("link", { name: "Schedule" })).toHaveAttribute("href", "/Audits/Schedule?audit=a1");
     await userEvent.click(screen.getByRole("button", { name: /Start audit/ }));
     await waitFor(() => expect(sent("POST /audit-records")[0]?.body).toEqual({ auditId: "a1" }));
-    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Documentation/Audit-Records/r7"));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Audits/Records/r7"));
     unmount();
     permissions = ["audits.read", "audits.manage"];
-    renderAt("/Documentation/Audits/a1");
+    renderAt("/Audits/Templates/a1");
     await screen.findByRole("heading", { name: /AUD-001/ });
     expect(screen.queryByRole("button", { name: /Start audit/ })).toBeNull();
   });
 
   it("does not offer to start a retired audit", async () => {
     routeApi({ "GET /audits/a1": detail({ status: "retired", retired: { at: "2026-11-03T09:00:00Z", by: null, reason: "Replaced" } }) });
-    renderAt("/Documentation/Audits/a1");
+    renderAt("/Audits/Templates/a1");
     await screen.findByRole("heading", { name: /AUD-001/ });
     expect(screen.queryByRole("button", { name: /Start audit/ })).toBeNull();
   });
 
   it("lets managers edit and retire with a reason, and shows the retirement afterwards", async () => {
     routeApi({ "GET /audits/a1": detail(), "POST /audits/a1/retire": detail({ status: "retired" }) });
-    renderAt("/Documentation/Audits/a1");
-    expect(await screen.findByRole("link", { name: /Edit/ })).toHaveAttribute("href", "/Documentation/Audits/a1/edit");
+    renderAt("/Audits/Templates/a1");
+    expect(await screen.findByRole("link", { name: /Edit/ })).toHaveAttribute("href", "/Audits/Templates/a1/edit");
     await userEvent.click(screen.getByRole("button", { name: "Retire" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByRole("button", { name: "Retire audit" })).toBeDisabled();
@@ -237,13 +237,13 @@ describe("audit page", () => {
 
   it("shows a retired audit with its reason and a Reactivate button, and no editing without manage rights", async () => {
     routeApi({ "GET /audits/a1": detail({ status: "retired", retired: { at: "2026-11-05T09:00:00Z", by: { id: "u9", name: "Ada Owner" }, reason: "Replaced by the LPA" } }), "POST /audits/a1/reactivate": detail() });
-    const { unmount } = renderAt("/Documentation/Audits/a1");
+    const { unmount } = renderAt("/Audits/Templates/a1");
     expect(await screen.findByText(/Replaced by the LPA/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Reactivate" }));
     await waitFor(() => expect(sent("POST /audits/a1/reactivate")).toHaveLength(1));
     unmount();
     permissions = ["audits.read"];
-    renderAt("/Documentation/Audits/a1");
+    renderAt("/Audits/Templates/a1");
     await screen.findByRole("heading", { name: /AUD-001/ });
     expect(screen.queryByRole("link", { name: /Edit/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Retire|Reactivate/ })).toBeNull();
@@ -300,7 +300,7 @@ const versionThree = {
 describe("version history of an audit", () => {
   it("shows the version beside the title, and each version with its reason, who, when, what changed and how many records were done against it", async () => {
     routeApi({ "GET /audits/a1": detail({ version: 3 }), "GET /audits/a1/versions": { data: versionList } });
-    renderAt("/Documentation/Audits/a1");
+    renderAt("/Audits/Templates/a1");
     expect(await screen.findByText("Version 3")).toBeInTheDocument();
     const table = await screen.findByRole("table", { name: "Versions" });
     const rows = within(table).getAllByRole("row");
@@ -314,13 +314,13 @@ describe("version history of an audit", () => {
     expect(rows[2]).toHaveTextContent("Title changed; Pass mark 90 → 95");
     expect(rows[3]).toHaveTextContent("First version");
     expect(rows[3]).toHaveTextContent("Unknown user");
-    expect(within(rows[2]).getByRole("link", { name: "2" })).toHaveAttribute("href", "/Documentation/Audit-Records?audit=a1&version=2");
+    expect(within(rows[2]).getByRole("link", { name: "2" })).toHaveAttribute("href", "/Audits/Records?audit=a1&version=2");
     expect(within(rows[3]).queryByRole("link")).toBeNull();
   });
 
   it("opens a version with what it changed from the one before, the audit as it was and the records done against it", async () => {
     routeApi({ "GET /audits/a1": detail({ version: 3 }), "GET /audits/a1/versions": { data: versionList }, "GET /audits/a1/versions/3": versionThree });
-    renderAt("/Documentation/Audits/a1");
+    renderAt("/Audits/Templates/a1");
     await userEvent.click(await screen.findByRole("button", { name: "View version 3" }));
     const dialog = await screen.findByRole("dialog", { name: "AUD-001 · version 3" });
     expect(await within(dialog).findByText("Added the floor, loosened the coolant limit and covered OP-20")).toBeInTheDocument();
@@ -339,7 +339,7 @@ describe("version history of an audit", () => {
     expect(within(content).getByRole("list", { name: "Checklist of version 3" })).toHaveTextContent("Coolant concentration");
     expect(content).toHaveTextContent("OP-10, OP-20");
     const records = within(dialog).getByRole("region", { name: "Records done against this version" });
-    expect(within(records).getByRole("link", { name: "AR-26-0001" })).toHaveAttribute("href", "/Documentation/Audit-Records/r1");
+    expect(within(records).getByRole("link", { name: "AR-26-0001" })).toHaveAttribute("href", "/Audits/Records/r1");
     expect(records).toHaveTextContent("Fail");
   });
 
@@ -349,7 +349,7 @@ describe("version history of an audit", () => {
       "GET /audits/a1/versions": { data: [versionList[2]] },
       "GET /audits/a1/versions/1": { ...versionList[2], auditType: "layered_process", purpose: null, procedure: null, questions: [], targets: [], records: [], changes: null },
     });
-    renderAt("/Documentation/Audits/a1");
+    renderAt("/Audits/Templates/a1");
     await userEvent.click(await screen.findByRole("button", { name: "View version 1" }));
     const dialog = await screen.findByRole("dialog", { name: "AUD-001 · version 1" });
     expect(await within(dialog).findByText("First version")).toBeInTheDocument();
@@ -359,7 +359,7 @@ describe("version history of an audit", () => {
 
   it("explains an audit with no versions yet", async () => {
     routeApi({ "GET /audits/a1": detail({ version: null }), "GET /audits/a1/versions": { data: [] } });
-    renderAt("/Documentation/Audits/a1");
+    renderAt("/Audits/Templates/a1");
     expect(await screen.findByText(/No versions yet/)).toBeInTheDocument();
     expect(screen.queryByText(/^Version \d/)).toBeNull();
   });
@@ -368,7 +368,7 @@ describe("version history of an audit", () => {
 describe("audit form", () => {
   it("lists what is still needed and sends nothing until it is there", async () => {
     routeApi();
-    renderAt("/Documentation/Audits/new");
+    renderAt("/Audits/Templates/new");
     await screen.findByRole("heading", { name: "Define an audit" });
     await userEvent.click(screen.getByRole("button", { name: "Define audit" }));
     const needed = await screen.findByRole("alert", { name: "Still needed" });
@@ -379,7 +379,7 @@ describe("audit form", () => {
 
   it("uses the custom combo box for every drop-down: there is no native select in the form", async () => {
     routeApi();
-    const { container } = renderAt("/Documentation/Audits/new");
+    const { container } = renderAt("/Audits/Templates/new");
     await screen.findByRole("heading", { name: "Define an audit" });
     await addQuestion("Q", "Rating");
     expect(container.querySelectorAll("select")).toHaveLength(0);
@@ -390,7 +390,7 @@ describe("audit form", () => {
 
   it("offers the ten response types, each with an example of the question it suits", async () => {
     routeApi();
-    renderAt("/Documentation/Audits/new");
+    renderAt("/Audits/Templates/new");
     await screen.findByRole("heading", { name: "Define an audit" });
     await userEvent.click(screen.getByRole("button", { name: /Add a question/ }));
     await userEvent.click(screen.getByRole("combobox", { name: "Answered with" }));
@@ -414,7 +414,7 @@ describe("audit form", () => {
       "POST /audits": () => ({ ...detail(), id: "new1", reference: "AUD-003" }), "GET /audits/new1": detail(),
       "GET /supplier-quality/suppliers": { data: [{ id: "sup1", code: "ACME", name: "Acme Metals", displayName: "Acme Metals" }], page: 1, pageSize: 100, total: 1 },
     });
-    renderAt("/Documentation/Audits/new");
+    renderAt("/Audits/Templates/new");
     await screen.findByRole("heading", { name: "Define an audit" });
     await userEvent.type(screen.getByLabelText(/^Title/), "Weekly LPA");
     await pick("Type", "Layered process audit");
@@ -473,12 +473,12 @@ describe("audit form", () => {
       { question: "Sheet signed?", guidance: null, answerType: "yes_no", passAnswer: "no", critical: false },
     ]);
     expect(saved().targets).toEqual([{ kind: "machine", machineId: "m1" }, { kind: "operation", operationCode: "OP-20" }, { kind: "department", departmentId: "d1" }, { kind: "supplier", supplierId: "sup1" }]);
-    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Documentation/Audits/new1"));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Audits/Templates/new1"));
   });
 
   it("needs no first due date for an audit done on demand", async () => {
     routeApi({ "POST /audits": () => ({ ...detail(), id: "new1" }), "GET /audits/new1": detail() });
-    renderAt("/Documentation/Audits/new");
+    renderAt("/Audits/Templates/new");
     await userEvent.type(await screen.findByLabelText(/^Title/), "On request");
     await pick("How often", "On demand");
     expect(screen.queryByLabelText(/^First due/)).toBeNull();
@@ -490,7 +490,7 @@ describe("audit form", () => {
   describe("what each response type asks the template for", () => {
     const start = async () => {
       routeApi({ "POST /audits": () => ({ ...detail(), id: "new1" }), "GET /audits/new1": detail() });
-      renderAt("/Documentation/Audits/new");
+      renderAt("/Audits/Templates/new");
       await userEvent.type(await screen.findByLabelText(/^Title/), "Types");
       await pick("How often", "On demand");
     };
@@ -628,7 +628,7 @@ describe("audit form", () => {
 
   it("says what is wrong with a question in words: no words, limits the wrong way round, an unfinished measurement, repeated options", async () => {
     routeApi();
-    renderAt("/Documentation/Audits/new");
+    renderAt("/Audits/Templates/new");
     await userEvent.type(await screen.findByLabelText(/^Title/), "x");
     await pick("How often", "On demand");
     await userEvent.click(screen.getByRole("button", { name: /Add a question/ }));
@@ -651,7 +651,7 @@ describe("audit form", () => {
 
   it("moves and removes questions", async () => {
     routeApi({ "GET /audits/a1": detail(), "PATCH /audits/a1": () => detail() });
-    renderAt("/Documentation/Audits/a1/edit");
+    renderAt("/Audits/Templates/a1/edit");
     await screen.findByRole("heading", { name: "Edit AUD-001" });
     await userEvent.click(screen.getByRole("button", { name: "Move question 1 down" }));
     const list = screen.getByRole("list", { name: "Checklist" });
@@ -672,7 +672,7 @@ describe("audit form", () => {
         questions: [{ id: "q9", sequence: 1, question: "Diameter", guidance: null, answerType: "measurement", passAnswer: null, unit: "mm", lowerLimit: 9.95, upperLimit: 10.1, nominal: 10, options: null, ratingMax: null, passRating: null, critical: true }],
       }),
     });
-    renderAt("/Documentation/Audits/a1/edit");
+    renderAt("/Audits/Templates/a1/edit");
     expect(await screen.findByLabelText(/^Title/)).toHaveValue("Layered process audit, CNC cell");
     expect(screen.getByLabelText(/^Pass mark/)).toHaveValue("95");
     expect(screen.getByRole("combobox", { name: "How often" })).toHaveValue("Every week");
@@ -689,7 +689,7 @@ describe("audit form", () => {
   describe("versions", () => {
     it("asks why when what the audit says changes, says which version it will become, and sends nothing without a reason", async () => {
       routeApi({ "GET /audits/a1": detail({ version: 2 }), "PATCH /audits/a1": () => detail({ version: 3 }) });
-      renderAt("/Documentation/Audits/a1/edit");
+      renderAt("/Audits/Templates/a1/edit");
       await screen.findByRole("heading", { name: "Edit AUD-001" });
       expect(screen.getByText(/^Version 2\. A change to what the audit says is saved as a new version/)).toBeInTheDocument();
       expect(screen.getByText(/Nothing about what the audit says has changed yet/)).toBeInTheDocument();
@@ -712,7 +712,7 @@ describe("audit form", () => {
 
     it("counts the pass mark, the type, the purpose and the procedure as content", async () => {
       routeApi({ "GET /audits/a1": detail({ version: 2 }) });
-      renderAt("/Documentation/Audits/a1/edit");
+      renderAt("/Audits/Templates/a1/edit");
       await screen.findByRole("heading", { name: "Edit AUD-001" });
       const nothing = () => screen.getByText(/Nothing about what the audit says has changed yet/);
       await userEvent.clear(screen.getByLabelText(/^Pass mark/));
@@ -727,7 +727,7 @@ describe("audit form", () => {
 
     it("needs no reason for a change to the schedule or the expected auditor, and sends none", async () => {
       routeApi({ "GET /audits/a1": detail({ version: 2 }), "PATCH /audits/a1": () => detail({ version: 2 }) });
-      renderAt("/Documentation/Audits/a1/edit");
+      renderAt("/Audits/Templates/a1/edit");
       await screen.findByRole("heading", { name: "Edit AUD-001" });
       await userEvent.clear(screen.getByLabelText(/^Grace period/));
       await userEvent.type(screen.getByLabelText(/^Grace period/), "5");
@@ -740,7 +740,7 @@ describe("audit form", () => {
 
     it("counts what it is relevant to and the order of the questions as content, but not the order things were added in", async () => {
       routeApi({ "GET /audits/a1": detail({ version: 1 }), "PATCH /audits/a1": () => detail({ version: 2 }) });
-      renderAt("/Documentation/Audits/a1/edit");
+      renderAt("/Audits/Templates/a1/edit");
       await screen.findByRole("heading", { name: "Edit AUD-001" });
       await userEvent.click(screen.getByRole("button", { name: "Move question 1 down" }));
       expect(screen.getByText("Saved as version 2, with this reason, in the version history")).toBeInTheDocument();

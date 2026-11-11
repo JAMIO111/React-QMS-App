@@ -30,7 +30,7 @@ export const findingColumns = [
     "Finding",
     head(HashIcon, "Finding"),
     (i) => (
-      <Link to={`/Documentation/Audit-Findings/${i.row.original.id}`} className="table-row-item font-medium text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
+      <Link to={`/Audits/Findings/${i.row.original.id}`} className="table-row-item font-medium text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
         {i.row.original.reference}
       </Link>
     ),
@@ -47,7 +47,7 @@ export const findingColumns = [
     "Audit record",
     head(ClipboardListIcon, "Audit record"),
     (i) => (
-      <Link to={`/Documentation/Audit-Records/${i.row.original.record.id}`} className="table-row-item text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
+      <Link to={`/Audits/Records/${i.row.original.record.id}`} className="table-row-item text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
         {i.row.original.record.reference} · {i.row.original.record.audit.title}
       </Link>
     ),

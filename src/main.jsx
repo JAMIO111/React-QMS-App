@@ -36,6 +36,7 @@ const Employees = lazy(() => import("./components/master-data/EmployeesPage.jsx"
 const MasterDataDashboard = lazy(() => import("./components/master-data/MasterDataDashboard.jsx"));
 const PartsPage = lazy(() => import("./components/master-data/PartsPage.jsx"));
 const LegacyNcrRedirect = lazy(() => import("./components/ncr/LegacyNcrRedirect.jsx"));
+const LegacyAuditRedirect = lazy(() => import("./components/audits/LegacyAuditRedirect.jsx"));
 const NcrPage = lazy(() => import("./components/ncr/NcrPage.jsx"));
 const NcDashboard = lazy(() => import("./components/ncr/NcDashboard.jsx"));
 const CalibrationDashboard = lazy(() => import("./components/calibration/CalibrationDashboard.jsx"));
@@ -254,16 +255,22 @@ const router = createBrowserRouter([
           { path: "Production/Lots", element: <LotsPage /> },
           { path: "Production/Serials", element: <SerialsPage /> },
           { path: "Production/Traceability", element: <TraceabilityPage /> },
-          { path: "Documentation/Audits", element: <AuditsPage /> },
-          { path: "Documentation/Audits/new", element: <AuditForm /> },
-          { path: "Documentation/Audits/:id", element: <AuditPage /> },
-          { path: "Documentation/Audits/:id/edit", element: <AuditForm /> },
-          { path: "Documentation/Audit-Dashboard", element: <AuditsDashboard /> },
-          { path: "Documentation/Audit-Schedule", element: <AuditSchedulePage /> },
-          { path: "Documentation/Audit-Records", element: <AuditRecordsPage /> },
-          { path: "Documentation/Audit-Records/:id", element: <AuditRecordPage /> },
-          { path: "Documentation/Audit-Findings", element: <AuditFindingsPage /> },
-          { path: "Documentation/Audit-Findings/:id", element: <AuditFindingPage /> },
+          { path: "Audits/Templates", element: <AuditsPage /> },
+          { path: "Audits/Templates/new", element: <AuditForm /> },
+          { path: "Audits/Templates/:id", element: <AuditPage /> },
+          { path: "Audits/Templates/:id/edit", element: <AuditForm /> },
+          { path: "Audits", element: <AuditsDashboard /> },
+          { path: "Audits/Schedule", element: <AuditSchedulePage /> },
+          { path: "Audits/Records", element: <AuditRecordsPage /> },
+          { path: "Audits/Records/:id", element: <AuditRecordPage /> },
+          { path: "Audits/Findings", element: <AuditFindingsPage /> },
+          { path: "Audits/Findings/:id", element: <AuditFindingPage /> },
+          // The audit pages used to be under Documentation.
+          { path: "Documentation/Audit-Dashboard", element: <LegacyAuditRedirect /> },
+          { path: "Documentation/Audit-Schedule", element: <LegacyAuditRedirect /> },
+          { path: "Documentation/Audit-Records/*", element: <LegacyAuditRedirect /> },
+          { path: "Documentation/Audit-Findings/*", element: <LegacyAuditRedirect /> },
+          { path: "Documentation/Audits/*", element: <LegacyAuditRedirect /> },
           { path: "Part-Families", element: <PartFamiliesPage /> },
           { path: "Part-Families/:id", element: <PartFamilyPage /> },
           {

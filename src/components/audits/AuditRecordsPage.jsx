@@ -35,7 +35,7 @@ const toCsvRow = (r) => ({
   status: r.status,
 });
 
-/** The Audit records register (Documentation → Audit records): every audit carried out, with its result. Filters live in the URL; sorting and paging are on the server. */
+/** The Audit records register (Audits → Audit records): every audit carried out, with its result. Filters live in the URL; sorting and paging are on the server. */
 const AuditRecordsPage = () => {
   const { can } = usePermissions();
   const canPerform = can("audits.perform");
@@ -192,7 +192,7 @@ const AuditRecordsPage = () => {
           onColumnOrderChange={prefs.setColumnOrder}
           rowSelection={rowSelection}
           setRowSelection={setRowSelection}
-          onRowDoubleClick={(r) => navigate(`/Documentation/Audit-Records/${r.id}`)}
+          onRowDoubleClick={(r) => navigate(`/Audits/Records/${r.id}`)}
           ariaLabel="Audit records"
           rowLabel={rowLabel}
         />

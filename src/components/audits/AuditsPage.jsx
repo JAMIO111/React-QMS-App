@@ -36,7 +36,7 @@ const toCsvRow = (r) => ({
   status: r.status,
 });
 
-/** The Audits register (Documentation → Audits): the audit definitions, with filters kept in the URL and the same server-side table as the other registers. */
+/** The Audits register (Audits → Audit templates): the audit definitions, with filters kept in the URL and the same server-side table as the other registers. */
 const AuditsPage = () => {
   const { can } = usePermissions();
   const canManage = can("audits.manage");
@@ -127,7 +127,7 @@ const AuditsPage = () => {
             onColumnOrderChange={prefs.setColumnOrder}
             onReset={prefs.resetColumns}
           />
-          {canManage && <CTAButton callbackFn={() => navigate("/Documentation/Audits/new")} text="New audit" type="main" icon={PlusIcon} iconSize="h-6 w-6" title="Define a new audit" />}
+          {canManage && <CTAButton callbackFn={() => navigate("/Audits/Templates/new")} text="New audit" type="main" icon={PlusIcon} iconSize="h-6 w-6" title="Define a new audit" />}
         </div>
       </div>
 
@@ -174,7 +174,7 @@ const AuditsPage = () => {
           onColumnOrderChange={prefs.setColumnOrder}
           rowSelection={rowSelection}
           setRowSelection={setRowSelection}
-          onRowDoubleClick={(r) => navigate(`/Documentation/Audits/${r.id}`)}
+          onRowDoubleClick={(r) => navigate(`/Audits/Templates/${r.id}`)}
           ariaLabel="Audits"
           rowLabel={rowLabel}
         />

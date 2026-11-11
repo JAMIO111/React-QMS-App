@@ -37,7 +37,7 @@ export const auditColumns = [
     "Audit",
     head(HashIcon, "Audit"),
     (i) => (
-      <Link to={`/Documentation/Audits/${i.row.original.id}`} className="table-row-item font-medium text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
+      <Link to={`/Audits/Templates/${i.row.original.id}`} className="table-row-item font-medium text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
         {i.row.original.reference}
       </Link>
     ),
@@ -57,7 +57,7 @@ export const auditColumns = [
       if (!last) return <div className="table-row-item text-secondary-text">Never</div>;
       return (
         <div className="table-row-item gap-2">
-          <Link to={`/Documentation/Audit-Records/${last.id}`} className="text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
+          <Link to={`/Audits/Records/${last.id}`} className="text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
             {formatDate(last.performedOn)}
           </Link>
           <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${RESULT_PILL[last.result]}`}>{resultLabel(last.result)}</span>

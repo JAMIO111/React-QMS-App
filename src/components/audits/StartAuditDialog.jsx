@@ -28,7 +28,7 @@ const StartAuditDialog = ({ onClose, supplier = null }) => {
             {
               onSuccess: (record) => {
                 showToast({ type: "success", title: "Audit started", message: `${record.reference} is open.` });
-                navigate(`/Documentation/Audit-Records/${record.id}`);
+                navigate(`/Audits/Records/${record.id}`);
               },
             }
           );

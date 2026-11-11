@@ -31,7 +31,7 @@ const toCsvRow = (f) => ({
   what_was_found: f.description,
 });
 
-/** The Audit findings register (Documentation → Audit findings): every finding of every audit. Filters live in the URL; sorting and paging are on the server. */
+/** The Audit findings register (Audits → Audit findings): every finding of every audit. Filters live in the URL; sorting and paging are on the server. */
 const AuditFindingsPage = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -181,7 +181,7 @@ const AuditFindingsPage = () => {
           onColumnOrderChange={prefs.setColumnOrder}
           rowSelection={rowSelection}
           setRowSelection={setRowSelection}
-          onRowDoubleClick={(f) => navigate(`/Documentation/Audit-Findings/${f.id}`)}
+          onRowDoubleClick={(f) => navigate(`/Audits/Findings/${f.id}`)}
           ariaLabel="Audit findings"
           rowLabel={rowLabel}
         />

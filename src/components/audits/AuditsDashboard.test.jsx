@@ -51,13 +51,13 @@ const Where = () => {
   const l = useLocation();
   return <p data-testid="where">{l.pathname + l.search}</p>;
 };
-const renderAt = (url = "/Documentation/Audit-Dashboard") =>
+const renderAt = (url = "/Audits") =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[url]}>
         <Routes>
-          <Route path="/Documentation/Audit-Dashboard" element={<><AuditsDashboard /><Where /></>} />
-          <Route path="/Documentation/*" element={<Where />} />
+          <Route path="/Audits" element={<><AuditsDashboard /><Where /></>} />
+          <Route path="/Audits/*" element={<Where />} />
         </Routes>
         <div id="modal-root" />
       </MemoryRouter>
@@ -99,13 +99,13 @@ describe("audits dashboard", () => {
   it("links the figures to the registers they come from", async () => {
     renderAt();
     await userEvent.click(await screen.findByRole("link", { name: /Open findings/ }));
-    expect(screen.getByTestId("where")).toHaveTextContent("/Documentation/Audit-Findings?status=open");
+    expect(screen.getByTestId("where")).toHaveTextContent("/Audits/Findings?status=open");
   });
 
   it("links an overdue count to the schedule filtered to overdue", async () => {
     renderAt();
     await userEvent.click(await screen.findByRole("link", { name: /Overdue or missed/ }));
-    expect(screen.getByTestId("where")).toHaveTextContent("/Documentation/Audit-Schedule?state=overdue");
+    expect(screen.getByTestId("where")).toHaveTextContent("/Audits/Schedule?state=overdue");
   });
 
   it("says when nothing has been decided, and when nothing was completed", async () => {
@@ -122,11 +122,11 @@ describe("audits dashboard", () => {
     await userEvent.click(within(screen.getByRole("dialog", { name: "Choose period" })).getByRole("button", { name: /^Last 12 months/ }));
     const today = new Date();
     await waitFor(() => expect(apiFetch.mock.calls.at(-1)[0]).toContain(`from=${format(subDays(subMonths(today, 12), -1), "yyyy-MM-dd")}`));
-    expect(screen.getByTestId("where")).toHaveTextContent("/Documentation/Audit-Dashboard?period=12m");
+    expect(screen.getByTestId("where")).toHaveTextContent("/Audits?period=12m");
   });
 
   it("starts from the period in the URL", async () => {
-    renderAt("/Documentation/Audit-Dashboard?period=30d");
+    renderAt("/Audits?period=30d");
     await screen.findByRole("link", { name: /Done as planned/ });
     expect(apiFetch.mock.calls[0][0]).toContain(`from=${format(subDays(new Date(), 29), "yyyy-MM-dd")}`);
   });
@@ -136,7 +136,7 @@ describe("audits dashboard", () => {
     const table = await screen.findByRole("table", { name: "Questions that fail most often" });
     const row = within(table).getByText("Guard fitted?").closest("tr");
     expect(row).toHaveTextContent("3 of 10 (30%)");
-    expect(within(row).getByRole("link", { name: "AUD-001" })).toHaveAttribute("href", "/Documentation/Audits/a1");
+    expect(within(row).getByRole("link", { name: "AUD-001" })).toHaveAttribute("href", "/Audits/Templates/a1");
   });
 
   it("shows coverage: what was never audited and what has not been for a long time are marked", async () => {
@@ -168,11 +168,11 @@ describe("audits dashboard", () => {
     expect(slots).toHaveTextContent("Overdue, due 07 Nov 2026");
     expect(slots).toHaveTextContent("Missed, due 20 Oct 2026");
     const findings = screen.getByRole("list", { name: "Findings past their due date" });
-    expect(within(findings).getByRole("link", { name: "AF-26-0001" })).toHaveAttribute("href", "/Documentation/Audit-Findings/f1");
+    expect(within(findings).getByRole("link", { name: "AF-26-0001" })).toHaveAttribute("href", "/Audits/Findings/f1");
     expect(findings).toHaveTextContent("7 days late");
     expect(findings).toHaveTextContent("Grace Hopper");
     const failed = screen.getByRole("list", { name: "Latest failed audits" });
-    expect(within(failed).getByRole("link", { name: "AR-26-0002" })).toHaveAttribute("href", "/Documentation/Audit-Records/r1");
+    expect(within(failed).getByRole("link", { name: "AR-26-0002" })).toHaveAttribute("href", "/Audits/Records/r1");
     expect(failed).toHaveTextContent("50% · 1 critical");
     const versions = screen.getByRole("list", { name: "Recent changes to audits" });
     expect(versions).toHaveTextContent("AUD-002 · Grinding audit · version 3");

@@ -47,7 +47,7 @@ const Stacked = ({ data, series, bucketLabel, name }) => (
 );
 
 /**
- * Audits dashboard (/Documentation/Audit-Dashboard): audits planned and done in a period, results, findings, the questions that fail most, how recently each machine, operation and
+ * Audits dashboard (/Audits): audits planned and done in a period, results, findings, the questions that fail most, how recently each machine, operation and
  * department was covered, and the latest changes to audit templates. Findings and coverage are as of today. The period is in the URL.
  */
 const AuditsDashboard = () => {
@@ -70,8 +70,8 @@ const AuditsDashboard = () => {
           </p>
         </div>
         <div className="flex flex-nowrap items-end gap-3 max-sm:flex-wrap">
-          <Link to="/Documentation/Audit-Schedule" className={linkClass}>Audit schedule</Link>
-          <Link to="/Documentation/Audit-Records" className={linkClass}>Audit records</Link>
+          <Link to="/Audits/Schedule" className={linkClass}>Audit schedule</Link>
+          <Link to="/Audits/Records" className={linkClass}>Audit records</Link>
           <DashboardPeriodPicker period={period} />
         </div>
       </div>
@@ -88,14 +88,14 @@ const AuditsDashboard = () => {
           label="Done as planned"
           value={k ? `${k.done} of ${k.planned}` : "—"}
           note={k ? (k.onTimeRate === null ? "Nothing decided yet" : `${percent(k.onTimeRate)} on time`) : ""}
-          to="/Documentation/Audit-Schedule"
+          to="/Audits/Schedule"
         />
         <Kpi
           icon={HourglassIcon}
           label="Overdue or missed"
           value={k ? k.overdue + k.missed : "—"}
           note={k ? `${k.overdue} overdue · ${k.missed} missed` : ""}
-          to="/Documentation/Audit-Schedule?state=overdue"
+          to="/Audits/Schedule?state=overdue"
           alert={k?.overdue + k?.missed > 0}
         />
         <Kpi
@@ -104,14 +104,14 @@ const AuditsDashboard = () => {
           value={k ? k.completed : "—"}
           change={k ? pctChange(k.completed, k.completedPrevious) : null}
           note={k ? (k.passRate === null ? "None in the period" : `${percent(k.passRate)} passed${k.averageScore === null ? "" : ` · average score ${k.averageScore}%`}`) : ""}
-          to="/Documentation/Audit-Records"
+          to="/Audits/Records"
         />
         <Kpi
           icon={TriangleAlertIcon}
           label="Open findings"
           value={k ? k.openFindings : "—"}
           note={k ? (k.overdueFindings ? `${k.overdueFindings} overdue` : "None overdue") : ""}
-          to="/Documentation/Audit-Findings?status=open"
+          to="/Audits/Findings?status=open"
           alert={k?.overdueFindings > 0}
         />
         <Kpi
@@ -121,7 +121,7 @@ const AuditsDashboard = () => {
           change={k ? pctChange(k.findingsRaised, k.findingsRaisedPrevious) : null}
           higherIsWorse
           note={k ? `${k.nonconformances} became a non-conformance` : ""}
-          to="/Documentation/Audit-Findings"
+          to="/Audits/Findings"
         />
         <Kpi icon={HistoryIcon} label="Template changes" value={k ? k.versionsSaved : "—"} note="New versions of audits in the period" />
       </div>
@@ -161,7 +161,7 @@ const AuditsDashboard = () => {
                   <tr key={`${q.auditId}-${q.question}`} className="border-t border-border-color">
                     <td className={td}>{q.question}</td>
                     <td className={td}>
-                      <Link className="text-link-color hover:underline" to={`/Documentation/Audits/${q.auditId}`}>{q.auditReference}</Link>
+                      <Link className="text-link-color hover:underline" to={`/Audits/Templates/${q.auditId}`}>{q.auditReference}</Link>
                     </td>
                     <td className={`${td} text-right tabular-nums`}>
                       {q.failed} of {q.answered} <span className="text-secondary-text">({percent(q.failRate)})</span>
@@ -227,7 +227,7 @@ const AuditsDashboard = () => {
               {data.slotsNeedingAttention.map((s) => (
                 <li key={`${s.auditId}-${s.dueOn}`} className="flex items-center justify-between gap-2 py-1.5">
                   <span>
-                    <Link className="text-link-color hover:underline" to={`/Documentation/Audits/${s.auditId}`}>{s.auditReference}</Link> · {s.auditTitle}
+                    <Link className="text-link-color hover:underline" to={`/Audits/Templates/${s.auditId}`}>{s.auditReference}</Link> · {s.auditTitle}
                   </span>
                   <span className={s.state === "missed" ? "text-error-color" : "text-warning-color"}>
                     {s.state === "missed" ? "Missed" : "Overdue"}, due {formatDate(s.dueOn)}
@@ -246,7 +246,7 @@ const AuditsDashboard = () => {
               {data.overdueFindings.map((f) => (
                 <li key={f.id} className="flex flex-col gap-0.5 py-1.5">
                   <span>
-                    <Link className="text-link-color hover:underline" to={`/Documentation/Audit-Findings/${f.id}`}>{f.reference}</Link> · {f.title}
+                    <Link className="text-link-color hover:underline" to={`/Audits/Findings/${f.id}`}>{f.reference}</Link> · {f.title}
                   </span>
                   <span className="text-xs text-secondary-text">
                     {f.classification} · due {formatDate(f.dueOn)} ({f.daysOverdue} {f.daysOverdue === 1 ? "day" : "days"} late){f.owner ? ` · ${f.owner}` : ""}
@@ -265,7 +265,7 @@ const AuditsDashboard = () => {
               {data.failedRecords.map((r) => (
                 <li key={r.id} className="flex items-center justify-between gap-2 py-1.5">
                   <span>
-                    <Link className="text-link-color hover:underline" to={`/Documentation/Audit-Records/${r.id}`}>{r.reference}</Link> · {r.auditTitle}
+                    <Link className="text-link-color hover:underline" to={`/Audits/Records/${r.id}`}>{r.reference}</Link> · {r.auditTitle}
                   </span>
                   <span className="text-xs text-secondary-text">
                     {formatDate(r.performedOn)}{r.score === null ? "" : ` · ${r.score}%`}{r.criticalFailed ? ` · ${r.criticalFailed} critical` : ""}
@@ -284,7 +284,7 @@ const AuditsDashboard = () => {
               {data.recentVersions.map((v) => (
                 <li key={`${v.auditId}-${v.version}`} className="flex flex-col gap-0.5 py-1.5">
                   <span>
-                    <Link className="text-link-color hover:underline" to={`/Documentation/Audits/${v.auditId}`}>{v.auditReference}</Link> · {v.auditTitle} · version {v.version}
+                    <Link className="text-link-color hover:underline" to={`/Audits/Templates/${v.auditId}`}>{v.auditReference}</Link> · {v.auditTitle} · version {v.version}
                   </span>
                   <span className="text-xs text-secondary-text">
                     {v.reason} — {formatDateTime(v.at)}{v.by ? `, ${v.by}` : ""}

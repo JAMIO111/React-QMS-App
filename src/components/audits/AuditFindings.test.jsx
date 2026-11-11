@@ -84,9 +84,9 @@ const renderAt = (url) =>
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[url]}>
         <Routes>
-          <Route path="/Documentation/Audit-Findings" element={<><AuditFindingsPage /><Where /></>} />
-          <Route path="/Documentation/Audit-Findings/:id" element={<><AuditFindingPage /><Where /></>} />
-          <Route path="/Documentation/Audit-Records/:id" element={<Where />} />
+          <Route path="/Audits/Findings" element={<><AuditFindingsPage /><Where /></>} />
+          <Route path="/Audits/Findings/:id" element={<><AuditFindingPage /><Where /></>} />
+          <Route path="/Audits/Records/:id" element={<Where />} />
           <Route path="/Non-Conformance/Register/:id" element={<Where />} />
           <Route path="/Settings/Audits" element={<SettingsAudits />} />
         </Routes>
@@ -124,7 +124,7 @@ describe("helpers", () => {
 describe("a finding", () => {
   it("shows what was found, who owns it, when it is due and where it came from", async () => {
     routeApi({ "GET /audit-findings/f1": finding() });
-    renderAt("/Documentation/Audit-Findings/f1");
+    renderAt("/Audits/Findings/f1");
     expect(await screen.findByRole("heading", { name: "AF-26-0001 · Work instruction missing" })).toBeInTheDocument();
     expect(screen.getAllByText("Major non-conformity").length).toBeGreaterThan(0);
     expect(screen.getByText("Open")).toBeInTheDocument();
@@ -132,20 +132,20 @@ describe("a finding", () => {
     expect(screen.getByText("Instructions are at every machine")).toBeInTheDocument();
     expect(screen.getByText("Grace Hopper")).toBeInTheDocument();
     expect(screen.getByText(/Question 1: Is the work instruction at the machine\?/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "AR-26-0001 · Cell audit" })).toHaveAttribute("href", "/Documentation/Audit-Records/r1");
+    expect(screen.getByRole("link", { name: "AR-26-0001 · Cell audit" })).toHaveAttribute("href", "/Audits/Records/r1");
     expect(screen.getByText(/No non-conformance has been raised from this finding yet/)).toBeInTheDocument();
     expect(screen.queryByText("Overdue")).toBeNull();
   });
 
   it("flags an overdue finding", async () => {
     routeApi({ "GET /audit-findings/f1": finding({ overdue: true, dueOn: "2026-11-01" }) });
-    renderAt("/Documentation/Audit-Findings/f1");
+    renderAt("/Audits/Findings/f1");
     expect(await screen.findByText("Overdue")).toBeInTheDocument();
   });
 
   it("offers the actions each person may take, and only while they apply", async () => {
     routeApi({ "GET /audit-findings/f1": finding() });
-    const view = renderAt("/Documentation/Audit-Findings/f1");
+    const view = renderAt("/Audits/Findings/f1");
     await screen.findByRole("heading", { name: /AF-26-0001/ });
     for (const name of ["Create non-conformance", "Edit", "Close finding", "Withdraw"]) expect(screen.getByRole("button", { name })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reopen" })).toBeNull();
@@ -153,7 +153,7 @@ describe("a finding", () => {
 
     permissions = ["audits.read", "audits.perform"];
     routeApi({ "GET /audit-findings/f1": finding() });
-    const performer = renderAt("/Documentation/Audit-Findings/f1");
+    const performer = renderAt("/Audits/Findings/f1");
     await screen.findByRole("heading", { name: /AF-26-0001/ });
     expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Withdraw" })).toBeInTheDocument();
@@ -164,7 +164,7 @@ describe("a finding", () => {
 
     permissions = ["audits.read"];
     routeApi({ "GET /audit-findings/f1": finding() });
-    renderAt("/Documentation/Audit-Findings/f1");
+    renderAt("/Audits/Findings/f1");
     await screen.findByRole("heading", { name: /AF-26-0001/ });
     expect(screen.queryAllByRole("button").map((b) => b.textContent)).not.toEqual(expect.arrayContaining(["Edit"]));
     for (const name of ["Create non-conformance", "Edit", "Close finding", "Withdraw", "Reopen"]) expect(screen.queryByRole("button", { name })).toBeNull();
@@ -172,14 +172,14 @@ describe("a finding", () => {
 
   it("offers no non-conformance for an observation, and none to withdraw once one is raised", async () => {
     routeApi({ "GET /audit-findings/f1": finding({ classification: { id: "c-obs", key: "observation", label: "Observation", kind: "observation" } }) });
-    const view = renderAt("/Documentation/Audit-Findings/f1");
+    const view = renderAt("/Audits/Findings/f1");
     await screen.findByRole("heading", { name: /AF-26-0001/ });
     expect(screen.queryByRole("button", { name: "Create non-conformance" })).toBeNull();
     expect(screen.getByText(/is an observation, so it is not raised as a non-conformance/)).toBeInTheDocument();
     view.unmount();
 
     routeApi({ "GET /audit-findings/f1": finding({ ncr: { id: "n9", reference: "NCR-26-0009", stage: "draft" } }) });
-    renderAt("/Documentation/Audit-Findings/f1");
+    renderAt("/Audits/Findings/f1");
     await screen.findByRole("heading", { name: /AF-26-0001/ });
     expect(screen.getByRole("link", { name: "NCR-26-0009" })).toHaveAttribute("href", "/Non-Conformance/Register/n9");
     expect(screen.getByText(/can be closed once that non-conformance is closed/)).toBeInTheDocument();
@@ -189,7 +189,7 @@ describe("a finding", () => {
 
   it("shows a closed finding with its note and offers only to reopen it; a withdrawn one shows the reason", async () => {
     routeApi({ "GET /audit-findings/f1": finding({ status: "closed", closedNote: "Instruction posted", closedBy: { id: "u2", name: "Mo Manager" }, closedAt: "2026-11-09T10:00:00Z" }) });
-    const view = renderAt("/Documentation/Audit-Findings/f1");
+    const view = renderAt("/Audits/Findings/f1");
     const banner = await screen.findByRole("status");
     expect(banner).toHaveTextContent(/Closed.*By Mo Manager/);
     expect(banner).toHaveTextContent("Instruction posted");
@@ -198,7 +198,7 @@ describe("a finding", () => {
     view.unmount();
 
     routeApi({ "GET /audit-findings/f1": finding({ status: "withdrawn", withdrawReason: "Raised on the wrong record" }) });
-    renderAt("/Documentation/Audit-Findings/f1");
+    renderAt("/Audits/Findings/f1");
     expect(await screen.findByRole("status")).toHaveTextContent(/Withdrawn.*Raised on the wrong record/);
     expect(screen.queryAllByRole("button", { name: /^(Edit|Close finding|Withdraw|Reopen|Create non-conformance)$/ })).toHaveLength(0);
   });
@@ -206,7 +206,7 @@ describe("a finding", () => {
   it("lets someone who may perform audits, but not manage them, neither reopen nor close", async () => {
     permissions = ["audits.read", "audits.perform"];
     routeApi({ "GET /audit-findings/f1": finding({ status: "closed", closedNote: "Done", closedAt: "2026-11-09T10:00:00Z" }) });
-    renderAt("/Documentation/Audit-Findings/f1");
+    renderAt("/Audits/Findings/f1");
     await screen.findByRole("status");
     expect(screen.queryByRole("button", { name: "Reopen" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
@@ -217,7 +217,7 @@ describe("a finding", () => {
     URL.createObjectURL = vi.fn(() => "blob:preview");
     URL.revokeObjectURL = vi.fn();
     routeApi({ "GET /audit-findings/f1": finding(), "POST /audit-findings/f1/attachments": { id: "x2", findingId: "f1", fileName: "photo.jpg", contentType: "image/jpeg", sizeBytes: 1, storagePath: "org-1/audit/r1/findings/f1/u1-photo.jpg", createdAt: "2026-11-08T10:00:00Z", createdBy: null, deletedAt: null, deleteReason: null } });
-    const { container } = renderAt("/Documentation/Audit-Findings/f1");
+    const { container } = renderAt("/Audits/Findings/f1");
     await screen.findByRole("heading", { name: /AF-26-0001/ });
     await userEvent.upload(container.querySelector("input[type=file]"), new File(["x"], "photo.jpg", { type: "image/jpeg" }));
     await userEvent.click(await screen.findByRole("button", { name: /Save upload/ }));
@@ -228,7 +228,7 @@ describe("a finding", () => {
 
   it("raises a draft non-conformance with the finding's words, and opens it", async () => {
     routeApi({ "GET /audit-findings/f1": finding(), "POST /audit-findings/f1/create-ncr": { nonconformanceId: "n1", created: true, finding: finding() } });
-    renderAt("/Documentation/Audit-Findings/f1");
+    renderAt("/Audits/Findings/f1");
     await userEvent.click(await screen.findByRole("button", { name: "Create non-conformance" }));
     const dialog = await screen.findByRole("dialog", { name: "Raise a non-conformance" });
     expect(within(dialog).getByLabelText("Title")).toHaveValue("Work instruction missing");
@@ -243,7 +243,7 @@ describe("a finding", () => {
 
   it("says so when the finding already had its non-conformance, and takes the person to it", async () => {
     routeApi({ "GET /audit-findings/f1": finding(), "POST /audit-findings/f1/create-ncr": { nonconformanceId: "n7", created: false, finding: finding() } });
-    renderAt("/Documentation/Audit-Findings/f1");
+    renderAt("/Audits/Findings/f1");
     await userEvent.click(await screen.findByRole("button", { name: "Create non-conformance" }));
     await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Raise non-conformance" }));
     await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Non-Conformance/Register/n7"));
@@ -254,7 +254,7 @@ describe("a finding", () => {
 
   it("closes, withdraws and reopens with a reason", async () => {
     routeApi({ "GET /audit-findings/f1": finding(), "POST /audit-findings/f1/close": finding({ status: "closed", closedNote: "Done", closedAt: "2026-11-09T10:00:00Z" }), "POST /audit-findings/f1/withdraw": finding({ status: "withdrawn", withdrawReason: "Oops" }), "POST /audit-findings/f1/reopen": finding() });
-    const view = renderAt("/Documentation/Audit-Findings/f1");
+    const view = renderAt("/Audits/Findings/f1");
     await userEvent.click(await screen.findByRole("button", { name: "Close finding" }));
     let dialog = await screen.findByRole("dialog", { name: "Close AF-26-0001?" });
     const confirm = within(dialog).getByRole("button", { name: "Close finding" });
@@ -272,7 +272,7 @@ describe("a finding", () => {
     view.unmount();
 
     routeApi({ "GET /audit-findings/f1": finding({ status: "closed", closedNote: "Done", closedAt: "2026-11-09T10:00:00Z" }), "POST /audit-findings/f1/reopen": finding() });
-    renderAt("/Documentation/Audit-Findings/f1");
+    renderAt("/Audits/Findings/f1");
     await userEvent.click(await screen.findByRole("button", { name: "Reopen" }));
     dialog = await screen.findByRole("dialog", { name: "Reopen AF-26-0001?" });
     await userEvent.type(within(dialog).getByLabelText(/Why is it being reopened/), "Not fixed");
@@ -282,7 +282,7 @@ describe("a finding", () => {
 
   it("edits an open finding, sending what is on screen", async () => {
     routeApi({ "GET /audit-findings/f1": finding(), "PATCH /audit-findings/f1": finding({ title: "Instruction missing at CNC-1" }) });
-    renderAt("/Documentation/Audit-Findings/f1");
+    renderAt("/Audits/Findings/f1");
     await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
     const dialog = await screen.findByRole("dialog", { name: "Edit AF-26-0001" });
     expect(within(dialog).getByLabelText("Title")).toHaveValue("Work instruction missing");
@@ -306,13 +306,13 @@ describe("a finding", () => {
 
   it("shows the evidence, and lets only someone who may perform audits add to an open finding", async () => {
     routeApi({ "GET /audit-findings/f1": finding(), "GET /audit-findings/f1/attachments": { data: [{ id: "x1", findingId: "f1", fileName: "photo.jpg", contentType: "image/jpeg", sizeBytes: 2048, storagePath: "org-1/audit/r1/findings/f1/u-photo.jpg", createdAt: "2026-11-08T10:00:00Z", createdBy: null, deletedAt: null, deleteReason: null }] } });
-    const view = renderAt("/Documentation/Audit-Findings/f1");
+    const view = renderAt("/Audits/Findings/f1");
     expect(await screen.findByText("photo.jpg")).toBeInTheDocument();
     expect(screen.getByText(/Drag and drop|Browse|drop/i)).toBeInTheDocument();
     view.unmount();
     permissions = ["audits.read", "audits.perform"];
     routeApi({ "GET /audit-findings/f1": finding({ status: "closed", closedNote: "Done", closedAt: "2026-11-09T10:00:00Z" }), "GET /audit-findings/f1/attachments": { data: [{ id: "x1", findingId: "f1", fileName: "photo.jpg", contentType: "image/jpeg", sizeBytes: 2048, storagePath: "p", createdAt: "2026-11-08T10:00:00Z", createdBy: null, deletedAt: null, deleteReason: null }] } });
-    renderAt("/Documentation/Audit-Findings/f1");
+    renderAt("/Audits/Findings/f1");
     expect(await screen.findByText("photo.jpg")).toBeInTheDocument();
     expect(screen.queryByText(/Drag and drop/i)).toBeNull();
   });
@@ -328,9 +328,9 @@ describe("the findings register", () => {
         finding({ id: "f2", reference: "AF-26-0002", title: "Swarf", classification: { id: "c-obs", key: "observation", label: "Observation", kind: "observation" }, owner: null, dueOn: null, overdue: true, status: "closed" }),
       ]),
     });
-    renderAt("/Documentation/Audit-Findings");
+    renderAt("/Audits/Findings");
     const table = await screen.findByRole("region", { name: "Audit findings" });
-    expect(await within(table).findByRole("link", { name: "AF-26-0001" })).toHaveAttribute("href", "/Documentation/Audit-Findings/f1");
+    expect(await within(table).findByRole("link", { name: "AF-26-0001" })).toHaveAttribute("href", "/Audits/Findings/f1");
     expect(within(table).getByText("Work instruction missing")).toBeInTheDocument();
     expect(within(table).getByText("Major non-conformity")).toBeInTheDocument();
     expect(within(table).getAllByRole("link", { name: /AR-26-0001 · Cell audit/ })).toHaveLength(2);
@@ -343,7 +343,7 @@ describe("the findings register", () => {
 
   it("filters by status, classification, kind, owner and audit, and only the overdue, kept in the URL with chips that clear them", async () => {
     routeApi({ "GET /audit-findings": page([finding()]) });
-    renderAt("/Documentation/Audit-Findings");
+    renderAt("/Audits/Findings");
     await screen.findByRole("link", { name: "AF-26-0001" });
     const choose = async (label, option) => {
       await userEvent.click(screen.getByRole("combobox", { name: label }));
@@ -376,7 +376,7 @@ describe("the findings register", () => {
 
   it("starts from a URL with filters already set", async () => {
     routeApi({ "GET /audit-findings": page([]) });
-    renderAt("/Documentation/Audit-Findings?status=open&overdue=true&kind=observation");
+    renderAt("/Audits/Findings?status=open&overdue=true&kind=observation");
     await waitFor(() => expect(last("GET /audit-findings")?.path).toMatch(/status=open/));
     expect(last("GET /audit-findings").path).toContain("overdue=true");
     expect(last("GET /audit-findings").path).toContain("kind=observation");
@@ -531,8 +531,8 @@ describe("the audit behind a non-conformance", () => {
         <NcrAuditSource source={source()} />
       </MemoryRouter>
     );
-    expect(screen.getByRole("link", { name: "AR-26-0001" })).toHaveAttribute("href", "/Documentation/Audit-Records/r1");
-    expect(screen.getByRole("link", { name: "AF-26-0001" })).toHaveAttribute("href", "/Documentation/Audit-Findings/f1");
+    expect(screen.getByRole("link", { name: "AR-26-0001" })).toHaveAttribute("href", "/Audits/Records/r1");
+    expect(screen.getByRole("link", { name: "AF-26-0001" })).toHaveAttribute("href", "/Audits/Findings/f1");
     expect(screen.getByText("Major non-conformity")).toBeInTheDocument();
     expect(screen.getByText("Open")).toBeInTheDocument();
     const answers = screen.getByRole("list", { name: "Answers behind this NC from AR-26-0001" });

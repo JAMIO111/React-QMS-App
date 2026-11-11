@@ -191,7 +191,7 @@ const QuestionRow = ({ q, index, count, onChange, onMove, onRemove }) => {
   );
 };
 
-/** Define or change an audit (/Documentation/Audits/new and /:id/edit). */
+/** Define or change an audit (/Audits/Templates/new and /:id/edit). */
 const AuditForm = () => {
   const { id } = useParams();
   const editing = !!id;
@@ -257,7 +257,7 @@ const AuditFormBody = ({ audit }) => {
     mutation.mutate(audit ? { path: `/audits/${audit.id}`, method: "PATCH", body } : { path: "/audits", body }, {
       onSuccess: (saved) => {
         showToast({ type: "success", title: "Saved", message: audit ? `${saved.reference} updated${saved.version !== audit.version ? `, now version ${saved.version}` : ""}.` : `${saved.reference} defined.` });
-        navigate(`/Documentation/Audits/${saved.id}`);
+        navigate(`/Audits/Templates/${saved.id}`);
       },
       onError: (error) => showToast({ type: "error", title: "Not saved", message: describeApiError(error) }),
     });
@@ -267,7 +267,7 @@ const AuditFormBody = ({ audit }) => {
     <form onSubmit={submit} noValidate className="flex w-full min-w-0 flex-1 min-h-0 flex-col gap-4 overflow-auto bg-primary-bg p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-2">
-          <Link to={audit ? `/Documentation/Audits/${audit.id}` : "/Documentation/Audits"} className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
+          <Link to={audit ? `/Audits/Templates/${audit.id}` : "/Audits/Templates"} className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
             <ArrowLeftIcon /> {audit ? audit.reference : "Audits"}
           </Link>
           <h1 className="text-xl font-semibold text-primary-text">{audit ? `Edit ${audit.reference}` : "Define an audit"}</h1>
@@ -278,7 +278,7 @@ const AuditFormBody = ({ audit }) => {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <CTAButton to={audit ? `/Documentation/Audits/${audit.id}` : "/Documentation/Audits"} type="neutral" size="md">
+          <CTAButton to={audit ? `/Audits/Templates/${audit.id}` : "/Audits/Templates"} type="neutral" size="md">
             Cancel
           </CTAButton>
           <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>

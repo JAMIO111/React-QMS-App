@@ -46,9 +46,9 @@ describe("supplier audits tab", () => {
       "GET /audit-findings": { data: [finding], page: 1, pageSize: 50, total: 1 },
     });
     renderUi();
-    expect(await screen.findByRole("link", { name: "AUD-001 · Supplier process audit" })).toHaveAttribute("href", "/Documentation/Audits/a1");
-    expect(screen.getByRole("link", { name: "AR-26-0001" })).toHaveAttribute("href", "/Documentation/Audit-Records/r1");
-    expect(await screen.findByRole("link", { name: "AF-26-0001" })).toHaveAttribute("href", "/Documentation/Audit-Findings/f1");
+    expect(await screen.findByRole("link", { name: "AUD-001 · Supplier process audit" })).toHaveAttribute("href", "/Audits/Templates/a1");
+    expect(screen.getByRole("link", { name: "AR-26-0001" })).toHaveAttribute("href", "/Audits/Records/r1");
+    expect(await screen.findByRole("link", { name: "AF-26-0001" })).toHaveAttribute("href", "/Audits/Findings/f1");
     expect(screen.getByRole("link", { name: "NCR-26-0007" })).toBeInTheDocument();
     expect(screen.getByText("Calibration records missing")).toBeInTheDocument();
     for (const k of ["GET /audits", "GET /audit-records", "GET /audit-findings"]) expect(calls.find((c) => c.k === k).path).toContain("supplierId=s1");

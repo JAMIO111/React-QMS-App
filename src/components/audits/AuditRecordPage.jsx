@@ -216,7 +216,7 @@ const Question = ({ q, recordId, editable, save, canFinding, onFinding }) => {
       {r?.finding ? (
         <p className="flex flex-wrap items-center gap-2 text-sm text-secondary-text">
           Finding
-          <Link to={`/Documentation/Audit-Findings/${r.finding.id}`} className="font-medium text-link-color hover:underline">
+          <Link to={`/Audits/Findings/${r.finding.id}`} className="font-medium text-link-color hover:underline">
             {r.finding.reference}
           </Link>
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${FINDING_KIND_PILL[r.finding.kind]}`}>{r.finding.classification}</span>
@@ -282,7 +282,7 @@ const Findings = ({ findings }) =>
     <ul aria-label="Findings" className="flex flex-col divide-y divide-border-color">
       {findings.map((f) => (
         <li key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
-          <Link to={`/Documentation/Audit-Findings/${f.id}`} className="font-medium text-link-color hover:underline">
+          <Link to={`/Audits/Findings/${f.id}`} className="font-medium text-link-color hover:underline">
             {f.reference}
           </Link>
           <span className={f.status === "withdrawn" ? "text-secondary-text line-through" : "text-primary-text"}>{f.title}</span>
@@ -300,7 +300,7 @@ const Findings = ({ findings }) =>
     </ul>
   );
 
-/** One audit carried out (/Documentation/Audit-Records/:id): answer the checklist, say what it was carried out on, complete it. */
+/** One audit carried out (/Audits/Records/:id): answer the checklist, say what it was carried out on, complete it. */
 const AuditRecordPage = () => {
   const { id } = useParams();
   const { can } = usePermissions();
@@ -325,7 +325,7 @@ const AuditRecordPage = () => {
     <div className="flex w-full min-w-0 flex-1 min-h-0 flex-col gap-4 overflow-auto bg-primary-bg p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-2">
-          <Link to="/Documentation/Audit-Records" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
+          <Link to="/Audits/Records" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
             <ArrowLeftIcon /> Audit records
           </Link>
           <div className="flex flex-wrap items-center gap-3">
@@ -335,7 +335,7 @@ const AuditRecordPage = () => {
             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_PILL[r.status]}`}>{recordStatusLabel(r.status)}</span>
             {r.result && <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${RESULT_PILL[r.result]}`}>{resultLabel(r.result)}</span>}
           </div>
-          <Link to={`/Documentation/Audits/${r.audit.id}`} className="w-fit text-sm text-link-color hover:underline">
+          <Link to={`/Audits/Templates/${r.audit.id}`} className="w-fit text-sm text-link-color hover:underline">
             {r.audit.reference} · {auditTypeLabel(r.audit.auditType)}
           </Link>
           <p className="text-sm text-secondary-text" data-testid="record-version">
@@ -344,7 +344,7 @@ const AuditRecordPage = () => {
             {r.version || r.currentVersion ? (
               <>
                 {" · "}
-                <Link to={`/Documentation/Audits/${r.audit.id}`} className="text-link-color hover:underline">Version history</Link>
+                <Link to={`/Audits/Templates/${r.audit.id}`} className="text-link-color hover:underline">Version history</Link>
               </>
             ) : null}
           </p>

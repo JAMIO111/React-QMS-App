@@ -12,7 +12,7 @@ const NcrAuditSource = ({ source }) => (
     {source.items.map((item) => (
       <div key={item.finding?.id ?? item.record.id} className="flex flex-col gap-2">
         <p className="text-sm text-primary-text">
-          <Link to={`/Documentation/Audit-Records/${item.record.id}`} className="font-medium text-link-color hover:underline">
+          <Link to={`/Audits/Records/${item.record.id}`} className="font-medium text-link-color hover:underline">
             {item.record.reference}
           </Link>{" "}
           · {item.record.audit.reference} · {item.record.audit.title} · carried out {formatDate(item.record.performedOn)}
@@ -20,7 +20,7 @@ const NcrAuditSource = ({ source }) => (
         {item.finding && (
           <p className="flex flex-wrap items-center gap-2 text-sm text-primary-text">
             Finding
-            <Link to={`/Documentation/Audit-Findings/${item.finding.id}`} className="font-medium text-link-color hover:underline">
+            <Link to={`/Audits/Findings/${item.finding.id}`} className="font-medium text-link-color hover:underline">
               {item.finding.reference}
             </Link>
             · {item.finding.title}

@@ -1,4 +1,16 @@
-/** Audits (Documentation → Audits): labels and small helpers shared by the register, the page and the form. */
+/** Audits (the Audits module): labels and small helpers shared by the register, the page and the form. */
+
+/**
+ * Audit pages used to live under /Documentation. Gives the address they have now (same ending, same query) so old links and bookmarks still
+ * land on the right page, or null for an address that is not one of the old audit pages.
+ */
+export const legacyAuditPath = (pathname) => {
+  const m = /^\/Documentation\/(Audit-Dashboard|Audit-Schedule|Audit-Records|Audit-Findings|Audits)(\/.*)?$/.exec(pathname ?? "");
+  if (!m) return null;
+  const base = { "Audit-Dashboard": "/Audits", "Audit-Schedule": "/Audits/Schedule", "Audit-Records": "/Audits/Records", "Audit-Findings": "/Audits/Findings", Audits: "/Audits/Templates" }[m[1]];
+  return `${base}${m[2] ?? ""}`;
+};
+
 export const AUDIT_TYPES = [
   { value: "process", label: "Process audit" },
   { value: "product", label: "Product audit" },

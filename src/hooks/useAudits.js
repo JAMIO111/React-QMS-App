@@ -4,7 +4,7 @@ import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
 import { provisionalResult } from "../lib/audits";
 
-/** Audits (Documentation → Audits): the register of audit definitions, one audit, and the changes made to them. */
+/** Audits (the Audits module): the register of audit definitions, one audit, and the changes made to them. */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "documentation", "audits", ...rest];
 
 const qs = (params) => {

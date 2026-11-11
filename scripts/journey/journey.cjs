@@ -436,7 +436,7 @@ async function containAndDispose({ page, stack, APP, orgName, see, shot, step, l
 /** The quality team defines an audit: checklist, what it is relevant to, frequency and pass mark; it appears in the Audits register. */
 async function defineAudit({ page, stack, APP, orgName, see, shot, step, log }) {
   step('the quality team defines a weekly layered process audit and finds it in the Audits register');
-  await page.goto(`${APP}/Documentation/Audits`);
+  await page.goto(`${APP}/Audits/Templates`);
   await see(page.getByRole('button', { name: /New audit/ }));
   await shot(page, '56-audits-empty');
   await page.getByRole('button', { name: /New audit/ }).click();
@@ -490,7 +490,7 @@ async function defineAudit({ page, stack, APP, orgName, see, shot, step, log }) 
   await see(page.getByRole('list', { name: 'Checklist' }).getByText('Critical'));
   await page.waitForTimeout(300);
   await shot(page, '58-audit-page');
-  await page.goto(`${APP}/Documentation/Audits`);
+  await page.goto(`${APP}/Audits/Templates`);
   await see(page.getByRole('region', { name: 'Audits' }).getByText('AUD-001'));
   const { rows: [d] } = await stack.admin.query(`select d.reference, d.frequency_kind, (select count(*)::int from public.audit_questions q where q.audit_definition_id = d.id) as questions,
       (select count(*)::int from public.audit_targets t where t.audit_definition_id = d.id) as targets from public.audit_definitions d join public.organisations o on o.id = d.organisation_id where o.name = $1`, [orgName]);
@@ -506,7 +506,7 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
     `update public.audit_definitions d set created_at = now() - interval '30 days' from public.organisations o where o.id = d.organisation_id and o.name = $1`,
     [orgName]
   );
-  await page.goto(`${APP}/Documentation/Audit-Schedule`);
+  await page.goto(`${APP}/Audits/Schedule`);
   await see(page.getByRole('table', { name: 'Scheduled audits' }));
   await shot(page, '59-audit-schedule');
   await page.getByRole('button', { name: /^Start AUD-001/ }).first().click();
@@ -554,11 +554,11 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
   await page.waitForTimeout(400);
   await shot(page, '62-ncr-from-audit');
 
-  await page.goto(`${APP}/Documentation/Audit-Records`);
+  await page.goto(`${APP}/Audits/Records`);
   await see(page.getByRole('region', { name: 'Audit records' }).getByRole('link', { name: /^AR-\d\d-0001$/ }));
   await see(page.getByRole('region', { name: 'Audit records' }).getByText('Fail'));
   await shot(page, '63-audit-records');
-  await page.goto(`${APP}/Documentation/Audits`);
+  await page.goto(`${APP}/Audits/Templates`);
   await see(page.getByRole('region', { name: 'Audits' }).getByText('Fail'));
   const { rows: [r] } = await stack.admin.query(
     `select r.status, r.result, r.critical_failed_count, r.occurrence_id is not null as scheduled,
@@ -572,7 +572,7 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
   if (!r || r.status !== 'completed' || r.result !== 'fail' || r.critical_failed_count !== 1 || !r.scheduled || r.links !== 1 || r.findings !== 1 || r.targets !== 2) throw new Error('the audit was not carried out as expected');
 
   step('the quality team changes the audit and is asked why; the history shows the version, the reason and what changed, and the record keeps the version it was done against');
-  await page.goto(`${APP}/Documentation/Audits`);
+  await page.goto(`${APP}/Audits/Templates`);
   await page.getByRole('region', { name: 'Audits' }).getByRole('link', { name: 'AUD-001' }).click();
   await see(page.getByText('Version 1', { exact: true }).first());
   await page.getByRole('link', { name: 'Edit' }).click();
@@ -593,7 +593,7 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
   await see(versionDialog.getByRole('region', { name: 'Changes from version 1' }).getByText(/Pass mark: 100% → 90%/));
   await shot(page, '65-audit-version');
   await versionDialog.getByRole('button', { name: 'Close' }).click();
-  await page.goto(`${APP}/Documentation/Audit-Records`);
+  await page.goto(`${APP}/Audits/Records`);
   await page.getByRole('region', { name: 'Audit records' }).getByRole('link', { name: /^AR-\d\d-0001$/ }).click();
   await see(page.getByTestId('record-version').getByText(/Done against version 1 of the audit \(the audit is now at version 2\)/));
   const { rows: [v] } = await stack.admin.query(
@@ -605,7 +605,7 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
   if (!v || v.versions !== 2 || v.record_version !== 1 || v.reason !== 'Lowered the pass mark while the cell is being retrained') throw new Error('the audit change was not versioned as expected');
 
   step('the audits dashboard shows planned against done, findings, coverage and the change just made');
-  await page.goto(`${APP}/Documentation/Audit-Dashboard`);
+  await page.goto(`${APP}/Audits`);
   await see(page.getByRole('heading', { name: 'Audits dashboard' }));
   await see(page.getByRole('link', { name: /Audits completed/ }).getByText('1', { exact: true }));
   await see(page.getByRole('link', { name: /Open findings/ }));

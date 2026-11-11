@@ -128,7 +128,7 @@ export const VersionDialog = ({ audit, version, onClose }) => {
               <ul className="flex flex-col gap-0.5 text-sm text-primary-text">
                 {v.records.map((r) => (
                   <li key={r.id}>
-                    <Link to={`/Documentation/Audit-Records/${r.id}`} className="text-link-color hover:underline">{r.reference}</Link> · {r.status === "completed" ? resultLabel(r.result) : recordStatusLabel(r.status)}
+                    <Link to={`/Audits/Records/${r.id}`} className="text-link-color hover:underline">{r.reference}</Link> · {r.status === "completed" ? resultLabel(r.result) : recordStatusLabel(r.status)}
                   </li>
                 ))}
                 {v.recordCount > v.records.length && <li className="text-secondary-text">and {v.recordCount - v.records.length} more</li>}
@@ -178,7 +178,7 @@ export const VersionHistory = ({ audit }) => {
                   <td className="py-1.5 pr-3 text-secondary-text">{v.summary.length ? v.summary.join("; ") : v.version === 1 ? "" : "—"}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">
                     {v.recordCount ? (
-                      <Link to={`/Documentation/Audit-Records?audit=${audit.id}&version=${v.version}`} className="text-link-color hover:underline">{v.recordCount}</Link>
+                      <Link to={`/Audits/Records?audit=${audit.id}&version=${v.version}`} className="text-link-color hover:underline">{v.recordCount}</Link>
                     ) : (
                       0
                     )}

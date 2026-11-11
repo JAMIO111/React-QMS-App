@@ -72,6 +72,7 @@ import {
   Printer as LucidePrinter,
   Route as LucideRoute,
   Search as LucideSearch,
+  SearchCheck as LucideSearchCheck,
   Settings as LucideSettings,
   Share as LucideShare,
   ShieldCheck as LucideShieldCheck,
@@ -205,6 +206,7 @@ export const SaveIcon = withDefaults(LucideSave);
 export const PrinterIcon = withDefaults(LucidePrinter);
 export const RouteIcon = withDefaults(LucideRoute);
 export const SearchIcon = withDefaults(LucideSearch);
+export const SearchCheckIcon = withDefaults(LucideSearchCheck);
 export const SettingsIcon = withDefaults(LucideSettings);
 export const ShareIcon = withDefaults(LucideShare);
 export const ShieldCheckIcon = withDefaults(LucideShieldCheck);

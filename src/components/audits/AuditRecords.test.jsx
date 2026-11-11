@@ -139,10 +139,10 @@ const renderAt = (url) =>
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[url]}>
         <Routes>
-          <Route path="/Documentation/Audit-Records" element={<><AuditRecordsPage /><Where /></>} />
-          <Route path="/Documentation/Audit-Records/:id" element={<><AuditRecordPage /><Where /></>} />
-          <Route path="/Documentation/Audit-Schedule" element={<><AuditSchedulePage /><Where /></>} />
-          <Route path="/Documentation/Audits/:id" element={<Where />} />
+          <Route path="/Audits/Records" element={<><AuditRecordsPage /><Where /></>} />
+          <Route path="/Audits/Records/:id" element={<><AuditRecordPage /><Where /></>} />
+          <Route path="/Audits/Schedule" element={<><AuditSchedulePage /><Where /></>} />
+          <Route path="/Audits/Templates/:id" element={<Where />} />
           <Route path="/Non-Conformance/Register/:id" element={<Where />} />
         </Routes>
         <div id="modal-root" />
@@ -159,7 +159,7 @@ beforeEach(() => {
 describe("answering an audit", () => {
   it("shows the questions as they were started, with the procedure and what is still needed", async () => {
     routeApi({ "GET /audit-records/r1": record() });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     expect(await screen.findByRole("heading", { name: "AR-26-0001 · Cell audit" })).toBeInTheDocument();
     const list = screen.getByRole("list", { name: "Checklist" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(4);
@@ -176,7 +176,7 @@ describe("answering an audit", () => {
   it("saves a pass / fail or yes / no answer as soon as it is chosen, and shows it straight away", async () => {
     // The save is still on its way: the screen already shows the answer.
     routeApi({ "GET /audit-records/r1": record(), "PUT /audit-records/r1/responses": () => new Promise(() => {}) });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     const group = await screen.findAllByRole("radiogroup", { name: "Answer to question 2" });
     await userEvent.click(within(group[0]).getByRole("radio", { name: "Fail" }));
     expect(within(group[0]).getByRole("radio", { name: "Fail" })).toHaveAttribute("aria-checked", "true");
@@ -196,7 +196,7 @@ describe("answering an audit", () => {
       "GET /audit-records/r1": () => (gets++ === 0 ? record() : new Promise(() => {})),
       "PUT /audit-records/r1/responses": () => Promise.reject(new Error("The server said no")),
     });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     const fail = within((await screen.findAllByRole("radiogroup", { name: "Answer to question 2" }))[0]).getByRole("radio", { name: "Fail" });
     await userEvent.click(fail);
     await waitFor(() => expect(sent("PUT /audit-records/r1/responses")).toHaveLength(1));
@@ -205,7 +205,7 @@ describe("answering an audit", () => {
 
   it("saves a number when the box is left", async () => {
     routeApi({ "GET /audit-records/r1": record(), "PUT /audit-records/r1/responses": record() });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     const box = await screen.findByLabelText("Answer to question 3");
     await userEvent.type(box, "8.5");
     expect(sent("PUT /audit-records/r1/responses")).toHaveLength(0);
@@ -216,7 +216,7 @@ describe("answering an audit", () => {
   it("saves what was found for a failed answer when the note is left, and a text question's note", async () => {
     const failed = record({ questions: questions().map((q) => (q.id === "q2" ? answered(q, { answer: "fail", result: "fail" }) : q)) });
     routeApi({ "GET /audit-records/r1": failed, "PUT /audit-records/r1/responses": failed });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     const found = await screen.findByLabelText("What was found, question 2");
     expect(found).toHaveAttribute("aria-required", "true");
     await userEvent.type(found, "Swarf under the bench");
@@ -236,7 +236,7 @@ describe("answering an audit", () => {
         return current;
       },
     });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     const lathe = await screen.findByRole("checkbox", { name: "CNC-1 · Lathe" });
     expect(lathe).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "CNC-2 · Mill" })).not.toBeChecked();
@@ -250,7 +250,7 @@ describe("answering an audit", () => {
   it("completes the audit once nothing is still needed, and says what the database worked out", async () => {
     const ready = record({ problems: [], targets: [{ kind: "machine", id: "m1", label: "CNC-1 · Lathe" }] });
     routeApi({ "GET /audit-records/r1": ready, "POST /audit-records/r1/complete": { ...ready, status: "completed", result: "pass", score: 100, reference: "AR-26-0001" } });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     const button = await screen.findByRole("button", { name: "Complete audit" });
     expect(button).toBeEnabled();
     expect(screen.queryByRole("list", { name: "Still needed" })).toBeNull();
@@ -260,7 +260,7 @@ describe("answering an audit", () => {
 
   it("abandons with a reason", async () => {
     routeApi({ "GET /audit-records/r1": record(), "POST /audit-records/r1/abandon": record() });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     await userEvent.click(await screen.findByRole("button", { name: "Abandon" }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.type(within(dialog).getByLabelText("Why is it being abandoned?"), "Started by mistake");
@@ -271,7 +271,7 @@ describe("answering an audit", () => {
   it("is read-only for people who may not perform audits", async () => {
     permissions = ["audits.read"];
     routeApi({ "GET /audit-records/r1": record() });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     await screen.findByRole("heading", { name: /AR-26-0001/ });
     expect(screen.getAllByRole("radio").every((r) => r.disabled)).toBe(true);
     expect(screen.getByLabelText("Answer to question 3")).toBeDisabled();
@@ -301,7 +301,7 @@ describe("a completed audit", () => {
 
   it("shows the result, the score against the pass mark and the failed critical question, with everything frozen", async () => {
     routeApi({ "GET /audit-records/r1": done() });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     const banner = await screen.findByRole("status");
     expect(banner).toHaveTextContent("Failed with 66.7% (pass mark 80%)");
     expect(banner).toHaveTextContent("2 passed, 1 failed, 1 not applicable; 1 critical question failed");
@@ -313,7 +313,7 @@ describe("a completed audit", () => {
 
   it("shows a failed critical answer's need for a finding, and creates one prefilled from the answer", async () => {
     routeApi({ "GET /audit-records/r1": done(), "POST /audit-records/r1/findings": finding() });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     const q1 = within(await screen.findByRole("listitem", { name: "Question 1" }));
     expect(q1.getByText(/needs a finding before the audit can be completed/)).toBeInTheDocument();
     // Only a failed answer offers it: the passed question beside it does not.
@@ -344,7 +344,7 @@ describe("a completed audit", () => {
     const two = done();
     two.questions[1] = answered(two.questions[1], { answer: "fail", result: "fail", note: "Swarf" });
     routeApi({ "GET /audit-records/r1": two, "POST /audit-records/r1/findings": finding() });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     const q2 = within(await screen.findByRole("listitem", { name: "Question 2" }));
     expect(q2.queryByText(/needs a finding/)).toBeNull();
     await userEvent.click(q2.getByRole("button", { name: "Create finding" }));
@@ -369,10 +369,10 @@ describe("a completed audit", () => {
       "GET /audit-records/r1": withFinding,
       "GET /audit-records/r1/findings": { data: [finding({ owner: { id: "e1", name: "Grace Hopper" }, ncr: { id: "n9", reference: "NCR-26-0009", stage: "draft" } }), finding({ id: "f2", reference: "AF-26-0002", status: "withdrawn", title: "Raised in error", answer: null, classification: { id: "c-obs", key: "observation", label: "Observation", kind: "observation" } })] },
     });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     const q1 = within(await screen.findByRole("listitem", { name: "Question 1" }));
     expect(q1.queryByRole("button", { name: "Create finding" })).toBeNull();
-    expect(q1.getByRole("link", { name: "AF-26-0001" })).toHaveAttribute("href", "/Documentation/Audit-Findings/f1");
+    expect(q1.getByRole("link", { name: "AF-26-0001" })).toHaveAttribute("href", "/Audits/Findings/f1");
     const list = within(await screen.findByRole("list", { name: "Findings" }));
     const [first, second] = list.getAllByRole("listitem");
     expect(first).toHaveTextContent("AF-26-0001");
@@ -388,7 +388,7 @@ describe("a completed audit", () => {
 
   it("cannot raise a finding when no classification is in use", async () => {
     routeApi({ "GET /audit-records/r1": done(), "GET /audit-finding-classifications": { data: CLASSES.map((c) => ({ ...c, active: false })) } });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     await userEvent.click(await screen.findByRole("button", { name: "Add finding" }));
     const dialog = await screen.findByRole("dialog", { name: "Add a finding" });
     await userEvent.type(within(dialog).getByLabelText("Title"), "Something");
@@ -398,7 +398,7 @@ describe("a completed audit", () => {
 
   it("adds a finding that is not tied to a question", async () => {
     routeApi({ "GET /audit-records/r1": done(), "POST /audit-records/r1/findings": finding({ answer: null }) });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     await userEvent.click(await screen.findByRole("button", { name: "Add finding" }));
     const dialog = await screen.findByRole("dialog", { name: "Add a finding" });
     await userEvent.type(within(dialog).getByLabelText("Title"), "Better lighting");
@@ -416,14 +416,14 @@ describe("a completed audit", () => {
   it("offers no way to raise findings without audits.perform, or on an abandoned record, but still lists them", async () => {
     permissions = ["audits.read"];
     routeApi({ "GET /audit-records/r1": done(), "GET /audit-records/r1/findings": { data: [finding()] } });
-    const { unmount } = renderAt("/Documentation/Audit-Records/r1");
+    const { unmount } = renderAt("/Audits/Records/r1");
     expect(await screen.findByRole("list", { name: "Findings" })).toHaveTextContent("AF-26-0001");
     expect(screen.queryByRole("button", { name: "Create finding" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Add finding" })).toBeNull();
     unmount();
     permissions = ["audits.read", "audits.perform"];
     routeApi({ "GET /audit-records/r1": { ...done(), status: "abandoned", result: null, abandonReason: "Wrong machine" } });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     await screen.findByText("Wrong machine");
     expect(screen.queryByRole("button", { name: "Create finding" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Add finding" })).toBeNull();
@@ -434,7 +434,7 @@ describe("a completed audit", () => {
     const raised = done();
     raised.questions[0].response.ncrs = [{ id: "n9", reference: "NCR-26-0009", stage: "draft" }];
     routeApi({ "GET /audit-records/r1": raised });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     expect(await screen.findByRole("link", { name: "NCR-26-0009" })).toHaveAttribute("href", "/Non-Conformance/Register/n9");
     expect(screen.queryByRole("button", { name: "Raise non-conformance" })).toBeNull();
   });
@@ -443,21 +443,21 @@ describe("a completed audit", () => {
 describe("the version a record was done against", () => {
   it("is said on the record, with the version the audit is at now when it has moved on, and a link to the history", async () => {
     routeApi({ "GET /audit-records/r1": record({ version: 3, currentVersion: 4 }), "GET /ncrs": { data: [], nextCursor: null } });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     const line = await screen.findByTestId("record-version");
     expect(line).toHaveTextContent("Done against version 3 of the audit (the audit is now at version 4)");
-    expect(within(line).getByRole("link", { name: "Version history" })).toHaveAttribute("href", "/Documentation/Audits/a1");
+    expect(within(line).getByRole("link", { name: "Version history" })).toHaveAttribute("href", "/Audits/Templates/a1");
   });
 
   it("does not mention a newer version when the record is on the current one", async () => {
     routeApi({ "GET /audit-records/r1": record({ version: 3, currentVersion: 3 }), "GET /ncrs": { data: [], nextCursor: null } });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     expect(await screen.findByTestId("record-version")).toHaveTextContent(/^Done against version 3 of the audit · Version history$/);
   });
 
   it("says when a record was made before versions were kept, without inventing one", async () => {
     routeApi({ "GET /audit-records/r1": record({ version: null, currentVersion: null }), "GET /ncrs": { data: [], nextCursor: null } });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     const line = await screen.findByTestId("record-version");
     expect(line).toHaveTextContent("Made before versions of audits were kept");
     expect(within(line).queryByRole("link")).toBeNull();
@@ -489,7 +489,7 @@ describe("audit records register", () => {
 
   it("shows the version of each record, and that the audit has moved on", async () => {
     routeApi({ "GET /audit-records": { data: [row(), row({ id: "r2", reference: "AR-26-0002", version: 4, currentVersion: 4 }), row({ id: "r3", reference: "AR-26-0003", version: null, currentVersion: null })], page: 1, pageSize: 25, total: 3 } });
-    renderAt("/Documentation/Audit-Records");
+    renderAt("/Audits/Records");
     const table = await screen.findByRole("region", { name: "Audit records" });
     const rows = await within(table).findAllByRole("row");
     expect(within(rows[1]).getByText("v3")).toBeInTheDocument();
@@ -501,7 +501,7 @@ describe("audit records register", () => {
 
   it("filters by the version from a link in the audit's history, as a chip that can be taken off", async () => {
     routeApi({ "GET /audit-records": { data: [row()], page: 1, pageSize: 25, total: 1 } });
-    renderAt("/Documentation/Audit-Records?audit=a1&version=3");
+    renderAt("/Audits/Records?audit=a1&version=3");
     await screen.findByRole("region", { name: "Audit records" });
     await waitFor(() => expect(last("GET /audit-records").path).toContain("version=3"));
     const chips = screen.getByLabelText("Active filters");
@@ -512,9 +512,9 @@ describe("audit records register", () => {
 
   it("lists the records with what each was carried out on, who did it, the result and score", async () => {
     routeApi({ "GET /audit-records": { data: [row(), row({ id: "r2", reference: "AR-26-0002", status: "in_progress", result: null, score: null, scheduledFor: null, carriedOutOn: [], failedCount: null, criticalFailedCount: null })], page: 1, pageSize: 25, total: 2 } });
-    renderAt("/Documentation/Audit-Records");
+    renderAt("/Audits/Records");
     const table = await screen.findByRole("region", { name: "Audit records" });
-    expect(await within(table).findByRole("link", { name: "AR-26-0001" })).toHaveAttribute("href", "/Documentation/Audit-Records/r1");
+    expect(await within(table).findByRole("link", { name: "AR-26-0001" })).toHaveAttribute("href", "/Audits/Records/r1");
     expect(within(table).getAllByText("AUD-001 · Cell audit")).toHaveLength(2);
     expect(within(table).getByText("CNC-1 · Lathe, OP-10")).toBeInTheDocument();
     expect(within(table).getAllByText("Ines Inspector")).toHaveLength(2);
@@ -529,7 +529,7 @@ describe("audit records register", () => {
 
   it("filters by result, status, audit, machine, dates and whose they are, kept in the URL with chips that clear them", async () => {
     routeApi({ "GET /audit-records": { data: [], page: 1, pageSize: 25, total: 0 } });
-    renderAt("/Documentation/Audit-Records");
+    renderAt("/Audits/Records");
     await screen.findByText("0 audit records");
     await userEvent.selectOptions(screen.getByLabelText("Result"), "fail");
     await userEvent.selectOptions(screen.getByLabelText("Status"), "completed");
@@ -553,7 +553,7 @@ describe("audit records register", () => {
 
   it("starts an unscheduled audit, only for people who may perform audits, and opens its record", async () => {
     routeApi({ "GET /audit-records": { data: [], page: 1, pageSize: 25, total: 0 }, "POST /audit-records": { id: "r9", reference: "AR-26-0009" } });
-    const { unmount } = renderAt("/Documentation/Audit-Records");
+    const { unmount } = renderAt("/Audits/Records");
     await userEvent.click(await screen.findByRole("button", { name: /Start an audit/ }));
     const dialog = await screen.findByRole("dialog");
     const start = within(dialog).getByRole("button", { name: "Start audit" });
@@ -562,10 +562,10 @@ describe("audit records register", () => {
     expect(within(dialog).getByText(/4 questions, 1 critical\. Pass mark 80%/)).toBeInTheDocument();
     await userEvent.click(start);
     await waitFor(() => expect(last("POST /audit-records")?.body).toEqual({ auditId: "a1" }));
-    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Documentation/Audit-Records/r9"));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Audits/Records/r9"));
     unmount();
     permissions = ["audits.read"];
-    renderAt("/Documentation/Audit-Records");
+    renderAt("/Audits/Records");
     await screen.findByText("0 audit records");
     expect(screen.queryByRole("button", { name: /Start an audit/ })).toBeNull();
   });
@@ -584,7 +584,7 @@ describe("audit schedule", () => {
 
   it("counts what is due, overdue, missed, in progress and done, with the pass and on-time rates", async () => {
     routeApi({ "GET /audit-schedule": scheduleBody(items()) });
-    renderAt("/Documentation/Audit-Schedule");
+    renderAt("/Audits/Schedule");
     const table = await screen.findByRole("table", { name: "Scheduled audits" });
     const tile = (name) => screen.getByRole("button", { name: new RegExp(`^${name}`) });
     expect(tile("Due in 7 days")).toHaveTextContent("1");
@@ -600,8 +600,8 @@ describe("audit schedule", () => {
     expect(within(table).getByText("Done · Pass")).toBeInTheDocument();
     expect(within(table).getByText("Done · Fail")).toBeInTheDocument();
     expect(within(table).getByText("Shutdown week")).toBeInTheDocument();
-    expect(within(table).getByRole("link", { name: "Continue AR-26-0003" })).toHaveAttribute("href", "/Documentation/Audit-Records/r3");
-    expect(within(table).getByRole("link", { name: "View AR-26-0001" })).toHaveAttribute("href", "/Documentation/Audit-Records/r1");
+    expect(within(table).getByRole("link", { name: "Continue AR-26-0003" })).toHaveAttribute("href", "/Audits/Records/r3");
+    expect(within(table).getByRole("link", { name: "View AR-26-0001" })).toHaveAttribute("href", "/Audits/Records/r1");
     expect(within(table).getByText(/\(3 days ago\)/)).toBeInTheDocument();
     expect(within(table).getByText(/\(in 1 day\)/)).toBeInTheDocument();
     expect(last("GET /audit-schedule").path).not.toContain("from=");
@@ -609,7 +609,7 @@ describe("audit schedule", () => {
 
   it("filters to a state when its figure is chosen, kept in the URL, and back again", async () => {
     routeApi({ "GET /audit-schedule": scheduleBody(items()) });
-    renderAt("/Documentation/Audit-Schedule");
+    renderAt("/Audits/Schedule");
     await screen.findByRole("table", { name: "Scheduled audits" });
     await userEvent.click(screen.getByRole("button", { name: /^Missed/ }));
     await waitFor(() => expect(last("GET /audit-schedule").path).toContain("state=missed"));
@@ -621,15 +621,15 @@ describe("audit schedule", () => {
 
   it("starts the audit for a slot and opens its record", async () => {
     routeApi({ "GET /audit-schedule": scheduleBody(items()), "POST /audit-records": { id: "r8", reference: "AR-26-0008" } });
-    renderAt("/Documentation/Audit-Schedule");
+    renderAt("/Audits/Schedule");
     await userEvent.click(await screen.findByRole("button", { name: "Start AUD-001 due 2026-11-05" }));
     await waitFor(() => expect(last("POST /audit-records")?.body).toEqual({ auditId: "a1", occurrenceId: "o1" }));
-    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Documentation/Audit-Records/r8"));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Audits/Records/r8"));
   });
 
   it("skips a slot with a reason and puts a skipped one back, for people who manage audits", async () => {
     routeApi({ "GET /audit-schedule": scheduleBody(items()), "POST /audit-occurrences/o1/skip": slot(), "POST /audit-occurrences/o7/unskip": slot() });
-    renderAt("/Documentation/Audit-Schedule");
+    renderAt("/Audits/Schedule");
     await userEvent.click(await screen.findByRole("button", { name: "Skip AUD-001 due 2026-11-05" }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.type(within(dialog).getByLabelText("Why is it being skipped?"), "Machine down");
@@ -642,7 +642,7 @@ describe("audit schedule", () => {
   it("offers only what the person may do", async () => {
     permissions = ["audits.read"];
     routeApi({ "GET /audit-schedule": scheduleBody(items()) });
-    renderAt("/Documentation/Audit-Schedule");
+    renderAt("/Audits/Schedule");
     await screen.findByRole("table", { name: "Scheduled audits" });
     expect(screen.queryByRole("button", { name: /^Start / })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Skip / })).toBeNull();
@@ -653,7 +653,7 @@ describe("audit schedule", () => {
 
   it("shows a month as a calendar with each slot on its day, and opens a slot for its actions", async () => {
     routeApi({ "GET /audit-schedule": scheduleBody(items()), "POST /audit-records": { id: "r8" } });
-    renderAt("/Documentation/Audit-Schedule?view=calendar&month=2026-11");
+    renderAt("/Audits/Schedule?view=calendar&month=2026-11");
     const grid = await screen.findByRole("grid", { name: "Audit calendar, November 2026" });
     expect(last("GET /audit-schedule").path).toContain("from=2026-11-01");
     expect(last("GET /audit-schedule").path).toContain("to=2026-11-30");
@@ -670,14 +670,14 @@ describe("audit schedule", () => {
 
   it("does not apply the state filter to the calendar, which shows every state", async () => {
     routeApi({ "GET /audit-schedule": scheduleBody(items()) });
-    renderAt("/Documentation/Audit-Schedule?view=calendar&month=2026-11&state=missed");
+    renderAt("/Audits/Schedule?view=calendar&month=2026-11&state=missed");
     await screen.findByRole("grid", { name: "Audit calendar, November 2026" });
     expect(last("GET /audit-schedule").path).not.toContain("state=");
   });
 
   it("moves between months and back to now", async () => {
     routeApi({ "GET /audit-schedule": scheduleBody([]) });
-    renderAt("/Documentation/Audit-Schedule?view=calendar&month=2026-11");
+    renderAt("/Audits/Schedule?view=calendar&month=2026-11");
     await screen.findByRole("grid", { name: "Audit calendar, November 2026" });
     await userEvent.click(screen.getByRole("button", { name: "Next month" }));
     expect(await screen.findByRole("grid", { name: "Audit calendar, December 2026" })).toBeInTheDocument();
@@ -690,7 +690,7 @@ describe("audit schedule", () => {
 
   it("starts an unscheduled audit from the schedule", async () => {
     routeApi({ "GET /audit-schedule": scheduleBody([]), "POST /audit-records": { id: "r9", reference: "AR-26-0009" } });
-    renderAt("/Documentation/Audit-Schedule");
+    renderAt("/Audits/Schedule");
     await userEvent.click(await screen.findByRole("button", { name: /Start an unscheduled audit/ }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.selectOptions(await within(dialog).findByLabelText(/Audit/), "a1");
@@ -721,7 +721,7 @@ describe("the form follows the template: each response type shows its own contro
 
   it("shows the words each type answers with, and the rule from the template", async () => {
     routeApi({ "GET /audit-records/r1": typed(), "GET /audit-records/r1/attachments": { data: [] } });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     await screen.findByRole("heading", { name: /AR-26-0001/ });
     expect(buttons("Answer to question 1")).toEqual(["Yes", "No"]);
     expect(buttons("Answer to question 2")).toEqual(["Compliant", "Non-compliant"]);
@@ -744,7 +744,7 @@ describe("the form follows the template: each response type shows its own contro
 
   it("saves compliant / non-compliant, a rating and a choice as they are given", async () => {
     routeApi({ "GET /audit-records/r1": typed(), "GET /audit-records/r1/attachments": { data: [] }, "PUT /audit-records/r1/responses": typed() });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     await screen.findByRole("heading", { name: /AR-26-0001/ });
     await userEvent.click(within(screen.getByRole("radiogroup", { name: "Answer to question 2" })).getByRole("radio", { name: "Non-compliant" }));
     await waitFor(() => expect(sent("PUT /audit-records/r1/responses")).toHaveLength(1));
@@ -764,7 +764,7 @@ describe("the form follows the template: each response type shows its own contro
   it("clearing a choice clears the note that went with it", async () => {
     const r = withAnswer(typed(), "t7", { choice: "Oily", result: "fail", note: "Because it was oily" });
     routeApi({ "GET /audit-records/r1": r, "GET /audit-records/r1/attachments": { data: [] }, "PUT /audit-records/r1/responses": r });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     await screen.findByRole("heading", { name: /AR-26-0001/ });
     await userEvent.click(screen.getByRole("button", { name: "Clear Answer to question 7" }));
     await waitFor(() => expect(sent("PUT /audit-records/r1/responses")).toHaveLength(1));
@@ -777,7 +777,7 @@ describe("the form follows the template: each response type shows its own contro
     r = withAnswer(r, "t10", { value: 5, result: "pass" });
     r = withAnswer(r, "t5", { value: 212, result: null });
     routeApi({ "GET /audit-records/r1": r, "GET /audit-records/r1/attachments": { data: [] } });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     await screen.findByRole("heading", { name: /AR-26-0001/ });
     expect(screen.getByRole("combobox", { name: "Answer to question 7" })).toHaveValue("Oily");
     expect(screen.getByLabelText("What was found, question 7")).toHaveAttribute("aria-required", "true");
@@ -801,7 +801,7 @@ describe("the form follows the template: each response type shows its own contro
       "GET /audit-records/r1/attachments": { data: [file] },
       "POST /audit-records/r1/attachments": { ...file, id: "f2", fileName: "photo.jpg" },
     });
-    const { container } = renderAt("/Documentation/Audit-Records/r1");
+    const { container } = renderAt("/Audits/Records/r1");
     await screen.findByRole("heading", { name: /AR-26-0001/ });
     expect(await screen.findByText("earlier.jpg")).toBeInTheDocument();
     expect(calls.some((c) => c.path === "/audit-records/r1/attachments?deleted=include&questionId=t9")).toBe(true);
@@ -817,7 +817,7 @@ describe("the form follows the template: each response type shows its own contro
     let r = typed({ status: "completed", result: "pass", score: 100, passedCount: 1, failedCount: 0, naCount: 0, criticalFailedCount: 0, completedAt: "2026-11-08T11:00:00Z", availableTargets: [], targetsRequired: false });
     r = withAnswer(r, "t7", { choice: "Clean", result: "pass" });
     routeApi({ "GET /audit-records/r1": r, "GET /audit-records/r1/attachments": { data: [file] } });
-    renderAt("/Documentation/Audit-Records/r1");
+    renderAt("/Audits/Records/r1");
     expect(await screen.findByText("earlier.jpg")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Add files/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove earlier.jpg" })).toBeNull();

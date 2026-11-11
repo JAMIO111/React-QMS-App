@@ -38,7 +38,7 @@ export default function SupplierAudits({ supplier }) {
             <tbody>
               {auditRows.map((a) => (
                 <tr key={a.id} className="border-t border-border-color">
-                  <td className="py-1.5 pr-3"><Link to={`/Documentation/Audits/${a.id}`} className="text-link-color hover:underline">{a.reference} · {a.title}</Link></td>
+                  <td className="py-1.5 pr-3"><Link to={`/Audits/Templates/${a.id}`} className="text-link-color hover:underline">{a.reference} · {a.title}</Link></td>
                   <td className="py-1.5 pr-3 text-primary-text">{a.lastRecord ? <span className="inline-flex items-center gap-2">{formatDate(a.lastRecord.performedOn)} <Pill tone={RESULT_PILL[a.lastRecord.result]}>{resultLabel(a.lastRecord.result)}</Pill></span> : <span className="text-secondary-text">Never</span>}</td>
                   <td className="py-1.5 text-primary-text">{a.nextDueOn ? formatDate(a.nextDueOn) : <span className="text-secondary-text">—</span>}</td>
                 </tr>
@@ -56,7 +56,7 @@ export default function SupplierAudits({ supplier }) {
             <tbody>
               {recordRows.map((r) => (
                 <tr key={r.id} className="border-t border-border-color">
-                  <td className="py-1.5 pr-3"><Link to={`/Documentation/Audit-Records/${r.id}`} className="text-link-color hover:underline">{r.reference}</Link></td>
+                  <td className="py-1.5 pr-3"><Link to={`/Audits/Records/${r.id}`} className="text-link-color hover:underline">{r.reference}</Link></td>
                   <td className="py-1.5 pr-3 text-primary-text">{r.audit.title}{r.version ? <span className="text-secondary-text"> · v{r.version}</span> : null}</td>
                   <td className="py-1.5 pr-3 text-secondary-text">{formatDate(r.performedOn)}</td>
                   <td className="py-1.5 pr-3 text-secondary-text">{recordStatusLabel(r.status)}</td>
@@ -76,7 +76,7 @@ export default function SupplierAudits({ supplier }) {
             <tbody>
               {findingRows.map((f) => (
                 <tr key={f.id} className="border-t border-border-color">
-                  <td className="py-1.5 pr-3"><Link to={`/Documentation/Audit-Findings/${f.id}`} className="text-link-color hover:underline">{f.reference}</Link><span className="block text-xs text-secondary-text">{f.title}</span></td>
+                  <td className="py-1.5 pr-3"><Link to={`/Audits/Findings/${f.id}`} className="text-link-color hover:underline">{f.reference}</Link><span className="block text-xs text-secondary-text">{f.title}</span></td>
                   <td className="py-1.5 pr-3"><Pill tone={FINDING_KIND_PILL[f.classification.kind]}>{f.classification.label}</Pill></td>
                   <td className="py-1.5 pr-3 text-secondary-text">{f.dueOn ? formatDate(f.dueOn) : "—"}{f.overdue ? <span className="ml-1 text-error-color">overdue</span> : null}</td>
                   <td className="py-1.5 pr-3"><Pill tone={FINDING_STATUS_PILL[f.status]}>{findingStatusLabel(f.status)}</Pill></td>

@@ -12,11 +12,23 @@ describe("menuStructure", () => {
     ]);
   });
 
-  it("offers the audits dashboard first among the audit pages, to people who may read audits", () => {
+  it("has Audits as its own module, opening on the dashboard, for people who may read audits", () => {
+    const audits = menuStructure.find((m) => m.name === "Audits");
+    expect(audits).toMatchObject({ path: "/Audits", permission: "audits.read" });
+    expect(audits.subMenu[0]).toMatchObject({ name: "Dashboard", path: "/Audits", end: true });
+    expect(audits.subMenu.map((s) => [s.name, s.path])).toEqual([
+      ["Dashboard", "/Audits"],
+      ["Audit schedule", "/Audits/Schedule"],
+      ["Audit templates", "/Audits/Templates"],
+      ["Audit records", "/Audits/Records"],
+      ["Audit findings", "/Audits/Findings"],
+    ]);
+  });
+
+  it("keeps only alerts under Documentation", () => {
     const docs = menuStructure.find((m) => m.name === "Documentation");
-    const audits = docs.subMenu.filter((s) => s.permission === "audits.read").map((s) => [s.name, s.path]);
-    expect(audits[0]).toEqual(["Audit dashboard", "/Documentation/Audit-Dashboard"]);
-    expect(audits.map((a) => a[0])).toEqual(["Audit dashboard", "Audits", "Audit schedule", "Audit records", "Audit findings"]);
+    expect(docs.subMenu.map((s) => s.name)).toEqual(["My alerts", "Quality alerts"]);
+    expect(JSON.stringify(docs)).not.toMatch(/Audit/);
   });
 
   it("no longer links to removed holiday-let areas", () => {

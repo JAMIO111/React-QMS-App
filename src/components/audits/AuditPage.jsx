@@ -19,7 +19,7 @@ const Fact = ({ label, children }) => (
   </div>
 );
 
-/** One audit (/Documentation/Audits/:id): its procedure, checklist, what it is relevant to, frequency and who is expected to do it. */
+/** One audit (/Audits/Templates/:id): its procedure, checklist, what it is relevant to, frequency and who is expected to do it. */
 const AuditPage = () => {
   const { id } = useParams();
   const { can } = usePermissions();
@@ -39,7 +39,7 @@ const AuditPage = () => {
     <div className="flex w-full min-w-0 flex-1 min-h-0 flex-col gap-4 overflow-auto bg-primary-bg p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-2">
-          <Link to="/Documentation/Audits" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
+          <Link to="/Audits/Templates" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
             <ArrowLeftIcon /> Audits
           </Link>
           <div className="flex flex-wrap items-center gap-3">
@@ -56,10 +56,10 @@ const AuditPage = () => {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <CTAButton to={`/Documentation/Audit-Records?audit=${a.id}`} type="neutral" size="md">
+          <CTAButton to={`/Audits/Records?audit=${a.id}`} type="neutral" size="md">
             Audit records
           </CTAButton>
-          <CTAButton to={`/Documentation/Audit-Schedule?audit=${a.id}`} type="neutral" size="md">
+          <CTAButton to={`/Audits/Schedule?audit=${a.id}`} type="neutral" size="md">
             Schedule
           </CTAButton>
           {canPerform && a.status === "active" && (
@@ -70,7 +70,7 @@ const AuditPage = () => {
               onClick={() =>
                 mutation.mutate(
                   { path: "/audit-records", body: { auditId: a.id } },
-                  { onSuccess: (record) => { showToast({ type: "success", title: "Audit started", message: `${record.reference} is open.` }); navigate(`/Documentation/Audit-Records/${record.id}`); } }
+                  { onSuccess: (record) => { showToast({ type: "success", title: "Audit started", message: `${record.reference} is open.` }); navigate(`/Audits/Records/${record.id}`); } }
                 )
               }>
               <PlayIcon className="mr-1 inline" aria-hidden="true" /> Start audit
@@ -79,7 +79,7 @@ const AuditPage = () => {
         </div>
         {canManage && (
           <div className="flex flex-wrap items-center gap-2">
-            <CTAButton to={`/Documentation/Audits/${a.id}/edit`} type="secondary" size="md">
+            <CTAButton to={`/Audits/Templates/${a.id}/edit`} type="secondary" size="md">
               <PencilIcon className="mr-1 inline" aria-hidden="true" /> Edit
             </CTAButton>
             {a.status === "active" ? (
@@ -112,7 +112,7 @@ const AuditPage = () => {
           <Fact label="Questions">{`${a.questionCount} (${a.criticalCount} critical)`}</Fact>
           <Fact label="Last done">
             {a.lastRecord ? (
-              <Link to={`/Documentation/Audit-Records/${a.lastRecord.id}`} className="text-link-color hover:underline">
+              <Link to={`/Audits/Records/${a.lastRecord.id}`} className="text-link-color hover:underline">
                 {formatDate(a.lastRecord.performedOn)}: {resultLabel(a.lastRecord.result)}
               </Link>
             ) : (

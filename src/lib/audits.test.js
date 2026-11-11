@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ANSWER_TYPES, emptyQuestion, formatScore, isScoredType, measurementLimits, monthBounds, monthLabel, monthWeeks, provisionalResult, questionProblems, questionRule, questionsBody, questionToForm, shiftMonth, slotLabel, slotPill, SLOT_PILL, targetBody, targetKey } from "./audits";
+import { legacyAuditPath, ANSWER_TYPES, emptyQuestion, formatScore, isScoredType, measurementLimits, monthBounds, monthLabel, monthWeeks, provisionalResult, questionProblems, questionRule, questionsBody, questionToForm, shiftMonth, slotLabel, slotPill, SLOT_PILL, targetBody, targetKey } from "./audits";
 
 describe("provisionalResult (what is shown while an answer is being saved)", () => {
   const yesNo = { answerType: "yes_no", passAnswer: "yes" };
@@ -185,5 +185,24 @@ describe("the question types", () => {
     expect(questionRule({ answerType: "rating", ratingMax: 5, passRating: null })).toBe("1 to 5; not scored");
     expect(questionRule({ answerType: "evidence" })).toBe("at least one photograph or document is needed");
     expect(questionRule({ answerType: "text" })).toBe("a note, not scored");
+  });
+});
+
+describe("legacyAuditPath", () => {
+  it("maps the old Documentation audit addresses to the Audits module, keeping the ending", () => {
+    expect(legacyAuditPath("/Documentation/Audit-Dashboard")).toBe("/Audits");
+    expect(legacyAuditPath("/Documentation/Audit-Schedule")).toBe("/Audits/Schedule");
+    expect(legacyAuditPath("/Documentation/Audit-Records")).toBe("/Audits/Records");
+    expect(legacyAuditPath("/Documentation/Audit-Records/abc-1")).toBe("/Audits/Records/abc-1");
+    expect(legacyAuditPath("/Documentation/Audit-Findings/f1")).toBe("/Audits/Findings/f1");
+    expect(legacyAuditPath("/Documentation/Audits")).toBe("/Audits/Templates");
+    expect(legacyAuditPath("/Documentation/Audits/new")).toBe("/Audits/Templates/new");
+    expect(legacyAuditPath("/Documentation/Audits/a1/edit")).toBe("/Audits/Templates/a1/edit");
+  });
+  it("leaves every other address alone", () => {
+    expect(legacyAuditPath("/Documentation/My-Alerts")).toBeNull();
+    expect(legacyAuditPath("/Documentation/Quality-Alerts/1")).toBeNull();
+    expect(legacyAuditPath("/Audits")).toBeNull();
+    expect(legacyAuditPath(undefined)).toBeNull();
   });
 });

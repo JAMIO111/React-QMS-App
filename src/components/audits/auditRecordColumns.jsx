@@ -30,7 +30,7 @@ export const auditRecordColumns = [
     "Record",
     head(HashIcon, "Record"),
     (i) => (
-      <Link to={`/Documentation/Audit-Records/${i.row.original.id}`} className="table-row-item font-medium text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
+      <Link to={`/Audits/Records/${i.row.original.id}`} className="table-row-item font-medium text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
         {i.row.original.reference}
       </Link>
     ),

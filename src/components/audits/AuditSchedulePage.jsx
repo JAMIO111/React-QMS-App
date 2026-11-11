@@ -48,7 +48,7 @@ const SlotActions = ({ item, canPerform, canManage, onSkip, onChanged }) => {
       {
         onSuccess: (record) => {
           showToast({ type: "success", title: "Audit started", message: `${record.reference} is open.` });
-          navigate(`/Documentation/Audit-Records/${record.id}`);
+          navigate(`/Audits/Records/${record.id}`);
         },
         onError: (e) => showToast({ type: "error", title: "Could not start the audit", message: e.message }),
       }
@@ -67,7 +67,7 @@ const SlotActions = ({ item, canPerform, canManage, onSkip, onChanged }) => {
         </CTAButton>
       )}
       {item.record && (
-        <Link to={`/Documentation/Audit-Records/${item.record.id}`} className="text-sm font-medium text-link-color hover:underline" onClick={onChanged}>
+        <Link to={`/Audits/Records/${item.record.id}`} className="text-sm font-medium text-link-color hover:underline" onClick={onChanged}>
           {item.state === "in_progress" ? `Continue ${item.record.reference}` : `View ${item.record.reference}`}
         </Link>
       )}
@@ -111,7 +111,7 @@ const SlotDialog = ({ item, onClose, ...actions }) => (
           {item.record.reference} was carried out on {formatDate(item.record.performedOn)}: {item.record.result === "pass" ? "passed" : "failed"} ({item.record.score}%).
         </p>
       )}
-      <Link to={`/Documentation/Audits/${item.audit.id}`} className="w-fit text-link-color hover:underline">
+      <Link to={`/Audits/Templates/${item.audit.id}`} className="w-fit text-link-color hover:underline">
         Open the audit
       </Link>
       <SlotActions item={item} {...actions} onChanged={onClose} />
@@ -140,7 +140,7 @@ const List = ({ items, ...actions }) =>
             <tr key={item.id} className="border-b border-border-color last:border-0 align-top">
               <td className="whitespace-nowrap px-4 py-3">{dueText(item)}</td>
               <td className="px-4 py-3">
-                <Link to={`/Documentation/Audits/${item.audit.id}`} className="font-medium text-link-color hover:underline">
+                <Link to={`/Audits/Templates/${item.audit.id}`} className="font-medium text-link-color hover:underline">
                   {item.audit.reference}
                 </Link>{" "}
                 {item.audit.title}
@@ -191,7 +191,7 @@ const Calendar = ({ month, today, items, onPick }) => {
   );
 };
 
-/** The audit schedule (Documentation → Audit schedule): what is coming up, overdue, missed and done, as a list or a month calendar. */
+/** The audit schedule (Audits → Audit schedule): what is coming up, overdue, missed and done, as a list or a month calendar. */
 const AuditSchedulePage = () => {
   const { can } = usePermissions();
   const canPerform = can("audits.perform");

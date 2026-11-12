@@ -188,3 +188,30 @@ describe('dispositions', () => {
     await api().post(`/api/v1/ncrs/${ctx.nc}/dispositions`).set(h).send({ decision: 'scrap', quantity: 1, instructions: 'late' }).expect(409);
   });
 });
+
+describe('RMA numbers', () => {
+  it('are generated for a customer non-conformance, for all or part of the quantity, as a proposed disposition', async () => {
+    const h = await as(ids.ownerA);
+    const yy = String(new Date().getFullYear()).slice(2);
+    await api().post(`/api/v1/ncrs/${ctx.nc}/rma`).set(h).send({ quantity: 1 }).expect(409); // an internal one
+    const customer = (await api().post('/api/v1/customers').set(h).send({ code: 'RMA-C', name: 'Returning Customer' }).expect(201)).body.id;
+    const nc = (await api().post('/api/v1/ncrs').set(h).send({ source: 'customer', customerId: customer, title: 'Burrs', severity: 'major', quantityAffected: 10, description: 'Burrs', siteId: ids.siteA, open: true, categoryId: await categoryId(admin, ids.orgA) }).expect(201)).body.id;
+    const url = `/api/v1/ncrs/${nc}/rma`;
+    await api().post(url).set(await as(ids.dual)).send({ quantity: 1 }).expect(403);
+    await api().post(url).set(h).send({ quantity: 0 }).expect(400);
+    await api().post(url).set(h).send({ quantity: 1, reference: 'RMA-MINE' }).expect(400);
+    await api().post(`/api/v1/ncrs/${ids.orgB}/rma`).set(h).send({ quantity: 1 }).expect(404);
+    const first = (await api().post(url).set(h).send({ quantity: 4 }).expect(201)).body;
+    expect(first).toMatchObject({ decision: 'customer_return', quantity: 4, status: 'proposed', reference: `RMA-${yy}-0001`, instructions: `Customer to return the parts under RMA-${yy}-0001` });
+    const second = (await api().post(url).set(h).send({ quantity: 6, instructions: 'Return to goods-in' }).expect(201)).body;
+    expect(second).toMatchObject({ reference: `RMA-${yy}-0002`, instructions: 'Return to goods-in' });
+    const over = await api().post(url).set(h).send({ quantity: 1 }).expect(409);
+    expect(over.body.error.code).toBe('ncr_rule');
+    // not typed in by hand, and the number and decision are fixed
+    await api().post(`/api/v1/ncrs/${nc}/dispositions`).set(h).send({ decision: 'customer_return', quantity: 1, instructions: 'x' }).expect(400);
+    await api().patch(`/api/v1/ncr-dispositions/${first.id}`).set(h).send({ reference: 'RMA-OTHER' }).expect(409);
+    await api().patch(`/api/v1/ncr-dispositions/${first.id}`).set(h).send({ decision: 'scrap' }).expect(409);
+    expect((await api().patch(`/api/v1/ncr-dispositions/${first.id}`).set(h).send({ quantity: 3 }).expect(200)).body.quantity).toBe(3);
+    expect((await api().post(`/api/v1/ncr-dispositions/${first.id}/approve`).set(h).send({}).expect(200)).body.status).toBe('approved');
+  });
+});

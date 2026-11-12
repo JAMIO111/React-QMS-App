@@ -295,6 +295,45 @@ describe("dispositions", () => {
     expect(await screen.findByRole("button", { name: "Propose a disposition" })).toBeDisabled();
     expect(screen.getByText("Everything affected already has a disposition.")).toBeInTheDocument();
   });
+
+  it("generates an RMA number for all or part of the quantity, only on a customer non-conformance", async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderIt(<NcrDispositions ncrId="n1" canEdit source="internal" />);
+    await screen.findByRole("button", { name: "Propose a disposition" });
+    expect(screen.queryByRole("button", { name: "Generate an RMA number" })).toBeNull();
+    unmount();
+    renderIt(<NcrDispositions ncrId="n1" canEdit source="customer" />);
+    await user.click(await screen.findByRole("button", { name: "Generate an RMA number" }));
+    const dialog = screen.getByRole("dialog", { name: "Generate an RMA number" });
+    const qty = within(dialog).getByLabelText(/^Quantity to return/);
+    expect(qty).toHaveValue("4");
+    await user.clear(qty);
+    await user.type(qty, "5");
+    expect(within(dialog).getByRole("button", { name: "Generate RMA number" })).toBeDisabled();
+    await user.clear(qty);
+    await user.type(qty, "3");
+    await user.click(within(dialog).getByRole("button", { name: "Generate RMA number" }));
+    await waitFor(() => expect(sent("/ncrs/n1/rma")).toHaveLength(1));
+    expect(sent("/ncrs/n1/rma")[0][1].body).toEqual({ quantity: 3, instructions: null, lotId: null });
+  });
+
+  it("shows a customer return with its RMA number, and edits it without touching the decision or the number", async () => {
+    const user = userEvent.setup();
+    dispositions = { ...dispositions, data: [disp({ decision: "customer_return", reference: "RMA-26-0001", quantity: 6, instructions: "Customer to return the parts under RMA-26-0001" })] };
+    renderIt(<NcrDispositions ncrId="n1" canEdit source="customer" />);
+    const item = (await screen.findByText("Customer return (RMA) · 6")).closest("li");
+    expect(item).toHaveTextContent("RMA number: RMA-26-0001");
+    await user.click(within(item).getByRole("button", { name: /^Edit/ }));
+    const dialog = screen.getByRole("dialog", { name: "Edit the proposed disposition" });
+    expect(within(dialog).queryByRole("combobox", { name: /Decision/ })).toBeNull();
+    expect(within(dialog).queryByLabelText(/Reference/)).toBeNull();
+    const qty = within(dialog).getByLabelText(/^Quantity/);
+    await user.clear(qty);
+    await user.type(qty, "2");
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(sent("/ncr-dispositions/d1", "PATCH")).toHaveLength(1));
+    expect(sent("/ncr-dispositions/d1", "PATCH")[0][1].body).toEqual({ quantity: 2, instructions: "Customer to return the parts under RMA-26-0001", lotId: null });
+  });
 });
 
 describe("the stage bar", () => {

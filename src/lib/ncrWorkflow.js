@@ -18,7 +18,9 @@ export const DISPOSITION_DECISIONS = [
   { value: "return_to_supplier", label: "Return to supplier" },
   { value: "concession", label: "Concession" },
 ];
-export const decisionLabel = (v) => DISPOSITION_DECISIONS.find((d) => d.value === v)?.label ?? v;
+/** Made only by generating an RMA number on a customer non-conformance, so it is never offered in the decision list. */
+export const RMA_DECISION = "customer_return";
+export const decisionLabel = (v) => (v === RMA_DECISION ? "Customer return (RMA)" : (DISPOSITION_DECISIONS.find((d) => d.value === v)?.label ?? v));
 
 /** The gates key for a stage key (the API uses camelCase). */
 export const gateKey = (stage) => (stage === "awaiting_closure" ? "awaitingClosure" : stage);

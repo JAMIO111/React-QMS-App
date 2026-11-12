@@ -499,7 +499,7 @@ const NcrPage = () => {
               <div onSubmit={(e) => e.stopPropagation()} className="flex flex-col gap-5">
                 <SectionHeading id="ncr-disposition" title="Disposition" sectionRef={refs.disposition} />
                 <Card>
-                  <NcrDispositions ncrId={ncr.id} canEdit={can("ncr.update") && !locked} />
+                  <NcrDispositions ncrId={ncr.id} source={ncr.source} canEdit={can("ncr.update") && !locked} />
                 </Card>
               </div>
             )}

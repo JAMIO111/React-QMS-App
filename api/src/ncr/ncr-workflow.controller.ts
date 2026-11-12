@@ -14,6 +14,7 @@ import {
   ContainmentReasonBody,
   CreateContainmentBody,
   CreateDispositionBody,
+  GenerateRmaBody,
   Disposition,
   Dispositions,
   Gates,
@@ -74,6 +75,16 @@ export class NcrWorkflowController {
   @ApiCreatedResponse({ schema: openApiSchema(Disposition) })
   createDisposition(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.createDisposition(ctx, parse(Uuid, id), parse(CreateDispositionBody, body));
+  }
+
+  /** Generate an RMA number for all or part of the quantity of a customer non-conformance: it becomes a proposed "customer return" disposition. */
+  @Post(':id/rma')
+  @HttpCode(201)
+  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @ApiBody({ schema: openApiSchema(GenerateRmaBody) })
+  @ApiCreatedResponse({ schema: openApiSchema(Disposition) })
+  generateRma(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.generateRma(ctx, parse(Uuid, id), parse(GenerateRmaBody, body));
   }
 
   @Get(':id/affected-lots')

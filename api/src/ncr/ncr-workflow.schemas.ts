@@ -8,6 +8,8 @@ const money = z.number().min(0).max(1e9);
 
 export const CONTAINMENT_KINDS = ['quarantine', 'sort', 'stop_ship', 'notify_customer', 'notify_supplier', 'recall', 'other'] as const;
 export const DISPOSITION_DECISIONS = ['rework', 'repair', 'scrap', 'use_as_is', 'return_to_supplier', 'concession'] as const;
+/** A customer return is never chosen by hand: it is made by generating an RMA number (POST /ncrs/{id}/rma). */
+export const ALL_DISPOSITION_DECISIONS = [...DISPOSITION_DECISIONS, 'customer_return'] as const;
 
 export const ContainmentAction = z.object({
   id: z.string().uuid(),
@@ -41,7 +43,7 @@ export type Containment = z.infer<typeof Containment>;
 export const Disposition = z.object({
   id: z.string().uuid(),
   nonconformanceId: z.string().uuid(),
-  decision: z.enum(DISPOSITION_DECISIONS),
+  decision: z.enum(ALL_DISPOSITION_DECISIONS),
   quantity: z.number(),
   instructions: z.string(),
   reference: z.string().nullable(),
@@ -104,6 +106,9 @@ export const ReasonBody = z.object({ reason: text(1000) }).strict();
 
 export const CreateDispositionBody = z
   .object({ decision: z.enum(DISPOSITION_DECISIONS), quantity: z.number().gt(0).max(1e9), instructions: text(2000), reference: optionalText(200), lotId: z.string().uuid().nullable().optional() })
+  .strict();
+export const GenerateRmaBody = z
+  .object({ quantity: z.number().gt(0).max(1e9), instructions: optionalText(2000), lotId: z.string().uuid().nullable().optional() })
   .strict();
 export const UpdateDispositionBody = CreateDispositionBody.partial()
   .strict()

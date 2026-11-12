@@ -13,6 +13,7 @@ import {
   ContainmentAction,
   CreateContainmentBody,
   CreateDispositionBody,
+  GenerateRmaBody,
   Disposition,
   Dispositions,
   Gates,
@@ -178,6 +179,17 @@ export class NcrWorkflowService {
         insert into public.ncr_dispositions (organisation_id, nonconformance_id, decision, quantity, instructions, reference, lot_id)
         values (${ctx.organisationId!}::uuid, ${ncrId}::uuid, ${body.decision}, ${body.quantity}, ${body.instructions}, ${body.reference ?? null}, ${body.lotId ?? null}::uuid)
         returning id`);
+      return this.loadDisposition(db, ctx, result.rows[0].id);
+    });
+  }
+
+  /** Gives the next RMA number and proposes a customer return for that quantity (customer non-conformances only; the database decides). */
+  generateRma(ctx: RequestContext, ncrId: string, body: z.infer<typeof GenerateRmaBody>): Promise<Disposition> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.assertVisible(db, ctx, ncrId);
+      const result = await db.execute<{ id: string }>(
+        sql`select app.generate_ncr_rma(${ncrId}::uuid, ${body.quantity}::numeric, ${body.instructions ?? null}, ${body.lotId ?? null}::uuid) as id`,
+      );
       return this.loadDisposition(db, ctx, result.rows[0].id);
     });
   }

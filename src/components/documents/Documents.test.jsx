@@ -16,6 +16,7 @@ const listCalls = [];
 const types = [
   { id: "t1", name: "Procedure", prefix: "SOP", description: null, reviewMonths: 24, contentHint: "text", sequence: 1, active: true, documents: 2 },
   { id: "t2", name: "Form", prefix: "FRM", description: null, reviewMonths: 36, contentHint: "file", sequence: 3, active: true, documents: 0 },
+  { id: "t3", name: "Calibration procedure", prefix: "CALP", description: null, reviewMonths: 24, contentHint: "text", sequence: 7, active: true, systemKey: "calibration_procedure", documents: 0 },
 ];
 const docRow = {
   id: "d1", number: "SOP-001", title: "Control of nonconforming product", type: { id: "t1", name: "Procedure", prefix: "SOP" }, contentKind: "text", description: "All sites",
@@ -238,6 +239,18 @@ describe("settings: document types", () => {
     expect(within(list).getByText(/Review every 36 months/)).toBeInTheDocument();
     await userEvent.click(within(list).getAllByRole("switch")[1]);
     expect(mutate).toHaveBeenCalledWith({ id: "t2", active: false }, expect.anything());
+  });
+
+  it("shows a built-in type as always on: it has no switch, and can still be edited", () => {
+    render(<MemoryRouter><SettingsDocuments /></MemoryRouter>);
+    const list = screen.getByRole("list", { name: "Document types" });
+    const row = within(list).getByText("Calibration procedure").closest("li");
+    expect(within(row).getByText("Built in")).toHaveAttribute("title", expect.stringMatching(/Gauge types choose their calibration procedure/));
+    expect(within(row).getByText("Always on")).toBeInTheDocument();
+    expect(within(row).queryByRole("switch")).not.toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Edit Calibration procedure" })).toBeInTheDocument();
+    // The other types keep their switch.
+    expect(within(list).getAllByRole("switch")).toHaveLength(2);
   });
 
   it("fixes the prefix of a type in use and adds a new one", async () => {

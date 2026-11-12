@@ -6,17 +6,18 @@ const STATUS_HINT = { draft: "not in force yet", withdrawn: "withdrawn" };
 const option = (d) => ({ id: d.id, name: `${d.number} · ${d.title}`, hint: STATUS_HINT[d.status] });
 
 /**
- * Chooses the controlled document that is a gauge type's calibration procedure (search by number, title or text; documents that are
- * drafts or in force). `current` is the saved document ({ id, number, title, status }), so it shows before any search.
+ * Chooses the controlled document that is a gauge type's calibration procedure. Only documents of the built-in type "Calibration procedure"
+ * are listed (search by number, title or text; drafts and documents in force): the server refuses any other kind. `current` is the saved
+ * document ({ id, number, title, status }), so it shows before any search, and a procedure chosen before the rule still shows.
  */
 const ProcedureDocumentPicker = ({ current, label = "Procedure", ...props }) => {
   const [q, setSearch] = useDebouncedSearch();
-  const documents = useDocuments({ q, status: "draft,active", pageSize: 20 });
+  const documents = useDocuments({ q, status: "draft,active", typeKey: "calibration_procedure", pageSize: 20 });
   return (
     <RemoteComboBox
       {...props}
       label={label}
-      placeholder="Search a document…"
+      placeholder="Search calibration procedures…"
       items={(documents.data?.data ?? []).map(option)}
       isFetching={documents.isFetching}
       onSearch={setSearch}

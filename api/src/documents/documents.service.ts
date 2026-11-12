@@ -26,12 +26,13 @@ const toType = (r: Row) => ({
   contentHint: r.content_hint as 'file' | 'text',
   sequence: Number(r.sequence),
   active: r.active as boolean,
+  systemKey: (r.system_key as 'calibration_procedure' | null) ?? null,
   documents: Number(r.document_count ?? 0),
 });
 
 /** Every document the caller may read (RLS), with its type, owner and the revision in progress, if any. */
 const DOCUMENT_SELECT = sql`
-  select d.*, t.name as type_name, t.prefix as type_prefix, d.next_review_on::text as next_review_day, coalesce(d.review_months, t.review_months) as review_months_effective,
+  select d.*, t.name as type_name, t.prefix as type_prefix, t.system_key as type_system_key, d.next_review_on::text as next_review_day, coalesce(d.review_months, t.review_months) as review_months_effective,
          (d.status = 'active' and d.next_review_on < current_date) as review_overdue,
          ${sql.raw(personName('po'))} as owner_name,
          ip.id as ip_id, ip.status as ip_status, ip.sequence as ip_sequence, ip.letter as ip_letter, ip.effective_from::text as ip_effective_from,
@@ -210,6 +211,7 @@ export class DocumentsService {
       await this.settle(db, ctx);
       const where: SQL[] = [sql`d.organisation_id = ${orgOf(ctx)}::uuid`];
       if (q.type) where.push(sql`d.type_id = any(string_to_array(${q.type}, ',')::uuid[])`);
+      if (q.typeKey) where.push(sql`d.type_system_key = ${q.typeKey}`);
       // Discarded documents only when asked for.
       where.push(q.status ? sql`d.status = any(string_to_array(${q.status}, ','))` : sql`d.status <> 'discarded'`);
       if (q.kind) where.push(sql`d.content_kind = ${q.kind}`);

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PencilIcon, PlusIcon } from "@/components/icons";
+import { LockIcon, PencilIcon, PlusIcon } from "@/components/icons";
 import CTAButton from "@/components/CTAButton";
 import { describeApiError } from "../../lib/api-client";
 import { useToast } from "../../contexts/ToastProvider";
@@ -70,7 +70,10 @@ const TypeDialog = ({ existing, onClose }) => {
   );
 };
 
-/** Settings → Data Management → Documents: document types (prefix, review interval, usual content, on/off). */
+/** What each built-in type is for. A built-in type cannot be switched off (the server refuses it): the application relies on it. */
+const BUILT_IN = { calibration_procedure: "Gauge types choose their calibration procedure from documents of this type" };
+
+/** Settings → Data Management → Documents: document types (prefix, review interval, usual content, on/off; built-in types are always on). */
 const SettingsDocuments = () => {
   const { can } = usePermissions();
   const canManage = can("documentation.manage");
@@ -99,9 +102,14 @@ const SettingsDocuments = () => {
       <ul className="-my-3 divide-y divide-border-color" aria-label="Document types">
         {list.map((t) => (
           <li key={t.id} className={`flex flex-wrap items-center justify-between gap-3 py-3 ${t.active ? "" : "opacity-60"}`}>
-            <div className="flex min-w-0 flex-col">
+            <div className="flex min-w-0 flex-1 basis-64 flex-col">
               <span className="font-medium text-primary-text">
                 {t.name} <span className="ml-1 rounded bg-primary-bg px-1.5 py-0.5 font-mono text-xs text-secondary-text">{t.prefix}</span>
+                {t.systemKey && (
+                  <span className="ml-2 rounded-full border border-border-color px-2 py-0.5 text-xs font-normal text-secondary-text" title={BUILT_IN[t.systemKey]}>
+                    Built in
+                  </span>
+                )}
               </span>
               <span className="text-sm text-secondary-text">
                 Review every {t.reviewMonths} {t.reviewMonths === 1 ? "month" : "months"} · usually {contentKindLabel(t.contentHint).toLowerCase()} · {t.documents}{" "}
@@ -110,10 +118,17 @@ const SettingsDocuments = () => {
               </span>
             </div>
             {canManage && (
-              <div className="flex items-center gap-3">
-                <Switch checked={t.active} onChange={() => toggle(t)} >
-                  <span className="sr-only">{t.active ? `Switch ${t.name} off` : `Switch ${t.name} on`}</span>
-                </Switch>
+              <div className="flex shrink-0 items-center gap-3">
+                {t.systemKey ? (
+                  <span className="inline-flex items-center gap-1 text-sm text-secondary-text" title="A built-in type cannot be switched off">
+                    <LockIcon aria-hidden="true" />
+                    Always on
+                  </span>
+                ) : (
+                  <Switch checked={t.active} onChange={() => toggle(t)}>
+                    <span className="sr-only">{t.active ? `Switch ${t.name} off` : `Switch ${t.name} on`}</span>
+                  </Switch>
+                )}
                 <CTAButton type="neutral" icon={PencilIcon} aria-label={`Edit ${t.name}`} onClick={() => setDialog({ existing: t })} />
               </div>
             )}

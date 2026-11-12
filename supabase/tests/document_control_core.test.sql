@@ -26,7 +26,7 @@ BEGIN
 
   -- ---- types: seeded, managed by functions ----
   PERFORM pg_temp.login(bob);
-  PERFORM pg_temp.assert_eq((SELECT string_agg(prefix, ',' ORDER BY sequence) FROM public.document_types WHERE organisation_id = org), 'SOP,WI,FRM,SPEC,POL,EXT', 'six types seeded, readable with documentation.read');
+  PERFORM pg_temp.assert_eq((SELECT string_agg(prefix, ',' ORDER BY sequence) FROM public.document_types WHERE organisation_id = org), 'SOP,WI,FRM,SPEC,POL,EXT,CALP', 'the general types and the calibration procedure type are seeded, readable with documentation.read');
   r := pg_temp.fails(format($f$SELECT app.save_document_type(%L, '{"name":"Drawing","prefix":"DWG"}'::jsonb)$f$, org));
   PERFORM pg_temp.assert_eq(left(r, 5), '42501', 'a viewer cannot add a type');
   PERFORM pg_temp.logout();

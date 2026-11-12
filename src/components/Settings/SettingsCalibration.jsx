@@ -108,7 +108,7 @@ const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
           </select>
         </span>
       </label>
-      <div className="w-72" title="The controlled document gauges of this type are calibrated to; a new calibration starts with its number">
+      <div className="w-72" title="The controlled document gauges of this type are calibrated to, chosen from documents of the type Calibration procedure; a new calibration starts with its number">
         <ProcedureDocumentPicker value={procedureDocumentId} onChange={(id) => setProcedureDocumentId(id ?? null)} current={initial?.procedureDocument} />
       </div>
       <label className="flex min-w-48 flex-1 flex-col gap-1 text-xs text-secondary-text">

@@ -48,6 +48,9 @@ export const UpdateTypeBody = z
   .refine(nothingToChange, 'Nothing to change');
 export type UpdateTypeBody = z.infer<typeof UpdateTypeBody>;
 
+/** Keys of the built-in document types. */
+export const DOCUMENT_TYPE_KEYS = ['calibration_procedure'] as const;
+
 export const TypeListQuery = z.object({ all: z.enum(['true', 'false']).default('false') });
 export type TypeListQuery = z.infer<typeof TypeListQuery>;
 
@@ -60,6 +63,8 @@ export const DocumentType = z.object({
   contentHint: z.enum(CONTENT_KINDS),
   sequence: z.number().int(),
   active: z.boolean(),
+  /** Set on a built-in type the application relies on (it cannot be switched off): `calibration_procedure` is where gauge types take their procedure from. */
+  systemKey: z.enum(DOCUMENT_TYPE_KEYS).nullable(),
   /** Documents of this type (any status); once there is one the prefix is fixed. */
   documents: z.number().int(),
 });
@@ -110,6 +115,8 @@ export const DocumentListQuery = z.object({
     .string()
     .optional()
     .refine((v) => !v || v.split(',').every((x) => z.string().uuid().safeParse(x).success), 'Type ids separated by commas'),
+  /** Only documents of this built-in type (e.g. the calibration procedures a gauge type chooses from). */
+  typeKey: z.enum(DOCUMENT_TYPE_KEYS).optional(),
   status: csv(DOCUMENT_STATUSES),
   kind: z.enum(CONTENT_KINDS).optional(),
   owner: z.enum(['me']).optional(),

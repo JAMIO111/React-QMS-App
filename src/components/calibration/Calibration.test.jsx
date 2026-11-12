@@ -345,6 +345,8 @@ describe("settings", () => {
     await userEvent.click(screen.getByRole("button", { name: "Edit Digital caliper" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Procedure" }));
     await userEvent.click(await screen.findByRole("option", { name: /WI-CAL-009/ }));
+    // Only documents of the built-in calibration procedure type are asked for.
+    expect(lastCall("GET /documents").path).toContain("typeKey=calibration_procedure");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(lastCall("PATCH /gauge-types/t1").body).toMatchObject({ procedureDocumentId: "d2" }));
   });

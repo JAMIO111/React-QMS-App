@@ -34,7 +34,9 @@ afterAll(async () => {
 describe('document types', () => {
   it('lists the seeded types to readers and lets a manager add and change one', async () => {
     const list = await api().get('/api/v1/document-types').set(await as(ids.inspectorA)).expect(200);
-    expect(list.body.data.map((t: { prefix: string }) => t.prefix)).toEqual(['SOP', 'WI', 'FRM', 'SPEC', 'POL', 'EXT']);
+    expect(list.body.data.map((t: { prefix: string }) => t.prefix)).toEqual(['SOP', 'WI', 'FRM', 'SPEC', 'POL', 'EXT', 'CALP']);
+    // Only the calibration procedure type is built in.
+    expect(list.body.data.map((t: { systemKey: string | null }) => t.systemKey)).toEqual([null, null, null, null, null, null, 'calibration_procedure']);
     ctx.sop = list.body.data[0].id;
     ctx.frm = list.body.data[2].id;
     await api().post('/api/v1/document-types').set(await as(ids.inspectorA)).send({ name: 'Drawing', prefix: 'DWG' }).expect(403);
@@ -47,7 +49,7 @@ describe('document types', () => {
     const off = await api().patch(`/api/v1/document-types/${created.body.id}`).set(await as(ids.ownerA)).send({ active: false }).expect(200);
     expect(off.body.active).toBe(false);
     const all = await api().get('/api/v1/document-types?all=true').set(await as(ids.ownerA)).expect(200);
-    expect(all.body.data).toHaveLength(7);
+    expect(all.body.data).toHaveLength(8);
   });
 });
 
@@ -150,5 +152,31 @@ describe('documents and drafts', () => {
     expect(list.body.data.map((d: { number: string }) => d.number)).not.toContain('FRM-001');
     const discarded = await api().get('/api/v1/documents?status=discarded').set(h).expect(200);
     expect(discarded.body.data.map((d: { number: string }) => d.number)).toEqual(['FRM-001']);
+  });
+});
+
+// Last, so that the documents it makes do not disturb the counts above.
+describe('the built-in calibration procedure type', () => {
+  it('keeps the built-in calibration procedure type in use, and lists only its documents when asked', async () => {
+    const owner = await as(ids.ownerA);
+    const types = (await api().get('/api/v1/document-types').set(owner).expect(200)).body.data;
+    const calp = types.find((t: { systemKey: string | null }) => t.systemKey === 'calibration_procedure');
+    expect(calp).toMatchObject({ name: 'Calibration procedure', prefix: 'CALP', contentHint: 'text', active: true });
+    const off = await api().patch(`/api/v1/document-types/${calp.id}`).set(owner).send({ active: false }).expect(409);
+    expect(off.body.error).toMatchObject({ code: 'document_rule', message: 'Calibration procedure is a built-in document type and cannot be switched off' });
+    // The key is not something a client can send; the rest of the type is the organisation's to change.
+    await api().patch(`/api/v1/document-types/${calp.id}`).set(owner).send({ systemKey: null }).expect(400);
+    await api().post('/api/v1/document-types').set(owner).send({ name: 'Mine', prefix: 'MINE', systemKey: 'calibration_procedure' }).expect(400);
+    const renamed = await api().patch(`/api/v1/document-types/${calp.id}`).set(owner).send({ description: 'How we calibrate', reviewMonths: 12 }).expect(200);
+    expect(renamed.body).toMatchObject({ systemKey: 'calibration_procedure', description: 'How we calibrate', reviewMonths: 12, active: true });
+
+    const procedure = (await api().post('/api/v1/documents').set(owner).send({ typeId: calp.id, title: 'Typekey caliper calibration', contentKind: 'text' }).expect(201)).body;
+    const other = (await api().post('/api/v1/documents').set(owner).send({ typeId: types[1].id, title: 'Typekey work instruction', contentKind: 'text' }).expect(201)).body;
+    expect(procedure.number).toBe('CALP-001');
+    const only = await api().get('/api/v1/documents?typeKey=calibration_procedure&q=Typekey').set(owner).expect(200);
+    expect(only.body.data.map((d: { id: string }) => d.id)).toEqual([procedure.id]);
+    const both = await api().get('/api/v1/documents?q=Typekey').set(owner).expect(200);
+    expect(both.body.data.map((d: { id: string }) => d.id).sort()).toEqual([procedure.id, other.id].sort());
+    await api().get('/api/v1/documents?typeKey=something_else').set(owner).expect(400);
   });
 });

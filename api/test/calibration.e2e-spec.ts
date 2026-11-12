@@ -61,8 +61,14 @@ describe('gauge types', () => {
     expect((await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ code: 'HG-600' }).expect(200)).body.code).toBe('HG-600');
     // The type's calibration procedure is one of the organisation's documents.
     expect(other.body).toMatchObject({ procedureDocumentId: null, procedureDocument: null });
-    const docType = (await api().get('/api/v1/document-types').set(h).expect(200)).body.data[0];
+    const docTypes = (await api().get('/api/v1/document-types').set(h).expect(200)).body.data;
+    const docType = docTypes.find((t: { systemKey: string | null }) => t.systemKey === 'calibration_procedure');
     const doc = (await api().post('/api/v1/documents').set(h).send({ typeId: docType.id, title: 'Caliper calibration', contentKind: 'text' }).expect(201)).body;
+    // Only a document of the built-in calibration procedure type can be a gauge type's procedure.
+    const sop = (await api().post('/api/v1/documents').set(h).send({ typeId: docTypes[0].id, title: 'Goods in', contentKind: 'text' }).expect(201)).body;
+    const wrong = await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ procedureDocumentId: sop.id }).expect(409);
+    expect(wrong.body.error).toMatchObject({ code: 'calibration_rule', message: 'The procedure must be a document of the type Calibration procedure' });
+    await api().post('/api/v1/gauge-types').set(h).send({ code: 'PRC-0', name: 'With the wrong procedure', procedureDocumentId: sop.id }).expect(409);
     const linked = (await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ procedureDocumentId: doc.id }).expect(200)).body;
     expect(linked).toMatchObject({ procedureDocumentId: doc.id, procedureDocument: { id: doc.id, number: doc.number, title: 'Caliper calibration' } });
     await api().patch(`/api/v1/gauge-types/${other.body.id}`).set(h).send({ procedureDocumentId: 'not-an-id' }).expect(400);

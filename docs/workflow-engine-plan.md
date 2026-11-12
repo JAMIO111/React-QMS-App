@@ -1,0 +1,85 @@
+# Background worker and workflow engine — plan
+
+**Status:** agreed 2026-11-12 (W1 pg_cron → API, W4 daily digest + overdue notice, W5/W6 notify + tasks first, lot hold and timers in WF3; the other decisions as recommended) · **Date:** 2026-11-12 · **Brief:** `docs/design-brief.md` §8 (events, workflows and background processing), §4 (jobs)
+
+## 1. Why now
+
+Every module so far closes with the same line in its exit report: **"No worker."** The following are all waiting on one:
+
+- 8D, risk and management review actions: nothing reminds the owner when an action falls due or goes overdue.
+- Audit slots, gauge calibrations, competence and supplier certification expiry: nothing reminds anyone.
+- Quality alert and document acknowledgements: overdue is only *shown*, never chased.
+- SCAR responses and periodic document reviews: overdue is only shown, never chased.
+- Supplier scorecards: nothing saves them on a schedule.
+- Integration imports run at most once a day.
+- Email is sent after the next request or by a daily safety-net cron.
+
+The brief (§8) also asks for **configurable, versioned workflows**, for example: "an inspection failure publishes `inspection.result.failed`; a workflow decides whether to notify a quality manager, put items on hold …". Doing that needs something that:
+
+1. **wakes up on its own** (no user request);
+2. **consumes the outbox** (`outbox_events`, which exists since 2.1 and that nothing reads yet);
+3. **runs work reliably**: leases, retries, idempotent.
+
+## 2. What exists today
+
+| Piece | State |
+|---|---|
+| `outbox_events` | Written by `app.emit_event` from SECURITY DEFINER triggers in the same transaction as the change. ~30 event types (NC created / stage changed / closed / disposition approved, 8D created / verified / closed, inspection started / failed reading / NC raised, calibration recorded / outcome changed, gauge status, control plan revision status, part revision released / corrected, supplier approval / risk / assessment, onboarding). One `processed_at` column; **nothing processes it.** |
+| `audit.events` → `notifications` | The in-app notification pipeline: a trigger on the audit trail, per-event visibility and preferences, `recipient_user_id` for "addressed to you" notices. Works without a worker. |
+| `email_outbox` | Its own queue (lease, back-off, final states), drained by `EmailService.drain()` after every non-GET request (`waitUntil`) and by a daily cron. |
+| `integration_sync_runs` | Its own queue (lease, attempts, `next_attempt_at`), drained by `SyncEngine.drain()` from a request or `/internal/cron/integration-runs`; the daily schedule runs from `/internal/cron/integration-schedule`. |
+| Crons (`api/vercel.json`) | Six **daily** jobs on the production deployment only: reconcile Stripe, archive abandoned set-ups, expire quality alerts, settle documents, the integration schedule, and email. Guarded by `CRON_SECRET` (`CronGuard`), run as the API login (`asApi`). |
+| "Worked out on read" | Overdue, expiry, standing and audit slots are computed by the API when a page is opened. This stays: the worker *adds* chasing, it does not replace the read-time truth. |
+| Hosting | API as a Vercel serverless function (short-lived; per-minute crons need Vercel Pro). The Supabase project has **pg_cron** and **pg_net** available (not yet installed) and Vault in use. |
+
+## 3. Decisions (agreed)
+
+| # | Question | Options | Recommendation |
+|---|---|---|---|
+| **W1** | **What wakes the worker** | (a) **pg_cron in Supabase, every minute, calls the API through pg_net** (`POST /internal/worker/tick` with the cron secret held in Vault); (b) Vercel cron every minute (needs Vercel Pro; production deployment only); (c) an always-on worker host (Railway / Fly / AWS) with Redis + BullMQ, as in brief §4 | **(a) now, shaped so (c) is a swap.** It works on any Vercel plan, costs nothing extra, and the database already holds the schedule. The tick is one service function (`WorkerService.tick(budget)`) that a later long-running worker would call in a loop. The six daily Vercel crons stay as a safety net. Caveat: there is one Supabase project, so pg_cron calls **one** address — the `Dev` deployment until production exists; the address lives in Vault and is changed by SQL. |
+| **W2** | **The job queue** | (a) one Postgres table `worker_jobs` (kind, payload, run at, attempts, lease, unique idempotency key; `FOR UPDATE SKIP LOCKED`); (b) Supabase's `pgmq` extension; (c) Redis/BullMQ | **(a).** Same pattern as the email and import queues, which are proven here; visible to SQL tests and the operator panel; transactional with the change that enqueues it. The existing `email_outbox` and `integration_sync_runs` **stay their own queues**: the tick simply drains them too. |
+| **W3** | **Reading the outbox** | (a) one `processed_at` (one consumer); (b) a cursor per consumer (`outbox_consumers (name, last_id)`), each consumer idempotent | **(b).** The workflow engine is the first consumer; webhooks (Phase 6) and the integration write-back will be others, and each must see every event once. Events are read in id order in pages. `processed_at` is left unused. Outbox rows older than 90 days are purged once every consumer has passed them. |
+| **W4** | **Reminders (time-based chasing)** | (a) one notice per record per threshold ("8D action CAPA-000012/3 is due tomorrow"); (b) **a daily digest per person** ("You have 2 actions overdue and 1 due this week", with a list) plus an immediate notice only when something first goes **overdue** | **(b).** Per-record notices flood an inbox (a quality manager owns dozens of things). The digest goes out once a day at the organisation's reminder time, in-app and by email under the existing notification preferences (a new event per area, switchable). Nothing is sent when there is nothing to say. Overdue is still worked out on read. |
+| **W5** | **What a workflow is (first version)** | (a) **event → conditions → actions rules**, single step, versioned, with a run log; (b) multi-step state machines (instances, tasks, transitions, escalation timers) | **(a) first.** The modules already hold their own multi-step approvals in the database (8D steps, document review, SCARs, acceptances), so a general state machine would duplicate them. Rules cover the brief's example. Escalation ("if still open after N days, notify the manager") comes as a **timer action** on the same rules in WF4, not as a state machine. |
+| **W6** | **What a rule may do** | Notify (in-app + email) a person, role, department, or the record's owner / site manager; **assign a task** (a to-do on a new *My tasks* list, closed by the person); put a lot on hold; request a re-measure; raise an NC; call a webhook | **Notify and assign a task in WF3; lot hold in WF4.** **Never raise an NC, close, approve or cancel anything automatically.** The modules' agreed rule "prompts only, never silent" (inspection, SPC, calibration) stands: a rule can *ask someone* to raise one (a task linking to the prefilled draft). Webhooks are Phase 6. |
+| **W7** | **Whose authority a rule acts with** | (a) the system; (b) the person who saved the rule version, re-checked at run time (like integration schedules) | **Notices and tasks: the system** (no actor, so the person who caused the event is told too). **Lot hold: (b)** — the saver must hold `production.manage` at that site when the rule runs, else the action fails, is logged and the rule's owner is told. |
+| **W8** | **Who writes rules** | A new permission **`workflows.manage`** (owner, admin, quality manager) + `workflows.read` (the same + quality engineer) | Agree. Rules are versioned with a reason from version 2 (like audits and risk matrices); a version is frozen; a run records the version it ran. A rule can be **tested against a recent event** (dry run: what it would have done, nothing sent). |
+| **W9** | **Delivery guarantees** | — | At-least-once processing; every action has an idempotency key (rule version + event id + action index), so a retry never notifies twice. Five attempts with back-off (1, 4, 16, 64 minutes), then failed and shown on the rule's run log and the operator panel. One failing rule never blocks the others or the queue. |
+| **W10** | **The organisation's day** | Reminder time and time zone | `organisation_settings.reminder_time` (default 07:00) and `time_zone` (default the first site's, else `Europe/London`), set in Settings → Organisation. Digests and "due today / tomorrow" use that zone. (A person's own browser zone still drives what *they* see on screen.) |
+
+## 4. Data model (sketch)
+
+```
+worker_jobs              id, organisation_id?, kind, payload jsonb, idempotency_key unique, run_at, status queued|running|done|failed|cancelled,
+                         attempts, lease_until, last_error, created_at, finished_at        -- API login only; no RLS reads by people
+worker_ticks             id, started_at, finished_at, source (pg_cron|vercel|request|manual), jobs_run, events_read, errors   -- health
+outbox_consumers         name pk, last_id, updated_at
+reminder_digests         organisation_id, user_id, day, area, items jsonb, notification_id   -- unique (organisation, user, day): sent once
+reminder_overdue_sent    organisation_id, record_kind, record_id, due_on                   -- unique: "first went overdue" once per due date
+workflow_rules           id, organisation_id, name, description, active, current_version, created_by, retired_at/reason
+workflow_rule_versions   id, rule_id, version, trigger (event type), conditions jsonb, actions jsonb, reason, saved_by, saved_at   -- frozen
+workflow_runs            id, organisation_id, rule_version_id, event_id, status matched|skipped|done|failed, detail jsonb, at   -- append-only
+workflow_tasks           id, organisation_id, reference (TSK-YY-NNNN), title, detail, record kind/id, assignee, due_on,
+                         status open|done|cancelled, done_note, rule_version_id?, created_at   -- functions only
+```
+
+All tenant tables get `organisation_id`, RLS, the audit trigger where they are records (rules, versions, tasks), guardrails and both sweeps, and **no table writes** (SECURITY DEFINER functions; system functions for the API login only).
+
+**Conditions** are a closed set (no expressions): field of the event's record `=`, `≠`, `in`, `not in`, empty / not empty, `≥` / `≤` for numbers and severities, combined with all / any. The fields come from a catalogue per event type (NC: source, severity, category, site, part family, supplier, customer, stage; inspection failure: part, family, machine, operation, characteristic, critical; …), read when the rule runs, as the record now is.
+
+## 5. Slices
+
+| Slice | What | Done when |
+|---|---|---|
+| **WK1 — worker foundation** | `worker_jobs`, `worker_ticks`, `outbox_consumers` migration; `WorkerService.tick(budget ≈ 45 s)`: lease due jobs, drain email and due import runs, settle documents, expire alerts (the daily crons' work, now every tick); `POST /internal/worker/tick` (`CronGuard`); SQL to install pg_cron + pg_net and schedule it (a runbook the user applies, secret and URL in Vault); worker health card on the operator panel (last tick, jobs waiting, failures). | The tick runs every minute on the live project; e2e tests drive the tick directly; nothing changes for users except email arriving within a minute |
+| **WK2 — reminders** | Organisation reminder time and zone; the reminder rules per area as SQL (8D / risk / review actions; NC containment actions; audits due / overdue; gauges due / overdue; documents and quality alerts to acknowledge; periodic document reviews; SCAR responses; competence and supplier certification expiry; risk reviews); daily digest notices (one per person) and the "went overdue" notice; preferences per area (in-app / email) in Settings → Notifications. | A person with overdue work gets one digest a day and one notice when something first goes overdue; tests prove nothing is sent twice and nothing is sent to someone who may not read it |
+| **WF1 — workflow rules core** | Rules, versions, runs, the outbox consumer, the condition evaluator (pure, unit-tested), actions **notify** and **assign a task**; `workflow_tasks` with *My tasks* (`/Tasks`, menu badge, home "For you"); permissions `workflows.read / .manage`. Widen `emit_event` coverage where the trigger catalogue needs it (audit finding raised, SPC alert, receipt line rejected, SCAR overdue …). | A rule "inspection failed on a critical characteristic → notify the site's quality manager and give the cell leader a task" works end to end, at least once, never twice |
+| **WF2 — rule builder** | Settings → **Workflows**: list, builder (trigger, conditions, actions as forms, no code), versions with reason, **test against a recent event**, run log per rule. | A quality manager builds, tests and changes a rule in the browser; history shows which version did what |
+| **WF3 — timers and lot hold** | Action **after N days, if still …** (re-checks the record when the timer fires: escalation), action **put the lot on hold** with the saver's authority (W7); scheduled supplier scorecards as a job kind. | Escalation and hold work and are refused, logged and reported when the authority has gone |
+| **WX — exit check** | Live guardrails, advisors, a journey step (a rule fires from a failed inspection, the task is done; a digest arrives), exit report. | — |
+
+Order: WK1 → WK2 (most of the value: everything already built starts chasing) → WF1 → WF2 → WF3 → WX.
+
+## 6. Not in this plan
+
+Multi-step workflow state machines, workflows that change the modules' own approvals, webhooks and ERP write-back (Phase 6), push notifications, SMS, a Redis worker host (W1 keeps the door open), per-person reminder times.

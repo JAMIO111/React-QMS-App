@@ -132,7 +132,7 @@ reminders on a schedule (no worker); a meeting calendar; customer satisfaction s
 
 ## 11. RK1 as built (2026-11-12)
 
-Migration `20260208100000_risk_register_core.sql` (applied live 2026-11-12; pushing the API before it leaves the risk endpoints failing).
+Migration `20260208200000_risk_register_core.sql` (applied live 2026-11-12; pushing the API before it leaves the risk endpoints failing).
 
 - **Permissions** `risk.read` / `.manage` / `.approve` (owner, admin, quality manager all; quality engineer read + manage; inspector, viewer read).
 - **Matrix:** `risk_models` (versions; `config` = five likelihood and five consequence labels, `bands[likelihood-1][consequence-1]`, `acceptanceBand` low | medium | high,

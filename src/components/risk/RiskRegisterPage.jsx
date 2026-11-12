@@ -12,7 +12,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import SlidingToggle from "../ui/SlidingToggle";
 import { RiskDialog } from "./RiskDialogs";
 
-const RISK_FILTER_KEYS = ["search", "status", "kind", "band", "category", "owner", "sort", "order", "page"];
+const RISK_FILTER_KEYS = ["search", "status", "kind", "band", "category", "owner", "overdue", "sort", "order", "page"];
 
 const COLUMNS = [
   ["reference", "Reference"],
@@ -20,12 +20,13 @@ const COLUMNS = [
   [null, "Kind"],
   ["category", "Category"],
   ["score", "Before treatment"],
-  ["assessedOn", "Assessed"],
+  ["residual", "After treatment"],
+  ["nextReview", "Next review"],
   ["owner", "Owner"],
   ["status", "Status"],
 ];
 
-/** The risk register (`/Risk/Register`): risks and opportunities with their current assessment. Retired ones are left out unless asked for. */
+/** The risk register (`/Risk/Register`): risks and opportunities with where they stand before and after treatment and when they are next reviewed. Retired ones are left out unless asked for. */
 const RiskRegisterPage = () => {
   const { can } = usePermissions();
   const navigate = useNavigate();
@@ -35,9 +36,9 @@ const RiskRegisterPage = () => {
   const page = Number(f.page) || 1;
   const sort = f.sort || "reference";
   const order = f.order || "asc";
-  const risks = useRisks({ q: f.search, status: f.status, kind: f.kind, band: f.band, categoryId: f.category, owner: f.owner, sort, order, page: f.page || undefined });
+  const risks = useRisks({ q: f.search, status: f.status, kind: f.kind, band: f.band, categoryId: f.category, owner: f.owner, reviewOverdue: f.overdue === "true" ? "true" : undefined, sort, order, page: f.page || undefined });
   const categoryOptions = (categories.data?.data ?? []).map((c) => ({ value: c.id, label: c.label, hint: c.active ? undefined : "Switched off" }));
-  const filtered = f.search || f.status || f.kind || f.band || f.category || f.owner;
+  const filtered = f.search || f.status || f.kind || f.band || f.category || f.owner || f.overdue;
   const sortBy = (key) => f.updateFilters({ sort: key, order: sort === key && order === "asc" ? "desc" : "asc", page: "" });
 
   return (
@@ -69,6 +70,7 @@ const RiskRegisterPage = () => {
           <ComboField label="Category" value={f.category || null} onChange={(v) => f.updateFilters({ category: v ?? "", page: "" })} options={categoryOptions} placeholder="Every category" clearable />
         </div>
         <SlidingToggle ariaLabel="Owner" options={[{ value: "", label: "Everyone's" }, { value: "me", label: "Mine" }]} value={f.owner || ""} onChange={(v) => f.updateFilters({ owner: v, page: "" })} />
+        <SlidingToggle ariaLabel="Review" options={[{ value: "", label: "Any review date" }, { value: "true", label: "Review overdue" }]} value={f.overdue || ""} onChange={(v) => f.updateFilters({ overdue: v, page: "" })} />
       </div>
       <SlidingToggle ariaLabel="Status" options={STATUS_OPTIONS} value={f.status || ""} onChange={(v) => f.updateFilters({ status: v, page: "" })} />
 
@@ -117,7 +119,18 @@ const RiskRegisterPage = () => {
                       <span className="text-secondary-text">Not assessed</span>
                     )}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-secondary-text">{r.inherent ? formatDay(r.inherent.assessedOn) : "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    {r.residual ? (
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${BAND_PILL[r.residual.band]}`}>
+                        {r.residual.score} · {bandLabel(r.residual.band)}
+                      </span>
+                    ) : (
+                      <span className="text-secondary-text">—</span>
+                    )}
+                  </td>
+                  <td className={`whitespace-nowrap px-3 py-2 ${r.reviewOverdue ? "font-medium text-error-color" : "text-secondary-text"}`}>
+                    {r.nextReviewOn ? `${formatDay(r.nextReviewOn)}${r.reviewOverdue ? " · overdue" : ""}` : "—"}
+                  </td>
                   <td className="px-3 py-2 text-secondary-text">{r.owner?.name ?? "—"}</td>
                   <td className="px-3 py-2">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusPill(r.status)}`}>{statusLabel(r.status)}</span>

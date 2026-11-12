@@ -261,7 +261,10 @@ BEGIN
   PERFORM pg_temp.logout();
   -- Risk register (RK1): a risk and its assessment (the matrix and the categories are seeded per organisation); written by the functions as the owner.
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
-  PERFORM app.assess_risk(app.create_risk(a, jsonb_build_object('title', 'Sweep risk', 'categoryId', (SELECT id FROM public.risk_categories WHERE organisation_id = a AND key = 'process'))), 3, 3, 'Sweep rationale');
+  PERFORM app.assess_risk(app.create_risk(a, jsonb_build_object('title', 'Sweep risk', 'categoryId', (SELECT id FROM public.risk_categories WHERE organisation_id = a AND key = 'process'))), 4, 4, 'Sweep rationale');
+  -- RK2: an action, a review and an acceptance waiting for an approver.
+  PERFORM app.set_risk_treatment(k.id, 'accept', NULL), app.add_risk_action(k.id, '{"description":"Sweep action"}'::jsonb), app.record_risk_review(k.id, 'Sweep review'),
+          app.propose_risk_acceptance(k.id, 'Sweep acceptance rationale') FROM public.risks k WHERE k.organisation_id = a AND k.title = 'Sweep risk';
   PERFORM pg_temp.logout();
   -- Document control (DC2): a named reviewer and a sign-off (one member in A, so seeded directly; people write through the functions).
   INSERT INTO public.document_revision_reviewers (organisation_id, revision_id, user_id)

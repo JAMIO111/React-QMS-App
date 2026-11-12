@@ -106,12 +106,17 @@ export const RiskDialog = ({ existing, onClose, onSaved }) => {
   );
 };
 
-/** Assess before treatment: choose a cell of the matrix and say why. The server works the score out again from the matrix in force. */
-export const AssessDialog = ({ risk, onClose }) => {
+/**
+ * Assess: choose a cell of the matrix and say why. `phase` "inherent" is before treatment, "residual" what is left after it.
+ * The server works the score out again from the matrix in force.
+ */
+export const AssessDialog = ({ risk, phase = "inherent", onClose }) => {
   const mutation = useRiskMutation();
   const model = useRiskModel();
   const { showToast } = useToast();
-  const [cell, setCell] = useState(risk.inherent ? { likelihood: risk.inherent.likelihood, consequence: risk.inherent.consequence } : null);
+  const residual = phase === "residual";
+  const before = residual ? risk.residual : risk.inherent;
+  const [cell, setCell] = useState(before ? { likelihood: before.likelihood, consequence: before.consequence } : null);
   const [rationale, setRationale] = useState("");
   const config = model.data?.config;
   const band = cell && config ? cellBand(config, cell.likelihood, cell.consequence) : null;
@@ -121,15 +126,17 @@ export const AssessDialog = ({ risk, onClose }) => {
     e.preventDefault();
     if (!ready) return;
     mutation.mutate(
-      { action: "assess", id: risk.id, body: { ...cell, rationale: rationale.trim() } },
+      { action: "assess", id: risk.id, body: { ...cell, rationale: rationale.trim(), ...(residual ? { phase: "residual" } : {}) } },
       { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Not assessed", message: describeApiError(err) }) },
     );
   };
   return (
-    <Dialog title={`Assess ${risk.reference}`} onClose={onClose} width="max-w-2xl">
+    <Dialog title={residual ? `What is left of ${risk.reference} after treatment` : `Assess ${risk.reference}`} onClose={onClose} width="max-w-2xl">
       <form noValidate onSubmit={save} className="flex flex-col gap-3">
         <p className="text-sm text-secondary-text">
-          {opportunity
+          {residual
+            ? "With the treatment in place, how likely is it now and how bad would it be? Choose the cell where the two meet."
+            : opportunity
             ? "How likely is it, and how much would it gain, as things stand? Choose the cell where the two meet."
             : "How likely is it, and how bad would it be, as things stand, before anything more is done about it? Choose the cell where the two meet."}
         </p>
@@ -149,9 +156,11 @@ export const AssessDialog = ({ risk, onClose }) => {
           )}
         </p>
         {cell && band && !opportunity && !isAcceptable(config, band) && (
-          <Callout tone="warning">Above the level your organisation accepts ({BAND_LABEL[config.acceptanceBand].toLowerCase()}): it will need treatment, or an approved acceptance.</Callout>
+          <Callout tone="warning">
+            Above the level your organisation accepts ({BAND_LABEL[config.acceptanceBand].toLowerCase()}): {residual ? "it will need more treatment, or an approver to accept it." : "it will need treatment, or an approved acceptance."}
+          </Callout>
         )}
-        <TextAreaField label="Why this score?" value={rationale} onChange={(e) => setRationale(e.target.value)} required maxLength={2000} rows={3} hint={risk.inherent ? "The earlier assessment is kept in the history" : "The evidence or reasoning behind it"} />
+        <TextAreaField label="Why this score?" value={rationale} onChange={(e) => setRationale(e.target.value)} required maxLength={2000} rows={3} hint={before ? "The earlier assessment is kept in the history" : "The evidence or reasoning behind it"} />
         <FormError error={mutation.error} />
         <Buttons onClose={onClose} pending={mutation.isPending} disabled={!ready} label="Record the assessment" />
       </form>

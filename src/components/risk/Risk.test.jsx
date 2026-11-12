@@ -29,10 +29,15 @@ const row = {
   cause: "One approved foundry", effect: "Line stop", owner: { id: "u1", name: "Ann Owner" }, site: null, department: null, status: "open",
   inherent: { id: "a1", likelihood: 4, consequence: 4, score: 16, band: "high", assessedOn: "2026-11-10", modelVersion: 1 },
   retiredReason: null, retiredAt: null, createdAt: "2026-11-09T08:00:00Z", updatedAt: "2026-11-10T08:00:00Z",
+  residual: null, band: "high", strategy: null, treatmentPlan: null, openActions: 0, nextReviewOn: "2027-02-10", reviewOverdue: false, outcome: null, closeNote: null, closedAt: null, closedBy: null, reopenReason: null,
 };
 const draftRow = { ...row, id: "r2", reference: "RSK-002", kind: "opportunity", title: "Second CMM shift", status: "draft", inherent: null };
 const assessment = { id: "a1", phase: "inherent", likelihood: 4, consequence: 4, likelihoodLabel: "Likely", consequenceLabel: "Major", score: 16, band: "high", rationale: "Two stoppages last year", assessedOn: "2026-11-10", assessedBy: "Ann Owner", current: true, modelVersion: 1, createdAt: "2026-11-10T08:00:00Z" };
-let risk = { ...row, assessments: [assessment], canManage: true, canEdit: true };
+const detail = {
+  assessments: [assessment], actions: [], reviews: [], acceptances: [], problems: ["Choose what will be done about the risk"],
+  acceptance: { acceptanceBand: "medium", above: true, accepted: false, waiting: false }, canManage: true, canApprove: true, canEdit: true,
+};
+let risk = { ...row, ...detail };
 
 vi.mock("../../hooks/useQmsApi", () => ({
   usePermissions: () => ({ can: (p) => permissions.includes(p), isLoading: false }),
@@ -61,7 +66,7 @@ beforeEach(() => {
   toggle.mockReset();
   listCalls.length = 0;
   permissions = ["risk.read", "risk.manage"];
-  risk = { ...row, assessments: [assessment], canManage: true, canEdit: true };
+  risk = { ...row, ...detail };
   model = { ...model, canChange: true };
 });
 
@@ -116,7 +121,7 @@ describe("risk page", () => {
   it("shows where it sits on the matrix, the reasoning and that it is above what is accepted", () => {
     at("/Risk/Register/r1", "/Risk/Register/:id", <RiskPage />);
     expect(screen.getByRole("heading", { name: "RSK-001" })).toBeInTheDocument();
-    expect(screen.getByText(/High — above the level your organisation accepts/)).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Still needed" })).getByText("Choose what will be done about the risk")).toBeInTheDocument();
     expect(screen.getByText("Two stoppages last year")).toBeInTheDocument();
     expect(screen.getByText("4 · Likely")).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Where it sits on the matrix" })).toBeInTheDocument();
@@ -124,7 +129,7 @@ describe("risk page", () => {
   });
 
   it("assesses by choosing a cell: the score and band show at once, and the reasoning is needed", async () => {
-    risk = { ...draftRow, assessments: [], canManage: true, canEdit: true };
+    risk = { ...draftRow, ...detail, assessments: [], problems: ["Assess the opportunity"] };
     at("/Risk/Register/r2", "/Risk/Register/:id", <RiskPage />);
     expect(screen.getByText("Not assessed yet")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Assess it" }));
@@ -140,7 +145,7 @@ describe("risk page", () => {
   });
 
   it("keeps every assessment in the history, and says when the matrix has moved on", () => {
-    risk = { ...row, assessments: [{ ...assessment, id: "a2", score: 8, likelihood: 2, band: "medium", likelihoodLabel: "Unlikely", rationale: "Second foundry on trial" }, { ...assessment, current: false }], canManage: true, canEdit: true };
+    risk = { ...row, ...detail, assessments: [{ ...assessment, id: "a2", score: 8, likelihood: 2, band: "medium", likelihoodLabel: "Unlikely", rationale: "Second foundry on trial" }, { ...assessment, current: false }] };
     model = { ...model, version: 2 };
     at("/Risk/Register/r1", "/Risk/Register/:id", <RiskPage />);
     const history = screen.getByRole("list", { name: "Assessment history" });
@@ -164,9 +169,142 @@ describe("risk page", () => {
     await userEvent.click(screen.getByRole("button", { name: "Bring back" }));
     expect(mutate).toHaveBeenLastCalledWith({ action: "reactivate", id: "r1" }, expect.anything());
     second.unmount();
-    risk = { ...row, assessments: [assessment], canManage: false, canEdit: false };
+    risk = { ...row, ...detail, canManage: false, canApprove: false, canEdit: false };
     at("/Risk/Register/r1", "/Risk/Register/:id", <RiskPage />);
     expect(screen.queryByRole("button", { name: /Assess|Edit|Retire/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("treatment, acceptance and reviews (RK2)", () => {
+  const openRisk = (over = {}) => {
+    risk = { ...row, ...detail, ...over };
+    return at("/Risk/Register/r1", "/Risk/Register/:id", <RiskPage />);
+  };
+  const action = { id: "x1", description: "Trial the second foundry", owner: { id: "u2", name: "Bob Bloggs" }, dueDate: "2020-01-01", status: "open", doneNote: null, doneAt: null, doneBy: null, cancelReason: null, cancelledAt: null, cancelledBy: null, mine: false, createdAt: "2026-11-10T08:00:00Z" };
+  const residual = { id: "a9", likelihood: 3, consequence: 4, score: 12, band: "high", assessedOn: "2026-11-12", modelVersion: 1 };
+  const residualDetail = { ...assessment, id: "a9", phase: "residual", likelihood: 3, likelihoodLabel: "Possible", score: 12, rationale: "Second foundry approved" };
+
+  it("chooses the approach from those that fit a risk, and adds an action given to a person", async () => {
+    openRisk();
+    await userEvent.click(screen.getByRole("button", { name: "Choose the approach" }));
+    let dialog = screen.getByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Approach/ }));
+    expect(screen.queryByRole("option", { name: /Exploit/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("option", { name: /Mitigate/ }));
+    await userEvent.type(within(dialog).getByLabelText("The plan"), "Qualify a second foundry");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect(mutate).toHaveBeenLastCalledWith({ action: "setTreatment", id: "r1", body: { strategy: "mitigate", plan: "Qualify a second foundry" } }, expect.anything());
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add an action" }));
+    dialog = screen.getByRole("dialog");
+    const add = within(dialog).getByRole("button", { name: "Add action" });
+    expect(add).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("What is to be done"), "Audit the foundry");
+    await userEvent.click(add);
+    expect(mutate).toHaveBeenLastCalledWith({ action: "addAction", id: "r1", body: { description: "Audit the foundry", ownerId: "u1", dueDate: null } }, expect.anything());
+  });
+
+  it("lists actions with who has them, flags a late one, and closes one with what was done", async () => {
+    openRisk({ strategy: "mitigate", status: "treating", openActions: 1, actions: [action, { ...action, id: "x2", description: "Hold stock", status: "done", doneNote: "Eight weeks held", doneAt: "2026-11-11T08:00:00Z", doneBy: "Ann Owner", dueDate: null }] });
+    const list = screen.getByRole("list", { name: "Actions" });
+    const first = within(list).getByText("Trial the second foundry").closest("li");
+    expect(first).toHaveTextContent("Open");
+    expect(first).toHaveTextContent("Overdue");
+    expect(first).toHaveTextContent("Bob Bloggs");
+    expect(within(list).getByText(/Eight weeks held/)).toBeInTheDocument();
+    await userEvent.click(within(first).getByRole("button", { name: "Mark done: Trial the second foundry" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("What was done"), "Trial passed");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Mark done" }));
+    expect(mutate).toHaveBeenLastCalledWith({ action: "completeAction", id: "x1", body: { note: "Trial passed" } }, expect.anything());
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await userEvent.click(screen.getByRole("button", { name: "Reopen action: Hold stock" }));
+    expect(mutate).toHaveBeenLastCalledWith({ action: "reopenAction", id: "x2" }, expect.anything());
+  });
+
+  it("lets the person an action was given to close it, and nothing else, without managing risks", () => {
+    openRisk({ strategy: "mitigate", status: "treating", canManage: false, canApprove: false, canEdit: false, actions: [{ ...action, mine: true }] });
+    expect(screen.getByRole("button", { name: "Mark done: Trial the second foundry" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Edit action|Cancel action|Add an action|Choose the approach|Record a review|Close/ })).not.toBeInTheDocument();
+  });
+
+  it("assesses what is left after treatment as a residual assessment", async () => {
+    openRisk({ strategy: "mitigate", status: "treating", problems: ["Assess what is left after treatment"] });
+    await userEvent.click(screen.getByRole("button", { name: "Assess what is left" }));
+    const dialog = screen.getByRole("dialog", { name: /What is left of RSK-001/ });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Possible and Major: 12, High" }));
+    await userEvent.type(within(dialog).getByLabelText("Why this score?"), "Second foundry approved");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Record the assessment" }));
+    expect(mutate).toHaveBeenLastCalledWith({ action: "assess", id: "r1", body: { likelihood: 3, consequence: 4, rationale: "Second foundry approved", phase: "residual" } }, expect.anything());
+  });
+
+  it("proposes accepting what is left, and only someone else decides", async () => {
+    const proposed = { id: "p1", status: "proposed", band: "high", rationale: "Second source approved; volume next quarter", proposedBy: "Ann Owner", proposedAt: "2026-11-12T08:00:00Z", decidedBy: null, decidedAt: null, decisionNote: null, inForce: true, canDecide: false, canWithdraw: true };
+    const base = { strategy: "mitigate", status: "treating", residual, assessments: [residualDetail, assessment] };
+    const first = openRisk(base);
+    await userEvent.click(screen.getByRole("button", { name: "Propose accepting it" }));
+    let dialog = screen.getByRole("dialog");
+    const propose = within(dialog).getByRole("button", { name: "Propose" });
+    await userEvent.type(within(dialog).getByLabelText("Why accept it as it stands?"), "short");
+    expect(propose).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("Why accept it as it stands?"), " but now long enough");
+    await userEvent.click(propose);
+    expect(mutate).toHaveBeenLastCalledWith({ action: "proposeAcceptance", id: "r1", body: { rationale: "short but now long enough" } }, expect.anything());
+    first.unmount();
+    // the proposer sees it waiting, with no Decide
+    const mine = openRisk({ ...base, acceptance: { ...detail.acceptance, waiting: true }, acceptances: [proposed], problems: ["The acceptance is waiting for an approver"] });
+    expect(screen.getByText("You proposed it, so someone else decides.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Decide…" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Propose accepting it" })).not.toBeInTheDocument();
+    mine.unmount();
+    // another approver decides, with a note
+    openRisk({ ...base, acceptance: { ...detail.acceptance, waiting: true }, acceptances: [{ ...proposed, canDecide: true }] });
+    await userEvent.click(screen.getByRole("button", { name: "Decide…" }));
+    dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Approve" })).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("Your note"), "Until volume is reached");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Approve" }));
+    expect(mutate).toHaveBeenLastCalledWith({ action: "decideAcceptance", id: "p1", body: { approve: true, note: "Until volume is reached" } }, expect.anything());
+  });
+
+  it("says when the review is overdue, records a review, and closes with an outcome", async () => {
+    openRisk({ strategy: "mitigate", status: "monitoring", residual: { ...residual, band: "medium", score: 6 }, band: "medium", problems: [], acceptance: { ...detail.acceptance, above: false }, reviewOverdue: true, nextReviewOn: "2026-11-01",
+      reviews: [{ id: "v1", outcome: "no_change", note: "Both foundries delivering", wasDueOn: "2026-08-01", nextReviewOn: "2026-11-01", reviewedOn: "2026-08-02", reviewedBy: "Ann Owner" }] });
+    expect(screen.getAllByText(/Review overdue/).length).toBeGreaterThan(0);
+    expect(within(screen.getByRole("list", { name: "Reviews" })).getByText("Both foundries delivering")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Record a review" }));
+    let dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("What you looked at and found"), "Nothing has changed");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Record the review" }));
+    expect(mutate).toHaveBeenLastCalledWith({ action: "review", id: "r1", body: { note: "Nothing has changed" } }, expect.anything());
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    dialog = screen.getByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Closed as/ }));
+    await userEvent.click(screen.getByRole("option", { name: /Treated/ }));
+    await userEvent.type(within(dialog).getByLabelText("Closing note"), "Two sources at volume");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Close it" }));
+    expect(mutate).toHaveBeenLastCalledWith({ action: "close", id: "r1", body: { outcome: "treated", note: "Two sources at volume" } }, expect.anything());
+  });
+
+  it("shows a closed risk as it was left, and reopens it with a reason", async () => {
+    openRisk({ status: "closed", outcome: "accepted", closeNote: "Lived with", closedAt: "2026-11-12T08:00:00Z", closedBy: "Ann Owner", nextReviewOn: null, canEdit: false, problems: [] });
+    expect(screen.getByText("Closed: accepted")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Assess|Add an action|Close$/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Reopen" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("Why is it reopened?"), "The supplier withdrew");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Reopen" }));
+    expect(mutate).toHaveBeenLastCalledWith({ action: "reopen", id: "r1", body: { reason: "The supplier withdrew" } }, expect.anything());
+  });
+
+  it("offers an opportunity its own approaches and no acceptance", async () => {
+    openRisk({ kind: "opportunity", acceptance: { ...detail.acceptance, above: false }, problems: ["Choose what will be done about the opportunity"] });
+    expect(screen.queryByRole("heading", { name: "Acceptance" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Choose the approach" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("combobox", { name: /Approach/ }));
+    expect(screen.getByRole("option", { name: /Exploit/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /Mitigate/ })).not.toBeInTheDocument();
   });
 });
 

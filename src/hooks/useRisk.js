@@ -80,6 +80,30 @@ export const useRiskMutation = () => {
           return send(`/risks/${id}/retire`);
         case "reactivate":
           return send(`/risks/${id}/reactivate`);
+        case "setTreatment":
+          return send(`/risks/${id}/treatment`, "PUT");
+        case "addAction":
+          return send(`/risks/${id}/actions`);
+        case "updateAction":
+          return send(`/risk-actions/${id}`, "PATCH");
+        case "completeAction":
+          return send(`/risk-actions/${id}/complete`);
+        case "cancelAction":
+          return send(`/risk-actions/${id}/cancel`);
+        case "reopenAction":
+          return send(`/risk-actions/${id}/reopen`);
+        case "proposeAcceptance":
+          return send(`/risks/${id}/acceptances`);
+        case "decideAcceptance":
+          return send(`/risk-acceptances/${id}/decide`);
+        case "withdrawAcceptance":
+          return send(`/risk-acceptances/${id}/withdraw`);
+        case "review":
+          return send(`/risks/${id}/reviews`);
+        case "close":
+          return send(`/risks/${id}/close`);
+        case "reopen":
+          return send(`/risks/${id}/reopen`);
         default:
           throw new Error(`Unknown action ${action}`);
       }

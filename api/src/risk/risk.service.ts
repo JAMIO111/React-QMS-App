@@ -5,7 +5,8 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import {
-  AllQuery, AssessBody, CreateCategoryBody, CreateRiskBody, ModelConfig, RiskCategory, RiskListQuery, SaveModelBody, ScoreQuery, UpdateCategoryBody, UpdateRiskBody,
+  AllQuery, AssessBody, CloseBody, CreateActionBody, CreateCategoryBody, CreateRiskBody, DecideBody, ModelConfig, ReviewBody, RiskCategory, RiskListQuery, SaveModelBody,
+  ScoreQuery, TreatmentBody, UpdateActionBody, UpdateCategoryBody, UpdateRiskBody,
 } from './risk.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -38,13 +39,20 @@ const toModel = (r: Row) => ({
 const RISK_SELECT = sql`
   select r.*, c.label as category_label, s.name as site_name, d.name as department_name, ${sql.raw(personName('po'))} as owner_name,
          a.id as a_id, a.likelihood as a_likelihood, a.consequence as a_consequence, a.score as a_score, a.band as a_band, a.assessed_on::text as a_assessed_on,
-         a.model_version as a_model_version
+         a.model_version as a_model_version,
+         b.id as b_id, b.likelihood as b_likelihood, b.consequence as b_consequence, b.score as b_score, b.band as b_band, b.assessed_on::text as b_assessed_on,
+         b.model_version as b_model_version, coalesce(b.band, a.band) as e_band, coalesce(b.score, a.score) as e_score,
+         r.next_review_on::text as next_review, (r.next_review_on < current_date and r.status in ('open', 'treating', 'monitoring')) as review_overdue,
+         (select count(*)::int from public.risk_actions x where x.risk_id = r.id and x.status = 'open') as open_actions,
+         ${sql.raw(personName('pcl'))} as closed_by_name
     from public.risks r
     join public.risk_categories c on c.id = r.category_id
     left join public.sites s on s.id = r.site_id
     left join public.departments d on d.id = r.department_id
     left join public.profiles po on po.id = r.owner_user_id
-    left join public.risk_assessments a on a.risk_id = r.id and a.phase = 'inherent' and a.status = 'current'`;
+    left join public.profiles pcl on pcl.id = r.closed_by
+    left join public.risk_assessments a on a.risk_id = r.id and a.phase = 'inherent' and a.status = 'current'
+    left join public.risk_assessments b on b.risk_id = r.id and b.phase = 'residual' and b.status = 'current'`;
 
 const SORT: Record<RiskListQuery['sort'], string> = {
   reference: 'r.reference',
@@ -53,9 +61,24 @@ const SORT: Record<RiskListQuery['sort'], string> = {
   owner: 'lower(r.owner_name)',
   status: 'r.status',
   score: 'r.a_score',
+  residual: 'r.b_score',
+  nextReview: 'r.next_review_on',
   assessedOn: 'r.a_assessed_on',
   createdAt: 'r.created_at',
 };
+
+const current = (r: Row, p: 'a' | 'b') =>
+  r[`${p}_id`]
+    ? {
+        id: r[`${p}_id`] as string,
+        likelihood: Number(r[`${p}_likelihood`]),
+        consequence: Number(r[`${p}_consequence`]),
+        score: Number(r[`${p}_score`]),
+        band: r[`${p}_band`] as string,
+        assessedOn: r[`${p}_assessed_on`] as string,
+        modelVersion: Number(r[`${p}_model_version`]),
+      }
+    : null;
 
 const toRisk = (r: Row) => ({
   id: r.id as string,
@@ -71,24 +94,29 @@ const toRisk = (r: Row) => ({
   department: r.department_id ? { id: r.department_id as string, name: (r.department_name as string) ?? 'Unknown' } : null,
   status: r.status as string,
   /** The current assessment before treatment (null until it is assessed). */
-  inherent: r.a_id
-    ? {
-        id: r.a_id as string,
-        likelihood: Number(r.a_likelihood),
-        consequence: Number(r.a_consequence),
-        score: Number(r.a_score),
-        band: r.a_band as string,
-        assessedOn: r.a_assessed_on as string,
-        modelVersion: Number(r.a_model_version),
-      }
-    : null,
+  inherent: current(r, 'a'),
+  /** What is left after treatment (null until that is assessed). */
+  residual: current(r, 'b'),
+  /** The band in force: the residual one when there is one, else the inherent one. */
+  band: (r.e_band as string) ?? null,
+  strategy: (r.strategy as string) ?? null,
+  treatmentPlan: (r.treatment_plan as string) ?? null,
+  openActions: Number(r.open_actions ?? 0),
+  nextReviewOn: (r.next_review as string) ?? null,
+  /** Worked out on read: the review date has passed and the risk is still live. */
+  reviewOverdue: Boolean(r.review_overdue),
+  outcome: (r.outcome as string) ?? null,
+  closeNote: (r.close_note as string) ?? null,
+  closedAt: r.closed_at ? (iso(r.closed_at) as string) : null,
+  closedBy: (r.closed_by_name as string) ?? null,
+  reopenReason: (r.reopen_reason as string) ?? null,
   retiredReason: (r.retired_reason as string) ?? null,
   retiredAt: r.retired_at ? (iso(r.retired_at) as string) : null,
   createdAt: iso(r.created_at) as string,
   updatedAt: iso(r.updated_at) as string,
 });
 
-/** Risk register (RK1): the scoring matrix, categories, risks and their assessments. Every write to a risk is a database function; reading is by RLS. */
+/** Risk register (RK1, RK2): the scoring matrix, categories, risks, their assessments, treatment, actions, acceptance, reviews and closing. Every write to a risk is a database function; reading is by RLS. */
 @Injectable()
 export class RiskService {
   constructor(private readonly database: DatabaseService) {}
@@ -192,8 +220,13 @@ export class RiskService {
       if (q.owner === 'me') where.push(sql`r.owner_user_id = auth.uid()`);
       if (q.band) {
         const bands = q.band.split(',');
-        where.push(sql`(r.a_band = any(string_to_array(${bands.filter((b) => b !== 'unassessed').join(',')}, ',')) ${bands.includes('unassessed') ? sql`or r.a_id is null` : sql``})`);
+        where.push(sql`(r.e_band = any(string_to_array(${bands.filter((b) => b !== 'unassessed').join(',')}, ',')) ${bands.includes('unassessed') ? sql`or r.a_id is null` : sql``})`);
       }
+      if (q.strategy) {
+        const chosen = q.strategy.split(',');
+        where.push(sql`(r.strategy = any(string_to_array(${chosen.filter((x) => x !== 'none').join(',')}, ',')) ${chosen.includes('none') ? sql`or r.strategy is null` : sql``})`);
+      }
+      if (q.reviewOverdue) where.push(sql`r.review_overdue`);
       if (q.q) {
         const p = likePattern(q.q);
         where.push(sql`(r.reference ilike ${p} escape '\\' or r.title ilike ${p} escape '\\' or r.description ilike ${p} escape '\\' or r.cause ilike ${p} escape '\\'
@@ -239,14 +272,92 @@ export class RiskService {
       modelVersion: Number(a.model_version),
       createdAt: iso(a.created_at) as string,
     }));
-    const can = (await db.execute<Row>(sql`select app.has_permission(${org}::uuid, 'risk.manage') as manage`)).rows[0];
+    const can = (
+      await db.execute<Row>(sql`
+        select app.has_permission(${org}::uuid, 'risk.manage') as manage, app.has_permission(${org}::uuid, 'risk.approve') as approve, auth.uid() as me,
+               app.risk_treatment_problems(${id}::uuid) as problems, app.risk_acceptance_state(${id}::uuid) as acceptance`)
+    ).rows[0];
     const base = toRisk(rows[0]);
     const manage = Boolean(can.manage);
+    const live = !['closed', 'retired'].includes(base.status);
+    const actions = (
+      await db.execute<Row>(sql`
+        select x.*, x.due_date::text as due, ${sql.raw(personName('po'))} as owner_name, ${sql.raw(personName('pd'))} as done_by_name, ${sql.raw(personName('pc'))} as cancelled_by_name
+          from public.risk_actions x
+          left join public.profiles po on po.id = x.owner_user_id left join public.profiles pd on pd.id = x.done_by left join public.profiles pc on pc.id = x.cancelled_by
+         where x.risk_id = ${id}::uuid and x.organisation_id = ${org}::uuid
+         order by (x.status = 'open') desc, x.due_date nulls last, x.created_at, x.id`)
+    ).rows.map((x) => ({
+      id: x.id as string,
+      description: x.description as string,
+      owner: person(x.owner_user_id, x.owner_name),
+      dueDate: (x.due as string) ?? null,
+      status: x.status as 'open' | 'done' | 'cancelled',
+      doneNote: (x.done_note as string) ?? null,
+      doneAt: x.done_at ? (iso(x.done_at) as string) : null,
+      doneBy: (x.done_by_name as string) ?? null,
+      cancelReason: (x.cancel_reason as string) ?? null,
+      cancelledAt: x.cancelled_at ? (iso(x.cancelled_at) as string) : null,
+      cancelledBy: (x.cancelled_by_name as string) ?? null,
+      /** The caller is the person it was given to (they may close it without managing risks). */
+      mine: x.owner_user_id === can.me,
+      createdAt: iso(x.created_at) as string,
+    }));
+    const reviews = (
+      await db.execute<Row>(sql`
+        select v.id, v.outcome, v.note, v.was_due_on::text as was_due_on, v.next_review_on::text as next_review_on, v.reviewed_on::text as reviewed_on, v.created_at,
+               ${sql.raw(personName('pv'))} as by_name
+          from public.risk_reviews v left join public.profiles pv on pv.id = v.reviewed_by
+         where v.risk_id = ${id}::uuid and v.organisation_id = ${org}::uuid order by v.created_at desc, v.id`)
+    ).rows.map((v) => ({
+      id: v.id as string,
+      outcome: v.outcome as 'no_change' | 'reassessed',
+      note: v.note as string,
+      wasDueOn: (v.was_due_on as string) ?? null,
+      nextReviewOn: (v.next_review_on as string) ?? null,
+      reviewedOn: v.reviewed_on as string,
+      reviewedBy: (v.by_name as string) ?? null,
+    }));
+    const acceptances = (
+      await db.execute<Row>(sql`
+        select x.*, ${sql.raw(personName('pp'))} as proposed_by_name, ${sql.raw(personName('pd'))} as decided_by_name
+          from public.risk_acceptances x left join public.profiles pp on pp.id = x.proposed_by left join public.profiles pd on pd.id = x.decided_by
+         where x.risk_id = ${id}::uuid and x.organisation_id = ${org}::uuid order by x.created_at desc, x.id`)
+    ).rows.map((x) => ({
+      id: x.id as string,
+      status: x.status as 'proposed' | 'approved' | 'rejected' | 'withdrawn',
+      band: x.band as string,
+      rationale: x.rationale as string,
+      proposedBy: (x.proposed_by_name as string) ?? null,
+      proposedAt: iso(x.created_at) as string,
+      decidedBy: (x.decided_by_name as string) ?? null,
+      decidedAt: x.decided_at ? (iso(x.decided_at) as string) : null,
+      decisionNote: (x.decision_note as string) ?? null,
+      /** It covers the assessment in force (an approved one for an earlier assessment no longer counts). */
+      inForce: x.assessment_id === (can.acceptance as Record<string, unknown>).assessmentId,
+      /** An approver other than the person who proposed it. */
+      canDecide: x.status === 'proposed' && Boolean(can.approve) && x.proposed_by !== can.me,
+      canWithdraw: x.status === 'proposed' && (Boolean(can.approve) || (manage && x.proposed_by === can.me)),
+    }));
+    const acceptance = can.acceptance as Record<string, unknown>;
     return {
       ...base,
       assessments,
+      actions,
+      reviews,
+      acceptances,
+      /** What still stands between this risk and "monitoring" (empty once closed or retired). */
+      problems: live ? ((can.problems as string[]) ?? []) : [],
+      acceptance: {
+        acceptanceBand: (acceptance.acceptanceBand as string) ?? null,
+        /** The band in force is above the level the organisation accepts. */
+        above: Boolean(acceptance.above),
+        accepted: Boolean(acceptance.accepted),
+        waiting: Boolean(acceptance.waiting),
+      },
       canManage: manage,
-      canEdit: manage && !['closed', 'retired'].includes(base.status),
+      canApprove: Boolean(can.approve),
+      canEdit: manage && live,
     };
   }
 
@@ -274,7 +385,69 @@ export class RiskService {
   }
 
   assess(ctx: RequestContext, id: string, body: AssessBody) {
-    return this.onRisk(ctx, id, (db) => db.execute(sql`select app.assess_risk(${id}::uuid, ${body.likelihood}::int, ${body.consequence}::int, ${body.rationale})`));
+    return this.onRisk(ctx, id, (db) =>
+      db.execute(sql`select app.assess_risk(${id}::uuid, ${body.likelihood}::int, ${body.consequence}::int, ${body.rationale}, ${body.phase ?? 'inherent'})`),
+    );
+  }
+
+  // ---- treatment, actions, acceptance, reviews, closing (RK2) ----------------------------------------
+
+  setTreatment(ctx: RequestContext, id: string, body: TreatmentBody) {
+    return this.onRisk(ctx, id, (db) => db.execute(sql`select app.set_risk_treatment(${id}::uuid, ${body.strategy}, ${body.plan ?? null})`));
+  }
+
+  addAction(ctx: RequestContext, id: string, body: CreateActionBody) {
+    return this.onRisk(ctx, id, (db) => db.execute(sql`select app.add_risk_action(${id}::uuid, ${json(body)}::jsonb)`));
+  }
+
+  /** A command on an action or an acceptance: found under RLS (404 otherwise), run, and answered with the whole risk. */
+  private onChild(ctx: RequestContext, table: 'risk_actions' | 'risk_acceptances', id: string, run: (db: Db) => Promise<unknown>) {
+    return this.database.asUser(ctx, async (db) => {
+      const found = (await db.execute<Row>(sql`select risk_id from public.${sql.raw(table)} where id = ${id}::uuid and organisation_id = ${orgOf(ctx)}::uuid`)).rows;
+      if (found.length === 0) throw ApiError.notFound(table === 'risk_actions' ? 'risk_action_not_found' : 'risk_acceptance_not_found', table === 'risk_actions' ? 'Action not found' : 'Acceptance not found');
+      await run(db);
+      return this.risk(db, ctx, found[0].risk_id as string);
+    });
+  }
+
+  updateAction(ctx: RequestContext, id: string, body: UpdateActionBody) {
+    return this.onChild(ctx, 'risk_actions', id, (db) => db.execute(sql`select app.update_risk_action(${id}::uuid, ${json(body)}::jsonb)`));
+  }
+
+  completeAction(ctx: RequestContext, id: string, note: string) {
+    return this.onChild(ctx, 'risk_actions', id, (db) => db.execute(sql`select app.complete_risk_action(${id}::uuid, ${note})`));
+  }
+
+  cancelAction(ctx: RequestContext, id: string, reason: string) {
+    return this.onChild(ctx, 'risk_actions', id, (db) => db.execute(sql`select app.cancel_risk_action(${id}::uuid, ${reason})`));
+  }
+
+  reopenAction(ctx: RequestContext, id: string) {
+    return this.onChild(ctx, 'risk_actions', id, (db) => db.execute(sql`select app.reopen_risk_action(${id}::uuid)`));
+  }
+
+  proposeAcceptance(ctx: RequestContext, id: string, rationale: string) {
+    return this.onRisk(ctx, id, (db) => db.execute(sql`select app.propose_risk_acceptance(${id}::uuid, ${rationale})`));
+  }
+
+  decideAcceptance(ctx: RequestContext, id: string, body: DecideBody) {
+    return this.onChild(ctx, 'risk_acceptances', id, (db) => db.execute(sql`select app.decide_risk_acceptance(${id}::uuid, ${body.approve}, ${body.note})`));
+  }
+
+  withdrawAcceptance(ctx: RequestContext, id: string, reason: string) {
+    return this.onChild(ctx, 'risk_acceptances', id, (db) => db.execute(sql`select app.withdraw_risk_acceptance(${id}::uuid, ${reason})`));
+  }
+
+  review(ctx: RequestContext, id: string, body: ReviewBody) {
+    return this.onRisk(ctx, id, (db) => db.execute(sql`select app.record_risk_review(${id}::uuid, ${body.note}, ${body.nextReviewOn ?? null}::date)`));
+  }
+
+  close(ctx: RequestContext, id: string, body: CloseBody) {
+    return this.onRisk(ctx, id, (db) => db.execute(sql`select app.close_risk(${id}::uuid, ${body.outcome}, ${body.note})`));
+  }
+
+  reopen(ctx: RequestContext, id: string, reason: string) {
+    return this.onRisk(ctx, id, (db) => db.execute(sql`select app.reopen_risk(${id}::uuid, ${reason})`));
   }
 
   retire(ctx: RequestContext, id: string, reason: string) {

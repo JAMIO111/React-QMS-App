@@ -77,6 +77,18 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/risks/{id}/assessments': { likelihood: 1, consequence: 1, rationale: 'Hijacked' },
     'POST /api/v1/risks/{id}/retire': { reason: 'Hijacked' },
     'POST /api/v1/risks/{id}/reactivate': {},
+    'PUT /api/v1/risks/{id}/treatment': { strategy: 'mitigate' },
+    'POST /api/v1/risks/{id}/actions': { description: 'Hijacked' },
+    'PATCH /api/v1/risk-actions/{id}': { description: 'Hijacked' },
+    'POST /api/v1/risk-actions/{id}/complete': { note: 'Hijacked' },
+    'POST /api/v1/risk-actions/{id}/cancel': { reason: 'Hijacked' },
+    'POST /api/v1/risk-actions/{id}/reopen': {},
+    'POST /api/v1/risks/{id}/acceptances': { rationale: 'Hijacked acceptance' },
+    'POST /api/v1/risk-acceptances/{id}/decide': { approve: true, note: 'Hijacked' },
+    'POST /api/v1/risk-acceptances/{id}/withdraw': { reason: 'Hijacked' },
+    'POST /api/v1/risks/{id}/reviews': { note: 'Hijacked' },
+    'POST /api/v1/risks/{id}/close': { outcome: 'no_longer_applies', note: 'Hijacked' },
+    'POST /api/v1/risks/{id}/reopen': { reason: 'Hijacked' },
     'PATCH /api/v1/competence/skills/{id}': { name: 'Hijacked' },
     'POST /api/v1/competence/skills/{id}/retire': { reason: 'Hijacked' },
     'POST /api/v1/competence/skills/{id}/reactivate': {},
@@ -467,6 +479,18 @@ const hasSample = (op: Op) =>
     'POST /api/v1/risks/{id}/assessments',
     'POST /api/v1/risks/{id}/retire',
     'POST /api/v1/risks/{id}/reactivate',
+    'PUT /api/v1/risks/{id}/treatment',
+    'POST /api/v1/risks/{id}/actions',
+    'PATCH /api/v1/risk-actions/{id}',
+    'POST /api/v1/risk-actions/{id}/complete',
+    'POST /api/v1/risk-actions/{id}/cancel',
+    'POST /api/v1/risk-actions/{id}/reopen',
+    'POST /api/v1/risks/{id}/acceptances',
+    'POST /api/v1/risk-acceptances/{id}/decide',
+    'POST /api/v1/risk-acceptances/{id}/withdraw',
+    'POST /api/v1/risks/{id}/reviews',
+    'POST /api/v1/risks/{id}/close',
+    'POST /api/v1/risks/{id}/reopen',
     'PATCH /api/v1/competence/skills/{id}',
     'POST /api/v1/competence/skills/{id}/retire',
     'POST /api/v1/competence/skills/{id}/reactivate',
@@ -897,6 +921,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/competence/categories/')) return a.competenceCategory;
   if (path.startsWith('/api/v1/risk-categories/')) return a.riskCategory;
   if (path.startsWith('/api/v1/risks/')) return a.risk;
+  if (path.startsWith('/api/v1/risk-actions/')) return a.riskAction;
+  if (path.startsWith('/api/v1/risk-acceptances/')) return a.riskAcceptance;
   if (path.startsWith('/api/v1/competence/skills/')) return a.competenceSkill;
   if (path.startsWith('/api/v1/competence/positions/')) return a.competencePosition;
   if (path.startsWith('/api/v1/competence/people/')) return a.employee;
@@ -1076,6 +1102,9 @@ beforeAll(async () => {
     a.competenceCategory = (await q1(`select id from public.competence_categories where organisation_id = $1 and key = 'inspection'`, [ids.orgA])).id;
     a.riskCategory = (await q1(`select id from public.risk_categories where organisation_id = $1 and key = 'process'`, [ids.orgA])).id;
     a.risk = (await q1(`select app.create_risk($1::uuid, jsonb_build_object('title', 'Alpha risk', 'categoryId', $2::text)) as id`, [ids.orgA, a.riskCategory])).id;
+    await q1(`select app.assess_risk($1::uuid, 4, 4, 'Alpha rationale'), app.set_risk_treatment($1::uuid, 'accept', null)`, [a.risk]);
+    a.riskAction = (await q1(`select app.add_risk_action($1::uuid, '{"description":"Alpha action"}'::jsonb) as id`, [a.risk])).id;
+    a.riskAcceptance = (await q1(`select app.propose_risk_acceptance($1::uuid, 'Alpha acceptance rationale') as id`, [a.risk])).id;
     a.competenceSkill = (await q1(`select app.save_competence_skill($1::uuid, jsonb_build_object('code', 'ALPHA', 'name', 'Alpha skill', 'categoryId', $2::text)) as id`, [ids.orgA, a.competenceCategory])).id;
     a.competencePosition = (await q1(`select app.save_competence_position($1::uuid, '{"code":"ALPHA","name":"Alpha position"}'::jsonb) as id`, [ids.orgA])).id;
     a.competenceHeld = (await q1(`select app.assign_employee_position($1::uuid, $2::uuid, current_date - 30) as id`, [a.employee, a.competencePosition])).id;

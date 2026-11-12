@@ -1,6 +1,6 @@
 # Risk and management review — plan
 
-**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **RK1 built** (§11); RK2–RK4, MR1–MR3 and RX are not · **Branch:** `Dev`
+**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **RK1 and RK2 built** (§11, §12); RK3–RK4, MR1–MR3 and RX are not · **Branch:** `Dev`
 **Menu names:** Risk (`ShieldAlert`), Management review (`Presentation`) · **Slices:** RK1–RK4, MR1–MR3, RX (exit check)
 
 Per `docs/design-brief.md` §6.7 ("Risk management", "Management review and quality KPIs") and Phase 4 ("Risk and management review"), the last
@@ -157,4 +157,26 @@ Migration `20260208200000_risk_register_core.sql` (applied live 2026-11-12; push
   and categories with an optimistic on/off), hooks `useRisk.js`, helpers `lib/risk.js`.
 - **Tests:** `supabase/tests/risk_register_core.test.sql` (+ tenancy sweep seed, guardrails audit list), `api/test/risk.e2e-spec.ts` (+ API sweep), `risk/Risk.test.jsx`.
 - **Not in RK1:** treatment, actions, residual assessments, acceptance, review dates (RK2); links and raise-from (RK3); heat map, dashboard, notices (RK4). Not browser-checked yet (RX).
+
+## 12. RK2 as built (2026-11-12)
+
+Migration `20260210100000_risk_treatment.sql` (pushing the API before it breaks every risk endpoint: they select the new columns).
+
+- **Treatment:** `risks.strategy` (mitigate / avoid / transfer / accept; an opportunity is exploited or left) and `treatment_plan`, set by `app.set_risk_treatment`.
+  `risk_actions` (given to an active member, due date; done with a note, cancelled with a reason, reopened; never deleted). The person an action was given to
+  closes it with only `risk.read`; everything else needs `risk.manage`.
+- **Residual assessments:** `app.assess_risk(…, phase)`; `residual` is what is left after treatment and never comes before an inherent one. **The assessment in
+  force** is the residual one when there is one, else the inherent one.
+- **Acceptance (RM5):** a risk whose band in force is above the matrix's acceptable band needs a `risk_acceptances` row: proposed by a manager with a rationale,
+  decided (approved or rejected, with a note) by someone else holding `risk.approve`. It covers the assessment it names, so assessing again asks afresh and
+  withdraws a proposal still waiting. A risk within the acceptable band needs none (proposing is refused), nor does an opportunity.
+- **Status is worked out, never set (RM8):** draft → open (assessed) → treating (a strategy is chosen) → monitoring (the "still needed" list
+  `app.risk_treatment_problems` is empty: a strategy, no open action, a residual assessment unless the strategy is accept, and within the acceptable band or accepted)
+  → closed (`app.close_risk`: treated / accepted / no longer applies, with a note; open actions are cancelled) → reopened with a reason.
+- **Reviews (RM6):** `next_review_on` = the day of the assessment or review + the months the current matrix gives the band in force (or a date given). Overdue is
+  worked out on read. `risk_reviews` is append-only: "no change" with a note, or "reassessed", written by every assessment after the first.
+- **Decided while building:** an action's owner defaults to the risk's owner; closing as "treated" is refused for a risk whose strategy is accept (close it as
+  accepted); retiring is refused while actions are open; a reopened or brought-back risk is due for review that day; the register's level filter uses the band
+  in force.
+- **Not in RK2:** links and raise-from (RK3); heat map, dashboard, notices and the menu badge (RK4). Not browser-checked yet (RX).
 

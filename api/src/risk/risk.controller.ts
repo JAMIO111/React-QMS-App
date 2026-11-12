@@ -5,7 +5,8 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
-  AllQuery, AssessBody, CreateCategoryBody, CreateRiskBody, ReasonBody, RiskCategory, RiskListQuery, SaveModelBody, ScoreQuery, UpdateCategoryBody, UpdateRiskBody,
+  AcceptanceBody, AllQuery, AssessBody, CloseBody, CreateActionBody, CreateCategoryBody, CreateRiskBody, DecideBody, NoteBody, ReasonBody, ReviewBody, RiskCategory,
+  RiskListQuery, SaveModelBody, ScoreQuery, TreatmentBody, UpdateActionBody, UpdateCategoryBody, UpdateRiskBody,
 } from './risk.schemas';
 import { RiskService } from './risk.service';
 
@@ -13,7 +14,7 @@ const READ = 'risk.read';
 const MANAGE = 'risk.manage';
 const APPROVE = 'risk.approve';
 
-/** Risk register (RK1): the 5 x 5 scoring matrix (versions), categories, risks and opportunities, and their assessments before treatment. */
+/** Risk register (RK1, RK2): the 5 x 5 scoring matrix (versions), categories, risks and opportunities, their assessments, treatment, actions, acceptance and reviews. */
 @ApiTags('risk')
 @ApiBearerAuth()
 @Controller()
@@ -110,7 +111,7 @@ export class RiskController {
   @HttpCode(200)
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(AssessBody) })
-  @ApiOkResponse({ description: 'Assesses the risk before treatment. The database works out the score and band; the earlier assessment is kept as superseded.' })
+  @ApiOkResponse({ description: 'Assesses the risk before treatment, or (`phase: residual`) what is left after it. The database works out the score and band; the earlier assessment is kept as superseded and the review date moves.' })
   assess(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.assess(ctx, parse(Uuid, id), parse(AssessBody, body));
   }
@@ -130,5 +131,112 @@ export class RiskController {
   @ApiOkResponse({ description: 'Brings a retired risk back (open when it has been assessed, else a draft)' })
   reactivate(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.reactivate(ctx, parse(Uuid, id));
+  }
+
+  // ---- treatment, actions, acceptance, reviews, closing (RK2); every command answers with the whole risk ----
+
+  @Put('risks/:id/treatment')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(TreatmentBody) })
+  @ApiOkResponse({ description: 'What will be done about it (mitigate / avoid / transfer / accept; exploit or accept for an opportunity) and the plan in words' })
+  setTreatment(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setTreatment(ctx, parse(Uuid, id), parse(TreatmentBody, body));
+  }
+
+  @Post('risks/:id/actions')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(CreateActionBody) })
+  @ApiCreatedResponse({ description: 'Adds an action, given to an active member (default: the risk\'s owner)' })
+  addAction(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addAction(ctx, parse(Uuid, id), parse(CreateActionBody, body));
+  }
+
+  @Patch('risk-actions/:id')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(UpdateActionBody) })
+  @ApiOkResponse({ description: 'Changes an open action' })
+  updateAction(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.updateAction(ctx, parse(Uuid, id), parse(UpdateActionBody, body));
+  }
+
+  @Post('risk-actions/:id/complete')
+  @HttpCode(200)
+  @OrganisationScoped(READ)
+  @ApiBody({ schema: openApiSchema(NoteBody) })
+  @ApiOkResponse({ description: 'Done, with what was done: by someone who manages risks or the person the action was given to (the database decides)' })
+  completeAction(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.completeAction(ctx, parse(Uuid, id), parse(NoteBody, body).note);
+  }
+
+  @Post('risk-actions/:id/cancel')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ description: 'Cancels an open action with a reason (never deleted)' })
+  cancelAction(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.cancelAction(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
+  }
+
+  @Post('risk-actions/:id/reopen')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'Reopens a done or cancelled action' })
+  reopenAction(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.reopenAction(ctx, parse(Uuid, id));
+  }
+
+  @Post('risks/:id/acceptances')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(AcceptanceBody) })
+  @ApiCreatedResponse({ description: 'Proposes accepting a risk that sits above the acceptable level as it stands; an approver other than the proposer decides' })
+  proposeAcceptance(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.proposeAcceptance(ctx, parse(Uuid, id), parse(AcceptanceBody, body).rationale);
+  }
+
+  @Post('risk-acceptances/:id/decide')
+  @HttpCode(200)
+  @OrganisationScoped(APPROVE)
+  @ApiBody({ schema: openApiSchema(DecideBody) })
+  @ApiOkResponse({ description: 'Approves or rejects a proposed acceptance, with a note (never the person who proposed it)' })
+  decideAcceptance(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.decideAcceptance(ctx, parse(Uuid, id), parse(DecideBody, body));
+  }
+
+  @Post('risk-acceptances/:id/withdraw')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ description: 'Withdraws a proposed acceptance (the person who proposed it, or an approver)' })
+  withdrawAcceptance(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.withdrawAcceptance(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
+  }
+
+  @Post('risks/:id/reviews')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReviewBody) })
+  @ApiCreatedResponse({ description: 'Records a review that found nothing changed, with a note; the next review date moves on (default: the months of its band)' })
+  review(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.review(ctx, parse(Uuid, id), parse(ReviewBody, body));
+  }
+
+  @Post('risks/:id/close')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(CloseBody) })
+  @ApiOkResponse({ description: 'Closes the risk as treated, accepted or no longer applies, with a note; open actions are cancelled' })
+  close(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.close(ctx, parse(Uuid, id), parse(CloseBody, body));
+  }
+
+  @Post('risks/:id/reopen')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ description: 'Reopens a closed risk with a reason; its status is worked out again and it is due for review today' })
+  reopen(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.reopen(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
   }
 }

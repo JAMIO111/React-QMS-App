@@ -46,9 +46,56 @@ export const STATUS_OPTIONS = [
   { value: "", label: "In the register" },
   { value: "draft", label: "Draft" },
   { value: "open", label: "Open" },
+  { value: "treating", label: "Treating" },
+  { value: "monitoring", label: "Monitoring" },
+  { value: "closed", label: "Closed" },
   { value: "retired", label: "Retired" },
   { value: "all", label: "All" },
 ];
+
+/** What will be done about it. An opportunity is exploited or left; a risk is never "exploited". */
+export const STRATEGIES = [
+  { value: "mitigate", label: "Mitigate", hint: "Make it less likely or less serious", kinds: ["risk"] },
+  { value: "avoid", label: "Avoid", hint: "Stop doing what causes it", kinds: ["risk"] },
+  { value: "transfer", label: "Transfer", hint: "Pass it on: insurance, a contract, a supplier", kinds: ["risk"] },
+  { value: "accept", label: "Accept", hint: "Live with it as it is", kinds: ["risk"] },
+  { value: "exploit", label: "Exploit", hint: "Go after it", kinds: ["opportunity"] },
+  { value: "accept", label: "Leave", hint: "Not pursued for now", kinds: ["opportunity"] },
+];
+export const strategyOptions = (kind) => STRATEGIES.filter((s) => s.kinds.includes(kind === "opportunity" ? "opportunity" : "risk")).map(({ value, label, hint }) => ({ value, label, hint }));
+export const strategyLabel = (strategy, kind) => strategyOptions(kind).find((s) => s.value === strategy)?.label ?? "Not decided";
+
+export const outcomeOptions = (kind) =>
+  kind === "opportunity"
+    ? [
+        { value: "treated", label: "Realised", hint: "It was pursued and the work is done" },
+        { value: "accepted", label: "Left", hint: "Not pursued" },
+        { value: "no_longer_applies", label: "No longer applies", hint: "Things have changed" },
+      ]
+    : [
+        { value: "treated", label: "Treated", hint: "The actions are done and what is left is acceptable" },
+        { value: "accepted", label: "Accepted", hint: "Lived with as it is" },
+        { value: "no_longer_applies", label: "No longer applies", hint: "Things have changed" },
+      ];
+export const outcomeLabel = (outcome, kind) => outcomeOptions(kind).find((o) => o.value === outcome)?.label ?? outcome;
+
+export const ACTION_STATUS = {
+  open: { label: "Open", tone: "bg-warning-color/15 text-warning-color" },
+  done: { label: "Done", tone: "bg-success-color/15 text-success-color" },
+  cancelled: { label: "Cancelled", tone: "bg-secondary-bg text-secondary-text" },
+};
+export const ACCEPTANCE_STATUS = {
+  proposed: { label: "Waiting for an approver", tone: "bg-warning-color/15 text-warning-color" },
+  approved: { label: "Approved", tone: "bg-success-color/15 text-success-color" },
+  rejected: { label: "Rejected", tone: "bg-error-color/15 text-error-color" },
+  withdrawn: { label: "Withdrawn", tone: "bg-secondary-bg text-secondary-text" },
+};
+
+/** "Review overdue since 3 Nov 2026" / "Next review 3 Feb 2027" / null when there is none. */
+export const reviewWords = (risk) => (!risk?.nextReviewOn ? null : risk.reviewOverdue ? `Review overdue since ${formatDay(risk.nextReviewOn)}` : `Next review ${formatDay(risk.nextReviewOn)}`);
+
+/** Whether an open action is past its date (dates are yyyy-MM-dd, compared with the person's own today). */
+export const actionOverdue = (action, today) => action.status === "open" && !!action.dueDate && action.dueDate < today;
 export const BAND_OPTIONS = [
   { value: "critical", label: "Critical" },
   { value: "high", label: "High" },
@@ -86,8 +133,8 @@ export const modelProblems = (config) => {
   return problems;
 };
 
-export const formatDay = (value) => {
+export function formatDay(value) {
   if (!value) return "—";
   const d = new Date(value.length === 10 ? `${value}T00:00:00` : value);
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-};
+}

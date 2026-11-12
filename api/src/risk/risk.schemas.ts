@@ -86,7 +86,32 @@ export const UpdateRiskBody = z
   .refine(nothingToChange, 'Nothing to change');
 export type UpdateRiskBody = z.infer<typeof UpdateRiskBody>;
 
-export const AssessBody = z.object({ likelihood: Level, consequence: Level, rationale: z.string().trim().min(3).max(2000) }).strict();
+export const RISK_STRATEGIES = ['mitigate', 'avoid', 'transfer', 'accept', 'exploit'] as const;
+export const RISK_OUTCOMES = ['treated', 'accepted', 'no_longer_applies'] as const;
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'A date as yyyy-MM-dd');
+
+/** `phase`: inherent (before treatment, the default) or residual (what is left after it). */
+export const AssessBody = z.object({ likelihood: Level, consequence: Level, rationale: z.string().trim().min(3).max(2000), phase: z.enum(['inherent', 'residual']).optional() }).strict();
+
+export const TreatmentBody = z.object({ strategy: z.enum(RISK_STRATEGIES), plan: text(4000) }).strict();
+export type TreatmentBody = z.infer<typeof TreatmentBody>;
+
+export const CreateActionBody = z.object({ description: z.string().trim().min(1).max(2000), ownerId: z.string().uuid().optional(), dueDate: isoDay.nullable().optional() }).strict();
+export type CreateActionBody = z.infer<typeof CreateActionBody>;
+export const UpdateActionBody = z
+  .object({ description: z.string().trim().min(1).max(2000).optional(), ownerId: z.string().uuid().optional(), dueDate: isoDay.nullable().optional() })
+  .strict()
+  .refine(nothingToChange, 'Nothing to change');
+export type UpdateActionBody = z.infer<typeof UpdateActionBody>;
+export const NoteBody = z.object({ note: z.string().trim().min(1).max(2000) }).strict();
+
+export const ReviewBody = z.object({ note: z.string().trim().min(3).max(2000), nextReviewOn: isoDay.optional() }).strict();
+export type ReviewBody = z.infer<typeof ReviewBody>;
+export const AcceptanceBody = z.object({ rationale: z.string().trim().min(10).max(2000) }).strict();
+export const DecideBody = z.object({ approve: z.boolean(), note: z.string().trim().min(3).max(1000) }).strict();
+export type DecideBody = z.infer<typeof DecideBody>;
+export const CloseBody = z.object({ outcome: z.enum(RISK_OUTCOMES), note: z.string().trim().min(3).max(2000) }).strict();
+export type CloseBody = z.infer<typeof CloseBody>;
 export type AssessBody = z.infer<typeof AssessBody>;
 
 export const ReasonBody = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
@@ -103,11 +128,14 @@ export const RiskListQuery = z.object({
   kind: z.enum(RISK_KINDS).optional(),
   /** Statuses separated by commas, or `live` (default: everything but retired) or `all`. */
   status: csv([...RISK_STATUSES, 'live', 'all']),
-  /** Bands of the current assessment, and `unassessed`. */
+  /** Bands of the assessment in force (what is left after treatment when assessed, else before it), and `unassessed`. */
   band: csv([...BANDS, 'unassessed']),
   categoryId: z.string().uuid().optional(),
   owner: z.enum(['me']).optional(),
-  sort: z.enum(['reference', 'title', 'category', 'owner', 'status', 'score', 'assessedOn', 'createdAt']).default('reference'),
+  strategy: csv([...RISK_STRATEGIES, 'none']),
+  /** Only risks whose review date has passed. */
+  reviewOverdue: z.enum(['true']).optional(),
+  sort: z.enum(['reference', 'title', 'category', 'owner', 'status', 'score', 'residual', 'nextReview', 'assessedOn', 'createdAt']).default('reference'),
   order: z.enum(['asc', 'desc']).default('asc'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),

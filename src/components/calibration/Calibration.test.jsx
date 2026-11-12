@@ -322,16 +322,48 @@ describe("settings", () => {
     renderAt("/Settings/Calibration");
     expect(await screen.findByText("Digital caliper")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Add gauge type" }));
-    await userEvent.type(screen.getByPlaceholderText(/e.g. Digital caliper/), "Micrometer 0-25");
+    // The form opens in a pop-up; the list stays as it is behind it.
+    const dialog = await screen.findByRole("dialog", { name: "New gauge type" });
+    expect(screen.getByText("Digital caliper")).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Name" }), "Micrometer 0-25");
     // The code is suggested from the name until it is typed.
-    expect(screen.getByRole("textbox", { name: "Code" })).toHaveValue("MICROMETER-0-25");
-    await userEvent.clear(screen.getByRole("textbox", { name: "Code" }));
-    await userEvent.type(screen.getByRole("textbox", { name: "Code" }), "mic-25");
-    await userEvent.clear(screen.getByRole("textbox", { name: "Interval" }));
-    await userEvent.type(screen.getByRole("textbox", { name: "Interval" }), "1");
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Interval unit" }), "years");
-    await userEvent.click(screen.getByRole("button", { name: "Add type" }));
+    expect(within(dialog).getByRole("textbox", { name: "Code" })).toHaveValue("MICROMETER-0-25");
+    await userEvent.clear(within(dialog).getByRole("textbox", { name: "Code" }));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Code" }), "mic-25");
+    await userEvent.clear(within(dialog).getByRole("textbox", { name: "Interval" }));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Interval" }), "1");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Interval unit" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Years" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add type" }));
     await waitFor(() => expect(lastCall("POST /gauge-types").body).toEqual({ code: "MIC-25", name: "Micrometer 0-25", description: null, procedureDocumentId: null, intervalValue: 1, intervalUnit: "years" }));
+    // Saved: the pop-up closes.
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("edits a gauge type in a pop-up, which Cancel closes without saving", async () => {
+    routeApi({ "PATCH /gauge-types/t1": (path, { body }) => ({ id: "t1", code: "CAL-150", name: "Digital caliper", ...body }) });
+    renderAt("/Settings/Calibration");
+    await userEvent.click(await screen.findByRole("button", { name: "Edit Digital caliper" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit Digital caliper" });
+    // Every field starts with what the type has, each on its own line with room for its hint.
+    expect(within(dialog).getByRole("textbox", { name: "Code" })).toHaveValue("CAL-150");
+    expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue("Digital caliper");
+    expect(within(dialog).getByRole("textbox", { name: "Interval" })).toHaveValue("6");
+    expect(within(dialog).getByText(/a document of the type Calibration procedure/)).toBeInTheDocument();
+    // The row is still in the list behind the pop-up.
+    expect(screen.getByRole("link", { name: "WI-CAL-004" })).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Description" }), "Workshop calipers");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(lastCall("PATCH /gauge-types/t1")).toBeUndefined();
+    // Opened again, it starts from the type, not from what was typed and cancelled.
+    await userEvent.click(screen.getByRole("button", { name: "Edit Digital caliper" }));
+    const again = await screen.findByRole("dialog", { name: "Edit Digital caliper" });
+    expect(within(again).getByRole("textbox", { name: "Description" })).toHaveValue("");
+    await userEvent.type(within(again).getByRole("textbox", { name: "Description" }), "Workshop calipers");
+    await userEvent.click(within(again).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(lastCall("PATCH /gauge-types/t1").body).toMatchObject({ code: "CAL-150", name: "Digital caliper", description: "Workshop calipers", procedureDocumentId: "d1", intervalValue: 6, intervalUnit: "months" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("links a gauge type's procedure to a controlled document chosen from a list", async () => {

@@ -12,6 +12,9 @@ import { INTERVAL_UNITS, formatInterval, gaugeTypeCodeFromName } from "../../lib
 import { Link } from "react-router-dom";
 import { documentPath } from "../../lib/documents";
 import ProcedureDocumentPicker from "../calibration/ProcedureDocumentPicker";
+import ComboField from "../ui/ComboField";
+import Dialog from "../ui/Dialog";
+import Field from "../ui/Field";
 import MenuCard from "../ui/MenuCard";
 import Callout from "../ui/Callout";
 import Switch from "../ui/Switch";
@@ -22,122 +25,87 @@ import CTAButton from "@/components/CTAButton";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 
-const input =
-  "rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm text-primary-text focus:outline-none focus:border-brand-primary";
+const UNIT_OPTIONS = INTERVAL_UNITS.map((u) => ({ value: u.id, label: u.name }));
 
-/** Code, name, description and default interval of a gauge type. A new type's code is suggested from its name until it is typed. */
-const TypeForm = ({ initial, onSubmit, onCancel, pending, submitText }) => {
-  const [name, setName] = useState(initial?.name ?? "");
-  const [code, setCode] = useState(initial?.code ?? "");
-  const [codeTouched, setCodeTouched] = useState(!!initial);
+/**
+ * Add or edit a gauge type in a pop-up: code, name, default interval, calibration procedure and description. A new type's code is
+ * suggested from its name until it is typed. An existing type's own extra details (custom fields) sit under the form and save by themselves.
+ */
+const TypeDialog = ({ type, onClose, onSubmit, pending, canManage = true }) => {
+  const [name, setName] = useState(type?.name ?? "");
+  const [code, setCode] = useState(type?.code ?? "");
+  const [codeTouched, setCodeTouched] = useState(!!type);
   const shownCode = codeTouched ? code : gaugeTypeCodeFromName(name);
-  const [description, setDescription] = useState(initial?.description ?? "");
-  const [procedureDocumentId, setProcedureDocumentId] = useState(initial?.procedureDocumentId ?? null);
-  const [intervalValue, setIntervalValue] = useState(
-    String(initial?.intervalValue ?? 12),
-  );
-  const [intervalUnit, setIntervalUnit] = useState(
-    initial?.intervalUnit ?? "months",
-  );
+  const [description, setDescription] = useState(type?.description ?? "");
+  const [procedureDocumentId, setProcedureDocumentId] = useState(type?.procedureDocumentId ?? null);
+  const [intervalValue, setIntervalValue] = useState(String(type?.intervalValue ?? 12));
+  const [intervalUnit, setIntervalUnit] = useState(type?.intervalUnit ?? "months");
   const [customValues, setCustomValues] = useState({});
-  const ok =
-    name.trim() &&
-    shownCode.trim() &&
-    Number.isInteger(Number(intervalValue)) &&
-    Number(intervalValue) >= 1;
+  // The procedure as it was when the pop-up opened, so the picker shows it whatever the list does behind.
+  const [procedure] = useState(type?.procedureDocument);
+  const ok = name.trim() && shownCode.trim() && Number.isInteger(Number(intervalValue)) && Number(intervalValue) >= 1;
+  const submit = (e) => {
+    e.preventDefault();
+    if (!ok) return;
+    onSubmit({
+      code: shownCode.trim(),
+      name: name.trim(),
+      description: description.trim() || null,
+      procedureDocumentId: procedureDocumentId ?? null,
+      intervalValue: Number(intervalValue),
+      intervalUnit,
+      ...(type ? {} : withCustomValues(customValues)),
+    });
+  };
   return (
-    <form
-      className="flex flex-wrap items-end gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (ok)
-          onSubmit({
-            code: shownCode.trim(),
-            name: name.trim(),
-            description: description.trim() || null,
-            procedureDocumentId: procedureDocumentId ?? null,
-            intervalValue: Number(intervalValue),
-            intervalUnit,
-            ...(initial ? {} : withCustomValues(customValues)),
-          });
-      }}>
-      <label className="flex flex-col gap-1 text-xs text-secondary-text">
-        <span data-required>Code</span>
-        <input
-          className={`${input} w-40 font-mono uppercase`}
-          value={shownCode}
-          onChange={(e) => {
-            setCodeTouched(true);
-            setCode(e.target.value.toUpperCase());
-          }}
-          maxLength={40}
-          placeholder="e.g. CAL-150"
-          title="Identifies the gauge type in Fortress and in imports; unique"
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-secondary-text">
-        <span data-required>Name</span>
-        <input
-          className={`${input} w-56`}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          maxLength={100}
-          placeholder="e.g. Digital caliper 0–150 mm"
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-secondary-text">
-        <span data-required>Interval</span>
-        <span className="flex gap-1">
-          <input
-            aria-label="Interval"
-            className={`${input} w-16 text-right`}
+    <Dialog title={type ? `Edit ${type.name}` : "New gauge type"} onClose={onClose} width="max-w-xl">
+      <form noValidate onSubmit={submit} className="flex flex-col gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field
+            label="Code"
+            required
+            value={shownCode}
+            onChange={(e) => {
+              setCodeTouched(true);
+              setCode(e.target.value.toUpperCase());
+            }}
+            maxLength={40}
+            placeholder="e.g. CAL-150"
+            inputClassName="font-mono uppercase"
+            hint="Identifies the type here and in imports"
+          />
+          <Field label="Name" required value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder="e.g. Digital caliper 0–150 mm" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field
+            label="Interval"
+            required
             inputMode="numeric"
             value={intervalValue}
             onChange={(e) => setIntervalValue(e.target.value)}
+            hint="How often gauges of this type are calibrated"
           />
-          <select
-            aria-label="Interval unit"
-            className={input}
-            value={intervalUnit}
-            onChange={(e) => setIntervalUnit(e.target.value)}>
-            {INTERVAL_UNITS.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name.toLowerCase()}
-              </option>
-            ))}
-          </select>
-        </span>
-      </label>
-      <div className="w-72" title="The controlled document gauges of this type are calibrated to, chosen from documents of the type Calibration procedure; a new calibration starts with its number">
-        <ProcedureDocumentPicker value={procedureDocumentId} onChange={(id) => setProcedureDocumentId(id ?? null)} current={initial?.procedureDocument} />
-      </div>
-      <label className="flex min-w-48 flex-1 flex-col gap-1 text-xs text-secondary-text">
-        Description
-        <input
-          className={input}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          maxLength={1000}
-          placeholder="Optional"
-        />
-      </label>
-      {!initial && (
-        <div className="basis-full">
-          <CustomFieldInputs entityType="gauge_type" values={customValues} onChange={setCustomValues} />
+          <ComboField label="Interval unit" required value={intervalUnit} onChange={(v) => setIntervalUnit(v ?? "months")} options={UNIT_OPTIONS} />
         </div>
-      )}
-      <CTAButton type="main" size="md" buttonType="submit" disabled={!ok || pending} loading={pending}>
-        {submitText}
-      </CTAButton>
-      {onCancel && (
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-sm text-secondary-text hover:underline cursor-pointer">
-          Cancel
-        </button>
-      )}
-    </form>
+        <ProcedureDocumentPicker
+          value={procedureDocumentId}
+          onChange={(id) => setProcedureDocumentId(id ?? null)}
+          current={procedure}
+          hint="The controlled document gauges of this type are calibrated to: a document of the type Calibration procedure. A new calibration starts with its number."
+        />
+        <Field label="Description" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} hint="Optional" />
+        {!type && <CustomFieldInputs entityType="gauge_type" values={customValues} onChange={setCustomValues} />}
+        <div className="flex justify-end gap-2">
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
+            Cancel
+          </CTAButton>
+          <CTAButton type="main" size="md" buttonType="submit" disabled={!ok || pending} loading={pending}>
+            {type ? "Save" : "Add type"}
+          </CTAButton>
+        </div>
+      </form>
+      {type && <CustomFieldsCard entityType="gauge_type" record={type} editable={canManage} className="mt-4" />}
+    </Dialog>
   );
 };
 
@@ -192,19 +160,10 @@ const TypeCard = ({ type, canManage }) => {
   return (
     <li
       className={`flex flex-col gap-3 rounded-xl border border-border-color bg-primary-bg p-4 ${type.active ? "" : "opacity-70"}`}>
-      {editing ? (
-        <>
-          <TypeForm
-            initial={type}
-            pending={mutation.isPending}
-            submitText="Save"
-            onCancel={() => setEditing(false)}
-            onSubmit={(body) => patch(body, `${body.name} saved.`)}
-          />
-          <CustomFieldsCard entityType="gauge_type" record={type} editable={canManage} />
-        </>
-      ) : (
-        <div className="flex flex-wrap items-center justify-between gap-5">
+      {editing && (
+        <TypeDialog type={type} canManage={canManage} pending={mutation.isPending} onClose={() => setEditing(false)} onSubmit={(body) => patch(body, `${body.name} saved.`)} />
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-5">
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-2 font-semibold text-primary-text">
               <span className="rounded-md bg-border-color/60 px-1.5 py-0.5 font-mono text-xs font-medium text-secondary-text" title="Code">{type.code}</span>
@@ -275,9 +234,8 @@ const TypeCard = ({ type, canManage }) => {
               </>
             )}
           </div>
-        </div>
-      )}
-      {!editing && missing > 0 && (
+      </div>
+      {missing > 0 && (
         <Callout
           tone="warning"
           title={`${missing} ${missing === 1 ? "gauge is" : "gauges are"} missing some of these checks`}
@@ -371,8 +329,7 @@ const SettingsCalibration = () => {
         subtitle="Default interval and template characteristics for each kind of gauge"
         bodyClassName="flex flex-col gap-3"
         action={
-          canManage &&
-          !adding && (
+          canManage && (
             <CTAButton
               buttonType="button"
               onClick={() => setAdding(true)}
@@ -382,34 +339,22 @@ const SettingsCalibration = () => {
           )
         }>
         {canManage && adding && (
-          <div className="rounded-xl border border-border-color bg-primary-bg p-4">
-            <TypeForm
-              pending={mutation.isPending}
-              submitText="Add type"
-              onCancel={() => setAdding(false)}
-              onSubmit={(body) =>
-                mutation.mutate(
-                  { path: "/gauge-types", body },
-                  {
-                    onSuccess: (t) => {
-                      setAdding(false);
-                      showToast({
-                        type: "success",
-                        title: "Added",
-                        message: `${t.name} added. Open its characteristics to add the checks.`,
-                      });
-                    },
-                    onError: (err) =>
-                      showToast({
-                        type: "error",
-                        title: "Not added",
-                        message: describeApiError(err),
-                      }),
+          <TypeDialog
+            pending={mutation.isPending}
+            onClose={() => setAdding(false)}
+            onSubmit={(body) =>
+              mutation.mutate(
+                { path: "/gauge-types", body },
+                {
+                  onSuccess: (t) => {
+                    setAdding(false);
+                    showToast({ type: "success", title: "Added", message: `${t.name} added. Open its characteristics to add the checks.` });
                   },
-                )
-              }
-            />
-          </div>
+                  onError: (err) => showToast({ type: "error", title: "Not added", message: describeApiError(err) }),
+                },
+              )
+            }
+          />
         )}
         {!!types?.length && (
           <label className="relative self-start">

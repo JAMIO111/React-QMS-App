@@ -268,7 +268,7 @@ Migration `20260217100000_management_reviews.sql` (applied live 2026-11-12; push
 
 ## 17. MR3 as built (2026-11-12)
 
-Migration `20260218100000_management_review_notices.sql` (not yet applied live; pushing the API before it breaks "My review actions" (it calls the new function) and leaves the notice unsent).
+Migration `20260218100000_management_review_notices.sql` (applied live 2026-11-12; pushing the API before it breaks "My review actions" (it calls the new function) and leaves the notice unsent).
 
 - **Previous-review actions as an input** were built in MR2 (§16): the first section of every review lists earlier completed reviews' actions still open or closed in the period.
 - **Action owner notice (RM14):** `management_review_actions.created|updated` ("A management review action was given to you": added with someone on it, or handed over), **own_record**

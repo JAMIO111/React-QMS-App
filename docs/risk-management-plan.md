@@ -160,7 +160,7 @@ Migration `20260208200000_risk_register_core.sql` (applied live 2026-11-12; push
 
 ## 12. RK2 as built (2026-11-12)
 
-Migration `20260210100000_risk_treatment.sql` (pushing the API before it breaks every risk endpoint: they select the new columns).
+Migration `20260210100000_risk_treatment.sql` (applied live 2026-11-12; pushing the API before it breaks every risk endpoint: they select the new columns).
 
 - **Treatment:** `risks.strategy` (mitigate / avoid / transfer / accept; an opportunity is exploited or left) and `treatment_plan`, set by `app.set_risk_treatment`.
   `risk_actions` (given to an active member, due date; done with a note, cancelled with a reason, reopened; never deleted). The person an action was given to

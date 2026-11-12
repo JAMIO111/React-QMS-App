@@ -1,4 +1,5 @@
-import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GraduationCapIcon, LayoutDashboardIcon, ScanSearchIcon, ShieldAlertIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
+import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GraduationCapIcon, LayoutDashboardIcon, ScanSearchIcon, ShieldAlertIcon,
+  PresentationIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
@@ -136,6 +137,13 @@ export const menuStructure = [
       { name: "Heat map", path: "/Risk/Heat-map" },
       { name: "My risk work", path: "/Risk/My-Work", badge: "my-risk-work" },
     ],
+  },
+  {
+    name: "Management review",
+    icon: PresentationIcon,
+    permission: "management_review.read",
+    path: "/Management-Review",
+    subMenu: [{ name: "Quality objectives", path: "/Management-Review/Objectives" }],
   },
   {
     name: "Production",

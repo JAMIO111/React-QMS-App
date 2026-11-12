@@ -90,6 +90,11 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/risks/{id}/close': { outcome: 'no_longer_applies', note: 'Hijacked' },
     'POST /api/v1/risks/{id}/reopen': { reason: 'Hijacked' },
     'PUT /api/v1/risks/{id}/links': { links: [] },
+    'GET /api/v1/quality-objectives/{id}': undefined,
+    'PATCH /api/v1/quality-objectives/{id}': { title: 'Hijacked' },
+    'POST /api/v1/quality-objectives/{id}/retire': { reason: 'Hijacked' },
+    'POST /api/v1/quality-objectives/{id}/reactivate': {},
+    'POST /api/v1/quality-objectives/{id}/values': { periodStart: '2026-01-01', value: 1, note: 'Hijacked' },
     'PATCH /api/v1/competence/skills/{id}': { name: 'Hijacked' },
     'POST /api/v1/competence/skills/{id}/retire': { reason: 'Hijacked' },
     'POST /api/v1/competence/skills/{id}/reactivate': {},
@@ -493,6 +498,11 @@ const hasSample = (op: Op) =>
     'POST /api/v1/risks/{id}/close',
     'POST /api/v1/risks/{id}/reopen',
     'PUT /api/v1/risks/{id}/links',
+    'GET /api/v1/quality-objectives/{id}',
+    'PATCH /api/v1/quality-objectives/{id}',
+    'POST /api/v1/quality-objectives/{id}/retire',
+    'POST /api/v1/quality-objectives/{id}/reactivate',
+    'POST /api/v1/quality-objectives/{id}/values',
     'PATCH /api/v1/competence/skills/{id}',
     'POST /api/v1/competence/skills/{id}/retire',
     'POST /api/v1/competence/skills/{id}/reactivate',
@@ -925,6 +935,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/risks/')) return a.risk;
   if (path.startsWith('/api/v1/risk-actions/')) return a.riskAction;
   if (path.startsWith('/api/v1/risk-acceptances/')) return a.riskAcceptance;
+  if (path.startsWith('/api/v1/quality-objectives/')) return a.qualityObjective;
   if (path.startsWith('/api/v1/competence/skills/')) return a.competenceSkill;
   if (path.startsWith('/api/v1/competence/positions/')) return a.competencePosition;
   if (path.startsWith('/api/v1/competence/people/')) return a.employee;
@@ -1107,6 +1118,7 @@ beforeAll(async () => {
     await q1(`select app.assess_risk($1::uuid, 4, 4, 'Alpha rationale'), app.set_risk_treatment($1::uuid, 'accept', null)`, [a.risk]);
     a.riskAction = (await q1(`select app.add_risk_action($1::uuid, '{"description":"Alpha action"}'::jsonb) as id`, [a.risk])).id;
     a.riskAcceptance = (await q1(`select app.propose_risk_acceptance($1::uuid, 'Alpha acceptance rationale') as id`, [a.risk])).id;
+    a.qualityObjective = (await q1(`select app.save_quality_objective($1::uuid, '{"title":"Alpha objective","target":95,"unit":"%"}'::jsonb) as id`, [ids.orgA])).id;
     a.competenceSkill = (await q1(`select app.save_competence_skill($1::uuid, jsonb_build_object('code', 'ALPHA', 'name', 'Alpha skill', 'categoryId', $2::text)) as id`, [ids.orgA, a.competenceCategory])).id;
     a.competencePosition = (await q1(`select app.save_competence_position($1::uuid, '{"code":"ALPHA","name":"Alpha position"}'::jsonb) as id`, [ids.orgA])).id;
     a.competenceHeld = (await q1(`select app.assign_employee_position($1::uuid, $2::uuid, current_date - 30) as id`, [a.employee, a.competencePosition])).id;

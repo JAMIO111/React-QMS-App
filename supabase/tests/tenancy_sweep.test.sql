@@ -268,6 +268,8 @@ BEGIN
   -- RK3: a link to a part.
   PERFORM app.set_risk_links(k.id, jsonb_build_array(jsonb_build_object('kind', 'part', 'id', (SELECT id FROM public.parts WHERE organisation_id = a LIMIT 1))))
      FROM public.risks k WHERE k.organisation_id = a AND k.title = 'Sweep risk';
+  -- Management review (MR1): a manual quality objective with a value.
+  PERFORM app.record_quality_objective_value(app.save_quality_objective(a, '{"title":"Sweep objective","target":95,"unit":"%"}'::jsonb), current_date, 96);
   PERFORM pg_temp.logout();
   -- Document control (DC2): a named reviewer and a sign-off (one member in A, so seeded directly; people write through the functions).
   INSERT INTO public.document_revision_reviewers (organisation_id, revision_id, user_id)

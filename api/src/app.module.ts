@@ -85,6 +85,8 @@ import { DocumentsController } from './documents/documents.controller';
 import { DocumentsService } from './documents/documents.service';
 import { RiskController } from './risk/risk.controller';
 import { RiskDashboardController, RiskDashboardService } from './risk/risk-dashboard';
+import { QualityObjectivesController } from './management-review/quality-objectives.controller';
+import { QualityObjectivesService } from './management-review/quality-objectives.service';
 import { RiskService } from './risk/risk.service';
 import { DocumentFileStore, SupabaseDocumentFileStore } from './documents/controlled-copy';
 import { DocumentsDashboardController, DocumentsDashboardService } from './documents/documents-dashboard';
@@ -248,6 +250,7 @@ export class AppModule implements NestModule {
         DocumentsController,
         RiskController,
         RiskDashboardController,
+        QualityObjectivesController,
         DocumentsDashboardController,
         SupplierQualificationController,
         SupplierRiskController,
@@ -332,6 +335,7 @@ export class AppModule implements NestModule {
         DocumentsService,
         RiskService,
         RiskDashboardService,
+        QualityObjectivesService,
         DocumentsDashboardService,
         { provide: DocumentFileStore, useClass: SupabaseDocumentFileStore },
         SupplierQualificationService,

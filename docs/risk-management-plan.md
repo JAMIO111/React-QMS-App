@@ -1,6 +1,6 @@
 # Risk and management review — plan
 
-**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **RK1–RK4 built** (§11–§14); MR1–MR3 and RX are not · **Branch:** `Dev`
+**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **RK1–RK4 and MR1 built** (§11–§15); MR2, MR3 and RX are not · **Branch:** `Dev`
 **Menu names:** Risk (`ShieldAlert`), Management review (`Presentation`) · **Slices:** RK1–RK4, MR1–MR3, RX (exit check)
 
 Per `docs/design-brief.md` §6.7 ("Risk management", "Management review and quality KPIs") and Phase 4 ("Risk and management review"), the last
@@ -214,3 +214,25 @@ Migration `20260215100000_risk_notices.sql` (applied live 2026-11-12; pushing th
 - **My work** `GET /risk-work/mine` (my risks due for review within 30 days or overdue, open actions given to me, acceptances I may decide — `risk.approve`, not my own proposal)
   and `GET /risk-work/count` (badge total = overdue reviews + open actions + acceptances). Page `/Risk/My-Work` (actions marked done from there; acceptances decided on the risk).
 - **Not in RK4:** reminders by email when a review or action falls due, a heat map trend over time, risks on the home page's "what needs attention". Not browser-checked yet (RX).
+
+## 15. MR1 as built (2026-11-12)
+
+Migration `20260216100000_quality_objectives.sql` (not yet applied live; pushing the API before it leaves the quality objective endpoints failing — nothing else uses them).
+
+- **Permissions (RM13):** `management_review.read / .manage` (owner, admin, quality manager both; quality engineer read; others none). Errors `QM027` → `409 management_review_rule`.
+- **`quality_objectives`** (`QO-001` …, `app.pad_number`): title, description, owner (active member), **measure** — `manual` or a fixed system measure — unit, direction (at least / at most),
+  target, frequency (monthly / quarterly / yearly) and the first period (any day; the period it falls in). The measure, frequency and first period are fixed once created (trigger, even for
+  SQL); the rest changes through `app.save_quality_objective` (audited). Retired with a reason, brought back, never deleted.
+- **System measures** (RM12), worked out on read by the API **as the person** (RLS), never stored: `ncr_count` (NCs raised, cancelled and deleted left out, at most), `supplier_ppm`
+  (units rejected at goods receipt per million received — a rejection's quantity, else the whole line — at most), `capa_on_time` (8Ds closed in the period by their due date, none = on time, %,
+  at least), `audit_pass_rate` (completed audits that passed, %, at least). Each brings its unit and direction. A measure whose records the person may not read (`ncr.read`, `receiving.read`,
+  `capa.read`, `audits.read`) is **"not available to you"**, never zero; a percentage or PPM with nothing to divide by has no value.
+- **`quality_objective_values`** (manual objectives only): one current value per period, append-only; a second value is a **correction** that needs a note and keeps the old one.
+  Recorded by a manager **or the objective's owner** (who may hold no management review permission: RLS shows them their own objectives).
+- **Standing:** on target / off target / no value per period; an objective's standing is that of its latest finished period with a value, else the period in progress ("so far").
+- **API** `api/src/management-review/quality-objectives.*`: `GET /quality-objective-measures`, `GET|POST /quality-objectives` (`all=true` includes retired; each with its last six periods),
+  `GET|PATCH /quality-objectives/{id}` (`periods` 1–60), `POST …/retire|reactivate|values`. **UI:** menu **Management review** (`Presentation`), `/Management-Review/Objectives`
+  (cards with the latest value, target, standing and a small chart) and `/Management-Review/Objectives/:id` (chart against a dashed target line, a table of every period with notes and
+  corrections, Record a value, Edit, Retire / Bring back).
+- **Not in MR1:** the management reviews themselves (MR2), objectives as a review input (MR2), a target that changes over time (a new target applies to every period), objectives per
+  site or department, a menu entry for an owner without the permission. Not browser-checked yet (RX).

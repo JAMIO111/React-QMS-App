@@ -61,7 +61,6 @@ const RiskPage = () => {
   const risk = query.data;
   useBreadcrumbNames([
     { path: `/Risk/Register/${id}`, label: risk ? `${risk.reference} · ${risk.title}` : null },
-    { path: "/Risk", label: "Risk", to: "/Risk/Register" },
   ]);
 
   if (query.isLoading) return <LoadingScreen />;

@@ -127,6 +127,8 @@ import {
   ShieldAlert as LucideShieldAlert,
   CalendarClock as LucideCalendarClock,
   Handshake as LucideHandshake,
+  Presentation as LucidePresentation,
+  Target as LucideTarget,
   Sparkles as LucideSparkles,
   Clock as LucideClock,
   Thermometer as LucideThermometer,
@@ -294,6 +296,8 @@ export const ClipboardCheckIcon = withDefaults(LucideClipboardCheck);
 export const ShieldAlertIcon = withDefaults(LucideShieldAlert);
 export const CalendarClockIcon = withDefaults(LucideCalendarClock);
 export const HandshakeIcon = withDefaults(LucideHandshake);
+export const PresentationIcon = withDefaults(LucidePresentation);
+export const TargetIcon = withDefaults(LucideTarget);
 export const SparklesIcon = withDefaults(LucideSparkles);
 export const ClockIcon = withDefaults(LucideClock);
 export const ThermometerIcon = withDefaults(LucideThermometer);

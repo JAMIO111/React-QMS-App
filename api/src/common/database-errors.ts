@@ -133,6 +133,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'document_rule', pg.message ?? 'That document change is not allowed');
     case 'QM026': // risk register rules: the matrix, risks, assessments (messages are written for users)
       return new ApiError(409, 'risk_rule', pg.message ?? 'That risk change is not allowed');
+    case 'QM027': // management review rules: quality objectives and their values, reviews (messages are written for users)
+      return new ApiError(409, 'management_review_rule', pg.message ?? 'That change is not allowed');
     case 'QM010': // notification type the caller cannot choose
       return new ApiError(404, 'notification_type_not_found', 'That notification type does not exist');
     case 'P0002': // no_data_found raised by app functions

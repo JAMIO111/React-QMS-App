@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ListIcon, PlayIcon } from "@/components/icons";
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ListIcon, PlayIcon, SlidersHorizontalIcon, XIcon } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
 import { useAudits, useAuditMutation, useAuditSchedule } from "../../hooks/useAudits";
 import { useMachines } from "../../hooks/useProcessControl";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useAuditScheduleFilters } from "../../hooks/useUrlFilters";
-import { auditorLabel, monthBounds, monthLabel, monthWeeks, shiftMonth, SLOT_STATES, slotLabel, slotPill } from "../../lib/audits";
+import { auditorLabel, monthBounds, monthLabel, monthWeeks, shiftMonth, slotLabel, slotPill, slotStateLabel } from "../../lib/audits";
 import { formatDate } from "../../lib/ncr";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
+import IconButton from "../IconButton";
 import ReasonDialog from "../ncr/ReasonDialog";
 import Dialog from "../ui/Dialog";
-import { ErrorNotice, SelectField } from "../master-data/shared";
+import { ErrorNotice } from "../master-data/shared";
+import AuditScheduleFilterPane from "./AuditScheduleFilterPane";
 import StartAuditDialog from "./StartAuditDialog";
 import SlidingToggle from "../ui/SlidingToggle";
 import { thisMonthIso } from "@/lib/localDate";
@@ -167,7 +169,8 @@ const Calendar = ({ month, today, items, onPick }) => {
   items.forEach((i) => byDay.set(i.dueOn, [...(byDay.get(i.dueOn) ?? []), i]));
   return (
     <div role="grid" aria-label={`Audit calendar, ${monthLabel(month)}`} className="overflow-x-auto">
-      <div className="grid min-w-3xl grid-cols-7 gap-px rounded-2xl border border-border-color bg-border-color">
+      {/* The cells are square and the frame is rounded: the frame clips them, so the corner days follow its curve. */}
+      <div className="grid min-w-3xl grid-cols-7 gap-px overflow-hidden rounded-2xl border border-border-color bg-border-color">
         {DAY_NAMES.map((d) => (
           <div key={d} role="columnheader" className="bg-secondary-bg px-2 py-1 text-xs font-medium uppercase tracking-wide text-tertiary-text">
             {d}
@@ -205,6 +208,7 @@ const AuditSchedulePage = () => {
   const [skipping, setSkipping] = useState(null);
   const [slot, setSlot] = useState(null);
   const [starting, setStarting] = useState(false);
+  const [filtering, setFiltering] = useState(false);
 
   const view = filters.view === "calendar" ? "calendar" : "list";
   const thisMonth = thisMonthIso();
@@ -225,6 +229,14 @@ const AuditSchedulePage = () => {
   const actions = { canPerform, canManage, onSkip: setSkipping };
   const machineItems = machines.data?.items ?? [];
   const auditItems = audits.data?.data ?? [];
+  const auditName = auditItems.find((a) => a.id === filters.audit);
+  const machineName = machineItems.find((m) => m.id === filters.machine);
+  // The calendar shows every state, so the state is a filter of the list only.
+  const activeFilters = [
+    ...(filters.audit ? [{ key: "audit", label: `Audit: ${auditName ? `${auditName.reference} · ${auditName.title}` : filters.auditLabel || "…"}`, clear: { audit: "", auditLabel: "" } }] : []),
+    ...(filters.machine ? [{ key: "machine", label: `Machine: ${machineName ? `${machineName.code} · ${machineName.name}` : filters.machineLabel || "…"}`, clear: { machine: "", machineLabel: "" } }] : []),
+    ...(filters.state && view === "list" ? [{ key: "state", label: `State: ${slotStateLabel(filters.state)}`, clear: { state: "" } }] : []),
+  ];
 
   return (
     <div className="flex w-full min-w-0 flex-1 min-h-0 flex-col gap-3 overflow-auto bg-primary-bg p-4">
@@ -243,8 +255,25 @@ const AuditSchedulePage = () => {
             onChange={(v) => updateFilters({ view: v === "list" ? "" : v })}
           />
           {canPerform && <CTAButton callbackFn={() => setStarting(true)} text="Start an unscheduled audit" type="main" icon={PlayIcon} iconSize="h-6 w-6" title="Carry out an audit now, without a scheduled slot" />}
+          <IconButton count={activeFilters.length} selected={filtering} color="blue" title="Filter" callback={() => setFiltering((open) => !open)} icon={<SlidersHorizontalIcon className="h-4.5 w-4.5" />} />
+          {filtering && <AuditScheduleFilterPane audits={auditItems} machines={machineItems} view={view} onClose={() => setFiltering(false)} />}
         </div>
       </div>
+      {activeFilters.length > 0 && (
+        <div aria-label="Active filters" className="flex flex-wrap items-center gap-2 px-1 text-sm">
+          {activeFilters.map((f) => (
+            <span key={f.key} className="flex items-center gap-1 rounded-full border border-brand-primary/50 bg-brand-primary/10 py-0.5 pl-3 pr-1 text-primary-text">
+              {f.label}
+              <button type="button" aria-label={`Remove filter ${f.label}`} onClick={() => updateFilters(f.clear)} className="cursor-pointer rounded-full p-0.5 hover:bg-brand-primary/20">
+                <XIcon className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          ))}
+          <button type="button" onClick={() => updateFilters({ audit: "", auditLabel: "", machine: "", machineLabel: "", state: "" })} className="cursor-pointer text-link-color hover:underline">
+            Clear all
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <Tile label="Due in 7 days" value={c?.dueNext7Days ?? "—"} state="upcoming" active={filters.state === "upcoming"} onPick={pick} note="Upcoming audits" />
@@ -254,12 +283,6 @@ const AuditSchedulePage = () => {
         <Tile label="Done" value={c?.done ?? "—"} state="done" active={filters.state === "done"} onPick={pick} note={c ? `${c.donePassed} passed, ${c.doneFailed} failed` : undefined} />
         <Tile label="Pass rate" value={c?.passRate == null ? "—" : `${c.passRate}%`} note="Of audits done" />
         <Tile label="On time" value={c?.onTimeRate == null ? "—" : `${c.onTimeRate}%`} note="Done by the deadline, of done or missed" />
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:max-w-3xl lg:grid-cols-3">
-        <SelectField label="Audit" value={filters.audit} onChange={(v) => updateFilters({ audit: v ?? "", auditLabel: "" })} options={auditItems.map((a) => ({ value: a.id, label: `${a.reference} · ${a.title}` }))} placeholder="Any audit" />
-        <SelectField label="Machine" value={filters.machine} onChange={(v) => updateFilters({ machine: v ?? "", machineLabel: "" })} options={machineItems.map((m) => ({ value: m.id, label: `${m.code} · ${m.name}` }))} placeholder="Any machine" />
-        {view === "list" && <SelectField label="State" value={filters.state} onChange={(v) => updateFilters({ state: v ?? "" })} options={SLOT_STATES} placeholder="Any state" />}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

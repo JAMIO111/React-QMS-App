@@ -688,6 +688,67 @@ describe("audit schedule", () => {
     expect(last("GET /audit-schedule").path).toContain("to=2026-10-31");
   });
 
+  it("keeps the filters in a pane: audit, machine and state apply together and show as chips that can be removed", async () => {
+    routeApi({ "GET /audit-schedule": scheduleBody(items()) });
+    renderAt("/Audits/Schedule");
+    await screen.findByRole("table", { name: "Scheduled audits" });
+    // No filter controls on the page itself any more.
+    expect(screen.queryByRole("combobox", { name: "Audit" })).toBeNull();
+    expect(screen.queryByLabelText("Active filters")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
+    const pane = await screen.findByRole("dialog", { name: "Filter the audit schedule" });
+    const choose = async (name, option) => {
+      await userEvent.click(within(pane).getByRole("combobox", { name }));
+      await userEvent.click(await screen.findByRole("option", { name: option }));
+    };
+    await choose("Audit", /AUD-001 · Cell audit/);
+    await choose("Machine", /CNC-2 · Mill/);
+    await choose("State", "Missed");
+    // Nothing is asked for until Apply.
+    expect(last("GET /audit-schedule").path).not.toContain("auditId=");
+    await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(last("GET /audit-schedule").path).toContain("auditId=a1"));
+    expect(last("GET /audit-schedule").path).toContain("machineId=m2");
+    expect(last("GET /audit-schedule").path).toContain("state=missed");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filter the audit schedule" })).toBeNull());
+    const chips = screen.getByLabelText("Active filters");
+    expect(chips).toHaveTextContent("Audit: AUD-001 · Cell audit");
+    expect(chips).toHaveTextContent("Machine: CNC-2 · Mill");
+    expect(chips).toHaveTextContent("State: Missed");
+    await userEvent.click(within(chips).getByRole("button", { name: "Remove filter Machine: CNC-2 · Mill" }));
+    await waitFor(() => expect(last("GET /audit-schedule").path).not.toContain("machineId="));
+    expect(last("GET /audit-schedule").path).toContain("auditId=a1");
+    await userEvent.click(within(screen.getByLabelText("Active filters")).getByRole("button", { name: "Clear all" }));
+    await waitFor(() => expect(screen.queryByLabelText("Active filters")).toBeNull());
+    expect(last("GET /audit-schedule").path).not.toContain("auditId=");
+  });
+
+  it("opens the pane on what is already filtered, resets everything, and says the calendar shows every state", async () => {
+    routeApi({ "GET /audit-schedule": scheduleBody(items()) });
+    renderAt("/Audits/Schedule?view=calendar&month=2026-11&audit=a1&state=missed");
+    await screen.findByRole("grid", { name: "Audit calendar, November 2026" });
+    // The state does not narrow the calendar, so it is not shown as an active filter there.
+    expect(screen.getByLabelText("Active filters")).toHaveTextContent("Audit: AUD-001 · Cell audit");
+    expect(screen.getByLabelText("Active filters")).not.toHaveTextContent("State");
+    // The button carries how many filters are on.
+    await userEvent.click(screen.getByRole("button", { name: /^1\s*Filter$/ }));
+    const pane = await screen.findByRole("dialog", { name: "Filter the audit schedule" });
+    expect(within(pane).getByRole("combobox", { name: "Audit" })).toHaveValue("AUD-001 · Cell audit");
+    expect(within(pane).getByText(/The calendar shows every state/)).toBeInTheDocument();
+    await userEvent.click(within(pane).getByRole("button", { name: "Reset all" }));
+    await waitFor(() => expect(screen.getByTestId("where")).not.toHaveTextContent("audit=a1"));
+    expect(screen.getByTestId("where")).toHaveTextContent("view=calendar");
+    expect(screen.getByTestId("where")).toHaveTextContent("month=2026-11");
+  });
+
+  it("clips the calendar's days to its rounded frame", async () => {
+    routeApi({ "GET /audit-schedule": scheduleBody(items()) });
+    renderAt("/Audits/Schedule?view=calendar&month=2026-11");
+    const grid = await screen.findByRole("grid", { name: "Audit calendar, November 2026" });
+    const frame = within(grid).getAllByRole("columnheader")[0].parentElement;
+    expect(frame).toHaveClass("rounded-2xl", "overflow-hidden");
+  });
+
   it("starts an unscheduled audit from the schedule", async () => {
     routeApi({ "GET /audit-schedule": scheduleBody([]), "POST /audit-records": { id: "r9", reference: "AR-26-0009" } });
     renderAt("/Audits/Schedule");

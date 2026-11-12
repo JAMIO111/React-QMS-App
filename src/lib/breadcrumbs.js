@@ -1,4 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
+import { FolderOpenIcon, ScanSearchIcon, SettingsIcon } from "@/components/icons";
+import { menuStructure } from "../MenuStructure";
 
 /**
  * Names for the parts of an address that are ids. A record page says what it is called ("ACME · Acme Metals", "SCAR-26-0004"); the breadcrumb shows that instead of the id.
@@ -35,3 +37,23 @@ export const useBreadcrumbEntries = () => useSyncExternalStore(subscribe, snapsh
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const looksLikeId = (segment) => UUID.test(segment);
+
+/**
+ * Each crumb carries the icon of the side-menu module its address belongs to: the menu entry (module or sub-page) whose path is the
+ * longest start of the crumb's path. A path shared by two modules (Suppliers) takes the first. Addresses outside the menu: Settings,
+ * the job hub (In-process inspection), else a folder.
+ */
+const MENU_ROOTS = [
+  ...menuStructure.flatMap((m) => [m.path, ...m.subMenu.map((s) => s.path)].map((path) => ({ path: path.toLowerCase(), Icon: m.icon }))),
+  { path: "/settings", Icon: SettingsIcon },
+  { path: "/jobs", Icon: ScanSearchIcon },
+];
+
+export const breadcrumbIcon = (path) => {
+  const p = path.toLowerCase();
+  let best = null;
+  for (const r of MENU_ROOTS) {
+    if ((p === r.path || p.startsWith(`${r.path}/`)) && (!best || r.path.length > best.path.length)) best = r;
+  }
+  return best?.Icon ?? FolderOpenIcon;
+};

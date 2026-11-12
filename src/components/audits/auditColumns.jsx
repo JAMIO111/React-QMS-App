@@ -57,11 +57,13 @@ export const auditColumns = [
       const last = i.row.original.lastRecord;
       if (!last) return <div className="table-row-item text-secondary-text">Never</div>;
       return (
-        <div className="table-row-item gap-2">
+        <div className="table-row-item">
+          <span className="inline-flex items-center gap-2">
           <Link to={`/Audits/Records/${last.id}`} className="text-link-color hover:underline" onClick={(e) => e.stopPropagation()}>
             {formatDate(last.performedOn)}
           </Link>
           <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${RESULT_PILL[last.result]}`}>{resultLabel(last.result)}</span>
+          </span>
         </div>
       );
     },

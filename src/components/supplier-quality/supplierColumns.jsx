@@ -43,9 +43,9 @@ export const supplierColumns = [
     "Supplier",
     head(BuildingIcon, "Supplier"),
     (i) => (
-      <div className="table-row-item flex-col items-start">
-        <span className="truncate">{i.row.original.name}</span>
-        {i.row.original.displayName && <span className="truncate text-xs text-secondary-text">{i.row.original.displayName}</span>}
+      <div className="table-row-item">
+        <span className="block truncate">{i.row.original.name}</span>
+        {i.row.original.displayName && <span className="block truncate text-xs text-secondary-text">{i.row.original.displayName}</span>}
       </div>
     ),
     { size: 260, minSize: 120, maxSize: 600, sortKey: "name" }
@@ -58,13 +58,15 @@ export const supplierColumns = [
     "Classifications",
     head(TagsIcon, "Classifications"),
     (i) => (
-      <div className="table-row-item flex-wrap gap-1">
+      <div className="table-row-item">
+        <span className="inline-flex items-center gap-1">
         {i.row.original.classifications.length === 0 && <span className="text-secondary-text">—</span>}
         {i.row.original.classifications.map((c) => (
           <span key={c.id} className="rounded-full border border-border-color bg-secondary-bg px-2 py-0.5 text-xs text-secondary-text">
             {c.label}
           </span>
         ))}
+        </span>
       </div>
     ),
     { size: 240, minSize: 120, maxSize: 600 }
@@ -78,9 +80,9 @@ export const supplierColumns = [
     (i) => {
       const c = i.row.original.primaryContact;
       return (
-        <div className="table-row-item flex-col items-start">
-          <span className="truncate">{c?.name ?? "—"}</span>
-          {c?.email && <span className="truncate text-xs text-secondary-text">{c.email}</span>}
+        <div className="table-row-item">
+          <span className="block truncate">{c?.name ?? "—"}</span>
+          {c?.email && <span className="block truncate text-xs text-secondary-text">{c.email}</span>}
         </div>
       );
     },

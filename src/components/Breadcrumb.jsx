@@ -1,15 +1,7 @@
 import React from "react";
 import { useLocation, Link } from "react-router-dom";
-import { looksLikeId, useBreadcrumbEntries } from "../lib/breadcrumbs";
-import { BoxesIcon, FolderOpenIcon, GaugeIcon, HouseIcon, SettingsIcon, TriangleAlertIcon } from "@/components/icons";
-
-const iconMap = {
-  Dashboard: <HouseIcon />,
-  "Non-Conformance": <TriangleAlertIcon />,
-  Calibration: <GaugeIcon />,
-  Inventory: <BoxesIcon />,
-  Settings: <SettingsIcon />,
-};
+import { breadcrumbIcon, looksLikeId, useBreadcrumbEntries } from "../lib/breadcrumbs";
+import { LayoutDashboardIcon } from "@/components/icons";
 
 // Utility: convert "non-conformance" → "Non Conformance"
 function formatSegment(segment) {
@@ -24,6 +16,11 @@ function splitPath(pathname) {
   return pathname.split("/").filter(Boolean);
 }
 
+const CrumbIcon = ({ path }) => {
+  const Icon = breadcrumbIcon(path);
+  return <Icon aria-hidden="true" />;
+};
+
 const Breadcrumb = () => {
   const location = useLocation();
   const segments = splitPath(location.pathname);
@@ -31,7 +28,7 @@ const Breadcrumb = () => {
 
   return (
     <nav className="flex items-center gap-1 text-sm text-secondary-text font-semibold">
-      <HouseIcon />
+      <LayoutDashboardIcon />
       <Link to="/Dashboard" className="hover:underline">
         Home
       </Link>
@@ -44,7 +41,7 @@ const Breadcrumb = () => {
         return (
           <React.Fragment key={segment}>
             <span className="mx-1">/</span>
-            {iconMap[segment] || <FolderOpenIcon />}
+            <CrumbIcon path={path} />
             <Link to={named?.to ?? path} className={named?.label ? "hover:underline" : "hover:underline capitalize"}>
               {text}
             </Link>

@@ -466,7 +466,7 @@ async function defineAudit({ page, stack, APP, orgName, see, shot, step, log }) 
   await page.getByRole('button', { name: /Add a question/ }).click();
   const q1 = page.getByRole('listitem', { name: 'Question 1' });
   await q1.getByLabel(/^Question/).fill('Is the cell clean and free of oil?');
-  await q1.getByLabel(/Critical/).check();
+  await q1.getByLabel(/Critical/).check({ force: true });
   await page.getByRole('button', { name: /Add a question/ }).click();
   const q2 = page.getByRole('listitem', { name: 'Question 2' });
   await q2.getByLabel(/^Question/).fill('Coolant concentration');
@@ -480,7 +480,7 @@ async function defineAudit({ page, stack, APP, orgName, see, shot, step, log }) 
   await pick(q3, 'Answered with', /^Multiple choice/);
   await q3.getByLabel('Option 1', { exact: true }).fill('Clean');
   await q3.getByLabel('Option 2', { exact: true }).fill('Oily');
-  await q3.getByLabel('Option 2 is acceptable').uncheck();
+  await q3.getByLabel('Option 2 is acceptable').uncheck({ force: true });
   await page.getByRole('button', { name: /Add a question/ }).click();
   const q4 = page.getByRole('listitem', { name: 'Question 4' });
   await q4.getByLabel(/^Question/).fill('Housekeeping score');
@@ -581,12 +581,13 @@ async function carryOutAudit({ page, stack, APP, orgName, see, shot, step, log }
   await page.getByRole('link', { name: 'Edit' }).click();
   await see(page.getByRole('heading', { name: 'Edit AUD-001' }));
   await page.getByLabel(/^Pass mark/).fill('90');
-  await see(page.getByText('Saved as version 2, with this reason, in the version history'));
+  await see(page.getByText('What the audit says has changed: it will be saved as version 2, and you will be asked why when you save.'));
   await page.getByRole('button', { name: 'Save changes' }).click();
-  await see(page.getByRole('alert', { name: 'Still needed' }).getByText('Say why the audit is changing'));
+  const why = page.getByRole('dialog', { name: 'Why is this changing?' });
+  await see(why);
   await shot(page, '64-audit-change-needs-a-reason');
-  await page.getByLabel(/^Why is this changing/).fill('Lowered the pass mark while the cell is being retrained');
-  await page.getByRole('button', { name: 'Save changes' }).click();
+  await why.getByRole('textbox', { name: /^Reason for the change/ }).fill('Lowered the pass mark while the cell is being retrained');
+  await why.getByRole('button', { name: 'Save version 2' }).click();
   await see(page.getByText('Version 2', { exact: true }).first());
   const versions = page.getByRole('table', { name: 'Versions' });
   await see(versions.getByText('Lowered the pass mark while the cell is being retrained'));

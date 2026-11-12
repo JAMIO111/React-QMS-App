@@ -47,9 +47,9 @@ export const capaColumns = [
     "Title",
     head(FileTextIcon, "Title"),
     (i) => (
-      <div className="table-row-item flex-col items-start">
-        <span className="truncate">{i.row.original.title}</span>
-        {i.row.original.externalReference && <span className="truncate text-xs text-secondary-text">{i.row.original.externalReference}</span>}
+      <div className="table-row-item">
+        <span className="block truncate">{i.row.original.title}</span>
+        {i.row.original.externalReference && <span className="block truncate text-xs text-secondary-text">{i.row.original.externalReference}</span>}
       </div>
     ),
     { size: 320, minSize: 140, maxSize: 700, sortKey: "title" }

@@ -658,8 +658,10 @@ describe("audit form", () => {
     expect(within(within(list).getByRole("listitem", { name: "Question 1" })).getByLabelText(/^Question/)).toHaveValue("Coolant concentration");
     await userEvent.click(screen.getByRole("button", { name: "Remove question 1" }));
     expect(within(screen.getByRole("list", { name: "Checklist" })).getAllByRole("listitem")).toHaveLength(1);
-    await userEvent.type(screen.getByLabelText(/^Why is this changing/), "Dropped the coolant question");
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    const why = await screen.findByRole("dialog", { name: "Why is this changing?" });
+    await userEvent.type(within(why).getByLabelText(/^Reason for the change/), "Dropped the coolant question");
+    await userEvent.click(within(why).getByRole("button", { name: /^Save version/ }));
     await waitFor(() => expect(sent("PATCH /audits/a1")).toHaveLength(1));
     expect(sent("PATCH /audits/a1")[0].body.changeReason).toBe("Dropped the coolant question");
     expect(sent("PATCH /audits/a1")[0].body.questions).toEqual([{ question: "Is the cell clean?", guidance: "Floor, bench, machine", answerType: "pass_fail", critical: true }]);
@@ -687,25 +689,32 @@ describe("audit form", () => {
   });
 
   describe("versions", () => {
-    it("asks why when what the audit says changes, says which version it will become, and sends nothing without a reason", async () => {
+    it("asks why in a dialog when what the audit says changes, says which version it will become, and sends nothing without a reason", async () => {
       routeApi({ "GET /audits/a1": detail({ version: 2 }), "PATCH /audits/a1": () => detail({ version: 3 }) });
       renderAt("/Audits/Templates/a1/edit");
       await screen.findByRole("heading", { name: "Edit AUD-001" });
       expect(screen.getByText(/^Version 2\. A change to what the audit says is saved as a new version/)).toBeInTheDocument();
-      expect(screen.getByText(/Nothing about what the audit says has changed yet/)).toBeInTheDocument();
-      expect(screen.getByLabelText(/^Why is this changing/)).not.toHaveAttribute("aria-required");
+      expect(screen.queryByRole("status")).toBeNull();
+      expect(screen.queryByLabelText(/Reason for the change/)).toBeNull();
       await userEvent.clear(screen.getByLabelText(/^Title/));
       await userEvent.type(screen.getByLabelText(/^Title/), "Weekly LPA, CNC");
-      expect(screen.getByText("Saved as version 3, with this reason, in the version history")).toBeInTheDocument();
-      expect(screen.getByLabelText(/^Why is this changing/)).toHaveAttribute("aria-required", "true");
+      expect(screen.getByText("What the audit says has changed: it will be saved as version 3, and you will be asked why when you save.")).toBeInTheDocument();
       await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
-      expect(await screen.findByRole("alert", { name: "Still needed" })).toHaveTextContent("Say why the audit is changing");
+      const why = await screen.findByRole("dialog", { name: "Why is this changing?" });
+      expect(within(why).getByText(/saved as version 3, with this reason, in the version history/)).toBeInTheDocument();
+      expect(within(why).getByLabelText(/^Reason for the change/)).toHaveAttribute("aria-required", "true");
+      const save = within(why).getByRole("button", { name: "Save version 3" });
+      expect(save).toBeDisabled();
+      await userEvent.type(within(why).getByLabelText(/^Reason for the change/), "ok");
+      expect(save).toBeDisabled(); // two characters are not a reason
+      await userEvent.click(within(why).getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("dialog")).toBeNull();
       expect(sent("PATCH /audits/a1")).toHaveLength(0);
-      await userEvent.type(screen.getByLabelText(/^Why is this changing/), "ok");
       await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
-      expect(sent("PATCH /audits/a1")).toHaveLength(0); // two characters are not a reason
-      await userEvent.type(screen.getByLabelText(/^Why is this changing/), "ay, clearer name");
-      await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      const again = await screen.findByRole("dialog", { name: "Why is this changing?" });
+      expect(within(again).getByLabelText(/^Reason for the change/)).toHaveValue("ok");
+      await userEvent.type(within(again).getByLabelText(/^Reason for the change/), "ay, clearer name");
+      await userEvent.click(within(again).getByRole("button", { name: "Save version 3" }));
       await waitFor(() => expect(sent("PATCH /audits/a1")).toHaveLength(1));
       expect(sent("PATCH /audits/a1")[0].body).toMatchObject({ title: "Weekly LPA, CNC", changeReason: "okay, clearer name" });
     });
@@ -714,15 +723,15 @@ describe("audit form", () => {
       routeApi({ "GET /audits/a1": detail({ version: 2 }) });
       renderAt("/Audits/Templates/a1/edit");
       await screen.findByRole("heading", { name: "Edit AUD-001" });
-      const nothing = () => screen.getByText(/Nothing about what the audit says has changed yet/);
+      const nothing = () => expect(screen.queryByRole("status")).toBeNull();
       await userEvent.clear(screen.getByLabelText(/^Pass mark/));
       await userEvent.type(screen.getByLabelText(/^Pass mark/), "90");
-      expect(screen.getByText("Saved as version 3, with this reason, in the version history")).toBeInTheDocument();
+      expect(screen.getByText("What the audit says has changed: it will be saved as version 3, and you will be asked why when you save.")).toBeInTheDocument();
       await userEvent.clear(screen.getByLabelText(/^Pass mark/));
       await userEvent.type(screen.getByLabelText(/^Pass mark/), "95");
-      expect(nothing()).toBeInTheDocument();
+      nothing();
       await userEvent.type(screen.getByLabelText(/^Purpose/), " more");
-      expect(screen.getByText("Saved as version 3, with this reason, in the version history")).toBeInTheDocument();
+      expect(screen.getByText("What the audit says has changed: it will be saved as version 3, and you will be asked why when you save.")).toBeInTheDocument();
     });
 
     it("needs no reason for a change to the schedule or the expected auditor, and sends none", async () => {
@@ -731,7 +740,7 @@ describe("audit form", () => {
       await screen.findByRole("heading", { name: "Edit AUD-001" });
       await userEvent.clear(screen.getByLabelText(/^Grace period/));
       await userEvent.type(screen.getByLabelText(/^Grace period/), "5");
-      expect(screen.getByText(/Nothing about what the audit says has changed yet/)).toBeInTheDocument();
+      expect(screen.queryByRole("status")).toBeNull();
       await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
       await waitFor(() => expect(sent("PATCH /audits/a1")).toHaveLength(1));
       expect(sent("PATCH /audits/a1")[0].body).toMatchObject({ graceDays: 5 });
@@ -743,9 +752,9 @@ describe("audit form", () => {
       renderAt("/Audits/Templates/a1/edit");
       await screen.findByRole("heading", { name: "Edit AUD-001" });
       await userEvent.click(screen.getByRole("button", { name: "Move question 1 down" }));
-      expect(screen.getByText("Saved as version 2, with this reason, in the version history")).toBeInTheDocument();
+      expect(screen.getByText("What the audit says has changed: it will be saved as version 2, and you will be asked why when you save.")).toBeInTheDocument();
       await userEvent.click(screen.getByRole("button", { name: "Move question 1 down" }));
-      expect(screen.getByText(/Nothing about what the audit says has changed yet/)).toBeInTheDocument();
+      expect(screen.queryByRole("status")).toBeNull();
     });
   });
 });

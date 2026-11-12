@@ -15,6 +15,8 @@ import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { ErrorNotice, FormError } from "../master-data/shared";
 import { TextAreaField } from "../ncr/Pickers";
 import CTAButton from "@/components/CTAButton";
+import Dialog from "../ui/Dialog";
+import Switch from "../ui/Switch";
 
 const fromAudit = (a) => ({
   title: a?.title ?? "",
@@ -95,9 +97,9 @@ const OptionsEditor = ({ q, index, set }) => {
         {q.options.map((o, i) => (
           <li key={o.key} className="flex flex-wrap items-end gap-2">
             <Field label={`Option ${i + 1}`} value={o.label} onChange={(e) => change(o.key, { label: e.target.value })} maxLength={100} className="min-w-48 flex-1" />
-            <label className="flex items-center gap-2 pb-2 text-sm text-primary-text">
-              <input type="checkbox" aria-label={`Option ${i + 1} is acceptable`} checked={o.passes} onChange={(e) => change(o.key, { passes: e.target.checked })} /> Acceptable
-            </label>
+            <Switch aria-label={`Option ${i + 1} is acceptable`} checked={o.passes} onChange={(e) => change(o.key, { passes: e.target.checked })} className="pb-2 text-sm text-primary-text">
+              Acceptable
+            </Switch>
             <button type="button" aria-label={`Remove option ${i + 1}`} disabled={q.options.length <= 2} onClick={() => set({ options: q.options.filter((x) => x.key !== o.key) })} className="mb-1 rounded p-1 text-error-color hover:bg-error-color/10 disabled:opacity-30 cursor-pointer">
               <Trash2Icon />
             </button>
@@ -182,9 +184,9 @@ const QuestionRow = ({ q, index, count, onChange, onMove, onRemove }) => {
         {t === "evidence" && <p className="text-sm text-secondary-text md:col-span-2">The auditor must add at least one photograph or document. It is not scored.</p>}
         {t === "text" && <p className="text-sm text-secondary-text md:col-span-2">The auditor writes a note. It is not scored.</p>}
         {scored && (
-          <label className="flex items-center gap-2 self-end pb-2 text-sm text-primary-text">
-            <input type="checkbox" checked={q.critical} onChange={(e) => set({ critical: e.target.checked })} /> Critical: the audit fails if this fails
-          </label>
+          <Switch checked={q.critical} onChange={(e) => set({ critical: e.target.checked })} className="self-end pb-2 text-sm text-primary-text">
+            Critical: the audit fails if this fails
+          </Switch>
         )}
       </div>
     </li>
@@ -213,6 +215,8 @@ const AuditFormBody = ({ audit }) => {
   const roles = useRoles();
   const [f, setF] = useState(() => fromAudit(audit));
   const [triedSave, setTriedSave] = useState(false);
+  // A content change asks "why" in a dialog when Save is pressed; the reason is kept if the dialog is closed and opened again.
+  const [askReason, setAskReason] = useState(false);
   const [reason, setReason] = useState("");
   const set = (patch) => setF((x) => ({ ...x, ...patch }));
   // A change to what the audit says (not to the schedule or the expected auditor) is saved as a new version and needs a reason.
@@ -224,7 +228,6 @@ const AuditFormBody = ({ audit }) => {
     scheduled && !f.firstDueOn && "Give the first due date",
     f.frequencyKind === "every_n_days" && !(Number(f.interval) >= 1) && "Say how many days apart",
     f.auditorKind !== "none" && !f.auditorId && "Choose who is expected to do it",
-    changed && reason.trim().length < 3 && "Say why the audit is changing",
     ...f.questions.flatMap((q, i) => questionProblems(q, i + 1)),
   ].filter(Boolean);
   const uniqueProblems = [...new Set(problems)];
@@ -253,9 +256,15 @@ const AuditFormBody = ({ audit }) => {
     e.preventDefault();
     setTriedSave(true);
     if (uniqueProblems.length) return;
-    const body = { ...toBody(f), ...(changed ? { changeReason: reason.trim() } : {}) };
+    if (changed) return setAskReason(true);
+    save();
+  };
+
+  const save = (changeReason) => {
+    const body = { ...toBody(f), ...(changeReason ? { changeReason } : {}) };
     mutation.mutate(audit ? { path: `/audits/${audit.id}`, method: "PATCH", body } : { path: "/audits", body }, {
       onSuccess: (saved) => {
+        setAskReason(false);
         showToast({ type: "success", title: "Saved", message: audit ? `${saved.reference} updated${saved.version !== audit.version ? `, now version ${saved.version}` : ""}.` : `${saved.reference} defined.` });
         navigate(`/Audits/Templates/${saved.id}`);
       },
@@ -274,6 +283,11 @@ const AuditFormBody = ({ audit }) => {
           {audit && (
             <p className="text-sm text-secondary-text">
               {audit.version ? `Version ${audit.version}. ` : ""}A change to what the audit says is saved as a new version, with a reason. Audits already done keep the questions and the version they were done against.
+            </p>
+          )}
+          {changed && (
+            <p role="status" className="text-sm font-medium text-primary-text">
+              What the audit says has changed: it will be saved as version {(audit.version ?? 0) + 1}, and you will be asked why when you save.
             </p>
           )}
         </div>
@@ -304,9 +318,9 @@ const AuditFormBody = ({ audit }) => {
           {scheduled && <RHFDatePickerPopout label="First due" required valueFormat="iso" value={f.firstDueOn} onChange={(v) => set({ firstDueOn: v })} />}
           {scheduled && <Field label="Grace period (days)" inputMode="numeric" value={f.graceDays} onChange={(e) => set({ graceDays: e.target.value })} hint="Days after the due date before it counts as missed" />}
           {scheduled && (
-            <label className="flex items-center gap-2 self-end pb-2 text-sm text-primary-text">
-              <input type="checkbox" checked={f.weekdaysOnly} onChange={(e) => set({ weekdaysOnly: e.target.checked })} /> Weekdays only
-            </label>
+            <Switch checked={f.weekdaysOnly} onChange={(e) => set({ weekdaysOnly: e.target.checked })} className="self-end pb-2 text-sm text-primary-text">
+              Weekdays only
+            </Switch>
           )}
           <ComboField label="Expected auditor" value={f.auditorKind} onChange={(v) => set({ auditorKind: v ?? "none", auditorId: null })} options={AUDITOR_KINDS} clearable={false} />
           {f.auditorKind !== "none" && <ComboField label={f.auditorKind === "person" ? "Person" : f.auditorKind === "role" ? "Role" : "Department"} required value={f.auditorId} onChange={(v) => set({ auditorId: v })} options={auditorOptions} placeholder="Choose…" />}
@@ -389,20 +403,52 @@ const AuditFormBody = ({ audit }) => {
         )}
       </MenuCard>
 
-      {audit && (
-        <MenuCard title="Reason for the change" subtitle={changed ? `Saved as version ${(audit.version ?? 0) + 1}, with this reason, in the version history` : "Needed when the title, type, purpose, procedure, pass mark, checklist or what it is relevant to changes"}>
-          <TextAreaField
-            label="Why is this changing?"
-            required={changed}
-            value={reason}
-            onChange={setReason}
-            rows={2}
-            maxLength={1000}
-            hint={changed ? undefined : "Nothing about what the audit says has changed yet. A change to the schedule or the expected auditor needs no reason."}
-          />
-        </MenuCard>
+      {askReason && (
+        <ReasonDialog
+          version={(audit?.version ?? 0) + 1}
+          reason={reason}
+          setReason={setReason}
+          pending={mutation.isPending}
+          error={mutation.error}
+          onCancel={() => setAskReason(false)}
+          onSave={() => save(reason.trim())}
+        />
       )}
     </form>
+  );
+};
+
+/**
+ * Asked when a change to what the audit says is saved: the reason goes into the version history with the new version. Its own form, so
+ * Enter in it saves this dialog rather than the page.
+ */
+const ReasonDialog = ({ version, reason, setReason, pending, error, onCancel, onSave }) => {
+  const ok = reason.trim().length >= 3;
+  return (
+    <Dialog title="Why is this changing?" onClose={onCancel}>
+      <form
+        noValidate
+        className="flex flex-col gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (ok) onSave();
+        }}>
+        <p className="text-sm text-secondary-text">
+          What the audit says has changed, so it is saved as version {version}, with this reason, in the version history. Audits already done keep the version they were done against.
+        </p>
+        <TextAreaField label="Reason for the change" required value={reason} onChange={setReason} rows={3} maxLength={1000} hint="At least three characters" />
+        <FormError error={error} />
+        <div className="flex justify-end gap-2">
+          <CTAButton type="neutral" size="md" onClick={onCancel}>
+            Cancel
+          </CTAButton>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={!ok} loading={pending} loadingText="Saving…">
+            Save version {version}
+          </CTAButton>
+        </div>
+      </form>
+    </Dialog>
   );
 };
 

@@ -38,9 +38,11 @@ export const gaugeColumns = [
     "Next due",
     head(CalendarClockIcon, "Next due"),
     (i) => (
-      <div className="table-row-item flex items-center gap-2">
-        <span>{formatDate(i.getValue())}</span>
-        {["overdue", "due_soon"].includes(i.row.original.dueState) && <DuePill state={i.row.original.dueState} days={i.row.original.daysUntilDue} />}
+      <div className="table-row-item">
+        <span className="inline-flex items-center gap-2">
+          <span>{formatDate(i.getValue())}</span>
+          {["overdue", "due_soon"].includes(i.row.original.dueState) && <DuePill state={i.row.original.dueState} days={i.row.original.daysUntilDue} />}
+        </span>
       </div>
     ),
     { size: 190, sortKey: "nextDueOn" }

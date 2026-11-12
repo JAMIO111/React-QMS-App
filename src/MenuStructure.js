@@ -143,9 +143,12 @@ export const menuStructure = [
     icon: PresentationIcon,
     permission: "management_review.read",
     path: "/Management-Review",
+    // badge: "my-review-actions" = open management review actions given to the signed-in person (see Navbar)
+    badge: "my-review-actions",
     subMenu: [
       { name: "Reviews", path: "/Management-Review/Reviews" },
       { name: "Quality objectives", path: "/Management-Review/Objectives" },
+      { name: "My actions", path: "/Management-Review/My-Actions", badge: "my-review-actions" },
     ],
   },
   {

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRightIcon, BellIcon, CircleCheckIcon, EyeIcon, FileTextIcon, ListChecksIcon, TriangleAlertIcon } from "@/components/icons";
+import { ArrowRightIcon, BellIcon, CircleCheckIcon, EyeIcon, FileTextIcon, ListChecksIcon, PresentationIcon, ShieldAlertIcon, TriangleAlertIcon } from "@/components/icons";
 import { useHomeDashboard } from "../../hooks/useHomeDashboard";
 import { describeApiError } from "../../lib/api-client";
 import Callout from "../ui/Callout";
@@ -8,7 +8,7 @@ import { Card } from "./DashboardParts";
 
 const tint = (color, pct) => `color-mix(in srgb, ${color} ${pct}%, transparent)`;
 const TONE = { critical: "error", warning: "warning" };
-const PERSONAL_ICON = { alerts: BellIcon, documents: FileTextIcon, reviews: EyeIcon, actions: ListChecksIcon };
+const PERSONAL_ICON = { alerts: BellIcon, documents: FileTextIcon, reviews: EyeIcon, actions: ListChecksIcon, risk: ShieldAlertIcon, reviewActions: PresentationIcon };
 const heading = "text-sm font-semibold uppercase tracking-wide text-secondary-text";
 
 /** One thing to act on: how many, what, and the way to it. */

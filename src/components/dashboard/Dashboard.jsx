@@ -4,6 +4,7 @@ import GoLiveCard from "./GoLiveCard";
 import HomeAttention from "./HomeAttention";
 import OnboardingCard from "./OnboardingCard";
 import StartJobCard from "../jobs/StartJobCard";
+import ManagementReviewCard from "../management-review/ManagementReviewCard";
 
 const today = () => new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
@@ -27,6 +28,7 @@ const Dashboard = () => {
       <GoLiveCard />
       <StartJobCard />
       <HomeAttention />
+      <ManagementReviewCard />
     </div>
   );
 };

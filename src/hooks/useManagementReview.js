@@ -143,3 +143,27 @@ export const useReviewInput = (reviewId) => {
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };
+
+/** Management review actions given to me (MR3): any member, no permission needed. Polled like the other "mine" counts. */
+export const useMyReviewActions = (status = "open", { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "my-actions", status),
+    queryFn: () => apiFetch(`/management-review-actions/mine?status=${status}`, { organisationId }),
+    enabled: !!organisationId && enabled,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+    retry: false,
+  });
+};
+
+/** The home page card: next review, last completed, open actions, objectives (management_review.read). */
+export const useManagementReviewOverview = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "overview"),
+    queryFn: () => apiFetch("/management-review-overview", { organisationId }),
+    enabled: !!organisationId && enabled,
+    retry: false,
+  });
+};

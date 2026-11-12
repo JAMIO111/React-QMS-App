@@ -24,6 +24,7 @@ vi.mock("../../hooks/useOnboarding", () => ({
 
 // What needs attention has its own tests (HomeAttention.test.jsx); here it would only ask for data.
 vi.mock("./HomeAttention", () => ({ default: () => null }));
+vi.mock("../management-review/ManagementReviewCard", () => ({ default: () => null }));
 
 import Dashboard from "./Dashboard";
 import { deferSetup, setupDeferred } from "../../lib/onboarding";

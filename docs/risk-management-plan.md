@@ -1,6 +1,6 @@
 # Risk and management review — plan
 
-**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **RK1–RK4, MR1 and MR2 built** (§11–§16); MR3 and RX are not · **Branch:** `Dev`
+**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **RK1–RK4 and MR1–MR3 built** (§11–§17); RX is not · **Branch:** `Dev`
 **Menu names:** Risk (`ShieldAlert`), Management review (`Presentation`) · **Slices:** RK1–RK4, MR1–MR3, RX (exit check)
 
 Per `docs/design-brief.md` §6.7 ("Risk management", "Management review and quality KPIs") and Phase 4 ("Risk and management review"), the last
@@ -265,3 +265,19 @@ Migration `20260217100000_management_reviews.sql` (applied live 2026-11-12; push
   and **Reviewed** ticked at once (optimistic), minutes in the document editor, decisions, actions, Start / Complete / Cancel, the still-needed list) and a printable
   **report** at `/Management-Review/Reviews/:id/report`.
 - **Not in MR2:** notices to an action's owner and a dashboard card (MR3), a review's own schedule or reminders, attachments, signatures. Not browser-checked yet (RX).
+
+## 17. MR3 as built (2026-11-12)
+
+Migration `20260218100000_management_review_notices.sql` (not yet applied live; pushing the API before it breaks "My review actions" (it calls the new function) and leaves the notice unsent).
+
+- **Previous-review actions as an input** were built in MR2 (§16): the first section of every review lists earlier completed reviews' actions still open or closed in the period.
+- **Action owner notice (RM14):** `management_review_actions.created|updated` ("A management review action was given to you": added with someone on it, or handed over), **own_record**
+  (the person may hold no management review permission), addressed to them, never written when they gave it to themselves, emailed by default, links to **My review actions**.
+  `app.emit_notification` = the `20260215100000` version + this branch (`review_id` in details).
+- **My review actions** (`GET /management-review-actions/mine?status=open|done|all`, membership only; page `/Management-Review/My-Actions`): the actions given to me with the review
+  they came from — named through `app.my_review_action_reviews(org)` (number, title, status of reviews I hold an action from), linked only for people who may read reviews — and
+  Mark done. Menu "My actions" with the badge `my-review-actions` for people who read management reviews; for everyone else the home page's **For you** tile and the notice lead there.
+- **Dashboard card:** `GET /management-review-overview` (`management_review.read`): the next review to hold, the last completed one (with "over a year ago" when it is), open and
+  overdue review actions, quality objectives on / off target. `ManagementReviewCard` on the home page. **For you** also gained "Risk reviews and actions for you" (RK4's count) and
+  "Management review actions for you" (shown to anyone who has one).
+- **Not in MR3:** reminders when a review falls due (no worker; the card says when the last one is over a year old), review areas on the home page's "By area" cards.

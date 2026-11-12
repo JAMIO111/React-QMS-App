@@ -21,6 +21,8 @@ export function notificationLink(n) {
       return "/CAPA/My-Actions";
     case "risks":
       return `/Risk/Register/${n.entityId}`;
+    case "management_review_actions":
+      return "/Management-Review/My-Actions";
     case "risk_actions":
       return d.risk_id ? `/Risk/Register/${d.risk_id}` : "/Risk/My-Work";
     case "competence_assessments":

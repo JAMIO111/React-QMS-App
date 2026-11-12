@@ -92,6 +92,11 @@ describe('management reviews (MR2)', () => {
     await api().get(`/api/v1/management-reviews/${review}`).set(inspector).expect(403);
     const closed = (await api().post(`/api/v1/management-review-actions/${action}/complete`).set(inspector).send({ note: 'Quotes in the shared folder' }).expect(200)).body;
     expect(closed).toEqual({ id: action, status: 'done' });
+    const mine = (await api().get('/api/v1/management-review-actions/mine?status=all').set(inspector).expect(200)).body;
+    expect(mine.data).toMatchObject([{ id: action, status: 'done', review: { id: review, title: 'H1 review', status: 'completed' } }]);
+    expect(mine.openCount).toBe(0);
+    const told = (await api().get('/api/v1/notifications').set(inspector).expect(200)).body.data;
+    expect(told.map((n: { entityType: string }) => n.entityType)).toContain('management_review_actions');
     const seen = (await api().get(`/api/v1/management-reviews/${review}`).set(await as(ids.ownerA)).expect(200)).body;
     expect(seen.actions[0]).toMatchObject({ status: 'done', doneNote: 'Quotes in the shared folder' });
   });
@@ -108,10 +113,20 @@ describe('management reviews (MR2)', () => {
     expect((await api().post(`/api/v1/management-reviews/${second.id}/cancel`).set(h).send({ reason: 'Merged with the H1 review' }).expect(200)).body).toMatchObject({ status: 'cancelled', cancelReason: 'Merged with the H1 review' });
   });
 
+  it('sums it up for the home page', async () => {
+    const o = (await api().get('/api/v1/management-review-overview').set(await as(ids.ownerA)).expect(200)).body;
+    expect(o.lastCompleted).toMatchObject({ id: review, title: 'H1 review', daysAgo: 0 });
+    expect(o.next).toBeNull();
+    expect(o.actions).toEqual({ open: 0, overdue: 0 });
+    expect(o.objectives).toMatchObject({ total: 0 });
+    await api().get('/api/v1/management-review-overview').set(await as(ids.inspectorA)).expect(403);
+  });
+
   it('keeps another organisation out', async () => {
     const other = await as(ids.ownerB, ids.orgB);
     await api().get(`/api/v1/management-reviews/${review}`).set(other).expect(404);
     await api().post(`/api/v1/management-review-actions/${action}/reopen`).set(other).expect(404);
     expect((await api().get('/api/v1/management-reviews').set(other).expect(200)).body.data).toEqual([]);
+    expect((await api().get('/api/v1/management-review-actions/mine').set(other).expect(200)).body.data).toEqual([]);
   });
 });

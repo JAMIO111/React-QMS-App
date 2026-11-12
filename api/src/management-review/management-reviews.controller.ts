@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
@@ -10,6 +11,7 @@ import { ManagementReviewsService } from './management-reviews.service';
 
 const READ = 'management_review.read';
 const MANAGE = 'management_review.manage';
+const MineQuery = z.object({ status: z.enum(['open', 'done', 'all']).default('open') });
 
 /**
  * Management reviews (MR2). Reading needs management_review.read; everything else management_review.manage, except closing an action, which its owner may do
@@ -27,6 +29,21 @@ export class ManagementReviewsController {
   @ApiOkResponse({ description: 'The reviews, those still to hold first, then the latest period first' })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.list(ctx, parse(ReviewListQuery, query).status);
+  }
+
+  @Get('management-review-actions/mine')
+  @OrganisationScoped()
+  @ApiQuery({ name: 'status', required: false, schema: { type: 'string', enum: ['open', 'done', 'all'] } })
+  @ApiOkResponse({ description: 'Management review actions given to the caller (open by default), each with the review it came from; no management review permission needed' })
+  mine(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.mine(ctx, parse(MineQuery, query).status);
+  }
+
+  @Get('management-review-overview')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'For the home page: the next review to hold, the last completed one, open and overdue actions, quality objectives on and off target' })
+  overview(@Ctx() ctx: RequestContext) {
+    return this.service.overview(ctx);
   }
 
   @Post('management-reviews')

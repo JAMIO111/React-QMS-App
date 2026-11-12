@@ -149,6 +149,6 @@ describe("quality objectives", () => {
     expect(basisWords("ncr_count", { numerator: 3, denominator: null })).toBeNull();
     const item = menuStructure.find((m) => m.name === "Management review");
     expect(item).toMatchObject({ permission: "management_review.read", path: "/Management-Review", icon: PresentationIcon });
-    expect(item.subMenu.map((s) => s.path)).toEqual(["/Management-Review/Reviews", "/Management-Review/Objectives"]);
+    expect(item.subMenu.map((s) => s.path)).toEqual(["/Management-Review/Reviews", "/Management-Review/Objectives", "/Management-Review/My-Actions"]);
   });
 });

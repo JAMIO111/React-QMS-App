@@ -124,6 +124,7 @@ const ObjectivePage = lazy(() => import("./components/management-review/Objectiv
 const ReviewsPage = lazy(() => import("./components/management-review/ReviewsPage.jsx"));
 const ReviewPage = lazy(() => import("./components/management-review/ReviewPage.jsx"));
 const ReviewReportPage = lazy(() => import("./components/management-review/ReviewReportPage.jsx"));
+const MyReviewActionsPage = lazy(() => import("./components/management-review/MyReviewActionsPage.jsx"));
 const DocumentsDashboard = lazy(() => import("./components/documents/DocumentsDashboard.jsx"));
 const ChangeRequestsPage = lazy(() => import("./components/documents/ChangeRequestsPage.jsx"));
 const DocumentPage = lazy(() => import("./components/documents/DocumentPage.jsx"));
@@ -278,6 +279,7 @@ const router = createBrowserRouter([
           { path: "Risk/My-Work", element: <MyRiskWorkPage /> },
           { path: "Management-Review", element: <Navigate to="/Management-Review/Reviews" replace /> },
           { path: "Management-Review/Reviews", element: <ReviewsPage /> },
+          { path: "Management-Review/My-Actions", element: <MyReviewActionsPage /> },
           { path: "Management-Review/Reviews/:id", element: <ReviewPage /> },
           { path: "Management-Review/Reviews/:id/report", element: <ReviewReportPage /> },
           { path: "Management-Review/Objectives", element: <ObjectivesPage /> },

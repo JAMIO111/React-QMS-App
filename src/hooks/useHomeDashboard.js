@@ -6,6 +6,8 @@ import { useMyCapaActions } from "./useCapa";
 import { useMyDocumentCount } from "./useDocuments";
 import { useMyAlertCount } from "./useDocumentation";
 import { usePermissions } from "./useQmsApi";
+import { useMyRiskCount } from "./useRisk";
+import { useMyReviewActions } from "./useManagementReview";
 
 /** What needs attention as of today in every area the person may read (`GET /home-dashboard`: one small request; areas they may not read are null). */
 export const useHomeAttention = () => {
@@ -30,6 +32,9 @@ export const useHomeDashboard = () => {
   const myAlerts = useMyAlertCount({ enabled: may("documentation.read") });
   const myDocuments = useMyDocumentCount({ enabled: may("documentation.read") });
   const myActions = useMyCapaActions("open", { enabled: may("capa.read") });
+  const myRiskWork = useMyRiskCount({ enabled: may("risk.read") });
+  // Any member may be given a management review action, with or without the permission.
+  const myReviewActions = useMyReviewActions("open", { enabled: !permissionsLoading });
 
   const modules = homeModules(attention.data);
   const personal = [
@@ -60,6 +65,20 @@ export const useHomeDashboard = () => {
       count: myActions.data?.openCount,
       overdue: 0,
       to: "/CAPA/My-Actions",
+    },
+    may("risk.read") && {
+      key: "risk",
+      label: "Risk reviews and actions for you",
+      count: myRiskWork.data?.total,
+      overdue: (myRiskWork.data?.overdueReviews ?? 0) + (myRiskWork.data?.overdueActions ?? 0),
+      to: "/Risk/My-Work",
+    },
+    (may("management_review.read") || myReviewActions.data?.openCount > 0) && {
+      key: "reviewActions",
+      label: "Management review actions for you",
+      count: myReviewActions.data?.openCount,
+      overdue: myReviewActions.data?.overdueCount ?? 0,
+      to: "/Management-Review/My-Actions",
     },
   ].filter(Boolean);
 

@@ -18,6 +18,7 @@ describe('where an email links to', () => {
     expect(notificationPath('quality_alert_recipients', A, { alert_id: B })).toBe(`/Documentation/Quality-Alerts/${B}`);
     expect(notificationPath('capa_actions', A, {})).toBe('/CAPA/My-Actions');
     expect(notificationPath('risks', A, {})).toBe(`/Risk/Register/${A}`);
+    expect(notificationPath('management_review_actions', A, { review_id: B })).toBe('/Management-Review/My-Actions');
     expect(notificationPath('risk_actions', A, { risk_id: B })).toBe(`/Risk/Register/${B}`);
     expect(notificationPath('risk_actions', A, { risk_id: 'not-an-id' })).toBe('/Risk/My-Work');
     expect(notificationPath('integration_alerts', A, { connection_id: A, run_id: B })).toBe(`/Settings/Integrations/${A}/runs/${B}`);

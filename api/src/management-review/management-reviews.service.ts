@@ -6,6 +6,7 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { ActionBody, AttendeesBody, PlanReviewBody, REVIEW_STATUSES, UpdateActionBody, UpdateReviewBody } from './management-reviews.schemas';
+import { QualityObjectivesService } from './quality-objectives.service';
 import { DATA_SECTIONS, DataSection, ReviewInputsService } from './review-inputs';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -55,7 +56,78 @@ export class ManagementReviewsService {
   constructor(
     private readonly database: DatabaseService,
     private readonly inputs: ReviewInputsService,
+    private readonly objectives: QualityObjectivesService,
   ) {}
+
+  /** Actions given to me, from any review (I may hold no management review permission: RLS shows me my own). */
+  mine(ctx: RequestContext, status: 'open' | 'done' | 'all') {
+    return this.database.asUser(ctx, async (db) => {
+      const org = orgOf(ctx);
+      const rows = (
+        await db.execute<Row>(sql`
+          select a.id, a.description, a.status, a.due_date::text as due, a.done_note, a.done_at, (a.status = 'open' and a.due_date < current_date) as overdue,
+                 a.review_id, m.reference, m.title, m.status as review_status
+            from public.management_review_actions a
+            join app.my_review_action_reviews(${org}::uuid) m on m.id = a.review_id
+           where a.organisation_id = ${org}::uuid and a.owner_user_id = auth.uid()
+             ${status === 'open' ? sql`and a.status = 'open'` : status === 'done' ? sql`and a.status = 'done'` : sql``}
+           order by (a.status = 'open') desc, a.due_date nulls last, a.created_at limit 200`)
+      ).rows;
+      const counts = (
+        await db.execute<Row>(sql`
+          select count(*) filter (where status = 'open')::int as open, count(*) filter (where status = 'open' and due_date < current_date)::int as overdue
+            from public.management_review_actions where organisation_id = ${org}::uuid and owner_user_id = auth.uid()`)
+      ).rows[0];
+      return {
+        data: rows.map((a) => ({
+          id: a.id as string,
+          description: a.description as string,
+          status: a.status as 'open' | 'done' | 'cancelled',
+          dueDate: (a.due as string) ?? null,
+          overdue: Boolean(a.overdue),
+          doneNote: (a.done_note as string) ?? null,
+          doneAt: a.done_at ? (iso(a.done_at) as string) : null,
+          review: { id: a.review_id as string, reference: a.reference as string, title: a.title as string, status: a.review_status as string },
+        })),
+        openCount: Number(counts.open),
+        overdueCount: Number(counts.overdue),
+      };
+    });
+  }
+
+  /** For the home page card: the next review to hold, the last completed one, open and overdue actions, and how the quality objectives stand. */
+  async overview(ctx: RequestContext) {
+    const objectives = await this.objectives.list(ctx, false);
+    return this.database.asUser(ctx, async (db) => {
+      const org = orgOf(ctx);
+      const next = (
+        await db.execute<Row>(sql`
+          select id, reference, title, status, planned_on::text as planned, held_on::text as held from public.management_reviews
+           where organisation_id = ${org}::uuid and status in ('planned', 'in_progress')
+           order by (status = 'in_progress') desc, planned_on nulls last, created_at limit 1`)
+      ).rows[0];
+      const last = (
+        await db.execute<Row>(sql`
+          select id, reference, title, held_on::text as held, completed_at, (current_date - held_on)::int as days_ago from public.management_reviews
+           where organisation_id = ${org}::uuid and status = 'completed' order by held_on desc nulls last, completed_at desc limit 1`)
+      ).rows[0];
+      const actions = (
+        await db.execute<Row>(sql`
+          select count(*) filter (where a.status = 'open')::int as open, count(*) filter (where a.status = 'open' and a.due_date < current_date)::int as overdue
+            from public.management_review_actions a join public.management_reviews m on m.id = a.review_id
+           where a.organisation_id = ${org}::uuid and m.status <> 'cancelled'`)
+      ).rows[0];
+      const by = (s: string) => objectives.data.filter((o) => o.standing === s).length;
+      return {
+        next: next ? { id: next.id as string, reference: next.reference as string, title: next.title as string, status: next.status as string, plannedOn: (next.planned as string) ?? null, heldOn: (next.held as string) ?? null } : null,
+        lastCompleted: last
+          ? { id: last.id as string, reference: last.reference as string, title: last.title as string, heldOn: (last.held as string) ?? null, daysAgo: last.days_ago == null ? null : Number(last.days_ago) }
+          : null,
+        actions: { open: Number(actions.open), overdue: Number(actions.overdue) },
+        objectives: { total: objectives.data.length, onTarget: by('on_target'), offTarget: by('off_target'), noValue: by('no_value') },
+      };
+    });
+  }
 
   list(ctx: RequestContext, status?: string) {
     return this.database.asUser(ctx, async (db) => {

@@ -29,6 +29,9 @@ const held = {
 };
 let review = base;
 let list = { data: [base], canManage: true };
+let permissions = ["management_review.read"];
+let mine = { data: [], openCount: 0, overdueCount: 0 };
+let overview = null;
 
 vi.mock("../Breadcrumb", () => ({ default: () => null }));
 vi.mock("../documents/DocumentEditor", () => ({ default: ({ label }) => <div>{label} editor</div> }));
@@ -40,17 +43,24 @@ vi.mock("../../hooks/useManagementReview", () => ({
   useManagementReview: () => ({ data: review, isLoading: false }),
   useReviewMutation: () => ({ mutate, isPending: false, error: null }),
   useReviewInput: () => ({ mutate: saveInput }),
+  useMyReviewActions: () => ({ data: mine, isLoading: false }),
+  useManagementReviewOverview: () => ({ data: overview }),
 }));
+vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p), isLoading: false }) }));
 
 import ReviewsPage from "./ReviewsPage";
 import ReviewPage from "./ReviewPage";
 import ReviewReportPage from "./ReviewReportPage";
+import MyReviewActionsPage from "./MyReviewActionsPage";
+import ManagementReviewCard from "./ManagementReviewCard";
 
 beforeEach(() => {
   mutate.mockReset();
   saveInput.mockReset();
   review = base;
   list = { data: [base], canManage: true };
+  permissions = ["management_review.read"];
+  overview = null;
 });
 
 const at = (path, route, element) =>
@@ -133,5 +143,45 @@ describe("management reviews", () => {
     expect(within(report).getByText("Dr Jones (from outside) — present")).toBeInTheDocument();
     expect(within(report).getByRole("region", { name: "Audit results" })).toHaveTextContent("92.5%");
     expect(within(report).getByRole("table", { name: "Actions" })).toHaveTextContent("Get three quotes");
+  });
+
+  it("lists my review actions and closes one, naming the review even when I may not open it", async () => {
+    permissions = [];
+    mine = {
+      data: [{ id: "x1", description: "Get three quotes", status: "open", dueDate: "2026-01-31", overdue: true, doneNote: null, doneAt: null, review: { id: "m1", reference: "MR-26-01", title: "H1 review", status: "completed" } }],
+      openCount: 1, overdueCount: 1,
+    };
+    at("/Management-Review/My-Actions", "/Management-Review/My-Actions", <MyReviewActionsPage />);
+    expect(screen.getByText("1 open · 1 overdue")).toBeInTheDocument();
+    const item = within(screen.getByRole("list", { name: "My review actions" })).getByRole("listitem");
+    expect(item).toHaveTextContent("MR-26-01 · H1 review · due 31 Jan 2026");
+    expect(within(item).queryByRole("link")).not.toBeInTheDocument();
+    expect(within(item).getByText("overdue")).toBeInTheDocument();
+    await userEvent.click(within(item).getByRole("button", { name: "Mark done: Get three quotes" }));
+    await userEvent.type(screen.getByLabelText("What was done"), "Quotes in");
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Mark done" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "completeAction", id: "x1", body: { note: "Quotes in" } }, expect.anything());
+  });
+
+  it("sums management review up on the home page, and warns when none was completed in the last year", () => {
+    overview = {
+      next: { id: "m2", reference: "MR-26-02", title: "H2 review", status: "planned", plannedOn: "2027-01-20", heldOn: null },
+      lastCompleted: { id: "m1", reference: "MR-25-01", title: "2025 review", heldOn: "2025-09-01", daysAgo: 437 },
+      actions: { open: 3, overdue: 1 },
+      objectives: { total: 4, onTarget: 3, offTarget: 1, noValue: 0 },
+    };
+    at("/", "/", <ManagementReviewCard />);
+    const card = screen.getByRole("region", { name: "Management review" });
+    expect(within(card).getByRole("link", { name: "MR-26-02 · H2 review" })).toHaveAttribute("href", "/Management-Review/Reviews/m2");
+    expect(within(card).getByText("Over a year ago")).toBeInTheDocument();
+    expect(within(card).getByText("1 overdue")).toBeInTheDocument();
+    expect(within(card).getByText("3 of 4")).toBeInTheDocument();
+  });
+
+  it("shows no card to someone who may not read management reviews", () => {
+    permissions = [];
+    overview = { next: null, lastCompleted: null, actions: { open: 0, overdue: 0 }, objectives: { total: 0, onTarget: 0, offTarget: 0, noValue: 0 } };
+    const { container } = at("/", "/", <ManagementReviewCard />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

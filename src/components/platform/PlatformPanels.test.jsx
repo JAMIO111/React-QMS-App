@@ -25,6 +25,16 @@ const routes = () => ({
   "/platform/organisations": { total: 2, data: [org(), org({ organisationId: "o2", name: "Beta Co", ownerEmails: [], subscriptionStatus: null, billingProvider: null, billingInterval: null, currentPeriodEnd: null, setupFinishedAt: null, mrrPence: 0, seatsPurchased: 0, seatsAssigned: 0, status: "archived", cancelAtPeriodEnd: null })] },
   "/platform/payments": { invoices: [{ id: "i1", organisationId: "o1", organisation: "Acme Ltd", number: "FQ-1", status: "paid", currency: "gbp", subtotal: 8000, tax: 1600, total: 9600, invoiceDate: "2026-11-01", paidAt: "2026-11-01T10:00:00Z" }], failedPayments: [{ organisationId: "o3", organisation: "Gamma Ltd", invoice: "FQ-9", amount: 3000, currency: "gbp", at: "2026-11-05T10:00:00Z" }], paidLast30DaysPence: 9600, taxLast30DaysPence: 1600, failedLast30Days: 1 },
   "/platform/email": { provider: "none", sending: false, counts: { sent: 0, unsent: 7, failed: 1 }, waiting: 0, oldestWaiting: null, lastSent: null, problems: [{ organisation: "Acme Ltd", event: "parts.created", status: "failed", attempts: 5, error: "Resend refused it (422): Invalid `to` field", at: "2026-11-06T10:00:00Z" }], byEvent: [{ event: "parts.created", count: 8 }] },
+  "/platform/worker": {
+    cronConfigured: true, jobKinds: ["reminders.digest"], lastTick: { id: 9, source: "pg_cron", startedAt: iso(30 * 1000), outcome: "done", durationMs: 812 },
+    lastHour: { ticks: 58, skipped: 2, problems: 1, sources: ["pg_cron"] },
+    recentTicks: [
+      { id: 9, source: "pg_cron", startedAt: iso(30 * 1000), outcome: "done", durationMs: 812, steps: [{ name: "email", ok: true, ms: 40, result: { sent: 2 } }, { name: "imports", ok: true, ms: 0, result: { skipped: "out of time" } }] },
+      { id: 8, source: "pg_cron", startedAt: iso(90 * 1000), outcome: "partial", durationMs: 1200, error: "email: Resend is down", steps: [{ name: "email", ok: false, ms: 900, error: "Resend is down" }] },
+    ],
+    jobs: { waiting: 3, due: 1, running: 0, oldestDue: iso(60 * 1000), byKind: [{ kind: "reminders.digest", status: "queued", count: 3 }], failures: [{ kind: "reminders.digest", organisation: "Acme Ltd", status: "failed", attempts: 5, error: "No such person", at: "2026-11-06T10:00:00Z" }] },
+    consumers: [{ name: "workflows", registeredAt: "2026-11-01T00:00:00Z", lastReadAt: iso(30 * 1000), delivered: 120, backlog: 4 }],
+  },
   "/platform/webhooks": { hours: 24, lastReceivedAt: iso(5 * 60 * 1000), lastProcessedAt: iso(5 * 60 * 1000), counts: { received: 12, processed: 9, ignored: 2, failed: 1 }, stuck: 0, failed: [{ eventId: "evt_1", type: "invoice.paid", error: "Unknown Stripe price price_x", attempts: 3, organisation: "Acme Ltd", receivedAt: "2026-11-06T10:00:00Z" }], types: [{ type: "invoice.paid", count: 5 }] },
   "/platform/activity": { data: [{ at: "2026-11-06T10:00:00Z", kind: "billing", event: "seats_added", organisationId: "o1", organisation: "Acme Ltd", details: { plan: "controller", from: 0, to: 2 } }, { at: "2026-11-06T09:00:00Z", kind: "organisation", event: "organisation_archived", organisationId: "o2", organisation: "Beta Co", details: { reason: "unpaid_setup" } }] },
 });
@@ -48,10 +58,10 @@ beforeEach(() => {
 });
 
 describe("the platform tabs", () => {
-  it("offers seven tabs, opens the overview, and keeps the chosen tab in the address", async () => {
+  it("offers eight tabs, opens the overview, and keeps the chosen tab in the address", async () => {
     renderAt("/platform");
     const tabs = await screen.findByRole("tablist", { name: "Platform" });
-    expect(within(tabs).getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Revenue", "Organisations", "Payments", "Webhooks", "Email", "Activity"]);
+    expect(within(tabs).getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Revenue", "Organisations", "Payments", "Webhooks", "Email", "Worker", "Activity"]);
     expect(within(tabs).getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
     await userEvent.click(within(tabs).getByRole("tab", { name: "Revenue" }));
     expect(within(tabs).getByRole("tab", { name: "Revenue" })).toHaveAttribute("aria-selected", "true");
@@ -235,6 +245,35 @@ describe("formatting", () => {
     expect(describeEvent({ event: "payment_failed" })).toBe("Payment failed");
     expect(describeEvent({ event: "admin_override", details: { overAssigned: 2, plan: "contributor" } })).toContain("2 over");
     expect(describeEvent({ event: "something_new" })).toBe("something new");
+  });
+});
+
+describe("worker", () => {
+  it("shows the last tick, each tick's steps, the job queue, problems and event readers", async () => {
+    renderAt("/platform?tab=worker");
+    const tiles = await screen.findByRole("group", { name: "Worker health" });
+    expect(tiles).toHaveTextContent("58");
+    expect(tiles).toHaveTextContent("2 skipped");
+    expect(tiles).toHaveTextContent("Done · 812 ms · pg_cron");
+    const ticks = screen.getByRole("table", { name: "Latest ticks" });
+    expect(ticks).toHaveTextContent("Email 40 ms · Imports: skipped");
+    expect(ticks).toHaveTextContent("Partly failed");
+    expect(ticks).toHaveTextContent("Resend is down");
+    expect(screen.getByRole("table", { name: "Job problems" })).toHaveTextContent("No such person");
+    expect(screen.getByRole("table", { name: "Event readers" })).toHaveTextContent("workflows4120");
+    expect(screen.queryByText("The worker has gone quiet")).toBeNull();
+  });
+
+  it("warns when the worker has gone quiet", async () => {
+    responses["/platform/worker"] = { ...responses["/platform/worker"], lastTick: { ...responses["/platform/worker"].lastTick, startedAt: iso(20 * 60 * 1000) } };
+    renderAt("/platform?tab=worker");
+    expect(await screen.findByText("The worker has gone quiet")).toBeInTheDocument();
+  });
+
+  it("says when the server has no cron secret", async () => {
+    responses["/platform/worker"] = { ...responses["/platform/worker"], cronConfigured: false };
+    renderAt("/platform?tab=worker");
+    expect(await screen.findByText("The worker cannot be called")).toBeInTheDocument();
   });
 });
 

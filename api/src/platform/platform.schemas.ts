@@ -80,6 +80,7 @@ export const PlatformPayments = z.record(z.unknown());
 export const PlatformWebhooks = z.record(z.unknown());
 /** Email notifications: counts by status, waiting, last sent, the provider in use and failures — never a subject, a body or an address. */
 export const PlatformEmail = z.record(z.unknown());
+export const PlatformWorker = z.record(z.unknown());
 export const PlatformActivity = z.object({
   data: z.array(z.object({ at: Iso, kind: z.string(), event: z.string(), organisationId: z.string().uuid(), organisation: z.string(), details: z.record(z.unknown()) })),
 });

@@ -73,3 +73,10 @@ them or paste them into chat.
 
 1. `https://qms-api-git-dev-jamie-drydens-projects.vercel.app/api/v1/health` returns `{"status":"ok","checks":{"database":"ok"}}`.
 2. Sign in on the frontend address; Settings → Organisation loads (this calls the API).
+
+## Background worker (WK1)
+
+The worker is woken by **pg_cron in Supabase**, not by Vercel: every minute it calls `POST /api/v1/internal/worker/tick?source=pg_cron` on `qms-api`
+through pg_net, with `Authorization: Bearer <CRON_SECRET>`. Set `CRON_SECRET` on `qms-api`, then apply `supabase/runbooks/worker-schedule.sql` in the
+SQL editor (it installs pg_cron and pg_net, keeps the address and the secret in Vault and schedules the call). Keep deployment protection off for
+`qms-api`. The operator panel's **Worker** tab (`/platform?tab=worker`) shows whether ticks arrive. The daily crons in `api/vercel.json` stay as a safety net.

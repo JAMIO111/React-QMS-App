@@ -2,7 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse } from '../common/validation';
-import { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformMe, PlatformOrganisations, PlatformPayments, PlatformEmail, PlatformRevenue, PlatformWebhooks } from './platform.schemas';
+import { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformMe, PlatformOrganisations, PlatformPayments, PlatformEmail, PlatformWorker, PlatformRevenue, PlatformWebhooks } from './platform.schemas';
 import { PlatformService } from './platform.service';
 
 /**
@@ -50,6 +50,12 @@ export class PlatformController {
   @ApiOkResponse({ description: 'Email notifications: the mail provider in use, emails by status, waiting, last sent and failures with their error (never content or addresses). 404 for non-operators, 403 mfa_required without MFA.', schema: openApiSchema(PlatformEmail) })
   email(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.email(ctx, parse(HoursQuery, query));
+  }
+
+  @Get('worker')
+  @ApiOkResponse({ description: 'The background worker: the last ticks with their steps, ticks in the last hour, the job queue by kind and status, failed jobs with their error (never payloads), outbox consumers and their backlog. 404 for non-operators, 403 mfa_required without MFA.', schema: openApiSchema(PlatformWorker) })
+  worker(@Ctx() ctx: RequestContext) {
+    return this.service.worker(ctx);
   }
 
   @Get('webhooks')

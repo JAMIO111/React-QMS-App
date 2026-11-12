@@ -104,13 +104,13 @@ export class CronService {
    * Works integration runs that are waiting (queued, part-done, or due to try again), oldest first, each for a short while, stopping after about 45 seconds
    * in all. Each run is leased, so this never collides with a person's "Run now"; anything left is picked up by the next call.
    */
-  async integrationRuns(limit: number, correlationId: string): Promise<{ due: number; results: { runId: string; state: string; reason: string | null }[] }> {
+  async integrationRuns(limit: number, correlationId: string, budgetMs = 45_000): Promise<{ due: number; results: { runId: string; state: string; reason: string | null }[] }> {
     const due = await this.database.asApi(
       async (client) => (await client.query(`select organisation_id, run_id from app.system_integration_runs_due($1::int)`, [limit])).rows as { organisation_id: string; run_id: string }[],
       correlationId,
       'integration',
     );
-    const stopAt = Date.now() + 45_000;
+    const stopAt = Date.now() + budgetMs;
     const results: { runId: string; state: string; reason: string | null }[] = [];
     for (const d of due) {
       const left = stopAt - Date.now();

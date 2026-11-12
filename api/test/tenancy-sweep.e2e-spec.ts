@@ -31,6 +31,7 @@ const UNSCOPED = new Set([
   'GET /api/v1/platform/organisations', // operator monitor: admin-only in the database (allow-list + MFA); counts and billing, never business data
   'GET /api/v1/platform/revenue',
   'GET /api/v1/platform/email', // operator monitor: counts and failures of email notifications, never content or addresses
+  'GET /api/v1/platform/worker', // operator monitor: ticks, the job queue and failures (kinds and errors, never payloads)
   'GET /api/v1/platform/payments',
   'GET /api/v1/platform/webhooks',
   'GET /api/v1/platform/activity',

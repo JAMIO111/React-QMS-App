@@ -161,6 +161,9 @@ import { ControlPlanContentService } from './process-control/control-plan-conten
 import { CronController } from './cron/cron.controller';
 import { CronGuard } from './cron/cron.guard';
 import { CronService } from './cron/cron.service';
+import { WorkerController } from './worker/worker.controller';
+import { WorkerService } from './worker/worker.service';
+import { WorkerJobRegistry } from './worker/job-registry';
 import { OrganisationGuard } from './tenancy/organisation.guard';
 
 @Module({})
@@ -194,6 +197,7 @@ export class AppModule implements NestModule {
         MeController,
         PlatformController,
         CronController,
+        WorkerController,
         OnboardingController,
         OrganisationsController,
         SitesController,
@@ -302,6 +306,8 @@ export class AppModule implements NestModule {
         MeService,
         PlatformService,
         CronService,
+        WorkerService,
+        WorkerJobRegistry,
         CronGuard,
         OnboardingService,
         MasterDataService,

@@ -4,6 +4,7 @@ import { ApiError } from '../common/api-error';
 import { ENV, Env } from '../config/env';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
+import { WorkerJobRegistry } from '../worker/job-registry';
 import type { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformOrganisations } from './platform.schemas';
 
 type Status = 'none' | 'needs_mfa' | 'ok';
@@ -14,6 +15,7 @@ export class PlatformService {
   constructor(
     private readonly database: DatabaseService,
     @Inject(ENV) private readonly env: Env,
+    private readonly jobs: WorkerJobRegistry,
   ) {}
 
   me(ctx: RequestContext): Promise<{ status: Status }> {
@@ -71,6 +73,12 @@ export class PlatformService {
   async email(ctx: RequestContext, q: HoursQuery): Promise<Record<string, unknown>> {
     const r = await this.json(ctx, (db) => db.execute<{ r: Record<string, unknown> }>(sql`select app.platform_email_outbox(${q.hours}::int) as r`));
     return { provider: this.env.MAIL_PROVIDER, sending: this.env.MAIL_PROVIDER !== 'none', ...r };
+  }
+
+  /** The background worker (WK1): last ticks, the job queue, failures and outbox backlogs; whether this server can be ticked at all. */
+  async worker(ctx: RequestContext): Promise<Record<string, unknown>> {
+    const r = await this.json(ctx, (db) => db.execute<{ r: Record<string, unknown> }>(sql`select app.platform_worker_health() as r`));
+    return { cronConfigured: !!this.env.CRON_SECRET, jobKinds: this.jobs.kinds(), ...r };
   }
 
   webhooks(ctx: RequestContext, q: HoursQuery): Promise<Record<string, unknown>> {

@@ -198,7 +198,7 @@ Migration `20260214100000_risk_links.sql` (applied live 2026-11-12; pushing the 
 
 ## 14. RK4 as built (2026-11-12)
 
-Migration `20260215100000_risk_notices.sql` (not yet applied live; pushing the API before it leaves the notices unsent — nothing else depends on it).
+Migration `20260215100000_risk_notices.sql` (applied live 2026-11-12; pushing the API before it leaves the notices unsent — nothing else depends on it).
 
 - **Notices (RM14):** `risk_actions.created|updated` ("A risk action was given to you": an open action added with someone on it, or handed to someone else) and
   `risks.created|updated` ("A risk was given to you": a live risk raised for someone, or handed over). Addressed to that one person (`recipient_user_id`, permission `risk.read`),

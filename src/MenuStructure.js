@@ -1,4 +1,4 @@
-import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GraduationCapIcon, LayoutDashboardIcon, ScanSearchIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
+import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GraduationCapIcon, LayoutDashboardIcon, ScanSearchIcon, ShieldAlertIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
@@ -122,6 +122,13 @@ export const menuStructure = [
       { name: "My competence", path: "/Competence/Mine", permission: "competence.own" },
       { name: "Skills and positions", path: "/Competence/Skills", permission: "competence.read" },
     ],
+  },
+  {
+    name: "Risk",
+    icon: ShieldAlertIcon,
+    permission: "risk.read",
+    path: "/Risk",
+    subMenu: [{ name: "Risk register", path: "/Risk/Register" }],
   },
   {
     name: "Production",

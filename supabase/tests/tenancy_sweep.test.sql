@@ -259,6 +259,10 @@ BEGIN
   PERFORM app.add_document_file(r.id, 'main', a || '/document/' || r.id || '/sweep.pdf', 'sweep.pdf', 'application/pdf', 1)
      FROM public.document_revisions r JOIN public.documents d ON d.id = r.document_id WHERE d.organisation_id = a AND d.title = 'Sweep form';
   PERFORM pg_temp.logout();
+  -- Risk register (RK1): a risk and its assessment (the matrix and the categories are seeded per organisation); written by the functions as the owner.
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
+  PERFORM app.assess_risk(app.create_risk(a, jsonb_build_object('title', 'Sweep risk', 'categoryId', (SELECT id FROM public.risk_categories WHERE organisation_id = a AND key = 'process'))), 3, 3, 'Sweep rationale');
+  PERFORM pg_temp.logout();
   -- Document control (DC2): a named reviewer and a sign-off (one member in A, so seeded directly; people write through the functions).
   INSERT INTO public.document_revision_reviewers (organisation_id, revision_id, user_id)
     SELECT a, r.id, '50000000-0000-0000-0000-0000000000a1' FROM public.document_revisions r JOIN public.documents d ON d.id = r.document_id WHERE d.organisation_id = a AND d.title = 'Sweep procedure';

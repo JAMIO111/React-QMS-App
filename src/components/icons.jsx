@@ -70,6 +70,7 @@ import {
   RectangleEllipsis as LucideRectangleEllipsis,
   RefreshCw as LucideRefreshCw,
   RotateCcw as LucideRotateCcw,
+  Archive as LucideArchive,
   Save as LucideSave,
   Printer as LucidePrinter,
   Route as LucideRoute,
@@ -220,6 +221,7 @@ export const QrCodeIcon = withDefaults(LucideQrCode);
 export const RectangleEllipsisIcon = withDefaults(LucideRectangleEllipsis);
 export const RefreshCwIcon = withDefaults(LucideRefreshCw);
 export const RotateCcwIcon = withDefaults(LucideRotateCcw);
+export const ArchiveIcon = withDefaults(LucideArchive);
 export const SaveIcon = withDefaults(LucideSave);
 export const PrinterIcon = withDefaults(LucidePrinter);
 export const RouteIcon = withDefaults(LucideRoute);

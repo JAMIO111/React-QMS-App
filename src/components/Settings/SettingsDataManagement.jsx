@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { usePermissions } from "../../hooks/useQmsApi";
 import LoadingScreen from "../ui/LoadingScreen";
-import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, FileTextIcon, GaugeIcon, GraduationCapIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
+import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, FileTextIcon, GaugeIcon, GraduationCapIcon, TriangleAlertIcon, TruckIcon, ShieldAlertIcon } from "@/components/icons";
 import SlidingToggle from "../ui/SlidingToggle";
 
 const SettingsNonConformance = lazy(() => import("./SettingsNonConformance"));
@@ -12,6 +12,7 @@ const SettingsAudits = lazy(() => import("./SettingsAudits"));
 const SettingsSupplierQuality = lazy(() => import("./SettingsSupplierQuality"));
 const SettingsCompetence = lazy(() => import("./SettingsCompetence"));
 const SettingsDocuments = lazy(() => import("./SettingsDocuments"));
+const SettingsRisk = lazy(() => import("./SettingsRisk"));
 const CustomFieldsSettings = lazy(() => import("../custom-fields/CustomFieldsSettings"));
 
 /**
@@ -83,6 +84,15 @@ const DATA_TABS = [
     manage: "documentation.manage",
     description: "Document types: each has a prefix and its own numbering (SOP-001, WI-014), a review interval and whether its documents are usually a file or written here.",
     Component: SettingsDocuments,
+  },
+  {
+    value: "risk",
+    icon: ShieldAlertIcon,
+    label: "Risk",
+    read: "risk.read",
+    manage: "risk.manage",
+    description: "The matrix risks are scored on (likelihood × consequence, with a band for each cell) and the categories of risk.",
+    Component: SettingsRisk,
   },
   {
     value: "custom-fields",

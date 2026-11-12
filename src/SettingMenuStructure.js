@@ -40,7 +40,7 @@ const SettingMenuStructure = [
     path: "Data-Management",
     icon: DatabaseIcon,
     // Any module the person may read: Non-conformance, Calibration, Process control, Audits, Supplier quality (tabs inside).
-    permission: ["ncr.read", "calibration.read", "process_control.read", "audits.read", "supplier_quality.read", "competence.read", "documentation.manage", "custom_fields.manage"],
+    permission: ["ncr.read", "calibration.read", "process_control.read", "audits.read", "supplier_quality.read", "competence.read", "documentation.manage", "risk.read", "custom_fields.manage"],
     subMenu: [],
   },
   {

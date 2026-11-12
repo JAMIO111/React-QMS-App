@@ -1,6 +1,6 @@
 # Risk and management review — plan
 
-**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), nothing built yet · **Branch:** `Dev`
+**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **RK1 built** (§11); RK2–RK4, MR1–MR3 and RX are not · **Branch:** `Dev`
 **Menu names:** Risk (`ShieldAlert`), Management review (`Presentation`) · **Slices:** RK1–RK4, MR1–MR3, RX (exit check)
 
 Per `docs/design-brief.md` §6.7 ("Risk management", "Management review and quality KPIs") and Phase 4 ("Risk and management review"), the last
@@ -129,3 +129,32 @@ reminders on a schedule (no worker); a meeting calendar; customer satisfaction s
 | Which first? | Risk (RK1–RK4), then management review (MR1–MR3), then the exit check |
 | Quality objectives | Manual values plus a fixed list of system measures (RM12) |
 | Accepting a risk above the acceptable band | `risk.approve` by someone other than the person who proposed it (RM5) |
+
+## 11. RK1 as built (2026-11-12)
+
+Migration `20260208100000_risk_register_core.sql` (applied live 2026-11-12; pushing the API before it leaves the risk endpoints failing).
+
+- **Permissions** `risk.read` / `.manage` / `.approve` (owner, admin, quality manager all; quality engineer read + manage; inspector, viewer read).
+- **Matrix:** `risk_models` (versions; `config` = five likelihood and five consequence labels, `bands[likelihood-1][consequence-1]`, `acceptanceBand` low | medium | high,
+  `reviewMonths` per band; valid per `app.risk_model_problem`; frozen by trigger, only current → not current; default seeded per organisation: score 1–4 low, 5–9 medium,
+  10–16 high, 17–25 critical, acceptable up to medium, reviews 12 / 6 / 3 / 1 months). `app.save_risk_model(org, config, reason)` (**`risk.approve`**, reason, unchanged refused).
+  `app.score_risk(org, likelihood, consequence)` → score, band, labels, acceptable, model id and version (`risk.read`).
+- **Categories:** `risk_categories` (ten seeded; RLS insert / update under `risk.manage`; key fixed; switched off, never deleted).
+- **Risks:** `risks` (`RSK-001` … from `app.risk_counters`; kind risk | opportunity; category, title, description, cause, effect, owner = active member (default the
+  person raising it), optional site and department; status draft → open; retired with a reason and brought back). Functions only: `app.create_risk(org, jsonb)`,
+  `update_risk(id, jsonb)` (kind only while a draft; nothing once closed or retired), `retire_risk(id, reason)`, `reactivate_risk(id)`.
+- **Assessments:** `risk_assessments` (append-only, frozen by trigger even for SQL; phase inherent; likelihood, consequence, score, band, the model id and version it
+  was scored with, rationale). `app.assess_risk(risk, likelihood, consequence, rationale)`: the database scores it on the current matrix, the first one opens a draft,
+  a later one supersedes. The review interval and acceptance band are stored on the matrix now and **used from RK2** (review dates, acceptance).
+- Errors `QM026` → `409 risk_rule`; another organisation `P0002` → 404.
+- **API** `api/src/risk/`: `GET|PUT /risk-model`, `GET /risk-score?likelihood&consequence`, `GET|POST /risk-categories`, `PATCH /risk-categories/{id}`, `GET /risks`
+  (page-based: `q`, `kind`, `status` (default `live` = not retired; `all`), `band` incl. `unassessed`, `categoryId`, `owner=me`, `sort`
+  reference|title|category|owner|status|score|assessedOn|createdAt), `POST /risks`, `GET|PATCH /risks/{id}`, `POST /risks/{id}/assessments|retire|reactivate`.
+- **UI:** menu **Risk** (`ShieldAlertIcon`, `risk.read`) → `/Risk/Register` (`risk/RiskRegisterPage.jsx`), risk page `/Risk/Register/:id` (`RiskPage.jsx`: details,
+  where it sits on the matrix, the reasoning, assessment history, "above the level your organisation accepts"), `RiskDialogs.jsx` (raise / edit, assess by choosing a
+  cell, retire), `RiskMatrix.jsx` (every cell says its score and band in words; colour only repeats it), Settings → Data Management → **Risk**
+  (`Settings/SettingsRisk.jsx`: matrix with **Change the matrix** for approvers — labels, click a cell to move its band on, acceptable level, review months, reason —
+  and categories with an optimistic on/off), hooks `useRisk.js`, helpers `lib/risk.js`.
+- **Tests:** `supabase/tests/risk_register_core.test.sql` (+ tenancy sweep seed, guardrails audit list), `api/test/risk.e2e-spec.ts` (+ API sweep), `risk/Risk.test.jsx`.
+- **Not in RK1:** treatment, actions, residual assessments, acceptance, review dates (RK2); links and raise-from (RK3); heat map, dashboard, notices (RK4). Not browser-checked yet (RX).
+

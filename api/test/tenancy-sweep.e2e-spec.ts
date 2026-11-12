@@ -71,6 +71,12 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/customers/{id}': { name: 'Hijacked' },
     'PATCH /api/v1/suppliers/{id}': { name: 'Hijacked' },
     'PATCH /api/v1/competence/categories/{id}': { label: 'Hijacked' },
+    'PATCH /api/v1/risk-categories/{id}': { label: 'Hijacked' },
+    'GET /api/v1/risks/{id}': undefined,
+    'PATCH /api/v1/risks/{id}': { title: 'Hijacked' },
+    'POST /api/v1/risks/{id}/assessments': { likelihood: 1, consequence: 1, rationale: 'Hijacked' },
+    'POST /api/v1/risks/{id}/retire': { reason: 'Hijacked' },
+    'POST /api/v1/risks/{id}/reactivate': {},
     'PATCH /api/v1/competence/skills/{id}': { name: 'Hijacked' },
     'POST /api/v1/competence/skills/{id}/retire': { reason: 'Hijacked' },
     'POST /api/v1/competence/skills/{id}/reactivate': {},
@@ -454,6 +460,12 @@ const hasSample = (op: Op) =>
     'POST /api/v1/members/{id}/role-assignments',
     'POST /api/v1/members/{id}/departments',
     'PATCH /api/v1/competence/categories/{id}',
+    'PATCH /api/v1/risk-categories/{id}',
+    'GET /api/v1/risks/{id}',
+    'PATCH /api/v1/risks/{id}',
+    'POST /api/v1/risks/{id}/assessments',
+    'POST /api/v1/risks/{id}/retire',
+    'POST /api/v1/risks/{id}/reactivate',
     'PATCH /api/v1/competence/skills/{id}',
     'POST /api/v1/competence/skills/{id}/retire',
     'POST /api/v1/competence/skills/{id}/reactivate',
@@ -881,6 +893,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
   if (path.startsWith('/api/v1/supplier-quality/classifications/')) return a.supplierClassification;
   if (path.startsWith('/api/v1/competence/categories/')) return a.competenceCategory;
+  if (path.startsWith('/api/v1/risk-categories/')) return a.riskCategory;
+  if (path.startsWith('/api/v1/risks/')) return a.risk;
   if (path.startsWith('/api/v1/competence/skills/')) return a.competenceSkill;
   if (path.startsWith('/api/v1/competence/positions/')) return a.competencePosition;
   if (path.startsWith('/api/v1/competence/people/')) return a.employee;
@@ -1058,6 +1072,8 @@ beforeAll(async () => {
     a.capaAction = (await q1(`insert into public.capa_actions (organisation_id, capa_id, phase, description) values ($1, $2, 'interim', 'Alpha containment') returning id`, [ids.orgA, a.capa])).id;
     a.savedFilter = (await q1(`insert into public.saved_filters (organisation_id, user_id, scope, name, filters) values ($1, $2, 'ncr_register', 'Alpha filter', '{"stage":"open"}') returning id`, [ids.orgA, ids.ownerA])).id;
     a.competenceCategory = (await q1(`select id from public.competence_categories where organisation_id = $1 and key = 'inspection'`, [ids.orgA])).id;
+    a.riskCategory = (await q1(`select id from public.risk_categories where organisation_id = $1 and key = 'process'`, [ids.orgA])).id;
+    a.risk = (await q1(`select app.create_risk($1::uuid, jsonb_build_object('title', 'Alpha risk', 'categoryId', $2::text)) as id`, [ids.orgA, a.riskCategory])).id;
     a.competenceSkill = (await q1(`select app.save_competence_skill($1::uuid, jsonb_build_object('code', 'ALPHA', 'name', 'Alpha skill', 'categoryId', $2::text)) as id`, [ids.orgA, a.competenceCategory])).id;
     a.competencePosition = (await q1(`select app.save_competence_position($1::uuid, '{"code":"ALPHA","name":"Alpha position"}'::jsonb) as id`, [ids.orgA])).id;
     a.competenceHeld = (await q1(`select app.assign_employee_position($1::uuid, $2::uuid, current_date - 30) as id`, [a.employee, a.competencePosition])).id;
@@ -1237,6 +1253,7 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/quality-alerts/active': '?operationCode=OP-1',
       '/api/v1/documents-in-force': '?operationCode=OP-1',
       '/api/v1/documents-dashboard': '?from=2025-01-01&to=2027-12-31',
+      '/api/v1/risk-score': '?likelihood=3&consequence=3',
       '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/calibration-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/control-plan-resolution': `?partId=${b.part}`,

@@ -83,6 +83,8 @@ import { CustomFieldsController, CustomValuesController } from './custom-fields/
 import { CompetenceController } from './competence/competence.controller';
 import { DocumentsController } from './documents/documents.controller';
 import { DocumentsService } from './documents/documents.service';
+import { RiskController } from './risk/risk.controller';
+import { RiskService } from './risk/risk.service';
 import { DocumentFileStore, SupabaseDocumentFileStore } from './documents/controlled-copy';
 import { DocumentsDashboardController, DocumentsDashboardService } from './documents/documents-dashboard';
 import { CompetenceDashboardController, CompetenceDashboardService } from './competence/competence-dashboard';
@@ -242,6 +244,7 @@ export class AppModule implements NestModule {
         CompetenceDashboardController,
         SupplierDashboardController,
         DocumentsController,
+        RiskController,
         DocumentsDashboardController,
         SupplierQualificationController,
         SupplierRiskController,
@@ -324,6 +327,7 @@ export class AppModule implements NestModule {
         SupplierDashboardService,
         CompetenceTrainingService,
         DocumentsService,
+        RiskService,
         DocumentsDashboardService,
         { provide: DocumentFileStore, useClass: SupabaseDocumentFileStore },
         SupplierQualificationService,

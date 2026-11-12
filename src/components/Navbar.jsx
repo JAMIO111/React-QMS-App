@@ -142,7 +142,7 @@ const Navbar = () => {
                 </li>
               ))}
           </ul>
-          <div className="mt-2 shrink-0 border-t-1 border-border-color"></div>
+          <div className="shrink-0 border-t-1 border-border-color"></div>
           <ul className="my-2 flex shrink-0 flex-col gap-2">
             <NavItem
               label="Settings"

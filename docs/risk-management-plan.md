@@ -217,7 +217,7 @@ Migration `20260215100000_risk_notices.sql` (applied live 2026-11-12; pushing th
 
 ## 15. MR1 as built (2026-11-12)
 
-Migration `20260216100000_quality_objectives.sql` (not yet applied live; pushing the API before it leaves the quality objective endpoints failing — nothing else uses them).
+Migration `20260216100000_quality_objectives.sql` (applied live 2026-11-12; pushing the API before it leaves the quality objective endpoints failing — nothing else uses them).
 
 - **Permissions (RM13):** `management_review.read / .manage` (owner, admin, quality manager both; quality engineer read; others none). Errors `QM027` → `409 management_review_rule`.
 - **`quality_objectives`** (`QO-001` …, `app.pad_number`): title, description, owner (active member), **measure** — `manual` or a fixed system measure — unit, direction (at least / at most),

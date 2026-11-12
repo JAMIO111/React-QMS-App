@@ -140,6 +140,7 @@ import { GaugeUsageController, InspectionMeasurementsController, InspectionsCont
 import { InspectionService } from './inspection/inspection.service';
 import { NcrAffectedLotsController, NcrContainmentActionsController, NcrDispositionsController, NcrWorkflowController } from './ncr/ncr-workflow.controller';
 import { NcrWorkflowService } from './ncr/ncr-workflow.service';
+import { HomeDashboardController, HomeDashboardService } from './home/home-dashboard';
 import { MasterDataDashboardController, MasterDataDashboardService } from './master-data/master-data-dashboard';
 import { ProcessControlDashboardController, ProcessControlDashboardService } from './process-control/process-control-dashboard';
 import { QualityAlertAttachmentsController, QualityAlertsController } from './documentation/documentation.controller';
@@ -274,6 +275,7 @@ export class AppModule implements NestModule {
         CapaAttachmentsController,
         ProcessControlDashboardController,
         MasterDataDashboardController,
+        HomeDashboardController,
         NcrWorkflowController,
         NcrContainmentActionsController,
         NcrDispositionsController,
@@ -353,6 +355,7 @@ export class AppModule implements NestModule {
         CapaService,
         ProcessControlDashboardService,
         MasterDataDashboardService,
+        HomeDashboardService,
         NcrWorkflowService,
         OrganisationsService,
         StructureService,

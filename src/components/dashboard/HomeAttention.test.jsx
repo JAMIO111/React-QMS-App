@@ -13,29 +13,28 @@ vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => p
 import HomeAttention from "./HomeAttention";
 import { homeModules, summarise } from "../../lib/homeDashboard";
 
-const ALL = ["ncr.read", "capa.read", "calibration.read", "process_control.read", "spc.read", "audits.read", "documentation.read", "supplier_quality.read", "competence.read", "master_data.read"];
+const ALL = ["documentation.read", "capa.read"];
+/** What GET /home-dashboard answers for someone who may read everything. */
 const sample = () => ({
-  "/ncr-dashboard": { kpis: { open: 19, criticalOpen: 2 }, byStage: [{ key: "open", count: 9 }, { key: "awaiting_closure", count: 4 }] },
-  "/capas?pageSize=1": { total: 6 },
-  "/capas?overdue=true&pageSize=1": { total: 1 },
-  "/capas?stage=awaiting_verification&pageSize=1": { total: 0 },
-  "/calibration-dashboard": { kpis: { inUse: 80, overdue: 5, quarantined: 0, dueNext30: 7 } },
-  "/process-control-dashboard": { kpis: { inProgress: 3, openFailures: 0, awaitingApproval: 2 } },
-  "/spc/alerts": { data: [], openCount: 4 },
-  "/audits-dashboard": { kpis: { openFindings: 9, overdue: 0, overdueFindings: 0, missed: 0 } },
-  "/documents-dashboard": { kpis: { inForce: 64, reviewsOverdue: 0, readersOverdue: 0, inReview: 0, awaitingApproval: 0, changeRequestsOpen: 0 } },
-  "/supplier-quality/dashboard": { kpis: { suppliers: 23, overdueScars: 3, expired: 0, approvalsWaiting: 1, expiring: 0, riskReviewsOverdue: 0 }, receiving: { available: true, awaitingDecision: 2, lateOrderLines: 0 } },
-  "/competence-dashboard": { kpis: { withGaps: 0, gaps: 0, expired: 0, expiring30: 0, neverAssessed: 0 } },
-  "/master-data-dashboard": { attention: [{ key: "a", label: "Active parts with no released revision", kind: "parts", count: 7 }, { key: "b", label: "Active machines with no site", kind: "machines", count: 0 }] },
+  "/home-dashboard": {
+    asOf: "2026-11-12",
+    nc: { open: 19, criticalOpen: 2, awaitingClosure: 4 },
+    capa: { running: 6, overdue: 1, awaitingVerification: 0 },
+    calibration: { inUse: 80, overdue: 5, quarantined: 0, dueNext30: 7 },
+    processControl: { inProgress: 3, openFailures: 0, awaitingApproval: 2, openSpcAlerts: 4 },
+    audits: { openFindings: 9, overdue: 0, overdueFindings: 0, missed: 0, days: 90 },
+    documents: { inForce: 64, reviewsOverdue: 0, readersOverdue: 0, inReview: 0, awaitingApproval: 0, changeRequestsOpen: 0 },
+    supplier: { suppliers: 23, overdueScars: 3, expired: 0, expiring: 0, approvalsWaiting: 1, riskReviewsOverdue: 0, receiving: { awaitingDecision: 2, lateOrderLines: 0 } },
+    competence: { withGaps: 0, gaps: 0, expired: 0, expiring30: 0, neverAssessed: 0 },
+    masterData: { checks: [{ key: "a", label: "Active parts with no released revision", kind: "parts", count: 7 }, { key: "b", label: "Active machines with no site", kind: "machines", count: 0 }] },
+  },
   "/quality-alerts/mine/count": { unacknowledged: 2, overdue: 1 },
   "/my-documents/count": { toRead: 3, overdue: 0, reviews: 0, total: 3 },
   "/capa-actions/mine": { data: [], openCount: 5 },
 });
 const answer = (path) => {
-  const exact = answers[path];
-  if (exact) return exact;
-  const key = Object.keys(answers).find((k) => !k.includes("?") && path.split("?")[0] === k);
-  if (key) return answers[key];
+  const key = path.split("?")[0];
+  if (answers[key]) return answers[key];
   throw Object.assign(new Error(`unexpected ${path}`), { status: 500 });
 };
 const called = (start) => apiFetch.mock.calls.some(([path]) => path.startsWith(start));
@@ -114,66 +113,75 @@ describe("what needs attention on the home page", () => {
     expect(within(mine).getByRole("link", { name: /8D actions assigned to you/ })).toHaveAttribute("href", "/CAPA/My-Actions");
   });
 
-  it("asks only for the areas the person may read, and shows only those", async () => {
-    permissions = ["calibration.read"];
+  it("makes one request for every area, and none to the areas' own dashboards", async () => {
     renderIt();
-    expect(await screen.findByRole("region", { name: "Calibration" })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("region", { name: "Needs attention" })).toHaveTextContent("1 critical · 1 to watch · in 1 of 1 areas"));
-    expect(screen.queryByRole("region", { name: "Non-conformance" })).toBeNull();
-    expect(screen.queryByRole("region", { name: "For you" })).toBeNull();
-    expect(called("/calibration-dashboard")).toBe(true);
-    for (const path of ["/ncr-dashboard", "/capas", "/audits-dashboard", "/supplier-quality", "/master-data-dashboard", "/spc/alerts", "/quality-alerts", "/my-documents", "/capa-actions"]) {
+    await screen.findByRole("region", { name: "Needs attention" });
+    expect(apiFetch.mock.calls.filter(([path]) => path === "/home-dashboard")).toHaveLength(1);
+    for (const path of ["/ncr-dashboard", "/capas", "/calibration-dashboard", "/process-control-dashboard", "/audits-dashboard", "/documents-dashboard", "/supplier-quality", "/competence-dashboard", "/master-data-dashboard", "/spc/alerts"]) {
       expect(called(path)).toBe(false);
     }
   });
 
-  it("shows nothing at all to someone who may read none of it", () => {
-    permissions = ["inspection.record"];
+  it("shows only the areas the server says the person may read", async () => {
+    permissions = [];
+    answers["/home-dashboard"] = { ...Object.fromEntries(Object.keys(sample()["/home-dashboard"]).map((k) => [k, null])), asOf: "2026-11-12", calibration: { inUse: 80, overdue: 5, quarantined: 0, dueNext30: 7 } };
+    renderIt();
+    expect(await screen.findByRole("region", { name: "Calibration" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Needs attention" })).toHaveTextContent("1 critical · 1 to watch · in 1 of 1 areas");
+    expect(screen.queryByRole("region", { name: "Non-conformance" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "For you" })).toBeNull();
+    for (const path of ["/quality-alerts", "/my-documents", "/capa-actions"]) expect(called(path)).toBe(false);
+  });
+
+  it("shows nothing at all to someone who may read none of it", async () => {
+    permissions = [];
+    answers["/home-dashboard"] = { ...Object.fromEntries(Object.keys(sample()["/home-dashboard"]).map((k) => [k, null])), asOf: "2026-11-12" };
     const { container } = renderIt();
-    expect(container).toBeEmptyDOMElement();
-    expect(apiFetch).not.toHaveBeenCalled();
+    await waitFor(() => expect(container).toBeEmptyDOMElement());
   });
 
   it("says so when everything is clear", async () => {
-    permissions = ["competence.read", "audits.read"];
-    answers["/audits-dashboard"] = { kpis: { openFindings: 0, overdue: 0, overdueFindings: 0, missed: 0 } };
+    const all = sample()["/home-dashboard"];
+    answers["/home-dashboard"] = { ...Object.fromEntries(Object.keys(all).map((k) => [k, null])), asOf: all.asOf, competence: all.competence, audits: { ...all.audits, openFindings: 0 } };
     renderIt();
     expect(await screen.findByText("Nothing needs attention in the areas you can see.")).toBeInTheDocument();
     expect(screen.getByText("Nothing is late, failed or quarantined.")).toBeInTheDocument();
   });
 
-  it("keeps the other areas when one cannot be loaded", async () => {
-    permissions = ["calibration.read", "audits.read"];
-    delete answers["/audits-dashboard"];
+  it("says why when the figures cannot be loaded, and still shows the person's own to-dos", async () => {
+    delete answers["/home-dashboard"];
     renderIt();
-    const audits = await screen.findByRole("region", { name: "Audits" });
-    await waitFor(() => expect(audits).toHaveTextContent("These figures could not be loaded."));
-    expect(screen.getByRole("region", { name: "Calibration" })).toHaveTextContent("80");
+    expect(await screen.findByRole("alert")).toHaveTextContent("What needs attention could not be loaded");
+    expect(screen.getByRole("region", { name: "For you" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "By area" })).toBeNull();
   });
 
-  it("leaves SPC alerts out for someone who may not read SPC", async () => {
-    permissions = ["process_control.read"];
+  it("leaves SPC alerts and deliveries out for someone who may not read them", async () => {
+    const all = sample()["/home-dashboard"];
+    answers["/home-dashboard"] = { ...all, processControl: { ...all.processControl, openSpcAlerts: null }, supplier: { ...all.supplier, receiving: null } };
     renderIt();
     const card = await screen.findByRole("region", { name: "Process control" });
-    await waitFor(() => expect(card).toHaveTextContent("Plan revisions waiting for approval"));
+    expect(card).toHaveTextContent("Plan revisions waiting for approval");
     expect(card).not.toHaveTextContent("SPC");
-    expect(called("/spc/alerts")).toBe(false);
+    expect(screen.getByRole("region", { name: "Supplier quality" })).not.toHaveTextContent("Delivered lines");
   });
 });
 
 describe("the attention rules", () => {
-  const can = () => true;
-  it("waits for an area's answer, and reports an area that failed", () => {
-    const modules = homeModules({ nc: { error: new Error("no") } }, can);
-    expect(modules.find((m) => m.key === "nc").state).toBe("error");
-    expect(modules.find((m) => m.key === "audits").state).toBe("loading");
-    expect(summarise(modules)).toMatchObject({ total: 0, loading: true, clear: 0 });
+  it("has no cards before the answer arrives", () => {
+    expect(homeModules(undefined)).toEqual([]);
+    expect(summarise([])).toMatchObject({ total: 0, critical: 0, warning: 0, areas: 0, urgent: [] });
   });
 
-  it("uses the singular for one, and leaves receiving out when the person may not read it", () => {
-    const supplier = { data: { kpis: { suppliers: 1, overdueScars: 1, expired: 0, approvalsWaiting: 0, expiring: 0, riskReviewsOverdue: 0 }, receiving: { available: false, awaitingDecision: 9, lateOrderLines: 9 } } };
-    const [m] = homeModules({ supplier }, (p) => p === "supplier_quality.read");
-    expect(m.headline).toEqual({ value: 1, label: "supplier in use" });
-    expect(m.lines.map((l) => l.label)).toEqual(["Corrective action response overdue"]);
+  it("uses the singular for one, and keeps the areas in their fixed order", () => {
+    const modules = homeModules({
+      supplier: { suppliers: 1, overdueScars: 1, expired: 0, expiring: 0, approvalsWaiting: 0, riskReviewsOverdue: 0, receiving: null },
+      nc: { open: 1, criticalOpen: 1, awaitingClosure: 0 },
+      capa: null,
+    });
+    expect(modules.map((m) => m.key)).toEqual(["nc", "supplier"]);
+    expect(modules[1].headline).toEqual({ value: 1, label: "supplier in use" });
+    expect(modules[1].lines.map((l) => l.label)).toEqual(["Corrective action response overdue"]);
+    expect(modules[0].lines.map((l) => l.label)).toEqual(["Critical non-conformance open"]);
   });
 });

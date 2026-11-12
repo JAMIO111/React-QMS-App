@@ -13,83 +13,71 @@ import { NCR_REGISTER } from "./ncr";
 import { KINDS } from "./masterData";
 
 /**
- * The home page's "needs attention" model. Every figure comes from a module's own dashboard (or register) answer, so the home page cannot
- * disagree with the module it points to. A line is `critical` (late, failed, quarantined: act now) or `warning` (waiting, or due soon).
- * Only lines with something to do are kept; a module with none is "all clear".
+ * The home page's "needs attention" model, built from `GET /home-dashboard`: one small answer with what needs attention in every area the
+ * person may read (an area they may not read is `null` there, and gets no card here). The API works each figure out with the same rule as that
+ * area's own dashboard, so the home page cannot disagree with the page it points to. A line is `critical` (late, failed, quarantined: act now)
+ * or `warning` (waiting, or due soon). Only lines with something to do are kept; a module with none is "all clear".
  */
 const OPEN_NC_STAGES = "draft,open,contained,investigating,dispositioned,awaiting_closure";
 const n = (value) => (Number.isFinite(value) ? value : 0);
 const line = (key, label, count, tone, to) => ({ key, label, count: n(count), tone, to });
 const plural = (count, one, many = `${one}s`) => (count === 1 ? one : many);
 
-/** The areas of the app the home page reports on, in the order they are shown, with the permission each needs. */
+/** The areas of the app the home page reports on, in the order they are shown. `key` is the area's name in the API's answer. */
 export const HOME_MODULES = [
-  { key: "nc", label: "Non-conformance", icon: TriangleAlertIcon, to: "/Non-Conformance", permission: "ncr.read", period: "12m" },
-  { key: "capa", label: "8D corrective actions", icon: ClipboardListIcon, to: "/CAPA", permission: "capa.read" },
-  { key: "calibration", label: "Calibration", icon: GaugeIcon, to: "/Calibration", permission: "calibration.read", period: "12m" },
-  { key: "processControl", label: "Process control", icon: ChartNoAxesCombinedIcon, to: "/Process-Control", permission: "process_control.read", period: "90d" },
-  { key: "audits", label: "Audits", icon: ClipboardCheckIcon, to: "/Audits", permission: "audits.read", period: "90d" },
-  { key: "documents", label: "Documents", icon: FileTextIcon, to: "/Documentation", permission: "documentation.read", period: "90d" },
-  { key: "supplier", label: "Supplier quality", icon: TruckIcon, to: "/Supplier-Quality", permission: "supplier_quality.read", period: "90d" },
-  { key: "competence", label: "Competence", icon: GraduationCapIcon, to: "/Competence", permission: "competence.read", period: "90d" },
-  { key: "masterData", label: "Master data", icon: BoxesIcon, to: "/Master-Data", permission: "master_data.read" },
+  { key: "nc", label: "Non-conformance", icon: TriangleAlertIcon, to: "/Non-Conformance" },
+  { key: "capa", label: "8D corrective actions", icon: ClipboardListIcon, to: "/CAPA" },
+  { key: "calibration", label: "Calibration", icon: GaugeIcon, to: "/Calibration" },
+  { key: "processControl", label: "Process control", icon: ChartNoAxesCombinedIcon, to: "/Process-Control" },
+  { key: "audits", label: "Audits", icon: ClipboardCheckIcon, to: "/Audits" },
+  { key: "documents", label: "Documents", icon: FileTextIcon, to: "/Documentation" },
+  { key: "supplier", label: "Supplier quality", icon: TruckIcon, to: "/Supplier-Quality" },
+  { key: "competence", label: "Competence", icon: GraduationCapIcon, to: "/Competence" },
+  { key: "masterData", label: "Master data", icon: BoxesIcon, to: "/Master-Data" },
 ];
 
-/** Per module: the headline figure and every line it could raise, from that module's answer. */
+/** Per module: the headline figure and every line it could raise, from that area's part of the answer. */
 const READERS = {
-  nc: (d) => {
-    const k = d.kpis;
-    const awaiting = d.byStage?.find((s) => s.key === "awaiting_closure")?.count;
-    return {
-      headline: { value: n(k.open), label: `open ${plural(n(k.open), "non-conformance")}` },
-      lines: [
-        line("critical", `Critical ${plural(n(k.criticalOpen), "non-conformance")} open`, k.criticalOpen, "critical", `${NCR_REGISTER}?stage=${OPEN_NC_STAGES}&severity=critical`),
-        line("awaiting_closure", "Waiting to be closed", awaiting, "warning", `${NCR_REGISTER}?stage=awaiting_closure`),
-      ],
-    };
-  },
-  capa: (d) => ({
-    headline: { value: n(d.running), label: `running ${plural(n(d.running), "8D")}` },
+  nc: (k) => ({
+    headline: { value: n(k.open), label: `open ${plural(n(k.open), "non-conformance")}` },
     lines: [
-      line("overdue", `${plural(n(d.overdue), "8D")} past ${n(d.overdue) === 1 ? "its" : "their"} due date`, d.overdue, "critical", "/CAPA?overdue=true"),
-      line("verification", "Waiting to be verified", d.awaitingVerification, "warning", "/CAPA?stage=awaiting_verification"),
+      line("critical", `Critical ${plural(n(k.criticalOpen), "non-conformance")} open`, k.criticalOpen, "critical", `${NCR_REGISTER}?stage=${OPEN_NC_STAGES}&severity=critical`),
+      line("awaiting_closure", "Waiting to be closed", k.awaitingClosure, "warning", `${NCR_REGISTER}?stage=awaiting_closure`),
     ],
   }),
-  calibration: (d) => {
-    const k = d.kpis;
-    return {
-      headline: { value: n(k.inUse), label: `${plural(n(k.inUse), "gauge")} in use` },
-      lines: [
-        line("overdue", `${plural(n(k.overdue), "Gauge")} overdue for calibration`, k.overdue, "critical", "/Calibration/Gauges?due=overdue"),
-        line("quarantined", `${plural(n(k.quarantined), "Gauge")} quarantined`, k.quarantined, "critical", "/Calibration/Gauges?status=quarantined"),
-        line("due30", "Due in the next 30 days", k.dueNext30, "warning", "/Calibration/Gauges?due=due_30"),
-      ],
-    };
-  },
-  processControl: (d) => {
-    const k = d.kpis;
-    return {
-      headline: { value: n(k.inProgress), label: `${plural(n(k.inProgress), "inspection")} in progress` },
-      lines: [
-        line("failures", "Failed readings with no acknowledgement or NC", k.openFailures, "critical", "/Process-Control"),
-        line("spc", `SPC ${plural(n(d.openSpcAlerts), "alert")} open`, d.openSpcAlerts, "critical", "/Process-Control/Alerts"),
-        line("approval", `Plan ${plural(n(k.awaitingApproval), "revision")} waiting for approval`, k.awaitingApproval, "warning", "/Process-Control/Plans"),
-      ],
-    };
-  },
-  audits: (d) => {
-    const k = d.kpis;
-    return {
-      headline: { value: n(k.openFindings), label: `open ${plural(n(k.openFindings), "finding")}` },
-      lines: [
-        line("overdue", `${plural(n(k.overdue), "Audit")} overdue`, k.overdue, "critical", "/Audits/Schedule?state=overdue"),
-        line("findings", `${plural(n(k.overdueFindings), "Finding")} past ${n(k.overdueFindings) === 1 ? "its" : "their"} due date`, k.overdueFindings, "critical", "/Audits/Findings?overdue=true"),
-        line("missed", `${plural(n(k.missed), "Audit")} missed in the last 90 days`, k.missed, "warning", "/Audits"),
-      ],
-    };
-  },
-  documents: (d) => {
-    const k = d.kpis;
+  capa: (k) => ({
+    headline: { value: n(k.running), label: `running ${plural(n(k.running), "8D")}` },
+    lines: [
+      line("overdue", `${plural(n(k.overdue), "8D")} past ${n(k.overdue) === 1 ? "its" : "their"} due date`, k.overdue, "critical", "/CAPA?overdue=true"),
+      line("verification", "Waiting to be verified", k.awaitingVerification, "warning", "/CAPA?stage=awaiting_verification"),
+    ],
+  }),
+  calibration: (k) => ({
+    headline: { value: n(k.inUse), label: `${plural(n(k.inUse), "gauge")} in use` },
+    lines: [
+      line("overdue", `${plural(n(k.overdue), "Gauge")} overdue for calibration`, k.overdue, "critical", "/Calibration/Gauges?due=overdue"),
+      line("quarantined", `${plural(n(k.quarantined), "Gauge")} quarantined`, k.quarantined, "critical", "/Calibration/Gauges?status=quarantined"),
+      line("due30", "Due in the next 30 days", k.dueNext30, "warning", "/Calibration/Gauges?due=due_30"),
+    ],
+  }),
+  processControl: (k) => ({
+    headline: { value: n(k.inProgress), label: `${plural(n(k.inProgress), "inspection")} in progress` },
+    lines: [
+      line("failures", "Failed readings with no acknowledgement or NC", k.openFailures, "critical", "/Process-Control"),
+      // Null when the person may not read SPC: then there is no line.
+      line("spc", `SPC ${plural(n(k.openSpcAlerts), "alert")} open`, k.openSpcAlerts, "critical", "/Process-Control/Alerts"),
+      line("approval", `Plan ${plural(n(k.awaitingApproval), "revision")} waiting for approval`, k.awaitingApproval, "warning", "/Process-Control/Plans"),
+    ],
+  }),
+  audits: (k) => ({
+    headline: { value: n(k.openFindings), label: `open ${plural(n(k.openFindings), "finding")}` },
+    lines: [
+      line("overdue", `${plural(n(k.overdue), "Audit")} overdue`, k.overdue, "critical", "/Audits/Schedule?state=overdue"),
+      line("findings", `${plural(n(k.overdueFindings), "Finding")} past ${n(k.overdueFindings) === 1 ? "its" : "their"} due date`, k.overdueFindings, "critical", "/Audits/Findings?overdue=true"),
+      line("missed", `${plural(n(k.missed), "Audit")} missed in the last ${k.days} days`, k.missed, "warning", "/Audits"),
+    ],
+  }),
+  documents: (k) => {
     const waiting = n(k.inReview) + n(k.awaitingApproval);
     return {
       headline: { value: n(k.inForce), label: `${plural(n(k.inForce), "document")} in force` },
@@ -101,9 +89,9 @@ const READERS = {
       ],
     };
   },
-  supplier: (d) => {
-    const k = d.kpis;
-    const rec = d.receiving?.available ? d.receiving : null;
+  supplier: (k) => {
+    // Null when the person may not read receiving: then there are no delivery lines.
+    const rec = k.receiving;
     return {
       headline: { value: n(k.suppliers), label: `${plural(n(k.suppliers), "supplier")} in use` },
       lines: [
@@ -117,20 +105,17 @@ const READERS = {
       ],
     };
   },
-  competence: (d) => {
-    const k = d.kpis;
-    return {
-      headline: { value: n(k.withGaps), label: `${plural(n(k.withGaps), "person", "people")} with a skill gap` },
-      lines: [
-        line("expired", `${plural(n(k.expired), "Assessment")} expired`, k.expired, "critical", "/Competence/Matrix?status=expired"),
-        line("gaps", `${plural(n(k.gaps), "Skill")} short of what a position needs`, k.gaps, "warning", "/Competence/Matrix?status=gap"),
-        line("expiring", "Expiring in the next 30 days", k.expiring30, "warning", "/Competence/Matrix?status=expiring"),
-        line("never", `${plural(n(k.neverAssessed), "Person", "People")} never assessed`, k.neverAssessed, "warning", "/Competence"),
-      ],
-    };
-  },
-  masterData: (d) => {
-    const checks = d.attention ?? [];
+  competence: (k) => ({
+    headline: { value: n(k.withGaps), label: `${plural(n(k.withGaps), "person", "people")} with a skill gap` },
+    lines: [
+      line("expired", `${plural(n(k.expired), "Assessment")} expired`, k.expired, "critical", "/Competence/Matrix?status=expired"),
+      line("gaps", `${plural(n(k.gaps), "Skill")} short of what a position needs`, k.gaps, "warning", "/Competence/Matrix?status=gap"),
+      line("expiring", "Expiring in the next 30 days", k.expiring30, "warning", "/Competence/Matrix?status=expiring"),
+      line("never", `${plural(n(k.neverAssessed), "Person", "People")} never assessed`, k.neverAssessed, "warning", "/Competence"),
+    ],
+  }),
+  masterData: (k) => {
+    const checks = k.checks ?? [];
     const passing = checks.filter((c) => c.count === 0).length;
     return {
       headline: { value: `${passing} of ${checks.length}`, label: "data-quality checks pass" },
@@ -140,16 +125,13 @@ const READERS = {
 };
 
 /**
- * What the home page shows for each module the person may read. `sources[key]` is `{ data, isLoading, error }`.
- * Returns one entry per allowed module: `{ …module, state: "loading" | "error" | "ready", headline, lines (only those with a count) }`.
+ * A card for each area in the answer (those the person may read), in the fixed order: `{ …module, headline, lines (only those with a count) }`.
+ * Nothing while the answer has not arrived.
  */
-export const homeModules = (sources, can) =>
-  HOME_MODULES.filter((m) => can(m.permission)).map((m) => {
-    const source = sources[m.key] ?? {};
-    if (source.error) return { ...m, state: "error", lines: [] };
-    if (!source.data) return { ...m, state: "loading", lines: [] };
-    const { headline, lines } = READERS[m.key](source.data);
-    return { ...m, state: "ready", headline, lines: lines.filter((l) => l.count > 0) };
+export const homeModules = (answer) =>
+  HOME_MODULES.filter((m) => answer?.[m.key]).map((m) => {
+    const { headline, lines } = READERS[m.key](answer[m.key]);
+    return { ...m, headline, lines: lines.filter((l) => l.count > 0) };
   });
 
 /** The totals for the hero card: how many lines need attention, how many of them are critical, and the critical ones, most first. */
@@ -161,8 +143,7 @@ export const summarise = (modules) => {
     critical: critical.length,
     warning: all.length - critical.length,
     areas: modules.filter((m) => m.lines.length > 0).length,
-    clear: modules.filter((m) => m.state === "ready" && m.lines.length === 0).length,
-    loading: modules.some((m) => m.state === "loading"),
+    clear: modules.filter((m) => m.lines.length === 0).length,
     urgent: [...critical].sort((a, b) => b.count - a.count),
   };
 };

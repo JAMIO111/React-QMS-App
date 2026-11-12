@@ -32,6 +32,14 @@ const inspector = () => as(ids.inspectorA);
 const other = () => as(ids.ownerB, ids.orgB);
 const base = '/api/v1/integrations';
 const cron = (path: string) => api().post(`/api/v1/internal/cron/${path}`).set('Authorization', `Bearer ${CRON_SECRET}`).expect(200);
+/**
+ * The cron works every organisation's due runs, and the suites share one database: a run another suite left waiting can fall due while this one runs.
+ * These tests are about this connection's runs, so they look only at those.
+ */
+const mine = async (connId: string, results: { runId: string }[]) => {
+  const own = new Set((await admin.query(`select id from public.integration_sync_runs where connection_id = $1`, [connId])).rows.map((r: { id: string }) => r.id));
+  return results.filter((r) => own.has(r.runId));
+};
 
 let site = '';
 let machines: Array<{ id: string; code: string; name: string; plant: string }> = [];
@@ -136,7 +144,7 @@ describe('scheduled imports and keeping them healthy', () => {
     await api().post('/api/v1/internal/cron/integration-schedule').expect(401);
     const first = (await cron('integration-schedule')).body;
     expect(first.scheduled).toEqual([expect.objectContaining({ connectionId: connId, entityType: 'machine', skipped: null })]);
-    expect(first.results).toEqual([expect.objectContaining({ state: 'finished' })]);
+    expect(await mine(connId, first.results)).toEqual([expect.objectContaining({ state: 'finished' })]);
     expect(await count()).toBe(10);
     const run = (await admin.query(`select kind, trigger, status, requested_by from public.integration_sync_runs where connection_id = $1 and trigger = 'schedule'`, [connId])).rows[0];
     expect(run).toMatchObject({ kind: 'full', trigger: 'schedule', status: 'succeeded', requested_by: ids.ownerA });
@@ -148,12 +156,12 @@ describe('scheduled imports and keeping them healthy', () => {
     failNext = 1;
     await admin.query(`select app.system_schedule_integration_runs(current_date + 1)`);
     const waiting = (await cron('integration-runs')).body;
-    expect(waiting.results).toEqual([expect.objectContaining({ state: 'waiting' })]);
+    expect(await mine(connId, waiting.results)).toEqual([expect.objectContaining({ state: 'waiting' })]);
     const next = (await admin.query(`select app.system_schedule_integration_runs(current_date + 2) as r`)).rows[0].r;
     expect(next).toEqual([expect.objectContaining({ runId: null, skipped: 'An earlier import is still running; it carries on' })]);
     await admin.query(`update public.integration_sync_runs set next_attempt_at = now() where connection_id = $1 and status in ('queued', 'running')`, [connId]);
     const done = (await cron('integration-runs')).body;
-    expect(done.results).toEqual([expect.objectContaining({ state: 'finished' })]);
+    expect(await mine(connId, done.results)).toEqual([expect.objectContaining({ state: 'finished' })]);
     expect(await count()).toBe(10);
     const runs = (await admin.query(`select status, unchanged, created from public.integration_sync_runs where connection_id = $1 and trigger = 'schedule' order by requested_at`, [connId])).rows;
     expect(runs[runs.length - 1]).toMatchObject({ status: 'succeeded', unchanged: 10, created: 0 });

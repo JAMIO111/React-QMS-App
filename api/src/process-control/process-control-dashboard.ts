@@ -104,6 +104,12 @@ const REVISION_LABEL: Record<string, string> = {
  * that still need someone, and where the SPC charts are signalling. Row-level security limits every figure to what
  * the caller may read (inspections by site); SPC needs spc.read.
  */
+/** A failed reading nobody has dealt with: current (not corrected), not acknowledged, and on no live non-conformance. */
+export const UNHANDLED_FAILURE = sql`
+      m.result = 'fail' and not exists (select 1 from public.inspection_measurements c where c.supersedes_id = m.id)
+      and not exists (select 1 from public.inspection_failure_acknowledgements a where a.measurement_id = m.id)
+      and app.reading_live_ncr(m.id) is null`;
+
 @Injectable()
 export class ProcessControlDashboardService {
   constructor(
@@ -119,10 +125,7 @@ export class ProcessControlDashboardService {
     const previousFrom = new Date(previousTo.getTime() - (days - 1) * 86_400_000);
     const bucket = days > 92 ? 'month' : 'week';
     const org = ctx.organisationId!;
-    const unhandled = sql`
-      m.result = 'fail' and not exists (select 1 from public.inspection_measurements c where c.supersedes_id = m.id)
-      and not exists (select 1 from public.inspection_failure_acknowledgements a where a.measurement_id = m.id)
-      and app.reading_live_ncr(m.id) is null`;
+    const unhandled = UNHANDLED_FAILURE;
 
     const spc = await this.spc.overview(ctx, { days: 30, maxCharts: 40, maxRecent: 10 });
 

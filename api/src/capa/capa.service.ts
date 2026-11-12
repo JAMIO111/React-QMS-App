@@ -11,7 +11,7 @@ import { AddTeamBody, ANALYSIS_DATA, CapaDetail, CapaSummary, CloseCapaBody, Com
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown' } : null);
-const RUNNING = sql`c.stage not in ('closed', 'cancelled')`;
+export const RUNNING = sql`c.stage not in ('closed', 'cancelled')`;
 /** Sort fields of the register, as SQL (owner and progress use the SELECT's own columns). */
 const SORT_SQL: Record<ListQuery['sort'], string> = {
   reference: 'c.reference', title: 'lower(c.title)', stage: 'c.stage', owner: `lower(${personName('po')})`, dueDate: 'c.due_date', ncrCount: 'ncr_count',

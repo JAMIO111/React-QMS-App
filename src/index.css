@@ -1,4 +1,7 @@
-@import "tailwindcss";
+/* Tailwind looks for class names only in the frontend source and the page shell. By default it scans the whole repository, so the notes in
+   CLAUDE.md and docs/, the API and the scripts added classes nobody uses, and saving any of them reloaded the page in development. */
+@import "tailwindcss" source("../src");
+@source "../index.html";
 @import "tw-animate-css";
 
 @theme {

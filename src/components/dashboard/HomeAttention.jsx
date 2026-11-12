@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { ArrowRightIcon, BellIcon, CircleCheckIcon, EyeIcon, FileTextIcon, ListChecksIcon, TriangleAlertIcon } from "@/components/icons";
 import { useHomeDashboard } from "../../hooks/useHomeDashboard";
+import { describeApiError } from "../../lib/api-client";
+import Callout from "../ui/Callout";
 import { ACCENT, Chip, Empty, HeroCard, SplitBar, StatTile } from "./DashboardGraphics";
 import { Card } from "./DashboardParts";
 
@@ -46,44 +48,31 @@ const ModuleCard = ({ module }) => {
             {module.label}
           </Link>
         </h3>
-        {module.state === "ready" &&
-          (module.lines.length === 0 ? (
-            <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-success-color">
-              <CircleCheckIcon className="h-4 w-4" aria-hidden="true" />
-              All clear
-            </span>
-          ) : (
-            <span className="flex shrink-0 flex-wrap justify-end gap-1">
-              {critical > 0 && <Chip tone="error">{critical} critical</Chip>}
-              {watch > 0 && <Chip tone="warning">{watch} to watch</Chip>}
-            </span>
-          ))}
+        {module.lines.length === 0 ? (
+          <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-success-color">
+            <CircleCheckIcon className="h-4 w-4" aria-hidden="true" />
+            All clear
+          </span>
+        ) : (
+          <span className="flex shrink-0 flex-wrap justify-end gap-1">
+            {critical > 0 && <Chip tone="error">{critical} critical</Chip>}
+            {watch > 0 && <Chip tone="warning">{watch} to watch</Chip>}
+          </span>
+        )}
       </div>
 
-      {module.state === "loading" && (
-        <div role="status" aria-label={`Loading ${module.label}`} className="flex animate-pulse flex-col gap-2 motion-reduce:animate-none">
-          <span className="h-8 w-24 rounded-lg bg-border-color" />
-          <span className="h-4 w-full rounded bg-border-color" />
-          <span className="h-4 w-2/3 rounded bg-border-color" />
-        </div>
-      )}
-      {module.state === "error" && <p className="text-sm text-secondary-text">These figures could not be loaded. Open the area to see why.</p>}
-      {module.state === "ready" && (
-        <>
-          <p className="flex items-baseline gap-2">
-            <span className="text-3xl font-semibold tabular-nums text-primary-text">{typeof module.headline.value === "number" ? module.headline.value.toLocaleString("en-GB") : module.headline.value}</span>
-            <span className="text-sm text-secondary-text">{module.headline.label}</span>
-          </p>
-          {module.lines.length > 0 ? (
-            <ul aria-label={`${module.label}: needs attention`} className="-mx-2 flex flex-col">
-              {module.lines.map((l) => (
-                <AttentionLine key={l.key} line={l} />
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-secondary-text">Nothing here needs attention.</p>
-          )}
-        </>
+      <p className="flex items-baseline gap-2">
+        <span className="text-3xl font-semibold tabular-nums text-primary-text">{typeof module.headline.value === "number" ? module.headline.value.toLocaleString("en-GB") : module.headline.value}</span>
+        <span className="text-sm text-secondary-text">{module.headline.label}</span>
+      </p>
+      {module.lines.length > 0 ? (
+        <ul aria-label={`${module.label}: needs attention`} className="-mx-2 flex flex-col">
+          {module.lines.map((l) => (
+            <AttentionLine key={l.key} line={l} />
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-secondary-text">Nothing here needs attention.</p>
       )}
     </section>
   );
@@ -94,12 +83,23 @@ const ModuleCard = ({ module }) => {
  * Each figure is the module's own (its dashboard's answer), and each line leads to the list behind it.
  */
 const HomeAttention = () => {
-  const { modules, summary, personal, isLoading } = useHomeDashboard();
-  if (isLoading || (modules.length === 0 && personal.length === 0)) return null;
+  const { modules, summary, personal, isLoading, error } = useHomeDashboard();
+  if (!isLoading && !error && modules.length === 0 && personal.length === 0) return null;
   const urgent = summary.urgent.slice(0, 6);
 
   return (
     <>
+      {isLoading && (
+        <div role="status" aria-label="Checking what needs attention" className="grid animate-pulse grid-cols-1 gap-4 motion-reduce:animate-none xl:grid-cols-5">
+          <span className="h-52 rounded-3xl bg-secondary-bg xl:col-span-2" />
+          <span className="h-52 rounded-2xl bg-secondary-bg xl:col-span-3" />
+        </div>
+      )}
+      {error && (
+        <Callout tone="error" role="alert" title="What needs attention could not be loaded">
+          {describeApiError(error)}
+        </Callout>
+      )}
       {modules.length > 0 && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
           <HeroCard
@@ -109,10 +109,8 @@ const HomeAttention = () => {
             value={summary.total}
             note={
               summary.total === 0
-                ? summary.loading
-                  ? "Checking each area…"
-                  : "Nothing needs attention in the areas you can see."
-                : `${summary.critical} critical · ${summary.warning} to watch · in ${summary.areas} of ${modules.length} areas${summary.loading ? " · still checking…" : ""}`
+                ? "Nothing needs attention in the areas you can see."
+                : `${summary.critical} critical · ${summary.warning} to watch · in ${summary.areas} of ${modules.length} areas`
             }>
             <SplitBar
               tall
@@ -134,7 +132,7 @@ const HomeAttention = () => {
                 ))}
               </ul>
             ) : (
-              <Empty>{summary.loading ? "Checking each area…" : "Nothing is late, failed or quarantined."}</Empty>
+              <Empty>Nothing is late, failed or quarantined.</Empty>
             )}
             {summary.urgent.length > urgent.length && <p className="text-xs text-secondary-text">{summary.urgent.length - urgent.length} more are listed by area below.</p>}
           </Card>

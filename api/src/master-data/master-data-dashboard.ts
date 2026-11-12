@@ -48,6 +48,29 @@ const top = (rows: Row[], limit: number, other: string): z.infer<typeof Count>[]
   return [...shown, ...(rest ? [{ key: 'other', label: other, count: rest }] : []), ...(none ? [none] : [])];
 };
 
+/**
+ * The data-quality checks over active records: how many fail each one. Shared with the home page (`GET /home-dashboard`), so the two cannot disagree.
+ * `run` executes a query and returns its rows (inside the caller's transaction, under RLS).
+ */
+export const dataQualityChecks = async (run: (query: ReturnType<typeof sql>) => Promise<Row[]>, org: string) => {
+  const [att] = await run(sql`
+    select
+      (select count(*) from public.parts p where p.organisation_id = ${org}::uuid and p.active
+         and not exists (select 1 from public.part_revisions r where r.part_id = p.id and r.status = 'released'))::int as no_release,
+      (select count(*) from public.parts p where p.organisation_id = ${org}::uuid and p.active and p.part_family_id is null)::int as no_family,
+      (select count(*) from public.parts p where p.organisation_id = ${org}::uuid and p.active
+         and not exists (select 1 from public.part_customers c where c.part_id = p.id))::int as no_customer,
+      (select count(*) from public.machines m where m.organisation_id = ${org}::uuid and m.active and m.site_id is null)::int as no_site,
+      (select count(*) from public."Employees" e where e.organisation_id = ${org}::uuid and e.active and e.department_id is null)::int as no_department`);
+  return [
+    { key: 'parts_without_release', label: 'Active parts with no released revision', kind: 'parts' as const, count: n(att.no_release) },
+    { key: 'parts_without_family', label: 'Active parts with no part family', kind: 'parts' as const, count: n(att.no_family) },
+    { key: 'parts_without_customer', label: 'Active parts with no customer', kind: 'parts' as const, count: n(att.no_customer) },
+    { key: 'machines_without_site', label: 'Active machines with no site', kind: 'machines' as const, count: n(att.no_site) },
+    { key: 'employees_without_department', label: 'Active employees with no department', kind: 'employees' as const, count: n(att.no_department) },
+  ];
+};
+
 @Injectable()
 export class MasterDataDashboardService {
   constructor(private readonly database: DatabaseService) {}
@@ -66,22 +89,7 @@ export class MasterDataDashboardService {
       const byKind = Object.fromEntries(entities.map((r) => [r.kind as string, r]));
       const activeOf = (k: string) => n(byKind[k]?.active);
 
-      const [att] = await q(sql`
-        select
-          (select count(*) from public.parts p where p.organisation_id = ${org}::uuid and p.active
-             and not exists (select 1 from public.part_revisions r where r.part_id = p.id and r.status = 'released'))::int as no_release,
-          (select count(*) from public.parts p where p.organisation_id = ${org}::uuid and p.active and p.part_family_id is null)::int as no_family,
-          (select count(*) from public.parts p where p.organisation_id = ${org}::uuid and p.active
-             and not exists (select 1 from public.part_customers c where c.part_id = p.id))::int as no_customer,
-          (select count(*) from public.machines m where m.organisation_id = ${org}::uuid and m.active and m.site_id is null)::int as no_site,
-          (select count(*) from public."Employees" e where e.organisation_id = ${org}::uuid and e.active and e.department_id is null)::int as no_department`);
-      const attention = [
-        { key: 'parts_without_release', label: 'Active parts with no released revision', kind: 'parts' as const, count: n(att.no_release), of: activeOf('parts') },
-        { key: 'parts_without_family', label: 'Active parts with no part family', kind: 'parts' as const, count: n(att.no_family), of: activeOf('parts') },
-        { key: 'parts_without_customer', label: 'Active parts with no customer', kind: 'parts' as const, count: n(att.no_customer), of: activeOf('parts') },
-        { key: 'machines_without_site', label: 'Active machines with no site', kind: 'machines' as const, count: n(att.no_site), of: activeOf('machines') },
-        { key: 'employees_without_department', label: 'Active employees with no department', kind: 'employees' as const, count: n(att.no_department), of: activeOf('employees') },
-      ];
+      const attention = (await dataQualityChecks(q, org)).map((c) => ({ ...c, of: activeOf(c.kind) }));
 
       // Twelve weeks (Monday starts), every week present even when nothing was added.
       const growthRows = await q(sql`

@@ -98,10 +98,10 @@ export type SupplierDashboard = z.infer<typeof SupplierDashboard>;
 
 const supplierRef = (r: Row) => ({ id: r.supplier_id as string, code: r.supplier_code as string, name: r.supplier_name as string });
 /** Suppliers the dashboard counts: in use and not archived. */
-const LIVE = `s.active and s.approval_status <> 'archived'`;
-const AWAITING = AWAITING_RESPONSE.map((s) => `'${s}'`).join(',');
+export const LIVE = `s.active and s.approval_status <> 'archived'`;
+export const AWAITING = AWAITING_RESPONSE.map((s) => `'${s}'`).join(',');
 /** Current certifications and documents that can expire, of live suppliers. */
-const EXPIRING = (org: string) => sql`
+export const EXPIRING = (org: string) => sql`
   select 'certification' as kind, c.id, c.supplier_id, coalesce(c.title, c.certificate_number) as title, c.expires_on
     from public.supplier_certifications c join public.suppliers s on s.id = c.supplier_id and ${sql.raw(LIVE)}
    where c.organisation_id = ${org}::uuid and c.status = 'current' and c.expires_on is not null
@@ -110,7 +110,7 @@ const EXPIRING = (org: string) => sql`
     from public.supplier_documents d join public.suppliers s on s.id = d.supplier_id and ${sql.raw(LIVE)}
    where d.organisation_id = ${org}::uuid and d.status = 'current' and d.expires_on is not null`;
 /** Delivered lines of live receipts with their latest decision and whether inspection was required. */
-const LINES = (org: string) => sql`
+export const LINES = (org: string) => sql`
   select x.id, g.received_on, d.decision, coalesce(det.required, false) as required
     from public.goods_receipt_lines x
     join public.goods_receipts g on g.id = x.goods_receipt_id and g.status = 'received'

@@ -55,7 +55,7 @@ export type CompetenceDashboard = z.infer<typeof CompetenceDashboard>;
 const LEVEL_LABELS = ['None', 'Learning', 'Supervised', 'Competent', 'Can train others'];
 
 /** Required skill and person pairs (active people and skills, positions held now) with the current level and what is short. */
-const CELLS = (org: string) => sql`
+export const CELLS = (org: string) => sql`
   select h.employee_id, h.skill_id, h.required, coalesce(a.level, 0) as level, (a.id is null) as unassessed, greatest(h.required - coalesce(a.level, 0), 0) as gap
     from (select x.employee_id, ps.skill_id, max(ps.required_level)::int as required
             from public.competence_employee_positions x
@@ -67,7 +67,7 @@ const CELLS = (org: string) => sql`
     left join public.competence_assessments a on a.employee_id = h.employee_id and a.skill_id = h.skill_id and a.status = 'current'`;
 
 /** Current assessments that can expire: level 1 or more, active person and skill. */
-const EXPIRING = (org: string) => sql`
+export const EXPIRING = (org: string) => sql`
   select a.employee_id, a.skill_id, a.level, a.expires_on
     from public.competence_assessments a
     join public."Employees" e on e.id = a.employee_id and e.active

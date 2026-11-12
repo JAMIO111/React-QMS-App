@@ -1,5 +1,5 @@
 import { pickCustomFilters } from '../custom-fields/custom-values';
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
@@ -15,8 +15,12 @@ import {
   HistoryEntry,
   NcrDetail,
   NcrListQuery,
+  NcrNewDefaults,
+  NcrNewDefaultsQuery,
   NcrRanges,
   NcrRangesQuery,
+  SetSourceCategoryBody,
+  SourceCategoryList,
   NcrPage,
   NCR_SOURCES,
   SORTABLE,
@@ -73,6 +77,15 @@ export class NcrController {
   @ApiOkResponse({ schema: openApiSchema(NcrRanges) })
   ranges(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.ranges(ctx, parse(NcrRangesQuery, query));
+  }
+
+  /** What a non-conformance raised by hand starts with (severity, the source's suggested category, the person's site and the sites they may choose). Declared before :id. */
+  @Get('new-defaults')
+  @OrganisationScoped('ncr.create', SITE_SCOPED)
+  @ApiQuery({ name: 'source', required: false, enum: [...NCR_SOURCES] })
+  @ApiOkResponse({ schema: openApiSchema(NcrNewDefaults) })
+  newDefaults(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.newDefaults(ctx, parse(NcrNewDefaultsQuery, query));
   }
 
   @Post()
@@ -175,5 +188,28 @@ export class NcrClassificationsController {
   @ApiOkResponse({ schema: openApiSchema(Classification) })
   update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.updateClassification(ctx, parse(Uuid, id), parse(UpdateClassificationBody, body));
+  }
+}
+
+/** The category suggested for a non-conformance raised by hand, per source. Every member reads them; people who manage the NC lists change them. */
+@ApiTags('ncrs')
+@ApiBearerAuth()
+@Controller('ncr-source-categories')
+export class NcrSourceCategoriesController {
+  constructor(private readonly service: NcrService) {}
+
+  @Get()
+  @OrganisationScoped()
+  @ApiOkResponse({ schema: openApiSchema(SourceCategoryList) })
+  list(@Ctx() ctx: RequestContext) {
+    return this.service.sourceCategories(ctx);
+  }
+
+  @Put()
+  @OrganisationScoped('lookups.manage')
+  @ApiBody({ schema: openApiSchema(SetSourceCategoryBody) })
+  @ApiOkResponse({ schema: openApiSchema(SourceCategoryList) })
+  set(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.setSourceCategory(ctx, parse(SetSourceCategoryBody, body));
   }
 }

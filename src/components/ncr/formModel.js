@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { detectionApplies } from "../../lib/ncr";
 
 /** NCR form values ↔ API bodies. */
 export const EMPTY = {
@@ -8,6 +9,9 @@ export const EMPTY = {
   productionOrderId: null, lotId: null, serialId: null,
   categoryId: null, failureModeId: null, subFailureModeId: null, causalProcessId: null, responsibleEmployeeId: null,
 };
+
+/** A non-conformance raised by hand starts at minor (NCs raised from an inspection, audit, calibration, receipt or import set their own). */
+export const NEW_NC = { ...EMPTY, severity: "minor" };
 
 /** API record → form values. */
 export const toForm = (n) => ({
@@ -32,6 +36,8 @@ export const toBody = (form, source) => {
   const supplierSide = source === "supplier" || source === "goods_receiving";
   if (!supplierSide) { delete body.supplierId; delete body.purchaseOrder; }
   if (supplierSide) delete body.workOrder;
+  // "Where detected" is not asked for these sources (anything entered earlier is kept).
+  if (!detectionApplies(source)) delete body.detectionProcessId;
   return body;
 };
 

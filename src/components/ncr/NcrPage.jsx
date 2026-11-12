@@ -38,9 +38,9 @@ import FileDrop from "../ui/FileDrop";
 import SideMenuItem from "../SideMenuItem";
 import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions, useSites } from "../../hooks/useQmsApi";
-import { useClassifications, useEmployees, useNcr, useNcrMutation } from "../../hooks/useNcr";
+import { useClassifications, useEmployees, useNcr, useNcrMutation, useNcrNewDefaults } from "../../hooks/useNcr";
 import { describeApiError } from "../../lib/api-client";
-import { NCR_REGISTER, NC_SOURCES, SEVERITIES, SOURCE_OPTIONS, formatDate, ncrPath, sourceLabel, stageOf } from "../../lib/ncr";
+import { NCR_REGISTER, NC_SOURCES, SEVERITIES, SOURCE_OPTIONS, detectionApplies, formatDate, ncrPath, sourceLabel, stageOf } from "../../lib/ncr";
 import { SeverityPill, StagePill } from "./Pills";
 import DeleteNcrDialog from "./DeleteNcrDialog";
 import { MachinePicker, PartPicker, PartyPicker, RevisionPicker } from "./Pickers";
@@ -55,7 +55,7 @@ import NcrReceiptSource from "../supplier-quality/NcrReceiptSource";
 import { useNcrReceiptSource } from "../../hooks/useIncoming";
 import { useNcrAuditSource } from "../../hooks/useAudits";
 import { useNcrInspectionSource } from "../../hooks/useInspection";
-import { EMPTY, changedFields, toBody, toForm } from "./formModel";
+import { EMPTY, NEW_NC, changedFields, toBody, toForm } from "./formModel";
 import { useProductionSettings } from "../../hooks/useProduction";
 import { LotPicker, OrderPicker, SerialPicker } from "../production/pickers";
 import LinkNotices from "../production/LinkNotices";
@@ -88,6 +88,18 @@ const Card = ({ children, className = "" }) => (
  * original NC entry form: header with Revert / Save, a side menu of sections (NC Details, Cost,
  * Investigation, Additional Info, History) and scrolling cards.
  */
+
+/** A field that shows a value the person cannot change here, laid out like the inputs beside it. */
+const ReadOnlyField = ({ label, icon: Icon, value, hint }) => (
+  <div className="flex min-w-0 flex-col gap-1">
+    <span className="text-sm font-medium text-secondary-text">{label}</span>
+    <div className="flex min-h-9.5 items-center gap-2 rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm text-primary-text">
+      {Icon && <Icon className="h-4 w-4 text-secondary-text" />} {value ?? "—"}
+    </div>
+    {hint && <p className="text-xs text-secondary-text">{hint}</p>}
+  </div>
+);
+
 const NcrPage = () => {
   const { id: routeId } = useParams();
   const isNew = routeId === "new";
@@ -111,7 +123,7 @@ const NcrPage = () => {
   const mutation = useNcrMutation();
   const settings = useProductionSettings();
   const canLinkProduction = can("production.read");
-  const { control, reset, watch, setValue } = useForm({ defaultValues: EMPTY });
+  const { control, reset, watch, setValue } = useForm({ defaultValues: isNew ? NEW_NC : EMPTY });
   const form = watch();
   const [customValues, setCustomValues] = useState({});
   const [dialog, setDialog] = useState(null); // "cancel" | "reopen" | "delete" | "source"
@@ -119,8 +131,18 @@ const NcrPage = () => {
   const refs = { details: useRef(null), cost: useRef(null), lots: useRef(null), containment: useRef(null), investigation: useRef(null), disposition: useRef(null), info: useRef(null), history: useRef(null) };
 
   const source = isNew ? newSource : ncr?.source;
-  const original = useMemo(() => (ncr ? toForm(ncr) : EMPTY), [ncr]);
+  const original = useMemo(() => (ncr ? toForm(ncr) : isNew ? NEW_NC : EMPTY), [ncr, isNew]);
   useEffect(() => reset(original), [original, reset]);
+  // A new NC starts with the source's suggested category and the person's own site, until they choose one themselves.
+  const { data: defaults } = useNcrNewDefaults(isNew ? source : null);
+  const categoryChosen = useRef(false);
+  const siteChosen = useRef(false);
+  useEffect(() => {
+    if (isNew && defaults && !categoryChosen.current) setValue("categoryId", defaults.category?.id ?? null);
+  }, [isNew, defaults, setValue]);
+  useEffect(() => {
+    if (isNew && defaults && !siteChosen.current) setValue("siteId", defaults.site.suggestedId ?? null);
+  }, [isNew, defaults, setValue]);
 
   const locked = !isNew && ncr && (ncr.stage === "closed" || ncr.stage === "cancelled" || !!ncr.deletedAt);
   const canEdit = isNew ? can("ncr.create") : can("ncr.update") && !locked;
@@ -190,6 +212,12 @@ const NcrPage = () => {
   // Active categories, plus the one this NC already has if it has since been switched off.
   const categories = (lists?.categories ?? []).map((c) => ({ id: c.id, name: c.name }));
   if (ncr?.category && !categories.some((c) => c.id === ncr.category.id)) categories.push({ id: ncr.category.id, name: `${ncr.category.name} (inactive)` });
+  // The site: a new NC offers only the sites the person may raise NCs at (fixed when there is one); an organisation with one site never asks.
+  const allSites = (sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }));
+  const siteOptions = isNew && defaults ? defaults.site.choices.map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` })) : allSites;
+  const oneSiteOrganisation = isNew ? !!defaults?.site.organisationHasOneSite : allSites.length === 1 && (!form.siteId || form.siteId === allSites[0].id);
+  const siteField = oneSiteOrganisation ? "hidden" : isNew && defaults?.site.choices.length === 1 ? "fixed" : "picker";
+  const suggestedCategory = isNew && !!form.categoryId && form.categoryId === defaults?.category?.id;
   const subs = (lists?.subFailureModes ?? []).filter((s) => s.parentId === form.failureModeId);
   const opt = (items) => (items ?? []).map((c) => ({ id: c.id, name: c.code ? `${c.code} – ${c.name}` : c.name }));
   /** A react-hook-form controlled field; `then` runs after the value changes (e.g. to clear a dependent field). */
@@ -361,8 +389,9 @@ const NcrPage = () => {
                 )}
                 {controlled("categoryId", (f) => (
                   <RHFComboBox {...f} label="Category" required icon={TagsIcon} placeholder={isNew || ncr?.stage === "draft" ? "Select a category" : "Uncategorised"} sort={false}
-                    clearable={categoryClearable} hint={!form.categoryId ? "What the problem is. Needed to open" : "What the problem is"} options={categories} />
-                ))}
+                    clearable={categoryClearable} options={categories}
+                    hint={!form.categoryId ? "What the problem is. Needed to open" : suggestedCategory ? "Suggested from the source; change it if the problem is something else" : "What the problem is"} />
+                ), () => { categoryChosen.current = true; })}
                 {source === "customer" && (
                   <>
                     {controlled("customerId", (f) => <PartyPicker {...f} kind="customers" label="Customer" icon={UsersIcon} current={ncr?.customer} required />)}
@@ -398,12 +427,17 @@ const NcrPage = () => {
                   {text("quantityInspected", "Quantity inspected", { dataType: "number", icon: LayersIcon, placeholder: "Enter qty" })}
                   {text("quantityAffected", "Quantity affected", { required: true, dataType: "number", icon: LayersIcon, placeholder: "Enter qty", hint: "Needed to open" })}
                 </div>
-                {controlled("siteId", (f) => (
-                  <RHFComboBox {...f} label="Site" icon={HouseIcon} placeholder="Select a site" options={(sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))} />
-                ))}
-                {controlled("detectionProcessId", (f) => (
-                  <MachinePicker {...f} label="Where detected" icon={FactoryIcon} current={ncr?.detectionProcess} />
-                ))}
+                {siteField === "picker" && controlled("siteId", (f) => (
+                  <RHFComboBox {...f} label="Site" icon={HouseIcon} placeholder="Select a site" options={siteOptions} />
+                ), () => { siteChosen.current = true; })}
+                {siteField === "fixed" && (
+                  <ReadOnlyField label="Site" icon={HouseIcon} value={siteOptions[0]?.name} hint="The only site you can raise non-conformances at" />
+                )}
+                {detectionApplies(source)
+                  ? controlled("detectionProcessId", (f) => <MachinePicker {...f} label="Where detected" icon={FactoryIcon} current={ncr?.detectionProcess} />)
+                  : ncr?.detectionProcess && (
+                      <ReadOnlyField label="Where detected" icon={FactoryIcon} value={ncr.detectionProcess.name} hint={`Not asked for a ${sourceLabel(source).toLowerCase()} non-conformance; kept from before`} />
+                    )}
                 <div className="lg:col-span-2">
                   <RHFTextArea label="Description" icon={AlignCenterIcon} value={form.description} onChange={set("description")} disabled={!canEdit} max={5000} rows={4} placeholder="Describe the non-conformance" />
                 </div>

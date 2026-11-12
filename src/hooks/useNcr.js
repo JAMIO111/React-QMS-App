@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { optimisticHandlers, settle } from "../lib/optimistic";
+import { refreshOrganisation } from "../lib/refresh";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "ncr", ...rest];
@@ -175,5 +176,60 @@ export const useNcrGates = (id) => {
     queryFn: () => apiFetch(`/ncrs/${id}/gates`, { organisationId }),
     enabled: !!organisationId && !!id,
     retry: false,
+  });
+};
+
+/**
+ * What a non-conformance raised by hand starts with, for the chosen source:
+ * { severity: "minor", category: { id, name } | null, site: { suggestedId, choices: [{ id, code, name }], organisationHasOneSite } }.
+ */
+export const useNcrNewDefaults = (source, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "new-defaults", source),
+    queryFn: () => apiFetch(`/ncrs/new-defaults?source=${encodeURIComponent(source)}`, { organisationId }),
+    enabled: !!organisationId && !!source && enabled,
+    retry: false,
+    staleTime: 60_000,
+  });
+};
+
+/** The category suggested for each source: { data: [{ source, label, category }], canManage }. */
+export const useSourceCategories = () => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "source-categories"),
+    queryFn: () => apiFetch("/ncr-source-categories", { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+  });
+};
+
+/**
+ * Change one source's suggestion: { source, category: { id, name } | null }. Shown straight away; the previous list comes back if the
+ * save is refused.
+ */
+export const useSetSourceCategory = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  const listKey = key(organisationId, "source-categories");
+  return useMutation({
+    mutationFn: ({ source, category }) =>
+      apiFetch("/ncr-source-categories", { method: "PUT", body: { source, categoryId: category?.id ?? null }, organisationId }),
+    onMutate: async ({ source, category }) => {
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previous = queryClient.getQueryData(listKey);
+      if (previous) {
+        queryClient.setQueryData(listKey, {
+          ...previous,
+          data: previous.data.map((r) => (r.source !== source ? r : { ...r, category: category ? { ...category, active: true } : null })),
+        });
+      }
+      return { previous };
+    },
+    onError: (_e, _arg, context) => {
+      if (context?.previous) queryClient.setQueryData(listKey, context.previous);
+    },
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };

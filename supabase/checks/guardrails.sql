@@ -69,7 +69,7 @@ audited(relname) AS (VALUES
   ('competence_categories'), ('competence_skills'), ('competence_positions'), ('competence_position_skills'), ('competence_employee_positions'), ('competence_assessments'), ('competence_training_sessions'), ('competence_session_skills'), ('competence_session_attendees'), ('competence_attachments'),
   ('document_types'), ('documents'), ('document_revisions'), ('document_revision_files'), ('document_revision_reviewers'), ('document_signoffs'), ('document_targets'), ('document_recipients'), ('document_skills'), ('document_periodic_reviews'), ('document_change_requests'), ('document_links'),
   ('risk_models'), ('risk_categories'), ('risks'), ('risk_assessments'), ('risk_actions'), ('risk_reviews'), ('risk_acceptances'),
-  ('integration_alerts'),
+  ('integration_alerts'), ('ncr_source_categories'),
   ('integration_connections'), ('integration_credentials'), ('integration_connection_events'), ('integration_external_records'), ('integration_sync_cursors'), ('integration_files'), ('integration_mappings'), ('integration_import_settings')
 )
 SELECT rule, object FROM (

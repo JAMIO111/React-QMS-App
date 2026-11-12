@@ -47,6 +47,12 @@ const ncr = (over = {}) => ({
 const page = (data) => ({ data, nextCursor: null });
 
 const calls = [];
+/** What a new NC starts with (GET /ncrs/new-defaults): by default an organisation with one site, and Product suggested for every source. */
+const oneSite = { suggestedId: "s1", choices: [{ id: "s1", code: "MAIN", name: "Main site" }], organisationHasOneSite: true };
+const newDefaults = (categories = {}, site = oneSite) => (path) => {
+  const source = new URLSearchParams(path.split("?")[1]).get("source");
+  return { source, severity: "minor", category: source in categories ? categories[source] : { id: "cat1", name: "Product" }, site };
+};
 /** The person's saved filters, kept by the fake API between calls (the API enforces five and unique names). */
 let savedFilters = [];
 const savedItem = (f, i) => ({ id: f.id, scope: "ncr_register", name: f.name, filters: f.filters, position: i, createdAt: "2026-11-01T09:00:00Z", updatedAt: "2026-11-01T09:00:00Z" });
@@ -66,6 +72,7 @@ const routeApi = (routes) =>
         { id: "m2", code: "WELD-1", name: "Port weld", active: true },
       ]),
       "GET /saved-filters": () => ({ data: savedFilters.map(savedItem), limit: 5 }),
+      "GET /ncrs/new-defaults": newDefaults(),
       "POST /saved-filters": (_path, o) => {
         if (savedFilters.length >= 5) throw Object.assign(new Error("You can save up to 5 filters here."), { status: 409 });
         const item = { id: `f${savedFilters.length + 10}`, name: o.body.name, filters: o.body.filters };
@@ -603,6 +610,83 @@ describe("NC registers", () => {
 });
 
 describe("NC form", () => {
+  const twoSites = { suggestedId: "s2", choices: [{ id: "s1", code: "MAIN", name: "Main site" }, { id: "s2", code: "PLB", name: "Plant B" }], organisationHasOneSite: false };
+
+  it("starts a new NC at minor, with the source's suggested category and the person's own site, until they choose otherwise", async () => {
+    routeApi({
+      "GET /ncrs/new-defaults": newDefaults({ customer: { id: "cat2", name: "Process" } }, twoSites),
+      "POST /ncrs": (_p, o) => ncr({ ...o.body, id: "n7" }),
+      "GET /ncrs/n7": ncr({ id: "n7" }),
+    });
+    renderAt("/Non-Conformance/Register/new?source=customer");
+    expect(await screen.findByRole("combobox", { name: /^Severity/ })).toHaveValue("Minor");
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /^Category/ })).toHaveValue("Process"));
+    expect(screen.getByText("Suggested from the source; change it if the problem is something else")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /^Site/ })).toHaveValue("PLB · Plant B");
+
+    // Another source brings its own suggestion ...
+    await pick(/^Source/, /^Internal(?! audit)/);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /^Category/ })).toHaveValue("Product"));
+    // ... until the person picks a category themselves.
+    await pick(/^Category/, "Process");
+    await pick(/^Source/, /^Supplier/);
+    await waitFor(() => expect(lastCall("GET /ncrs/new-defaults").path).toContain("source=supplier"));
+    expect(screen.getByRole("combobox", { name: /^Category/ })).toHaveValue("Process");
+    await pick(/^Site/, "MAIN · Main site");
+    await pick(/^Source/, /^Internal(?! audit)/);
+    expect(screen.getByRole("combobox", { name: /^Site/ })).toHaveValue("MAIN · Main site");
+
+    await userEvent.type(screen.getByLabelText("Title"), "Burr on edge");
+    await userEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+    expect(lastCall("POST /ncrs").body).toMatchObject({ source: "internal", severity: "minor", categoryId: "cat2", siteId: "s1" });
+  });
+
+  it("fixes the site for someone who may raise NCs at one site only, and does not ask in an organisation with one site", async () => {
+    routeApi({
+      "GET /ncrs/new-defaults": newDefaults({}, { suggestedId: "s2", choices: [{ id: "s2", code: "PLB", name: "Plant B" }], organisationHasOneSite: false }),
+      "POST /ncrs": (_p, o) => ncr({ ...o.body, id: "n7" }),
+      "GET /ncrs/n7": ncr({ id: "n7" }),
+    });
+    const first = renderAt("/Non-Conformance/Register/new");
+    expect(await screen.findByText("The only site you can raise non-conformances at")).toBeInTheDocument();
+    expect(screen.getByText("PLB · Plant B")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /^Site/ })).toBeNull();
+    await userEvent.type(screen.getByLabelText("Title"), "Scratch");
+    await userEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+    expect(lastCall("POST /ncrs").body).toMatchObject({ siteId: "s2", severity: "minor", categoryId: "cat1" });
+    first.unmount();
+
+    routeApi({ "POST /ncrs": (_p, o) => ncr({ ...o.body, id: "n7" }), "GET /ncrs/n7": ncr({ id: "n7" }) });
+    renderAt("/Non-Conformance/Register/new");
+    await screen.findByRole("combobox", { name: /^Severity/ });
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /^Category/ })).toHaveValue("Product"));
+    expect(screen.queryByRole("combobox", { name: /^Site/ })).toBeNull();
+    expect(screen.queryByText("The only site you can raise non-conformances at")).toBeNull();
+    await userEvent.type(screen.getByLabelText("Title"), "Dent");
+    await userEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+    expect(lastCall("POST /ncrs").body).toMatchObject({ siteId: "s1" });
+  });
+
+  it("does not ask where a customer, external audit or management review NC was detected, and keeps one recorded before", async () => {
+    routeApi({});
+    const first = renderAt("/Non-Conformance/Register/new?source=customer");
+    await screen.findByRole("combobox", { name: /^Severity/ });
+    expect(screen.queryByRole("combobox", { name: /Where detected/ })).toBeNull();
+    for (const label of [/^External audit/, /^Management review/]) {
+      await pick(/^Source/, label);
+      expect(screen.queryByRole("combobox", { name: /Where detected/ })).toBeNull();
+    }
+    await pick(/^Source/, /^Internal(?! audit)/);
+    expect(screen.getByRole("combobox", { name: /Where detected/ })).toBeInTheDocument();
+    first.unmount();
+
+    routeApi({ "GET /ncrs/n6": ncr({ id: "n6", source: "customer", customer: { id: "c1", name: "Acme" }, detectionProcess: { id: "m1", name: "CNC lathe 1" } }) });
+    renderAt("/Non-Conformance/Register/n6");
+    expect(await screen.findByText("CNC lathe 1")).toBeInTheDocument();
+    expect(screen.getByText("Not asked for a customer non-conformance; kept from before")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /Where detected/ })).toBeNull();
+  });
+
   it("raises an internal NC with only the internal fields", async () => {
     routeApi({ "POST /ncrs": (_p, o) => ncr({ ...o.body, id: "n9", reference: "NCM-26-002" }), "GET /ncrs/n9": ncr({ id: "n9", reference: "NCM-26-002" }) });
     renderAt("/Non-Conformance/Register/new");
@@ -661,10 +745,14 @@ describe("NC form", () => {
 
   it("needs a category to raise one, and says so", async () => {
     const { ApiClientError } = await import("../../lib/api-client");
-    routeApi({ "POST /ncrs": () => Promise.reject(new ApiClientError({ status: 409, code: "ncr_rule", message: "To open this non-conformance, fill in: category" })) });
+    routeApi({
+      "GET /ncrs/new-defaults": newDefaults({ internal: null }), // a source that suggests no category
+      "POST /ncrs": () => Promise.reject(new ApiClientError({ status: 409, code: "ncr_rule", message: "To open this non-conformance, fill in: category" })),
+    });
     renderAt("/Non-Conformance/Register/new");
     await userEvent.type(await screen.findByLabelText("Title"), "No category yet");
-    expect(screen.getByRole("combobox", { name: /^Category/ })).toBeInTheDocument();
+    await waitFor(() => expect(lastCall("GET /ncrs/new-defaults")).toBeTruthy());
+    expect(screen.getByRole("combobox", { name: /^Category/ })).toHaveValue("");
     expect(screen.getByText("What the problem is. Needed to open")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Raise NC" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("fill in: category");
@@ -907,11 +995,40 @@ describe("Settings → Data Management", () => {
     expect(within(sources).getByText(/Needs the customer to open/)).toBeInTheDocument();
   });
 
+  const SOURCE_KEYS = ["internal", "customer", "supplier", "internal_audit", "external_audit", "production_inspection", "final_inspection", "calibration", "goods_receiving", "engineering", "management_review"];
+  const suggestions = (canManage, over = {}) => ({
+    data: SOURCE_KEYS.map((source) => ({ source, label: source, category: source in over ? over[source] : { id: "cat1", name: "Product", active: true } })),
+    canManage,
+  });
+
+  it("sets the category each source suggests, saved as it is chosen", async () => {
+    let list = suggestions(true, { engineering: null });
+    routeApi({
+      "GET /ncr-source-categories": () => list,
+      "PUT /ncr-source-categories": (_p, o) => {
+        list = suggestions(true, { engineering: o.body.categoryId ? { id: o.body.categoryId, name: "Process", active: true } : null });
+        return list;
+      },
+    });
+    renderAt("/Settings");
+    const sources = await screen.findByRole("region", { name: "Sources" });
+    const engineering = await within(sources).findByRole("combobox", { name: "Suggested category for Engineering" });
+    expect(engineering).toHaveValue("");
+    expect(within(sources).getByRole("combobox", { name: "Suggested category for Customer" })).toHaveValue("Product");
+    await userEvent.click(engineering);
+    await userEvent.click(await screen.findByRole("option", { name: "Process" }));
+    expect(lastCall("PUT /ncr-source-categories").body).toEqual({ source: "engineering", categoryId: "cat2" });
+    await waitFor(() => expect(engineering).toHaveValue("Process"));
+  });
+
   it("is read-only without lookups.manage", async () => {
     permissions = ["ncr.read"];
-    routeApi({});
+    routeApi({ "GET /ncr-source-categories": suggestions(false, { engineering: null }) });
     renderAt("/Settings");
     expect(await screen.findByText("Dimensional")).toBeInTheDocument();
+    const sources = screen.getByRole("region", { name: "Sources" });
+    expect(await within(sources).findAllByText("Product")).toHaveLength(10);
+    expect(within(sources).queryByRole("combobox")).toBeNull();
     expect(screen.queryByLabelText("New failure mode")).toBeNull();
     expect(screen.queryByRole("switch", { name: /^(?!Show).* active$/ })).toBeNull();
   });

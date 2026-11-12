@@ -16,9 +16,15 @@ import {
   HistoryEntry,
   NcrDetail,
   NcrListQuery,
+  NcrNewDefaults,
+  NcrNewDefaultsQuery,
   NcrRanges,
   NcrRangesQuery,
   NcrSummary,
+  NCR_SOURCES,
+  NCR_SOURCE_LABELS,
+  SetSourceCategoryBody,
+  SourceCategoryList,
   TransitionBody,
   UpdateClassificationBody,
   UpdateNcrBody,
@@ -137,6 +143,11 @@ const toColumns = (body: Partial<z.infer<typeof UpdateNcrBody>>) => {
  * owns the rules (reference generation, stage machine, locking, soft delete, events); errors come
  * back as 409 with a readable message.
  */
+/** The sites the caller may raise a non-conformance at, the one a new NC starts with marked (app.my_ncr_site_choices). */
+const siteChoices = async (db: Db, ctx: RequestContext) =>
+  (await db.execute<{ id: string; code: string; name: string; suggested: boolean }>(sql`
+    select id, code, name, suggested from app.my_ncr_site_choices(${ctx.organisationId!}::uuid)`)).rows;
+
 @Injectable()
 export class NcrService {
   constructor(private readonly database: DatabaseService) {}
@@ -215,6 +226,11 @@ export class NcrService {
   create(ctx: RequestContext, body: CreateNcrBody): Promise<NcrDetail> {
     return this.database.asUser(ctx, async (db) => {
       const { open, source, customValues, ...rest } = body;
+      // No site given: someone who may raise NCs at one site only raises it there (otherwise the database would refuse an NC with no site).
+      if (!rest.siteId) {
+        const choices = await siteChoices(db, ctx);
+        if (choices.length === 1) rest.siteId = choices[0].id;
+      }
       const [row] = await db
         .insert(nonconformances)
         .values({ ...toColumns(rest), title: rest.title, organisationId: ctx.organisationId!, source, stage: open ? 'open' : 'draft', detectedBy: ctx.user.id })
@@ -222,6 +238,64 @@ export class NcrService {
       await writeCustomValues(db, 'nonconformance', row.id, customValues);
       return this.load(db, ctx, row.id);
     });
+  }
+
+  /** What a non-conformance raised by hand starts with: severity minor, the source's suggested category, the person's site and the sites they may choose. */
+  newDefaults(ctx: RequestContext, q: z.infer<typeof NcrNewDefaultsQuery>): Promise<z.infer<typeof NcrNewDefaults>> {
+    return this.database.asUser(ctx, async (db) => {
+      const choices = await siteChoices(db, ctx);
+      const [counts] = (await db.execute<{ sites: number }>(sql`
+        select count(*)::int as sites from public.sites where organisation_id = ${ctx.organisationId!}::uuid and active`)).rows;
+      const [category] = (await db.execute<{ id: string; name: string }>(sql`
+        select c.id, c.name from public.ncr_source_categories s
+          join public.ncr_classifications c on c.id = s.category_id and c.active
+         where s.organisation_id = ${ctx.organisationId!}::uuid and s.source = ${q.source}`)).rows;
+      return {
+        source: q.source,
+        severity: 'minor' as const,
+        category: category ? { id: category.id, name: category.name } : null,
+        site: {
+          suggestedId: choices.find((c) => c.suggested)?.id ?? null,
+          choices: choices.map(({ id, code, name }) => ({ id, code, name })),
+          organisationHasOneSite: Number(counts?.sites ?? 0) === 1,
+        },
+      };
+    });
+  }
+
+  /** The suggested category of every source, in the fixed order of sources. */
+  sourceCategories(ctx: RequestContext): Promise<z.infer<typeof SourceCategoryList>> {
+    return this.database.asUser(ctx, (db) => this.loadSourceCategories(db, ctx));
+  }
+
+  setSourceCategory(ctx: RequestContext, body: z.infer<typeof SetSourceCategoryBody>): Promise<z.infer<typeof SourceCategoryList>> {
+    return this.database.asUser(ctx, async (db) => {
+      const result = await db.execute(sql`
+        update public.ncr_source_categories set category_id = ${body.categoryId}::uuid
+         where organisation_id = ${ctx.organisationId!}::uuid and source = ${body.source} returning id`);
+      if (!result.rows.length) throw ApiError.notFound('source_not_found', 'That source has no suggestion to change');
+      return this.loadSourceCategories(db, ctx);
+    });
+  }
+
+  private async loadSourceCategories(db: Db, ctx: RequestContext): Promise<z.infer<typeof SourceCategoryList>> {
+    const rows = (await db.execute<{ source: string; category_id: string | null; name: string | null; active: boolean | null }>(sql`
+      select s.source, c.id as category_id, c.name, c.active
+        from public.ncr_source_categories s left join public.ncr_classifications c on c.id = s.category_id
+       where s.organisation_id = ${ctx.organisationId!}::uuid`)).rows;
+    const [perm] = (await db.execute<{ manage: boolean }>(sql`select app.has_permission(${ctx.organisationId!}::uuid, 'lookups.manage') as manage`)).rows;
+    const bySource = new Map(rows.map((r) => [r.source, r]));
+    return {
+      data: NCR_SOURCES.map((source) => {
+        const r = bySource.get(source);
+        return {
+          source,
+          label: NCR_SOURCE_LABELS[source],
+          category: r?.category_id ? { id: r.category_id, name: r.name!, active: !!r.active } : null,
+        };
+      }),
+      canManage: !!perm?.manage,
+    };
   }
 
   update(ctx: RequestContext, id: string, body: z.infer<typeof UpdateNcrBody>): Promise<NcrDetail> {

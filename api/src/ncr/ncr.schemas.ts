@@ -290,3 +290,31 @@ export const NcrRanges = z.object({
   quantity: z.object({ max: z.number() }),
   baseCurrency: z.string(),
 });
+
+/** What a non-conformance raised by hand starts with (GET /ncrs/new-defaults). Only suggestions: the person can change each of them. */
+export const NcrNewDefaultsQuery = z.object({ source: NcrSource.default('internal') });
+export const NcrSiteChoice = z.object({ id: z.string().uuid(), code: z.string(), name: z.string() });
+export const NcrNewDefaults = z.object({
+  source: NcrSource,
+  /** Always minor for a non-conformance raised by hand. */
+  severity: z.literal('minor'),
+  /** The category the source suggests (Settings → Data Management → Non-conformance), or none. Only an active category is suggested. */
+  category: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
+  site: z.object({
+    /** The site the NC starts at: the person's only one, else their own (employee record, then primary department), else none. */
+    suggestedId: z.string().uuid().nullable(),
+    /** The active sites the person may raise a non-conformance at. */
+    choices: z.array(NcrSiteChoice),
+    /** The organisation has a single active site: the form need not ask. */
+    organisationHasOneSite: z.boolean(),
+  }),
+});
+
+/** The suggested category of each source (all eleven, in the fixed order). */
+export const SourceCategory = z.object({
+  source: NcrSource,
+  label: z.string(),
+  category: z.object({ id: z.string().uuid(), name: z.string(), active: z.boolean() }).nullable(),
+});
+export const SourceCategoryList = z.object({ data: z.array(SourceCategory), canManage: z.boolean() });
+export const SetSourceCategoryBody = z.object({ source: NcrSource, categoryId: z.string().uuid().nullable() }).strict();

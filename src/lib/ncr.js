@@ -19,6 +19,10 @@ export const NC_SOURCES = [
 ];
 export const sourceOf = (key) => NC_SOURCES.find((s) => s.key === key) ?? null;
 export const sourceLabel = (key) => sourceOf(key)?.label ?? (key ? String(key) : "—");
+
+/** Sources where "Where detected" (a machine of ours) does not apply: the problem was found by the customer, an external auditor or a management review. */
+export const NO_DETECTION_SOURCES = ["customer", "external_audit", "management_review"];
+export const detectionApplies = (source) => !NO_DETECTION_SOURCES.includes(source);
 export const SOURCE_OPTIONS = NC_SOURCES.map((s) => ({ id: s.key, name: s.label, hint: s.hint }));
 
 /**

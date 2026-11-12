@@ -215,3 +215,72 @@ describe('non-conformances', () => {
     expect(res.body.data.map((e: { name: string }) => e.name)).toContain('Sam Operator');
   });
 });
+
+describe('what a non-conformance raised by hand starts with', () => {
+  const codeOf = async (code: string) =>
+    (await admin.query(`select id from public.ncr_classifications where organisation_id = $1 and kind = 'category' and code = $2`, [ids.orgA, code])).rows[0].id as string;
+
+  it('starts at minor with the source\'s suggested category and the sites the person may choose', async () => {
+    const res = await api().get('/api/v1/ncrs/new-defaults?source=calibration').set(await as(ids.ownerA)).expect(200);
+    expect(res.body).toMatchObject({ source: 'calibration', severity: 'minor', category: { id: await codeOf('EQUIPMENT'), name: 'Equipment' } });
+    expect(res.body.site.organisationHasOneSite).toBe(false);
+    expect(res.body.site.choices.map((s: { id: string }) => s.id).sort()).toEqual([ids.siteA, plantB].sort());
+    expect(res.body.site.suggestedId).toBeNull(); // an owner with no employee record or department: nothing says which site is theirs
+    const internal = await api().get('/api/v1/ncrs/new-defaults').set(await as(ids.ownerA)).expect(200);
+    expect(internal.body).toMatchObject({ source: 'internal', category: { name: 'Product' } });
+    await api().get('/api/v1/ncrs/new-defaults?source=nonsense').set(await as(ids.ownerA)).expect(400);
+  });
+
+  it('gives someone limited to one site only that site, and raises their NC there when no site is given', async () => {
+    const res = await api().get('/api/v1/ncrs/new-defaults?source=customer').set(await as(SITE_USER)).expect(200);
+    expect(res.body.site).toMatchObject({ suggestedId: plantB, choices: [{ id: plantB, code: 'PB', name: 'Plant B' }] });
+    const created = await api().post('/api/v1/ncrs').set(await as(SITE_USER)).send({ source: 'internal', title: 'No site given' }).expect(201);
+    expect(created.body.site).toMatchObject({ id: plantB });
+    // Someone who may raise NCs anywhere and gives no site gets none.
+    const anywhere = await api().post('/api/v1/ncrs').set(await as(ENGINEER)).send({ source: 'internal', title: 'No site either' }).expect(201);
+    expect(anywhere.body.site).toBeNull();
+  });
+
+  it('suggests the site of the person\'s own employee record', async () => {
+    await admin.query(`insert into public."Employees" (organisation_id, first_name, surname, site_id, auth_id) values ($1, 'Eng', 'Ineer', $2, $3)`, [ids.orgA, plantB, ENGINEER]);
+    const res = await api().get('/api/v1/ncrs/new-defaults').set(await as(ENGINEER)).expect(200);
+    expect(res.body.site.suggestedId).toBe(plantB);
+    expect(res.body.site.choices).toHaveLength(2);
+  });
+
+  it('lets the people who manage the NC lists change a source\'s suggestion; everyone reads them', async () => {
+    const owner = await as(ids.ownerA);
+    const list = await api().get('/api/v1/ncr-source-categories').set(owner).expect(200);
+    expect(list.body.canManage).toBe(true);
+    expect(list.body.data.map((r: { source: string }) => r.source)).toEqual([
+      'internal', 'customer', 'supplier', 'internal_audit', 'external_audit', 'production_inspection', 'final_inspection', 'calibration', 'goods_receiving',
+      'engineering', 'management_review']);
+    expect(list.body.data.find((r: { source: string }) => r.source === 'engineering')).toMatchObject({ label: 'Engineering', category: null });
+    expect(list.body.data.find((r: { source: string }) => r.source === 'internal_audit').category).toMatchObject({ name: 'System', active: true });
+
+    const doc = await codeOf('DOCUMENTATION');
+    const set = await api().put('/api/v1/ncr-source-categories').set(owner).send({ source: 'engineering', categoryId: doc }).expect(200);
+    expect(set.body.data.find((r: { source: string }) => r.source === 'engineering').category).toMatchObject({ id: doc, name: 'Documentation' });
+    expect((await api().get('/api/v1/ncrs/new-defaults?source=engineering').set(owner).expect(200)).body.category).toMatchObject({ id: doc });
+
+    const refused = await api().put('/api/v1/ncr-source-categories').set(owner).send({ source: 'engineering', categoryId: failureMode }).expect(409);
+    expect(refused.body.error.code).toBe('ncr_rule');
+    await api().put('/api/v1/ncr-source-categories').set(owner).send({ source: 'engineering', categoryId: null }).expect(200);
+    expect((await api().get('/api/v1/ncrs/new-defaults?source=engineering').set(owner).expect(200)).body.category).toBeNull();
+
+    const inspector = await as(ids.inspectorA);
+    expect((await api().get('/api/v1/ncr-source-categories').set(inspector).expect(200)).body.canManage).toBe(false);
+    await api().put('/api/v1/ncr-source-categories').set(inspector).send({ source: 'engineering', categoryId: doc }).expect(403);
+    await api().put('/api/v1/ncr-source-categories').set(owner).send({ source: 'engineering', categoryId: doc, extra: 1 }).expect(400);
+  });
+
+  it('leaves out a suggestion whose category has since been switched off', async () => {
+    const product = await codeOf('PRODUCT');
+    await admin.query(`update public.ncr_classifications set active = false where id = $1`, [product]);
+    try {
+      expect((await api().get('/api/v1/ncrs/new-defaults?source=customer').set(await as(ids.ownerA)).expect(200)).body.category).toBeNull();
+    } finally {
+      await admin.query(`update public.ncr_classifications set active = true where id = $1`, [product]);
+    }
+  });
+});

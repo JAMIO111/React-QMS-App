@@ -47,7 +47,7 @@ import { TraceabilityService } from './production/traceability.service';
 import { JobsController } from './jobs/jobs.controller';
 import { JobsService } from './jobs/jobs.service';
 import { EmployeesService } from './employees/employees.service';
-import { NcrClassificationsController, NcrController } from './ncr/ncr.controller';
+import { NcrClassificationsController, NcrController, NcrSourceCategoriesController } from './ncr/ncr.controller';
 import { NcrService } from './ncr/ncr.service';
 import { NcrAttachmentsController, NcrChildRecordsController, NcrCostsController } from './ncr/ncr-records.controller';
 import { NcrRecordsService } from './ncr/ncr-records.service';
@@ -205,6 +205,7 @@ export class AppModule implements NestModule {
         NcrAttachmentsController,
         NcrDashboardController,
         NcrClassificationsController,
+        NcrSourceCategoriesController,
         EmployeesController,
         AuditsController,
         AuditsDashboardController,

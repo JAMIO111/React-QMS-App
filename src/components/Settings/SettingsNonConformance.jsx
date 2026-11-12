@@ -3,9 +3,11 @@ import MenuCard from "../ui/MenuCard";
 import StatTile from "../ui/StatTile";
 import LoadingScreen from "../ui/LoadingScreen";
 import ClassificationList from "./ClassificationList";
-import { FactoryIcon, PackageIcon, UsersIcon } from "@/components/icons";
+import { FactoryIcon, PackageIcon, TagsIcon, UsersIcon } from "@/components/icons";
+import RHFComboBox from "../ui/RHFComboBox";
 import { usePermissions } from "../../hooks/useQmsApi";
-import { useClassifications } from "../../hooks/useNcr";
+import { useClassifications, useSetSourceCategory, useSourceCategories } from "../../hooks/useNcr";
+import { useToast } from "../../contexts/ToastProvider";
 import { NC_SOURCES, STAGES } from "../../lib/ncr";
 import { StagePill } from "../ncr/Pills";
 import { describeApiError } from "../../lib/api-client";
@@ -28,6 +30,66 @@ const MASTER_DATA = [
 ];
 
 const Stat = ({ label, active, total }) => <StatTile label={label} value={active} note={total - active > 0 ? `${total - active} inactive` : "all active"} />;
+
+/** The fixed sources, each with the category a non-conformance raised by hand starts with (chosen here by the people who manage the NC lists; saved as chosen). */
+const SourceList = ({ categories }) => {
+  const { data } = useSourceCategories();
+  const setCategory = useSetSourceCategory();
+  const { showToast } = useToast();
+  const suggestion = Object.fromEntries((data?.data ?? []).map((r) => [r.source, r.category]));
+  const canManage = !!data?.canManage;
+  const options = categories.filter((c) => c.active).map((c) => ({ id: c.id, name: c.name }));
+  const choose = (source, id) => {
+    const category = id ? options.find((o) => o.id === id) ?? null : null;
+    setCategory.mutate(
+      { source, category },
+      { onError: (err) => showToast({ type: "error", title: "Suggestion not saved", message: describeApiError(err) }) },
+    );
+  };
+  return (
+    <ul className="grid gap-2 sm:grid-cols-2">
+      {NC_SOURCES.map((s) => {
+        const current = suggestion[s.key] ?? null;
+        // A suggestion whose category was switched off since is shown as such, and not offered to new non-conformances.
+        const own = current && !options.some((o) => o.id === current.id) ? [...options, { id: current.id, name: `${current.name} (switched off)` }] : options;
+        return (
+          <li key={s.key} className="flex flex-col gap-2 rounded-xl border border-border-color px-3 py-2">
+            <div>
+              <p className="font-medium text-primary-text">{s.label}</p>
+              <p className="text-xs text-secondary-text">
+                {s.hint}
+                {s.party === "customer" && ". Needs the customer to open."}
+                {s.party === "supplier" && ". Needs the supplier to open."}
+                {s.party === "supplier?" && ". May name the supplier."}
+              </p>
+            </div>
+            {canManage ? (
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-secondary-text">Suggested category</span>
+                <RHFComboBox
+                  ariaLabel={`Suggested category for ${s.label}`}
+                  icon={TagsIcon}
+                  placeholder="No suggestion"
+                  clearable
+                  sort={false}
+                  options={own}
+                  value={current?.id ?? null}
+                  onChange={(id) => choose(s.key, id)}
+                />
+              </div>
+            ) : (
+              data && (
+                <p className="text-xs text-secondary-text">
+                  Suggested category: <span className="text-primary-text">{current ? (current.active ? current.name : `${current.name} (switched off)`) : "none"}</span>
+                </p>
+              )
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+};
 
 /** Data Management → Non-conformance: categories, failure modes, the fixed sources and stages, and where the related master data lives. */
 const SettingsNonConformance = () => {
@@ -67,20 +129,11 @@ const SettingsNonConformance = () => {
           </MenuCard>
         </>
       )}
-      <MenuCard title="Sources" subtitle="Where a non-conformance came from or was detected. The list is fixed; each non-conformance has one source and one category.">
-        <ul className="grid gap-2 sm:grid-cols-2">
-          {NC_SOURCES.map((s) => (
-            <li key={s.key} className="rounded-xl border border-border-color px-3 py-2">
-              <p className="font-medium text-primary-text">{s.label}</p>
-              <p className="text-xs text-secondary-text">
-                {s.hint}
-                {s.party === "customer" && ". Needs the customer to open."}
-                {s.party === "supplier" && ". Needs the supplier to open."}
-                {s.party === "supplier?" && ". May name the supplier."}
-              </p>
-            </li>
-          ))}
-        </ul>
+      <MenuCard
+        title="Sources"
+        subtitle="Where a non-conformance came from or was detected. The list is fixed; each non-conformance has one source and one category. A non-conformance raised by hand starts with the source's suggested category, which the person can change."
+      >
+        <SourceList categories={lists?.categories ?? []} />
       </MenuCard>
       <MenuCard title="NCR stages" subtitle="How a non-conformance moves from draft to closed">
         <ol className="flex flex-col">

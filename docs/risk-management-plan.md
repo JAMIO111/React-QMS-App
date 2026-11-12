@@ -1,6 +1,6 @@
 # Risk and management review — plan
 
-**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **RK1–RK4 and MR1 built** (§11–§15); MR2, MR3 and RX are not · **Branch:** `Dev`
+**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **RK1–RK4, MR1 and MR2 built** (§11–§16); MR3 and RX are not · **Branch:** `Dev`
 **Menu names:** Risk (`ShieldAlert`), Management review (`Presentation`) · **Slices:** RK1–RK4, MR1–MR3, RX (exit check)
 
 Per `docs/design-brief.md` §6.7 ("Risk management", "Management review and quality KPIs") and Phase 4 ("Risk and management review"), the last
@@ -236,3 +236,32 @@ Migration `20260216100000_quality_objectives.sql` (applied live 2026-11-12; push
   corrections, Record a value, Edit, Retire / Bring back).
 - **Not in MR1:** the management reviews themselves (MR2), objectives as a review input (MR2), a target that changes over time (a new target applies to every period), objectives per
   site or department, a menu entry for an owner without the permission. Not browser-checked yet (RX).
+
+## 16. MR2 as built (2026-11-12)
+
+Migration `20260217100000_management_reviews.sql` (not yet applied live; pushing the API before it leaves only the management review endpoints failing).
+
+- **Tables** (all functions-only writes, audited, RLS `management_review.read`): `management_reviews` (`MR-YY-NN` per organisation and year; title, period (≤ 3 years), planned date, held on,
+  chair = active member, minutes as TipTap JSON + text; planned → in_progress → completed | cancelled), `management_review_inputs` (the twelve sections of §5, made when planned, in
+  `app.management_review_sections()`; two are commentary only: changes in context, opportunities for improvement), `management_review_attendees` (member or named outsider, role,
+  invited / present / apologies; replaced as a whole), `management_review_decisions` (improvement / resources / QMS change / other) and `management_review_actions` (owner, due,
+  optional decision; open → done with a note | cancelled with a reason, reopened; **readable by its owner** even without the permission).
+- **Rules:** the period is fixed once started; who was present only once started; inputs are gathered, commented on and reviewed, decisions and actions recorded and the minutes
+  written **only while the review is held**; a re-gathered section must be reviewed again; a commentary-only section needs commentary to be reviewed; a decision with actions cannot
+  be removed. **Completing** needs every section reviewed, someone present, the day it was held, and a decision or a note why none was needed (`app.management_review_problems`
+  is the "still needed" list). A completed or cancelled review, its inputs, attendees and decisions **never change again** (triggers, even for SQL); cancelling cancels its
+  open actions. Actions live on: owner and due date may move, an owner or a manager closes them.
+- **Gathering (RM10):** `ReviewInputsService` (`api/src/management-review/review-inputs.ts`) calls each module's own dashboard service **as the person** for the review's period
+  and stores **one snapshot shape** — `{ figures: [{label, value, unit?, note?}], lists: [{title, items: [{label, value?, note?, link?}]}], notes? }` — so the page draws any
+  section the same way. Sources: previous actions (this table: earlier completed reviews' actions still open or closed in the period — the MR3 input is already here), customer
+  feedback (NC dashboard, source customer), quality objectives (MR1), process performance (NC dashboard + process control dashboard), nonconformities (NC dashboard + 8D figures),
+  monitoring (calibration), audit results (audits), external providers (supplier dashboard, with its own "not available" parts), resources (competence), risks (RK4 dashboard).
+  A section whose source the person may not read is stored **not available**, never zeros; a section with several sources keeps what was readable and notes what was not.
+  Starting a review gathers everything; **Gather again** re-gathers one section or all.
+- **API** `management-reviews.*`: `GET|POST /management-reviews`, `GET|PATCH /management-reviews/{id}`, `POST …/start|gather|complete|cancel`, `PUT …/attendees|minutes`,
+  `PATCH /management-review-inputs/{id}`, `POST …/decisions`, `PATCH|DELETE /management-review-decisions/{id}`, `POST …/actions`, `PATCH /management-review-actions/{id}`,
+  `POST /management-review-actions/{id}/complete` (membership only; the database decides) `|cancel|reopen`. Every command answers with the whole review.
+- **UI:** `/Management-Review` → **Reviews** (`ReviewsPage`), the review page (`ReviewPage`: attendees, an input card per section with the snapshot, commentary saved on leaving
+  and **Reviewed** ticked at once (optimistic), minutes in the document editor, decisions, actions, Start / Complete / Cancel, the still-needed list) and a printable
+  **report** at `/Management-Review/Reviews/:id/report`.
+- **Not in MR2:** notices to an action's owner and a dashboard card (MR3), a review's own schedule or reminders, attachments, signatures. Not browser-checked yet (RX).

@@ -37,7 +37,7 @@ const ObjectivePage = () => {
   const { showToast } = useToast();
   useBreadcrumbNames([
     { path: `/Management-Review/Objectives/${id}`, label: o ? o.reference : null },
-    { path: "/Management-Review", label: "Management review", to: "/Management-Review/Objectives" },
+    { path: "/Management-Review", label: "Management review", to: "/Management-Review/Reviews" },
   ]);
 
   if (isLoading) return <LoadingScreen />;

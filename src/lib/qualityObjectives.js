@@ -41,3 +41,31 @@ export const basisWords = (measure, p) => {
 };
 
 export const objectivePath = (id) => `/Management-Review/Objectives/${id}`;
+
+/** Management reviews (MR2). */
+export const REVIEW_STATUS = {
+  planned: { label: "Planned", pill: "bg-border-color text-secondary-text" },
+  in_progress: { label: "Being held", pill: "bg-warning-color/15 text-warning-color" },
+  completed: { label: "Completed", pill: "bg-success-color/15 text-success-color" },
+  cancelled: { label: "Cancelled", pill: "bg-border-color text-secondary-text" },
+};
+export const DECISION_CATEGORIES = [
+  { value: "improvement", label: "Improvement" },
+  { value: "resources", label: "Resources" },
+  { value: "qms_change", label: "Change to the QMS" },
+  { value: "other", label: "Other" },
+];
+export const decisionCategoryLabel = (c) => DECISION_CATEGORIES.find((x) => x.value === c)?.label ?? c;
+export const ATTENDANCE = [
+  { value: "invited", label: "Invited" },
+  { value: "present", label: "Present" },
+  { value: "apologies", label: "Apologies" },
+];
+export const reviewPath = (id) => `/Management-Review/Reviews/${id}`;
+export const formatDay = (d) => (d ? new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—");
+/** A gathered figure in words: "4", "92.5%", "£1,200". */
+export const figureWords = (f) => {
+  if (f.value === null || f.value === undefined) return "—";
+  if (typeof f.value === "string") return f.value;
+  return formatValue(f.value, f.unit);
+};

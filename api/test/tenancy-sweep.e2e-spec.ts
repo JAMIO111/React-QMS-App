@@ -95,6 +95,23 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/quality-objectives/{id}/retire': { reason: 'Hijacked' },
     'POST /api/v1/quality-objectives/{id}/reactivate': {},
     'POST /api/v1/quality-objectives/{id}/values': { periodStart: '2026-01-01', value: 1, note: 'Hijacked' },
+    'GET /api/v1/management-reviews/{id}': undefined,
+    'PATCH /api/v1/management-reviews/{id}': { title: 'Hijacked' },
+    'POST /api/v1/management-reviews/{id}/start': {},
+    'POST /api/v1/management-reviews/{id}/gather': {},
+    'PATCH /api/v1/management-review-inputs/{id}': { commentary: 'Hijacked', reviewed: false },
+    'PUT /api/v1/management-reviews/{id}/attendees': { attendees: [] },
+    'PUT /api/v1/management-reviews/{id}/minutes': { minutes: null },
+    'POST /api/v1/management-reviews/{id}/decisions': { description: 'Hijacked', category: 'other' },
+    'PATCH /api/v1/management-review-decisions/{id}': { description: 'Hijacked', category: 'other' },
+    'DELETE /api/v1/management-review-decisions/{id}': undefined,
+    'POST /api/v1/management-reviews/{id}/actions': { description: 'Hijacked' },
+    'PATCH /api/v1/management-review-actions/{id}': { dueDate: '2030-01-01' },
+    'POST /api/v1/management-review-actions/{id}/complete': { note: 'Hijacked' },
+    'POST /api/v1/management-review-actions/{id}/cancel': { reason: 'Hijacked' },
+    'POST /api/v1/management-review-actions/{id}/reopen': {},
+    'POST /api/v1/management-reviews/{id}/complete': {},
+    'POST /api/v1/management-reviews/{id}/cancel': { reason: 'Hijacked' },
     'PATCH /api/v1/competence/skills/{id}': { name: 'Hijacked' },
     'POST /api/v1/competence/skills/{id}/retire': { reason: 'Hijacked' },
     'POST /api/v1/competence/skills/{id}/reactivate': {},
@@ -503,6 +520,23 @@ const hasSample = (op: Op) =>
     'POST /api/v1/quality-objectives/{id}/retire',
     'POST /api/v1/quality-objectives/{id}/reactivate',
     'POST /api/v1/quality-objectives/{id}/values',
+    'GET /api/v1/management-reviews/{id}',
+    'PATCH /api/v1/management-reviews/{id}',
+    'POST /api/v1/management-reviews/{id}/start',
+    'POST /api/v1/management-reviews/{id}/gather',
+    'PATCH /api/v1/management-review-inputs/{id}',
+    'PUT /api/v1/management-reviews/{id}/attendees',
+    'PUT /api/v1/management-reviews/{id}/minutes',
+    'POST /api/v1/management-reviews/{id}/decisions',
+    'PATCH /api/v1/management-review-decisions/{id}',
+    'DELETE /api/v1/management-review-decisions/{id}',
+    'POST /api/v1/management-reviews/{id}/actions',
+    'PATCH /api/v1/management-review-actions/{id}',
+    'POST /api/v1/management-review-actions/{id}/complete',
+    'POST /api/v1/management-review-actions/{id}/cancel',
+    'POST /api/v1/management-review-actions/{id}/reopen',
+    'POST /api/v1/management-reviews/{id}/complete',
+    'POST /api/v1/management-reviews/{id}/cancel',
     'PATCH /api/v1/competence/skills/{id}',
     'POST /api/v1/competence/skills/{id}/retire',
     'POST /api/v1/competence/skills/{id}/reactivate',
@@ -936,6 +970,10 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/risk-actions/')) return a.riskAction;
   if (path.startsWith('/api/v1/risk-acceptances/')) return a.riskAcceptance;
   if (path.startsWith('/api/v1/quality-objectives/')) return a.qualityObjective;
+  if (path.startsWith('/api/v1/management-reviews/')) return a.managementReview;
+  if (path.startsWith('/api/v1/management-review-inputs/')) return a.managementReviewInput;
+  if (path.startsWith('/api/v1/management-review-decisions/')) return a.managementReviewDecision;
+  if (path.startsWith('/api/v1/management-review-actions/')) return a.managementReviewAction;
   if (path.startsWith('/api/v1/competence/skills/')) return a.competenceSkill;
   if (path.startsWith('/api/v1/competence/positions/')) return a.competencePosition;
   if (path.startsWith('/api/v1/competence/people/')) return a.employee;
@@ -1119,6 +1157,11 @@ beforeAll(async () => {
     a.riskAction = (await q1(`select app.add_risk_action($1::uuid, '{"description":"Alpha action"}'::jsonb) as id`, [a.risk])).id;
     a.riskAcceptance = (await q1(`select app.propose_risk_acceptance($1::uuid, 'Alpha acceptance rationale') as id`, [a.risk])).id;
     a.qualityObjective = (await q1(`select app.save_quality_objective($1::uuid, '{"title":"Alpha objective","target":95,"unit":"%"}'::jsonb) as id`, [ids.orgA])).id;
+    a.managementReview = (await q1(`select app.plan_management_review($1::uuid, '{"title":"Alpha review","periodFrom":"2026-01-01","periodTo":"2026-06-30"}'::jsonb) as id`, [ids.orgA])).id;
+    await q1(`select app.start_management_review($1::uuid)`, [a.managementReview]);
+    a.managementReviewInput = (await q1(`select id from public.management_review_inputs where review_id = $1 and section = 'context'`, [a.managementReview])).id;
+    a.managementReviewDecision = (await q1(`select app.add_management_review_decision($1::uuid, 'Alpha decision', 'other') as id`, [a.managementReview])).id;
+    a.managementReviewAction = (await q1(`select app.add_management_review_action($1::uuid, '{"description":"Alpha action"}'::jsonb) as id`, [a.managementReview])).id;
     a.competenceSkill = (await q1(`select app.save_competence_skill($1::uuid, jsonb_build_object('code', 'ALPHA', 'name', 'Alpha skill', 'categoryId', $2::text)) as id`, [ids.orgA, a.competenceCategory])).id;
     a.competencePosition = (await q1(`select app.save_competence_position($1::uuid, '{"code":"ALPHA","name":"Alpha position"}'::jsonb) as id`, [ids.orgA])).id;
     a.competenceHeld = (await q1(`select app.assign_employee_position($1::uuid, $2::uuid, current_date - 30) as id`, [a.employee, a.competencePosition])).id;

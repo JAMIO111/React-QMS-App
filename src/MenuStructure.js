@@ -143,7 +143,10 @@ export const menuStructure = [
     icon: PresentationIcon,
     permission: "management_review.read",
     path: "/Management-Review",
-    subMenu: [{ name: "Quality objectives", path: "/Management-Review/Objectives" }],
+    subMenu: [
+      { name: "Reviews", path: "/Management-Review/Reviews" },
+      { name: "Quality objectives", path: "/Management-Review/Objectives" },
+    ],
   },
   {
     name: "Production",

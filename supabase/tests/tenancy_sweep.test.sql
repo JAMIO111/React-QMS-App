@@ -270,6 +270,12 @@ BEGIN
      FROM public.risks k WHERE k.organisation_id = a AND k.title = 'Sweep risk';
   -- Management review (MR1): a manual quality objective with a value.
   PERFORM app.record_quality_objective_value(app.save_quality_objective(a, '{"title":"Sweep objective","target":95,"unit":"%"}'::jsonb), current_date, 96);
+  -- Management review (MR2): a review held with an input gathered, an attendee, a decision and an action.
+  PERFORM app.plan_management_review(a, '{"title":"Sweep review","periodFrom":"2026-01-01","periodTo":"2026-06-30"}'::jsonb);
+  PERFORM app.start_management_review(m.id), app.set_management_review_snapshot(m.id, 'audit_results', true, '{"figures":[]}'::jsonb),
+          app.set_management_review_attendees(m.id, '[{"name":"Sweep guest","attendance":"present"}]'::jsonb),
+          app.add_management_review_action(m.id, jsonb_build_object('description', 'Sweep action', 'decisionId', app.add_management_review_decision(m.id, 'Sweep decision', 'other')))
+     FROM public.management_reviews m WHERE m.organisation_id = a AND m.title = 'Sweep review';
   PERFORM pg_temp.logout();
   -- Document control (DC2): a named reviewer and a sign-off (one member in A, so seeded directly; people write through the functions).
   INSERT INTO public.document_revision_reviewers (organisation_id, revision_id, user_id)

@@ -182,7 +182,7 @@ Migration `20260210100000_risk_treatment.sql` (applied live 2026-11-12; pushing 
 
 ## 13. RK3 as built (2026-11-12)
 
-Migration `20260214100000_risk_links.sql` (pushing the API before it breaks the risk detail and the new endpoints).
+Migration `20260214100000_risk_links.sql` (applied live 2026-11-12; pushing the API before it breaks the risk detail and the new endpoints).
 
 - **Links (RM7):** `risk_links`, one target per row — non-conformance, 8D, audit finding, supplier, part, part family, machine, controlled document (each with an
   own-organisation foreign key) or an operation code in words. Replaced as a whole by `app.set_risk_links` (`risk.manage`, not once closed or retired). Links, never copies:

@@ -164,23 +164,31 @@ const List = ({ items, ...actions }) =>
     </div>
   );
 
+/**
+ * The month as a calendar. The rounded frame is the scroll area: the weeks scroll inside it (and sideways on a narrow screen) while the
+ * day names stay at the top. The weeks share the frame's height when there is room, and keep a minimum height when there is not.
+ */
 const Calendar = ({ month, today, items, onPick }) => {
   const byDay = new Map();
   items.forEach((i) => byDay.set(i.dueOn, [...(byDay.get(i.dueOn) ?? []), i]));
+  const weeks = monthWeeks(month);
   return (
-    <div role="grid" aria-label={`Audit calendar, ${monthLabel(month)}`} className="overflow-x-auto">
-      {/* The cells are square and the frame is rounded: the frame clips them, so the corner days follow its curve. */}
-      <div className="grid min-w-3xl grid-cols-7 gap-px overflow-hidden rounded-2xl border border-border-color bg-border-color">
+    <div
+      role="grid"
+      aria-label={`Audit calendar, ${monthLabel(month)}`}
+      tabIndex={0}
+      className="min-h-96 flex-1 overflow-auto rounded-2xl border border-border-color bg-secondary-bg outline-none focus-visible:ring-2 focus-visible:ring-brand-primary">
+      <div className="grid min-h-full min-w-3xl grid-cols-7 gap-px bg-border-color" style={{ gridTemplateRows: `auto repeat(${weeks.length}, minmax(6rem, 1fr))` }}>
         {DAY_NAMES.map((d) => (
-          <div key={d} role="columnheader" className="bg-secondary-bg px-2 py-1 text-xs font-medium uppercase tracking-wide text-tertiary-text">
+          <div key={d} role="columnheader" className="sticky top-0 z-10 bg-secondary-bg px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-tertiary-text shadow-[0_1px_0_var(--color-border-color)]">
             {d}
           </div>
         ))}
-        {monthWeeks(month).flat().map((day) => {
+        {weeks.flat().map((day) => {
           const inMonth = day.startsWith(month);
           const list = byDay.get(day) ?? [];
           return (
-            <div key={day} role="gridcell" aria-label={day} className={`flex min-h-24 flex-col gap-1 p-1.5 ${inMonth ? "bg-secondary-bg" : "bg-primary-bg"} ${day === today ? "ring-2 ring-inset ring-brand-primary" : ""}`}>
+            <div key={day} role="gridcell" aria-label={day} className={`flex flex-col gap-1 p-1.5 ${inMonth ? "bg-secondary-bg" : "bg-primary-bg"} ${day === today ? "ring-2 ring-inset ring-brand-primary" : ""}`}>
               <span className={`text-xs tabular-nums ${inMonth ? "text-primary-text" : "text-tertiary-text"} ${day === today ? "font-semibold" : ""}`}>{Number(day.slice(8))}</span>
               {list.map((item) => (
                 <button key={item.id} type="button" onClick={() => onPick(item)} className={`truncate rounded-md px-1.5 py-0.5 text-left text-xs font-medium cursor-pointer ${slotPill(item)}`} title={`${item.audit.reference} · ${item.audit.title}: ${slotLabel(item)}`}>

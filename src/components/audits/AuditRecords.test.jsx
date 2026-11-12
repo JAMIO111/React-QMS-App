@@ -741,12 +741,18 @@ describe("audit schedule", () => {
     expect(screen.getByTestId("where")).toHaveTextContent("month=2026-11");
   });
 
-  it("clips the calendar's days to its rounded frame", async () => {
+  it("scrolls the weeks inside the calendar's rounded frame, with the day names held at the top", async () => {
     routeApi({ "GET /audit-schedule": scheduleBody(items()) });
     renderAt("/Audits/Schedule?view=calendar&month=2026-11");
     const grid = await screen.findByRole("grid", { name: "Audit calendar, November 2026" });
-    const frame = within(grid).getAllByRole("columnheader")[0].parentElement;
-    expect(frame).toHaveClass("rounded-2xl", "overflow-hidden");
+    // The frame is the scroll area: rounded, and it takes the height that is left on the page.
+    expect(grid).toHaveClass("rounded-2xl", "overflow-auto", "flex-1");
+    const headers = within(grid).getAllByRole("columnheader");
+    expect(headers.map((h) => h.textContent)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+    headers.forEach((h) => expect(h).toHaveClass("sticky", "top-0"));
+    // One row for the day names, then a row a week.
+    expect(headers[0].parentElement.style.gridTemplateRows).toBe("auto repeat(6, minmax(6rem, 1fr))");
+    expect(within(grid).getAllByRole("gridcell")).toHaveLength(42);
   });
 
   it("starts an unscheduled audit from the schedule", async () => {

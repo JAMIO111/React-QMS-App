@@ -177,7 +177,7 @@ const Calendar = ({ month, today, items, onPick }) => {
       role="grid"
       aria-label={`Audit calendar, ${monthLabel(month)}`}
       tabIndex={0}
-      className="min-h-96 flex-1 overflow-auto rounded-2xl border border-border-color bg-secondary-bg outline-none focus-visible:ring-2 focus-visible:ring-brand-primary">
+      className="min-h-96 flex-1 overflow-auto rounded-2xl md:min-h-0 border border-border-color bg-secondary-bg outline-none focus-visible:ring-2 focus-visible:ring-brand-primary">
       <div className="grid min-h-full min-w-3xl grid-cols-7 gap-px bg-border-color" style={{ gridTemplateRows: `auto repeat(${weeks.length}, minmax(6rem, 1fr))` }}>
         {DAY_NAMES.map((d) => (
           <div key={d} role="columnheader" className="sticky top-0 z-10 bg-secondary-bg px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-tertiary-text shadow-[0_1px_0_var(--color-border-color)]">
@@ -246,8 +246,9 @@ const AuditSchedulePage = () => {
     ...(filters.state && view === "list" ? [{ key: "state", label: `State: ${slotStateLabel(filters.state)}`, clear: { state: "" } }] : []),
   ];
 
+  // In the calendar view the page itself stays still on a desktop window: only the calendar scrolls.
   return (
-    <div className="flex w-full min-w-0 flex-1 min-h-0 flex-col gap-3 overflow-auto bg-primary-bg p-4">
+    <div className={`flex w-full min-w-0 flex-1 min-h-0 flex-col gap-3 overflow-auto bg-primary-bg p-4 ${view === "calendar" ? "md:overflow-hidden" : ""}`}>
       <div className="flex flex-row flex-wrap items-center justify-between gap-3 pl-1">
         <div className="flex flex-col gap-2">
           <Breadcrumb />

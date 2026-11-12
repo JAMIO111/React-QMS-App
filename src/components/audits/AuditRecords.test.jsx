@@ -746,13 +746,22 @@ describe("audit schedule", () => {
     renderAt("/Audits/Schedule?view=calendar&month=2026-11");
     const grid = await screen.findByRole("grid", { name: "Audit calendar, November 2026" });
     // The frame is the scroll area: rounded, and it takes the height that is left on the page.
-    expect(grid).toHaveClass("rounded-2xl", "overflow-auto", "flex-1");
+    expect(grid).toHaveClass("rounded-2xl", "overflow-auto", "flex-1", "md:min-h-0");
+    // Only the calendar scrolls: on a desktop window the page around it stays still.
+    expect(grid.parentElement).toHaveClass("md:overflow-hidden");
     const headers = within(grid).getAllByRole("columnheader");
     expect(headers.map((h) => h.textContent)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
     headers.forEach((h) => expect(h).toHaveClass("sticky", "top-0"));
     // One row for the day names, then a row a week.
     expect(headers[0].parentElement.style.gridTemplateRows).toBe("auto repeat(6, minmax(6rem, 1fr))");
     expect(within(grid).getAllByRole("gridcell")).toHaveLength(42);
+  });
+
+  it("lets the page scroll in the list view", async () => {
+    routeApi({ "GET /audit-schedule": scheduleBody(items()) });
+    renderAt("/Audits/Schedule");
+    const table = await screen.findByRole("table");
+    expect(table.closest(".overflow-auto")).not.toHaveClass("md:overflow-hidden");
   });
 
   it("starts an unscheduled audit from the schedule", async () => {

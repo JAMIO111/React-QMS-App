@@ -8,6 +8,7 @@ export const EMPTY = {
   customerId: null, customerReference: "", supplierId: null, purchaseOrder: "", workOrder: "",
   productionOrderId: null, lotId: null, serialId: null,
   categoryId: null, failureModeId: null, subFailureModeId: null, causalProcessId: null, responsibleEmployeeId: null,
+  detectedByEmployeeId: null, responsibleDepartmentId: null,
 };
 
 /** A non-conformance raised by hand starts at minor (NCs raised from an inspection, audit, calibration, receipt or import set their own). */
@@ -24,6 +25,7 @@ export const toForm = (n) => ({
   productionOrderId: n.links?.productionOrder?.id ?? null, lotId: n.links?.lot?.id ?? null, serialId: n.links?.serial?.id ?? null,
   categoryId: n.category?.id ?? null, failureModeId: n.failureMode?.id ?? null, subFailureModeId: n.subFailureMode?.id ?? null, causalProcessId: n.causalProcess?.id ?? null,
   responsibleEmployeeId: n.responsibleEmployee?.id ?? null,
+  detectedByEmployeeId: n.detectedByEmployee?.id ?? null, responsibleDepartmentId: n.responsibleDepartment?.id ?? null,
 });
 
 /** Form values → API body (empty strings → null, quantities → numbers). Only fields relevant to the source (the source itself is not part of the form). */

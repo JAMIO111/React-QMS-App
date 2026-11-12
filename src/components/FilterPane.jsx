@@ -1,9 +1,10 @@
 import CustomFieldFilters from "./custom-fields/CustomFieldFilters";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { XIcon, TagIcon, TagsIcon, Trash2Icon, QrCodeIcon, UsersIcon } from "@/components/icons";
+import { XIcon, TagIcon, TagsIcon, Trash2Icon, QrCodeIcon, UsersIcon, BuildingIcon, UserSearchIcon } from "@/components/icons";
 import { useNCMFilters } from "../hooks/useNCMFilters";
-import { useClassifications, useNcrRanges } from "../hooks/useNcr";
+import { useClassifications, useEmployees, useNcrRanges } from "../hooks/useNcr";
+import { useAllDepartments, useSites } from "../hooks/useQmsApi";
 import { NC_SOURCES, SEVERITIES, STAGES } from "../lib/ncr";
 import { formatMoney } from "../lib/costs";
 import RHFComboBox from "./ui/RHFComboBox";
@@ -65,6 +66,18 @@ const FilterPane = ({ onClose }) => {
   const [severities, setSeverities] = useState(list(filters.severity));
   const [from, setFrom] = useState(filters.from || null);
   const [to, setTo] = useState(filters.to || null);
+  const [raisedFrom, setRaisedFrom] = useState(filters.raisedFrom || null);
+  const [raisedTo, setRaisedTo] = useState(filters.raisedTo || null);
+  const [department, setDepartment] = useState(filters.department || null);
+  const [detectedBy, setDetectedBy] = useState(filters.detectedBy || null);
+  const { data: departments } = useAllDepartments({ includeInactive: true });
+  const { data: sites } = useSites();
+  const { data: employees } = useEmployees();
+  const siteCode = new Map((sites?.data ?? []).map((s) => [s.id, s.code]));
+  const departmentOptions = (departments?.data ?? []).map((d) => ({
+    id: d.id, name: d.active === false ? `${d.name} (inactive)` : d.name, hint: [d.code, siteCode.get(d.siteId)].filter(Boolean).join(" · ") || undefined,
+  }));
+  const employeeOptions = (employees ?? []).map((e) => ({ id: e.id, name: e.active === false ? `${e.name} (left)` : e.name, hint: e.jobTitle ?? undefined }));
   const production = useProductionSettings();
   const [order, setOrder] = useState(filters.order ? { id: filters.order, name: filters.orderLabel } : null);
   const [lot, setLot] = useState(filters.lot ? { id: filters.lot, name: filters.lotLabel } : null);
@@ -133,6 +146,12 @@ const FilterPane = ({ onClose }) => {
       severity: severities.join(","),
       from: from ?? "",
       to: to ?? "",
+      raisedFrom: raisedFrom ?? "",
+      raisedTo: raisedTo ?? "",
+      department: department ?? "",
+      departmentLabel: department ? departmentOptions.find((d) => d.id === department)?.name ?? filters.departmentLabel : "",
+      detectedBy: detectedBy ?? "",
+      detectedByLabel: detectedBy ? employeeOptions.find((e) => e.id === detectedBy)?.name ?? filters.detectedByLabel : "",
       part: part?.id ?? "",
       partLabel: part?.id ? part.name ?? "" : "",
       order: order?.id ?? "",
@@ -153,7 +172,7 @@ const FilterPane = ({ onClose }) => {
     });
   };
   const resetAll = () =>
-    apply(Object.fromEntries(["source", "category", "categoryLabel", "uncategorised", "stage", "severity", "from", "to", "part", "partLabel", "customer", "customerLabel", "supplier", "supplierLabel", "order", "orderLabel", "lot", "lotLabel",
+    apply(Object.fromEntries(["source", "category", "categoryLabel", "uncategorised", "stage", "severity", "from", "to", "raisedFrom", "raisedTo", "department", "departmentLabel", "detectedBy", "detectedByLabel", "part", "partLabel", "customer", "customerLabel", "supplier", "supplierLabel", "order", "orderLabel", "lot", "lotLabel",
       "costMin", "costMax", "qtyMin", "qtyMax", "failureMode", "subFailureMode", "deleted"].map((k) => [k, ""])));
 
   return createPortal(
@@ -181,6 +200,7 @@ const FilterPane = ({ onClose }) => {
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
         <DateRangeFilter label="Detected" from={from} to={to} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
+        <DateRangeFilter label="Raised" from={raisedFrom} to={raisedTo} onChange={(r) => { setRaisedFrom(r.from); setRaisedTo(r.to); }} />
         <Pills legend="Source" options={NC_SOURCES} selected={sources} onToggle={toggle(setSources)} />
         <RHFComboBox label="Category" icon={TagsIcon} placeholder="All categories" options={categoryOptions} value={category} onChange={setCategory} sort={false} />
         <Pills legend="Stage" options={STAGES} selected={stages} onToggle={toggle(setStages)} />
@@ -193,6 +213,8 @@ const FilterPane = ({ onClose }) => {
           <LotPicker label="Lot" value={lot?.id ?? null} current={lot?.id ? { id: lot.id, lotNumber: lot.name ?? "" } : undefined}
             onChange={(id, item) => setLot(id ? { id, name: item?.name ?? lot?.name } : null)} />
         )}
+        <RHFComboBox label="Detected by" icon={UserSearchIcon} placeholder="Anyone" options={employeeOptions} value={detectedBy} onChange={setDetectedBy} />
+        <RHFComboBox label="Responsible department" icon={BuildingIcon} placeholder="All departments" options={departmentOptions} value={department} onChange={setDepartment} />
         <PartyPicker kind="customers" label="Customer" icon={UsersIcon}
           value={customer?.id ?? null} current={customer?.id ? { id: customer.id, name: customer.name ?? "" } : undefined}
           onChange={(id, item) => setCustomer(id ? { id, name: item?.name ?? customer?.name } : null)} />

@@ -154,6 +154,8 @@ export const FIELD_LABELS = {
   failure_mode_id: "Failure mode",
   sub_failure_mode_id: "Sub-failure mode",
   responsible_employee_id: "Responsible operator",
+  detected_by_employee_id: "Detected by",
+  responsible_department_id: "Responsible department",
   owner_id: "Owner",
   closed_at: "Closed at",
   closed_by: "Closed by",

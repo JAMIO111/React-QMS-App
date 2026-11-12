@@ -280,10 +280,10 @@ const sampleBody = (op: Op): object | undefined =>
     'GET /api/v1/ncrs/{id}/history': undefined,
     'PATCH /api/v1/ncr-classifications/{id}': { name: 'Hijacked' },
     'GET /api/v1/ncrs/{id}/costs': undefined,
-    'POST /api/v1/ncrs/{id}/costs': { costType: 'scrap', currency: 'GBP', amount: 1 },
+    'POST /api/v1/ncrs/{id}/costs': { costType: 'scrap', currency: 'GBP', unitCost: 1 },
     'GET /api/v1/ncrs/{id}/attachments': undefined,
     'POST /api/v1/ncrs/{id}/attachments': { storagePath: `${b.org}/ncr/${a.ncr}/x.txt`, fileName: 'x.txt', sizeBytes: 1 },
-    'PATCH /api/v1/ncr-costs/{id}': { amount: 999 },
+    'PATCH /api/v1/ncr-costs/{id}': { unitCost: 999 },
     'POST /api/v1/ncr-costs/{id}/delete': { reason: 'Hijacked' },
     'POST /api/v1/ncr-costs/{id}/restore': undefined,
     'POST /api/v1/ncr-attachments/{id}/delete': { reason: 'Hijacked' },
@@ -1225,7 +1225,7 @@ describe('tenancy sweep over every API route', () => {
       site: 'Alpha main', dept: 'Quality A', member: 'active', assignment: 1,
       customer: 'Alpha customer', supplier: 'Alpha supplier', part: 'Alpha part', revision: 'draft//1',
       ncr: 'Alpha NCR/draft/true', classification: 'Alpha failure',
-      cost: '10/true', attachment: 'true', costs: 1, attachments: 1,
+      cost: '10.00/true', attachment: 'true', costs: 1, attachments: 1,
     });
     const cal = await admin.query(
       `select (select description || '/' || (deleted_at is null) from public.gauges where id = $1) gauge,

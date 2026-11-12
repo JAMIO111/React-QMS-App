@@ -53,6 +53,8 @@ const SORT_SQL: Record<NcrListQuery['sort'], string> = {
   capaCount: 'coalesce(cl.n_capa, 0)',
   createdAt: 'n.created_at',
   raisedBy: "lower(nullif(trim(concat_ws(' ', rb.first_name, rb.surname)), ''))",
+  detectedByEmployee: "lower(nullif(trim(concat_ws(' ', de.first_name, de.surname)), ''))",
+  responsibleDepartment: 'lower(rd.name)',
 };
 
 const likePattern = (term: string) => `%${term.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
@@ -60,6 +62,7 @@ const likePattern = (term: string) => `%${term.replace(/[\\%_]/g, (ch) => `\\${c
 const HISTORY_ID_FIELDS = [
   'site_id', 'part_id', 'part_revision_id', 'customer_id', 'supplier_id', 'detection_process_id', 'causal_process_id',
   'failure_mode_id', 'sub_failure_mode_id', 'category_id', 'responsible_employee_id', 'owner_id', 'detected_by', 'closed_by', 'deleted_by',
+  'detected_by_employee_id', 'responsible_department_id',
 ] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -75,7 +78,9 @@ const SELECT_SUMMARY = `
   fm.id as fm_id, fm.name as fm_name, sfm.id as sfm_id, sfm.name as sfm_name, cp.id as cp_id, cp.name as cp_name, cat.id as cat_id, cat.name as cat_name,
   coalesce(tc.total, 0) as total_cost, os.base_currency,
   coalesce(cl.n_capa, 0) as capa_count, case when cl.n_capa = 1 then cl.capa_id end as capa_id, case when cl.n_capa = 1 then cl.capa_reference end as capa_reference,
-  n.created_by as raised_by_id, nullif(trim(concat_ws(' ', rb.first_name, rb.surname)), '') as raised_by_name`;
+  n.created_by as raised_by_id, nullif(trim(concat_ws(' ', rb.first_name, rb.surname)), '') as raised_by_name,
+  de.id as detected_employee_id, nullif(trim(concat_ws(' ', de.first_name, de.surname)), '') as detected_employee_name,
+  rd.id as responsible_department_id, rd.name as responsible_department_name`;
 const FROM = `
   from public.nonconformances n
   left join public.parts p on p.id = n.part_id
@@ -89,6 +94,9 @@ const FROM = `
   left join public.organisation_settings os on os.organisation_id = n.organisation_id
   -- Who raised it (the person who created the record).
   left join public.profiles rb on rb.id = n.created_by
+  -- Who found it (Employees register; hidden without master_data.read, like the responsible employee) and the responsible department.
+  left join public."Employees" de on de.id = n.detected_by_employee_id
+  left join public.departments rd on rd.id = n.responsible_department_id
   -- Total of the NCR's costs that are not deleted, in the organisation's base currency.
   left join lateral (
     select sum(k.gross_base) as total from public.ncr_costs k where k.nonconformance_id = n.id and k.deleted_at is null
@@ -129,6 +137,8 @@ const toSummary = (r: Row): NcrSummary => ({
   capaCount: Number(r.capa_count ?? 0),
   capa: r.capa_id ? { id: r.capa_id as string, reference: r.capa_reference as string } : null,
   raisedBy: r.raised_by_id ? { id: r.raised_by_id as string, name: (r.raised_by_name as string) ?? '' } : null,
+  detectedByEmployee: ref(r.detected_employee_id, r.detected_employee_name),
+  responsibleDepartment: ref(r.responsible_department_id, r.responsible_department_name),
   deletedAt: iso(r.deleted_at),
   createdAt: iso(r.created_at)!,
 });
@@ -181,6 +191,11 @@ export class NcrService {
       }
       if (q.from) where.push(sql`n.detected_at >= ${q.from}::date`);
       if (q.to) where.push(sql`n.detected_at <= ${q.to}::date`);
+      // The day it was raised in the caller's time zone (the request's TimeZone setting).
+      if (q.raisedFrom) where.push(sql`n.created_at >= ${q.raisedFrom}::date::timestamptz`);
+      if (q.raisedTo) where.push(sql`n.created_at < (${q.raisedTo}::date + 1)::timestamptz`);
+      if (q.responsibleDepartmentId) where.push(sql`n.responsible_department_id = ${q.responsibleDepartmentId}::uuid`);
+      if (q.detectedByEmployeeId) where.push(sql`n.detected_by_employee_id = ${q.detectedByEmployeeId}::uuid`);
       if (q.severity.length) where.push(sql`n.severity = any(string_to_array(${q.severity.join(',')}, ','))`);
       if (q.costMin !== undefined) where.push(sql`coalesce(tc.total, 0) >= ${q.costMin}`);
       if (q.costMax !== undefined) where.push(sql`coalesce(tc.total, 0) <= ${q.costMax}`);
@@ -255,7 +270,9 @@ export class NcrService {
         select c.id, c.name from public.ncr_source_categories s
           join public.ncr_classifications c on c.id = s.category_id and c.active
          where s.organisation_id = ${ctx.organisationId!}::uuid and s.source = ${q.source}`)).rows;
+      const [me] = (await db.execute<{ id: string; name: string | null }>(sql`select id, name from app.my_employee(${ctx.organisationId!}::uuid)`)).rows;
       return {
+        detectedBy: me ? { id: me.id, name: me.name ?? '' } : null,
         source: q.source,
         severity: 'minor' as const,
         category: category ? { id: category.id, name: category.name } : null,
@@ -376,6 +393,7 @@ export class NcrService {
         union all select mc.id, mc.name from public.machines mc join ids using (id)
         union all select t.id, t.name from public.sites t join ids using (id)
         union all select e.id, ${sql.raw(personName('e'))} from public."Employees" e join ids using (id)
+        union all select d.id, d.name from public.departments d join ids using (id)
         union all select u.id, ${sql.raw(personName('u'))} from public.profiles u join ids using (id)`);
       const names = new Map(named.rows.filter((r) => r.name).map((r) => [r.id as string, r.name as string]));
       for (const e of entries) {

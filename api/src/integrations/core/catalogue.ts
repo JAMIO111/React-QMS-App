@@ -212,6 +212,8 @@ export const CATALOGUE: EntityCatalogue[] = [
       ref('detectionMachine', 'Where detected', 'machine', 'machine code'),
       ref('causalMachine', 'Causal process', 'machine', 'machine code'),
       ref('responsibleEmployee', 'Responsible employee', 'employee', 'employee number'),
+      ref('detectedBy', 'Detected by', 'employee', 'employee number', { description: 'The employee who found it' }),
+      ref('responsibleDepartment', 'Responsible department', 'department', 'department code'),
       { key: 'quantityAffected', label: 'Quantity affected', type: 'number' },
       { key: 'quantityInspected', label: 'Quantity inspected', type: 'number' },
       { key: 'workOrder', label: 'Work order', type: 'text', maxLength: 60 },

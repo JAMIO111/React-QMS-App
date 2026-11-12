@@ -18,7 +18,7 @@ const deletedFilter = (alias: string, deleted: z.infer<typeof DeletedQuery>['del
 /** Column names for cost fields the API accepts. */
 const COST_COLUMNS: Record<string, string> = {
   costType: 'cost_type', description: 'description', incurredOn: 'incurred_on', currency: 'currency',
-  vatTreatment: 'vat_treatment', vatRate: 'vat_rate', amount: 'amount', exchangeRate: 'exchange_rate',
+  vatTreatment: 'vat_treatment', vatRate: 'vat_rate', quantity: 'quantity', unitCost: 'unit_cost', exchangeRate: 'exchange_rate',
 };
 
 /**
@@ -52,9 +52,9 @@ export class NcrRecordsService {
     return this.database.asUser(ctx, async (db) => {
       await this.assertNcrVisible(db, ctx, ncrId);
       const result = await db.execute<{ id: string }>(sql`
-        insert into public.ncr_costs (organisation_id, nonconformance_id, cost_type, description, incurred_on, currency, vat_treatment, vat_rate, amount, exchange_rate)
+        insert into public.ncr_costs (organisation_id, nonconformance_id, cost_type, description, incurred_on, currency, vat_treatment, vat_rate, quantity, unit_cost, exchange_rate)
         values (${ctx.organisationId!}::uuid, ${ncrId}::uuid, ${body.costType}, ${body.description ?? null}, coalesce(${body.incurredOn ?? null}::date, current_date),
-                ${body.currency}, ${body.vatTreatment}, ${body.vatRate}, ${body.amount}, ${body.exchangeRate})
+                ${body.currency}, ${body.vatTreatment}, ${body.vatRate}, ${body.quantity}, ${body.unitCost}, ${body.exchangeRate})
         returning id`);
       return this.loadCost(db, ctx, result.rows[0].id);
     });
@@ -170,6 +170,8 @@ const toCost = (r: Row): Cost => ({
   currency: r.currency as string,
   vatTreatment: r.vat_treatment as Cost['vatTreatment'],
   vatRate: num(r.vat_rate),
+  quantity: num(r.quantity),
+  unitCost: num(r.unit_cost),
   amount: num(r.amount),
   exchangeRate: num(r.exchange_rate),
   netAmount: num(r.net_amount),

@@ -75,6 +75,10 @@ export const NcrSummary = z.object({
   capa: z.object({ id: z.string().uuid(), reference: z.string() }).nullable(),
   /** Who raised it (created the record); null when unknown (imported, or the account is gone). */
   raisedBy: Ref,
+  /** Who found the problem (Employees register). */
+  detectedByEmployee: Ref,
+  /** The department responsible for the problem. */
+  responsibleDepartment: Ref,
   deletedAt: dateTime.nullable(),
   createdAt: dateTime,
   customValues: CustomValues.optional(),
@@ -110,7 +114,7 @@ export type NcrDetail = z.infer<typeof NcrDetail>;
 
 export const NcrPage = z.object({ data: z.array(NcrSummary), page: z.number(), pageSize: z.number(), total: z.number() });
 
-export const SORTABLE = ['reference', 'detectedAt', 'title', 'stage', 'severity', 'quantityAffected', 'partNumber', 'customer', 'supplier', 'failureMode', 'createdAt', 'totalCost', 'source', 'category', 'capaCount', 'raisedBy'] as const;
+export const SORTABLE = ['reference', 'detectedAt', 'title', 'stage', 'severity', 'quantityAffected', 'partNumber', 'customer', 'supplier', 'failureMode', 'createdAt', 'totalCost', 'source', 'category', 'capaCount', 'raisedBy', 'detectedByEmployee', 'responsibleDepartment'] as const;
 
 export const NcrListQuery = z.object({
   /** One or several sources, comma-separated. */
@@ -135,6 +139,11 @@ export const NcrListQuery = z.object({
   lotId: z.string().uuid().optional(),
   from: isoDate.optional(),
   to: isoDate.optional(),
+  /** Raised (created) on these days, inclusive, in the caller's time zone. */
+  raisedFrom: isoDate.optional(),
+  raisedTo: isoDate.optional(),
+  responsibleDepartmentId: z.string().uuid().optional(),
+  detectedByEmployeeId: z.string().uuid().optional(),
   severity: z
     .string()
     .optional()
@@ -193,6 +202,8 @@ const fields = {
   subFailureModeId: id,
   categoryId: id,
   responsibleEmployeeId: id,
+  detectedByEmployeeId: id,
+  responsibleDepartmentId: id,
   ownerId: id,
 };
 
@@ -310,6 +321,8 @@ export const NcrNewDefaults = z.object({
     /** The organisation has a single active site: the form need not ask. */
     organisationHasOneSite: z.boolean(),
   }),
+  /** Who detected it starts as the person's own employee record (linked to their sign-in), when they have one. */
+  detectedBy: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
 });
 
 /** The suggested category of each source (all eleven, in the fixed order). */

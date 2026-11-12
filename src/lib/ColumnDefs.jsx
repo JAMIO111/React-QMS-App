@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { AlignCenterIcon, ClipboardCheckIcon, BoxIcon, InboxIcon, TagsIcon, CalendarIcon, CircleDashedIcon, LayersIcon, PoundSterlingIcon, QrCodeIcon, TagIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { AlignCenterIcon, BuildingIcon, CalendarPlusIcon, UserSearchIcon, ClipboardCheckIcon, BoxIcon, InboxIcon, TagsIcon, CalendarIcon, CircleDashedIcon, LayersIcon, PoundSterlingIcon, QrCodeIcon, TagIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
 import { formatMoney } from "./costs";
 import { SeverityPill, StagePill } from "../components/ncr/Pills";
 import { formatDate, sourceLabel } from "./ncr";
@@ -86,6 +86,11 @@ const capa = col(
   },
   { size: 130, sortKey: "capaCount", accessor: (r) => r.capaCount }
 );
+/** The day the NC was raised (the record created), in the person's own time zone. */
+const raisedAt = col("createdAt", "Raised", head(CalendarPlusIcon, "Raised"), (i) => <div className="table-row-item">{formatDate(i.getValue())}</div>, { size: 120, sortKey: "createdAt" });
+/** Who found it (Employees register) and the department responsible. */
+const detectedBy = col("detectedByEmployee", "Detected by", head(UserSearchIcon, "Detected by"), nameOf, { size: 170, sortKey: "detectedByEmployee" });
+const responsibleDepartment = col("responsibleDepartment", "Responsible department", head(BuildingIcon, "Responsible dept."), nameOf, { size: 180, sortKey: "responsibleDepartment" });
 /** Who raised the NC (created the record); hidden at first. */
 const raisedBy = col("raisedBy", "Raised by", head(UsersIcon, "Raised by"), nameOf, { size: 170, sortKey: "raisedBy" });
 const workOrder = col("workOrder", "Work order", head(BoxIcon, "Work order"), text, { size: 130 });
@@ -105,8 +110,8 @@ const category = col(
 
 /** The one register's columns: where it came from (source) and what the problem is (category) come first. */
 export const getNcColumns = () => [
-  reference, detectedAt, source, category, customer, supplier, workOrder, customerReference, purchaseOrder, part, title, quantity, totalCost,
-  failureMode, subFailureMode, causalProcess, severity, stage, raisedBy, capa,
+  reference, raisedAt, detectedAt, source, category, customer, supplier, workOrder, customerReference, purchaseOrder, part, title, quantity, totalCost,
+  failureMode, subFailureMode, causalProcess, detectedBy, responsibleDepartment, severity, stage, raisedBy, capa,
 ];
 /** Columns that start hidden (they only apply to some sources); the column menu shows them. */
 export const NC_DEFAULT_HIDDEN = { workOrder: false, customerReference: false, purchaseOrder: false, raisedBy: false };

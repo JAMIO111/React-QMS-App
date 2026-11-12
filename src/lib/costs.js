@@ -43,6 +43,19 @@ export const formatMoney = (amount, currency = "GBP") => {
   }
 };
 
+/** A unit price: pennies as usual, up to four decimals when it has them (fasteners at £0.0035 each). */
+export const formatUnitMoney = (amount, currency = "GBP") => {
+  if (amount === null || amount === undefined || amount === "" || Number.isNaN(Number(amount))) return "—";
+  try {
+    return new Intl.NumberFormat("en-GB", { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(amount);
+  } catch {
+    return `${currency} ${Number(amount)}`;
+  }
+};
+
+/** A quantity as people write it: no trailing zeros, up to four decimals. */
+export const formatQuantity = (q) => (q === null || q === undefined || q === "" || Number.isNaN(Number(q)) ? "—" : new Intl.NumberFormat("en-GB", { maximumFractionDigits: 4 }).format(q));
+
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 /**

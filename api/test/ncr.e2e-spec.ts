@@ -283,6 +283,51 @@ describe('what a non-conformance raised by hand starts with', () => {
     await api().get('/api/v1/ncrs?sort=raisedBy&order=asc').set(h).expect(200);
   });
 
+  it('records who detected it and the responsible department, filters by them and by the day it was raised', async () => {
+    const h = await as(ids.ownerA);
+    const one = async (q: string, params: unknown[]) => (await admin.query(q, params)).rows[0];
+    const site = (await one(`select id from public.sites where organisation_id = $1 and code <> 'PB' order by created_at limit 1`, [ids.orgA])).id;
+    const dept = (await one(`insert into public.departments (organisation_id, site_id, code, name) values ($1, $2, 'QA-DET', 'Quality') returning id`, [ids.orgA, site])).id;
+    const emp = (await one(`insert into public."Employees" (organisation_id, first_name, surname, auth_id) values ($1, 'Owen', 'Owner', $2) returning id`, [ids.orgA, ids.ownerA])).id;
+    const gone = (await one(`insert into public."Employees" (organisation_id, first_name, surname, active) values ($1, 'Left', 'Already', false) returning id`, [ids.orgA])).id;
+    try {
+      // A new NC starts with the person's own employee record as who detected it.
+      expect((await api().get('/api/v1/ncrs/new-defaults').set(h).expect(200)).body.detectedBy).toEqual({ id: emp, name: 'Owen Owner' });
+      expect((await api().get('/api/v1/ncrs/new-defaults').set(await as(ids.inspectorA)).expect(200)).body.detectedBy).toBeNull();
+
+      const created = await api().post('/api/v1/ncrs').set(h).send({ source: 'internal', title: 'Found by Owen', detectedByEmployeeId: emp, responsibleDepartmentId: dept }).expect(201);
+      expect(created.body).toMatchObject({ detectedByEmployee: { id: emp, name: 'Owen Owner' }, responsibleDepartment: { id: dept, name: 'Quality' } });
+      const other = await api().post('/api/v1/ncrs').set(h).send({ source: 'internal', title: 'Found by nobody' }).expect(201);
+      expect(other.body).toMatchObject({ detectedByEmployee: null, responsibleDepartment: null });
+
+      const byDept = await api().get(`/api/v1/ncrs?responsibleDepartmentId=${dept}`).set(h).expect(200);
+      expect(byDept.body.data.map((n: { id: string }) => n.id)).toEqual([created.body.id]);
+      const byEmp = await api().get(`/api/v1/ncrs?detectedByEmployeeId=${emp}`).set(h).expect(200);
+      expect(byEmp.body.data.map((n: { id: string }) => n.id)).toEqual([created.body.id]);
+      await api().get('/api/v1/ncrs?sort=detectedByEmployee&order=asc').set(h).expect(200);
+      await api().get('/api/v1/ncrs?sort=responsibleDepartment&order=desc').set(h).expect(200);
+
+      // Raised: the day it was created. Move one NC back a week and filter both ways.
+      await admin.query(`update public.nonconformances set created_at = now() - interval '7 days' where id = $1`, [other.body.id]);
+      const day = (offset: number) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
+      const today = await api().get(`/api/v1/ncrs?raisedFrom=${day(-1)}&q=found%20by`).set({ ...h, 'X-Time-Zone': 'UTC' }).expect(200);
+      expect(today.body.data.map((n: { id: string }) => n.id)).toEqual([created.body.id]);
+      const before = await api().get(`/api/v1/ncrs?raisedTo=${day(-3)}&q=found%20by`).set({ ...h, 'X-Time-Zone': 'UTC' }).expect(200);
+      expect(before.body.data.map((n: { id: string }) => n.id)).toEqual([other.body.id]);
+      await api().get('/api/v1/ncrs?raisedFrom=yesterday').set(h).expect(400);
+
+      // An employee who has left or a department of nothing is refused; clearing is allowed; the history names them.
+      await api().patch(`/api/v1/ncrs/${created.body.id}`).set(h).send({ detectedByEmployeeId: gone }).expect(409);
+      const cleared = await api().patch(`/api/v1/ncrs/${created.body.id}`).set(h).send({ responsibleDepartmentId: null }).expect(200);
+      expect(cleared.body.responsibleDepartment).toBeNull();
+      const history = await api().get(`/api/v1/ncrs/${created.body.id}/history`).set(h).expect(200);
+      const change = history.body.data.find((e: { changedFields: string[] }) => e.changedFields.includes('responsible_department_id'));
+      expect(change.names[dept]).toBe('Quality');
+    } finally {
+      await admin.query(`update public."Employees" set auth_id = null where id = $1`, [emp]);
+    }
+  });
+
   it('leaves out a suggestion whose category has since been switched off', async () => {
     const product = await codeOf('PRODUCT');
     await admin.query(`update public.ncr_classifications set active = false where id = $1`, [product]);

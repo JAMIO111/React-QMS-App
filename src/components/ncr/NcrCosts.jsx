@@ -9,7 +9,7 @@ import { useNcrCosts, useNcrMutation } from "../../hooks/useNcr";
 import { useOrganisationDetails, useSites } from "../../hooks/useQmsApi";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
-import { costTypeName, formatMoney } from "../../lib/costs";
+import { costTypeName, formatMoney, formatQuantity, formatUnitMoney } from "../../lib/costs";
 import { formatDate } from "../../lib/ncr";
 import LoadingScreen from "../ui/LoadingScreen";
 
@@ -78,6 +78,8 @@ const NcrCosts = ({ ncrId, siteId, canEdit }) => {
               <th className="px-4 py-2 text-left">Date</th>
               <th className="px-4 py-2 text-left">Cost type</th>
               <th className="px-4 py-2 text-left">Description</th>
+              <th className="px-4 py-2 text-right">Qty</th>
+              <th className="px-4 py-2 text-right">Unit cost</th>
               <th className="px-4 py-2 text-right">Amount</th>
               <th className="px-4 py-2 text-right">Net ({baseCurrency})</th>
               <th className="px-4 py-2 text-right">Gross ({baseCurrency})</th>
@@ -88,15 +90,15 @@ const NcrCosts = ({ ncrId, siteId, canEdit }) => {
           <tbody className="text-secondary-text">
             {costs.isLoading ? (
               <tr>
-                <td colSpan={8}><LoadingScreen size="sm" /></td>
+                <td colSpan={10}><LoadingScreen size="sm" /></td>
               </tr>
             ) : costs.error ? (
               <tr>
-                <td colSpan={8} role="alert" className="py-4 text-center text-error-color">{describeApiError(costs.error)}</td>
+                <td colSpan={10} role="alert" className="py-4 text-center text-error-color">{describeApiError(costs.error)}</td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-4 text-center text-muted">No cost items logged yet.</td>
+                <td colSpan={10} className="py-4 text-center text-muted">No cost items logged yet.</td>
               </tr>
             ) : (
               rows.map((c) => (
@@ -107,6 +109,8 @@ const NcrCosts = ({ ncrId, siteId, canEdit }) => {
                     {c.description || "—"}
                     {c.deletedAt && <span className="block text-xs text-error-color">Deleted: {c.deleteReason}</span>}
                   </td>
+                  <td className="px-4 py-2 text-right whitespace-nowrap">{formatQuantity(c.quantity)}</td>
+                  <td className="px-4 py-2 text-right whitespace-nowrap">{formatUnitMoney(c.unitCost, c.currency)}</td>
                   <td className="px-4 py-2 text-right whitespace-nowrap">
                     {formatMoney(c.grossAmount, c.currency)}
                     {c.vatTreatment !== "none" && <span className="block text-xs">inc. {formatMoney(c.vatAmount, c.currency)} VAT</span>}

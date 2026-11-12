@@ -21,6 +21,11 @@ export const Cost = z.object({
   currency: z.string(),
   vatTreatment: VatTreatment,
   vatRate: z.number(),
+  /** How many (pieces, hours, kilograms…). */
+  quantity: z.number(),
+  /** Cost of one, in the line's currency and VAT treatment. */
+  unitCost: z.number(),
+  /** Quantity × unit cost, rounded to pennies (worked out by the database). */
   amount: z.number(),
   exchangeRate: z.number(),
   netAmount: z.number(),
@@ -49,7 +54,8 @@ const costFields = {
   currency: z.string().trim().regex(/^[A-Za-z]{3}$/, 'Use a 3-letter ISO currency code').transform((v) => v.toUpperCase()),
   vatTreatment: VatTreatment.default('none'),
   vatRate: z.number().min(0).lt(1).default(0),
-  amount: z.number().min(0).lt(1e12),
+  quantity: z.number().gt(0).lt(1e9).default(1),
+  unitCost: z.number().min(0).lt(1e12),
   exchangeRate: z.number().positive().default(1),
 };
 export const CreateCostBody = z.object(costFields).strict();
@@ -61,7 +67,8 @@ export const UpdateCostBody = z
     currency: costFields.currency.optional(),
     vatTreatment: VatTreatment.optional(),
     vatRate: z.number().min(0).lt(1).optional(),
-    amount: costFields.amount.optional(),
+    quantity: z.number().gt(0).lt(1e9).optional(),
+    unitCost: costFields.unitCost.optional(),
     exchangeRate: z.number().positive().optional(),
   })
   .strict()

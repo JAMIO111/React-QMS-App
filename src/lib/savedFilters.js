@@ -32,6 +32,7 @@ const TITLES = {
   search: "Search", source: "Source", category: "Category", uncategorised: "Uncategorised", stage: "Stage", severity: "Severity",
   failureMode: "Failure mode", subFailureMode: "Sub-failure mode", deleted: "Deleted", part: "Part", customer: "Customer", supplier: "Supplier",
   order: "Order", lot: "Lot", costMin: "Cost from", costMax: "Cost up to", qtyMin: "Quantity from", qtyMax: "Quantity up to", from: "Detected from", to: "Detected to",
+  raisedFrom: "Raised from", raisedTo: "Raised to", department: "Responsible department", detectedBy: "Detected by",
 };
 const words = (v) => String(v).replace(/(^|,)\s*([a-z])/g, (_, s, c) => s + (s ? " " : "") + c.toUpperCase()).replace(/_/g, " ");
 

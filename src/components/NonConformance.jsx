@@ -51,7 +51,10 @@ const toCsvRow = (n) => ({
   failure_mode: n.failureMode?.name ?? "",
   sub_failure_mode: n.subFailureMode?.name ?? "",
   causal_process: n.causalProcess?.name ?? "",
+  raised: n.createdAt ? formatDate(n.createdAt) : "",
   raised_by: n.raisedBy?.name ?? "",
+  detected_by: n.detectedByEmployee?.name ?? "",
+  responsible_department: n.responsibleDepartment?.name ?? "",
   deleted: n.deletedAt ? "yes" : "",
 });
 
@@ -136,6 +139,10 @@ const NonConformance = () => {
     severity: filters.severity,
     from: filters.from,
     to: filters.to,
+    raisedFrom: filters.raisedFrom,
+    raisedTo: filters.raisedTo,
+    responsibleDepartmentId: filters.department,
+    detectedByEmployeeId: filters.detectedBy,
     partId: filters.part,
     productionOrderId: filters.order,
     lotId: filters.lot,
@@ -181,14 +188,17 @@ const NonConformance = () => {
   // Costs are kept in the organisation's base currency, so the rows add up.
   const totalCost = selectedRows.reduce((acc, r) => acc + (Number(r.totalCost) || 0), 0);
   const filterCount = [
-    "source", "category", "uncategorised", "stage", "severity", "failureMode", "subFailureMode", "deleted", "part", "customer", "supplier",
-  ].filter((k) => filters[k]).length + customFilters.count + (filters.from || filters.to ? 1 : 0) + (filters.costMin || filters.costMax ? 1 : 0) + (filters.qtyMin || filters.qtyMax ? 1 : 0);
+    "source", "category", "uncategorised", "stage", "severity", "failureMode", "subFailureMode", "deleted", "part", "customer", "supplier", "department", "detectedBy",
+  ].filter((k) => filters[k]).length + customFilters.count + (filters.from || filters.to ? 1 : 0) + (filters.raisedFrom || filters.raisedTo ? 1 : 0) + (filters.costMin || filters.costMax ? 1 : 0) + (filters.qtyMin || filters.qtyMax ? 1 : 0);
   const between = (lo, hi, fmt = (v) => v) => (lo && hi ? `${fmt(lo)} – ${fmt(hi)}` : lo ? `from ${fmt(lo)}` : `up to ${fmt(hi)}`);
   const nameOf = (id) => (lists?.all ?? []).find((c) => c.id === id)?.name ?? "…";
   // What the register is currently filtered by, each removable on its own.
   const activeFilters = [
     ...(filters.search ? [{ key: "search", label: `Search: “${filters.search}”`, clear: { search: "" } }] : []),
     ...(filters.from || filters.to ? [{ key: "date", label: `Detected ${between(filters.from, filters.to, formatDate)}`, clear: { from: "", to: "" } }] : []),
+    ...(filters.raisedFrom || filters.raisedTo ? [{ key: "raised", label: `Raised ${between(filters.raisedFrom, filters.raisedTo, formatDate)}`, clear: { raisedFrom: "", raisedTo: "" } }] : []),
+    ...(filters.detectedBy ? [{ key: "detectedBy", label: `Detected by: ${filters.detectedByLabel || "selected"}`, clear: { detectedBy: "", detectedByLabel: "" } }] : []),
+    ...(filters.department ? [{ key: "department", label: `Responsible department: ${filters.departmentLabel || "selected"}`, clear: { department: "", departmentLabel: "" } }] : []),
     ...(filters.stage ? [{ key: "stage", label: `Stage: ${filters.stage.split(",").map((k) => stageOf(k).label).join(", ")}`, clear: { stage: "" } }] : []),
     ...(filters.severity ? [{ key: "severity", label: `Severity: ${filters.severity.split(",").map((k) => k[0].toUpperCase() + k.slice(1)).join(", ")}`, clear: { severity: "" } }] : []),
     ...(filters.order ? [{ key: "order", label: `Order: ${filters.orderLabel || "selected order"}`, clear: { order: "", orderLabel: "" } }] : []),

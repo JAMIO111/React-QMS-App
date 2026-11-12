@@ -112,6 +112,8 @@ import {
   CreditCard as LucideCreditCard,
   Tags as LucideTags,
   Building2 as LucideBuilding2,
+  UserSearch as LucideUserSearch,
+  CalendarPlus as LucideCalendarPlus,
   MapPin as LucideMapPin,
   Wrench as LucideWrench,
   Coins as LucideCoins,
@@ -265,6 +267,8 @@ export const CreditCardIcon = withDefaults(LucideCreditCard);
 export const ReceiptIcon = withDefaults(LucideReceipt);
 export const TagsIcon = withDefaults(LucideTags);
 export const BuildingIcon = withDefaults(LucideBuilding2);
+export const UserSearchIcon = withDefaults(LucideUserSearch);
+export const CalendarPlusIcon = withDefaults(LucideCalendarPlus);
 export const MapPinIcon = withDefaults(LucideMapPin);
 export const WrenchIcon = withDefaults(LucideWrench);
 export const CoinsIcon = withDefaults(LucideCoins);

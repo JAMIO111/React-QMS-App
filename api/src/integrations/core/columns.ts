@@ -124,6 +124,7 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
       description: { column: 'description' }, requirement: { column: 'requirement' }, actualResult: { column: 'actual_result' }, detectedAt: { column: 'detected_at' },
       site: { column: 'site_id' }, part: { column: 'part_id' }, customer: { column: 'customer_id' }, supplier: { column: 'supplier_id' },
       detectionMachine: { column: 'detection_process_id' }, causalMachine: { column: 'causal_process_id' }, responsibleEmployee: { column: 'responsible_employee_id' },
+      detectedBy: { column: 'detected_by_employee_id' }, responsibleDepartment: { column: 'responsible_department_id' },
       quantityAffected: { column: 'quantity_affected' }, quantityInspected: { column: 'quantity_inspected' }, workOrder: { column: 'work_order' },
       purchaseOrder: { column: 'purchase_order' }, customerReference: { column: 'customer_reference' }, lotNumber: { column: 'lot_number' },
       serialNumber: { column: 'serial_number' },

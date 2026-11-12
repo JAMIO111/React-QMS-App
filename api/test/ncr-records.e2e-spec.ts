@@ -49,12 +49,12 @@ describe('costs', () => {
   it('adds costs with VAT and currency worked out by the server', async () => {
     const h = await as(ids.ownerA);
     const inc = await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h)
-      .send({ costType: 'scrap', currency: 'gbp', vatTreatment: 'inclusive', vatRate: 0.2, amount: 120, description: 'Scrapped bar' }).expect(201);
-    expect(inc.body).toMatchObject({ costType: 'scrap', currency: 'GBP', netAmount: 100, vatAmount: 20, grossAmount: 120, grossBase: 120, baseCurrency: 'GBP', createdBy: { id: ids.ownerA } });
+      .send({ costType: 'scrap', currency: 'gbp', vatTreatment: 'inclusive', vatRate: 0.2, quantity: 4, unitCost: 30, description: 'Scrapped bar' }).expect(201);
+    expect(inc.body).toMatchObject({ costType: 'scrap', currency: 'GBP', quantity: 4, unitCost: 30, amount: 120, netAmount: 100, vatAmount: 20, grossAmount: 120, grossBase: 120, baseCurrency: 'GBP', createdBy: { id: ids.ownerA } });
     costId = inc.body.id;
     const eur = await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h)
-      .send({ costType: 'transport', currency: 'EUR', amount: 50, exchangeRate: 0.85, incurredOn: '2026-10-01' }).expect(201);
-    expect(eur.body).toMatchObject({ vatTreatment: 'none', grossAmount: 50, netBase: 42.5, grossBase: 42.5, incurredOn: '2026-10-01' });
+      .send({ costType: 'transport', currency: 'EUR', unitCost: 50, exchangeRate: 0.85, incurredOn: '2026-10-01' }).expect(201);
+    expect(eur.body).toMatchObject({ quantity: 1, unitCost: 50, vatTreatment: 'none', grossAmount: 50, netBase: 42.5, grossBase: 42.5, incurredOn: '2026-10-01' });
 
     const list = await api().get(`/api/v1/ncrs/${ncr}/costs`).set(h).expect(200);
     expect(list.body.totals).toEqual({ baseCurrency: 'GBP', net: 142.5, gross: 162.5, count: 2 });
@@ -70,35 +70,41 @@ describe('costs', () => {
 
   it('validates input', async () => {
     const h = await as(ids.ownerA);
-    await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h).send({ costType: 'bribes', currency: 'GBP', amount: 1 }).expect(400);
-    await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h).send({ costType: 'scrap', currency: 'GBP', amount: -5 }).expect(400);
-    await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h).send({ costType: 'scrap', currency: 'GBP', amount: 1, netAmount: 0 }).expect(400);
+    await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h).send({ costType: 'bribes', currency: 'GBP', unitCost: 1 }).expect(400);
+    await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h).send({ costType: 'scrap', currency: 'GBP', unitCost: -5 }).expect(400);
+    await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h).send({ costType: 'scrap', currency: 'GBP', unitCost: 5, quantity: 0 }).expect(400);
+    // The amount is worked out by the database, never sent.
+    await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h).send({ costType: 'scrap', currency: 'GBP', unitCost: 5, amount: 1 }).expect(400);
+    await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h).send({ costType: 'scrap', currency: 'GBP', unitCost: 1, netAmount: 0 }).expect(400);
     await api().patch(`/api/v1/ncr-costs/${costId}`).set(h).send({}).expect(400);
   });
 
   it('edits, deletes with a reason and restores', async () => {
     const h = await as(ids.ownerA);
-    const edited = await api().patch(`/api/v1/ncr-costs/${costId}`).set(h).send({ vatTreatment: 'exclusive', amount: 100 }).expect(200);
-    expect(edited.body).toMatchObject({ netAmount: 100, grossAmount: 120 });
+    const edited = await api().patch(`/api/v1/ncr-costs/${costId}`).set(h).send({ vatTreatment: 'exclusive', unitCost: 25 }).expect(200);
+    expect(edited.body).toMatchObject({ quantity: 4, unitCost: 25, amount: 100, netAmount: 100, grossAmount: 120 });
+    const halves = await api().patch(`/api/v1/ncr-costs/${costId}`).set(h).send({ quantity: 2.5 }).expect(200);
+    expect(halves.body).toMatchObject({ amount: 62.5, grossAmount: 75 });
+    await api().patch(`/api/v1/ncr-costs/${costId}`).set(h).send({ quantity: 4 }).expect(200);
     await api().post(`/api/v1/ncr-costs/${costId}/delete`).set(h).send({}).expect(400);
     const deleted = await api().post(`/api/v1/ncr-costs/${costId}/delete`).set(h).send({ reason: 'Duplicate' }).expect(200);
     expect(deleted.body).toMatchObject({ deleteReason: 'Duplicate' });
     expect((await api().get(`/api/v1/ncrs/${ncr}/costs`).set(h).expect(200)).body.totals.count).toBe(1);
     expect((await api().get(`/api/v1/ncrs/${ncr}`).set(h).expect(200)).body.totalCost).toBe(42.5);
     expect((await api().get(`/api/v1/ncrs/${ncr}/costs?deleted=only`).set(h).expect(200)).body.data.map((c: { id: string }) => c.id)).toEqual([costId]);
-    const locked = await api().patch(`/api/v1/ncr-costs/${costId}`).set(h).send({ amount: 1 }).expect(409);
+    const locked = await api().patch(`/api/v1/ncr-costs/${costId}`).set(h).send({ unitCost: 1 }).expect(409);
     expect(locked.body.error.message).toBe('This cost is deleted');
     await api().post(`/api/v1/ncr-costs/${costId}/restore`).set(h).expect(200);
     expect((await api().get(`/api/v1/ncrs/${ncr}/costs`).set(h).expect(200)).body.totals.count).toBe(2);
   });
 
   it('needs ncr.update to add costs and keeps site-scoped users to their site', async () => {
-    await api().post(`/api/v1/ncrs/${ncr}/costs`).set(await as(ids.inspectorA)).send({ costType: 'scrap', currency: 'GBP', amount: 1 }).expect(403);
+    await api().post(`/api/v1/ncrs/${ncr}/costs`).set(await as(ids.inspectorA)).send({ costType: 'scrap', currency: 'GBP', unitCost: 1 }).expect(403);
     await api().get(`/api/v1/ncrs/${ncr}/costs`).set(await as(ids.inspectorA)).expect(200);
     const site = await as(SITE_USER);
     await api().get(`/api/v1/ncrs/${ncr}/costs`).set(site).expect(404);
-    await api().patch(`/api/v1/ncr-costs/${costId}`).set(site).send({ amount: 1 }).expect(404);
-    await api().post(`/api/v1/ncrs/${ncrAtB}/costs`).set(site).send({ costType: 'sorting', currency: 'GBP', amount: 25 }).expect(201);
+    await api().patch(`/api/v1/ncr-costs/${costId}`).set(site).send({ unitCost: 1 }).expect(404);
+    await api().post(`/api/v1/ncrs/${ncrAtB}/costs`).set(site).send({ costType: 'sorting', currency: 'GBP', unitCost: 25 }).expect(201);
   });
 });
 
@@ -175,7 +181,7 @@ describe('attachments', () => {
     await api().post(`/api/v1/ncrs/${ncr}/transitions`).set(h).send({ to: 'open' }).expect(200);
     await settleNcr(app.getHttpServer(), h, ncr);
     await api().post(`/api/v1/ncrs/${ncr}/transitions`).set(h).send({ to: 'closed' }).expect(200);
-    const res = await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h).send({ costType: 'scrap', currency: 'GBP', amount: 1 }).expect(409);
+    const res = await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h).send({ costType: 'scrap', currency: 'GBP', unitCost: 1 }).expect(409);
     expect(res.body.error.message).toBe('This non-conformance is closed; reopen it to make changes');
     await api().post(`/api/v1/ncr-attachments/${fileId}/delete`).set(h).send({ reason: 'Late' }).expect(409);
   });

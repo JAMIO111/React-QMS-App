@@ -176,6 +176,8 @@ export const nonconformances = pgTable('nonconformances', {
   failureModeId: uuid('failure_mode_id'),
   subFailureModeId: uuid('sub_failure_mode_id'),
   responsibleEmployeeId: uuid('responsible_employee_id'),
+  detectedByEmployeeId: uuid('detected_by_employee_id'),
+  responsibleDepartmentId: uuid('responsible_department_id'),
   ownerId: uuid('owner_id'),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   deleteReason: text('delete_reason'),

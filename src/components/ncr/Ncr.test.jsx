@@ -13,6 +13,7 @@ vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => (
 vi.mock("../../hooks/useQmsApi", () => ({
   usePermissions: () => ({ can: (p) => permissions.includes(p) }),
   useSites: () => ({ data: { data: [{ id: "s1", code: "MAIN", name: "Main site" }] } }),
+  useAllDepartments: () => ({ data: { data: [{ id: "d1", code: "QA", name: "Quality", siteId: "s1", active: true }, { id: "d2", code: "OLD", name: "Old dept", siteId: "s1", active: false }] } }),
   useOrganisationDetails: () => ({ data: { settings: { baseCurrency: "GBP", vatRate: 0.2, ...orgProduction } } }),
 }));
 const upload = vi.fn();
@@ -137,6 +138,45 @@ beforeEach(() => {
 });
 
 describe("NC registers", () => {
+  it("shows the day raised, who detected it and the responsible department, and filters by them", async () => {
+    routeApi({
+      "GET /ncrs": {
+        data: [ncr({ id: "n1", createdAt: "2026-10-28T09:00:00Z", detectedByEmployee: { id: "e1", name: "Sam Operator" }, responsibleDepartment: { id: "d1", name: "Quality" } })],
+        page: 1, pageSize: 25, total: 1,
+      },
+      "GET /ncrs/ranges": { cost: { max: 0 }, quantity: { max: 0 }, baseCurrency: "GBP" },
+    });
+    renderAt("/Non-Conformance/Register");
+    const raised = await screen.findByRole("columnheader", { name: /Raised(?! by)/ });
+    expect(raised).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /Detected by/ })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /Responsible dept/ })).toBeInTheDocument();
+    expect(screen.getByText("28 Oct 2026")).toBeInTheDocument();
+    expect(screen.getByText("Sam Operator")).toBeInTheDocument();
+    expect(screen.getAllByText("Quality").length).toBeGreaterThan(0);
+    await userEvent.click(within(raised).getByRole("button"));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("sort=createdAt"));
+
+    await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
+    const pane = screen.getByRole("dialog", { name: "Filter non-conformances" });
+    await userEvent.click(within(pane).getByRole("combobox", { name: "Detected by" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Sam Operator" }));
+    await userEvent.click(within(pane).getByRole("combobox", { name: "Responsible department" }));
+    await userEvent.click(await screen.findByRole("option", { name: /^Quality/ }));
+    const first = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    await userEvent.click(within(pane).getByRole("button", { name: /^Raised/ }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Choose raised" })).getByRole("button", { name: /^This month/ }));
+    await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("responsibleDepartmentId=d1"));
+    const path = lastCall("GET /ncrs").path;
+    for (const part of ["detectedByEmployeeId=e1", `raisedFrom=${format(first, "yyyy-MM-dd")}`, `raisedTo=${format(new Date(), "yyyy-MM-dd")}`]) expect(path).toContain(part);
+    expect(path).not.toContain("from=" + format(first, "yyyy-MM-dd") + "&");
+    const active = screen.getByLabelText("Active filters");
+    for (const text of ["Detected by: Sam Operator", "Responsible department: Quality", "Raised"]) expect(active).toHaveTextContent(text);
+    await userEvent.click(within(active).getByRole("button", { name: "Remove filter Responsible department: Quality" }));
+    await waitFor(() => expect(lastCall("GET /ncrs").path).not.toContain("responsibleDepartmentId"));
+  });
+
   it("lists every source and category in one register, with Source and Category columns", async () => {
     routeApi({
       "GET /ncrs": {
@@ -379,7 +419,7 @@ describe("NC registers", () => {
     routeApi({ "GET /ncrs": { data: [ncr()], page: 1, pageSize: 25, total: 1 } });
     renderAt("/Non-Conformance/Register");
     await screen.findByText("NCM-26-001");
-    await userEvent.click(within(screen.getByRole("columnheader", { name: /Detected/ })).getByRole("button"));
+    await userEvent.click(within(screen.getByRole("columnheader", { name: /Detected(?! by)/ })).getByRole("button"));
     await waitFor(() => expect(lastCall("GET /ncrs").path).toContain("sort=detectedAt"));
     expect(lastCall("GET /ncrs").path).toContain("order=asc");
   });
@@ -652,6 +692,46 @@ describe("NC form", () => {
     await userEvent.type(screen.getByLabelText("Title"), "Burr on edge");
     await userEvent.click(screen.getByRole("button", { name: "Save as draft" }));
     expect(lastCall("POST /ncrs").body).toMatchObject({ source: "internal", severity: "minor", categoryId: "cat2", siteId: "s1" });
+  });
+
+  it("starts who detected it as the person's own employee record, next to where detected; the responsible department is in Investigation", async () => {
+    routeApi({
+      "GET /ncrs/new-defaults": (path) => ({ ...newDefaults()(path), detectedBy: { id: "e1", name: "Sam Operator" } }),
+      "POST /ncrs": (_p, o) => ncr({ ...o.body, id: "n7" }),
+      "GET /ncrs/n7": ncr({ id: "n7" }),
+    });
+    renderAt("/Non-Conformance/Register/new?source=internal");
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /^Detected by/ })).toHaveValue("Sam Operator"));
+    // Beside where detected, in the details card.
+    const where = screen.getByRole("combobox", { name: /^Where detected/ });
+    const detector = screen.getByRole("combobox", { name: /^Detected by/ });
+    expect(where.compareDocumentPosition(detector) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const investigation = document.getElementById("ncr-investigation");
+    const department = screen.getByRole("combobox", { name: /^Responsible department/ });
+    expect(investigation.compareDocumentPosition(department) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(investigation.compareDocumentPosition(detector) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    // A switched-off department is not offered.
+    await userEvent.click(department);
+    expect(screen.queryByRole("option", { name: /Old dept/ })).toBeNull();
+    await userEvent.click(await screen.findByRole("option", { name: /^Quality/ }));
+
+    await userEvent.type(screen.getByLabelText("Title"), "Burr on edge");
+    await userEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+    expect(lastCall("POST /ncrs").body).toMatchObject({ detectedByEmployeeId: "e1", responsibleDepartmentId: "d1" });
+  });
+
+  it("shows who detected a saved NC and its department, and saves a change", async () => {
+    routeApi({
+      "GET /ncrs/n1": ncr({ detectedByEmployee: { id: "e9", name: "Left Already" }, responsibleDepartment: { id: "d2", name: "Old dept" } }),
+      "PATCH /ncrs/n1": (_p, o) => ncr(o.body),
+    });
+    renderAt("/Non-Conformance/Register/n1");
+    // Someone who has since left, and a department since switched off, are still shown.
+    expect(await screen.findByRole("combobox", { name: /^Detected by/ })).toHaveValue("Left Already");
+    expect(screen.getByRole("combobox", { name: /^Responsible department/ })).toHaveValue("Old dept");
+    await pick(/^Detected by/, "Sam Operator");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(lastCall("PATCH /ncrs/n1").body).toEqual({ detectedByEmployeeId: "e1" }));
   });
 
   it("fixes the site for someone who may raise NCs at one site only, and does not ask in an organisation with one site", async () => {
@@ -1092,7 +1172,7 @@ describe("Settings → Data Management", () => {
 describe("NC page layout, costs and files", () => {
   const costList = {
     data: [
-      { id: "c1", costType: "scrap", description: "Scrapped bar", incurredOn: "2026-11-01", currency: "GBP", vatTreatment: "inclusive", vatRate: 0.2, amount: 120,
+      { id: "c1", costType: "scrap", description: "Scrapped bar", incurredOn: "2026-11-01", currency: "GBP", vatTreatment: "inclusive", vatRate: 0.2, quantity: 4, unitCost: 30, amount: 120,
         exchangeRate: 1, netAmount: 100, vatAmount: 20, grossAmount: 120, baseCurrency: "GBP", netBase: 100, grossBase: 120,
         createdAt: "2026-11-01T09:00:00Z", createdBy: { id: "u1", name: "Ada Owner" }, deletedAt: null, deleteReason: null },
     ],
@@ -1116,6 +1196,9 @@ describe("NC page layout, costs and files", () => {
     expect(within(table).getByText("Scrapped bar")).toBeInTheDocument();
     expect(within(table).getByText("Total (1 item)")).toBeInTheDocument();
     expect(within(table).getAllByText("£120.00").length).toBeGreaterThan(0);
+    const row = within(table).getByText("Scrapped bar").closest("tr");
+    expect(within(row).getByText("4")).toBeInTheDocument();
+    expect(within(row).getByText("£30.00")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "New item" }));
     const dialog = screen.getByRole("dialog", { name: "New cost item" });
@@ -1123,13 +1206,16 @@ describe("NC page layout, costs and files", () => {
     await userEvent.click(await screen.findByRole("option", { name: "Labour" }));
     await userEvent.click(within(dialog).getByRole("combobox", { name: "VAT option" }));
     await userEvent.click(screen.getByRole("option", { name: "VAT exclusive" }));
-    await userEvent.type(within(dialog).getByLabelText(/Amount \(ex\. VAT\)/), "50");
+    const qty = within(dialog).getByLabelText("Quantity");
+    await userEvent.clear(qty);
+    await userEvent.type(qty, "2");
+    await userEvent.type(within(dialog).getByLabelText(/Unit cost \(ex\. VAT\)/), "25");
     const preview = within(dialog).getByLabelText("Cost preview");
-    expect(preview).toHaveTextContent("£50.00");
+    expect(preview).toHaveTextContent("2 × £25.00 = £50.00");
     expect(preview).toHaveTextContent("£10.00");
     expect(preview).toHaveTextContent("£60.00");
     await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
-    await waitFor(() => expect(lastCall("POST /ncrs/n1/costs").body).toMatchObject({ costType: "labour", currency: "GBP", vatTreatment: "exclusive", vatRate: 0.2, amount: 50, exchangeRate: 1 }));
+    await waitFor(() => expect(lastCall("POST /ncrs/n1/costs").body).toMatchObject({ costType: "labour", currency: "GBP", vatTreatment: "exclusive", vatRate: 0.2, quantity: 2, unitCost: 25, exchangeRate: 1 }));
   });
 
   it("asks for an exchange rate for a foreign currency", async () => {
@@ -1143,13 +1229,13 @@ describe("NC page layout, costs and files", () => {
     await userEvent.click(currency);
     await userEvent.type(currency, "EUR");
     await userEvent.click(screen.getByRole("option", { name: /^EUR/ }));
-    await userEvent.type(within(dialog).getByLabelText(/^Amount/), "100");
+    await userEvent.type(within(dialog).getByLabelText(/^Unit cost/), "100");
     await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
     expect(await within(dialog).findByText("Enter the exchange rate")).toBeInTheDocument();
     await userEvent.type(within(dialog).getByLabelText(/Exchange rate/), "0.85");
     expect(within(dialog).getByLabelText("Cost preview")).toHaveTextContent("£85.00");
     await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
-    await waitFor(() => expect(lastCall("POST /ncrs/n1/costs").body).toMatchObject({ costType: "transport", currency: "EUR", amount: 100, exchangeRate: 0.85 }));
+    await waitFor(() => expect(lastCall("POST /ncrs/n1/costs").body).toMatchObject({ costType: "transport", currency: "EUR", quantity: 1, unitCost: 100, exchangeRate: 0.85 }));
   });
 
   it("deletes a cost with a reason", async () => {
@@ -1208,7 +1294,7 @@ describe("dialogs inside the NC form", () => {
     const dialog = screen.getByRole("dialog", { name: "New cost item" });
     await userEvent.click(within(dialog).getByRole("combobox", { name: /Cost type/ }));
     await userEvent.click(await screen.findByRole("option", { name: "Rework" }));
-    await userEvent.type(within(dialog).getByLabelText(/^Amount/), "10");
+    await userEvent.type(within(dialog).getByLabelText(/^Unit cost/), "10");
     await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
     await waitFor(() => expect(lastCall("POST /ncrs/n1/costs")).toBeTruthy());
     expect(lastCall("PATCH /ncrs/n1")).toBeUndefined();

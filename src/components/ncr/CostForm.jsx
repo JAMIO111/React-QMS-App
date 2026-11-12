@@ -2,13 +2,13 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
-import { ArrowRightLeftIcon, CoinsIcon, FileTextIcon, ReceiptIcon, SaveIcon, TagIcon } from "@/components/icons";
+import { ArrowRightLeftIcon, CoinsIcon, FileTextIcon, HashIcon, ReceiptIcon, SaveIcon, TagIcon } from "@/components/icons";
 import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import TextInput from "../ui/TextInput";
 import CTAButton from "../CTAButton";
 import { describeApiError } from "../../lib/api-client";
-import { COST_TYPES, CURRENCY_OPTIONS, VAT_OPTIONS, costAmounts, currencySymbol, formatMoney } from "../../lib/costs";
+import { COST_TYPES, CURRENCY_OPTIONS, VAT_OPTIONS, costAmounts, currencySymbol, formatMoney, formatQuantity, formatUnitMoney } from "../../lib/costs";
 
 const number = (message) =>
   z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : Number(v)), z.number({ required_error: message, invalid_type_error: message }));
@@ -21,11 +21,13 @@ const schema = z
     currency: z.string({ required_error: "Choose a currency", invalid_type_error: "Choose a currency" }),
     vatTreatment: z.enum(["none", "inclusive", "exclusive"]),
     vatRatePercent: number("Enter the VAT rate").pipe(z.number().min(0, "0–99%").lt(100, "0–99%")),
-    amount: number("Enter the amount").pipe(z.number().min(0, "Cannot be negative").lt(1e12)),
+    quantity: number("Enter the quantity").pipe(z.number().gt(0, "Must be more than 0").lt(1e9, "Too many")),
+    unitCost: number("Enter the unit cost").pipe(z.number().min(0, "Cannot be negative").lt(1e12)),
     exchangeRate: z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : Number(v)), z.number().positive("Must be more than 0").optional()),
     baseCurrency: z.string(),
   })
-  .refine((v) => v.currency === v.baseCurrency || v.exchangeRate, { path: ["exchangeRate"], message: "Enter the exchange rate" });
+  .refine((v) => v.currency === v.baseCurrency || v.exchangeRate, { path: ["exchangeRate"], message: "Enter the exchange rate" })
+  .refine((v) => v.quantity * v.unitCost < 1e12, { path: ["unitCost"], message: "The total is too large" });
 
 /** Form values for a cost (new: organisation defaults). */
 const initialValues = (cost, { baseCurrency, defaultCurrency, vatRate }) =>
@@ -37,7 +39,8 @@ const initialValues = (cost, { baseCurrency, defaultCurrency, vatRate }) =>
         currency: cost.currency,
         vatTreatment: cost.vatTreatment,
         vatRatePercent: cost.vatTreatment === "none" ? round(vatRate * 100) : round(cost.vatRate * 100),
-        amount: cost.amount,
+        quantity: cost.quantity ?? 1,
+        unitCost: cost.unitCost ?? cost.amount,
         exchangeRate: cost.currency === baseCurrency ? "" : cost.exchangeRate,
         baseCurrency,
       }
@@ -48,16 +51,26 @@ const initialValues = (cost, { baseCurrency, defaultCurrency, vatRate }) =>
         currency: defaultCurrency || baseCurrency,
         vatTreatment: "none",
         vatRatePercent: round(vatRate * 100),
-        amount: "",
+        quantity: 1,
+        unitCost: "",
         exchangeRate: "",
         baseCurrency,
       };
 const round = (n) => Math.round(n * 10000) / 10000;
 
+/** Quantity × unit cost, rounded to pennies as the database does; null until both are numbers. */
+export const lineAmount = (quantity, unitCost) => {
+  if (quantity === "" || quantity === null || quantity === undefined || unitCost === "" || unitCost === null || unitCost === undefined) return null;
+  const q = Number(quantity);
+  const u = Number(unitCost);
+  if (Number.isNaN(q) || Number.isNaN(u)) return null;
+  return Math.round(q * u * 100) / 100;
+};
+
 /**
  * Add or edit a cost line (ported from the original CostInputForm): cost type, VAT option and
- * rate, currency (starts as `defaultCurrency`, the NC's site currency; exchange rate to the organisation's base currency) and amount, with a live
- * net / VAT / gross preview. The server works out the stored totals the same way.
+ * rate, currency (starts as `defaultCurrency`, the NC's site currency; exchange rate to the organisation's base currency), quantity and unit cost,
+ * with a live amount and net / VAT / gross preview. The server works out the stored amount and totals the same way.
  */
 const CostForm = ({ cost, baseCurrency = "GBP", defaultCurrency, vatRate = 0.2, onSubmit, onCancel, pending, error }) => {
   const { control, handleSubmit, watch } = useForm({
@@ -66,8 +79,10 @@ const CostForm = ({ cost, baseCurrency = "GBP", defaultCurrency, vatRate = 0.2, 
   });
   const v = watch();
   const foreign = v.currency && v.currency !== baseCurrency;
-  const preview = costAmounts({ ...v, vatRate: Number(v.vatRatePercent) / 100 }, baseCurrency);
-  const amountLabel = v.vatTreatment === "inclusive" ? "Amount (inc. VAT)" : v.vatTreatment === "exclusive" ? "Amount (ex. VAT)" : "Amount";
+  const amount = lineAmount(v.quantity, v.unitCost);
+  const preview = costAmounts({ ...v, amount, vatRate: Number(v.vatRatePercent) / 100 }, baseCurrency);
+  const unitLabel = v.vatTreatment === "inclusive" ? "Unit cost (inc. VAT)" : v.vatTreatment === "exclusive" ? "Unit cost (ex. VAT)" : "Unit cost";
+  const symbol = currencySymbol(v.currency).length <= 2 ? currencySymbol(v.currency) : undefined;
 
   const submit = handleSubmit((values) =>
     onSubmit({
@@ -77,7 +92,8 @@ const CostForm = ({ cost, baseCurrency = "GBP", defaultCurrency, vatRate = 0.2, 
       currency: values.currency,
       vatTreatment: values.vatTreatment,
       vatRate: values.vatTreatment === "none" ? 0 : round(values.vatRatePercent / 100),
-      amount: values.amount,
+      quantity: values.quantity,
+      unitCost: values.unitCost,
       exchangeRate: values.currency === baseCurrency ? 1 : values.exchangeRate,
     })
   );
@@ -93,9 +109,10 @@ const CostForm = ({ cost, baseCurrency = "GBP", defaultCurrency, vatRate = 0.2, 
         {v.vatTreatment !== "none" &&
           field("vatRatePercent", (f) => <TextInput {...f} label="VAT rate" required dataType="number" icon={ReceiptIcon} suffix="%" placeholder="20" value={f.value ?? ""} />)}
         {field("currency", (f) => <RHFComboBox {...f} label="Currency" required icon={CoinsIcon} placeholder="Select a currency" options={CURRENCY_OPTIONS} sort={false} clearable={false} />)}
-        {field("amount", (f) => (
-          <TextInput {...f} label={amountLabel} required dataType="number" icon={CoinsIcon} prefix={currencySymbol(v.currency).length <= 2 ? currencySymbol(v.currency) : undefined} placeholder="0.00" value={f.value ?? ""} />
+        {field("quantity", (f) => (
+          <TextInput {...f} label="Quantity" required dataType="number" icon={HashIcon} placeholder="1" hint="Pieces, hours, kilograms…" value={f.value ?? ""} />
         ))}
+        {field("unitCost", (f) => <TextInput {...f} label={unitLabel} required dataType="number" icon={CoinsIcon} prefix={symbol} placeholder="0.00" value={f.value ?? ""} />)}
         {foreign &&
           field("exchangeRate", (f) => (
             <TextInput {...f} label={`Exchange rate (1 ${v.currency} = ? ${baseCurrency})`} required dataType="number" icon={ArrowRightLeftIcon} placeholder="1.00" value={f.value ?? ""} />
@@ -106,6 +123,12 @@ const CostForm = ({ cost, baseCurrency = "GBP", defaultCurrency, vatRate = 0.2, 
       </div>
 
       <dl aria-label="Cost preview" className="grid grid-cols-3 gap-2 rounded-xl border border-border-color bg-secondary-bg p-3 text-sm">
+        <div className="col-span-3 flex flex-wrap items-baseline gap-x-2">
+          <dt className="text-secondary-text">Amount</dt>
+          <dd className="font-semibold text-primary-text">
+            {amount !== null ? `${formatQuantity(v.quantity)} × ${formatUnitMoney(v.unitCost, v.currency)} = ${formatMoney(amount, v.currency)}` : "—"}
+          </dd>
+        </div>
         {[
           ["Net", preview && formatMoney(preview.net, v.currency)],
           ["VAT", preview && formatMoney(preview.vat, v.currency)],

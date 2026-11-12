@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Controller, useForm } from "react-hook-form";
 import {
+  BuildingIcon,
+  UserSearchIcon,
   AlignCenterIcon,
   ArrowLeftIcon,
   BoxIcon,
@@ -37,7 +39,7 @@ import TextInput from "../ui/TextInput";
 import FileDrop from "../ui/FileDrop";
 import SideMenuItem from "../SideMenuItem";
 import { useToast } from "../../contexts/ToastProvider";
-import { usePermissions, useSites } from "../../hooks/useQmsApi";
+import { useAllDepartments, usePermissions, useSites } from "../../hooks/useQmsApi";
 import { useClassifications, useEmployees, useNcr, useNcrMutation, useNcrNewDefaults } from "../../hooks/useNcr";
 import { describeApiError } from "../../lib/api-client";
 import { NCR_REGISTER, NC_SOURCES, SEVERITIES, SOURCE_OPTIONS, detectionApplies, formatDate, ncrPath, sourceLabel, stageOf } from "../../lib/ncr";
@@ -121,6 +123,7 @@ const NcrPage = () => {
   const { data: lists } = useClassifications();
   const { data: employees } = useEmployees();
   const { data: sites } = useSites();
+  const { data: departments } = useAllDepartments({ includeInactive: true });
   const mutation = useNcrMutation();
   const settings = useProductionSettings();
   const canLinkProduction = can("production.read");
@@ -141,11 +144,16 @@ const NcrPage = () => {
   const hasMoreDetails = (customFields?.data ?? []).some((f) => f.active || (!isNew && ncr?.customValues?.[f.key] != null && ncr.customValues[f.key] !== ""));
   const categoryChosen = useRef(false);
   const siteChosen = useRef(false);
+  const detectorChosen = useRef(false);
   useEffect(() => {
     if (isNew && defaults && !categoryChosen.current) setValue("categoryId", defaults.category?.id ?? null);
   }, [isNew, defaults, setValue]);
   useEffect(() => {
     if (isNew && defaults && !siteChosen.current) setValue("siteId", defaults.site.suggestedId ?? null);
+  }, [isNew, defaults, setValue]);
+  // Who detected it starts as the person's own employee record; once they pick someone it stays theirs.
+  useEffect(() => {
+    if (isNew && defaults && !detectorChosen.current) setValue("detectedByEmployeeId", defaults.detectedBy?.id ?? null);
   }, [isNew, defaults, setValue]);
 
   const locked = !isNew && ncr && (ncr.stage === "closed" || ncr.stage === "cancelled" || !!ncr.deletedAt);
@@ -218,6 +226,17 @@ const NcrPage = () => {
   if (ncr?.category && !categories.some((c) => c.id === ncr.category.id)) categories.push({ id: ncr.category.id, name: `${ncr.category.name} (inactive)` });
   // The site: a new NC offers only the sites the person may raise NCs at (fixed when there is one); an organisation with one site never asks.
   const allSites = (sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }));
+  // People from the Employees register (active ones, plus whoever is already named) and the organisation's departments (site code as the hint).
+  const employeeOptions = (current, saved) => {
+    const list = (employees ?? []).filter((e) => e.active || e.id === current).map((e) => ({ id: e.id, name: e.name, hint: e.jobTitle ?? undefined }));
+    return saved && current === saved.id && !list.some((e) => e.id === saved.id) ? [...list, { id: saved.id, name: saved.name || "Employee" }] : list;
+  };
+  const siteCode = new Map((sites?.data ?? []).map((s) => [s.id, s.code]));
+  const departmentOptions = (departments?.data ?? [])
+    .filter((d) => d.active !== false || d.id === form.responsibleDepartmentId)
+    .map((d) => ({ id: d.id, name: d.name, hint: [d.code, siteCode.get(d.siteId)].filter(Boolean).join(" · ") || undefined }));
+  if (ncr?.responsibleDepartment && form.responsibleDepartmentId === ncr.responsibleDepartment.id && !departmentOptions.some((d) => d.id === ncr.responsibleDepartment.id))
+    departmentOptions.push({ id: ncr.responsibleDepartment.id, name: ncr.responsibleDepartment.name });
   const siteOptions = isNew && defaults ? defaults.site.choices.map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` })) : allSites;
   const oneSiteOrganisation = isNew ? !!defaults?.site.organisationHasOneSite : allSites.length === 1 && (!form.siteId || form.siteId === allSites[0].id);
   const siteField = oneSiteOrganisation ? "hidden" : isNew && defaults?.site.choices.length === 1 ? "fixed" : "picker";
@@ -443,11 +462,18 @@ const NcrPage = () => {
                 {siteField === "fixed" && (
                   <ReadOnlyField label="Site" icon={HouseIcon} value={siteOptions[0]?.name} hint="The only site you can raise non-conformances at" />
                 )}
+                {/* Where and by whom it was found, side by side. */}
+                <div className="grid grid-cols-1 items-start gap-x-8 gap-y-4 lg:col-span-2 lg:grid-cols-2">
                 {detectionApplies(source)
                   ? controlled("detectionProcessId", (f) => <MachinePicker {...f} label="Where detected" icon={FactoryIcon} current={ncr?.detectionProcess} />)
                   : ncr?.detectionProcess && (
                       <ReadOnlyField label="Where detected" icon={FactoryIcon} value={ncr.detectionProcess.name} hint={`Not asked for a ${sourceLabel(source).toLowerCase()} non-conformance; kept from before`} />
                     )}
+                {controlled("detectedByEmployeeId", (f) => (
+                  <RHFComboBox {...f} label="Detected by" icon={UserSearchIcon} placeholder="Who found it"
+                    options={employeeOptions(form.detectedByEmployeeId, ncr?.detectedByEmployee)} />
+                ), () => { detectorChosen.current = true; })}
+                </div>
                 <div className="lg:col-span-2">
                   <RHFTextArea label="Description" icon={AlignCenterIcon} value={form.description} onChange={set("description")} disabled={!canEdit} max={5000} rows={4} placeholder="Describe the non-conformance" />
                 </div>
@@ -515,8 +541,12 @@ const NcrPage = () => {
                 {source !== "supplier" &&
                   controlled("responsibleEmployeeId", (f) => (
                     <RHFComboBox {...f} label="Responsible operator" icon={UsersIcon} placeholder="Select an operator"
-                      options={(employees ?? []).filter((e) => e.active || e.id === form.responsibleEmployeeId).map((e) => ({ id: e.id, name: e.name, hint: e.jobTitle ?? undefined }))} />
+                      options={employeeOptions(form.responsibleEmployeeId, ncr?.responsibleEmployee)} />
                   ))}
+                {controlled("responsibleDepartmentId", (f) => (
+                  <RHFComboBox {...f} label="Responsible department" icon={BuildingIcon} placeholder="Select a department"
+                    options={departmentOptions} />
+                ))}
               </div>
               {!isNew && ncr && <NcrCapaCard ncr={ncr} />}
               {!isNew && ncr && <NcrScarCard ncr={ncr} />}

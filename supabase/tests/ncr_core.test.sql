@@ -56,7 +56,7 @@ BEGIN
   -- Create: the reference is generated (even if one is supplied); drafts need little.
   INSERT INTO public.nonconformances (organisation_id, reference, source, title, site_id, legacy_ncm_id)
     VALUES (org, 'FORGED-1', 'internal', 'Bore oversize', site_a, gen_random_uuid()) RETURNING id INTO ncr;
-  PERFORM pg_temp.assert_eq((SELECT reference ~ ('^NCM-' || to_char(current_date, 'YY') || '-001$') FROM public.nonconformances WHERE id = ncr), true, 'reference generated per organisation and year');
+  PERFORM pg_temp.assert_eq((SELECT reference ~ ('^NCM-' || to_char(current_date, 'YY') || '-0001$') FROM public.nonconformances WHERE id = ncr), true, 'reference generated per organisation and year');
   PERFORM pg_temp.assert_eq((SELECT stage || '|' || (legacy_ncm_id IS NULL) || '|' || created_by FROM public.nonconformances WHERE id = ncr), 'draft|true|20000000-0000-0000-0000-000000000101', 'draft, no forged legacy link, stamped creator');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.outbox_events WHERE entity_id = ncr AND event_type = 'ncr.created'), 1::bigint, 'creation event');
 

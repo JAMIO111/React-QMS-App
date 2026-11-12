@@ -81,7 +81,7 @@ describe('non-conformances', () => {
       .expect(201);
     internal = res.body.id;
     expect(res.body).toMatchObject({
-      reference: expect.stringMatching(/^NCM-\d{2}-\d{3}$/),
+      reference: expect.stringMatching(/^NCM-\d{2}-\d{4}$/),
       source: 'internal',
       stage: 'draft',
       part: { partNumber: 'BRK-100', revision: 'A' },
@@ -195,6 +195,18 @@ describe('non-conformances', () => {
     const listed = await api().get('/api/v1/ncrs').set(h).expect(200);
     expect(listed.body.data.map((n: { id: string }) => n.id)).toEqual([atB.body.id]);
     await api().get(`/api/v1/ncrs/${internal}`).set(h).expect(404);
+  });
+
+  it('sorts references by their number, so three-digit ones from before sit in order with four-digit ones', async () => {
+    for (const ref of ['NCM-24-0100', 'NCM-24-010', 'NCM-24-0011', 'NCM-24-009']) {
+      await admin.query(`insert into public.nonconformances (organisation_id, site_id, source, title, reference) values ($1, $2, 'internal', 'Numbering order', $3)`,
+        [ids.orgA, ids.siteA, ref]);
+    }
+    const h = await as(ids.ownerA);
+    const refs = async (order: string) => (await api().get(`/api/v1/ncrs?q=numbering%20order&sort=reference&order=${order}`).set(h).expect(200)).body.data
+      .map((n: { reference: string }) => n.reference);
+    expect(await refs('asc')).toEqual(['NCM-24-009', 'NCM-24-010', 'NCM-24-0011', 'NCM-24-0100']);
+    expect(await refs('desc')).toEqual(['NCM-24-0100', 'NCM-24-0011', 'NCM-24-010', 'NCM-24-009']);
   });
 
   it('lists personnel for the responsible-operator picker', async () => {

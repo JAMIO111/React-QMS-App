@@ -147,7 +147,7 @@ describe('the operator monitor', () => {
       (await api().get('/api/v1/platform/activity?limit=200').set(await mfa())).body,
       (await api().get('/api/v1/platform/payments').set(await mfa())).body,
     ]);
-    expect(all).not.toContain('NCM-26-001'); // the seeded non-conformance of each organisation
+    expect(all).not.toMatch(/NCM-\d{2}-\d{3,}/); // the seeded non-conformance of each organisation
   });
 });
 

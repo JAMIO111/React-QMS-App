@@ -24,9 +24,14 @@ import {
   UpdateNcrBody,
 } from './ncr.schemas';
 
+/**
+ * Sorts references by their running number, not as text: NC numbers moved from three digits to four (SNC-26-010, then SNC-26-0011), and
+ * as text -0011 would come before -010. The part before the number (prefix and year) sorts as text, the number as a number.
+ */
+const REFERENCE_ORDER = `regexp_replace(n.reference, '[0-9]+$', '') || lpad(coalesce(substring(n.reference from '[0-9]+$'), ''), 12, '0')`;
 const STAGE_ORDER = `array_position(array['draft','open','contained','investigating','dispositioned','awaiting_closure','closed','cancelled'], n.stage)`;
 const SORT_SQL: Record<NcrListQuery['sort'], string> = {
-  reference: 'n.reference',
+  reference: REFERENCE_ORDER,
   detectedAt: 'n.detected_at',
   title: 'lower(n.title)',
   stage: STAGE_ORDER,
@@ -173,7 +178,7 @@ export class NcrService {
       }
       const cf = await customFilterSql(db, ctx.organisationId!, 'nonconformance', sql`n.id`, custom);
       if (cf) where.push(cf);
-      const order = sql.raw(`${SORT_SQL[q.sort]} ${q.order} nulls last, n.reference ${q.order}`);
+      const order = sql.raw(`${SORT_SQL[q.sort]} ${q.order} nulls last, ${REFERENCE_ORDER} ${q.order}`);
       const result = await db.execute<Row>(sql`
         select ${sql.raw(SELECT_SUMMARY)}, count(*) over () as total_count
         ${sql.raw(FROM)}

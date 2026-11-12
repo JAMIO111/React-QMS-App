@@ -239,7 +239,7 @@ Migration `20260216100000_quality_objectives.sql` (applied live 2026-11-12; push
 
 ## 16. MR2 as built (2026-11-12)
 
-Migration `20260217100000_management_reviews.sql` (not yet applied live; pushing the API before it leaves only the management review endpoints failing).
+Migration `20260217100000_management_reviews.sql` (applied live 2026-11-12; pushing the API before it leaves only the management review endpoints failing).
 
 - **Tables** (all functions-only writes, audited, RLS `management_review.read`): `management_reviews` (`MR-YY-NN` per organisation and year; title, period (≤ 3 years), planned date, held on,
   chair = active member, minutes as TipTap JSON + text; planned → in_progress → completed | cancelled), `management_review_inputs` (the twelve sections of §5, made when planned, in

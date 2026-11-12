@@ -60,6 +60,8 @@ export class OrganisationsService {
             ...(s.allowInlineOrders !== undefined ? { allowInlineOrders: s.allowInlineOrders } : {}),
             ...(s.requireProductionOrder !== undefined ? { requireProductionOrder: s.requireProductionOrder } : {}),
             ...(s.advancedImports !== undefined ? { advancedImports: s.advancedImports } : {}),
+            ...(s.reminderTime !== undefined ? { reminderTime: `${s.reminderTime}:00` } : {}),
+            ...(s.timeZone !== undefined ? { timeZone: s.timeZone } : {}),
             ...(s.logoPath !== undefined ? { logoPath: s.logoPath } : {}),
           })
           .where(eq(organisationSettings.organisationId, organisationId))
@@ -94,6 +96,9 @@ export class OrganisationsService {
         allowInlineOrders: row.settings.allowInlineOrders,
         requireProductionOrder: row.settings.requireProductionOrder,
         advancedImports: row.settings.advancedImports,
+        reminderTime: String(row.settings.reminderTime).slice(0, 5),
+        timeZone: row.settings.timeZone ?? null,
+        effectiveTimeZone: (await db.execute<{ z: string }>(sql`select app.organisation_time_zone(${organisationId}::uuid) as z`)).rows[0].z,
         logoPath: row.settings.logoPath ?? null,
       },
     };

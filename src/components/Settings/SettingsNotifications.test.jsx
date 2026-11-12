@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 
 const apiFetch = vi.fn();
 vi.mock("../../lib/api-client", async (importOriginal) => ({ ...(await importOriginal()), apiFetch: (...a) => apiFetch(...a) }));
@@ -16,10 +17,23 @@ const pref = (over = {}) => ({
 });
 
 let state;
+let areas;
 beforeEach(() => {
   apiFetch.mockReset();
+  areas = {
+    reminderTime: "07:00",
+    timeZone: "Europe/London",
+    data: [
+      { area: "capa_actions", label: "8D actions", description: "8D actions assigned to you", soonDays: 7, enabled: true },
+      { area: "gauges", label: "Gauge calibration", description: "Gauges in your custody due for calibration", soonDays: 14, enabled: true },
+    ],
+  };
   state = { email: { sending: false }, data: [pref(), pref({ eventKey: "parts.updated", action: "updated", description: "Part changed", enabled: false, defaultEnabled: false })] };
   apiFetch.mockImplementation(async (path, opts = {}) => {
+    if (path === "/reminder-areas") {
+      if (opts.method === "PUT") areas = { ...areas, data: areas.data.map((a) => (a.area === opts.body.area ? { ...a, enabled: opts.body.enabled } : a)) };
+      return areas;
+    }
     if (opts.method === "PUT") {
       state = { ...state, data: state.data.map((p) => (p.eventKey === opts.body.eventKey ? { ...p, ...("email" in opts.body ? { email: opts.body.email ?? p.emailDefault, emailOverridden: opts.body.email !== null } : {}) } : p)) };
     }
@@ -30,7 +44,9 @@ beforeEach(() => {
 const renderPage = () =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <SettingsNotifications />
+      <MemoryRouter>
+        <SettingsNotifications />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 
@@ -56,5 +72,18 @@ describe("Settings → Notifications", () => {
     renderPage();
     await screen.findByRole("button", { name: "Part created by email" });
     expect(screen.queryByText("Emails are not being sent yet")).toBeNull();
+  });
+
+  it("lists the reminder areas with the organisation's time, and switches one off at once and on the server", async () => {
+    renderPage();
+    const list = await screen.findByRole("list", { name: "Reminder areas" });
+    expect(screen.getByText(/Once a day at 07:00 \(Europe\/London\)/)).toBeInTheDocument();
+    expect(list).toHaveTextContent("Gauges in your custody due for calibration · from 14 days before");
+    const sw = screen.getByRole("switch", { name: "Remind me about Gauge calibration" });
+    expect(sw).toBeChecked();
+    await userEvent.click(sw);
+    expect(sw).not.toBeChecked();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/reminder-areas", expect.objectContaining({ method: "PUT", body: { area: "gauges", enabled: false } })));
+    expect(screen.getByRole("link", { name: "See my reminders" })).toHaveAttribute("href", "/Reminders");
   });
 });

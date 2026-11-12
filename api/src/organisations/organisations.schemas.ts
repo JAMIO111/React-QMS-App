@@ -32,6 +32,11 @@ export const OrganisationResponse = z.object({
     requireProductionOrder: z.boolean(),
     /** The formula editor and the import template manager are shown (UI2c). */
     advancedImports: z.boolean(),
+    /** When the daily reminders go out (HH:MM, WK2), in `timeZone`. */
+    reminderTime: z.string(),
+    /** The organisation's own time zone; null = its first site's. `effectiveTimeZone` is the one in use. */
+    timeZone: z.string().nullable(),
+    effectiveTimeZone: z.string(),
     /** Path of the logo in the private org-logos bucket (<organisation id>/logo/...), or null. */
     logoPath: z.string().nullable(),
   }),
@@ -74,6 +79,24 @@ export const UpdateOrganisationBody = z
         allowInlineOrders: z.boolean().optional(),
         requireProductionOrder: z.boolean().optional(),
         advancedImports: z.boolean().optional(),
+        /** HH:MM, on a five-minute step. */
+        reminderTime: z.string().trim().regex(/^([01]\d|2[0-3]):[0-5][05]$/, 'Use HH:MM on a five-minute step').optional(),
+        /** An IANA time zone (the database refuses an unknown one); null = the first site's. */
+        timeZone: z
+          .string()
+          .trim()
+          .min(1)
+          .max(64)
+          .refine((z) => {
+            try {
+              new Intl.DateTimeFormat('en-GB', { timeZone: z });
+              return true;
+            } catch {
+              return false;
+            }
+          }, 'Unknown time zone')
+          .nullable()
+          .optional(),
         /** Set after uploading to org-logos at <organisation id>/logo/...; null removes the logo. */
         logoPath: z.string().trim().max(300).nullable().optional(),
       })

@@ -17,6 +17,8 @@ export interface EmailRow {
   created_at: string | Date;
 }
 
+import { reminderPath } from '../reminders/reminder-paths';
+
 const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const id = (v: unknown): string | null => (typeof v === 'string' && UUID.test(v) ? v : null);
@@ -60,6 +62,10 @@ export function notificationPath(entityType: string, entityId: string, details: 
       return '/Settings/Subscription';
     case 'organisation_users':
       return '/Settings/Users';
+    case 'reminder_digests':
+      return '/Reminders';
+    case 'reminder_overdue_notices':
+      return reminderPath(d.area, d.target_id);
     case 'integration_alerts':
       return id(d.connection_id) && id(d.run_id) ? `/Settings/Integrations/${id(d.connection_id)}/runs/${id(d.run_id)}` : '/Settings/Integrations';
     default:

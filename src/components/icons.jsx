@@ -24,6 +24,8 @@ import {
   AtSign as LucideAtSign,
   Ban as LucideBan,
   Bell as LucideBell,
+  BellOff as LucideBellOff,
+  AlarmClock as LucideAlarmClock,
   Box as LucideBox,
   Boxes as LucideBoxes,
   Calendar as LucideCalendar,
@@ -181,6 +183,8 @@ export const ArrowUpZAIcon = withDefaults(LucideArrowUpZA);
 export const AtSignIcon = withDefaults(LucideAtSign);
 export const BanIcon = withDefaults(LucideBan);
 export const BellIcon = withDefaults(LucideBell);
+export const BellOffIcon = withDefaults(LucideBellOff);
+export const AlarmClockIcon = withDefaults(LucideAlarmClock);
 export const BoxIcon = withDefaults(LucideBox);
 export const BoxesIcon = withDefaults(LucideBoxes);
 export const CalendarIcon = withDefaults(LucideCalendar);

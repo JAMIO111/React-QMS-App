@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { FolderOpenIcon, ScanSearchIcon, SettingsIcon } from "@/components/icons";
+import { AlarmClockIcon, FolderOpenIcon, ScanSearchIcon, SettingsIcon } from "@/components/icons";
 import { menuStructure } from "../MenuStructure";
 
 /**
@@ -47,6 +47,7 @@ const MENU_ROOTS = [
   ...menuStructure.flatMap((m) => [m.path, ...m.subMenu.map((s) => s.path)].map((path) => ({ path: path.toLowerCase(), Icon: m.icon }))),
   { path: "/settings", Icon: SettingsIcon },
   { path: "/jobs", Icon: ScanSearchIcon },
+  { path: "/reminders", Icon: AlarmClockIcon },
 ];
 
 export const breadcrumbIcon = (path) => {

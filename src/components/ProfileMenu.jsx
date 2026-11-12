@@ -1,4 +1,4 @@
-import { CircleHelpIcon, LogOutIcon, MoonStarIcon, SettingsIcon, SunIcon } from "@/components/icons";
+import { AlarmClockIcon, CircleHelpIcon, LogOutIcon, MoonStarIcon, SettingsIcon, SunIcon } from "@/components/icons";
 import DropdownMenu from "./ui/DropdownMenu";
 import { useUser } from "../contexts/UserProvider";
 import useSignedAvatarUrl from "../hooks/useSignedAvatarURL";
@@ -26,6 +26,7 @@ const ProfileMenu = () => {
         </>
       }
       items={[
+        { label: "My reminders", icon: AlarmClockIcon, to: "/Reminders" },
         { label: "Settings", icon: SettingsIcon, to: "/Settings" },
         HELP_URL
           ? { label: "Help", icon: CircleHelpIcon, href: HELP_URL }

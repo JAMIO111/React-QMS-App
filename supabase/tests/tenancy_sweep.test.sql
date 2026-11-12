@@ -277,6 +277,12 @@ BEGIN
           app.add_management_review_action(m.id, jsonb_build_object('description', 'Sweep action', 'decisionId', app.add_management_review_decision(m.id, 'Sweep decision', 'other')))
      FROM public.management_reviews m WHERE m.organisation_id = a AND m.title = 'Sweep review';
   PERFORM pg_temp.logout();
+  -- Reminders (WK2): an area switched off, a digest and an overdue notice (seeded directly; only the worker writes the last two).
+  INSERT INTO public.reminder_preferences (organisation_id, user_id, area, enabled) VALUES (a, '50000000-0000-0000-0000-0000000000a1', 'gauges', false);
+  INSERT INTO public.reminder_digests (organisation_id, user_id, day, overdue, due_soon, summary, items)
+    VALUES (a, '50000000-0000-0000-0000-0000000000a1', current_date, 1, 0, '1 overdue: sweep', '[]'::jsonb);
+  INSERT INTO public.reminder_overdue_notices (organisation_id, user_id, area, record_id, target_id, label, due_on)
+    VALUES (a, '50000000-0000-0000-0000-0000000000a1', 'risk_actions', gen_random_uuid(), gen_random_uuid(), 'Sweep action', current_date - 1);
   -- Document control (DC2): a named reviewer and a sign-off (one member in A, so seeded directly; people write through the functions).
   INSERT INTO public.document_revision_reviewers (organisation_id, revision_id, user_id)
     SELECT a, r.id, '50000000-0000-0000-0000-0000000000a1' FROM public.document_revisions r JOIN public.documents d ON d.id = r.document_id WHERE d.organisation_id = a AND d.title = 'Sweep procedure';

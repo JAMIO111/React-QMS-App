@@ -164,6 +164,8 @@ import { CronService } from './cron/cron.service';
 import { WorkerController } from './worker/worker.controller';
 import { WorkerService } from './worker/worker.service';
 import { WorkerJobRegistry } from './worker/job-registry';
+import { RemindersController } from './reminders/reminders.controller';
+import { RemindersService } from './reminders/reminders.service';
 import { OrganisationGuard } from './tenancy/organisation.guard';
 
 @Module({})
@@ -198,6 +200,7 @@ export class AppModule implements NestModule {
         PlatformController,
         CronController,
         WorkerController,
+        RemindersController,
         OnboardingController,
         OrganisationsController,
         SitesController,
@@ -308,6 +311,7 @@ export class AppModule implements NestModule {
         CronService,
         WorkerService,
         WorkerJobRegistry,
+        RemindersService,
         CronGuard,
         OnboardingService,
         MasterDataService,

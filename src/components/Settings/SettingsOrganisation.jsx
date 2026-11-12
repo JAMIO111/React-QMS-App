@@ -5,6 +5,7 @@ import ThemeColourPicker from "./ThemeColourPicker";
 import OrganisationLogo from "./OrganisationLogo";
 import ProductionSettings from "./ProductionSettings";
 import RequireMfaSetting from "./RequireMfaSetting";
+import ReminderTimeSetting from "./ReminderTimeSetting";
 import { describeApiError, API_URL } from "../../lib/api-client";
 import {
   useOrganisationDetails,
@@ -221,6 +222,8 @@ const SettingsOrganisation = () => {
         value={!!org.settings.requireMfa}
         canManage={canManage}
       />
+
+      <ReminderTimeSetting settings={org.settings} canManage={canManage} />
 
       <ProductionSettings
         settings={{

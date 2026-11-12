@@ -2,7 +2,7 @@
  * Drizzle definitions for the tables the API reads/writes directly. The SQL migrations in
  * supabase/migrations are the source of truth; keep these in step with them.
  */
-import { boolean, integer, numeric, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, integer, numeric, pgTable, text, time, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 export const profiles = pgTable('profiles', {
   id: uuid('id').primaryKey(),
@@ -36,6 +36,8 @@ export const organisationSettings = pgTable('organisation_settings', {
   allowInlineOrders: boolean('allow_inline_orders').notNull(),
   requireProductionOrder: boolean('require_production_order').notNull(),
   advancedImports: boolean('advanced_imports').notNull(),
+  reminderTime: time('reminder_time').notNull(),
+  timeZone: text('time_zone'),
 });
 
 export const organisationUsers = pgTable('organisation_users', {

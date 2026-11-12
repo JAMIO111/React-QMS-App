@@ -1,4 +1,5 @@
 import { ncrPath } from "./ncr";
+import { reminderPath } from "./reminders";
 /** Where a notification leads, from its entity type and the ids stored in `details`. */
 export function notificationLink(n) {
   const d = n.details ?? {};
@@ -44,6 +45,10 @@ export function notificationLink(n) {
       return "/Settings/Subscription";
     case "organisation_users":
       return "/Settings/Users";
+    case "reminder_digests":
+      return "/Reminders";
+    case "reminder_overdue_notices":
+      return reminderPath(d.area, d.target_id);
     case "integration_alerts":
       return d.connection_id && d.run_id ? `/Settings/Integrations/${d.connection_id}/runs/${d.run_id}` : "/Settings/Integrations";
     default:

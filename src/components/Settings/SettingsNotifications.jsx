@@ -3,6 +3,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import LoadingButton from "../ui/LoadingButton";
 import Switch from "@/components/ui/Switch";
 import Callout from "../ui/Callout";
+import ReminderAreasCard from "./ReminderAreasCard";
 import { BellIcon, MailIcon } from "@/components/icons";
 import { ApiUnavailable } from "./SettingsOrganisation";
 import { describeApiError } from "../../lib/api-client";
@@ -79,6 +80,7 @@ const SettingsNotifications = () => {
           </LoadingButton>
         }
       />
+      <ReminderAreasCard />
       {delivery && !delivery.sending && (
         <Callout tone="info" title="Emails are not being sent yet">
           Your email choices are saved, but this server has no mail provider set up, so nothing is emailed until it has one.

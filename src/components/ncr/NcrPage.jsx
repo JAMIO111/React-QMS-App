@@ -70,6 +70,7 @@ import { useNcrGates } from "../../hooks/useNcr";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
+import { useCustomFields } from "../../hooks/useCustomFields";
 import { withCustomValues } from "../../lib/customFields";
 
 /** Section title with a rule, as in the original NC entry form. */
@@ -135,6 +136,9 @@ const NcrPage = () => {
   useEffect(() => reset(original), [original, reset]);
   // A new NC starts with the source's suggested category and the person's own site, until they choose one themselves.
   const { data: defaults } = useNcrNewDefaults(isNew ? source : null);
+  // "More details" (the organisation's own fields): every field in use, before the NC is saved too; a retired one only while this NC holds a value for it.
+  const { data: customFields } = useCustomFields("nonconformance", { includeRetired: true });
+  const hasMoreDetails = (customFields?.data ?? []).some((f) => f.active || (!isNew && ncr?.customValues?.[f.key] != null && ncr.customValues[f.key] !== ""));
   const categoryChosen = useRef(false);
   const siteChosen = useRef(false);
   useEffect(() => {
@@ -217,6 +221,9 @@ const NcrPage = () => {
   const siteOptions = isNew && defaults ? defaults.site.choices.map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` })) : allSites;
   const oneSiteOrganisation = isNew ? !!defaults?.site.organisationHasOneSite : allSites.length === 1 && (!form.siteId || form.siteId === allSites[0].id);
   const siteField = oneSiteOrganisation ? "hidden" : isNew && defaults?.site.choices.length === 1 ? "fixed" : "picker";
+  const inspectedQty = form.quantityInspected === "" || form.quantityInspected == null ? null : Number(form.quantityInspected);
+  const affectedQty = form.quantityAffected === "" || form.quantityAffected == null ? null : Number(form.quantityAffected);
+  const moreAffectedThanInspected = inspectedQty != null && affectedQty != null && Number.isFinite(inspectedQty) && Number.isFinite(affectedQty) && affectedQty > inspectedQty;
   const suggestedCategory = isNew && !!form.categoryId && form.categoryId === defaults?.category?.id;
   const subs = (lists?.subFailureModes ?? []).filter((s) => s.parentId === form.failureModeId);
   const opt = (items) => (items ?? []).map((c) => ({ id: c.id, name: c.code ? `${c.code} – ${c.name}` : c.name }));
@@ -244,10 +251,10 @@ const NcrPage = () => {
 
   const sections = [
     { key: "details", title: "NC Details", subtitle: "Log NC information", icon: ClipboardListIcon },
+    { key: "investigation", title: "Investigation", subtitle: "Classify the cause", icon: WrenchIcon },
     { key: "cost", title: "Cost", subtitle: "Track NC expenses", icon: PoundSterlingIcon, needsRecord: true },
     ...(settings.useLotsAndSerials ? [{ key: "lots", title: "Affected lots", subtitle: "Which lots are involved", icon: BoxesIcon, needsRecord: true }] : []),
     { key: "containment", title: "Containment", subtitle: "Stop suspect product", icon: ShieldCheckIcon, needsRecord: true },
-    { key: "investigation", title: "Investigation", subtitle: "Classify the cause", icon: WrenchIcon },
     { key: "disposition", title: "Disposition", subtitle: "What happens to the items", icon: ClipboardCheckIcon, needsRecord: true },
     { key: "info", title: "Additional Info", subtitle: "Files and attachments", icon: InboxIcon, needsRecord: true },
     { key: "history", title: "History", subtitle: "Who changed what", icon: HistoryIcon, needsRecord: true },
@@ -401,11 +408,6 @@ const NcrPage = () => {
                 {(source === "supplier" || source === "goods_receiving") && (
                   <>
                     {controlled("supplierId", (f) => <PartyPicker {...f} kind="suppliers" label="Supplier" icon={UsersIcon} current={ncr?.supplier} required={source === "supplier"} hint={source === "goods_receiving" ? "If you know which supplier it came from" : undefined} />)}
-                    {ncr?.supplier && (
-                      <p className="-mt-1 text-xs">
-                        <Link to={`/Suppliers/${ncr.supplier.id}`} className="text-link-color hover:underline">Open {ncr.supplier.name}&apos;s profile</Link>
-                      </p>
-                    )}
                     {text("purchaseOrder", "Purchase order", { maxLength: 60, icon: ReceiptIcon })}
                   </>
                 )}
@@ -423,9 +425,17 @@ const NcrPage = () => {
                   <SerialPicker {...f} partId={form.partId} lotId={form.lotId} current={ncr?.links?.serial} />
                 ), (id, item) => pickedProduction({ serialNumber: item?.name, partId: item?.part?.id, lotId: item?.lot?.id, lotNumber: item?.lot?.lotNumber, orderId: item?.productionOrder?.id, orderNumber: item?.productionOrder?.orderNumber }))}
                 {text("serialNumber", "Serial number", { maxLength: 60, icon: HashIcon, disabled: !canEdit || !!form.serialId, hint: form.serialId ? "From the serial number" : undefined })}
-                <div className="flex w-full items-start gap-5">
-                  {text("quantityInspected", "Quantity inspected", { dataType: "number", icon: LayersIcon, placeholder: "Enter qty" })}
-                  {text("quantityAffected", "Quantity affected", { required: true, dataType: "number", icon: LayersIcon, placeholder: "Enter qty", hint: "Needed to open" })}
+                <div className="flex w-full flex-col gap-1">
+                  <div className="flex w-full items-start gap-5">
+                    {text("quantityInspected", "Quantity inspected", { dataType: "number", icon: LayersIcon, placeholder: "Enter qty" })}
+                    {text("quantityAffected", "Quantity affected", { required: true, dataType: "number", icon: LayersIcon, placeholder: "Enter qty", hint: "Needed to open" })}
+                  </div>
+                  {moreAffectedThanInspected && (
+                    <p role="status" className="flex items-start gap-1.5 text-xs text-secondary-text">
+                      <TriangleAlertIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning-color" />
+                      More are affected than were inspected. That is right when the rest are suspect from a sample (the whole lot or batch); otherwise check the numbers.
+                    </p>
+                  )}
                 </div>
                 {siteField === "picker" && controlled("siteId", (f) => (
                   <RHFComboBox {...f} label="Site" icon={HouseIcon} placeholder="Select a site" options={siteOptions} />
@@ -444,9 +454,20 @@ const NcrPage = () => {
                 <RHFTextArea label="Requirement / specification" icon={ClipboardListIcon} value={form.requirement} onChange={set("requirement")} disabled={!canEdit} max={2000} rows={3} placeholder="What it should have been" />
                 <RHFTextArea label="Actual result" icon={AlignCenterIcon} value={form.actualResult} onChange={set("actualResult")} disabled={!canEdit} max={2000} rows={3} placeholder="What was found" />
               </div>
-              {isNew && <CustomFieldInputs entityType="nonconformance" values={customValues} onChange={setCustomValues} />}
             </Card>
-            {!isNew && <CustomFieldsCard entityType="nonconformance" record={ncr} editable={can("ncr.update") && !locked} />}
+
+            {hasMoreDetails && (
+              <>
+                <SectionHeading id="ncr-more" title="More details" />
+                <Card>
+                  {isNew ? (
+                    <CustomFieldInputs entityType="nonconformance" values={customValues} onChange={setCustomValues} all bare />
+                  ) : (
+                    <CustomFieldsCard entityType="nonconformance" record={ncr} editable={can("ncr.update") && !locked} bare />
+                  )}
+                </Card>
+              </>
+            )}
 
             {!isNew && inspectionSource?.inspections?.length > 0 && (
               <>
@@ -475,6 +496,32 @@ const NcrPage = () => {
               </>
             )}
 
+            <SectionHeading id="ncr-investigation" title="Investigation" sectionRef={refs.investigation} />
+            <Card>
+              <div className="grid w-full grid-cols-1 items-start gap-x-8 gap-y-4 lg:grid-cols-2">
+                {controlled(
+                  "failureModeId",
+                  (f) => <RHFComboBox {...f} label="Failure mode" icon={TagIcon} placeholder="Select a failure mode" options={opt(lists?.failureModes)} />,
+                  () => setValue("subFailureModeId", null, { shouldDirty: true })
+                )}
+                {controlled("subFailureModeId", (f) => (
+                  <RHFComboBox {...f} label="Sub-failure mode" icon={TagsIcon} options={opt(subs)}
+                    disabled={f.disabled || !form.failureModeId} placeholder={form.failureModeId ? "Select a sub-failure mode" : "Choose a failure mode first"} />
+                ))}
+                {source !== "supplier" && source !== "goods_receiving" &&
+                  controlled("causalProcessId", (f) => (
+                    <MachinePicker {...f} label="Causal process" icon={FactoryIcon} current={ncr?.causalProcess} />
+                  ))}
+                {source !== "supplier" &&
+                  controlled("responsibleEmployeeId", (f) => (
+                    <RHFComboBox {...f} label="Responsible operator" icon={UsersIcon} placeholder="Select an operator"
+                      options={(employees ?? []).filter((e) => e.active || e.id === form.responsibleEmployeeId).map((e) => ({ id: e.id, name: e.name, hint: e.jobTitle ?? undefined }))} />
+                  ))}
+              </div>
+              {!isNew && ncr && <NcrCapaCard ncr={ncr} />}
+              {!isNew && ncr && <NcrScarCard ncr={ncr} />}
+            </Card>
+
             {!isNew && (
               <>
                 <SectionHeading id="ncr-cost" title="Cost" sectionRef={refs.cost} />
@@ -502,32 +549,6 @@ const NcrPage = () => {
                 </Card>
               </div>
             )}
-
-            <SectionHeading id="ncr-investigation" title="Investigation" sectionRef={refs.investigation} />
-            <Card>
-              <div className="grid w-full grid-cols-1 items-start gap-x-8 gap-y-4 lg:grid-cols-2">
-                {controlled(
-                  "failureModeId",
-                  (f) => <RHFComboBox {...f} label="Failure mode" icon={TagIcon} placeholder="Select a failure mode" options={opt(lists?.failureModes)} />,
-                  () => setValue("subFailureModeId", null, { shouldDirty: true })
-                )}
-                {controlled("subFailureModeId", (f) => (
-                  <RHFComboBox {...f} label="Sub-failure mode" icon={TagsIcon} options={opt(subs)}
-                    disabled={f.disabled || !form.failureModeId} placeholder={form.failureModeId ? "Select a sub-failure mode" : "Choose a failure mode first"} />
-                ))}
-                {source !== "supplier" && source !== "goods_receiving" &&
-                  controlled("causalProcessId", (f) => (
-                    <MachinePicker {...f} label="Causal process" icon={FactoryIcon} current={ncr?.causalProcess} />
-                  ))}
-                {source !== "supplier" &&
-                  controlled("responsibleEmployeeId", (f) => (
-                    <RHFComboBox {...f} label="Responsible operator" icon={UsersIcon} placeholder="Select an operator"
-                      options={(employees ?? []).filter((e) => e.active || e.id === form.responsibleEmployeeId).map((e) => ({ id: e.id, name: e.name, hint: e.jobTitle ?? undefined }))} />
-                  ))}
-              </div>
-              {!isNew && ncr && <NcrCapaCard ncr={ncr} />}
-              {!isNew && ncr && <NcrScarCard ncr={ncr} />}
-            </Card>
 
             {!isNew && (
               <div onSubmit={(e) => e.stopPropagation()} className="flex flex-col gap-5">

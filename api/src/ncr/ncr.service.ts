@@ -52,6 +52,7 @@ const SORT_SQL: Record<NcrListQuery['sort'], string> = {
   totalCost: 'coalesce(tc.total, 0)',
   capaCount: 'coalesce(cl.n_capa, 0)',
   createdAt: 'n.created_at',
+  raisedBy: "lower(nullif(trim(concat_ws(' ', rb.first_name, rb.surname)), ''))",
 };
 
 const likePattern = (term: string) => `%${term.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
@@ -73,7 +74,8 @@ const SELECT_SUMMARY = `
   s.id as supplier_id, coalesce(s.display_name, s.name) as supplier_name,
   fm.id as fm_id, fm.name as fm_name, sfm.id as sfm_id, sfm.name as sfm_name, cp.id as cp_id, cp.name as cp_name, cat.id as cat_id, cat.name as cat_name,
   coalesce(tc.total, 0) as total_cost, os.base_currency,
-  coalesce(cl.n_capa, 0) as capa_count, case when cl.n_capa = 1 then cl.capa_id end as capa_id, case when cl.n_capa = 1 then cl.capa_reference end as capa_reference`;
+  coalesce(cl.n_capa, 0) as capa_count, case when cl.n_capa = 1 then cl.capa_id end as capa_id, case when cl.n_capa = 1 then cl.capa_reference end as capa_reference,
+  n.created_by as raised_by_id, nullif(trim(concat_ws(' ', rb.first_name, rb.surname)), '') as raised_by_name`;
 const FROM = `
   from public.nonconformances n
   left join public.parts p on p.id = n.part_id
@@ -85,6 +87,8 @@ const FROM = `
   left join public.machines cp on cp.id = n.causal_process_id
   left join public.ncr_classifications cat on cat.id = n.category_id
   left join public.organisation_settings os on os.organisation_id = n.organisation_id
+  -- Who raised it (the person who created the record).
+  left join public.profiles rb on rb.id = n.created_by
   -- Total of the NCR's costs that are not deleted, in the organisation's base currency.
   left join lateral (
     select sum(k.gross_base) as total from public.ncr_costs k where k.nonconformance_id = n.id and k.deleted_at is null
@@ -124,6 +128,7 @@ const toSummary = (r: Row): NcrSummary => ({
   costCurrency: (r.base_currency as string) ?? 'GBP',
   capaCount: Number(r.capa_count ?? 0),
   capa: r.capa_id ? { id: r.capa_id as string, reference: r.capa_reference as string } : null,
+  raisedBy: r.raised_by_id ? { id: r.raised_by_id as string, name: (r.raised_by_name as string) ?? '' } : null,
   deletedAt: iso(r.deleted_at),
   createdAt: iso(r.created_at)!,
 });

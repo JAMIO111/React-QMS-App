@@ -163,6 +163,19 @@ describe("NC registers", () => {
     expect(screen.queryByRole("columnheader", { name: /Purchase order/ })).toBeNull();
   });
 
+  it("offers who raised each NC as a column, hidden until chosen", async () => {
+    routeApi({ "GET /ncrs": { data: [ncr({ raisedBy: { id: "u1", name: "Ada Owner" } })], page: 1, pageSize: 25, total: 1 } });
+    renderAt("/Non-Conformance/Register");
+    await screen.findByText("NCM-26-001");
+    expect(screen.queryByRole("columnheader", { name: /Raised by/ })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /Columns/ }));
+    const option = screen.getByRole("checkbox", { name: "Raised by" });
+    expect(option).not.toBeChecked();
+    await userEvent.click(option);
+    expect(await screen.findByRole("columnheader", { name: /Raised by/ })).toBeInTheDocument();
+    expect(within(screen.getByText("NCM-26-001").closest("tr")).getByText("Ada Owner")).toBeInTheDocument();
+  });
+
   describe("saved filters", () => {
     const OPEN_MAJORS = { id: "f1", name: "Open majors", filters: { stage: "open", severity: "major" } };
     const CUSTOMER = { id: "f2", name: "Customer complaints", filters: { source: "customer" } };
@@ -665,6 +678,48 @@ describe("NC form", () => {
     await userEvent.type(screen.getByLabelText("Title"), "Dent");
     await userEvent.click(screen.getByRole("button", { name: "Save as draft" }));
     expect(lastCall("POST /ncrs").body).toMatchObject({ siteId: "s1" });
+  });
+
+  it("shows the organisation's own fields before the NC is saved, and sends them with it", async () => {
+    routeApi({
+      "GET /custom-fields": {
+        data: [
+          { id: "cf1", key: "shift", label: "Shift", fieldType: "text", active: true, requiredAt: "never", position: 1, section: null, options: [] },
+          { id: "cf2", key: "line_stop", label: "Line stopped", fieldType: "boolean", active: true, requiredAt: "never", position: 2, section: null, options: [] },
+        ],
+        limit: 20,
+        entities: [{ entityType: "nonconformance", label: "Non-conformances", stages: [], activeCount: 2 }],
+      },
+      "POST /ncrs": (_p, o) => ncr({ ...o.body, id: "n7" }),
+      "GET /ncrs/n7": ncr({ id: "n7" }),
+    });
+    renderAt("/Non-Conformance/Register/new");
+    expect(await screen.findByRole("heading", { name: "More details" })).toBeInTheDocument();
+    await userEvent.type(screen.getByRole("textbox", { name: "Shift" }), "Night");
+    await userEvent.tab();
+    await userEvent.type(screen.getByLabelText("Title"), "Chipped edge");
+    await userEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+    expect(lastCall("POST /ncrs").body.customValues).toEqual({ shift: "Night" });
+  });
+
+  it("says when more are affected than were inspected, without stopping the save", async () => {
+    routeApi({});
+    renderAt("/Non-Conformance/Register/new");
+    await userEvent.type(await screen.findByLabelText("Quantity inspected"), "5");
+    await userEvent.type(screen.getByLabelText("Quantity affected"), "12");
+    expect(screen.getByRole("status")).toHaveTextContent("More are affected than were inspected");
+    await userEvent.clear(screen.getByLabelText("Quantity affected"));
+    await userEvent.type(screen.getByLabelText("Quantity affected"), "3");
+    expect(screen.queryByText(/More are affected than were inspected/)).toBeNull();
+  });
+
+  it("lists Investigation second in the page menu, above Cost", async () => {
+    routeApi({});
+    renderAt("/Non-Conformance/Register/new");
+    await screen.findByLabelText("Title");
+    const order = ["NC Details", "Investigation", "Cost"].map((t) => screen.getAllByText(t)[0]);
+    expect(order[0].compareDocumentPosition(order[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(order[1].compareDocumentPosition(order[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("does not ask where a customer, external audit or management review NC was detected, and keeps one recorded before", async () => {

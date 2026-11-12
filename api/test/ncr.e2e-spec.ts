@@ -274,6 +274,15 @@ describe('what a non-conformance raised by hand starts with', () => {
     await api().put('/api/v1/ncr-source-categories').set(owner).send({ source: 'engineering', categoryId: doc, extra: 1 }).expect(400);
   });
 
+  it('says who raised each NC in the register, and sorts by it', async () => {
+    const h = await as(ids.ownerA);
+    const created = await api().post('/api/v1/ncrs').set(h).send({ source: 'internal', title: 'Who raised me' }).expect(201);
+    const list = await api().get('/api/v1/ncrs?q=who%20raised%20me').set(h).expect(200);
+    expect(list.body.data[0]).toMatchObject({ id: created.body.id, raisedBy: { id: ids.ownerA } });
+    expect(list.body.data[0].raisedBy.name).toBeTruthy();
+    await api().get('/api/v1/ncrs?sort=raisedBy&order=asc').set(h).expect(200);
+  });
+
   it('leaves out a suggestion whose category has since been switched off', async () => {
     const product = await codeOf('PRODUCT');
     await admin.query(`update public.ncr_classifications set active = false where id = $1`, [product]);

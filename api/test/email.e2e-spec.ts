@@ -52,6 +52,12 @@ afterAll(async () => {
 });
 
 describe('email notifications', () => {
+  // The suites share one database and run in no fixed order: notices other suites left behind must not count here, so each test starts with
+  // everything from other organisations already considered.
+  beforeEach(async () => {
+    await admin.query(`update public.notifications set email_queued_at = now() where email_queued_at is null and organisation_id <> $1`, [ids.orgA]);
+  });
+
   it('lists the email choice beside each event and says whether this server sends email', async () => {
     const res = await api().get('/api/v1/notification-preferences').set(await as(ids.dual)).expect(200);
     expect(res.body.email).toEqual({ sending: false });

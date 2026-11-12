@@ -51,6 +51,7 @@ const toCsvRow = (n) => ({
   failure_mode: n.failureMode?.name ?? "",
   sub_failure_mode: n.subFailureMode?.name ?? "",
   causal_process: n.causalProcess?.name ?? "",
+  raised_by: n.raisedBy?.name ?? "",
   deleted: n.deletedAt ? "yes" : "",
 });
 

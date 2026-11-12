@@ -20,11 +20,11 @@ const NcrScarCard = ({ ncr }) => {
   const rows = query.data?.data ?? [];
   const live = rows.filter((r) => scarIsRunning(r.status));
   return (
-    <section aria-label="Supplier corrective action" className="mt-4 flex flex-col gap-2 rounded-lg border border-border-color p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-semibold text-primary-text">Supplier corrective action</h3>
-          <p className="text-xs text-secondary-text">Ask {ncr.supplier.name} to investigate and fix this. Their response is reviewed and checked here.</p>
+    <section aria-label="Supplier corrective action" className="flex flex-col gap-3 border-t border-border-color pt-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <h3 className="text-xl font-semibold text-primary-text">Supplier corrective action</h3>
+          <p className="text-sm text-secondary-text">Ask {ncr.supplier.name} to investigate and fix this. Their response is reviewed and checked here.</p>
         </div>
         {can("supplier_quality.manage") && (
           <CTAButton type="secondary" size="default" icon={PlusIcon} onClick={() => setCreating(true)}>{live.length ? "Raise another SCAR" : "Raise a SCAR"}</CTAButton>

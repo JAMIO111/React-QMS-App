@@ -55,13 +55,16 @@ const NcrCapaCard = ({ ncr }) => {
   );
 
   return (
-    <div className="flex flex-col gap-3" aria-label="8D investigation">
-      <h3 className="text-lg text-primary-text">8D investigation</h3>
+    <section className="flex flex-col gap-3 border-t border-border-color pt-5" aria-label="8D investigation">
+      <div className="flex flex-col gap-0.5">
+        <h3 className="text-xl font-semibold text-primary-text">8D investigation</h3>
+        <p className="text-sm text-secondary-text">A structured root-cause investigation for this non-conformance.</p>
+      </div>
       {capas.isLoading ? (
         <p className="text-sm text-secondary-text">Loading…</p>
       ) : list.length === 0 ? (
-        <div className="flex flex-col items-start gap-3 rounded-lg border-2 border-dashed border-border-dark-color bg-secondary-bg p-4">
-          <p className="text-sm text-primary-text">No 8D addresses this non-conformance yet.</p>
+        <div className="flex flex-col items-start gap-3">
+          <p className="text-sm text-secondary-text">No 8D addresses this non-conformance yet.</p>
           {manage ? buttons : <p className="text-sm text-secondary-text">You can read 8Ds but not start them.</p>}
         </div>
       ) : (
@@ -97,7 +100,7 @@ const NcrCapaCard = ({ ncr }) => {
           onConfirm={(reason) => mutation.mutate({ action: "unlinkNcr", id: unlinking.linkId, body: { reason } }, { onSuccess: () => setUnlinking(null) })}
         />
       )}
-    </div>
+    </section>
   );
 };
 

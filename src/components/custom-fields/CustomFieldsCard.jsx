@@ -161,7 +161,7 @@ const FieldRow = ({ field, value, editable, people, stages, onSave }) => {
  * shown at once and put back if the database refuses). `editable` = the person may edit the record and it is not closed; otherwise the values
  * are shown as words. Retired fields appear only when the record holds a value for them. Renders nothing when the kind of record has no fields.
  */
-const CustomFieldsCard = ({ entityType, record, editable = false, title = "More details", className = "" }) => {
+const CustomFieldsCard = ({ entityType, record, editable = false, title = "More details", className = "", bare = false }) => {
   const { data } = useCustomFields(entityType, { includeRetired: true });
   const values = record?.customValues ?? {};
   const fields = (data?.data ?? []).filter((f) => f.active || !isMissing(values[f.key]));
@@ -182,9 +182,10 @@ const CustomFieldsCard = ({ entityType, record, editable = false, title = "More 
   const groups = groupBySection(fields);
   const hasSections = groups.some((g) => g.section);
 
+  // `bare`: only the fields, for a page that draws its own heading and card around them.
   return (
-    <section aria-label={title} className={`flex min-w-0 flex-col gap-4 rounded-2xl border border-border-color bg-secondary-bg p-5 ${className}`}>
-      <h2 className="text-lg font-semibold text-primary-text">{title}</h2>
+    <section aria-label={title} className={bare ? `flex min-w-0 flex-col gap-4 ${className}` : `flex min-w-0 flex-col gap-4 rounded-2xl border border-border-color bg-secondary-bg p-5 ${className}`}>
+      {!bare && <h2 className="text-lg font-semibold text-primary-text">{title}</h2>}
       {groups.map((g) => (
         <div key={g.section || "_"} className="flex flex-col gap-3">
           {hasSections && <h3 className="text-sm font-semibold text-primary-text">{g.section || "Other details"}</h3>}
@@ -207,7 +208,7 @@ export default CustomFieldsCard;
  * For create forms: the fields that must have a value when the record is saved (or every active field with `all`), held in the form's own state
  * (`values`, `onChange(next)`) and sent as `customValues` with the create. Renders nothing when there are none.
  */
-export const CustomFieldInputs = ({ entityType, values = {}, onChange, all = false, title = "More details" }) => {
+export const CustomFieldInputs = ({ entityType, values = {}, onChange, all = false, title = "More details", bare = false }) => {
   const { data } = useCustomFields(entityType);
   const fields = (data?.data ?? []).filter((f) => f.active && (all || f.requiredAt === "save"));
   const stages = data?.entities?.find((e) => e.entityType === entityType)?.stages ?? [];
@@ -221,8 +222,8 @@ export const CustomFieldInputs = ({ entityType, values = {}, onChange, all = fal
     onChange(next);
   };
   return (
-    <fieldset className="flex flex-col gap-3">
-      <legend className="mb-1 text-sm font-semibold text-primary-text">{title}</legend>
+    <fieldset className="flex flex-col gap-3" aria-label={bare ? title : undefined}>
+      {!bare && <legend className="mb-1 text-sm font-semibold text-primary-text">{title}</legend>}
       <div className="grid gap-4 sm:grid-cols-2">
         {fields.map((f) => (
           <div key={f.id} className={f.fieldType === "long_text" || f.fieldType === "multi_choice" ? "sm:col-span-2" : ""}>

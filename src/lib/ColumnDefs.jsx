@@ -86,6 +86,8 @@ const capa = col(
   },
   { size: 130, sortKey: "capaCount", accessor: (r) => r.capaCount }
 );
+/** Who raised the NC (created the record); hidden at first. */
+const raisedBy = col("raisedBy", "Raised by", head(UsersIcon, "Raised by"), nameOf, { size: 170, sortKey: "raisedBy" });
 const workOrder = col("workOrder", "Work order", head(BoxIcon, "Work order"), text, { size: 130 });
 const customer = col("customer", "Customer", head(UsersIcon, "Customer"), nameOf, { size: 180, sortKey: "customer" });
 const customerReference = col("customerReference", "Customer ref.", head(UsersIcon, "Customer ref."), text, { size: 150 });
@@ -104,7 +106,7 @@ const category = col(
 /** The one register's columns: where it came from (source) and what the problem is (category) come first. */
 export const getNcColumns = () => [
   reference, detectedAt, source, category, customer, supplier, workOrder, customerReference, purchaseOrder, part, title, quantity, totalCost,
-  failureMode, subFailureMode, causalProcess, severity, stage, capa,
+  failureMode, subFailureMode, causalProcess, severity, stage, raisedBy, capa,
 ];
 /** Columns that start hidden (they only apply to some sources); the column menu shows them. */
-export const NC_DEFAULT_HIDDEN = { workOrder: false, customerReference: false, purchaseOrder: false };
+export const NC_DEFAULT_HIDDEN = { workOrder: false, customerReference: false, purchaseOrder: false, raisedBy: false };

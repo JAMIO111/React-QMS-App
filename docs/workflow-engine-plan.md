@@ -82,7 +82,7 @@ Order: WK1 → WK2 (most of the value: everything already built starts chasing) 
 
 ## 6. Progress
 
-- **WK1 done** (migration `20260219100000_worker_foundation.sql`; runbook `supabase/runbooks/worker-schedule.sql`): `app.worker_jobs`, `app.worker_ticks`, `app.worker_state`, `app.outbox_consumers`, `app.outbox_deliveries` and their API-login-only functions; `WorkerService.tick` (`api/src/worker/`) with the steps quality alerts → documents → jobs → email → imports, each on its own; `POST|GET /internal/worker/tick?source&budgetMs` (`CronGuard`); `WorkerJobRegistry` (handlers by kind, `PermanentJobError`) and `WorkerService.enqueue`; `GET /platform/worker` and the operator panel's **Worker** tab. The six daily Vercel crons stay as a safety net. The integration schedule (daily imports) stays on its own cron.
+- **WK1 done** (migration `20260219100000_worker_foundation.sql`, applied live 2026-11-12; runbook `supabase/runbooks/worker-schedule.sql`): `app.worker_jobs`, `app.worker_ticks`, `app.worker_state`, `app.outbox_consumers`, `app.outbox_deliveries` and their API-login-only functions; `WorkerService.tick` (`api/src/worker/`) with the steps quality alerts → documents → jobs → email → imports, each on its own; `POST|GET /internal/worker/tick?source&budgetMs` (`CronGuard`); `WorkerJobRegistry` (handlers by kind, `PermanentJobError`) and `WorkerService.enqueue`; `GET /platform/worker` and the operator panel's **Worker** tab. The six daily Vercel crons stay as a safety net. The integration schedule (daily imports) stays on its own cron.
 
 ## 7. Not in this plan
 

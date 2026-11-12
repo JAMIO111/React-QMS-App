@@ -12,6 +12,7 @@ import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
+import LinkedRisks from "../risk/LinkedRisks";
 import SlidingToggle from "../ui/SlidingToggle";
 import Switch from "../ui/Switch";
 import { ErrorNotice } from "../master-data/shared";
@@ -121,6 +122,7 @@ const Overview = ({ supplier, canManage, canEditCustom, onEditContact, onAddCont
         </dl>
       </MenuCard>
       <CustomFieldsCard entityType="supplier" record={s} editable={canEditCustom} />
+      <LinkedRisks kind="supplier" id={s.id} />
       <MenuCard
         title="Contacts"
         action={canManage && (

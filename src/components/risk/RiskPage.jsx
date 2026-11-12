@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { ArchiveIcon, LockIcon, PencilIcon, RotateCcwIcon } from "@/components/icons";
 import CTAButton from "@/components/CTAButton";
 import { describeApiError } from "../../lib/api-client";
 import { useToast } from "../../contexts/ToastProvider";
 import { useRisk, useRiskModel, useRiskMutation } from "../../hooks/useRisk";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
-import { BAND_LABEL, BAND_PILL, formatDay, isAcceptable, kindLabel, outcomeLabel, reviewWords, statusLabel, statusPill } from "../../lib/risk";
+import { BAND_LABEL, BAND_PILL, formatDay, isAcceptable, kindLabel, linkKindLabel, linkPath, linkWords, outcomeLabel, reviewWords, statusLabel, statusPill } from "../../lib/risk";
 import { ErrorNotice } from "../master-data/shared";
 import Callout from "../ui/Callout";
 import LoadingScreen from "../ui/LoadingScreen";
@@ -14,6 +14,7 @@ import MenuCard from "../ui/MenuCard";
 import { AssessDialog, RetireDialog, RiskDialog } from "./RiskDialogs";
 import RiskMatrix from "./RiskMatrix";
 import { AcceptanceCard, CloseDialog, ReviewsCard, TextDialog, TreatmentCard } from "./RiskTreatment";
+import { LinksCard } from "./RiskLinks";
 
 const Fact = ({ label, children }) => (
   <div>
@@ -84,6 +85,18 @@ const RiskPage = () => {
             <span className="inline-flex rounded-full bg-secondary-bg px-2 py-0.5 text-xs font-medium text-secondary-text">{kindLabel(risk.kind)}</span>
           </div>
           <p className="text-lg text-primary-text">{risk.title}</p>
+          {risk.origin && (
+            <p className="text-sm text-secondary-text">
+              Raised from {linkKindLabel(risk.origin.kind).toLowerCase()}{" "}
+              {risk.origin.readable ? (
+                <Link to={linkPath(risk.origin)} className="font-medium text-primary-text hover:underline">
+                  {linkWords(risk.origin)}
+                </Link>
+              ) : (
+                "you cannot open"
+              )}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {risk.canEdit && (
@@ -183,6 +196,8 @@ const RiskPage = () => {
           <p className="text-sm text-secondary-text">Not assessed yet.</p>
         )}
       </MenuCard>
+
+      <LinksCard risk={risk} />
 
       {risk.status !== "draft" && <TreatmentCard risk={risk} />}
 

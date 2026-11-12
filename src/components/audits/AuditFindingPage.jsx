@@ -12,6 +12,7 @@ import Dialog from "../ui/Dialog";
 import ComboField from "../ui/ComboField";
 import { AttachmentDrop } from "../ui/FileDrop";
 import MenuCard from "../ui/MenuCard";
+import LinkedRisks from "../risk/LinkedRisks";
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import FindingDialog from "./FindingDialog";
 import CTAButton from "@/components/CTAButton";
@@ -209,6 +210,7 @@ const AuditFindingPage = () => {
       <MenuCard title="Evidence" subtitle="Photographs and documents kept with the finding">
         <Evidence finding={f} editable={open && canPerform} />
       </MenuCard>
+      <LinkedRisks kind="audit_finding" id={f.id} />
 
       <MenuCard title="Non-conformance" subtitle="A finding classified as a non-conformity can be taken into the non-conformance workflow, once">
         {f.ncr ? (

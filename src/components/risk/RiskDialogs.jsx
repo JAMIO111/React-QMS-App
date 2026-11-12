@@ -1,12 +1,13 @@
 import { useState } from "react";
 import CTAButton from "@/components/CTAButton";
+import { XIcon } from "@/components/icons";
 import { describeApiError } from "../../lib/api-client";
 import { useToast } from "../../contexts/ToastProvider";
 import { useAuth } from "../../contexts/AuthProvider";
 import { useCustomFieldPeople } from "../../hooks/useCustomFields";
 import { useAllDepartments, useSites } from "../../hooks/useQmsApi";
 import { useRiskCategories, useRiskModel, useRiskMutation } from "../../hooks/useRisk";
-import { BAND_LABEL, BAND_PILL, cellBand, isAcceptable, RISK_KINDS } from "../../lib/risk";
+import { BAND_LABEL, BAND_PILL, cellBand, isAcceptable, linkKindLabel, linksBody, linkWords, RISK_KINDS } from "../../lib/risk";
 import { FormError, TextAreaField } from "../master-data/shared";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
@@ -25,8 +26,12 @@ const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   </div>
 );
 
-/** Raise a risk or an opportunity, or change its details. The kind is fixed once it has been assessed. */
-export const RiskDialog = ({ existing, onClose, onSaved }) => {
+/**
+ * Raise a risk or an opportunity, or change its details. The kind is fixed once it has been assessed.
+ * `draft` (from GET /risk-draft) prefills a risk raised from a non-conformance, an 8D or an audit finding: its source is linked and kept,
+ * and the other records it suggests are linked unless taken off.
+ */
+export const RiskDialog = ({ existing, draft, onClose, onSaved }) => {
   const mutation = useRiskMutation();
   const categories = useRiskCategories();
   const people = useCustomFieldPeople();
@@ -34,12 +39,14 @@ export const RiskDialog = ({ existing, onClose, onSaved }) => {
   const departments = useAllDepartments();
   const { user } = useAuth();
   const { showToast } = useToast();
-  const [kind, setKind] = useState(existing?.kind ?? "risk");
-  const [categoryId, setCategoryId] = useState(existing?.category.id ?? null);
-  const [title, setTitle] = useState(existing?.title ?? "");
-  const [description, setDescription] = useState(existing?.description ?? "");
-  const [cause, setCause] = useState(existing?.cause ?? "");
-  const [effect, setEffect] = useState(existing?.effect ?? "");
+  const [kind, setKind] = useState(existing?.kind ?? draft?.kind ?? "risk");
+  const [categoryId, setCategoryId] = useState(existing?.category.id ?? draft?.categoryId ?? null);
+  const [title, setTitle] = useState(existing?.title ?? draft?.title ?? "");
+  const [description, setDescription] = useState(existing?.description ?? draft?.description ?? "");
+  const [cause, setCause] = useState(existing?.cause ?? draft?.cause ?? "");
+  const [effect, setEffect] = useState(existing?.effect ?? draft?.effect ?? "");
+  const source = draft?.source ?? null;
+  const [extraLinks, setExtraLinks] = useState(() => (draft?.links ?? []).filter((l) => !(source && l.kind === source.kind && l.id === source.id)));
   const [ownerId, setOwnerId] = useState(existing?.owner?.id ?? user?.id ?? null);
   const [siteId, setSiteId] = useState(existing?.site?.id ?? null);
   const [departmentId, setDepartmentId] = useState(existing?.department?.id ?? null);
@@ -62,6 +69,10 @@ export const RiskDialog = ({ existing, onClose, onSaved }) => {
       ownerId, siteId: siteId ?? null, departmentId: departmentId ?? null,
     };
     if (!kindFixed) body.kind = kind;
+    if (source) {
+      body.raisedFrom = { kind: source.kind, id: source.id };
+      body.links = linksBody(extraLinks);
+    }
     mutation.mutate(existing ? { action: "update", id: existing.id, body } : { action: "create", body }, {
       onSuccess: (risk) => {
         onSaved?.(risk);
@@ -72,8 +83,27 @@ export const RiskDialog = ({ existing, onClose, onSaved }) => {
   };
 
   return (
-    <Dialog title={existing ? `Edit ${existing.reference}` : "Raise a risk or an opportunity"} onClose={onClose} width="max-w-2xl">
+    <Dialog title={existing ? `Edit ${existing.reference}` : source ? `Raise a risk from ${source.reference}` : "Raise a risk or an opportunity"} onClose={onClose} width="max-w-2xl">
       <form noValidate onSubmit={save} className="flex flex-col gap-3">
+        {source && (
+          <Callout tone="info" title={`Raised from ${source.reference}`}>
+            {source.title}. It stays linked to the risk{extraLinks.length ? ", with the records below unless you take them off" : ""}.
+            {extraLinks.length > 0 && (
+              <ul aria-label="Also linked" className="mt-2 flex flex-wrap gap-2">
+                {extraLinks.map((l) => (
+                  <li key={`${l.kind}:${l.id ?? l.code}`} className="flex items-center gap-1 rounded-full border border-border-color bg-primary-bg px-2 py-0.5 text-xs">
+                    <span>
+                      {linkKindLabel(l.kind)} {linkWords(l)}
+                    </span>
+                    <button type="button" aria-label={`Do not link ${linkWords(l)}`} className="text-secondary-text hover:text-error-color" onClick={() => setExtraLinks((c) => c.filter((x) => x !== l))}>
+                      <XIcon className="h-3 w-3" aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Callout>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
           <ComboField label="It is" required value={kind} onChange={(v) => setKind(v ?? "risk")} options={RISK_KINDS} disabled={kindFixed} hint={kindFixed ? "Fixed once it has been assessed" : undefined} />
           <ComboField label="Category" required value={categoryId} onChange={setCategoryId} options={categoryOptions} placeholder="Choose a category" />

@@ -1,6 +1,6 @@
 # Risk and management review — plan
 
-**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **RK1 and RK2 built** (§11, §12); RK3–RK4, MR1–MR3 and RX are not · **Branch:** `Dev`
+**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **RK1–RK3 built** (§11–§13); RK4, MR1–MR3 and RX are not · **Branch:** `Dev`
 **Menu names:** Risk (`ShieldAlert`), Management review (`Presentation`) · **Slices:** RK1–RK4, MR1–MR3, RX (exit check)
 
 Per `docs/design-brief.md` §6.7 ("Risk management", "Management review and quality KPIs") and Phase 4 ("Risk and management review"), the last
@@ -179,4 +179,20 @@ Migration `20260210100000_risk_treatment.sql` (applied live 2026-11-12; pushing 
   accepted); retiring is refused while actions are open; a reopened or brought-back risk is due for review that day; the register's level filter uses the band
   in force.
 - **Not in RK2:** links and raise-from (RK3); heat map, dashboard, notices and the menu badge (RK4). Not browser-checked yet (RX).
+
+## 13. RK3 as built (2026-11-12)
+
+Migration `20260214100000_risk_links.sql` (pushing the API before it breaks the risk detail and the new endpoints).
+
+- **Links (RM7):** `risk_links`, one target per row — non-conformance, 8D, audit finding, supplier, part, part family, machine, controlled document (each with an
+  own-organisation foreign key) or an operation code in words. Replaced as a whole by `app.set_risk_links` (`risk.manage`, not once closed or retired). Links, never copies:
+  a record's name is shown only to someone who may read it under its own rules.
+- **Raising from a record:** `app.risk_draft_from(kind, id)` suggests the fields and links from a non-conformance (title, description, category from its source, its part,
+  supplier and causal machine), an 8D (title, problem statement, verified root causes as the cause) or an audit finding (title, what was found, the requirement as the cause,
+  the suppliers and machines audited). `app.raise_risk_from` creates the risk, links the source and keeps it as the risk's **origin**, which never changes and whose link
+  cannot be removed.
+- **Where risks show:** a Risks card on the NC page, 8D step D7, the audit finding page, the supplier profile and the machine dialog, with **Raise a risk** on the first three.
+- **Decided while building:** the source needs only to be readable (raising needs `risk.manage`); a supplier, part or machine record lists its risks but does not offer
+  raising one (they are not events); retired risks are left out of a record's list, closed ones listed last.
+- **Not in RK3:** heat map, dashboard, notices, menu badge (RK4); a Risks card on the part, part family and document pages. Not browser-checked yet (RX).
 

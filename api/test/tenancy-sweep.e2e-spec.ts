@@ -89,6 +89,7 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/risks/{id}/reviews': { note: 'Hijacked' },
     'POST /api/v1/risks/{id}/close': { outcome: 'no_longer_applies', note: 'Hijacked' },
     'POST /api/v1/risks/{id}/reopen': { reason: 'Hijacked' },
+    'PUT /api/v1/risks/{id}/links': { links: [] },
     'PATCH /api/v1/competence/skills/{id}': { name: 'Hijacked' },
     'POST /api/v1/competence/skills/{id}/retire': { reason: 'Hijacked' },
     'POST /api/v1/competence/skills/{id}/reactivate': {},
@@ -491,6 +492,7 @@ const hasSample = (op: Op) =>
     'POST /api/v1/risks/{id}/reviews',
     'POST /api/v1/risks/{id}/close',
     'POST /api/v1/risks/{id}/reopen',
+    'PUT /api/v1/risks/{id}/links',
     'PATCH /api/v1/competence/skills/{id}',
     'POST /api/v1/competence/skills/{id}/retire',
     'POST /api/v1/competence/skills/{id}/reactivate',
@@ -1163,6 +1165,7 @@ beforeAll(async () => {
   b.part = (await one(`insert into public.parts (organisation_id, part_number, name) values ($1, 'B-PART', 'Beta part') returning id`, [ids.orgB])).id;
   b.productionOrder = (await one(`insert into public.production_orders (organisation_id, order_number, part_id, quantity_planned) values ($1, 'B-WO-1', $2, 5) returning id`, [ids.orgB, b.part])).id;
   b.supplier = (await one(`insert into public.suppliers (organisation_id, code, name) values ($1, 'B-SUP', 'Beta supplier') returning id`, [ids.orgB])).id;
+  b.ncr = (await one(`insert into public.nonconformances (organisation_id, reference, source, title, severity, description) values ($1, 'NC-B-0001', 'internal', 'Beta NC', 'minor', 'Beta') returning id`, [ids.orgB])).id;
   b.machine = (await one(`insert into public.machines (organisation_id, code, name) values ($1, 'B-M1', 'Beta machine') returning id`, [ids.orgB])).id;
   await admin.query(`insert into public.departments (organisation_id, site_id, code, name) values ($1, $2, 'QA', 'Quality B')`, [ids.orgB, ids.siteB]);
 });
@@ -1285,6 +1288,8 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/documents-in-force': '?operationCode=OP-1',
       '/api/v1/documents-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/risk-score': '?likelihood=3&consequence=3',
+      '/api/v1/risks/linked': `?kind=part&id=${b.part}`,
+      '/api/v1/risk-draft': `?kind=ncr&id=${b.ncr}`,
       '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/calibration-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/control-plan-resolution': `?partId=${b.part}`,

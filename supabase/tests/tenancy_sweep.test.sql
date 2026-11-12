@@ -265,6 +265,9 @@ BEGIN
   -- RK2: an action, a review and an acceptance waiting for an approver.
   PERFORM app.set_risk_treatment(k.id, 'accept', NULL), app.add_risk_action(k.id, '{"description":"Sweep action"}'::jsonb), app.record_risk_review(k.id, 'Sweep review'),
           app.propose_risk_acceptance(k.id, 'Sweep acceptance rationale') FROM public.risks k WHERE k.organisation_id = a AND k.title = 'Sweep risk';
+  -- RK3: a link to a part.
+  PERFORM app.set_risk_links(k.id, jsonb_build_array(jsonb_build_object('kind', 'part', 'id', (SELECT id FROM public.parts WHERE organisation_id = a LIMIT 1))))
+     FROM public.risks k WHERE k.organisation_id = a AND k.title = 'Sweep risk';
   PERFORM pg_temp.logout();
   -- Document control (DC2): a named reviewer and a sign-off (one member in A, so seeded directly; people write through the functions).
   INSERT INTO public.document_revision_reviewers (organisation_id, revision_id, user_id)

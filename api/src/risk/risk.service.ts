@@ -5,9 +5,44 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import {
-  AllQuery, AssessBody, CloseBody, CreateActionBody, CreateCategoryBody, CreateRiskBody, DecideBody, ModelConfig, ReviewBody, RiskCategory, RiskListQuery, SaveModelBody,
-  ScoreQuery, TreatmentBody, UpdateActionBody, UpdateCategoryBody, UpdateRiskBody,
+  AllQuery, AssessBody, CloseBody, CreateActionBody, CreateCategoryBody, CreateRiskBody, DecideBody, DraftQuery, LinkedQuery, LinkItem, ModelConfig, ReviewBody, RiskCategory,
+  RiskListQuery, SaveModelBody, ScoreQuery, TreatmentBody, UpdateActionBody, UpdateCategoryBody, UpdateRiskBody,
 } from './risk.schemas';
+
+const LINK_COLUMN: Record<string, string> = {
+  ncr: 'ncr_id', capa: 'capa_id', audit_finding: 'audit_finding_id', supplier: 'supplier_id', part: 'part_id', part_family: 'part_family_id', machine: 'machine_id', document: 'document_id',
+};
+
+/**
+ * The records named by links, each read under the caller's own rules (RLS of that record's table), so a record they may not read has no label.
+ * `src` is a query giving `kind`, `target_id`, `operation_code` (plus anything else to pass through).
+ */
+const labelled = (src: SQL) => sql`
+  select x.*,
+         coalesce(n.reference, c.reference, f.reference, s.code, p.part_number, pf.code, m.code, d.number) as t_reference,
+         coalesce(n.title, c.title, f.title, s.name, p.name, pf.name, m.name, d.title) as t_name
+    from (${src}) x
+    left join public.nonconformances n on x.kind = 'ncr' and n.id = x.target_id
+    left join public.capas c on x.kind = 'capa' and c.id = x.target_id
+    left join public.audit_findings f on x.kind = 'audit_finding' and f.id = x.target_id
+    left join public.suppliers s on x.kind = 'supplier' and s.id = x.target_id
+    left join public.parts p on x.kind = 'part' and p.id = x.target_id
+    left join public.part_families pf on x.kind = 'part_family' and pf.id = x.target_id
+    left join public.machines m on x.kind = 'machine' and m.id = x.target_id
+    left join public.documents d on x.kind = 'document' and d.id = x.target_id`;
+
+const toLink = (r: Row) => ({
+  kind: r.kind as string,
+  /** The record's id (null for an operation code). */
+  id: (r.target_id as string) ?? null,
+  code: (r.operation_code as string) ?? null,
+  /** Number and name; null when the caller may not read the record. */
+  reference: r.kind === 'operation_code' ? (r.operation_code as string) : ((r.t_reference as string) ?? null),
+  name: (r.t_name as string) ?? null,
+  readable: r.kind === 'operation_code' || r.t_reference != null,
+});
+const TARGET = sql.raw(`coalesce(${Object.values(LINK_COLUMN).map((c) => `l.${c}`).join(', ')})`);
+const linkJson = (links: LinkItem[]) => JSON.stringify(links);
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const likePattern = (term: string) => `%${term.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
@@ -340,8 +375,21 @@ export class RiskService {
       canWithdraw: x.status === 'proposed' && (Boolean(can.approve) || (manage && x.proposed_by === can.me)),
     }));
     const acceptance = can.acceptance as Record<string, unknown>;
+    const links = (
+      await db.execute<Row>(
+        labelled(sql`select l.kind, ${TARGET} as target_id, l.operation_code, l.created_at from public.risk_links l
+                      where l.risk_id = ${id}::uuid and l.organisation_id = ${org}::uuid`),
+      )
+    ).rows
+      .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || String(a.kind).localeCompare(String(b.kind)))
+      .map(toLink);
+    const originRow = rows[0];
+    const origin = originRow.origin_kind ? links.find((l) => l.kind === originRow.origin_kind && l.id === originRow.origin_id) ?? { kind: originRow.origin_kind as string, id: originRow.origin_id as string, code: null, reference: null, name: null, readable: false } : null;
     return {
       ...base,
+      links,
+      /** The record it was raised from (always one of its links), or null. */
+      origin,
       assessments,
       actions,
       reviews,
@@ -366,9 +414,64 @@ export class RiskService {
   }
 
   create(ctx: RequestContext, body: CreateRiskBody) {
+    const { raisedFrom, links, ...fields } = body;
     return this.database.asUser(ctx, async (db) => {
-      const res = await db.execute<{ id: string }>(sql`select app.create_risk(${orgOf(ctx)}::uuid, ${json(body)}::jsonb) as id`);
-      return this.risk(db, ctx, res.rows[0].id);
+      let id: string;
+      if (raisedFrom) {
+        id = (await db.execute<{ id: string }>(sql`select app.raise_risk_from(${raisedFrom.kind}, ${raisedFrom.id}::uuid, ${json(fields)}::jsonb, ${linkJson(links ?? [])}::jsonb) as id`)).rows[0].id;
+      } else {
+        id = (await db.execute<{ id: string }>(sql`select app.create_risk(${orgOf(ctx)}::uuid, ${json(fields)}::jsonb) as id`)).rows[0].id;
+        if (links?.length) await db.execute(sql`select app.set_risk_links(${id}::uuid, ${linkJson(links)}::jsonb)`);
+      }
+      return this.risk(db, ctx, id);
+    });
+  }
+
+  // ---- links and raising from a record (RK3) -----------------------------------------------------------
+
+  setLinks(ctx: RequestContext, id: string, links: LinkItem[]) {
+    return this.onRisk(ctx, id, (db) => db.execute(sql`select app.set_risk_links(${id}::uuid, ${linkJson(links)}::jsonb)`));
+  }
+
+  /** What a risk raised from a non-conformance, an 8D or an audit finding would start with (nothing is saved). */
+  draft(ctx: RequestContext, q: DraftQuery) {
+    return this.database.asUser(ctx, async (db) => {
+      const d = (await db.execute<{ d: Record<string, unknown> }>(sql`select app.risk_draft_from(${q.kind}, ${q.id}::uuid) as d`)).rows[0].d;
+      const items = (d.links as { kind: string; id?: string; code?: string }[]) ?? [];
+      const rows = items.length
+        ? (
+            await db.execute<Row>(
+              labelled(sql`select (e ->> 'kind') as kind, nullif(e ->> 'id', '')::uuid as target_id, (e ->> 'code') as operation_code, o as position
+                             from jsonb_array_elements(${JSON.stringify(items)}::jsonb) with ordinality t(e, o)`),
+            )
+          ).rows.sort((a, b) => Number(a.position) - Number(b.position))
+        : [];
+      return {
+        kind: d.kind as string,
+        categoryId: (d.categoryId as string) ?? null,
+        title: (d.title as string) ?? '',
+        description: (d.description as string) ?? null,
+        cause: (d.cause as string) ?? null,
+        effect: (d.effect as string) ?? null,
+        source: d.source as { kind: string; id: string; reference: string; title: string },
+        links: rows.map(toLink),
+      };
+    });
+  }
+
+  /** Risks linked to one record (for its page): the register rows, live ones first. */
+  linked(ctx: RequestContext, q: LinkedQuery) {
+    return this.database.asUser(ctx, async (db) => {
+      const col = sql.raw(LINK_COLUMN[q.kind]);
+      const rows = (
+        await db.execute<Row>(sql`
+          select * from (${RISK_SELECT}) r
+           where r.organisation_id = ${orgOf(ctx)}::uuid and r.status <> 'retired'
+             and exists (select 1 from public.risk_links l where l.risk_id = r.id and l.kind = ${q.kind} and l.${col} = ${q.id}::uuid)
+           order by (r.status = 'closed'), r.e_score desc nulls last, r.reference`)
+      ).rows;
+      const can = (await db.execute<Row>(sql`select app.has_permission(${orgOf(ctx)}::uuid, 'risk.manage') as manage`)).rows[0];
+      return { data: rows.map(toRisk), canRaise: Boolean(can.manage) };
     });
   }
 

@@ -56,6 +56,29 @@ export const useRisk = (id) => {
   });
 };
 
+/** Risks linked to one record (for that record's page): { data, canRaise }. */
+export const useLinkedRisks = (kind, id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "linked", kind, id),
+    queryFn: () => apiFetch(`/risks/linked?${qs({ kind, id })}`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};
+
+/** What a risk raised from a non-conformance, an 8D or an audit finding starts with (nothing saved). */
+export const useRiskDraft = (kind, id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "draft", kind, id),
+    queryFn: () => apiFetch(`/risk-draft?${qs({ kind, id })}`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+    staleTime: 0,
+  });
+};
+
 /** One command at a time: { action, id, body }. Every one refreshes the organisation's cached data. */
 export const useRiskMutation = () => {
   const { organisationId } = useOrganisation();
@@ -104,6 +127,8 @@ export const useRiskMutation = () => {
           return send(`/risks/${id}/close`);
         case "reopen":
           return send(`/risks/${id}/reopen`);
+        case "setLinks":
+          return send(`/risks/${id}/links`, "PUT");
         default:
           throw new Error(`Unknown action ${action}`);
       }

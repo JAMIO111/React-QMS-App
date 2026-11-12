@@ -77,7 +77,20 @@ const riskFields = {
   siteId: z.string().uuid().nullable().optional(),
   departmentId: z.string().uuid().nullable().optional(),
 };
-export const CreateRiskBody = z.object(riskFields).strict();
+export const LINK_KINDS = ['ncr', 'capa', 'audit_finding', 'supplier', 'part', 'part_family', 'machine', 'document', 'operation_code'] as const;
+export const SOURCE_KINDS = ['ncr', 'capa', 'audit_finding'] as const;
+/** A record a risk is linked to: `{ kind, id }`, or `{ kind: 'operation_code', code }`. */
+export const LinkItem = z.union([
+  z.object({ kind: z.enum(LINK_KINDS).exclude(['operation_code']), id: z.string().uuid() }).strict(),
+  z.object({ kind: z.literal('operation_code'), code: z.string().trim().min(1).max(40) }).strict(),
+]);
+export type LinkItem = z.infer<typeof LinkItem>;
+export const LinksBody = z.object({ links: z.array(LinkItem).max(100) }).strict();
+export type LinksBody = z.infer<typeof LinksBody>;
+export const SourceRef = z.object({ kind: z.enum(SOURCE_KINDS), id: z.string().uuid() }).strict();
+
+/** `raisedFrom` raises it from a non-conformance, an 8D or an audit finding (that record is linked and kept as its origin); `links` adds others. */
+export const CreateRiskBody = z.object({ ...riskFields, raisedFrom: SourceRef.optional(), links: z.array(LinkItem).max(100).optional() }).strict();
 export type CreateRiskBody = z.infer<typeof CreateRiskBody>;
 
 export const UpdateRiskBody = z
@@ -122,6 +135,11 @@ const csv = (values: readonly string[]) =>
     .string()
     .optional()
     .refine((v) => !v || v.split(',').every((x) => values.includes(x)), `One or more of ${values.join(', ')}`);
+
+export const DraftQuery = z.object({ kind: z.enum(SOURCE_KINDS), id: z.string().uuid() });
+export type DraftQuery = z.infer<typeof DraftQuery>;
+export const LinkedQuery = z.object({ kind: z.enum(LINK_KINDS).exclude(['operation_code']), id: z.string().uuid() });
+export type LinkedQuery = z.infer<typeof LinkedQuery>;
 
 export const RiskListQuery = z.object({
   q: z.string().trim().max(100).optional(),

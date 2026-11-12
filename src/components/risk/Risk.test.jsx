@@ -34,7 +34,7 @@ const row = {
 const draftRow = { ...row, id: "r2", reference: "RSK-002", kind: "opportunity", title: "Second CMM shift", status: "draft", inherent: null };
 const assessment = { id: "a1", phase: "inherent", likelihood: 4, consequence: 4, likelihoodLabel: "Likely", consequenceLabel: "Major", score: 16, band: "high", rationale: "Two stoppages last year", assessedOn: "2026-11-10", assessedBy: "Ann Owner", current: true, modelVersion: 1, createdAt: "2026-11-10T08:00:00Z" };
 const detail = {
-  assessments: [assessment], actions: [], reviews: [], acceptances: [], problems: ["Choose what will be done about the risk"],
+  assessments: [assessment], actions: [], reviews: [], acceptances: [], links: [], origin: null, problems: ["Choose what will be done about the risk"],
   acceptance: { acceptanceBand: "medium", above: true, accepted: false, waiting: false }, canManage: true, canApprove: true, canEdit: true,
 };
 let risk = { ...row, ...detail };
@@ -47,7 +47,17 @@ vi.mock("../../hooks/useQmsApi", () => ({
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock("../../contexts/AuthProvider", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 vi.mock("../../hooks/useCustomFields", () => ({ useCustomFieldPeople: () => ({ data: [{ id: "u1", name: "Ann Owner" }, { id: "u2", name: "Bob Bloggs" }] }) }));
+vi.mock("../ncr/Pickers", () => {
+  const Stub = ({ label }) => <span>{label} picker</span>;
+  return { NcrPicker: Stub, PartPicker: Stub, PartyPicker: Stub, MachinePicker: Stub, RemoteComboBox: Stub };
+});
+vi.mock("../../hooks/useProcessControl", () => ({ usePartFamilies: () => ({ data: { items: [] } }) }));
+vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "o1" }) }));
+let linked = { data: [], canRaise: true };
+let draft = null;
 vi.mock("../../hooks/useRisk", () => ({
+  useLinkedRisks: () => ({ data: linked, isLoading: false }),
+  useRiskDraft: () => ({ data: draft, isLoading: false }),
   useRiskModel: () => ({ data: model, isLoading: false }),
   useRiskCategories: () => ({ data: { data: categories }, isLoading: false }),
   useRisks: (params) => (listCalls.push(params), { data: { data: [row, draftRow], page: 1, pageSize: 50, total: 2 }, isLoading: false }),
@@ -60,6 +70,7 @@ import RiskRegisterPage from "./RiskRegisterPage";
 import RiskPage from "./RiskPage";
 import RiskMatrix from "./RiskMatrix";
 import SettingsRisk from "../Settings/SettingsRisk";
+import LinkedRisks from "./LinkedRisks";
 
 beforeEach(() => {
   mutate.mockReset();
@@ -305,6 +316,75 @@ describe("treatment, acceptance and reviews (RK2)", () => {
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("combobox", { name: /Approach/ }));
     expect(screen.getByRole("option", { name: /Exploit/ })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /Mitigate/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("links and raising from a record (RK3)", () => {
+  const ncLink = { kind: "ncr", id: "n1", code: null, reference: "NC-0012", name: "Cracked weld", readable: true };
+  const partLink = { kind: "part", id: "p1", code: null, reference: "BR-100", name: "Bracket", readable: true };
+
+  it("shows where the risk came from and what it is linked to, each to its page; a record the reader may not open is named only by its kind", () => {
+    risk = { ...row, ...detail, origin: ncLink, links: [ncLink, partLink, { kind: "capa", id: "c9", code: null, reference: null, name: null, readable: false }, { kind: "operation_code", id: null, code: "OP20", reference: "OP20", name: null, readable: true }] };
+    at("/Risk/Register/r1", "/Risk/Register/:id", <RiskPage />);
+    expect(screen.getByText(/Raised from non-conformance/)).toBeInTheDocument();
+    const list = screen.getByRole("list", { name: "Linked records" });
+    expect(within(list).getByRole("link", { name: /NC-0012 · Cracked weld/ })).toHaveAttribute("href", "/Non-Conformance/Register/n1");
+    expect(within(list).getByRole("link", { name: /BR-100 · Bracket/ })).toHaveAttribute("href", "/Parts/p1");
+    expect(within(list).getByText("A 8d you cannot open")).toBeInTheDocument();
+    expect(within(list).getByText("OP20")).toBeInTheDocument();
+  });
+
+  it("changes the links: the record it was raised from cannot be taken off; an operation is typed in", async () => {
+    risk = { ...row, ...detail, origin: ncLink, links: [ncLink, partLink] };
+    at("/Risk/Register/r1", "/Risk/Register/:id", <RiskPage />);
+    await userEvent.click(screen.getByRole("button", { name: "Change links" }));
+    const dialog = screen.getByRole("dialog");
+    const list = within(dialog).getByRole("list", { name: "Links" });
+    expect(within(list).getByText("Raised from this")).toBeInTheDocument();
+    expect(within(list).queryByRole("button", { name: /Remove NC-0012/ })).not.toBeInTheDocument();
+    await userEvent.click(within(list).getByRole("button", { name: "Remove BR-100 · Bracket" }));
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Add a link to/ }));
+    await userEvent.click(screen.getByRole("option", { name: "Operation" }));
+    await userEvent.type(within(dialog).getByLabelText("Operation code"), " OP30 ");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save links" }));
+    expect(mutate).toHaveBeenLastCalledWith({ action: "setLinks", id: "r1", body: { links: [{ kind: "ncr", id: "n1" }, { kind: "operation_code", code: "OP30" }] } }, expect.anything());
+  });
+
+  it("lists the risks linked to a record and raises one from it, prefilled, with the suggested links unless taken off", async () => {
+    permissions = ["risk.read", "risk.manage"];
+    linked = { data: [{ ...row, band: "high", reviewOverdue: false }], canRaise: true };
+    draft = { kind: "risk", categoryId: "c2", title: "Cracked weld", description: "Crack at the weld toe", cause: null, effect: null, source: { kind: "ncr", id: "n1", reference: "NC-0012", title: "Cracked weld" }, links: [ncLink, partLink] };
+    render(<MemoryRouter><LinkedRisks kind="ncr" id="n1" /></MemoryRouter>);
+    const list = screen.getByRole("list", { name: "Linked risks" });
+    expect(within(list).getByRole("link", { name: "RSK-001" })).toHaveAttribute("href", "/Risk/Register/r1");
+    expect(within(list).getByText("High")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Raise a risk" }));
+    const dialog = screen.getByRole("dialog", { name: "Raise a risk from NC-0012" });
+    expect(within(dialog).getByLabelText(/^Title/)).toHaveValue("Cracked weld");
+    expect(within(within(dialog).getByRole("list", { name: "Also linked" })).getByText(/BR-100/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Do not link BR-100 · Bracket" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Raise it" }));
+    expect(mutate).toHaveBeenLastCalledWith(
+      { action: "create", body: expect.objectContaining({ title: "Cracked weld", categoryId: "c2", raisedFrom: { kind: "ncr", id: "n1" }, links: [] }) },
+      expect.anything(),
+    );
+  });
+
+  it("offers no Raise a risk without the right, nothing at all to someone who may not read risks, and none on a supplier", () => {
+    permissions = ["risk.read"];
+    linked = { data: [], canRaise: false };
+    const first = render(<MemoryRouter><LinkedRisks kind="ncr" id="n1" /></MemoryRouter>);
+    expect(screen.getByText("No risk is linked to this yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Raise a risk" })).not.toBeInTheDocument();
+    first.unmount();
+    linked = { data: [], canRaise: true };
+    const second = render(<MemoryRouter><LinkedRisks kind="supplier" id="s1" /></MemoryRouter>);
+    expect(screen.queryByRole("button", { name: "Raise a risk" })).not.toBeInTheDocument();
+    second.unmount();
+    permissions = [];
+    const { container } = render(<MemoryRouter><LinkedRisks kind="ncr" id="n1" /></MemoryRouter>);
+    expect(container).toBeEmptyDOMElement();
   });
 });
 

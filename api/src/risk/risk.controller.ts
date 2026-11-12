@@ -5,7 +5,8 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
-  AcceptanceBody, AllQuery, AssessBody, CloseBody, CreateActionBody, CreateCategoryBody, CreateRiskBody, DecideBody, NoteBody, ReasonBody, ReviewBody, RiskCategory,
+  AcceptanceBody, AllQuery, AssessBody, CloseBody, CreateActionBody, CreateCategoryBody, CreateRiskBody, DecideBody, DraftQuery, LinkedQuery, LinksBody, NoteBody, ReasonBody,
+  ReviewBody, RiskCategory,
   RiskListQuery, SaveModelBody, ScoreQuery, TreatmentBody, UpdateActionBody, UpdateCategoryBody, UpdateRiskBody,
 } from './risk.schemas';
 import { RiskService } from './risk.service';
@@ -83,11 +84,29 @@ export class RiskController {
     return this.service.list(ctx, parse(RiskListQuery, query));
   }
 
+  @Get('risks/linked')
+  @OrganisationScoped(READ)
+  @ApiQuery({ name: 'kind', required: true, schema: { type: 'string', enum: ['ncr', 'capa', 'audit_finding', 'supplier', 'part', 'part_family', 'machine', 'document'] } })
+  @ApiQuery({ name: 'id', required: true, schema: { type: 'string', format: 'uuid' } })
+  @ApiOkResponse({ description: 'Risks linked to one record (not retired; closed ones last), and whether the caller may raise one' })
+  linked(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.linked(ctx, parse(LinkedQuery, query));
+  }
+
+  @Get('risk-draft')
+  @OrganisationScoped(READ)
+  @ApiQuery({ name: 'kind', required: true, schema: { type: 'string', enum: ['ncr', 'capa', 'audit_finding'] } })
+  @ApiQuery({ name: 'id', required: true, schema: { type: 'string', format: 'uuid' } })
+  @ApiOkResponse({ description: 'What a risk raised from a non-conformance, an 8D or an audit finding would start with: fields and suggested links. Nothing is saved.' })
+  draft(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.draft(ctx, parse(DraftQuery, query));
+  }
+
   @Post('risks')
   @HttpCode(201)
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(CreateRiskBody) })
-  @ApiCreatedResponse({ description: 'Raises a risk or an opportunity as a draft (RSK-001 …); the first assessment opens it' })
+  @ApiCreatedResponse({ description: 'Raises a risk or an opportunity as a draft (RSK-001 …), optionally from a non-conformance, an 8D or an audit finding (`raisedFrom`) and with links; the first assessment opens it' })
   create(@Ctx() ctx: RequestContext, @Body() body: unknown) {
     return this.service.create(ctx, parse(CreateRiskBody, body));
   }
@@ -238,5 +257,13 @@ export class RiskController {
   @ApiOkResponse({ description: 'Reopens a closed risk with a reason; its status is worked out again and it is due for review today' })
   reopen(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.reopen(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
+  }
+
+  @Put('risks/:id/links')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(LinksBody) })
+  @ApiOkResponse({ description: 'Replaces everything the risk is linked to (the record it was raised from stays)' })
+  setLinks(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setLinks(ctx, parse(Uuid, id), parse(LinksBody, body).links);
   }
 }

@@ -53,6 +53,7 @@ import NcrHistory from "./NcrHistory";
 import NcrCosts from "./NcrCosts";
 import NcrInspectionSource from "../inspection/NcrInspectionSource";
 import NcrAuditSource from "../audits/NcrAuditSource";
+import LinkedRisks from "../risk/LinkedRisks";
 import NcrReceiptSource from "../supplier-quality/NcrReceiptSource";
 import { useNcrReceiptSource } from "../../hooks/useIncoming";
 import { useNcrAuditSource } from "../../hooks/useAudits";
@@ -518,6 +519,15 @@ const NcrPage = () => {
                 <SectionHeading id="ncr-receipt-source" title="Source delivery" />
                 <Card>
                   <NcrReceiptSource source={receiptSource} ncr={ncr} canLink={can("ncr.update") && ncr.stage !== "cancelled"} />
+                </Card>
+              </>
+            )}
+
+            {!isNew && can("risk.read") && (
+              <>
+                <SectionHeading id="ncr-risks" title="Risks" />
+                <Card>
+                  <LinkedRisks kind="ncr" id={ncr.id} plain title="Risks linked to this non-conformance" />
                 </Card>
               </>
             )}

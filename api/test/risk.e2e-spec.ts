@@ -5,7 +5,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { makeIds, requireDb, seed, startApp, token } from './helpers';
+import { categoryId, makeIds, requireDb, seed, startApp, token } from './helpers';
 
 const ids = makeIds('a1c');
 let app: INestApplication;
@@ -272,5 +272,59 @@ describe('treatment, acceptance, reviews and closing (RK2)', () => {
     await api().post(`/api/v1/risk-actions/${action}/reopen`).set(b).expect(404);
     await api().post(`/api/v1/risks/${risk}/reviews`).set(b).send({ note: 'Hijack' }).expect(404);
     await api().post(`/api/v1/risks/${risk}/close`).set(b).send({ outcome: 'treated', note: 'Hijack' }).expect(404);
+  });
+});
+
+describe('links and raising from a record (RK3)', () => {
+  let ncr = '';
+  let part = '';
+  let risk = '';
+
+  it('drafts a risk from an NC, raises it with the NC linked, and lists it on the NC', async () => {
+    const h = await as(ids.ownerA);
+    part = (await api().post('/api/v1/parts').set(h).send({ partNumber: 'RK3-1', name: 'Bracket' }).expect(201)).body.id;
+    ncr = (
+      await api().post('/api/v1/ncrs').set(h).send({ source: 'internal', title: 'Cracked weld', severity: 'major', quantityAffected: 4, description: 'Crack at the weld toe', siteId: ids.siteA, partId: part, open: true, categoryId: await categoryId(admin, ids.orgA) }).expect(201)
+    ).body.id;
+    await api().get(`/api/v1/risk-draft?kind=supplier&id=${ncr}`).set(h).expect(400);
+    await api().get(`/api/v1/risk-draft?kind=ncr&id=${ncr}`).set(await as(ids.ownerB, ids.orgB)).expect(404);
+    const draft = (await api().get(`/api/v1/risk-draft?kind=ncr&id=${ncr}`).set(h).expect(200)).body;
+    expect(draft).toMatchObject({ kind: 'risk', title: 'Cracked weld', description: 'Crack at the weld toe', source: { kind: 'ncr', id: ncr, title: 'Cracked weld' } });
+    expect(draft.links.map((l: { kind: string; id: string }) => [l.kind, l.id])).toEqual([['ncr', ncr], ['part', part]]);
+    expect(draft.links[1]).toMatchObject({ reference: 'RK3-1', name: 'Bracket', readable: true });
+    await api().post('/api/v1/risks').set(await as(ids.inspectorA)).send({ title: 'x', categoryId: draft.categoryId, raisedFrom: { kind: 'ncr', id: ncr } }).expect(403);
+    const made = (
+      await api().post('/api/v1/risks').set(h).send({ title: 'Weld cracking on brackets', categoryId: draft.categoryId, description: draft.description, raisedFrom: { kind: 'ncr', id: ncr }, links: [{ kind: 'part', id: part }] }).expect(201)
+    ).body;
+    risk = made.id;
+    expect(made.origin).toMatchObject({ kind: 'ncr', id: ncr, name: 'Cracked weld', readable: true });
+    expect(made.links.map((l: { kind: string }) => l.kind).sort()).toEqual(['ncr', 'part']);
+    const onNc = (await api().get(`/api/v1/risks/linked?kind=ncr&id=${ncr}`).set(await as(ids.inspectorA)).expect(200)).body;
+    expect(onNc).toMatchObject({ canRaise: false, data: [{ id: risk, title: 'Weld cracking on brackets' }] });
+    expect((await api().get(`/api/v1/risks/linked?kind=part&id=${part}`).set(h).expect(200)).body).toMatchObject({ canRaise: true, data: [{ id: risk }] });
+    await api().get('/api/v1/risks/linked?kind=operation_code&id=x').set(h).expect(400);
+  });
+
+  it('replaces the links as a whole, keeping the origin, refusing another organisation\'s records', async () => {
+    const h = await as(ids.ownerA);
+    await api().put(`/api/v1/risks/${risk}/links`).set(await as(ids.inspectorA)).send({ links: [] }).expect(403);
+    await api().put(`/api/v1/risks/${risk}/links`).set(h).send({ links: [{ kind: 'lot', id: part }] }).expect(400);
+    const kept = await api().put(`/api/v1/risks/${risk}/links`).set(h).send({ links: [{ kind: 'part', id: part }] }).expect(409);
+    expect(kept.body.error).toMatchObject({ code: 'risk_rule' });
+    expect(kept.body.error.message).toMatch(/stays linked/);
+    const theirs = (await admin.query(`select id from public.parts where organisation_id = $1 limit 1`, [ids.orgB])).rows[0]?.id
+      ?? (await admin.query(`insert into public.parts (organisation_id, part_number, name) values ($1, 'B-1', 'Theirs') returning id`, [ids.orgB])).rows[0].id;
+    const other = await api().put(`/api/v1/risks/${risk}/links`).set(h).send({ links: [{ kind: 'ncr', id: ncr }, { kind: 'part', id: theirs }] }).expect(409);
+    expect(other.body.error.message).toBe('That part is not in this organisation');
+    const saved = (await api().put(`/api/v1/risks/${risk}/links`).set(h).send({ links: [{ kind: 'ncr', id: ncr }, { kind: 'operation_code', code: 'OP30' }] }).expect(200)).body;
+    expect(saved.links).toMatchObject([{ kind: 'ncr', id: ncr }, { kind: 'operation_code', code: 'OP30', reference: 'OP30', readable: true }]);
+    expect((await api().get(`/api/v1/risks/linked?kind=part&id=${part}`).set(h).expect(200)).body.data).toEqual([]);
+  });
+
+  it('shows the links to a reader, and nothing to another organisation', async () => {
+    const h = await as(ids.dual);
+    const seen = (await api().get(`/api/v1/risks/${risk}`).set(h).expect(200)).body;
+    expect(seen.links.find((l: { kind: string }) => l.kind === 'ncr')).toMatchObject({ id: ncr });
+    await api().get(`/api/v1/risks/${risk}`).set(await as(ids.ownerB, ids.orgB)).expect(404);
   });
 });

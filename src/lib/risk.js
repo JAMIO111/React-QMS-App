@@ -106,6 +106,55 @@ export const BAND_OPTIONS = [
 
 export const riskPath = (id) => `/Risk/Register/${id}`;
 
+/** What a risk can be linked to, in the order the link editor offers them. */
+export const LINK_KINDS = [
+  { value: "ncr", label: "Non-conformance", plural: "Non-conformances" },
+  { value: "capa", label: "8D", plural: "8Ds" },
+  { value: "audit_finding", label: "Audit finding", plural: "Audit findings" },
+  { value: "supplier", label: "Supplier", plural: "Suppliers" },
+  { value: "part", label: "Part", plural: "Parts" },
+  { value: "part_family", label: "Part family", plural: "Part families" },
+  { value: "machine", label: "Machine", plural: "Machines" },
+  { value: "document", label: "Document", plural: "Documents" },
+  { value: "operation_code", label: "Operation", plural: "Operations" },
+];
+export const linkKindLabel = (kind) => LINK_KINDS.find((k) => k.value === kind)?.label ?? kind;
+
+/** The page of a linked record, or null when it has none (an operation code). */
+export const linkPath = (link) => {
+  if (!link?.id) return null;
+  switch (link.kind) {
+    case "ncr":
+      return `/Non-Conformance/Register/${link.id}`;
+    case "capa":
+      return `/CAPA/${link.id}`;
+    case "audit_finding":
+      return `/Audits/Findings/${link.id}`;
+    case "supplier":
+      return `/Suppliers/${link.id}`;
+    case "part":
+      return `/Parts/${link.id}`;
+    case "part_family":
+      return `/Part-Families/${link.id}`;
+    case "machine":
+      return "/Machines";
+    case "document":
+      return `/Documentation/Documents/${link.id}`;
+    default:
+      return null;
+  }
+};
+
+/** "NC-0012 · Cracked weld", or a plain word when the reader may not see the record. */
+export const linkWords = (link) =>
+  link.kind === "operation_code" ? link.code : link.readable ? [link.reference, link.name].filter(Boolean).join(" · ") : `A ${linkKindLabel(link.kind).toLowerCase()} you cannot open`;
+
+/** The body the API takes for a list of links. */
+export const linksBody = (links) => links.map((l) => (l.kind === "operation_code" ? { kind: l.kind, code: l.code } : { kind: l.kind, id: l.id }));
+
+/** The same link twice (same kind and record, or the same operation ignoring case). */
+export const sameLink = (a, b) => a.kind === b.kind && (a.kind === "operation_code" ? a.code?.toUpperCase() === b.code?.toUpperCase() : a.id === b.id);
+
 /** The band of a cell (levels 1-5) on a matrix config. */
 export const cellBand = (config, likelihood, consequence) => config?.bands?.[likelihood - 1]?.[consequence - 1] ?? null;
 

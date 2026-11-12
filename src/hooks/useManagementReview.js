@@ -130,7 +130,9 @@ export const useReviewInput = (reviewId) => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
   const detailKey = key(organisationId, "review", reviewId);
+  const mutationKey = ["review-input", reviewId];
   return useMutation({
+    mutationKey,
     mutationFn: ({ inputId, commentary, reviewed }) => apiFetch(`/management-review-inputs/${inputId}`, { method: "PATCH", body: { commentary, reviewed }, organisationId }),
     onMutate: async ({ inputId, commentary, reviewed }) => {
       await queryClient.cancelQueries({ queryKey: detailKey });
@@ -139,7 +141,10 @@ export const useReviewInput = (reviewId) => {
       return { previous };
     },
     onError: (_err, _vars, context) => context?.previous && queryClient.setQueryData(detailKey, context.previous),
-    onSuccess: (review) => queryClient.setQueryData(detailKey, review),
+    // Saves can overlap (leaving the commentary box, then ticking): only the last one to finish puts the server's review in the cache, so an older reply never undoes a newer tick.
+    onSuccess: (review) => {
+      if (queryClient.isMutating({ mutationKey }) <= 1) queryClient.setQueryData(detailKey, review);
+    },
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };

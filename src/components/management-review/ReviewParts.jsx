@@ -69,20 +69,30 @@ export const InputCard = ({ review, input, onGather, gathering }) => {
   const { showToast } = useToast();
   const [text, setText] = useState(input.commentary ?? "");
   useEffect(() => setText(input.commentary ?? ""), [input.commentary]);
+  // The tick shows at once (the cache updates a moment later) and is put back if the save is refused.
+  const [ticked, setTicked] = useState(input.reviewed);
+  useEffect(() => setTicked(input.reviewed), [input.reviewed]);
   const holding = review.canHold;
-  const send = (reviewed, commentary = text) =>
+  const send = (reviewed, commentary = text) => {
+    setTicked(reviewed);
     save.mutate(
       { inputId: input.id, commentary: commentary.trim() || null, reviewed },
-      { onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) },
+      {
+        onError: (err) => {
+          setTicked(input.reviewed);
+          showToast({ type: "error", title: "Not saved", message: describeApiError(err) });
+        },
+      },
     );
+  };
   const canTick = input.commentaryOnly ? !!text.trim() : !!input.gatheredAt;
 
   return (
-    <section aria-label={input.title} className={`flex flex-col gap-3 rounded-2xl border bg-secondary-bg p-4 ${input.reviewed ? "border-success-color/50" : "border-border-color"}`}>
+    <section aria-label={input.title} className={`flex flex-col gap-3 rounded-2xl border bg-secondary-bg p-4 ${ticked ? "border-success-color/50" : "border-border-color"}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex flex-col">
           <h3 className="flex items-center gap-2 text-base font-semibold text-primary-text">
-            {input.reviewed && <CircleCheckIcon className="text-success-color" aria-hidden="true" />}
+            {ticked && <CircleCheckIcon className="text-success-color" aria-hidden="true" />}
             {input.title}
           </h3>
           <span className="text-xs text-secondary-text">
@@ -106,11 +116,11 @@ export const InputCard = ({ review, input, onGather, gathering }) => {
       <SnapshotView snapshot={input.snapshot} />
       {holding ? (
         <>
-          <TextAreaField label="Commentary" required={input.commentaryOnly} value={text} onChange={(e) => setText(e.target.value)} onBlur={() => text !== (input.commentary ?? "") && send(input.reviewed)} maxLength={8000} rows={2} />
+          <TextAreaField label="Commentary" required={input.commentaryOnly} value={text} onChange={(e) => setText(e.target.value)} onBlur={() => text !== (input.commentary ?? "") && send(ticked)} maxLength={8000} rows={2} />
           <label className="flex items-center gap-2 text-sm text-primary-text">
-            <input type="checkbox" checked={input.reviewed} disabled={!canTick && !input.reviewed} onChange={(e) => send(e.target.checked)} className="h-4 w-4" />
+            <input type="checkbox" checked={ticked} disabled={!canTick && !ticked} onChange={(e) => send(e.target.checked)} className="h-4 w-4" />
             Reviewed in the meeting
-            {!canTick && !input.reviewed && <span className="text-xs text-secondary-text">({input.commentaryOnly ? "write the commentary first" : "gather the figures first"})</span>}
+            {!canTick && !ticked && <span className="text-xs text-secondary-text">({input.commentaryOnly ? "write the commentary first" : "gather the figures first"})</span>}
           </label>
         </>
       ) : (

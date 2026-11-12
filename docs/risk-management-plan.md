@@ -1,6 +1,6 @@
 # Risk and management review — plan
 
-**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **RK1–RK4 and MR1–MR3 built** (§11–§17); RX is not · **Branch:** `Dev`
+**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **all slices built, RX exit check done** (§11–§18, `docs/risk-management-exit-report.md`) · **Branch:** `Dev`
 **Menu names:** Risk (`ShieldAlert`), Management review (`Presentation`) · **Slices:** RK1–RK4, MR1–MR3, RX (exit check)
 
 Per `docs/design-brief.md` §6.7 ("Risk management", "Management review and quality KPIs") and Phase 4 ("Risk and management review"), the last
@@ -281,3 +281,10 @@ Migration `20260218100000_management_review_notices.sql` (applied live 2026-11-1
   overdue review actions, quality objectives on / off target. `ManagementReviewCard` on the home page. **For you** also gained "Risk reviews and actions for you" (RK4's count) and
   "Management review actions for you" (shown to anyone who has one).
 - **Not in MR3:** reminders when a review falls due (no worker; the card says when the last one is over a year old), review areas on the home page's "By area" cards.
+
+## 18. RX — exit check (2026-11-12)
+
+`docs/risk-management-exit-report.md`: live guardrails 0 violations, advisors show nothing new for these modules, and `npm run journey` has a step for both
+(raise a risk from an NC → assess → treat → assess what is left → accepted by another approver → review; a quality objective; a management review planned, started,
+reviewed, decided, completed, its action closed by its owner and the report printed). The browser found two real faults in the review page, both fixed: the
+"Reviewed" tick did not show at once, and two overlapping saves of one section could undo each other. Both modules are complete.

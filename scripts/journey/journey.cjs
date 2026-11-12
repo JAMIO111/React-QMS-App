@@ -203,6 +203,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await importFromApi({ page, stack, APP, orgName, see, shot, step, log });
   await competence({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
   await documentControl({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
+  await riskAndReview({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -1374,5 +1375,195 @@ async function documentControl({ browser, page, stack, APP, orgName, see, shot, 
   await see(page.getByRole('heading', { name: 'Documents dashboard' }));
   await see(page.getByRole('link', { name: /In force\s*1/ }));
   await shot(page, '99-documents-dashboard');
+}
+
+// "Sunday 1 November 2026": how the date picker names a day.
+const dayName = (d) =>
+  `${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()]} ${d.getDate()} ${
+    ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][d.getMonth()]
+  } ${d.getFullYear()}`;
+
+async function riskAndReview({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch }) {
+  const org = (await stack.admin.query(`select id from public.organisations where name = $1`, [orgName])).rows[0];
+  const { rows: [nc] } = await stack.admin.query(`select id, reference from public.nonconformances where organisation_id = $1 and title = 'Rod bore burr'`, [org.id]);
+
+  step('owner raises a risk from the non-conformance, prefilled, and assesses it: high');
+  await page.goto(`${APP}/Non-Conformance/Register/${nc.id}`);
+  const risks = page.getByRole('region', { name: 'Risks linked to this non-conformance' });
+  await risks.getByRole('button', { name: 'Raise a risk' }).click();
+  const raise = page.getByRole('dialog', { name: `Raise a risk from ${nc.reference}` });
+  await see(raise.getByLabel('Title'));
+  await raise.getByRole('button', { name: 'Raise it' }).click();
+  await page.waitForURL(/\/Risk\/Register\/[0-9a-f-]{36}$/);
+  const riskUrl = page.url();
+  await see(page.getByText(new RegExp(`Raised from.*${nc.reference}`)));
+  await page.getByRole('button', { name: 'Assess it' }).click();
+  let assess = page.getByRole('dialog', { name: /^Assess RSK-/ });
+  await assess.getByRole('button', { name: 'Likely and Major: 16, High' }).click();
+  await assess.getByLabel('Why this score?').fill('Burrs found on two batches this month');
+  await assess.getByRole('button', { name: 'Record the assessment' }).click();
+  await see(page.getByText('Choose what will be done about the risk'));
+
+  step('owner chooses to mitigate it and assesses what is left: still high, so it needs accepting');
+  await page.getByRole('button', { name: 'Choose the approach' }).click();
+  const treat = page.getByRole('dialog', { name: /^What will be done about/ });
+  await treat.getByRole('combobox', { name: /Approach/ }).click();
+  await page.getByRole('option', { name: /^Mitigate/ }).click();
+  await treat.getByLabel('The plan').fill('Deburr at the machine and check the first part of every batch');
+  await treat.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Assess what is left' }).click();
+  assess = page.getByRole('dialog', { name: /^What is left of RSK-/ });
+  await assess.getByRole('button', { name: 'Possible and Major: 12, High' }).click();
+  await assess.getByLabel('Why this score?').fill('Deburring in place; customer impact unchanged');
+  await assess.getByRole('button', { name: 'Record the assessment' }).click();
+  await see(page.getByText(/have it accepted by an approver/));
+  await page.getByRole('button', { name: 'Propose accepting it' }).click();
+  const propose = page.getByRole('dialog', { name: /^Propose accepting/ });
+  await propose.getByLabel('Why accept it as it stands?').fill('A second deburring cell is on order; until then the first-part check holds');
+  await propose.getByRole('button', { name: 'Propose' }).click();
+  await see(page.getByText('You proposed it, so someone else decides.'));
+  await shot(page, 'a0-risk-awaiting-acceptance');
+
+  step('Colin, an approver, accepts it; the owner records a review and the risk is monitored');
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const colin = await ctx.newPage();
+  colin.setDefaultTimeout(15000);
+  watch(colin, 'colin');
+  await signIn(colin, APP, colleague.email);
+  await see(colin.getByRole('heading', { level: 1, name: /good (morning|afternoon|evening), Colin/i }));
+  await colin.goto(riskUrl);
+  await colin.getByRole('button', { name: 'Decide…' }).click();
+  const decide = colin.getByRole('dialog', { name: /^Accept RSK-/ });
+  await decide.getByLabel('Your note').fill('Accepted until the second cell is running');
+  await decide.getByRole('button', { name: 'Approve' }).click();
+  await see(colin.getByText('Monitoring', { exact: true }).first());
+  await page.reload();
+  await page.getByRole('button', { name: 'Record a review' }).click();
+  const review = page.getByRole('dialog', { name: /^Review RSK-/ });
+  await review.getByLabel('What you looked at and found').fill('No burrs at the customer since the first-part check started');
+  await review.getByRole('button', { name: 'Record the review' }).click();
+  await see(page.getByRole('list', { name: 'Reviews' }).getByText(/No burrs at the customer/));
+  await shot(page, 'a1-risk-monitoring');
+  const { rows: [risk] } = await stack.admin.query(
+    `select r.status, r.origin_kind, (select count(*)::int from public.risk_reviews v where v.risk_id = r.id) as reviews,
+            (select a.status || ':' || (a.decided_by = u.id)::text from public.risk_acceptances a, auth.users u where a.risk_id = r.id and lower(u.email) = lower($2)) as acceptance
+       from public.risks r where r.organisation_id = $1 and r.origin_kind = 'ncr' and r.origin_id = $3`,
+    [org.id, colleague.email, nc.id],
+  );
+  log(`risk: ${JSON.stringify(risk)}`);
+  if (!risk || risk.status !== 'monitoring' || risk.acceptance !== 'approved:true' || risk.reviews < 2) throw new Error(`the risk was not accepted by Colin and reviewed: ${JSON.stringify(risk)}`);
+
+  step('the risk dashboard and the heat map show it');
+  await page.goto(`${APP}/Risk`);
+  await see(page.getByRole('heading', { name: 'Risk dashboard' }));
+  await see(page.getByRole('table', { name: 'Highest risks' }).getByRole('link', { name: /Rod bore burr|RSK-/ }).first());
+  await shot(page, 'a2-risk-dashboard');
+  await page.goto(`${APP}/Risk/Heat-map`);
+  await page.getByRole('button', { name: /Possible and Major: 12, High, 1 risk/ }).click();
+  await see(page.getByRole('list', { name: 'Risks in the chosen cell' }).getByRole('link').first());
+  await shot(page, 'a3-risk-heat-map');
+
+  step('owner defines a quality objective and records this month\'s value');
+  await page.goto(`${APP}/Management-Review/Objectives`);
+  await page.getByRole('button', { name: /New objective/ }).click();
+  const define = page.getByRole('dialog', { name: 'Define a quality objective' });
+  await define.getByLabel('Objective').fill('Customer complaints answered within 5 days');
+  await define.getByLabel('Unit').fill('%');
+  await define.getByLabel('Target').fill('95');
+  await define.getByRole('button', { name: 'Define it' }).click();
+  await page.waitForURL(/\/Management-Review\/Objectives\/[0-9a-f-]{36}$/);
+  await page.getByRole('button', { name: 'Record a value' }).click();
+  const value = page.getByRole('dialog', { name: /^Record a value/ });
+  await value.getByLabel('Value (%)').fill('97');
+  await value.getByRole('button', { name: 'Record it' }).click();
+  await see(page.getByText('On target').first());
+  await shot(page, 'a4-quality-objective');
+
+  step('owner plans a management review for this month, invites Colin and starts it: the inputs are gathered');
+  await page.goto(`${APP}/Management-Review/Reviews`);
+  await page.getByRole('button', { name: /Plan a review/ }).click();
+  const plan = page.getByRole('dialog', { name: 'Plan a management review' });
+  await plan.getByLabel('Title').fill('Management review, this month');
+  const now = new Date();
+  const first = new Date(now.getFullYear(), now.getMonth(), 1);
+  await plan.getByRole('button', { name: 'Reviews the period from' }).click();
+  await page.getByRole('dialog', { name: 'Choose reviews the period from' }).getByRole('button', { name: dayName(first) }).click();
+  await plan.getByRole('button', { name: /^To\b/ }).click();
+  await page.getByRole('dialog', { name: 'Choose to' }).getByRole('button', { name: dayName(now) }).click();
+  await plan.getByRole('button', { name: 'Plan it' }).click();
+  await page.waitForURL(/\/Management-Review\/Reviews\/[0-9a-f-]{36}$/);
+  const reviewUrl = page.url();
+  await page.getByRole('region', { name: 'Attendees' }).getByRole('button', { name: 'Change' }).click();
+  let people = page.getByRole('dialog', { name: 'Attendees' });
+  await people.getByRole('combobox', { name: 'Add a member' }).click();
+  await page.getByRole('option', { name: /Colin Colleague/ }).click();
+  await people.getByRole('button', { name: 'Save attendees' }).click();
+  await see(page.getByRole('list', { name: 'Attendees' }).getByText('Colin Colleague'));
+  await page.getByRole('button', { name: 'Start the review' }).click();
+  await see(page.getByRole('heading', { name: 'Inputs' }));
+  await see(page.getByRole('region', { name: 'Quality objectives' }).getByText(/Customer complaints answered/));
+  await see(page.getByRole('region', { name: 'Effectiveness of actions on risks and opportunities' }).getByText('High or critical'));
+  await shot(page, 'a5-review-inputs');
+
+  step('the meeting: every section reviewed, Colin present, a decision and an action for Colin, then completed');
+  for (const section of ['Changes in external and internal issues', 'Opportunities for improvement']) {
+    const card = page.getByRole('region', { name: section });
+    await card.getByRole('textbox', { name: /^Commentary/ }).fill('Discussed in the meeting');
+  }
+  const boxes = page.getByRole('checkbox', { name: /Reviewed in the meeting/ });
+  const count = await boxes.count();
+  for (let i = 0; i < count; i++) {
+    const box = boxes.nth(i);
+    if (!(await box.isChecked())) {
+      await box.check();
+    }
+  }
+  await page.getByRole('region', { name: 'Attendees' }).getByRole('button', { name: 'Change' }).click();
+  people = page.getByRole('dialog', { name: 'Attendees' });
+  await people.getByRole('combobox', { name: 'Attendance' }).click();
+  await page.getByRole('option', { name: 'Present' }).click();
+  await people.getByRole('button', { name: 'Save attendees' }).click();
+  await see(page.getByRole('list', { name: 'Attendees' }).getByText(/Present/));
+  await page.getByRole('button', { name: 'Record a decision' }).click();
+  const decision = page.getByRole('dialog', { name: 'Record a decision' });
+  await decision.getByLabel('What was decided').fill('Fund a second deburring cell');
+  await decision.getByRole('button', { name: 'Record it' }).click();
+  await page.getByRole('button', { name: 'Give an action' }).click();
+  const action = page.getByRole('dialog', { name: 'Give an action' });
+  await action.getByLabel('What is to be done').fill('Get three quotes for a deburring cell');
+  await action.getByRole('combobox', { name: /Given to/ }).click();
+  await page.getByRole('option', { name: /Colin Colleague/ }).click();
+  await action.getByRole('button', { name: 'Give the action' }).click();
+  await see(page.getByRole('list', { name: 'Actions' }).getByText('Get three quotes for a deburring cell'));
+  await page.getByRole('button', { name: 'Complete', exact: true }).click();
+  await page.getByRole('dialog', { name: /^Complete MR-/ }).getByRole('button', { name: 'Complete the review' }).click();
+  await see(page.getByText(/The record is frozen/));
+  await shot(page, 'a6-review-completed');
+
+  step('Colin is told, closes his action from My review actions, and the report prints the whole review');
+  await colin.goto(`${APP}/Management-Review/My-Actions`);
+  const mine = colin.getByRole('list', { name: 'My review actions' });
+  await see(mine.getByText('Get three quotes for a deburring cell'));
+  await mine.getByRole('button', { name: 'Mark done: Get three quotes for a deburring cell' }).click();
+  await colin.getByRole('dialog').getByLabel('What was done').fill('Three quotes in the shared folder');
+  await colin.getByRole('dialog').getByRole('button', { name: 'Mark done' }).click();
+  await see(colin.getByText('No management review action is waiting for you.'));
+  await ctx.close();
+  await page.goto(`${reviewUrl}/report`);
+  const report = page.getByRole('article', { name: 'Management review report' });
+  await see(report.getByText('Fund a second deburring cell'));
+  await see(report.getByRole('table', { name: 'Actions' }).getByText(/Three quotes in the shared folder/));
+  await shot(page, 'a7-review-report');
+  const { rows: [mr] } = await stack.admin.query(
+    `select m.status, (select count(*)::int from public.management_review_inputs i where i.review_id = m.id and i.reviewed) as reviewed,
+            (select count(*)::int from public.management_review_inputs i where i.review_id = m.id and i.available is false) as unavailable,
+            (select a.status from public.management_review_actions a where a.review_id = m.id) as action,
+            (select count(*)::int from public.notifications n join auth.users u on u.id = n.recipient_user_id
+              where n.entity_type = 'management_review_actions' and n.organisation_id = m.organisation_id and lower(u.email) = lower($2)) as told
+       from public.management_reviews m where m.organisation_id = $1 and m.title = 'Management review, this month'`,
+    [org.id, colleague.email],
+  );
+  log(`review: ${JSON.stringify(mr)}`);
+  if (!mr || mr.status !== 'completed' || mr.reviewed !== 12 || mr.action !== 'done' || mr.told !== 1) throw new Error(`the review was not held end to end: ${JSON.stringify(mr)}`);
 }
 

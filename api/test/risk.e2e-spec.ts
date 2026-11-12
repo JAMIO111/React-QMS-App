@@ -328,3 +328,71 @@ describe('links and raising from a record (RK3)', () => {
     await api().get(`/api/v1/risks/${risk}`).set(await as(ids.ownerB, ids.orgB)).expect(404);
   });
 });
+
+describe('heat map, dashboard, my work and notices (RK4)', () => {
+  const day = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  let risk = '';
+
+  it('places live risks on the map by the assessment asked for', async () => {
+    const h = await as(ids.ownerA);
+    const made = (await api().post('/api/v1/risks').set(h).send({ categoryId: ctx.process, title: 'Furnace refractory wear', ownerId: ids.inspectorA }).expect(201)).body;
+    risk = made.id;
+    await api().post(`/api/v1/risks/${risk}/assessments`).set(h).send({ likelihood: 5, consequence: 5, rationale: 'Lining at end of life' }).expect(200);
+    await api().put(`/api/v1/risks/${risk}/treatment`).set(h).send({ strategy: 'mitigate' }).expect(200);
+    await api().post(`/api/v1/risks/${risk}/assessments`).set(h).send({ likelihood: 2, consequence: 5, rationale: 'Relined', phase: 'residual' }).expect(200);
+
+    const cell = (map: { cells: { likelihood: number; consequence: number; risks: { id: string }[] }[] }, l: number, c: number) =>
+      map.cells.find((x) => x.likelihood === l && x.consequence === c)?.risks.map((x) => x.id) ?? [];
+    const inherent = (await api().get('/api/v1/risk-heatmap?phase=inherent').set(h).expect(200)).body;
+    expect(cell(inherent, 5, 5)).toContain(risk);
+    const effective = (await api().get('/api/v1/risk-heatmap').set(h).expect(200)).body;
+    expect(effective.phase).toBe('effective');
+    expect(cell(effective, 2, 5)).toContain(risk);
+    expect(cell(effective, 5, 5)).not.toContain(risk);
+    const residual = (await api().get('/api/v1/risk-heatmap?phase=residual').set(h).expect(200)).body;
+    expect(residual.notPlaced).toBeGreaterThan(0);
+    const mine = (await api().get('/api/v1/risk-heatmap?owner=me').set(await as(ids.inspectorA)).expect(200)).body;
+    expect(mine.placed).toBe(1);
+    await api().get('/api/v1/risk-heatmap?phase=later').set(h).expect(400);
+    const other = (await api().get('/api/v1/risk-heatmap').set(await as(ids.ownerB, ids.orgB)).expect(200)).body;
+    expect(other.cells.flatMap((x: { risks: { id: string }[] }) => x.risks.map((r) => r.id))).not.toContain(risk);
+  });
+
+  it('tells the owner and the person an action is given to, never the person who did it', async () => {
+    const h = await as(ids.ownerA);
+    await api().post(`/api/v1/risks/${risk}/actions`).set(h).send({ description: 'Order a spare lining', ownerId: ids.inspectorA, dueDate: day(-2) }).expect(201);
+    const told = (await api().get('/api/v1/notifications').set(await as(ids.inspectorA)).expect(200)).body.data;
+    const keys = told.map((n: { eventKey?: string; entityType: string }) => n.entityType);
+    expect(keys).toEqual(expect.arrayContaining(['risks', 'risk_actions']));
+    const own = (await api().get('/api/v1/notifications').set(h).expect(200)).body.data;
+    expect(own.filter((n: { entityType: string }) => n.entityType === 'risk_actions' || n.entityType === 'risks')).toEqual([]);
+  });
+
+  it('gives each person their own work and a count for the menu', async () => {
+    const inspector = await as(ids.inspectorA);
+    const work = (await api().get('/api/v1/risk-work/mine').set(inspector).expect(200)).body;
+    expect(work.actions).toMatchObject([{ riskId: risk, description: 'Order a spare lining', overdue: true }]);
+    expect(work.acceptances).toEqual([]);
+    const count = (await api().get('/api/v1/risk-work/count').set(inspector).expect(200)).body;
+    expect(count).toMatchObject({ openActions: 1, overdueActions: 1, acceptances: 0 });
+    expect(count.total).toBe(count.overdueReviews + count.openActions + count.acceptances);
+    const other = (await api().get('/api/v1/risk-work/count').set(await as(ids.ownerB, ids.orgB)).expect(200)).body;
+    expect(other.openActions).toBe(0);
+  });
+
+  it('sums up the register as of today and for the period', async () => {
+    const h = await as(ids.ownerA);
+    await api().get('/api/v1/risks-dashboard').set(h).expect(400);
+    await api().get('/api/v1/risks-dashboard?from=2026-02-01&to=2026-01-01').set(h).expect(400);
+    const d = (await api().get(`/api/v1/risks-dashboard?from=${day(-30)}&to=${day(0)}`).set(h).expect(200)).body;
+    expect(d.period.bucket).toBe('week');
+    expect(d.kpis.risks).toBeGreaterThan(0);
+    expect(d.kpis.raised).toBeGreaterThan(0);
+    expect(d.kpis.overdueActions).toBeGreaterThanOrEqual(1);
+    expect(d.byBand.map((b: { band: string }) => b.band)).toEqual(['critical', 'high', 'medium', 'low', 'unassessed']);
+    expect(d.overdueActions.map((a: { riskId: string }) => a.riskId)).toContain(risk);
+    expect(d.trend.reduce((s: number, t: { raised: number }) => s + t.raised, 0)).toBe(d.kpis.raised);
+    const other = (await api().get(`/api/v1/risks-dashboard?from=${day(-30)}&to=${day(0)}`).set(await as(ids.ownerB, ids.orgB)).expect(200)).body;
+    expect(other.overdueActions.map((a: { riskId: string }) => a.riskId)).not.toContain(risk);
+  });
+});

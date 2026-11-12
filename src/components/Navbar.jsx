@@ -12,6 +12,7 @@ import { useCanSee, useOrganisationLogo } from "../hooks/useQmsApi";
 import { useMyAlertCount } from "../hooks/useDocumentation";
 import { useMyDocumentCount } from "../hooks/useDocuments";
 import { useMyCapaActions } from "../hooks/useCapa";
+import { useMyRiskCount } from "../hooks/useRisk";
 import { useModuleAccess } from "../hooks/useSubscription";
 import { useProductionSettings } from "../hooks/useProduction";
 import { subMenuVisible } from "../lib/production";
@@ -25,11 +26,13 @@ const Navbar = () => {
   const myAlerts = useMyAlertCount({ enabled: canSee("documentation.read") });
   const myActions = useMyCapaActions("open", { enabled: canSee("capa.read") });
   const myDocuments = useMyDocumentCount({ enabled: canSee("documentation.read") });
+  const myRiskWork = useMyRiskCount({ enabled: canSee("risk.read") });
   const badges = {
     "my-alerts": myAlerts.data?.unacknowledged ?? 0,
     "my-documents": myDocuments.data?.total ?? 0,
     documentation: (myAlerts.data?.unacknowledged ?? 0) + (myDocuments.data?.total ?? 0),
     "my-actions": myActions.data?.openCount ?? 0,
+    "my-risk-work": myRiskWork.data?.total ?? 0,
   };
   const hasModule = useModuleAccess();
   const { organisation } = useOrganisation();

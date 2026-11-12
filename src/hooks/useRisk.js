@@ -34,6 +34,54 @@ export const useRiskCategories = ({ all = false } = {}) => {
   });
 };
 
+/** Live risks per cell of the matrix: `phase` inherent | residual | effective (default), optional `kind`, `categoryId`, `owner=me`. */
+export const useRiskHeatmap = (params) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "heatmap", params),
+    queryFn: () => apiFetch(`/risk-heatmap?${qs(params)}`, { organisationId }),
+    enabled: !!organisationId,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+};
+
+/** The risk dashboard for a period (`period` from useDashboardPeriod). */
+export const useRiskDashboard = (period) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "dashboard", period?.fromIso, period?.toIso),
+    queryFn: () => apiFetch(`/risks-dashboard?${qs({ from: period.fromIso, to: period.toIso })}`, { organisationId }),
+    enabled: !!organisationId && !!period?.fromIso,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+};
+
+/** My risks due for review, my open actions and acceptances waiting for me. */
+export const useMyRiskWork = () => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "work", "mine"),
+    queryFn: () => apiFetch("/risk-work/mine", { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+  });
+};
+
+/** Counts for the menu badge (polled every five minutes, like the other badges). */
+export const useMyRiskCount = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "work", "count"),
+    queryFn: () => apiFetch("/risk-work/count", { organisationId }),
+    enabled: !!organisationId && enabled,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+    retry: false,
+  });
+};
+
 /** The register: filters and paging are the server's. */
 export const useRisks = (params) => {
   const { organisationId } = useOrganisation();

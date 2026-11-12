@@ -116,6 +116,9 @@ const DocumentsPage = lazy(() => import("./components/documents/DocumentsPage.js
 const MyDocumentsPage = lazy(() => import("./components/documents/MyDocumentsPage.jsx"));
 const RiskRegisterPage = lazy(() => import("./components/risk/RiskRegisterPage.jsx"));
 const RiskPage = lazy(() => import("./components/risk/RiskPage.jsx"));
+const RiskDashboard = lazy(() => import("./components/risk/RiskDashboard.jsx"));
+const RiskHeatMapPage = lazy(() => import("./components/risk/RiskHeatMapPage.jsx"));
+const MyRiskWorkPage = lazy(() => import("./components/risk/MyRiskWorkPage.jsx"));
 const DocumentsDashboard = lazy(() => import("./components/documents/DocumentsDashboard.jsx"));
 const ChangeRequestsPage = lazy(() => import("./components/documents/ChangeRequestsPage.jsx"));
 const DocumentPage = lazy(() => import("./components/documents/DocumentPage.jsx"));
@@ -265,7 +268,9 @@ const router = createBrowserRouter([
           { path: "Suppliers/:supplierId/assessments/:id", element: <AssessmentPage /> },
           { path: "Supplier-Quality", element: <SupplierDashboard /> },
           { path: "Supplier-Quality/Expiry", element: <ExpiryWatchlistPage /> },
-          { path: "Risk", element: <Navigate to="/Risk/Register" replace /> },
+          { path: "Risk", element: <RiskDashboard /> },
+          { path: "Risk/Heat-map", element: <RiskHeatMapPage /> },
+          { path: "Risk/My-Work", element: <MyRiskWorkPage /> },
           { path: "Risk/Register", element: <RiskRegisterPage /> },
           { path: "Risk/Register/:id", element: <RiskPage /> },
           { path: "Competence", element: <CompetenceDashboard /> },

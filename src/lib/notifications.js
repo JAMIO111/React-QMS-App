@@ -19,6 +19,10 @@ export function notificationLink(n) {
       return d.alert_id ? `/Documentation/Quality-Alerts/${d.alert_id}` : "/Documentation/My-Alerts";
     case "capa_actions":
       return "/CAPA/My-Actions";
+    case "risks":
+      return `/Risk/Register/${n.entityId}`;
+    case "risk_actions":
+      return d.risk_id ? `/Risk/Register/${d.risk_id}` : "/Risk/My-Work";
     case "competence_assessments":
       return "/Competence/Mine";
     case "document_change_requests":

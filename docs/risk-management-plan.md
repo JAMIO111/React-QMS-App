@@ -1,6 +1,6 @@
 # Risk and management review — plan
 
-**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **RK1–RK3 built** (§11–§13); RK4, MR1–MR3 and RX are not · **Branch:** `Dev`
+**Status:** agreed 2026-11-11 (RM2 5 × 5 matrix, build order risk first (RK1–RK4 then MR1–MR3), RM12 manual and fixed system measures, RM5 approver other than the proposer — chosen by the user; the rest proposed and accepted with them), **RK1–RK4 built** (§11–§14); MR1–MR3 and RX are not · **Branch:** `Dev`
 **Menu names:** Risk (`ShieldAlert`), Management review (`Presentation`) · **Slices:** RK1–RK4, MR1–MR3, RX (exit check)
 
 Per `docs/design-brief.md` §6.7 ("Risk management", "Management review and quality KPIs") and Phase 4 ("Risk and management review"), the last
@@ -196,3 +196,21 @@ Migration `20260214100000_risk_links.sql` (applied live 2026-11-12; pushing the 
   raising one (they are not events); retired risks are left out of a record's list, closed ones listed last.
 - **Not in RK3:** heat map, dashboard, notices, menu badge (RK4); a Risks card on the part, part family and document pages. Not browser-checked yet (RX).
 
+## 14. RK4 as built (2026-11-12)
+
+Migration `20260215100000_risk_notices.sql` (not yet applied live; pushing the API before it leaves the notices unsent — nothing else depends on it).
+
+- **Notices (RM14):** `risk_actions.created|updated` ("A risk action was given to you": an open action added with someone on it, or handed to someone else) and
+  `risks.created|updated` ("A risk was given to you": a live risk raised for someone, or handed over). Addressed to that one person (`recipient_user_id`, permission `risk.read`),
+  **never written when the person is the one who did it**, emailed by default, switched off per person in Settings → Notifications; links go to the risk.
+  `app.emit_notification` = the `20260205100000` version plus these two branches (and `risk_id` in the details). No reminder when a review falls due (no worker): the dashboard
+  and the menu badge show it.
+- **Heat map** `GET /risk-heatmap?phase=inherent|residual|effective&kind&categoryId&owner=me`: live risks (not closed or retired) counted per cell with up to 50 of them each;
+  `effective` = the assessment in force. Page `/Risk/Heat-map` (phase, kind, mine and category in the address; choosing a cell lists its risks).
+- **Dashboard** `GET /risks-dashboard?from&to` (`risk.read`, ≤ 3 years): as of today — live risks and opportunities, not assessed, high or critical in force and how many have no
+  treatment, reviews overdue, open and overdue actions, acceptances waiting; levels split, stages, categories, treatments, highest risks, overdue reviews and actions, acceptances
+  waiting, the latest raised from a problem; for the period — raised (and from a record), closed, assessments, raised / closed per week or month. Page `/Risk` (now the module's
+  default; the register stays at `/Risk/Register`).
+- **My work** `GET /risk-work/mine` (my risks due for review within 30 days or overdue, open actions given to me, acceptances I may decide — `risk.approve`, not my own proposal)
+  and `GET /risk-work/count` (badge total = overdue reviews + open actions + acceptances). Page `/Risk/My-Work` (actions marked done from there; acceptances decided on the risk).
+- **Not in RK4:** reminders by email when a review or action falls due, a heat map trend over time, risks on the home page's "what needs attention". Not browser-checked yet (RX).

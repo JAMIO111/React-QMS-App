@@ -42,6 +42,10 @@ export function notificationPath(entityType: string, entityId: string, details: 
       return id(d.alert_id) ? `/Documentation/Quality-Alerts/${id(d.alert_id)}` : '/Documentation/My-Alerts';
     case 'capa_actions':
       return '/CAPA/My-Actions';
+    case 'risks':
+      return e && `/Risk/Register/${e}`;
+    case 'risk_actions':
+      return id(d.risk_id) ? `/Risk/Register/${id(d.risk_id)}` : '/Risk/My-Work';
     case 'spc_alerts':
       return '/Process-Control/Alerts';
     case 'parts':

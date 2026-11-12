@@ -39,6 +39,11 @@ const detail = {
 };
 let risk = { ...row, ...detail };
 
+vi.mock("recharts", async (importOriginal) => {
+  const mod = await importOriginal();
+  const { cloneElement } = await import("react");
+  return { ...mod, ResponsiveContainer: ({ children }) => cloneElement(children, { width: 600, height: 300 }) };
+});
 vi.mock("../../hooks/useQmsApi", () => ({
   usePermissions: () => ({ can: (p) => permissions.includes(p), isLoading: false }),
   useSites: () => ({ data: { data: [{ id: "s1", name: "Leeds", code: "LDS" }] } }),
@@ -54,9 +59,19 @@ vi.mock("../ncr/Pickers", () => {
 vi.mock("../../hooks/useProcessControl", () => ({ usePartFamilies: () => ({ data: { items: [] } }) }));
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "o1" }) }));
 let linked = { data: [], canRaise: true };
+const heatParams = [];
+let heatmap = { phase: "effective", placed: 2, notPlaced: 1, cells: [{ likelihood: 4, consequence: 4, count: 2, risks: [
+  { id: "r1", reference: "RSK-001", title: "Single source for castings", kind: "risk", status: "open", owner: "Ann Owner", score: 16 },
+  { id: "r3", reference: "RSK-003", title: "Coolant supply", kind: "risk", status: "treating", owner: null, score: 16 },
+] }] };
+let dashboard = null;
+let work = null;
 let draft = null;
 vi.mock("../../hooks/useRisk", () => ({
   useLinkedRisks: () => ({ data: linked, isLoading: false }),
+  useRiskHeatmap: (params) => (heatParams.push(params), { data: heatmap, isLoading: false }),
+  useRiskDashboard: () => ({ data: dashboard, isLoading: false, isFetching: false }),
+  useMyRiskWork: () => ({ data: work, isLoading: false }),
   useRiskDraft: () => ({ data: draft, isLoading: false }),
   useRiskModel: () => ({ data: model, isLoading: false }),
   useRiskCategories: () => ({ data: { data: categories }, isLoading: false }),
@@ -71,11 +86,15 @@ import RiskPage from "./RiskPage";
 import RiskMatrix from "./RiskMatrix";
 import SettingsRisk from "../Settings/SettingsRisk";
 import LinkedRisks from "./LinkedRisks";
+import RiskDashboard from "./RiskDashboard";
+import RiskHeatMapPage from "./RiskHeatMapPage";
+import MyRiskWorkPage from "./MyRiskWorkPage";
 
 beforeEach(() => {
   mutate.mockReset();
   toggle.mockReset();
   listCalls.length = 0;
+  heatParams.length = 0;
   permissions = ["risk.read", "risk.manage"];
   risk = { ...row, ...detail };
   model = { ...model, canChange: true };
@@ -449,6 +468,78 @@ describe("matrix and helpers", () => {
   it("is in the menu with its icon, for people who may read risks", () => {
     const item = menuStructure.find((m) => m.name === "Risk");
     expect(item).toMatchObject({ permission: "risk.read", path: "/Risk", icon: ShieldAlertIcon });
-    expect(item.subMenu.map((s) => s.path)).toEqual(["/Risk/Register"]);
+    expect(item.subMenu.map((s) => s.path)).toEqual(["/Risk", "/Risk/Register", "/Risk/Heat-map", "/Risk/My-Work"]);
+    expect(item.badge).toBe("my-risk-work");
+    expect(item.subMenu.find((s) => s.path === "/Risk/My-Work").badge).toBe("my-risk-work");
+  });
+});
+
+describe("heat map, dashboard and my work (RK4)", () => {
+  it("counts risks in each cell and lists a chosen cell's risks", async () => {
+    at("/Risk/Heat-map", "/Risk/Heat-map", <RiskHeatMapPage />);
+    expect(screen.getByText(/2 live risks placed in force · 1 not placed/)).toBeInTheDocument();
+    const cell = screen.getByRole("button", { name: "Likely and Major: 16, High, 2 risks" });
+    expect(cell).toHaveTextContent("2 risks");
+    await userEvent.click(cell);
+    const list = screen.getByRole("list", { name: "Risks in the chosen cell" });
+    expect(within(list).getByRole("link", { name: "RSK-001 · Single source for castings" })).toHaveAttribute("href", "/Risk/Register/r1");
+    expect(within(list).getByText("Risk · No owner")).toBeInTheDocument();
+    expect(heatParams.at(-1)).toMatchObject({ phase: "effective" });
+  });
+
+  it("switches between before treatment, after it and in force, and to my own", async () => {
+    at("/Risk/Heat-map?phase=residual", "/Risk/Heat-map", <RiskHeatMapPage />);
+    expect(heatParams.at(-1)).toMatchObject({ phase: "residual" });
+    expect(screen.getByText(/not assessed after treatment/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Before treatment" }));
+    expect(heatParams.at(-1)).toMatchObject({ phase: "inherent" });
+    await userEvent.click(screen.getByRole("button", { name: "Mine" }));
+    expect(heatParams.at(-1)).toMatchObject({ owner: "me" });
+  });
+
+  it("shows the dashboard's figures, lists and the small heat map", () => {
+    dashboard = {
+      period: { from: "2026-08-14", to: "2026-11-12", bucket: "month" },
+      kpis: { risks: 5, opportunities: 1, unassessed: 1, highOrCritical: 2, untreatedHigh: 1, reviewsOverdue: 1, openActions: 3, overdueActions: 1, acceptancesWaiting: 1, raised: 4, raisedFromRecords: 2, closed: 1, assessments: 6 },
+      byBand: [{ band: "critical", count: 1 }, { band: "high", count: 1 }, { band: "medium", count: 2 }, { band: "low", count: 1 }, { band: "unassessed", count: 1 }],
+      byStatus: [{ status: "open", count: 2 }, { status: "treating", count: 2 }],
+      byCategory: [{ categoryId: "c1", label: "Process", count: 4, highOrCritical: 2 }],
+      byStrategy: [{ strategy: "mitigate", count: 3 }, { strategy: null, count: 1 }],
+      trend: [{ start: "2026-08-01", raised: 1, closed: 0 }, { start: "2026-09-01", raised: 3, closed: 1 }],
+      topRisks: [{ id: "r1", reference: "RSK-001", title: "Single source for castings", kind: "risk", status: "open", band: "high", score: 16, owner: "Ann Owner", nextReviewOn: "2027-02-10", days: 90 }],
+      overdueReviews: [{ id: "r3", reference: "RSK-003", title: "Coolant supply", kind: "risk", status: "treating", band: "medium", score: 8, owner: null, nextReviewOn: "2026-11-01", days: 11 }],
+      overdueActions: [{ id: "x1", riskId: "r1", reference: "RSK-001", title: "Single source for castings", description: "Audit the second foundry", owner: "Bob Bloggs", dueDate: "2026-11-10", days: 2 }],
+      waitingAcceptances: [{ id: "q1", riskId: "r3", reference: "RSK-003", title: "Coolant supply", band: "high", proposedBy: "Ann Owner", proposedAt: "2026-11-11T09:00:00Z" }],
+      raisedFromRecords: [{ id: "r4", reference: "RSK-004", title: "Burrs on housings", originKind: "ncr", band: null, createdAt: "2026-11-05T09:00:00Z" }],
+    };
+    at("/Risk", "/Risk", <RiskDashboard />);
+    expect(screen.getByText("1 with no treatment chosen · of 5 live risks")).toBeInTheDocument();
+    expect(within(screen.getByRole("table", { name: "Highest risks" })).getByRole("link", { name: "RSK-001 · Single source for castings" })).toHaveAttribute("href", "/Risk/Register/r1");
+    expect(within(screen.getByRole("list", { name: "Reviews overdue" })).getByText("11 days late")).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Actions overdue" })).getByText("Audit the second foundry")).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Risks raised from records" })).getByText(/From non-conformance/)).toBeInTheDocument();
+    expect(screen.getByText("Likely and Major: 16, High")).toBeInTheDocument();
+    expect(heatParams.at(-1)).toMatchObject({ phase: "effective", kind: "risk" });
+  });
+
+  it("lists my work and closes an action given to me with what was done", async () => {
+    work = {
+      reviews: [{ id: "r1", reference: "RSK-001", title: "Single source for castings", kind: "risk", status: "open", band: "high", score: 16, owner: "Ann Owner", nextReviewOn: "2026-11-02", days: -10 }],
+      actions: [{ id: "x1", riskId: "r1", reference: "RSK-001", title: "Single source for castings", description: "Audit the second foundry", dueDate: "2026-11-10", overdue: true }],
+      acceptances: [],
+    };
+    at("/Risk/My-Work", "/Risk/My-Work", <MyRiskWorkPage />);
+    expect(within(screen.getByRole("list", { name: "My reviews due" })).getByText("10 days overdue")).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Acceptances waiting for me" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Mark done: Audit the second foundry" }));
+    await userEvent.type(screen.getByLabelText("What was done"), "Audited and approved");
+    await userEvent.click(screen.getByRole("button", { name: "Mark done" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "completeAction", id: "x1", body: { note: "Audited and approved" } }, expect.anything());
+  });
+
+  it("says when nothing needs me", () => {
+    work = { reviews: [], actions: [], acceptances: [] };
+    at("/Risk/My-Work", "/Risk/My-Work", <MyRiskWorkPage />);
+    expect(screen.getByText("Nothing needs you at the moment.")).toBeInTheDocument();
   });
 });

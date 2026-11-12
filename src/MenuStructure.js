@@ -128,7 +128,14 @@ export const menuStructure = [
     icon: ShieldAlertIcon,
     permission: "risk.read",
     path: "/Risk",
-    subMenu: [{ name: "Risk register", path: "/Risk/Register" }],
+    // badge: "my-risk-work" = my risks overdue for review + my open risk actions + acceptances I may decide (see Navbar)
+    badge: "my-risk-work",
+    subMenu: [
+      { name: "Dashboard", path: "/Risk", end: true },
+      { name: "Risk register", path: "/Risk/Register" },
+      { name: "Heat map", path: "/Risk/Heat-map" },
+      { name: "My risk work", path: "/Risk/My-Work", badge: "my-risk-work" },
+    ],
   },
   {
     name: "Production",

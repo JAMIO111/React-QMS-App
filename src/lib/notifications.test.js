@@ -7,6 +7,8 @@ describe("notificationLink", () => {
   it("routes records and settings", () => {
     expect(notificationLink({ entityType: "nonconformances", entityId: "1", details: { source: "supplier" } })).toBe("/Non-Conformance/Register/1");
     expect(notificationLink({ entityType: "competence_assessments", entityId: "a", details: {} })).toBe("/Competence/Mine");
+    expect(notificationLink({ entityType: "risks", entityId: "r", details: { risk_id: "r" } })).toBe("/Risk/Register/r");
+    expect(notificationLink({ entityType: "risk_actions", entityId: "x", details: { risk_id: "r" } })).toBe("/Risk/Register/r");
     expect(notificationLink({ entityType: "calibrations", entityId: "c", details: { gauge_id: "g" } })).toBe("/Calibration/Gauges/g/calibrations/c");
     expect(notificationLink({ entityType: "billing_invoices", entityId: "i" })).toBe("/Settings/Subscription");
     expect(notificationLink({ entityType: "unknown", entityId: "x" })).toBeNull();

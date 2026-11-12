@@ -124,6 +124,7 @@ const ObjectivePage = lazy(() => import("./components/management-review/Objectiv
 const ReviewsPage = lazy(() => import("./components/management-review/ReviewsPage.jsx"));
 const ReviewPage = lazy(() => import("./components/management-review/ReviewPage.jsx"));
 const ReviewReportPage = lazy(() => import("./components/management-review/ReviewReportPage.jsx"));
+const MyTasksPage = lazy(() => import("./components/workflows/MyTasksPage.jsx"));
 const MyReviewActionsPage = lazy(() => import("./components/management-review/MyReviewActionsPage.jsx"));
 const RemindersPage = lazy(() => import("./components/reminders/RemindersPage.jsx"));
 const DocumentsDashboard = lazy(() => import("./components/documents/DocumentsDashboard.jsx"));
@@ -282,6 +283,7 @@ const router = createBrowserRouter([
           { path: "Management-Review/Reviews", element: <ReviewsPage /> },
           { path: "Management-Review/My-Actions", element: <MyReviewActionsPage /> },
           { path: "Reminders", element: <RemindersPage /> },
+          { path: "Tasks", element: <MyTasksPage /> },
           { path: "Management-Review/Reviews/:id", element: <ReviewPage /> },
           { path: "Management-Review/Reviews/:id/report", element: <ReviewReportPage /> },
           { path: "Management-Review/Objectives", element: <ObjectivesPage /> },

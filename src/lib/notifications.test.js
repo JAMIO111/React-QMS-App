@@ -44,6 +44,13 @@ describe("groupPreferences", () => {
 });
 
 describe("import alerts and email choices", () => {
+  it("leads a workflow notice to its record and a workflow task to My tasks", () => {
+    const id = "11111111-2222-3333-4444-555555555555";
+    expect(notificationLink({ entityType: "workflow_notices", entityId: "n", details: { record_kind: "nonconformance", record_id: id } })).toBe(`/Non-Conformance/Register/${id}`);
+    expect(notificationLink({ entityType: "workflow_notices", entityId: "n", details: { record_kind: "gauge", record_id: "not-an-id" } })).toBeNull();
+    expect(notificationLink({ entityType: "workflow_tasks", entityId: "t", details: {} })).toBe("/Tasks");
+  });
+
   it("leads an import alert to its run", () => {
     expect(notificationLink({ entityType: "integration_alerts", entityId: "a", details: { connection_id: "c", run_id: "r" } })).toBe("/Settings/Integrations/c/runs/r");
     expect(notificationLink({ entityType: "integration_alerts", entityId: "a", details: {} })).toBe("/Settings/Integrations");

@@ -166,6 +166,9 @@ import { WorkerService } from './worker/worker.service';
 import { WorkerJobRegistry } from './worker/job-registry';
 import { RemindersController } from './reminders/reminders.controller';
 import { RemindersService } from './reminders/reminders.service';
+import { WorkflowsController } from './workflows/workflows.controller';
+import { WorkflowsService } from './workflows/workflows.service';
+import { WorkflowEngine } from './workflows/workflow-engine';
 import { OrganisationGuard } from './tenancy/organisation.guard';
 
 @Module({})
@@ -201,6 +204,7 @@ export class AppModule implements NestModule {
         CronController,
         WorkerController,
         RemindersController,
+        WorkflowsController,
         OnboardingController,
         OrganisationsController,
         SitesController,
@@ -312,6 +316,8 @@ export class AppModule implements NestModule {
         WorkerService,
         WorkerJobRegistry,
         RemindersService,
+        WorkflowsService,
+        WorkflowEngine,
         CronGuard,
         OnboardingService,
         MasterDataService,

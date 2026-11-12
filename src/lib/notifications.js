@@ -1,5 +1,6 @@
 import { ncrPath } from "./ncr";
 import { reminderPath } from "./reminders";
+import { workflowRecordPath } from "./workflows";
 /** Where a notification leads, from its entity type and the ids stored in `details`. */
 export function notificationLink(n) {
   const d = n.details ?? {};
@@ -45,6 +46,10 @@ export function notificationLink(n) {
       return "/Settings/Subscription";
     case "organisation_users":
       return "/Settings/Users";
+    case "workflow_notices":
+      return workflowRecordPath(d.record_kind, d.record_id);
+    case "workflow_tasks":
+      return "/Tasks";
     case "reminder_digests":
       return "/Reminders";
     case "reminder_overdue_notices":

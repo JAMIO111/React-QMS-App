@@ -141,6 +141,7 @@ import {
   ChevronRight as LucideChevronRight,
   Link as LucideLink,
   ListChecks as LucideListChecks,
+  ListTodo as LucideListTodo,
   Activity as LucideActivity,
   Bold as LucideBold,
   Italic as LucideItalic,
@@ -313,3 +314,4 @@ export const ChevronLeftIcon = withDefaults(LucideChevronLeft);
 export const ChevronRightIcon = withDefaults(LucideChevronRight);
 export const LinkIcon = withDefaults(LucideLink);
 export const ListChecksIcon = withDefaults(LucideListChecks);
+export const ListTodoIcon = withDefaults(LucideListTodo);

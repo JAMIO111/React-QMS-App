@@ -111,6 +111,12 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/management-review-actions/{id}/complete': { note: 'Hijacked' },
     'POST /api/v1/management-review-actions/{id}/cancel': { reason: 'Hijacked' },
     'POST /api/v1/management-review-actions/{id}/reopen': {},
+    'GET /api/v1/workflow-rules/{id}': undefined,
+    'PATCH /api/v1/workflow-rules/{id}': { name: 'Hijacked' },
+    'POST /api/v1/workflow-rules/{id}/status': { status: 'paused' },
+    'POST /api/v1/workflow-tasks/{id}/complete': { note: 'Hijacked' },
+    'POST /api/v1/workflow-tasks/{id}/reopen': {},
+    'POST /api/v1/workflow-tasks/{id}/cancel': { reason: 'Hijacked' },
     'POST /api/v1/management-reviews/{id}/complete': {},
     'POST /api/v1/management-reviews/{id}/cancel': { reason: 'Hijacked' },
     'PATCH /api/v1/competence/skills/{id}': { name: 'Hijacked' },
@@ -536,6 +542,12 @@ const hasSample = (op: Op) =>
     'POST /api/v1/management-review-actions/{id}/complete',
     'POST /api/v1/management-review-actions/{id}/cancel',
     'POST /api/v1/management-review-actions/{id}/reopen',
+    'GET /api/v1/workflow-rules/{id}',
+    'PATCH /api/v1/workflow-rules/{id}',
+    'POST /api/v1/workflow-rules/{id}/status',
+    'POST /api/v1/workflow-tasks/{id}/complete',
+    'POST /api/v1/workflow-tasks/{id}/reopen',
+    'POST /api/v1/workflow-tasks/{id}/cancel',
     'POST /api/v1/management-reviews/{id}/complete',
     'POST /api/v1/management-reviews/{id}/cancel',
     'PATCH /api/v1/competence/skills/{id}',
@@ -975,6 +987,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/management-review-inputs/')) return a.managementReviewInput;
   if (path.startsWith('/api/v1/management-review-decisions/')) return a.managementReviewDecision;
   if (path.startsWith('/api/v1/management-review-actions/')) return a.managementReviewAction;
+  if (path.startsWith('/api/v1/workflow-rules/')) return a.workflowRule;
+  if (path.startsWith('/api/v1/workflow-tasks/')) return a.workflowTask;
   if (path.startsWith('/api/v1/competence/skills/')) return a.competenceSkill;
   if (path.startsWith('/api/v1/competence/positions/')) return a.competencePosition;
   if (path.startsWith('/api/v1/competence/people/')) return a.employee;
@@ -1163,6 +1177,7 @@ beforeAll(async () => {
     a.managementReviewInput = (await q1(`select id from public.management_review_inputs where review_id = $1 and section = 'context'`, [a.managementReview])).id;
     a.managementReviewDecision = (await q1(`select app.add_management_review_decision($1::uuid, 'Alpha decision', 'other') as id`, [a.managementReview])).id;
     a.managementReviewAction = (await q1(`select app.add_management_review_action($1::uuid, '{"description":"Alpha action"}'::jsonb) as id`, [a.managementReview])).id;
+    a.workflowRule = (await q1(`select app.save_workflow_rule($1::uuid, '{"name":"Alpha rule","trigger":"ncr.created","actions":[{"type":"notify","recipients":[{"kind":"record_owner"}],"message":"x"}]}'::jsonb) as id`, [ids.orgA])).id;
     a.competenceSkill = (await q1(`select app.save_competence_skill($1::uuid, jsonb_build_object('code', 'ALPHA', 'name', 'Alpha skill', 'categoryId', $2::text)) as id`, [ids.orgA, a.competenceCategory])).id;
     a.competencePosition = (await q1(`select app.save_competence_position($1::uuid, '{"code":"ALPHA","name":"Alpha position"}'::jsonb) as id`, [ids.orgA])).id;
     a.competenceHeld = (await q1(`select app.assign_employee_position($1::uuid, $2::uuid, current_date - 30) as id`, [a.employee, a.competencePosition])).id;
@@ -1204,6 +1219,15 @@ beforeAll(async () => {
     a.supplierScarExtension = (await q1(`select app.request_scar_extension($1::uuid, current_date + 40, 'Alpha extension') as id`, [a.supplierScar])).id;
     a.supplierProduct = (await q1(`insert into public.supplier_product_links (organisation_id, supplier_id, kind, description) values ($1, $2, 'service', 'Alpha service') returning id`, [ids.orgA, a.supplier])).id;
     await client.query('commit');
+    // WF1: a task, given by the worker's functions (API login only), so seeded on the admin connection.
+    a.workflowTask = (
+      await one(
+        `select (app.system_workflow_task(r.run_id, 0, jsonb_build_object('kind', 'person', 'userId', $3::uuid), 'Alpha task', null, null) ->> 'taskId')::uuid as id
+           from app.system_record_workflow_run($1::uuid, (select id from public.workflow_rule_versions where rule_id = $2::uuid), 999999002, 'ncr.created', 'nonconformance', $4::uuid,
+                app.system_workflow_facts($1::uuid, 'nonconformance', $4::uuid, '{}'::jsonb)) r`,
+        [ids.orgA, a.workflowRule, ids.ownerA, a.ncr],
+      )
+    ).id;
     a.customField = (await admin.query(`insert into public.custom_field_definitions (organisation_id, entity_type, key, label, field_type) values ($1, 'part', 'alpha_note', 'Alpha note', 'text') returning id`, [ids.orgA])).rows[0].id;
     // IN5: a value parked for review (written only by the import runner, so seeded directly).
     a.integrationConflict = (

@@ -1,11 +1,20 @@
 import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GraduationCapIcon, LayoutDashboardIcon, ScanSearchIcon, ShieldAlertIcon,
-  PresentationIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
+  ListTodoIcon, PresentationIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
     name: "Dashboard",
     icon: LayoutDashboardIcon,
     path: "/Dashboard",
+    subMenu: [],
+  },
+  {
+    // Tasks workflow rules gave the signed-in person: every member may hold one, so no permission.
+    // badge: "my-tasks" = how many are still open (see Navbar)
+    name: "My tasks",
+    icon: ListTodoIcon,
+    path: "/Tasks",
+    badge: "my-tasks",
     subMenu: [],
   },
   {

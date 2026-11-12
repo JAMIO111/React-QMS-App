@@ -8,6 +8,7 @@ import { useMyAlertCount } from "./useDocumentation";
 import { usePermissions } from "./useQmsApi";
 import { useMyRiskCount } from "./useRisk";
 import { useMyReviewActions } from "./useManagementReview";
+import { useMyTasks } from "./useWorkflows";
 
 /** What needs attention as of today in every area the person may read (`GET /home-dashboard`: one small request; areas they may not read are null). */
 export const useHomeAttention = () => {
@@ -35,6 +36,7 @@ export const useHomeDashboard = () => {
   const myRiskWork = useMyRiskCount({ enabled: may("risk.read") });
   // Any member may be given a management review action, with or without the permission.
   const myReviewActions = useMyReviewActions("open", { enabled: !permissionsLoading });
+  const myTasks = useMyTasks("open", { enabled: !permissionsLoading });
 
   const modules = homeModules(attention.data);
   const personal = [
@@ -79,6 +81,13 @@ export const useHomeDashboard = () => {
       count: myReviewActions.data?.openCount,
       overdue: myReviewActions.data?.overdueCount ?? 0,
       to: "/Management-Review/My-Actions",
+    },
+    myTasks.data?.openCount > 0 && {
+      key: "tasks",
+      label: "Tasks workflow rules gave you",
+      count: myTasks.data.openCount,
+      overdue: myTasks.data.overdueCount ?? 0,
+      to: "/Tasks",
     },
   ].filter(Boolean);
 

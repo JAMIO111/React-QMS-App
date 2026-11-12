@@ -18,6 +18,7 @@ export interface EmailRow {
 }
 
 import { reminderPath } from '../reminders/reminder-paths';
+import { workflowRecordPath } from '../workflows/catalogue';
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -62,6 +63,10 @@ export function notificationPath(entityType: string, entityId: string, details: 
       return '/Settings/Subscription';
     case 'organisation_users':
       return '/Settings/Users';
+    case 'workflow_notices':
+      return workflowRecordPath(d.record_kind, d.record_id);
+    case 'workflow_tasks':
+      return '/Tasks';
     case 'reminder_digests':
       return '/Reminders';
     case 'reminder_overdue_notices':

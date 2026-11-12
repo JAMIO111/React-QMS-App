@@ -5,6 +5,7 @@ import { EmailService } from '../email/email.service';
 import { CronService } from '../cron/cron.service';
 import { PermanentJobError, WorkerJobRegistry } from './job-registry';
 import { RemindersService } from '../reminders/reminders.service';
+import { WorkflowEngine } from '../workflows/workflow-engine';
 
 export type TickSource = 'pg_cron' | 'vercel' | 'manual' | 'test';
 
@@ -51,6 +52,7 @@ export class WorkerService {
     private readonly cron: CronService,
     private readonly jobs: WorkerJobRegistry,
     private readonly reminders: RemindersService,
+    private readonly workflows: WorkflowEngine,
   ) {}
 
   async tick(options: { source: TickSource; budgetMs?: number; correlationId?: string }): Promise<TickOutcome> {
@@ -88,6 +90,7 @@ export class WorkerService {
     await step('quality-alerts', () => this.cron.expireQualityAlerts(correlationId));
     await step('documents', () => this.cron.settleDocuments(correlationId));
     await step('reminders', () => this.reminders.runDaily(correlationId), 3_000);
+    await step('workflows', () => this.workflows.consume(correlationId, Math.min(stopAt - 12_000, Date.now() + 10_000)), 3_000);
     await step('jobs', () => this.runJobs(correlationId, stopAt - 8_000), 3_000);
     await step('email', () => this.email.drain({ budgetMs: Math.min(15_000, left() - 2_000), correlationId }), 3_000);
     await step('imports', () => this.cron.integrationRuns(10, correlationId, Math.min(25_000, left() - 2_000)), 4_000);

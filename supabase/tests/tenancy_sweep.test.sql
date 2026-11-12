@@ -283,6 +283,16 @@ BEGIN
     VALUES (a, '50000000-0000-0000-0000-0000000000a1', current_date, 1, 0, '1 overdue: sweep', '[]'::jsonb);
   INSERT INTO public.reminder_overdue_notices (organisation_id, user_id, area, record_id, target_id, label, due_on)
     VALUES (a, '50000000-0000-0000-0000-0000000000a1', 'risk_actions', gen_random_uuid(), gen_random_uuid(), 'Sweep action', current_date - 1);
+  -- Workflows (WF1): a rule (two versions), a run, a notice and a task (the rule as owner A; the rest written by the worker's functions).
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
+  PERFORM app.save_workflow_rule(a, '{"name":"Sweep rule","trigger":"ncr.created","actions":[{"type":"notify","recipients":[{"kind":"record_owner"}]}]}'::jsonb);
+  PERFORM pg_temp.logout();
+  PERFORM app.system_workflow_notify(x.run_id, 0, jsonb_build_array(jsonb_build_object('kind', 'person', 'userId', '50000000-0000-0000-0000-0000000000a1')), 'Sweep'),
+          app.system_workflow_task(x.run_id, 1, jsonb_build_object('kind', 'person', 'userId', '50000000-0000-0000-0000-0000000000a1'), 'Sweep task', NULL, 3)
+     FROM (SELECT (app.system_record_workflow_run(a, v.id, 999999001, 'ncr.created', 'nonconformance', n.id,
+                   app.system_workflow_facts(a, 'nonconformance', n.id, '{}'))).run_id
+             FROM public.workflow_rule_versions v, LATERAL (SELECT id FROM public.nonconformances WHERE organisation_id = a LIMIT 1) n
+            WHERE v.organisation_id = a) x;
   -- Document control (DC2): a named reviewer and a sign-off (one member in A, so seeded directly; people write through the functions).
   INSERT INTO public.document_revision_reviewers (organisation_id, revision_id, user_id)
     SELECT a, r.id, '50000000-0000-0000-0000-0000000000a1' FROM public.document_revisions r JOIN public.documents d ON d.id = r.document_id WHERE d.organisation_id = a AND d.title = 'Sweep procedure';

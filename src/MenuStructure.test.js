@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { menuStructure } from "./MenuStructure";
-import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, GaugeIcon, GraduationCapIcon, ScanSearchIcon, TruckIcon } from "@/components/icons";
+import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, GaugeIcon, GraduationCapIcon, ListTodoIcon, ScanSearchIcon, TruckIcon } from "@/components/icons";
 
 describe("menuStructure", () => {
   it("opens the NC dashboard and exposes the one non-conformance register", () => {
@@ -44,6 +44,11 @@ describe("menuStructure", () => {
     const master = menuStructure.find((m) => m.name === "Master Data");
     expect(master.subMenu.map((s) => s.path)).toContain("/Employees");
     expect(master.permission).toBe("master_data.read");
+  });
+
+  it("offers My tasks to every member, second, with the open tasks as its badge", () => {
+    expect(menuStructure[1]).toMatchObject({ name: "My tasks", path: "/Tasks", badge: "my-tasks", icon: ListTodoIcon });
+    expect(menuStructure[1].permission).toBeUndefined();
   });
 
   it("uses the agreed icon for each module", () => {

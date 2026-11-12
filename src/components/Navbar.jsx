@@ -14,6 +14,7 @@ import { useMyDocumentCount } from "../hooks/useDocuments";
 import { useMyCapaActions } from "../hooks/useCapa";
 import { useMyRiskCount } from "../hooks/useRisk";
 import { useMyReviewActions } from "../hooks/useManagementReview";
+import { useMyTasks } from "../hooks/useWorkflows";
 import { useModuleAccess } from "../hooks/useSubscription";
 import { useProductionSettings } from "../hooks/useProduction";
 import { subMenuVisible } from "../lib/production";
@@ -29,7 +30,9 @@ const Navbar = () => {
   const myDocuments = useMyDocumentCount({ enabled: canSee("documentation.read") });
   const myRiskWork = useMyRiskCount({ enabled: canSee("risk.read") });
   const myReviewActions = useMyReviewActions("open", { enabled: canSee("management_review.read") });
+  const myTasks = useMyTasks("open");
   const badges = {
+    "my-tasks": myTasks.data?.openCount ?? 0,
     "my-alerts": myAlerts.data?.unacknowledged ?? 0,
     "my-documents": myDocuments.data?.total ?? 0,
     documentation: (myAlerts.data?.unacknowledged ?? 0) + (myDocuments.data?.total ?? 0),

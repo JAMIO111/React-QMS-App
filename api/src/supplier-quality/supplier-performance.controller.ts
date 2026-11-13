@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { InspectionRecommendation, Performance, PerformanceQuery, RecommendationQuery, SaveModelBody, SaveScorecardBody, Scorecard, ScorecardModel, ScorecardSummary, SupplierSettings, SupplierSettingsBody, Watchlist, WatchlistQuery } from './supplier-performance.schemas';
+import { InspectionRecommendation, Performance, Schedule, ScheduleBody, PerformanceQuery, RecommendationQuery, SaveModelBody, SaveScorecardBody, Scorecard, ScorecardModel, ScorecardSummary, SupplierSettings, SupplierSettingsBody, Watchlist, WatchlistQuery } from './supplier-performance.schemas';
 import { SupplierPerformanceService } from './supplier-performance.service';
 
 const READ = 'supplier_quality.read';
@@ -34,6 +34,21 @@ export class SupplierPerformanceController {
   @ApiOkResponse({ description: 'Saves a new version with a reason; saved scorecards keep the version they used', schema: openApiSchema(ScorecardModel) })
   saveModel(@Ctx() ctx: RequestContext, @Body() body: unknown) {
     return this.service.saveModel(ctx, parse(SaveModelBody, body));
+  }
+
+  @Get('performance/schedule')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'Scheduled scorecards: monthly, quarterly and annual (each on or off), which suppliers, the next periods, whose authority it uses and any problem', schema: openApiSchema(Schedule) })
+  schedule(@Ctx() ctx: RequestContext) {
+    return this.service.schedule(ctx);
+  }
+
+  @Put('performance/schedule')
+  @OrganisationScoped(CONFIGURE)
+  @ApiBody({ schema: openApiSchema(ScheduleBody) })
+  @ApiOkResponse({ description: 'Switches monthly, quarterly and annual scorecards on or off separately and sets which suppliers they cover; keys left out keep their value. The schedule then uses your authority.', schema: openApiSchema(Schedule) })
+  saveSchedule(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.saveSchedule(ctx, parse(ScheduleBody, body));
   }
 
   @Get('performance/watchlist')

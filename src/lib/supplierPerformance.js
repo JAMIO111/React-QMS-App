@@ -71,3 +71,23 @@ export const sourceLink = (sourceType, item, supplierId) => {
 
 export const percent = (v, digits = 0) => (v === null || v === undefined ? "—" : `${(Number(v) * 100).toFixed(digits)}%`);
 export const formatScore = (s) => (s === null || s === undefined ? "—" : Number(s).toFixed(0));
+
+/** Scheduled scorecards (SQ5b): the three kinds, switched on and off separately. */
+export const PERIOD_KINDS = [
+  { value: "monthly", label: "Monthly", hint: "A scorecard for every calendar month, saved once the month has ended" },
+  { value: "quarterly", label: "Quarterly", hint: "A scorecard for every quarter (January–March, …), saved once it has ended" },
+  { value: "annual", label: "Annual", hint: "A scorecard for every calendar year, saved once it has ended" },
+];
+
+/** A scheduled period in words: "October 2026", "Q4 2026", "2026". */
+export const periodWords = (kind, from) => {
+  if (!from) return "";
+  const [y, m] = from.split("-").map(Number);
+  if (kind === "monthly") return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+  if (kind === "quarterly") return `Q${Math.floor((m - 1) / 3) + 1} ${y}`;
+  return String(y);
+};
+
+/** Who saved a scorecard: a person, or the schedule (with the period it covers). */
+export const savedByWords = (card) =>
+  card.periodKind ? `Saved by the schedule · ${PERIOD_KINDS.find((k) => k.value === card.periodKind)?.label ?? ""} · ${periodWords(card.periodKind, card.periodFrom)}` : card.createdBy ? `Saved by ${card.createdBy.name}` : "Saved";

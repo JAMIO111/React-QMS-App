@@ -40,7 +40,7 @@ No table writes on any of these tables. Every change is a SECURITY DEFINER funct
 - **Rules read the record as it is when they run,** not as it was when the event happened. A timer reads it again when its time comes. For a stage change, the stage moved to comes from the event.
 - **Testing a rule** looks back 90 days and only at records the person testing may read. A timer's test says what it would do as the record is today.
 - **The owner of the record** is the NC's owner, the inspection's recorder and so on, as `app.system_workflow_facts` defines it per trigger.
-- Not built: scheduled supplier scorecards (moved out of WF3: they need a system way to save a scorecard and a schedule setting), cancelling a waiting timer by hand, copying a rule, more triggers (SPC alerts, receipt line rejected, SCAR overdue), escalation to a manager by role from reminders, a time per person for reminders, webhooks (Phase 6).
+- Scheduled supplier scorecards were moved out of WF3 and built afterwards as SQ5b (`docs/supplier-quality-plan.md`). Not built: cancelling a waiting timer by hand, copying a rule, more triggers (SPC alerts, receipt line rejected, SCAR overdue), escalation to a manager by role from reminders, a time per person for reminders, webhooks (Phase 6).
 - The worker was tested for correctness, **not load-tested**; a tick's budget is 40 seconds and a step that runs out of time carries on at the next tick.
 
 ## Go-live runbook

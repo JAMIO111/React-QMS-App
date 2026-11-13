@@ -54,6 +54,8 @@ export function notificationLink(n) {
       return "/Reminders";
     case "reminder_overdue_notices":
       return reminderPath(d.area, d.target_id);
+    case "supplier_band_drops":
+      return d.record_id ? `/Suppliers/${d.record_id}?tab=performance` : "/Supplier-Quality/Watchlist";
     case "integration_alerts":
       return d.connection_id && d.run_id ? `/Settings/Integrations/${d.connection_id}/runs/${d.run_id}` : "/Settings/Integrations";
     default:

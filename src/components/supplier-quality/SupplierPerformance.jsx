@@ -3,7 +3,7 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { usePerformance, usePerformanceMutation, useScorecard, useScorecards } from "../../hooks/useSupplierPerformance";
 import { formatDate } from "../../lib/ncr";
 import { formatDateTime } from "../../lib/processControl";
-import { DEFAULT_PERIOD, PERIODS, formatScore, periodFor } from "../../lib/supplierPerformance";
+import { DEFAULT_PERIOD, PERIODS, formatScore, periodFor, savedByWords } from "../../lib/supplierPerformance";
 import CTAButton from "../CTAButton";
 import Callout from "../ui/Callout";
 import Dialog from "../ui/Dialog";
@@ -41,7 +41,7 @@ const ScorecardDialog = ({ id, supplierId, onClose }) => {
       {!c ? <p className="text-sm text-secondary-text">Loading…</p> : (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-secondary-text">
-            {formatDate(c.periodFrom)} to {formatDate(c.periodTo)} · model version {c.modelVersion} · saved {formatDateTime(c.createdAt)}{c.createdBy ? ` by ${c.createdBy.name}` : ""}{c.note ? ` · ${c.note}` : ""}
+            {formatDate(c.periodFrom)} to {formatDate(c.periodTo)} · model version {c.modelVersion} · {savedByWords(c)} on {formatDateTime(c.createdAt)}{c.note ? ` · ${c.note}` : ""}
           </p>
           <div className="flex items-center gap-3"><span className="text-3xl font-semibold tabular-nums text-primary-text">{formatScore(c.score)}</span><BandPill band={c.band} /></div>
           <ComponentCards components={c.components} />
@@ -86,7 +86,7 @@ export default function SupplierPerformance({ supplier }) {
         )}
       </MenuCard>
       <SupplierScoringSettings supplier={supplier} canConfigure={can("supplier_quality.configure")} />
-      <MenuCard title="Saved scorecards" subtitle="Frozen records: they keep the figures and the model version they were saved with.">
+      <MenuCard title="Saved scorecards" subtitle="Frozen records: they keep the figures and the model version they were saved with. The schedule in Settings can save one every month, quarter or year.">
         {cards.error && <ErrorNotice error={cards.error} />}
         {!cards.data ? null : cards.data.length === 0 ? <p className="text-sm text-secondary-text">No scorecards saved yet.</p> : (
           <div className="flex flex-col gap-3">
@@ -98,7 +98,7 @@ export default function SupplierPerformance({ supplier }) {
                   <span className="tabular-nums text-primary-text">{formatScore(c.score)}</span>
                   <BandPill band={c.band} />
                   <span className="text-secondary-text">v{c.modelVersion} · {c.warningCount} {c.warningCount === 1 ? "warning" : "warnings"}{c.note ? ` · ${c.note}` : ""}</span>
-                  <span className="ml-auto text-xs text-secondary-text">{formatDateTime(c.createdAt)}{c.createdBy ? ` · ${c.createdBy.name}` : ""}</span>
+                  <span className="ml-auto text-xs text-secondary-text">{savedByWords(c)} · {formatDateTime(c.createdAt)}</span>
                 </li>
               ))}
             </ul>

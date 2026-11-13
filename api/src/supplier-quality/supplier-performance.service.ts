@@ -7,7 +7,7 @@ import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { todayIn } from './expiry';
 import { recommendInspection } from './inspection-recommendation';
-import { InspectionRecommendation, Performance, PerformanceOverrides, PerformanceQuery, RecommendationQuery, SaveModelBody, SaveScorecardBody, Scorecard, ScorecardConfig, ScorecardModel, ScorecardSummary, SupplierSettings, SupplierSettingsBody, Watchlist, WatchlistQuery } from './supplier-performance.schemas';
+import { InspectionRecommendation, Performance, Schedule, ScheduleBody, PerformanceOverrides, PerformanceQuery, RecommendationQuery, SaveModelBody, SaveScorecardBody, Scorecard, ScorecardConfig, ScorecardModel, ScorecardSummary, SupplierSettings, SupplierSettingsBody, Watchlist, WatchlistQuery } from './supplier-performance.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown user' } : null);
@@ -57,6 +57,13 @@ const overridesFromRaw = (o: Record<string, unknown> | null | undefined): Perfor
 };
 
 type RawScoring = { score: number | null; band: Performance['band']; components: Performance['components']; warnings: Performance['warnings']; weightWithData: number | null; metrics: Record<string, unknown> };
+
+/** The last day of a period of this kind starting on `from` (as app.scorecard_period_end). */
+export const periodEnd = (kind: 'monthly' | 'quarterly' | 'annual', from: string) => {
+  const d = new Date(`${from}T00:00:00Z`);
+  const months = kind === 'monthly' ? 1 : kind === 'quarterly' ? 3 : 12;
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, 0)).toISOString().slice(0, 10);
+};
 
 const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
@@ -129,6 +136,7 @@ export class SupplierPerformanceService {
       warnings: r.warnings as Scorecard['warnings'],
       weightWithData: null,
       note: (r.note as string) ?? null,
+      periodKind: (r.period_kind as Scorecard['periodKind']) ?? null,
       createdAt: iso(r.created_at)!,
       createdBy: person(r.created_by, r.created_by_name),
     };
@@ -152,14 +160,14 @@ export class SupplierPerformanceService {
     return this.database.asUser(ctx, async (db) => {
       await this.assertSupplier(db, ctx, supplierId);
       const rows = await db.execute<Row>(sql`
-        select c.id, c.period_from::text as period_from_t, c.period_to::text as period_to_t, c.model_version, c.score, c.band, jsonb_array_length(c.warnings) as warning_count, c.note, c.created_at, c.created_by,
+        select c.id, c.period_from::text as period_from_t, c.period_to::text as period_to_t, c.model_version, c.score, c.band, jsonb_array_length(c.warnings) as warning_count, c.note, c.period_kind, c.created_at, c.created_by,
                ${sql.raw(personName('p'))} as created_by_name
         from public.supplier_scorecards c left join public.profiles p on p.id = c.created_by
         where c.supplier_id = ${supplierId}::uuid and c.organisation_id = ${orgOf(ctx)}::uuid order by c.created_at desc, c.id`);
       return {
         data: rows.rows.map((r) => ({
           id: r.id as string, periodFrom: r.period_from_t as string, periodTo: r.period_to_t as string, modelVersion: Number(r.model_version), score: num(r.score), band: r.band as ScorecardSummary['band'],
-          warningCount: Number(r.warning_count), note: (r.note as string) ?? null, createdAt: iso(r.created_at)!, createdBy: person(r.created_by, r.created_by_name),
+          warningCount: Number(r.warning_count), note: (r.note as string) ?? null, periodKind: (r.period_kind as ScorecardSummary['periodKind']) ?? null, createdAt: iso(r.created_at)!, createdBy: person(r.created_by, r.created_by_name),
         })),
       };
     });
@@ -171,6 +179,52 @@ export class SupplierPerformanceService {
       const res = await db.execute<{ id: string }>(sql`select app.save_supplier_scorecard(${supplierId}::uuid, ${b.from}::date, ${b.to}::date, ${b.note ?? null}) as id`);
       return this.loadOne(db, ctx, res.rows[0].id);
     });
+  }
+
+  /** The scorecard schedule (SQ5b); an organisation that never set one has everything off. */
+  private async loadSchedule(db: Db, ctx: RequestContext): Promise<Schedule> {
+    const res = await db.execute<Row>(sql`
+      select s.monthly, s.quarterly, s.annual, s.scope, s.classification_ids, s.monthly_next::text as monthly_next, s.quarterly_next::text as quarterly_next, s.annual_next::text as annual_next,
+             s.set_by, ${sql.raw(personName('p'))} as set_by_name, s.problem, s.problem_at, s.last_saved_at
+      from public.supplier_scorecard_schedules s left join public.profiles p on p.id = s.set_by
+      where s.organisation_id = ${orgOf(ctx)}::uuid`);
+    const s = res.rows[0];
+    const ids = (s?.classification_ids as string[] | undefined) ?? [];
+    const classes = ids.length
+      ? (await db.execute<Row>(sql`select id, label, active from public.supplier_classifications where organisation_id = ${orgOf(ctx)}::uuid and id = any(${`{${ids.join(',')}}`}::uuid[]) order by sequence, label`)).rows
+      : [];
+    const can = await db.execute<{ ok: boolean }>(sql`select app.has_permission(${orgOf(ctx)}::uuid, 'supplier_quality.configure') as ok`);
+    const next = (kind: 'monthly' | 'quarterly' | 'annual', from: unknown) =>
+      s?.[kind] && from ? { from: from as string, to: periodEnd(kind, from as string) } : null;
+    return {
+      monthly: Boolean(s?.monthly),
+      quarterly: Boolean(s?.quarterly),
+      annual: Boolean(s?.annual),
+      scope: (s?.scope as Schedule['scope']) ?? 'all',
+      classifications: classes.map((c) => ({ id: c.id as string, label: c.label as string, active: Boolean(c.active) })),
+      next: { monthly: next('monthly', s?.monthly_next), quarterly: next('quarterly', s?.quarterly_next), annual: next('annual', s?.annual_next) },
+      setBy: person(s?.set_by, s?.set_by_name),
+      problem: (s?.problem as string) ?? null,
+      problemAt: iso(s?.problem_at) ?? null,
+      lastSavedAt: iso(s?.last_saved_at) ?? null,
+      canChange: Boolean(can.rows[0]?.ok),
+    };
+  }
+
+  schedule(ctx: RequestContext): Promise<Schedule> {
+    return this.database.asUser(ctx, (db) => this.loadSchedule(db, ctx));
+  }
+
+  saveSchedule(ctx: RequestContext, b: ScheduleBody): Promise<Schedule> {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.set_supplier_scorecard_schedule(${orgOf(ctx)}::uuid, ${JSON.stringify(b)}::jsonb)`);
+      return this.loadSchedule(db, ctx);
+    });
+  }
+
+  /** The worker's step: scorecards for every period that has ended, as the person who set each organisation's schedule (API login). */
+  runSchedule(correlationId: string): Promise<{ organisations: number; saved: number; bandDrops: number }> {
+    return this.database.asApi(async (c) => (await c.query(`select app.system_run_scheduled_scorecards(200) as r`)).rows[0].r, correlationId, 'worker');
   }
 
   /** A supplier's own overrides and what it is scored with now (the model's configuration with them on top). */

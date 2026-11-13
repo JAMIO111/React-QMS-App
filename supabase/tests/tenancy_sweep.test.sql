@@ -379,9 +379,15 @@ BEGIN
     jsonb_build_object('certificateNumber', 'SWEEP-MTR', 'kind', 'mill_test_report', 'heatNumber', 'H-1', 'receiptLineId', (SELECT id FROM public.goods_receipt_lines WHERE goods_receipt_id = (SELECT id FROM _sweep_gr) LIMIT 1)));
   PERFORM app.save_supplier_scorecard((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), current_date - 30, current_date, 'Sweep scorecard');
   PERFORM app.set_supplier_performance_settings((SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), '{"graceDaysAfter": 2}'::jsonb);
+  -- Scheduled scorecards (SQ5b): the schedule, set by owner A.
+  PERFORM app.set_supplier_scorecard_schedule(a, '{"monthly": true}'::jsonb);
   PERFORM app.set_integration_credential(app.create_integration_connection(a, 'rest_api', 'Sweep REST', 'sweep-rest', '{"baseUrl": "https://api.example.com", "authType": "bearer"}'::jsonb), 'bearer', 'sweep-secret');
   DROP TABLE _sweep_gr;
   PERFORM pg_temp.logout();
+  -- Scheduled scorecards (SQ5b): a band drop between two scorecards (only the worker writes it, so seeded directly).
+  INSERT INTO public.supplier_band_drops (organisation_id, supplier_id, scorecard_id, previous_scorecard_id, period_kind, period_from, period_to, from_band, to_band, supplier_label, change_label)
+    SELECT a, c.supplier_id, c.id, c.id, 'monthly', c.period_from, c.period_to, 'good', 'poor', 'Sweep supplier', 'Good → Poor'
+      FROM public.supplier_scorecards c WHERE c.organisation_id = a LIMIT 1;
   -- Integrations IN2: a run with a staged row, the map, a cursor and a run error (the runner's tables are written by the API login only, so seeded directly).
   INSERT INTO public.integration_sync_runs (id, organisation_id, connection_id, entity_type, kind, status)
     SELECT '5f000000-0000-0000-0000-00000000c001', a, id, 'supplier', 'full', 'partial' FROM public.integration_connections WHERE organisation_id = a LIMIT 1;

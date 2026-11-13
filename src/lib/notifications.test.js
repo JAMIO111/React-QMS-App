@@ -53,6 +53,7 @@ describe("import alerts and email choices", () => {
 
   it("leads an import alert to its run", () => {
     expect(notificationLink({ entityType: "integration_alerts", entityId: "a", details: { connection_id: "c", run_id: "r" } })).toBe("/Settings/Integrations/c/runs/r");
+    expect(notificationLink({ entityType: "supplier_band_drops", entityId: "a", details: { record_kind: "supplier", record_id: "s" } })).toBe("/Suppliers/s?tab=performance");
     expect(notificationLink({ entityType: "integration_alerts", entityId: "a", details: {} })).toBe("/Settings/Integrations");
   });
 

@@ -6,6 +6,7 @@ import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
 import { makeIds, requireDb, seed, startApp, token } from './helpers';
+import { SupplierPerformanceService } from '../src/supplier-quality/supplier-performance.service';
 
 const ids = makeIds('fe');
 let app: INestApplication;
@@ -263,3 +264,57 @@ describe('linking a non-conformance to a received line', () => {
   });
 });
 
+
+describe('scheduled scorecards', () => {
+  const lastMonth = () => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString().slice(0, 10);
+  };
+  const run = () => app.get(SupplierPerformanceService).runSchedule('e2e-scorecards');
+
+  it('starts with everything off, and only a configurer may change it', async () => {
+    const s = (await api().get(`${base}/performance/schedule`).set(await inspector()).expect(200)).body;
+    expect(s).toMatchObject({ monthly: false, quarterly: false, annual: false, scope: 'all', classifications: [], canChange: false, next: { monthly: null, quarterly: null, annual: null } });
+    await api().put(`${base}/performance/schedule`).set(await inspector()).send({ monthly: true }).expect(403);
+    await api().put(`${base}/performance/schedule`).set(await owner()).send({ monthly: 'yes' }).expect(400);
+    await api().put(`${base}/performance/schedule`).set(await owner()).send({ scope: 'classifications', classificationIds: [] }).expect(409);
+  });
+
+  it('switches monthly, quarterly and annual on separately and saves each period once, by the schedule', async () => {
+    const s = (await api().put(`${base}/performance/schedule`).set(await owner()).send({ monthly: true, annual: true }).expect(200)).body;
+    expect(s).toMatchObject({ monthly: true, quarterly: false, annual: true, canChange: true, problem: null });
+    expect(s.next.monthly.from).toBe(lastMonth());
+    expect(s.setBy.id).toBe(ids.ownerA);
+    const first = await run();
+    expect(first.saved).toBeGreaterThanOrEqual(4); // last month and last year, for both suppliers (other suites' suppliers too)
+    expect((await run()).saved).toBe(0);
+    const cards = (await api().get(`${base}/suppliers/${ctx.s1}/scorecards`).set(await inspector()).expect(200)).body.data;
+    const monthly = cards.find((c: { periodKind: string | null }) => c.periodKind === 'monthly');
+    expect(monthly).toMatchObject({ periodFrom: lastMonth(), createdBy: null });
+    expect(cards.filter((c: { periodKind: string | null }) => c.periodKind === 'annual')).toHaveLength(1);
+    expect((await api().get(`${base}/scorecards/${monthly.id}`).set(await inspector()).expect(200)).body.periodKind).toBe('monthly');
+    const after = (await api().get(`${base}/performance/schedule`).set(await inspector()).expect(200)).body;
+    expect(after.next.monthly.from > lastMonth()).toBe(true);
+    expect(after.lastSavedAt).not.toBeNull();
+
+    const q = (await api().put(`${base}/performance/schedule`).set(await owner()).send({ quarterly: true, monthly: false }).expect(200)).body;
+    expect(q).toMatchObject({ monthly: false, quarterly: true, annual: true });
+    await run();
+    const quarterly = (await api().get(`${base}/suppliers/${ctx.s2}/scorecards`).set(await inspector()).expect(200)).body.data.filter((c: { periodKind: string | null }) => c.periodKind === 'quarterly');
+    expect(quarterly).toHaveLength(1);
+  });
+
+  it('covers only the chosen classifications when asked', async () => {
+    const cls = (await admin.query(`select id from public.supplier_classifications where organisation_id = $1 order by sequence limit 1`, [ids.orgA])).rows[0].id;
+    const s = (await api().put(`${base}/performance/schedule`).set(await owner()).send({ scope: 'classifications', classificationIds: [cls] }).expect(200)).body;
+    expect(s.scope).toBe('classifications');
+    expect(s.classifications).toEqual([expect.objectContaining({ id: cls, active: true })]);
+    const otherCls = (await admin.query(`select id from public.supplier_classifications where organisation_id = $1 limit 1`, [ids.orgB])).rows[0].id;
+    await api().put(`${base}/performance/schedule`).set(await owner()).send({ classificationIds: [otherCls] }).expect(409);
+  });
+
+  it('is invisible to another organisation', async () => {
+    const s = (await api().get(`${base}/performance/schedule`).set(await other()).expect(200)).body;
+    expect(s).toMatchObject({ monthly: false, quarterly: false, annual: false, setBy: null });
+  });
+});

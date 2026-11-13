@@ -56,6 +56,12 @@ export const useScorecardModel = () => {
   return useQuery({ queryKey: key(organisationId, "model"), queryFn: () => apiFetch(`${BASE}/performance/model`, { organisationId }), enabled: !!organisationId, retry: false });
 };
 
+/** Scheduled scorecards: monthly, quarterly and annual (each on or off), which suppliers, the next periods and any problem. */
+export const useScorecardSchedule = () => {
+  const { organisationId } = useOrganisation();
+  return useQuery({ queryKey: key(organisationId, "schedule"), queryFn: () => apiFetch(`${BASE}/performance/schedule`, { organisationId }), enabled: !!organisationId, retry: false });
+};
+
 /** A supplier's own scoring settings (empty = follows the model) and what it is scored with now. */
 export const useSupplierPerformanceSettings = (id, { enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
@@ -107,6 +113,8 @@ export const usePerformanceMutation = () => {
           return apiFetch(`${BASE}/suppliers/${id}/scorecards`, { method: "POST", body, organisationId });
         case "saveModel":
           return apiFetch(`${BASE}/performance/model`, { method: "PUT", body, organisationId });
+        case "saveSchedule":
+          return apiFetch(`${BASE}/performance/schedule`, { method: "PUT", body, organisationId });
         case "saveSupplierSettings":
           return apiFetch(`${BASE}/suppliers/${id}/performance/settings`, { method: "PUT", body, organisationId });
         default:
@@ -115,12 +123,26 @@ export const usePerformanceMutation = () => {
     },
     // A new model version shows at once on the Settings card; a refusal puts the old one back and says why.
     onMutate: async ({ action, body }) => {
+      // A switch on the schedule card moves at once; the server's answer (next periods, whose authority) replaces it.
+      if (action === "saveSchedule") {
+        const queryKey = key(organisationId, "schedule");
+        await queryClient.cancelQueries({ queryKey });
+        const previous = queryClient.getQueryData(queryKey);
+        if (previous) {
+          const { classificationIds, ...rest } = body;
+          queryClient.setQueryData(queryKey, { ...previous, ...rest, ...(classificationIds ? { classifications: previous.classifications.filter((c) => classificationIds.includes(c.id)) } : {}) });
+        }
+        return { previous, queryKey };
+      }
       if (action !== "saveModel") return {};
       const queryKey = key(organisationId, "model");
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData(queryKey);
       if (previous) queryClient.setQueryData(queryKey, { ...previous, config: body.config });
       return { previous, queryKey };
+    },
+    onSuccess: (data, { action }) => {
+      if (action === "saveSchedule") queryClient.setQueryData(key(organisationId, "schedule"), data);
     },
     onError: (error, vars, context) => {
       if (context?.previous) queryClient.setQueryData(context.queryKey, context.previous);

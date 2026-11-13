@@ -73,11 +73,11 @@ describe('the worker tick', () => {
   it('runs every step in order and records the tick', async () => {
     const res = (await api().post('/api/v1/internal/worker/tick?source=manual&budgetMs=20000').set(cron).expect(200)).body;
     expect(res.skipped).toBe(false);
-    expect(res.steps.map((s: { name: string }) => s.name)).toEqual(['quality-alerts', 'documents', 'reminders', 'workflows', 'jobs', 'email', 'imports']);
+    expect(res.steps.map((s: { name: string }) => s.name)).toEqual(['quality-alerts', 'documents', 'reminders', 'scorecards', 'workflows', 'jobs', 'email', 'imports']);
     expect(res.steps.every((s: { ok: boolean }) => s.ok)).toBe(true);
     expect(res.outcome).toBe('done');
     const tick = (await admin.query(`select source, outcome, finished_at, jsonb_array_length(steps) as n from app.worker_ticks where id = $1`, [res.tickId])).rows[0];
-    expect(tick).toMatchObject({ source: 'manual', outcome: 'done', n: 7 });
+    expect(tick).toMatchObject({ source: 'manual', outcome: 'done', n: 8 });
     expect(tick.finished_at).not.toBeNull();
     expect((await admin.query(`select lease_until from app.worker_state`)).rows[0].lease_until).toBeNull();
   });

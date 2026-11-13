@@ -4,7 +4,7 @@ import { ago, when } from "./format";
 import Callout from "../ui/Callout";
 
 const OUTCOME = { done: "Done", partial: "Partly failed", error: "Failed", skipped: "Skipped (another tick was working)", running: "Running" };
-const STEP = { "quality-alerts": "Quality alerts", documents: "Documents", reminders: "Reminders", workflows: "Workflow rules", jobs: "Jobs", email: "Email", imports: "Imports" };
+const STEP = { "quality-alerts": "Quality alerts", documents: "Documents", reminders: "Reminders", scorecards: "Supplier scorecards", workflows: "Workflow rules", jobs: "Jobs", email: "Email", imports: "Imports" };
 
 const stepWords = (s) => {
   if (!s.ok) return `${STEP[s.name] ?? s.name}: failed`;

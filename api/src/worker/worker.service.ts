@@ -6,6 +6,7 @@ import { CronService } from '../cron/cron.service';
 import { PermanentJobError, WorkerJobRegistry } from './job-registry';
 import { RemindersService } from '../reminders/reminders.service';
 import { WorkflowEngine } from '../workflows/workflow-engine';
+import { SupplierPerformanceService } from '../supplier-quality/supplier-performance.service';
 
 export type TickSource = 'pg_cron' | 'vercel' | 'manual' | 'test';
 
@@ -39,7 +40,7 @@ const MAX_BUDGET = 50_000;
  * One tick works at a time (a database lease); a tick that finds another still working is recorded as skipped and returns at once.
  *
  * Each tick, within its time budget, in this order: quality alerts past their expiry date expire; approved document revisions whose day has come take
- * effect; organisations whose reminder time has come get today's reminders (WK2); due background jobs run; email is fanned out and sent; import runs that are waiting are worked. Every step is on its own: one that fails is
+ * effect; organisations whose reminder time has come get today's reminders (WK2); scheduled supplier scorecards are saved for periods that have ended (SQ5b); due background jobs run; email is fanned out and sent; import runs that are waiting are worked. Every step is on its own: one that fails is
  * recorded and the others still run. A later always-on worker would call `tick()` in a loop; nothing here assumes Vercel.
  */
 @Injectable()
@@ -53,6 +54,7 @@ export class WorkerService {
     private readonly jobs: WorkerJobRegistry,
     private readonly reminders: RemindersService,
     private readonly workflows: WorkflowEngine,
+    private readonly scorecards: SupplierPerformanceService,
   ) {}
 
   async tick(options: { source: TickSource; budgetMs?: number; correlationId?: string }): Promise<TickOutcome> {
@@ -90,6 +92,7 @@ export class WorkerService {
     await step('quality-alerts', () => this.cron.expireQualityAlerts(correlationId));
     await step('documents', () => this.cron.settleDocuments(correlationId));
     await step('reminders', () => this.reminders.runDaily(correlationId), 3_000);
+    await step('scorecards', () => this.scorecards.runSchedule(correlationId), 3_000);
     await step('workflows', () => this.workflows.consume(correlationId, Math.min(stopAt - 12_000, Date.now() + 10_000)), 3_000);
     await step('jobs', () => this.runJobs(correlationId, stopAt - 8_000), 3_000);
     await step('email', () => this.email.drain({ budgetMs: Math.min(15_000, left() - 2_000), correlationId }), 3_000);

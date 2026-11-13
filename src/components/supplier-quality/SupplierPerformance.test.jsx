@@ -14,6 +14,7 @@ vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: v
 import SupplierPerformance from "./SupplierPerformance";
 import WatchlistPage from "./WatchlistPage";
 import ScorecardModelCard from "./ScorecardModel";
+import ScorecardScheduleCard from "./ScorecardSchedule";
 
 const config = { otdPolicy: "agreed", weights: { otd: 30, ppm: 30, ncs: 20, scar: 10, certs: 10 }, ppmGood: 1000, ppmZero: 50000, ncPenalty: { critical: 40, major: 20, minor: 5 }, goodFrom: 85, watchFrom: 70, minLines: 5 };
 const metrics = {
@@ -100,12 +101,15 @@ describe("performance tab", () => {
     permissions = ["supplier_quality.read", "receiving.read"];
     routeApi({
       "GET /supplier-quality/suppliers/s1/performance": perf(),
-      "GET /supplier-quality/suppliers/s1/scorecards": { data: [{ id: "sc1", periodFrom: "2026-08-01", periodTo: "2026-10-31", modelVersion: 1, score: 61, band: "watch", warningCount: 2, note: "Q3", createdAt: "2026-11-01T09:00:00Z", createdBy: { id: "u1", name: "Ada" } }] },
+      "GET /supplier-quality/suppliers/s1/scorecards": { data: [{ id: "sc1", periodFrom: "2026-08-01", periodTo: "2026-10-31", modelVersion: 1, score: 61, band: "watch", warningCount: 2, note: "Q3", createdAt: "2026-11-01T09:00:00Z", createdBy: { id: "u1", name: "Ada" }, periodKind: null },
+        { id: "sc2", periodFrom: "2026-10-01", periodTo: "2026-10-31", modelVersion: 1, score: 70, band: "watch", warningCount: 0, note: null, createdAt: "2026-11-01T00:05:00Z", createdBy: null, periodKind: "monthly" }] },
     });
     renderUi(<SupplierPerformance supplier={supplier} />);
-    expect(await screen.findByRole("list", { name: "Saved scorecards" })).toBeInTheDocument();
+    const list = await screen.findByRole("list", { name: "Saved scorecards" });
     expect(screen.queryByRole("button", { name: "Save as a scorecard" })).toBeNull();
     expect(screen.getByText(/v1 · 2 warnings · Q3/)).toBeInTheDocument();
+    expect(list).toHaveTextContent("Saved by Ada");
+    expect(list).toHaveTextContent("Saved by the schedule · Monthly · October 2026");
   });
 });
 
@@ -276,5 +280,68 @@ describe("scorecard model", () => {
     await userEvent.type(screen.getByLabelText(/Good from/), "90");
     await userEvent.click(save);
     await waitFor(() => expect(calls.find((c) => c.k === "PUT /supplier-quality/performance/model")?.body).toMatchObject({ reason: "Stricter bands", config: { goodFrom: 90, otdPolicy: "agreed" } }));
+  });
+});
+
+describe("scheduled scorecards", () => {
+  const SCHEDULE = {
+    monthly: true, quarterly: false, annual: false, scope: "all", classifications: [],
+    next: { monthly: { from: "2026-11-01", to: "2026-11-30" }, quarterly: null, annual: null },
+    setBy: { id: "u1", name: "Ada" }, problem: null, problemAt: null, lastSavedAt: "2026-11-01T00:05:00Z", canChange: true,
+  };
+  const CLASSES = { data: [{ id: "c1", label: "Critical", active: true }, { id: "c2", label: "Logistics", active: true }] };
+
+  it("switches each period on and off on its own, at once", async () => {
+    let release;
+    let current = SCHEDULE;
+    routeApi({ "GET /supplier-quality/performance/schedule": SCHEDULE, "GET /supplier-quality/classifications": CLASSES });
+    renderUi(<ScorecardScheduleCard />);
+    expect(await screen.findByText(/Next: November 2026, saved after 30 Nov 2026/)).toBeInTheDocument();
+    expect(screen.getByText(/worked out with Ada's access/)).toBeInTheDocument();
+    apiFetch.mockImplementation(async (path, opts = {}) => {
+      const k = `${opts.method ?? "GET"} ${path.split("?")[0]}`;
+      calls.push({ k, path, body: opts.body });
+      if (k === "PUT /supplier-quality/performance/schedule") return new Promise((r) => { release = () => { current = { ...SCHEDULE, quarterly: true, next: { ...SCHEDULE.next, quarterly: { from: "2026-07-01", to: "2026-09-30" } } }; r(current); }; });
+      return k === "GET /supplier-quality/classifications" ? CLASSES : current;
+    });
+    const quarterly = screen.getByRole("switch", { name: "Quarterly scorecards" });
+    expect(quarterly).not.toBeChecked();
+    await userEvent.click(quarterly);
+    expect(quarterly).toBeChecked(); // before the server answers
+    expect(screen.getByRole("switch", { name: "Monthly scorecards" })).toBeChecked();
+    expect(calls.find((c) => c.k === "PUT /supplier-quality/performance/schedule").body).toEqual({ quarterly: true });
+    release();
+    expect(await screen.findByText(/Next: Q3 2026, saved after 30 Sept? 2026/)).toBeInTheDocument();
+  });
+
+  it("covers chosen classifications, saved once the first one is chosen", async () => {
+    const routes = {
+      "GET /supplier-quality/performance/schedule": SCHEDULE, "GET /supplier-quality/classifications": CLASSES,
+      "PUT /supplier-quality/performance/schedule": { ...SCHEDULE, scope: "classifications", classifications: [{ id: "c1", label: "Critical", active: true }] },
+    };
+    routeApi(routes);
+    const saved = routes["PUT /supplier-quality/performance/schedule"];
+    apiFetch.mockImplementation(async (path, opts = {}) => {
+      const k = `${opts.method ?? "GET"} ${path.split("?")[0]}`;
+      calls.push({ k, path, body: opts.body });
+      if (k === "PUT /supplier-quality/performance/schedule") routes["GET /supplier-quality/performance/schedule"] = saved;
+      return routes[k];
+    });
+    renderUi(<ScorecardScheduleCard />);
+    await userEvent.click(await screen.findByRole("button", { name: "Chosen classifications" }));
+    expect(calls.some((c) => c.k === "PUT /supplier-quality/performance/schedule")).toBe(false);
+    expect(screen.getByText("Choose a classification to save this.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("combobox", { name: /Add a classification/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /Critical/ }));
+    await waitFor(() => expect(calls.find((c) => c.k === "PUT /supplier-quality/performance/schedule")?.body).toEqual({ scope: "classifications", classificationIds: ["c1"] }));
+    expect(await screen.findByRole("button", { name: "Remove Critical" })).toBeDisabled();
+  });
+
+  it("is read-only without the right to configure, and says when nothing is being saved", async () => {
+    routeApi({ "GET /supplier-quality/performance/schedule": { ...SCHEDULE, canChange: false, problem: "Nothing was saved: the person who set the schedule can no longer see supplier performance." }, "GET /supplier-quality/classifications": CLASSES });
+    renderUi(<ScorecardScheduleCard />);
+    expect(await screen.findByRole("switch", { name: "Monthly scorecards" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Chosen classifications" })).toBeNull();
+    expect(screen.getByText("Scorecards are not being saved")).toBeInTheDocument();
   });
 });

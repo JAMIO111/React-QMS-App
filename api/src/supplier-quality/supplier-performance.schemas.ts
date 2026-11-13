@@ -8,6 +8,7 @@ export const OTD_POLICIES = ['agreed', 'original'] as const;
 export const BANDS = ['good', 'watch', 'poor', 'insufficient'] as const;
 export const METRIC_KEYS = ['otd', 'in_full', 'ppm', 'ncs', 'scar', 'certs'] as const;
 export const PPM_BASES = ['rejected', 'ncs'] as const;
+export const PERIOD_KINDS = ['monthly', 'quarterly', 'annual'] as const;
 
 const Weight = z.number().int().min(0).max(100);
 const Penalty = z.number().int().min(0).max(100);
@@ -139,6 +140,8 @@ export const Scorecard = Performance.omit({ model: true, overrides: true }).exte
   modelVersion: z.number().int(),
   config: ScorecardConfig,
   note: z.string().nullable(),
+  /** Set when the schedule saved it (createdBy is then null); null when a person did. */
+  periodKind: z.enum(PERIOD_KINDS).nullable(),
   createdAt: Iso,
   createdBy: Person,
 });
@@ -152,6 +155,7 @@ export const ScorecardSummary = z.object({
   band: z.enum(BANDS),
   warningCount: z.number().int(),
   note: z.string().nullable(),
+  periodKind: z.enum(PERIOD_KINDS).nullable(),
   createdAt: Iso,
   createdBy: Person,
 });
@@ -166,3 +170,32 @@ export const WatchlistRow = z.object({
   warnings: z.array(Warning),
 });
 export const Watchlist = z.object({ days: z.number().int(), data: z.array(WatchlistRow) });
+
+/** Scheduled scorecards (SQ5b): monthly, quarterly and annual are switched on and off separately; keys left out keep their value. */
+export const ScheduleBody = z
+  .object({
+    monthly: z.boolean().optional(),
+    quarterly: z.boolean().optional(),
+    annual: z.boolean().optional(),
+    scope: z.enum(['all', 'classifications']).optional(),
+    classificationIds: z.array(z.string().uuid()).max(50).optional(),
+  })
+  .strict();
+export type ScheduleBody = z.infer<typeof ScheduleBody>;
+const NextPeriod = z.object({ from: DateOnly, to: DateOnly }).nullable();
+export const Schedule = z.object({
+  monthly: z.boolean(),
+  quarterly: z.boolean(),
+  annual: z.boolean(),
+  scope: z.enum(['all', 'classifications']),
+  classifications: z.array(z.object({ id: z.string().uuid(), label: z.string(), active: z.boolean() })),
+  /** The next period of each switched-on kind still to save; it is saved once it has ended. */
+  next: z.object({ monthly: NextPeriod, quarterly: NextPeriod, annual: NextPeriod }),
+  /** Whose authority the schedule uses (the person who last saved it). */
+  setBy: Person,
+  problem: z.string().nullable(),
+  problemAt: Iso.nullable(),
+  lastSavedAt: Iso.nullable(),
+  canChange: z.boolean(),
+});
+export type Schedule = z.infer<typeof Schedule>;

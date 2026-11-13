@@ -1,7 +1,11 @@
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCustomFieldPeople, useCustomFields } from "../../hooks/useCustomFields";
+import { CalendarIcon, CircleCheckIcon, FileTextIcon, HashIcon, ListChecksIcon, ListIcon, UserIcon } from "@/components/icons";
 import { formatCustomValue } from "../../lib/customFields";
+
+/** An icon per kind of field, so a custom column's header looks like the register's own (`table-header`: icon + label). */
+const TYPE_ICON = { text: FileTextIcon, long_text: FileTextIcon, number: HashIcon, date: CalendarIcon, boolean: CircleCheckIcon, choice: ListIcon, multi_choice: ListChecksIcon, person: UserIcon };
 
 /**
  * Register columns for a kind of record's custom fields: one per active field, id `cf_<key>`, reading `row.customValues`, not sortable, hidden
@@ -15,9 +19,17 @@ export const useCustomColumns = (entityType) => {
     const people = Object.fromEntries((peopleList ?? []).map((p) => [p.id, p.name]));
     const columns = fields.map((f) => ({
       id: `cf_${f.key}`,
-      header: f.label,
+      headerString: f.label,
+      header: () => {
+        const Icon = TYPE_ICON[f.fieldType] ?? FileTextIcon;
+        return (
+          <div className="table-header">
+            <Icon className="shrink-0" /> {f.label}
+          </div>
+        );
+      },
       accessorFn: (row) => formatCustomValue(f, row?.customValues?.[f.key], people),
-      cell: (info) => info.getValue() || <span className="text-secondary-text">—</span>,
+      cell: (info) => <div className="table-row-item">{info.getValue() || <span className="text-secondary-text">—</span>}</div>,
       enableSorting: false,
       size: f.fieldType === "long_text" ? 260 : 160,
       minSize: 80,

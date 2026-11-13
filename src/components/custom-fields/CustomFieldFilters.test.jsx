@@ -75,6 +75,11 @@ describe("custom columns", () => {
     expect(result.current.defaultHidden).toEqual({ cf_finish: false, cf_weight: false, cf_coating: false });
     expect(result.current.columns[2].accessorFn({ customValues: { coating: "zinc" } })).toBe("Zinc");
     expect(result.current.columns[1].enableSorting).toBe(false);
+    // Headers look like the register's own: the table-header style with an icon, and a plain name for the column menu.
+    const { container } = render(<>{result.current.columns[1].header()}</>);
+    expect(container.querySelector(".table-header")).toHaveTextContent("Weight");
+    expect(container.querySelector(".table-header svg")).not.toBeNull();
+    expect(result.current.columns[1].headerString).toBe("Weight");
   });
 
   it("describes filters and CSV values", () => {

@@ -205,6 +205,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await documentControl({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
   await riskAndReview({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
   await workflowsAndReminders({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
+  await newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -1666,4 +1667,80 @@ async function workflowsAndReminders({ browser, page, stack, APP, orgName, see, 
   await see(colin.getByRole('list', { name: 'Due soon' }).getByText(/Fit the second deburring cell/));
   await shot(colin, 'b3-reminders');
   await ctx.close();
+}
+
+/**
+ * WF4: a rule on one of the new triggers ("A risk is assessed"), built in the browser with a number test (score at least 12) and a word test (title contains "burr"),
+ * tested against a recent real event before it is saved, then run by the worker: a low score does nothing, a high one tells Colin once.
+ */
+async function newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague }) {
+  const org = (await stack.admin.query(`select id from public.organisations where name = $1`, [orgName])).rows[0];
+  const ownerId = (await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email])).rows[0].id;
+  const colinId = (await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [colleague.email])).rows[0].id;
+  const api = apiAs(stack, ownerId, owner.email, org.id);
+  const risk = (await stack.admin.query(`select id, reference, title from public.risks where organisation_id = $1 order by created_at limit 1`, [org.id])).rows[0];
+  log(`risk: ${risk.reference} ${risk.title}`);
+
+  step('owner writes a rule on a new trigger: when a risk is assessed with a score of at least 12 and "burr" in its title, tell Colin');
+  await page.goto(`${APP}/Settings/Workflows`);
+  await page.getByRole('link', { name: /New rule/ }).click();
+  await page.getByRole('textbox', { name: /^Name/ }).fill('High burr risks');
+  await page.getByRole('combobox', { name: /^What starts the rule/ }).click();
+  await page.getByRole('option', { name: /^A risk is assessed/ }).click();
+
+  await page.getByRole('button', { name: 'Add a condition' }).click();
+  let cond = page.getByRole('listitem', { name: 'Condition 1' });
+  await cond.getByRole('combobox', { name: /^Test/ }).click();
+  await page.getByRole('option', { name: /^Score/ }).click();
+  await see(cond.getByRole('combobox', { name: /^How/ }));
+  if (!(await cond.getByRole('combobox', { name: /^How/ }).inputValue()).includes('at least')) {
+    await cond.getByRole('combobox', { name: /^How/ }).click();
+    await page.getByRole('option', { name: 'is at least' }).click();
+  }
+  await cond.getByRole('spinbutton', { name: /^Score.*value/ }).fill('12');
+
+  await page.getByRole('button', { name: 'Add a condition' }).click();
+  cond = page.getByRole('listitem', { name: 'Condition 2' });
+  await cond.getByRole('combobox', { name: /^Test/ }).click();
+  await page.getByRole('option', { name: /^Title$/ }).click();
+  await cond.getByRole('textbox', { name: /^Title: value/ }).fill('burr');
+
+  const action = page.getByRole('listitem', { name: 'Action 1' });
+  await action.getByRole('combobox', { name: /^Who is told/ }).click();
+  await page.getByRole('option', { name: 'A person' }).click();
+  await action.getByRole('combobox', { name: /^Person/ }).click();
+  await page.getByRole('option', { name: 'Colin Colleague' }).click();
+  await action.getByRole('textbox', { name: /^Message/ }).fill('A burr risk scored high: look at the deburring cell');
+
+  step('the owner tests it against the risk assessed earlier: it would run and tell Colin');
+  await page.getByRole('combobox', { name: /^Test against/ }).click();
+  await page.getByRole('option').first().click();
+  await page.getByRole('button', { name: 'Run the test' }).click();
+  await see(page.getByText('The rule would run'));
+  await see(page.getByRole('list', { name: 'What it would do' }).getByText(/Would tell Colin Colleague/));
+  await shot(page, 'b4-workflow-new-trigger-test');
+  await page.getByRole('button', { name: 'Save and turn on' }).click();
+  await page.waitForURL(/\/Settings\/Workflows\/[0-9a-f-]{36}$/);
+  const ruleUrl = page.url();
+  const ruleId = ruleUrl.split('/').pop();
+
+  step('the risk is assessed again at 9 (no run), then at 16 (one notice for Colin)');
+  await api('POST', `/risks/${risk.id}/assessments`, { likelihood: 3, consequence: 3, rationale: 'Second cell fitted, checking', phase: 'residual' });
+  await stack.tick();
+  let runs = (await stack.admin.query(`select count(*)::int as n from public.workflow_runs where rule_id = $1`, [ruleId])).rows[0].n;
+  if (runs !== 0) throw new Error(`a score of 9 should not run the rule (runs: ${runs})`);
+  await api('POST', `/risks/${risk.id}/assessments`, { likelihood: 4, consequence: 4, rationale: 'Burrs found again after the change', phase: 'residual' });
+  await stack.tick();
+  await stack.tick();
+  runs = (await stack.admin.query(`select count(*)::int as n from public.workflow_runs where rule_id = $1`, [ruleId])).rows[0].n;
+  const notices = (await stack.admin.query(`select n.message, n.record_kind from public.workflow_notices n join public.workflow_runs r on r.id = n.run_id where r.rule_id = $1 and n.user_id = $2`, [ruleId, colinId])).rows;
+  log(`runs: ${runs}, notices: ${JSON.stringify(notices)}`);
+  if (runs !== 1 || notices.length !== 1 || notices[0].record_kind !== 'risk') throw new Error('the rule did not tell Colin exactly once about the risk');
+
+  step('the rule page shows the run, leading to the risk');
+  await page.goto(ruleUrl);
+  const list = page.getByRole('list', { name: 'Runs' });
+  await see(list.getByText(/version 1 · Done/));
+  await see(list.getByRole('link', { name: new RegExp(risk.reference) }));
+  await shot(page, 'b5-workflow-new-trigger-run');
 }

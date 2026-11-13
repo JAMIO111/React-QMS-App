@@ -60,3 +60,80 @@ export const useTaskMutation = () => {
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };
+
+/* ---------------- Rules (WF2): workflows.read to read, workflows.manage to write and test ---------------- */
+
+export const useWorkflowTriggers = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "triggers"),
+    queryFn: () => apiFetch("/workflow-triggers", { organisationId }),
+    enabled: !!organisationId && enabled,
+    staleTime: 10 * 60_000,
+    retry: false,
+    select: (r) => r.data,
+  });
+};
+
+export const useWorkflowRules = () => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "rules"),
+    queryFn: () => apiFetch("/workflow-rules", { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+    select: (r) => r.data,
+  });
+};
+
+export const useWorkflowRule = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "rule", id),
+    queryFn: () => apiFetch(`/workflow-rules/${id}`, { organisationId }),
+    enabled: !!organisationId && !!id && id !== "new",
+    retry: false,
+  });
+};
+
+const RULE_COMMANDS = {
+  create: ({ body }) => ["/workflow-rules", "POST", body],
+  update: ({ id, body }) => [`/workflow-rules/${id}`, "PATCH", body],
+  status: ({ id, body }) => [`/workflow-rules/${id}/status`, "POST", body],
+};
+
+/** Writes a rule (create, update, status). Every command answers with the whole rule, which replaces the cached one. */
+export const useWorkflowRuleMutation = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (command) => {
+      const make = RULE_COMMANDS[command.action];
+      if (!make) throw new Error(`Unknown action ${command.action}`);
+      const [path, method, body] = make(command);
+      return apiFetch(path, { method, body, organisationId });
+    },
+    onSuccess: (rule) => {
+      if (rule?.id) queryClient.setQueryData(key(organisationId, "rule", rule.id), rule);
+      return refreshOrganisation(queryClient, organisationId);
+    },
+  });
+};
+
+/** The latest events a rule with this trigger could have run on (for testing). */
+export const useWorkflowTestEvents = (trigger, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "test-events", trigger),
+    queryFn: () => apiFetch(`/workflow-test-events?trigger=${encodeURIComponent(trigger)}`, { organisationId }),
+    enabled: !!organisationId && !!trigger && enabled,
+    retry: false,
+    select: (r) => r.data,
+  });
+};
+
+/** A dry run of the rule as written against one event: nothing is saved or sent, so nothing needs refreshing. */
+export const useTestWorkflowRule = () => {
+  const { organisationId } = useOrganisation();
+  return useMutation({ mutationFn: (body) => apiFetch("/workflow-tests", { method: "POST", body, organisationId }) });
+};

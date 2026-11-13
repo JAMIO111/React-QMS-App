@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { parse } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { CancelBody, CompleteBody, CreateRuleBody, StatusBody, TaskListQuery, UpdateRuleBody } from './workflows.schemas';
+import { CancelBody, CompleteBody, CreateRuleBody, StatusBody, TaskListQuery, TestBody, TestEventsQuery, UpdateRuleBody } from './workflows.schemas';
 import { WorkflowsService } from './workflows.service';
 
 @ApiTags('workflows')
@@ -17,6 +17,21 @@ export class WorkflowsController {
   @ApiOkResponse({ description: 'What a rule can start from, and for each what it can test (fields, their kinds and choices)' })
   triggers() {
     return this.service.triggers();
+  }
+
+  @Get('workflow-test-events')
+  @OrganisationScoped('workflows.manage')
+  @ApiOkResponse({ description: 'The latest events (90 days) a rule with this trigger could have run on, whose record the caller may read, with the facts in words' })
+  testEvents(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.testEvents(ctx, parse(TestEventsQuery, query).trigger);
+  }
+
+  @Post('workflow-tests')
+  @HttpCode(200)
+  @OrganisationScoped('workflows.manage')
+  @ApiOkResponse({ description: 'Dry run: would this rule (as written, saved or not) match one recent event, and whom would each action reach? Nothing is saved or sent.' })
+  test(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.test(ctx, parse(TestBody, body));
   }
 
   @Get('workflow-rules')

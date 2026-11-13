@@ -7,6 +7,7 @@ import {
   SettingsIcon,
   ShieldUserIcon,
   UserCogIcon,
+  WorkflowIcon,
 } from "@/components/icons";
 
 const SettingMenuStructure = [
@@ -41,6 +42,13 @@ const SettingMenuStructure = [
     icon: DatabaseIcon,
     // Any module the person may read: Non-conformance, Calibration, Process control, Audits, Supplier quality (tabs inside).
     permission: ["ncr.read", "calibration.read", "process_control.read", "audits.read", "supplier_quality.read", "competence.read", "documentation.manage", "risk.read", "custom_fields.manage"],
+    subMenu: [],
+  },
+  {
+    name: "Workflows",
+    path: "Workflows",
+    icon: WorkflowIcon,
+    permission: "workflows.read",
     subMenu: [],
   },
   {

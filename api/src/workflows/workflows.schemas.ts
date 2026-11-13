@@ -53,6 +53,13 @@ export const UpdateRuleBody = z
   .strict();
 export type UpdateRuleBody = z.infer<typeof UpdateRuleBody>;
 
+/** A dry run (WF2): what a rule as written now would do for one recent event. Nothing is saved or sent. */
+export const TestBody = z
+  .object({ trigger: z.string().min(1).max(80), conditions: ConditionsSchema.default({ all: [] }), actions: z.array(Action).max(10).default([]), eventId: z.coerce.number().int().positive() })
+  .strict();
+export type TestBody = z.infer<typeof TestBody>;
+export const TestEventsQuery = z.object({ trigger: z.string().min(1).max(80) });
+
 export const StatusBody = z.object({ status: z.enum(['active', 'paused', 'retired']), reason: z.string().trim().min(3).max(1000).optional() }).strict();
 export const TaskListQuery = z.object({ status: z.enum(['open', 'done', 'all']).default('open') });
 export const CompleteBody = z.object({ note: z.string().trim().max(2000).optional() }).strict();

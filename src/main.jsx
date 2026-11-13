@@ -124,6 +124,8 @@ const ObjectivePage = lazy(() => import("./components/management-review/Objectiv
 const ReviewsPage = lazy(() => import("./components/management-review/ReviewsPage.jsx"));
 const ReviewPage = lazy(() => import("./components/management-review/ReviewPage.jsx"));
 const ReviewReportPage = lazy(() => import("./components/management-review/ReviewReportPage.jsx"));
+const WorkflowsPage = lazy(() => import("./components/workflows/WorkflowsPage.jsx"));
+const WorkflowRulePage = lazy(() => import("./components/workflows/WorkflowRulePage.jsx"));
 const MyTasksPage = lazy(() => import("./components/workflows/MyTasksPage.jsx"));
 const MyReviewActionsPage = lazy(() => import("./components/management-review/MyReviewActionsPage.jsx"));
 const RemindersPage = lazy(() => import("./components/reminders/RemindersPage.jsx"));
@@ -248,6 +250,8 @@ const router = createBrowserRouter([
               { path: "Process-Control", element: <Navigate to="../Data-Management?tab=process-control" replace /> },
               { path: "Audits", element: <Navigate to="../Data-Management?tab=audits" replace /> },
               { path: "Supplier-Quality", element: <Navigate to="../Data-Management?tab=supplier-quality" replace /> },
+              { path: "Workflows", element: <WorkflowsPage /> },
+              { path: "Workflows/:id", element: <WorkflowRulePage key="workflow-rule" /> },
               { path: "Integrations", element: <SettingsIntegrations /> },
               { path: "Integrations/csv", element: <CsvImportWizard /> },
               { path: "Integrations/Templates", element: <ImportTemplatesPage /> },

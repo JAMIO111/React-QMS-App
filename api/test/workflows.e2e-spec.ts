@@ -137,6 +137,42 @@ describe('workflow rules', () => {
     expect((await admin.query(`select count(*)::int as n from public.workflow_tasks where organisation_id = $1`, [ids.orgA])).rows[0].n).toBe(1);
   });
 
+  it('tests a rule against a recent event without saving or sending anything', async () => {
+    const h = await as(ids.ownerA);
+    const events = (await api().get('/api/v1/workflow-test-events?trigger=ncr.created').set(h).expect(200)).body.data;
+    const major = events.find((e: { record: { label: string } }) => e.record.label.startsWith('WF-NC-1'));
+    const minor = events.find((e: { record: { label: string } }) => e.record.label.startsWith('WF-NC-2'));
+    expect(major.facts.find((f: { field: string }) => f.field === 'severity')).toMatchObject({ value: 'major', words: 'Major' });
+    await api().get('/api/v1/workflow-test-events?trigger=ncr.created').set(await as(ids.inspectorA)).expect(403);
+    await api().get('/api/v1/workflow-test-events?trigger=nonsense').set(h).expect(409);
+    const before = (await admin.query(`select count(*)::int as n from public.workflow_tasks where organisation_id = $1`, [ids.orgA])).rows[0].n;
+    const rule = {
+      trigger: 'ncr.created',
+      conditions: { all: [{ field: 'severity', op: 'gte', value: 'major' }] },
+      actions: [
+        { type: 'notify', recipients: [{ kind: 'person', userId: ids.inspectorA }, { kind: 'person', userId: ids.ownerB }], message: 'x' },
+        { type: 'task', assignee: { kind: 'person', userId: ids.inspectorA }, title: 'Check' },
+      ],
+    };
+    const hit = (await api().post('/api/v1/workflow-tests').set(h).send({ ...rule, eventId: major.eventId }).expect(200)).body;
+    expect(hit).toMatchObject({ matched: true, conditions: { all: [{ field: 'severity', label: 'Severity', holds: true }] } });
+    expect(hit.actions[0].people).toEqual(
+      expect.arrayContaining([expect.objectContaining({ userId: ids.inspectorA, told: true }), expect.objectContaining({ userId: ids.ownerB, told: false })]),
+    );
+    expect(hit.actions[0].wouldTell).toBe(1);
+    expect(hit.labels[ids.inspectorA]).toBeTruthy();
+    const miss = (await api().post('/api/v1/workflow-tests').set(h).send({ ...rule, eventId: minor.eventId }).expect(200)).body;
+    expect(miss).toMatchObject({ matched: false, actions: [{ wouldTell: 0 }, { wouldTell: 0 }] });
+    await api().post('/api/v1/workflow-tests').set(h).send({ ...rule, trigger: 'capa.created', conditions: { all: [] }, eventId: major.eventId }).expect(409);
+    await api().post('/api/v1/workflow-tests').set(await as(ids.ownerB, ids.orgB)).send({ ...rule, actions: [], eventId: major.eventId }).expect(404);
+    expect((await admin.query(`select count(*)::int as n from public.workflow_tasks where organisation_id = $1`, [ids.orgA])).rows[0].n).toBe(before);
+  });
+
+  it('names the people, roles and records a rule refers to', async () => {
+    const rule = (await api().get(`/api/v1/workflow-rules/${ruleId}`).set(await as(ids.ownerA)).expect(200)).body;
+    expect(rule.labels[ids.inspectorA]).toBeTruthy();
+  });
+
   it('lets the person see and close their task, and only someone who manages workflows cancel one', async () => {
     const mine = (await api().get('/api/v1/workflow-tasks/mine').set(await as(ids.inspectorA)).expect(200)).body;
     expect(mine.openCount).toBe(1);

@@ -142,6 +142,7 @@ import {
   Link as LucideLink,
   ListChecks as LucideListChecks,
   ListTodo as LucideListTodo,
+  Workflow as LucideWorkflow,
   Activity as LucideActivity,
   Bold as LucideBold,
   Italic as LucideItalic,
@@ -315,3 +316,4 @@ export const ChevronRightIcon = withDefaults(LucideChevronRight);
 export const LinkIcon = withDefaults(LucideLink);
 export const ListChecksIcon = withDefaults(LucideListChecks);
 export const ListTodoIcon = withDefaults(LucideListTodo);
+export const WorkflowIcon = withDefaults(LucideWorkflow);

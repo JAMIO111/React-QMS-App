@@ -5,11 +5,27 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { TRIGGERS, triggerFor, workflowRecordPath } from './catalogue';
-import { conditionProblems, Conditions } from './conditions';
-import type { Action, CreateRuleBody, UpdateRuleBody } from './workflows.schemas';
+import { conditionHolds, conditionProblems, Conditions } from './conditions';
+import type { Action, CreateRuleBody, TestBody, UpdateRuleBody } from './workflows.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const json = (v: unknown) => JSON.stringify(v);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Every id a rule names: ref values in its conditions and the people, roles and departments in its actions. */
+function namedIds(conditions: Conditions | undefined, actions: Action[] | undefined): string[] {
+  const ids = new Set<string>();
+  for (const c of [...(conditions?.all ?? []), ...(conditions?.any ?? [])]) {
+    for (const v of Array.isArray(c.value) ? c.value : c.value ? [c.value] : []) if (UUID.test(v)) ids.add(v);
+  }
+  for (const a of actions ?? []) {
+    for (const r of a.type === 'notify' ? a.recipients : [a.assignee]) {
+      const id = r.kind === 'person' ? r.userId : r.kind === 'role' ? r.roleId : r.kind === 'department' ? r.departmentId : null;
+      if (id) ids.add(id);
+    }
+  }
+  return [...ids];
+}
 
 /** Workflow rules and tasks (WF1). Rules are written by `app.save_workflow_rule`; what they test and do is checked here against the catalogue first. */
 @Injectable()
@@ -75,6 +91,109 @@ export class WorkflowsService {
     return this.database.asUser(ctx, async (db) => {
       await db.execute(sql`select app.set_workflow_rule_status(${id}::uuid, ${status}, ${reason ?? null})`);
       return this.load(db, ctx, id);
+    });
+  }
+
+  /** Names for ids a rule shows (parts, sites, people, roles …), read as the caller: an id they may not read has no name. */
+  private async labels(db: Db, ctx: RequestContext, ids: string[]): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
+    if (!ids.length) return out;
+    const list = ids.join(',');
+    const rows = (
+      await db.execute<Row>(sql`
+        with wanted as (select unnest(string_to_array(${list}, ','))::uuid as id)
+        select s.id, s.name as label from public.sites s join wanted w on w.id = s.id where s.organisation_id = ${orgOf(ctx)}::uuid
+        union all select p.id, concat_ws(' · ', p.part_number, p.name) from public.parts p join wanted w on w.id = p.id
+        union all select f.id, concat_ws(' · ', f.code, f.name) from public.part_families f join wanted w on w.id = f.id
+        union all select x.id, x.name from public.suppliers x join wanted w on w.id = x.id
+        union all select x.id, x.name from public.customers x join wanted w on w.id = x.id
+        union all select m.id, concat_ws(' · ', m.code, m.name) from public.machines m join wanted w on w.id = m.id
+        union all select g.id, g.name from public.gauge_types g join wanted w on w.id = g.id
+        union all select r.id, r.name from public.roles r join wanted w on w.id = r.id where r.organisation_id = ${orgOf(ctx)}::uuid
+        union all select d.id, d.name from public.departments d join wanted w on w.id = d.id
+        union all select c.user_id, c.name from app.custom_field_people(${orgOf(ctx)}::uuid) c join wanted w on w.id = c.user_id`)
+    ).rows;
+    for (const r of rows) if (r.label) out[r.id as string] = r.label as string;
+    return out;
+  }
+
+  /** The facts of a record in words, field by field, for the trigger's fields. */
+  private describeFacts(triggerKey: string, facts: Record<string, unknown>, labels: Record<string, string>) {
+    const trigger = triggerFor(triggerKey);
+    return (trigger?.fields ?? []).map((f) => {
+      const raw = facts[f.key];
+      const value = raw === null || raw === undefined || raw === '' ? null : String(raw);
+      const words = value === null ? null : f.options?.find((o) => o.value === value)?.label ?? (f.type === 'ref' ? labels[value] ?? null : value);
+      return { field: f.key, label: f.label, value, words };
+    });
+  }
+
+  /** The latest events a rule could have run on (90 days), whose record the caller may read, with the record and its facts in words. */
+  testEvents(ctx: RequestContext, triggerKey: string) {
+    if (!triggerFor(triggerKey)) throw new ApiError(409, 'workflow_rule', 'Choose what starts the rule');
+    return this.database.asUser(ctx, async (db) => {
+      const rows = (await db.execute<Row>(sql`select event_id::text as event_id, created_at, facts from app.workflow_recent_events(${orgOf(ctx)}::uuid, ${triggerKey}, 20)`)).rows;
+      const ids = new Set<string>();
+      for (const r of rows) for (const v of Object.values((r.facts as Record<string, unknown>) ?? {})) if (typeof v === 'string' && UUID.test(v)) ids.add(v);
+      const labels = await this.labels(db, ctx, [...ids]);
+      return {
+        data: rows.map((r) => {
+          const facts = r.facts as Record<string, unknown>;
+          return {
+            eventId: Number(r.event_id),
+            at: new Date(r.created_at as string).toISOString(),
+            record: { kind: facts.record_kind as string, id: facts.record_id as string, label: facts.label as string, path: workflowRecordPath(facts.record_kind, facts.record_id) },
+            facts: this.describeFacts(triggerKey, facts, labels),
+          };
+        }),
+      };
+    });
+  }
+
+  /**
+   * A dry run: whether the rule as written would match one recent event (each condition with its outcome) and, if so, whom each action would reach and whether
+   * each may be told. The same evaluation and the same "may be told" check as the worker; nothing is saved or sent.
+   */
+  async test(ctx: RequestContext, body: TestBody) {
+    const trigger = triggerFor(body.trigger);
+    if (!trigger) throw new ApiError(409, 'workflow_rule', 'Choose what starts the rule');
+    const problems = conditionProblems(body.conditions ?? {}, trigger);
+    if (problems.length) throw new ApiError(409, 'workflow_rule', problems[0], { problems });
+    return this.database.asUser(ctx, async (db) => {
+      const preview = (
+        await db.execute<Row>(sql`select app.workflow_preview_people(${orgOf(ctx)}::uuid, ${body.eventId}::bigint, ${json(body.actions)}::jsonb) as p`)
+      ).rows[0].p as { eventType: string; createdAt: string; facts: Record<string, unknown>; actions: { index: number; type: string; total: number; people: { userId: string; name: string; told: boolean }[] }[] };
+      if (preview.eventType !== body.trigger) throw new ApiError(409, 'workflow_rule', 'That event is not one this rule starts from');
+      const facts = preview.facts;
+      const ids = new Set<string>(namedIds(body.conditions, body.actions));
+      for (const v of Object.values(facts)) if (typeof v === 'string' && UUID.test(v)) ids.add(v);
+      const labels = await this.labels(db, ctx, [...ids]);
+      const check = (c: { field: string; op: string; value?: string | string[] }) => ({
+        field: c.field,
+        label: trigger.fields.find((f) => f.key === c.field)?.label ?? c.field,
+        op: c.op,
+        value: c.value ?? null,
+        holds: conditionHolds(c as never, facts, trigger),
+      });
+      const all = (body.conditions.all ?? []).map(check);
+      const any = (body.conditions.any ?? []).map(check);
+      const matched = all.every((c) => c.holds) && (any.length === 0 || any.some((c) => c.holds));
+      return {
+        eventId: body.eventId,
+        at: new Date(preview.createdAt).toISOString(),
+        record: { kind: facts.record_kind as string, id: facts.record_id as string, label: facts.label as string, path: workflowRecordPath(facts.record_kind, facts.record_id) },
+        facts: this.describeFacts(body.trigger, facts, labels),
+        conditions: { all, any },
+        matched,
+        actions: preview.actions.map((a) => ({
+          index: a.index,
+          type: a.type,
+          total: a.total,
+          people: a.people,
+          wouldTell: matched ? a.people.filter((p) => p.told).length : 0,
+        })),
+        labels,
+      };
     });
   }
 
@@ -184,6 +303,9 @@ export class WorkflowsService {
                                  where w.rule_id = ${id}::uuid order by w.created_at desc limit 25`)
     ).rows;
     const current = versions[0];
+    const ids = new Set<string>();
+    for (const v of versions) for (const id of namedIds(v.conditions as Conditions, v.actions as Action[])) ids.add(id);
+    const labels = await this.labels(db, ctx, [...ids]);
     return {
       id: r.id as string,
       reference: r.reference as string,
@@ -214,6 +336,7 @@ export class WorkflowsService {
         record: { kind: w.record_kind as string, id: w.record_id as string, label: w.label as string, path: workflowRecordPath(w.record_kind, w.record_id) },
         at: new Date(w.created_at as string).toISOString(),
       })),
+      labels,
     };
   }
 }

@@ -27,7 +27,7 @@ import { useBackfillProduction, useCreateInlineOrder } from "../hooks/useProduct
 import { useSavedFilterMutation } from "../hooks/useSavedFilters";
 import { useAnswerAudit, useAuditMutation, useSetAuditTargets, useUpdateClassification } from "../hooks/useAudits";
 import { useCustomFieldMutation, useSetCustomValues } from "../hooks/useCustomFields";
-import { useTaskMutation } from "../hooks/useWorkflows";
+import { useTaskMutation, useWorkflowRuleMutation } from "../hooks/useWorkflows";
 import { useDecideMissing, useIgnoreRows, useIntegrationMutation, useSetAllowedHosts, useTemplateMutation } from "../hooks/useIntegrations";
 
 /** What other modules have on screen: each must be marked stale by an action in any module. */
@@ -132,6 +132,7 @@ describe("every action refreshes every module's data", () => {
     ["save an import template", useTemplateMutation, { action: "create", body: { entityType: "part", name: "x", keyField: "Code", fields: [] } }],
     ["new template version", useTemplateMutation, { action: "saveVersion", id: "t1", body: { reason: "Why" } }],
     ["bring back a template version", useTemplateMutation, { action: "restoreVersion", id: "t1", body: { version: 1, reason: "Why" } }],
+    ["write a workflow rule", useWorkflowRuleMutation, { action: "create", body: { name: "x" } }],
     ["close a workflow task", useTaskMutation, { action: "complete", id: "t1", body: { note: "Done" } }],
     ["fill in custom values", () => useSetCustomValues("part", "11111111-1111-1111-1111-111111111111"), { values: { finish: "Ra 0.8" }, current: {} }],
   ];

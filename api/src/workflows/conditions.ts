@@ -20,7 +20,7 @@ export const OPS: Op[] = ['eq', 'ne', 'in', 'not_in', 'gte', 'lte', 'empty', 'no
 const text = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v));
 const same = (a: string | null, b: string) => a !== null && a.toLowerCase() === b.toLowerCase();
 
-function holds(c: Condition, facts: Record<string, unknown>, trigger?: Trigger): boolean {
+export function conditionHolds(c: Condition, facts: Record<string, unknown>, trigger?: Trigger): boolean {
   const actual = text(facts[c.field]);
   const values = Array.isArray(c.value) ? c.value : c.value === undefined ? [] : [c.value];
   switch (c.op) {
@@ -52,8 +52,8 @@ function holds(c: Condition, facts: Record<string, unknown>, trigger?: Trigger):
 export function evaluateConditions(conditions: Conditions | null | undefined, facts: Record<string, unknown>, trigger?: Trigger): boolean {
   const all = conditions?.all ?? [];
   const any = conditions?.any ?? [];
-  if (!all.every((c) => holds(c, facts, trigger))) return false;
-  return any.length === 0 || any.some((c) => holds(c, facts, trigger));
+  if (!all.every((c) => conditionHolds(c, facts, trigger))) return false;
+  return any.length === 0 || any.some((c) => conditionHolds(c, facts, trigger));
 }
 
 /** What is wrong with conditions for a trigger (empty = fine): unknown fields, operators that do not fit the field, values that are not offered. */

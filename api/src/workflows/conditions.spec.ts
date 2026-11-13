@@ -40,3 +40,30 @@ describe('workflow conditions', () => {
     expect(conditionProblems({ all: [{ field: 'part_id', op: 'eq' }] }, nc)).toEqual(['Part: say what to compare with']);
   });
 });
+
+describe('numbers and words (WF4)', () => {
+  const nc2 = triggerFor('ncr.created')!;
+  const f = { quantity_affected: 40, total_cost: '120.50', title: 'Bent brackets on line 3' };
+  it('compares numbers as numbers, never as words', () => {
+    expect(evaluateConditions({ all: [{ field: 'quantity_affected', op: 'gt', value: '9' }] }, f, nc2)).toBe(true);
+    expect(evaluateConditions({ all: [{ field: 'quantity_affected', op: 'lt', value: '100' }] }, f, nc2)).toBe(true);
+    expect(evaluateConditions({ all: [{ field: 'total_cost', op: 'gte', value: '120.5' }] }, f, nc2)).toBe(true);
+    expect(evaluateConditions({ all: [{ field: 'total_cost', op: 'lte', value: '100' }] }, f, nc2)).toBe(false);
+    expect(evaluateConditions({ all: [{ field: 'quantity_affected', op: 'eq', value: '40.0' }] }, f, nc2)).toBe(true);
+    expect(evaluateConditions({ all: [{ field: 'quantity_affected', op: 'gt', value: '9' }] }, { quantity_affected: null }, nc2)).toBe(false);
+  });
+
+  it('searches words ignoring case', () => {
+    expect(evaluateConditions({ all: [{ field: 'title', op: 'contains', value: 'LINE 3' }] }, f, nc2)).toBe(true);
+    expect(evaluateConditions({ all: [{ field: 'title', op: 'not_contains', value: 'scratch' }] }, f, nc2)).toBe(true);
+    expect(evaluateConditions({ all: [{ field: 'title', op: 'not_contains', value: 'scratch' }] }, { title: null }, nc2)).toBe(true);
+    expect(evaluateConditions({ all: [{ field: 'title', op: 'contains', value: 'bent' }] }, { title: null }, nc2)).toBe(false);
+  });
+
+  it('refuses tests that do not fit the field and numbers that are not numbers', () => {
+    expect(conditionProblems({ all: [{ field: 'quantity_affected', op: 'gt', value: 'lots' }] }, nc2)).toEqual(['Quantity affected: "lots" is not a number']);
+    expect(conditionProblems({ all: [{ field: 'source', op: 'contains', value: 'cust' }] }, nc2)).toEqual(['Source: "contains" applies to words only']);
+    expect(conditionProblems({ all: [{ field: 'title', op: 'gt', value: '3' }] }, nc2)).toEqual(['Title has no order, so "at least" / "at most" do not apply']);
+    expect(conditionProblems({ all: [{ field: 'quantity_affected', op: 'gte', value: '10' }, { field: 'title', op: 'contains', value: 'line' }] }, nc2)).toEqual([]);
+  });
+});

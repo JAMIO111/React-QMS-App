@@ -18,6 +18,22 @@ export function workflowRecordPath(kind, id) {
       return `/Audits/Findings/${id}`;
     case "supplier":
       return `/Suppliers/${id}`;
+    case "audit_record":
+      return `/Audits/Records/${id}`;
+    case "part":
+      return `/Parts/${id}`;
+    case "control_plan":
+      return `/Process-Control/Plans/${id}`;
+    case "spc_alert":
+      return "/Process-Control/Alerts";
+    case "goods_receipt":
+      return `/Supplier-Quality/Goods-Receipts/${id}`;
+    case "scar":
+      return `/Supplier-Quality/SCARs/${id}`;
+    case "risk":
+      return `/Risk/Register/${id}`;
+    case "quality_alert":
+      return `/Documentation/Quality-Alerts/${id}`;
     default:
       return null;
   }
@@ -39,21 +55,37 @@ export function dueWords(dueOn) {
 
 /* ---------------- The rule builder (WF2) ---------------- */
 
+/** The module a trigger belongs to, from the permission it needs (shown beside each trigger so the long list reads by area). */
+const AREAS = {
+  ncr: "Non-conformance", inspection: "Inspection", spc: "Process control", process_control: "Process control", master_data: "Master data",
+  calibration: "Calibration", capa: "8D", audits: "Audits", supplier_quality: "Supplier quality", receiving: "Supplier quality", risk: "Risk", documentation: "Documentation",
+};
+export const triggerArea = (trigger) => AREAS[String(trigger?.permission ?? "").split(".")[0]] ?? "";
+export const triggerOptions = (triggers) =>
+  [...triggers]
+    .map((t) => ({ value: t.eventType, label: t.label, hint: triggerArea(t), keywords: triggerArea(t) }))
+    .sort((a, b) => a.hint.localeCompare(b.hint) || a.label.localeCompare(b.label));
+
 /** The tests offered for a field, by its type (mirrors api/src/workflows/conditions.ts). */
 export const OP_LABELS = {
   eq: "is",
   ne: "is not",
   in: "is one of",
   not_in: "is none of",
+  gt: "is more than",
+  lt: "is less than",
   gte: "is at least",
   lte: "is at most",
+  contains: "contains",
+  not_contains: "does not contain",
   empty: "is empty",
   not_empty: "is filled in",
 };
 export const opsFor = (field) => {
   if (!field) return [];
   if (field.type === "ordered") return ["eq", "ne", "in", "not_in", "gte", "lte", "empty", "not_empty"];
-  if (field.type === "text") return ["eq", "ne", "in", "not_in", "empty", "not_empty"];
+  if (field.type === "text") return ["contains", "not_contains", "eq", "ne", "in", "not_in", "empty", "not_empty"];
+  if (field.type === "number") return ["gte", "lte", "gt", "lt", "eq", "ne", "empty", "not_empty"];
   return ["eq", "ne", "in", "not_in", "empty", "not_empty"];
 };
 export const isListOp = (op) => op === "in" || op === "not_in";
@@ -66,12 +98,15 @@ export const RECIPIENT_KINDS = [
   { value: "department", label: "Everyone in a department" },
 ];
 
+/** The test a condition starts with when its field is chosen. */
+export const defaultOp = (field) => (field?.type === "ordered" || field?.type === "number" ? "gte" : field?.type === "text" ? "contains" : "eq");
+export const isNumber = (v) => v !== "" && v !== null && v !== undefined && Number.isFinite(Number(String(v).trim()));
 export const newCondition = (trigger) => {
   const field = trigger?.fields?.[0];
-  return { field: field?.key ?? "", op: field?.type === "ordered" ? "gte" : "eq", value: "" };
+  return { field: field?.key ?? "", op: defaultOp(field), value: "" };
 };
 /** The record kinds a lot can be found on (a non-conformance's lot, the lot of the inspection a failed reading belongs to). */
-export const LOT_ENTITIES = ["nonconformance", "inspection_measurement"];
+export const LOT_ENTITIES = ["nonconformance", "ncr_disposition", "inspection_measurement"];
 export const canHoldLot = (trigger) => LOT_ENTITIES.includes(trigger?.entityType);
 
 export const newAction = (type = "notify") => {
@@ -191,7 +226,10 @@ const conditionProblems = (list, trigger, where) =>
     if (!field) return [`${where}condition ${i + 1}: choose what to test`];
     if (!needsValue(c.op)) return [];
     const v = cleanValue(c);
-    return (Array.isArray(v) ? v.length === 0 : !v) ? [`${where}condition ${i + 1}: say what ${field.label.toLowerCase()} to compare with`] : [];
+    if (Array.isArray(v) ? v.length === 0 : !v) return [`${where}condition ${i + 1}: say what ${field.label.toLowerCase()} to compare with`];
+    if (field.type === "number" && !(Array.isArray(v) ? v : [v]).every(isNumber)) return [`${where}condition ${i + 1}: ${field.label.toLowerCase()} is a number`];
+    if (!opsFor(field).includes(c.op)) return [`${where}condition ${i + 1}: that test does not apply to ${field.label.toLowerCase()}`];
+    return [];
   });
 
 const actionProblems = (a, n, trigger) => {

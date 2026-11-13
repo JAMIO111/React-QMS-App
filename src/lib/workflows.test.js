@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contentChanged, describeAction, describeCondition, draftFromRule, draftProblems, emptyDraft, opsFor, ruleContent, workflowRecordPath } from "./workflows";
+import { contentChanged, defaultOp, describeAction, describeCondition, draftFromRule, draftProblems, emptyDraft, opsFor, ruleContent, triggerOptions, workflowRecordPath } from "./workflows";
 
 const trigger = {
   eventType: "ncr.created",
@@ -84,5 +84,34 @@ describe("workflow rule builder helpers", () => {
     expect(draftProblems(draft, trigger)).toEqual(["Condition 1: say what severity to compare with", "Action 1: write the message"]);
     expect(draftProblems({ ...draftFromRule(rule) }, trigger)).toEqual([]);
     expect(draftProblems({ ...draftFromRule(rule), actions: [{ ...draftFromRule(rule).actions[0], dueDays: 400 }] }, trigger)).toEqual(["Action 1: due in 0 to 365 days"]);
+  });
+});
+
+describe("more triggers and tests (WF4)", () => {
+  const nc = { eventType: "ncr.created", label: "A non-conformance is raised", permission: "ncr.read", entityType: "nonconformance", fields: [
+    { key: "quantity_affected", label: "Quantity affected", type: "number" },
+    { key: "title", label: "Title", type: "text" },
+  ] };
+  it("offers number and word tests and starts each field on a sensible one", () => {
+    expect(opsFor(nc.fields[0])).toEqual(["gte", "lte", "gt", "lt", "eq", "ne", "empty", "not_empty"]);
+    expect(opsFor(nc.fields[1])[0]).toBe("contains");
+    expect(defaultOp(nc.fields[0])).toBe("gte");
+    expect(defaultOp(nc.fields[1])).toBe("contains");
+  });
+  it("describes them in words and asks for a real number", () => {
+    expect(describeCondition({ field: "quantity_affected", op: "gt", value: "100" }, nc)).toBe("Quantity affected is more than 100");
+    expect(describeCondition({ field: "title", op: "not_contains", value: "scrap" }, nc)).toBe("Title does not contain scrap");
+    const draft = { ...emptyDraft(), name: "x", trigger: "ncr.created", conditions: [{ field: "quantity_affected", op: "gte", value: "lots" }], actions: [{ type: "notify", recipients: [{ kind: "record_owner" }], message: "m" }] };
+    expect(draftProblems(draft, nc)).toEqual(["Condition 1: quantity affected is a number"]);
+    expect(draftProblems({ ...draft, conditions: [{ field: "title", op: "gt", value: "3" }] }, nc)).toEqual(["Condition 1: that test does not apply to title"]);
+  });
+  it("lists triggers by area and links the new kinds of record", () => {
+    const opts = triggerOptions([nc, { eventType: "risk.assessed", label: "A risk is assessed", permission: "risk.read" }, { eventType: "capa.closed", label: "An 8D is closed", permission: "capa.read" }]);
+    expect(opts.map((o) => o.hint)).toEqual(["8D", "Non-conformance", "Risk"]);
+    const P = "11111111-2222-3333-4444-555555555555";
+    expect(workflowRecordPath("scar", P)).toBe(`/Supplier-Quality/SCARs/${P}`);
+    expect(workflowRecordPath("goods_receipt", P)).toBe(`/Supplier-Quality/Goods-Receipts/${P}`);
+    expect(workflowRecordPath("spc_alert", P)).toBe("/Process-Control/Alerts");
+    expect(workflowRecordPath("risk", P)).toBe(`/Risk/Register/${P}`);
   });
 });

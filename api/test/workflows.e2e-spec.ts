@@ -245,4 +245,50 @@ describe('workflow rules', () => {
     const list = (await api().get('/api/v1/workflow-rules').set(h).expect(200)).body;
     expect(list.data.find((r: { id: string }) => r.id === ruleId)).toMatchObject({ status: 'retired', runs: 1 });
   });
+
+  it('offers the same triggers as the database, and tests numbers and words (WF4)', async () => {
+    const h = await as(ids.ownerA);
+    const api21 = (await api().get('/api/v1/workflow-triggers').set(h).expect(200)).body.data as { eventType: string; entityType: string; permission: string }[];
+    const db = (await admin.query(`select event_type, entity_type, permission from app.workflow_triggers() order by event_type`)).rows;
+    expect(api21.map((t) => [t.eventType, t.entityType, t.permission]).sort()).toEqual(db.map((r) => [r.event_type, r.entity_type, r.permission]));
+    const notify = [{ type: 'notify', recipients: [{ kind: 'record_owner' }], message: 'Big one' }];
+    const bad = await api()
+      .post('/api/v1/workflow-rules')
+      .set(h)
+      .send({ name: 'Big NCs', trigger: 'ncr.created', conditions: { all: [{ field: 'quantity_affected', op: 'gte', value: 'lots' }, { field: 'source', op: 'contains', value: 'cust' }] }, actions: notify })
+      .expect(409);
+    expect(bad.body.error.details.problems).toEqual(['Quantity affected: "lots" is not a number', 'Source: "contains" applies to words only']);
+    await api()
+      .post('/api/v1/workflow-rules')
+      .set(h)
+      .send({ name: 'Big NCs', trigger: 'ncr.created', conditions: { all: [{ field: 'quantity_affected', op: 'gte', value: '100' }, { field: 'title', op: 'contains', value: 'workflow' }] }, actions: notify })
+      .expect(201);
+  });
+
+  it('runs a rule when an SPC alert is raised (an event written by the new trigger)', async () => {
+    const h = await as(ids.ownerA);
+    const made = (
+      await api()
+        .post('/api/v1/workflow-rules')
+        .set(h)
+        .send({
+          name: 'Out-of-control points',
+          trigger: 'spc.alert.raised',
+          conditions: { all: [{ field: 'rule', op: 'in', value: ['we1'] }] },
+          actions: [{ type: 'notify', recipients: [{ kind: 'person', userId: ids.ownerA }], message: 'Look at the chart' }],
+        })
+        .expect(201)
+    ).body;
+    const part = (await admin.query(`insert into public.parts (organisation_id, part_number, name) values ($1, 'WF4-P', 'Shaft') returning id`, [ids.orgA])).rows[0].id;
+    for (const rule of ['we1', 'we4'])
+      await admin.query(
+        `insert into public.spc_alerts (organisation_id, part_id, part_number, characteristic_key, characteristic_name, operation_code, variant, rule, point_at, summary)
+         values ($1, $2, 'WF4-P', 'od', 'Outside diameter', 'OP-10', 'imr', $3, now(), 'Signal')`,
+        [ids.orgA, part, rule],
+      );
+    await worker.tick({ source: 'test', budgetMs: 30_000 });
+    const rule = (await api().get(`/api/v1/workflow-rules/${made.id}`).set(h).expect(200)).body;
+    expect(rule.runs).toHaveLength(1);
+    expect(rule.runs[0]).toMatchObject({ status: 'done', record: { kind: 'spc_alert', path: '/Process-Control/Alerts' } });
+  });
 });

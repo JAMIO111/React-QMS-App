@@ -12,7 +12,7 @@ import { useCustomFieldPeople } from "../../hooks/useCustomFields";
 import { useGaugeTypes } from "../../hooks/useCalibration";
 import { usePartFamilies } from "../../hooks/useProcessControl";
 import { useAllDepartments, useRoles, useSites } from "../../hooks/useQmsApi";
-import { OP_LABELS, RECIPIENT_KINDS, canHoldLot, isListOp, needsValue, newAction, newCondition, opsFor } from "../../lib/workflows";
+import { OP_LABELS, RECIPIENT_KINDS, canHoldLot, defaultOp, isListOp, triggerOptions, needsValue, newAction, newCondition, opsFor } from "../../lib/workflows";
 
 const box = "flex flex-col gap-3 rounded-xl border border-border-color bg-primary-bg p-3";
 
@@ -82,7 +82,7 @@ const Chips = ({ values, words, onRemove, disabled }) =>
     </ul>
   ) : null;
 
-/** What a condition compares with: a choice, several choices, a record, several records, or words. */
+/** What a condition compares with: a choice, several choices, a record, several records, a number, or words. */
 const ValueInput = ({ field, condition, onChange, labels, onLabel, disabled }) => {
   const list = isListOp(condition.op);
   const values = Array.isArray(condition.value) ? condition.value : condition.value ? [condition.value] : [];
@@ -147,10 +147,23 @@ const ValueInput = ({ field, condition, onChange, labels, onLabel, disabled }) =
       </div>
     );
   }
+  if (field.type === "number")
+    return (
+      <Field
+        label={label}
+        type="number"
+        step="any"
+        inputMode="decimal"
+        value={Array.isArray(condition.value) ? condition.value[0] ?? "" : condition.value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        required
+        disabled={disabled}
+      />
+    );
   return (
     <Field
       label={label}
-      hint={list ? "Separate values with commas" : undefined}
+      hint={list ? "Separate values with commas" : condition.op === "contains" || condition.op === "not_contains" ? "Capital letters do not matter" : undefined}
       value={Array.isArray(condition.value) ? condition.value.join(", ") : condition.value ?? ""}
       onChange={(e) => onChange(e.target.value)}
       required
@@ -171,7 +184,7 @@ const ConditionRow = ({ index, condition, trigger, onChange, onRemove, labels, o
           value={condition.field || null}
           onChange={(key) => {
             const f = trigger.fields.find((x) => x.key === key);
-            onChange({ field: key ?? "", op: f?.type === "ordered" ? "gte" : "eq", value: "" });
+            onChange({ field: key ?? "", op: defaultOp(f), value: "" });
           }}
           options={trigger.fields.map((f) => ({ value: f.key, label: f.label }))}
           required
@@ -424,7 +437,8 @@ const RuleBuilder = ({ draft, setDraft, triggers, labels, onLabel, disabled }) =
           label="What starts the rule"
           value={draft.trigger || null}
           onChange={changeTrigger}
-          options={triggers.map((t) => ({ value: t.eventType, label: t.label }))}
+          options={triggerOptions(triggers)}
+          sort={false}
           required
           disabled={disabled}
         />

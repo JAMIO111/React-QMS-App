@@ -31,7 +31,7 @@ BEGIN
       FROM public.organisation_users ou WHERE ou.organisation_id = org AND ou.user_id IN (bob, cat);
 
   -- ---- the catalogue ----
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.workflow_triggers()), 8::bigint, 'eight things can start a rule');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.workflow_triggers()) >= 8, true, 'the first eight things (and more since WF4) can start a rule');
 
   -- ---- writing a rule ----
   PERFORM pg_temp.login(cat);

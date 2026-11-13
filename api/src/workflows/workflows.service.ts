@@ -40,7 +40,7 @@ function recipientsOf(a: Action | InnerAction): Recipient[] {
 }
 
 /** The record kinds a lot can be found on: a non-conformance's lot, or the lot of the inspection a failed reading belongs to. */
-const LOT_TRIGGERS = new Set(['nonconformance', 'inspection_measurement']);
+const LOT_TRIGGERS = new Set(['nonconformance', 'ncr_disposition', 'inspection_measurement']);
 
 /** Workflow rules and tasks (WF1). Rules are written by `app.save_workflow_rule`; what they test and do is checked here against the catalogue first. */
 @Injectable()

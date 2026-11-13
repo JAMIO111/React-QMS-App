@@ -204,6 +204,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await competence({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
   await documentControl({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
   await riskAndReview({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
+  await workflowsAndReminders({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -1568,3 +1569,101 @@ async function riskAndReview({ browser, page, stack, APP, orgName, see, shot, st
   if (!mr || mr.status !== 'completed' || mr.reviewed !== 12 || mr.action !== 'done' || mr.told !== 1) throw new Error(`the review was not held end to end: ${JSON.stringify(mr)}`);
 }
 
+
+/**
+ * The background worker and workflow rules (docs/workflow-engine-plan.md, WX): the owner writes a rule in Settings → Workflows ("when an inspection reading
+ * fails, give Colin a task"), a failed reading is recorded, the worker runs the rule once, Colin closes the task from My tasks, the rule shows what it did;
+ * then Colin is given a risk action due tomorrow and the daily reminder lists it for him.
+ */
+async function workflowsAndReminders({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }) {
+  const org = (await stack.admin.query(`select o.id, (select id from public.sites where organisation_id = o.id limit 1) as site from public.organisations o where o.name = $1`, [orgName])).rows[0];
+  const ownerId = (await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email])).rows[0].id;
+  const colinId = (await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [colleague.email])).rows[0].id;
+  const api = apiAs(stack, ownerId, owner.email, org.id);
+
+  step('owner writes a workflow rule in Settings → Workflows: when an inspection reading fails, give Colin a task');
+  await page.goto(`${APP}/Settings/Workflows`);
+  await see(page.getByRole('heading', { level: 1, name: 'Workflows' }));
+  await page.getByRole('link', { name: /New rule/ }).click();
+  await page.getByRole('textbox', { name: /^Name/ }).fill('Failed reading at the cell');
+  await page.getByRole('combobox', { name: /^What starts the rule/ }).click();
+  await page.getByRole('option', { name: 'An inspection reading fails' }).click();
+  const action = page.getByRole('listitem', { name: 'Action 1' });
+  await action.getByRole('button', { name: 'Give a task' }).click();
+  await action.getByRole('combobox', { name: /^Who gets the task/ }).click();
+  await page.getByRole('option', { name: 'A person' }).click();
+  await action.getByRole('combobox', { name: /^Person/ }).click();
+  await page.getByRole('option', { name: 'Colin Colleague' }).click();
+  await action.getByRole('textbox', { name: /^Task/ }).fill('Check the gauge and the last parts made');
+  await action.getByRole('spinbutton', { name: 'Due in (days)' }).fill('1');
+  await shot(page, 'b0-workflow-rule-builder');
+  await page.getByRole('button', { name: 'Save and turn on' }).click();
+  await page.waitForURL(/\/Settings\/Workflows\/[0-9a-f-]{36}$/);
+  const ruleUrl = page.url();
+  await see(page.getByRole('heading', { level: 1, name: 'Failed reading at the cell' }));
+  await see(page.getByText('It has not run yet.'));
+
+  step('Colin is given a risk action due tomorrow; then the worker runs: today\'s reminders, and the rule engine starts reading events');
+  // Reminders go out once a day per organisation, at its reminder time (midnight here, so the journey does not depend on the clock).
+  const risk = (await stack.admin.query(`select id from public.risks where organisation_id = $1 order by created_at limit 1`, [org.id])).rows[0];
+  const tomorrow = new Date(Date.now() + 86400_000).toISOString().slice(0, 10);
+  await api('POST', `/risks/${risk.id}/actions`, { description: 'Fit the second deburring cell', ownerId: colinId, dueDate: tomorrow });
+  await stack.admin.query(`update public.organisation_settings set reminder_time = '00:00' where organisation_id = $1`, [org.id]);
+  await stack.tick(); // the rule engine reads the events written from its first read onwards
+  const digests = (await stack.admin.query(`select due_soon, overdue from public.reminder_digests where organisation_id = $1 and user_id = $2`, [org.id, colinId])).rows;
+  log(`digests: ${JSON.stringify(digests)}`);
+  if (digests.length !== 1 || digests[0].due_soon < 1) throw new Error('Colin did not get one reminder digest with the action');
+
+  step('a reading fails at the lathe');
+  const part = (await stack.admin.query(`select id from public.parts where organisation_id = $1 and part_number = 'JRN-100'`, [org.id])).rows[0];
+  const machine = (await stack.admin.query(`select id from public.machines where organisation_id = $1 and code = 'CNC-J1'`, [org.id])).rows[0];
+  const inspection = await api('POST', '/inspections', { siteId: org.site, partId: part.id, operationCode: 'OP-10', machineId: machine.id, triggerType: 'manual' });
+  const requirement = inspection.requirements.find((r) => r.characteristicKey === 'VISUAL') ?? inspection.requirements[0];
+  await api('POST', `/inspections/${inspection.id}/samples`, { readings: [{ requirementId: requirement.id, valuePass: false }] });
+
+  step('the worker runs the rule once: Colin has one task, and another tick gives him no second one');
+  const first = await stack.tick();
+  log(`tick: ${JSON.stringify(first.steps.map((s) => [s.name, s.ok]))}`);
+  await stack.tick();
+  const tasks = (await stack.admin.query(`select reference, status from public.workflow_tasks where organisation_id = $1 and assignee_user_id = $2`, [org.id, colinId])).rows;
+  log(`tasks: ${JSON.stringify(tasks)}`);
+  if (tasks.length !== 1 || tasks[0].status !== 'open') throw new Error('the rule did not give Colin exactly one task');
+
+  step('Colin opens My tasks and marks the task done');
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const colin = await ctx.newPage();
+  colin.setDefaultTimeout(15000);
+  watch(colin, 'colin');
+  await signIn(colin, APP, colleague.email);
+  await see(colin.getByRole('heading', { level: 1, name: /good (morning|afternoon|evening), Colin/i }));
+  await colin.goto(`${APP}/Tasks`);
+  await see(colin.getByRole('heading', { level: 1, name: 'My tasks' }));
+  const list = colin.getByRole('list', { name: 'My tasks' });
+  await see(list.getByText('Check the gauge and the last parts made'));
+  await see(list.getByText(/from the rule “Failed reading at the cell”/));
+  await shot(colin, 'b1-my-tasks');
+  await list.getByRole('button', { name: 'Mark done: Check the gauge and the last parts made' }).click();
+  const done = colin.getByRole('dialog', { name: 'Mark the task done' });
+  await done.getByLabel(/What was done/).fill('Gauge checked, last ten parts re-inspected: all good');
+  await done.getByRole('button', { name: 'Mark done' }).click();
+  await see(colin.getByText('No task is waiting for you.'));
+  for (let i = 0; i < 20; i++) {
+    const t = (await stack.admin.query(`select status from public.workflow_tasks where organisation_id = $1 and assignee_user_id = $2`, [org.id, colinId])).rows[0];
+    if (t.status === 'done') break;
+    if (i === 19) throw new Error('the task was not closed');
+    await new Promise((r) => setTimeout(r, 250));
+  }
+
+  step('the owner sees what the rule did, for which record, at which version');
+  await page.goto(ruleUrl);
+  const runs = page.getByRole('list', { name: 'Runs' });
+  await see(runs.getByText(/version 1 · Done/));
+  await see(runs.getByText(/1: task TSK-/));
+  await shot(page, 'b2-workflow-rule-runs');
+
+  step('Colin opens My reminders: the risk action is due soon');
+  await colin.goto(`${APP}/Reminders`);
+  await see(colin.getByRole('list', { name: 'Due soon' }).getByText(/Fit the second deburring cell/));
+  await shot(colin, 'b3-reminders');
+  await ctx.close();
+}

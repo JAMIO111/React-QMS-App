@@ -260,8 +260,11 @@ async function startStack({ appUrl, log = console.log }) {
   await api.init();
   await api.listen(PORTS.api, '127.0.0.1');
   const fake = await startFakeSupabase(admin, stripe, log, storage);
+  const { WorkerService } = require('../../api/dist/worker/worker.service');
+  // One worker tick, as pg_cron would call it every minute in production.
+  const tick = (budgetMs = 30000) => nest.get(WorkerService).tick({ source: 'manual', budgetMs });
   return {
-    admin, api, stripe, erp, passwords: fake.passwords, ports: PORTS, sign,
+    admin, api, stripe, erp, passwords: fake.passwords, ports: PORTS, sign, tick,
     stop: async () => { await new Promise((r) => fake.server.close(r)); await new Promise((r) => erp.server.close(r)); await api.close(); await admin.end(); },
   };
 }

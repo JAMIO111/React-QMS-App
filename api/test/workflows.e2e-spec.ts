@@ -189,6 +189,51 @@ describe('workflow rules', () => {
     expect(cancelled.status).toBe('cancelled');
   });
 
+  it('holds the lot at once and, a day later, tells someone if the NC is still open (WF3)', async () => {
+    const h = await as(ids.ownerA);
+    // A lot can only be held for a record that names one.
+    await api()
+      .post('/api/v1/workflow-rules')
+      .set(h)
+      .send({ name: 'Wrong', trigger: 'capa.created', actions: [{ type: 'hold_lot', reason: 'Hold it' }] })
+      .expect(409);
+    const rule = (
+      await api()
+        .post('/api/v1/workflow-rules')
+        .set(h)
+        .send({
+          name: 'Hold and chase',
+          trigger: 'ncr.created',
+          conditions: { all: [{ field: 'severity', op: 'eq', value: 'minor' }] },
+          actions: [
+            { type: 'hold_lot', reason: 'Suspect material' },
+            { type: 'later', afterDays: 1, conditions: { all: [{ field: 'stage', op: 'ne', value: 'closed' }] }, actions: [{ type: 'notify', recipients: [{ kind: 'person', userId: ids.inspectorA }], message: 'Still open after a day' }] },
+          ],
+        })
+        .expect(201)
+    ).body;
+    const part = (await admin.query(`insert into public.parts (organisation_id, part_number, name) values ($1, 'WF3-P', 'Bracket') returning id`, [ids.orgA])).rows[0].id;
+    const lot = (await admin.query(`insert into public.lots (organisation_id, lot_number, part_id, origin) values ($1, 'WF3-L1', $2, 'produced') returning id`, [ids.orgA, part])).rows[0].id;
+    const ncr = await raiseNc('WF-NC-3', 'minor');
+    await admin.query(`update public.nonconformances set part_id = $2, lot_id = $3 where id = $1`, [ncr, part, lot]);
+
+    await worker.tick({ source: 'test', budgetMs: 30_000 });
+    expect((await admin.query(`select status, updated_by from public.lots where id = $1`, [lot])).rows[0]).toEqual({ status: 'on_hold', updated_by: ids.ownerA });
+    const timer = (await admin.query(`select id, run_at from app.worker_jobs where kind = 'workflow.timer' and payload ->> 'index' = '1' order by created_at desc limit 1`)).rows[0];
+    expect(new Date(timer.run_at).getTime()).toBeGreaterThan(Date.now() + 23 * 60 * 60 * 1000);
+    let detail = (await api().get(`/api/v1/workflow-rules/${rule.id}`).set(h).expect(200)).body;
+    expect(detail.runs[0].results['1']).toMatchObject({ waiting: true });
+
+    // The day has passed.
+    await admin.query(`update app.worker_jobs set run_at = now() where id = $1`, [timer.id]);
+    await worker.tick({ source: 'test', budgetMs: 30_000 });
+    const told = (await admin.query(`select count(*)::int as n from public.workflow_notices where run_id = $1 and action_index = 20 and user_id = $2`, [detail.runs[0].id, ids.inspectorA])).rows[0].n;
+    expect(told).toBe(1);
+    detail = (await api().get(`/api/v1/workflow-rules/${rule.id}`).set(h).expect(200)).body;
+    expect(detail.runs[0].results['1']).toMatchObject({ fired: true, still: true });
+    await api().post(`/api/v1/workflow-rules/${rule.id}/status`).set(h).send({ status: 'retired', reason: 'Test finished' }).expect(200);
+  });
+
   it('pauses and retires a rule', async () => {
     const h = await as(ids.ownerA);
     expect((await api().post(`/api/v1/workflow-rules/${ruleId}/status`).set(h).send({ status: 'paused' }).expect(200)).body.status).toBe('paused');

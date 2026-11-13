@@ -32,6 +32,7 @@ const NC_STAGE = o(
 );
 const NC_FIELDS: TriggerField[] = [
   { key: 'severity', label: 'Severity', type: 'ordered', options: SEVERITY },
+  { key: 'stage', label: 'Stage', type: 'enum', options: NC_STAGE },
   { key: 'source', label: 'Source', type: 'enum', options: NC_SOURCE },
   { key: 'category', label: 'Category (code)', type: 'text' },
   { key: 'site_id', label: 'Site', type: 'ref', ref: 'site' },

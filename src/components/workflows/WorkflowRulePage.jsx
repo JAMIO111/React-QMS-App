@@ -50,6 +50,15 @@ const runSummary = (run) =>
     .sort(([a], [b]) => Number(a) - Number(b))
     .map(([i, r]) => {
       const n = Number(i) + 1;
+      if (r.waiting) return `${n}: waiting until ${when(r.due)}`;
+      if (r.fired) {
+        if (r.stopped) return `${n}: timer stopped — ${r.stopped.toLowerCase()}`;
+        if (r.still === false) return `${n}: timer ran; no longer needed`;
+        if (r.error) return `${n}: timer failed — ${r.error}`;
+        return `${n}: timer ran; ${(r.results ?? []).length} thing${(r.results ?? []).length === 1 ? "" : "s"} done`;
+      }
+      if (r.held) return `${n}: lot ${r.lot} put on hold`;
+      if (r.refused) return `${n}: lot ${r.lot ?? ""} not held — ${r.refused}`;
       if (r.reference) return `${n}: task ${r.reference}${r.created === false ? " (already given)" : ""}`;
       if (typeof r.told === "number") return `${n}: told ${r.told}${r.skipped ? `, ${r.skipped} may not read it` : ""}`;
       if (r.skipped) return `${n}: ${typeof r.skipped === "string" ? r.skipped.toLowerCase() : "skipped"}`;
@@ -217,7 +226,7 @@ const WorkflowRulePage = () => {
         )}
       </MenuCard>
 
-      {canManage && !retired && <RuleTest draft={draft} problems={problems} labels={labels} />}
+      {canManage && !retired && <RuleTest draft={draft} problems={problems} labels={labels} trigger={trigger} />}
 
       {!isNew && (
         <>
@@ -270,7 +279,7 @@ const WorkflowRulePage = () => {
                   )}
                   <ul className="list-disc pl-5 text-primary-text">
                     {v.actions.map((a, i) => (
-                      <li key={i}>{describeAction(a, labels)}</li>
+                      <li key={i}>{describeAction(a, labels, triggerOf(v.trigger))}</li>
                     ))}
                   </ul>
                 </li>

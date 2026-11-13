@@ -22,13 +22,24 @@ export const TaskAction = z
     dueDays: z.number().int().min(0).max(365).optional(),
   })
   .strict();
-export const Action = z.discriminatedUnion('type', [NotifyAction, TaskAction]);
-export type Action = z.infer<typeof Action>;
+/** Put the lot of the record on hold, with the authority of the person who saved the rule version (WF3). */
+export const HoldLotAction = z.object({ type: z.literal('hold_lot'), reason: z.string().trim().min(3).max(500) }).strict();
 
 const ConditionSchema = z
   .object({ field: z.string().min(1).max(60), op: z.enum(OPS as [Op, ...Op[]]), value: z.union([z.string().max(200), z.array(z.string().max(200)).max(50)]).optional() })
   .strict();
 export const ConditionsSchema = z.object({ all: z.array(ConditionSchema).max(20).optional(), any: z.array(ConditionSchema).max(20).optional() }).strict();
+
+/** What a timer may do once it runs: tell people, give a task, hold the lot (never another timer). */
+export const InnerAction = z.discriminatedUnion('type', [NotifyAction, TaskAction, HoldLotAction]);
+export type InnerAction = z.infer<typeof InnerAction>;
+
+/** After N days, if the record still meets these conditions (read again then), do these (WF3: escalation). */
+export const LaterAction = z
+  .object({ type: z.literal('later'), afterDays: z.number().int().min(1).max(365), conditions: ConditionsSchema.default({ all: [] }), actions: z.array(InnerAction).min(1).max(5) })
+  .strict();
+export const Action = z.discriminatedUnion('type', [NotifyAction, TaskAction, HoldLotAction, LaterAction]);
+export type Action = z.infer<typeof Action>;
 
 export const CreateRuleBody = z
   .object({

@@ -12,7 +12,7 @@ import { useCustomFieldPeople } from "../../hooks/useCustomFields";
 import { useGaugeTypes } from "../../hooks/useCalibration";
 import { usePartFamilies } from "../../hooks/useProcessControl";
 import { useAllDepartments, useRoles, useSites } from "../../hooks/useQmsApi";
-import { OP_LABELS, RECIPIENT_KINDS, isListOp, needsValue, newAction, newCondition, opsFor } from "../../lib/workflows";
+import { OP_LABELS, RECIPIENT_KINDS, canHoldLot, isListOp, needsValue, newAction, newCondition, opsFor } from "../../lib/workflows";
 
 const box = "flex flex-col gap-3 rounded-xl border border-border-color bg-primary-bg p-3";
 
@@ -246,23 +246,102 @@ const RecipientRow = ({ recipient, onChange, onRemove, allowGroups, labels, onLa
   );
 };
 
-const ActionCard = ({ index, action, onChange, onRemove, labels, onLabel, disabled, canRemove }) => {
-  const n = index + 1;
+/** "After N days, if the record still …, do these": the conditions are read again when the time comes. */
+const LaterBody = ({ action, n, onChange, trigger, labels, onLabel, disabled }) => (
+  <div className="flex flex-col gap-3">
+    <Field
+      className="w-40"
+      label="After (days)"
+      type="number"
+      min={1}
+      max={365}
+      value={action.afterDays ?? ""}
+      onChange={(e) => onChange({ ...action, afterDays: e.target.value === "" ? "" : Number(e.target.value) })}
+      required
+      disabled={disabled}
+    />
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <p className="text-sm font-medium text-secondary-text">If the record then still meets{action.conditions.length ? "" : " (no conditions: always)"}</p>
+      {action.conditions.length > 1 && (
+        <SlidingToggle
+          ariaLabel={`How action ${n}'s conditions combine`}
+          options={[
+            { value: "all", label: "All of these", disabled },
+            { value: "any", label: "Any of these", disabled },
+          ]}
+          value={action.match}
+          onChange={(match) => onChange({ ...action, match })}
+        />
+      )}
+    </div>
+    <ol className="flex flex-col gap-2" aria-label={`Action ${n}: still true`}>
+      {action.conditions.map((c, i) => (
+        <ConditionRow
+          key={i}
+          index={i}
+          condition={c}
+          trigger={trigger}
+          labels={labels}
+          onLabel={onLabel}
+          disabled={disabled}
+          onChange={(next) => onChange({ ...action, conditions: action.conditions.map((x, j) => (j === i ? next : x)) })}
+          onRemove={() => onChange({ ...action, conditions: action.conditions.filter((_, j) => j !== i) })}
+        />
+      ))}
+    </ol>
+    {!disabled && action.conditions.length < 20 && (
+      <CTAButton type="neutral" className="self-start" icon={PlusIcon} onClick={() => onChange({ ...action, conditions: [...action.conditions, newCondition(trigger)] })}>
+        Add a condition
+      </CTAButton>
+    )}
+    <p className="text-sm font-medium text-secondary-text">Then</p>
+    <ol className="flex flex-col gap-2">
+      {action.actions.map((inner, j) => (
+        <ActionCard
+          key={j}
+          index={j}
+          parent={n}
+          action={inner}
+          trigger={trigger}
+          labels={labels}
+          onLabel={onLabel}
+          disabled={disabled}
+          canRemove={action.actions.length > 1}
+          onChange={(next) => onChange({ ...action, actions: action.actions.map((x, k) => (k === j ? next : x)) })}
+          onRemove={() => onChange({ ...action, actions: action.actions.filter((_, k) => k !== j) })}
+        />
+      ))}
+    </ol>
+    {!disabled && action.actions.length < 5 && (
+      <CTAButton type="neutral" className="self-start" icon={PlusIcon} onClick={() => onChange({ ...action, actions: [...action.actions, newAction("notify")] })}>
+        Add something to do then
+      </CTAButton>
+    )}
+  </div>
+);
+
+const ActionCard = ({ index, action, onChange, onRemove, labels, onLabel, disabled, canRemove, trigger, parent }) => {
+  const n = parent ? `${parent}.${index + 1}` : `${index + 1}`;
+  const types = [
+    { value: "notify", label: "Tell people", disabled },
+    { value: "task", label: "Give a task", disabled },
+    canHoldLot(trigger) && { value: "hold_lot", label: "Hold the lot", disabled },
+    !parent && trigger && { value: "later", label: "Later, if still…", disabled },
+  ].filter(Boolean);
   return (
     <li className={box} aria-label={`Action ${n}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <SlidingToggle
-          ariaLabel={`What action ${n} does`}
-          options={[
-            { value: "notify", label: "Tell people", disabled },
-            { value: "task", label: "Give a task", disabled },
-          ]}
-          value={action.type}
-          onChange={(type) => onChange(newAction(type))}
-        />
+        <SlidingToggle ariaLabel={`What action ${n} does`} options={types} value={action.type} onChange={(type) => onChange(newAction(type))} />
         {canRemove && !disabled && <CTAButton type="neutral" onClick={onRemove} aria-label={`Remove action ${n}`} icon={Trash2Icon} text="Remove" />}
       </div>
-      {action.type === "notify" ? (
+      {action.type === "hold_lot" ? (
+        <>
+          <Field label="Why the lot is held" value={action.reason} onChange={(e) => onChange({ ...action, reason: e.target.value })} required maxLength={500} disabled={disabled}
+            hint="The lot named on the record is put on hold, with the authority of whoever saves this version of the rule. If they may no longer hold lots there, nothing is held and they are told." />
+        </>
+      ) : action.type === "later" ? (
+        <LaterBody action={action} n={n} onChange={onChange} trigger={trigger} labels={labels} onLabel={onLabel} disabled={disabled} />
+      ) : action.type === "notify" ? (
         <>
           <div className="flex flex-col gap-2">
             {action.recipients.map((r, i) => (
@@ -318,10 +397,17 @@ const RuleBuilder = ({ draft, setDraft, triggers, labels, onLabel, disabled }) =
   const trigger = triggers.find((t) => t.eventType === draft.trigger);
   const [confirmTrigger, setConfirmTrigger] = useState(null);
   const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
+  // Conditions test the old record, so a new trigger clears them (the rule's and its timers').
+  const withTrigger = (eventType) => ({
+    trigger: eventType,
+    conditions: [],
+    actions: draft.actions.map((a) => (a.type === "later" ? { ...a, conditions: [] } : a)),
+  });
+  const hasConditions = draft.conditions.length > 0 || draft.actions.some((a) => a.type === "later" && a.conditions.length > 0);
   const changeTrigger = (eventType) => {
     if (!eventType || eventType === draft.trigger) return;
-    if (draft.conditions.length && draft.trigger) setConfirmTrigger(eventType);
-    else set({ trigger: eventType, conditions: [] });
+    if (hasConditions && draft.trigger) setConfirmTrigger(eventType);
+    else set(withTrigger(eventType));
   };
   return (
     <div className="flex flex-col gap-5">
@@ -348,7 +434,7 @@ const RuleBuilder = ({ draft, setDraft, triggers, labels, onLabel, disabled }) =
             role="alert"
             action={
               <span className="flex gap-2">
-                <CTAButton type="secondary" onClick={() => { set({ trigger: confirmTrigger, conditions: [] }); setConfirmTrigger(null); }}>
+                <CTAButton type="secondary" onClick={() => { set(withTrigger(confirmTrigger)); setConfirmTrigger(null); }}>
                   Change it
                 </CTAButton>
                 <CTAButton type="neutral" onClick={() => setConfirmTrigger(null)}>
@@ -418,6 +504,7 @@ const RuleBuilder = ({ draft, setDraft, triggers, labels, onLabel, disabled }) =
               onLabel={onLabel}
               disabled={disabled}
               canRemove={draft.actions.length > 1}
+              trigger={trigger}
               onChange={(next) => set({ actions: draft.actions.map((x, j) => (j === i ? next : x)) })}
               onRemove={() => set({ actions: draft.actions.filter((_, j) => j !== i) })}
             />

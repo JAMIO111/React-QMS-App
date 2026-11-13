@@ -3,7 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { PermanentJobError, WorkerJobRegistry } from '../worker/job-registry';
 import { triggerFor } from './catalogue';
 import { Conditions, evaluateConditions } from './conditions';
-import type { Action } from './workflows.schemas';
+import type { Action, InnerAction } from './workflows.schemas';
 
 export interface ConsumeResult {
   events: number;
@@ -35,13 +35,31 @@ export class WorkflowEngine implements OnModuleInit {
       const action = job.payload.action as Action | undefined;
       if (!runId || !Number.isInteger(index) || !action) throw new PermanentJobError('The job does not say which run and action');
       try {
-        const result = await this.perform(runId, index, action, job.correlationId);
+        const result = await this.perform(runId, index, action, job.correlationId, undefined, job.organisationId);
         await this.done(runId, index, true, result, job.correlationId);
         return result;
       } catch (error) {
         // The last attempt records the failure on the run, so the run log shows it.
         if (error instanceof PermanentJobError || job.attempt >= job.maxAttempts) {
           await this.done(runId, index, false, { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' }, job.correlationId).catch(() => undefined);
+        }
+        throw error;
+      }
+    });
+
+    // A timer (WF3) runs at its time: it reads the record again, and does its actions only while the rule is on and the conditions still hold.
+    this.jobs.register('workflow.timer', async (job) => {
+      const runId = String(job.payload.runId ?? '');
+      const index = Number(job.payload.index);
+      const action = job.payload.action as Action | undefined;
+      if (!runId || !Number.isInteger(index) || action?.type !== 'later') throw new PermanentJobError('The job does not say which run and timer');
+      try {
+        const result = await this.fire(runId, index, action, job.correlationId);
+        await this.done(runId, index, !result.failed, result, job.correlationId);
+        return result;
+      } catch (error) {
+        if (error instanceof PermanentJobError || job.attempt >= job.maxAttempts) {
+          await this.done(runId, index, false, { fired: true, error: error instanceof Error ? error.message.slice(0, 300) : 'failed' }, job.correlationId).catch(() => undefined);
         }
         throw error;
       }
@@ -129,23 +147,40 @@ export class WorkflowEngine implements OnModuleInit {
     );
   }
 
-  private perform(runId: string, index: number, action: Action, correlationId: string): Promise<Record<string, unknown>> {
+  /** One action of a run. `facts` (a timer's fresh reading of the record) replaces the facts recorded on the run. */
+  private perform(runId: string, index: number, action: Action | InnerAction, correlationId: string, facts?: Record<string, unknown>, organisationId?: string | null): Promise<Record<string, unknown>> {
+    const f = facts ? JSON.stringify(facts) : null;
     return this.database.asApi(
       async (c) => {
         if (action.type === 'notify') {
-          return (await c.query(`select app.system_workflow_notify($1, $2, $3::jsonb, $4) as r`, [runId, index, JSON.stringify(action.recipients), action.message])).rows[0].r;
+          return (await c.query(`select app.system_workflow_notify($1, $2, $3::jsonb, $4, $5::jsonb) as r`, [runId, index, JSON.stringify(action.recipients), action.message, f])).rows[0].r;
         }
         if (action.type === 'task') {
           return (
-            await c.query(`select app.system_workflow_task($1, $2, $3::jsonb, $4, $5, $6) as r`, [
+            await c.query(`select app.system_workflow_task($1, $2, $3::jsonb, $4, $5, $6, $7::jsonb) as r`, [
               runId,
               index,
               JSON.stringify(action.assignee),
               action.title,
               action.detail ?? null,
               action.dueDays ?? null,
+              f,
             ])
           ).rows[0].r;
+        }
+        if (action.type === 'hold_lot') {
+          return (await c.query(`select app.system_workflow_hold_lot($1, $2, $3, $4::jsonb) as r`, [runId, index, action.reason, f])).rows[0].r;
+        }
+        if (action.type === 'later') {
+          // Queue the timer once (the key is the run and the action); it runs after the days given.
+          const due = new Date(Date.now() + action.afterDays * 24 * 60 * 60 * 1000);
+          await c.query(`select app.system_enqueue_job('workflow.timer', $1::jsonb, $2, $3, $4::timestamptz)`, [
+            JSON.stringify({ runId, index, action }),
+            organisationId ?? null,
+            `wf:timer:${runId}:${index}`,
+            due.toISOString(),
+          ]);
+          return { waiting: true, due: due.toISOString() };
         }
         throw new PermanentJobError(`Unknown action ${(action as { type?: string }).type}`);
       },
@@ -154,9 +189,35 @@ export class WorkflowEngine implements OnModuleInit {
     );
   }
 
+  /** A timer's time has come: read the record again; if the rule is on and the conditions still hold, do the inner actions (each at its own place, once). */
+  private async fire(runId: string, index: number, action: Extract<Action, { type: 'later' }>, correlationId: string) {
+    const now = (await this.database.asApi(async (c) => (await c.query(`select app.system_workflow_timer_facts($1) as t`, [runId])).rows[0].t, correlationId, 'worker')) as {
+      active: boolean;
+      reason?: string;
+      eventType: string;
+      facts: Record<string, unknown> | null;
+    };
+    if (!now.active) return { fired: true, still: false, stopped: now.reason ?? 'The rule is off now' };
+    if (!now.facts) return { fired: true, still: false, stopped: 'The record is gone' };
+    if (!evaluateConditions(action.conditions, now.facts, triggerFor(now.eventType))) return { fired: true, still: false };
+    const results: Record<string, unknown>[] = [];
+    let failed = false;
+    for (const [j, inner] of action.actions.entries()) {
+      try {
+        const r = await this.perform(runId, 10 + index * 10 + j, inner, correlationId, now.facts);
+        if (r.refused) failed = true;
+        results.push(r);
+      } catch (error) {
+        failed = true;
+        results.push({ error: error instanceof Error ? error.message.slice(0, 300) : 'failed' });
+      }
+    }
+    return { fired: true, still: true, results, failed };
+  }
+
   private done(runId: string, index: number, ok: boolean, result: Record<string, unknown>, correlationId: string) {
     return this.database.asApi(
-      (c) => c.query(`select app.system_workflow_action_done($1, $2, $3, $4::jsonb)`, [runId, index, ok && !result.skipped, JSON.stringify(result)]),
+      (c) => c.query(`select app.system_workflow_action_done($1, $2, $3, $4::jsonb)`, [runId, index, ok && !result.skipped && !result.refused, JSON.stringify(result)]),
       correlationId,
       'worker',
     );

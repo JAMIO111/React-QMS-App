@@ -10,6 +10,7 @@ const NC = "31111111-2222-3333-4444-555555555555";
 const triggers = [
   {
     eventType: "ncr.created",
+    entityType: "nonconformance",
     label: "A non-conformance is raised",
     fields: [
       { key: "severity", label: "Severity", type: "ordered", options: [{ value: "minor", label: "Minor" }, { value: "major", label: "Major" }, { value: "critical", label: "Critical" }] },
@@ -119,6 +120,29 @@ describe("Settings → Workflows", () => {
       },
       expect.any(Object),
     );
+  });
+
+  it("adds a hold on the lot and a timer that chases if the NC is still not closed", async () => {
+    const user = userEvent.setup();
+    show("/Settings/Workflows/new");
+    await user.type(screen.getByLabelText("Name"), "Hold and chase");
+    await user.click(screen.getByLabelText("What starts the rule"));
+    await user.click(screen.getByRole("option", { name: "A non-conformance is raised" }));
+    const first = screen.getByRole("listitem", { name: "Action 1" });
+    await user.click(within(first).getByRole("button", { name: "Hold the lot" }));
+    await user.type(within(first).getByLabelText("Why the lot is held"), "Suspect material");
+    await user.click(screen.getByRole("button", { name: "Add an action" }));
+    const second = screen.getByRole("listitem", { name: "Action 2" });
+    await user.click(within(second).getByRole("button", { name: "Later, if still…" }));
+    const days = within(second).getByLabelText("After (days)");
+    await user.clear(days);
+    await user.type(days, "2");
+    await user.type(within(second).getByLabelText("Message"), "Still open");
+    await user.click(screen.getByRole("button", { name: "Save and turn on" }));
+    expect(mutate.mock.lastCall[0].body.actions).toEqual([
+      { type: "hold_lot", reason: "Suspect material" },
+      { type: "later", afterDays: 2, conditions: { all: [] }, actions: [{ type: "notify", recipients: [{ kind: "record_owner" }], message: "Still open" }] },
+    ]);
   });
 
   it("asks why when what a rule does changes, but not for a new name", async () => {

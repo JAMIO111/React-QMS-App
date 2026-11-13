@@ -20,6 +20,32 @@ const rule = {
   actions: [{ type: "task", assignee: { kind: "person", userId: U }, title: "Check", dueDays: 2 }],
 };
 
+describe("timers and holding a lot (WF3)", () => {
+  const nc = { ...trigger, entityType: "nonconformance", fields: [...trigger.fields, { key: "stage", label: "Stage", type: "enum", options: [{ value: "open", label: "Open" }, { value: "closed", label: "Closed" }] }] };
+  const later = {
+    type: "later",
+    afterDays: 3,
+    conditions: { all: [{ field: "stage", op: "ne", value: "closed" }] },
+    actions: [{ type: "notify", recipients: [{ kind: "record_owner" }], message: "Still open" }, { type: "hold_lot", reason: "Overdue" }],
+  };
+  it("describes a timer and a hold in words", () => {
+    expect(describeAction(later, {}, nc)).toBe("After 3 days if Stage is not Closed: Tell the record's owner: “Still open”; Put the lot on hold: “Overdue”");
+  });
+
+  it("round-trips a timer with its own conditions and actions", () => {
+    const rule = { ...{ name: "x", trigger: "ncr.created", conditions: { all: [] } }, actions: [later] };
+    expect(ruleContent(draftFromRule(rule)).actions).toEqual([later]);
+    expect(contentChanged(draftFromRule(rule), rule)).toBe(false);
+  });
+
+  it("asks for what a timer and a hold need, and refuses a hold where there is no lot", () => {
+    const draft = { ...draftFromRule({ name: "x", trigger: "ncr.created", conditions: {}, actions: [{ ...later, afterDays: 0, actions: [{ type: "hold_lot", reason: "" }] }] }) };
+    expect(draftProblems(draft, nc)).toEqual(["Action 1: wait 1 to 365 days", "Action 1.1: say why the lot is held"]);
+    const capa = { ...trigger, eventType: "capa.created", label: "An 8D is started", entityType: "capa" };
+    expect(draftProblems({ ...emptyDraft(), name: "x", trigger: "capa.created", actions: [{ type: "hold_lot", reason: "Hold" }] }, capa)).toEqual(["Action 1: “An 8D is started” names no lot to hold"]);
+  });
+});
+
 describe("workflow rule builder helpers", () => {
   it("links records only by known kind and id", () => {
     expect(workflowRecordPath("capa", P)).toBe(`/CAPA/${P}/d0`);

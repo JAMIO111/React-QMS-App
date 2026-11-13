@@ -15,7 +15,7 @@ const at = (iso) => new Date(iso).toLocaleString("en-GB", { day: "numeric", mont
  * Test the rule as it is on screen (saved or not) against a recent event: which conditions hold, and whom each action would reach. Nothing is saved or sent.
  * `problems` (from the builder) must be empty first.
  */
-const RuleTest = ({ draft, problems, labels }) => {
+const RuleTest = ({ draft, problems, labels, trigger }) => {
   const events = useWorkflowTestEvents(draft.trigger);
   const test = useTestWorkflowRule();
   const [eventId, setEventId] = useState(null);
@@ -102,8 +102,20 @@ const RuleTest = ({ draft, problems, labels }) => {
                   const notTold = a.people.filter((p) => !p.told);
                   return (
                     <li key={a.index} className="rounded-lg border border-border-color p-2">
-                      <p className="text-primary-text">{describeAction(content.actions[a.index], names)}</p>
-                      {!result.matched ? (
+                      <p className="text-primary-text">{describeAction(content.actions[a.index], names, trigger)}</p>
+                      {a.type === "later" ? (
+                        <p className="text-secondary-text">
+                          {!result.matched
+                            ? "Not started: the conditions do not hold."
+                            : `Would wait ${a.afterDays} day${a.afterDays === 1 ? "" : "s"}, then read the record again. As it is today, ${a.stillNow?.holds ? "it would go ahead" : "it would stop there"}${
+                                a.stillNow?.holds && a.inner?.length
+                                  ? `: ${a.inner.map((x) => (x.type === "hold_lot" ? "the lot would be held" : x.people.filter((p) => p.told).map((p) => p.name).join(", ") || "nobody")).join("; ")}`
+                                  : ""
+                              }.`}
+                        </p>
+                      ) : a.type === "hold_lot" ? (
+                        <p className="text-secondary-text">{result.matched ? "Would put the record's lot on hold (if it names one), with the authority of whoever saves this version." : "Not done: the conditions do not hold."}</p>
+                      ) : !result.matched ? (
                         <p className="text-secondary-text">Not done: the conditions do not hold.</p>
                       ) : told.length ? (
                         <p className="text-secondary-text">

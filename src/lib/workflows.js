@@ -70,8 +70,16 @@ export const newCondition = (trigger) => {
   const field = trigger?.fields?.[0];
   return { field: field?.key ?? "", op: field?.type === "ordered" ? "gte" : "eq", value: "" };
 };
-export const newAction = (type = "notify") =>
-  type === "task" ? { type: "task", assignee: { kind: "record_owner" }, title: "", detail: "", dueDays: "" } : { type: "notify", recipients: [{ kind: "record_owner" }], message: "" };
+/** The record kinds a lot can be found on (a non-conformance's lot, the lot of the inspection a failed reading belongs to). */
+export const LOT_ENTITIES = ["nonconformance", "inspection_measurement"];
+export const canHoldLot = (trigger) => LOT_ENTITIES.includes(trigger?.entityType);
+
+export const newAction = (type = "notify") => {
+  if (type === "task") return { type: "task", assignee: { kind: "record_owner" }, title: "", detail: "", dueDays: "" };
+  if (type === "hold_lot") return { type: "hold_lot", reason: "" };
+  if (type === "later") return { type: "later", afterDays: 3, match: "all", conditions: [], actions: [newAction("notify")] };
+  return { type: "notify", recipients: [{ kind: "record_owner" }], message: "" };
+};
 export const emptyDraft = () => ({ name: "", description: "", trigger: "", match: "all", conditions: [], actions: [newAction("notify")] });
 
 const valueWords = (field, v, labels = {}) => field?.options?.find((o) => o.value === v)?.label ?? (field?.type === "ref" ? labels[v] ?? "a record no longer listed" : v);
@@ -93,30 +101,46 @@ export function describeRecipient(r, labels = {}) {
   return "someone";
 }
 
-/** "Tell the record's owner and Ann Smith: “Have a look”" / "Give the record's owner a task: “Check” (due in 2 days)". */
-export function describeAction(a, labels = {}) {
+const days = (n) => `${n} day${Number(n) === 1 ? "" : "s"}`;
+const conditionsOf = (c) => [...(c?.all ?? []), ...(c?.any ?? [])];
+
+/** "Tell the record's owner and Ann Smith: “Have a look”" / "Give the record's owner a task: “Check” (due in 2 days)" / "Put the lot on hold" / a timer. */
+export function describeAction(a, labels = {}, trigger) {
   if (a.type === "task") {
-    const due = a.dueDays === 0 ? " (due the same day)" : a.dueDays ? ` (due in ${a.dueDays} day${a.dueDays === 1 ? "" : "s"})` : "";
+    const due = a.dueDays === 0 ? " (due the same day)" : a.dueDays ? ` (due in ${days(a.dueDays)})` : "";
     return `Give ${describeRecipient(a.assignee, labels)} a task: “${a.title}”${due}`;
+  }
+  if (a.type === "hold_lot") return `Put the lot on hold: “${a.reason}”`;
+  if (a.type === "later") {
+    const list = conditionsOf(a.conditions);
+    const still = list.length ? ` if ${a.conditions?.any?.length ? "any of: " : ""}${list.map((c) => describeCondition(c, trigger, labels)).join(a.conditions?.any?.length ? "; " : " and ")}` : "";
+    return `After ${days(a.afterDays)}${still}: ${a.actions.map((x) => describeAction(x, labels, trigger)).join("; ")}`;
   }
   return `Tell ${a.recipients.map((r) => describeRecipient(r, labels)).join(", ")}: “${a.message}”`;
 }
 
+const conditionsToDraft = (conditions) => {
+  const any = conditions?.any ?? [];
+  const all = conditions?.all ?? [];
+  const useAny = any.length > 0 && !all.length;
+  return { match: useAny ? "any" : "all", conditions: (useAny ? any : all).map((c) => ({ field: c.field, op: c.op, value: c.value ?? "" })) };
+};
+
+const actionToDraft = (a) => {
+  if (a.type === "task") return { type: "task", assignee: { ...a.assignee }, title: a.title ?? "", detail: a.detail ?? "", dueDays: a.dueDays ?? "" };
+  if (a.type === "hold_lot") return { type: "hold_lot", reason: a.reason ?? "" };
+  if (a.type === "later") return { type: "later", afterDays: a.afterDays ?? 1, ...conditionsToDraft(a.conditions), actions: (a.actions ?? []).map(actionToDraft) };
+  return { type: "notify", recipients: a.recipients.map((r) => ({ ...r })), message: a.message ?? "" };
+};
+
 /** A saved rule as the builder edits it. */
 export function draftFromRule(rule) {
-  const any = rule.conditions?.any ?? [];
-  const all = rule.conditions?.all ?? [];
   return {
     name: rule.name ?? "",
     description: rule.description ?? "",
     trigger: rule.trigger ?? "",
-    match: any.length && !all.length ? "any" : "all",
-    conditions: (any.length && !all.length ? any : all).map((c) => ({ field: c.field, op: c.op, value: c.value ?? "" })),
-    actions: (rule.actions ?? []).map((a) =>
-      a.type === "task"
-        ? { type: "task", assignee: { ...a.assignee }, title: a.title ?? "", detail: a.detail ?? "", dueDays: a.dueDays ?? "" }
-        : { type: "notify", recipients: a.recipients.map((r) => ({ ...r })), message: a.message ?? "" },
-    ),
+    ...conditionsToDraft(rule.conditions),
+    actions: (rule.actions ?? []).map(actionToDraft),
   };
 }
 
@@ -127,25 +151,29 @@ const cleanValue = (c) => {
   return v === undefined || v === null ? "" : String(v).trim();
 };
 
-/** What the API takes: trigger, conditions, actions (name and description added by the caller). */
-export function ruleContent(draft) {
-  const conditions = draft.conditions.map((c) => {
+const conditionsContent = (match, list) => {
+  const conditions = list.map((c) => {
     const value = cleanValue(c);
     return value === undefined ? { field: c.field, op: c.op } : { field: c.field, op: c.op, value };
   });
-  return {
-    trigger: draft.trigger,
-    conditions: draft.match === "any" ? { any: conditions } : { all: conditions },
-    actions: draft.actions.map((a) => {
-      if (a.type === "task") {
-        const out = { type: "task", assignee: a.assignee, title: a.title.trim() };
-        if (a.detail?.trim()) out.detail = a.detail.trim();
-        if (a.dueDays !== "" && a.dueDays !== null && a.dueDays !== undefined) out.dueDays = Number(a.dueDays);
-        return out;
-      }
-      return { type: "notify", recipients: a.recipients, message: a.message.trim() };
-    }),
-  };
+  return match === "any" ? { any: conditions } : { all: conditions };
+};
+
+const actionContent = (a) => {
+  if (a.type === "task") {
+    const out = { type: "task", assignee: a.assignee, title: a.title.trim() };
+    if (a.detail?.trim()) out.detail = a.detail.trim();
+    if (a.dueDays !== "" && a.dueDays !== null && a.dueDays !== undefined) out.dueDays = Number(a.dueDays);
+    return out;
+  }
+  if (a.type === "hold_lot") return { type: "hold_lot", reason: a.reason.trim() };
+  if (a.type === "later") return { type: "later", afterDays: Number(a.afterDays), conditions: conditionsContent(a.match, a.conditions), actions: a.actions.map(actionContent) };
+  return { type: "notify", recipients: a.recipients, message: a.message.trim() };
+};
+
+/** What the API takes: trigger, conditions, actions (name and description added by the caller). */
+export function ruleContent(draft) {
+  return { trigger: draft.trigger, conditions: conditionsContent(draft.match, draft.conditions), actions: draft.actions.map(actionContent) };
 }
 
 const sortKeys = (v) => (Array.isArray(v) ? v.map(sortKeys) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])])) : v);
@@ -157,6 +185,42 @@ export const contentChanged = (draft, rule) => {
 };
 
 /** What is still needed before the rule can be saved or tested (empty = fine). */
+const conditionProblems = (list, trigger, where) =>
+  list.flatMap((c, i) => {
+    const field = trigger.fields.find((f) => f.key === c.field);
+    if (!field) return [`${where}condition ${i + 1}: choose what to test`];
+    if (!needsValue(c.op)) return [];
+    const v = cleanValue(c);
+    return (Array.isArray(v) ? v.length === 0 : !v) ? [`${where}condition ${i + 1}: say what ${field.label.toLowerCase()} to compare with`] : [];
+  });
+
+const actionProblems = (a, n, trigger) => {
+  const problems = [];
+  if (a.type === "notify") {
+    if (!a.message.trim()) problems.push(`${n}: write the message`);
+    if (!a.recipients.length) problems.push(`${n}: say who is told`);
+    a.recipients.forEach((r) => {
+      if ((r.kind === "person" && !r.userId) || (r.kind === "role" && !r.roleId) || (r.kind === "department" && !r.departmentId)) problems.push(`${n}: choose who`);
+    });
+  } else if (a.type === "task") {
+    if (!a.title.trim()) problems.push(`${n}: give the task a title`);
+    if (a.assignee.kind === "person" && !a.assignee.userId) problems.push(`${n}: choose who gets the task`);
+    if (a.dueDays !== "" && a.dueDays !== null && a.dueDays !== undefined && !(Number.isInteger(Number(a.dueDays)) && Number(a.dueDays) >= 0 && Number(a.dueDays) <= 365))
+      problems.push(`${n}: due in 0 to 365 days`);
+  } else if (a.type === "hold_lot") {
+    if (!canHoldLot(trigger)) problems.push(`${n}: “${trigger.label}” names no lot to hold`);
+    if (a.reason.trim().length < 3) problems.push(`${n}: say why the lot is held`);
+  } else if (a.type === "later") {
+    const d = Number(a.afterDays);
+    if (!(Number.isInteger(d) && d >= 1 && d <= 365)) problems.push(`${n}: wait 1 to 365 days`);
+    problems.push(...conditionProblems(a.conditions, trigger, `${n}, `));
+    if (!a.actions.length) problems.push(`${n}: say what to do then`);
+    a.actions.forEach((inner, j) => problems.push(...actionProblems(inner, `${n}.${j + 1}`, trigger)));
+  }
+  return problems;
+};
+
+/** What is still needed before the rule can be saved or tested (empty = fine). */
 export function draftProblems(draft, trigger) {
   const problems = [];
   if (!draft.name.trim()) problems.push("Give the rule a name");
@@ -164,30 +228,9 @@ export function draftProblems(draft, trigger) {
     problems.push("Choose what starts the rule");
     return problems;
   }
-  draft.conditions.forEach((c, i) => {
-    const field = trigger.fields.find((f) => f.key === c.field);
-    if (!field) problems.push(`Condition ${i + 1}: choose what to test`);
-    else if (needsValue(c.op)) {
-      const v = cleanValue(c);
-      if (Array.isArray(v) ? v.length === 0 : !v) problems.push(`Condition ${i + 1}: say what ${field.label.toLowerCase()} to compare with`);
-    }
-  });
+  problems.push(...conditionProblems(draft.conditions, trigger, "").map((p) => p.charAt(0).toUpperCase() + p.slice(1)));
   if (!draft.actions.length) problems.push("Add at least one thing for the rule to do");
-  draft.actions.forEach((a, i) => {
-    const n = i + 1;
-    if (a.type === "notify") {
-      if (!a.message.trim()) problems.push(`Action ${n}: write the message`);
-      if (!a.recipients.length) problems.push(`Action ${n}: say who is told`);
-      a.recipients.forEach((r) => {
-        if ((r.kind === "person" && !r.userId) || (r.kind === "role" && !r.roleId) || (r.kind === "department" && !r.departmentId)) problems.push(`Action ${n}: choose who`);
-      });
-    } else {
-      if (!a.title.trim()) problems.push(`Action ${n}: give the task a title`);
-      if (a.assignee.kind === "person" && !a.assignee.userId) problems.push(`Action ${n}: choose who gets the task`);
-      if (a.dueDays !== "" && a.dueDays !== null && a.dueDays !== undefined && !(Number.isInteger(Number(a.dueDays)) && Number(a.dueDays) >= 0 && Number(a.dueDays) <= 365))
-        problems.push(`Action ${n}: due in 0 to 365 days`);
-    }
-  });
+  draft.actions.forEach((a, i) => problems.push(...actionProblems(a, `Action ${i + 1}`, trigger)));
   return [...new Set(problems)];
 }
 

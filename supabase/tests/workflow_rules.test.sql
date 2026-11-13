@@ -140,9 +140,9 @@ BEGIN
                                WHERE t.key = 'workflow_tasks.created' AND n.recipient_user_id = bob), 1::bigint, 'Bob was told once, when it was given');
 
   -- ---- who may call what ----
-  PERFORM pg_temp.assert_eq(has_function_privilege('authenticated', 'app.system_workflow_notify(uuid,integer,jsonb,text)', 'execute'), false, 'people cannot send notices');
+  PERFORM pg_temp.assert_eq(has_function_privilege('authenticated', 'app.system_workflow_notify(uuid,integer,jsonb,text,jsonb)', 'execute'), false, 'people cannot send notices');
   PERFORM pg_temp.assert_eq(has_function_privilege('authenticated', 'app.system_workflow_facts(uuid,text,uuid,jsonb)', 'execute'), false, 'nor read facts');
-  PERFORM pg_temp.assert_eq(has_function_privilege('qms_api', 'app.system_workflow_task(uuid,integer,jsonb,text,text,integer)', 'execute'), true, 'the API login gives tasks');
+  PERFORM pg_temp.assert_eq(has_function_privilege('qms_api', 'app.system_workflow_task(uuid,integer,jsonb,text,text,integer,jsonb)', 'execute'), true, 'the API login gives tasks');
   PERFORM pg_temp.assert_eq(has_table_privilege('authenticated', 'public.workflow_tasks', 'update'), false, 'no table writes');
 END $$;
 

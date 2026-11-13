@@ -6,7 +6,7 @@ import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { TRIGGERS, triggerFor, workflowRecordPath } from './catalogue';
 import { conditionHolds, conditionProblems, Conditions } from './conditions';
-import type { Action, CreateRuleBody, TestBody, UpdateRuleBody } from './workflows.schemas';
+import type { Action, CreateRuleBody, InnerAction, TestBody, UpdateRuleBody } from './workflows.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const json = (v: unknown) => JSON.stringify(v);
@@ -19,13 +19,28 @@ function namedIds(conditions: Conditions | undefined, actions: Action[] | undefi
     for (const v of Array.isArray(c.value) ? c.value : c.value ? [c.value] : []) if (UUID.test(v)) ids.add(v);
   }
   for (const a of actions ?? []) {
-    for (const r of a.type === 'notify' ? a.recipients : [a.assignee]) {
+    if (a.type === 'later') {
+      for (const id of namedIds(a.conditions, a.actions as Action[])) ids.add(id);
+      continue;
+    }
+    for (const r of recipientsOf(a)) {
       const id = r.kind === 'person' ? r.userId : r.kind === 'role' ? r.roleId : r.kind === 'department' ? r.departmentId : null;
       if (id) ids.add(id);
     }
   }
   return [...ids];
 }
+
+type Recipient = { kind: string; userId?: string; roleId?: string; departmentId?: string };
+/** The people, roles and departments an action names (none for holding a lot or a timer itself). */
+function recipientsOf(a: Action | InnerAction): Recipient[] {
+  if (a.type === 'notify') return a.recipients as Recipient[];
+  if (a.type === 'task') return [a.assignee as Recipient];
+  return [];
+}
+
+/** The record kinds a lot can be found on: a non-conformance's lot, or the lot of the inspection a failed reading belongs to. */
+const LOT_TRIGGERS = new Set(['nonconformance', 'inspection_measurement']);
 
 /** Workflow rules and tasks (WF1). Rules are written by `app.save_workflow_rule`; what they test and do is checked here against the catalogue first. */
 @Injectable()
@@ -160,8 +175,11 @@ export class WorkflowsService {
     const problems = conditionProblems(body.conditions ?? {}, trigger);
     if (problems.length) throw new ApiError(409, 'workflow_rule', problems[0], { problems });
     return this.database.asUser(ctx, async (db) => {
+      // Timers' inner actions are previewed too (who they would reach today); they follow the top-level ones in the list sent.
+      const flat: (Action | InnerAction)[] = [...body.actions];
+      const innerAt: number[][] = body.actions.map((a) => (a.type === 'later' ? a.actions.map((inner) => flat.push(inner) - 1) : []));
       const preview = (
-        await db.execute<Row>(sql`select app.workflow_preview_people(${orgOf(ctx)}::uuid, ${body.eventId}::bigint, ${json(body.actions)}::jsonb) as p`)
+        await db.execute<Row>(sql`select app.workflow_preview_people(${orgOf(ctx)}::uuid, ${body.eventId}::bigint, ${json(flat)}::jsonb) as p`)
       ).rows[0].p as { eventType: string; createdAt: string; facts: Record<string, unknown>; actions: { index: number; type: string; total: number; people: { userId: string; name: string; told: boolean }[] }[] };
       if (preview.eventType !== body.trigger) throw new ApiError(409, 'workflow_rule', 'That event is not one this rule starts from');
       const facts = preview.facts;
@@ -185,13 +203,23 @@ export class WorkflowsService {
         facts: this.describeFacts(body.trigger, facts, labels),
         conditions: { all, any },
         matched,
-        actions: preview.actions.map((a) => ({
-          index: a.index,
-          type: a.type,
-          total: a.total,
-          people: a.people,
-          wouldTell: matched ? a.people.filter((p) => p.told).length : 0,
-        })),
+        actions: body.actions.map((action, i) => {
+          const a = preview.actions[i];
+          const out = { index: i, type: action.type, total: a.total, people: a.people, wouldTell: matched ? a.people.filter((p) => p.told).length : 0 };
+          if (action.type !== 'later') return out;
+          // A timer reads the record again when it runs; today's answer is only a guide.
+          const stillAll = (action.conditions.all ?? []).map(check);
+          const stillAny = (action.conditions.any ?? []).map(check);
+          return {
+            ...out,
+            afterDays: action.afterDays,
+            stillNow: { all: stillAll, any: stillAny, holds: stillAll.every((c) => c.holds) && (stillAny.length === 0 || stillAny.some((c) => c.holds)) },
+            inner: innerAt[i].map((at, j) => {
+              const p = preview.actions[at];
+              return { index: j, type: p.type, total: p.total, people: p.people };
+            }),
+          };
+        }),
         labels,
       };
     });
@@ -260,13 +288,20 @@ export class WorkflowsService {
     const users = new Set<string>();
     const roles = new Set<string>();
     const departments = new Set<string>();
-    for (const a of actions) {
-      for (const r of a.type === 'notify' ? a.recipients : [a.assignee]) {
-        if (r.kind === 'person') users.add(r.userId);
-        if (r.kind === 'role') roles.add(r.roleId);
-        if (r.kind === 'department') departments.add(r.departmentId);
+    const visit = (a: Action | InnerAction, where: string) => {
+      if (a.type === 'hold_lot' && !LOT_TRIGGERS.has(trigger.entityType)) problems.push(`${where}"${trigger.label}" names no lot, so there is no lot to put on hold`);
+      for (const r of recipientsOf(a)) {
+        if (r.kind === 'person' && r.userId) users.add(r.userId);
+        if (r.kind === 'role' && r.roleId) roles.add(r.roleId);
+        if (r.kind === 'department' && r.departmentId) departments.add(r.departmentId);
       }
-    }
+    };
+    actions.forEach((a, i) => {
+      if (a.type === 'later') {
+        for (const p of conditionProblems(a.conditions ?? {}, trigger)) problems.push(`Action ${i + 1}, still true after ${a.afterDays} days: ${p}`);
+        a.actions.forEach((inner) => visit(inner, `Action ${i + 1}: `));
+      } else visit(a, '');
+    });
     await this.database.asUser(ctx, async (db) => {
       const org = orgOf(ctx);
       if (users.size) {

@@ -469,6 +469,19 @@ const sampleBody = (op: Op): object | undefined =>
     'GET /api/v1/ncrs/{id}/inspection-source': undefined,
     'GET /api/v1/calibrations/{id}/gauge-usage': undefined,
     'GET /api/v1/inspections/{id}': undefined,
+    'GET /api/v1/measurement-profiles/{id}': undefined,
+    'PATCH /api/v1/measurement-profiles/{id}': { name: 'Hijacked' },
+    'POST /api/v1/measurement-profiles/{id}/retire': { reason: 'Hijacked' },
+    'POST /api/v1/measurement-profiles/{id}/reactivate': undefined,
+    'GET /api/v1/parts/{id}/feature-maps': undefined,
+    'POST /api/v1/parts/{id}/feature-maps': { featureName: 'Hijacked', characteristicKey: 'OD' },
+    'POST /api/v1/measurement-feature-maps/{id}/end': undefined,
+    'POST /api/v1/inspections/{id}/imports': { path: 'x/inspection/y/z.csv', fileName: 'z.csv', profileId: '00000000-0000-0000-0000-000000000000' },
+    'GET /api/v1/inspections/{id}/imports': undefined,
+    'GET /api/v1/inspection-imports/{id}': undefined,
+    'POST /api/v1/inspection-imports/{id}/confirm-mismatches': undefined,
+    'POST /api/v1/inspection-imports/{id}/discard': { reason: 'Hijacked' },
+    'PUT /api/v1/inspection-import-rows/{id}/match': { requirementId: null },
     'POST /api/v1/inspections/{id}/samples': { readings: [{ requirementId: a.requirement, valueNumeric: '1' }] },
     'POST /api/v1/inspections/{id}/complete': undefined,
     'POST /api/v1/inspections/{id}/abandon': { reason: 'Hijacked' },
@@ -916,6 +929,19 @@ const hasSample = (op: Op) =>
     'GET /api/v1/ncrs/{id}/inspection-source',
     'GET /api/v1/calibrations/{id}/gauge-usage',
     'GET /api/v1/inspections/{id}',
+    'GET /api/v1/measurement-profiles/{id}',
+    'PATCH /api/v1/measurement-profiles/{id}',
+    'POST /api/v1/measurement-profiles/{id}/retire',
+    'POST /api/v1/measurement-profiles/{id}/reactivate',
+    'GET /api/v1/parts/{id}/feature-maps',
+    'POST /api/v1/parts/{id}/feature-maps',
+    'POST /api/v1/measurement-feature-maps/{id}/end',
+    'POST /api/v1/inspections/{id}/imports',
+    'GET /api/v1/inspections/{id}/imports',
+    'GET /api/v1/inspection-imports/{id}',
+    'POST /api/v1/inspection-imports/{id}/confirm-mismatches',
+    'POST /api/v1/inspection-imports/{id}/discard',
+    'PUT /api/v1/inspection-import-rows/{id}/match',
     'POST /api/v1/inspections/{id}/samples',
     'POST /api/v1/inspections/{id}/complete',
     'POST /api/v1/inspections/{id}/abandon',
@@ -944,6 +970,10 @@ const hasSample = (op: Op) =>
 
 /** Organisation A's record id for the resource a path refers to. */
 const foreignIdFor = (path: string) => {
+  if (path.startsWith('/api/v1/measurement-profiles/')) return a.measurementProfile;
+  if (path.startsWith('/api/v1/measurement-feature-maps/')) return a.featureMap;
+  if (path.startsWith('/api/v1/inspection-imports/')) return a.inspectionImport;
+  if (path.startsWith('/api/v1/inspection-import-rows/')) return a.importRow;
   if (path.startsWith('/api/v1/sites/')) return a.site;
   if (path.startsWith('/api/v1/departments/')) return a.department;
   if (path.startsWith('/api/v1/members/')) return a.ownerMembership;
@@ -1153,6 +1183,14 @@ beforeAll(async () => {
     a.requirement = (await q1(`select id from public.resolved_inspection_requirements where inspection_record_id = $1`, [a.inspection])).id;
     const isample = (await q1(`insert into public.inspection_samples (organisation_id, inspection_record_id) values ($1, $2) returning id`, [ids.orgA, a.inspection])).id;
     a.measurement = (await q1(`insert into public.inspection_measurements (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric) values ($1, $2, $3, $4, 1) returning id`, [ids.orgA, a.inspection, isample, a.requirement])).id;
+    // CMM ingestion: a profile, a feature map and a preview with one part and one matched feature.
+    a.measurementProfile = (await q1(`select app.save_measurement_profile($1, '{"name":"Alpha CMM","format":"table","settings":{"columns":{"feature":"F","actual":"A"}}}'::jsonb) as id`, [ids.orgA])).id;
+    a.featureMap = (await q1(`select app.save_feature_map($1, null, 'OD', 'OD') as id`, [ipart])).id;
+    a.inspectionImport = (await q1(`select app.create_inspection_import($1::uuid, jsonb_build_object('filePath', $2::text || '/inspection/' || $1::uuid::text || '/a.csv', 'fileName', 'a.csv',
+      'fileSha256', repeat('a', 64), 'sizeBytes', 1, 'format', 'table', 'units', jsonb_build_array(jsonb_build_object('position', 1, 'rows',
+      jsonb_build_array(jsonb_build_object('position', 1, 'featureName', 'OD', 'valueNumeric', 1, 'requirementId', $3::uuid, 'matchKind', 'balloon')))))) as id`,
+      [a.inspection, ids.orgA, a.requirement])).id;
+    a.importRow = (await q1(`select id from public.inspection_import_rows where import_id = $1`, [a.inspectionImport])).id;
     await client.query(`select app.raise_spc_alerts($1, $2, '[{"characteristicKey":"OD","characteristicName":"OD","operationCode":"OP-1","variant":"imr","rule":"we1","side":"above","pointAt":"2026-11-05T08:00:00Z","summary":"Rule 1","inspectionId":null,"inspectionReference":null}]'::jsonb)`, [ids.orgA, ipart]);
     a.alert = (await q1(`select id from public.spc_alerts where organisation_id = $1`, [ids.orgA])).id;
     a.qualityAlert = (await q1(`insert into public.quality_alerts (organisation_id, title, category, severity) values ($1, 'Alpha alert', 'product', 'low') returning id`, [ids.orgA])).id;

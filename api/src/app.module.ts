@@ -127,6 +127,9 @@ import { IntegrationMonitorService } from './integrations/integration-monitor.se
 import { IntegrationConflictsController } from './integrations/integration-conflicts.controller';
 import { IntegrationConflictsService } from './integrations/integration-conflicts.service';
 import { IntegrationFileStore, SupabaseIntegrationFileStore } from './integrations/core/file-store';
+import { InspectionFileStore, SupabaseInspectionFileStore } from './measurement-imports/file-store';
+import { FeatureMapsController, InspectionImportsController, MeasurementProfilesController } from './measurement-imports/measurement-imports.controller';
+import { MeasurementImportsService } from './measurement-imports/measurement-imports.service';
 import { IntegrationRunsService } from './integrations/integration-runs.service';
 import { ConnectorRegistry } from './integrations/core/connector.registry';
 import { EntityImporterRegistry } from './integrations/core/entity-importer';
@@ -285,6 +288,9 @@ export class AppModule implements NestModule {
         MaterialCertificatesController,
         InspectionsController,
         InspectionMeasurementsController,
+        MeasurementProfilesController,
+        FeatureMapsController,
+        InspectionImportsController,
         NcrInspectionSourceController,
         SpcController,
         QualityAlertsController,
@@ -384,6 +390,8 @@ export class AppModule implements NestModule {
         { provide: EntityImporterRegistry, useFactory: defaultImporterRegistry },
         MaterialCertificatesService,
         InspectionService,
+        MeasurementImportsService,
+        { provide: InspectionFileStore, useClass: SupabaseInspectionFileStore },
         SpcService,
         DocumentationService,
         CapaService,

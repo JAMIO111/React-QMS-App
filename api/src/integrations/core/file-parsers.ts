@@ -94,7 +94,7 @@ export function decodeText(buf: Uint8Array, encoding: Encoding | 'auto' = 'auto'
   return (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text).replace(/\u0000/g, '');
 }
 
-const DELIMITER_CHARS: Record<Delimiter, string> = { ',': ',', ';': ';', tab: '\t', '|': '|' };
+export const DELIMITER_CHARS: Record<Delimiter, string> = { ',': ',', ';': ';', tab: '\t', '|': '|' };
 
 /** The separator of a delimited text: the candidate found the same number of times (more than none) on each of the first lines, most often wins; else comma. */
 export function detectDelimiter(text: string): Delimiter {
@@ -225,6 +225,12 @@ export function excelSerialToIso(serial: number): string {
 }
 
 export function parseXlsx(buf: Uint8Array, opts: ParseOptions = {}): ParsedFile {
+  const { table, sheet } = readXlsxTable(buf);
+  return toParsed(table, opts.hasHeader !== false, opts.maxRows ?? 100_000, sheet);
+}
+
+/** The first worksheet as a grid of text cells (row index = row number − 1), for readers that need the lines above a table too. */
+export function readXlsxTable(buf: Uint8Array): { table: string[][]; sheet: string } {
   let files: Record<string, Uint8Array>;
   try {
     files = unzipSync(buf, { filter: (f) => f.name.startsWith('xl/') && (f.name.endsWith('.xml') || f.name.endsWith('.rels')) });
@@ -285,7 +291,7 @@ export function parseXlsx(buf: Uint8Array, opts: ParseOptions = {}): ParsedFile 
     while (table.length < rowNumber - 1) table.push([]);
     table[rowNumber - 1] = cells;
   }
-  return toParsed(table, opts.hasHeader !== false, opts.maxRows ?? 100_000, sheetName);
+  return { table, sheet: sheetName };
 }
 
 /** Read a file by its name: .xlsx as a workbook, anything else as CSV with the connection's settings. */

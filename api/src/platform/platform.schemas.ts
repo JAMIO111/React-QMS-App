@@ -70,6 +70,8 @@ export const PlatformOrganisation = z.object({
   /** Monthly equivalent in pence, excluding VAT. */
   mrrPence: z.number().int(),
   lastSyncedAt: Iso.nullable(),
+  /** off | monitor | enforce (docs/security-plan.md): an enforcing organisation can be recovered to monitor by an operator. */
+  networkPolicy: z.enum(['off', 'monitor', 'enforce']),
 });
 export const PlatformOrganisations = z.object({ data: z.array(PlatformOrganisation), total: z.number().int() });
 export type PlatformOrganisations = z.infer<typeof PlatformOrganisations>;
@@ -85,3 +87,6 @@ export const PlatformActivity = z.object({
   data: z.array(z.object({ at: Iso, kind: z.string(), event: z.string(), organisationId: z.string().uuid(), organisation: z.string(), details: z.record(z.unknown()) })),
 });
 export type PlatformActivity = z.infer<typeof PlatformActivity>;
+
+/** An operator puts an enforced network policy back to monitor (docs/security-plan.md SE5). */
+export const RecoverNetworkBody = z.object({ reason: z.string().trim().min(10).max(1000), verification: z.string().trim().min(10).max(1000) }).strict();

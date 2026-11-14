@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useAuth } from "../contexts/AuthProvider";
 
@@ -39,3 +39,16 @@ export const usePlatformEmail = (hours = 24) => useMonitor(["email", hours], `/p
 export const usePlatformWorker = () => useMonitor(["worker"], "/platform/worker", { refetch: 30_000 });
 export const usePlatformWebhooks = (hours = 24) => useMonitor(["webhooks", hours], `/platform/webhooks?hours=${hours}`, { refetch: 30_000 });
 export const usePlatformActivity = (limit = 100) => useMonitor(["activity", limit], `/platform/activity?limit=${limit}`);
+
+/**
+ * Recover access for an organisation whose network restrictions lock everyone out (security plan SE5): back to monitor, never off, with a reason and
+ * how ownership was verified. Owners and admins are told by the database. The operator's organisations list is read again.
+ */
+export const useRecoverNetworkPolicy = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ organisationId, reason, verification }) =>
+      apiFetch(`/platform/organisations/${organisationId}/recover-network-policy`, { method: "POST", body: { reason, verification } }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "platform", "organisations"] }),
+  });
+};

@@ -126,6 +126,21 @@ describe("Settings → Security", () => {
     expect(screen.getByLabelText(/Address or range/)).toHaveValue("198.51.100.200");
   });
 
+  it("shows the changes, with an operator's recovery and why", () => {
+    policy = {
+      ...policy,
+      history: [
+        { id: "h2", kind: "recovery", from: "enforce", to: "monitor", by: "Fortress support", reason: "Provider changed overnight", verification: "Called the owner back", summary: "", at: "2026-11-14T10:00:00Z" },
+        { id: "h1", kind: "change", from: "off", to: "enforce", by: "Ada Owner", reason: null, verification: null, summary: "", at: "2026-11-14T09:00:00Z" },
+      ],
+    };
+    renderIt();
+    const list = screen.getByRole("list", { name: "Changes to network restrictions" });
+    expect(within(list).getByText(/Enforce → Monitor by Fortress support/)).toBeInTheDocument();
+    expect(within(list).getByText(/Provider changed overnight \(checked by: Called the owner back\)/)).toBeInTheDocument();
+    expect(within(list).getByText(/Off → Enforce by Ada Owner/)).toBeInTheDocument();
+  });
+
   it("is read-only for someone who may only read it", () => {
     permissions = ["security.read"];
     renderIt();

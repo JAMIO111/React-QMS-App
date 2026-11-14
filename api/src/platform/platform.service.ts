@@ -34,6 +34,14 @@ export class PlatformService {
       await this.requireOperator(db);
       const res = await db.execute<Record<string, unknown>>(sql`select * from app.platform_organisations(${q.search ?? null}, ${q.limit}::int, ${q.offset}::int)`);
       const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
+      const ids = res.rows.map((r) => r.organisation_id as string);
+      const policies = new Map<string, string>();
+      if (ids.length) {
+        const p = await db.execute<{ organisation_id: string; network_policy: string }>(
+          sql`select organisation_id, network_policy from app.platform_network_policies(${`{${ids.join(',')}}`}::uuid[])`,
+        );
+        for (const row of p.rows) policies.set(row.organisation_id, row.network_policy);
+      }
       return {
         total: res.rows.length ? Number(res.rows[0].total_rows) : 0,
         data: res.rows.map((r) => ({
@@ -57,8 +65,23 @@ export class PlatformService {
           seatsAssigned: Number(r.seats_assigned),
           mrrPence: Number(r.mrr_pence),
           lastSyncedAt: iso(r.last_synced_at),
+          networkPolicy: (policies.get(r.organisation_id as string) ?? 'off') as 'off' | 'monitor' | 'enforce',
         })),
       };
+    });
+  }
+
+  /**
+   * Recovery when everyone is locked out (docs/security-plan.md S6): an enforced policy goes back to monitor, never off, with a reason and how
+   * ownership was verified. The database checks the operator (allow-list and MFA), writes the history row and tells every owner and admin.
+   */
+  recoverNetworkPolicy(ctx: RequestContext, organisationId: string, body: { reason: string; verification: string }) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.requireOperator(db);
+      const r = await db.execute<{ id: string }>(
+        sql`select app.platform_recover_network_policy(${organisationId}::uuid, ${body.reason}, ${body.verification}) as id`,
+      );
+      return { organisationId, networkPolicy: 'monitor' as const, changeId: r.rows[0].id };
     });
   }
 

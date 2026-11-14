@@ -144,6 +144,20 @@ export class SecurityService {
       updatedAt: iso(n.updated_at)!,
       updatedBy: (n.updated_by as string) ?? null,
     }));
+    const changes = await db.execute<Row>(sql`
+      select id, kind, from_mode, to_mode, changed_by_name, reason, verification, summary, created_at
+        from public.network_policy_changes where organisation_id = ${org}::uuid order by created_at desc, id desc limit 20`);
+    const history = changes.rows.map((c) => ({
+      id: c.id as string,
+      kind: c.kind as 'change' | 'recovery',
+      from: c.from_mode as string,
+      to: c.to_mode as string,
+      by: c.kind === 'recovery' ? 'Fortress support' : ((c.changed_by_name as string) ?? null),
+      reason: (c.reason as string) ?? null,
+      verification: (c.verification as string) ?? null,
+      summary: c.summary as string,
+      at: iso(c.created_at)!,
+    }));
     const live = list.filter((n) => !n.removed);
     return {
       mode: ((s.network_policy as string) ?? 'off') as 'off' | 'monitor' | 'enforce',
@@ -155,6 +169,8 @@ export class SecurityService {
       covered: live.some((n) => n.active && n.includesYou),
       activeCount: live.filter((n) => n.active).length,
       networks: list,
+      /** The latest changes of the policy (who, from, to; an operator's recovery with its reason and how ownership was verified). */
+      history,
     };
   }
 }

@@ -23,6 +23,7 @@ describe('where an email links to', () => {
     expect(notificationPath('risk_actions', A, { risk_id: 'not-an-id' })).toBe('/Risk/My-Work');
     expect(notificationPath('integration_alerts', A, { connection_id: A, run_id: B })).toBe(`/Settings/Integrations/${A}/runs/${B}`);
     expect(notificationPath('integration_alerts', A, {})).toBe('/Settings/Integrations');
+    expect(notificationPath('network_policy_changes', A, {})).toBe('/Settings/Security');
     expect(notificationPath('supplier_band_drops', A, { record_kind: 'supplier', record_id: B })).toBe(`/Suppliers/${B}?tab=performance`);
     expect(notificationPath('supplier_band_drops', A, { record_id: '../x' })).toBe('/Supplier-Quality/Watchlist');
     expect(notificationPath('something_else', A, {})).toBeNull();

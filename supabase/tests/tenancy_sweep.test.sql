@@ -449,6 +449,9 @@ BEGIN
   INSERT INTO public.organisation_networks (organisation_id, name, network) VALUES (a, 'Sweep HQ', '203.0.113.0/28');
   PERFORM app.system_record_access_denial(a, '50000000-0000-0000-0000-0000000000a1', '198.51.100.7', 'monitor', '/api/v1/ncrs');
   INSERT INTO sweep VALUES ('network', (SELECT id FROM public.organisation_networks WHERE organisation_id = a AND name = 'Sweep HQ'));
+  -- SE5: a change of the policy is written down by the trigger (monitor and back, so nobody is blocked in the sweep).
+  UPDATE public.organisation_settings SET network_policy = 'monitor' WHERE organisation_id = a;
+  UPDATE public.organisation_settings SET network_policy = 'off' WHERE organisation_id = a;
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));
 END $$;

@@ -1,8 +1,8 @@
-import { Controller, Get, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
-import { openApiSchema, parse } from '../common/validation';
-import { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformMe, PlatformOrganisations, PlatformPayments, PlatformEmail, PlatformWorker, PlatformRevenue, PlatformWebhooks } from './platform.schemas';
+import { openApiSchema, parse, Uuid } from '../common/validation';
+import { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformMe, PlatformOrganisations, PlatformPayments, PlatformEmail, PlatformWorker, PlatformRevenue, PlatformWebhooks, RecoverNetworkBody } from './platform.schemas';
 import { PlatformService } from './platform.service';
 
 /**
@@ -32,6 +32,14 @@ export class PlatformController {
   @ApiOkResponse({ description: 'Every organisation with its billing state, owners and counts (no business data). Search by name or owner email. 404 for non-operators, 403 mfa_required without MFA.', schema: openApiSchema(PlatformOrganisations) })
   organisations(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.organisations(ctx, parse(OrganisationsQuery, query));
+  }
+
+  @Post('organisations/:id/recover-network-policy')
+  @HttpCode(200)
+  @ApiBody({ schema: openApiSchema(RecoverNetworkBody) })
+  @ApiOkResponse({ description: 'Put an organisation that enforces network restrictions back to monitor when everyone is locked out (reason and how ownership was verified; never off). Owners and admins are told. 404 for non-operators, 403 mfa_required without MFA, 409 security_rule when it is not enforcing.' })
+  recoverNetworkPolicy(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.recoverNetworkPolicy(ctx, parse(Uuid, id), parse(RecoverNetworkBody, body));
   }
 
   @Get('revenue')

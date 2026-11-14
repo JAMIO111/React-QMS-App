@@ -130,6 +130,25 @@ describe("organisations", () => {
     expect(screen.getByText(/no records, documents or quality data/)).toBeInTheDocument();
   });
 
+  it("recovers access for an organisation that locks everyone out: back to monitor, with a reason and how ownership was verified", async () => {
+    responses["/platform/organisations"] = { total: 1, data: [org({ networkPolicy: "enforce" })] };
+    responses["/platform/organisations/o1/recover-network-policy"] = { organisationId: "o1", networkPolicy: "monitor", changeId: "c1" };
+    renderAt("/platform?tab=organisations");
+    const table = await screen.findByRole("table", { name: "Organisations" });
+    expect(within(table).getByText("Enforced")).toBeInTheDocument();
+    await userEvent.click(within(table).getByRole("button", { name: "Recover access" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Recover access" }));
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(/Say why/);
+    await userEvent.type(within(dialog).getByLabelText(/^Why/), "Changed internet provider overnight");
+    await userEvent.type(within(dialog).getByLabelText(/How ownership was verified/), "Called the owner back on file");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Recover access" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/platform/organisations/o1/recover-network-policy", {
+      method: "POST", body: { reason: "Changed internet provider overnight", verification: "Called the owner back on file" },
+    }));
+    expect(await within(dialog).findByText("Back to monitor")).toBeInTheDocument();
+  });
+
   it("searches after a pause, and says when nothing matches", async () => {
     renderAt("/platform?tab=organisations");
     await screen.findByRole("table", { name: "Organisations" });

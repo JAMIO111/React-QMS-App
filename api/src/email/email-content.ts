@@ -63,6 +63,8 @@ export function notificationPath(entityType: string, entityId: string, details: 
     case 'organisation_subscriptions':
     case 'billing_invoices':
       return '/Settings/Subscription';
+    case 'network_policy_changes':
+      return '/Settings/Security';
     case 'organisation_users':
       return '/Settings/Users';
     case 'workflow_notices':

@@ -35,6 +35,7 @@ const UNSCOPED = new Set([
   'GET /api/v1/platform/payments',
   'GET /api/v1/platform/webhooks',
   'GET /api/v1/platform/activity',
+  'POST /api/v1/platform/organisations/{id}/recover-network-policy', // operator recovery (security plan SE5): admin-only in the database (allow-list + MFA); spans organisations by design
   // /internal/cron/* (scheduled jobs: CRON_SECRET, only database functions made for them) is left out of the OpenAPI document, so it is not seen here; platform-monitor.e2e-spec covers it.
   'POST /api/v1/stripe/webhook', // authenticated by Stripe's signature over the raw body; applies state only through app.stripe_* functions
 ]);

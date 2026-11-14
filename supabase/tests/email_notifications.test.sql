@@ -81,6 +81,8 @@ BEGIN
   UPDATE public.organisation_settings SET network_policy = 'enforce' WHERE organisation_id = org;
   SELECT * INTO leased FROM app.system_lease_emails(10, 60) WHERE to_address = 'owner@mail.test';
   UPDATE public.organisation_settings SET network_policy = 'off' WHERE organisation_id = org;
+  -- (those two changes write their own notices, SE5; they are not what this test counts)
+  UPDATE public.notifications SET email_queued_at = now() WHERE entity_type = 'network_policy_changes' AND organisation_id = org;
   PERFORM pg_temp.assert_eq(leased.network_restricted, true, 'the lease says the organisation enforces its networks (the email is then short, S9)');
   PERFORM pg_temp.assert_eq(leased.organisation_name, 'Mail Works', 'the lease carries what the email needs');
   PERFORM pg_temp.assert_eq(leased.event_key, 'quality_alert_recipients.created', 'and the event');

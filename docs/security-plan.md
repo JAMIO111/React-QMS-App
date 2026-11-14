@@ -1,6 +1,6 @@
 # Organisation security: network allowlisting and access rules — plan
 
-**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** · **SE1 done** (migration `20260228100000_organisation_security.sql`, applied live 2026-11-14, live guardrails 0 violations) · **SE2 done** (API, no migration) · **SE3 done** (migration `20260301100000_storage_through_api.sql`, applied live 2026-11-14) · **SE4 done** (migration `20260302100000_network_restricted_emails.sql`, applied live 2026-11-14) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
+**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** · **SE1 done** (migration `20260228100000_organisation_security.sql`, applied live 2026-11-14, live guardrails 0 violations) · **SE2 done** (API, no migration) · **SE3 done** (migration `20260301100000_storage_through_api.sql`, applied live 2026-11-14) · **SE4 done** (migration `20260302100000_network_restricted_emails.sql`, applied live 2026-11-14) · **SE5 built** (migration `20260303100000_network_policy_recovery.sql`, not yet applied live) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
 
 ## 1. Why
 
@@ -246,7 +246,32 @@ It is network control, not device or identity control: it does not prove the dev
   - Restricted email in `email.spec.ts`.
   - The lease column in `email_notifications.test.sql`.
 
-## 14. Not in this plan
+## 14. SE5 as built (migration `20260303100000_network_policy_recovery.sql`)
+
+- **History of every change.** `network_policy_changes` (functions-free: written only by trigger `organisation_settings_network_policy_history` when `network_policy` changes; frozen even for SQL; audited; read with `security.read`):
+  - kind `change` or `recovery`, from and to, who (and their name at the time);
+  - for a recovery, the operator's reason and how ownership was verified;
+  - a one-line summary and what to do next.
+- **Recovery (S6).** `app.platform_recover_network_policy(org, reason, verification)`:
+  - Only a platform operator: on the allow-list and with an MFA session (`app.is_platform_admin()`).
+  - Only while the organisation **enforces**. It goes back to **monitor**, never off, and the approved networks are kept.
+  - Reason and verification are each 10 to 1000 characters.
+  - The audit trail shows the operator as the actor.
+  - API: `POST /platform/organisations/{id}/recover-network-policy {reason, verification}`. It answers 404 to someone who is not an operator, `403 mfa_required` without MFA, `409 security_rule` when the organisation is not enforcing, and 404 for an unknown organisation. It is on the tenancy sweep's reviewed allowlist, since it spans organisations by design.
+  - The operator panel's organisations list shows each organisation's policy (`app.platform_network_policies`, admin-only), with **Recover access** on enforcing ones. The dialog asks why and how ownership was verified.
+- **Owners and admins are told.**
+  - New event `network_policy_changes.created`: group Security, `security.read`, on by default, emailed by default.
+  - The notice has **no actor**, so the person who enforced is told too. Its body says what changed and, when enforced, "If everyone is locked out, an owner can ask Fortress support to put restrictions back to monitor".
+  - `app.emit_notification` is the `20260221100000` version plus this table in the no-actor list. That is now the latest definition.
+  - `app.system_lease_emails` sends these notices **in full even while enforced**, so the lockout guidance reaches the inbox. They hold no quality data.
+  - The notice links to `/Settings/Security`, in both `notificationLink` and the email's `notificationPath`.
+- **Settings → Security** shows **Changes**: the latest 20, with a recovery's reason and how ownership was verified (`history` on `GET /security/access-policy`).
+- **Tests:**
+  - `supabase/tests/network_policy_recovery.test.sql`, plus the sweep seed and the guardrails list.
+  - `api/test/network-recovery.e2e-spec.ts`: locked out, the operator panel, who may recover, the policy back to monitor, the owner back in, history, notices.
+  - `PlatformPanels.test.jsx`, `SettingsSecurity.test.jsx`, `notifications.test.js`, `email.spec.ts`.
+
+## 15. Not in this plan
 
 - SSO (Entra ID, SAML), device certificates, managed devices, country rules.
 - Per-person or per-site allowlists (the policy is organisation-wide, as in the brief).

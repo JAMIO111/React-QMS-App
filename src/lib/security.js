@@ -16,6 +16,8 @@ export const MODES = [
 
 export const ENFORCE_WORD = "enforce";
 
+export const modeLabel = (mode) => MODES.find((m) => m.value === mode)?.label ?? mode;
+
 /** What stops enforcing now (the server checks the same). */
 export const enforceProblems = (policy) => {
   const problems = [];

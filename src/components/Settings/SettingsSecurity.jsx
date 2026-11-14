@@ -14,7 +14,7 @@ import { useOrganisationDetails, usePermissions } from "../../hooks/useQmsApi";
 import { useAccessDenials, useAccessPolicy, useSecurityMutation } from "../../hooks/useSecurity";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
-import { MODES, ENFORCE_WORD, denialWords, enforceProblems, whenWords } from "../../lib/security";
+import { MODES, ENFORCE_WORD, denialWords, enforceProblems, modeLabel, whenWords } from "../../lib/security";
 
 /**
  * Settings → Security (docs/security-plan.md SE4): two-factor (moved here from Organisation), access restrictions (the network policy and the
@@ -191,6 +191,28 @@ function AccessRestrictions({ canManage }) {
           </div>
         )}
       </div>
+
+      {(p.history ?? []).length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-base font-semibold text-primary-text">Changes</h3>
+          <ul className="flex flex-col gap-2" aria-label="Changes to network restrictions">
+            {p.history.map((h) => (
+              <li key={h.id} className={`rounded-lg border px-4 py-2 text-sm ${h.kind === "recovery" ? "border-warning-color" : "border-border-color"}`}>
+                <span className="text-primary-text">
+                  {modeLabel(h.from)} → {modeLabel(h.to)}
+                  {h.by ? ` by ${h.by}` : ""}
+                </span>
+                <span className="text-secondary-text"> · {whenWords(h.at)}</span>
+                {h.kind === "recovery" && (
+                  <p className="mt-1 text-secondary-text">
+                    Access recovered because nobody could get in: {h.reason} (checked by: {h.verification})
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {dialog?.kind === "network" && <NetworkDialog network={dialog.network} prefill={dialog.prefill} onClose={() => setDialog(null)} />}
       {dialog?.kind === "remove" && <RemoveDialog network={dialog.network} onClose={() => setDialog(null)} />}

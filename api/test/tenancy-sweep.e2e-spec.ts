@@ -20,6 +20,7 @@ const api = () => request(app.getHttpServer());
 /** Routes that are deliberately not organisation-scoped (reviewed). */
 const UNSCOPED = new Set([
   'GET /api/v1/health',
+  'GET /api/v1/health/network', // temporary diagnostic (security plan SE0), removed in SE2
   'GET /api/v1/me',
   'PATCH /api/v1/me',
   'POST /api/v1/organisations',

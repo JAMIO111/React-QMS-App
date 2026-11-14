@@ -89,7 +89,8 @@ async function startFakeSupabase(admin, stripe, log, storage) {
         return reply(200, userJson(r.rows[0]));
       }
       if (url.pathname.startsWith('/storage/v1/object/')) {
-        const key = decodeURIComponent(url.pathname.slice('/storage/v1/object/'.length));
+        // A signed upload (the API signed it, docs/security-plan.md SE3) lands under the same key as a plain one.
+        const key = decodeURIComponent(url.pathname.slice('/storage/v1/object/'.length)).replace(/^upload\/sign\//, '');
         if (req.method === 'POST' || req.method === 'PUT') {
           const chunks = [];
           for await (const c of req) chunks.push(c);
@@ -244,11 +245,20 @@ async function startStack({ appUrl, log = console.log }) {
   const { ApiError } = require('../../api/dist/common/api-error');
   const { IntegrationFileStore } = require('../../api/dist/integrations/core/file-store');
   const { InspectionFileStore } = require('../../api/dist/measurement-imports/file-store');
+  const { FileLinkSigner } = require('../../api/dist/files/file-links');
   const stripe = makeFakeStripe(StripeGateway, ApiError);
   // Uploaded import files: the browser stores them in the stand-in, and the API reads them back from the same place.
   const storage = new Map();
   const fromBucket = (bucket) => ({ get enabled() { return true; }, download: async (p) => (storage.has(`${bucket}/${p}`) ? new Uint8Array(storage.get(`${bucket}/${p}`)) : null) });
   const files = fromBucket('integration-files');
+  // File links: the API checks the rule as usual, then "signs" links that point at the stand-in.
+  const storageBase = `http://127.0.0.1:${PORTS.supabase}/storage/v1`;
+  const signer = {
+    get enabled() { return true; },
+    signDownload: async (bucket, path) => (storage.has(`${bucket}/${path}`) ? `${storageBase}/object/${bucket}/${path}` : null),
+    signUpload: async (bucket, path) => ({ token: 'journey', signedUrl: `${storageBase}/object/upload/sign/${bucket}/${path}?token=journey` }),
+    remove: async (bucket, path) => { storage.delete(`${bucket}/${path}`); },
+  };
   const env = loadEnv({ NODE_ENV: 'test', DATABASE_URL: dbUrl, SUPABASE_JWT_SECRET: JWT_SECRET, JWT_ISSUER: ISSUER, LOG_LEVEL: 'silent', PORT: String(PORTS.api), CORS_ORIGINS: appUrl, APP_BASE_URL: appUrl, RATE_LIMIT_PER_MINUTE: '100000' });
   const erp = await startFakeErp(log);
   const { ConnectorRegistry } = require('../../api/dist/integrations/core/connector.registry'); // the provider token to replace
@@ -256,6 +266,7 @@ async function startStack({ appUrl, log = console.log }) {
     .overrideProvider(StripeGateway).useValue(stripe)
     .overrideProvider(IntegrationFileStore).useValue(files)
     .overrideProvider(InspectionFileStore).useValue(fromBucket('inspection-files'))
+    .overrideProvider(FileLinkSigner).useValue(signer)
     .overrideProvider(ConnectorRegistry).useValue(erpConnectors(erp))
     .compile();
   const nest = moduleRef.createNestApplication({ bufferLogs: true, rawBody: true });

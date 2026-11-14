@@ -8,7 +8,7 @@ const size = (bytes) => (bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${Math
 
 /** An image on an alert, shown in the pane through a short-lived signed link (the bucket is private). Click for full size in a new tab. */
 const Picture = ({ file }) => {
-  const url = useQuery({ queryKey: ["signed-url", BUCKET, file.storagePath], queryFn: () => generateSignedUrl(BUCKET, file.storagePath, 60 * 30), staleTime: 20 * 60_000, retry: false });
+  const url = useQuery({ queryKey: ["signed-url", BUCKET, file.storagePath], queryFn: () => generateSignedUrl(BUCKET, file.storagePath, 60 * 30), staleTime: 4 * 60_000, retry: false });
   if (url.isLoading) return <div role="status" aria-label={`Loading ${file.fileName}`} className="h-40 w-full rounded-lg shimmer" />;
   if (!url.data) return <p className="text-sm text-error-color">{file.fileName} could not be loaded.</p>;
   return (

@@ -1,6 +1,6 @@
 # Organisation security: network allowlisting and access rules — plan
 
-**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** · **SE1 done** (migration `20260228100000_organisation_security.sql`, applied live 2026-11-14, live guardrails 0 violations) · **SE2 done** (API, no migration) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
+**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** · **SE1 done** (migration `20260228100000_organisation_security.sql`, applied live 2026-11-14, live guardrails 0 violations) · **SE2 done** (API, no migration) · **SE3 built** (migration `20260301100000_storage_through_api.sql`, not yet applied live) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
 
 ## 1. Why
 
@@ -199,13 +199,34 @@ It is network control, not device or identity control: it does not prove the dev
   - blocked attempts counted;
   - off opens again.
   - Also: tenancy sweep sample bodies, the worker step list.
-- **Not covered yet:** files fetched straight from Supabase Storage (SE3); emails while enforced (SE4).
+- **Not covered yet:** emails while enforced (SE4). Files: SE3, below.
 
-## 12. Not in this plan
+## 12. SE3 as built (migration `20260301100000_storage_through_api.sql`)
+
+- **One rule per bucket.** `app.storage_file_allowed(bucket, name, write)` states who may read or add a file in each of the eleven organisation buckets (audit, calibration, CAPA, competence, document, inspection, integration, NC, quality alert, supplier files and logos). The expressions are the ones the policies had. **The storage policies now call it, and so does the API before it signs**, so the two cannot disagree.
+- **Direct access refused while enforced.** Every organisation bucket's policies (insert and select; logos also update and delete) add `app.storage_direct_allowed(name)`. It is false when the organisation in the path's first segment enforces its network policy, **unless the request comes from the API's own login** (`session_user = 'qms_api'`). A browser cannot be that login: PostgREST and Storage connect as their own roles. So the API's existing checks that an upload arrived (`select 1 from storage.objects …` as the person) keep working.
+- **Avatars** (`users/<user id>/…`) are the person's own and are left as they were, in the browser.
+- **API** (`api/src/files/`; any member; the guard checks membership and the network first):
+  - `POST /files/upload-url {bucket, path}` → `{ token, signedUrl }`. The path must be in the organisation's folder (`pathProblem`: no empty, `.` or `..` segments, no backslash or control characters, at least three segments), and the rule must allow adding. A Supabase signed upload is for that one path, refuses an existing object and lasts two hours.
+  - `POST /files/download-url {bucket, path, expiresIn?, downloadName?}` → `{ url, expiresIn, expiresAt }`. The default is ten minutes and the maximum an hour. **While the organisation enforces, the maximum is five minutes.** A missing file answers 404 `file_not_found`.
+  - `POST /files/remove {bucket: 'org-logos', path}`: a replaced or cleared logo (`organisation.manage`).
+  - Refusals: `403 file_not_allowed`, `400 invalid_path`. Without `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` the answer is `503 file_storage_unavailable`. Signing is done by `FileLinkSigner` (`SupabaseFileLinkSigner`, with the service key; tests use a fake).
+- **Browser:**
+  - `src/api/supabaseApi.js`: `uploadFileToSupabase`, `uploadToPath`, `generateSignedUrl` (the organisation is the path's first segment) and `removeOrganisationFile` ask the API, then upload with `uploadToSignedUrl`.
+  - The organisation logo hooks use them.
+  - Cached links are kept for four minutes.
+  - `src/api/supabaseApi.test.js` fails if any file other than the helper and the two avatar files calls `supabase.storage.from`.
+- **Tests:**
+  - `supabase/tests/storage_through_api.test.sql`: every policy uses the shared rule; direct reads, uploads and deletes are refused while enforced, avatars are not; the API login passes.
+  - `api/test/files.e2e-spec.ts`: rule, paths, other organisation, read-only person, network, five-minute cap, logo removal, the arrival check while enforced, 503.
+  - The journey's stand-in storage now takes signed uploads.
+- **Limit (documented):** a link already issued works from anywhere until it expires: at most five minutes while enforced.
+
+## 13. Not in this plan
 
 - SSO (Entra ID, SAML), device certificates, managed devices, country rules.
 - Per-person or per-site allowlists (the policy is organisation-wide, as in the brief).
 - Automatic discovery of company networks.
 - A security dashboard beyond the blocked-attempts list.
 - Restricting **sign-in** itself (Supabase Auth is shared by all organisations; the rule applies to the organisation's data).
-- Revoking a signed file link already issued (it expires within 60 seconds).
+- Revoking a signed file link already issued (it expires within five minutes while enforced).

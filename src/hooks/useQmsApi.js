@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
-import supabase from "../supabase-client";
+import { generateSignedUrl, removeOrganisationFile, uploadToPath } from "../api/supabaseApi";
 import { useAuth } from "../contexts/AuthProvider";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
@@ -66,13 +66,9 @@ export const useOrganisationLogo = () => {
   const path = org?.settings?.logoPath ?? null;
   return useQuery({
     queryKey: orgKey(organisationId, "logo", path),
-    queryFn: async () => {
-      const { data, error } = await supabase.storage.from("org-logos").createSignedUrl(path, 60 * 60);
-      if (error) throw error;
-      return data?.signedUrl ?? null;
-    },
+    queryFn: () => generateSignedUrl("org-logos", path, 60 * 60),
     enabled: !!organisationId && !!path,
-    staleTime: 50 * 60 * 1000,
+    staleTime: 4 * 60 * 1000, // links last five minutes while network restrictions are enforced
     retry: false,
   });
 };
@@ -87,14 +83,13 @@ export const uploadOrganisationLogo = async (file, organisationId) => {
   if (!ext) throw new Error("Use a PNG, JPG, WebP or SVG image.");
   if (file.size > LOGO_MAX_BYTES) throw new Error("The logo must be 1 MB or smaller.");
   const path = `${organisationId}/logo/${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from("org-logos").upload(path, file, { contentType: file.type, upsert: false });
-  if (error) throw new Error(`Upload failed: ${error.message}`);
+  await uploadToPath(file, "org-logos", organisationId, path, file.type);
   return path;
 };
 
 /** Removes a replaced or cleared logo file (best effort; the setting is what the app uses). */
 export const removeOrganisationLogoFile = async (path) => {
-  if (path) await supabase.storage.from("org-logos").remove([path]);
+  if (path) await removeOrganisationFile("org-logos", path);
 };
 
 export const useUpdateOrganisation = () => {

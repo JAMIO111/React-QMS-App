@@ -168,6 +168,9 @@ import { WorkerController } from './worker/worker.controller';
 import { WorkerService } from './worker/worker.service';
 import { WorkerJobRegistry } from './worker/job-registry';
 import { RemindersController } from './reminders/reminders.controller';
+import { FileLinkSigner, SupabaseFileLinkSigner } from './files/file-links';
+import { FilesController } from './files/files.controller';
+import { FilesService } from './files/files.service';
 import { SecurityController } from './security/security.controller';
 import { SecurityService } from './security/security.service';
 import { RemindersService } from './reminders/reminders.service';
@@ -210,6 +213,7 @@ export class AppModule implements NestModule {
         WorkerController,
         RemindersController,
         SecurityController,
+        FilesController,
         WorkflowsController,
         OnboardingController,
         OrganisationsController,
@@ -326,6 +330,7 @@ export class AppModule implements NestModule {
         WorkerJobRegistry,
         RemindersService,
         SecurityService,
+        FilesService,
         WorkflowsService,
         WorkflowEngine,
         CronGuard,
@@ -396,6 +401,7 @@ export class AppModule implements NestModule {
         InspectionService,
         MeasurementImportsService,
         { provide: InspectionFileStore, useClass: SupabaseInspectionFileStore },
+        { provide: FileLinkSigner, useClass: SupabaseFileLinkSigner },
         SpcService,
         DocumentationService,
         CapaService,

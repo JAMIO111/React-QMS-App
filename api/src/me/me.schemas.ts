@@ -29,6 +29,9 @@ export const Membership = z.object({
   /** none | in_progress | complete: the owner's set-up wizard (only people who can set the organisation up see in_progress). */
   onboarding: z.enum(['none', 'in_progress', 'complete']),
   permissions: z.array(z.string()),
+  /** The organisation's network rule for this request (docs/security-plan.md): open (no restriction), allowed, monitored (outside the approved
+   *  networks, recorded but not blocked) or denied (blocked: the app shows why), with the address the API saw. */
+  network: z.object({ state: z.enum(['open', 'allowed', 'monitored', 'denied']), address: z.string().nullable() }),
 });
 
 /** Two-factor state of this session and the organisations it cannot use until MFA is passed. */

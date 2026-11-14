@@ -20,7 +20,6 @@ const api = () => request(app.getHttpServer());
 /** Routes that are deliberately not organisation-scoped (reviewed). */
 const UNSCOPED = new Set([
   'GET /api/v1/health',
-  'GET /api/v1/health/network', // temporary diagnostic (security plan SE0), removed in SE2
   'GET /api/v1/me',
   'PATCH /api/v1/me',
   'POST /api/v1/organisations',
@@ -484,6 +483,9 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/inspection-imports/{id}/discard': { reason: 'Hijacked' },
     'POST /api/v1/inspection-imports/{id}/apply': {},
     'PUT /api/v1/inspection-import-rows/{id}/match': { requirementId: null },
+    'PATCH /api/v1/security/networks/{id}': { name: 'Hijacked' },
+    'POST /api/v1/security/networks/{id}/remove': { reason: 'Hijacked' },
+    'POST /api/v1/security/networks/{id}/restore': undefined,
     'POST /api/v1/inspections/{id}/samples': { readings: [{ requirementId: a.requirement, valueNumeric: '1' }] },
     'POST /api/v1/inspections/{id}/complete': undefined,
     'POST /api/v1/inspections/{id}/abandon': { reason: 'Hijacked' },
@@ -945,6 +947,9 @@ const hasSample = (op: Op) =>
     'POST /api/v1/inspection-imports/{id}/discard',
     'POST /api/v1/inspection-imports/{id}/apply',
     'PUT /api/v1/inspection-import-rows/{id}/match',
+    'PATCH /api/v1/security/networks/{id}',
+    'POST /api/v1/security/networks/{id}/remove',
+    'POST /api/v1/security/networks/{id}/restore',
     'POST /api/v1/inspections/{id}/samples',
     'POST /api/v1/inspections/{id}/complete',
     'POST /api/v1/inspections/{id}/abandon',
@@ -977,6 +982,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/measurement-feature-maps/')) return a.featureMap;
   if (path.startsWith('/api/v1/inspection-imports/')) return a.inspectionImport;
   if (path.startsWith('/api/v1/inspection-import-rows/')) return a.importRow;
+  if (path.startsWith('/api/v1/security/networks/')) return a.network;
   if (path.startsWith('/api/v1/sites/')) return a.site;
   if (path.startsWith('/api/v1/departments/')) return a.department;
   if (path.startsWith('/api/v1/members/')) return a.ownerMembership;
@@ -1194,6 +1200,8 @@ beforeAll(async () => {
       jsonb_build_array(jsonb_build_object('position', 1, 'featureName', 'OD', 'valueNumeric', 1, 'requirementId', $3::uuid, 'matchKind', 'balloon')))))) as id`,
       [a.inspection, ids.orgA, a.requirement])).id;
     a.importRow = (await q1(`select id from public.inspection_import_rows where import_id = $1`, [a.inspectionImport])).id;
+    // Security (SE1/SE2): an approved network of A's.
+    a.network = (await q1(`select app.save_organisation_network($1, '{"name":"Sweep HQ","network":"203.0.113.0/28"}'::jsonb, null) as id`, [ids.orgA])).id;
     await client.query(`select app.raise_spc_alerts($1, $2, '[{"characteristicKey":"OD","characteristicName":"OD","operationCode":"OP-1","variant":"imr","rule":"we1","side":"above","pointAt":"2026-11-05T08:00:00Z","summary":"Rule 1","inspectionId":null,"inspectionReference":null}]'::jsonb)`, [ids.orgA, ipart]);
     a.alert = (await q1(`select id from public.spc_alerts where organisation_id = $1`, [ids.orgA])).id;
     a.qualityAlert = (await q1(`insert into public.quality_alerts (organisation_id, title, category, severity) values ($1, 'Alpha alert', 'product', 'low') returning id`, [ids.orgA])).id;

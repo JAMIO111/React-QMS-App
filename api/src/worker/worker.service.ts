@@ -57,6 +57,15 @@ export class WorkerService {
     private readonly scorecards: SupplierPerformanceService,
   ) {}
 
+  /** Small clean-ups: blocked access attempts older than 90 days (docs/security-plan.md S8). */
+  private housekeeping(correlationId: string) {
+    return this.database.asApi(
+      async (c) => ({ accessDenialsCleared: Number((await c.query('select app.system_purge_access_denials() as n')).rows[0].n) }),
+      correlationId,
+      'worker',
+    );
+  }
+
   async tick(options: { source: TickSource; budgetMs?: number; correlationId?: string }): Promise<TickOutcome> {
     const started = Date.now();
     const budget = Math.min(Math.max(options.budgetMs ?? 45_000, 1_000), MAX_BUDGET);
@@ -97,6 +106,7 @@ export class WorkerService {
     await step('jobs', () => this.runJobs(correlationId, stopAt - 8_000), 3_000);
     await step('email', () => this.email.drain({ budgetMs: Math.min(15_000, left() - 2_000), correlationId }), 3_000);
     await step('imports', () => this.cron.integrationRuns(10, correlationId, Math.min(25_000, left() - 2_000)), 4_000);
+    await step('housekeeping', () => this.housekeeping(correlationId), 1_000);
 
     // Partial when a step failed; error when every step that ran failed.
     const failed = steps.filter((s) => !s.ok);

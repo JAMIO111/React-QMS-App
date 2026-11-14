@@ -2,6 +2,7 @@ import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import type { JWTPayload } from 'jose';
+import { clientAddress } from '../security/client-address';
 
 export interface AuthenticatedUser {
   id: string;
@@ -24,6 +25,8 @@ export interface RequestContext {
   organisationId?: string;
   /** The person's IANA time zone (X-Time-Zone), validated; "UTC" when absent or unknown. Postgres runs the request in it, so current_date is their today. */
   timeZone?: string;
+  /** The caller's address as the API sees it (req.ip behind the trusted proxy hops; docs/security-plan.md S2), or null when it cannot be read. */
+  address?: string | null;
 }
 
 export const CORRELATION_HEADER = 'x-correlation-id';
@@ -64,6 +67,7 @@ export function contextFrom(req: ApiRequest): RequestContext {
     reason: reason || undefined,
     organisationId: req.organisationId,
     timeZone: validTimeZone(req.headers['x-time-zone']),
+    address: clientAddress(req.ip),
   };
 }
 

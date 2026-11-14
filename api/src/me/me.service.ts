@@ -37,13 +37,15 @@ export class MeService {
       permissions: string[] | null;
       access_state: string | null;
       onboarding: string;
+      network: string | null;
     }>(sql`
       select m.id as membership_id, o.id as organisation_id, o.name, o.slug,
              array(select p from app.my_visible_permissions(o.id) p order by p) as permissions,
              app.organisation_access_state(o.id) as access_state,
              case when o.onboarding_completed_at is not null then 'complete'
                   when exists (select 1 from public.organisation_onboarding w where w.organisation_id = o.id) then 'in_progress'
-                  else 'none' end as onboarding
+                  else 'none' end as onboarding,
+             app.network_allowed(o.id, ${ctx.address ?? null}::inet) as network
       from public.organisation_users m
       join public.organisations o on o.id = m.organisation_id and o.status = 'active'
       where m.user_id = auth.uid() and m.status = 'active'
@@ -74,6 +76,7 @@ export class MeService {
         accessState: (m.access_state ?? 'open') as 'open' | 'needs_subscription' | 'lapsed',
         onboarding: m.onboarding as 'none' | 'in_progress' | 'complete',
         permissions: m.permissions ?? [],
+        network: { state: (m.network ?? 'open') as 'open' | 'allowed' | 'monitored' | 'denied', address: ctx.address ?? null },
       })),
     };
   }

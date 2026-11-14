@@ -1,6 +1,6 @@
 # Organisation security: network allowlisting and access rules — plan
 
-**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** · **SE1 built** (migration `20260228100000_organisation_security.sql`, not yet applied live) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
+**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** · **SE1 built** (migration `20260228100000_organisation_security.sql`, not yet applied live) · **SE2 built** (API, no migration) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
 
 ## 1. Why
 
@@ -167,7 +167,41 @@ It is network control, not device or identity control: it does not prove the dev
 - Errors `QM029` (→ `409 security_rule` in SE2), another organisation `P0002`.
 - Tests: `supabase/tests/organisation_security.test.sql`, tenancy sweep seeds and assertions, guardrails audit list.
 
-## 11. Not in this plan
+## 11. SE2 as built (API, no migration)
+
+- **Request context:** `RequestContext.address` = `clientAddress(req.ip)` (`api/src/security/client-address.ts`), set in `contextFrom` for every authenticated request.
+- **Guard** (`OrganisationGuard`):
+  - its one query also returns `app.network_allowed(org, address)`;
+  - **the network is checked right after membership, before the permission**, so a blocked person is told about the network, not about a missing permission;
+  - `denied` → `403 network_not_allowed` with `details.address` and the message "This organisation does not allow access from your network…";
+  - `denied` and `monitored` both write an `access_denials` row on the API login (`recordDenial`; a failure to record is logged and never changes the answer);
+  - non-members still get 404. No cache, so a change applies on the next request.
+- **Routes** (`api/src/security/`):
+  - `GET /security/access-policy` (`security.read`) → mode, changed at / by, `canManage`, the caller's `address`, `covered`, `activeCount`, `networks`. Each network carries `count` ("16 addresses"), `single`, `includesYou`, removed, and who / when.
+  - `PUT /security/access-policy {mode, confirm}` — enforce needs `confirm: true` (400 `confirmation_required`).
+  - `POST /security/networks {name, network, active?}`, `PATCH /security/networks/{id}`, `POST …/{id}/remove {reason}|restore` (`security.manage`); each answers with the whole policy.
+  - `GET /security/access-denials?from&to&userId&mode&limit` (`security.read`) → person, address, mode, attempts, last path, first / last seen, `nowAllowed` (a network covers it now).
+  - Errors `QM029` → `409 security_rule`.
+- **`/me`:** each membership carries `network: { state: open | allowed | monitored | denied, address }`, so the app can show the blocked screen (SE4) without touching the organisation's data.
+- **Worker:** a `housekeeping` step clears blocked attempts older than 90 days (`app.system_purge_access_denials`).
+- **The SE0 diagnostic route `GET /health/network` is removed.**
+- **Tests:** `api/test/security.e2e-spec.ts` covers:
+  - the address the API checks: one trusted hop takes the proxy's address and ignores a forged one in front; no hop ignores the headers; IPv6;
+  - rights and refused ranges;
+  - monitor (nobody blocked, attempt recorded);
+  - enforce: needs confirmation and your own address;
+  - blocked from outside, with the address in the reply; inside allowed; CIDR edges; IPv6; IPv4 written as IPv6; a write blocked too;
+  - a forged address in front of the proxy's ignored;
+  - the same session blocked after moving networks;
+  - a person in two organisations still uses the other one, and `/me` says which is blocked;
+  - a non-member still gets 404;
+  - lockout refusals;
+  - blocked attempts counted;
+  - off opens again.
+  - Also: tenancy sweep sample bodies, the worker step list.
+- **Not covered yet:** files fetched straight from Supabase Storage (SE3); emails while enforced (SE4).
+
+## 12. Not in this plan
 
 - SSO (Entra ID, SAML), device certificates, managed devices, country rules.
 - Per-person or per-site allowlists (the policy is organisation-wide, as in the brief).

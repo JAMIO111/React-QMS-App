@@ -168,6 +168,8 @@ import { WorkerController } from './worker/worker.controller';
 import { WorkerService } from './worker/worker.service';
 import { WorkerJobRegistry } from './worker/job-registry';
 import { RemindersController } from './reminders/reminders.controller';
+import { SecurityController } from './security/security.controller';
+import { SecurityService } from './security/security.service';
 import { RemindersService } from './reminders/reminders.service';
 import { WorkflowsController } from './workflows/workflows.controller';
 import { WorkflowsService } from './workflows/workflows.service';
@@ -207,6 +209,7 @@ export class AppModule implements NestModule {
         CronController,
         WorkerController,
         RemindersController,
+        SecurityController,
         WorkflowsController,
         OnboardingController,
         OrganisationsController,
@@ -322,6 +325,7 @@ export class AppModule implements NestModule {
         WorkerService,
         WorkerJobRegistry,
         RemindersService,
+        SecurityService,
         WorkflowsService,
         WorkflowEngine,
         CronGuard,

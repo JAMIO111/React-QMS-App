@@ -1,4 +1,4 @@
-import { applyDecorators, CanActivate, ExecutionContext, Injectable, SetMetadata } from '@nestjs/common';
+import { applyDecorators, CanActivate, ExecutionContext, Injectable, Logger, SetMetadata } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ApiHeader, ApiResponse } from '@nestjs/swagger';
 import { sql } from 'drizzle-orm';
@@ -30,6 +30,8 @@ export const OrganisationScoped = (permission?: string, options: { anyScope?: bo
 
 @Injectable()
 export class OrganisationGuard implements CanActivate {
+  private readonly log = new Logger(OrganisationGuard.name);
+
   constructor(
     private readonly reflector: Reflector,
     private readonly db: DatabaseService,
@@ -47,15 +49,17 @@ export class OrganisationGuard implements CanActivate {
       throw ApiError.badRequest('invalid_organisation_id', 'X-Organisation-Id must be a UUID');
     }
 
-    const { member, allowed, mfa_blocked } = await this.db.asUser(contextFrom(req), async (db) => {
-      const result = await db.execute<{ member: boolean; allowed: boolean; mfa_blocked: boolean }>(
+    const ctx = contextFrom(req);
+    const { member, allowed, mfa_blocked, network } = await this.db.asUser(ctx, async (db) => {
+      const result = await db.execute<{ member: boolean; allowed: boolean; mfa_blocked: boolean; network: string | null }>(
         sql`select app.is_member(${organisationId}::uuid) as member,
                    (${scope.permission ?? null}::text is null
                     or case when ${scope.anyScope ?? false}::boolean
                             then app.has_permission_somewhere(${organisationId}::uuid, ${scope.permission ?? null}::text)
                             else app.has_permission(${organisationId}::uuid, ${scope.permission ?? null}::text) end) as allowed,
                    exists (select 1 from app.mfa_blocked_organisations() b
-                           where b.organisation_id = ${organisationId}::uuid) as mfa_blocked`,
+                           where b.organisation_id = ${organisationId}::uuid) as mfa_blocked,
+                   app.network_allowed(${organisationId}::uuid, ${ctx.address ?? null}::inet) as network`,
       );
       return result.rows[0];
     });
@@ -64,8 +68,30 @@ export class OrganisationGuard implements CanActivate {
     // caller's own memberships are reported, so this does not reveal other tenants.
     if (mfa_blocked) throw new ApiError(403, 'mfa_required', 'This organisation requires two-factor authentication');
     if (!member) throw ApiError.notFound('organisation_not_found', 'Organisation not found');
+    // The organisation's network rule (docs/security-plan.md S1): checked on every request, in the same query, so a change applies at once.
+    if (network === 'denied' || network === 'monitored') {
+      await this.recordDenial(organisationId, ctx.user.id, ctx.address ?? null, network === 'denied' ? 'enforce' : 'monitor', req.originalUrl ?? req.url, ctx.correlationId);
+      if (network === 'denied') {
+        throw new ApiError(403, 'network_not_allowed', 'This organisation does not allow access from your network. Connect through your company network or VPN, or ask an administrator.', {
+          address: ctx.address ?? null,
+        });
+      }
+    }
     if (!allowed) throw ApiError.forbidden(undefined, { permission: scope.permission });
     req.organisationId = organisationId.toLowerCase();
     return true;
+  }
+
+  /** Records a blocked (or, in monitor mode, would-be blocked) request on the API login. Never lets a failure to record change the answer. */
+  private async recordDenial(organisationId: string, userId: string, address: string | null, mode: 'enforce' | 'monitor', path: string, correlationId: string) {
+    try {
+      await this.db.asApi(
+        (c) => c.query('select app.system_record_access_denial($1::uuid, $2::uuid, $3, $4, $5)', [organisationId, userId, address ?? 'unknown', mode, path]),
+        correlationId,
+        'security',
+      );
+    } catch (e) {
+      this.log.warn(`Could not record a ${mode} network denial: ${(e as Error).message}`);
+    }
   }
 }

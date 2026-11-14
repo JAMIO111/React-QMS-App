@@ -4,6 +4,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
+  ApplyBody,
   CreateImportBody,
   DiscardBody,
   FeatureMapBody,
@@ -182,6 +183,16 @@ export class InspectionImportsController {
   @ApiOkResponse({ schema: openApiSchema(ImportDetail) })
   discard(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.discard(ctx, parse(Uuid, id), parse(DiscardBody, body ?? {}));
+  }
+
+  /** Record the preview's readings (new, a retest of the failed ones, or a correction with a reason); all or nothing. */
+  @Post('inspection-imports/:id/apply')
+  @HttpCode(200)
+  @OrganisationScoped('inspection.record', SITE_SCOPED)
+  @ApiBody({ schema: openApiSchema(ApplyBody) })
+  @ApiOkResponse({ schema: openApiSchema(ImportDetail) })
+  apply(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.apply(ctx, parse(Uuid, id), parse(ApplyBody, body ?? {}));
   }
 
   /** Match a feature to a check (or to nothing); `remember` also saves it for later files of the part. */

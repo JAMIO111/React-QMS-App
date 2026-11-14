@@ -1,6 +1,6 @@
 # CMM and measurement file ingestion — plan
 
-**Status:** agreed 2026-11-14 (C1–C15 as recommended; sample files for CM0 still to come) · **CM1 done** (migration `20260226100000_measurement_imports.sql`, applied live 2026-11-14) · **CM2 done** (migration `20260227100000_measurement_import_units.sql`, not yet applied live) · **Date:** 2026-11-14 · **Brief:** `docs/design-brief.md` §6.4 (inspection and measurement), §12 Phase 6 ("CMM/inspection data ingestion"), §14 (definition of done)
+**Status:** agreed 2026-11-14 (C1–C15 as recommended; sample files for CM0 still to come) · **CM1 done** (migration `20260226100000_measurement_imports.sql`, applied live 2026-11-14) · **CM2 done** (migration `20260227100000_measurement_import_units.sql`, applied live 2026-11-14) · **CM3 done** (no migration) · **Date:** 2026-11-14 · **Brief:** `docs/design-brief.md` §6.4 (inspection and measurement), §12 Phase 6 ("CMM/inspection data ingestion"), §14 (definition of done)
 
 ## 1. Why
 
@@ -116,6 +116,16 @@ A part-number mismatch blocks; the file's tolerance never decides pass/fail; an 
 - **API:** `GET /measurement-profiles` (`all=true` incl. retired; `canManage`), `GET /measurement-profiles/templates`, `POST /measurement-profiles/try` (settings + file as base64 ≤ 2 MB; nothing saved; `ok: false` with the reason when it cannot be read), `GET /measurement-profiles/{id}` (with versions), `POST` / `PATCH` (`process_control.manage`; a settings change needs `reason`), `POST …/{id}/retire|reactivate`; `GET|POST /parts/{id}/feature-maps`, `POST /measurement-feature-maps/{id}/end`; `POST /inspections/{id}/imports {path, fileName, profileId, gaugeId?}` (`inspection.record`; the API downloads the file from `inspection-files` with the service key (`InspectionFileStore`, `503 file_storage_unavailable` without it), works out the SHA-256 itself, reads and matches it and stores the preview; `400 file_unreadable` with the reader's message), `GET /inspections/{id}/imports`, `GET /inspection-imports/{id}` (header, warnings, counts, the inspection's checks, parts with their rows, `expired`, `canRecord`), `PUT /inspection-import-rows/{id}/match {requirementId|null, remember}`, `POST /inspection-imports/{id}/confirm-mismatches`, `POST …/discard {reason?}`.
 - **Tests:** `parse-report.spec.ts`, `match.spec.ts`, `supabase/tests/measurement_import_units.test.sql`, `api/test/measurement-imports.e2e-spec.ts` (+ API sweep).
 
-## 11. Not in this plan
+## 11. CM3 as built (no migration)
+
+- **`POST /inspection-imports/{id}/apply {mode new|retest|correct, reason?, gaugeId?, gaugeOverrideReason?, newSubgroup?, triggerType?}`** (`inspection.record`), one transaction, all or nothing: `app.begin_inspection_import_apply` (the CM1 checks), then each part of the file:
+  - **new** — recorded through **`InspectionService.recordSample`** (split out of `addSample`, which now calls it): the **sampling plan** decides the trigger exactly as for typed readings (so a file cannot add a sample the plan does not ask for — "nothing more to sample", or an event trigger with no rule — and `triggerType` gives the reason for an extra one, as on the typed path), the database judges each reading, the gauge and its override are checked, **SPC alerts** are raised on the new points; the sample keeps the file's unit reference and notes "From IMP-…";
+  - **retest** — a retest sample; each reading re-measures the latest current reading of its check, which must have failed ("… has no failed reading to retest: its latest reading passed");
+  - **correct** (needs a reason and `inspection.correct`) — the part's sample is the one with the file's unit reference (or, for a one-part file with no reference, the latest sample) holding most of these checks; each current reading there is replaced (the original kept, with the reason);
+  then `app.finish_inspection_import_apply`. Values go to the database as exact text (`value_numeric::text`), never through a JavaScript number.
+- Readings carry **`importId`** in the inspection detail (`GET /inspections/{id}` → `measurements[].importId`) for CM4's "from a file" marker.
+- **Tests:** `api/test/measurement-imports.e2e-spec.ts` (confirm first; viewer refused; readings with the CMM and the import on them; frozen once applied; the same file once; retest of the failed reading and refused when the latest passed; a correction with a reason keeping the original; a correction for an unknown part refused with nothing recorded; the sampling plan's refusals; an overdue CMM needing the override and its reason) (+ API sweep).
+
+## 12. Not in this plan
 
 Reading PDFs or DMIS; automatic NCs; a file sent with no person checking it (comes with the agent, C2b, and still ends in a preview unless a customer agrees otherwise); writing CMM programs or plans back to the machine; QIF Plans (making control plans from a CAD model); Q-DAS DFQ (later, on request); statistics on features that are not in the control plan.

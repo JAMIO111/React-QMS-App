@@ -158,6 +158,8 @@ export const Measurement = z.object({
   supersededById: z.string().uuid().nullable(),
   correctionReason: z.string().nullable(),
   retestOfId: z.string().uuid().nullable(),
+  /** The measurement file import the reading came from (null when typed). */
+  importId: z.string().uuid().nullable().optional(),
   notes: z.string().nullable(),
   /** A person has seen this failed reading and said what is being done (PC5). */
   acknowledgement: z.object({ note: z.string(), at: Iso, by: Ref.nullable() }).nullable(),

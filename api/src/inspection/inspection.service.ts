@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { iso, num, personName, Row } from '../calibration/calibration.service';
+import type { PoolClient } from 'pg';
 import { DatabaseService, Db } from '../database/database.service';
 import { buildSchedule, EVENT_TRIGGERS, eventViolations, nextSample, PLANNED_TRIGGERS, PlanRequirement, plannedViolations, timedDue } from './sampling-rules';
 import {
@@ -155,29 +156,40 @@ export class InspectionService {
   addSample(ctx: RequestContext, id: string, body: z.infer<typeof AddSampleBody>): Promise<InspectionDetail> {
     return this.database.asUser(ctx, async (db, client) => {
       await this.requireRecord(db, ctx, id);
-      const trigger = body.isRetest ? (body.triggerType ?? 'manual') : await this.planSample(db, id, body);
-      const sample = await db.execute<{ id: string }>(sql`insert into public.inspection_samples
-        (organisation_id, inspection_record_id, unit_reference, trigger_type, is_retest, notes, subgroup_number)
-        values (${orgOf(ctx)}::uuid, ${id}::uuid, ${body.unitReference ?? null}, ${trigger}, ${body.isRetest ?? false}, ${body.notes ?? null},
-                ${body.newSubgroup && !body.isRetest ? sql`(select coalesce(max(subgroup_number), 0) + 1 from public.inspection_samples where inspection_record_id = ${id}::uuid)` : sql`null`})
-        returning id`);
-      const sampleId = sample.rows[0].id;
-      for (const r of body.readings) {
-        await db.execute(sql`insert into public.inspection_measurements
-          (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric, value_pass, value_count, gauge_id, gauge_override_reason, retest_of_id, notes)
-          values (${orgOf(ctx)}::uuid, ${id}::uuid, ${sampleId}::uuid, ${r.requirementId}::uuid, ${r.valueNumeric ?? null}::numeric,
-                  ${r.valuePass ?? null}, ${r.valueCount ?? null}::integer, ${r.gaugeId ?? null}::uuid, ${r.gaugeOverrideReason ?? null}, ${r.retestOfId ?? null}::uuid, ${r.notes ?? null})`);
-      }
-      // A signal on the points just recorded becomes an alert (retests re-measure a failed reading and are not charted).
-      if (!body.isRetest) {
-        const at = await db.execute<Row>(sql`select r.part_id, min(m.measured_at) as since from public.inspection_measurements m
-          join public.inspection_records r on r.id = m.inspection_record_id where m.sample_id = ${sampleId}::uuid group by r.part_id`);
-        if (at.rows[0]) {
-          await this.spc.raiseAlerts(db, client, ctx, at.rows[0].part_id as string, body.readings.map((r) => r.requirementId), new Date(new Date(at.rows[0].since as string).getTime() - 1000));
-        }
-      }
+      await this.recordSample(db, client, ctx, id, body);
       return this.load(db, ctx, id);
     });
+  }
+
+  /**
+   * Record one sample and its readings inside the caller's transaction: the sampling plan decides the trigger, the database judges each reading,
+   * and signals on the new points become SPC alerts. A measurement file import (CM3) records each part through here, with its `importId` on every
+   * reading. Returns the sample's id.
+   */
+  async recordSample(db: Db, client: PoolClient, ctx: RequestContext, id: string, body: z.infer<typeof AddSampleBody>, importId: string | null = null): Promise<string> {
+    const trigger = body.isRetest ? (body.triggerType ?? 'manual') : await this.planSample(db, id, body);
+    const sample = await db.execute<{ id: string }>(sql`insert into public.inspection_samples
+      (organisation_id, inspection_record_id, unit_reference, trigger_type, is_retest, notes, subgroup_number)
+      values (${orgOf(ctx)}::uuid, ${id}::uuid, ${body.unitReference ?? null}, ${trigger}, ${body.isRetest ?? false}, ${body.notes ?? null},
+              ${body.newSubgroup && !body.isRetest ? sql`(select coalesce(max(subgroup_number), 0) + 1 from public.inspection_samples where inspection_record_id = ${id}::uuid)` : sql`null`})
+      returning id`);
+    const sampleId = sample.rows[0].id;
+    for (const r of body.readings) {
+      await db.execute(sql`insert into public.inspection_measurements
+        (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric, value_pass, value_count, gauge_id, gauge_override_reason, retest_of_id, notes, import_id)
+        values (${orgOf(ctx)}::uuid, ${id}::uuid, ${sampleId}::uuid, ${r.requirementId}::uuid, ${r.valueNumeric ?? null}::numeric,
+                ${r.valuePass ?? null}, ${r.valueCount ?? null}::integer, ${r.gaugeId ?? null}::uuid, ${r.gaugeOverrideReason ?? null}, ${r.retestOfId ?? null}::uuid, ${r.notes ?? null},
+                ${importId}::uuid)`);
+    }
+    // A signal on the points just recorded becomes an alert (retests re-measure a failed reading and are not charted).
+    if (!body.isRetest) {
+      const at = await db.execute<Row>(sql`select r.part_id, min(m.measured_at) as since from public.inspection_measurements m
+        join public.inspection_records r on r.id = m.inspection_record_id where m.sample_id = ${sampleId}::uuid group by r.part_id`);
+      if (at.rows[0]) {
+        await this.spc.raiseAlerts(db, client, ctx, at.rows[0].part_id as string, body.readings.map((r) => r.requirementId), new Date(new Date(at.rows[0].since as string).getTime() - 1000));
+      }
+    }
+    return sampleId;
   }
 
   /** An inspection can only be completed once every planned sample is recorded (abandon it otherwise). */
@@ -535,6 +547,7 @@ export class InspectionService {
         supersededById: (m.superseded_by_id as string) ?? null,
         correctionReason: (m.correction_reason as string) ?? null,
         retestOfId: (m.retest_of_id as string) ?? null,
+        importId: (m.import_id as string) ?? null,
         notes: (m.notes as string) ?? null,
         acknowledgement: (() => {
           const a = acks.rows.find((x) => x.measurement_id === m.id);

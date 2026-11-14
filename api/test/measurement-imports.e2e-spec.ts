@@ -206,3 +206,102 @@ describe('uploading a report onto an inspection', () => {
     await api().post(`/api/v1/measurement-profiles/${ctx.profile}/reactivate`).set(h).expect(200);
   });
 });
+
+describe('applying a preview (CM3)', () => {
+  const file = (rows: string[]) => ['Part: HSG-1', 'Serial: SN-77', '', 'Feature,Balloon,Actual,Lower limit,Upper limit', ...rows].join('\n');
+  const upload = async (h: Record<string, string>, name: string, text: string) =>
+    (await api().post(`/api/v1/inspections/${ctx.inspection}/imports`).set(h).send({ path: put(name, text), fileName: name, profileId: ctx.profile }).expect(201)).body;
+  const readings = async (h: Record<string, string>) => {
+    const insp = (await api().get(`/api/v1/inspections/${ctx.inspection}`).set(h).expect(200)).body;
+    return insp.measurements as {
+      id: string; requirementId: string; valueNumeric: string; result: string; importId: string | null; retestOfId: string | null; supersedesId: string | null; correctionReason: string | null;
+      gauge: { assetNumber: string } | null;
+    }[];
+  };
+
+  it('waits for the differences to be confirmed, then records each matched feature as a reading with the CMM, all at once', async () => {
+    const h = await as(ids.inspectorA);
+    const refused = await api().post(`/api/v1/inspection-imports/${ctx.import}/apply`).set(h).send({}).expect(409);
+    expect(refused.body.error.message).toMatch(/confirm/);
+    await api().post(`/api/v1/inspection-imports/${ctx.import}/confirm-mismatches`).set(h).expect(200);
+    await api().post(`/api/v1/inspection-imports/${ctx.import}/apply`).set(await as(ids.dual)).send({}).expect(403);
+    const applied = await api().post(`/api/v1/inspection-imports/${ctx.import}/apply`).set(h).send({}).expect(200);
+    expect(applied.body).toMatchObject({ status: 'applied', applyMode: 'new' });
+    expect(applied.body.units[0].sampleId).not.toBeNull();
+    const rows = applied.body.units[0].rows.filter((r: { requirementId: string | null }) => r.requirementId);
+    expect(rows.every((r: { measurementId: string | null }) => r.measurementId)).toBe(true);
+    const fromFile = (await readings(h)).filter((r) => r.importId === ctx.import);
+    expect(fromFile.map((r) => [r.valueNumeric, r.result, r.gauge?.assetNumber]).sort()).toEqual([['25.02', 'pass', 'CMM-1'], ['40.15', 'fail', 'CMM-1'], [null, 'pass', 'CMM-1']].sort());
+    const insp = (await api().get(`/api/v1/inspections/${ctx.inspection}`).set(h).expect(200)).body;
+    expect(insp.samples.at(-1)).toMatchObject({ unitReference: 'SN-77', notes: expect.stringMatching(/^From IMP-/) });
+    // Frozen once applied.
+    await api().post(`/api/v1/inspection-imports/${ctx.import}/discard`).set(h).send({}).expect(409);
+    await api().post(`/api/v1/inspection-imports/${ctx.import}/apply`).set(h).send({}).expect(409);
+  });
+
+  it('the same file is applied to an inspection once', async () => {
+    const h = await as(ids.inspectorA);
+    const again = await upload(h, 'report.csv', REPORT);
+    await api().post(`/api/v1/inspection-imports/${again.id}/confirm-mismatches`).set(h).expect(200);
+    const res = await api().post(`/api/v1/inspection-imports/${again.id}/apply`).set(h).send({}).expect(409);
+    expect(res.body.error.message).toMatch(/already imported on this inspection/);
+    expect((await api().get(`/api/v1/inspection-imports/${again.id}`).set(h).expect(200)).body.status).toBe('previewed');
+  });
+
+  it('a re-measure applied as a retest re-measures the failed reading; a check whose latest reading passed cannot be retested', async () => {
+    const h = await as(ids.inspectorA);
+    const failed = (await readings(h)).find((r) => r.importId === ctx.import && r.result === 'fail')!;
+    const retest = await upload(h, 'retest.csv', file(['Length,2,40.05,39.9,40.1']));
+    const res = await api().post(`/api/v1/inspection-imports/${retest.id}/apply`).set(h).send({ mode: 'retest' }).expect(200);
+    expect(res.body).toMatchObject({ status: 'applied', applyMode: 'retest' });
+    const r = (await readings(h)).find((x) => x.importId === retest.id)!;
+    expect(r).toMatchObject({ valueNumeric: '40.05', result: 'pass', retestOfId: failed.id });
+    const again = await upload(h, 'retest2.csv', file(['Length,2,40.06,39.9,40.1']));
+    const refused = await api().post(`/api/v1/inspection-imports/${again.id}/apply`).set(h).send({ mode: 'retest' }).expect(409);
+    expect(refused.body.error.message).toMatch(/latest reading passed/);
+  });
+
+  it('a corrected file replaces the readings of that part, with a reason, keeping the originals', async () => {
+    const owner = await as(ids.ownerA);
+    const original = (await readings(owner)).find((r) => r.importId === ctx.import && r.valueNumeric === '25.02')!;
+    const fix = await upload(owner, 'fix.csv', file(['Bore,1,25.01,24.95,25.05']));
+    const noReason = await api().post(`/api/v1/inspection-imports/${fix.id}/apply`).set(owner).send({ mode: 'correct' }).expect(409);
+    expect(noReason.body.error.message).toMatch(/why the readings are being corrected/);
+    await api().post(`/api/v1/inspection-imports/${fix.id}/apply`).set(owner).send({ mode: 'correct', reason: 'Probe was not qualified' }).expect(200);
+    const all = await readings(owner);
+    const correction = all.find((x) => x.importId === fix.id)!;
+    expect(correction).toMatchObject({ valueNumeric: '25.01', supersedesId: original.id, correctionReason: 'Probe was not qualified' });
+    expect(all.some((x) => x.id === original.id)).toBe(true);
+  });
+
+  it('goes through the sampling plan like typed readings, and a CMM overdue for calibration needs an authorised override with a reason', async () => {
+    const owner = await as(ids.ownerA);
+    const overdue = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10);
+    const old = (await api().post('/api/v1/gauges').set(owner).send({ assetNumber: 'CMM-OLD', description: 'Old CMM', siteId: ids.siteA, nextDueOn: overdue }).expect(201)).body.id;
+    // A further part: the plan's samples are all taken, and it has no rule for a manual extra.
+    const extra = await upload(owner, 'extra.csv', file(['Bore,1,25.0,24.95,25.05']).replace('SN-77', 'SN-80'));
+    const done = await api().post(`/api/v1/inspection-imports/${extra.id}/apply`).set(owner).send({}).expect(409);
+    expect(done.body.error.message).toMatch(/nothing more to sample/);
+    const manual = await api().post(`/api/v1/inspection-imports/${extra.id}/apply`).set(owner).send({ triggerType: 'manual' }).expect(409);
+    expect(manual.body.error.message).toMatch(/does not sample this on "manual"/);
+    // A correction of SN-77 measured on the overdue CMM.
+    const preview = await upload(owner, 'old.csv', file(['Bore,1,25.0,24.95,25.05']));
+    const refused = await api().post(`/api/v1/inspection-imports/${preview.id}/apply`).set(owner).send({ mode: 'correct', reason: 'Re-measured', gaugeId: old }).expect(409);
+    expect(refused.body.error.message).toMatch(/CMM-OLD is overdue for calibration/);
+    const applied = await api().post(`/api/v1/inspection-imports/${preview.id}/apply`).set(owner)
+      .send({ mode: 'correct', reason: 'Re-measured', gaugeId: old, gaugeOverrideReason: 'Calibrated yesterday, certificate on its way' }).expect(200);
+    expect(applied.body).toMatchObject({ status: 'applied', gauge: { assetNumber: 'CMM-OLD' } });
+    const r = (await readings(owner)).find((x) => x.importId === preview.id) as unknown as { gauge: { valid: boolean }; gaugeOverrideReason: string };
+    expect(r).toMatchObject({ gauge: { valid: false }, gaugeOverrideReason: 'Calibrated yesterday, certificate on its way' });
+  });
+
+  it('a correction for a part that was never measured is refused, and nothing is recorded', async () => {
+    const owner = await as(ids.ownerA);
+    const before = (await readings(owner)).length;
+    const other = await upload(owner, 'other.csv', file(['Bore,1,25.0,24.95,25.05']).replace('SN-77', 'SN-99'));
+    const res = await api().post(`/api/v1/inspection-imports/${other.id}/apply`).set(owner).send({ mode: 'correct', reason: 'Wrong offset' }).expect(409);
+    expect(res.body.error.message).toMatch(/No sample of this inspection is part SN-99/);
+    expect((await readings(owner)).length).toBe(before);
+    expect((await api().get(`/api/v1/inspection-imports/${other.id}`).set(owner).expect(200)).body.status).toBe('previewed');
+  });
+});

@@ -7,9 +7,11 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { FileParseError } from '../integrations/core/file-parsers';
+import { InspectionService } from '../inspection/inspection.service';
 import { InspectionFileStore } from './file-store';
 import { matchReport, MatchFeatureMap, MatchRequirement } from './match';
 import {
+  ApplyBody,
   CreateImportBody,
   DiscardBody,
   FeatureMap,
@@ -68,6 +70,7 @@ export class MeasurementImportsService {
   constructor(
     private readonly database: DatabaseService,
     private readonly store: InspectionFileStore,
+    private readonly inspections: InspectionService,
   ) {}
 
   // ---- profiles ----
@@ -309,6 +312,115 @@ export class MeasurementImportsService {
     });
   }
 
+  /**
+   * Apply a preview (C10–C12) in one transaction: the database starts it (checks it is still good to apply), each part becomes a sample recorded
+   * through the inspection's normal path — so the sampling plan, the database's pass/fail, gauge checks and SPC alerts all run as for typed
+   * readings — and the database finishes it (every matched feature became exactly that reading). All or nothing.
+   */
+  apply(ctx: RequestContext, id: string, body: z.infer<typeof ApplyBody>): Promise<DetailT> {
+    return this.database.asUser(ctx, async (db, client) => {
+      const head = await db.execute<Row>(sql`select inspection_record_id, gauge_id from public.inspection_imports where id = ${id}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!head.rows[0]) throw ApiError.notFound('import_not_found', 'Import not found');
+      const inspectionId = head.rows[0].inspection_record_id as string;
+      const gaugeId = body.gaugeId !== undefined ? body.gaugeId : ((head.rows[0].gauge_id as string) ?? null);
+      const plan = (
+        await db.execute<{ plan: ApplyPlan }>(sql`select app.begin_inspection_import_apply(${id}::uuid, ${gaugeId}::uuid, ${body.mode}, ${body.reason ?? null},
+          ${body.gaugeOverrideReason ?? null}) as plan`)
+      ).rows[0].plan;
+
+      // The exact values as text (JSON numbers can lose digits).
+      const exact = new Map(
+        (await db.execute<{ id: string; v: string | null }>(sql`select id, value_numeric::text as v from public.inspection_import_rows where import_id = ${id}::uuid`)).rows.map((r) => [r.id, r.v]),
+      );
+      for (const u of plan.units) for (const r of u.rows) r.valueText = exact.get(r.id) ?? null;
+
+      const units: { unitId: string; sampleId: string }[] = [];
+      for (const [i, unit] of plan.units.entries()) {
+        const reading = (r: ApplyRow) => ({
+          requirementId: r.requirementId,
+          ...(r.valueText != null ? { valueNumeric: r.valueText } : {}),
+          ...(r.valuePass != null ? { valuePass: r.valuePass } : {}),
+          ...(r.valueCount != null ? { valueCount: r.valueCount } : {}),
+          gaugeId: gaugeId ?? undefined,
+          gaugeOverrideReason: body.gaugeOverrideReason ?? undefined,
+        });
+        if (body.mode === 'correct') {
+          units.push({ unitId: unit.id, sampleId: await this.correctUnit(db, ctx, inspectionId, id, unit, plan.units.length, gaugeId, body) });
+          continue;
+        }
+        const readings =
+          body.mode === 'retest'
+            ? await Promise.all(unit.rows.map(async (r) => ({ ...reading(r), retestOfId: await this.failedReading(db, inspectionId, r.requirementId) })))
+            : unit.rows.map(reading);
+        const sampleId = await this.inspections.recordSample(
+          db,
+          client,
+          ctx,
+          inspectionId,
+          { unitReference: unit.unitReference ?? undefined, isRetest: body.mode === 'retest', newSubgroup: i === 0 && body.newSubgroup, triggerType: body.triggerType, readings, notes: `From ${plan.reference}` },
+          id,
+        );
+        units.push({ unitId: unit.id, sampleId });
+      }
+      await db.execute(sql`select app.finish_inspection_import_apply(${id}::uuid, ${JSON.stringify(units)}::jsonb)`);
+      return this.loadImport(db, ctx, id);
+    });
+  }
+
+  /** The reading a retest re-measures: the latest current reading of the check, which must have failed. */
+  private async failedReading(db: Db, inspectionId: string, requirementId: string): Promise<string> {
+    const r = await db.execute<Row>(sql`select m.id, m.result, q.name from public.inspection_measurements m
+      join public.resolved_inspection_requirements q on q.id = m.requirement_id
+      where m.inspection_record_id = ${inspectionId}::uuid and m.requirement_id = ${requirementId}::uuid
+        and not exists (select 1 from public.inspection_measurements c where c.supersedes_id = m.id)
+      order by m.measured_at desc, m.created_at desc limit 1`);
+    const latest = r.rows[0];
+    if (!latest || latest.result !== 'fail') {
+      const name = latest ? (latest.name as string) : ((await db.execute<Row>(sql`select name from public.resolved_inspection_requirements where id = ${requirementId}::uuid`)).rows[0]?.name as string);
+      throw new ApiError(409, 'inspection_rule', latest ? `${name} has no failed reading to retest: its latest reading passed` : `${name} has no reading to retest yet`);
+    }
+    return latest.id as string;
+  }
+
+  /**
+   * Correct a part already measured: its sample is the one with the same unit reference, or — for a file with one part and no reference — the
+   * latest sample holding readings of these checks; each current reading there is replaced (the original is kept, with the reason).
+   */
+  private async correctUnit(db: Db, ctx: RequestContext, inspectionId: string, importId: string, unit: ApplyUnit, unitCount: number, gaugeId: string | null,
+                            body: z.infer<typeof ApplyBody>): Promise<string> {
+    const reqIds = unit.rows.map((r) => r.requirementId);
+    // The part's sample holding the most of these checks (a part may also have retest samples holding only some), newest first.
+    const found =
+      unit.unitReference || unitCount === 1
+        ? await db.execute<Row>(sql`select s.id from public.inspection_samples s
+            join public.inspection_measurements m on m.sample_id = s.id and m.requirement_id = any(string_to_array(${reqIds.join(',')}, ',')::uuid[])
+            where s.inspection_record_id = ${inspectionId}::uuid
+              ${unit.unitReference ? sql`and lower(s.unit_reference) = lower(${unit.unitReference})` : sql``}
+            group by s.id, s.sample_number order by count(distinct m.requirement_id) desc, s.sample_number desc limit 1`)
+        : { rows: [] as Row[] };
+    const sampleId = found.rows[0]?.id as string | undefined;
+    if (!sampleId) {
+      throw new ApiError(409, 'inspection_rule', unit.unitReference
+        ? `No sample of this inspection is part ${unit.unitReference}; record it as new readings instead`
+        : 'Say which part each correction is for: the file needs a serial or part reference per part');
+    }
+    for (const r of unit.rows) {
+      const cur = await db.execute<Row>(sql`select m.id, m.retest_of_id from public.inspection_measurements m where m.sample_id = ${sampleId}::uuid and m.requirement_id = ${r.requirementId}::uuid
+        and not exists (select 1 from public.inspection_measurements c where c.supersedes_id = m.id) order by m.created_at desc limit 1`);
+      if (!cur.rows[0]) {
+        const name = (await db.execute<Row>(sql`select name from public.resolved_inspection_requirements where id = ${r.requirementId}::uuid`)).rows[0]?.name as string;
+        throw new ApiError(409, 'inspection_rule', `${name} has no reading on that part to correct`);
+      }
+      await db.execute(sql`insert into public.inspection_measurements
+        (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric, value_pass, value_count, gauge_id, gauge_override_reason,
+         supersedes_id, correction_reason, retest_of_id, import_id)
+        values (${orgOf(ctx)}::uuid, ${inspectionId}::uuid, ${sampleId}::uuid, ${r.requirementId}::uuid, ${r.valueText ?? null}::numeric, ${r.valuePass ?? null},
+                ${r.valueCount ?? null}::integer, ${gaugeId}::uuid, ${body.gaugeOverrideReason ?? null}, ${cur.rows[0].id as string}::uuid, ${body.reason ?? null},
+                ${(cur.rows[0].retest_of_id as string) ?? null}::uuid, ${importId}::uuid)`);
+    }
+    return sampleId;
+  }
+
   private async requireImport(db: Db, ctx: RequestContext, id: string) {
     const found = await db.execute(sql`select 1 from public.inspection_imports where id = ${id}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
     if (!found.rows[0]) throw ApiError.notFound('import_not_found', 'Import not found');
@@ -389,6 +501,27 @@ export class MeasurementImportsService {
       })),
     };
   }
+}
+
+interface ApplyRow {
+  id: string;
+  requirementId: string;
+  valueNumeric: number | null;
+  valuePass: boolean | null;
+  valueCount: number | null;
+  /** value_numeric as exact text, read after the plan. */
+  valueText?: string | null;
+}
+interface ApplyUnit {
+  id: string;
+  position: number;
+  unitReference: string | null;
+  rows: ApplyRow[];
+}
+interface ApplyPlan {
+  reference: string;
+  mode: string;
+  units: ApplyUnit[];
 }
 
 const IMPORT_SELECT = `select i.id, i.reference, i.inspection_record_id, i.status, i.file_name, i.created_at, i.applied_at, i.discarded_at,

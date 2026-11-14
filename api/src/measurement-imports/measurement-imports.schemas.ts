@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Trigger } from '../inspection/inspection.schemas';
 import { TableSettings } from './profile-settings';
 
 const Reason = z.string().trim().min(3).max(1000);
@@ -51,6 +52,21 @@ export const MatchBody = z
     requirementId: z.string().uuid().nullable(),
     /** Also save it as the part's feature map, so later files of the part match the same way. */
     remember: z.boolean().default(false),
+  })
+  .strict();
+
+/** Apply a preview: new readings (default), a retest of the failed readings, or a correction of a part already measured (needs a reason). */
+export const ApplyBody = z
+  .object({
+    mode: z.enum(['new', 'retest', 'correct']).default('new'),
+    reason: z.string().trim().min(3).max(1000).nullish(),
+    /** The gauge the readings were taken with; left out = the one on the preview (the profile's default). */
+    gaugeId: z.string().uuid().nullish(),
+    gaugeOverrideReason: z.string().trim().min(1).max(1000).nullish(),
+    /** Start a new SPC subgroup with the first part. */
+    newSubgroup: z.boolean().optional(),
+    /** Why the sample was taken, as on the typed path: left out = the next sample of the plan; an event (manual, after tool change …) for an extra one. */
+    triggerType: Trigger.optional(),
   })
   .strict();
 

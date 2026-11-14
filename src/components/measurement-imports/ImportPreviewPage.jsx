@@ -246,7 +246,7 @@ const ImportPreviewPage = () => {
             <h1 className="text-2xl font-semibold text-primary-text">{detail.reference}</h1>
             <ImportStatusPill status={detail.status} />
             <span className="text-sm text-secondary-text">
-              {detail.fileName} · {detail.profile ? `${detail.profile.name} (version ${detail.profile.version})` : detail.format === "qif" ? "QIF file" : detail.format} · {formatDateTime(detail.createdAt)}
+              {detail.fileName} · {detail.profile ? `${detail.profile.name} (version ${detail.profile.version})` : detail.format === "qif" ? "QIF file" : "read without a profile"} · {formatDateTime(detail.createdAt)}
               {detail.createdBy ? ` · ${detail.createdBy}` : ""}
             </span>
           </div>

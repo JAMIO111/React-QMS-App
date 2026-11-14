@@ -344,3 +344,22 @@ describe('QIF files (CM5)', () => {
     expect(noProfile.body.error.code).toBe('profile_required');
   });
 });
+
+describe('PC-DMIS generic exports', () => {
+  it('need no profile: dimensions are read from their lines and matched by a balloon-number label', async () => {
+    const h = await as(ids.inspectorA);
+    const text = [
+      'CIR1, 93.486348, 19.488589, -1.269350, 0.000000, 0.000000, 1.000000, 25.010000',
+      '1 AX:D, 25.000000, 0.050000, 0.050000, 25.010000, 0.010000, 0.000000',
+      '2 AX:X, 40.000000, 0.100000, 0.100000, 40.250000, 0.250000, 0.150000',
+      'LOC1 AX:X, 93.485000, 0.010000, 0.010000, 93.486348, 0.001348, 0.000000',
+      'LOC1 AX:Y, 19.500000, 0.010000, 0.010000, 19.488589, -0.011411, 0.001411',
+    ].join('\r\n');
+    const res = await api().post(`/api/v1/inspections/${ctx.inspection}/imports`).set(h).send({ path: put('generic.txt', text), fileName: 'generic.txt', gaugeId: ctx.cmm }).expect(201);
+    expect(res.body).toMatchObject({ format: 'table', profile: null, counts: { parts: 1, features: 4, matched: 2, unmatched: 2, problems: 0, failures: 1, mismatches: 0 } });
+    expect(res.body.units[0].rows.map((r: { featureName: string; matchKind: string; expectedResult: string | null }) => [r.featureName, r.matchKind, r.expectedResult])).toEqual([
+      ['1 D', 'balloon', 'pass'], ['2 X', 'balloon', 'fail'], ['LOC1 X', 'none', null], ['LOC1 Y', 'none', null],
+    ]);
+    expect(res.body.warnings.map((w: { message: string }) => w.message).join(' ')).toMatch(/PC-DMIS generic export/);
+  });
+});

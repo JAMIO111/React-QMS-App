@@ -26,6 +26,7 @@ import {
   TryResult,
 } from './measurement-imports.schemas';
 import { ParsedReport, parseReport } from './parse-report';
+import { isPcdmisGeneric, parsePcdmisGeneric } from './parse-pcdmis-generic';
 import { isQifFile, parseQif } from './parse-qif';
 import { PROFILE_TEMPLATES, TableSettings } from './profile-settings';
 
@@ -228,14 +229,18 @@ export class MeasurementImportsService {
       if (!bytes) throw ApiError.badRequest('file_not_found', 'The uploaded file was not found; upload it again');
       if (bytes.length > MAX_FILE) throw ApiError.badRequest('file_too_large', 'A measurement file can be at most 25 MB');
 
-      // A QIF file describes itself (CM5): no profile. Anything else is a table export read with the chosen profile.
+      // A QIF file describes itself (CM5): no profile. Anything else but a PC-DMIS generic export is a table export read with the chosen profile.
       const qif = isQifFile(body.fileName, bytes);
       let profile: ProfileT | null = null;
       let report: ParsedReport;
+      // A PC-DMIS generic export has no heading row, so no profile can read it: it is recognised by its lines and read as it is.
+      const generic = !qif && isPcdmisGeneric(bytes);
       if (qif) {
         report = readable(() => parseQif(bytes));
+      } else if (generic) {
+        report = readable(() => parsePcdmisGeneric(bytes));
       } else {
-        if (!body.profileId) throw ApiError.badRequest('profile_required', 'Choose the profile that reads this file');
+        if (!body.profileId) throw ApiError.badRequest('profile_required', 'This file is not QIF or a PC-DMIS generic export: choose the profile that reads it');
         profile = await this.loadProfile(db, ctx, body.profileId);
         if (!profile.active) throw new ApiError(409, 'inspection_rule', `Profile ${profile.name} is retired`);
         if (profile.format !== 'table') throw new ApiError(409, 'inspection_rule', `Profile ${profile.name} does not read table files`);

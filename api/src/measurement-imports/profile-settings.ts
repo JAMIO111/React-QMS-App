@@ -86,7 +86,7 @@ export const PROFILE_TEMPLATES: ProfileTemplate[] = [
   {
     key: 'pcdmis_csv',
     name: 'Hexagon PC-DMIS CSV export',
-    description: 'One line per dimension and axis, with + and − tolerances (the minus tolerance written without its sign).',
+    description: 'A PC-DMIS report exported with a heading row: one line per dimension and axis, with + and − tolerances (the minus tolerance written without its sign). A File › Export › Generic text file needs no profile: it is read as it is.',
     format: 'table',
     settings: TableSettings.parse({
       delimiter: 'auto',

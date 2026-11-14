@@ -49,7 +49,8 @@ export const ImportFileDialog = ({ inspection, back, onClose }) => {
   const profile = list.find((p) => p.id === profileId) ?? (list.length === 1 ? list[0] : null);
   const qif = isQifName(file?.name);
   const chosenProfile = qif ? null : (profile?.id ?? null);
-  const ready = Boolean(file) && (qif || Boolean(chosenProfile));
+  // QIF files and PC-DMIS generic exports are read without a profile; for anything else the server asks for one.
+  const ready = Boolean(file);
 
   const pick = (files) => {
     const f = files?.[0];
@@ -84,16 +85,17 @@ export const ImportFileDialog = ({ inspection, back, onClose }) => {
           </Callout>
         ) : profiles.isSuccess && list.length === 0 ? (
           <Callout tone="warning" title="No file profile yet">
-            A QIF file can be read now. For a table export, someone who manages control plans sets up how your CMM&apos;s files are read, in Settings → Data Management → Process control → Measurement files.
+            QIF files and PC-DMIS generic exports can be read now. For other table exports, someone who manages control plans sets up how your CMM&apos;s files are read, in Settings → Data Management → Process control → Measurement files.
           </Callout>
         ) : (
           <ComboField
             label="How the file is read"
-            required
             value={chosenProfile}
+            placeholder="Work it out from the file"
+            clearable
             onChange={setProfileId}
             options={list.map((p) => ({ value: p.id, label: p.name, hint: p.description ?? undefined }))}
-            hint="The profile for this machine's software."
+            hint="The profile for this machine's software. Not needed for QIF files or PC-DMIS generic exports."
           />
         )}
         <ComboField
@@ -118,7 +120,7 @@ export const ImportFileDialog = ({ inspection, back, onClose }) => {
           ) : (
             <span className="font-medium text-primary-text">Drop the report here or click to choose it</span>
           )}
-          <span className="text-xs text-secondary-text">.csv, .txt, .xlsx or QIF (.qif, .xml), up to 25 MB. Nothing is recorded until you have checked the preview.</span>
+          <span className="text-xs text-secondary-text">.csv, .txt, .xlsx, a PC-DMIS generic export or QIF (.qif, .xml), up to 25 MB. Nothing is recorded until you have checked the preview.</span>
           <input ref={input} type="file" accept={ACCEPT} className="hidden" data-testid="measurement-file" onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
         </div>
         {error && <Callout tone="error" role="alert">{error}</Callout>}

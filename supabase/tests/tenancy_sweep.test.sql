@@ -21,7 +21,7 @@ DECLARE
   a uuid; b uuid; site uuid; owner_role uuid; invite uuid; fm bigint; status bigint; proc bigint;
   part uuid := gen_random_uuid(); cust uuid := gen_random_uuid(); supp uuid := gen_random_uuid();
   emp uuid := gen_random_uuid(); d8 uuid := gen_random_uuid(); ncr uuid := gen_random_uuid(); notif uuid := gen_random_uuid();
-  inspection uuid; qa uuid; qm uuid; sweep_q record;
+  inspection uuid; qa uuid; qm uuid; sweep_q record; cmm_profile uuid; cmm_import uuid;
 BEGIN
   PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
   a := app.create_organisation('Sweep Alpha');
@@ -166,6 +166,15 @@ BEGIN
   INSERT INTO public.inspection_failure_acknowledgements (organisation_id, inspection_record_id, measurement_id, note)
     SELECT a, inspection_record_id, id, 'Seen by the sweep' FROM public.inspection_measurements WHERE inspection_record_id = inspection AND result = 'fail';
   PERFORM app.raise_ncr_from_inspection(inspection, ARRAY(SELECT id FROM public.inspection_measurements WHERE inspection_record_id = inspection AND result = 'fail'), 'Sweep NC from inspection');
+  -- CMM ingestion (CM1): a profile, a feature map and a file stored as a preview (one part, one matched feature).
+  cmm_profile := app.save_measurement_profile(a, '{"name": "Sweep CMM", "format": "table", "settings": {"delimiter": "comma"}}'::jsonb);
+  PERFORM app.save_feature_map((SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'), NULL, 'SWEEP_FEATURE',
+                               (SELECT characteristic_key FROM public.resolved_inspection_requirements WHERE inspection_record_id = inspection LIMIT 1));
+  cmm_import := app.create_inspection_import(inspection, jsonb_build_object(
+    'filePath', a::text || '/inspection/' || inspection::text || '/sweep.csv', 'fileName', 'sweep.csv', 'fileSha256', repeat('a', 64), 'sizeBytes', 10,
+    'format', 'table', 'units', jsonb_build_array(jsonb_build_object('position', 1, 'rows', jsonb_build_array(jsonb_build_object(
+      'position', 1, 'featureName', 'SWEEP_FEATURE', 'valueNumeric', 100,
+      'requirementId', (SELECT id FROM public.resolved_inspection_requirements WHERE inspection_record_id = inspection LIMIT 1), 'matchKind', 'map'))))));
   -- PC6: a saved SPC baseline.
   INSERT INTO public.spc_baselines (organisation_id, part_id, characteristic_key, chart_type, subgroup_size, window_from, window_to, n_points, provisional,
       measurement_ids, centre, ucl, lcl, dispersion_centre, dispersion_ucl, dispersion_lcl, sigma)
@@ -435,6 +444,7 @@ BEGIN
   INSERT INTO public.custom_field_values (record_id, organisation_id, entity_type, "values")
     VALUES ((SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'), a, 'part', '{"sweep_note": "x"}');
   INSERT INTO sweep VALUES ('pc_part', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'));
+  INSERT INTO sweep VALUES ('cmm_profile', cmm_profile), ('cmm_import', cmm_import);
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));
 END $$;
@@ -527,6 +537,9 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.gauge_usage((SELECT id FROM public.gauges LIMIT 1))), 0::bigint, 'gauge_usage of A');
   PERFORM pg_temp.assert_fails(format('SELECT app.raise_ncr_from_inspection(%L, ARRAY[]::uuid[], %L)', (SELECT id FROM public.inspection_records LIMIT 1), 'x'), 'raise_ncr_from_inspection(A inspection)');
   PERFORM pg_temp.assert_fails(format('SELECT app.start_inspection(%L, %L)', (SELECT id FROM public.sites LIMIT 1), (SELECT value FROM sweep WHERE key = 'pc_part')), 'start_inspection(A part)');
+  PERFORM pg_temp.assert_fails(format($q$SELECT app.retire_measurement_profile(%L, 'Not mine')$q$, (SELECT value FROM sweep WHERE key = 'cmm_profile')), 'retire_measurement_profile(A profile)');
+  PERFORM pg_temp.assert_fails(format('SELECT app.discard_inspection_import(%L)', (SELECT value FROM sweep WHERE key = 'cmm_import')), 'discard_inspection_import(A import)');
+  PERFORM pg_temp.assert_fails(format('SELECT app.begin_inspection_import_apply(%L, NULL)', (SELECT value FROM sweep WHERE key = 'cmm_import')), 'begin_inspection_import_apply(A import)');
   PERFORM pg_temp.logout();
 END $$;
 

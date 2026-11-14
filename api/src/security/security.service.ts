@@ -67,6 +67,20 @@ export class SecurityService {
     });
   }
 
+  setEmailDomains(ctx: RequestContext, domains: string[]) {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.set_allowed_email_domains(${orgOf(ctx)}::uuid, coalesce(string_to_array(nullif(${domains.join('\n')}, ''), E'\n'), '{}'::text[]))`);
+      return this.load(db, ctx);
+    });
+  }
+
+  setSessionAge(ctx: RequestContext, hours: number | null) {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.set_max_session_hours(${orgOf(ctx)}::uuid, ${hours}::int)`);
+      return this.load(db, ctx);
+    });
+  }
+
   denials(ctx: RequestContext, q: { from?: string; to?: string; userId?: string; mode?: 'monitor' | 'enforce'; limit?: number }) {
     return this.database.asUser(ctx, async (db) => {
       const rows = await db.execute<Row>(sql`
@@ -109,7 +123,7 @@ export class SecurityService {
     const org = orgOf(ctx);
     const address = ctx.address ?? null;
     const settings = await db.execute<Row>(sql`
-      select s.network_policy, s.network_policy_changed_at,
+      select s.network_policy, s.network_policy_changed_at, s.allowed_email_domains, s.max_session_hours,
              nullif(btrim(concat_ws(' ', p.first_name, p.surname)), '') as changed_by,
              app.has_permission(${org}::uuid, 'security.manage') as can_manage
         from public.organisation_settings s
@@ -158,6 +172,7 @@ export class SecurityService {
       summary: c.summary as string,
       at: iso(c.created_at)!,
     }));
+    const outside = await db.execute<Row>(sql`select * from app.members_outside_email_domains(${org}::uuid)`);
     const live = list.filter((n) => !n.removed);
     return {
       mode: ((s.network_policy as string) ?? 'off') as 'off' | 'monitor' | 'enforce',
@@ -171,6 +186,17 @@ export class SecurityService {
       networks: list,
       /** The latest changes of the policy (who, from, to; an operator's recovery with its reason and how ownership was verified). */
       history,
+      /** Invitations only to these domains (and their sub-domains); empty = anyone. */
+      allowedEmailDomains: ((s.allowed_email_domains as string[]) ?? []),
+      /** Members (active or invited) whose address is outside the allowed domains: listed, never removed. */
+      outsideDomains: outside.rows.map((m) => ({
+        membershipId: m.membership_id as string,
+        name: (m.name as string) ?? null,
+        email: (m.email as string) ?? null,
+        status: m.status as string,
+      })),
+      /** Sign in again after this many hours; null = no limit. */
+      maxSessionHours: s.max_session_hours == null ? null : Number(s.max_session_hours),
     };
   }
 }

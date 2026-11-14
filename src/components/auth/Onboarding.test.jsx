@@ -154,6 +154,13 @@ describe("sign-in with an unverified account", () => {
     alert.mockRestore();
   });
 
+  it("says why when the organisation asked the person to sign in again, once", () => {
+    sessionStorage.setItem("qms:reauth-note", "This organisation asks you to sign in again every 12 hours. Please sign in again.");
+    renderAt("/login", <Route path="/login" element={<Login />} />);
+    expect(screen.getByText(/sign in again every 12 hours/)).toBeInTheDocument();
+    expect(sessionStorage.getItem("qms:reauth-note")).toBeNull();
+  });
+
   it("a wrong password is still a plain message", async () => {
     signInFn.mockRejectedValue(new Error("Invalid login credentials"));
     renderAt("/login", <Route path="/login" element={<Login />} />);

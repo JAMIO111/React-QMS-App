@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { REAUTH_NOTE_KEY } from "../lib/security";
 import { Link, useNavigate } from "react-router-dom";
 import { signIn } from "../authService";
 import { AtSignIcon, EyeIcon, EyeOffIcon, LockIcon } from "@/components/icons";
@@ -10,6 +11,16 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [unverifiedEmail, setUnverifiedEmail] = useState(null);
+  // Signed out because the organisation asks people to sign in again after a while (security plan SE6).
+  const [reauthNote] = useState(() => {
+    try {
+      const note = sessionStorage.getItem(REAUTH_NOTE_KEY);
+      if (note) sessionStorage.removeItem(REAUTH_NOTE_KEY);
+      return note;
+    } catch {
+      return null;
+    }
+  });
   const navigate = useNavigate(null);
   const [loading, setLoading] = useState(false);
 
@@ -48,6 +59,7 @@ const Login = () => {
         <h1 className="text-3xl text-left text-primary-text font-semibold">Welcome back</h1>
         <p className="text-left text-md text-secondary-text">Sign in to Fortress QMS with your work email.</p>
       </div>
+      {reauthNote && <AuthNotice>{reauthNote}</AuthNotice>}
       <form
         onSubmit={handleSubmit(handleLogin)}
         className="flex w-full flex-col gap-4">

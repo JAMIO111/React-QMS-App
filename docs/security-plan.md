@@ -1,6 +1,6 @@
 # Organisation security: network allowlisting and access rules — plan
 
-**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** · **SE1 done** (migration `20260228100000_organisation_security.sql`, applied live 2026-11-14, live guardrails 0 violations) · **SE2 done** (API, no migration) · **SE3 done** (migration `20260301100000_storage_through_api.sql`, applied live 2026-11-14) · **SE4 done** (migration `20260302100000_network_restricted_emails.sql`, applied live 2026-11-14) · **SE5 done** (migration `20260303100000_network_policy_recovery.sql`, applied live 2026-11-14) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
+**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** · **SE1 done** (migration `20260228100000_organisation_security.sql`, applied live 2026-11-14, live guardrails 0 violations) · **SE2 done** (API, no migration) · **SE3 done** (migration `20260301100000_storage_through_api.sql`, applied live 2026-11-14) · **SE4 done** (migration `20260302100000_network_restricted_emails.sql`, applied live 2026-11-14) · **SE5 done** (migration `20260303100000_network_policy_recovery.sql`, applied live 2026-11-14) · **SE6 built** (migration `20260304100000_security_who_rules.sql`, not yet applied live) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
 
 ## 1. Why
 
@@ -271,7 +271,27 @@ It is network control, not device or identity control: it does not prove the dev
   - `api/test/network-recovery.e2e-spec.ts`: locked out, the operator panel, who may recover, the policy back to monitor, the owner back in, history, notices.
   - `PlatformPanels.test.jsx`, `SettingsSecurity.test.jsx`, `notifications.test.js`, `email.spec.ts`.
 
-## 15. Not in this plan
+## 15. SE6 as built (migration `20260304100000_security_who_rules.sql`)
+
+- **Allowed email domains (S11):**
+  - Set with `organisation_settings.allowed_email_domains` (≤ 20). The only writer is `app.set_allowed_email_domains(org, domains[])` (`security.manage`); `app.normalise_email_domain` lowercases, strips a leading "@" and refuses anything that is not a domain, with the reason.
+  - Empty means anyone can be invited. An entry also allows its sub-domains, never a domain that only ends with the same letters.
+  - **Enforced by trigger `organisation_users_email_domain`**, so every way of inviting obeys it: one, many, or a removed member invited again (`QM015` → `409 invitation_rule`, "This organisation only invites addresses at …"). In a bulk invitation each row is refused on its own.
+  - Members already outside, active or invited, are listed (`app.members_outside_email_domains`, `security.read`) and never removed.
+- **Maximum session age (S11):**
+  - Set with `organisation_settings.max_session_hours` (1–720, null = no limit), written only by `app.set_max_session_hours` (`security.manage`).
+  - `OrganisationGuard` reads it in its one query (`app.max_session_hours(org)`, members only). It takes the sign-in time from the token's `amr` claim, the newest entry (`signedInAt`, `sessionTooOld`).
+  - Older than the limit, or with no sign-in time in the token, means **`401 reauthentication_required`** with `maxSessionHours`. Supabase keeps `amr` when it refreshes a token, so refreshing does not reset the clock.
+- **API:**
+  - `PUT /security/email-domains {domains}` and `PUT /security/session-age {hours|null}` (`security.manage`).
+  - The policy carries `allowedEmailDomains`, `outsideDomains` and `maxSessionHours`.
+- **Screens:**
+  - Settings → Security has **Who can be invited** (domain chips added and removed at once, optimistic, and the members already outside) and **Sign in again after** (No limit, 8 hours, 12 hours, 1 day, 7 days, 30 days).
+  - When any request answers `401 reauthentication_required`, `apiFetch` raises `qms:reauthentication-required`. `App.jsx` then signs the person out and leaves the reason in session storage, and the sign-in page shows it once.
+- **Fix to SE5 in the same migration:** two policy changes in one transaction had the same `created_at`, so the recovery function's "latest change" was chosen by a random id (it showed as a flaky SQL test). `network_policy_changes.created_at` now defaults to `clock_timestamp()`, and the function picks its own recovery row.
+- **Tests:** `supabase/tests/security_who_rules.test.sql`, `api/test/security-who.e2e-spec.ts` (including the `amr` helpers), `SettingsSecurity.test.jsx`, `App.test.jsx`, `api-client.test.js`, `Onboarding.test.jsx` (the sign-in note).
+
+## 16. Not in this plan
 
 - SSO (Entra ID, SAML), device certificates, managed devices, country rules.
 - Per-person or per-site allowlists (the policy is organisation-wide, as in the brief).

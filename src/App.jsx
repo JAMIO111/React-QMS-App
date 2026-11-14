@@ -16,7 +16,8 @@ import ThemeColourSync from "./components/ThemeColourSync";
 import { useEffect, useState } from "react";
 import NetworkBlocked from "./components/NetworkBlocked";
 import { useNetworkAccess } from "./hooks/useSecurity";
-import { NETWORK_BLOCKED_EVENT } from "./lib/security";
+import { NETWORK_BLOCKED_EVENT, REAUTH_EVENT, REAUTH_NOTE_KEY } from "./lib/security";
+import useSignOut from "./hooks/useSignOut";
 
 function App() {
   const { organisation, error } = useOrganisation();
@@ -27,6 +28,20 @@ function App() {
   // A request refused with 403 network_not_allowed (security plan SE4) switches to the blocked screen at once, before /me is read again.
   const [blockedBy, setBlockedBy] = useState(null); // { organisationId, address }
   const [retrying, setRetrying] = useState(false);
+  const [signOutNow] = useSignOut();
+  // The organisation's maximum session age (security plan SE6): sign out, and the sign-in page says why.
+  useEffect(() => {
+    const onReauth = (e) => {
+      try {
+        sessionStorage.setItem(REAUTH_NOTE_KEY, e.detail?.message || "Please sign in again.");
+      } catch {
+        /* storage may be unavailable; signing out still happens */
+      }
+      signOutNow();
+    };
+    window.addEventListener(REAUTH_EVENT, onReauth);
+    return () => window.removeEventListener(REAUTH_EVENT, onReauth);
+  }, [signOutNow]);
   useEffect(() => {
     const onBlocked = (e) => {
       setBlockedBy(e.detail ?? {});

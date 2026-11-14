@@ -13,6 +13,8 @@ const NetworkPatch = z
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
 const RemoveBody = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
+const DomainsBody = z.object({ domains: z.array(z.string().trim().min(1).max(253)).max(20) }).strict();
+const SessionAgeBody = z.object({ hours: z.number().int().min(1).max(720).nullable() }).strict();
 const DenialsQuery = z.object({
   from: z.string().date().optional(),
   to: z.string().date().optional(),
@@ -73,6 +75,22 @@ export class SecurityController {
   @ApiOkResponse({ description: 'Bring a removed network back, switched off' })
   restoreNetwork(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.restoreNetwork(ctx, parse(Uuid, id));
+  }
+
+  @Put('email-domains')
+  @OrganisationScoped('security.manage')
+  @ApiBody({ schema: openApiSchema(DomainsBody) })
+  @ApiOkResponse({ description: 'Invitations only to these email domains and their sub-domains (empty = anyone). Members already outside are listed, not removed. Answers with the policy' })
+  setEmailDomains(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.setEmailDomains(ctx, parse(DomainsBody, body).domains);
+  }
+
+  @Put('session-age')
+  @OrganisationScoped('security.manage')
+  @ApiBody({ schema: openApiSchema(SessionAgeBody) })
+  @ApiOkResponse({ description: 'Sign in again after this many hours (1 to 720), or null for no limit. Requests from an older sign-in answer 401 reauthentication_required' })
+  setSessionAge(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.setSessionAge(ctx, parse(SessionAgeBody, body).hours);
   }
 
   @Get('access-denials')

@@ -28,6 +28,25 @@ export const OrganisationScoped = (permission?: string, options: { anyScope?: bo
     ...(permission ? [ApiResponse({ status: 403, description: `Requires permission ${permission}` })] : []),
   );
 
+/**
+ * When the person last signed in, from the token's amr claim (Supabase lists each method with its time; a later sign-in or second factor is the
+ * newest). Seconds since 1970, or null when the token says nothing about it.
+ */
+export function signedInAt(claims: Record<string, unknown>): number | null {
+  const amr = claims.amr;
+  if (!Array.isArray(amr)) return null;
+  const times = amr.map((m) => (m && typeof m === 'object' ? Number((m as { timestamp?: unknown }).timestamp) : NaN)).filter((t) => Number.isFinite(t) && t > 0);
+  return times.length ? Math.max(...times) : null;
+}
+
+/** True when the session is older than the limit, or when its sign-in time cannot be known (then the person signs in again). */
+export function sessionTooOld(claims: Record<string, unknown>, maxHours: number, nowSeconds = Date.now() / 1000): boolean {
+  const at = signedInAt(claims);
+  return at == null || nowSeconds - at > maxHours * 3600;
+}
+
+export const hoursWords = (h: number) => (h % 24 === 0 ? `${h / 24} day${h === 24 ? '' : 's'}` : `${h} hour${h === 1 ? '' : 's'}`);
+
 @Injectable()
 export class OrganisationGuard implements CanActivate {
   private readonly log = new Logger(OrganisationGuard.name);
@@ -50,8 +69,8 @@ export class OrganisationGuard implements CanActivate {
     }
 
     const ctx = contextFrom(req);
-    const { member, allowed, mfa_blocked, network } = await this.db.asUser(ctx, async (db) => {
-      const result = await db.execute<{ member: boolean; allowed: boolean; mfa_blocked: boolean; network: string | null }>(
+    const { member, allowed, mfa_blocked, network, max_session_hours } = await this.db.asUser(ctx, async (db) => {
+      const result = await db.execute<{ member: boolean; allowed: boolean; mfa_blocked: boolean; network: string | null; max_session_hours: number | null }>(
         sql`select app.is_member(${organisationId}::uuid) as member,
                    (${scope.permission ?? null}::text is null
                     or case when ${scope.anyScope ?? false}::boolean
@@ -59,7 +78,8 @@ export class OrganisationGuard implements CanActivate {
                             else app.has_permission(${organisationId}::uuid, ${scope.permission ?? null}::text) end) as allowed,
                    exists (select 1 from app.mfa_blocked_organisations() b
                            where b.organisation_id = ${organisationId}::uuid) as mfa_blocked,
-                   app.network_allowed(${organisationId}::uuid, ${ctx.address ?? null}::inet) as network`,
+                   app.network_allowed(${organisationId}::uuid, ${ctx.address ?? null}::inet) as network,
+                   app.max_session_hours(${organisationId}::uuid) as max_session_hours`,
       );
       return result.rows[0];
     });
@@ -76,6 +96,12 @@ export class OrganisationGuard implements CanActivate {
           address: ctx.address ?? null,
         });
       }
+    }
+    // The organisation's maximum session age (docs/security-plan.md S11): sign in again after N hours, counted from the sign-in in the token.
+    if (max_session_hours != null && sessionTooOld(ctx.user.claims as Record<string, unknown>, Number(max_session_hours))) {
+      throw new ApiError(401, 'reauthentication_required', `This organisation asks you to sign in again every ${hoursWords(Number(max_session_hours))}. Please sign in again.`, {
+        maxSessionHours: Number(max_session_hours),
+      });
     }
     if (!allowed) throw ApiError.forbidden(undefined, { permission: scope.permission });
     req.organisationId = organisationId.toLowerCase();

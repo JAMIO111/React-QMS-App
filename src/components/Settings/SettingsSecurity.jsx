@@ -14,7 +14,9 @@ import { useOrganisationDetails, usePermissions } from "../../hooks/useQmsApi";
 import { useAccessDenials, useAccessPolicy, useSecurityMutation } from "../../hooks/useSecurity";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
-import { MODES, ENFORCE_WORD, denialWords, enforceProblems, modeLabel, whenWords } from "../../lib/security";
+import { MODES, ENFORCE_WORD, SESSION_AGES, denialWords, enforceProblems, modeLabel, normaliseDomain, whenWords } from "../../lib/security";
+import ComboField from "../ui/ComboField";
+import { XIcon } from "@/components/icons";
 
 /**
  * Settings → Security (docs/security-plan.md SE4): two-factor (moved here from Organisation), access restrictions (the network policy and the
@@ -39,6 +41,8 @@ const SettingsSecurity = () => {
     <div className="flex flex-col gap-4">
       <RequireMfaSetting value={!!org.data?.settings?.requireMfa} canManage={canManage && can("organisation.manage")} />
       <AccessRestrictions canManage={canManage} />
+      <WhoCanBeInvited canManage={canManage} />
+      <SessionAge canManage={canManage} />
       <BlockedAttempts canManage={canManage} />
     </div>
   );
@@ -385,6 +389,97 @@ function BlockedAttempts({ canManage }) {
         </ul>
       )}
       {prefill && <NetworkDialog prefill={prefill} onClose={() => setPrefill(null)} />}
+    </MenuCard>
+  );
+}
+
+/** Invitations only to the organisation's own email domains (security plan SE6). Saved at once; members already outside are listed, never removed. */
+function WhoCanBeInvited({ canManage }) {
+  const policy = useAccessPolicy();
+  const mutate = useSecurityMutation();
+  const { showToast } = useToast();
+  const [text, setText] = useState("");
+  const [problem, setProblem] = useState(null);
+  const p = policy.data;
+  if (!p) return null;
+  const domains = p.allowedEmailDomains ?? [];
+  const save = (next, done) =>
+    mutate.mutate(
+      { action: "setEmailDomains", body: { domains: next } },
+      { onSuccess: done, onError: (error) => showToast({ type: "error", title: "Not changed", message: describeApiError(error) }) },
+    );
+  const add = (e) => {
+    e.preventDefault();
+    setProblem(null);
+    const d = normaliseDomain(text);
+    if (!d) return setProblem("Type a domain such as acme.com.");
+    if (domains.includes(d)) return setText("");
+    save([...domains, d], () => setText(""));
+  };
+  return (
+    <MenuCard title="Who can be invited" subtitle="Invitations go only to addresses at these email domains (and their sub-domains). With none, anyone can be invited." bodyClassName="flex flex-col gap-3">
+      {domains.length === 0 ? (
+        <p className="text-sm text-secondary-text">Anyone can be invited.</p>
+      ) : (
+        <ul className="flex flex-wrap gap-2" aria-label="Allowed email domains">
+          {domains.map((d) => (
+            <li key={d} className="inline-flex items-center gap-1 rounded-full border border-border-color bg-secondary-bg py-1 pl-3 pr-1 text-sm text-primary-text">
+              @{d}
+              {canManage && (
+                <button type="button" aria-label={`Remove ${d}`} className="rounded-full p-1 text-secondary-text hover:text-error-color cursor-pointer" onClick={() => save(domains.filter((x) => x !== d))}>
+                  <XIcon />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canManage && (
+        <form noValidate onSubmit={add} className="flex flex-wrap items-end gap-2">
+          <Field label="Add a domain" value={text} onChange={(e) => setText(e.target.value)} placeholder="acme.com" className="min-w-56 flex-1" />
+          <CTAButton type="neutral" size="default" buttonType="submit" icon={PlusIcon}>Add</CTAButton>
+        </form>
+      )}
+      {problem && <Callout tone="error" role="alert">{problem}</Callout>}
+      {domains.length > 0 && (p.outsideDomains ?? []).length > 0 && (
+        <Callout tone="warning" title="Already in the organisation from other domains">
+          <p>They stay members; only new invitations are limited.</p>
+          <ul className="mt-1 list-disc pl-5" aria-label="Members outside the allowed domains">
+            {p.outsideDomains.map((m) => (
+              <li key={m.membershipId}>{m.name ? `${m.name} — ` : ""}{m.email}{m.status === "invited" ? " (invited)" : ""}</li>
+            ))}
+          </ul>
+        </Callout>
+      )}
+    </MenuCard>
+  );
+}
+
+/** Sign in again after a while (security plan SE6): checked by the server on every request, from the time the person signed in. */
+function SessionAge({ canManage }) {
+  const policy = useAccessPolicy();
+  const mutate = useSecurityMutation();
+  const { showToast } = useToast();
+  const p = policy.data;
+  if (!p) return null;
+  const value = p.maxSessionHours == null ? "none" : String(p.maxSessionHours);
+  const options = SESSION_AGES.some((o) => o.value === value) ? SESSION_AGES : [...SESSION_AGES, { value, label: `${p.maxSessionHours} hours` }];
+  return (
+    <MenuCard title="Sign in again after" subtitle="People are asked to sign in again once this long has passed since they last signed in, wherever they are." bodyClassName="flex flex-col gap-2">
+      <ComboField
+        label="Sign in again after"
+        value={value}
+        required
+        disabled={!canManage}
+        options={options}
+        onChange={(v) =>
+          v && v !== value &&
+          mutate.mutate(
+            { action: "setSessionAge", body: { hours: v === "none" ? null : Number(v) } },
+            { onError: (error) => showToast({ type: "error", title: "Not changed", message: describeApiError(error) }) },
+          )
+        }
+      />
     </MenuCard>
   );
 }

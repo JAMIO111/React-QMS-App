@@ -40,3 +40,27 @@ export const denialWords = (d) => {
 
 /** Event the API client raises when a request answers 403 network_not_allowed. */
 export const NETWORK_BLOCKED_EVENT = "qms:network-blocked";
+
+/** Event the API client raises when a request answers 401 reauthentication_required (the organisation's maximum session age). */
+export const REAUTH_EVENT = "qms:reauthentication-required";
+/** What the sign-in page says after the app signed someone out for that reason (session storage). */
+export const REAUTH_NOTE_KEY = "qms:reauth-note";
+
+/** The choices for "sign in again after" (hours; "none" = no limit). */
+export const SESSION_AGES = [
+  { value: "none", label: "No limit" },
+  { value: "8", label: "8 hours (one shift)" },
+  { value: "12", label: "12 hours" },
+  { value: "24", label: "1 day" },
+  { value: "168", label: "7 days" },
+  { value: "720", label: "30 days" },
+];
+
+export const sessionAgeWords = (hours) =>
+  hours == null ? "No limit" : SESSION_AGES.find((o) => o.value === String(hours))?.label ?? (hours % 24 === 0 ? `${hours / 24} days` : `${hours} hours`);
+
+/** "acme.com" from what people type ("@Acme.com "), or null when it is not a domain (the server checks again). */
+export const normaliseDomain = (text) => {
+  const v = String(text ?? "").trim().toLowerCase().replace(/^@/, "");
+  return /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(v) ? v : null;
+};

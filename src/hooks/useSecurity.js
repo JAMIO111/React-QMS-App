@@ -41,6 +41,10 @@ const request = ({ action, id, body }) => {
       return { path: `/security/networks/${id}`, method: "PATCH", body };
     case "removeNetwork":
       return { path: `/security/networks/${id}/remove`, method: "POST", body };
+    case "setEmailDomains":
+      return { path: "/security/email-domains", method: "PUT", body };
+    case "setSessionAge":
+      return { path: "/security/session-age", method: "PUT", body };
     case "restoreNetwork":
       return { path: `/security/networks/${id}/restore`, method: "POST" };
     default:
@@ -66,6 +70,8 @@ export const useSecurityMutation = () => {
       await queryClient.cancelQueries({ queryKey: policyKey });
       const previous = queryClient.getQueryData(policyKey);
       if (previous && vars.action === "setMode") queryClient.setQueryData(policyKey, { ...previous, mode: vars.body.mode });
+      if (previous && vars.action === "setEmailDomains") queryClient.setQueryData(policyKey, { ...previous, allowedEmailDomains: vars.body.domains });
+      if (previous && vars.action === "setSessionAge") queryClient.setQueryData(policyKey, { ...previous, maxSessionHours: vars.body.hours });
       if (previous && vars.action === "updateNetwork" && Object.keys(vars.body).join() === "active") {
         queryClient.setQueryData(policyKey, { ...previous, networks: previous.networks.map((n) => (n.id === vars.id ? { ...n, active: vars.body.active } : n)) });
       }

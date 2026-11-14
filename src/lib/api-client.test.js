@@ -49,6 +49,15 @@ describe("apiFetch", () => {
     window.removeEventListener("qms:network-blocked", heard);
   });
 
+  it("tells the app when the organisation asks people to sign in again (401 reauthentication_required)", async () => {
+    const heard = vi.fn();
+    window.addEventListener("qms:reauthentication-required", heard);
+    fetch.mockResolvedValue(jsonResponse(401, { error: { code: "reauthentication_required", message: "Sign in again" } }));
+    await expect(apiFetch("/ncrs", { organisationId: "org-1" })).rejects.toMatchObject({ code: "reauthentication_required" });
+    expect(heard.mock.calls[0][0].detail).toEqual({ organisationId: "org-1", message: "Sign in again" });
+    window.removeEventListener("qms:reauthentication-required", heard);
+  });
+
   it("turns the API error format into an ApiClientError", async () => {
     fetch.mockResolvedValue(
       jsonResponse(409, { error: { code: "conflict", message: "A site with this code already exists", correlationId: "c-1" } })

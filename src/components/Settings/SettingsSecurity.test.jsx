@@ -151,6 +151,43 @@ describe("Settings → Security", () => {
   });
 });
 
+describe("Settings → Security: who can be invited and signing in again", () => {
+  it("adds and removes allowed email domains, saved at once, and lists members already outside", async () => {
+    policy = { ...policy, allowedEmailDomains: ["acme.test"], outsideDomains: [{ membershipId: "m1", name: "Tim Temp", email: "tim@gmail.test", status: "active" }], maxSessionHours: null };
+    renderIt();
+    expect(screen.getByRole("list", { name: "Allowed email domains" })).toHaveTextContent("@acme.test");
+    expect(screen.getByRole("list", { name: "Members outside the allowed domains" })).toHaveTextContent("Tim Temp — tim@gmail.test");
+    await userEvent.type(screen.getByLabelText("Add a domain"), "not a domain");
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(screen.getByText("Type a domain such as acme.com.")).toBeInTheDocument();
+    expect(mutate).not.toHaveBeenCalled();
+    await userEvent.clear(screen.getByLabelText("Add a domain"));
+    await userEvent.type(screen.getByLabelText("Add a domain"), "@Acme-Group.test");
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "setEmailDomains", body: { domains: ["acme.test", "acme-group.test"] } }, expect.anything());
+    await userEvent.click(screen.getByRole("button", { name: "Remove acme.test" }));
+    expect(mutate).toHaveBeenLastCalledWith({ action: "setEmailDomains", body: { domains: [] } }, expect.anything());
+  });
+
+  it("says anyone can be invited when there are no domains, and offers no editing to someone who may only read", () => {
+    permissions = ["security.read"];
+    policy = { ...policy, allowedEmailDomains: [], outsideDomains: [], maxSessionHours: 12 };
+    renderIt();
+    expect(screen.getByText("Anyone can be invited.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Add a domain")).toBeNull();
+    expect(screen.getByRole("combobox", { name: /Sign in again after/ })).toBeDisabled();
+  });
+
+  it("chooses how long before people sign in again", async () => {
+    policy = { ...policy, allowedEmailDomains: [], outsideDomains: [], maxSessionHours: null };
+    renderIt();
+    const combo = screen.getByRole("combobox", { name: /Sign in again after/ });
+    await userEvent.click(combo);
+    await userEvent.click(await screen.findByRole("option", { name: /8 hours/ }));
+    expect(mutate).toHaveBeenCalledWith({ action: "setSessionAge", body: { hours: 8 } }, expect.anything());
+  });
+});
+
 describe("what stops enforcing", () => {
   it("needs a network that is on and the person's own address inside one", () => {
     expect(enforceProblems({ activeCount: 0, address: "203.0.113.10", covered: false })).toEqual([

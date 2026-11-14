@@ -8,6 +8,8 @@ let access;
 let permissions;
 let me;
 const refetch = vi.fn(async () => ({ data: me }));
+const signOutNow = vi.fn();
+vi.mock("./hooks/useSignOut", () => ({ default: () => [signOutNow, false] }));
 vi.mock("./App.css", () => ({}));
 vi.mock("./components/Navbar", () => ({ default: () => <nav>navbar</nav> }));
 vi.mock("./components/Header", () => ({ default: () => <header>header</header> }));
@@ -137,5 +139,15 @@ describe("the app shell", () => {
     me = { memberships: [{ organisation: { id: "org-1" }, network: { state: "monitored", address: "198.51.100.200" } }] };
     renderAt("/Dashboard");
     expect(screen.getByText("dashboard page")).toBeInTheDocument();
+  });
+
+  it("signs out, and leaves the reason for the sign-in page, when the organisation asks people to sign in again", () => {
+    renderAt("/Dashboard");
+    act(() => {
+      window.dispatchEvent(new CustomEvent("qms:reauthentication-required", { detail: { organisationId: "org-1", message: "This organisation asks you to sign in again every 12 hours. Please sign in again." } }));
+    });
+    expect(signOutNow).toHaveBeenCalled();
+    expect(sessionStorage.getItem("qms:reauth-note")).toMatch(/every 12 hours/);
+    sessionStorage.removeItem("qms:reauth-note");
   });
 });

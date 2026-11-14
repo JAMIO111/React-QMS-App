@@ -15,7 +15,9 @@ import Dialog from "../ui/Dialog";
 import { FileIcon } from "../ui/FileDrop";
 import MenuCard from "../ui/MenuCard";
 
-const ACCEPT = ".csv,.txt,.xlsx";
+const ACCEPT = ".csv,.txt,.xlsx,.qif,.xml";
+/** A QIF file (CM5) names its own checks, limits and units, so it needs no profile. */
+export const isQifName = (name) => /\.(qif|xml)$/i.test(name ?? "");
 const MAX_BYTES = 26_214_400;
 
 const TONE = { warning: "bg-warning-color/15 text-warning-color", success: "bg-success-color/15 text-success-color", neutral: "bg-border-color text-secondary-text" };
@@ -45,7 +47,9 @@ export const ImportFileDialog = ({ inspection, back, onClose }) => {
   const [error, setError] = useState(null);
   const input = useRef(null);
   const profile = list.find((p) => p.id === profileId) ?? (list.length === 1 ? list[0] : null);
-  const chosenProfile = profile?.id ?? null;
+  const qif = isQifName(file?.name);
+  const chosenProfile = qif ? null : (profile?.id ?? null);
+  const ready = Boolean(file) && (qif || Boolean(chosenProfile));
 
   const pick = (files) => {
     const f = files?.[0];
@@ -55,13 +59,13 @@ export const ImportFileDialog = ({ inspection, back, onClose }) => {
   };
 
   const send = async () => {
-    if (!file || !chosenProfile) return;
+    if (!ready) return;
     setBusy(true);
     setError(null);
     try {
       const { path } = await uploadFileToSupabase(file, "inspection-files", organisationId, inspection.id, "inspection");
-      const created = await mutation.mutateAsync({ action: "create", inspectionId: inspection.id, body: { path, fileName: file.name, profileId: chosenProfile, gaugeId: gaugeId ?? undefined } });
-      rememberChoice(inspection.machine?.id, { profileId: chosenProfile, gaugeId });
+      const created = await mutation.mutateAsync({ action: "create", inspectionId: inspection.id, body: { path, fileName: file.name, profileId: chosenProfile ?? undefined, gaugeId: gaugeId ?? undefined } });
+      rememberChoice(inspection.machine?.id, qif ? { profileId: remembered.profileId ?? null, gaugeId } : { profileId: chosenProfile, gaugeId });
       onClose();
       navigate(importPath(inspection.id, created.id, back));
     } catch (e) {
@@ -74,51 +78,53 @@ export const ImportFileDialog = ({ inspection, back, onClose }) => {
   return (
     <Dialog title="Import from a measurement file" onClose={onClose} width="max-w-xl">
       <div className="flex flex-col gap-4">
-        {profiles.isSuccess && list.length === 0 ? (
+        {qif ? (
+          <Callout tone="info" title="QIF file">
+            A QIF file names its own checks, limits and units, so no profile is needed.
+          </Callout>
+        ) : profiles.isSuccess && list.length === 0 ? (
           <Callout tone="warning" title="No file profile yet">
-            Someone who manages control plans sets up how your CMM&apos;s files are read, in Settings → Data Management → Process control → Measurement files.
+            A QIF file can be read now. For a table export, someone who manages control plans sets up how your CMM&apos;s files are read, in Settings → Data Management → Process control → Measurement files.
           </Callout>
         ) : (
-          <>
-            <ComboField
-              label="How the file is read"
-              required
-              value={chosenProfile}
-              onChange={setProfileId}
-              options={list.map((p) => ({ value: p.id, label: p.name, hint: p.description ?? undefined }))}
-              hint="The profile for this machine's software."
-            />
-            <ComboField
-              label="Gauge used"
-              value={gaugeId ?? profile?.defaultGauge?.id ?? null}
-              onChange={setGaugeId}
-              options={(gauges.data?.data ?? []).map((g) => ({ value: g.id, label: g.assetNumber, hint: g.description }))}
-              hint={profile?.defaultGauge ? `The profile's own is ${profile.defaultGauge.assetNumber}.` : "Its calibration state is copied onto every reading."}
-            />
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label="Choose a measurement file"
-              onClick={() => !busy && input.current?.click()}
-              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && !busy && input.current?.click()}
-              onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-              onDragLeave={() => setDrag(false)}
-              onDrop={(e) => { e.preventDefault(); setDrag(false); if (!busy) pick(e.dataTransfer.files); }}
-              className={`flex cursor-pointer flex-col items-center gap-1 rounded-lg border-2 border-dashed px-4 py-6 text-center text-sm ${drag ? "border-theme bg-theme/5" : "border-border-color"} ${busy ? "opacity-60" : ""}`}>
-              {file ? (
-                <span className="flex items-center gap-2 font-medium text-primary-text"><FileIcon name={file.name} className="h-6 w-6" /> {file.name}</span>
-              ) : (
-                <span className="font-medium text-primary-text">Drop the report here or click to choose it</span>
-              )}
-              <span className="text-xs text-secondary-text">.csv, .txt or .xlsx, up to 25 MB. Nothing is recorded until you have checked the preview.</span>
-              <input ref={input} type="file" accept={ACCEPT} className="hidden" data-testid="measurement-file" onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
-            </div>
-          </>
+          <ComboField
+            label="How the file is read"
+            required
+            value={chosenProfile}
+            onChange={setProfileId}
+            options={list.map((p) => ({ value: p.id, label: p.name, hint: p.description ?? undefined }))}
+            hint="The profile for this machine's software."
+          />
         )}
+        <ComboField
+          label="Gauge used"
+          value={gaugeId ?? (qif ? null : profile?.defaultGauge?.id) ?? null}
+          onChange={setGaugeId}
+          options={(gauges.data?.data ?? []).map((g) => ({ value: g.id, label: g.assetNumber, hint: g.description }))}
+          hint={!qif && profile?.defaultGauge ? `The profile's own is ${profile.defaultGauge.assetNumber}.` : "Its calibration state is copied onto every reading."}
+        />
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="Choose a measurement file"
+          onClick={() => !busy && input.current?.click()}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && !busy && input.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={(e) => { e.preventDefault(); setDrag(false); if (!busy) pick(e.dataTransfer.files); }}
+          className={`flex cursor-pointer flex-col items-center gap-1 rounded-lg border-2 border-dashed px-4 py-6 text-center text-sm ${drag ? "border-theme bg-theme/5" : "border-border-color"} ${busy ? "opacity-60" : ""}`}>
+          {file ? (
+            <span className="flex items-center gap-2 font-medium text-primary-text"><FileIcon name={file.name} className="h-6 w-6" /> {file.name}</span>
+          ) : (
+            <span className="font-medium text-primary-text">Drop the report here or click to choose it</span>
+          )}
+          <span className="text-xs text-secondary-text">.csv, .txt, .xlsx or QIF (.qif, .xml), up to 25 MB. Nothing is recorded until you have checked the preview.</span>
+          <input ref={input} type="file" accept={ACCEPT} className="hidden" data-testid="measurement-file" onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
+        </div>
         {error && <Callout tone="error" role="alert">{error}</Callout>}
         <div className="flex justify-end gap-2">
           <CTAButton type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton type="main" size="md" onClick={send} disabled={!file || !chosenProfile} loading={busy} loadingText="Reading the file…" icon={UploadIcon}>
+          <CTAButton type="main" size="md" onClick={send} disabled={!ready} loading={busy} loadingText="Reading the file…" icon={UploadIcon}>
             Read the file
           </CTAButton>
         </div>

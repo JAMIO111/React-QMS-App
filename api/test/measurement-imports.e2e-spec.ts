@@ -13,6 +13,7 @@ import { configureApp } from '../src/app.factory';
 import { AppModule } from '../src/app.module';
 import { InspectionFileStore } from '../src/measurement-imports/file-store';
 import { makeIds, requireDb, seed, testEnv, token } from './helpers';
+import { SAMPLE_QIF } from './qif-sample';
 
 const ids = makeIds('c2a');
 let app: INestApplication;
@@ -303,5 +304,43 @@ describe('applying a preview (CM3)', () => {
     expect(res.body.error.message).toMatch(/No sample of this inspection is part SN-99/);
     expect((await readings(owner)).length).toBe(before);
     expect((await api().get(`/api/v1/inspection-imports/${other.id}`).set(owner).expect(200)).body.status).toBe('previewed');
+  });
+});
+
+describe('QIF files (CM5)', () => {
+  // The sample describes part BRK-100; here it is the inspection's part, with balloons 1 and 2 and serial SN-77.
+  const qif = (part = 'HSG-1') =>
+    SAMPLE_QIF.replace('BRK-100', part).replace('<Designator>12<', '<Designator>1<').replace('<Designator>13<', '<Designator>2<')
+      .replace('<TargetValue>25<', '<TargetValue>25<').replace('<Value>0.031<', '<Value>40.05<')
+      .replace('<FlatnessCharacteristicDefinition id="11"><ToleranceValue>0.02</ToleranceValue>', '<FlatnessCharacteristicDefinition id="11"><Tolerance><MaxValue>0.1</MaxValue><MinValue>-0.1</MinValue></Tolerance>')
+      .replace('<CharacteristicDefinitionId>11</CharacteristicDefinitionId><Name>Face</Name>', '<CharacteristicDefinitionId>11</CharacteristicDefinitionId><Name>Face</Name><TargetValue>40</TargetValue>')
+      .replace('SN-7<', 'SN-77<');
+
+  it('needs no profile: the file names its own checks, limits and part, and applies like any other', async () => {
+    const owner = await as(ids.ownerA);
+    const res = await api().post(`/api/v1/inspections/${ctx.inspection}/imports`).set(owner).send({ path: put('run.qif', qif()), fileName: 'run.qif', gaugeId: ctx.cmm }).expect(201);
+    expect(res.body).toMatchObject({
+      format: 'qif', profile: null, header: { partNumber: 'HSG-1' },
+      counts: { parts: 1, features: 2, matched: 2, toRecord: 2, unmatched: 0, problems: 0, failures: 0, mismatches: 0 },
+    });
+    expect(res.body.units[0].unitReference).toBe('SN-77');
+    expect(res.body.units[0].rows.map((r: { charNumber: string; matchKind: string; expectedResult: string }) => [r.charNumber, r.matchKind, r.expectedResult])).toEqual([['1', 'balloon', 'pass'], ['2', 'balloon', 'pass']]);
+    const applied = await api().post(`/api/v1/inspection-imports/${res.body.id}/apply`).set(owner).send({ mode: 'correct', reason: 'Re-run from the QIF export' }).expect(200);
+    expect(applied.body.status).toBe('applied');
+    const insp = (await api().get(`/api/v1/inspections/${ctx.inspection}`).set(owner).expect(200)).body;
+    const fromFile = insp.measurements.filter((m: { importId: string | null }) => m.importId === res.body.id);
+    expect(fromFile.map((m: { valueNumeric: string }) => m.valueNumeric).sort()).toEqual(['25.012', '40.05']);
+  });
+
+  it('refuses a QIF file for another part, broken XML or a DOCTYPE; a table file still needs a profile', async () => {
+    const h = await as(ids.inspectorA);
+    const wrong = await api().post(`/api/v1/inspections/${ctx.inspection}/imports`).set(h).send({ path: put('w.qif', qif('OTHER-2')), fileName: 'w.qif' }).expect(409);
+    expect(wrong.body.error.message).toMatch(/OTHER-2/);
+    const evil = '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><QIFDocument>&e;</QIFDocument>';
+    const doctype = await api().post(`/api/v1/inspections/${ctx.inspection}/imports`).set(h).send({ path: put('e.xml', evil), fileName: 'e.xml' }).expect(400);
+    expect(doctype.body.error).toMatchObject({ code: 'file_unreadable', message: expect.stringMatching(/DOCTYPE/) });
+    await api().post(`/api/v1/inspections/${ctx.inspection}/imports`).set(h).send({ path: put('b.qif', '<QIFDocument><a></QIFDocument>'), fileName: 'b.qif' }).expect(400);
+    const noProfile = await api().post(`/api/v1/inspections/${ctx.inspection}/imports`).set(h).send({ path: put('t.csv', REPORT), fileName: 't.csv' }).expect(400);
+    expect(noProfile.body.error.code).toBe('profile_required');
   });
 });

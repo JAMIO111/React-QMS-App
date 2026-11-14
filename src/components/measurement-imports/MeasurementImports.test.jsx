@@ -131,6 +131,30 @@ describe("the Measurement files card and upload", () => {
     expect(JSON.parse(localStorage.getItem("fortress.cmm-import.m1"))).toMatchObject({ profileId: "p1" });
   });
 
+  it("reads a QIF file without a profile, even before any profile exists", async () => {
+    routes([
+      ["GET", /\/inspections\/insp1\/imports$/, { data: [] }],
+      ["GET", /\/measurement-profiles$/, { data: [], canManage: false }],
+      ["GET", /\/gauges/, { data: [gauge] }],
+      ["POST", /\/inspections\/insp1\/imports$/, detail({ format: "qif", profile: null, fileName: "run.qif" })],
+      ["GET", /\/inspection-imports\/i1$/, detail({ format: "qif", profile: null, fileName: "run.qif" })],
+    ]);
+    upload.mockResolvedValue({ path: "org-1/inspection/insp1/u-run.qif" });
+    wrap(<MeasurementFilesCard inspection={inspection} canRecord />);
+    await userEvent.click(await screen.findByRole("button", { name: "Import from CMM" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText(/A QIF file can be read now/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Read the file" })).toBeDisabled();
+    await userEvent.upload(within(dialog).getByTestId("measurement-file"), new File(["<QIFDocument/>"], "run.qif", { type: "application/xml" }));
+    expect(within(dialog).getByText(/no profile is needed/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Read the file" }));
+    await waitFor(() => expect(apiFetch.mock.calls.some(([, o]) => o?.method === "POST")).toBe(true));
+    const post = apiFetch.mock.calls.find(([, o]) => o?.method === "POST");
+    expect(post[1].body).toMatchObject({ path: "org-1/inspection/insp1/u-run.qif", fileName: "run.qif" });
+    expect(post[1].body.profileId).toBeUndefined();
+    expect(await screen.findByText(/run\.qif · QIF file/)).toBeInTheDocument();
+  });
+
   it("lists the files read for the inspection, and offers no import to someone who cannot record", async () => {
     routes([["GET", /\/inspections\/insp1\/imports$/, { data: [detail()] }]]);
     wrap(<MeasurementFilesCard inspection={inspection} canRecord={false} />);

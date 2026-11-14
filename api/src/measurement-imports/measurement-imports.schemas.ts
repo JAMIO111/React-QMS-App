@@ -42,7 +42,8 @@ export const CreateImportBody = z
   .object({
     path: z.string().min(1).max(500),
     fileName: z.string().trim().min(1).max(255),
-    profileId: z.string().uuid(),
+    /** Needed for a table export; a QIF file describes itself and needs none. */
+    profileId: z.string().uuid().nullish(),
     gaugeId: z.string().uuid().nullish(),
   })
   .strict();

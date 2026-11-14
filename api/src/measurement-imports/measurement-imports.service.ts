@@ -25,7 +25,8 @@ import {
   TryBody,
   TryResult,
 } from './measurement-imports.schemas';
-import { parseReport } from './parse-report';
+import { ParsedReport, parseReport } from './parse-report';
+import { isQifFile, parseQif } from './parse-qif';
 import { PROFILE_TEMPLATES, TableSettings } from './profile-settings';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -222,17 +223,26 @@ export class MeasurementImportsService {
       if (!body.path.startsWith(`${orgOf(ctx)}/inspection/${inspectionId}/`) || body.path.includes('..')) {
         throw ApiError.badRequest('invalid_path', 'The file must be uploaded to this inspection’s folder');
       }
-      const profile = await this.loadProfile(db, ctx, body.profileId);
-      if (!profile.active) throw new ApiError(409, 'inspection_rule', `Profile ${profile.name} is retired`);
-      const settings = TableSettings.safeParse(profile.settings);
-      if (!settings.success) throw new ApiError(409, 'inspection_rule', `Profile ${profile.name} cannot read files any more; check its settings`);
-
       if (!this.store.enabled) throw new ApiError(503, 'file_storage_unavailable', 'Measurement file imports are not set up on this server yet');
       const bytes = await this.store.download(body.path);
       if (!bytes) throw ApiError.badRequest('file_not_found', 'The uploaded file was not found; upload it again');
       if (bytes.length > MAX_FILE) throw ApiError.badRequest('file_too_large', 'A measurement file can be at most 25 MB');
 
-      const report = readable(() => parseReport(body.fileName, bytes, settings.data));
+      // A QIF file describes itself (CM5): no profile. Anything else is a table export read with the chosen profile.
+      const qif = isQifFile(body.fileName, bytes);
+      let profile: ProfileT | null = null;
+      let report: ParsedReport;
+      if (qif) {
+        report = readable(() => parseQif(bytes));
+      } else {
+        if (!body.profileId) throw ApiError.badRequest('profile_required', 'Choose the profile that reads this file');
+        profile = await this.loadProfile(db, ctx, body.profileId);
+        if (!profile.active) throw new ApiError(409, 'inspection_rule', `Profile ${profile.name} is retired`);
+        if (profile.format !== 'table') throw new ApiError(409, 'inspection_rule', `Profile ${profile.name} does not read table files`);
+        const settings = TableSettings.safeParse(profile.settings);
+        if (!settings.success) throw new ApiError(409, 'inspection_rule', `Profile ${profile.name} cannot read files any more; check its settings`);
+        report = readable(() => parseReport(body.fileName, bytes, settings.data));
+      }
       const reqs = await db.execute<Row>(sql`select id, characteristic_key, char_number, name, data_type, applicable
         from public.resolved_inspection_requirements where inspection_record_id = ${inspectionId}::uuid order by sequence`);
       const maps = await db.execute<Row>(sql`select feature_name, characteristic_key, profile_id from public.measurement_feature_maps
@@ -248,15 +258,15 @@ export class MeasurementImportsService {
           applicable: q.applicable as boolean,
         })),
         maps.rows.map((m): MatchFeatureMap => ({ featureName: m.feature_name as string, characteristicKey: m.characteristic_key as string, profileId: (m.profile_id as string) ?? null })),
-        profile.id,
+        profile?.id ?? null,
       );
       const payload = {
         filePath: body.path,
         fileName: body.fileName,
         fileSha256: createHash('sha256').update(bytes).digest('hex'),
         sizeBytes: bytes.length,
-        format: 'table',
-        profileId: profile.id,
+        format: qif ? 'qif' : 'table',
+        profileId: profile?.id ?? null,
         gaugeId: body.gaugeId ?? null,
         header: report.header,
         warnings: [...report.warnings, ...matched.warnings].map((message) => ({ kind: 'file', message })),

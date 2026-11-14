@@ -1,6 +1,6 @@
 # CMM and measurement file ingestion — plan
 
-**Status:** agreed 2026-11-14 (C1–C15 as recommended; sample files for CM0 still to come) · **CM1 done** (migration `20260226100000_measurement_imports.sql`, applied live 2026-11-14) · **CM2 done** (migration `20260227100000_measurement_import_units.sql`, applied live 2026-11-14) · **CM3 done** (no migration) · **CM4 done** (screens, no migration) · **Date:** 2026-11-14 · **Brief:** `docs/design-brief.md` §6.4 (inspection and measurement), §12 Phase 6 ("CMM/inspection data ingestion"), §14 (definition of done)
+**Status:** agreed 2026-11-14 (C1–C15 as recommended; sample files for CM0 still to come) · **CM1 done** (migration `20260226100000_measurement_imports.sql`, applied live 2026-11-14) · **CM2 done** (migration `20260227100000_measurement_import_units.sql`, applied live 2026-11-14) · **CM3 done** (no migration) · **CM4 done** (screens, no migration) · **CM5 done** (QIF, no migration) · **Date:** 2026-11-14 · **Brief:** `docs/design-brief.md` §6.4 (inspection and measurement), §12 Phase 6 ("CMM/inspection data ingestion"), §14 (definition of done)
 
 ## 1. Why
 
@@ -135,6 +135,13 @@ A part-number mismatch blocks; the file's tolerance never decides pass/fail; an 
 - **Part page:** **CMM feature matches** (`FeatureMapsCard.jsx`): the part's remembered matches with their profile, add one (feature name, characteristic key in capitals, optional profile), remove one.
 - Hooks `src/hooks/useMeasurementImports.js`, helpers `src/lib/measurementImports.js`. Tests `measurement-imports/MeasurementImports.test.jsx` (upload and open the preview, the card for readers, confirm then record, an optimistic match with remember, a correction needing a reason, read-only once recorded, a profile from a template tried and saved, the reason for a changed profile, nothing offered without the right, feature matches), `refresh.test.js`. **Not browser-checked yet (CM6).**
 
-## 13. Not in this plan
+## 13. CM5 as built (QIF Results, no migration)
+
+- `api/src/measurement-imports/parse-qif.ts`: a small XML reader of our own (elements, attributes, text, CDATA, comments; namespace prefixes dropped). **A DOCTYPE is refused**, so no entity expansion or external reference is possible; nesting ≤ 64, elements ≤ 500,000, attribute names cannot reach the object prototype. `parseQif` gives the same `ParsedReport` as the table reader, so matching, the preview, unit conversion and applying are unchanged: one part per `MeasurementResults` (its `SerialNumber`, else "Result N"), one feature per `…CharacteristicMeasurement` followed through `CharacteristicItemId` → item (name, `CharacteristicDesignator/Designator` = balloon) → nominal (`TargetValue`) → definition (`Tolerance` Max/MinValue as deviations; a form tolerance's `ToleranceValue` becomes 0 … zone); `Value` is the actual (an attribute check takes PASS / FAIL from `Status`); units from `FileUnits/PrimaryUnits` (linear and angular, default mm / deg); the header part number from `Product/…/Part/Name`, the program from `MeasurementPlan/Name`.
+- `isQifFile` (by `.qif` / `.xml`, or a `QIFDocument` first element): such a file is read **without a profile** (`profileId` optional on `POST /inspections/{id}/imports`; the import is stored with format `qif` and no profile, feature maps without a profile apply); a table file without a profile is `400 profile_required`; a profile that is not a table profile is refused for table files.
+- UI: the upload dialog accepts `.qif` / `.xml`, says no profile is needed and hides the profile choice for them, and works even before any profile exists; the preview names the file "QIF file".
+- Tests `parse-qif.spec.ts` (incl. the DOCTYPE and prototype checks), `measurement-imports.e2e-spec.ts` (QIF preview and correction applied; wrong part, DOCTYPE, broken XML, table without a profile), `MeasurementImports.test.jsx`. The element names follow the QIF 3 schema and are to be checked against real exports (CM0).
+
+## 14. Not in this plan
 
 Reading PDFs or DMIS; automatic NCs; a file sent with no person checking it (comes with the agent, C2b, and still ends in a preview unless a customer agrees otherwise); writing CMM programs or plans back to the machine; QIF Plans (making control plans from a CAD model); Q-DAS DFQ (later, on request); statistics on features that are not in the control plan.

@@ -1,6 +1,6 @@
 # Organisation security: network allowlisting and access rules — plan
 
-**Status:** draft for agreement · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
+**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** (below) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
 
 ## 1. Why
 
@@ -131,7 +131,18 @@ It is network control, not device or identity control: it does not prove the dev
 - **Coverage:** the tenancy sweep already lists every route. A new test fails if an organisation-scoped route is reachable from a denied address.
 - **Files:** a test that direct storage access to an enforced organisation's bucket is refused.
 
-## 9. Not in this plan
+## 9. SE0 result (2026-11-14, Vercel dev deployment)
+
+`GET /api/v1/health/network` (temporary, public; removed in SE2) was called from outside, once plainly and then with every forwarding header forged (`X-Forwarded-For: 6.6.6.6`, `6.6.6.6, 7.7.7.7`, `X-Real-IP`, `Forwarded: for=6.6.6.6`, `X-Vercel-Forwarded-For`).
+
+**Vercel replaces all of them.** Whatever the caller sends, the function receives `x-forwarded-for`, `x-real-ip` and `x-vercel-forwarded-for` set to the caller's real address. It also receives a signed `forwarded` header with the same address. The connection itself comes from `127.0.0.1` (Vercel's local runtime). So with `trust proxy` = 1 (`TRUST_PROXY_HOPS` default in production), `req.ip` is the caller's real address, and a forged header never reaches it. In every call `address` = `reqIp` = the real address, and the forged 6.6.6.6 appeared nowhere. **S2 is confirmed as planned.**
+
+- **Different addresses on successive calls.** The three calls came from three addresses in one /24 (`160.79.106.x`), because the network they were made from leaves through a pool of addresses. Customers behind such a pool (many corporate firewalls and VPNs) must allow the **range**, not one address. The Add network dialog and the monitor mode (S4) are what make this easy to get right.
+- **Per environment.** Vercel (dev, and production when it exists): `TRUST_PROXY_HOPS` = 1, the default for `NODE_ENV=production`. Local and tests: 0 (headers ignored). If a CDN or proxy is ever put in front of Vercel, the hop count changes and the origin must refuse direct traffic. Re-run this check after any such change.
+- **Not checked.** IPv6 (the calls were IPv4; the code and the e2e test handle IPv6). What Supabase passes to Postgres for direct PostgREST / Storage calls: not needed, because S3 (b) moves file links behind the API.
+- **Tests:** `client-address.spec.ts`, `api/test/client-address.e2e-spec.ts` (one trusted hop takes the last address and ignores what was forged in front of it; no trusted hop ignores the headers).
+
+## 10. Not in this plan
 
 - SSO (Entra ID, SAML), device certificates, managed devices, country rules.
 - Per-person or per-site allowlists (the policy is organisation-wide, as in the brief).

@@ -37,6 +37,18 @@ describe("apiFetch", () => {
     expect(init.headers["X-Correlation-Id"]).toBeTruthy();
   });
 
+  it("tells the app when the organisation does not allow this network (403 network_not_allowed)", async () => {
+    const heard = vi.fn();
+    window.addEventListener("qms:network-blocked", heard);
+    fetch.mockResolvedValue(jsonResponse(403, { error: { code: "network_not_allowed", message: "Not from here", details: { address: "198.51.100.200" } } }));
+    await expect(apiFetch("/ncrs", { organisationId: "org-1" })).rejects.toMatchObject({ code: "network_not_allowed" });
+    expect(heard.mock.calls[0][0].detail).toEqual({ organisationId: "org-1", address: "198.51.100.200" });
+    fetch.mockResolvedValue(jsonResponse(403, { error: { code: "forbidden", message: "No" } }));
+    await expect(apiFetch("/ncrs", { organisationId: "org-1" })).rejects.toBeTruthy();
+    expect(heard).toHaveBeenCalledTimes(1);
+    window.removeEventListener("qms:network-blocked", heard);
+  });
+
   it("turns the API error format into an ApiClientError", async () => {
     fetch.mockResolvedValue(
       jsonResponse(409, { error: { code: "conflict", message: "A site with this code already exists", correlationId: "c-1" } })

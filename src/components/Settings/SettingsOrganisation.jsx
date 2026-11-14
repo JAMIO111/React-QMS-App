@@ -4,7 +4,7 @@ import SitesManager from "./SitesManager";
 import ThemeColourPicker from "./ThemeColourPicker";
 import OrganisationLogo from "./OrganisationLogo";
 import ProductionSettings from "./ProductionSettings";
-import RequireMfaSetting from "./RequireMfaSetting";
+import { Link } from "react-router-dom";
 import ReminderTimeSetting from "./ReminderTimeSetting";
 import { describeApiError, API_URL } from "../../lib/api-client";
 import {
@@ -218,10 +218,12 @@ const SettingsOrganisation = () => {
         canManage={canManage}
       />
 
-      <RequireMfaSetting
-        value={!!org.settings.requireMfa}
-        canManage={canManage}
-      />
+      <MenuCard title="Security" subtitle="Two-factor authentication and the networks this organisation can be used from.">
+        <p className="text-sm text-secondary-text">
+          These are in <Link to="/Settings/Security" className="text-link-color hover:underline">Settings → Security</Link>
+          {org.settings.requireMfa ? " (two-factor is required)." : "."}
+        </p>
+      </MenuCard>
 
       <ReminderTimeSetting settings={org.settings} canManage={canManage} />
 

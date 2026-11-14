@@ -1,10 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 let org;
 let access;
 let permissions;
+let me;
+const refetch = vi.fn(async () => ({ data: me }));
 vi.mock("./App.css", () => ({}));
 vi.mock("./components/Navbar", () => ({ default: () => <nav>navbar</nav> }));
 vi.mock("./components/Header", () => ({ default: () => <header>header</header> }));
@@ -18,6 +21,7 @@ vi.mock("./contexts/NotificationProvider", () => ({ NotificationProvider: ({ chi
 vi.mock("./contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisation: org, error: null }) }));
 vi.mock("./hooks/useQmsApi", () => ({
   useOrganisationAccess: () => access,
+  useMe: () => ({ data: me, refetch, isLoading: false }),
   usePermissions: () => ({ can: (p) => permissions.includes(p) }),
 }));
 
@@ -41,6 +45,8 @@ beforeEach(() => {
   org = { id: "org-1", name: "Acme Ltd" };
   access = { accessState: "open", onboarding: "complete", isLoading: false };
   permissions = ["organisation.manage"];
+  me = { memberships: [{ organisation: { id: "org-1" }, network: { state: "open", address: "203.0.113.10" } }] };
+  refetch.mockClear();
   resumeSetup();
 });
 
@@ -104,5 +110,32 @@ describe("the app shell", () => {
     org = null;
     renderAt("/Dashboard");
     expect(screen.getByText("no organisation")).toBeInTheDocument();
+  });
+
+  it("shows the blocked screen, with the address, when the organisation does not allow this network (and nothing of the app)", () => {
+    me = { memberships: [{ organisation: { id: "org-1" }, network: { state: "denied", address: "198.51.100.200" } }] };
+    renderAt("/Settings/Subscription");
+    expect(screen.getByRole("heading", { name: "Acme Ltd is not available on this network" })).toBeInTheDocument();
+    expect(screen.getByText("198.51.100.200")).toBeInTheDocument();
+    expect(screen.queryByText("subscription settings")).toBeNull();
+  });
+
+  it("switches to the blocked screen as soon as a request answers 403 network_not_allowed, and Try again checks /me", async () => {
+    renderAt("/Dashboard");
+    expect(screen.getByText("dashboard page")).toBeInTheDocument();
+    act(() => {
+      window.dispatchEvent(new CustomEvent("qms:network-blocked", { detail: { organisationId: "org-1", address: "198.51.100.200" } }));
+    });
+    expect(screen.getByRole("heading", { name: /not available on this network/ })).toBeInTheDocument();
+    expect(screen.queryByText("dashboard page")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(refetch).toHaveBeenCalled();
+    expect(await screen.findByText("dashboard page")).toBeInTheDocument();
+  });
+
+  it("monitor mode blocks nobody", () => {
+    me = { memberships: [{ organisation: { id: "org-1" }, network: { state: "monitored", address: "198.51.100.200" } }] };
+    renderAt("/Dashboard");
+    expect(screen.getByText("dashboard page")).toBeInTheDocument();
   });
 });

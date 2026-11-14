@@ -1,5 +1,6 @@
 import supabase from "../supabase-client";
 import { browserTimeZone } from "./timeZones";
+import { NETWORK_BLOCKED_EVENT } from "./security";
 
 /** Base URL of the QMS API (see api/README.md). */
 export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
@@ -67,6 +68,10 @@ export async function apiFetch(path, { method = "GET", body, organisationId, rea
   const payload = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) {
     const error = payload?.error ?? {};
+    // The organisation does not allow this network (security plan SE4): the app switches to the blocked screen.
+    if (response.status === 403 && error.code === "network_not_allowed" && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(NETWORK_BLOCKED_EVENT, { detail: { organisationId, address: error.details?.address ?? null } }));
+    }
     throw new ApiClientError({
       status: response.status,
       code: error.code ?? "http_error",

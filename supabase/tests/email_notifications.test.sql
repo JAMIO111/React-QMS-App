@@ -78,7 +78,10 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT user_id FROM public.email_outbox WHERE notification_id = n_id), owner, 'the owner is the one emailed');
 
   -- ---- leasing and outcomes ----
+  UPDATE public.organisation_settings SET network_policy = 'enforce' WHERE organisation_id = org;
   SELECT * INTO leased FROM app.system_lease_emails(10, 60) WHERE to_address = 'owner@mail.test';
+  UPDATE public.organisation_settings SET network_policy = 'off' WHERE organisation_id = org;
+  PERFORM pg_temp.assert_eq(leased.network_restricted, true, 'the lease says the organisation enforces its networks (the email is then short, S9)');
   PERFORM pg_temp.assert_eq(leased.organisation_name, 'Mail Works', 'the lease carries what the email needs');
   PERFORM pg_temp.assert_eq(leased.event_key, 'quality_alert_recipients.created', 'and the event');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.system_lease_emails(10, 60)), 0::bigint, 'a leased email is not handed out twice');

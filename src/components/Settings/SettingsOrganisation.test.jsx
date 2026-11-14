@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 
 const org = {
   id: "org-1",
@@ -35,7 +36,7 @@ describe("SettingsOrganisation", () => {
   it("lets an administrator save details with an audit reason", async () => {
     details = { data: org, isLoading: false, error: null };
     permissions = ["organisation.manage"];
-    render(<SettingsOrganisation />);
+    render(<MemoryRouter><SettingsOrganisation /></MemoryRouter>);
 
     expect(screen.getByLabelText("VAT rate (%)")).toHaveValue(20);
     await userEvent.clear(screen.getByLabelText("Name"));
@@ -58,7 +59,7 @@ describe("SettingsOrganisation", () => {
   it("is read-only without organisation.manage", () => {
     details = { data: org, isLoading: false, error: null };
     permissions = ["ncr.read"];
-    render(<SettingsOrganisation />);
+    render(<MemoryRouter><SettingsOrganisation /></MemoryRouter>);
     expect(screen.getByLabelText("Name")).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
     expect(screen.getByText("sites manager false")).toBeInTheDocument();
@@ -67,7 +68,7 @@ describe("SettingsOrganisation", () => {
   it("explains when the API is not running", () => {
     details = { data: undefined, isLoading: false, error: new ApiClientError({ status: 0, code: "api_unreachable", message: "x" }) };
     permissions = [];
-    render(<SettingsOrganisation />);
+    render(<MemoryRouter><SettingsOrganisation /></MemoryRouter>);
     expect(screen.getByRole("alert")).toHaveTextContent("npm run api:dev");
   });
 });
@@ -76,12 +77,12 @@ describe("SettingsOrganisation with the theme picker", () => {
   it("keeps unsaved edits when only the theme colour changes", async () => {
     details = { data: org, isLoading: false, error: null };
     permissions = ["organisation.manage"];
-    const { rerender } = render(<SettingsOrganisation />);
+    const { rerender } = render(<MemoryRouter><SettingsOrganisation /></MemoryRouter>);
     await userEvent.clear(screen.getByLabelText("Name"));
     await userEvent.type(screen.getByLabelText("Name"), "Draft name");
 
     details = { data: { ...org, settings: { ...org.settings, themeColour: "green" } }, isLoading: false, error: null };
-    rerender(<SettingsOrganisation />);
+    rerender(<MemoryRouter><SettingsOrganisation /></MemoryRouter>);
     expect(screen.getByLabelText("Name")).toHaveValue("Draft name");
   });
 });

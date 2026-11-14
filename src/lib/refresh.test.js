@@ -30,6 +30,7 @@ import { useCustomFieldMutation, useSetCustomValues } from "../hooks/useCustomFi
 import { useTaskMutation, useWorkflowRuleMutation } from "../hooks/useWorkflows";
 import { useDecideMissing, useIgnoreRows, useIntegrationMutation, useSetAllowedHosts, useTemplateMutation } from "../hooks/useIntegrations";
 import { useFeatureMapMutation, useImportMutation, useMatchFeature, useProfileMutation, useTryProfile } from "../hooks/useMeasurementImports";
+import { useSecurityMutation } from "../hooks/useSecurity";
 
 /** What other modules have on screen: each must be marked stale by an action in any module. */
 const watched = [
@@ -141,6 +142,8 @@ describe("every action refreshes every module's data", () => {
     ["read a measurement file into an inspection", useImportMutation, { action: "create", inspectionId: "i1", body: { path: "x", fileName: "a.csv", profileId: "p1" } }],
     ["record a measurement file", useImportMutation, { action: "apply", id: "11111111-1111-1111-1111-111111111111", body: { mode: "new" } }],
     ["match a feature of a measurement file", () => useMatchFeature("11111111-1111-1111-1111-111111111111"), { rowId: "r1", requirementId: null }],
+    ["approve a network", useSecurityMutation, { action: "addNetwork", body: { name: "HQ", network: "203.0.113.10" } }],
+    ["change the network policy", useSecurityMutation, { action: "setMode", body: { mode: "monitor" } }],
     ["remember a feature match", useFeatureMapMutation, { action: "save", partId: "p1", body: { featureName: "OD", characteristicKey: "OD" } }],
   ];
 

@@ -1,6 +1,6 @@
 # Organisation security: network allowlisting and access rules — plan
 
-**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** · **SE1 done** (migration `20260228100000_organisation_security.sql`, applied live 2026-11-14, live guardrails 0 violations) · **SE2 done** (API, no migration) · **SE3 done** (migration `20260301100000_storage_through_api.sql`, applied live 2026-11-14) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
+**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** · **SE1 done** (migration `20260228100000_organisation_security.sql`, applied live 2026-11-14, live guardrails 0 violations) · **SE2 done** (API, no migration) · **SE3 done** (migration `20260301100000_storage_through_api.sql`, applied live 2026-11-14) · **SE4 built** (migration `20260302100000_network_restricted_emails.sql`, not yet applied live) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
 
 ## 1. Why
 
@@ -222,7 +222,31 @@ It is network control, not device or identity control: it does not prove the dev
   - The journey's stand-in storage now takes signed uploads.
 - **Limit (documented):** a link already issued works from anywhere until it expires: at most five minutes while enforced.
 
-## 13. Not in this plan
+## 13. SE4 as built (migration `20260302100000_network_restricted_emails.sql`)
+
+- **Settings → Security** (`Settings/SettingsSecurity.jsx`, menu item with `security.read`, icon `ShieldCheck`; hooks `src/hooks/useSecurity.js`; words `src/lib/security.js`):
+  - **Two-factor authentication:** the switch moved here from Organisation, which now keeps a one-line pointer. The API still needs `organisation.manage` to change it; owners and admins hold both.
+  - **Access restrictions:**
+    - Off / Monitor / Enforce as a `SlidingToggle` (radio), each explained in plain words. Off and monitor save at once (optimistic).
+    - **Enforce** opens a dialog: who will be blocked, how many people or addresses were outside during monitoring, what still stops it (`enforceProblems`: a network switched on, your own address inside one), and the word "enforce" typed to confirm.
+    - "Your address as Fortress sees it", with **Add this address** when it is outside every network.
+    - The approved networks: name, range, how many addresses, "Includes you", who changed it last, an active switch (optimistic, put back if the lockout rule refuses), and "…" Edit / Remove (with a reason). Removed networks are folded away, with **Bring back**.
+    - The network dialog shows the server's message (for example "did you mean 203.0.113.0/24?").
+  - **Recent blocked attempts:** who, from where, how often, when, blocked or would-be-blocked, "Now allowed", and **Add this address** for a manager.
+- **Blocked screen** (`NetworkBlocked.jsx`): shown in place of the whole app, Settings included, when `/me` says the organisation denies this network. It is also shown straight away when any request answers `403 network_not_allowed`: `apiFetch` raises the `qms:network-blocked` window event and `App.jsx` listens. It shows the address, what to do, **Try again** (re-reads `/me`) and a switch to another organisation. Monitor blocks nobody.
+- **Switcher:** an organisation denied on this network reads "<name> (not available on this network)".
+- **Emails while enforced (S9):**
+  - `app.system_lease_emails` now returns `network_restricted`.
+  - For those organisations, `renderNotificationEmail` sends only "You have a new notification in Fortress — <organisation>", a line asking to open it from the company network or VPN, and the link. No title or description.
+- **Tests:**
+  - `SettingsSecurity.test.jsx`.
+  - Blocked-screen cases in `App.test.jsx`.
+  - `OrganisationSwitcher.test.jsx`.
+  - The event in `api-client.test.js`.
+  - Restricted email in `email.spec.ts`.
+  - The lease column in `email_notifications.test.sql`.
+
+## 14. Not in this plan
 
 - SSO (Entra ID, SAML), device certificates, managed devices, country rules.
 - Per-person or per-site allowlists (the policy is organisation-wide, as in the brief).

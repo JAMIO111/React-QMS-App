@@ -15,6 +15,8 @@ export interface EmailRow {
   body: string | null;
   details: Record<string, unknown> | null;
   created_at: string | Date;
+  /** The organisation enforces its approved networks (docs/security-plan.md S9): the email says only that there is a notification, and links to it. */
+  network_restricted?: boolean;
 }
 
 import { reminderPath } from '../reminders/reminder-paths';
@@ -95,8 +97,10 @@ export interface RenderedEmail {
 }
 
 export function renderNotificationEmail(row: EmailRow, appBaseUrl: string | undefined): RenderedEmail {
-  const title = oneLine(row.title, 150);
-  const body = row.body ? oneLine(row.body, 600) : null;
+  const restricted = row.network_restricted === true;
+  // While the organisation enforces its networks, nothing of the record goes into the inbox: no title, no description (S9).
+  const title = restricted ? 'You have a new notification' : oneLine(row.title, 150);
+  const body = restricted ? 'Open it from your company network or VPN.' : row.body ? oneLine(row.body, 600) : null;
   const org = oneLine(row.organisation_name, 120);
   const path = notificationPath(row.entity_type, row.entity_id, row.details);
   let link: string | null = null;
@@ -109,7 +113,7 @@ export function renderNotificationEmail(row: EmailRow, appBaseUrl: string | unde
   }
   const settings = appBaseUrl ? (() => { try { return new URL('/Settings/Notifications', appBaseUrl).toString(); } catch { return null; } })() : null;
   const greeting = str(row.recipient_name) ? `Hello ${oneLine(row.recipient_name!, 80)},` : 'Hello,';
-  const subject = oneLine(`${title}${body ? ` — ${body}` : ''}`, 180);
+  const subject = restricted ? oneLine(`You have a new notification in Fortress — ${org}`, 180) : oneLine(`${title}${body ? ` — ${body}` : ''}`, 180);
   const when = new Date(row.created_at).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
 
   const text = [

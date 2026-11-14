@@ -5,6 +5,7 @@ import {
   MonitorCogIcon,
   PlugIcon,
   SettingsIcon,
+  ShieldCheckIcon,
   ShieldUserIcon,
   UserCogIcon,
   WorkflowIcon,
@@ -28,6 +29,13 @@ const SettingMenuStructure = [
     path: "Users",
     icon: ShieldUserIcon,
     permission: "members.read",
+    subMenu: [],
+  },
+  {
+    name: "Security",
+    path: "Security",
+    icon: ShieldCheckIcon,
+    permission: "security.read",
     subMenu: [],
   },
   {

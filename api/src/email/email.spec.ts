@@ -59,6 +59,18 @@ describe('the email', () => {
     expect(e.text).toContain('Open Fortress QMS to see it.');
   });
 
+  it('while the organisation enforces its networks: no title or description, only that there is something and the link (S9)', () => {
+    const e = renderNotificationEmail(row({ network_restricted: true }), 'https://qms.example.com');
+    expect(e.subject).toBe('You have a new notification in Fortress — Acme Ltd');
+    for (const part of [e.subject, e.text, e.html]) {
+      expect(part).not.toContain('Burr on bore');
+      expect(part).not.toContain('Non-conformance created');
+    }
+    expect(e.text).toContain('You have a new notification in Acme Ltd.');
+    expect(e.text).toContain('Open it from your company network or VPN.');
+    expect(e.link).toBe(`https://qms.example.com/Non-Conformance/Register/${A}`);
+  });
+
   it('bounds a long subject', () => {
     expect(renderNotificationEmail(row({ body: 'x'.repeat(1000) }), undefined).subject.length).toBeLessThanOrEqual(180);
   });

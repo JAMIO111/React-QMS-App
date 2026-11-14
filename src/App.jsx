@@ -13,13 +13,29 @@ import SubscriptionBanner from "./components/SubscriptionBanner";
 import SubscriptionNeeded from "./components/onboarding/SubscriptionNeeded";
 import { setupDeferred } from "./lib/onboarding";
 import ThemeColourSync from "./components/ThemeColourSync";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import NetworkBlocked from "./components/NetworkBlocked";
+import { useNetworkAccess } from "./hooks/useSecurity";
+import { NETWORK_BLOCKED_EVENT } from "./lib/security";
 
 function App() {
   const { organisation, error } = useOrganisation();
   const { accessState, onboarding, isLoading: accessLoading } = useOrganisationAccess();
   const { can } = usePermissions();
   const { pathname } = useLocation();
+  const network = useNetworkAccess();
+  // A request refused with 403 network_not_allowed (security plan SE4) switches to the blocked screen at once, before /me is read again.
+  const [blockedBy, setBlockedBy] = useState(null); // { organisationId, address }
+  const [retrying, setRetrying] = useState(false);
+  useEffect(() => {
+    const onBlocked = (e) => {
+      setBlockedBy(e.detail ?? {});
+      network.refetch?.();
+    };
+    window.addEventListener(NETWORK_BLOCKED_EVENT, onBlocked);
+    return () => window.removeEventListener(NETWORK_BLOCKED_EVENT, onBlocked);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Browser tab: "Fortress QMS | <organisation>".
   useEffect(() => {
@@ -43,6 +59,18 @@ function App() {
   // An organisation without a valid subscription leaves only billing and set-up (the database refuses the rest too).
   const gated = !accessLoading && accessState !== "open";
   const settingsRoute = pathname.startsWith("/Settings");
+  const blockedHere = blockedBy && (!blockedBy.organisationId || blockedBy.organisationId === organisation.id);
+  const networkBlocked = network.state === "denied" || blockedHere;
+  const retry = async () => {
+    setRetrying(true);
+    try {
+      const fresh = await network.refetch?.();
+      const m = fresh?.data?.memberships?.find((x) => x.organisation.id === organisation.id);
+      if (m?.network?.state !== "denied") setBlockedBy(null);
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   return (
     <SearchProvider>
@@ -56,8 +84,14 @@ function App() {
           <main className="flex flex-col flex-1 h-full min-w-0 min-h-0">
             <Header />
             <div className="relative flex flex-col flex-1 overflow-clip min-w-0 min-h-0">
-              {!gated && <SubscriptionBanner />}
-              {gated && !settingsRoute ? <SubscriptionNeeded /> : <Outlet />}
+              {networkBlocked ? (
+                <NetworkBlocked address={network.address ?? blockedBy?.address ?? null} onRetry={retry} retrying={retrying} />
+              ) : (
+                <>
+                  {!gated && <SubscriptionBanner />}
+                  {gated && !settingsRoute ? <SubscriptionNeeded /> : <Outlet />}
+                </>
+              )}
             </div>
           </main>
         </div>

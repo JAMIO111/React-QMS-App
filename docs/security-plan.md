@@ -1,6 +1,6 @@
 # Organisation security: network allowlisting and access rules — plan
 
-**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** (below) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
+**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** · **SE1 built** (migration `20260228100000_organisation_security.sql`, not yet applied live) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
 
 ## 1. Why
 
@@ -142,7 +142,32 @@ It is network control, not device or identity control: it does not prove the dev
 - **Not checked.** IPv6 (the calls were IPv4; the code and the e2e test handle IPv6). What Supabase passes to Postgres for direct PostgREST / Storage calls: not needed, because S3 (b) moves file links behind the API.
 - **Tests:** `client-address.spec.ts`, `api/test/client-address.e2e-spec.ts` (one trusted hop takes the last address and ignores what was forged in front of it; no trusted hop ignores the headers).
 
-## 10. Not in this plan
+## 10. SE1 as built (migration `20260228100000_organisation_security.sql`)
+
+- **Permissions** `security.read` / `security.manage`: owner and admin.
+- **`organisation_settings`:** `network_policy` (off | monitor | enforce, default off), `network_policy_changed_at` / `_by`. There is no column UPDATE grant, so only `app.set_network_policy` changes it. It is audited with the settings row.
+- **`organisation_networks`:**
+  - name, `network` (Postgres `cidr`), active, `removed_at` / `_by` / `removed_reason`, created / updated stamps;
+  - name and network unique among live entries, at most 100 per organisation;
+  - audited, RLS `security.read`, no table writes, never deleted.
+  - Removing needs a reason (3+ characters). A restored entry comes back **switched off**, so restoring never widens access by itself.
+- **Reading an entry** (`app.parse_network`):
+  - trimmed; a single address becomes `/32` or `/128`; an IPv4 address written as IPv6 becomes IPv4;
+  - host bits set are refused with the network meant ("198.51.100.5/28 has bits set after the /28: did you mean 198.51.100.0/28?");
+  - refused (`app.network_problem`): wider than /8 (IPv4) or /16 (IPv6); private, loopback, link-local, carrier-grade NAT, multicast, reserved and unspecified ranges, which a server never sees as a caller.
+  - **Documentation ranges (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`, `2001:db8::/32`) are allowed**, so tests and examples can use them. This changes the sketch in §4, which had them allowed only in tests.
+- **`app.network_allowed(org, address)`** → `open` (off) | `allowed` | `monitored` (monitor mode, outside every network) | `denied` (enforced, outside every network, or no address). It returns NULL for anyone who is not a member, so it never reveals another tenant's policy. IPv4 written as IPv6 matches its IPv4 network (`app.plain_address`).
+- **Lockout prevention** (`app.set_network_policy`, `save_ / remove_organisation_network`; the caller's address is passed in by the API):
+  - enforce needs an active network and the caller's address inside one;
+  - while enforced, switching off, moving or removing the network that covers the caller is refused, unless another active network covers them;
+  - off and monitor can always be chosen.
+- **`access_denials`:** one row per organisation, person, address, mode and hour, counting attempts.
+  - The last path is kept without its query string; an unreadable address is `unknown`.
+  - Written only by `app.system_record_access_denial` (API login); read with `security.read`; cleared after 90 days by `app.system_purge_access_denials` (API login; the worker step comes in SE2).
+- Errors `QM029` (→ `409 security_rule` in SE2), another organisation `P0002`.
+- Tests: `supabase/tests/organisation_security.test.sql`, tenancy sweep seeds and assertions, guardrails audit list.
+
+## 11. Not in this plan
 
 - SSO (Entra ID, SAML), device certificates, managed devices, country rules.
 - Per-person or per-site allowlists (the policy is organisation-wide, as in the brief).

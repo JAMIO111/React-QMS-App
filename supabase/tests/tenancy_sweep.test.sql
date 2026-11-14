@@ -445,6 +445,10 @@ BEGIN
     VALUES ((SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'), a, 'part', '{"sweep_note": "x"}');
   INSERT INTO sweep VALUES ('pc_part', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'));
   INSERT INTO sweep VALUES ('cmm_profile', cmm_profile), ('cmm_import', cmm_import);
+  -- Security (SE1): an approved network and a blocked attempt (seeded directly; people write through the functions, the API login records attempts).
+  INSERT INTO public.organisation_networks (organisation_id, name, network) VALUES (a, 'Sweep HQ', '203.0.113.0/28');
+  PERFORM app.system_record_access_denial(a, '50000000-0000-0000-0000-0000000000a1', '198.51.100.7', 'monitor', '/api/v1/ncrs');
+  INSERT INTO sweep VALUES ('network', (SELECT id FROM public.organisation_networks WHERE organisation_id = a AND name = 'Sweep HQ'));
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));
 END $$;
@@ -540,6 +544,10 @@ BEGIN
   PERFORM pg_temp.assert_fails(format($q$SELECT app.retire_measurement_profile(%L, 'Not mine')$q$, (SELECT value FROM sweep WHERE key = 'cmm_profile')), 'retire_measurement_profile(A profile)');
   PERFORM pg_temp.assert_fails(format('SELECT app.discard_inspection_import(%L)', (SELECT value FROM sweep WHERE key = 'cmm_import')), 'discard_inspection_import(A import)');
   PERFORM pg_temp.assert_fails(format('SELECT app.begin_inspection_import_apply(%L, NULL)', (SELECT value FROM sweep WHERE key = 'cmm_import')), 'begin_inspection_import_apply(A import)');
+  PERFORM pg_temp.assert_fails(format($q$SELECT app.remove_organisation_network(%L, 'Not mine', '203.0.113.1')$q$, (SELECT value FROM sweep WHERE key = 'network')), 'remove_organisation_network(A network)');
+  PERFORM pg_temp.assert_fails(format($q$SELECT app.save_organisation_network(%L, '{"name":"x"}', '203.0.113.1', %L)$q$, a, (SELECT value FROM sweep WHERE key = 'network')), 'save_organisation_network(A network)');
+  PERFORM pg_temp.assert_fails(format($q$SELECT app.set_network_policy(%L, 'off', NULL)$q$, a), 'set_network_policy(A)');
+  PERFORM pg_temp.assert_eq(app.network_allowed(a, '203.0.113.1'), NULL::text, 'network_allowed(A) says nothing to a non-member');
   PERFORM pg_temp.logout();
 END $$;
 

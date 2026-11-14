@@ -1,6 +1,6 @@
 # CMM and measurement file ingestion — plan
 
-**Status:** agreed 2026-11-14 (C1–C15 as recommended; sample files for CM0 still to come) · **CM1 done** (migration `20260226100000_measurement_imports.sql`, not yet applied live) · **Date:** 2026-11-14 · **Brief:** `docs/design-brief.md` §6.4 (inspection and measurement), §12 Phase 6 ("CMM/inspection data ingestion"), §14 (definition of done)
+**Status:** agreed 2026-11-14 (C1–C15 as recommended; sample files for CM0 still to come) · **CM1 done** (migration `20260226100000_measurement_imports.sql`, applied live 2026-11-14) · **Date:** 2026-11-14 · **Brief:** `docs/design-brief.md` §6.4 (inspection and measurement), §12 Phase 6 ("CMM/inspection data ingestion"), §14 (definition of done)
 
 ## 1. Why
 

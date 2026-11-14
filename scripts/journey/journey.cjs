@@ -207,6 +207,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await workflowsAndReminders({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague });
   await cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner });
+  await networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -1877,4 +1878,95 @@ async function cmmImports({ page, stack, APP, orgName, see, shot, step, log, own
   await see(matches.getByText('DAT1 X'));
   await matches.scrollIntoViewIfNeeded();
   await shot(page, '96-cmm-feature-matches');
+}
+
+/**
+ * Organisation security (docs/security-plan.md SX): the owner, at the head office (203.0.113.10), approves that address, monitors, sees Colin's
+ * request from home (198.51.100.200) recorded, then enforces; Colin is shown the blocked screen while the owner carries on; a platform operator
+ * recovers access (back to monitor) and the owner switches restrictions off again. The API trusts one proxy hop, as on Vercel, so the address is
+ * the X-Forwarded-For the browser's requests carry here.
+ */
+async function networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }) {
+  const OFFICE = '203.0.113.10';
+  const HOME = '198.51.100.200';
+  const apiUrls = `http://127.0.0.1:${stack.ports.api}/**`;
+  const from = (address) => (route) => route.continue({ headers: { ...route.request().headers(), 'x-forwarded-for': address } });
+  const org = (await stack.admin.query(`select id from public.organisations where name = $1`, [orgName])).rows[0];
+  const policy = async () => (await stack.admin.query(`select network_policy from public.organisation_settings where organisation_id = $1`, [org.id])).rows[0].network_policy;
+  const waitFor = async (what, test) => {
+    for (let i = 0; i < 50; i += 1) { if (await test()) return; await new Promise((r) => setTimeout(r, 200)); }
+    throw new Error(`timed out waiting for ${what}`);
+  };
+
+  step('the owner, at the head office, approves its address and starts monitoring');
+  await page.context().route(apiUrls, from(OFFICE));
+  await page.goto(`${APP}/Settings/Security`);
+  await see(page.getByText(OFFICE).first());
+  await page.getByRole('button', { name: 'Add this address' }).first().click();
+  const add = page.getByRole('dialog', { name: 'Add network' });
+  await add.getByLabel('Name').fill('Head office');
+  await add.getByRole('button', { name: 'Add network' }).click();
+  await see(page.getByRole('list', { name: 'Approved networks' }).getByText('Head office'));
+  await see(page.getByText('In an approved network'));
+  await page.getByRole('radiogroup', { name: 'Network policy' }).getByRole('radio', { name: 'Monitor' }).click();
+  await waitFor('monitor', async () => (await policy()) === 'monitor');
+  await shot(page, '140-security-monitor');
+
+  step('Colin signs in from home: allowed while monitoring, and the request is recorded');
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await ctx.route(apiUrls, from(HOME));
+  const colin = await ctx.newPage();
+  colin.setDefaultTimeout(15000);
+  // While enforced, Colin's requests are refused on purpose (403 network_not_allowed): that is what this step checks.
+  watch(colin, 'colin-home', [(status) => status === 403]);
+  await signIn(colin, APP, colleague.email);
+  await see(colin.getByRole('heading', { level: 1, name: /good (morning|afternoon|evening), Colin/i }));
+  await waitFor('a monitored request', async () => (await stack.admin.query(`select count(*)::int n from public.access_denials where organisation_id = $1 and mode = 'monitor' and address = $2`, [org.id, HOME])).rows[0].n > 0);
+  await page.reload();
+  const attempts = page.getByRole('list', { name: 'Recent blocked attempts' });
+  await see(attempts.getByText(HOME));
+  await see(attempts.getByText(/Colin/));
+  await shot(page, '141-security-monitored-attempt');
+
+  step('the owner enforces (typed confirmation); Colin is blocked, the owner carries on');
+  await page.getByRole('radiogroup', { name: 'Network policy' }).getByRole('radio', { name: 'Enforce' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Enforce access restrictions?' });
+  await confirm.getByLabel(/to confirm/).fill('enforce');
+  await shot(page, '142-security-enforce-confirm');
+  await confirm.getByRole('button', { name: 'Enforce' }).click();
+  await waitFor('enforce', async () => (await policy()) === 'enforce');
+  await colin.reload();
+  const blocked = colin.getByRole('alert').filter({ has: colin.getByRole('heading', { level: 1 }) });
+  await see(blocked);
+  await see(blocked.getByText(HOME));
+  await shot(colin, '143-security-colin-blocked');
+  await page.goto(`${APP}/Dashboard`);
+  await see(page.getByRole('heading', { level: 1, name: /good (morning|afternoon|evening), Olivia/i }));
+  const denied = (await stack.admin.query(`select count(*)::int n from public.access_denials where organisation_id = $1 and mode = 'enforce' and address = $2`, [org.id, HOME])).rows[0];
+  if (denied.n < 1) throw new Error('the blocked request was not recorded');
+
+  step('a platform operator recovers access (back to monitor, networks kept); the owner switches restrictions off');
+  const ownerRow = (await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email])).rows[0];
+  await stack.admin.query(`insert into public.platform_admins (user_id, note) values ($1, 'journey operator') on conflict do nothing`, [ownerRow.id]);
+  const token = await stack.sign({ id: ownerRow.id, email: owner.email }, { aal: 'aal2' });
+  const res = await fetch(`http://127.0.0.1:${stack.ports.api}/api/v1/platform/organisations/${org.id}/recover-network-policy`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Forwarded-For': HOME },
+    body: JSON.stringify({ reason: 'The office line changed and everyone is locked out', verification: 'Called the owner back on the number held for the account' }),
+  });
+  if (!res.ok) throw new Error(`recovery -> ${res.status} ${(await res.text()).slice(0, 300)}`);
+  if ((await policy()) !== 'monitor') throw new Error('recovery did not return the organisation to monitor');
+  await stack.admin.query(`delete from public.platform_admins where user_id = $1`, [ownerRow.id]);
+  await colin.getByRole('button', { name: 'Try again' }).click();
+  await see(colin.getByRole('heading', { level: 1, name: /good (morning|afternoon|evening), Colin/i }));
+  await page.goto(`${APP}/Settings/Security`);
+  await see(page.getByRole('list', { name: 'Changes to network restrictions' }).getByText(/recover/i).first());
+  await page.getByRole('radiogroup', { name: 'Network policy' }).getByRole('radio', { name: 'Off' }).click();
+  await waitFor('off', async () => (await policy()) === 'off');
+  await shot(page, '144-security-history');
+  const told = (await stack.admin.query(`select count(*)::int n from public.notifications where organisation_id = $1 and entity_type = 'network_policy_changes'`, [org.id])).rows[0];
+  log(`network policy notices: ${told.n}`);
+  if (told.n < 4) throw new Error(`owners were not told of every change: ${JSON.stringify(told)}`);
+  await ctx.close();
+  await page.context().unroute(apiUrls);
 }

@@ -34,18 +34,19 @@ async function waitFor(url, ms = 60000) {
   throw new Error(`${url} did not come up`);
 }
 
-function watch(page, who) {
+function watch(page, who, extra = []) {
+  const allowed = [...ALLOWED, ...extra];
   page.on('console', (m) => {
     if (m.type() !== 'error') return;
     // The browser logs every failed request as a console error; the ones we expect (see ALLOWED) are not problems.
     const status = /status of (\d+)/.exec(m.text());
-    if (status && ALLOWED.some((a) => a(Number(status[1]), m.location().url ?? ''))) return;
+    if (status && allowed.some((a) => a(Number(status[1]), m.location().url ?? ''))) return;
     problems.push(`[${who}] console error: ${m.text().slice(0, 300)}`);
   });
   page.on('pageerror', (e) => problems.push(`[${who}] page error: ${String(e).slice(0, 300)}`));
   page.on('response', async (r) => {
     const u = r.url();
-    if (r.status() >= 400 && (u.includes(`:${PORTS.api}`) || u.includes(`:${PORTS.supabase}`)) && !ALLOWED.some((a) => a(r.status(), u))) {
+    if (r.status() >= 400 && (u.includes(`:${PORTS.api}`) || u.includes(`:${PORTS.supabase}`)) && !allowed.some((a) => a(r.status(), u))) {
       const text = await r.text().catch(() => '');
       problems.push(`[${who}] ${r.status()} ${r.request().method()} ${u} ${text.slice(0, 300)}`);
     }

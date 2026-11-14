@@ -259,7 +259,9 @@ async function startStack({ appUrl, log = console.log }) {
     signUpload: async (bucket, path) => ({ token: 'journey', signedUrl: `${storageBase}/object/upload/sign/${bucket}/${path}?token=journey` }),
     remove: async (bucket, path) => { storage.delete(`${bucket}/${path}`); },
   };
-  const env = loadEnv({ NODE_ENV: 'test', DATABASE_URL: dbUrl, SUPABASE_JWT_SECRET: JWT_SECRET, JWT_ISSUER: ISSUER, LOG_LEVEL: 'silent', PORT: String(PORTS.api), CORS_ORIGINS: appUrl, APP_BASE_URL: appUrl, RATE_LIMIT_PER_MINUTE: '100000' });
+  const env = loadEnv({ NODE_ENV: 'test', DATABASE_URL: dbUrl, SUPABASE_JWT_SECRET: JWT_SECRET, JWT_ISSUER: ISSUER, LOG_LEVEL: 'silent', PORT: String(PORTS.api), CORS_ORIGINS: appUrl, APP_BASE_URL: appUrl, RATE_LIMIT_PER_MINUTE: '100000',
+    // One proxy hop, as behind Vercel: the security step sets X-Forwarded-For on the browser's requests to stand for an office and a home network.
+    TRUST_PROXY_HOPS: '1' });
   const erp = await startFakeErp(log);
   const { ConnectorRegistry } = require('../../api/dist/integrations/core/connector.registry'); // the provider token to replace
   const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(env)] })

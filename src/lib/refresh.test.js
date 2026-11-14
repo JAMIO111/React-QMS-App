@@ -29,6 +29,7 @@ import { useAnswerAudit, useAuditMutation, useSetAuditTargets, useUpdateClassifi
 import { useCustomFieldMutation, useSetCustomValues } from "../hooks/useCustomFields";
 import { useTaskMutation, useWorkflowRuleMutation } from "../hooks/useWorkflows";
 import { useDecideMissing, useIgnoreRows, useIntegrationMutation, useSetAllowedHosts, useTemplateMutation } from "../hooks/useIntegrations";
+import { useFeatureMapMutation, useImportMutation, useMatchFeature, useProfileMutation, useTryProfile } from "../hooks/useMeasurementImports";
 
 /** What other modules have on screen: each must be marked stale by an action in any module. */
 const watched = [
@@ -135,6 +136,12 @@ describe("every action refreshes every module's data", () => {
     ["write a workflow rule", useWorkflowRuleMutation, { action: "create", body: { name: "x" } }],
     ["close a workflow task", useTaskMutation, { action: "complete", id: "t1", body: { note: "Done" } }],
     ["fill in custom values", () => useSetCustomValues("part", "11111111-1111-1111-1111-111111111111"), { values: { finish: "Ra 0.8" }, current: {} }],
+    ["save a measurement file profile", useProfileMutation, { action: "create", body: { name: "Bench", settings: { columns: { feature: "F", actual: "A" } } } }],
+    ["try a measurement file", useTryProfile, { settings: { columns: { feature: "F", actual: "A" } }, fileName: "a.csv", contentBase64: "eA==" }],
+    ["read a measurement file into an inspection", useImportMutation, { action: "create", inspectionId: "i1", body: { path: "x", fileName: "a.csv", profileId: "p1" } }],
+    ["record a measurement file", useImportMutation, { action: "apply", id: "11111111-1111-1111-1111-111111111111", body: { mode: "new" } }],
+    ["match a feature of a measurement file", () => useMatchFeature("11111111-1111-1111-1111-111111111111"), { rowId: "r1", requirementId: null }],
+    ["remember a feature match", useFeatureMapMutation, { action: "save", partId: "p1", body: { featureName: "OD", characteristicKey: "OD" } }],
   ];
 
   it.each(cases)("%s", async (_name, useHook, variables) => {

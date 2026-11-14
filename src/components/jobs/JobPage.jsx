@@ -38,6 +38,7 @@ import { useActiveAlerts } from "../../hooks/useDocumentation";
 import { useDocumentsInForce } from "../../hooks/useDocuments";
 import { DocumentsInForceList } from "../documents/DocumentsInForce";
 import SidePanes from "./panes/SidePanes";
+import { MeasurementFilesCard } from "../measurement-imports/ImportFromFile";
 import AlertsPane from "./panes/AlertsPane";
 import NcrsPane from "./panes/NcrsPane";
 import RevisionsPane from "./panes/RevisionsPane";
@@ -371,6 +372,8 @@ const JobPage = () => {
                 canOverride={can("inspection.override_gauge")}
               />
             )}
+
+            <MeasurementFilesCard inspection={inspection} canRecord={canRecord} back={`/Jobs/${inspection.id}`} />
 
             <MenuCard
               title="Readings"

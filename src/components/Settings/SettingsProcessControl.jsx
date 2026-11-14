@@ -11,6 +11,7 @@ import StatTile from "../ui/StatTile";
 import CharacteristicForm from "../process-control/CharacteristicForm";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
+import MeasurementProfilesCard from "../measurement-imports/MeasurementProfilesCard";
 
 const inputClass =
   "rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm text-primary-text placeholder:text-tertiary-text focus:outline-none focus:border-brand-primary";
@@ -144,6 +145,7 @@ const SettingsProcessControl = () => {
           ))}
         </ul>
       </MenuCard>
+      <MeasurementProfilesCard />
       {editing && (
         <Dialog title={editing.id ? "Edit template" : "Add template"} onClose={() => setEditing(null)} width="max-w-3xl">
           <CharacteristicForm asTemplate characteristic={editing.id ? editing : undefined} onDone={() => setEditing(null)} />

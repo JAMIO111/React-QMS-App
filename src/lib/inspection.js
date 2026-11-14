@@ -55,7 +55,7 @@ const countedReadings = (inspection, requirementId) => {
     .map((m) => ({ triggerType: triggerBySample.get(m.sampleId), measuredAt: new Date(m.measuredAt).getTime() }));
 };
 
-const EVENT_TRIGGERS = ["start_of_shift", "after_setup", "after_tool_change", "manual"];
+export const EVENT_TRIGGERS = ["start_of_shift", "after_setup", "after_tool_change", "manual"];
 const PLANNED_TRIGGERS = ["first_off", "last_off", "every_n_parts"];
 
 /** Event triggers (shift start, set-up, tool change, manual) the plan has rules for: samples outside the planned sequence. */

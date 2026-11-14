@@ -425,6 +425,7 @@ export const ReadingsGrid = ({ inspection, onOpen }) => {
                             <HistoryIcon className="h-3 w-3" /> {m.supersedesId ? "corrected" : "gauge override"}
                           </span>
                         )}
+                        {m.importId && <span className="text-xs text-secondary-text">from a file</span>}
                       </button>
                     ) : (
                       <span className="text-secondary-text">—</span>

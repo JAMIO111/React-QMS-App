@@ -17,6 +17,7 @@ import { ResultBadge, StatusPill } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
 import RHFComboBox from "../ui/RHFComboBox";
 import CustomFieldsCard from "../custom-fields/CustomFieldsCard";
+import { MeasurementFilesCard } from "../measurement-imports/ImportFromFile";
 
 /** One in-process inspection: context, due checks, sample entry, readings, completion. */
 const InspectionPage = () => {
@@ -75,6 +76,7 @@ const InspectionPage = () => {
 
           {open && <SamplePlan inspection={inspection} />}
           {open && canRecord && <SampleEntry key={inspection.samples.length} inspection={inspection} gauges={gauges} canOverride={can("inspection.override_gauge")} />}
+          <MeasurementFilesCard inspection={inspection} canRecord={canRecord} />
 
           <MenuCard title="Readings" subtitle="Select a reading for its history, a correction or a retest.">
             <ReadingsGrid inspection={inspection} onOpen={(requirement, reading) => setOpened({ requirement, reading })} />

@@ -20,6 +20,7 @@ import PartCustomers from "./PartCustomers";
 import { CorrectDialog, CorrectionImpactCard, ReleaseCorrectionDialog } from "./RevisionCorrection";
 import { currentRevisionLabel, revisionLabel } from "../../lib/partRevisions";
 import RequirementPreview from "../process-control/RequirementPreview";
+import FeatureMapsCard from "../measurement-imports/FeatureMapsCard";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 
@@ -321,6 +322,9 @@ const PartDetailPage = () => {
               title="Inspection requirements"
               subtitle="The control plan that applies to this part and what is checked, from its released revision."
             />
+          )}
+          {(can("process_control.read") || can("inspection.read")) && (
+            <FeatureMapsCard partId={part.id} canEdit={can("process_control.manage") || can("inspection.record")} />
           )}
         </>
       )}

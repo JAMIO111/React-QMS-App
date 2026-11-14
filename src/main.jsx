@@ -147,6 +147,7 @@ const JobPage = lazy(() => import("./components/jobs/JobPage.jsx"));
 const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
 const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
 const InspectionPage = lazy(() => import("./components/inspection/InspectionPage.jsx"));
+const ImportPreviewPage = lazy(() => import("./components/measurement-imports/ImportPreviewPage.jsx"));
 const AuthPage = lazy(() => import("./components/AuthPage.jsx"));
 const Login = lazy(() => import("./components/Login.jsx"));
 const SignUp = lazy(() => import("./components/SignUp.jsx"));
@@ -369,6 +370,7 @@ const router = createBrowserRouter([
             { path: "Inspections", element: <InspectionsPage /> },
             { path: "Inspections/new", element: <StartInspectionPage /> },
             { path: "Inspections/:id", element: <InspectionPage /> },
+            { path: "Inspections/:inspectionId/imports/:importId", element: <ImportPreviewPage /> },
             { path: "Jobs/:id", element: <JobPage /> },
             ],
           },

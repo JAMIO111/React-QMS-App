@@ -1,6 +1,6 @@
 # Organisation security: network allowlisting and access rules — plan
 
-**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** · **SE1 built** (migration `20260228100000_organisation_security.sql`, not yet applied live) · **SE2 built** (API, no migration) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
+**Status:** agreed 2026-11-14 (S1–S12 as recommended) · **SE0 done** · **SE1 done** (migration `20260228100000_organisation_security.sql`, applied live 2026-11-14, live guardrails 0 violations) · **SE2 done** (API, no migration) · **Date:** 2026-11-14 · **Source:** `fortress-ip-allowlisting-feature-brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §5 (security), §14 (definition of done), §15 (non-goals)
 
 ## 1. Why
 

@@ -206,6 +206,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await riskAndReview({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
   await workflowsAndReminders({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague });
+  await cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -1743,4 +1744,137 @@ async function newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step,
   await see(list.getByText(/version 1 · Done/));
   await see(list.getByRole('link', { name: new RegExp(risk.reference) }));
   await shot(page, 'b5-workflow-new-trigger-run');
+}
+
+/** A QIF Results document (ISO 23952) with one part: each check as definition (tolerance), nominal, item (name, balloon) and measurement. */
+function qifFile(partNumber, serial, checks) {
+  const defs = checks.map((c, i) => `<DiameterCharacteristicDefinition id="${10 + i}"><Tolerance><MaxValue>${c.plus}</MaxValue><MinValue>${-c.minus}</MinValue></Tolerance></DiameterCharacteristicDefinition>`).join('');
+  const noms = checks.map((c, i) => `<DiameterCharacteristicNominal id="${30 + i}"><CharacteristicDefinitionId>${10 + i}</CharacteristicDefinitionId><TargetValue>${c.nominal}</TargetValue></DiameterCharacteristicNominal>`).join('');
+  const items = checks.map((c, i) => `<DiameterCharacteristicItem id="${50 + i}"><Name>${c.name}</Name>${c.balloon ? `<CharacteristicDesignator><Designator>${c.balloon}</Designator></CharacteristicDesignator>` : ''}<CharacteristicNominalId>${30 + i}</CharacteristicNominalId></DiameterCharacteristicItem>`).join('');
+  const meas = checks.map((c, i) => `<DiameterCharacteristicMeasurement id="${70 + i}"><Value>${c.value}</Value><CharacteristicItemId>${50 + i}</CharacteristicItemId></DiameterCharacteristicMeasurement>`).join('');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<QIFDocument xmlns="http://qifstandards.org/xsd/qif3" versionQIF="3.0.0">
+  <FileUnits><PrimaryUnits><LinearUnit><SIUnitName>meter</SIUnitName><UnitName>mm</UnitName></LinearUnit></PrimaryUnits></FileUnits>
+  <Product><PartSet n="1"><Part id="1"><Name>${partNumber}</Name></Part></PartSet></Product>
+  <Characteristics><CharacteristicDefinitions>${defs}</CharacteristicDefinitions><CharacteristicNominals>${noms}</CharacteristicNominals><CharacteristicItems>${items}</CharacteristicItems></Characteristics>
+  <MeasurementsResults><MeasurementResultsSet><MeasurementResults id="90"><MeasuredCharacteristics><CharacteristicMeasurements>${meas}</CharacteristicMeasurements></MeasuredCharacteristics>
+    <ThisResultsInstanceQPId><SerialNumber>${serial}</SerialNumber></ThisResultsInstanceQPId></MeasurementResults></MeasurementResultsSet></MeasurementsResults>
+</QIFDocument>`;
+}
+
+/**
+ * CMM and measurement file ingestion (docs/cmm-ingestion-plan.md): on a running job the operator reads a PC-DMIS generic export (no profile),
+ * matches the one feature without a balloon by hand and remembers it, records the readings and completes the job; on the next job a QIF file is read,
+ * the remembered match is used again, and the readings are recorded. Every reading goes through the normal path (the database decides pass or fail).
+ */
+async function cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner }) {
+  step('set-up for CMM imports: a part with three measured checks, a CMM, and a running job');
+  const { rows: [org] } = await stack.admin.query(`select o.id, (select id from public.sites where organisation_id = o.id limit 1) as site from public.organisations o where o.name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  const family = (await stack.admin.query(`select id from public.part_families where organisation_id = $1 and code = 'JRN'`, [org.id])).rows[0];
+  const part = await api('POST', '/parts', { partNumber: 'JRN-200', name: 'Journey housing', partFamilyId: family.id, initialRevision: { revision: 'A' } });
+  const machine = (await stack.admin.query(`select id from public.machines where organisation_id = $1 and code = 'CNC-J1'`, [org.id])).rows[0];
+  const cmm = await api('POST', '/gauges', { assetNumber: 'CMM-J1', description: 'Bridge CMM', siteId: org.site });
+  const plan = await api('POST', '/control-plans', { planCode: 'CP-JRN-200', title: 'Journey housing' });
+  await api('POST', `/control-plans/${plan.id}/applicability`, { partId: part.id });
+  const planRev = plan.revisions[0].id;
+  const op = (await api('POST', `/control-plan-revisions/${planRev}/operations`, { operationCode: 'OP-20', name: 'Boring' })).operations[0].id;
+  const sampling = [{ triggerType: 'first_off', sampleSize: 1 }];
+  const add = (body) => api('POST', `/control-plan-revisions/${planRev}/characteristics`, { operationId: op, sampling, unitCode: 'mm', ...body });
+  await add({ characteristicKey: 'BORE', charNumber: '1', name: 'Bore diameter', nominal: 25, lowerLimit: 24.95, upperLimit: 25.05 });
+  await add({ characteristicKey: 'LENGTH', charNumber: '2', name: 'Overall length', nominal: 40, lowerLimit: 39.9, upperLimit: 40.1 });
+  await add({ characteristicKey: 'DATUM_X', name: 'Datum offset', nominal: 10, lowerLimit: 9.98, upperLimit: 10.02 });
+  await api('PATCH', `/control-plan-revisions/${planRev}`, { changeReason: 'First release' });
+  await api('POST', `/part-revisions/${part.revisions[0].id}/release`);
+  await api('POST', `/control-plan-revisions/${planRev}/transitions`, { action: 'submit' });
+  await api('POST', `/control-plan-revisions/${planRev}/transitions`, { action: 'approve' });
+  const job1 = await api('POST', '/jobs', { machineId: machine.id, partId: part.id, operationCode: 'OP-20' });
+
+  step('the operator reads a PC-DMIS generic export on the job hub, with no profile set up');
+  const generic = [
+    'CIR1, 93.486348, 19.488589, -1.269350, 0.000000, 0.000000, 1.000000, 25.012000',
+    'CIR1 HITS, 85.984616, 19.473057, -1.279984, 0.999998, 0.002070, 0.000000',
+    '1 AX:D, 25.000000, 0.050000, 0.050000, 25.012000, 0.012000, 0.000000',
+    '2 AX:X, 40.000000, 0.100000, 0.100000, 40.030000, 0.030000, 0.000000',
+    'DAT1 AX:X, 10.000000, 0.020000, 0.020000, 10.005000, 0.005000, 0.000000',
+    'DAT1 AX:Y, 5.000000, 0.020000, 0.020000, 5.001000, 0.001000, 0.000000',
+  ].join('\r\n');
+  await page.goto(`${APP}/Jobs/${job1.id}`);
+  await page.getByRole('button', { name: 'Import from CMM' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import from a measurement file' });
+  await see(dialog.getByText(/QIF files and PC-DMIS generic exports can be read now/));
+  await dialog.getByRole('combobox', { name: /Gauge used/ }).click();
+  await page.getByRole('option', { name: /CMM-J1/ }).click();
+  await dialog.getByTestId('measurement-file').setInputFiles({ name: 'JRN-200-run1.txt', mimeType: 'text/plain', buffer: Buffer.from(generic) });
+  await shot(page, '90-cmm-import-dialog');
+  await dialog.getByRole('button', { name: 'Read the file' }).click();
+  await page.waitForURL(/\/imports\//);
+  await see(page.getByText(/Read as a PC-DMIS generic export/));
+  await see(page.getByRole('table', { name: 'Features of part 1' }));
+  await shot(page, '91-cmm-preview-generic');
+
+  step('the feature without a balloon number is matched by hand and remembered for the part');
+  await page.getByRole('combobox', { name: 'Check for DAT1 X' }).click();
+  await page.getByRole('option', { name: /Datum offset/ }).click();
+  for (let i = 0; i < 20; i++) {
+    const n = (await stack.admin.query(`select count(*)::int n from public.measurement_feature_maps where part_id = $1 and feature_name = 'DAT1 X' and characteristic_key = 'DATUM_X' and ended_at is null`, [part.id])).rows[0].n;
+    if (n === 1) break;
+    if (i === 19) throw new Error('the match was not remembered');
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  await see(page.getByRole('button', { name: 'Record 3 readings' }));
+  await shot(page, '92-cmm-matched-by-hand');
+
+  step('the readings are recorded together, then the job is completed');
+  await page.getByRole('button', { name: 'Record 3 readings' }).click();
+  await page.waitForURL(new RegExp(`/Jobs/${job1.id}$`));
+  await see(page.getByRole('list', { name: 'Measurement files' }));
+  await see(page.getByText(/1 of 1 planned samples recorded/));
+  const readings1 = (await stack.admin.query(
+    `select r.characteristic_key k, m.value_numeric::text v, m.result from public.inspection_measurements m join public.resolved_inspection_requirements r on r.id = m.requirement_id
+      where m.inspection_record_id = $1 and m.import_id is not null order by r.characteristic_key`, [job1.id])).rows;
+  log(`readings from the PC-DMIS file: ${JSON.stringify(readings1)}`);
+  if (readings1.length !== 3 || readings1.some((r) => r.result !== 'pass')) throw new Error('the PC-DMIS readings were not recorded as passes');
+  await shot(page, '93-cmm-recorded-on-job');
+  await page.getByRole('button', { name: 'Complete inspection' }).click();
+  await see(page.getByText('Completed', { exact: true }));
+
+  step('on the next job a QIF file is read: balloons match two checks, the remembered match the third, and one value is out of tolerance');
+  const job2 = await api('POST', '/jobs', { machineId: machine.id, partId: part.id, operationCode: 'OP-20' });
+  const qif = qifFile('JRN-200', 'SN-0002', [
+    { name: 'Bore', balloon: '1', nominal: 25, plus: 0.05, minus: 0.05, value: 25.061 },
+    { name: 'Length', balloon: '2', nominal: 40, plus: 0.1, minus: 0.1, value: 39.98 },
+    { name: 'DAT1 X', nominal: 10, plus: 0.02, minus: 0.02, value: 10.004 },
+  ]);
+  await page.goto(`${APP}/Jobs/${job2.id}`);
+  await page.getByRole('button', { name: 'Import from CMM' }).click();
+  await dialog.getByTestId('measurement-file').setInputFiles({ name: 'JRN-200-SN-0002.qif', mimeType: 'application/xml', buffer: Buffer.from(qif) });
+  await see(dialog.getByText(/no profile is needed/));
+  await dialog.getByRole('combobox', { name: /Gauge used/ }).click();
+  await page.getByRole('option', { name: /CMM-J1/ }).click();
+  await dialog.getByRole('button', { name: 'Read the file' }).click();
+  await page.waitForURL(/\/imports\//);
+  await see(page.getByText(/QIF file/).first());
+  await see(page.getByRole('heading', { name: /Part 1 · SN-0002/ }));
+  await see(page.getByRole('button', { name: 'Record 3 readings' }));
+  await shot(page, '94-cmm-preview-qif');
+  await page.getByRole('button', { name: 'Record 3 readings' }).click();
+  await page.waitForURL(new RegExp(`/Jobs/${job2.id}$`));
+  const readings2 = (await stack.admin.query(
+    `select r.characteristic_key k, m.value_numeric::text v, m.result from public.inspection_measurements m join public.resolved_inspection_requirements r on r.id = m.requirement_id
+      where m.inspection_record_id = $1 and m.import_id is not null order by r.characteristic_key`, [job2.id])).rows;
+  log(`readings from the QIF file: ${JSON.stringify(readings2)}`);
+  const bore = readings2.find((r) => r.k === 'BORE');
+  if (readings2.length !== 3 || bore?.result !== 'fail' || readings2.filter((r) => r.result === 'pass').length !== 2) throw new Error('the QIF readings were not recorded as expected');
+  await see(page.getByText(/1 of 1 planned samples recorded/)); // the job page shows the sample the file recorded
+  await see(page.getByRole('table', { name: 'Readings' }));
+  await shot(page, '95-cmm-qif-recorded-failure');
+
+  step('the part page lists the remembered CMM feature match');
+  await page.goto(`${APP}/Parts/${part.id}`);
+  const matches = page.getByRole('list', { name: 'CMM feature matches' });
+  await see(matches.getByText('DAT1 X'));
+  await matches.scrollIntoViewIfNeeded();
+  await shot(page, '96-cmm-feature-matches');
 }

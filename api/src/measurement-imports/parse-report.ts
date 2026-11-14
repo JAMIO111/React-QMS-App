@@ -34,6 +34,8 @@ export interface ParsedReport {
   units: ParsedUnit[];
   featureCount: number;
   warnings: string[];
+  /** How the file was read, shown as information rather than a warning (e.g. which built-in reader read it). */
+  notes?: string[];
 }
 
 export const MAX_UNITS = 200;

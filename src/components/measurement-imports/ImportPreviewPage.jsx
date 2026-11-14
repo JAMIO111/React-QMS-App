@@ -283,7 +283,7 @@ const ImportPreviewPage = () => {
           )}
 
           {detail.warnings.map((w, i) => (
-            <Callout key={i} tone="warning">{w.message}</Callout>
+            <Callout key={i} tone={w.kind === "info" ? "info" : "warning"}>{w.message}</Callout>
           ))}
 
           {detail.counts.mismatches > 0 && detail.status === "previewed" && (

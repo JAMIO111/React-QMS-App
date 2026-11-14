@@ -360,6 +360,6 @@ describe('PC-DMIS generic exports', () => {
     expect(res.body.units[0].rows.map((r: { featureName: string; matchKind: string; expectedResult: string | null }) => [r.featureName, r.matchKind, r.expectedResult])).toEqual([
       ['1 D', 'balloon', 'pass'], ['2 X', 'balloon', 'fail'], ['LOC1 X', 'none', null], ['LOC1 Y', 'none', null],
     ]);
-    expect(res.body.warnings.map((w: { message: string }) => w.message).join(' ')).toMatch(/PC-DMIS generic export/);
+    expect(res.body.warnings).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'info', message: expect.stringMatching(/PC-DMIS generic export/) })]));
   });
 });

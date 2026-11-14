@@ -33,7 +33,8 @@ describe('PC-DMIS generic export', () => {
     ]);
     expect(r.units[0].features.every((f) => f.balloon === null && f.unit === null)).toBe(true);
     expect(r.units[0].features[1].raw).toMatchObject({ Dimension: 'LOC1', Axis: 'Y', Deviation: '-0.011411', 'Out of tol': '0.001411' });
-    expect(r.warnings.join(' ')).toMatch(/2 feature and hit lines/);
+    expect(r.notes?.join(' ')).toMatch(/2 feature and hit lines/);
+    expect(r.warnings).toEqual([]);
   });
 
   it('a negative minus tolerance puts the lower limit above nominal; a label on one axis may be a balloon number', () => {

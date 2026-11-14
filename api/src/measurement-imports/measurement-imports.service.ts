@@ -274,7 +274,10 @@ export class MeasurementImportsService {
         profileId: profile?.id ?? null,
         gaugeId: body.gaugeId ?? null,
         header: report.header,
-        warnings: [...report.warnings, ...matched.warnings].map((message) => ({ kind: 'file', message })),
+        warnings: [
+          ...(report.notes ?? []).map((message) => ({ kind: 'info', message })),
+          ...[...report.warnings, ...matched.warnings].map((message) => ({ kind: 'file', message })),
+        ],
         units: matched.units,
       };
       const created = await db.execute<{ id: string }>(sql`select app.create_inspection_import(${inspectionId}::uuid, ${JSON.stringify(payload)}::jsonb) as id`);

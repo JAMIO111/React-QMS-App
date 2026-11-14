@@ -84,7 +84,7 @@ export const ImportFileDialog = ({ inspection, back, onClose }) => {
             A QIF file names its own checks, limits and units, so no profile is needed.
           </Callout>
         ) : profiles.isSuccess && list.length === 0 ? (
-          <Callout tone="warning" title="No file profile yet">
+          <Callout tone="info" title="No file profile yet">
             QIF files and PC-DMIS generic exports can be read now. For other table exports, someone who manages control plans sets up how your CMM&apos;s files are read, in Settings → Data Management → Process control → Measurement files.
           </Callout>
         ) : (

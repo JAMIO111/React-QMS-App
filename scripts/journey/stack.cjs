@@ -243,16 +243,19 @@ async function startStack({ appUrl, log = console.log }) {
   const { StripeGateway } = require('../../api/dist/billing/stripe.gateway');
   const { ApiError } = require('../../api/dist/common/api-error');
   const { IntegrationFileStore } = require('../../api/dist/integrations/core/file-store');
+  const { InspectionFileStore } = require('../../api/dist/measurement-imports/file-store');
   const stripe = makeFakeStripe(StripeGateway, ApiError);
   // Uploaded import files: the browser stores them in the stand-in, and the API reads them back from the same place.
   const storage = new Map();
-  const files = { get enabled() { return true; }, download: async (p) => (storage.has(`integration-files/${p}`) ? new Uint8Array(storage.get(`integration-files/${p}`)) : null) };
+  const fromBucket = (bucket) => ({ get enabled() { return true; }, download: async (p) => (storage.has(`${bucket}/${p}`) ? new Uint8Array(storage.get(`${bucket}/${p}`)) : null) });
+  const files = fromBucket('integration-files');
   const env = loadEnv({ NODE_ENV: 'test', DATABASE_URL: dbUrl, SUPABASE_JWT_SECRET: JWT_SECRET, JWT_ISSUER: ISSUER, LOG_LEVEL: 'silent', PORT: String(PORTS.api), CORS_ORIGINS: appUrl, APP_BASE_URL: appUrl, RATE_LIMIT_PER_MINUTE: '100000' });
   const erp = await startFakeErp(log);
   const { ConnectorRegistry } = require('../../api/dist/integrations/core/connector.registry'); // the provider token to replace
   const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(env)] })
     .overrideProvider(StripeGateway).useValue(stripe)
     .overrideProvider(IntegrationFileStore).useValue(files)
+    .overrideProvider(InspectionFileStore).useValue(fromBucket('inspection-files'))
     .overrideProvider(ConnectorRegistry).useValue(erpConnectors(erp))
     .compile();
   const nest = moduleRef.createNestApplication({ bufferLogs: true, rawBody: true });

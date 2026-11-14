@@ -61,8 +61,9 @@ export function isPcdmisGeneric(buf: Uint8Array): boolean {
 export function parsePcdmisGeneric(buf: Uint8Array): ParsedReport {
   const read = readLines(decodeText(buf));
   if (!read) throw new FileParseError('This is not a PC-DMIS generic export: every line must be a dimension (“LABEL AX:X, …”), feature or hits line');
-  const warnings: string[] = ['Read as a PC-DMIS generic export. The file names no unit, so its values are taken to be in each check’s own unit.'];
-  if (read.featureLines > 0) warnings.push(`${read.featureLines} feature and hit lines carry no limits and were not read; only dimensions are.`);
+  const notes = ['Read as a PC-DMIS generic export. The file names no unit, so its values are taken to be in each check’s own unit.'];
+  const warnings: string[] = [];
+  if (read.featureLines > 0) notes.push(`${read.featureLines} feature and hit lines carry no limits and were not read; only dimensions are.`);
 
   // The format has no part separator. A dimension and axis written a second time starts the next part (several runs exported into one file).
   const groups: DimLine[][] = [[]];
@@ -104,5 +105,5 @@ export function parsePcdmisGeneric(buf: Uint8Array): ParsedReport {
     });
     return { position: index + 1, reference: groups.length > 1 ? `Part ${index + 1}` : null, features };
   });
-  return { header: {}, headings: [], headingRow: 0, units, featureCount: position, warnings };
+  return { header: {}, headings: [], headingRow: 0, units, featureCount: position, warnings, notes };
 }

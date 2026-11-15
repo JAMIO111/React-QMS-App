@@ -2,7 +2,7 @@
  * The real Connector Agent (connector-agent/, .NET) against the real API (docs/connector-agent-plan.md AG1, AG2): a person makes a registration
  * token, the agent registers with it, runs, shows as online and answers a ping from the agent's page. Then a database connection: the password
  * is sealed as the browser seals it, the agent stores it, tests the connection against a real PostgreSQL, browses its schemas, tables and columns
- * and previews a table — and stops itself cleanly when revoked.
+ * previews a table and imports one (AG3) — and stops itself cleanly when revoked.
  * The database part needs the throwaway cluster on TCP (AGENT_TEST_PG_PORT, set by run-e2e.sh); without it only the AG1 part runs.
  *
  * Needs the built agent: `dotnet build connector-agent/src/Fortress.Agent.Host` and AGENT_BINARY=<path to FortressAgent.dll>
@@ -128,6 +128,43 @@ maybe('the real connector agent', () => {
     const refused = await finished((await job(path, { kind: 'preview', request: { schema: 'bin_erp', object: 'salaries' } })).id, 'the refused preview');
     expect(refused).toMatchObject({ status: 'failed', errorKind: 'not_found' });
     expect(output).not.toContain('bin-reader-pass');
+    await extraction(connectionId, finished);
+  }
+
+  /** AG3 with the real agent and a real PostgreSQL: a table chosen for machines, a sample, a template, then an import of 1,100 rows in two batches. */
+  async function extraction(connectionId: string, finished: (id: string, what: string) => Promise<any>) {
+    await admin.query(`
+      create table bin_erp.machines (id int primary key, code text not null, name text not null, plant text not null, active boolean not null);
+      insert into bin_erp.machines select g, 'BIN-M' || lpad(g::text, 4, '0'), 'Machine ' || g, 'MAIN', g % 12 <> 0 from generate_series(1, 1200) g;
+      grant select on bin_erp.machines to bin_reader;`);
+    const conn = `/api/v1/integrations/connections/${connectionId}`;
+    await api().post(`${conn}/ready`).set(await as()).send({}).expect(200);
+    expect((await api().post(`${conn}/activate`).set(await as()).send({}).expect(200)).body.status).toBe('active');
+    const source = { schema: 'bin_erp', object: 'machines', keyColumn: 'id', columns: ['id', 'code', 'name', 'plant'], filters: [{ column: 'active', op: 'eq', value: true }] };
+    await api().put(`${conn}/record-source`).set(await as()).send({ entityType: 'machine', source }).expect(200);
+    const sampleJob = await api().post(`${conn}/agent-jobs`).set(await as()).send({ kind: 'preview', request: { schema: 'bin_erp', object: 'machines', limit: 20 } }).expect(201);
+    await finished(sampleJob.body.id, 'the sample');
+    const sample = (await api().post(`${conn}/sample`).set(await as()).send({ entityType: 'machine' }).expect(200)).body;
+    expect(sample.columns).toEqual(['id', 'code', 'name', 'plant']);
+    const fields = [{ target: 'code', source: 'code' }, { target: 'name', source: 'name' }, { target: 'site', source: 'plant' }];
+    const templateId = (await api().post('/api/v1/integrations/templates').set(await as()).send({
+      entityType: 'machine', name: 'Factory machines', keyField: 'id', fields, expectedColumns: sample.columns, settings: { writeMode: 'add_update', matchExisting: false },
+    }).expect(201)).body.id;
+
+    const importOnce = async () => {
+      const started = (await api().post(`${conn}/runs`).set(await as()).send({ entityType: 'machine', kind: 'full', templateId }).expect(201)).body;
+      return until('the import to finish', async () => {
+        const r = (await api().post(`/api/v1/integrations/runs/${started.id}/continue`).set(await as()).send({})).body;
+        return ['succeeded', 'partial', 'failed'].includes(r.status) && r;
+      }, 120_000);
+    };
+    const first = await importOnce();
+    expect(first).toMatchObject({ status: 'succeeded', counts: { total: 1100, created: 1100 } });
+    const job = (await admin.query(`select progress, result from public.integration_agent_jobs where run_id = $1`, [first.id])).rows[0];
+    expect(job.result).toMatchObject({ batches: 2, rows: 1100 });
+    expect((await admin.query(`select count(*)::int as n from public.machines where organisation_id = $1 and code like 'BIN-M%'`, [ids.orgA])).rows[0].n).toBe(1100);
+    const again = await importOnce();
+    expect(again).toMatchObject({ status: 'succeeded', counts: { total: 1100, created: 0, updated: 0, unchanged: 1100 } });
   }
 
   it('registers, comes online, answers a ping and stops when revoked', async () => {
@@ -158,7 +195,7 @@ maybe('the real connector agent', () => {
       return r.body.online && r.body;
     });
     expect(online.version).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(online.capabilities.jobs).toEqual(['discover', 'ping', 'preview', 'store_credential', 'test_connection']);
+    expect(online.capabilities.jobs).toEqual(['discover', 'extract', 'ping', 'preview', 'store_credential', 'test_connection']);
     expect(online.capabilities.adapters).toEqual(['postgres', 'sqlserver']);
 
     // Opening the agent's page wakes it to poll quickly, so the ping is answered within seconds.
@@ -180,5 +217,5 @@ maybe('the real connector agent', () => {
 
     // Nothing secret in what the agent printed or logged.
     expect(output).not.toContain(reg.body.token);
-  }, 240_000);
+  }, 420_000);
 });

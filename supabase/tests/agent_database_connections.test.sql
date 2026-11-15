@@ -1,6 +1,6 @@
 -- Connector agent AG2 (docs/connector-agent-plan.md): database connections read through an agent — settings, the agent fixed to the connection,
 -- the password sealed for the agent and forgotten by Fortress, test / browse / preview jobs, test results as of when they were asked,
--- activation needs, revoke / reinstall, imports refused until AG3, and isolation between organisations.
+-- activation needs, revoke / reinstall, an import needs its table, and isolation between organisations.
 \set ON_ERROR_STOP 1
 BEGIN;
 \ir helpers.sql
@@ -161,9 +161,9 @@ BEGIN
   PERFORM app.mark_integration_ready(conn);
   PERFORM pg_temp.assert_eq((SELECT status FROM public.integration_connections WHERE id = conn), 'ready', 'it can be marked ready');
 
-  -- ---- imports wait for AG3 ----
+  -- ---- an import needs to know which table holds the records (AG3) ----
   t := pg_temp.fails(format('SELECT app.request_integration_run(%L, ''machine'', ''preview'')', conn));
-  PERFORM pg_temp.assert_true(t LIKE 'QM022%not available yet%', 'no imports from a database yet: ' || t);
+  PERFORM pg_temp.assert_true(t LIKE 'QM022%which table holds machine records%', 'an import needs its table: ' || t);
 
   -- ---- isolation ----
   PERFORM pg_temp.login(other);

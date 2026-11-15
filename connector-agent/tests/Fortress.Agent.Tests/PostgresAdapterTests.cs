@@ -91,6 +91,60 @@ public sealed class PostgresAdapterTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Extracts_in_key_order_page_by_page_with_typed_filters_given_as_text()
+    {
+        if (admin is null) return;
+        await using var db = await new DatabaseAdapters().OpenAsync(Settings(), Reader, default);
+        var shape = (await db.ColumnsAsync("agent_erp", "work orders", default))!;
+        DbColumn C(string n) => shape.Columns.Single(c => c.Name == n);
+        var columns = new[] { C("id"), C("order no"), C("due"), C("on hold") };
+        // Filters on a date, a boolean and a number, all sent as untyped text: PostgreSQL reads each as its column's type.
+        var filters = new[] { new ExtractFilter(C("due"), "gte", "2026-01-11"), new ExtractFilter(C("on hold"), "eq", "false"), new ExtractFilter(C("qty"), "lt", "75"), new ExtractFilter(C("notes"), "is_null", null) };
+        var keys = new List<long>();
+        string? after = null;
+        while (true)
+        {
+            var page = await db.ExtractPageAsync(new ExtractQuery(shape, columns, C("id"), filters, after, 7), default);
+            if (page.Count == 0) break;
+            keys.AddRange(page.Select(r => (long)r.Values["id"]!));
+            after = page[^1].KeyText;
+            Assert.Equal(columns.Select(c => c.Name), page[0].Values.Keys);
+            if (page.Count < 7) break;
+        }
+        // due >= 2026-01-11 → id >= 10; qty < 75 → id < 50; not on hold → id % 5 <> 0; notes empty → not id 3.
+        var expected = Enumerable.Range(10, 40).Where(i => i % 5 != 0).Select(i => (long)i).ToList();
+        Assert.Equal(expected, keys);
+
+        // A text key and a date key carry on from the last one read, as text.
+        var parts = (await db.ColumnsAsync("agent_erp", "parts", default))!;
+        var byNo = await db.ExtractPageAsync(new ExtractQuery(parts, parts.Columns, parts.Columns.Single(c => c.Name == "part no"), [], "P-100", 10), default);
+        Assert.Equal(["P-200"], byNo.Select(r => (string)r.Values["part no"]!));
+        var byDue = await db.ExtractPageAsync(new ExtractQuery(shape, columns, C("due"), [], "2026-03-01", 10), default);
+        Assert.Equal([60L], byDue.Select(r => (long)r.Values["id"]!));
+        Assert.Equal("2026-03-02", byDue[0].KeyText);
+    }
+
+    [Fact]
+    public async Task An_odd_name_or_a_hostile_value_never_becomes_sql()
+    {
+        if (admin is null) return;
+        await using var db = await new DatabaseAdapters().OpenAsync(Settings(), Reader, default);
+        var shape = (await db.ColumnsAsync("agent_erp", "work orders", default))!;
+        DbColumn C(string n) => shape.Columns.Single(c => c.Name == n);
+        var hostile = "x'; delete from agent_erp.parts; --";
+        var rows = await db.ExtractPageAsync(new ExtractQuery(shape, [C("id"), C("order no")], C("id"), [new ExtractFilter(C("order no"), "eq", hostile)], null, 10), default);
+        Assert.Empty(rows);
+        var (sql, values) = PostgresAdapter.ExtractSql(new ExtractQuery(shape, [C("id"), C("order no")], C("id"), [new ExtractFilter(C("order no"), "eq", hostile)], "5", 10));
+        Assert.DoesNotContain("delete", sql);
+        Assert.Equal(["5", hostile], values);
+        Assert.Equal("select \"id\", \"order no\" from \"agent_erp\".\"work orders\" where \"id\" IS NOT NULL and \"id\" > $1 and \"order no\" = $2 order by \"id\" limit $3", sql);
+        await using var c = new NpgsqlConnection(Admin);
+        await c.OpenAsync();
+        await using var count = new NpgsqlCommand("select count(*) from agent_erp.parts", c);
+        Assert.Equal(2L, await count.ExecuteScalarAsync());
+    }
+
+    [Fact]
     public async Task Says_why_it_could_not_connect_without_echoing_the_password()
     {
         if (admin is null) return;

@@ -63,7 +63,12 @@ export const useIntegrationRun = (runId) => {
     queryFn: () => apiFetch(`${BASE}/runs/${runId}`, { organisationId }),
     enabled: !!organisationId && !!runId,
     retry: false,
-    refetchInterval: (q) => (q.state.data && (q.state.data.status === "queued" || q.state.data.status === "running") ? 10_000 : false),
+    // Every 10 seconds while it runs; every 2 while a connector agent is reading the table for it (AG3).
+    refetchInterval: (q) => {
+      const r = q.state.data;
+      if (!r || !(r.status === "queued" || r.status === "running")) return false;
+      return r.agent && ["pending", "received", "running"].includes(r.agent.status) ? 2_000 : 10_000;
+    },
   });
 };
 
@@ -166,6 +171,8 @@ export const useIntegrationMutation = () => {
           return send(`/connections/${id}/agent-credential`, "PUT");
         case "connectionJob":
           return send(`/connections/${id}/agent-jobs`);
+        case "setRecordSource":
+          return send(`/connections/${id}/record-source`, "PUT");
         case "revokeCredential":
           return send(`/connections/${id}/credential/revoke`);
         case "test":

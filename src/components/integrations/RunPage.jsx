@@ -5,7 +5,7 @@ import { useIntegrationConnection, useIntegrationMutation, useIntegrationRun, us
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
-import { ENTITY_LABELS, ROW_STATUS, RUN_KINDS, WRITE_MODE_LABELS, drainMessage, isLive, missingSummary, apiMappingPath, wizardPath } from "../../lib/integrations";
+import { ENTITY_LABELS, ROW_STATUS, RUN_KINDS, WRITE_MODE_LABELS, agentJobRunning, drainMessage, isLive, missingSummary, apiMappingPath, wizardPath } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
 import Dialog from "../ui/Dialog";
@@ -122,7 +122,10 @@ const RunPage = () => {
       },
     );
   // After a preview of a file: the same file and template (its current version) or mapping, written this time.
-  const apiRun = connection.data?.provider?.key === "rest_api";
+  const apiRun = ["rest_api", "sql_agent"].includes(connection.data?.provider?.key);
+  // A database connection's run waits while its connector agent reads the table (AG3).
+  const agentReading = live && run.agent && agentJobRunning(run.agent.status);
+  const agentDone = live && run.agent?.status === "completed" && !run.fetchDone;
   const importFile = () =>
     mutation.mutate(
       { action: "requestRun", id, body: { entityType: run.entityType, kind: "full", ...(run.file ? { fileId: run.file.id } : {}), ...(run.template ? { templateId: run.template.id } : {}) } },
@@ -160,13 +163,26 @@ const RunPage = () => {
           </Callout>
         )}
         {preview && <Callout tone="info" className="mt-3">A preview writes nothing. It shows what a real import would do now.</Callout>}
+        {agentReading && (
+          <Callout tone="info" className="mt-3" title="The connector agent is reading the table" role="status">
+            {run.agent.status === "pending"
+              ? "It takes the job the next time it checks in (within seconds while this page is open)."
+              : `${run.agent.rows.toLocaleString("en-GB")} rows read so far, in ${run.agent.batches} batch${run.agent.batches === 1 ? "" : "es"}.`}{" "}
+            The import carries on once the agent has sent every row.
+          </Callout>
+        )}
+        {agentDone && (
+          <Callout tone="info" className="mt-3" title="The agent has sent every row" role="status">
+            {run.agent.rows.toLocaleString("en-GB")} rows are ready: Continue to import them now (or Fortress does it within a minute).
+          </Callout>
+        )}
         {run.nextAttemptAt && <Callout tone="warning" className="mt-3" title="Waiting to try again">{run.errorSummary} It will be tried again from {formatDateTime(run.nextAttemptAt)}.</Callout>}
         {run.status === "failed" && run.errorSummary && <Callout tone="error" className="mt-3" title="The import failed">{run.errorSummary}</Callout>}
         {run.status === "cancelled" && <Callout tone="info" className="mt-3" title="Cancelled">{run.cancelReason}{run.cancelledBy ? ` (${run.cancelledBy.name})` : ""}</Callout>}
         {notice && <Callout tone="info" className="mt-3" role="status">{notice}</Callout>}
         {canRun && (
           <div className="mt-3 flex flex-wrap gap-2">
-            {live && !run.nextAttemptAt && <CTAButton type="main" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => act("continueRun", {})}>{mutation.isPending ? "Working…" : "Continue"}</CTAButton>}
+            {live && !run.nextAttemptAt && !agentReading && <CTAButton type="main" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => act("continueRun", {})}>{mutation.isPending ? "Working…" : "Continue"}</CTAButton>}
             {live && <CTAButton type="danger" size="md" onClick={() => setCancelling(true)}>Cancel import</CTAButton>}
             {!live && run.rowsNow.failed > 0 && connection.data?.status === "active" && (
               <CTAButton type="main" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => act("retryRows", { entityType: run.entityType })}>{mutation.isPending ? "Retrying…" : "Retry failed rows"}</CTAButton>

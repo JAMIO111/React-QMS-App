@@ -161,7 +161,12 @@ public sealed class AgentRunner(
             var r = await api.ProgressAsync(identity, job.Id, progress, token);
             if (r.Cancelled) await jobCts.CancelAsync();
             return !r.Cancelled;
-        }, clock);
+        }, clock, async (batch, token) =>
+        {
+            var r = await api.SendBatchAsync(identity, job.Id, batch, token);
+            if (r.Cancelled) await jobCts.CancelAsync();
+            return r;
+        });
         var started = Stopwatch.StartNew();
         try
         {

@@ -14,6 +14,7 @@ import { Agent, AgentCaller, AgentGuard } from './agent.guard';
 import { AGENT_HEADERS, TOKEN_PATTERN } from './agent-signature';
 import { ConnectionJobBody } from '../integrations.schemas';
 import { AgentsService } from './agents.service';
+import { readAgentBatch } from './agent-batch';
 
 const READ = 'integrations.read';
 const MANAGE = 'integrations.manage';
@@ -261,6 +262,18 @@ export class AgentApiController {
   @ApiOkResponse({ description: 'The job is done, with its result. Repeating it changes nothing.' })
   complete(@Agent() agent: AgentCaller, @Param('id') id: string, @Body() body: unknown) {
     return this.service.report(agent, parse(Uuid, id), 'complete', parse(CompleteBody, body ?? {}));
+  }
+
+  @Post('jobs/:id/batches')
+  @HttpCode(200)
+  @UseGuards(AgentGuard)
+  @ApiOkResponse({
+    description:
+      'One batch of an extraction: gzip of {"seq","lastKey","rows"} (Content-Type: application/gzip, at most 1 MB; 8 MB once inflated, 1,000 rows) with X-Batch-Checksum = SHA-256 (hex) of the JSON inside. Stored once and in order; a batch sent again is acknowledged again. The answer says when the job has been cancelled.',
+  })
+  batch(@Agent() agent: AgentCaller, @Param('id') id: string, @Req() req: RawBodyRequest<Request>) {
+    const body = Buffer.isBuffer(req.body) ? req.body : req.rawBody;
+    return this.service.storeBatch(agent, parse(Uuid, id), readAgentBatch(body, header(req, 'x-batch-checksum')));
   }
 
   @Post('jobs/:id/fail')

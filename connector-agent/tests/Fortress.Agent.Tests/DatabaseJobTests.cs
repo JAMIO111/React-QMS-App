@@ -27,7 +27,7 @@ internal sealed class FakeDatabase : IDatabaseAdapterFactory, IDatabaseAdapter
     public Task<IReadOnlyList<DbObject>> ObjectsAsync(string schema, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<DbObject>>([new DbObject("orders", "table", 2500), new DbObject("v_open_orders", "view", null), new DbObject("salaries", "table", 10)]);
     public Task<TableShape?> ColumnsAsync(string schema, string name, CancellationToken ct) => Task.FromResult<TableShape?>(name == "missing" ? null : new TableShape(schema, name,
-        [new DbColumn("id", "bigint", false, true), new DbColumn("order no", "text", false, false), new DbColumn("qty", "numeric(12,3)", true, false), new DbColumn("due", "date", true, false)],
+        [new DbColumn("id", "bigint", false, true), new DbColumn("order no", "text", false, false), new DbColumn("qty", "numeric(12,3)", true, false), new DbColumn("due", "date", true, false), new DbColumn("notes", "text", true, false)],
         [new DbForeignKey("orders_part_fkey", ["part id"], "erp", "parts", ["id"])]));
     public Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> PreviewAsync(TableShape shape, int limit, CancellationToken ct)
     {
@@ -37,6 +37,27 @@ internal sealed class FakeDatabase : IDatabaseAdapterFactory, IDatabaseAdapter
             ["id"] = (long)i, ["order no"] = $"WO-{i}", ["qty"] = 1.500m * i, ["due"] = new DateOnly(2026, 1, i % 28 + 1),
         }).ToList());
     }
+    /// <summary>Rows for extraction: ids 1..ExtractRows, in id order, with optional long notes.</summary>
+    public int ExtractRows { get; set; } = 25;
+    public int NotesLength { get; set; }
+    public List<ExtractQuery> Extracts { get; } = [];
+
+    public Task<IReadOnlyList<ExtractedRow>> ExtractPageAsync(ExtractQuery q, CancellationToken ct)
+    {
+        Extracts.Add(q);
+        var after = q.AfterKey is null ? 0 : long.Parse(q.AfterKey, System.Globalization.CultureInfo.InvariantCulture);
+        var rnd = new Random(7);
+        return Task.FromResult<IReadOnlyList<ExtractedRow>>(Enumerable.Range(1, ExtractRows).Where(i => i > after).Take(q.Limit).Select(i =>
+        {
+            var all = new Dictionary<string, object?>
+            {
+                ["id"] = (long)i, ["order no"] = $"WO-{i}", ["qty"] = 1.500m * i, ["due"] = new DateOnly(2026, 1, i % 28 + 1),
+                ["notes"] = NotesLength == 0 ? null : new string(Enumerable.Range(0, NotesLength).Select(_ => (char)rnd.Next('a', 'z' + 1)).ToArray()),
+            };
+            return new ExtractedRow(q.Columns.ToDictionary(c => c.Name, c => all.GetValueOrDefault(c.Name)), i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }).ToList());
+    }
+
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
 
@@ -165,7 +186,7 @@ public sealed class DatabaseJobTests : IDisposable
         Assert.Equal(1, row["id"]!.GetValue<long>());
         Assert.Equal("1.500", row["qty"]!.GetValue<string>());
         Assert.Equal("2026-01-02", row["due"]!.GetValue<string>());
-        Assert.Equal(["id", "order no", "qty", "due"], r["columns"]!.AsArray().Select(c => c!["name"]!.GetValue<string>()));
+        Assert.Equal(["id", "order no", "qty", "due", "notes"], r["columns"]!.AsArray().Select(c => c!["name"]!.GetValue<string>()));
     }
 
     [Fact]
@@ -234,7 +255,7 @@ public sealed class DatabaseJobTests : IDisposable
     public void Says_which_databases_it_reads()
     {
         var caps = Handlers().Capabilities();
-        Assert.Equal(["discover", "ping", "preview", "store_credential", "test_connection"], caps["jobs"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.Equal(["discover", "extract", "ping", "preview", "store_credential", "test_connection"], caps["jobs"]!.AsArray().Select(x => x!.GetValue<string>()));
         Assert.Equal(["postgres", "sqlserver"], caps["adapters"]!.AsArray().Select(x => x!.GetValue<string>()));
     }
 }

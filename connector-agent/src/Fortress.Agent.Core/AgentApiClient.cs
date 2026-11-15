@@ -52,6 +52,16 @@ public sealed class AgentApiClient(HttpClient http, TimeProvider? clock = null)
     public Task<JobReportResponse> FailAsync(AgentIdentity id, string jobId, JobFailure failure, CancellationToken ct) =>
         ReportAsync(id, jobId, "fail", failure, ct);
 
+    /// <summary>
+    /// Send one batch of an extraction: the gzip body is what is signed and sent; Fortress inflates it (with a size cap) and checks the checksum.
+    /// </summary>
+    public async Task<BatchReceipt> SendBatchAsync(AgentIdentity id, string jobId, RowBatch batch, CancellationToken ct)
+    {
+        using var res = await SendAsync(id.ApiUrl, $"integrations/agent/jobs/{Uri.EscapeDataString(jobId)}/batches", batch.Gzip, "application/gzip",
+            new Dictionary<string, string> { ["X-Batch-Checksum"] = batch.Checksum }, id.SigningKey, id.AgentId, ct);
+        return await ReadAsync<BatchReceipt>(res, ct) ?? new BatchReceipt();
+    }
+
     /// <summary>Replace the agent's keys. Signed with the current key; every later request must be signed with the new one.</summary>
     public async Task RotateKeysAsync(AgentIdentity id, string signingKey, string sealingKey, CancellationToken ct)
     {
@@ -73,13 +83,17 @@ public sealed class AgentApiClient(HttpClient http, TimeProvider? clock = null)
     private Task<HttpResponseMessage> SendAsync(AgentIdentity id, string relative, object? body, CancellationToken ct) =>
         SendAsync(id.ApiUrl, relative, body, id.SigningKey, id.AgentId, ct);
 
-    private async Task<HttpResponseMessage> SendAsync(string apiUrl, string relative, object? body, ECDsa key, string agentId, CancellationToken ct)
+    private Task<HttpResponseMessage> SendAsync(string apiUrl, string relative, object? body, ECDsa key, string agentId, CancellationToken ct) =>
+        SendAsync(apiUrl, relative, body is null ? Array.Empty<byte>() : JsonSerializer.SerializeToUtf8Bytes(body, Json), "application/json", null, key, agentId, ct);
+
+    private async Task<HttpResponseMessage> SendAsync(
+        string apiUrl, string relative, byte[] bytes, string contentType, IReadOnlyDictionary<string, string>? extraHeaders, ECDsa key, string agentId, CancellationToken ct)
     {
         var uri = Endpoint(apiUrl, relative);
-        var bytes = body is null ? Array.Empty<byte>() : JsonSerializer.SerializeToUtf8Bytes(body, Json);
         var headers = RequestSigner.Sign(key, "POST", uri.PathAndQuery, bytes, agentId, clock.GetUtcNow());
         using var request = new HttpRequestMessage(HttpMethod.Post, uri) { Content = new ByteArrayContent(bytes) };
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        request.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        if (extraHeaders is not null) foreach (var (k, v) in extraHeaders) request.Headers.Add(k, v);
         if (headers.AgentId is not null) request.Headers.Add(RequestSigner.HeaderAgentId, headers.AgentId);
         request.Headers.Add(RequestSigner.HeaderTimestamp, headers.Timestamp);
         request.Headers.Add(RequestSigner.HeaderNonce, headers.Nonce);
@@ -187,6 +201,15 @@ public sealed record AgentJob
     public JsonObject? Spec { get; init; }
     public int Attempt { get; init; }
     public DateTimeOffset? LeasedUntil { get; init; }
+    /// <summary>For an extraction taken again: where to carry on (the first batch Fortress does not have, and the key of the last row it has).</summary>
+    public JobResume? Resume { get; init; }
+}
+
+public sealed record JobResume
+{
+    public int NextSeq { get; init; }
+    public string? AfterKey { get; init; }
+    public long Rows { get; init; }
 }
 
 public sealed record JobReportResponse

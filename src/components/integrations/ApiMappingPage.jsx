@@ -15,7 +15,7 @@ import {
 import { useOrganisationDetails, usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
-import { ENTITY_LABELS, mappingToRows, rowHasSource, rowsInUse, rowsToFields } from "../../lib/integrations";
+import { DB_ENGINES, ENTITY_LABELS, describeRecordSource, mappingToRows, rowHasSource, rowsInUse, rowsToFields } from "../../lib/integrations";
 import { ADD_ONLY_KINDS, ADD_UPDATE_KINDS, connectionTemplate, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
@@ -25,10 +25,20 @@ import MenuCard from "../ui/MenuCard";
 import { ErrorNotice } from "../master-data/shared";
 import { KEY_GUESS, SaveTemplateDialog, TemplateSettingsCard } from "./CsvImportWizard";
 import MappingStep from "./MappingStep";
+import { Failed, useAsk, Waiting } from "./database/agentAsk";
 import ProviderLogo from "./ProviderLogo";
 import CTAButton from "@/components/CTAButton";
 
+/** What the page calls the source: an API's fields, or a database table's columns (AG3). */
+const WORDS = {
+  api: { what: "field the API sends", fields: "fields", reading: "Reading the first page from the API…", unread: "The API could not be read", none: "The API sent no records", start: "Read what the API sends to start mapping", missing: "Fields the mapping needs are not in what the API sends", choose: "Choose which field the API sends becomes each Fortress field." },
+  database: { what: "column of the table", fields: "columns", reading: "Reading the sample…", unread: "The sample could not be read", none: "The table sent no rows", start: "Ask the connector agent for a sample to start mapping", missing: "Columns the mapping needs are not in the table", choose: "Choose which column of the table becomes each Fortress field." },
+};
+
 /**
+ * A database connection (AG3) is mapped the same way from a sample the connector agent sends (the first rows of the table chosen for that kind of
+ * record, cut to its columns): Fortress cannot read the database itself, so the page asks the agent for the sample when there is none yet.
+ *
  * Map an API connection's fields to Fortress fields (after IN7): the API's first page for the chosen kind of record is read once (nothing is stored)
  * and its columns — nested fields with dots — feed the same mapping editor as the file wizard. The examples, the value after each step and the
  * column check come from the server, which reads the API again exactly as an import would. The mapping is an organisation-wide import template:
@@ -48,11 +58,24 @@ const ApiMappingPage = () => {
   const org = useOrganisationDetails();
   const advanced = !!org.data?.settings?.advancedImports;
   const conn = connection.data ?? null;
-  const kinds = Object.keys(conn?.config?.entities ?? {});
+  const isDb = conn?.provider?.key === "sql_agent";
+  const W = WORDS[isDb ? "database" : "api"];
+  const kinds = isDb ? (conn?.recordSources ?? []).map((x) => x.entityType) : Object.keys(conn?.config?.entities ?? {});
+  const recordSource = isDb ? (conn?.recordSources ?? []).find((x) => x.entityType === (kinds.includes(params.get("entity")) ? params.get("entity") : kinds[0]))?.source : null;
   const entityParam = params.get("entity");
   const entityType = kinds.includes(entityParam) ? entityParam : kinds[0] ?? null;
   const catalogue = entities.data?.find((e) => e.entityType === entityType);
-  const sample = useApiSampleQuery(conn?.provider?.key === "rest_api" ? id : null, entityType);
+  const sample = useApiSampleQuery(["rest_api", "sql_agent"].includes(conn?.provider?.key) ? id : null, entityType);
+  // A database connection's sample is asked of the agent; once it has answered, the sample is read again.
+  const askSample = useAsk(id);
+  const askedStatus = askSample.job?.status;
+  useEffect(() => {
+    if (askedStatus === "completed") sample.refetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askedStatus]);
+  const needsSample = isDb && sample.error?.code === "agent_sample_needed";
+  const askForSample = () => recordSource && askSample.ask("preview", { schema: recordSource.schema, object: recordSource.object, limit: 20 });
+  const readAgain = () => (isDb ? askForSample() : sample.refetch());
   const allTemplates = useImportTemplates(undefined);
   const templates = (allTemplates.data ?? []).filter((t) => t.entityType === entityType);
   const runs = useIntegrationRuns(id);
@@ -99,8 +122,8 @@ const ApiMappingPage = () => {
   const err = connection.error ?? entities.error;
   if (err) return <div className="p-4"><ErrorNotice error={err} /></div>;
   if (!conn) return null;
-  if (conn.provider?.key !== "rest_api") {
-    return <div className="p-4"><Callout tone="info">Only API connections are mapped here. Files are mapped in the file import wizard.</Callout></div>;
+  if (conn.provider?.key !== "rest_api" && !isDb) {
+    return <div className="p-4"><Callout tone="info">Only API and database connections are mapped here. Files are mapped in the file import wizard.</Callout></div>;
   }
 
   const canManage = can("integrations.manage");
@@ -124,7 +147,7 @@ const ApiMappingPage = () => {
   const disabledReason =
     missing > 0 ? null
       : !form?.keyField ? "Choose the field that identifies each record"
-        : blocking ? "Fields the mapping needs are not in what the API sends"
+        : blocking ? W.missing
           : stepProblems[0] ?? (cannotSave ? "Ask someone who manages integrations to save these changes" : null);
   const importReason = !active ? "Activate the connection to import (a preview works before that)" : !importable || !writable ? "You may not import these records" : null;
 
@@ -172,16 +195,18 @@ const ApiMappingPage = () => {
     <div className="flex min-h-full flex-col">
       <div className="flex flex-col gap-4 p-4">
         <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-border-color bg-secondary-bg p-4">
-          <ProviderLogo mark="api" name="REST API" />
+          {isDb ? <ProviderLogo mark={conn.config?.engine === "postgres" ? "postgresql" : "database"} name={DB_ENGINES[conn.config?.engine] ?? "Database"} /> : <ProviderLogo mark="api" name="REST API" />}
           <div className="flex min-w-0 flex-1 flex-col">
             <h1 className="text-lg font-semibold text-primary-text">Map fields from {conn.name}</h1>
-            <p className="text-xs text-secondary-text">Choose which field the API sends becomes each Fortress field. Nothing is imported until you preview or import.</p>
+            <p className="text-xs text-secondary-text">{W.choose} Nothing is imported until you preview or import.</p>
           </div>
         </div>
 
         {kinds.length === 0 ? (
           <Callout tone="info" title="No records set up yet">
-            Say in the connection&apos;s settings where the API gives each kind of record, then map its fields here.
+            {isDb
+              ? "Choose on the connection's page which table each kind of record is read from, then map its columns here."
+              : "Say in the connection's settings where the API gives each kind of record, then map its fields here."}
           </Callout>
         ) : (
           <>
@@ -190,7 +215,7 @@ const ApiMappingPage = () => {
               subtitle="A template remembers how the API's fields become Fortress fields, for everyone in the organisation."
               action={canManage && form && <CTAButton type="secondary" size="md" disabled={busy || !changed} onClick={() => setSaving({ kind: null })}>{templateId ? "Save a new version" : "Save as template"}</CTAButton>}>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <ComboField label="Records" value={entityType} onChange={(v) => v && set({ entity: v, template: null })} options={kinds.map((k) => ({ value: k, label: ENTITY_LABELS[k] ?? k, hint: conn.config.entities[k]?.path }))} required />
+                <ComboField label="Records" value={entityType} onChange={(v) => v && set({ entity: v, template: null })} options={kinds.map((k) => ({ value: k, label: ENTITY_LABELS[k] ?? k, hint: isDb ? describeRecordSource(conn.recordSources.find((x) => x.entityType === k).source) : conn.config.entities[k]?.path }))} required />
                 <ComboField label="Start from" value={templateId ?? "new"} onChange={(v) => set({ template: v ?? "new" })} options={templateOptions} required />
                 <div className="flex items-end pb-1.5 text-sm text-secondary-text" role="status">
                   {templateId && version
@@ -200,15 +225,25 @@ const ApiMappingPage = () => {
               </div>
             </MenuCard>
 
-            {sample.isLoading && <p className="text-sm text-secondary-text" role="status">Reading the first page from the API…</p>}
-            {sample.error && (
-              <Callout tone="error" title="The API could not be read" action={<CTAButton type="neutral" size="md" onClick={() => sample.refetch()} loading={sample.isFetching}>Try again</CTAButton>}>
+            {sample.isLoading && <p className="text-sm text-secondary-text" role="status">{W.reading}</p>}
+            {needsSample && (
+              <Callout tone="info" title="Ask the connector agent for a sample"
+                action={<CTAButton type="main" size="md" onClick={askForSample} loading={askSample.busy} loadingText="Asking the agent…">Ask for a sample</CTAButton>}>
+                Fortress does not read the database itself: the agent sends the first rows of {recordSource ? `${recordSource.schema}.${recordSource.object}` : "the table"}, and the columns are mapped from them.
+              </Callout>
+            )}
+            {isDb && askSample.busy && <Waiting job={askSample.job} />}
+            {isDb && askSample.job?.status === "failed" && <Failed job={askSample.job} />}
+            {sample.error && !needsSample && (
+              <Callout tone="error" title={W.unread} action={<CTAButton type="neutral" size="md" onClick={() => sample.refetch()} loading={sample.isFetching}>Try again</CTAButton>}>
                 {describeApiError(sample.error)}
               </Callout>
             )}
             {sample.data && headers.length === 0 && (
-              <Callout tone="warning" title="The API sent no records" action={<CTAButton type="neutral" size="md" onClick={() => sample.refetch()} loading={sample.isFetching}>Read again</CTAButton>}>
-                Fields can only be mapped from records the API sends. Check the path and where the list is in the answer in the connection&apos;s settings.
+              <Callout tone="warning" title={W.none} action={<CTAButton type="neutral" size="md" onClick={readAgain} loading={sample.isFetching || askSample.busy}>Read again</CTAButton>}>
+                {isDb
+                  ? "Columns can only be mapped from rows the table holds. Check the table chosen and its filters on the connection's page."
+                  : "Fields can only be mapped from records the API sends. Check the path and where the list is in the answer in the connection's settings."}
               </Callout>
             )}
 
@@ -217,8 +252,10 @@ const ApiMappingPage = () => {
                 <TemplateSettingsCard entityType={entityType} settings={form.settings} onChange={(s) => setForm({ ...form, settings: s })} readOnly={!canRun} />
                 <MenuCard
                   title={`Map fields to ${catalogue.label.toLowerCase()}`}
-                  subtitle={`${headers.length} fields in the first ${sampleRows.length} records. Nested fields have dots, e.g. dimensions.width. The examples are worked out by Fortress exactly as the import will.`}
-                  action={<CTAButton type="neutral" size="md" onClick={() => sample.refetch()} loading={sample.isFetching}>Read again</CTAButton>}>
+                  subtitle={isDb
+                    ? `${headers.length} columns in the first ${sampleRows.length} rows the agent sent. The examples are worked out by Fortress exactly as the import will.`
+                    : `${headers.length} fields in the first ${sampleRows.length} records. Nested fields have dots, e.g. dimensions.width. The examples are worked out by Fortress exactly as the import will.`}
+                  action={<CTAButton type="neutral" size="md" onClick={readAgain} loading={sample.isFetching || askSample.busy}>Read again</CTAButton>}>
                   <MappingStep
                     fields={fields}
                     columns={[...new Set([...headers, ...(version ? [version.keyField] : [])].filter(Boolean))]}
@@ -232,7 +269,7 @@ const ApiMappingPage = () => {
                     readOnly={!canRun}
                     advanced={advanced}
                     problems={problems}
-                    source="api"
+                    source={isDb ? "database" : "api"}
                     updates={!ADD_ONLY_KINDS.includes(entityType) && !ADD_UPDATE_KINDS.includes(entityType) && (form.settings?.writeMode ?? "add_only") !== "add_only"}
                   />
                 </MenuCard>
@@ -245,7 +282,7 @@ const ApiMappingPage = () => {
       <div className="sticky -bottom-5 z-10 -mx-5 -mb-5 mt-auto border-t border-border-color bg-secondary-bg/95 px-9 py-3 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-secondary-text" role="status">
-            {!form ? "Read what the API sends to start mapping"
+            {!form ? W.start
               : missing > 0 ? <span className="font-medium text-error-color">{missing === 1 ? "1 required field is not matched" : `${missing} required fields are not matched`}</span>
                 : disabledReason ? <span className="font-medium text-error-color">{disabledReason}</span>
                   : <span className="font-medium text-success-color">All required fields matched · {used} of {fields.length} fields used{importReason ? ` · ${importReason}` : ""}</span>}

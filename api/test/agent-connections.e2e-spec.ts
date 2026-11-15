@@ -163,10 +163,10 @@ describe('a database connection on an agent', () => {
     expect(done.body).toMatchObject({ status: 'completed', result: { rows: [{ 'order no': 'WO-1' }] } });
   });
 
-  it('cannot import yet (AG3)', async () => {
+  it('cannot import until a table is chosen for the records (AG3)', async () => {
     const res = await api().post(`/api/v1/integrations/connections/${connectionId}/runs`).set(await as(ids.ownerA)).send({ entityType: 'machine', kind: 'preview' });
     expect(res.status).toBe(409);
-    expect(res.body.error.message).toMatch(/not available/);
+    expect(res.body.error.message).toMatch(/which table holds machine records/);
   });
 
   it('another organisation cannot see the connection', async () => {

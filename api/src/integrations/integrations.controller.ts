@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiTags } fr
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { AgentCredentialBody, AllowedHosts, AllowedHostsBody, Sample, SampleBody, ConnectionDetail, ConnectionList, CreateConnectionBody, CredentialBody, EmptyBody, ProviderList, ReasonBody, UpdateConnectionBody } from './integrations.schemas';
+import { AgentCredentialBody, AllowedHosts, AllowedHostsBody, Sample, SampleBody, ConnectionDetail, ConnectionList, CreateConnectionBody, CredentialBody, EmptyBody, ProviderList, ReasonBody, RecordSourceBody, UpdateConnectionBody } from './integrations.schemas';
 import { IntegrationsService } from './integrations.service';
 
 const READ = 'integrations.read';
@@ -90,6 +90,17 @@ export class IntegrationsController {
   })
   setAgentCredential(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.setAgentCredential(ctx, parse(Uuid, id), parse(AgentCredentialBody, body));
+  }
+
+  @Put('connections/:id/record-source')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(RecordSourceBody) })
+  @ApiOkResponse({
+    description: 'A database connection (AG3): which table or view a kind of record is read from (schema, table, the column that identifies each row, columns, filters), or null to stop. A structured request, never SQL. Does not change the connection\'s approval.',
+    schema: openApiSchema(ConnectionDetail),
+  })
+  setRecordSource(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setRecordSource(ctx, parse(Uuid, id), parse(RecordSourceBody, body));
   }
 
   @Post('connections/:id/credential/revoke')

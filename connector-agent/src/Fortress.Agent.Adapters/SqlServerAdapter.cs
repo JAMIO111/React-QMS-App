@@ -187,6 +187,58 @@ public sealed class SqlServerAdapter : IDatabaseAdapter
             return rows;
         }, ct);
 
+    public Task<IReadOnlyList<ExtractedRow>> ExtractPageAsync(ExtractQuery q, CancellationToken ct) =>
+        ReadAsync<IReadOnlyList<ExtractedRow>>(async cmd =>
+        {
+            var (sql, values) = ExtractSql(q);
+            cmd.CommandText = sql;
+            // Values go as Unicode text; SQL Server converts each to the type of the column it is compared with.
+            for (var i = 0; i < values.Count; i++) cmd.Parameters.Add(new SqlParameter($"@p{i + 1}", SqlDbType.NVarChar, 4000) { Value = values[i] });
+            cmd.Parameters.Add(new SqlParameter("@limit", SqlDbType.Int) { Value = Math.Clamp(q.Limit, 1, 1000) });
+            var rows = new List<ExtractedRow>();
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            var keyIndex = PostgresAdapter.IndexOf(q.Columns, q.Key);
+            while (await r.ReadAsync(ct))
+            {
+                var row = new Dictionary<string, object?>(StringComparer.Ordinal);
+                for (var i = 0; i < q.Columns.Count; i++)
+                {
+                    object? v;
+                    try { v = r.IsDBNull(i) ? null : r.GetValue(i); }
+                    catch (Exception e) when (e is InvalidCastException or NotSupportedException) { v = r.GetProviderSpecificValue(i)?.ToString(); }
+                    row[q.Columns[i].Name] = v;
+                }
+                var key = row[q.Columns[keyIndex].Name] ?? throw new JobFailedException("internal", "A row came back with no key");
+                rows.Add(new ExtractedRow(row, DbValues.KeyText(key)));
+            }
+            return rows;
+        }, ct);
+
+    /// <summary>
+    /// An extraction page: names bracket-quoted from sys.columns; the key of the last row and each filter's value are @p1, @p2 … and the row
+    /// count is @limit. Only a SELECT is ever built.
+    /// </summary>
+    public static (string Sql, IReadOnlyList<string> Values) ExtractSql(ExtractQuery q)
+    {
+        var values = new List<string>();
+        var where = new List<string> { $"{Quote(q.Key.Name)} IS NOT NULL" };
+        if (q.AfterKey is not null)
+        {
+            values.Add(q.AfterKey);
+            where.Add($"{Quote(q.Key.Name)} > @p{values.Count}");
+        }
+        foreach (var f in q.Filters)
+        {
+            var op = ExtractFilter.Sql(f.Op);
+            if (ExtractFilter.NoValue.Contains(f.Op)) { where.Add($"{Quote(f.Column.Name)} {op}"); continue; }
+            values.Add(f.Value ?? throw new JobFailedException("invalid", $"The filter on {f.Column.Name} has no value"));
+            where.Add($"{Quote(f.Column.Name)} {op} @p{values.Count}");
+        }
+        var sql = $"SELECT TOP (@limit) {string.Join(", ", q.Columns.Select(c => Quote(c.Name)))} FROM {Quote(q.Shape.Schema)}.{Quote(q.Shape.Name)}" +
+                  $" WHERE {string.Join(" AND ", where)} ORDER BY {Quote(q.Key.Name)}";
+        return (sql, values);
+    }
+
     /// <summary>The only data query: columns and table as sys.columns named them, each bracket-quoted; the row count is the parameter @limit.</summary>
     public static string PreviewSql(TableShape shape) =>
         $"SELECT TOP (@limit) {string.Join(", ", shape.Columns.Select(c => Quote(c.Name)))} FROM {Quote(shape.Schema)}.{Quote(shape.Name)}";

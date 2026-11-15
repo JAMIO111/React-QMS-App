@@ -25,6 +25,7 @@ import ReconciliationCard from "./ReconciliationCard";
 import CTAButton from "@/components/CTAButton";
 import DatabaseConnectionDialog from "./database/DatabaseConnectionDialog";
 import { AgentCard, AgentJobsList, BrowseCard } from "./database/DatabasePanels";
+import { RecordSourcesCard } from "./database/RecordSources";
 
 /** Paste a credential once. It is sent in one request, stored encrypted and never shown again. */
 const CredentialDialog = ({ connection, kind, onClose }) => {
@@ -187,6 +188,7 @@ const ConnectionPage = () => {
       )}
 
       {isDatabase && <AgentCard connection={c} canManage={manage} />}
+      {isDatabase && <RecordSourcesCard connection={c} />}
       {isDatabase && manage && !retired && <BrowseCard connection={c} />}
       {isDatabase && c.agentJobs?.length > 0 && (
         <MenuCard title="Agent jobs" subtitle="What the agent was asked to do for this connection, newest first.">

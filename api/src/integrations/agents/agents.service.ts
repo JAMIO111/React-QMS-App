@@ -5,6 +5,7 @@ import { ApiError } from '../../common/api-error';
 import type { RequestContext } from '../../common/request-context';
 import { DatabaseService, Db } from '../../database/database.service';
 import type { AgentCaller } from './agent.guard';
+import type { AgentBatch } from './agent-batch';
 import { freshTimestamp, p256Key, REGISTRATION_SUBJECT, sha256Hex, tokenHash, validNonce, verifySignature } from './agent-signature';
 
 type Row = Record<string, unknown>;
@@ -242,6 +243,18 @@ export class AgentsService {
     return this.database.asApi(
       async (c) => (await c.query('select app.system_agent_job_report($1::uuid, $2::uuid, $3, $4::jsonb) as r', [agent.agentId, jobId, action, JSON.stringify(payload)])).rows[0]
         .r as { status: string; cancelled: boolean },
+      agent.correlationId,
+      'agent',
+    );
+  }
+
+  /** One batch of extracted rows (AG3), already inflated and checked; the database keeps it once, in order. */
+  storeBatch(agent: AgentCaller, jobId: string, batch: AgentBatch) {
+    return this.database.asApi(
+      async (c) =>
+        (await c.query('select app.system_agent_store_batch($1::uuid, $2::uuid, $3::int, $4, $5, $6::jsonb) as r', [
+          agent.agentId, jobId, batch.seq, batch.checksum, batch.lastKey, JSON.stringify(batch.rows),
+        ])).rows[0].r as { status: string; cancelled: boolean; stored: boolean; duplicate?: boolean; batches?: number; rows?: number },
       agent.correlationId,
       'agent',
     );

@@ -472,6 +472,16 @@ BEGIN
   INSERT INTO public.integration_agent_credentials (connection_id, organisation_id, agent_id, key_id, status)
     SELECT c.id, a, c.agent_id, k.id, 'stored' FROM public.integration_connections c JOIN public.integration_agent_keys k ON k.agent_id = c.agent_id
      WHERE c.organisation_id = a AND c.external_system = 'sweep-db';
+  INSERT INTO public.integration_record_sources (organisation_id, connection_id, entity_type, source)
+    SELECT a, c.id, 'machine', '{"schema": "erp", "object": "machines", "keyColumn": "code"}' FROM public.integration_connections c
+     WHERE c.organisation_id = a AND c.external_system = 'sweep-db';
+  INSERT INTO public.integration_sync_runs (organisation_id, connection_id, entity_type, kind, status)
+    SELECT a, c.id, 'machine', 'preview', 'queued' FROM public.integration_connections c WHERE c.organisation_id = a AND c.external_system = 'sweep-db';
+  INSERT INTO public.integration_agent_jobs (organisation_id, agent_id, connection_id, run_id, kind)
+    SELECT a, c.agent_id, c.id, r.id, 'extract' FROM public.integration_connections c JOIN public.integration_sync_runs r ON r.connection_id = c.id
+     WHERE c.organisation_id = a AND c.external_system = 'sweep-db';
+  INSERT INTO public.integration_agent_batches (organisation_id, job_id, seq, row_count, checksum, rows)
+    SELECT a, j.id, 0, 1, repeat('a', 64), '[{"code": "M1"}]' FROM public.integration_agent_jobs j WHERE j.organisation_id = a AND j.kind = 'extract';
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));
 END $$;

@@ -178,6 +178,64 @@ public sealed class PostgresAdapter : IDatabaseAdapter
             return rows;
         }, ct);
 
+    public Task<IReadOnlyList<ExtractedRow>> ExtractPageAsync(ExtractQuery q, CancellationToken ct) =>
+        ReadAsync<IReadOnlyList<ExtractedRow>>(async cmd =>
+        {
+            var (sql, values) = ExtractSql(q);
+            cmd.CommandText = sql;
+            // Values go as untyped text: PostgreSQL reads each as the type of the column it is compared with (a date, a number, a boolean…).
+            foreach (var v in values) cmd.Parameters.Add(new NpgsqlParameter { Value = v, NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Unknown });
+            cmd.Parameters.Add(new NpgsqlParameter { Value = Math.Clamp(q.Limit, 1, 1000) });
+            var rows = new List<ExtractedRow>();
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            var keyIndex = IndexOf(q.Columns, q.Key);
+            while (await r.ReadAsync(ct))
+            {
+                var row = new Dictionary<string, object?>(StringComparer.Ordinal);
+                for (var i = 0; i < q.Columns.Count; i++)
+                {
+                    object? v;
+                    try { v = r.IsDBNull(i) ? null : r.GetValue(i); }
+                    catch (InvalidCastException) { v = r.GetProviderSpecificValue(i)?.ToString(); }
+                    row[q.Columns[i].Name] = v;
+                }
+                var key = row[q.Columns[keyIndex].Name] ?? throw new JobFailedException("internal", "A row came back with no key");
+                rows.Add(new ExtractedRow(row, DbValues.KeyText(key)));
+            }
+            return rows;
+        }, ct);
+
+    internal static int IndexOf(IReadOnlyList<DbColumn> columns, DbColumn key)
+    {
+        for (var i = 0; i < columns.Count; i++) if (columns[i].Name == key.Name) return i;
+        throw new JobFailedException("invalid", "The column that identifies each row must be read");
+    }
+
+    /// <summary>
+    /// An extraction page: columns, table and every column in WHERE / ORDER BY as the catalogue named them, quoted; the key of the last row, each
+    /// filter's value and the row count are the parameters $1, $2 … in that order (the row count last). Only a SELECT is ever built.
+    /// </summary>
+    public static (string Sql, IReadOnlyList<string> Values) ExtractSql(ExtractQuery q)
+    {
+        var values = new List<string>();
+        var where = new List<string> { $"{Quote(q.Key.Name)} IS NOT NULL" };
+        if (q.AfterKey is not null)
+        {
+            values.Add(q.AfterKey);
+            where.Add($"{Quote(q.Key.Name)} > ${values.Count}");
+        }
+        foreach (var f in q.Filters)
+        {
+            var op = ExtractFilter.Sql(f.Op);
+            if (ExtractFilter.NoValue.Contains(f.Op)) { where.Add($"{Quote(f.Column.Name)} {op}"); continue; }
+            values.Add(f.Value ?? throw new JobFailedException("invalid", $"The filter on {f.Column.Name} has no value"));
+            where.Add($"{Quote(f.Column.Name)} {op} ${values.Count}");
+        }
+        var sql = $"select {string.Join(", ", q.Columns.Select(c => Quote(c.Name)))} from {Quote(q.Shape.Schema)}.{Quote(q.Shape.Name)}" +
+                  $" where {string.Join(" and ", where)} order by {Quote(q.Key.Name)} limit ${values.Count + 1}";
+        return (sql, values);
+    }
+
     /// <summary>The only data query: columns and table as the catalogue named them, each quoted; the row count is the parameter $1.</summary>
     public static string PreviewSql(TableShape shape) =>
         $"select {string.Join(", ", shape.Columns.Select(c => Quote(c.Name)))} from {Quote(shape.Schema)}.{Quote(shape.Name)} limit $1";

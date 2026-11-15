@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useToast } from "../../../contexts/ToastProvider";
-import { useAgentJob, useAgentMutation } from "../../../hooks/useAgents";
+import { useAgentMutation } from "../../../hooks/useAgents";
 import { useIntegrationMutation } from "../../../hooks/useIntegrations";
 import { agentPath, ago } from "../../../lib/agents";
 import { describeApiError } from "../../../lib/api-client";
@@ -9,6 +9,8 @@ import { AGENT_CREDENTIAL_WORDS, DB_ENGINES, agentJobRunning, databaseWhere, dbN
 import { formatDateTime } from "../../../lib/processControl";
 import { sealCredential } from "../../../lib/sealCredential";
 import { ServerIcon } from "@/components/icons";
+import { Failed, JOB_STATUS, useAsk, Waiting } from "./agentAsk";
+import { RecordSourceDialog } from "./RecordSources";
 import Callout from "../../ui/Callout";
 import Dialog from "../../ui/Dialog";
 import Field from "../../ui/Field";
@@ -16,8 +18,7 @@ import MenuCard from "../../ui/MenuCard";
 import { FormError } from "../../master-data/shared";
 import CTAButton from "@/components/CTAButton";
 
-const JOB_WORDS = { store_credential: "Password", test_connection: "Connection test", discover: "Browse", preview: "Preview" };
-const JOB_STATUS = { pending: "Waiting for the agent", received: "The agent has it", running: "Running", completed: "Done", failed: "Failed", cancelled: "Cancelled" };
+const JOB_WORDS = { store_credential: "Password", test_connection: "Connection test", discover: "Browse", preview: "Preview", extract: "Read for an import" };
 
 /**
  * Type the database password. It is sealed here, in the browser, to the agent's own key (WebCrypto), so Fortress carries it without being able
@@ -126,32 +127,6 @@ export const AgentCard = ({ connection: c, canManage }) => {
 };
 
 /** Ask the agent something and follow the job until it answers. */
-const useAsk = (connectionId) => {
-  const mutation = useIntegrationMutation();
-  const { showToast } = useToast();
-  const [jobId, setJobId] = useState(null);
-  const job = useAgentJob(jobId);
-  const ask = (kind, request) =>
-    mutation.mutate(
-      { action: "connectionJob", id: connectionId, body: { kind, request } },
-      { onSuccess: (j) => setJobId(j.id), onError: (err) => showToast({ type: "error", title: "Not asked", message: describeApiError(err) }) },
-    );
-  const busy = mutation.isPending || (!!jobId && (!job.data || agentJobRunning(job.data.status)));
-  return { ask, busy, job: job.data, reset: () => setJobId(null) };
-};
-
-const Waiting = ({ job }) => (
-  <p role="status" className="text-sm text-secondary-text">
-    {job ? JOB_STATUS[job.status] : "Asking the agent…"}
-  </p>
-);
-
-const Failed = ({ job }) => (
-  <Callout tone="error" title="The agent could not do it">
-    {job.errorMessage}
-  </Callout>
-);
-
 const cell = (v) => (v === null || v === undefined ? <span className="text-secondary-text">—</span> : typeof v === "boolean" ? (v ? "true" : "false") : String(v));
 
 /**
@@ -165,6 +140,7 @@ export const BrowseCard = ({ connection: c }) => {
   const preview = useAsk(c.id);
   const [schema, setSchema] = useState(null);
   const [object, setObject] = useState(null);
+  const [using, setUsing] = useState(false);
   if (c.agent?.status !== "active") return null;
   const pickSchema = (s) => {
     setSchema(s);
@@ -242,9 +218,12 @@ export const BrowseCard = ({ connection: c }) => {
                       Links to: {columns.job.result.foreignKeys.map((f) => `${f.references.schema}.${f.references.object} (${f.columns.join(", ")})`).join("; ")}
                     </p>
                   )}
-                  <CTAButton type="secondary" size="md" className="self-start" onClick={() => preview.ask("preview", { schema, object, limit: 20 })} loading={preview.busy} loadingText="Reading…">
-                    Preview the first rows
-                  </CTAButton>
+                  <div className="flex flex-wrap gap-2">
+                    <CTAButton type="secondary" size="md" onClick={() => preview.ask("preview", { schema, object, limit: 20 })} loading={preview.busy} loadingText="Reading…">
+                      Preview the first rows
+                    </CTAButton>
+                    <CTAButton type="main" size="md" onClick={() => setUsing(true)}>Use this table</CTAButton>
+                  </div>
                 </>
               )}
             </section>
@@ -268,6 +247,9 @@ export const BrowseCard = ({ connection: c }) => {
           </div>
         )}
       </div>
+      {using && done(columns) && (
+        <RecordSourceDialog connection={c} schema={schema} object={object} shape={{ columns: columns.job.result.columns }} onClose={() => setUsing(false)} />
+      )}
     </MenuCard>
   );
 };

@@ -1,7 +1,7 @@
 # Fortress Connector Agent
 
 A Windows service the customer installs inside their network. It connects **out** to Fortress over HTTPS, takes the jobs Fortress has for
-it and answers them. Plan and decisions: `docs/connector-agent-plan.md` (AG1 = this: registration, signed requests, heartbeat, jobs, ping).
+it and answers them. Plan and decisions: `docs/connector-agent-plan.md` (AG1: registration, signed requests, heartbeat, jobs, ping; AG2: databases; AG3: extraction for imports).
 
 ```
 src/Fortress.Agent.Core     identity and keys, request signing, the API client, the run loop, job handlers (ping)
@@ -59,4 +59,17 @@ The Windows service, DPAPI protection, `install.ps1` / `uninstall.ps1` and the f
   Names ignore case and `*` matches anything. Without the file the agent reads whatever its database login can — which is why the login should
   be read-only and limited to what Fortress needs.
 - `bash run-e2e.sh` also runs the PostgreSQL adapter tests against the throwaway database over TCP, and the real agent through a database
-  connection (password, test, browse, preview).
+  connection (password, test, browse, preview, and an import read in batches).
+
+## Extraction for imports (AG3)
+
+- An `extract` job names a table or view, the column that identifies each row, which columns (or all) and simple filters
+  (`eq ne gt gte lt lte is_null not_null`). The agent checks every name against the catalogue and builds one SELECT per page:
+  `WHERE key IS NOT NULL [AND key > @after] [AND filters] ORDER BY key` with the row count, the last key and every filter value as parameters
+  (sent as text: the database reads each as its column's type). Rows with no key value are not read.
+- Rows go to Fortress in **batches of at most 1,000** as gzip of `{"seq","lastKey","rows"}` (`POST .../jobs/{id}/batches`,
+  `Content-Type: application/gzip`, `X-Batch-Checksum` = SHA-256 of the JSON inside). A page that would be over 900 kB compressed (or 7 MB of
+  JSON) is sent in halves. Text values are cut at 5,000 characters.
+- Fortress keeps each batch once and in order; a job taken again after a restart or a transient failure carries on from where Fortress's
+  batches end (the job says the next batch number and the last key it holds). Completing the job is refused unless Fortress holds every batch.
+- A preview reads at most 1,000 rows; an import reads the whole table.

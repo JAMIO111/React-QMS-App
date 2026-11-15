@@ -29,6 +29,8 @@ export interface DrainOptions {
 interface Lease {
   leased: boolean;
   reason?: string;
+  /** Not leased because the connector agent is still reading the table (AG3): the run is released when its extraction completes. */
+  waitingForAgent?: boolean;
   id: string;
   connectionId: string;
   providerKey: string;
@@ -40,6 +42,7 @@ interface Lease {
   fetchDone: boolean;
   requestedBy: string | null;
   file: { id: string; status: string; chunkCount: number; headers: string[] } | null;
+  agent: { jobId: string; batchCount: number } | null;
   mapping: (MappingSpec & { id: string; version: number }) | null;
 }
 
@@ -91,7 +94,7 @@ export class SyncEngine {
       }, options.correlationId, 'integration');
 
     const lease = (await api((c) => c.query('select app.system_lease_integration_run($1::uuid, $2::uuid, $3::uuid, $4::int) as l', [organisationId, runId, owner, Math.ceil(budget / 1000) + 60]))).rows[0].l as Lease;
-    if (!lease.leased) return { state: 'blocked', reason: lease.reason };
+    if (!lease.leased) return { state: lease.waitingForAgent ? 'waiting' : 'blocked', reason: lease.reason };
     const user = lease.requestedBy;
     const call = <T>(work: (client: PoolClient) => Promise<T>) => api(work, user);
     const runError = async (kind: RunErrorKind, message: string, transient: boolean, retryAfter?: number): Promise<DrainResult> => {
@@ -113,6 +116,13 @@ export class SyncEngine {
               (await call((c) => c.query('select app.system_integration_file_chunk($1::uuid, $2::uuid, $3::uuid, $4::int) as r', [organisationId, runId, owner, seq]))).rows[0].r as Array<{ r: number; v: Record<string, string> }> | null,
           }
         : undefined;
+      const agentBatches = lease.agent
+        ? {
+            count: lease.agent.batchCount,
+            read: async (seq: number) =>
+              (await call((c) => c.query('select app.system_integration_agent_batch($1::uuid, $2::uuid, $3::uuid, $4::int) as r', [organisationId, runId, owner, seq]))).rows[0].r as Array<Record<string, unknown>> | null,
+          }
+        : undefined;
       let fetchDone = lease.fetchDone;
       let cursor = lease.cursor;
       const ctx: ImportContext = { organisationId, connectionId: lease.connectionId, runId, externalSystem: lease.externalSystem, initiatingUser: user, owner };
@@ -131,7 +141,7 @@ export class SyncEngine {
             : undefined;
           let page;
           try {
-            page = await adapter.fetchRecords({ config: lease.config ?? {}, secret, file, allowedHosts }, lease.entityType, cursor);
+            page = await adapter.fetchRecords({ config: lease.config ?? {}, secret, file, agentBatches, allowedHosts }, lease.entityType, cursor);
           } catch (error) {
             if (error instanceof ConnectorError) return await runError(error.kind, error.message, error.transient, error.retryAfterSeconds);
             this.log.warn({ runId, err: error instanceof Error ? error.name : 'unknown' }, 'integration fetch failed');

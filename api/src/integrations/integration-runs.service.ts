@@ -15,7 +15,8 @@ const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (
 
 const SELECT = `
   select r.*, c.name as connection_name, ${personName('pq')} as requested_by_name, ${personName('px')} as cancelled_by_name,
-         f.file_name, m.version as mapping_version, tv.version as template_version, tt.id as template_id, tt.name as template_name
+         f.file_name, m.version as mapping_version, tv.version as template_version, tt.id as template_id, tt.name as template_name,
+         aj.status as agent_status, aj.progress as agent_progress, aj.error_message as agent_error
   from public.integration_sync_runs r
   join public.integration_connections c on c.id = r.connection_id
   left join public.integration_files f on f.id = r.file_id
@@ -23,7 +24,8 @@ const SELECT = `
   left join public.integration_template_versions tv on tv.id = r.template_version_id
   left join public.integration_templates tt on tt.id = tv.template_id
   left join public.profiles pq on pq.id = r.requested_by
-  left join public.profiles px on px.id = r.cancelled_by`;
+  left join public.profiles px on px.id = r.cancelled_by
+  left join public.integration_agent_jobs aj on aj.run_id = r.id and aj.kind = 'extract'`;
 
 const toRun = (r: Row): z.infer<typeof Run> => ({
   id: r.id as string,
@@ -51,6 +53,14 @@ const toRun = (r: Row): z.infer<typeof Run> => ({
   mappingVersion: r.mapping_version === null || r.mapping_version === undefined ? null : Number(r.mapping_version),
   template: r.template_id ? { id: r.template_id as string, name: r.template_name as string, version: Number(r.template_version) } : null,
   settings: (r.settings as z.infer<typeof Run>['settings']) ?? null,
+  agent: r.agent_status
+    ? {
+        status: r.agent_status as string,
+        rows: Number((r.agent_progress as { rows?: number } | null)?.rows ?? 0),
+        batches: Number((r.agent_progress as { batches?: number } | null)?.batches ?? 0),
+        errorMessage: (r.agent_error as string | null) ?? null,
+      }
+    : null,
 });
 
 /**

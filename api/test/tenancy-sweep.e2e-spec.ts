@@ -48,6 +48,7 @@ const UNSCOPED = new Set([
   'POST /api/v1/integrations/agent/jobs/{id}/progress',
   'POST /api/v1/integrations/agent/jobs/{id}/complete',
   'POST /api/v1/integrations/agent/jobs/{id}/fail',
+  'POST /api/v1/integrations/agent/jobs/{id}/batches',
   'POST /api/v1/integrations/agent/keys/rotate',
   'POST /api/v1/integrations/agent/deregister',
 ]);
@@ -216,6 +217,7 @@ const sampleBody = (op: Op): object | undefined =>
     'PUT /api/v1/integrations/connections/{id}/credential': { kind: 'bearer', secret: 'hijack' },
     'PUT /api/v1/integrations/connections/{id}/agent-credential': { keyId: '00000000-0000-4000-8000-000000000001', sealed: { epk: 'A'.repeat(88), iv: 'B'.repeat(16), ct: 'C'.repeat(64) } },
     'POST /api/v1/integrations/connections/{id}/agent-jobs': { kind: 'test_connection' },
+    'PUT /api/v1/integrations/connections/{id}/record-source': { entityType: 'machine', source: { schema: 'erp', object: 'machines', keyColumn: 'id' } },
     'POST /api/v1/integrations/connections/{id}/credential/revoke': { reason: 'Hijacked' },
     'POST /api/v1/integrations/connections/{id}/test': {},
     'POST /api/v1/integrations/connections/{id}/sample': { entityType: 'machine' },
@@ -687,6 +689,7 @@ const hasSample = (op: Op) =>
     'PUT /api/v1/integrations/connections/{id}/credential',
     'PUT /api/v1/integrations/connections/{id}/agent-credential',
     'POST /api/v1/integrations/connections/{id}/agent-jobs',
+    'PUT /api/v1/integrations/connections/{id}/record-source',
     'POST /api/v1/integrations/connections/{id}/credential/revoke',
     'POST /api/v1/integrations/connections/{id}/test',
     'POST /api/v1/integrations/connections/{id}/sample',

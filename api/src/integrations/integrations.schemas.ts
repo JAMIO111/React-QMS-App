@@ -41,6 +41,33 @@ export type ReasonBody = z.infer<typeof ReasonBody>;
 
 export const EmptyBody = z.object({}).strict();
 
+const DbName = z.string().min(1).max(128).refine((v) => v.trim() !== '' && !/[\u0000-\u001f]/.test(v), 'a name as the database spells it');
+/**
+ * Where a kind of record is read from in a database connection (AG3): a table or view, the column that identifies each row, which columns (all
+ * when left out) and simple filters. A structured request: the agent checks every name against the database and builds its own read-only SELECT.
+ */
+export const RecordSource = z
+  .object({
+    schema: DbName,
+    object: DbName,
+    keyColumn: DbName,
+    columns: z.array(DbName).min(1).max(300).optional(),
+    filters: z
+      .array(
+        z
+          .object({
+            column: DbName,
+            op: z.enum(['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'is_null', 'not_null']),
+            value: z.union([z.string().max(200), z.number(), z.boolean()]).optional(),
+          })
+          .strict(),
+      )
+      .max(10)
+      .optional(),
+  })
+  .strict();
+export type RecordSource = z.infer<typeof RecordSource>;
+
 /** The organisation's allow-list of host names its connections may call (empty: any public host). */
 export const AllowedHostsBody = z.object({ hosts: z.array(z.string().trim().max(253)).max(50) }).strict();
 export type AllowedHostsBody = z.infer<typeof AllowedHostsBody>;
@@ -109,7 +136,9 @@ export const ConnectionDetail = z.object({
   agentCredential: z
     .object({ status: z.enum(['waiting', 'stored', 'failed', 'cleared']), setAt: Iso, setBy: Person, storedAt: Iso.nullable(), message: z.string().nullable() })
     .nullable(),
-  /** The latest jobs the agent was given for this connection (test, browse, preview, password), newest first. */
+  /** For a database connection (AG3): which table or view each kind of record is read from. Empty for other connections. */
+  recordSources: z.array(z.object({ entityType: z.string(), source: RecordSource, updatedAt: Iso })),
+  /** The latest jobs the agent was given for this connection (test, browse, preview, password, extraction), newest first. */
   agentJobs: z.array(z.object({
     id: z.string().uuid(), kind: z.string(), status: z.string(), errorMessage: z.string().nullable(), createdAt: Iso, finishedAt: Iso.nullable(), requestedBy: z.string().nullable(),
   })),
@@ -128,6 +157,10 @@ export const AgentCredentialBody = z
   })
   .strict();
 export type AgentCredentialBody = z.infer<typeof AgentCredentialBody>;
+
+
+export const RecordSourceBody = z.object({ entityType: z.string().regex(/^[a-z_]{2,40}$/), source: RecordSource.nullable() }).strict();
+export type RecordSourceBody = z.infer<typeof RecordSourceBody>;
 
 /** Something to ask the agent about a database connection. A structured request: the agent builds its own read-only query. */
 export const ConnectionJobBody = z

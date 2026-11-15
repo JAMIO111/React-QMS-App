@@ -22,6 +22,8 @@ export interface AdapterContext {
   allowedHosts?: string[];
   /** For a file connection: the uploaded file the run imports, read a chunk at a time (null past the end). */
   file?: { id: string; chunkCount: number; readChunk(seq: number): Promise<Array<{ r: number; v: Record<string, string> }> | null> };
+  /** For a database connection: the batches the connector agent sent for this run (AG3), read one at a time (null once cleared). */
+  agentBatches?: { count: number; read(seq: number): Promise<Array<Record<string, unknown>> | null> };
 }
 
 export interface ConnectionTestResult {

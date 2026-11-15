@@ -40,6 +40,12 @@ const SOURCE_WORDS = {
     missingTitle: "Fields the mapping uses are not in what the API sends", unused: (n) => (n === 1 ? "1 field the API sends is not used" : `${n} fields the API sends are not used`),
     translate: "Translate (one per line: value the API sends=value in Fortress)", matchSource: "The id it was given when it was imported through this connection",
   },
+  database: {
+    column: "column", columns: "columns", Column: "Column", cell: "value", header: "Column of the table",
+    keyLabel: "Column that identifies each record", keyHint: "The same row keeps the same value every time it is read, so importing again updates it instead of adding another",
+    missingTitle: "Columns the mapping uses are not in the table", unused: (n) => (n === 1 ? "1 column of the table is not used" : `${n} columns of the table are not used`),
+    translate: "Translate (one per line: value in the table=value in Fortress)", matchSource: "The id it was given when it was imported through this connection",
+  },
 };
 
 /** What goes in the middle of a row when it is not a single column. */

@@ -8,7 +8,8 @@ import { DatabaseService, Db } from '../database/database.service';
 import { ConnectorError } from './core/connector.interface';
 import { ConnectorRegistry } from './core/connector.registry';
 import { SyncEngine } from './core/sync.engine';
-import { AgentCredentialBody, AllowedHosts, AllowedHostsBody, ConnectionDetail, ConnectionList, CreateConnectionBody, CredentialBody, ProviderList, ReasonBody, UpdateConnectionBody } from './integrations.schemas';
+import { AgentCredentialBody, AllowedHosts, AllowedHostsBody, ConnectionDetail, ConnectionList, CreateConnectionBody, CredentialBody, ProviderList, ReasonBody, RecordSource, RecordSourceBody, UpdateConnectionBody } from './integrations.schemas';
+import { agentCellText } from './agents/agent-batch';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown user' } : null);
@@ -78,7 +79,7 @@ export class IntegrationsService {
       db.execute<Row>(sql`select k.kind, k.created_at, k.created_by, ${sql.raw(personName('p'))} as created_by_name from public.integration_credentials k left join public.profiles p on p.id = k.created_by where k.connection_id = ${id}::uuid and k.revoked_at is null`),
       db.execute<Row>(sql`select e.action, e.from_status, e.to_status, e.note, e.at, e.by, ${sql.raw(personName('p'))} as by_name from public.integration_connection_events e left join public.profiles p on p.id = e.by where e.connection_id = ${id}::uuid order by e.at desc, e.created_at desc limit 100`),
       db.execute<{ p: string[]; can_activate: boolean | null }>(sql`select app.integration_activation_problems(${id}::uuid) as p, app.integration_can_activate(${id}::uuid) as can_activate`),
-      agentId ? this.agentPart(db, id, agentId) : Promise.resolve({ agent: null, agentCredential: null, agentJobs: [] }),
+      agentId ? this.agentPart(db, id, agentId) : Promise.resolve({ agent: null, agentCredential: null, agentJobs: [], recordSources: [] }),
     ]);
     const c = cred.rows[0];
     const importable = this.engine.importable(rows.rows[0].provider_key as string);
@@ -99,14 +100,15 @@ export class IntegrationsService {
   }
 
   /** A database connection's agent, whether it holds the password, and its latest jobs for this connection (AG2). */
-  private async agentPart(db: Db, id: string, agentId: string): Promise<Pick<ConnectionDetail, 'agent' | 'agentCredential' | 'agentJobs'>> {
-    const [a, k, jobs] = await Promise.all([
+  private async agentPart(db: Db, id: string, agentId: string): Promise<Pick<ConnectionDetail, 'agent' | 'agentCredential' | 'agentJobs' | 'recordSources'>> {
+    const [a, k, jobs, sources] = await Promise.all([
       db.execute<Row>(sql`select a.id, a.name, a.status, a.last_heartbeat_at, ky.id as key_id, ky.sealing_key
         from public.integration_agents a left join public.integration_agent_keys ky on ky.agent_id = a.id and ky.status = 'active' where a.id = ${agentId}::uuid`),
       db.execute<Row>(sql`select k.status, k.set_at, k.set_by, ${sql.raw(personName('p'))} as set_by_name, k.stored_at, k.message
         from public.integration_agent_credentials k left join public.profiles p on p.id = k.set_by where k.connection_id = ${id}::uuid`),
       db.execute<Row>(sql`select j.id, j.kind, j.status, j.error_message, j.created_at, j.finished_at, ${sql.raw(personName('p'))} as requested_by_name
         from public.integration_agent_jobs j left join public.profiles p on p.id = j.requested_by where j.connection_id = ${id}::uuid order by j.created_at desc limit 10`),
+      db.execute<Row>(sql`select s.entity_type, s.source, s.updated_at from public.integration_record_sources s where s.connection_id = ${id}::uuid order by s.entity_type`),
     ]);
     const r = a.rows[0];
     const last = r?.last_heartbeat_at ? new Date(r.last_heartbeat_at as string) : null;
@@ -126,7 +128,16 @@ export class IntegrationsService {
         id: j.id as string, kind: j.kind as string, status: j.status as string, errorMessage: (j.error_message as string | null) ?? null,
         createdAt: iso(j.created_at)!, finishedAt: iso(j.finished_at), requestedBy: (j.requested_by_name as string | null) ?? null,
       })),
+      recordSources: sources.rows.map((x) => ({ entityType: x.entity_type as string, source: x.source as RecordSource, updatedAt: iso(x.updated_at)! })),
     };
+  }
+
+  /** Say which table a kind of record is read from in a database connection, or stop (AG3). The database checks the shape and the rights. */
+  setRecordSource(ctx: RequestContext, id: string, b: RecordSourceBody): Promise<ConnectionDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.set_integration_record_source(${id}::uuid, ${b.entityType}, ${b.source ? JSON.stringify(b.source) : null}::jsonb)`);
+      return this.load(db, ctx, id);
+    });
   }
 
   get(ctx: RequestContext, id: string): Promise<ConnectionDetail> {
@@ -211,6 +222,7 @@ export class IntegrationsService {
       return rows.rows[0];
     });
     if (info.status === 'retired') throw new ApiError(409, 'integration_rule', 'A retired connection cannot be read');
+    if (info.provider_key === 'sql_agent') return this.agentSample(ctx, id, entityType);
     const adapter = this.registry.get(info.provider_key as string);
     const meta = adapter?.getMetadata();
     if (!adapter?.fetchRecords || meta?.kind !== 'api') throw new ApiError(409, 'integration_rule', 'Only an API connection gives a sample; a file is read when it is uploaded');
@@ -234,6 +246,30 @@ export class IntegrationsService {
     const seenColumns = new Set<string>();
     for (const rec of page.records) for (const k of Object.keys(rec.payload)) if (!seenColumns.has(k) && columns.length < 500) { seenColumns.add(k); columns.push(k); }
     return { columns, rows };
+  }
+
+  /**
+   * A database connection's sample (AG3): the rows of the latest preview the agent sent of the table this kind of record is read from, asked for
+   * since the source was last chosen, cut to the source's columns. Fortress cannot read the database itself, so the mapping page asks the agent
+   * for a preview first (a `preview` job) when there is none.
+   */
+  private agentSample(ctx: RequestContext, id: string, entityType: string): Promise<{ columns: string[]; rows: Array<{ r: number; v: Record<string, string> }> }> {
+    return this.database.asUser(ctx, async (db) => {
+      const src = (await db.execute<Row>(sql`select s.source, s.updated_at from public.integration_record_sources s where s.connection_id = ${id}::uuid and s.entity_type = ${entityType}`)).rows[0];
+      if (!src) throw new ApiError(409, 'integration_rule', `Choose the table ${entityType.replace(/_/g, ' ')} records are read from first`);
+      const source = src.source as RecordSource;
+      const job = (await db.execute<Row>(sql`select j.result from public.integration_agent_jobs j
+         where j.connection_id = ${id}::uuid and j.kind = 'preview' and j.status = 'completed'
+           and j.spec -> 'request' ->> 'schema' = ${source.schema} and j.spec -> 'request' ->> 'object' = ${source.object}
+           and j.created_at >= ${src.updated_at}::timestamptz
+         order by j.created_at desc limit 1`)).rows[0];
+      if (!job) throw new ApiError(409, 'agent_sample_needed', `Ask the connector agent for a sample of ${source.schema}.${source.object} first`);
+      const result = (job.result ?? {}) as { columns?: Array<{ name: string }>; rows?: Array<Record<string, unknown>> };
+      const all = (result.columns ?? []).map((c) => c.name);
+      const columns = source.columns ? all.filter((c) => source.columns!.includes(c)) : all;
+      const rows = (result.rows ?? []).slice(0, 20).map((row, i) => ({ r: i + 1, v: Object.fromEntries(columns.map((c) => [c, agentCellText(row[c])])) }));
+      return { columns, rows };
+    });
   }
 
   /** Ask the provider's adapter whether the connection works, and record the result. An adapter that cannot test yet is reported, not recorded. */

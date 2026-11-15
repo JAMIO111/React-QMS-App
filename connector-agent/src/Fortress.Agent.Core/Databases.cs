@@ -75,7 +75,35 @@ public interface IDatabaseAdapter : IAsyncDisposable
     /// <summary>Null when the table or view does not exist or this sign-in cannot read it.</summary>
     Task<TableShape?> ColumnsAsync(string schema, string name, CancellationToken ct);
     Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> PreviewAsync(TableShape shape, int limit, CancellationToken ct);
+    /// <summary>
+    /// The next page of an extraction: rows whose key is not empty and after <see cref="ExtractQuery.AfterKey"/>, matching the filters, in key
+    /// order. Values (the filters' and the key's) are parameters, never part of the SQL text.
+    /// </summary>
+    Task<IReadOnlyList<ExtractedRow>> ExtractPageAsync(ExtractQuery query, CancellationToken ct);
 }
+
+/// <summary>One filter of a record source: column (as the catalogue named it), a test from a fixed list, and the value as text (null for the empty tests).</summary>
+public sealed record ExtractFilter(DbColumn Column, string Op, string? Value)
+{
+    public static readonly IReadOnlySet<string> Ops = new HashSet<string>(StringComparer.Ordinal) { "eq", "ne", "gt", "gte", "lt", "lte", "is_null", "not_null" };
+    public static readonly IReadOnlySet<string> NoValue = new HashSet<string>(StringComparer.Ordinal) { "is_null", "not_null" };
+
+    /// <summary>The SQL comparison for a test from the fixed list; anything else is refused before a query is built.</summary>
+    public static string Sql(string op) => op switch
+    {
+        "eq" => "=", "ne" => "<>", "gt" => ">", "gte" => ">=", "lt" => "<", "lte" => "<=", "is_null" => "IS NULL", "not_null" => "IS NOT NULL",
+        _ => throw new JobFailedException("invalid", $"A filter cannot test \"{op}\""),
+    };
+}
+
+/// <summary>
+/// One page of an extraction (AG3): the columns to read (catalogue names), the key column the rows are ordered by, filters, the key of the last row
+/// already sent (keyset paging: rows after it), and how many rows. Built only from what <see cref="IDatabaseAdapter.ColumnsAsync"/> listed.
+/// </summary>
+public sealed record ExtractQuery(TableShape Shape, IReadOnlyList<DbColumn> Columns, DbColumn Key, IReadOnlyList<ExtractFilter> Filters, string? AfterKey, int Limit);
+
+/// <summary>A row read for an extraction, and its key as text (to carry on after it, and to resume after a restart).</summary>
+public sealed record ExtractedRow(IReadOnlyDictionary<string, object?> Values, string KeyText);
 
 public interface IDatabaseAdapterFactory
 {
@@ -91,7 +119,12 @@ public static class DbValues
 {
     public const int MaxText = 1000;
 
-    public static JsonNode? ToJson(object? value) => value switch
+    /// <summary>Text cut for an extraction: longer than a preview, as long as Fortress's longest text field.</summary>
+    public const int MaxExtractText = 5000;
+
+    public static JsonNode? ToJson(object? value) => ToJson(value, MaxText);
+
+    public static JsonNode? ToJson(object? value, int maxText) => value switch
     {
         null or DBNull => null,
         bool b => JsonValue.Create(b),
@@ -110,11 +143,27 @@ public static class DbValues
         TimeSpan ts => JsonValue.Create(ts.ToString("c", CultureInfo.InvariantCulture)),
         Guid g => JsonValue.Create(g.ToString()),
         byte[] bytes => JsonValue.Create($"(binary, {bytes.Length} bytes)"),
-        string s => JsonValue.Create(s.Length <= MaxText ? s : s[..MaxText] + "…"),
-        _ => JsonValue.Create(Cut(Convert.ToString(value, CultureInfo.InvariantCulture) ?? "")),
+        string s => JsonValue.Create(Cut(s, maxText)),
+        _ => JsonValue.Create(Cut(Convert.ToString(value, CultureInfo.InvariantCulture) ?? "", maxText)),
     };
 
-    private static string Cut(string s) => s.Length <= MaxText ? s : s[..MaxText] + "…";
+    private static string Cut(string s, int max) => s.Length <= max ? s : s[..max] + "…";
+
+    /// <summary>
+    /// A key value as text the database reads back as the same value (never cut): ISO dates and times with every fraction digit, decimals with a dot.
+    /// Sent as a parameter for "rows after this one", and kept by Fortress so a restarted extraction carries on from it.
+    /// </summary>
+    public static string KeyText(object value) => value switch
+    {
+        bool b => b ? "true" : "false",
+        DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        TimeOnly t => t.ToString("HH:mm:ss.fffffff", CultureInfo.InvariantCulture),
+        DateTime dt => dt.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff", CultureInfo.InvariantCulture),
+        DateTimeOffset o => o.ToString("O", CultureInfo.InvariantCulture),
+        byte[] bytes => Convert.ToHexString(bytes),
+        IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
+        _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? "",
+    };
 }
 
 /// <summary>

@@ -245,6 +245,7 @@ export const runSummary = (run) => {
 export const drainMessage = (drain) => {
   if (!drain) return null;
   if (drain.state === "paused") return "There is more to do. Carry on to continue the import.";
+  if (drain.state === "waiting" && /^Waiting for the connector agent/.test(drain.reason ?? "")) return `${drain.reason}. The import carries on once the agent has sent every row.`;
   if (drain.state === "waiting") return `The source could not be read (${drain.reason}). It will be tried again automatically.`;
   if (drain.state === "failed") return drain.reason;
   if (drain.state === "blocked") return drain.reason;
@@ -602,3 +603,61 @@ export const AGENT_CREDENTIAL_WORDS = {
 
 /** A job given to the agent is still going. */
 export const agentJobRunning = (status) => ["pending", "received", "running"].includes(status);
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+// Where each kind of record is read from in a database connection (docs/connector-agent-plan.md AG3)
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+
+export const FILTER_OPS = [
+  { value: "eq", label: "equals" },
+  { value: "ne", label: "does not equal" },
+  { value: "gt", label: "greater than" },
+  { value: "gte", label: "at least" },
+  { value: "lt", label: "less than" },
+  { value: "lte", label: "at most" },
+  { value: "is_null", label: "is empty", noValue: true },
+  { value: "not_null", label: "is not empty", noValue: true },
+];
+const OP_WORDS = Object.fromEntries(FILTER_OPS.map((o) => [o.value, o.label]));
+const NO_VALUE = new Set(FILTER_OPS.filter((o) => o.noValue).map((o) => o.value));
+
+/** The record source dialog's form from a saved source (or a table just browsed: its primary key is the first guess for the key column). */
+export const recordSourceForm = (source, shape) => ({
+  keyColumn: source?.keyColumn ?? shape?.columns?.find((c) => c.primaryKey)?.name ?? shape?.columns?.[0]?.name ?? null,
+  allColumns: !source?.columns,
+  columns: source?.columns ?? (shape?.columns ?? []).map((c) => c.name),
+  filters: (source?.filters ?? []).map((f) => ({ column: f.column, op: f.op, value: f.value === undefined ? "" : String(f.value) })),
+});
+
+/** What still stops the source being saved, in words; null when it can be. */
+export const recordSourceProblem = (f) => {
+  if (!f.keyColumn) return "Choose the column that identifies each row";
+  if (!f.allColumns) {
+    if (f.columns.length === 0) return "Choose the columns to read, or read them all";
+    if (!f.columns.includes(f.keyColumn)) return "Read the column that identifies each row too";
+  }
+  if (f.filters.length > 10) return "Up to 10 filters";
+  for (const x of f.filters) {
+    if (!x.column) return "Choose the column each filter tests";
+    if (!NO_VALUE.has(x.op) && !String(x.value ?? "").trim()) return `Give the value the filter on ${x.column} compares with`;
+    if (String(x.value ?? "").length > 200) return "A filter's value is at most 200 characters";
+  }
+  return null;
+};
+
+/** The body the API takes: columns only when chosen, filter values as typed (the database reads them as its column's type). */
+export const recordSourceBody = (schema, object, f) => {
+  const source = { schema, object, keyColumn: f.keyColumn };
+  if (!f.allColumns) source.columns = f.columns;
+  if (f.filters.length) source.filters = f.filters.map((x) => (NO_VALUE.has(x.op) ? { column: x.column, op: x.op } : { column: x.column, op: x.op, value: String(x.value).trim() }));
+  return source;
+};
+
+/** A source in one line: "erp.machines · key id · 4 columns · active equals true". */
+export const describeRecordSource = (s) =>
+  [
+    `${s.schema}.${s.object}`,
+    `key ${s.keyColumn}`,
+    s.columns ? `${s.columns.length} column${s.columns.length === 1 ? "" : "s"}` : "all columns",
+    ...(s.filters ?? []).map((x) => `${x.column} ${OP_WORDS[x.op] ?? x.op}${NO_VALUE.has(x.op) ? "" : ` ${x.value}`}`),
+  ].join(" · ");

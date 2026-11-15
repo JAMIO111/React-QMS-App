@@ -77,6 +77,8 @@ export const Run = z.object({
   missing: z.record(z.string(), z.union([z.number(), z.string()])).nullable().optional(),
   cancelledBy: Person,
   fetchDone: z.boolean(),
+  /** A run from a database connection (AG3): how far the connector agent has got reading the table. Null for other runs. */
+  agent: z.object({ status: z.string(), rows: z.number().int(), batches: z.number().int(), errorMessage: z.string().nullable() }).nullable().optional(),
   /** The file a file connection imported, and the mapping version applied. */
   file: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
   mappingVersion: z.number().int().nullable(),

@@ -54,7 +54,7 @@ export class AgentGuard implements CanActivate {
     );
     if (!identity) throw new ApiError(401, 'agent_unauthenticated', 'This agent is not registered with Fortress');
     if (identity.status !== 'active') throw new ApiError(401, 'agent_revoked', 'This agent has been revoked in Fortress. Register it again to use it.');
-    const ok = verifySignature(identity.signingKey, { method: req.method, path: req.originalUrl, body: req.rawBody, timestamp: timestamp!, nonce, agentId }, signature);
+    const ok = verifySignature(identity.signingKey, { method: req.method, path: req.originalUrl, body: req.rawBody ?? (Buffer.isBuffer(req.body) ? req.body : undefined), timestamp: timestamp!, nonce, agentId }, signature);
     if (!ok) throw new ApiError(401, 'agent_unauthenticated', 'The request\'s signature does not match this agent\'s key');
 
     const address = clientAddress(req.ip);

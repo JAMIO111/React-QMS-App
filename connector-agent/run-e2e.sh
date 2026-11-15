@@ -2,7 +2,7 @@
 # Builds the agent and runs it against the real API and a migrated throwaway Postgres that also listens on TCP, as a customer's server would:
 #  1. the agent's own tests, including the PostgreSQL adapter against that server (AGENT_TEST_PG);
 #  2. api/test/connector-agent-binary.e2e-spec.ts: the built agent registers, comes online, answers a ping, takes a sealed password, tests,
-#     browses and previews a real table, and stops when revoked.
+#     browses and previews a real table, imports one through the pipeline twice (the second writes nothing), and stops when revoked.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 export PATH="$HOME/.dotnet:$PATH" DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1

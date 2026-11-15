@@ -246,7 +246,7 @@ Test `supabase/tests/agent_extraction.test.sql` (+ guardrails list, tenancy swee
 
 ## 17. AG4 as built (2026-11-15)
 
-Migration `20260308100000_agent_sync.sql` (**not yet applied live**). Pushing the API before it breaks the batch route (it calls the seven-argument
+Migration `20260308100000_agent_sync.sql` (applied live 2026-11-15; live guardrails 0 violations). Pushing the API before it breaks the batch route (it calls the seven-argument
 `app.system_agent_store_batch`), the settings route for the new schedules and the worker's `agent-imports` step (`system_schedule_integration_runs(date, boolean)`).
 
 - **Incremental reads.** A record source may name `changedColumn`: a date-and-time or number the database moves on when a row changes. It must be

@@ -1,0 +1,168 @@
+# Fortress Connector Agent — plan
+
+**Status:** proposed 2026-11-15, decisions AG-D1–AG-D12 to agree · **Source:** `Fortress_Connector_Agent_Design_Brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §7.3 (connector contract), §7.6 (local agent security), §12 Phase 6, §14 (definition of done) · **Builds on:** `docs/connectors-plan.md` (IN1–IN9), `docs/import-templates-plan.md`, `docs/security-plan.md`
+
+## 1. Why
+
+Most manufacturing customers keep their ERP / MES data in a SQL database inside their own network. The cloud connectors we have (files and REST, Phase 5) cannot reach it. The Connector Agent is a small Windows service the customer installs inside their network. It connects **outwards** to Fortress, takes approved jobs, reads approved tables and sends rows back. The rows then go through the import pipeline that already exists (templates, mapping, steps and formulas, preview, references, field ownership, review queue, records that disappeared, health). The customer opens no firewall ports and exposes no database.
+
+The agent is infrastructure, not a QMS. It holds no quality logic and never writes to Fortress tables; Fortress decides what a row means.
+
+## 2. What exists today (inspected)
+
+| Area | Today | What it means for the agent |
+|---|---|---|
+| Connector contract | `api/src/integrations/core/connector.interface.ts`: `ProviderKind = 'file' \| 'api' \| 'agent'` already; adapters give `getMetadata`, `testConnection`, `fetchRecords(ctx, entity, cursor)` | An **agent adapter** fits as a third kind with no change to the contract |
+| Provider catalogue | `integration_providers` has `sql_agent` ("Local SQL agent … Planned.", kind `agent`) since IN1 | Switch it on rather than add a new concept |
+| Connections | `integration_connections` (status draft → ready → active ⇄ paused → retired, non-secret `config` checked by `app.integration_config_problem`, preparer ≠ activator unless an Owner / Admin) | An agent connection is a connection with an `agent_id`. The brief's own `integration_connections` table **already exists**, so we add to it instead of making a second one |
+| Credentials | `integration_credentials`: the secret lives in Supabase Vault, read only by the API login | The agent brief wants database passwords to stay on the customer's machine. Decision AG-D4 |
+| Runs, staging, cursors | `integration_sync_runs` (queue and record, lease, attempts, back-off), `integration_inbox` (staging per source record, content hash, unchanged = nothing written), `integration_external_records` (the map), `integration_sync_cursors` (moved only when a run finishes), `integration_run_errors` | These **are** the brief's `integration_sync_jobs` / `_history` / `_checkpoints`. We reuse them. Only the agent's own work queue (test, discover, preview, extract) is new |
+| How a file feeds the engine | Browser uploads → API parses → `integration_file_chunks` (≤ 1,000 rows) → the run's lease hands the engine a `file.readChunk(seq)` → the CSV adapter's `fetchRecords` pages through the chunks | **The same shape works for the agent:** the agent uploads batches, which are stored as chunks; the engine pages through them. Staging, mapping and import stay unchanged |
+| Mapping from a sample | `ApiMappingPage` reads a REST API's first page as the sample and feeds the shared `MappingStep`, templates and server preview | A table's preview becomes the sample the same way |
+| Schedules | Daily schedule per API connection and kind of record (IN8), worker tick every minute (WK1) | The brief wants every 5 / 15 / 60 minutes too. The worker can do it (AG-D9) |
+| Health, missing records, review queue | IN5 / IN8 | Unchanged; agent runs show up there like any run |
+| Outbound safety | `SafeHttpClient` (SSRF rules, allow-list) for the cloud's own calls | Not used by the agent. The agent makes its own outbound calls only to Fortress, plus internal REST calls in AG5 under its own allow-list |
+| Request limits | API JSON body limit **1 MB** (`app.factory.ts`); Vercel function body limit 4.5 MB; function time limit | Batches must be small and compressed (AG-D6) |
+| Public routes | `@Public` + own guard (Stripe webhook, `CronGuard`); the tenancy sweep allow-lists unscoped routes | Agent routes are public to user JWTs and use an **AgentGuard**, with their own isolation tests |
+| Network allowlisting | `OrganisationGuard` checks `app.network_allowed` for people | Agent requests are checked too (AG-D10) |
+| Tooling here | Node / Postgres only. The .NET SDK can be installed (dot.net and NuGet reachable); **Docker does not work here, so there is no SQL Server in this container** | SQL Server needs a Windows CI runner or the customer's / your machine (AG-D11) |
+
+**Where the uploaded brief does not match this repository** (it says "inspect and adapt", and these are the adaptations):
+- **No Drizzle ORM.** The schema is plain SQL migrations with RLS, audit triggers, guardrails and both tenancy sweeps; every new table follows that.
+- Routes are `/api/v1/integrations/…` with the existing error shape (`{ error: { code, message, details, correlationId } }`), not `/api/integrations/…`.
+- Tables: reuse `integration_connections`, `integration_sync_runs`, `integration_inbox`, `integration_sync_cursors`, `integration_run_errors` and `integration_connection_events`. New tables are only for what has no home today: agents, registration tokens, agent keys, agent jobs, batches, agent events.
+- **mTLS is not available on Vercel functions** (no client-certificate verification at the edge for us), so AG-D2 proposes request signing with a key the agent holds.
+- **WebSockets are not available on Vercel functions**, so polling is the only channel in the first release (AG-D3).
+
+## 3. How it fits together
+
+```
+Fortress web  ──(people, JWT)──▶  API (NestJS on Vercel)  ◀──(agent, signed requests, outbound only)──  Connector Agent (Windows service)
+                                    │                                                                      │
+                                    │ integration_agent_jobs (test / discover / preview / extract)         │ adapters: SQL Server first
+                                    │ integration_agent_batches (rows the agent sent)  ◀── uploads ─────── │ reads approved tables only
+                                    ▼                                                                      ▼
+                          existing sync engine: lease → AgentAdapter.fetchRecords reads the batches    customer databases (never exposed)
+                          → staging → mapping / template → references → import → map / cursors / health
+```
+
+A **run** (preview, full, incremental, retry) on an agent connection happens in two halves:
+1. **Extraction.** The run creates an `extract` agent job. The agent reads the table page by page and uploads batches; each batch is acknowledged and stored.
+2. **Import.** Once the job reports complete, the run is released to the engine. The engine's `AgentAdapter` pages through the stored batches exactly as the CSV adapter pages through file chunks.
+
+A run waits in `queued` with a reason ("waiting for the agent") while extraction is under way. A run whose agent is offline fails after a time limit with "the agent did not answer" and can be retried.
+
+## 4. Decisions to agree
+
+| # | Decision | Options | Recommendation |
+|---|---|---|---|
+| **AG-D1** | **Where the agent code lives** | (a) a folder `connector-agent/` in this repository; (b) a separate repository | **(a).** The API contract and the agent change together. Shared JSON fixtures of every message let the API e2e tests and the agent's tests check one contract. The folder is outside the npm workspaces and Vercel ignores it. It can move to its own repository later if it needs its own release cadence. |
+| **AG-D2** | **How the agent proves who it is** | (a) mTLS client certificates (brief); (b) the agent generates its own Ed25519 key pair at registration and **signs every request**; the API keeps only the public key; (c) a long-lived bearer secret | **(b).** Vercel cannot verify client certificates for us, so (a) would mean another proxy in front. (b) gives the same properties: the private key never leaves the machine (DPAPI-protected, not exportable), and each agent has its own identity, revocable at once. Each request carries the agent id, a timestamp and a nonce, signed over method, path, body hash and timestamp. The API refuses a request over 5 minutes old or with a nonce already seen. Keys can be rotated (new key signed with the old one) and revoked. (c) is a password in a file: rejected. |
+| **AG-D3** | **How jobs reach the agent** | (a) HTTPS polling with back-off; (b) WebSocket; (c) Supabase Realtime | **(a) for the first release.** The heartbeat answers "jobs waiting: yes/no". The agent polls every 15 s while work is waiting or a person is looking at its connection page (the page asks for "fast poll" for 10 minutes), otherwise every 60 s, backing off to 5 minutes when Fortress is unreachable. (b) is impossible on Vercel functions; (c) can come later as an optimisation without changing the job model. |
+| **AG-D4** | **Where database passwords live** | (a) typed on the agent machine (a small local command), Fortress keeps only a reference; (b) typed in Fortress, **encrypted in the browser to the agent's public key** (sealed box), passed through the API as opaque bytes, decrypted and kept only by the agent (DPAPI); (c) stored in Vault like the REST credentials and sent to the agent per job | **(b), with Windows Authentication offered first for SQL Server** (the service account, no password at all). With (b) the person stays in Fortress, and neither the API, the database nor the logs ever hold the password in plaintext. The browser sends it once and never gets it back. (a) is offered as well for customers whose policy forbids typing database passwords into a web page. (c) would put every customer's database password in our Vault: rejected. Rotation = type a new one; the agent replaces it. |
+| **AG-D5** | **What may be read** (no arbitrary SQL) | (a) the cloud sends SQL; (b) the cloud sends a **structured extraction spec** (database, schema, table or view, columns, key column, optional filters `column op value`, incremental column), which the agent turns into parameterised SQL with quoted identifiers, checked against what it discovered; (c) (b) plus a **local allow-list** on the agent machine | **(c).** The cloud never sends SQL text. On the agent machine the customer's IT team may also limit the agent to named databases / schemas / tables in its local configuration, so even a compromised Fortress account could read only what IT allowed. An empty local list = whatever the database login can read, and the read-only login stays the real boundary. The agent refuses anything that is not a SELECT it built itself. Views are allowed, so a customer can expose exactly what they want through one. |
+| **AG-D6** | **Batch size and transfer** | — | Batches of **≤ 1,000 rows and ≤ 900 kB after gzip** (under the API's 1 MB body limit, well under Vercel's 4.5 MB), with a SHA-256 checksum, sequence number, job id, row count and extraction time. The API stores a batch once (`unique (job, seq)`), so a resent batch is acknowledged again and changes nothing. The agent keeps the job's progress locally and resumes from the first batch not acknowledged. Batches are cleared with the run's payloads (90 days, as `integration_inbox`). |
+| **AG-D7** | **Data types** | (a) every value as text (as files and REST today); (b) typed JSON values (number, boolean, ISO date / timestamp, null; binary as base64 only when a column is chosen) | **(b) in the batch, read as text by today's mapping.** The staging payload keeps the original type, so a later mapping can use it. The existing steps / formulas / references work on the text form unchanged (dates in ISO, decimals with a dot, no thousands separators), so typed data reaches the mapping in a form it already reads correctly. |
+| **AG-D8** | **Incremental reads** | (a) a "changed since" column (modified timestamp or increasing id); (b) SQL Server Change Tracking; (c) both | **(a) first (AG4), (b) later.** The watermark is the existing `integration_sync_cursors` value, moved **only when the run finishes**, so nothing is lost if an import fails. Reads use `column > watermark ORDER BY column, key` with a small overlap, and duplicates are already absorbed by the content hash. Change Tracking is a later option for tables without a usable column. |
+| **AG-D9** | **Schedules** | (a) keep daily only; (b) add every 5, 15, 60 minutes for agent connections | **(b).** `integration_import_settings.schedule` gains `every_5m`, `every_15m`, `hourly` for agent connections. The worker's existing schedule step asks for runs and still **never starts one beside a run still waiting or running**. REST connections keep daily until there is a reason to change. |
+| **AG-D10** | **Network allowlisting and seats for agent requests** | — | Agent requests are checked against the organisation's **network policy** like a person's (the agent sits on the company network, so it passes; a stolen key used from elsewhere is blocked and recorded). Managing agents needs `integrations.manage`, and so a **Controller seat** (as for every `integrations.*` permission). Registering an agent is preparing; **activating an agent connection** follows the existing rule (a different person, or an Owner / Admin). |
+| **AG-D11** | **How SQL Server is tested** | (a) only against fakes; (b) a GitHub Actions Windows runner with SQL Server; (c) your own Windows machine with SQL Server Express | **(b) for CI plus (c) for the exit check.** Here (this container) I can build and unit-test the agent on Linux (.NET runs here; the credential store is abstracted, with DPAPI on Windows and a test store elsewhere), and run the **PostgreSQL adapter against a real Postgres**. SQL Server itself needs a machine with SQL Server. I cannot claim the SQL Server adapter works until it has run against one. |
+| **AG-D12** | **Installer, signing and updates** | — | **AG1–AG4:** a zip and a PowerShell install script (`sc.exe` service, dedicated low-privilege account, ACLs on `ProgramData`), unsigned, for pilots only. **AG6:** WiX MSI and Authenticode signing with **your** code-signing certificate (a purchase and an identity check only you can do), plus signed update manifests and administrator-approved updates. Production customers should not get an unsigned installer. |
+
+## 5. Data model (sketch; tenant tables, RLS, audit, functions only)
+
+All tables carry `organisation_id`, RLS (`integrations.read` to read), no table writes for people, audit triggers on the ones marked (A), and go into the guardrails list and both tenancy sweeps.
+
+- **`integration_agents`** (A): name, location note, status `pending | online | offline | revoked` (online / offline is worked out from `last_heartbeat_at`, never stored), agent version, OS, machine name (as reported), `registered_at/by`, `revoked_at/by/reason`, `last_heartbeat_at`, reported capabilities (adapters, limits). Renamed, never deleted.
+- **`integration_agent_registration_tokens`**: **hash** of a one-time token (shown once, `FAGT-…`, 256 bits), expiry (default 24 h, 1 h – 7 days), created by, used at / by which agent. Single-use, enforced in the function.
+- **`integration_agent_keys`**: agent, Ed25519 public key, status `active | retired | revoked`, created / retired. One active key per agent; rotation inserts the new key and retires the old.
+- **`integration_agent_nonces`** (not audited): recently seen nonces per agent, purged after 10 minutes by the worker's housekeeping step.
+- **`integration_connections`**: gains `agent_id` (composite FK, required for provider kind `agent`). `config` holds the non-secret connection settings (server, port, instance, database, authentication type, encrypt / trust-certificate, selected objects). Credentials for agent connections live on the agent (AG-D4); Fortress keeps `credential_ref` and `credential_set_at`.
+- **`integration_agent_jobs`** (A on status changes): kind `test_connection | discover | preview | extract` (`discover` takes a level: databases / schemas / objects / columns), connection, run (for `extract`), spec (validated JSON, never SQL), status `pending → received → running → completed | failed | cancelled` (plus `retrying`), attempts, lease (agent, until), progress (rows, batches), result (for test / discover / preview: bounded JSON ≤ 200 kB), error (kind + message without secrets), timestamps, `idempotency_key`. The agent receives only jobs for its own connections. A lease that expires puts the job back to pending (so a restarted service does not run it twice at once). Results are cleared after 30 days.
+- **`integration_agent_batches`**: job, seq, row count, checksum, received at, rows (jsonb, typed values). `unique (job_id, seq)`. Read by the engine via the run's lease, as file chunks are.
+- **`integration_agent_events`**: append-only lifecycle and diagnostics (registered, key rotated, came online, went offline, job failed, version changed, revoked). Bounded fields, never row contents or connection strings.
+- **`integration_sync_runs`**: gains `agent_job_id` and the waiting reason. `integration_import_settings.schedule` gains the minute schedules (AG-D9).
+
+Functions (SECURITY DEFINER): people's ones need `integrations.manage` / `.run`. The agent's ones (`app.system_agent_*`) are **API-login only** and re-check the agent, its status, its key and the connection's organisation on every call. Errors `QM022` → `409 integration_rule`, another organisation `P0002` → 404.
+
+## 6. API
+
+**For people** (organisation-scoped, `integrations.*`):
+- `GET /integrations/agents`, `GET|PATCH /integrations/agents/{id}`, `POST …/{id}/revoke {reason}`, `GET …/{id}/events`, `GET …/{id}/jobs`.
+- `POST /integrations/agent-registrations` → `{ token, expiresAt, downloadUrl }` (the token is shown once), `POST /integrations/agent-registrations/{id}/cancel`.
+- `POST /integrations/connections` takes provider `sql_agent` + `agentId`; `PUT /integrations/connections/{id}/credential` for an agent connection takes a **sealed** credential (base64, opaque) and returns no secret.
+- `POST /integrations/connections/{id}/agent-jobs {kind, spec}` (test / discover / preview); `GET /integrations/agent-jobs/{id}` (status, result).
+- Existing run, template, mapping, preview, schedule, health and review routes work unchanged for agent connections.
+
+**For the agent** (`@Public`, `AgentGuard`: signature, timestamp, nonce, active key, agent not revoked, network policy; rate limited per agent):
+- `POST /integrations/agent/register {token, publicKey, name, version, os, capabilities}` → `{ agentId, organisationName, pollSeconds }` (the token's own check stands in for a signature).
+- `POST /integrations/agent/heartbeat {version, os, uptime, adapters, queue}` → `{ jobsWaiting, pollSeconds, fastPollUntil, revoked }`.
+- `POST /integrations/agent/jobs/next` → one job leased to this agent, or 204.
+- `POST /integrations/agent/jobs/{id}/ack | progress | complete | fail`.
+- `POST /integrations/agent/jobs/{id}/batches` (gzip JSON, headers `X-Batch-Seq`, `X-Batch-Checksum`).
+- `PUT /integrations/agent/credentials/{connectionId}` → the sealed credential for the agent to collect once (deleted from Fortress as soon as the agent confirms it is stored).
+- `POST /integrations/agent/keys/rotate {newPublicKey}` (signed with the old key), `POST /integrations/agent/deregister`.
+
+Every agent message has a JSON Schema in `connector-agent/contract/`, used by the API's zod schemas and the agent's tests. The tenancy sweep allow-lists the agent routes, and a dedicated e2e test checks that one agent can never see, lease, report on or upload to another organisation's or another agent's jobs.
+
+## 7. The agent (connector-agent/)
+
+.NET 10 LTS Worker Service in C# (as the brief says; versions checked at AG0), split along the brief's lines:
+- `Fortress.Connector.Host`: service entry, configuration, Windows Service integration, graceful shutdown.
+- `Fortress.Connector.Core`: registration, request signing, poller with back-off, job processor (bounded concurrency, timeouts, cancellation, local job state), batching / checksums / resume, structured logging (Serilog, rolling files in `ProgramData`, never secrets or row contents).
+- `Fortress.Connector.Adapters`: `IConnectorAdapter` (test, discover, preview, extract as `IAsyncEnumerable` of rows); SQL Server (`Microsoft.Data.SqlClient`) first, then PostgreSQL (`Npgsql`), MySQL (`MySqlConnector`), internal REST, files / shares.
+- `Fortress.Connector.Infrastructure`: HTTP client (TLS 1.2+, server certificate validated, optional corporate proxy), credential store (DPAPI `LocalMachine` scope with entropy on Windows; a test store elsewhere), local state (a small SQLite or JSON file under `ProgramData\…\State`).
+- `Fortress.Connector.Tests`: unit tests, the contract fixtures, a fake Fortress server, and adapter tests against real databases where available.
+
+Read-only rules are enforced in the agent: every query is a SELECT the agent built from a validated spec with quoted identifiers and parameters. `ApplicationIntent=ReadOnly`, `SET TRANSACTION ISOLATION LEVEL READ COMMITTED` (no locks held beyond each page; snapshot isolation where enabled) and a command timeout keep extraction from blocking the ERP. The install guide gives the SQL to create a login with `db_datareader` on chosen schemas only.
+
+## 8. Screens (Settings → Integrations)
+
+- A **Connector agents** card on the integrations page (online / offline count) and the page `/Settings/Integrations/Agents`: name, location, version, online status from the last heartbeat, connections, running jobs, last error. Then **Add a connector agent**: a dialog giving the one-time token with copy, its expiry, the download link and three steps to install.
+- **Agent page**: details (rename, location), connections, recent jobs, events, **Revoke** (reason, confirmation; its connections are paused), and **Replace** (a new token for a reinstall, same connections).
+- **SQL Server connection form** (the connection form, provider `sql_agent`, after choosing the agent):
+  - server, instance or port, database;
+  - authentication: **Windows (the service account)** or SQL login, with user and password sealed in the browser;
+  - encrypt (on), trust server certificate (off by default, with a warning).
+  - **Test connection** runs a `test_connection` job and shows the answer within seconds (fast poll).
+- **Browse and choose**: databases → schemas → tables and views (with row estimates) → columns (type, null, key, foreign keys) → **Preview** (first 20 rows) → per kind of Fortress record, which table / view, columns, key column and "changed since" column → **Map fields**. The last step opens the same `MappingStep` / template page the API connections use, with the preview as the sample.
+- The run page, schedule card, health card, review queue and missing-records card work as today. Waiting runs say "waiting for the agent (12 of ~40 batches)".
+
+## 9. Slices
+
+| Slice | What | Done when |
+|---|---|---|
+| **AG0** | Spike, no product code: install the .NET SDK here, confirm the .NET 10 / package versions and that `Microsoft.Data.SqlClient` builds on Linux. Prove request signing end to end (a tiny C# client signs, a Nest guard verifies) and gzip batch upload under the body limit. Settle AG-D1–AG-D12 | Decisions agreed, results written into this plan |
+| **AG1** | **Core agent.** Migration (agents, tokens, keys, nonces, events, agent jobs), API (registration, heartbeat, next / ack / complete / fail, revoke, rotate), screens (agent list, add, page, revoke). Agent: worker service, registration, key in the credential store, signed requests, heartbeat, poll, a `ping` job end to end, logs, PowerShell install script. Tests: SQL (single-use token, revocation, isolation), API e2e (signature, replay, stale timestamp, revoked agent, other organisation), agent unit tests, contract fixtures | You install the agent on a Windows machine, register it, and see it **online** in Fortress. Revoking it stops it at the next request |
+| **AG2** | **SQL Server adapter: connect, browse, preview.** `sql_agent` switched on, agent connections, sealed credentials and Windows auth, `test_connection`, `discover` (databases, schemas, tables / views, columns, primary and foreign keys), `preview`; local allow-list; the browse screens. CI job on a Windows runner with SQL Server (AG-D11) | You connect your SQL Server through Fortress, browse it and preview a table |
+| **AG3** | **Extraction into the existing pipeline.** Record source per kind of record (object, columns, key, filters); `extract` jobs; batches with checksum, acknowledgement and resume; `AgentAdapter` reading batches through the run's lease; map fields from the preview; preview and import runs; a re-import writes nothing; a failed run can be retried | Selected SQL Server data is imported with the existing mapping wizard, without duplicates |
+| **AG4** | **Synchronisation.** Incremental by "changed since" column with the cursor moved only when the run finishes; schedules every 5 / 15 / 60 minutes and daily; offline-agent handling; records that disappeared after a full read; health and history | Changed rows arrive without re-reading the whole table, on a schedule |
+| **AG5** | **More adapters.** PostgreSQL (tested here against a real Postgres), MySQL, internal REST (agent-side allow-list and SSRF rules), CSV / Excel / allowed folders and shares | One agent runs several kinds of connection at once |
+| **AG6** | **Production hardening and exit check.** WiX MSI, Authenticode signing, signed update manifests and administrator-approved updates, key rotation schedule, bounded diagnostics upload, recovery tests (kill the service mid-extraction, cut the network, restart the database), load test (a million rows), security review, browser journey step with a fake agent, `docs/connector-agent-exit-report.md` | Suitable for several independent customers; a real customer integration has run reliably (brief Phase 6 exit) |
+
+AG1–AG3 is the smallest useful product: a pilot customer can import from SQL Server. AG4 makes it a sync. AG5 and AG6 make it general and safe to hand out widely.
+
+## 10. Tests that make it safe
+
+- **Isolation:** an agent can lease, report on, upload to and collect credentials for only its own connections in its own organisation. Tested with two organisations and two agents, every agent route, in the API e2e suite and the tenancy sweep.
+- **Identity:** a bad signature, a replayed nonce, a stale timestamp, a retired or revoked key, a revoked agent, a used or expired registration token and a request from outside the network policy are all refused.
+- **No SQL from the cloud:** spec fuzzing (identifiers with quotes, brackets, semicolons, comments, unicode look-alikes) produces either a correctly quoted parameterised SELECT or a refusal, never a second statement. Objects outside the local allow-list are refused.
+- **Exactly once:** a resent batch changes nothing; an agent restarted mid-job resumes without gaps or doubles; a lease that expires puts the job back once; the cursor never moves past rows not imported.
+- **Secrets:** no password, connection string or row content in API logs, agent logs, events, errors or job results. The sealed credential cannot be decrypted by the API (a test holds only the public key).
+- **Contract:** every message in `connector-agent/contract/` is accepted by the API schemas and produced by the agent.
+
+## 11. What needs you
+
+1. **Agreement on AG-D1–AG-D12** (especially AG-D2 signing instead of mTLS and AG-D4 browser-sealed passwords).
+2. **A Windows machine with SQL Server** (Express is fine) for the AG1 and AG2 acceptance checks, and later a pilot customer's representative environment. I can build and test everything else here.
+3. **A code-signing certificate** before AG6 (an organisation-validated or EV Authenticode certificate in the company's name).
+4. Optionally, **GitHub Actions** with a Windows runner for the SQL Server CI job (none is set up today).
+
+## 12. Not in this plan
+
+- Write-back to customer systems (brief Phase 6 "controlled write-back", a separate plan with its own approvals).
+- Named ERP adapters (SAP, Dynamics, Sage …): they come once the generic path has run at a customer.
+- Linux / macOS installers (the code stays portable; only Windows is packaged).
+- A local management window (the brief marks it optional; Fortress is the console).
+- SQL Server Change Tracking / CDC (after AG4 if a customer needs it).
+- Pushing jobs over WebSockets or Realtime (polling first).

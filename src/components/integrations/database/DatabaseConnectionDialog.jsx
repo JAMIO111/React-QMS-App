@@ -91,16 +91,16 @@ const DatabaseConnectionDialog = ({ engine, existing = null, onClose, onCreated 
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="sm:col-span-2">
-            <Field label="Server" value={f.server} onChange={(e) => set({ server: e.target.value })} required placeholder={f.engine === "postgres" ? "erp-db.factory.local" : "SQL01"} hint="As the agent's machine knows it: a name or an address" />
+            <Field label="Server" value={f.server} onChange={(e) => set({ server: e.target.value })} required placeholder={f.engine === "sqlserver" ? "SQL01" : "erp-db.factory.local"} hint="As the agent's machine knows it: a name or an address" />
           </div>
           {f.engine === "sqlserver" ? (
             <Field label="Instance" value={f.instance} onChange={(e) => set({ instance: e.target.value })} placeholder="SQLEXPRESS" hint="Or a port" />
           ) : (
-            <Field label="Port" type="number" value={f.port} onChange={(e) => set({ port: e.target.value })} placeholder="5432" />
+            <Field label="Port" type="number" value={f.port} onChange={(e) => set({ port: e.target.value })} placeholder={f.engine === "mysql" ? "3306" : "5432"} />
           )}
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Database" value={f.database} onChange={(e) => set({ database: e.target.value })} required placeholder={f.engine === "postgres" ? "erp" : "ERP"} />
+          <Field label="Database" value={f.database} onChange={(e) => set({ database: e.target.value })} required placeholder={f.engine === "sqlserver" ? "ERP" : "erp"} />
           {f.engine === "sqlserver" && <Field label="Port" type="number" value={f.port} onChange={(e) => set({ port: e.target.value })} placeholder="1433" hint="Only if not the default, and no instance" />}
         </div>
         <ComboField label="How the agent signs in" value={f.authType} onChange={(v) => v && set({ authType: v })} options={DB_AUTH[f.engine]} required />

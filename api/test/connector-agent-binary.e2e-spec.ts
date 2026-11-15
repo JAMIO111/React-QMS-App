@@ -22,6 +22,7 @@ import { giveControllerSeats, makeIds, requireDb, seed, startApp, token } from '
 
 const binary = process.env.AGENT_BINARY;
 const pgPort = process.env.AGENT_TEST_PG_PORT ? Number(process.env.AGENT_TEST_PG_PORT) : null;
+const myPort = process.env.AGENT_TEST_MYSQL_PORT ? Number(process.env.AGENT_TEST_MYSQL_PORT) : null;
 
 /** Seal as the browser does (src/lib/sealCredential.js): ECDH P-256 → HKDF-SHA256 → AES-256-GCM, the connection id as associated data. */
 function seal(sealingSpki: string, connectionId: string, plaintext: string) {
@@ -129,6 +130,7 @@ maybe('the real connector agent', () => {
     expect(refused).toMatchObject({ status: 'failed', errorKind: 'not_found' });
     expect(output).not.toContain('bin-reader-pass');
     await extraction(connectionId, finished);
+    if (myPort) await mysqlConnection(agentId, finished, connectionId);
   }
 
   /** AG3 with the real agent and a real PostgreSQL: a table chosen for machines, a sample, a template, then an import of 1,100 rows in two batches. */
@@ -188,6 +190,63 @@ maybe('the real connector agent', () => {
     expect(new Date((await cursorOf()).w).toISOString()).toBe('2026-11-10T09:00:00.000Z');
   }
 
+  /**
+   * AG5a: the same agent also reads a real MySQL / MariaDB (AGENT_TEST_MYSQL_PORT, set by mysql-check.sh) while its PostgreSQL connection stays
+   * in use — one agent, two kinds of database. Password sealed for the agent, test, a table chosen, a sample, a template, an import; then the
+   * PostgreSQL connection imports again unchanged.
+   */
+  async function mysqlConnection(agentId: string, finished: (id: string, what: string) => Promise<any>, pgConnectionId: string) {
+    const mysql = (sql: string) => run('mariadb', ['--no-defaults', '-h127.0.0.1', `-P${myPort}`, '-uroot', '-pcheck-root', '-e', sql]);
+    await mysql(`
+      drop database if exists bin_my; drop user if exists 'bin_my_reader'@'%';
+      create database bin_my;
+      create table bin_my.machines (id int primary key, code varchar(20) not null, name varchar(60) not null, plant varchar(10) not null);
+      insert into bin_my.machines with recursive g (n) as (select 1 union all select n + 1 from g where n < 40)
+        select n, concat('MY-M', lpad(n, 3, '0')), concat('MySQL machine ', n), 'MAIN' from g;
+      create user 'bin_my_reader'@'%' identified by 'bin-my-pass';
+      grant select on bin_my.machines to 'bin_my_reader'@'%';`);
+    const created = await api().post('/api/v1/integrations/connections').set(await as()).send({
+      providerKey: 'sql_agent', name: 'Plant MySQL', externalSystem: 'plant-mysql', agentId,
+      config: { engine: 'mysql', server: '127.0.0.1', port: myPort, database: 'bin_my', authType: 'password', encrypt: false },
+    }).expect(201);
+    const id = created.body.id as string;
+    const conn = `/api/v1/integrations/connections/${id}`;
+    const sealed = seal(created.body.agent.sealingKey, id, JSON.stringify({ username: 'bin_my_reader', password: 'bin-my-pass' }));
+    const withPassword = await api().put(`${conn}/agent-credential`).set(await as()).send({ keyId: created.body.agent.keyId, sealed }).expect(200);
+    await finished(withPassword.body.agentJobs[0].id, 'the agent to store the MySQL password');
+    const tested = await api().post(`${conn}/test`).set(await as()).expect(200);
+    const test = await finished(tested.body.agentJobs[0].id, 'the MySQL connection test');
+    expect(test.status).toBe('completed');
+    expect(test.result.message).toMatch(/^Signed in to (MySQL|MariaDB) \d+\.\d+(\.\d+)? as bin_my_reader@%? ?\(database bin_my\)/);
+    await api().post(`${conn}/ready`).set(await as()).send({}).expect(200);
+    expect((await api().post(`${conn}/activate`).set(await as()).send({}).expect(200)).body.status).toBe('active');
+    const schemas = await finished((await api().post(`${conn}/agent-jobs`).set(await as()).send({ kind: 'discover', request: { level: 'schemas' } }).expect(201)).body.id, 'the MySQL schemas');
+    expect(schemas.result.schemas.map((x: { name: string }) => x.name)).toEqual(['bin_my']);
+    const source = { schema: 'bin_my', object: 'machines', keyColumn: 'id', columns: ['id', 'code', 'name', 'plant'] };
+    await api().put(`${conn}/record-source`).set(await as()).send({ entityType: 'machine', source }).expect(200);
+    const sampleJob = await api().post(`${conn}/agent-jobs`).set(await as()).send({ kind: 'preview', request: { schema: 'bin_my', object: 'machines', limit: 20 } }).expect(201);
+    await finished(sampleJob.body.id, 'the MySQL sample');
+    const sample = (await api().post(`${conn}/sample`).set(await as()).send({ entityType: 'machine' }).expect(200)).body;
+    expect(sample.rows[0].v).toEqual({ id: '1', code: 'MY-M001', name: 'MySQL machine 1', plant: 'MAIN' });
+    const fields = [{ target: 'code', source: 'code' }, { target: 'name', source: 'name' }, { target: 'site', source: 'plant' }];
+    const templateId = (await api().post('/api/v1/integrations/templates').set(await as()).send({
+      entityType: 'machine', name: 'Plant MySQL machines', keyField: 'id', fields, expectedColumns: sample.columns, settings: { writeMode: 'add_update', matchExisting: false },
+    }).expect(201)).body.id;
+    const importFrom = async (connectionId: string, template: string) => {
+      const started = (await api().post(`/api/v1/integrations/connections/${connectionId}/runs`).set(await as()).send({ entityType: 'machine', kind: 'full', templateId: template }).expect(201)).body;
+      return until('the import to finish', async () => {
+        const r = (await api().post(`/api/v1/integrations/runs/${started.id}/continue`).set(await as()).send({})).body;
+        return ['succeeded', 'partial', 'failed'].includes(r.status) && r;
+      }, 120_000);
+    };
+    expect(await importFrom(id, templateId)).toMatchObject({ status: 'succeeded', counts: { total: 40, created: 40 } });
+    expect((await admin.query(`select count(*)::int as n from public.machines where organisation_id = $1 and code like 'MY-M%'`, [ids.orgA])).rows[0].n).toBe(40);
+    expect(output).not.toContain('bin-my-pass');
+    // The PostgreSQL connection on the same agent still reads, and writes nothing new.
+    const pgTemplate = (await admin.query(`select id from public.integration_templates where organisation_id = $1 and name = 'Factory machines'`, [ids.orgA])).rows[0].id;
+    expect(await importFrom(pgConnectionId, pgTemplate)).toMatchObject({ status: 'succeeded', counts: { created: 0 } });
+  }
+
   it('registers, comes online, answers a ping and stops when revoked', async () => {
     const reg = await api().post('/api/v1/integrations/agent-registrations').set(await as()).send({ name: 'Real agent', location: 'Test bench' }).expect(201);
 
@@ -217,7 +276,7 @@ maybe('the real connector agent', () => {
     });
     expect(online.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(online.capabilities.jobs).toEqual(['discover', 'extract', 'ping', 'preview', 'store_credential', 'test_connection']);
-    expect(online.capabilities.adapters).toEqual(['postgres', 'sqlserver']);
+    expect(online.capabilities.adapters).toEqual(['mysql', 'postgres', 'sqlserver']);
 
     // Opening the agent's page wakes it to poll quickly, so the ping is answered within seconds.
     await api().post(`/api/v1/integrations/agents/${agentId}/wake`).set(await as()).expect(200);

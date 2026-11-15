@@ -148,7 +148,7 @@ public sealed class DatabaseJobTests : IDisposable
     [Theory]
     [InlineData("server", "db;Password=x", "server")]
     [InlineData("database", "erp;Integrated Security=true", "database name")]
-    [InlineData("engine", "oracle", "SQL Server and PostgreSQL")]
+    [InlineData("engine", "oracle", "SQL Server, PostgreSQL and MySQL")]
     [InlineData("authType", "windows", "PostgreSQL signs in")]
     public async Task Refuses_settings_that_could_change_the_connection_string(string key, string value, string words)
     {

@@ -283,3 +283,40 @@ Migration `20260308100000_agent_sync.sql` (applied live 2026-11-15; live guardra
   - UI: `AgentImports.test.jsx`.
 - **Not built.** Deletes detected by an incremental read (only a full read finds them). A changed column without a total order (ties are re-read,
   never skipped). Per-connection times of day.
+
+## 18. AG5 as built
+
+AG5 adds three kinds of source, each a slice of its own: **AG5a MySQL** (below), **AG5b files from allowed folders and shares**, and **AG5c
+internal REST APIs**. PostgreSQL was done in AG2.
+
+### AG5a — MySQL and MariaDB (2026-11-15)
+
+Migration `20260309100000_agent_mysql.sql` (**not yet applied live**). It replaces only `app.integration_agent_config_problem`, so a database
+connection may name engine `mysql`. It signs in with a user name and password, sealed in the browser for the agent as for PostgreSQL. It takes
+a port (default 3306) and no instance. Pushing the API before it does not break anything: creating a MySQL connection is refused until it is
+applied.
+
+- **Agent.** `MySqlAdapter` (`Fortress.Agent.Adapters`, MySqlConnector 3.0.0) is registered in `DatabaseAdapters` as `mysql`, and the agent
+  now reports `mysql` among its adapters.
+  - Every call runs in `START TRANSACTION READ ONLY` and is rolled back.
+  - The catalogue comes from `information_schema`, which in MySQL lists only what the sign-in may read.
+  - Identifiers are quoted with backticks. The last key, the filters' values and the row count are parameters (`@p1…`, `@limit`). Text values
+    are converted by MySQL to the type of the compared column.
+  - MySQL has no level between a database and its tables, so **the connection's database is the one schema offered**. Another database is
+    refused, even when the login could read it.
+  - `AllowLoadLocalInfile=false`: the server can never ask the agent for a file.
+  - Zero dates (`0000-00-00`) are kept as text. `TINYINT(1)` reads as true / false.
+  - Errors are put in words without the password (`auth`, `not_found`, `refused`, `timeout`, `network`).
+  - `ConnectionSettings` accepts `mysql` with a password sign-in only.
+- **Fortress.** No API change: the database checks the settings. The MySQL card is available (`INTEGRATION_CATALOGUE`, `providerKey sql_agent`,
+  `engine mysql`). The connection form has no instance field for MySQL and suggests port 3306. `DB_ENGINES` / `DB_AUTH` include MySQL.
+  Incremental reads, schedules, record sources, templates and imports work as for the other engines.
+- **Tests.**
+  - `supabase/tests/agent_mysql.test.sql`.
+  - `MySqlAdapterTests.cs` against a real MariaDB 10.11 started by `connector-agent/mysql-check.sh` (a throwaway server on 127.0.0.1:33069,
+    removed afterwards). It covers reads and refusals, page-by-page extraction with typed filters given as text, incremental marks, hostile
+    values, sign-in errors without the password, and read-only transactions.
+  - `connector-agent-binary.e2e-spec.ts`: **the same running agent imports 40 rows from MySQL while its PostgreSQL connection stays in use**,
+    then PostgreSQL imports again with nothing written. This is AG5's "one agent, several kinds of connection".
+  - `DatabaseConnections.test.jsx`.
+- **Still to check.** MySQL 8 itself (only MariaDB runs here). SQL Server, as before, on the Windows machine.

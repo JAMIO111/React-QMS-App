@@ -85,6 +85,29 @@ describe("database connection settings", () => {
     });
   });
 
+  it("connects MySQL through an agent with a user name and password (AG5)", async () => {
+    const f = databaseForm("mysql");
+    expect(f.authType).toBe("password");
+    expect(databaseConfig({ ...f, server: "erp-mysql", database: "erp", port: "3307" })).toEqual({ engine: "mysql", server: "erp-mysql", database: "erp", authType: "password", encrypt: true, port: 3307 });
+    routeApi({
+      "GET /integrations/agents": { data: [{ id: "ag1", name: "Newcastle", status: "active", online: true }], onlineCount: 1, activeCount: 1 },
+      "POST /integrations/connections": (_p, o) => ({ id: "c9", ...o.body }),
+    });
+    const onCreated = vi.fn();
+    wrap(<DatabaseConnectionDialog engine="mysql" onClose={() => {}} onCreated={onCreated} />);
+    const dialog = await screen.findByRole("dialog", { name: "Connect MySQL" });
+    expect(within(dialog).queryByRole("textbox", { name: /Instance/ })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("spinbutton", { name: /Port/ })).toHaveAttribute("placeholder", "3306");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Connector agent/ }));
+    await userEvent.click(screen.getByRole("option", { name: /Newcastle/ }));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Name/ }), "ERP MySQL");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Server/ }), "erp-mysql.factory.local");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Database/ }), "erp");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create connection" }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(calls.find((c) => c.k === "POST /integrations/connections").body.config).toEqual({ engine: "mysql", server: "erp-mysql.factory.local", database: "erp", authType: "password", encrypt: true });
+  });
+
   it("says when there is no agent to read through", async () => {
     routeApi({ "GET /integrations/agents": { data: [], onlineCount: 0, activeCount: 0 } });
     wrap(<DatabaseConnectionDialog engine="sqlserver" onClose={() => {}} />);

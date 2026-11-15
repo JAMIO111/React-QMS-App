@@ -447,7 +447,7 @@ export const INTEGRATION_CATALOGUE = [
   { key: "dynamics_bc", name: "Microsoft Dynamics 365 Business Central", description: "Items, vendors, customers and production orders from Business Central.", mark: "microsoft", available: false },
   { key: "sap", name: "SAP", description: "Materials, business partners and orders from SAP S/4HANA or Business One.", mark: "sap", available: false },
   { key: "sage", name: "Sage", description: "Suppliers, customers and stock items from Sage 200 or Sage X3.", mark: "sage", available: false },
-  { key: "mysql", name: "MySQL", description: "Read tables or views from a MySQL database through a small agent on your network.", mark: "mysql", available: false },
+  { key: "mysql", providerKey: "sql_agent", engine: "mysql", name: "MySQL", description: "Read tables or views from a MySQL or MariaDB database through a connector agent on your network. Nothing connects in.", mark: "mysql", available: true },
   { key: "postgresql", providerKey: "sql_agent", engine: "postgres", name: "PostgreSQL", description: "Read tables or views from a PostgreSQL database through a connector agent on your network. Nothing connects in.", mark: "postgresql", available: true },
   { key: "sql_server", providerKey: "sql_agent", engine: "sqlserver", name: "Microsoft SQL Server", description: "Read tables or views from SQL Server through a connector agent on your network. Nothing connects in.", mark: "database", available: true },
   { key: "odoo", name: "Odoo", description: "Products, partners and manufacturing orders from Odoo.", mark: "odoo", available: false },
@@ -548,7 +548,7 @@ export const apiMappingPath = (connectionId, entityType, templateId) => {
 // Database connections through a connector agent (docs/connector-agent-plan.md AG2)
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 
-export const DB_ENGINES = { postgres: "PostgreSQL", sqlserver: "Microsoft SQL Server" };
+export const DB_ENGINES = { postgres: "PostgreSQL", sqlserver: "Microsoft SQL Server", mysql: "MySQL" };
 
 /** How each engine may sign in. SQL Server's Windows authentication uses the agent's service account: no password at all. */
 export const DB_AUTH = {
@@ -557,6 +557,7 @@ export const DB_AUTH = {
     { value: "sql", label: "SQL login (user name and password)" },
   ],
   postgres: [{ value: "password", label: "User name and password" }],
+  mysql: [{ value: "password", label: "User name and password" }],
 };
 
 export const dbNeedsPassword = (config) => ["sql", "password"].includes(config?.authType);
@@ -568,7 +569,7 @@ export const databaseForm = (engine, c = {}) => ({
   port: c.port != null ? String(c.port) : "",
   instance: c.instance ?? "",
   database: c.database ?? "",
-  authType: c.authType ?? ((c.engine ?? engine) === "postgres" ? "password" : "windows"),
+  authType: c.authType ?? ((c.engine ?? engine ?? "sqlserver") === "sqlserver" ? "windows" : "password"),
   encrypt: c.encrypt !== false,
   trustServerCertificate: c.trustServerCertificate === true,
 });

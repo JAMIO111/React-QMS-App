@@ -45,10 +45,12 @@ The Windows service, DPAPI protection, `install.ps1` / `uninstall.ps1` and the f
 
 ## Databases (AG2)
 
-- **Adapters** (`src/Fortress.Agent.Adapters`): PostgreSQL (Npgsql) and SQL Server (Microsoft.Data.SqlClient). Read only: each call is a
-  read-only transaction (SQL Server: `ApplicationIntent=ReadOnly`, read committed, rolled back), the catalogue is read with the login's own
-  rights, and the only query that touches data is built from the columns the catalogue listed, quoted, with the row count as a parameter.
-  SQL Server has not yet run against a real server (none in the build container).
+- **Adapters** (`src/Fortress.Agent.Adapters`): PostgreSQL (Npgsql), SQL Server (Microsoft.Data.SqlClient) and MySQL / MariaDB
+  (MySqlConnector, AG5a). Read only: each call is a read-only transaction (SQL Server: `ApplicationIntent=ReadOnly`, read committed, rolled back;
+  MySQL: `START TRANSACTION READ ONLY`, rolled back), the catalogue is read with the login's own rights, and the only query that touches data is
+  built from the columns the catalogue listed, quoted, with every value as a parameter. MySQL reads only the connection's own database (it is
+  the one schema offered), never asks the server for local files (`AllowLoadLocalInfile=false`), and keeps zero dates (`0000-00-00`) as text.
+  SQL Server has not yet run against a real server (none in the build container); MySQL has run against MariaDB 10.11, not yet MySQL 8.
 - **Passwords**: typed in Fortress, sealed in the browser to this agent's sealing key, opened here (`SealedBox`) and kept one file per
   connection in `credentials\` (DPAPI). Fortress never holds them readable. Windows authentication needs none: the agent signs in as its service
   account, so give that account read access to the database.
@@ -59,7 +61,8 @@ The Windows service, DPAPI protection, `install.ps1` / `uninstall.ps1` and the f
   Names ignore case and `*` matches anything. Without the file the agent reads whatever its database login can — which is why the login should
   be read-only and limited to what Fortress needs.
 - `bash run-e2e.sh` also runs the PostgreSQL adapter tests against the throwaway database over TCP, and the real agent through a database
-  connection (password, test, browse, preview, and an import read in batches).
+  connection (password, test, browse, preview, and an import read in batches). With MariaDB or MySQL installed, `mysql-check.sh` starts a
+  throwaway server too: the MySQL adapter tests run, and the same running agent also imports from MySQL while its PostgreSQL connection stays in use.
 
 ## Extraction for imports (AG3)
 

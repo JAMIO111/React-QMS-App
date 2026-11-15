@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Database adapters: SQL Server (Microsoft.Data.SqlClient) and PostgreSQL (Npgsql). Read only. -->
+  <!-- Database adapters: SQL Server (Microsoft.Data.SqlClient), PostgreSQL (Npgsql) and MySQL / MariaDB (MySqlConnector). Read only. -->
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.2" />
     <PackageReference Include="Npgsql" Version="10.0.3" />
+    <PackageReference Include="MySqlConnector" Version="3.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Fortress.Agent.Core\Fortress.Agent.Core.csproj" />

@@ -30,7 +30,7 @@ public sealed partial record ConnectionSettings(
         int? Num(string key) => c[key] is JsonValue v && v.TryGetValue<int>(out var n) ? n : null;
 
         var engine = Text("engine");
-        if (engine is not ("sqlserver" or "postgres")) throw Invalid("This agent reads SQL Server and PostgreSQL databases");
+        if (engine is not ("sqlserver" or "postgres" or "mysql")) throw Invalid("This agent reads SQL Server, PostgreSQL and MySQL databases");
         var server = Text("server");
         if (!ServerPattern().IsMatch(server)) throw Invalid("The database server's name is not valid");
         var port = Num("port");
@@ -42,6 +42,7 @@ public sealed partial record ConnectionSettings(
         var auth = Text("authType");
         if (engine == "sqlserver" && auth is not ("windows" or "sql")) throw Invalid("SQL Server signs in with Windows authentication or a SQL login");
         if (engine == "postgres" && auth != "password") throw Invalid("PostgreSQL signs in with a user name and password");
+        if (engine == "mysql" && auth != "password") throw Invalid("MySQL signs in with a user name and password");
         var timeout = Math.Clamp(Num("timeoutSeconds") ?? 15, 5, 120);
         return new ConnectionSettings(engine, server, port, instance, database, auth, Flag("encrypt", true), Flag("trustServerCertificate", false), timeout);
     }

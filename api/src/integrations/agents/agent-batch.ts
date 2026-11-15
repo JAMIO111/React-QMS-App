@@ -11,6 +11,8 @@ export interface AgentBatch {
   lastKey: string | null;
   rows: Array<Record<string, unknown>>;
   checksum: string;
+  /** The highest changed value the agent has read so far in this job (incremental reads, AG4). */
+  changedUpTo: string | null;
 }
 
 /**
@@ -39,17 +41,20 @@ export function readAgentBatch(body: unknown, checksumHeader: string | undefined
   } catch {
     throw ApiError.badRequest('batch_invalid', 'The batch is not valid JSON');
   }
-  const b = parsed as { seq?: unknown; lastKey?: unknown; rows?: unknown };
+  const b = parsed as { seq?: unknown; lastKey?: unknown; rows?: unknown; changedUpTo?: unknown };
   if (!b || typeof b !== 'object' || Array.isArray(b)) throw ApiError.badRequest('batch_invalid', 'A batch is an object with seq, lastKey and rows');
   if (typeof b.seq !== 'number' || !Number.isInteger(b.seq) || b.seq < 0 || b.seq > 100_000) throw ApiError.badRequest('batch_invalid', 'A batch needs its sequence number');
   if (b.lastKey !== null && b.lastKey !== undefined && (typeof b.lastKey !== 'string' || b.lastKey.length > 2000)) {
     throw ApiError.badRequest('batch_invalid', 'The last key is text of at most 2,000 characters');
   }
+  if (b.changedUpTo !== null && b.changedUpTo !== undefined && (typeof b.changedUpTo !== 'string' || b.changedUpTo.length > 2000)) {
+    throw ApiError.badRequest('batch_invalid', 'The changed value is text of at most 2,000 characters');
+  }
   if (!Array.isArray(b.rows) || b.rows.length > MAX_BATCH_ROWS) throw ApiError.badRequest('batch_invalid', `A batch holds a list of at most ${MAX_BATCH_ROWS} rows`);
   for (const row of b.rows) {
     if (!row || typeof row !== 'object' || Array.isArray(row)) throw ApiError.badRequest('batch_invalid', 'Each row is an object of column values');
   }
-  return { seq: b.seq, lastKey: (b.lastKey as string | null | undefined) ?? null, rows: b.rows as Array<Record<string, unknown>>, checksum };
+  return { seq: b.seq, lastKey: (b.lastKey as string | null | undefined) ?? null, rows: b.rows as Array<Record<string, unknown>>, checksum, changedUpTo: (b.changedUpTo as string | null | undefined) ?? null };
 }
 
 /**

@@ -125,6 +125,21 @@ public sealed class PostgresAdapterTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_incremental_page_reads_rows_changed_at_or_after_the_mark()
+    {
+        if (admin is null) return;
+        await using var db = await new DatabaseAdapters().OpenAsync(Settings(), Reader, default);
+        var shape = (await db.ColumnsAsync("agent_erp", "work orders", default))!;
+        DbColumn C(string n) => shape.Columns.Single(c => c.Name == n);
+        // raised = 2026-01-01 08:00Z + g hours; the mark is the UTC text the agent kept (a 'Z' keeps it the same instant whatever the session's zone).
+        var rows = await db.ExtractPageAsync(new ExtractQuery(shape, [C("id"), C("raised")], C("id"), [new ExtractFilter(C("raised"), "gte", "2026-01-03T10:00:00.0000000Z")], null, 100), default);
+        Assert.Equal(Enumerable.Range(50, 11).Select(i => (long)i), rows.Select(r => (long)r.Values["id"]!));
+        string? mark = null;
+        foreach (var r in rows) mark = DbValues.HigherMark(mark, r.Values["raised"]!);
+        Assert.Equal("2026-01-03T20:00:00.0000000Z", mark);
+    }
+
+    [Fact]
     public async Task An_odd_name_or_a_hostile_value_never_becomes_sql()
     {
         if (admin is null) return;

@@ -210,6 +210,8 @@ public sealed record JobResume
     public int NextSeq { get; init; }
     public string? AfterKey { get; init; }
     public long Rows { get; init; }
+    /// <summary>The highest changed value Fortress holds from earlier batches of this job (incremental reads, AG4).</summary>
+    public string? ChangedUpTo { get; init; }
 }
 
 public sealed record JobReportResponse

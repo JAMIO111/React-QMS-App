@@ -13,7 +13,9 @@ vi.mock("../../../hooks/useQmsApi", async (importOriginal) => ({ ...(await impor
 
 import { BrowseCard } from "./DatabasePanels";
 import { RecordSourcesCard } from "./RecordSources";
-import { describeRecordSource, drainMessage, recordSourceBody, recordSourceForm, recordSourceProblem } from "../../../lib/integrations";
+import { HealthCard, ScheduleCard } from "../KeepHealthy";
+import ImportsCard from "../ImportsCard";
+import { describeRecordSource, drainMessage, recordSourceBody, recordSourceForm, recordSourceProblem, scheduleLabel, scheduleOptions } from "../../../lib/integrations";
 
 const calls = [];
 const routeApi = (routes) =>
@@ -61,7 +63,7 @@ describe("where records are read from", () => {
     expect(recordSourceBody("erp", "machines", { ...f, allColumns: false, columns: ["id", "code"], filters: [{ column: "active", op: "eq", value: " true " }, { column: "retired", op: "is_null", value: "x" }] }))
       .toEqual({ schema: "erp", object: "machines", keyColumn: "id", columns: ["id", "code"], filters: [{ column: "active", op: "eq", value: "true" }, { column: "retired", op: "is_null" }] });
     expect(describeRecordSource(SOURCE)).toBe("erp.machines · key id · 2 columns · active equals true");
-    expect(recordSourceForm(SOURCE)).toEqual({ keyColumn: "id", allColumns: false, columns: ["id", "code"], filters: [{ column: "active", op: "eq", value: "true" }] });
+    expect(recordSourceForm(SOURCE)).toEqual({ keyColumn: "id", allColumns: false, columns: ["id", "code"], filters: [{ column: "active", op: "eq", value: "true" }], changedColumn: null });
   });
 
   it("says a run is waiting for the agent in words, not as a failure", () => {
@@ -119,5 +121,78 @@ describe("where records are read from", () => {
   it("asks how to start when no table has been chosen", () => {
     wrap(<RecordSourcesCard connection={connection()} />);
     expect(screen.getByText(/Browse the database below/)).toBeInTheDocument();
+  });
+});
+
+describe("reading only what changed, on a schedule (AG4)", () => {
+  const TRACKED = { ...SOURCE, columns: ["id", "code", "changed_at"], changedColumn: "changed_at" };
+  const setting = (over = {}) => ({
+    entityType: "machine", writeMode: "add_update", matchExisting: false, onMissing: "nothing", schedule: "manual", saved: true, fixed: false,
+    canDeactivate: true, tracksMissing: true, template: null, scheduledBy: null, lastScheduledAt: null, scheduleProblem: null, ...over,
+  });
+
+  it("keeps the column that shows when a row changed with the source", () => {
+    const f = recordSourceForm(TRACKED);
+    expect(f.changedColumn).toBe("changed_at");
+    expect(recordSourceBody("erp", "machines", f)).toMatchObject({ changedColumn: "changed_at" });
+    expect(recordSourceProblem({ ...f, columns: ["id", "code"] })).toMatch(/shows when a row changed too/);
+    expect(recordSourceProblem({ ...f, allColumns: true, columns: [] })).toBeNull();
+    expect(describeRecordSource(TRACKED)).toMatch(/changes shown by changed_at$/);
+    expect(scheduleOptions(false).map((o) => o.value)).toEqual(["manual", "daily"]);
+    expect(scheduleOptions(true).map((o) => o.value)).toEqual(["manual", "every_5m", "every_15m", "hourly", "daily"]);
+    expect(scheduleLabel("every_15m")).toBe("Every 15 minutes");
+  });
+
+  it("offers every few minutes for a database table and says it reads only the changes", async () => {
+    let saved = setting();
+    routeApi({
+      "GET /integrations/connections/c1/settings": () => ({ data: [saved] }),
+      "GET /integrations/templates": { data: [{ id: "t1", name: "ERP machines", entityType: "machine", currentVersion: 1 }] },
+      "PUT /integrations/connections/c1/settings": (_p, o) => {
+        saved = setting({ ...o.body, template: { id: "t1", name: "ERP machines", version: 1 }, scheduledBy: { id: "u1", name: "Ada Owner" } });
+        return saved;
+      },
+    });
+    wrap(<ScheduleCard connection={connection({ recordSources: [{ entityType: "machine", source: TRACKED }] })} />);
+    const row = await screen.findByRole("listitem", { name: "Machines schedule" });
+    await userEvent.click(within(row).getByRole("combobox", { name: /Import template/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /ERP machines/ }));
+    await waitFor(() => expect(calls.find((c) => c.k === "PUT /integrations/connections/c1/settings")?.body).toEqual({ entityType: "machine", templateId: "t1" }));
+    await userEvent.click(within(row).getByRole("combobox", { name: /How often machines are imported/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Every 15 minutes" }));
+    await waitFor(() => expect(calls.filter((c) => c.k === "PUT /integrations/connections/c1/settings").at(-1).body).toEqual({ entityType: "machine", schedule: "every_15m", templateId: "t1" }));
+    expect(await within(row).findByText(/Runs every 15 minutes while the connector agent is online as Ada Owner/)).toBeInTheDocument();
+    expect(within(row).getByText(/Reads only the rows changed since the last import/)).toBeInTheDocument();
+  });
+
+  it("allows an incremental import only when the table says when a row changed", async () => {
+    routeApi({
+      "GET /integrations/runs": { data: [{ id: "r1", kind: "full", entityType: "machine", status: "succeeded", requestedAt: "2026-11-15T08:00:00Z", template: { id: "t1", name: "ERP machines", version: 1 }, counts: {} }], page: 1, pageSize: 8, total: 1 },
+      "GET /integrations/templates": { data: [{ id: "t1", name: "ERP machines", entityType: "machine", currentVersion: 1 }] },
+    });
+    const base = { runnable: ["machine"], importable: ["machine"], writable: ["machine"] };
+    const { unmount } = wrap(<ImportsCard canRun connection={connection({ ...base, recordSources: [{ entityType: "machine", source: SOURCE }] })} />);
+    await userEvent.click(screen.getByRole("button", { name: "Run an import" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Full" })).toBeEnabled());
+    expect(screen.getByRole("button", { name: "Incremental" })).toBeDisabled();
+    unmount();
+    wrap(<ImportsCard canRun connection={connection({ ...base, recordSources: [{ entityType: "machine", source: TRACKED }] })} />);
+    await userEvent.click(screen.getByRole("button", { name: "Run an import" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Incremental" })).toBeEnabled());
+  });
+
+  it("says in import health when a scheduled import's agent is offline", async () => {
+    routeApi({
+      "GET /integrations/health": {
+        data: [{ connectionId: "c1", connectionName: "ERP database", connectionStatus: "active", providerKind: "agent", entityType: "machine", schedule: "every_5m", onMissing: "nothing", template: null,
+          lastScheduledAt: null, scheduleProblem: null, lastRun: null, lastSuccessAt: null, failedInARow: 0, rowsNeedingAction: 0, missingWaiting: 0, missingHeld: 0, conflictsOpen: 0,
+          agent: { id: "ag1", name: "Newcastle", online: false, lastHeartbeatAt: "2026-11-15T09:00:00Z" }, state: "attention" }],
+        counts: { ok: 0, attention: 1, failing: 0 },
+      },
+    });
+    wrap(<HealthCard />);
+    const row = await screen.findByRole("listitem", { name: "ERP database: Machines" });
+    expect(within(row).getByText(/Every 5 minutes · not imported yet · connector agent Newcastle offline since/)).toBeInTheDocument();
+    expect(within(row).getByText("Needs a look")).toBeInTheDocument();
   });
 });

@@ -243,3 +243,43 @@ Test `supabase/tests/agent_extraction.test.sql` (+ guardrails list, tenancy swee
 **Screens:** connection page **Records read from the database** (`database/RecordSources.jsx`: each kind with its table in words, **Map fields**, Change / Stop reading), **Use this table** on the browse card → `RecordSourceDialog` (kind of record, key column (the primary key first), all or chosen columns, filters), the mapping page (`ApiMappingPage`) maps a database connection too (asks the agent for a sample when there is none, column words), the Run dialog offers only kinds with a source and needs a template to import, the run page says how far the agent has got (polling every 2 s while it reads), `database/agentAsk.jsx` (shared job asking). Tests `AgentImports.test.jsx`.
 
 **Not built (AG4 and later):** incremental reads, schedules, a run failing by itself when its agent stays offline (cancel works), records that disappeared for database connections, SQL Server against a real server.
+
+## 17. AG4 as built (2026-11-15)
+
+Migration `20260308100000_agent_sync.sql` (**not yet applied live**). Pushing the API before it breaks the batch route (it calls the seven-argument
+`app.system_agent_store_batch`), the settings route for the new schedules and the worker's `agent-imports` step (`system_schedule_integration_runs(date, boolean)`).
+
+- **Incremental reads.** A record source may name `changedColumn`: a date-and-time or number the database moves on when a row changes. It must be
+  one of the listed columns when columns are listed. An incremental run of a database connection is allowed only then. Its `extract` job carries
+  `changedSince` = the mark saved by the last finished full or incremental run (`integration_sync_cursors`, `{"w": …}`, the REST shape). The agent
+  adds `changed >= since` to the filters, reads the column too, and keeps the highest value it has read (`DbValues.HigherMark`, compared by type).
+  It sends that value with each batch (`changedUpTo`, stored in the job's progress and returned on resume) and in its completed result. The lease
+  hands `changedColumn`, `changedSince` and `changedUpTo` to the engine. `AgentAdapter`'s last page returns `{"w": changedUpTo ?? changedSince}` as
+  its next cursor, and the cursor moves only when the run finishes. A full read sets the mark the same way. The row at the old mark is read again
+  (`>=`, so nothing changed in the same instant is lost) and comes out unchanged. An incremental run's starting cursor is the mark, not a batch
+  number, so the adapter starts at batch 0 (found by the e2e test: it had looped).
+- **Schedules.** `manual | every_5m | every_15m | hourly | daily`. The minute schedules are for `sql_agent` connections only. A schedule on a
+  database connection needs its record source and a template. The worker step `agent-imports` (every tick, before imports) runs
+  `app.system_fail_stalled_agent_jobs()` and then `app.system_schedule_integration_runs(current_date, false)`. With `p_daily = false` only the
+  minute schedules are considered; the daily cron still asks for the daily ones. A run is never queued beside one still waiting or running, nor
+  while the agent is offline: the reason is stored as the schedule's problem. A scheduled run of a database is incremental when the source names
+  a changed column and a mark exists, else full.
+- **Offline agents.** A job for an agent that has not been heard from for 15 minutes is failed once it is 15 minutes old: "The connector agent X did
+  not answer: it was last seen …". This applies to extract, test, discover, preview and ping jobs. A failed extraction fails its run as before.
+  `app.integration_health` carries `agent {id, name, online, lastHeartbeatAt}`, and a scheduled row whose agent is offline needs a look.
+- **Records that disappeared.** The existing check after a full read applies to database connections unchanged. The e2e test lists a row missing
+  from a full read.
+- **UI.** The source dialog has **Column that shows when a row changed** (optional), and the source line says "changes shown by …". The Run dialog
+  offers Incremental for a table with that column. The connection page has a **Schedule** card for database connections: how often (By hand,
+  every 5 / 15 minutes, hourly, daily), the template, what to do when a record disappears, and what a scheduled read does. Import health shows the
+  schedule in words and "connector agent … offline since …".
+- **Tests.**
+  - SQL: `supabase/tests/agent_sync.test.sql`.
+  - API: `agent-batch.spec.ts` (mark, adapter cursor) and `agent-extraction.e2e-spec.ts` (mark from a full read, incremental read and its cursor,
+    disappeared rows, schedules, health).
+  - Real agent: `connector-agent-binary.e2e-spec.ts`. Against real PostgreSQL, a changed column is added, a full read sets the mark at the highest
+    active row, and an incremental read updates only the three rows changed after it.
+  - Agent: `ExtractionTests.cs` and `PostgresAdapterTests.cs`.
+  - UI: `AgentImports.test.jsx`.
+- **Not built.** Deletes detected by an incremental read (only a full read finds them). A changed column without a total order (ties are re-read,
+  never skipped). Per-connection times of day.

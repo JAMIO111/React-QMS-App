@@ -25,7 +25,9 @@ export class IntegrationMonitorService {
       const rows = (await db.execute<{ h: Health['data'] }>(sql`select app.integration_health(${orgOf(ctx)}::uuid) as h`)).rows[0].h ?? [];
       const data = rows.map((r) => {
         const failing = (r.lastRun?.status === 'failed') || !!r.scheduleProblem || r.failedInARow > 0;
-        const attention = r.rowsNeedingAction > 0 || r.missingWaiting > 0 || r.conflictsOpen > 0 || r.lastRun?.status === 'partial' || (r.lastRun?.status === 'running' && !!r.lastRun.nextAttemptAt);
+        // A scheduled database connection whose agent is offline cannot run: someone should look at the agent.
+        const agentDown = !!r.agent && !r.agent.online && r.schedule !== 'manual';
+        const attention = agentDown || r.rowsNeedingAction > 0 || r.missingWaiting > 0 || r.conflictsOpen > 0 || r.lastRun?.status === 'partial' || (r.lastRun?.status === 'running' && !!r.lastRun.nextAttemptAt);
         return { ...r, state: (failing ? 'failing' : attention ? 'attention' : 'ok') as Health['data'][number]['state'] };
       });
       const counts = { ok: 0, attention: 0, failing: 0 };

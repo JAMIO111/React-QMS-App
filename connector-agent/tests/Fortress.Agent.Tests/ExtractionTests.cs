@@ -165,6 +165,53 @@ public sealed class ExtractionTests : IDisposable
     }
 
     [Fact]
+    public async Task An_incremental_read_asks_for_rows_changed_since_the_mark_and_reports_the_highest_read()
+    {
+        var request = Request(batchRows: 10);
+        request["changedColumn"] = "qty";
+        request["changedSince"] = "3";
+        var result = await Handler.RunAsync(Job(request), Ctx, default);
+        Assert.Equal([("qty", "gte", "3")], db.Extracts[0].Filters.Select(f => (f.Column.Name, f.Op, f.Value)));
+        // The running mark goes with each batch, so a restarted job carries it on.
+        Assert.Equal(["15.000", "30.000", "37.500"], sent.Select(b => Open(b, out _)["changedUpTo"]!.GetValue<string>()));
+        Assert.Equal("37.500", result!["changedUpTo"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task A_job_taken_again_starts_from_the_mark_Fortress_holds()
+    {
+        var request = Request(batchRows: 10);
+        request["changedColumn"] = "qty";
+        var result = await Handler.RunAsync(Job(request, new JobResume { NextSeq = 2, AfterKey = "20", Rows = 20, ChangedUpTo = "99" }), Ctx, default);
+        // Rows 21-25 read here (qty up to 37.5) are below the 99 already reached, so the mark stays.
+        Assert.Equal("99", result!["changedUpTo"]!.GetValue<string>());
+        Assert.Empty(db.Extracts[0].Filters);
+    }
+
+    [Fact]
+    public async Task With_no_rows_an_incremental_read_keeps_the_mark_it_started_from()
+    {
+        db.ExtractRows = 0;
+        var request = Request();
+        request["changedColumn"] = "due";
+        request["changedSince"] = "2026-11-05";
+        Assert.Equal("2026-11-05", (await Handler.RunAsync(Job(request), Ctx, default))!["changedUpTo"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void The_mark_compares_values_by_their_own_type()
+    {
+        Assert.Equal("10", DbValues.HigherMark("9", 10L));
+        Assert.Equal("100.5", DbValues.HigherMark("100.5", 9.25m));
+        Assert.Equal("2026-11-05T08:00:00.0000000Z", DbValues.HigherMark("2026-11-04T23:00:00Z", new DateTime(2026, 11, 5, 8, 0, 0, DateTimeKind.Utc)));
+        Assert.Equal("2026-11-05T08:00:00Z", DbValues.HigherMark("2026-11-05T08:00:00Z", new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc)));
+        Assert.Equal("2026-02-01", DbValues.HigherMark("2026-01-31", new DateOnly(2026, 2, 1)));
+        Assert.Equal("B", DbValues.HigherMark("A", "B"));
+        Assert.Equal("7", DbValues.HigherMark("not a number", 7L));
+        Assert.Equal("5", DbValues.HigherMark(null, 5));
+    }
+
+    [Fact]
     public void Sql_server_builds_the_same_shape_of_query_with_bracketed_names()
     {
         var shape = new TableShape("dbo", "work]orders", [new DbColumn("id", "int", false, true), new DbColumn("order no", "nvarchar", false, false)], []);

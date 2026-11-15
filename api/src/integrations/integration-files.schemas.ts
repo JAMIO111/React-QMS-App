@@ -133,7 +133,8 @@ export const MappingList = z.object({ data: z.array(MappingVersion) });
 
 export const WRITE_MODES = ['add_only', 'add_update', 'update_only'] as const;
 export const ON_MISSING = ['nothing', 'list', 'deactivate'] as const;
-export const SCHEDULES = ['manual', 'daily'] as const;
+/** How often an import runs: by hand, daily (API and database connections), or every 5 / 15 / 60 minutes (database connections, AG4). */
+export const SCHEDULES = ['manual', 'every_5m', 'every_15m', 'hourly', 'daily'] as const;
 export const ImportSettings = z.object({
   entityType: z.enum(ENTITY_TYPES),
   writeMode: z.enum(WRITE_MODES),

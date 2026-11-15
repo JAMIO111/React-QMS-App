@@ -30,6 +30,9 @@ public sealed class ExtractHandler(DatabaseJobContext databases) : IJobHandler
         var keyName = Name("keyColumn", "which column identifies each row");
         var batchRows = Math.Clamp(request["batchRows"] is JsonValue b && b.TryGetValue<int>(out var br) ? br : MaxBatchRows, 1, MaxBatchRows);
         long? maxRows = request["maxRows"] is JsonValue m && m.TryGetValue<long>(out var mr) ? mr : null;
+        string? Opt(string key) => request[key] is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 0 ? s : null;
+        var changedName = Opt("changedColumn");
+        var changedSince = Opt("changedSince");
 
         var (db, _, allow) = await databases.OpenAsync(job, ct);
         await using (db)
@@ -45,6 +48,9 @@ public sealed class ExtractHandler(DatabaseJobContext databases) : IJobHandler
                 ? list.Select(x => Column(x?.GetValue<string>() ?? "", "column")).ToList()
                 : shape.Columns.ToList();
             if (!columns.Any(c => c.Name == key.Name)) columns.Insert(0, key);
+            // Incremental reads (AG4): rows changed at or after the mark of the last finished import; the highest changed value read is reported back.
+            var changed = changedName is null ? null : Column(changedName, "column that shows when a row changed,");
+            if (changed is not null && !columns.Any(c => c.Name == changed.Name)) columns.Add(changed);
             var filters = new List<ExtractFilter>();
             if (request["filters"] is JsonArray fs)
             {
@@ -63,7 +69,10 @@ public sealed class ExtractHandler(DatabaseJobContext databases) : IJobHandler
                 }
             }
 
+            if (changed is not null && changedSince is not null) filters.Add(new ExtractFilter(changed, "gte", changedSince));
+
             var seq = job.Resume?.NextSeq ?? 0;
+            var mark = job.Resume?.ChangedUpTo ?? (changed is null ? null : changedSince);
             var afterKey = job.Resume?.AfterKey;
             var total = job.Resume?.Rows ?? 0;
             var truncated = false;
@@ -80,7 +89,10 @@ public sealed class ExtractHandler(DatabaseJobContext databases) : IJobHandler
                 if (page.Count == 0) break;
                 foreach (var part in Split(page, columns))
                 {
-                    var receipt = await context.SendBatchAsync(part.Batch(seq), ct);
+                    if (changed is not null)
+                        foreach (var row in part.Rows)
+                            if (row.Values.TryGetValue(changed.Name, out var v) && v is not null && v is not DBNull) mark = DbValues.HigherMark(mark, v);
+                    var receipt = await context.SendBatchAsync(part.Batch(seq, changed is null ? null : mark), ct);
                     if (receipt.Cancelled) { ct.ThrowIfCancellationRequested(); throw new OperationCanceledException("The job was cancelled in Fortress"); }
                     seq++;
                     total += part.Rows.Count;
@@ -94,6 +106,7 @@ public sealed class ExtractHandler(DatabaseJobContext databases) : IJobHandler
                 ["rows"] = total,
                 ["columns"] = new JsonArray(columns.Select(c => (JsonNode)new JsonObject { ["name"] = c.Name, ["type"] = c.DataType }).ToArray()),
                 ["truncated"] = truncated,
+                ["changedUpTo"] = changed is null ? null : mark,
             };
         }
     }
@@ -135,13 +148,13 @@ public sealed class ExtractHandler(DatabaseJobContext databases) : IJobHandler
             }
         }
 
-        public RowBatch Batch(int seq)
+        public RowBatch Batch(int seq, string? changedUpTo = null)
         {
-            var json = Json(seq);
+            var json = Json(seq, changedUpTo);
             return new RowBatch(seq, Rows.Count, Compress(json), Convert.ToHexStringLower(SHA256.HashData(json)));
         }
 
-        private byte[] Json(int seq)
+        private byte[] Json(int seq, string? changedUpTo = null)
         {
             var array = new JsonArray();
             foreach (var row in Rows)
@@ -151,6 +164,7 @@ public sealed class ExtractHandler(DatabaseJobContext databases) : IJobHandler
                 array.Add(o);
             }
             var body = new JsonObject { ["seq"] = seq, ["lastKey"] = Rows.Count > 0 ? Rows[^1].KeyText : null, ["rows"] = array };
+            if (changedUpTo is not null) body["changedUpTo"] = changedUpTo;
             return JsonSerializer.SerializeToUtf8Bytes(body);
         }
 

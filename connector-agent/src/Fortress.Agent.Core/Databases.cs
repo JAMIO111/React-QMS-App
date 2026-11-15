@@ -150,6 +150,30 @@ public static class DbValues
     private static string Cut(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 
     /// <summary>
+    /// The higher of a high-water mark (as text, from Fortress or from earlier rows) and a value just read, as text (AG4). Compared by the value's
+    /// own type — numbers as numbers, dates and times as instants — so "10" is above "9"; text compares ordinally. A mark that cannot be read as
+    /// the value's type gives way to the value.
+    /// </summary>
+    public static string HigherMark(string? mark, object value)
+    {
+        var text = KeyText(value);
+        if (mark is null) return text;
+        var inv = CultureInfo.InvariantCulture;
+        int? cmp = value switch
+        {
+            byte or sbyte or short or ushort or int or uint or long or ulong or decimal =>
+                decimal.TryParse(mark, NumberStyles.Number | NumberStyles.AllowExponent, inv, out var m) ? Convert.ToDecimal(value, inv).CompareTo(m) : null,
+            float or double => double.TryParse(mark, NumberStyles.Float, inv, out var d) ? Convert.ToDouble(value, inv).CompareTo(d) : null,
+            DateTimeOffset o => DateTimeOffset.TryParse(mark, inv, DateTimeStyles.RoundtripKind, out var mo) ? o.CompareTo(mo) : null,
+            DateTime dt => DateTime.TryParse(mark, inv, DateTimeStyles.RoundtripKind, out var md) ? dt.CompareTo(md) : null,
+            DateOnly dd => DateOnly.TryParse(mark, inv, DateTimeStyles.None, out var mdd) ? dd.CompareTo(mdd) : null,
+            TimeOnly tt => TimeOnly.TryParse(mark, inv, DateTimeStyles.None, out var mt) ? tt.CompareTo(mt) : null,
+            _ => string.CompareOrdinal(text, mark),
+        };
+        return cmp is null or > 0 ? text : mark;
+    }
+
+    /// <summary>
     /// A key value as text the database reads back as the same value (never cut): ISO dates and times with every fraction digit, decimals with a dot.
     /// Sent as a parameter for "rows after this one", and kept by Fortress so a restarted extraction carries on from it.
     /// </summary>
@@ -158,7 +182,7 @@ public static class DbValues
         bool b => b ? "true" : "false",
         DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
         TimeOnly t => t.ToString("HH:mm:ss.fffffff", CultureInfo.InvariantCulture),
-        DateTime dt => dt.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff", CultureInfo.InvariantCulture),
+        DateTime dt => dt.ToString(dt.Kind == DateTimeKind.Utc ? "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'" : "yyyy-MM-dd'T'HH:mm:ss.fffffff", CultureInfo.InvariantCulture),
         DateTimeOffset o => o.ToString("O", CultureInfo.InvariantCulture),
         byte[] bytes => Convert.ToHexString(bytes),
         IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),

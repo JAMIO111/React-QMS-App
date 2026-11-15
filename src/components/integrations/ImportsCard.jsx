@@ -29,9 +29,11 @@ const RunDialog = ({ connection, runs, onClose }) => {
   // An API connection reads only the kinds of record its settings say where to find (IN7).
   const isApi = connection.provider?.kind === "api";
   const configured = connection.config?.entities ?? {};
-  // A database connection reads only the kinds of record a table has been chosen for (AG3); it always reads the whole table for now.
+  // A database connection reads only the kinds of record a table has been chosen for (AG3).
   const isDb = connection.provider?.key === "sql_agent";
   const sources = new Set((connection.recordSources ?? []).map((s) => s.entityType));
+  // An incremental read of a table needs the column that shows when a row changed (AG4).
+  const changeTracked = new Set((connection.recordSources ?? []).filter((s) => s.source?.changedColumn).map((s) => s.entityType));
   const choices = isApi ? connection.runnable.filter((t) => t in configured) : isDb ? connection.runnable.filter((t) => sources.has(t)) : connection.runnable;
   const [entityType, setEntityType] = useState(choices[0] ?? null);
   const [kind, setKind] = useState("preview");
@@ -48,7 +50,7 @@ const RunDialog = ({ connection, runs, onClose }) => {
   // A file always needs a template; an API connection needs one to write (a preview without one shows what arrives).
   const mapped = !isFile || !!chosenTemplate;
   const apiNeedsTemplate = (isApi || isDb) && !chosenTemplate;
-  const incrementalSet = isDb ? false : !isApi || !!configured[entityType]?.incremental;
+  const incrementalSet = isDb ? changeTracked.has(entityType) : !isApi || !!configured[entityType]?.incremental;
   // Writing records needs an importer for that kind of record; a preview only needs the mapping.
   const importable = (connection.importable ?? []).includes(entityType);
   const writable = (connection.writable ?? connection.importable ?? []).includes(entityType);

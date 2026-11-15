@@ -86,6 +86,8 @@ export const RecordSourceDialog = ({ connection, schema, object, shape: given = 
           <>
             <ComboField label="Column that identifies each row" value={f.keyColumn} onChange={(v) => set({ keyColumn: v })} options={colOptions} required
               hint="The same row keeps the same value every time it is read, so importing again updates it instead of adding another. Rows with no value here are not read." />
+            <ComboField label="Column that shows when a row changed" value={f.changedColumn} onChange={(v) => set({ changedColumn: v ?? null })} options={colOptions} clearable
+              hint="Optional: a date-and-time (or a number) the database moves on whenever the row changes. With it, an incremental import reads only the rows changed since the last one." />
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium text-primary-text">Columns to read</span>
               <SlidingToggle ariaLabel="Columns to read" options={[{ value: "all", label: "All columns" }, { value: "chosen", label: "Choose" }]}

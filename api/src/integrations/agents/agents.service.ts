@@ -252,8 +252,8 @@ export class AgentsService {
   storeBatch(agent: AgentCaller, jobId: string, batch: AgentBatch) {
     return this.database.asApi(
       async (c) =>
-        (await c.query('select app.system_agent_store_batch($1::uuid, $2::uuid, $3::int, $4, $5, $6::jsonb) as r', [
-          agent.agentId, jobId, batch.seq, batch.checksum, batch.lastKey, JSON.stringify(batch.rows),
+        (await c.query('select app.system_agent_store_batch($1::uuid, $2::uuid, $3::int, $4, $5, $6::jsonb, $7) as r', [
+          agent.agentId, jobId, batch.seq, batch.checksum, batch.lastKey, JSON.stringify(batch.rows), batch.changedUpTo,
         ])).rows[0].r as { status: string; cancelled: boolean; stored: boolean; duplicate?: boolean; batches?: number; rows?: number },
       agent.correlationId,
       'agent',

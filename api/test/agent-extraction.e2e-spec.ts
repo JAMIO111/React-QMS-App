@@ -55,7 +55,7 @@ async function agentExtracts(rows = ROWS, size = 2) {
   return job;
 }
 
-const run = async (kind: 'preview' | 'full', extra: Record<string, unknown> = {}) =>
+const run = async (kind: 'preview' | 'full' | 'incremental', extra: Record<string, unknown> = {}) =>
   (await api().post(`${base}/connections/${connId}/runs`).set(await as(ids.ownerA)).send({ entityType: 'machine', kind, ...extra }).expect(201)).body;
 const carryOn = async (runId: string) => (await api().post(`${base}/runs/${runId}/continue`).set(await as(ids.ownerA)).send({}).expect(200)).body;
 
@@ -157,6 +157,56 @@ describe('reading a database through the agent into an import', () => {
     const detail = (await api().get(`${base}/runs/${r.id}`).set(await as(ids.ownerA)).expect(200)).body;
     expect(detail.status).toBe('failed');
     expect(detail.errorSummary ?? detail.errors?.[0]?.message).toMatch(/could not read the records: There is no table/);
+  });
+
+  it('reads only what changed once the source names its changed column (AG4)', async () => {
+    const changed = { ...SOURCE, columns: [...SOURCE.columns, 'changed'], changedColumn: 'changed' };
+    await api().put(`${base}/connections/${connId}/record-source`).set(await as(ids.ownerA)).send({ entityType: 'machine', source: changed }).expect(200);
+    // A full read sets the mark: the agent reports the highest changed value it read.
+    const full = await run('full', { templateId });
+    const job = await agents.take(agent);
+    expect(job.spec.request).toMatchObject({ changedColumn: 'changed' });
+    expect(job.spec.request.changedSince).toBeUndefined();
+    const rows = ROWS.map((r, i) => ({ ...r, changed: `2026-11-0${i + 1}T08:00:00Z` }));
+    await agents.batch(agent, job.id, { seq: 0, lastKey: '5', rows, changedUpTo: "2026-11-05T08:00:00Z" }).expect(200);
+    await agents.signed(agent, `/api/v1/integrations/agent/jobs/${job.id}/complete`, { result: { batches: 1, rows: 5, changedUpTo: '2026-11-05T08:00:00Z' } }).expect(200);
+    expect(await carryOn(full.id)).toMatchObject({ status: 'succeeded' });
+    const cursor = (await admin.query(`select cursor from public.integration_sync_cursors where connection_id = $1 and entity_type = 'machine'`, [connId])).rows[0].cursor;
+    expect(JSON.parse(cursor)).toEqual({ w: '2026-11-05T08:00:00Z' });
+    // An incremental read starts at it; one changed row comes back and is updated, the mark moves on.
+    const inc = await run('incremental', { templateId });
+    const job2 = await agents.take(agent);
+    expect(job2.spec.request.changedSince).toBe('2026-11-05T08:00:00Z');
+    await agents.batch(agent, job2.id, { seq: 0, lastKey: '2', rows: [{ ...rows[1], name: 'Machine 2 (rebuilt)', changed: '2026-11-09T08:00:00Z' }], changedUpTo: "2026-11-09T08:00:00Z" }).expect(200);
+    await agents.signed(agent, `/api/v1/integrations/agent/jobs/${job2.id}/complete`, { result: { batches: 1, rows: 1, changedUpTo: '2026-11-09T08:00:00Z' } }).expect(200);
+    expect(await carryOn(inc.id)).toMatchObject({ kind: 'incremental', status: 'succeeded', counts: { total: 1, updated: 1 } });
+    expect((await admin.query(`select name from public.machines where organisation_id = $1 and code = 'DB-M2'`, [ids.orgA])).rows[0].name).toBe('Machine 2 (rebuilt)');
+    const after = (await admin.query(`select cursor from public.integration_sync_cursors where connection_id = $1 and entity_type = 'machine'`, [connId])).rows[0].cursor;
+    expect(JSON.parse(after)).toEqual({ w: '2026-11-09T08:00:00Z' });
+  }, 90000);
+
+  it('lists a row that is no longer in the table after a full read (AG4)', async () => {
+    await api().put(`${base}/connections/${connId}/settings`).set(await as(ids.ownerA)).send({ entityType: 'machine', onMissing: 'list' }).expect(200);
+    const full = await run('full', { templateId });
+    const job = await agents.take(agent);
+    const rows = ROWS.filter((r) => r.id !== 4).map((r) => ({ ...r, changed: '2026-11-09T08:00:00Z' }));
+    await agents.batch(agent, job.id, { seq: 0, lastKey: '5', rows, changedUpTo: '2026-11-09T08:00:00Z' }).expect(200);
+    await agents.signed(agent, `/api/v1/integrations/agent/jobs/${job.id}/complete`, { result: { batches: 1, rows: rows.length, changedUpTo: '2026-11-09T08:00:00Z' } }).expect(200);
+    expect(await carryOn(full.id)).toMatchObject({ status: 'succeeded' });
+    const missing = (await api().get(`${base}/missing-records?connectionId=${connId}&entityType=machine`).set(await as(ids.ownerA)).expect(200)).body;
+    expect(missing.data).toEqual([expect.objectContaining({ externalId: '4', status: 'listed' })]);
+    await api().put(`${base}/connections/${connId}/settings`).set(await as(ids.ownerA)).send({ entityType: 'machine', onMissing: 'nothing' }).expect(200);
+  }, 60000);
+
+  it('runs every few minutes on a schedule, and health names the agent (AG4)', async () => {
+    const bad = await api().put(`${base}/connections/${connId}/settings`).set(await as(ids.ownerA)).send({ entityType: 'part', schedule: 'every_15m', templateId }).expect(409);
+    expect(bad.body.error.message).toMatch(/template is for another kind|table these records are read from/);
+    const saved = (await api().put(`${base}/connections/${connId}/settings`).set(await as(ids.ownerA)).send({ entityType: 'machine', schedule: 'every_15m', templateId }).expect(200)).body;
+    expect(saved.schedule).toBe('every_15m');
+    const health = (await api().get(`${base}/health`).set(await as(ids.ownerA)).expect(200)).body;
+    const row = health.data.find((r: { connectionId: string; entityType: string }) => r.connectionId === connId && r.entityType === 'machine');
+    expect(row).toMatchObject({ schedule: 'every_15m', agent: { name: 'Newcastle', online: true } });
+    await api().put(`${base}/connections/${connId}/settings`).set(await as(ids.ownerA)).send({ entityType: 'machine', schedule: 'manual' }).expect(200);
   });
 
   it('batches are never readable by people, and another organisation sees nothing', async () => {

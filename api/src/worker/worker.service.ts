@@ -58,6 +58,18 @@ export class WorkerService {
   ) {}
 
   /** Small clean-ups: blocked access attempts older than 90 days (docs/security-plan.md S8) and connector agents' request nonces older than ten minutes. */
+  /**
+   * Database connections (AG4): jobs for an agent that stopped answering fail (and their imports with them), then imports scheduled every 5 / 15 /
+   * 60 minutes are asked for (daily ones stay with the daily cron).
+   */
+  private agentImports(correlationId: string) {
+    return this.database.asApi(async (c) => {
+      const stalled = Number((await c.query('select app.system_fail_stalled_agent_jobs() as n')).rows[0].n);
+      const asked = (await c.query('select app.system_schedule_integration_runs(current_date, false) as r')).rows[0].r as Array<{ runId: string | null; skipped: string | null }>;
+      return { stalledJobsFailed: stalled, runsAsked: asked.filter((a) => a.runId).length, skipped: asked.filter((a) => a.skipped).length };
+    }, correlationId, 'worker');
+  }
+
   private housekeeping(correlationId: string) {
     return this.database.asApi(
       async (c) => ({
@@ -108,6 +120,7 @@ export class WorkerService {
     await step('workflows', () => this.workflows.consume(correlationId, Math.min(stopAt - 12_000, Date.now() + 10_000)), 3_000);
     await step('jobs', () => this.runJobs(correlationId, stopAt - 8_000), 3_000);
     await step('email', () => this.email.drain({ budgetMs: Math.min(15_000, left() - 2_000), correlationId }), 3_000);
+    await step('agent-imports', () => this.agentImports(correlationId), 2_000);
     await step('imports', () => this.cron.integrationRuns(10, correlationId, Math.min(25_000, left() - 2_000)), 4_000);
     await step('housekeeping', () => this.housekeeping(correlationId), 1_000);
 

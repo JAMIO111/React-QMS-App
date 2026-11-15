@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ENTITY_TYPES } from './core/entity-importer';
+import { SCHEDULES } from './integration-files.schemas';
 
 const Iso = z.string();
 const Person = z.object({ id: z.string().uuid(), name: z.string() }).nullable();
@@ -11,11 +12,13 @@ export const HealthRow = z.object({
   connectionStatus: z.string(),
   providerKind: z.string(),
   entityType: z.string(),
-  schedule: z.enum(['manual', 'daily']),
+  schedule: z.enum(SCHEDULES),
   onMissing: z.enum(['nothing', 'list', 'deactivate']),
   template: z.object({ id: z.string().uuid(), name: z.string(), version: z.number().int(), archived: z.boolean() }).nullable(),
   lastScheduledAt: Iso.nullable(),
   scheduleProblem: z.string().nullable(),
+  /** A database connection's connector agent (AG4): whether it is online. Null for other connections. */
+  agent: z.object({ id: z.string().uuid(), name: z.string(), online: z.boolean(), lastHeartbeatAt: Iso.nullable() }).nullable().optional(),
   lastRun: z
     .object({ id: z.string().uuid(), kind: z.string(), trigger: z.string(), status: z.string(), requestedAt: Iso, finishedAt: Iso.nullable(), errorSummary: z.string().nullable(), nextAttemptAt: Iso.nullable() })
     .nullable(),

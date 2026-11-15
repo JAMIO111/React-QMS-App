@@ -165,6 +165,27 @@ maybe('the real connector agent', () => {
     expect((await admin.query(`select count(*)::int as n from public.machines where organisation_id = $1 and code like 'BIN-M%'`, [ids.orgA])).rows[0].n).toBe(1100);
     const again = await importOnce();
     expect(again).toMatchObject({ status: 'succeeded', counts: { total: 1100, created: 0, updated: 0, unchanged: 1100 } });
+
+    // AG4: with a column that shows when a row changed, a full read sets the mark and an incremental read brings only the rows changed since.
+    await admin.query(`
+      alter table bin_erp.machines add column changed timestamptz not null default timestamptz '2026-11-01 08:00+00';
+      update bin_erp.machines set changed = timestamptz '2026-11-01 08:00+00' + make_interval(secs => id);`);
+    await api().put(`${conn}/record-source`).set(await as()).send({ entityType: 'machine', source: { ...source, columns: [...source.columns, 'changed'], changedColumn: 'changed' } }).expect(200);
+    const marked = await importOnce();
+    expect(marked).toMatchObject({ status: 'succeeded', counts: { total: 1100, created: 0 } });
+    const cursorOf = async () => JSON.parse((await admin.query(`select cursor from public.integration_sync_cursors where connection_id = $1 and entity_type = 'machine'`, [connectionId])).rows[0].cursor);
+    expect(new Date((await cursorOf()).w).toISOString()).toBe('2026-11-01T08:19:59.000Z'); // row 1199, the highest active row (1200 is inactive)
+    await admin.query(`update bin_erp.machines set name = name || ' (rebuilt)', changed = timestamptz '2026-11-10 09:00+00' where id in (5, 6, 7)`);
+    const started = (await api().post(`${conn}/runs`).set(await as()).send({ entityType: 'machine', kind: 'incremental', templateId }).expect(201)).body;
+    const inc = await until('the incremental import to finish', async () => {
+      const r = (await api().post(`/api/v1/integrations/runs/${started.id}/continue`).set(await as()).send({})).body;
+      return ['succeeded', 'partial', 'failed'].includes(r.status) && r;
+    }, 120_000);
+    // The row at the old mark is read again (changed >= mark), and is unchanged; the three rebuilt ones are updated.
+    expect(inc).toMatchObject({ kind: 'incremental', status: 'succeeded', counts: { updated: 3 } });
+    expect(inc.counts.total).toBeLessThanOrEqual(4);
+    expect((await admin.query(`select name from public.machines where organisation_id = $1 and code = 'BIN-M0006'`, [ids.orgA])).rows[0].name).toBe('Machine 6 (rebuilt)');
+    expect(new Date((await cursorOf()).w).toISOString()).toBe('2026-11-10T09:00:00.000Z');
   }
 
   it('registers, comes online, answers a ping and stops when revoked', async () => {

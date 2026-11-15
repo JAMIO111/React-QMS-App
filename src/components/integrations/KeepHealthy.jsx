@@ -13,7 +13,7 @@ import {
 } from "../../hooks/useIntegrations";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
-import { ENTITY_LABELS, HEALTH_STATES, MISSING_OPTIONS, recordPath } from "../../lib/integrations";
+import { ENTITY_LABELS, HEALTH_STATES, MISSING_OPTIONS, recordPath, scheduleLabel, scheduleOptions } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
@@ -25,8 +25,8 @@ import CTAButton from "@/components/CTAButton";
 
 const label = (t) => ENTITY_LABELS[t] ?? t;
 
-/** One kind of record's schedule: manual or daily with a template, and what happens to records that disappear. Saved as chosen. */
-const ScheduleRow = ({ connection, setting, canManage }) => {
+/** One kind of record's schedule: by hand, or on a schedule with a template, and what happens to records that disappear. Saved as chosen. */
+const ScheduleRow = ({ connection, setting, canManage, isDatabase, changeTracked }) => {
   const save = useSaveImportSettings(connection.id);
   const templates = useImportTemplates(setting.entityType);
   const { showToast } = useToast();
@@ -37,17 +37,30 @@ const ScheduleRow = ({ connection, setting, canManage }) => {
     <li aria-label={`${label(setting.entityType)} schedule`} className="flex flex-col gap-2 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-medium text-primary-text">{label(setting.entityType)}</span>
-        <SlidingToggle
-          ariaLabel={`When ${label(setting.entityType).toLowerCase()} are imported`}
-          value={setting.schedule}
-          onChange={(v) => send(v === "daily" ? { schedule: "daily", templateId } : { schedule: "manual" })}
-          options={[
-            { value: "manual", label: "By hand", disabled: !canManage },
-            { value: "daily", label: "Daily", disabled: !canManage || !templateId },
-          ]}
-        />
+        {!isDatabase && (
+          <SlidingToggle
+            ariaLabel={`When ${label(setting.entityType).toLowerCase()} are imported`}
+            value={setting.schedule}
+            onChange={(v) => send(v === "daily" ? { schedule: "daily", templateId } : { schedule: "manual" })}
+            options={[
+              { value: "manual", label: "By hand", disabled: !canManage },
+              { value: "daily", label: "Daily", disabled: !canManage || !templateId },
+            ]}
+          />
+        )}
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {isDatabase && (
+          <ComboField
+            label={`How often ${label(setting.entityType).toLowerCase()} are imported`}
+            value={setting.schedule}
+            onChange={(v) => send(v && v !== "manual" ? { schedule: v, templateId } : { schedule: "manual" })}
+            options={scheduleOptions(true).map((o) => ({ value: o.value, label: o.label, disabled: o.value !== "manual" && !templateId }))}
+            disabled={!canManage}
+            required
+            hint={templateId ? undefined : "Choose an import template first"}
+          />
+        )}
         <ComboField
           label="Import template"
           value={templateId}
@@ -67,28 +80,47 @@ const ScheduleRow = ({ connection, setting, canManage }) => {
           />
         )}
       </div>
-      {setting.schedule === "daily" && (
+      {setting.schedule !== "manual" && (
         <p className="text-xs text-secondary-text">
-          Runs every night (about 04:00) as {setting.scheduledBy?.name ?? "the person who switched it on"}
-          {setting.lastScheduledAt ? ` · last asked for ${formatDateTime(setting.lastScheduledAt)}` : ""}. Incremental when the connection says how, otherwise in full.
+          {setting.schedule === "daily" ? "Runs every night (about 04:00)" : `Runs ${scheduleLabel(setting.schedule).toLowerCase()} while the connector agent is online`} as{" "}
+          {setting.scheduledBy?.name ?? "the person who switched it on"}
+          {setting.lastScheduledAt ? ` · last asked for ${formatDateTime(setting.lastScheduledAt)}` : ""}.{" "}
+          {isDatabase
+            ? changeTracked
+              ? "Reads only the rows changed since the last import (in full the first time)."
+              : "Reads the whole table each time: say which column shows when a row changed to read only the changes."
+            : "Incremental when the connection says how, otherwise in full."}
         </p>
       )}
-      {setting.schedule === "daily" && setting.scheduleProblem && <Callout tone="warning" title="The last daily import did not start">{setting.scheduleProblem}</Callout>}
+      {setting.schedule !== "manual" && setting.scheduleProblem && <Callout tone="warning" title={`The last ${setting.schedule === "daily" ? "daily" : "scheduled"} import did not start`}>{setting.scheduleProblem}</Callout>}
     </li>
   );
 };
 
-/** Schedules for an API connection's kinds of record (IN8). */
+/** Schedules for an API connection's kinds of record (IN8), or a database connection's tables (AG4: every few minutes too). */
 export const ScheduleCard = ({ connection }) => {
   const { can } = usePermissions();
   const settings = useIntegrationSettings(connection.id);
-  const kinds = Object.keys(connection.config?.entities ?? {});
+  const isDatabase = connection.provider?.key === "sql_agent";
+  const sources = connection.recordSources ?? [];
+  const kinds = isDatabase ? sources.map((s) => s.entityType) : Object.keys(connection.config?.entities ?? {});
+  const tracked = new Set(sources.filter((s) => s.source?.changedColumn).map((s) => s.entityType));
   const rows = (settings.data ?? []).filter((s) => kinds.includes(s.entityType));
   if (kinds.length === 0) return null;
   return (
-    <MenuCard title="Schedule" subtitle="Import by hand, or every night with an import template. A daily import writes as whoever switched it on.">
+    <MenuCard
+      title="Schedule"
+      subtitle={
+        isDatabase
+          ? "Import by hand, or every few minutes, hourly or nightly with an import template, while the connector agent is online. A scheduled import writes as whoever switched it on."
+          : "Import by hand, or every night with an import template. A daily import writes as whoever switched it on."
+      }
+    >
       <ul aria-label="Schedules" className="flex flex-col divide-y divide-border-color">
-        {rows.map((s) => <ScheduleRow key={s.entityType} connection={connection} setting={s} canManage={can("integrations.manage") && connection.status !== "retired"} />)}
+        {rows.map((s) => (
+          <ScheduleRow key={s.entityType} connection={connection} setting={s} isDatabase={isDatabase} changeTracked={tracked.has(s.entityType)}
+            canManage={can("integrations.manage") && connection.status !== "retired"} />
+        ))}
       </ul>
     </MenuCard>
   );
@@ -238,13 +270,14 @@ export const HealthCard = () => {
             r.conflictsOpen ? `${r.conflictsOpen} value${r.conflictsOpen === 1 ? "" : "s"} to review` : null,
             r.failedInARow > 1 ? `failed ${r.failedInARow} times in a row` : null,
             r.scheduleProblem,
+            r.agent && !r.agent.online ? `connector agent ${r.agent.name} offline${r.agent.lastHeartbeatAt ? ` since ${formatDateTime(r.agent.lastHeartbeatAt)}` : ""}` : null,
           ].filter(Boolean);
           return (
             <li key={`${r.connectionId}-${r.entityType}`} aria-label={`${r.connectionName}: ${label(r.entityType)}`} className="flex flex-wrap items-center gap-3 py-2">
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <Link to={`/Settings/Integrations/${r.connectionId}`} className="text-sm font-medium text-link-color hover:underline">{r.connectionName} · {label(r.entityType)}</Link>
                 <span className="text-xs text-secondary-text">
-                  {r.schedule === "daily" ? "Daily" : "By hand"}
+                  {scheduleLabel(r.schedule)}
                   {r.lastRun ? ` · last import ${r.lastRun.status} ${formatDateTime(r.lastRun.finishedAt ?? r.lastRun.requestedAt)}` : " · not imported yet"}
                   {waits.length > 0 ? ` · ${waits.join(" · ")}` : ""}
                 </span>

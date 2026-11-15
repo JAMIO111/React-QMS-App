@@ -385,8 +385,14 @@ export const ON_MISSING = [
 ];
 export const SCHEDULES = [
   { value: "manual", label: "By hand" },
+  { value: "every_5m", label: "Every 5 minutes", database: true },
+  { value: "every_15m", label: "Every 15 minutes", database: true },
+  { value: "hourly", label: "Hourly", database: true },
   { value: "daily", label: "Daily" },
 ];
+/** The schedules a connection can use: the minute ones only for a database read through an agent (AG4). */
+export const scheduleOptions = (isDatabase) => SCHEDULES.filter((s) => isDatabase || !s.database);
+export const scheduleLabel = (value) => SCHEDULES.find((s) => s.value === value)?.label ?? "By hand";
 /** Where a record an import wrote is shown (a page of its own where there is one, else its register). */
 export const recordPath = (entityType, id) =>
   ({
@@ -627,6 +633,7 @@ export const recordSourceForm = (source, shape) => ({
   allColumns: !source?.columns,
   columns: source?.columns ?? (shape?.columns ?? []).map((c) => c.name),
   filters: (source?.filters ?? []).map((f) => ({ column: f.column, op: f.op, value: f.value === undefined ? "" : String(f.value) })),
+  changedColumn: source?.changedColumn ?? null,
 });
 
 /** What still stops the source being saved, in words; null when it can be. */
@@ -635,6 +642,7 @@ export const recordSourceProblem = (f) => {
   if (!f.allColumns) {
     if (f.columns.length === 0) return "Choose the columns to read, or read them all";
     if (!f.columns.includes(f.keyColumn)) return "Read the column that identifies each row too";
+    if (f.changedColumn && !f.columns.includes(f.changedColumn)) return "Read the column that shows when a row changed too";
   }
   if (f.filters.length > 10) return "Up to 10 filters";
   for (const x of f.filters) {
@@ -649,6 +657,7 @@ export const recordSourceProblem = (f) => {
 export const recordSourceBody = (schema, object, f) => {
   const source = { schema, object, keyColumn: f.keyColumn };
   if (!f.allColumns) source.columns = f.columns;
+  if (f.changedColumn) source.changedColumn = f.changedColumn;
   if (f.filters.length) source.filters = f.filters.map((x) => (NO_VALUE.has(x.op) ? { column: x.column, op: x.op } : { column: x.column, op: x.op, value: String(x.value).trim() }));
   return source;
 };
@@ -660,4 +669,5 @@ export const describeRecordSource = (s) =>
     `key ${s.keyColumn}`,
     s.columns ? `${s.columns.length} column${s.columns.length === 1 ? "" : "s"}` : "all columns",
     ...(s.filters ?? []).map((x) => `${x.column} ${OP_WORDS[x.op] ?? x.op}${NO_VALUE.has(x.op) ? "" : ` ${x.value}`}`),
+    ...(s.changedColumn ? [`changes shown by ${s.changedColumn}`] : []),
   ].join(" · ");

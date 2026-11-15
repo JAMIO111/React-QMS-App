@@ -197,7 +197,7 @@ const ConnectionPage = () => {
       )}
       {c.provider.key === "csv" && <FilesCard connection={c} canUpload={can("integrations.run")} canMap={manage} />}
       {c.provider.kind === "api" && !retired && can("integrations.run") && <ApiSampleCard connection={c} />}
-      {c.provider.kind === "api" && <ScheduleCard connection={c} />}
+      {(c.provider.kind === "api" || c.provider.key === "sql_agent") && <ScheduleCard connection={c} />}
       <MissingCard connectionId={c.id} />
       <AttentionCard connection={c} kinds={c.provider.kind === "api" ? Object.keys(c.config?.entities ?? {}) : (c.importable ?? [])} />
 

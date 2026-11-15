@@ -51,6 +51,8 @@ export const RecordSource = z
     schema: DbName,
     object: DbName,
     keyColumn: DbName,
+    /** The column that shows when a row changed (a modified date or an increasing number): incremental reads take rows at or after the last mark (AG4). */
+    changedColumn: DbName.optional(),
     columns: z.array(DbName).min(1).max(300).optional(),
     filters: z
       .array(

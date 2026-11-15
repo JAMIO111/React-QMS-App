@@ -25,7 +25,7 @@ export function agentClient(app: () => INestApplication) {
     return api().post(path).set({ 'Content-Type': 'application/json', 'X-Agent-Id': agent.id, ...headers(agent.id, agent.signing.privateKey, path, raw) }).send(raw.toString('utf8'));
   };
   /** One batch as the agent sends it: gzip of {"seq","lastKey","rows"}, the checksum of the JSON inside in a header, the gzip bytes signed. */
-  const batch = (agent: TestAgent, jobId: string, body: { seq: number; lastKey: string | null; rows: unknown[] }, opts: { checksum?: string; gzip?: Buffer } = {}) => {
+  const batch = (agent: TestAgent, jobId: string, body: { seq: number; lastKey: string | null; rows: unknown[]; changedUpTo?: string }, opts: { checksum?: string; gzip?: Buffer } = {}) => {
     const json = Buffer.from(JSON.stringify(body));
     const gz = opts.gzip ?? gzipSync(json);
     const path = `/api/v1/integrations/agent/jobs/${jobId}/batches`;

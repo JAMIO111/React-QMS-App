@@ -42,7 +42,7 @@ interface Lease {
   fetchDone: boolean;
   requestedBy: string | null;
   file: { id: string; status: string; chunkCount: number; headers: string[] } | null;
-  agent: { jobId: string; batchCount: number } | null;
+  agent: { jobId: string; batchCount: number; changedColumn?: string; changedSince?: string; changedUpTo?: string } | null;
   mapping: (MappingSpec & { id: string; version: number }) | null;
 }
 
@@ -119,6 +119,9 @@ export class SyncEngine {
       const agentBatches = lease.agent
         ? {
             count: lease.agent.batchCount,
+            changedColumn: lease.agent.changedColumn,
+            changedSince: lease.agent.changedSince,
+            changedUpTo: lease.agent.changedUpTo,
             read: async (seq: number) =>
               (await call((c) => c.query('select app.system_integration_agent_batch($1::uuid, $2::uuid, $3::uuid, $4::int) as r', [organisationId, runId, owner, seq]))).rows[0].r as Array<Record<string, unknown>> | null,
           }

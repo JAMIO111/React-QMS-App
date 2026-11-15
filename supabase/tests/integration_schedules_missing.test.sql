@@ -72,7 +72,7 @@ BEGIN
   PERFORM pg_temp.logout();
 
   -- ---- the daily scheduler ----
-  PERFORM pg_temp.assert_eq(has_function_privilege('authenticated', 'app.system_schedule_integration_runs(date)', 'EXECUTE'), false, 'people cannot call the scheduler');
+  PERFORM pg_temp.assert_eq(has_function_privilege('authenticated', 'app.system_schedule_integration_runs(date, boolean)', 'EXECUTE'), false, 'people cannot call the scheduler');
   res := app.system_schedule_integration_runs(current_date);
   PERFORM pg_temp.assert_eq(jsonb_array_length(res), 2, 'both scheduled imports are asked for');
   SELECT id INTO run FROM public.integration_sync_runs WHERE connection_id = rest AND entity_type = 'supplier' AND trigger = 'schedule';

@@ -452,6 +452,20 @@ BEGIN
   -- SE5: a change of the policy is written down by the trigger (monitor and back, so nobody is blocked in the sweep).
   UPDATE public.organisation_settings SET network_policy = 'monitor' WHERE organisation_id = a;
   UPDATE public.organisation_settings SET network_policy = 'off' WHERE organisation_id = a;
+  -- Connector agents (AG1): a registration, an agent with a key, a nonce, an event and a job (seeded directly; people write through functions,
+  -- the agent through the API login).
+  INSERT INTO public.integration_agent_registrations (organisation_id, token_hash, name, expires_at)
+    VALUES (a, encode(sha256(convert_to('sweep-token', 'UTF8')), 'hex'), 'Sweep agent', now() + interval '1 day');
+  INSERT INTO public.integration_agents (organisation_id, name) VALUES (a, 'Sweep agent');
+  INSERT INTO public.integration_agent_keys (organisation_id, agent_id, signing_key, sealing_key)
+    SELECT a, id, repeat('A', 88), repeat('B', 88) FROM public.integration_agents WHERE organisation_id = a;
+  INSERT INTO public.integration_agent_nonces (organisation_id, agent_id, nonce)
+    SELECT a, id, repeat('e', 32) FROM public.integration_agents WHERE organisation_id = a;
+  INSERT INTO public.integration_agent_events (organisation_id, agent_id, kind)
+    SELECT a, id, 'registered' FROM public.integration_agents WHERE organisation_id = a;
+  INSERT INTO public.integration_agent_jobs (organisation_id, agent_id, kind)
+    SELECT a, id, 'ping' FROM public.integration_agents WHERE organisation_id = a;
+  INSERT INTO sweep VALUES ('agent', (SELECT id FROM public.integration_agents WHERE organisation_id = a));
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));
 END $$;

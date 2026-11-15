@@ -11,6 +11,8 @@ import {
 } from "../../hooks/useIntegrations";
 import ConnectionForm from "../integrations/ConnectionForm";
 import { HealthCard } from "../integrations/KeepHealthy";
+import { useAgents } from "../../hooks/useAgents";
+import { agentsPath } from "../../lib/agents";
 import Field from "../ui/Field";
 import {
   useOrganisationDetails,
@@ -319,6 +321,8 @@ const IntegrationsHome = () => {
         </MenuCard>
       )}
 
+      <ConnectorAgentsCard />
+
       <HealthCard />
 
       <AdvancedImports />
@@ -366,6 +370,27 @@ const IntegrationsHome = () => {
         />
       )}
     </div>
+  );
+};
+
+/** The organisation's connector agents at a glance, with the way to manage them (docs/connector-agent-plan.md AG1). */
+const ConnectorAgentsCard = () => {
+  const agents = useAgents();
+  const active = agents.data?.activeCount ?? 0;
+  const online = agents.data?.onlineCount ?? 0;
+  return (
+    <MenuCard
+      title="Connector agents"
+      subtitle="Reach databases inside your network through a small service you install there. It connects out to Fortress; nothing connects in."
+      action={
+        <CTAButton to={agentsPath()} type="secondary" size="default">
+          Manage agents
+        </CTAButton>
+      }>
+      <p className="text-sm text-primary-text" role="status">
+        {active === 0 ? "No agents yet." : `${active === 1 ? "1 agent" : `${active} agents`}, ${online} online.`}
+      </p>
+    </MenuCard>
   );
 };
 

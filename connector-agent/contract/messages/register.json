@@ -1,0 +1,9 @@
+{
+  "token": "FAGT-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
+  "signingKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEgyJD774Fdrk933xEZYKxk2mCWzrQhxWDWS3t0XwZY887DZQ/3164daE07gONlHdVoIFKNgl39qPOSmXs1SY8Vg==",
+  "sealingKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEhh+ZCYeagUzAqIhYZb8pMf9ISCDTIMjb6N7iMH+RRj04Jw7PA7gmARAjF7jHulMmyjtJCRM6RV0SVElzd1SGgA==",
+  "version": "0.1.0",
+  "os": "Microsoft Windows 10.0.20348",
+  "machine": "ERP01",
+  "capabilities": { "jobs": ["ping"], "adapters": [], "maxBatchRows": 1000 }
+}

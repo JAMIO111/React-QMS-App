@@ -116,6 +116,9 @@ import { MaterialCertificatesController } from './receiving/material-certificate
 import { MaterialCertificatesService } from './receiving/material-certificates.service';
 import { RequirementsController } from './receiving/requirements.controller';
 import { IntegrationsController } from './integrations/integrations.controller';
+import { AgentApiController, AgentsController } from './integrations/agents/agents.controller';
+import { AgentGuard } from './integrations/agents/agent.guard';
+import { AgentsService } from './integrations/agents/agents.service';
 import { IntegrationsService } from './integrations/integrations.service';
 import { IntegrationRunsController } from './integrations/integration-runs.controller';
 import { IntegrationFilesController } from './integrations/integration-files.controller';
@@ -286,6 +289,8 @@ export class AppModule implements NestModule {
         ReceivingController,
         RequirementsController,
         IntegrationsController,
+        AgentsController,
+        AgentApiController,
         IntegrationRunsController,
         IntegrationFilesController,
         IntegrationTemplatesController,
@@ -384,6 +389,8 @@ export class AppModule implements NestModule {
         ReceivingService,
         RequirementsService,
         IntegrationsService,
+        AgentsService,
+        AgentGuard,
         IntegrationRunsService,
         IntegrationFilesService,
         IntegrationTemplatesService,

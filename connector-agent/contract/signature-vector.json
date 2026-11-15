@@ -1,0 +1,14 @@
+{
+  "_comment": "Shared by api/src/integrations/agents/agent-signature.spec.ts and the agent tests (connector-agent/tests). A request signed per docs/connector-agent-plan.md AG-D2: both sides must build exactly this canonical string and accept this signature with this public key. Test data only: the key was made for this file.",
+  "method": "POST",
+  "path": "/api/v1/integrations/agent/heartbeat",
+  "body": "{\"version\":\"0.1.0\",\"os\":\"Microsoft Windows 10.0.20348\",\"machine\":\"ERP01\",\"capabilities\":{\"jobs\":[\"ping\"],\"adapters\":[],\"maxBatchRows\":1000},\"uptimeSeconds\":42}",
+  "timestamp": "1794787200",
+  "nonce": "9F86D081884C7D659A2FEAA0C55AD015",
+  "agentId": "7b0c5a3e-9d4f-4f1e-9a63-2a5e5a1d1c01",
+  "bodySha256": "39984b6119152c134190732c6b85adb2357ea7f8b959db6baa54d4f4f95968cd",
+  "canonical": "FORTRESS-AGENT-V1\nPOST\n/api/v1/integrations/agent/heartbeat\n39984b6119152c134190732c6b85adb2357ea7f8b959db6baa54d4f4f95968cd\n1794787200\n9f86d081884c7d659a2feaa0c55ad015\n7b0c5a3e-9d4f-4f1e-9a63-2a5e5a1d1c01",
+  "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEgyJD774Fdrk933xEZYKxk2mCWzrQhxWDWS3t0XwZY887DZQ/3164daE07gONlHdVoIFKNgl39qPOSmXs1SY8Vg==",
+  "fingerprint": "5495 882e cac0 dafc",
+  "signature": "NxfGSqzrFvBF5olUXS0GIcFemNPg04xehRCO3IguD7cvZ+xkXQk0cJ3NplOmJbKnw/2rkmUiesrQqThpe6f4vw=="
+}

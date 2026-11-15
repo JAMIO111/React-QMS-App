@@ -57,10 +57,13 @@ export class WorkerService {
     private readonly scorecards: SupplierPerformanceService,
   ) {}
 
-  /** Small clean-ups: blocked access attempts older than 90 days (docs/security-plan.md S8). */
+  /** Small clean-ups: blocked access attempts older than 90 days (docs/security-plan.md S8) and connector agents' request nonces older than ten minutes. */
   private housekeeping(correlationId: string) {
     return this.database.asApi(
-      async (c) => ({ accessDenialsCleared: Number((await c.query('select app.system_purge_access_denials() as n')).rows[0].n) }),
+      async (c) => ({
+        accessDenialsCleared: Number((await c.query('select app.system_purge_access_denials() as n')).rows[0].n),
+        agentNoncesCleared: Number((await c.query('select app.system_purge_agent_nonces() as n')).rows[0].n),
+      }),
       correlationId,
       'worker',
     );

@@ -38,6 +38,18 @@ const UNSCOPED = new Set([
   'POST /api/v1/platform/organisations/{id}/recover-network-policy', // operator recovery (security plan SE5): admin-only in the database (allow-list + MFA); spans organisations by design
   // /internal/cron/* (scheduled jobs: CRON_SECRET, only database functions made for them) is left out of the OpenAPI document, so it is not seen here; platform-monitor.e2e-spec covers it.
   'POST /api/v1/stripe/webhook', // authenticated by Stripe's signature over the raw body; applies state only through app.stripe_* functions
+  // The connector agent's own API (docs/connector-agent-plan.md AG1): no person's token; every request is signed with the agent's key (AgentGuard), which
+  // ties it to one agent and so to one organisation, and reaches the database only through app.system_agent_* functions that check the agent again.
+  // Registration is signed with the key it registers and carries a single-use token. connector-agents.e2e-spec covers isolation between agents.
+  'POST /api/v1/integrations/agent/register',
+  'POST /api/v1/integrations/agent/heartbeat',
+  'POST /api/v1/integrations/agent/jobs/next',
+  'POST /api/v1/integrations/agent/jobs/{id}/ack',
+  'POST /api/v1/integrations/agent/jobs/{id}/progress',
+  'POST /api/v1/integrations/agent/jobs/{id}/complete',
+  'POST /api/v1/integrations/agent/jobs/{id}/fail',
+  'POST /api/v1/integrations/agent/keys/rotate',
+  'POST /api/v1/integrations/agent/deregister',
 ]);
 
 interface Op {
@@ -487,6 +499,13 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/security/networks/{id}': { name: 'Hijacked' },
     'POST /api/v1/security/networks/{id}/remove': { reason: 'Hijacked' },
     'POST /api/v1/security/networks/{id}/restore': undefined,
+    'GET /api/v1/integrations/agents/{id}': undefined,
+    'PATCH /api/v1/integrations/agents/{id}': { name: 'Hijacked' },
+    'POST /api/v1/integrations/agents/{id}/revoke': { reason: 'Hijacked' },
+    'POST /api/v1/integrations/agents/{id}/wake': undefined,
+    'POST /api/v1/integrations/agents/{id}/ping': {},
+    'GET /api/v1/integrations/agent-jobs/{id}': undefined,
+    'POST /api/v1/integrations/agent-registrations/{id}/cancel': undefined,
     'POST /api/v1/inspections/{id}/samples': { readings: [{ requirementId: a.requirement, valueNumeric: '1' }] },
     'POST /api/v1/inspections/{id}/complete': undefined,
     'POST /api/v1/inspections/{id}/abandon': { reason: 'Hijacked' },
@@ -951,6 +970,13 @@ const hasSample = (op: Op) =>
     'PATCH /api/v1/security/networks/{id}',
     'POST /api/v1/security/networks/{id}/remove',
     'POST /api/v1/security/networks/{id}/restore',
+    'GET /api/v1/integrations/agents/{id}',
+    'PATCH /api/v1/integrations/agents/{id}',
+    'POST /api/v1/integrations/agents/{id}/revoke',
+    'POST /api/v1/integrations/agents/{id}/wake',
+    'POST /api/v1/integrations/agents/{id}/ping',
+    'GET /api/v1/integrations/agent-jobs/{id}',
+    'POST /api/v1/integrations/agent-registrations/{id}/cancel',
     'POST /api/v1/inspections/{id}/samples',
     'POST /api/v1/inspections/{id}/complete',
     'POST /api/v1/inspections/{id}/abandon',
@@ -984,6 +1010,9 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/inspection-imports/')) return a.inspectionImport;
   if (path.startsWith('/api/v1/inspection-import-rows/')) return a.importRow;
   if (path.startsWith('/api/v1/security/networks/')) return a.network;
+  if (path.startsWith('/api/v1/integrations/agents/')) return a.agent;
+  if (path.startsWith('/api/v1/integrations/agent-jobs/')) return a.agentJob;
+  if (path.startsWith('/api/v1/integrations/agent-registrations/')) return a.agentRegistration;
   if (path.startsWith('/api/v1/sites/')) return a.site;
   if (path.startsWith('/api/v1/departments/')) return a.department;
   if (path.startsWith('/api/v1/members/')) return a.ownerMembership;
@@ -1203,6 +1232,11 @@ beforeAll(async () => {
     a.importRow = (await q1(`select id from public.inspection_import_rows where import_id = $1`, [a.inspectionImport])).id;
     // Security (SE1/SE2): an approved network of A's.
     a.network = (await q1(`select app.save_organisation_network($1, '{"name":"Sweep HQ","network":"203.0.113.0/28"}'::jsonb, null) as id`, [ids.orgA])).id;
+    // Connector agents (AG1): an agent of A's with a job, and an unused registration (seeded directly: agents register through the API login).
+    a.agent = (await admin.query(`insert into public.integration_agents (organisation_id, name) values ($1, 'Sweep agent') returning id`, [ids.orgA])).rows[0].id;
+    a.agentJob = (await admin.query(`insert into public.integration_agent_jobs (organisation_id, agent_id, kind) values ($1, $2, 'ping') returning id`, [ids.orgA, a.agent])).rows[0].id;
+    a.agentRegistration = (await admin.query(`insert into public.integration_agent_registrations (organisation_id, token_hash, name, expires_at)
+      values ($1, encode(sha256(convert_to('sweep-token', 'UTF8')), 'hex'), 'Sweep registration', now() + interval '1 day') returning id`, [ids.orgA])).rows[0].id;
     await client.query(`select app.raise_spc_alerts($1, $2, '[{"characteristicKey":"OD","characteristicName":"OD","operationCode":"OP-1","variant":"imr","rule":"we1","side":"above","pointAt":"2026-11-05T08:00:00Z","summary":"Rule 1","inspectionId":null,"inspectionReference":null}]'::jsonb)`, [ids.orgA, ipart]);
     a.alert = (await q1(`select id from public.spc_alerts where organisation_id = $1`, [ids.orgA])).id;
     a.qualityAlert = (await q1(`insert into public.quality_alerts (organisation_id, title, category, severity) values ($1, 'Alpha alert', 'product', 'low') returning id`, [ids.orgA])).id;

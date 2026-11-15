@@ -22,6 +22,10 @@ const EnvSchema = z
     STRIPE_WEBHOOK_SECRET: z.string().regex(/^whsec_[A-Za-z0-9]{10,}$/, 'must be a Stripe webhook signing secret').optional(),
     /** The web app's address, for Stripe's return links (Checkout success/cancel, Customer Portal). */
     APP_BASE_URL: z.string().url().optional(),
+    /** The API address connector agents are told to call (docs/connector-agent-plan.md AG1), e.g. https://api.example.com/api/v1. Unset: the address the person's request came in on. */
+    AGENT_API_URL: z.string().url().optional(),
+    /** Where the connector agent installer can be downloaded (shown with a new registration token). Unset: no download link is shown. */
+    AGENT_DOWNLOAD_URL: z.string().url().optional(),
     /** Protects the scheduled jobs (/internal/cron/*): sent by Vercel Cron as `Authorization: Bearer <CRON_SECRET>`. Unset: the jobs answer 503. Server-side only. */
     CRON_SECRET: z.string().min(20, 'must be at least 20 characters').optional(),
     /** Email notifications (docs/email-oauth-plan.md, E1): unset / none = outbox only (built and queued, marked not sent); resend = Resend's HTTPS API. */

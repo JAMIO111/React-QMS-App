@@ -104,6 +104,8 @@ import {
   Factory as LucideFactory,
   Globe as LucideGlobe,
   KeyRound as LucideKeyRound,
+  Copy as LucideCopy,
+  Server as LucideServer,
   Power as LucidePower,
   FileText as LucideFileText,
   Hash as LucideHash,
@@ -265,6 +267,8 @@ export const GraduationCapIcon = withDefaults(LucideGraduationCap);
 export const FactoryIcon = withDefaults(LucideFactory);
 export const GlobeIcon = withDefaults(LucideGlobe);
 export const KeyRoundIcon = withDefaults(LucideKeyRound);
+export const CopyIcon = withDefaults(LucideCopy);
+export const ServerIcon = withDefaults(LucideServer);
 export const UserIcon = withDefaults(LucideUser);
 export const PowerIcon = withDefaults(LucidePower);
 export const FileTextIcon = withDefaults(LucideFileText);

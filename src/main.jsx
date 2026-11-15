@@ -80,6 +80,8 @@ const RequirementsPage = lazy(() => import("./components/supplier-quality/Requir
 const ScarsPage = lazy(() => import("./components/supplier-quality/ScarsPage.jsx"));
 const ScarPage = lazy(() => import("./components/supplier-quality/ScarPage.jsx"));
 const SettingsIntegrations = lazy(() => import("./components/Settings/SettingsIntegrations.jsx"));
+const ConnectorAgentsPage = lazy(() => import("./components/integrations/agents/AgentsPage.jsx"));
+const ConnectorAgentPage = lazy(() => import("./components/integrations/agents/AgentPage.jsx"));
 const CsvImportWizard = lazy(() => import("./components/integrations/CsvImportWizard.jsx"));
 const ImportTemplatesPage = lazy(() => import("./components/integrations/TemplatesPage.jsx"));
 const IntegrationReviewPage = lazy(() => import("./components/integrations/ReviewPage.jsx"));
@@ -259,6 +261,8 @@ const router = createBrowserRouter([
               { path: "Integrations/csv", element: <CsvImportWizard /> },
               { path: "Integrations/Templates", element: <ImportTemplatesPage /> },
               { path: "Integrations/Review", element: <IntegrationReviewPage /> },
+              { path: "Integrations/Agents", element: <ConnectorAgentsPage /> },
+              { path: "Integrations/Agents/:id", element: <ConnectorAgentPage key="connector-agent" /> },
               { path: "Integrations/Templates/:templateId", element: <ImportTemplatePage /> },
               { path: "Integrations/:id", element: <ConnectionPage /> },
               { path: "Integrations/:id/runs/:runId", element: <IntegrationRunPage /> },

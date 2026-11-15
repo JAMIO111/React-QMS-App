@@ -1,6 +1,6 @@
 # Fortress Connector Agent — plan
 
-**Status:** proposed 2026-11-15, decisions AG-D1–AG-D12 to agree · **Source:** `Fortress_Connector_Agent_Design_Brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §7.3 (connector contract), §7.6 (local agent security), §12 Phase 6, §14 (definition of done) · **Builds on:** `docs/connectors-plan.md` (IN1–IN9), `docs/import-templates-plan.md`, `docs/security-plan.md`
+**Status:** agreed 2026-11-15 (AG-D1–AG-D12 as recommended) · **AG0** in progress · **Source:** `Fortress_Connector_Agent_Design_Brief.md` (uploaded) · **Brief:** `docs/design-brief.md` §7.3 (connector contract), §7.6 (local agent security), §12 Phase 6, §14 (definition of done) · **Builds on:** `docs/connectors-plan.md` (IN1–IN9), `docs/import-templates-plan.md`, `docs/security-plan.md`
 
 ## 1. Why
 

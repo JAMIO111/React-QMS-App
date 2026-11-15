@@ -29,8 +29,11 @@ public sealed class RunnerTests : IDisposable
             return Task.CompletedTask;
         });
 
-    private void Beat(bool jobsWaiting = false, int poll = 60, bool revoked = false) =>
-        fake.Routes["/integrations/agent/heartbeat"] = _ => FakeFortress.Json(new { revoked, jobsWaiting, pollSeconds = poll, serverTime = DateTimeOffset.UtcNow });
+    private void Beat(bool jobsWaiting = false, int poll = 60, bool revoked = false, bool fast = false) =>
+        fake.Routes["/integrations/agent/heartbeat"] = _ => FakeFortress.Json(new
+        {
+            revoked, jobsWaiting, pollSeconds = poll, serverTime = DateTimeOffset.UtcNow, fastPollUntil = fast ? DateTimeOffset.UtcNow.AddMinutes(10) : (DateTimeOffset?)null,
+        });
 
     private void Jobs(params AgentJob[] jobs)
     {
@@ -65,6 +68,21 @@ public sealed class RunnerTests : IDisposable
         var result = JsonNode.Parse(fake.Requests[3].Body)!["result"]!;
         Assert.True(result["pong"]!.GetValue<bool>());
         Assert.Equal(TimeSpan.FromSeconds(15), Assert.Single(waits));
+    }
+
+    [Fact]
+    public async Task While_someone_is_waiting_it_looks_for_jobs_every_two_seconds_between_heartbeats()
+    {
+        Beat(fast: true, poll: 15);
+        var calls = 0;
+        // Nothing at first; a job appears while the agent is between heartbeats.
+        fake.Routes["/integrations/agent/jobs/next"] = _ => ++calls == 3 ? FakeFortress.Json(new AgentJob { Id = "q1", Kind = "ping" }) : FakeFortress.NoContent();
+        Reports();
+        await Runner(cycles: 9).RunAsync(stop.Token);
+        Assert.Equal(["heartbeat", "jobs/next", "jobs/next", "jobs/next", "jobs/q1/ack", "jobs/q1/complete"], Paths().Take(6));
+        // Seven quick looks of 2 s, then the 1 s left until the next heartbeat at 15 s.
+        Assert.Equal([2, 2, 2, 2, 2, 2, 2, 1], waits.Take(8).Select(w => (int)w.TotalSeconds));
+        Assert.Equal(2, Paths().Count(p => p == "heartbeat"));
     }
 
     [Fact]

@@ -42,3 +42,21 @@ spike/                      the AG0 spike (kept for reference)
 The Windows service, DPAPI protection, `install.ps1` / `uninstall.ps1` and the folder permissions have not been run on a Windows machine
 (there is none here). Everything else is tested on Linux with the same code. The first install on the Windows machine with SQL Server
 (plan §11) is the AG1 acceptance check.
+
+## Databases (AG2)
+
+- **Adapters** (`src/Fortress.Agent.Adapters`): PostgreSQL (Npgsql) and SQL Server (Microsoft.Data.SqlClient). Read only: each call is a
+  read-only transaction (SQL Server: `ApplicationIntent=ReadOnly`, read committed, rolled back), the catalogue is read with the login's own
+  rights, and the only query that touches data is built from the columns the catalogue listed, quoted, with the row count as a parameter.
+  SQL Server has not yet run against a real server (none in the build container).
+- **Passwords**: typed in Fortress, sealed in the browser to this agent's sealing key, opened here (`SealedBox`) and kept one file per
+  connection in `credentials\` (DPAPI). Fortress never holds them readable. Windows authentication needs none: the agent signs in as its service
+  account, so give that account read access to the database.
+- **Allow-list** (optional): `%ProgramData%\Fortress\ConnectorAgent\allowlist.json`, read afresh for every job:
+  ```json
+  { "databases": ["ERP"], "schemas": ["dbo"], "objects": ["erp.orders", "erp.v_*"] }
+  ```
+  Names ignore case and `*` matches anything. Without the file the agent reads whatever its database login can — which is why the login should
+  be read-only and limited to what Fortress needs.
+- `bash run-e2e.sh` also runs the PostgreSQL adapter tests against the throwaway database over TCP, and the real agent through a database
+  connection (password, test, browse, preview).

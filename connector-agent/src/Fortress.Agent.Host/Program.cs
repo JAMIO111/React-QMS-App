@@ -28,7 +28,8 @@ try
     var store = new IdentityStore(paths.IdentityFile, KeyProtectors.ForThisMachine());
     using var http = Http.Client();
     var api = new AgentApiClient(http);
-    var handlers = JobHandlers.Default();
+    // At registration there is no sealing key yet; the handlers are only asked what this agent can do.
+    var handlers = AgentJobs.Create(paths, KeyProtectors.ForThisMachine(), () => throw new InvalidOperationException("Not registered"));
     using var stop = new CancellationTokenSource();
     Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Cancel(); };
 
@@ -81,7 +82,8 @@ try
                 return 1;
             }
             store.Delete();
-            Console.WriteLine($"Identity removed from {store.Path}.");
+            if (Directory.Exists(paths.CredentialsFolder)) Directory.Delete(paths.CredentialsFolder, recursive: true);
+            Console.WriteLine($"Identity and database passwords removed from {paths.Root}.");
             return 0;
         }
         default:

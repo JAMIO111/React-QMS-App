@@ -23,6 +23,8 @@ import FilesCard from "./FilesCard";
 import ImportsCard from "./ImportsCard";
 import ReconciliationCard from "./ReconciliationCard";
 import CTAButton from "@/components/CTAButton";
+import DatabaseConnectionDialog from "./database/DatabaseConnectionDialog";
+import { AgentCard, AgentJobsList, BrowseCard } from "./database/DatabasePanels";
 
 /** Paste a credential once. It is sent in one request, stored encrypted and never shown again. */
 const CredentialDialog = ({ connection, kind, onClose }) => {
@@ -109,12 +111,22 @@ const ConnectionPage = () => {
     <CTAButton key={label} buttonType="button" type={type} size="md" onClick={onClick} disabled={disabled || mutation.isPending} loading={mutation.isPending}>{label}</CTAButton>
   );
   const isFile = !!c.fileConnection;
+  const isDatabase = c.provider.key === "sql_agent";
+  const testRunning = isDatabase && (c.agentJobs ?? []).some((j) => j.kind === "test_connection" && ["pending", "received", "running"].includes(j.status));
   const actions = [];
   if (isFile) {
     // A file connection is in use from the start: no test, ready, activate, pause or resume (plan §6.9). Edit and retire sit in the "…" menu.
   } else if (manage && !retired) {
     actions.push(button("Edit settings", () => setDialog("edit")));
-    actions.push(button("Test connection", () => run("test", "Test finished")));
+    actions.push(
+      isDatabase ? (
+        <CTAButton key="test" buttonType="button" type="neutral" size="md" onClick={() => run("test")} loading={testRunning || mutation.isPending} loadingText="Testing on the agent…">
+          Test connection
+        </CTAButton>
+      ) : (
+        button("Test connection", () => run("test", "Test finished"))
+      ),
+    );
     if (c.status === "draft") actions.push(button("Mark ready", () => run("ready", "Marked ready"), "main", c.problems.length > 0));
     if (c.status === "active") actions.push(button("Pause", () => setDialog("pause")));
     if (c.status === "paused") actions.push(button("Resume", () => run("resume", "Resumed"), "main"));
@@ -174,6 +186,13 @@ const ConnectionPage = () => {
         </MenuCard>
       )}
 
+      {isDatabase && <AgentCard connection={c} canManage={manage} />}
+      {isDatabase && manage && !retired && <BrowseCard connection={c} />}
+      {isDatabase && c.agentJobs?.length > 0 && (
+        <MenuCard title="Agent jobs" subtitle="What the agent was asked to do for this connection, newest first.">
+          <AgentJobsList connection={c} />
+        </MenuCard>
+      )}
       {c.provider.key === "csv" && <FilesCard connection={c} canUpload={can("integrations.run")} canMap={manage} />}
       {c.provider.kind === "api" && !retired && can("integrations.run") && <ApiSampleCard connection={c} />}
       {c.provider.kind === "api" && <ScheduleCard connection={c} />}
@@ -198,7 +217,7 @@ const ConnectionPage = () => {
         </details>
       </MenuCard>
 
-      {dialog === "edit" && <ConnectionForm existing={c} providers={providers.data ?? []} onClose={() => setDialog(null)} />}
+      {dialog === "edit" && (isDatabase ? <DatabaseConnectionDialog existing={c} onClose={() => setDialog(null)} /> : <ConnectionForm existing={c} providers={providers.data ?? []} onClose={() => setDialog(null)} />)}
       {dialog === "credential" && <CredentialDialog connection={c} kind={credKind} onClose={() => setDialog(null)} />}
       {dialog === "revoke" && <ReasonDialog title="Revoke the credential" action="revokeCredential" connection={c} confirm="Revoke" onClose={() => setDialog(null)} />}
       {dialog === "pause" && <ReasonDialog title="Pause this connection" action="pause" connection={c} confirm="Pause" tone="main" onClose={() => setDialog(null)} />}

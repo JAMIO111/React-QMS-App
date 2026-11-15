@@ -19,8 +19,11 @@ export const CreateConnectionBody = z
     name: z.string().trim().min(2).max(80),
     externalSystem: z.string().regex(/^[a-z][a-z0-9_-]{1,39}$/, 'Use 2 to 40 lower-case letters, digits, hyphens or underscores, starting with a letter'),
     config: Config.optional(),
+    /** A database connection (provider sql_agent) names the connector agent that reads it; no other kind does. */
+    agentId: z.string().uuid().optional(),
   })
-  .strict();
+  .strict()
+  .refine((b) => (b.providerKey === 'sql_agent') === !!b.agentId, { message: 'A database connection names its connector agent, and only a database connection does', path: ['agentId'] });
 export type CreateConnectionBody = z.infer<typeof CreateConnectionBody>;
 
 export const UpdateConnectionBody = z
@@ -92,9 +95,54 @@ export const ConnectionDetail = z.object({
   /** The caller may activate it now: approval right, and a different person from whoever marked it ready (an owner or admin may activate their own). */
   canActivate: z.boolean(),
   events: z.array(z.object({ action: z.string(), fromStatus: z.string().nullable(), toStatus: z.string().nullable(), note: z.string().nullable(), at: Iso, by: Person })),
+  /**
+   * A database connection's agent (AG2): whether it is online, and its current sealing key, which the browser seals the password to.
+   * Null for other connections.
+   */
+  agent: z
+    .object({
+      id: z.string().uuid(), name: z.string(), status: z.enum(['active', 'revoked']), online: z.boolean(), lastHeartbeatAt: Iso.nullable(),
+      keyId: z.string().uuid().nullable(), sealingKey: z.string().nullable(),
+    })
+    .nullable(),
+  /** Whether the agent holds the password (never the password itself). Null when none was given or the connection needs none. */
+  agentCredential: z
+    .object({ status: z.enum(['waiting', 'stored', 'failed', 'cleared']), setAt: Iso, setBy: Person, storedAt: Iso.nullable(), message: z.string().nullable() })
+    .nullable(),
+  /** The latest jobs the agent was given for this connection (test, browse, preview, password), newest first. */
+  agentJobs: z.array(z.object({
+    id: z.string().uuid(), kind: z.string(), status: z.string(), errorMessage: z.string().nullable(), createdAt: Iso, finishedAt: Iso.nullable(), requestedBy: z.string().nullable(),
+  })),
 });
 export type ConnectionDetail = z.infer<typeof ConnectionDetail>;
 
 export const SampleBody = z.object({ entityType: z.string().regex(/^[a-z_]{2,40}$/) }).strict();
 export type SampleBody = z.infer<typeof SampleBody>;
 export const Sample = z.object({ columns: z.array(z.string()), rows: z.array(z.object({ r: z.number().int(), v: z.record(z.string(), z.string()) })) });
+
+/** The database password sealed in the browser to the agent's sealing key (ECDH P-256 → HKDF-SHA256 → AES-256-GCM). Fortress cannot open it. */
+export const AgentCredentialBody = z
+  .object({
+    keyId: z.string().uuid(),
+    sealed: z.object({ epk: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/).min(80).max(200), iv: z.string().regex(/^[A-Za-z0-9+/]{16}$/), ct: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/).min(24).max(8000) }).strict(),
+  })
+  .strict();
+export type AgentCredentialBody = z.infer<typeof AgentCredentialBody>;
+
+/** Something to ask the agent about a database connection. A structured request: the agent builds its own read-only query. */
+export const ConnectionJobBody = z
+  .object({
+    kind: z.enum(['test_connection', 'discover', 'preview']),
+    request: z
+      .object({
+        level: z.enum(['schemas', 'objects', 'columns']).optional(),
+        schema: z.string().min(1).max(128).optional(),
+        object: z.string().min(1).max(128).optional(),
+        limit: z.number().int().min(1).max(50).optional(),
+      })
+      .strict()
+      .optional(),
+    idempotencyKey: z.string().min(8).max(120).optional(),
+  })
+  .strict();
+export type ConnectionJobBody = z.infer<typeof ConnectionJobBody>;

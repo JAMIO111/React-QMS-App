@@ -120,6 +120,14 @@ export class AgentsService {
     });
   }
 
+  /** Ask a database connection's agent to test it, browse it or preview a table (AG2); the database checks the request and the caller's rights. */
+  connectionJob(ctx: RequestContext, connectionId: string, b: { kind: string; request?: Record<string, unknown>; idempotencyKey?: string }) {
+    return this.database.asUser(ctx, async (db) => {
+      const r = (await db.execute(sql`select app.request_connection_job(${connectionId}::uuid, ${b.kind}, ${JSON.stringify(b.request ?? {})}::jsonb, ${b.idempotencyKey ?? null}) as id`)).rows[0] as Row;
+      return this.jobById(db, orgOf(ctx), r.id as string);
+    });
+  }
+
   job(ctx: RequestContext, jobId: string) {
     return this.database.asUser(ctx, (db) => this.jobById(db, orgOf(ctx), jobId));
   }

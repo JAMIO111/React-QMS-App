@@ -13,6 +13,10 @@ public sealed record AgentPaths(string Root)
 {
     public string IdentityFile => Path.Combine(Root, "agent.json");
     public string LogFolder => Path.Combine(Root, "logs");
+    /// <summary>Database passwords this agent holds, one protected file per connection.</summary>
+    public string CredentialsFolder => Path.Combine(Root, "credentials");
+    /// <summary>The customer's own limit on what this agent may read (optional).</summary>
+    public string AllowListFile => Path.Combine(Root, "allowlist.json");
 
     public static AgentPaths From(string? dataDir)
     {
@@ -66,6 +70,13 @@ public static class Http
     };
 }
 
+public static class AgentJobs
+{
+    /// <summary>The jobs this agent does, with its database adapters, its password store and the local allow-list.</summary>
+    public static JobHandlers Create(AgentPaths paths, IKeyProtector protector, Func<System.Security.Cryptography.ECDiffieHellman> sealingKey) =>
+        JobHandlers.ForDatabases(new Fortress.Agent.Adapters.DatabaseAdapters(), new CredentialStore(paths.CredentialsFolder, protector), paths.AllowListFile, sealingKey);
+}
+
 public static class AgentHost
 {
     /// <summary>The agent as a long-running process: a Windows service when started by the service manager, else a console program.</summary>
@@ -84,7 +95,7 @@ public static class AgentHost
         builder.Services.AddSingleton(identity);
         builder.Services.AddSingleton(_ => Http.Client());
         builder.Services.AddSingleton(sp => new AgentApiClient(sp.GetRequiredService<HttpClient>()));
-        builder.Services.AddSingleton(_ => JobHandlers.Default());
+        builder.Services.AddSingleton(_ => AgentJobs.Create(paths, KeyProtectors.ForThisMachine(), () => identity.SealingKey));
         builder.Services.AddSingleton(sp => new AgentRunner(
             sp.GetRequiredService<AgentIdentity>(), sp.GetRequiredService<AgentApiClient>(), sp.GetRequiredService<JobHandlers>(),
             sp.GetRequiredService<ILogger<AgentRunner>>()));

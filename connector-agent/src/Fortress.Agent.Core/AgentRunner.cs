@@ -51,6 +51,9 @@ public sealed class AgentRunner(
                 if (beat.JobsWaiting || beat.FastPollUntil is not null) await DrainJobsAsync(ct);
                 else await DrainJobsAsync(ct, max: 1);
                 wait = TimeSpan.FromSeconds(Math.Clamp(beat.PollSeconds, 5, 300));
+                // Someone has the agent's or a connection's page open: look for their next job every few seconds until the next heartbeat,
+                // so a test, a browse or a preview answers in seconds rather than on the next poll.
+                if (beat.FastPollUntil is not null) wait = await QuickPollAsync(wait, ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -81,6 +84,22 @@ public sealed class AgentRunner(
         }
         logger.LogInformation("Fortress Connector Agent stopping");
         return RunOutcome.Stopped;
+    }
+
+    /// <summary>How often to look for jobs while someone is waiting on one (heartbeats stay every poll interval).</summary>
+    public static readonly TimeSpan QuickPoll = TimeSpan.FromSeconds(2);
+
+    /// <summary>Look for jobs every <see cref="QuickPoll"/> for most of <paramref name="interval"/>; returns what is left to wait before the next heartbeat.</summary>
+    private async Task<TimeSpan> QuickPollAsync(TimeSpan interval, CancellationToken ct)
+    {
+        var left = interval;
+        while (left > QuickPoll && !ct.IsCancellationRequested)
+        {
+            await delay(QuickPoll, ct);
+            left -= QuickPoll;
+            await DrainJobsAsync(ct);
+        }
+        return left;
     }
 
     private RunOutcome Revoked(string why)

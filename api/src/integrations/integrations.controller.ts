@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiTags } fr
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { AllowedHosts, AllowedHostsBody, Sample, SampleBody, ConnectionDetail, ConnectionList, CreateConnectionBody, CredentialBody, EmptyBody, ProviderList, ReasonBody, UpdateConnectionBody } from './integrations.schemas';
+import { AgentCredentialBody, AllowedHosts, AllowedHostsBody, Sample, SampleBody, ConnectionDetail, ConnectionList, CreateConnectionBody, CredentialBody, EmptyBody, ProviderList, ReasonBody, UpdateConnectionBody } from './integrations.schemas';
 import { IntegrationsService } from './integrations.service';
 
 const READ = 'integrations.read';
@@ -79,6 +79,17 @@ export class IntegrationsController {
   @ApiOkResponse({ description: 'Stores the credential in Vault, replacing (and deleting) the previous one. The value is never returned.', schema: openApiSchema(ConnectionDetail) })
   setCredential(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.setCredential(ctx, parse(Uuid, id), parse(CredentialBody, body));
+  }
+
+  @Put('connections/:id/agent-credential')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(AgentCredentialBody) })
+  @ApiOkResponse({
+    description: 'A database connection: hands the agent the password, sealed in the browser to the agent\'s current sealing key. Fortress cannot open it; the job that carries it forgets it when it ends.',
+    schema: openApiSchema(ConnectionDetail),
+  })
+  setAgentCredential(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setAgentCredential(ctx, parse(Uuid, id), parse(AgentCredentialBody, body));
   }
 
   @Post('connections/:id/credential/revoke')

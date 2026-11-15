@@ -12,6 +12,7 @@ import { clientAddress } from '../../security/client-address';
 import { OrganisationScoped } from '../../tenancy/organisation.guard';
 import { Agent, AgentCaller, AgentGuard } from './agent.guard';
 import { AGENT_HEADERS, TOKEN_PATTERN } from './agent-signature';
+import { ConnectionJobBody } from '../integrations.schemas';
 import { AgentsService } from './agents.service';
 
 const READ = 'integrations.read';
@@ -137,6 +138,17 @@ export class AgentsController {
   @ApiCreatedResponse({ description: 'A ping job: the agent answers with its version and clock when it next polls (within seconds while someone is looking)' })
   ping(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.ping(ctx, parse(Uuid, id), parse(PingBody, body ?? {}).idempotencyKey ?? null);
+  }
+
+  @Post('connections/:id/agent-jobs')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ConnectionJobBody) })
+  @ApiCreatedResponse({
+    description: 'A database connection (AG2): ask its agent to test it, list schemas / tables and views / columns, or preview a table. A structured request, never SQL; follow it with GET agent-jobs/{id}.',
+  })
+  connectionJob(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.connectionJob(ctx, parse(Uuid, id), parse(ConnectionJobBody, body));
   }
 
   @Get('agent-jobs/:id')

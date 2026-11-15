@@ -10,6 +10,7 @@ import {
   useSetAllowedHosts,
 } from "../../hooks/useIntegrations";
 import ConnectionForm from "../integrations/ConnectionForm";
+import DatabaseConnectionDialog from "../integrations/database/DatabaseConnectionDialog";
 import { HealthCard } from "../integrations/KeepHealthy";
 import { useAgents } from "../../hooks/useAgents";
 import { agentsPath } from "../../lib/agents";
@@ -240,12 +241,19 @@ const IntegrationsHome = () => {
   const recent = runs.data?.data ?? [];
   const navigate = useNavigate();
   const [adding, setAdding] = useState(null);
+  const [addingDatabase, setAddingDatabase] = useState(null);
   const providers = useIntegrationProviders();
   const actionFor = (item) =>
     item.key === "csv" && canImport ? (
       <CTAButton to="/Settings/Integrations/csv" type="main" size="md">
         <span className="flex items-center gap-1">
           Import a file <ArrowRightIcon />
+        </span>
+      </CTAButton>
+    ) : item.providerKey === "sql_agent" && can("integrations.manage") ? (
+      <CTAButton type="main" size="md" onClick={() => setAddingDatabase(item.engine)}>
+        <span className="flex items-center gap-1">
+          Connect a database <ArrowRightIcon />
         </span>
       </CTAButton>
     ) : item.key === "rest_api" && can("integrations.manage") ? (
@@ -361,6 +369,13 @@ const IntegrationsHome = () => {
         </MenuCard>
       )}
 
+      {addingDatabase && (
+        <DatabaseConnectionDialog
+          engine={addingDatabase}
+          onClose={() => setAddingDatabase(null)}
+          onCreated={(c) => navigate(`/Settings/Integrations/${c.id}`)}
+        />
+      )}
       {adding && (
         <ConnectionForm
           providers={providers.data ?? []}

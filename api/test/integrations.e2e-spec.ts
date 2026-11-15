@@ -44,7 +44,7 @@ describe('integration connections', () => {
   it('lists the providers, and only for people who may read integrations', async () => {
     const res = (await api().get(`${base}/providers`).set(await owner()).expect(200)).body.data;
     expect(res.map((p: { key: string }) => p.key)).toEqual(['csv', 'rest_api', 'sql_agent']);
-    expect(res.find((p: { key: string }) => p.key === 'sql_agent').status).toBe('planned');
+    expect(res.find((p: { key: string }) => p.key === 'sql_agent').status).toBe('available');
     await api().get(`${base}/providers`).set(await inspector()).expect(403);
     await api().get(`${base}/connections`).set(await inspector()).expect(403);
   });
@@ -59,7 +59,7 @@ describe('integration connections', () => {
     await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'csv', name: 'Dup code', externalSystem: 'ERP 2' }).expect(400);
     await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'csv', name: 'erp PARTS file', externalSystem: 'erp9' }).expect(409);
     await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'csv', name: 'Other', externalSystem: 'erp' }).expect(409);
-    await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'sql_agent', name: 'Agent', externalSystem: 'agent' }).expect(409);
+    await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'sql_agent', name: 'Agent', externalSystem: 'agent' }).expect(400);
     await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'csv', name: 'Bad delimiter', externalSystem: 'bad1', config: { delimiter: 'x' } }).expect(409);
     await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'csv', name: 'Extra', externalSystem: 'bad2', extra: 1 }).expect(400);
     for (const baseUrl of ['http://api.example.com', 'https://localhost/x', 'https://10.0.0.1/x', 'https://169.254.169.254/latest', 'https://u:p@api.example.com']) {

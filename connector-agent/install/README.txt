@@ -15,6 +15,11 @@ Install
          powershell -ExecutionPolicy Bypass -File .\install.ps1 -ApiUrl "<address>" -Token "<token>"
   4. The agent shows as Online in Fortress within a minute. Use "Check now" on its page to test it.
 
+Databases
+  For a database connection, give the agent a login that can only read. With Windows authentication it signs in as
+  its service account (NT SERVICE\FortressConnectorAgent). To limit what it may read whatever the login allows, put an
+  allowlist.json in %ProgramData%\Fortress\ConnectorAgent (see the README in the repository).
+
 Logs
   %ProgramData%\Fortress\ConnectorAgent\logs  (one file a day, kept 14 days; no passwords or data rows are ever logged)
 

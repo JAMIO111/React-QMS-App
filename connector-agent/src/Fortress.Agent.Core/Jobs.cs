@@ -42,8 +42,22 @@ public sealed class PingHandler : IJobHandler
 public sealed class JobHandlers
 {
     private readonly Dictionary<string, IJobHandler> handlers;
+    private readonly IReadOnlyCollection<string> engines;
 
-    public JobHandlers(IEnumerable<IJobHandler> handlers) => this.handlers = handlers.ToDictionary(h => h.Kind, StringComparer.Ordinal);
+    public JobHandlers(IEnumerable<IJobHandler> handlers, IReadOnlyCollection<string>? engines = null)
+    {
+        this.handlers = handlers.ToDictionary(h => h.Kind, StringComparer.Ordinal);
+        this.engines = engines ?? [];
+    }
+
+    /// <summary>Every job this agent does: ping, and for database connections the password, test, browse and preview (AG2).</summary>
+    public static JobHandlers ForDatabases(IDatabaseAdapterFactory adapters, CredentialStore credentials, string allowListPath, Func<System.Security.Cryptography.ECDiffieHellman> sealingKey)
+    {
+        var databases = new DatabaseJobContext(adapters, credentials, allowListPath);
+        return new JobHandlers(
+            [new PingHandler(), new StoreCredentialHandler(sealingKey, credentials), new TestConnectionHandler(databases), new DiscoverHandler(databases), new PreviewHandler(databases)],
+            adapters.Engines);
+    }
 
     public static JobHandlers Default() => new([new PingHandler()]);
 
@@ -55,7 +69,7 @@ public sealed class JobHandlers
     public JsonObject Capabilities() => new()
     {
         ["jobs"] = new JsonArray(handlers.Keys.Order(StringComparer.Ordinal).Select(k => (JsonNode)JsonValue.Create(k)!).ToArray()),
-        ["adapters"] = new JsonArray(),
+        ["adapters"] = new JsonArray(engines.Order(StringComparer.Ordinal).Select(k => (JsonNode)JsonValue.Create(k)!).ToArray()),
         ["maxBatchRows"] = 1000,
     };
 }

@@ -12,6 +12,7 @@
     <Using Include="Xunit" />
     <ProjectReference Include="..\..\src\Fortress.Agent.Core\Fortress.Agent.Core.csproj" />
     <ProjectReference Include="..\..\src\Fortress.Agent.Host\Fortress.Agent.Host.csproj" />
+    <ProjectReference Include="..\..\src\Fortress.Agent.Adapters\Fortress.Agent.Adapters.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\contract\**\*.json" Link="contract\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

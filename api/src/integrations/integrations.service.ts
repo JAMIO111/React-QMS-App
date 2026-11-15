@@ -8,7 +8,7 @@ import { DatabaseService, Db } from '../database/database.service';
 import { ConnectorError } from './core/connector.interface';
 import { ConnectorRegistry } from './core/connector.registry';
 import { SyncEngine } from './core/sync.engine';
-import { AllowedHosts, AllowedHostsBody, ConnectionDetail, ConnectionList, CreateConnectionBody, CredentialBody, ProviderList, ReasonBody, UpdateConnectionBody } from './integrations.schemas';
+import { AgentCredentialBody, AllowedHosts, AllowedHostsBody, ConnectionDetail, ConnectionList, CreateConnectionBody, CredentialBody, ProviderList, ReasonBody, UpdateConnectionBody } from './integrations.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown user' } : null);
@@ -73,10 +73,12 @@ export class IntegrationsService {
   private async load(db: Db, ctx: RequestContext, id: string): Promise<ConnectionDetail> {
     const rows = await db.execute<Row>(sql`${sql.raw(SELECT)} where c.id = ${id}::uuid and c.organisation_id = ${orgOf(ctx)}::uuid`);
     if (!rows.rows[0]) throw ApiError.notFound('connection_not_found', 'Connection not found');
-    const [cred, events, problems] = await Promise.all([
+    const agentId = (rows.rows[0].agent_id as string | null) ?? null;
+    const [cred, events, problems, agent] = await Promise.all([
       db.execute<Row>(sql`select k.kind, k.created_at, k.created_by, ${sql.raw(personName('p'))} as created_by_name from public.integration_credentials k left join public.profiles p on p.id = k.created_by where k.connection_id = ${id}::uuid and k.revoked_at is null`),
       db.execute<Row>(sql`select e.action, e.from_status, e.to_status, e.note, e.at, e.by, ${sql.raw(personName('p'))} as by_name from public.integration_connection_events e left join public.profiles p on p.id = e.by where e.connection_id = ${id}::uuid order by e.at desc, e.created_at desc limit 100`),
       db.execute<{ p: string[]; can_activate: boolean | null }>(sql`select app.integration_activation_problems(${id}::uuid) as p, app.integration_can_activate(${id}::uuid) as can_activate`),
+      agentId ? this.agentPart(db, id, agentId) : Promise.resolve({ agent: null, agentCredential: null, agentJobs: [] }),
     ]);
     const c = cred.rows[0];
     const importable = this.engine.importable(rows.rows[0].provider_key as string);
@@ -92,6 +94,38 @@ export class IntegrationsService {
       fileConnection: rows.rows[0].provider_key === 'csv',
       canActivate: !!problems.rows[0].can_activate,
       events: events.rows.map((e) => ({ action: e.action as string, fromStatus: (e.from_status as string) ?? null, toStatus: (e.to_status as string) ?? null, note: (e.note as string) ?? null, at: iso(e.at)!, by: person(e.by, e.by_name) })),
+      ...agent,
+    };
+  }
+
+  /** A database connection's agent, whether it holds the password, and its latest jobs for this connection (AG2). */
+  private async agentPart(db: Db, id: string, agentId: string): Promise<Pick<ConnectionDetail, 'agent' | 'agentCredential' | 'agentJobs'>> {
+    const [a, k, jobs] = await Promise.all([
+      db.execute<Row>(sql`select a.id, a.name, a.status, a.last_heartbeat_at, ky.id as key_id, ky.sealing_key
+        from public.integration_agents a left join public.integration_agent_keys ky on ky.agent_id = a.id and ky.status = 'active' where a.id = ${agentId}::uuid`),
+      db.execute<Row>(sql`select k.status, k.set_at, k.set_by, ${sql.raw(personName('p'))} as set_by_name, k.stored_at, k.message
+        from public.integration_agent_credentials k left join public.profiles p on p.id = k.set_by where k.connection_id = ${id}::uuid`),
+      db.execute<Row>(sql`select j.id, j.kind, j.status, j.error_message, j.created_at, j.finished_at, ${sql.raw(personName('p'))} as requested_by_name
+        from public.integration_agent_jobs j left join public.profiles p on p.id = j.requested_by where j.connection_id = ${id}::uuid order by j.created_at desc limit 10`),
+    ]);
+    const r = a.rows[0];
+    const last = r?.last_heartbeat_at ? new Date(r.last_heartbeat_at as string) : null;
+    const c = k.rows[0];
+    return {
+      agent: r
+        ? {
+            id: r.id as string, name: r.name as string, status: r.status as 'active' | 'revoked',
+            online: r.status === 'active' && !!last && Date.now() - last.getTime() <= 180_000, lastHeartbeatAt: last ? last.toISOString() : null,
+            keyId: (r.key_id as string | null) ?? null, sealingKey: r.status === 'active' ? ((r.sealing_key as string | null) ?? null) : null,
+          }
+        : null,
+      agentCredential: c
+        ? { status: c.status as 'waiting' | 'stored' | 'failed' | 'cleared', setAt: iso(c.set_at)!, setBy: person(c.set_by, c.set_by_name), storedAt: iso(c.stored_at), message: (c.message as string | null) ?? null }
+        : null,
+      agentJobs: jobs.rows.map((j) => ({
+        id: j.id as string, kind: j.kind as string, status: j.status as string, errorMessage: (j.error_message as string | null) ?? null,
+        createdAt: iso(j.created_at)!, finishedAt: iso(j.finished_at), requestedBy: (j.requested_by_name as string | null) ?? null,
+      })),
     };
   }
 
@@ -101,7 +135,9 @@ export class IntegrationsService {
 
   create(ctx: RequestContext, b: CreateConnectionBody): Promise<ConnectionDetail> {
     return this.database.asUser(ctx, async (db) => {
-      const res = await db.execute<{ id: string }>(sql`select app.create_integration_connection(${orgOf(ctx)}::uuid, ${b.providerKey}, ${b.name}, ${b.externalSystem}, ${JSON.stringify(b.config ?? {})}::jsonb) as id`);
+      const res = b.providerKey === 'sql_agent'
+        ? await db.execute<{ id: string }>(sql`select app.create_agent_connection(${orgOf(ctx)}::uuid, ${b.agentId}::uuid, ${b.name}, ${b.externalSystem}, ${JSON.stringify(b.config ?? {})}::jsonb) as id`)
+        : await db.execute<{ id: string }>(sql`select app.create_integration_connection(${orgOf(ctx)}::uuid, ${b.providerKey}, ${b.name}, ${b.externalSystem}, ${JSON.stringify(b.config ?? {})}::jsonb) as id`);
       return this.load(db, ctx, res.rows[0].id);
     });
   }
@@ -122,6 +158,17 @@ export class IntegrationsService {
         if ((error as { code?: string }).code) throw error; // a database rule: the filter turns it into a message that never contains the value
         throw new ApiError(500, 'credential_failed', 'The credential could not be saved');
       }
+      return this.load(db, ctx, id);
+    });
+  }
+
+  /**
+   * Hand the agent the database password, sealed in the browser to the agent's sealing key (AG2). The API only passes the sealed bytes on; the
+   * database checks they were sealed to the agent's current key and gives them to the agent as a job that forgets them when it ends.
+   */
+  setAgentCredential(ctx: RequestContext, id: string, b: AgentCredentialBody): Promise<ConnectionDetail> {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.set_agent_credential(${id}::uuid, ${JSON.stringify(b.sealed)}::jsonb, ${b.keyId}::uuid)`);
       return this.load(db, ctx, id);
     });
   }
@@ -199,6 +246,13 @@ export class IntegrationsService {
       return rows.rows[0];
     });
     if (info.status === 'retired') throw new ApiError(409, 'integration_rule', 'A retired connection cannot be tested');
+    // A database connection is tested by its agent: the test is a job, and its answer is recorded when the agent reports (AG2).
+    if (info.provider_key === 'sql_agent') {
+      return this.database.asUser(ctx, async (db) => {
+        await db.execute(sql`select app.request_connection_job(${id}::uuid, 'test_connection', '{}'::jsonb, null)`);
+        return this.load(db, ctx, id);
+      });
+    }
     const adapter = this.registry.get(info.provider_key as string);
     if (!adapter) throw new ApiError(409, 'integration_rule', 'That provider has no connector yet');
     const meta = adapter.getMetadata();

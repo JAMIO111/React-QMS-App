@@ -466,6 +466,12 @@ BEGIN
   INSERT INTO public.integration_agent_jobs (organisation_id, agent_id, kind)
     SELECT a, id, 'ping' FROM public.integration_agents WHERE organisation_id = a;
   INSERT INTO sweep VALUES ('agent', (SELECT id FROM public.integration_agents WHERE organisation_id = a));
+  INSERT INTO public.integration_connections (organisation_id, provider_id, name, external_system, config, agent_id)
+    SELECT a, (SELECT id FROM public.integration_providers WHERE key = 'sql_agent'), 'Sweep database', 'sweep-db',
+           '{"engine": "postgres", "server": "db", "database": "erp", "authType": "password"}', id FROM public.integration_agents WHERE organisation_id = a;
+  INSERT INTO public.integration_agent_credentials (connection_id, organisation_id, agent_id, key_id, status)
+    SELECT c.id, a, c.agent_id, k.id, 'stored' FROM public.integration_connections c JOIN public.integration_agent_keys k ON k.agent_id = c.agent_id
+     WHERE c.organisation_id = a AND c.external_system = 'sweep-db';
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));
 END $$;

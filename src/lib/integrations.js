@@ -23,6 +23,8 @@ export const EVENT_LABELS = {
   credential_set: "Credential stored",
   credential_rotated: "Credential replaced",
   credential_revoked: "Credential revoked",
+  credential_stored: "Password stored on the agent",
+  credential_failed: "The agent could not store the password",
   ready: "Marked ready",
   activated: "Activated",
   paused: "Paused",
@@ -439,8 +441,8 @@ export const INTEGRATION_CATALOGUE = [
   { key: "sap", name: "SAP", description: "Materials, business partners and orders from SAP S/4HANA or Business One.", mark: "sap", available: false },
   { key: "sage", name: "Sage", description: "Suppliers, customers and stock items from Sage 200 or Sage X3.", mark: "sage", available: false },
   { key: "mysql", name: "MySQL", description: "Read tables or views from a MySQL database through a small agent on your network.", mark: "mysql", available: false },
-  { key: "postgresql", name: "PostgreSQL", description: "Read tables or views from a PostgreSQL database through a small agent on your network.", mark: "postgresql", available: false },
-  { key: "sql_server", name: "Microsoft SQL Server", description: "Read tables or views from SQL Server through a small agent on your network.", mark: "database", available: false },
+  { key: "postgresql", providerKey: "sql_agent", engine: "postgres", name: "PostgreSQL", description: "Read tables or views from a PostgreSQL database through a connector agent on your network. Nothing connects in.", mark: "postgresql", available: true },
+  { key: "sql_server", providerKey: "sql_agent", engine: "sqlserver", name: "Microsoft SQL Server", description: "Read tables or views from SQL Server through a connector agent on your network. Nothing connects in.", mark: "database", available: true },
   { key: "odoo", name: "Odoo", description: "Products, partners and manufacturing orders from Odoo.", mark: "odoo", available: false },
   { key: "google_sheets", name: "Google Sheets", description: "Keep a shared sheet and Fortress in step.", mark: "googlesheets", available: false },
   { key: "xero", name: "Xero", description: "Suppliers and customers from your Xero contacts.", mark: "xero", available: false },
@@ -534,3 +536,69 @@ export const apiMappingPath = (connectionId, entityType, templateId) => {
   const s = q.toString();
   return `/Settings/Integrations/${connectionId}/map${s ? `?${s}` : ""}`;
 };
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+// Database connections through a connector agent (docs/connector-agent-plan.md AG2)
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+
+export const DB_ENGINES = { postgres: "PostgreSQL", sqlserver: "Microsoft SQL Server" };
+
+/** How each engine may sign in. SQL Server's Windows authentication uses the agent's service account: no password at all. */
+export const DB_AUTH = {
+  sqlserver: [
+    { value: "windows", label: "Windows authentication (the agent's service account)" },
+    { value: "sql", label: "SQL login (user name and password)" },
+  ],
+  postgres: [{ value: "password", label: "User name and password" }],
+};
+
+export const dbNeedsPassword = (config) => ["sql", "password"].includes(config?.authType);
+
+/** The dialog's fields from a connection's settings (or a new one for an engine). */
+export const databaseForm = (engine, c = {}) => ({
+  engine: c.engine ?? engine ?? "sqlserver",
+  server: c.server ?? "",
+  port: c.port != null ? String(c.port) : "",
+  instance: c.instance ?? "",
+  database: c.database ?? "",
+  authType: c.authType ?? ((c.engine ?? engine) === "postgres" ? "password" : "windows"),
+  encrypt: c.encrypt !== false,
+  trustServerCertificate: c.trustServerCertificate === true,
+});
+
+const SERVER = /^(\(local\)|\.|[A-Za-z0-9]([A-Za-z0-9._-]{0,251}[A-Za-z0-9])?|[0-9A-Fa-f:.]{2,45})$/;
+const DATABASE_BAD = /[;='"[\]]|\p{Cc}/u;
+
+/** What is wrong with the dialog's fields, in the database's own words (the database checks again). */
+export const databaseFormProblem = (f) => {
+  if (!SERVER.test(f.server.trim())) return "Give the database server's name or address (letters, digits, dots and hyphens)";
+  if (f.port && !(/^\d+$/.test(f.port) && +f.port >= 1 && +f.port <= 65535)) return "The port is a whole number from 1 to 65535";
+  if (f.engine === "sqlserver" && f.instance && !/^[A-Za-z0-9_$#-]{1,32}$/.test(f.instance.trim())) return "The instance name is up to 32 letters, digits, _ $ # or -";
+  if (f.instance && f.port) return "Give a port or an instance name, not both";
+  const db = f.database.trim();
+  if (!db || db.length > 128 || DATABASE_BAD.test(db)) return "Give the database name (no ; = quotes or brackets)";
+  return null;
+};
+
+/** The settings the API takes (only what was set). */
+export const databaseConfig = (f) => {
+  const c = { engine: f.engine, server: f.server.trim(), database: f.database.trim(), authType: f.authType, encrypt: !!f.encrypt };
+  if (f.port) c.port = Number(f.port);
+  if (f.engine === "sqlserver" && f.instance.trim()) c.instance = f.instance.trim();
+  if (f.trustServerCertificate) c.trustServerCertificate = true;
+  return c;
+};
+
+/** Where the database is, in one line: "SQL01\\SQLEXPRESS / ERP" or "erp-db:5432 / erp". */
+export const databaseWhere = (c) =>
+  `${c?.server ?? "?"}${c?.instance ? `\\${c.instance}` : c?.port ? `:${c.port}` : ""} / ${c?.database ?? "?"}`;
+
+export const AGENT_CREDENTIAL_WORDS = {
+  waiting: "On its way to the agent",
+  stored: "Stored on the agent",
+  failed: "The agent could not store it",
+  cleared: "Needs typing again",
+};
+
+/** A job given to the agent is still going. */
+export const agentJobRunning = (status) => ["pending", "received", "running"].includes(status);

@@ -21,7 +21,14 @@ export const useIntegrationConnections = () => {
 /** One connection with its history, whether a credential is stored (never the value) and what still stops it being made ready. */
 export const useIntegrationConnection = (id) => {
   const { organisationId } = useOrganisation();
-  return useQuery({ queryKey: key(organisationId, "connection", id), queryFn: () => apiFetch(`${BASE}/connections/${id}`, { organisationId }), enabled: !!organisationId && !!id, retry: false });
+  return useQuery({
+    queryKey: key(organisationId, "connection", id),
+    queryFn: () => apiFetch(`${BASE}/connections/${id}`, { organisationId }),
+    enabled: !!organisationId && !!id,
+    retry: false,
+    // A database connection: while its agent is doing something for it (storing the password, testing), look again every 2 seconds.
+    refetchInterval: (query) => ((query.state.data?.agentJobs ?? []).some((j) => ["pending", "received", "running"].includes(j.status)) ? 2_000 : false),
+  });
 };
 
 /** The latest import runs of a connection. Polls while one is queued or running. */
@@ -155,6 +162,10 @@ export const useIntegrationMutation = () => {
           return send(`/connections/${id}`, "PATCH");
         case "setCredential":
           return send(`/connections/${id}/credential`, "PUT");
+        case "setAgentCredential":
+          return send(`/connections/${id}/agent-credential`, "PUT");
+        case "connectionJob":
+          return send(`/connections/${id}/agent-jobs`);
         case "revokeCredential":
           return send(`/connections/${id}/credential/revoke`);
         case "test":

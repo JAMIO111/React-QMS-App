@@ -16,5 +16,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Fortress.Agent.Core\Fortress.Agent.Core.csproj" />
+    <ProjectReference Include="..\Fortress.Agent.Adapters\Fortress.Agent.Adapters.csproj" />
   </ItemGroup>
 </Project>

@@ -515,7 +515,7 @@ container. AG6b needs a release-signing key that only you hold, and AG6c needs y
 
 ### AG6a as built (2026-11-16)
 
-Migration `20260312100000_agent_resilience.sql` (not applied live yet): agent job kinds `rotate_keys` and `diagnostics` (no connection, like
+Migration `20260312100000_agent_resilience.sql` (applied live 2026-11-16, live guardrails 0 violations): agent job kinds `rotate_keys` and `diagnostics` (no connection, like
 `ping`); `app.request_agent_job` takes them (one waiting rotation at a time, a second request returns it); `app.system_purge_agent_diagnostics()`
 (API login only) replaces a bundle older than 30 days with `{cleared, clearedAt}`, called by the worker's `housekeeping` step
 (`agentDiagnosticsCleared`). Test `supabase/tests/agent_resilience.test.sql`.

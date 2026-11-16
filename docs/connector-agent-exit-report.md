@@ -42,7 +42,7 @@ A reviewer who had not written the code went through the whole agent path: agent
 | `npm test` (1,606), `npm run lint` (0 errors), `npm run build` | pass |
 | Browser journey (`npm run journey`, new step `connectorAgent()`) | pass: token shown once, the agent registers and is Online, Check now answered, the password sealed in the browser is opened by the agent exactly as typed and no sealed bytes are kept, revoke stops the agent |
 | Load test (AG-D4) | pending: 100,000 rows (a million would take hours through the import engine here); figures added when the run finishes |
-| Live guardrails | pending: run once `20260314100000_agent_hardening.sql` is applied live |
+| Live guardrails (after `20260314100000_agent_hardening.sql` was applied live, 2026-11-16) | **0 violations**; the migration recorded, both triggers enabled, `set_agent_credential` sends the connection, the new functions not callable by `authenticated` or `anon` |
 | Windows CI (`.github/workflows/connector-agent.yml`) | **not run yet:** nothing has been pushed. Its first run is the check of the MSI, the services, the folder permissions, the update swap and roll-back on a real Windows machine, and of the SQL Server 2022 and MySQL 8 adapters |
 
 ## Windows acceptance list (for the first customer machine)
@@ -60,7 +60,7 @@ CI runs most of this on a clean Windows Server. These need a real customer-like 
 
 ## What you need to do
 
-- **Apply** `supabase/migrations/20260314100000_agent_hardening.sql` live. Pushing the API first is harmless.
+- ~~Apply the hardening migration~~ — done 2026-11-16.
 - **Make a release key** on your own computer: `node connector-agent/release/make-release-key.mjs <file>`. Keep the private key off this repository. Add the public key to `ReleaseKeys.Built` (`connector-agent/src/Fortress.Agent.Core/Updates.cs`) and to the API's `AGENT_RELEASE_KEYS`. Until then no update is accepted.
 - **A code-signing certificate** for the MSI and the exe:
   - add it as the GitHub secrets `FORTRESS_SIGN_PFX_BASE64` and `FORTRESS_SIGN_PFX_PASSWORD`;

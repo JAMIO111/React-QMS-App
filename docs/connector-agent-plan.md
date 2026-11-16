@@ -643,7 +643,7 @@ who did not write it, each finding checked against the code before it was accept
 
 ### AG6d as built (2026-11-16)
 
-- Migration `20260314100000_agent_hardening.sql` (not applied live yet; pushing the API first is harmless: agents ask for passwords again only after
+- Migration `20260314100000_agent_hardening.sql` (applied live 2026-11-16, live guardrails 0 violations; pushing the API first was harmless: agents ask for passwords again only after
   a connection's target changes). SQL test `agent_hardening.test.sql`; `agent_database_connections.test.sql` re-seals after a database change.
 - **Browser journey** step `connectorAgent()` (`scripts/journey/journey.cjs`, agent `scripts/journey/fake-agent.cjs`: the real protocol and signatures
   against the real API): add an agent and read its one-time token, the agent registers and shows Online, **Check now** is answered, a PostgreSQL

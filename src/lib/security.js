@@ -85,3 +85,13 @@ export const ssoCheckWords = (outcome, domain) =>
     failed: { type: "error", title: "Record missing", message: `${domain} stays verified for now, but its record could not be found.` },
     refused: { type: "error", title: "Cannot be verified", message: `${domain} cannot be used here; the reason is shown under it.` },
   })[outcome] ?? { type: "info", title: "Checked", message: domain };
+
+/** Raised by apiFetch on 403 sso_required (docs/sso-plan.md SS6): the organisation requires its company sign-in, which this session did not use. */
+export const SSO_REQUIRED_EVENT = "qms:sso-required";
+
+/** Single sign-on modes in words. */
+export const SSO_MODES = {
+  off: { label: "Off", note: "Everyone signs in with their email and password." },
+  optional: { label: "Optional", note: "People can sign in with their company account; passwords still work. Use it to try single sign-on out." },
+  required: { label: "Required", note: "Members must sign in with their company account. Only break-glass members may use a password, with two-factor." },
+};

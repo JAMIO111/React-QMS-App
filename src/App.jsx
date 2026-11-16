@@ -15,8 +15,9 @@ import { setupDeferred } from "./lib/onboarding";
 import ThemeColourSync from "./components/ThemeColourSync";
 import { useEffect, useState } from "react";
 import NetworkBlocked from "./components/NetworkBlocked";
+import SsoRequired from "./components/SsoRequired";
 import { useNetworkAccess } from "./hooks/useSecurity";
-import { NETWORK_BLOCKED_EVENT, REAUTH_EVENT, REAUTH_NOTE_KEY } from "./lib/security";
+import { NETWORK_BLOCKED_EVENT, REAUTH_EVENT, REAUTH_NOTE_KEY, SSO_REQUIRED_EVENT } from "./lib/security";
 import useSignOut from "./hooks/useSignOut";
 
 function App() {
@@ -28,6 +29,8 @@ function App() {
   // A request refused with 403 network_not_allowed (security plan SE4) switches to the blocked screen at once, before /me is read again.
   const [blockedBy, setBlockedBy] = useState(null); // { organisationId, address }
   const [retrying, setRetrying] = useState(false);
+  // A request refused with 403 sso_required (sso plan SS6), e.g. after an owner required single sign-on during this session.
+  const [ssoRequired, setSsoRequired] = useState(null); // { organisationId, providerId, breakGlass }
   const [signOutNow] = useSignOut();
   // The organisation's maximum session age (security plan SE6): sign out, and the sign-in page says why.
   useEffect(() => {
@@ -50,6 +53,12 @@ function App() {
     window.addEventListener(NETWORK_BLOCKED_EVENT, onBlocked);
     return () => window.removeEventListener(NETWORK_BLOCKED_EVENT, onBlocked);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const onSso = (e) => setSsoRequired(e.detail ?? {});
+    window.addEventListener(SSO_REQUIRED_EVENT, onSso);
+    return () => window.removeEventListener(SSO_REQUIRED_EVENT, onSso);
   }, []);
 
   // Browser tab: "Fortress QMS | <organisation>".
@@ -76,6 +85,7 @@ function App() {
   const settingsRoute = pathname.startsWith("/Settings");
   const blockedHere = blockedBy && (!blockedBy.organisationId || blockedBy.organisationId === organisation.id);
   const networkBlocked = network.state === "denied" || blockedHere;
+  const ssoHere = ssoRequired && (!ssoRequired.organisationId || ssoRequired.organisationId === organisation.id);
   const retry = async () => {
     setRetrying(true);
     try {
@@ -99,7 +109,9 @@ function App() {
           <main className="flex flex-col flex-1 h-full min-w-0 min-h-0">
             <Header />
             <div className="relative flex flex-col flex-1 overflow-clip min-w-0 min-h-0">
-              {networkBlocked ? (
+              {ssoHere ? (
+                <SsoRequired organisations={[{ id: organisation.id, name: organisation.name, providerId: ssoRequired.providerId, breakGlass: ssoRequired.breakGlass }]} />
+              ) : networkBlocked ? (
                 <NetworkBlocked address={network.address ?? blockedBy?.address ?? null} onRetry={retry} retrying={retrying} />
               ) : (
                 <>

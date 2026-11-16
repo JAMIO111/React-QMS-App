@@ -40,6 +40,8 @@ const EMAIL_NOTES = {
     "They already have an account, so no email was sent. They will see the invitation next time they sign in.",
   send_failed:
     "The invitation was created but the email could not be sent. Ask them to sign in with this address.",
+  company_sign_in:
+    "They sign in with their company account, so no password invitation was sent. Ask them to choose Sign in with your company account; the invitation will be waiting.",
 };
 
 const displayName = (m) =>

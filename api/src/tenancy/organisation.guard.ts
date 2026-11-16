@@ -69,8 +69,18 @@ export class OrganisationGuard implements CanActivate {
     }
 
     const ctx = contextFrom(req);
-    const { member, allowed, mfa_blocked, network, max_session_hours } = await this.db.asUser(ctx, async (db) => {
-      const result = await db.execute<{ member: boolean; allowed: boolean; mfa_blocked: boolean; network: string | null; max_session_hours: number | null }>(
+    const { member, allowed, mfa_blocked, sso_provider, sso_blocked, sso_break_glass, sso_method, network, max_session_hours } = await this.db.asUser(ctx, async (db) => {
+      const result = await db.execute<{
+        member: boolean;
+        allowed: boolean;
+        mfa_blocked: boolean;
+        sso_blocked: boolean;
+        sso_provider: string | null;
+        sso_break_glass: boolean | null;
+        sso_method: 'sso' | 'break_glass' | null;
+        network: string | null;
+        max_session_hours: number | null;
+      }>(
         sql`select app.is_member(${organisationId}::uuid) as member,
                    (${scope.permission ?? null}::text is null
                     or case when ${scope.anyScope ?? false}::boolean
@@ -78,12 +88,28 @@ export class OrganisationGuard implements CanActivate {
                             else app.has_permission(${organisationId}::uuid, ${scope.permission ?? null}::text) end) as allowed,
                    exists (select 1 from app.mfa_blocked_organisations() b
                            where b.organisation_id = ${organisationId}::uuid) as mfa_blocked,
+                   sb.organisation_id is not null as sso_blocked, sb.provider_id as sso_provider, sb.break_glass as sso_break_glass,
+                   app.sso_session_method(${organisationId}::uuid) as sso_method,
                    app.network_allowed(${organisationId}::uuid, ${ctx.address ?? null}::inet) as network,
-                   app.max_session_hours(${organisationId}::uuid) as max_session_hours`,
+                   app.max_session_hours(${organisationId}::uuid) as max_session_hours
+              from (select 1) one
+              left join app.sso_blocked_organisations() sb on sb.organisation_id = ${organisationId}::uuid`,
       );
       return result.rows[0];
     });
 
+    // An organisation that requires its company sign-in, which this session did not use (docs/sso-plan.md SS6). Checked before two-factor:
+    // signing in through the company may meet the two-factor rule too. Only the caller's own memberships are reported.
+    if (sso_blocked) {
+      throw new ApiError(
+        403,
+        'sso_required',
+        sso_break_glass
+          ? 'This organisation requires its company sign-in. As a break-glass member you can also sign in with your password and two-factor authentication.'
+          : 'This organisation requires you to sign in with your company account.',
+        { providerId: sso_provider ?? null, breakGlass: Boolean(sso_break_glass) },
+      );
+    }
     // A member whose session has not passed MFA, in an organisation that requires it. Only the
     // caller's own memberships are reported, so this does not reveal other tenants.
     if (mfa_blocked) throw new ApiError(403, 'mfa_required', 'This organisation requires two-factor authentication');
@@ -104,8 +130,29 @@ export class OrganisationGuard implements CanActivate {
       });
     }
     if (!allowed) throw ApiError.forbidden(undefined, { permission: scope.permission });
+    if (sso_method) await this.recordSignIn(organisationId.toLowerCase(), ctx.user.id, sso_method, ctx.correlationId);
     req.organisationId = organisationId.toLowerCase();
     return true;
+  }
+
+  /** Hours already recorded by this process, so a busy session writes once an hour, not on every request. */
+  private readonly signInsSeen = new Set<string>();
+
+  /**
+   * Records a request made through the company sign-in or break-glass (one row per person, method and hour; the first break-glass use of an hour
+   * is told to owners and admins by the database). Never lets a failure to record change the answer.
+   */
+  private async recordSignIn(organisationId: string, userId: string, method: 'sso' | 'break_glass', correlationId: string) {
+    const hour = Math.floor(Date.now() / 3_600_000);
+    const key = `${organisationId}:${userId}:${method}:${hour}`;
+    if (this.signInsSeen.has(key)) return;
+    try {
+      await this.db.asApi((c) => c.query('select app.system_record_sso_sign_in($1::uuid, $2::uuid, $3)', [organisationId, userId, method]), correlationId, 'security');
+      if (this.signInsSeen.size > 10_000) this.signInsSeen.clear();
+      this.signInsSeen.add(key);
+    } catch (e) {
+      this.log.warn(`Could not record a ${method} sign-in: ${(e as Error).message}`);
+    }
   }
 
   /** Records a blocked (or, in monitor mode, would-be blocked) request on the API login. Never lets a failure to record change the answer. */

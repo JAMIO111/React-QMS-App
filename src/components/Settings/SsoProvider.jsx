@@ -100,7 +100,14 @@ export default function SsoProvider({ sso, canManage }) {
             {canManage && sso.available && (
               <>
                 <CTAButton type="neutral" size="default" onClick={() => setEditing(true)}>Replace metadata</CTAButton>
-                <CTAButton type="danger" size="default" onClick={() => setDisabling(true)}>Disconnect</CTAButton>
+                <CTAButton
+                  type="danger"
+                  size="default"
+                  onClick={() => setDisabling(true)}
+                  disabled={sso.mode !== "off"}
+                  title={sso.mode !== "off" ? "Switch single sign-on off first" : undefined}>
+                  Disconnect
+                </CTAButton>
               </>
             )}
           </div>

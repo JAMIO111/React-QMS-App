@@ -227,3 +227,107 @@ describe('accepting the terms after a company sign-in', () => {
   });
 });
 
+
+/**
+ * SS3: requiring the company sign-in (docs/sso-plan.md SS6–SS9). Tokens carry amr as Supabase writes it. In the database a session with no amr
+ * (system work acting for a person) is not affected; over HTTP the 12-hour limit still asks such a token to sign in again. The rules themselves
+ * are in supabase/tests/sso_enforcement.test.sql.
+ */
+describe('requiring the company sign-in', () => {
+  let providerId: string;
+  const password = (aal: 'aal1' | 'aal2' = 'aal1') => ({ aal, amr: [{ method: 'password', timestamp: Math.floor(Date.now() / 1000) }] });
+  const saml = () => ({ aal: 'aal1', amr: [{ method: 'sso/saml', provider: providerId, timestamp: Math.floor(Date.now() / 1000) }] });
+  const with_ = async (user: string, claims: Record<string, unknown>) => ({ Authorization: `Bearer ${await token(user, claims)}`, 'X-Organisation-Id': ids.orgA });
+
+  it('optional needs a connected provider; then passwords still work', async () => {
+    const none = await api().put('/api/v1/security/sso/mode').set(await as(ids.ownerA)).send({ mode: 'optional' }).expect(409);
+    expect(none.body.error.message).toMatch(/Connect your company/);
+    const res = await api().put('/api/v1/security/sso/provider').set(await as(ids.ownerA)).send({ metadataUrl: 'https://login.example.test/ss3.xml' }).expect(200);
+    providerId = res.body.provider.supabaseProviderId;
+    await api().put('/api/v1/security/sso/mode').set(await as(ids.inspectorA)).send({ mode: 'optional' }).expect(403);
+    const optional = await api().put('/api/v1/security/sso/mode').set(await as(ids.ownerA)).send({ mode: 'optional' }).expect(200);
+    expect(optional.body).toMatchObject({ mode: 'optional', modeChangedBy: 'Ada Owner' });
+    await api().get('/api/v1/ncrs').set(await with_(ids.inspectorA, password())).expect(200);
+  });
+
+  it('required needs confirming, and a request through the company sign-in', async () => {
+    await api().put('/api/v1/security/sso/mode').set(await as(ids.ownerA)).send({ mode: 'required' }).expect(400);
+    const refused = await api().put('/api/v1/security/sso/mode').set(await with_(ids.ownerA, password('aal2'))).send({ mode: 'required', confirm: true }).expect(409);
+    expect(refused.body.error).toMatchObject({ code: 'sso_rule', message: expect.stringMatching(/Sign in with your company account first/) });
+    const res = await api().put('/api/v1/security/sso/mode').set(await with_(ids.ownerA, saml())).send({ mode: 'required', confirm: true }).expect(200);
+    expect(res.body).toMatchObject({ mode: 'required', session: { viaSso: true }, sessionHours: { stored: null, effective: 12 } });
+    expect(res.body.changes[0]).toMatchObject({ kind: 'mode', from: 'optional', to: 'required', by: 'Ada Owner' });
+    expect(res.body.passwordMembers.map((m: { userId: string }) => m.userId)).toEqual(expect.arrayContaining([ids.ownerA, ids.inspectorA]));
+  });
+
+  it('refuses a password session with 403 sso_required, on every organisation route', async () => {
+    const res = await api().get('/api/v1/ncrs').set(await with_(ids.inspectorA, password('aal2'))).expect(403);
+    expect(res.body.error).toMatchObject({ code: 'sso_required', details: { providerId, breakGlass: false } });
+    const me = await api().get('/api/v1/me').set({ Authorization: `Bearer ${await token(ids.inspectorA, password())}` }).expect(200);
+    expect(me.body.sso.requiredBy).toEqual([expect.objectContaining({ id: ids.orgA, providerId, breakGlass: false })]);
+    expect(me.body.memberships.map((m: { organisation: { id: string } }) => m.organisation.id)).not.toContain(ids.orgA);
+    expect(me.body.mfa.requiredBy).toEqual([]);
+  });
+
+  it('lets in a request through the organisation’s own provider, wherever it is in amr, and records the sign-in', async () => {
+    await api().get('/api/v1/ncrs').set(await with_(ids.inspectorA, saml())).expect(200);
+    const both = { aal: 'aal2', amr: [{ method: 'totp', timestamp: Math.floor(Date.now() / 1000) }, ...saml().amr] };
+    await api().get('/api/v1/ncrs').set(await with_(ids.inspectorA, both)).expect(200);
+    const other = { aal: 'aal1', amr: [{ method: 'sso/saml', provider: '00000000-0000-4000-8000-0000000000ff' }] };
+    expect((await api().get('/api/v1/ncrs').set(await with_(ids.inspectorA, other)).expect(403)).body.error.code).toBe('sso_required');
+    const rows = await admin.query(`select method, count from public.sso_sign_ins where organisation_id = $1 and user_id = $2`, [ids.orgA, ids.inspectorA]);
+    expect(rows.rows).toEqual([{ method: 'sso', count: 1 }]); // once an hour per process, however many requests
+  });
+
+  it('applies the 12-hour session limit while required (a token that does not say when it signed in is asked to sign in again)', async () => {
+    const res = await api().get('/api/v1/ncrs').set(await as(ids.inspectorA)).expect(401);
+    expect(res.body.error).toMatchObject({ code: 'reauthentication_required', details: { maxSessionHours: 12 } });
+    const old = { aal: 'aal1', amr: [{ method: 'sso/saml', provider: providerId, timestamp: Math.floor(Date.now() / 1000) - 13 * 3600 }] };
+    expect((await api().get('/api/v1/ncrs').set(await with_(ids.inspectorA, old)).expect(401)).body.error.code).toBe('reauthentication_required');
+  });
+
+  it('break-glass: an owner gets in with a password AND two-factor, never a password alone, and owners are told', async () => {
+    await api().put('/api/v1/security/sso/break-glass').set(await with_(ids.ownerA, saml())).send({ userIds: [ids.inspectorA] }).expect(409);
+    const res = await api().put('/api/v1/security/sso/break-glass').set(await with_(ids.ownerA, saml())).send({ userIds: [ids.ownerA] }).expect(200);
+    expect(res.body.breakGlass).toEqual([expect.objectContaining({ userId: ids.ownerA, name: 'Ada Owner' })]);
+    const alone = await api().get('/api/v1/ncrs').set(await with_(ids.ownerA, password('aal1'))).expect(403);
+    expect(alone.body.error).toMatchObject({ code: 'sso_required', details: { breakGlass: true } });
+    await api().get('/api/v1/ncrs').set(await with_(ids.ownerA, password('aal2'))).expect(200);
+    const used = await admin.query(`select count(*)::int as n from public.sso_changes where organisation_id = $1 and kind = 'break_glass_used'`, [ids.orgA]);
+    expect(used.rows[0].n).toBe(1);
+  });
+
+  it('keeps the provider while single sign-on is in use, without asking Supabase', async () => {
+    const before = sso.calls.length;
+    const res = await api().post('/api/v1/security/sso/provider/disable').set(await with_(ids.ownerA, saml())).send({ reason: 'Changing provider' }).expect(409);
+    expect(res.body.error.message).toMatch(/Switch single sign-on off/);
+    expect(sso.calls.length).toBe(before);
+  });
+
+  it('invites only at the verified domains, and never with a password invitation', async () => {
+    const role = (await admin.query(`select id from public.roles where organisation_id = $1 and key = 'quality_manager'`, [ids.orgA])).rows[0].id;
+    const outside = await api().post('/api/v1/members/invitations').set(await with_(ids.ownerA, saml())).send({ email: 'guest@elsewhere-ss3.test', roleId: role }).expect(409);
+    expect(outside.body.error.message).toMatch(/requires single sign-on/);
+    const inside = await api().post('/api/v1/members/invitations').set(await with_(ids.ownerA, saml())).send({ email: 'new.person@beta-ss2.test', roleId: role }).expect(201);
+    expect(inside.body.email).toEqual({ sent: false, reason: 'company_sign_in' });
+  });
+
+  it('switching a company sign-in’s two-factor trust off is refused from a session that would then fail', async () => {
+    await admin.query(`update public.organisation_settings set require_mfa = true where organisation_id = $1`, [ids.orgA]);
+    const refused = await api().put('/api/v1/security/sso/two-factor').set(await with_(ids.ownerA, saml())).send({ trust: false }).expect(409);
+    expect(refused.body.error.message).toMatch(/Set up two-factor/);
+    await admin.query(`update public.organisation_settings set require_mfa = false where organisation_id = $1`, [ids.orgA]);
+  });
+
+  it('an operator with MFA can make it optional again', async () => {
+    await admin.query(`insert into public.platform_admins (user_id, note) values ($1, 'operator') on conflict do nothing`, [ids.outsider]);
+    const body = { reason: 'The certificate expired overnight', verification: 'Called the owner back on file' };
+    const auth = { Authorization: `Bearer ${await token(ids.outsider, { aal: 'aal2' })}` };
+    const res = await api().post(`/api/v1/platform/organisations/${ids.orgA}/recover-sso`).set(auth).send(body).expect(200);
+    expect(res.body).toMatchObject({ organisationId: ids.orgA, ssoMode: 'optional' });
+    const list = await api().get('/api/v1/platform/organisations').set(auth).expect(200);
+    expect(list.body.data.find((o: { organisationId: string }) => o.organisationId === ids.orgA).sso).toEqual({ mode: 'optional', connected: true });
+    await api().get('/api/v1/ncrs').set(await with_(ids.inspectorA, password())).expect(200);
+    await api().put('/api/v1/security/sso/mode').set(await as(ids.ownerA)).send({ mode: 'off' }).expect(200);
+  });
+});

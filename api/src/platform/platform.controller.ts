@@ -42,6 +42,14 @@ export class PlatformController {
     return this.service.recoverNetworkPolicy(ctx, parse(Uuid, id), parse(RecoverNetworkBody, body));
   }
 
+  @Post('organisations/:id/recover-sso')
+  @HttpCode(200)
+  @ApiBody({ schema: openApiSchema(RecoverNetworkBody) })
+  @ApiOkResponse({ description: 'Make single sign-on optional again for an organisation that requires it, when the company sign-in fails and nobody can get in (reason and how ownership was verified; never off; the provider is kept). Owners and admins are told. 404 for non-operators, 403 mfa_required without MFA, 409 sso_rule when it is not required.' })
+  recoverSso(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.recoverSso(ctx, parse(Uuid, id), parse(RecoverNetworkBody, body));
+  }
+
   @Get('agent-releases')
   @ApiOkResponse({ description: 'Connector agent releases, withdrawn ones too, with how many agents run each, and which release keys are configured (AGENT_RELEASE_KEYS). 404 for non-operators, 403 mfa_required without MFA.', schema: openApiSchema(AgentReleases) })
   agentReleases(@Ctx() ctx: RequestContext) {

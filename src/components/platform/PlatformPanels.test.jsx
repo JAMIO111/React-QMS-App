@@ -149,6 +149,24 @@ describe("organisations", () => {
     expect(await within(dialog).findByText("Back to monitor")).toBeInTheDocument();
   });
 
+  it("makes single sign-on optional again for an organisation whose company sign-in fails", async () => {
+    responses["/platform/organisations"] = { total: 1, data: [org({ sso: { mode: "required", connected: true } })] };
+    responses["/platform/organisations/o1/recover-sso"] = { organisationId: "o1", ssoMode: "optional", changeId: "c2" };
+    renderAt("/platform?tab=organisations");
+    const table = await screen.findByRole("table", { name: "Organisations" });
+    expect(within(table).getByText("Required")).toBeInTheDocument();
+    await userEvent.click(within(table).getByRole("button", { name: /Make single sign-on optional for/ }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent(/the company sign-in stays connected/);
+    await userEvent.type(within(dialog).getByLabelText(/^Why/), "The certificate expired overnight");
+    await userEvent.type(within(dialog).getByLabelText(/How ownership was verified/), "Called the owner back on file");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Recover access" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/platform/organisations/o1/recover-sso", {
+      method: "POST", body: { reason: "The certificate expired overnight", verification: "Called the owner back on file" },
+    }));
+    expect(await within(dialog).findByText("Single sign-on is optional again")).toBeInTheDocument();
+  });
+
   it("searches after a pause, and says when nothing matches", async () => {
     renderAt("/platform?tab=organisations");
     await screen.findByRole("table", { name: "Organisations" });

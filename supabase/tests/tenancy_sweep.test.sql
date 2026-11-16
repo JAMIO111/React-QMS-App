@@ -454,6 +454,9 @@ BEGIN
   INSERT INTO sweep VALUES ('sso_domain', (SELECT id FROM public.organisation_sso_domains WHERE organisation_id = a));
   -- SS2: a provider (written by the API login).
   PERFORM app.system_sso_save_provider(a, '50000000-0000-0000-0000-0000000000a1', gen_random_uuid(), 'https://idp.sweep.test/entity', 'https://idp.sweep.test/metadata', NULL, '{}');
+  -- SS3: a break-glass member, a sign-in and a change (seeded directly / by the API login; people write through functions).
+  INSERT INTO public.sso_break_glass_members (organisation_id, user_id) VALUES (a, '50000000-0000-0000-0000-0000000000a1');
+  PERFORM app.system_record_sso_sign_in(a, '50000000-0000-0000-0000-0000000000a1', 'break_glass');
   -- SE5: a change of the policy is written down by the trigger (monitor and back, so nobody is blocked in the sweep).
   UPDATE public.organisation_settings SET network_policy = 'monitor' WHERE organisation_id = a;
   UPDATE public.organisation_settings SET network_policy = 'off' WHERE organisation_id = a;

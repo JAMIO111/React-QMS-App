@@ -24,7 +24,9 @@ const departmentLabel = (d, sites) => `${sites.find((s) => s.id === d.siteId)?.c
 const outcomeText = (r) => {
   if (!r.ok) return r.error?.message ?? "Not invited";
   const e = r.emailOutcome;
+  if (e?.sent && e.kind === "company_sign_in") return "Invited. We emailed them a link to sign in with their company account.";
   if (e?.sent) return e.kind === "sign_in_link" ? "Invited. They already have an account, so we emailed a sign-in link." : "Invited. An email is on its way.";
+  if (e?.reason === "company_sign_in") return "Invited. They sign in with their company account: the invitation will be waiting when they do.";
   if (e?.reason === "not_configured") return "Invited. Email is not set up here, so tell them to sign in or sign up with this address.";
   if (e?.reason === "existing_account") return "Invited. They already have an account: they will see the invitation when they sign in.";
   return "Invited, but the email could not be sent. Use Resend below, or tell them to sign in.";

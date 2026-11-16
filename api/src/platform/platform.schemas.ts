@@ -72,6 +72,7 @@ export const PlatformOrganisation = z.object({
   lastSyncedAt: Iso.nullable(),
   /** off | monitor | enforce (docs/security-plan.md): an enforcing organisation can be recovered to monitor by an operator. */
   networkPolicy: z.enum(['off', 'monitor', 'enforce']),
+  sso: z.object({ mode: z.enum(['off', 'optional', 'required']), connected: z.boolean() }),
 });
 export const PlatformOrganisations = z.object({ data: z.array(PlatformOrganisation), total: z.number().int() });
 export type PlatformOrganisations = z.infer<typeof PlatformOrganisations>;

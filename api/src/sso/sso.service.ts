@@ -83,11 +83,40 @@ export class SsoService {
     return this.overview(ctx);
   }
 
+  /**
+   * Off / optional / required (SS6). The database refuses required unless this request came through the organisation's own provider, so the
+   * person switching has shown the company sign-in works.
+   */
+  setMode(ctx: RequestContext, mode: 'off' | 'optional' | 'required') {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.set_sso_mode(${orgOf(ctx)}::uuid, ${mode})`);
+      return this.load(db, ctx);
+    });
+  }
+
+  /** Whether a company sign-in meets the organisation's two-factor rule (SS7). */
+  setTrustIdpMfa(ctx: RequestContext, trust: boolean) {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.set_sso_trust_idp_mfa(${orgOf(ctx)}::uuid, ${trust})`);
+      return this.load(db, ctx);
+    });
+  }
+
+  /** The break-glass members, replaced as a whole (SS8): up to three owners or admins who may use a password and two-factor. */
+  setBreakGlass(ctx: RequestContext, userIds: string[]) {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.set_sso_break_glass(${orgOf(ctx)}::uuid, ${`{${userIds.join(',')}}`}::uuid[])`);
+      return this.load(db, ctx);
+    });
+  }
+
   /** Switches single sign-on off: the provider leaves Supabase (its domains are free again) and is kept here as disabled, with the reason. */
   async disableProvider(ctx: RequestContext, reason: string) {
     this.requireAdmin();
     const state = await this.state(orgOf(ctx), ctx.correlationId);
     if (!state.providerId || !state.supabaseId) throw new ApiError(409, 'sso_rule', 'Single sign-on is not connected');
+    // Checked before Supabase is touched (the database refuses it again): people sign in through it while single sign-on is in use.
+    if (state.mode !== 'off') throw new ApiError(409, 'sso_rule', "Switch single sign-on off before disconnecting your company's sign-in");
     await this.callAdmin(() => this.admin.remove(state.supabaseId!));
     await this.database.asApi(
       (c) => c.query(`select app.system_sso_disable_provider($1::uuid, $2::uuid, $3)`, [state.providerId, ctx.user.id, reason]),
@@ -133,7 +162,14 @@ export class SsoService {
 
   private async state(organisationId: string, correlationId: string) {
     const row = await this.database.asApi(
-      async (c) => (await c.query(`select provider_id, supabase_provider_id, domains, verified, last_error from app.system_sso_provider_state($1::uuid)`, [organisationId])).rows[0] as Row,
+      async (c) =>
+        (
+          await c.query(
+            `select st.provider_id, st.supabase_provider_id, st.domains, st.verified, st.last_error, (select m.mode from app.system_sso_mode($1::uuid) m) as mode
+               from app.system_sso_provider_state($1::uuid) st`,
+            [organisationId],
+          )
+        ).rows[0] as Row,
       correlationId,
       'sso',
     );
@@ -143,6 +179,7 @@ export class SsoService {
       domains: ((row?.domains as string[]) ?? []).slice().sort(),
       verified: ((row?.verified as string[]) ?? []).slice().sort(),
       lastError: (row?.last_error as string) ?? null,
+      mode: ((row?.mode as string) ?? 'off') as 'off' | 'optional' | 'required',
     };
   }
 
@@ -202,9 +239,13 @@ export class SsoService {
     const org = orgOf(ctx);
     const s = (
       await db.execute<Row>(sql`
-        select s.sso_mode, s.sso_join, s.sso_trust_idp_mfa, s.allowed_email_domains,
-               app.has_permission(${org}::uuid, 'security.manage') as can_manage
-          from public.organisation_settings s where s.organisation_id = ${org}::uuid`)
+        select s.sso_mode, s.sso_join, s.sso_trust_idp_mfa, s.allowed_email_domains, s.require_mfa, s.max_session_hours, s.sso_mode_changed_at,
+               nullif(btrim(concat_ws(' ', mp.first_name, mp.surname)), '') as sso_mode_changed_by,
+               app.has_permission(${org}::uuid, 'security.manage') as can_manage,
+               app.sso_session_for(${org}::uuid) as via_sso, app.session_aal() as aal
+          from public.organisation_settings s
+          left join public.profiles mp on mp.id = s.sso_mode_changed_by
+         where s.organisation_id = ${org}::uuid`)
     ).rows[0] ?? {};
     const rows = await db.execute<Row>(sql`
       select d.id, d.domain, d.verification_token, d.verified_at, d.last_checked_at, d.check_failed_at, d.check_error,
@@ -272,6 +313,22 @@ export class SsoService {
       disabledReason: (p.disabled_reason as string) ?? null,
     });
     const active = providers.rows.find((p) => p.status === 'active');
+    // Password members (owners and admins among them can be break-glass); SSO users have no password, so they never can.
+    const people = await db.execute<Row>(sql`select user_id, name, email, break_glass, owner_or_admin from app.sso_password_members(${org}::uuid)`);
+    const glass = await db.execute<Row>(sql`
+      select b.user_id, b.added_at from public.sso_break_glass_members b
+       where b.organisation_id = ${org}::uuid and b.ended_at is null order by b.added_at`);
+    const person = new Map(people.rows.map((p) => [p.user_id as string, p]));
+    const signIns = await db.execute<Row>(sql`
+      select i.user_id, i.method, sum(i.count)::int as requests, max(i.last_at) as last_at, min(i.first_at) as first_at
+        from public.sso_sign_ins i where i.organisation_id = ${org}::uuid and i.hour > now() - interval '30 days'
+       group by i.user_id, i.method order by max(i.last_at) desc limit 50`);
+    const names = new Map(people.rows.map((p) => [p.user_id as string, (p.name as string) ?? (p.email as string)]));
+    const changes = await db.execute<Row>(sql`
+      select c.id, c.kind, c.from_value, c.to_value, c.user_name, c.reason, c.summary, c.created_at
+        from public.sso_changes c where c.organisation_id = ${org}::uuid order by c.created_at desc limit 20`);
+    const mode = ((s.sso_mode as string) ?? 'off') as 'off' | 'optional' | 'required';
+    const storedHours = s.max_session_hours == null ? null : Number(s.max_session_hours);
     return {
       /** Whether this server can register providers with Supabase (SUPABASE_MANAGEMENT_TOKEN set). */
       available: this.admin.enabled,
@@ -279,7 +336,46 @@ export class SsoService {
       serviceProvider: serviceProviderValues(this.env.SUPABASE_URL),
       provider: active ? providerOf(active) : null,
       previousProviders: providers.rows.filter((p) => p.status !== 'active').map(providerOf),
-      mode: ((s.sso_mode as string) ?? 'off') as 'off' | 'optional' | 'required',
+      mode,
+      modeChangedAt: iso(s.sso_mode_changed_at),
+      modeChangedBy: (s.sso_mode_changed_by as string) ?? null,
+      /** How this request signed in: through the organisation's own provider (needed to switch to required) and its two-factor level. */
+      session: { viaSso: Boolean(s.via_sso), aal: (s.aal as string) === 'aal2' ? 'aal2' : 'aal1' },
+      requireMfa: Boolean(s.require_mfa),
+      /** The session limit applied: the stored one, else 12 hours while required (SS9). */
+      sessionHours: { stored: storedHours, effective: storedHours ?? (mode === 'required' ? 12 : null) },
+      breakGlass: glass.rows.map((b) => ({
+        userId: b.user_id as string,
+        name: (person.get(b.user_id as string)?.name as string) ?? null,
+        email: (person.get(b.user_id as string)?.email as string) ?? null,
+        addedAt: iso(b.added_at)!,
+      })),
+      /** Members who sign in with a password: blocked while required unless they are break-glass. Owners and admins among them can be break-glass. */
+      passwordMembers: people.rows.map((p) => ({
+        userId: p.user_id as string,
+        name: (p.name as string) ?? null,
+        email: (p.email as string) ?? null,
+        breakGlass: Boolean(p.break_glass),
+        ownerOrAdmin: Boolean(p.owner_or_admin),
+      })),
+      signIns: signIns.rows.map((i) => ({
+        userId: i.user_id as string,
+        name: names.get(i.user_id as string) ?? null,
+        method: i.method as 'sso' | 'break_glass',
+        requests: Number(i.requests),
+        firstAt: iso(i.first_at)!,
+        lastAt: iso(i.last_at)!,
+      })),
+      changes: changes.rows.map((c) => ({
+        id: c.id as string,
+        kind: c.kind as 'mode' | 'two_factor' | 'break_glass_list' | 'break_glass_used' | 'recovery',
+        from: (c.from_value as string) ?? null,
+        to: (c.to_value as string) ?? null,
+        by: (c.user_name as string) ?? null,
+        reason: (c.reason as string) ?? null,
+        summary: c.summary as string,
+        at: iso(c.created_at)!,
+      })),
       join: ((s.sso_join as string) ?? 'invited') as 'invited' | 'domain',
       trustIdpMfa: s.sso_trust_idp_mfa !== false,
       canManage: Boolean(s.can_manage),

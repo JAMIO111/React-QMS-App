@@ -1,4 +1,5 @@
 import { loadEnv } from '../config/env';
+import { MailMessage, MailTransport } from '../email/mail-transport';
 import { InvitationMailer } from './invitation-mailer.service';
 
 const base = { DATABASE_URL: 'postgres://x', SUPABASE_JWT_SECRET: 'x'.repeat(40) };
@@ -62,6 +63,35 @@ describe('InvitationMailer', () => {
       expect(only422).toHaveBeenCalledTimes(1);
       const linkFails = jest.fn().mockResolvedValueOnce(new Response('{}', { status: 422 })).mockRejectedValueOnce(new Error('network'));
       await expect(mailer.send('a@example.test', 'Acme', linkFails)).resolves.toEqual({ sent: false, reason: 'existing_account' });
+    });
+  });
+
+  describe('someone who signs in with their company account (SSO)', () => {
+    class Recorder extends MailTransport {
+      readonly name = 'resend';
+      sent: MailMessage[] = [];
+      async send(m: MailMessage) {
+        this.sent.push(m);
+        return { outcome: 'sent' as const, provider: this.name };
+      }
+    }
+    const env = loadEnv({ ...base, SUPABASE_URL: 'https://p.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'service-role-key-value', APP_BASE_URL: 'https://web.example/' });
+
+    it('emails a link to the company sign-in through the mail provider, never a Supabase invitation', async () => {
+      const transport = new Recorder();
+      const mailer = new InvitationMailer(env, transport);
+      await expect(mailer.sendCompanySignIn('new@acme.test', 'Acme <Ltd>', 'acme.test')).resolves.toEqual({ sent: true, kind: 'company_sign_in' });
+      expect(transport.sent[0]).toMatchObject({ to: 'new@acme.test', subject: 'You are invited to Acme <Ltd> on Fortress QMS' });
+      expect(transport.sent[0].text).toContain('https://web.example/sso?domain=acme.test');
+      expect(transport.sent[0].html).toContain('Acme &lt;Ltd&gt;');
+    });
+
+    it('sends nothing without a mail provider or an app address: the invitation waits for them', async () => {
+      await expect(new InvitationMailer(env).sendCompanySignIn('new@acme.test', 'Acme', 'acme.test')).resolves.toEqual({ sent: false, reason: 'company_sign_in' });
+      await expect(new InvitationMailer(loadEnv(base), new Recorder()).sendCompanySignIn('new@acme.test', 'Acme', 'acme.test')).resolves.toEqual({
+        sent: false,
+        reason: 'company_sign_in',
+      });
     });
   });
 });

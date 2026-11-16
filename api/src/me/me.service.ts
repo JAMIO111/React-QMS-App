@@ -63,7 +63,12 @@ export class MeService {
     const blocked = await db.execute<{ organisation_id: string; name: string }>(
       sql`select organisation_id, name from app.mfa_blocked_organisations()`,
     );
-    const blockedIds = new Set(blocked.rows.map((b) => b.organisation_id));
+    // Organisations that require their company sign-in, which this session did not use (docs/sso-plan.md SS6): left out of `memberships`
+    // too, and listed so the app can offer the right sign-in (or, for a break-glass member, two-factor).
+    const ssoBlocked = await db.execute<{ organisation_id: string; name: string; provider_id: string | null; break_glass: boolean }>(
+      sql`select organisation_id, name, provider_id, break_glass from app.sso_blocked_organisations()`,
+    );
+    const blockedIds = new Set([...blocked.rows, ...ssoBlocked.rows].map((b) => b.organisation_id));
 
     return {
       profile: {
@@ -79,6 +84,9 @@ export class MeService {
       mfa: {
         level: ctx.user.claims.aal === 'aal2' ? 'aal2' : 'aal1',
         requiredBy: blocked.rows.map((b) => ({ id: b.organisation_id, name: b.name })),
+      },
+      sso: {
+        requiredBy: ssoBlocked.rows.map((b) => ({ id: b.organisation_id, name: b.name, providerId: b.provider_id ?? null, breakGlass: Boolean(b.break_glass) })),
       },
       memberships: memberships.rows.filter((m) => !blockedIds.has(m.organisation_id)).map((m) => ({
         membershipId: m.membership_id,

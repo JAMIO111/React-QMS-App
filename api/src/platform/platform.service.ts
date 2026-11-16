@@ -37,11 +37,16 @@ export class PlatformService {
       const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
       const ids = res.rows.map((r) => r.organisation_id as string);
       const policies = new Map<string, string>();
+      const sso = new Map<string, { mode: 'off' | 'optional' | 'required'; connected: boolean }>();
       if (ids.length) {
         const p = await db.execute<{ organisation_id: string; network_policy: string }>(
           sql`select organisation_id, network_policy from app.platform_network_policies(${`{${ids.join(',')}}`}::uuid[])`,
         );
         for (const row of p.rows) policies.set(row.organisation_id, row.network_policy);
+        const m = await db.execute<{ organisation_id: string; sso_mode: string; connected: boolean }>(
+          sql`select organisation_id, sso_mode, connected from app.platform_sso_modes(${`{${ids.join(',')}}`}::uuid[])`,
+        );
+        for (const row of m.rows) sso.set(row.organisation_id, { mode: row.sso_mode as 'off' | 'optional' | 'required', connected: Boolean(row.connected) });
       }
       return {
         total: res.rows.length ? Number(res.rows[0].total_rows) : 0,
@@ -67,6 +72,7 @@ export class PlatformService {
           mrrPence: Number(r.mrr_pence),
           lastSyncedAt: iso(r.last_synced_at),
           networkPolicy: (policies.get(r.organisation_id as string) ?? 'off') as 'off' | 'monitor' | 'enforce',
+          sso: sso.get(r.organisation_id as string) ?? { mode: 'off' as const, connected: false },
         })),
       };
     });
@@ -83,6 +89,18 @@ export class PlatformService {
         sql`select app.platform_recover_network_policy(${organisationId}::uuid, ${body.reason}, ${body.verification}) as id`,
       );
       return { organisationId, networkPolicy: 'monitor' as const, changeId: r.rows[0].id };
+    });
+  }
+
+  /**
+   * Recovery when the company sign-in fails and nobody can get in (docs/sso-plan.md SS8): required goes back to optional, never off, with a reason
+   * and how ownership was verified. The database checks the operator, writes the history row and tells every owner and admin.
+   */
+  recoverSso(ctx: RequestContext, organisationId: string, body: { reason: string; verification: string }) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.requireOperator(db);
+      const r = await db.execute<{ id: string }>(sql`select app.platform_recover_sso(${organisationId}::uuid, ${body.reason}, ${body.verification}) as id`);
+      return { organisationId, ssoMode: 'optional' as const, changeId: r.rows[0].id };
     });
   }
 

@@ -42,7 +42,11 @@ export const MfaStatus = z.object({
   level: z.enum(['aal1', 'aal2']),
   requiredBy: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
 });
-export const MeResponse = z.object({ profile: Profile, memberships: z.array(Membership), mfa: MfaStatus });
+/** Organisations that require their company sign-in, which this session did not use (docs/sso-plan.md SS6). */
+export const SsoStatus = z.object({
+  requiredBy: z.array(z.object({ id: z.string().uuid(), name: z.string(), providerId: z.string().uuid().nullable(), breakGlass: z.boolean() })),
+});
+export const MeResponse = z.object({ profile: Profile, memberships: z.array(Membership), mfa: MfaStatus, sso: SsoStatus });
 export type MeResponse = z.infer<typeof MeResponse>;
 
 export const AcceptTermsBody = z.object({ version: z.string().trim().regex(/^[A-Za-z0-9._-]{1,20}$/) }).strict();

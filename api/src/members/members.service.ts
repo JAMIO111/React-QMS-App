@@ -114,7 +114,7 @@ export class MembersService {
       return { member: await this.one(db, ctx.organisationId!, membershipId), organisationName: org.rows[0].name };
     });
     // Email after the invitation is committed; a failed email never loses the invitation.
-    const email = await this.mailer.send(body.email, organisationName);
+    const email = await this.sendInvitation(ctx, body.email, organisationName);
     return { member, email };
   }
 
@@ -151,6 +151,27 @@ export class MembersService {
     return { results, invited, failed: results.length - invited };
   }
 
+  /**
+   * The invitation email. Someone at the organisation's single sign-on domains, while it is in use, is sent to the company sign-in instead of
+   * being given a password account (docs/sso-plan.md SS6).
+   */
+  private async sendInvitation(ctx: RequestContext, email: string, organisationName: string) {
+    const domain = await this.companySignInDomain(ctx, email);
+    return domain ? this.mailer.sendCompanySignIn(email, organisationName, domain) : this.mailer.send(email, organisationName);
+  }
+
+  private async companySignInDomain(ctx: RequestContext, email: string): Promise<string | null> {
+    const at = email.split('@')[1]?.toLowerCase();
+    if (!at) return null;
+    const row = await this.database.asApi(
+      async (c) => (await c.query(`select mode, domains from app.system_sso_mode($1::uuid)`, [ctx.organisationId])).rows[0] as { mode: string; domains: string[] } | undefined,
+      ctx.correlationId,
+      'members',
+    );
+    if (!row || row.mode === 'off') return null;
+    return (row.domains ?? []).find((d) => at === d || at.endsWith(`.${d}`)) ?? null;
+  }
+
   /** Sends a pending invitation again (not within a minute, at most ten times) and gives it another 14 days. */
   async resendInvitation(ctx: RequestContext, membershipId: string) {
     const { member, organisationName } = await this.database.asUser(ctx, async (db) => {
@@ -159,7 +180,7 @@ export class MembersService {
       const org = await db.execute<{ name: string }>(sql`select name from public.organisations where id = ${ctx.organisationId}::uuid`);
       return { member: await this.one(db, ctx.organisationId!, membershipId), organisationName: org.rows[0].name };
     });
-    const email = member.email ? await this.mailer.send(member.email, organisationName) : ({ sent: false, reason: 'send_failed' } as const);
+    const email = member.email ? await this.sendInvitation(ctx, member.email, organisationName) : ({ sent: false, reason: 'send_failed' } as const);
     return { member, email };
   }
 

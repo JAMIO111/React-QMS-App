@@ -39,7 +39,8 @@ beforeEach(() => {
   mutate.mockReset();
   showToast.mockReset();
   pending = null;
-  sso = { available: true, serviceProvider: SP, provider: null, previousProviders: [], mode: "off", join: "invited", trustIdpMfa: true, canManage: true, allowedEmailDomains: [], domains: [waiting, verified, failing, removed] };
+  sso = { available: true, serviceProvider: SP, provider: null, previousProviders: [], mode: "off", join: "invited", trustIdpMfa: true, canManage: true, allowedEmailDomains: [], domains: [waiting, verified, failing, removed],
+    session: { viaSso: false, aal: "aal1" }, requireMfa: false, sessionHours: { stored: null, effective: null }, breakGlass: [], passwordMembers: [], signIns: [], changes: [] };
 });
 
 describe("Settings → Security → Single sign-on", () => {

@@ -129,6 +129,12 @@ const ssoRequest = ({ action, id, body }) => {
       return { path: "/security/sso/provider", method: "PUT", body };
     case "disableProvider":
       return { path: "/security/sso/provider/disable", method: "POST", body };
+    case "setMode":
+      return { path: "/security/sso/mode", method: "PUT", body };
+    case "setTrust":
+      return { path: "/security/sso/two-factor", method: "PUT", body };
+    case "setBreakGlass":
+      return { path: "/security/sso/break-glass", method: "PUT", body };
     default:
       throw new Error(`Unknown single sign-on action ${action}`);
   }
@@ -150,6 +156,15 @@ export const useSsoMutation = () => {
     onMutate: async (vars) => {
       await queryClient.cancelQueries({ queryKey: ssoKey });
       const previous = queryClient.getQueryData(ssoKey);
+      // Switches and lists show at once; the server's answer replaces them, a refusal puts them back.
+      if (previous && vars.action === "setTrust") queryClient.setQueryData(ssoKey, { ...previous, trustIdpMfa: vars.body.trust });
+      if (previous && vars.action === "setBreakGlass") {
+        const byId = new Map((previous.passwordMembers ?? []).map((m) => [m.userId, m]));
+        queryClient.setQueryData(ssoKey, {
+          ...previous,
+          breakGlass: vars.body.userIds.map((userId) => ({ userId, name: byId.get(userId)?.name ?? null, email: byId.get(userId)?.email ?? null, addedAt: null })),
+        });
+      }
       if (previous && vars.action === "removeDomain") {
         queryClient.setQueryData(ssoKey, {
           ...previous,

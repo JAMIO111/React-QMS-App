@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { usePlatformOrganisations, useRecoverNetworkPolicy } from "../../hooks/usePlatform";
+import { usePlatformOrganisations, useRecoverNetworkPolicy, useRecoverSso } from "../../hooks/usePlatform";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import Callout from "../ui/Callout";
@@ -29,8 +29,38 @@ const Subscription = ({ o }) => {
  * Recover access (security plan SE5): an organisation whose network restrictions lock everyone out goes back to monitor (never off). The operator
  * says why and how they checked the request came from an owner; owners and admins are told, and it is in their history.
  */
-export const RecoverAccessDialog = ({ organisation, onClose }) => {
-  const recover = useRecoverNetworkPolicy();
+const RECOVERY = {
+  network: {
+    done: ["Back to monitor", "Nobody is blocked now. The approved networks are kept, and the owners and admins have been told."],
+    what: (
+      <>
+        Its network restrictions go back to <strong>monitor</strong>: nobody is blocked, the approved networks are kept, and the owners decide when to
+        enforce again.
+      </>
+    ),
+    why: "For example: the factory changed internet provider and nobody can get in.",
+  },
+  sso: {
+    done: ["Single sign-on is optional again", "Passwords work again. The company sign-in is kept, and the owners and admins have been told."],
+    what: (
+      <>
+        Single sign-on becomes <strong>optional</strong>: people can sign in with their password again, the company sign-in stays connected, and the
+        owners decide when to require it again.
+      </>
+    ),
+    why: "For example: the company's sign-in certificate expired and nobody, break-glass members included, can get in.",
+  },
+};
+
+/**
+ * Recover access when everyone is locked out: network restrictions back to monitor (security plan SE5) or single sign-on back to optional (sso plan
+ * SS8), never off. The operator says why and how they checked the request came from an owner; owners and admins are told, and it is in their history.
+ */
+export const RecoverAccessDialog = ({ organisation, onClose, kind = "network" }) => {
+  const network = useRecoverNetworkPolicy();
+  const sso = useRecoverSso();
+  const recover = kind === "sso" ? sso : network;
+  const words = RECOVERY[kind];
   const [reason, setReason] = useState("");
   const [verification, setVerification] = useState("");
   const [problem, setProblem] = useState(null);
@@ -49,16 +79,15 @@ export const RecoverAccessDialog = ({ organisation, onClose }) => {
     <Dialog title={`Recover access to ${organisation.name}`} onClose={onClose} width="max-w-xl">
       {done ? (
         <div className="flex flex-col gap-4">
-          <Callout tone="success" title="Back to monitor">Nobody is blocked now. The approved networks are kept, and the owners and admins have been told.</Callout>
+          <Callout tone="success" title={words.done[0]}>{words.done[1]}</Callout>
           <CTAButton type="main" size="md" className="self-end" onClick={onClose}>Close</CTAButton>
         </div>
       ) : (
         <form noValidate onSubmit={submit} className="flex flex-col gap-4">
           <p className="text-sm text-secondary-text">
-            Its network restrictions go back to <strong>monitor</strong>: nobody is blocked, the approved networks are kept, and the owners decide when to
-            enforce again. Only do this for a request you have checked came from an owner.
+            {words.what} Only do this for a request you have checked came from an owner.
           </p>
-          <TextAreaField label="Why" required value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} hint="For example: the factory changed internet provider and nobody can get in." />
+          <TextAreaField label="Why" required value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} hint={words.why} />
           <Field label="How ownership was verified" required value={verification} maxLength={1000} onChange={(e) => setVerification(e.target.value)} hint="For example: called the owner back on the number held for the account." />
           {problem && <Callout tone="error" role="alert">{problem}</Callout>}
           <div className="flex justify-end gap-2">
@@ -96,7 +125,7 @@ const OrganisationsPanel = () => {
           <Card title={`Organisations (${res.total})`} subtitle="Counts and billing only: no records, documents or quality data">
             <Table
               caption="Organisations"
-              head={["Organisation", "Owners", "Members", "Set-up", "Subscription", "Seats", "MRR", "Network"]}
+              head={["Organisation", "Owners", "Members", "Set-up", "Subscription", "Seats", "MRR", "Network", "Single sign-on"]}
               empty={res.data.length === 0 ? (search ? "No organisation matches." : "No organisations yet.") : null}>
               {res.data.map((o) => (
                 <tr key={o.organisationId} className="border-b border-border-color align-top last:border-0">
@@ -113,7 +142,7 @@ const OrganisationsPanel = () => {
                   <td className="py-2 pr-3 text-primary-text"><Subscription o={o} /></td>
                   <td className="py-2 pr-3 text-primary-text">{o.seatsAssigned} / {o.seatsPurchased}</td>
                   <td className="py-2 pr-3 text-primary-text">{o.mrrPence ? pounds(o.mrrPence) : "—"}</td>
-                  <td className="py-2 text-primary-text">
+                  <td className="py-2 pr-3 text-primary-text">
                     {o.networkPolicy === "enforce" ? (
                       <span className="flex flex-col items-start gap-1">
                         <Pill tone="bad">Enforced</Pill>
@@ -123,6 +152,20 @@ const OrganisationsPanel = () => {
                       <Pill tone="quiet">Monitor</Pill>
                     ) : (
                       <span className="text-secondary-text">Off</span>
+                    )}
+                  </td>
+                  <td className="py-2 text-primary-text">
+                    {o.sso?.mode === "required" ? (
+                      <span className="flex flex-col items-start gap-1">
+                        <Pill tone="bad">Required</Pill>
+                        <CTAButton type="neutral" size="default" onClick={() => setRecovering({ ...o, kind: "sso" })} aria-label={`Make single sign-on optional for ${o.name}`}>
+                          Make optional
+                        </CTAButton>
+                      </span>
+                    ) : o.sso?.mode === "optional" ? (
+                      <Pill tone="quiet">Optional</Pill>
+                    ) : (
+                      <span className="text-secondary-text">{o.sso?.connected ? "Connected, off" : "Off"}</span>
                     )}
                   </td>
                 </tr>
@@ -140,7 +183,7 @@ const OrganisationsPanel = () => {
           </Card>
         )}
       </Panel>
-      {recovering && <RecoverAccessDialog organisation={recovering} onClose={() => setRecovering(null)} />}
+      {recovering && <RecoverAccessDialog organisation={recovering} kind={recovering.kind ?? "network"} onClose={() => setRecovering(null)} />}
     </div>
   );
 };

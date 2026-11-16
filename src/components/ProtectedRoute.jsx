@@ -3,6 +3,7 @@ import { useAuth } from "../contexts/AuthProvider";
 import { useMe } from "../hooks/useQmsApi";
 import LoadingScreen from "./ui/LoadingScreen";
 import FirstSignIn from "./auth/FirstSignIn";
+import SsoRequired from "./SsoRequired";
 import { isCompanyAccount } from "../lib/sso";
 
 const Loading = () => (
@@ -27,6 +28,10 @@ const ProtectedRoute = () => {
   const toMfa = <Navigate to={`/mfa?next=${encodeURIComponent(here)}`} replace />;
   if (assurance.nextLevel === "aal2" && assurance.currentLevel !== "aal2") return toMfa;
   if (assurance.currentLevel !== "aal2" && me.data?.mfa?.requiredBy?.length) return toMfa;
+  // Every organisation the person belongs to requires its company sign-in, which this session did not use (docs/sso-plan.md SS6). The
+  // two-factor page stays reachable for a break-glass member.
+  const ssoRequiredBy = me.data?.sso?.requiredBy ?? [];
+  if (ssoRequiredBy.length && !me.data.memberships?.length && !location.pathname.startsWith("/mfa")) return <SsoRequired organisations={ssoRequiredBy} fullPage />;
   // Someone who first arrived through their company's sign-in has not accepted Fortress's terms yet (docs/sso-plan.md SS10).
   if (isCompanyAccount(user) && me.data && !me.data.profile?.termsAcceptedAt) return <FirstSignIn profile={me.data.profile} />;
 

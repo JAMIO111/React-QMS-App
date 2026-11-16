@@ -1,6 +1,6 @@
 # Single sign-on (SAML) — plan
 
-**Status:** agreed 2026-11-16 (SS1–SS12 as recommended) · **SS0 done as far as it can be without a paid plan** (§12; the live sign-in check waits for Pro) · **SS1 done** (migration `20260316100000_sso_domains.sql`, §13; applied live 2026-11-16) · **SS2 built** (migration `20260317100000_sso_providers.sql`, §14; not yet applied live) · **Brief:** `docs/design-brief.md` §12 Phase 7 ("SSO and enterprise identity"), §5 (security), §14 (definition of done), §15 (non-goals) · **Builds on:** `docs/security-plan.md` (network policy, allowed email domains, maximum session age, operator recovery)
+**Status:** agreed 2026-11-16 (SS1–SS12 as recommended) · **SS0 done as far as it can be without a paid plan** (§12; the live sign-in check waits for Pro) · **SS1 done** (migration `20260316100000_sso_domains.sql`, §13; applied live 2026-11-16) · **SS2 done** (migration `20260317100000_sso_providers.sql`, §14; applied live 2026-11-16) · **SS3 built** (migration `20260318100000_sso_enforcement.sql`, §15; not yet applied live) · **Brief:** `docs/design-brief.md` §12 Phase 7 ("SSO and enterprise identity"), §5 (security), §14 (definition of done), §15 (non-goals) · **Builds on:** `docs/security-plan.md` (network policy, allowed email domains, maximum session age, operator recovery)
 
 ## 1. Why
 
@@ -271,3 +271,66 @@ Found from the documentation and from **the Supabase Auth server's source** (`gi
   - `api/test/sso.e2e-spec.ts` (fake Management API; provider, domain sync, disable, terms), `supabase-sso-admin.spec.ts`, and the API sweep allowlist for `POST /me/terms`;
   - `SingleSignOn.test.jsx`, `SingleSignOnPages.test.jsx`, `lib/sso.test.js`.
 - **Not checked live:** the real Management API and a real sign-in both wait for the Pro plan. The fake follows Supabase's documented request and response shapes.
+
+## 15. SS3 as built (migration `20260318100000_sso_enforcement.sql`)
+
+- **Where it is enforced.** `app.mfa_satisfied(org)`, which every membership and permission helper already calls, is now **two-factor satisfied AND
+  single sign-on satisfied**, so RLS, the API guard, storage and every function follow it without touching the helpers.
+  - Two-factor: `aal2`, or not required, or (`sso_trust_idp_mfa` and a session through **this organisation's active provider**) (SS7).
+  - Single sign-on: the mode is not required, or the session came through this organisation's provider, or a **break-glass member at `aal2`**
+    (never a password alone), or the token has **no `amr`** at all.
+  - "This organisation's provider" = an `amr` entry with method `sso/saml` and `provider` = the active provider's Supabase id, found **anywhere
+    in the array** (`app.sso_session_for`). Another organisation's provider, a disabled one, or an entry without a provider id never counts.
+  - **Why no `amr` is exempt:** every token Supabase issues carries `amr`; the system work that acts for a person (email fan-out, reminders,
+    workflows, scorecards, imports, agents) sets only `sub`, `role` and `aal`, and must not be refused. Over HTTP such a token still meets the
+    12-hour session limit (its sign-in time is unknown, so it is asked to sign in again).
+  - The halves are also `app.two_factor_satisfied` and `app.sso_satisfied`. `app.mfa_blocked_organisations` lists only organisations where
+    two-factor is what blocks; **`app.sso_blocked_organisations`** lists those where single sign-on does, with the provider id and whether the
+    caller is break-glass.
+- **Modes** through `app.set_sso_mode(org, mode)` (`security.manage`): optional and required need an active provider with a domain sent to
+  Supabase; **required needs the request to come through that provider now**. While required:
+  - the session limit is **12 hours** unless one is stored (`app.max_session_hours`; the stored setting wins) (SS9);
+  - invitations only to addresses at the verified single sign-on domains or their sub-domains (trigger, `QM015`);
+  - (and while not off) a verified domain cannot be removed and the provider cannot be disconnected: switch it off first (the API checks
+    before it touches Supabase).
+  - Off vs optional: a company sign-in through a connected provider is accepted in both; the difference is what the organisation tells and
+    sends people (invitations below). Disconnecting the provider is the switch that stops company sign-ins.
+- **Two-factor trust** through `app.set_sso_trust_idp_mfa` (refused when switching it off would lock the caller out). `app.guard_require_mfa`
+  now also accepts a trusted company sign-in when two-factor is switched on.
+- **Break-glass** (`sso_break_glass_members`, replaced as a whole by `app.set_sso_break_glass`): at most three, organisation-wide owners or
+  admins, checked again at every request (someone who stops being an owner or admin stops being break-glass). Ended, never deleted.
+- **Sign-ins** (`sso_sign_ins`): one row per organisation, person, method (`sso` | `break_glass`) and hour with a count, written by the API login
+  (`app.system_record_sso_sign_in`, called by the guard once an hour per process); the first break-glass use of an hour is a change, so owners
+  and admins are told. Kept 90 days (worker housekeeping).
+- **History and notices** (`sso_changes`): mode, two-factor trust, break-glass list, each break-glass use and an operator's recovery; frozen,
+  audited, `security.read`; notice `sso_changes.created` to owners and admins **with no actor** (so the person who changed it is told too),
+  emailed by default. `app.emit_notification` = the `20260303100000` version + `sso_changes` in the no-actor list — **the latest definition**.
+- **Recovery:** `app.platform_recover_sso(org, reason, verification)` (operator with MFA): required → optional, never off, the provider kept.
+  `app.platform_sso_modes(orgs)` for the panel.
+- **Password members:** `app.sso_password_members(org)` (`security.read`; members whose account is not `is_sso_user`), shown before requiring:
+  they are blocked unless break-glass, and (until SS4 moves them across) need inviting again with their company address.
+- **API:**
+  - The guard answers **`403 sso_required`** `{ providerId, breakGlass }` before checking two-factor, and records company / break-glass sign-ins.
+  - `PUT /security/sso/mode {mode, confirm}` (`confirm: true` for required), `PUT /security/sso/two-factor {trust}`,
+    `PUT /security/sso/break-glass {userIds}`; `GET /security/sso` adds `modeChangedAt/By`, `session {viaSso, aal}`, `requireMfa`,
+    `sessionHours {stored, effective}`, `breakGlass`, `passwordMembers`, `signIns` (30 days), `changes` (last 20).
+  - `/me` has `sso.requiredBy` (id, name, providerId, breakGlass); those organisations are left out of `memberships`.
+  - `POST /platform/organisations/{id}/recover-sso`; platform organisations carry `sso {mode, connected}`.
+  - **Invitations** to an address at the organisation's single sign-on domains, while not off, are **never Supabase password invitations**
+    (they would make a password account beside the company one): `InvitationMailer.sendCompanySignIn` emails a link to `/sso?domain=…` through
+    the mail provider (`MAIL_PROVIDER`), else nothing is sent (`reason: company_sign_in`) and the invitation waits for them.
+- **UI:**
+  - `Settings/SsoMode.jsx` on the Single sign-on card: Off / Optional / Required (required asks for the typed word "require", lists who will be
+    blocked, warns when nobody is break-glass, and from a password session offers **Sign in with your company account** instead), the 12-hour
+    note, the two-factor switch (optimistic), break-glass members (owners and admins with a password; optimistic), recent sign-ins and the history.
+    Disconnect and Remove (verified domain) are switched off while single sign-on is in use.
+  - `SsoRequired.jsx`: the blocked screen ("Acme requires your company sign-in", **Sign in with your company account**, **Use two-factor instead**
+    for a break-glass member, Sign out), from `ProtectedRoute` when every organisation requires it, and in `App.jsx` on `qms:sso-required`
+    (raised by `apiFetch` on `403 sso_required`).
+  - The operator panel's organisations tab has a Single sign-on column with **Make optional** (`RecoverAccessDialog kind="sso"`).
+- **Tests:** `supabase/tests/sso_enforcement.test.sql` (plus sweep seeds and the guardrails list), `api/test/sso.e2e-spec.ts` (SS3 block: tokens
+  with `amr`), the API sweep allowlist for `recover-sso`, `invitation-mailer.service.spec.ts`, `SsoMode.test.jsx`, `SsoRequired.test.jsx`,
+  `PlatformPanels.test.jsx`.
+- **Not checked live:** a real company sign-in (the Pro plan). **Pushing the API before this migration breaks every organisation route** (the guard
+  calls `app.sso_blocked_organisations` and `app.sso_session_method`) and `/me`.
+

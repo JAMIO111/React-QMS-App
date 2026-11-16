@@ -8,6 +8,12 @@ import { SsoService } from './sso.service';
 
 const DomainBody = z.object({ domain: z.string().trim().min(1).max(253) }).strict();
 const RemoveBody = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
+const ModeBody = z
+  .object({ mode: z.enum(['off', 'optional', 'required']), confirm: z.boolean().optional() })
+  .strict()
+  .refine((b) => b.mode !== 'required' || b.confirm === true, { message: 'Requiring single sign-on must be confirmed (confirm: true)', path: ['confirm'] });
+const TrustBody = z.object({ trust: z.boolean() }).strict();
+const BreakGlassBody = z.object({ userIds: z.array(z.string().uuid()).max(3) }).strict();
 const ProviderBody = z.union([
   z.object({ metadataUrl: z.string().trim().url().max(2000).refine((u) => u.startsWith('https://'), 'The metadata address must start with https://') }).strict(),
   z
@@ -59,6 +65,33 @@ export class SsoController {
   @ApiOkResponse({ description: 'Disconnect the identity provider (kept in the history with the reason); its domains are free again' })
   disableProvider(@Ctx() ctx: RequestContext, @Body() body: unknown) {
     return this.service.disableProvider(ctx, parse(RemoveBody, body).reason);
+  }
+
+  @Put('mode')
+  @OrganisationScoped('security.manage')
+  @ApiBody({ schema: openApiSchema(ModeBody) })
+  @ApiOkResponse({
+    description:
+      'Off, optional (passwords still work) or required (company sign-in only; confirm: true). Optional and required need a connected provider with a domain; required needs this request to come through that provider. Answers with the overview',
+  })
+  setMode(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.setMode(ctx, parse(ModeBody, body).mode);
+  }
+
+  @Put('two-factor')
+  @OrganisationScoped('security.manage')
+  @ApiBody({ schema: openApiSchema(TrustBody) })
+  @ApiOkResponse({ description: 'Whether a company sign-in meets the organisation’s two-factor rule (default on). Answers with the overview' })
+  setTrust(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.setTrustIdpMfa(ctx, parse(TrustBody, body).trust);
+  }
+
+  @Put('break-glass')
+  @OrganisationScoped('security.manage')
+  @ApiBody({ schema: openApiSchema(BreakGlassBody) })
+  @ApiOkResponse({ description: 'The break-glass members (up to three owners or admins who may sign in with a password and two-factor while single sign-on is required), replaced as a whole' })
+  setBreakGlass(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.setBreakGlass(ctx, parse(BreakGlassBody, body).userIds);
   }
 
   @Post('domains/:id/remove')

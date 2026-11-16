@@ -1,9 +1,13 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ENV, Env } from '../config/env';
+import { MailTransport } from '../email/mail-transport';
 
 export type EmailOutcome =
-  | { sent: true; kind?: 'sign_in_link' }
-  | { sent: false; reason: 'not_configured' | 'existing_account' | 'send_failed' };
+  | { sent: true; kind?: 'sign_in_link' | 'company_sign_in' }
+  | { sent: false; reason: 'not_configured' | 'existing_account' | 'send_failed' | 'company_sign_in' };
+
+const escapeHtml = (v: string) => v.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 /**
  * Sends invitation emails through Supabase Auth's admin invite endpoint (creates the account and
@@ -16,7 +20,42 @@ export type EmailOutcome =
 export class InvitationMailer {
   private readonly logger = new Logger(InvitationMailer.name);
 
-  constructor(@Inject(ENV) private readonly env: Env) {}
+  constructor(
+    @Inject(ENV) private readonly env: Env,
+    @Optional() private readonly transport?: MailTransport,
+  ) {}
+
+  /** Where someone at a single sign-on domain starts: the company sign-in page with their domain filled in. */
+  companySignInUrl(domain: string): string | undefined {
+    const base = this.env.APP_BASE_URL ?? this.env.INVITE_REDIRECT_URL;
+    if (!base) return undefined;
+    try {
+      const url = new URL('/sso', base);
+      url.searchParams.set('domain', domain);
+      return url.toString();
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * An invitation to someone who signs in with their company account (docs/sso-plan.md SS6): never a Supabase invitation, which would make a
+   * password account beside the company one. A plain email through the mail provider says where to sign in; the invitation waits for them
+   * (it is matched by email when they arrive). Without a provider, nothing is sent and they find it when they sign in.
+   */
+  async sendCompanySignIn(email: string, organisationName: string, domain: string): Promise<EmailOutcome> {
+    const link = this.companySignInUrl(domain);
+    if (!link || !this.transport || this.transport.name === 'none') return { sent: false, reason: 'company_sign_in' };
+    const text = `You have been invited to ${organisationName} on Fortress QMS.\n\nSign in with your company account here: ${link}\n\nYour invitation will be waiting for you.`;
+    const html = `<p>You have been invited to <strong>${escapeHtml(organisationName)}</strong> on Fortress QMS.</p><p><a href="${escapeHtml(link)}">Sign in with your company account</a>. Your invitation will be waiting for you.</p>`;
+    try {
+      const outcome = await this.transport.send({ id: randomUUID(), to: email, subject: `You are invited to ${organisationName} on Fortress QMS`, text, html });
+      return outcome.outcome === 'sent' ? { sent: true, kind: 'company_sign_in' } : { sent: false, reason: 'company_sign_in' };
+    } catch (error) {
+      this.logger.warn({ err: error }, 'Company sign-in invitation email failed');
+      return { sent: false, reason: 'company_sign_in' };
+    }
+  }
 
   get configured(): boolean {
     return Boolean(this.env.SUPABASE_URL && this.env.SUPABASE_SERVICE_ROLE_KEY);

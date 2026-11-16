@@ -53,6 +53,19 @@ export const useRecoverNetworkPolicy = () => {
   });
 };
 
+/**
+ * Make single sign-on optional again for an organisation whose company sign-in fails and nobody can get in (sso plan SS8): never off, the provider
+ * is kept, with a reason and how ownership was verified. Owners and admins are told by the database.
+ */
+export const useRecoverSso = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ organisationId, reason, verification }) =>
+      apiFetch(`/platform/organisations/${organisationId}/recover-sso`, { method: "POST", body: { reason, verification } }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "platform", "organisations"] }),
+  });
+};
+
 /** Connector agent releases (AG6b): every one including withdrawn, how many agents run each, and whether the API has release keys to check them. */
 export const usePlatformAgentReleases = () => useMonitor(["agent-releases"], "/platform/agent-releases", { refetch: false });
 

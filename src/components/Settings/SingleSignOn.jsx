@@ -6,6 +6,7 @@ import Field from "../ui/Field";
 import CopyButton from "../ui/CopyButton";
 import RowActionsMenu from "../ui/RowActionsMenu";
 import SsoProvider from "./SsoProvider";
+import SsoMode from "./SsoMode";
 import CTAButton from "@/components/CTAButton";
 import { TextAreaField } from "../master-data/shared";
 import { PlusIcon, RefreshCwIcon } from "@/components/icons";
@@ -27,7 +28,8 @@ const Pill = ({ tone, children }) => {
 /**
  * Settings → Security → Single sign-on (docs/sso-plan.md SS1): the email domains the organisation proves it owns with a DNS TXT record. Proving a
  * domain is the first step: a domain linked to single sign-on sends everyone at it to the company's own sign-in, so another company must never
- * be able to claim it. Below the domains, `SsoProvider` connects the company's sign-in (SS2); the Off / Optional / Required choice comes in SS3.
+ * be able to claim it. Below the domains, `SsoProvider` connects the company's sign-in (SS2) and `SsoMode` holds Off / Optional / Required, two-factor trust and the
+ * break-glass members (SS3).
  */
 export default function SingleSignOn({ canManage }) {
   const sso = useSso();
@@ -67,7 +69,7 @@ export default function SingleSignOn({ canManage }) {
       bodyClassName="flex flex-col gap-4">
       <p className="text-sm text-secondary-text">
         For each domain, add the TXT record shown at the company that runs the domain&apos;s DNS, then choose <strong>Check now</strong>. Once a domain is
-        verified it is yours in Fortress: no other organisation can use it. Then connect your company's sign-in below.
+        verified it is yours in Fortress: no other organisation can use it. Then connect your company's sign-in below, and choose whether to offer or require it.
       </p>
 
       {live.length === 0 ? (
@@ -75,7 +77,7 @@ export default function SingleSignOn({ canManage }) {
       ) : (
         <ul className="flex flex-col gap-3" aria-label="Single sign-on domains">
           {live.map((d) => (
-            <DomainRow key={d.id} domain={d} canManage={canManage} checking={checking(d.id)} onCheck={() => check(d)} onRemove={() => setRemoving(d)} />
+            <DomainRow key={d.id} domain={d} canManage={canManage} inUse={s.mode !== "off"} checking={checking(d.id)} onCheck={() => check(d)} onRemove={() => setRemoving(d)} />
           ))}
         </ul>
       )}
@@ -110,12 +112,13 @@ export default function SingleSignOn({ canManage }) {
         </div>
       )}
       <SsoProvider sso={s} canManage={canManage} />
+      <SsoMode sso={s} canManage={canManage} />
       {removing && <RemoveDomainDialog domain={removing} onClose={() => setRemoving(null)} />}
     </MenuCard>
   );
 }
 
-function DomainRow({ domain: d, canManage, checking, onCheck, onRemove }) {
+function DomainRow({ domain: d, canManage, inUse, checking, onCheck, onRemove }) {
   const state = SSO_DOMAIN_STATES[d.state];
   return (
     <li className="flex flex-col gap-2 rounded-xl border border-border-color p-3" aria-label={d.domain}>
@@ -128,7 +131,11 @@ function DomainRow({ domain: d, canManage, checking, onCheck, onRemove }) {
               Check now
             </CTAButton>
           )}
-          {canManage && <RowActionsMenu label={`Actions for ${d.domain}`} items={[{ label: "Remove…", tone: "danger", onSelect: onRemove }]} />}
+          {canManage && <RowActionsMenu label={`Actions for ${d.domain}`} items={[
+                inUse && d.state !== "unverified"
+                  ? { label: "Remove…", hint: "Switch single sign-on off first", disabled: true }
+                  : { label: "Remove…", tone: "danger", onSelect: onRemove },
+              ]} />}
         </span>
       </div>
       {d.state === "verified" && (

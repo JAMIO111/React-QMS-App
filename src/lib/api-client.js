@@ -1,6 +1,6 @@
 import supabase from "../supabase-client";
 import { browserTimeZone } from "./timeZones";
-import { NETWORK_BLOCKED_EVENT, REAUTH_EVENT } from "./security";
+import { NETWORK_BLOCKED_EVENT, REAUTH_EVENT, SSO_REQUIRED_EVENT } from "./security";
 
 /** Base URL of the QMS API (see api/README.md). */
 export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
@@ -71,6 +71,12 @@ export async function apiFetch(path, { method = "GET", body, organisationId, rea
     // The organisation does not allow this network (security plan SE4): the app switches to the blocked screen.
     if (response.status === 403 && error.code === "network_not_allowed" && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent(NETWORK_BLOCKED_EVENT, { detail: { organisationId, address: error.details?.address ?? null } }));
+    }
+    // The organisation requires its company sign-in, which this session did not use (sso plan SS6): the app shows how to sign in.
+    if (response.status === 403 && error.code === "sso_required" && typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent(SSO_REQUIRED_EVENT, { detail: { organisationId, providerId: error.details?.providerId ?? null, breakGlass: !!error.details?.breakGlass, message: error.message ?? null } }),
+      );
     }
     // The organisation asks people to sign in again after a while (security plan SE6): the app signs out and says why.
     if (response.status === 401 && error.code === "reauthentication_required" && typeof window !== "undefined") {

@@ -34,15 +34,15 @@ A reviewer who had not written the code went through the whole agent path: agent
 
 | Check | Result |
 |---|---|
-| `npm run db:check` (all migrations through `20260314100000`, incl. the new `agent_hardening` test) | RESULT_DB |
+| `npm run db:check` (all migrations through `20260314100000`, incl. the new `agent_hardening` test) | pass (135 SQL test files) |
 | `npm run api:test` (432) | pass |
-| `npm run api:test:e2e` (incl. the agent suites and the tenancy sweep) | RESULT_E2E |
-| Agent tests (`dotnet test`, incl. the real PostgreSQL and MariaDB adapters) | RESULT_AGENT |
-| Real agent against the real API (`connector-agent/run-e2e.sh`: registration, passwords, browse, imports, incremental, folders, internal API incl. the plain-http refusal, recovery cases, a signed update staged) | RESULT_BINARY |
+| `npm run api:test:e2e` (incl. the agent suites and the tenancy sweep) | pass (1,116 tests in 101 suites; the real-agent suite runs separately) |
+| Agent tests (`dotnet test`, incl. the real PostgreSQL and MariaDB adapters) | pass (156) |
+| Real agent against the real API (`connector-agent/run-e2e.sh`: registration, passwords, browse, imports, incremental, folders, internal API incl. the plain-http refusal, recovery cases, a signed update staged) | pass (agent tests, then the real agent end to end) |
 | `npm test` (1,606), `npm run lint` (0 errors), `npm run build` | pass |
-| Browser journey (`npm run journey`, new step `connectorAgent()`) | RESULT_JOURNEY |
-| Load test (AG-D4) | RESULT_LOAD |
-| Live guardrails | RESULT_LIVE |
+| Browser journey (`npm run journey`, new step `connectorAgent()`) | pass: token shown once, the agent registers and is Online, Check now answered, the password sealed in the browser is opened by the agent exactly as typed and no sealed bytes are kept, revoke stops the agent |
+| Load test (AG-D4) | pending: 100,000 rows (a million would take hours through the import engine here); figures added when the run finishes |
+| Live guardrails | pending: run once `20260314100000_agent_hardening.sql` is applied live |
 | Windows CI (`.github/workflows/connector-agent.yml`) | **not run yet:** nothing has been pushed. Its first run is the check of the MSI, the services, the folder permissions, the update swap and roll-back on a real Windows machine, and of the SQL Server 2022 and MySQL 8 adapters |
 
 ## Windows acceptance list (for the first customer machine)

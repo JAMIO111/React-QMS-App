@@ -52,7 +52,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: check-pg
         ports: ['5432:5432']
-        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 30
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4

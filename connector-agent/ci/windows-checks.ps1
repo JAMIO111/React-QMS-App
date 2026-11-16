@@ -40,6 +40,8 @@ $failures = New-Object System.Collections.Generic.List[string]
 
 New-Item -ItemType Directory -Force -Path $Work | Out-Null
 $StateFile = Join-Path $Work 'fake-state.json'
+# The step's own log is lost when a job is cancelled; this copy goes into the uploaded logs.
+Start-Transcript -Path (Join-Path $Work 'checks-output.txt') -Force | Out-Null
 
 function Check($ok, $what) {
     if ($ok) { Write-Host "  ok   $what" -ForegroundColor Green }
@@ -159,16 +161,36 @@ try {
     Check ((Msi "/x `"$TestMsi`"" $logY) -eq 0) 'the test MSI removes cleanly after self-updates'
     Check (-not (Test-Path $InstallDir) -and -not (Test-Path "$InstallDir.staging") -and -not (Test-Path "$InstallDir.previous")) 'no update leftovers in Program Files'
 }
+catch {
+    $failures.Add("the checks stopped early: $($_.Exception.Message)")
+    Write-Host "  FAIL the checks stopped early: $($_.Exception.Message)" -ForegroundColor Red
+}
 finally {
-    if ($fake -and -not $fake.HasExited) { Stop-Process -Id $fake.Id -Force }
     $logs = Join-Path $DataDir 'logs'
     if (Test-Path $logs) { Copy-Item -Recurse -Force $logs (Join-Path $Work 'agent-logs') -ErrorAction SilentlyContinue }
+    # Whatever happened, leave the machine clean for the next step: an agent left running (a check failed before the
+    # uninstall) may be what made the later test step hang in run 9.
+    foreach ($msi in @($TestMsi, $ReleaseMsi)) {
+        if ((Service $AgentService) -or (Service $UpdaterService)) {
+            Start-Process msiexec.exe -ArgumentList "/x `"$msi`" /qn" -Wait -ErrorAction SilentlyContinue | Out-Null
+        }
+    }
+    foreach ($name in @($AgentService, $UpdaterService)) {
+        if (Service $name) {
+            Stop-Service $name -Force -ErrorAction SilentlyContinue
+            & sc.exe delete $name | Out-Null
+        }
+    }
+    Get-Process FortressAgent -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    if ($fake -and -not $fake.HasExited) { Stop-Process -Id $fake.Id -Force }
 }
 
 Write-Host ''
 if ($failures.Count) {
     Write-Host "$($failures.Count) check(s) failed:" -ForegroundColor Red
     $failures | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
+    Stop-Transcript | Out-Null
     exit 1
 }
 Write-Host 'All Windows checks passed.' -ForegroundColor Green
+Stop-Transcript | Out-Null

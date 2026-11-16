@@ -138,12 +138,17 @@ jobs:
             Compress-Archive -Path "$out\*" -DestinationPath "$PWD\bin\release-$v.zip" -Force
           }
       - name: Windows checks
+        timeout-minutes: 30
         run: >
           ./ci/windows-checks.ps1 -ReleaseMsi $env:RELEASE_MSI -TestMsi $env:TEST_MSI
           -NewZip bin/release-0.99.0.zip -RollbackZip bin/release-0.99.1.zip
       - name: Agent tests on Windows (DPAPI, paths)
         if: always()
-        run: dotnet test tests/Fortress.Agent.Tests
+        timeout-minutes: 10
+        # A test that hangs is stopped after 3 minutes with a dump naming it, instead of holding the job.
+        run: >
+          dotnet test tests/Fortress.Agent.Tests --blame-hang-timeout 3m --blame-hang-dump-type mini
+          --results-directory $env:RUNNER_TEMP/agent-checks/test-results
       - name: Keep the MSI
         uses: actions/upload-artifact@v4
         with:

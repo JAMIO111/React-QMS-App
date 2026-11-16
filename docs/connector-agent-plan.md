@@ -473,3 +473,42 @@ existing breaks.
   - POST queries, custom headers, non-JSON answers.
   - Mutual TLS, or a custom CA beyond the machine's own trust store.
   - Writing back to the API.
+
+## 19. AG6 — production hardening (plan, 2026-11-16)
+
+AG6 makes the agent safe to hand to several independent customers. It is split into four slices. AG6a and AG6d can be built and tested in this
+container. AG6b needs a release-signing key that only you hold, and AG6c needs your code-signing certificate and a Windows machine (AG-D12).
+
+| Slice | What | Tested here? |
+|-------|------|--------------|
+| **AG6a — resilience** | Key rotation on a schedule, a bounded diagnostics bundle, recovery tests with the real agent, a load test of a million rows | Yes (Linux agent, real PostgreSQL) |
+| **AG6b — updates** | Signed release manifests, an operator who publishes releases, an organisation admin who approves an update for an agent, the agent downloading, checking and staging it, then swapping on Windows with roll-back | Download, checks and staging: yes. The Windows swap: on the Windows machine only |
+| **AG6c — installer and signing** | WiX MSI (service, low-privilege account, ACLs, upgrade code), Authenticode signing of the exe and MSI, a Windows CI workflow that builds both and runs the SQL Server tests (AG-D11) | No: the WiX build, signtool and SQL Server need Windows. The files are written here and run there |
+| **AG6d — exit check** | Security review of the whole agent path, a browser journey step with a fake agent, live guardrails, `docs/connector-agent-exit-report.md` | Yes, except the Windows acceptance list it hands over |
+
+### Decisions taken (recommendations; say if you want any changed)
+
+- **AG6-D1 Key rotation.** The agent rotates its signing and sealing keys every **90 days** on its own, and an admin can ask it to rotate now
+  from the agent's page. It keeps the **previous sealing key for 30 days**, so a password sealed just before the rotation still opens. The server
+  side (`keys/rotate`) exists since AG1; AG6a adds the schedule, the "rotate now" job and the previous key.
+- **AG6-D2 Diagnostics.** A `diagnostics` job, asked for from the agent's page, sends a bundle of **at most 64 kB**:
+  - version, OS and .NET runtime, uptime, the adapters, the allow-list (it is the customer's own file);
+  - the clock offset and the last 200 log lines.
+  - It never includes passwords, keys, tokens or row contents. Log lines are already free of them, and the bundle redacts anything shaped like a
+    key or token as well.
+  - Fortress keeps the bundle with the job (people with `integrations.manage` see it) and drops it after 30 days.
+- **AG6-D3 Updates are approved, never pushed** (AG6b).
+  - An operator publishes a release in Fortress: version, download address, SHA-256 and a manifest signed with the **release key** (ECDSA
+    P-256, the same algorithm as everything else). The private release key lives offline with you; the agent has the public key built in.
+  - An organisation's `integrations.manage` holder approves "update this agent to 0.7.0". The agent checks the manifest signature and the file's
+    SHA-256, then stages the update.
+  - On Windows a small updater stops the service, swaps the folder and starts it again. If the agent has not checked in within 5 minutes it puts
+    the old folder back.
+  - An agent never updates itself without that approval, and never downloads from an address that is not in a signed manifest.
+- **AG6-D4 Load target.** A million rows of a 20-column table imported from PostgreSQL through the real agent, and the same import again with
+  nothing written. Time, peak agent memory and batch count are recorded in the exit report. It passes if nothing is lost or duplicated and the
+  agent's memory stays bounded (it streams; it never holds the table).
+- **AG6-D5 Recovery.** Each of these is an automated test with the real agent:
+  - the agent killed mid-extraction and started again (it resumes from Fortress's last batch);
+  - the API unreachable for a while, then back (the agent retries and carries on);
+  - the database restarted mid-read (the job retries within its attempts, or fails in words when it cannot).

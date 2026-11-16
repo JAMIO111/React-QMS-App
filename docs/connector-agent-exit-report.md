@@ -61,7 +61,7 @@ CI runs most of this on a clean Windows Server. These need a real customer-like 
 ## What you need to do
 
 - ~~Apply the hardening migration~~ — done 2026-11-16.
-- **Make a release key** on your own computer: `node connector-agent/release/make-release-key.mjs <file>`. Keep the private key off this repository. Add the public key to `ReleaseKeys.Built` (`connector-agent/src/Fortress.Agent.Core/Updates.cs`) and to the API's `AGENT_RELEASE_KEYS`. Until then no update is accepted.
+- ~~Make a release key~~ — done 2026-11-16: key id `bbbe9b808fda7ca1`, public half built into `ReleaseKeys.Built` (`connector-agent/src/Fortress.Agent.Core/Updates.cs`). The private key stays with you, off this repository. **Still to do:** set `AGENT_RELEASE_KEYS` to the same public key on the API's Vercel project and redeploy; /platform → Agent releases then lists key id `bbbe9b808fda7ca1`. An agent installed before this build trusts no key and is reinstalled by hand once (none are installed yet).
 - **A code-signing certificate** for the MSI and the exe:
   - add it as the GitHub secrets `FORTRESS_SIGN_PFX_BASE64` and `FORTRESS_SIGN_PFX_PASSWORD`;
   - or, for a certificate on a hardware token or cloud HSM (now the norm for new certificates), run the workflow on a self-hosted Windows runner with `FORTRESS_SIGN_THUMBPRINT`.

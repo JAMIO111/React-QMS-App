@@ -14,8 +14,12 @@ namespace Fortress.Agent.Core;
 /// </summary>
 public static class ReleaseKeys
 {
-    /// <summary>The release keys built into the agent. Empty: no update is accepted.</summary>
-    public static readonly IReadOnlyList<string> Built = [];
+    /// <summary>The release keys built into the agent (base64 SPKI, P-256). Empty would mean no update is accepted.</summary>
+    public static readonly IReadOnlyList<string> Built =
+    [
+        // Fortress release key 1, key id bbbe9b808fda7ca1 (made 2026-11-16; the private half is kept off this repository).
+        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE+jSp+sdQen1pRtlSiq38xvwMmEHXjdXprQe4/74ACgAFUJOBdVGbcoBAVcso8P46hMB+TLrXTvvLhX5r348x+Q==",
+    ];
 
     /// <summary>A test key, honoured only by a Debug build or one built with FortressTestHooks=true (the tests); a shipped build ignores the setting entirely.</summary>
     public const string TestKeySetting = "FORTRESS_AGENT_TEST_RELEASE_KEY";

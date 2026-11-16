@@ -313,4 +313,18 @@ public sealed class UpdateTests : IDisposable
         Assert.Equal("applied", outcome);
         Assert.Equal("verified", File.ReadAllText(Path.Combine(install, "FortressAgent.exe"))); // not the agent's staged copy ("new")
     }
+
+    [Fact]
+    public void Every_built_in_release_key_is_a_p256_public_key()
+    {
+        Assert.NotEmpty(ReleaseKeys.Built);
+        foreach (var spki in ReleaseKeys.Built)
+        {
+            using var ecdsa = ECDsa.Create();
+            ecdsa.ImportSubjectPublicKeyInfo(Convert.FromBase64String(spki), out var read);
+            Assert.Equal(Convert.FromBase64String(spki).Length, read);
+            Assert.Equal(256, ecdsa.KeySize);
+        }
+        Assert.Equal(ReleaseKeys.Built.Count, ReleaseKeys.Built.Distinct().Count());
+    }
 }

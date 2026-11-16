@@ -3,8 +3,9 @@
     The Windows installer (docs/connector-agent-plan.md AG6c). Windows only: WiX needs Windows to make an MSI, so this project is not in
     FortressAgent.sln and is built by .github/workflows/connector-agent.yml (or by hand on a Windows machine):
 
-      dotnet publish ..\src\Fortress.Agent.Host -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o ..\bin\msi-app
+      dotnet publish ..\src\Fortress.Agent.Host -c Release -r win-x64 (self-contained, single file) -o ..\bin\msi-app
       dotnet build FortressAgent.Installer.wixproj -c Release -p:AppDir=..\bin\msi-app -p:AgentVersion=0.1.0
+    (the exact publish options are in the workflow; an XML comment may not hold two hyphens in a row)
   -->
   <PropertyGroup>
     <OutputName>FortressConnectorAgent</OutputName>

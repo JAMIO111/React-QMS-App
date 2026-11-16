@@ -177,9 +177,7 @@ public sealed class SqlServerAdapter : IDatabaseAdapter
                 var row = new Dictionary<string, object?>(StringComparer.Ordinal);
                 for (var i = 0; i < shape.Columns.Count; i++)
                 {
-                    object? v;
-                    try { v = r.IsDBNull(i) ? null : r.GetValue(i); }
-                    catch (Exception e) when (e is InvalidCastException or NotSupportedException) { v = r.GetProviderSpecificValue(i)?.ToString(); }
+                    var v = ReadValue(r, i);
                     row[shape.Columns[i].Name] = v;
                 }
                 rows.Add(row);
@@ -203,9 +201,7 @@ public sealed class SqlServerAdapter : IDatabaseAdapter
                 var row = new Dictionary<string, object?>(StringComparer.Ordinal);
                 for (var i = 0; i < q.Columns.Count; i++)
                 {
-                    object? v;
-                    try { v = r.IsDBNull(i) ? null : r.GetValue(i); }
-                    catch (Exception e) when (e is InvalidCastException or NotSupportedException) { v = r.GetProviderSpecificValue(i)?.ToString(); }
+                    var v = ReadValue(r, i);
                     row[q.Columns[i].Name] = v;
                 }
                 var key = row[q.Columns[keyIndex].Name] ?? throw new JobFailedException("internal", "A row came back with no key");
@@ -243,7 +239,35 @@ public sealed class SqlServerAdapter : IDatabaseAdapter
     public static string PreviewSql(TableShape shape) =>
         $"SELECT TOP (@limit) {string.Join(", ", shape.Columns.Select(c => Quote(c.Name)))} FROM {Quote(shape.Schema)}.{Quote(shape.Name)}";
 
+    /// <summary>
+    /// One column's value. SqlClient hands a <c>date</c> back as a midnight <see cref="DateTime"/> and a <c>time</c> as a <see cref="TimeSpan"/>;
+    /// they become <see cref="DateOnly"/> / <see cref="TimeOnly"/> so they read "2026-03-02" and "08:30:00", as from PostgreSQL and MySQL.
+    /// </summary>
+    internal static object? ReadValue(System.Data.Common.DbDataReader r, int i)
+    {
+        try
+        {
+            if (r.IsDBNull(i)) return null;
+            var v = r.GetValue(i);
+            var type = r.GetDataTypeName(i);
+            return (v, type.ToLowerInvariant()) switch
+            {
+                (DateTime d, "date") => DateOnly.FromDateTime(d),
+                (TimeSpan t, "time") when t >= TimeSpan.Zero && t < TimeSpan.FromDays(1) => TimeOnly.FromTimeSpan(t),
+                _ => v,
+            };
+        }
+        catch (Exception e) when (e is InvalidCastException or NotSupportedException) { return r.GetProviderSpecificValue(i)?.ToString(); }
+    }
+
     public static string Quote(string identifier) => "[" + identifier.Replace("]", "]]") + "]";
+
+    private static bool HasSocketError(Exception e)
+    {
+        for (var x = e.InnerException; x is not null; x = x.InnerException)
+            if (x is System.Net.Sockets.SocketException) return true;
+        return false;
+    }
 
     internal static JobFailedException Translate(Exception e, ConnectionSettings? s)
     {
@@ -254,7 +278,9 @@ public sealed class SqlServerAdapter : IDatabaseAdapter
             SqlException q when q.Number == 4060 => new JobFailedException("not_found", $"SQL Server cannot open that database for this sign-in: {q.Message}"),
             SqlException q when q.Number is 229 or 230 => new JobFailedException("refused", $"SQL Server refused: {q.Message}"),
             SqlException q when q.Number == -2 => new JobFailedException("timeout", "SQL Server took too long to answer"),
-            SqlException q when q.Number is 53 or 2 or -1 or 40 or 26 or 10060 or 10061 or 10053 or 10054 or 233 or 64 =>
+            // Windows reports the socket or named-pipe error; the managed network layer (Linux, and Windows with it switched on) reports
+            // SNI error 35 ("an internal exception was caught") with the refused socket inside.
+            SqlException q when q.Number is 53 or 2 or -1 or 40 or 26 or 35 or 10060 or 10061 or 10053 or 10054 or 233 or 64 || HasSocketError(q) =>
                 new JobFailedException("network", $"Could not reach {where}: {q.Message}", transient: true),
             // Shutting down, a deadlock victim, the database recovering or unavailable: worth another attempt (AG6a, AG6-D5).
             SqlException q when q.Number is 6005 or 1205 or 40613 or 40197 or 40501 or 49918 or 49919 or 49920 =>

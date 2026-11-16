@@ -176,7 +176,7 @@ public sealed class PostgresAdapterTests : IAsyncLifetime
     {
         if (admin is null) return;
         // The adapter never issues a write; prove the session it opens refuses one even inside its own transaction pattern.
-        await using var c = new NpgsqlConnection(PostgresAdapter.ConnectionString(Settings(), new DbCredential("postgres", "")));
+        await using var c = new NpgsqlConnection(PostgresAdapter.ConnectionString(Settings(), new DbCredential(admin.Username!, admin.Password ?? "")));
         await c.OpenAsync();
         await using var tx = await c.BeginTransactionAsync();
         await using (var ro = new NpgsqlCommand("SET TRANSACTION READ ONLY", c, tx)) await ro.ExecuteNonQueryAsync();

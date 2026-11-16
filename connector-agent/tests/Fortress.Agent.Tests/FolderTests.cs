@@ -68,7 +68,7 @@ public sealed class FolderTests : IDisposable
         Write("machines-2026-11-01.csv", "code\nM1\n");
         Write("notes.docx", "x");
         Write(".hidden.csv", "code\n");
-        if (!OperatingSystem.IsWindows()) File.SetAttributes(Path.Combine(exports, ".hidden.csv"), FileAttributes.Hidden);
+        if (OperatingSystem.IsWindows()) File.SetAttributes(Path.Combine(exports, ".hidden.csv"), FileAttributes.Hidden); // elsewhere the dot makes it hidden
         File.WriteAllText(Path.Combine(exports, "old", "machines-2025.csv"), "code\nOLD\n");
 
         var test = await Run("test_connection");

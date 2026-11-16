@@ -78,10 +78,6 @@
         </ServiceInstall>
         <ServiceControl Id="UpdaterServiceStop" Name="FortressConnectorAgentUpdater" Stop="both" Remove="uninstall" Wait="yes" />
       </Component>
-      <Files Directory="UPDATERFOLDER" Include="$(var.AppDir)\**">
-        <Exclude Files="$(var.AppDir)\FortressAgent.exe" />
-        <Exclude Files="$(var.AppDir)\**\*.pdb" />
-      </Files>
 
       <!-- On removal, what self-updates leave in Program Files goes too: the install folder as a whole (an update may have added files Windows
            Installer does not know), the release the updater unpacked and the version it replaced. An upgrade removes the old product first, so
@@ -93,11 +89,8 @@
         <util:RemoveFolderEx Id="RemovePrevious" On="uninstall" Property="AGENT_PREVIOUS_DIR" />
       </Component>
 
-      <!-- Everything else the publish step produced (a single-file build has little or nothing here). -->
-      <Files Directory="INSTALLFOLDER" Include="$(var.AppDir)\**">
-        <Exclude Files="$(var.AppDir)\FortressAgent.exe" />
-        <Exclude Files="$(var.AppDir)\**\*.pdb" />
-      </Files>
+      <!-- The program is one self-contained file (dotnet publish -p:PublishSingleFile=true with native libraries inside); the publish
+           produces nothing else, and WiX refuses a Files element that finds nothing (WIX8600). -->
 
       <!-- The folder above the data folder: owned by Administrators, so nobody else can rename or replace the agent's folder. -->
       <Component Id="FortressDataFolder" Directory="FortressData" Guid="D8A41F6E-27C3-4B95-9E0A-5C1B7F3E8D62" Permanent="yes">

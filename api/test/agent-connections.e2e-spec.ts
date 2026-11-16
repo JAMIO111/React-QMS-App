@@ -166,7 +166,7 @@ describe('a database connection on an agent', () => {
   it('cannot import until a table is chosen for the records (AG3)', async () => {
     const res = await api().post(`/api/v1/integrations/connections/${connectionId}/runs`).set(await as(ids.ownerA)).send({ entityType: 'machine', kind: 'preview' });
     expect(res.status).toBe(409);
-    expect(res.body.error.message).toMatch(/which table holds machine records/);
+    expect(res.body.error.message).toMatch(/which table or file holds machine records/);
   });
 
   it('another organisation cannot see the connection', async () => {

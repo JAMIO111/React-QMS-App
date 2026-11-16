@@ -78,7 +78,7 @@ describe('reading a database through the agent into an import', () => {
 
   it('says which table holds machines, as a structured request', async () => {
     const refused = await api().post(`${base}/connections/${connId}/runs`).set(await as(ids.ownerA)).send({ entityType: 'machine', kind: 'preview' }).expect(409);
-    expect(refused.body.error.message).toMatch(/which table holds machine records/);
+    expect(refused.body.error.message).toMatch(/which table or file holds machine records/);
     await api().put(`${base}/connections/${connId}/record-source`).set(await as(ids.inspectorA)).send({ entityType: 'machine', source: SOURCE }).expect(403);
     await api().put(`${base}/connections/${connId}/record-source`).set(await as(ids.ownerA)).send({ entityType: 'machine', source: { ...SOURCE, sql: 'select 1' } }).expect(400);
     const noKey = await api().put(`${base}/connections/${connId}/record-source`).set(await as(ids.ownerA)).send({ entityType: 'machine', source: { ...SOURCE, columns: ['code'] } }).expect(409);

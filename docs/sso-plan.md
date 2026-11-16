@@ -1,6 +1,6 @@
 # Single sign-on (SAML) — plan
 
-**Status:** proposed 2026-11-16, decisions SS1–SS12 waiting to be agreed · **Brief:** `docs/design-brief.md` §12 Phase 7 ("SSO and enterprise identity"), §5 (security), §14 (definition of done), §15 (non-goals) · **Builds on:** `docs/security-plan.md` (network policy, allowed email domains, maximum session age, operator recovery)
+**Status:** agreed 2026-11-16 (SS1–SS12 as recommended) · **SS0 done as far as it can be without a paid plan** (§12; the live sign-in check waits for Pro) · **Brief:** `docs/design-brief.md` §12 Phase 7 ("SSO and enterprise identity"), §5 (security), §14 (definition of done), §15 (non-goals) · **Builds on:** `docs/security-plan.md` (network policy, allowed email domains, maximum session age, operator recovery)
 
 ## 1. Why
 
@@ -31,7 +31,7 @@ This plan adds:
 | Sign-out | Single logout is "best-effort"; not supported in practice. | Leaving IT's system does not end a Fortress session already open (SS9). |
 | Started from the company's portal | Not compatible with PKCE. Recommended: a "bookmark app" pointing at our own page, which starts the sign-in. | `/sso?domain=acme.com` serves as that bookmark. |
 | Two-factor level after SSO | **Not documented.** | SS0 must find out (`aal1` expected). |
-| Domain shared by two providers | **Not documented.** | Fortress keeps domains unique itself (SS3). |
+| Domain shared by two providers | Not documented; **the Auth server refuses it** (unique index on `lower(domain)`, §12). | Fortress keeps domains unique itself too (SS3), so the refusal is never what a customer sees. |
 
 ## 3. What exists today (inspected)
 
@@ -49,7 +49,7 @@ This plan adds:
 | # | Decision | Options | Recommendation |
 |---|---|---|---|
 | **SS1** | **Protocol** | (a) SAML through Supabase; (b) OIDC through a broker (Auth0, WorkOS) in front of Supabase; (c) both | **(a).** It is what Supabase supports and what IT departments set up. A broker adds a supplier, a cost and a second user store. OIDC can follow if a customer asks (§11). |
-| **SS2** | **Who registers the provider with Supabase** | (a) the platform operator by CLI when a customer asks; (b) **self-service**: the organisation's owner or admin fills in the form, and the API calls the Management API with a token held only as a server variable (`SUPABASE_MANAGEMENT_TOKEN`); (c) like (b), but each new provider waits for an operator's approval on `/platform` | **(b), after SS0 confirms the narrowest token Supabase offers** (a fine-grained token limited to `auth_config_write` on this project, if it exists). Without a narrow token, **(c)**: the same code, with an operator's click as a second check before the call. Either way the token never reaches the browser or the database, and every call is recorded. (a) does not scale and puts a person in every sale. |
+| **SS2** | **Who registers the provider with Supabase** | (a) the platform operator by CLI when a customer asks; (b) **self-service**: the organisation's owner or admin fills in the form, and the API calls the Management API with a token held only as a server variable (`SUPABASE_MANAGEMENT_TOKEN`); (c) like (b), but each new provider waits for an operator's approval on `/platform` | **(b), with a scoped token** (§12: Supabase personal access tokens can be limited to one project and one permission, **Auth Config: Read-write**, which covers creating, updating and deleting SSO providers). Either way the token never reaches the browser or the database, and every call is recorded. (a) does not scale and puts a person in every sale. |
 | **SS3** | **Proving the company owns its domain** | (a) trust what is typed; (b) **DNS TXT record** `fortress-verification=<token>` checked by the API; (c) an email to an address at the domain | **(b).** A domain linked to a provider sends **every** sign-in from that domain to that provider, so a false claim would capture another company's staff. **One domain → one organisation across all of Fortress.** A domain is linked to Supabase only once verified, re-checked weekly by the worker, and flagged (not removed) when the record goes. While allowed email domains (SE6) are set, an SSO domain must be one of them. |
 | **SS4** | **Who may get in through SSO** | (a) **invited only**: SSO proves the identity, membership still comes from an invitation; (b) **joins on first sign-in** with a default role (and optional default department), no seat; (c) roles from the provider's groups | **(a) by default, (b) as a switch** for organisations that want it (default role from a short list: viewer, inspector; never owner or admin; no seat until someone gives one; the owners are told). **(c) later** (§11): group-to-role mapping needs care, because a mistake in the company's directory would grant rights in Fortress. |
 | **SS5** | **People who already have a password account** (Supabase creates a *separate* user on their first SSO sign-in) | (a) treat them as a new person, re-invite, and suspend the old account (history split across two people); (b) **move them across**: on their first SSO sign-in, someone with `members.manage` confirms (or the person confirms with their old password) that the new sign-in is the same person, and one function moves the membership; (c) attach the SSO identity to the old user by writing to `auth.identities` (unsupported; could break on a Supabase upgrade) | **(b).** It moves what makes someone *a working member*: roles, departments, seat, employee link (`Employees.auth_id`), preferences, saved filters, reminder areas. It also moves **open** work: open actions and tasks, pending sign-offs, documents to read, items they own. **Finished records keep the old id**, which is history. The old account is suspended in that organisation, and `profiles.moved_to` makes the old name show as "now signs in with SSO". A test like the integration-catalogue drift test **fails when a migration adds a column that refers to a user and is not classified** as moved or history. |
@@ -162,3 +162,31 @@ This plan adds:
 - SSO for the platform operator panel.
 - Signing in to several organisations' providers in one session (a person in two SSO organisations signs in to each in turn).
 - Per-site providers.
+
+## 12. SS0 result (2026-11-16)
+
+Found from the documentation and from **the Supabase Auth server's source** (`github.com/supabase/auth`, commit `387e91f`, 2026-11-16), not yet from a live sign-in.
+
+| Question | Answer | Where it came from |
+|---|---|---|
+| Is the project on a plan with SAML? | **No.** The organisation (JDigital) is on the **free plan**. SAML needs **Pro or above**. | Supabase organisation details |
+| Can the management token be narrow? | **Yes.** A personal access token can be limited to chosen organisations, projects and permissions. Tokens made in the dashboard are scoped by default; full-access ones are marked "Legacy". **Auth Config: Read-write** covers "Create / Update / Delete a SSO provider". The page says nothing about expiry. | `supabase.com/docs/guides/platform/personal-access-tokens` |
+| Two-factor level of a SAML sign-in | **`aal1`.** Only TOTP, phone, WebAuthn and recovery codes count as second factors (`IsAAL2Claim`, `internal/models/amr.go`). An SSO user can still add Fortress two-factor and reach `aal2`. | Source |
+| What `amr` holds | Every method used in the session, **most recent first**. A SAML entry carries `provider` = the provider's uuid, because an SSO user has exactly one identity, `sso:<uuid>` (`CalculateAALAndAMR`, `internal/models/sessions.go`). **Check the whole array, never only the first entry.** | Source |
+| One domain on two providers | **Refused**: `create unique index sso_domains_domain_idx on sso_domains (lower(domain))`. | Source, migration `20221021082433_add_saml` |
+| Unknown domain | `signInWithSSO({ domain })` answers **404 `sso_provider_not_found`**, "No SSO provider assigned for this domain". It reveals only whether *some* provider has that domain, so the sign-in page shows one message for both cases. | Source, `internal/api/sso.go` |
+| Linking | An SSO user is marked `is_sso_user` and is **never** found by email for password sign-in, recovery or linking. Two users with one email is the normal state, as SS5 assumes. | Source, `internal/models/user.go` |
+
+**Consequences for the build:**
+
+- **Anything that looks a person up by email must handle two users with one address.** That covers:
+  - `app.accept_invitation` (it reads the signed-in user's own email, which is fine);
+  - the invitation mailer: for an organisation that requires SSO it must send a plain link to `/sso`, never a Supabase password invitation;
+  - the employee login-candidate list;
+  - any other `auth.users` email lookup.
+  
+  SS2 lists and tests each one.
+- **SS7 is needed**, because a SAML session alone never reaches `aal2`.
+- **Testing without the paid plan:** the Auth server is open source, builds with the Go already in this container, and runs against the local test Postgres with SAML switched on. The SS2 and SS3 tests can drive a **real Supabase Auth server and a local test identity provider**, instead of a fake, to get real tokens. The live check on the Dev deployment still needs Pro.
+
+**Still to do once the project is on Pro:** switch on SAML, register a test identity provider (a free Microsoft Entra test tenant), sign in, and confirm the token matches the table above. That is the first step of SSX if it has not happened earlier.

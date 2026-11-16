@@ -141,7 +141,8 @@ export class IntegrationRunsService {
     if (!rows.rows[0]) throw ApiError.notFound('run_not_found', 'Import not found');
     const [errors, statuses] = await Promise.all([
       db.execute<Row>(sql`select attempt, kind, message, transient, at from public.integration_run_errors where run_id = ${runId}::uuid order by at, attempt`),
-      db.execute<Row>(sql`select status, count(*)::int as n from public.integration_inbox where run_id = ${runId}::uuid or last_run_id = ${runId}::uuid group by status`),
+      // One permission check and indexed reads (RLS would check every row, which timed out for a 100,000-row import).
+      db.execute<Row>(sql`select status, n from app.integration_run_row_counts(${runId}::uuid)`),
     ]);
     const r = rows.rows[0];
     const rowsNow = Object.fromEntries(ROW_STATUSES.map((s) => [s, 0])) as Record<(typeof ROW_STATUSES)[number], number>;
@@ -165,11 +166,11 @@ export class IntegrationRunsService {
     return this.database.asUser(ctx, async (db) => {
       const exists = await db.execute<Row>(sql`select 1 from public.integration_sync_runs where id = ${runId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
       if (!exists.rows[0]) throw ApiError.notFound('run_not_found', 'Import not found');
-      const where = sql`i.organisation_id = ${orgOf(ctx)}::uuid and (i.run_id = ${runId}::uuid or i.last_run_id = ${runId}::uuid)
-        and (${q.status ?? null}::text is null or i.status = ${q.status ?? null})`;
+      // The run's rows through app.integration_run_rows / _row_counts: one permission check and indexed reads, however large the import.
+      const status = q.status ?? null;
       const [rows, total] = await Promise.all([
-        db.execute<Row>(sql`select i.* from public.integration_inbox i where ${where} order by i.created_at, i.source_row nulls last, i.id limit ${q.pageSize} offset ${(q.page - 1) * q.pageSize}`),
-        db.execute<{ n: number }>(sql`select count(*)::int as n from public.integration_inbox i where ${where}`),
+        db.execute<Row>(sql`select * from app.integration_run_rows(${runId}::uuid, ${status}::text, ${q.pageSize}::int, ${(q.page - 1) * q.pageSize}::int)`),
+        db.execute<{ n: number }>(sql`select coalesce(sum(n), 0)::int as n from app.integration_run_row_counts(${runId}::uuid) where ${status}::text is null or status = ${status}::text`),
       ]);
       return {
         data: rows.rows.map((i) => ({

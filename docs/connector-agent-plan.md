@@ -650,3 +650,9 @@ who did not write it, each finding checked against the code before it was accept
   connection through it, the password sealed in the browser and opened by the agent exactly as typed (the job keeps no sealed bytes), revoke and the
   agent stops.
 - Exit report `docs/connector-agent-exit-report.md`.
+- **Found by the load test:** a run's page counted its rows under RLS, which checks `integrations.read` once per row, with an `or` no index could
+  serve; at 100,000 rows that passed the API login's 15-second statement timeout, so a large import's status could no longer be read at all (every
+  kind of import, not only the agent's). Migration `20260315100000_integration_run_rows_fast.sql` adds `app.integration_run_row_counts(run)` and
+  `app.integration_run_rows(run, status, limit, offset)` (one permission check for the run's organisation, then indexed reads; a new index on
+  `integration_inbox (last_run_id, status)`; pages ≤ 500 rows) and the run detail and run rows endpoints use them. SQL test
+  `integration_run_rows_fast.test.sql` checks they return exactly what RLS shows, and nothing to a viewer or another organisation.

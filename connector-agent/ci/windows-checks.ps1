@@ -96,7 +96,10 @@ try {
     Check ($updater.StartMode -eq 'Manual') 'the updater starts only on demand'
     Check ($updater.PathName -match 'apply-update' -and $updater.PathName -match [regex]::Escape($UpdaterDir)) 'the updater runs its own copy with apply-update'
     $sddl = (& sc.exe sdshow $UpdaterService) -join ''
-    Check ($sddl -match "\(A;;RPLCLOCRRC;;;$ServiceSid\)") "the agent's account may start the updater and only that ($sddl)"
+    # Windows writes the rights in its own order (LCRPLOCRRC for what the MSI asked as RPLCLOCRRC): compare them as a set.
+    $ace = [regex]::Match($sddl, "\(A;;([A-Z]+);;;$ServiceSid\)")
+    $rights = if ($ace.Success) { ([regex]::Matches($ace.Groups[1].Value, '..') | ForEach-Object Value | Sort-Object) -join ',' } else { '' }
+    Check ($rights -eq 'CR,LC,LO,RC,RP') "the agent's account may start the updater and only that ($sddl)"
     Check (-not ($sddl -match "\(A;;[A-Z]*(WP|DC|WD|WO|SD)[A-Z]*;;;$ServiceSid\)")) "the agent's account cannot change or stop the updater"
 
     $fortress = Split-Path $DataDir -Parent

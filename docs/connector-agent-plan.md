@@ -617,7 +617,7 @@ who did not write it, each finding checked against the code before it was accept
 | 5 | The Windows swap ran as the agent's low-privilege account, which can neither stop its own service nor write Program Files, and trusted files in a folder that account can write | Low (it could not work) | **Fixed.** A second service, **FortressConnectorAgentUpdater** (LocalSystem, started on demand, its own copy of the program), does the swap. The agent's account may only start it. It checks the release's signature, platform and version again with its own built-in keys, copies the package somewhere only it can write, checks size and SHA-256 there, and unpacks that copy |
 | 6 | Smaller points: plain http to internal APIs with a key; a link (junction) below an allowed folder; the sealing key comes from Fortress | Low | **Fixed:** a key or password goes over plain http only with `"plainHttpSignIn": true` in the allow-list; a folder reached through a link below the allowed folder is refused and files that are links are never listed or read. **Accepted:** a compromised Fortress could hand the browser another sealing key. The agent's key fingerprint is on its page and from `FortressAgent status`; comparing them is on the acceptance list |
 
-### AG6c as built (2026-11-16): written here, run on Windows by CI
+### AG6c as built (2026-11-16): written here, passing on Windows in CI (run 8)
 
 - **MSI** (`connector-agent/installer/`, WiX 5, `FortressAgent.Installer.wixproj` + `Package.wxs`): the agent service (`NT SERVICE\FortressConnectorAgent`,
   delayed automatic, restarted twice after a crash); the updater service (LocalSystem, on demand, its own copy in `Program Files\Fortress\ConnectorAgentUpdater`,
@@ -641,6 +641,8 @@ who did not write it, each finding checked against the code before it was accept
 - **Not run yet:** the workflow has not run (nothing is pushed); its first run is the check. The fake Fortress was tried here against the Linux
   agent (registration, heartbeats, a signed update staged).
 
+
+**CI results (2026-11-16):** eight runs to green. Found and fixed: SQL Server `date`/`time` values (SqlClient returns DateTime/TimeSpan; now DateOnly/TimeOnly), an unreachable SQL Server on the managed network layer (SNI error 35 / inner SocketException) classed as refused instead of a passing network failure, WiX 5 refusals (`--` in an XML comment, `<ServiceConfig>` WIX1149 → delayed start set by `sc.exe config … start= delayed-auto` after InstallServices, empty `<Files>` WIX8600 (the publish is one exe), `WixRemoveFoldersEx` renamed WIX0094 → the folder properties are set after AppSearch, two `SetProperty` for RegisterAgent WIX0091 → `SetRegisterAgentReplace`), and the workflow: shared obj/bin let WiX hand back the release MSI as the test MSI, so obj/bin are emptied before every Windows build and the step fails if the two MSIs or exes are identical. Run 8: 41 Windows checks pass, including the update swap and the roll-back.
 ### AG6d as built (2026-11-16)
 
 - Migration `20260314100000_agent_hardening.sql` (applied live 2026-11-16, live guardrails 0 violations; pushing the API first was harmless: agents ask for passwords again only after

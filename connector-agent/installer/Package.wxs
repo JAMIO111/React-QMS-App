@@ -125,7 +125,7 @@
     <!-- Register: deferred, as SYSTEM (DPAPI machine keys; the identity file inherits the folder's permissions). The token never reaches the log. -->
     <SetProperty Id="RegisterAgent" Sequence="execute" Before="RegisterAgent" Condition="TOKEN AND NOT REMOVE AND NOT REPLACE"
                  Value="&quot;[#FortressAgentExe]&quot; register --api &quot;[API_URL]&quot; --token &quot;[TOKEN]&quot; --data-dir &quot;[AGENTDATA].&quot;" />
-    <SetProperty Id="RegisterAgent" Sequence="execute" Before="RegisterAgent" Condition="TOKEN AND NOT REMOVE AND REPLACE"
+    <SetProperty Id="RegisterAgent" Action="SetRegisterAgentReplace" Sequence="execute" Before="RegisterAgent" Condition="TOKEN AND NOT REMOVE AND REPLACE"
                  Value="&quot;[#FortressAgentExe]&quot; register --api &quot;[API_URL]&quot; --token &quot;[TOKEN]&quot; --data-dir &quot;[AGENTDATA].&quot; --replace" />
     <CustomAction Id="RegisterAgent" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec" Execute="deferred" Impersonate="no" Return="check" HideTarget="yes" />
 

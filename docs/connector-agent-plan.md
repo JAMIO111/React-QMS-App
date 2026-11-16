@@ -573,7 +573,7 @@ Migration `20260312100000_agent_resilience.sql` (applied live 2026-11-16, live g
 
 ### AG6b as built (2026-11-16)
 
-Migration `20260313100000_agent_updates.sql` (**not applied live yet**; pushing the API before it breaks the agent page, which selects from
+Migration `20260313100000_agent_updates.sql` (applied live 2026-11-16, live guardrails 0 violations; pushing the API before it breaks the agent page, which selects from
 `integration_agent_updates` and `integration_agent_releases`).
 
 - **Database:** as designed above. `app.platform_publish_agent_release(manifest, signature, key_id)` (operator with MFA; reads and checks the

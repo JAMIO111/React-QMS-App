@@ -100,25 +100,30 @@ jobs:
           "AGENT_VERSION=$version" >> $env:GITHUB_ENV
           $app = "$PWD\bin\msi-app"
           # Never FortressTestHooks here: this is the build customers get.
-          dotnet publish --no-incremental src/Fortress.Agent.Host -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true `
+          Remove-Item -Recurse -Force src\*\obj, src\*\bin, installer\obj, installer\bin -ErrorAction SilentlyContinue
+          dotnet publish src/Fortress.Agent.Host -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o $app
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & ./release/sign-windows.ps1 -Files "$app\FortressAgent.exe" -Required:([bool]$env:REQUIRE_SIGNATURE)
-          dotnet build --no-incremental installer/FortressAgent.Installer.wixproj -c Release -p:AppDir=$app -p:AgentVersion=$version -o "$PWD\bin\msi-release"
+          Remove-Item -Recurse -Force src\*\obj, src\*\bin, installer\obj, installer\bin -ErrorAction SilentlyContinue
+          dotnet build installer/FortressAgent.Installer.wixproj -c Release -p:AppDir=$app -p:AgentVersion=$version -o "$PWD\bin\msi-release"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $msi = Get-ChildItem -Recurse bin\msi-release -Filter *.msi | Select-Object -First 1
           & ./release/sign-windows.ps1 -Files $msi.FullName -Required:([bool]$env:REQUIRE_SIGNATURE)
           "RELEASE_MSI=$($msi.FullName)" >> $env:GITHUB_ENV
       - name: Build the test MSI and two test releases
         run: |
-          # Every build here is --no-incremental: they share obj folders, and WiX does not notice that AppDir points somewhere else, so
-          # an incremental build handed back the release MSI (which trusts no update key) as the test MSI.
+          # Every build here starts from empty obj/bin folders: they are shared, and WiX does not notice that AppDir points somewhere else,
+          # so an incremental build handed back the release MSI (which trusts no update key) as the test MSI. (dotnet publish has no
+          # --no-incremental.)
           # A build that also trusts the throwaway release key the checks give it in its environment (FortressTestHooks); never shipped.
           $app = "$PWD\bin\msi-test-app"
-          dotnet publish --no-incremental src/Fortress.Agent.Host -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true `
+          Remove-Item -Recurse -Force src\*\obj, src\*\bin, installer\obj, installer\bin -ErrorAction SilentlyContinue
+          dotnet publish src/Fortress.Agent.Host -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:FortressTestHooks=true -o $app
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          dotnet build --no-incremental installer/FortressAgent.Installer.wixproj -c Release -p:AppDir=$app -p:AgentVersion=$env:AGENT_VERSION -o "$PWD\bin\msi-test"
+          Remove-Item -Recurse -Force src\*\obj, src\*\bin, installer\obj, installer\bin -ErrorAction SilentlyContinue
+          dotnet build installer/FortressAgent.Installer.wixproj -c Release -p:AppDir=$app -p:AgentVersion=$env:AGENT_VERSION -o "$PWD\bin\msi-test"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $testMsi = (Get-ChildItem -Recurse bin\msi-test -Filter *.msi | Select-Object -First 1).FullName
           if ((Get-FileHash $testMsi).Hash -eq (Get-FileHash $env:RELEASE_MSI).Hash) { throw 'The test MSI is the release MSI again: it was not rebuilt' }
@@ -126,7 +131,8 @@ jobs:
           "TEST_MSI=$testMsi" >> $env:GITHUB_ENV
           foreach ($v in '0.99.0', '0.99.1') {
             $out = "$PWD\bin\release-$v"
-            dotnet publish --no-incremental src/Fortress.Agent.Host -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true `
+            Remove-Item -Recurse -Force src\*\obj, src\*\bin, installer\obj, installer\bin -ErrorAction SilentlyContinue
+            dotnet publish src/Fortress.Agent.Host -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true `
               -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:FortressTestHooks=true -p:Version=$v -o $out
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
             Compress-Archive -Path "$out\*" -DestinationPath "$PWD\bin\release-$v.zip" -Force

@@ -291,7 +291,7 @@ internal REST APIs**. PostgreSQL was done in AG2.
 
 ### AG5a — MySQL and MariaDB (2026-11-15)
 
-Migration `20260309100000_agent_mysql.sql` (**not yet applied live**). It replaces only `app.integration_agent_config_problem`, so a database
+Migration `20260309100000_agent_mysql.sql` (applied live 2026-11-16). It replaces only `app.integration_agent_config_problem`, so a database
 connection may name engine `mysql`. It signs in with a user name and password, sealed in the browser for the agent as for PostgreSQL. It takes
 a port (default 3306) and no instance. Pushing the API before it does not break anything: creating a MySQL connection is refused until it is
 applied.

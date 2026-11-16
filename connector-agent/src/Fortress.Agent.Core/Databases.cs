@@ -204,6 +204,11 @@ public sealed class LocalAllowList
     public IReadOnlyList<string> Objects { get; init; } = [];
     /// <summary>Folders this agent may read (AG5b), each with everything below it. Unlike the other lists, none means no folder at all.</summary>
     public IReadOnlyList<string> Folders { get; init; } = [];
+    /// <summary>
+    /// Hosts of internal APIs this agent may call (AG5c): "erp.factory.local", "10.0.4.12", "erp.factory.local:8080" or "*.factory.local". A name
+    /// allows that host only (a "*." entry its sub-domains); with a port, only that port. None means no API at all.
+    /// </summary>
+    public IReadOnlyList<string> Hosts { get; init; } = [];
 
     public static LocalAllowList Everything { get; } = new();
 
@@ -224,7 +229,7 @@ public sealed class LocalAllowList
         IReadOnlyList<string> List(string key) => node?[key] is JsonArray a
             ? a.Select(x => x?.GetValue<string>()?.Trim()).Where(x => !string.IsNullOrEmpty(x)).Select(x => x!).ToArray()
             : [];
-        return new LocalAllowList { Databases = List("databases"), Schemas = List("schemas"), Objects = List("objects"), Folders = List("folders") };
+        return new LocalAllowList { Databases = List("databases"), Schemas = List("schemas"), Objects = List("objects"), Folders = List("folders"), Hosts = List("hosts") };
     }
 
     /// <summary>The folder or one above it is listed. Paths are compared whole, after resolving them, ignoring case on Windows.</summary>
@@ -241,6 +246,50 @@ public sealed class LocalAllowList
             try { root = Full(allowed); } catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException) { continue; }
             if (string.Equals(target, root, comparison)) return true;
             if (target.StartsWith(root + Path.DirectorySeparatorChar, comparison) || target.StartsWith(root + Path.AltDirectorySeparatorChar, comparison)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>The address's host (and port, when the entry names one) is listed. Host names ignore case; addresses compare as addresses.</summary>
+    public bool AllowsHost(Uri uri)
+    {
+        if (Hosts.Count == 0) return false;
+        var host = uri.IdnHost.Trim('[', ']').ToLowerInvariant();
+        foreach (var raw in Hosts)
+        {
+            var entry = raw.Trim().ToLowerInvariant();
+            int? port = null;
+            // "host:port" or "[v6]:port"; a bare IPv6 address has more than one colon and no port.
+            if (entry.StartsWith('['))
+            {
+                var close = entry.IndexOf(']');
+                if (close < 0) continue;
+                if (close + 1 < entry.Length)
+                {
+                    if (entry[close + 1] != ':' || !int.TryParse(entry[(close + 2)..], out var p6)) continue;
+                    port = p6;
+                }
+                entry = entry[1..close];
+            }
+            else if (entry.Count(c => c == ':') == 1)
+            {
+                var colon = entry.IndexOf(':');
+                if (!int.TryParse(entry[(colon + 1)..], out var p)) continue;
+                port = p;
+                entry = entry[..colon];
+            }
+            if (port is { } want && want != uri.Port) continue;
+            if (System.Net.IPAddress.TryParse(entry, out var listed))
+            {
+                if (System.Net.IPAddress.TryParse(host, out var asked) && listed.Equals(asked)) return true;
+                continue;
+            }
+            if (entry.StartsWith("*."))
+            {
+                if (host.EndsWith(entry[1..], StringComparison.Ordinal) && host.Length > entry.Length - 1) return true;
+                continue;
+            }
+            if (host == entry.TrimEnd('.')) return true;
         }
         return false;
     }

@@ -99,7 +99,7 @@ public sealed class JobHandlers
         return new JobHandlers(
             [new PingHandler(), new StoreCredentialHandler(sealingKey, credentials), new TestConnectionHandler(databases), new DiscoverHandler(databases), new PreviewHandler(databases),
              new ExtractHandler(databases)],
-            [.. adapters.Engines, "folder"]);
+            [.. adapters.Engines, "folder", "rest"]);
     }
 
     public static JobHandlers Default() => new([new PingHandler()]);

@@ -2,7 +2,7 @@ import excelLogo from "@/assets/integrations/excel.webp";
 import restApiLogo from "@/assets/integrations/rest-api.webp";
 import sqlServerLogo from "@/assets/integrations/sql-server.webp";
 import { BRAND_MARKS } from "./brandMarks";
-import { FolderOpenIcon } from "@/components/icons";
+import { FolderOpenIcon, ServerIcon } from "@/components/icons";
 
 /** Logos kept as pictures (bundled with the app). */
 const IMAGES = { file: excelLogo, api: restApiLogo, database: sqlServerLogo };
@@ -46,6 +46,8 @@ const ProviderLogo = ({ mark, name, className = "", size = "md" }) => {
         <MicrosoftMark />
       ) : mark === "folder" ? (
         <FolderOpenIcon className={`${small ? "h-5 w-5" : "h-7 w-7"} text-amber-500`} aria-hidden="true" />
+      ) : mark === "network" ? (
+        <ServerIcon className={`${small ? "h-5 w-5" : "h-7 w-7"} text-sky-600`} aria-hidden="true" />
       ) : brand ? (
         <svg
           viewBox="0 0 24 24"

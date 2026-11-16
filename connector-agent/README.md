@@ -75,6 +75,19 @@ The Windows service, DPAPI protection, `install.ps1` / `uninstall.ps1` and the f
   import sends the **newest** file matching the name or pattern; the agent never parses it — it sends the bytes in signed parts (≤ 768 kB each, ≤ 25
   MB in all) and Fortress reads them as it reads uploaded files. An incremental import sends nothing when the newest file is the one Fortress has.
 
+## Internal REST APIs (AG5c)
+
+- A connection with engine `rest` names an API as this machine reaches it (`http://erp.factory.local:8080/api`; http is fine on your own
+  network). The agent calls it **only when `"hosts"` in `allowlist.json` names its host** (none = no API at all):
+  ```json
+  { "hosts": ["erp.factory.local:8080", "10.0.4.12", "*.mes.local"] }
+  ```
+  A plain name allows that host only (any port unless one is given); `*.` allows its sub-domains.
+- Redirects are never followed. Link-local (cloud metadata), "any", multicast and broadcast addresses are refused, whatever a name resolves to.
+  Next-page links must stay on the same address. The machine's own proxy settings are not used.
+- The key, token or password is sealed in the browser and kept here like a database password. The agent reads the pages and sends Fortress the
+  records as rows, flattened exactly as the cloud REST connector flattens them (`contract/rest-flatten.json`).
+
 ## Extraction for imports (AG3)
 
 - An `extract` job names a table or view, the column that identifies each row, which columns (or all) and simple filters

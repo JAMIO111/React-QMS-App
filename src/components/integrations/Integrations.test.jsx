@@ -67,7 +67,7 @@ beforeEach(() => {
 });
 
 describe("Settings → Integrations", () => {
-  it("shows every integration as a card with its logo; the file import, the REST API, a folder and the three databases are available", async () => {
+  it("shows every integration as a card with its logo; the file import, the REST API, a folder, an internal API and the three databases are available", async () => {
     routeApi({
       "GET /integrations/connections": { data: [conn({ status: "active" })] },
       "GET /integrations/runs": { data: [run()], page: 1, pageSize: 8, total: 1 },
@@ -83,7 +83,7 @@ describe("Settings → Integrations", () => {
     expect(within(csv).getByText("Available")).toBeInTheDocument();
     expect(within(csv).getByRole("link", { name: /Import a file/ })).toHaveAttribute("href", "/Settings/Integrations/csv");
     expect(within(within(grid).getByRole("listitem", { name: "SAP" })).getByText("Coming soon")).toBeInTheDocument();
-    expect(within(grid).getAllByText("Coming soon")).toHaveLength(cards.length - 6);
+    expect(within(grid).getAllByText("Coming soon")).toHaveLength(cards.length - 7);
     for (const name of ["PostgreSQL", "Microsoft SQL Server"]) {
       const db = within(grid).getByRole("listitem", { name });
       expect(within(db).getByText("Available")).toBeInTheDocument();

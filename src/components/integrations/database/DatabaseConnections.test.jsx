@@ -133,6 +133,56 @@ describe("database connection settings", () => {
     });
   });
 
+  it("connects an internal API through an agent and seals its token with no user name (AG5c)", async () => {
+    const { restFormProblem } = await import("../../../lib/integrations");
+    const f = databaseForm("rest");
+    expect(f.authType).toBe("none");
+    expect(restFormProblem({ ...f, baseUrl: "http://10.0.4.12:8080/api" })).toBeNull();
+    expect(restFormProblem({ ...f, baseUrl: "http://169.254.169.254/latest" })).toMatch(/link-local/);
+    expect(restFormProblem({ ...f, baseUrl: "http://user:pw@erp/api" })).toMatch(/no user name/);
+    expect(restFormProblem({ ...f, baseUrl: "http://erp/api", authType: "api_key", apiKeyHeader: "Host" })).toMatch(/cannot be sent in the Host header/);
+    expect(databaseWhere({ engine: "rest", baseUrl: "http://erp:8080/api" })).toBe("http://erp:8080/api");
+    routeApi({
+      "GET /integrations/agents": { data: [{ id: "ag1", name: "Newcastle", status: "active", online: true }], onlineCount: 1, activeCount: 1 },
+      "POST /integrations/connections": (_p, o) => ({ id: "c9", ...o.body }),
+    });
+    const onCreated = vi.fn();
+    wrap(<DatabaseConnectionDialog engine="rest" onClose={() => {}} onCreated={onCreated} />);
+    const dialog = await screen.findByRole("dialog", { name: "Connect an internal API" });
+    expect(within(dialog).queryByRole("textbox", { name: /^Server/ })).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Connector agent/ }));
+    await userEvent.click(screen.getByRole("option", { name: /Newcastle/ }));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Name/ }), "ERP API");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Address/ }), "http://169.254.169.254/x");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create connection" }));
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(/link-local/);
+    await userEvent.clear(within(dialog).getByRole("textbox", { name: /^Address/ }));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Address/ }), "http://erp.factory.local:8080/api");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /How the agent signs in/ }));
+    await userEvent.click(screen.getByRole("option", { name: "A bearer token" }));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /Path to test/ }), "/health");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create connection" }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(calls.find((c) => c.k === "POST /integrations/connections").body).toEqual({
+      providerKey: "sql_agent", name: "ERP API", externalSystem: "erp-api", agentId: "ag1",
+      config: { engine: "rest", baseUrl: "http://erp.factory.local:8080/api", authType: "bearer", testPath: "/health" },
+    });
+
+    // The token: one field, sealed with an empty user name.
+    const api = connection({ name: "ERP API", config: { engine: "rest", baseUrl: "http://erp.factory.local:8080/api", authType: "bearer" } });
+    sealCredential.mockResolvedValue({ epk: "e", iv: "i", ct: "c" });
+    routeApi({ "POST /integrations/agents/ag1/wake": {}, "PUT /integrations/connections/c1/agent-credential": api });
+    wrap(<AgentCard connection={api} canManage />);
+    expect(screen.getByText("Token: Not typed yet")).toBeInTheDocument();
+    expect(screen.getByText(/Internal API at http:\/\/erp.factory.local:8080\/api/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Type the token" }));
+    const sealDialog = await screen.findByRole("dialog", { name: "Type the API's token" });
+    expect(within(sealDialog).queryByLabelText(/User name/)).not.toBeInTheDocument();
+    await userEvent.type(within(sealDialog).getByLabelText(/^Token/), "s3cret");
+    await userEvent.click(within(sealDialog).getByRole("button", { name: "Seal and send to the agent" }));
+    await waitFor(() => expect(sealCredential).toHaveBeenCalledWith(SEALING, "c1", { username: "", password: "s3cret" }));
+  });
+
   it("says when there is no agent to read through", async () => {
     routeApi({ "GET /integrations/agents": { data: [], onlineCount: 0, activeCount: 0 } });
     wrap(<DatabaseConnectionDialog engine="sqlserver" onClose={() => {}} />);

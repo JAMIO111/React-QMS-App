@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { JSON_PATH, PARAM, REST_PATH, RestPaging } from './providers/rest-api/rest-config';
 
 const Iso = z.string().datetime({ offset: true });
 const Person = z.object({ id: z.string().uuid(), name: z.string() }).nullable();
@@ -76,9 +77,32 @@ const FileName = z
   .refine((v) => v.trim() === v && !/[\\/:\u0000-\u001f"<>|]/.test(v) && v !== '.' && v !== '..', 'a file name directly in the folder');
 /** Where a kind of record is read from in a folder (AG5b): the newest CSV or Excel file matching the name or pattern. */
 const FileSource = z.object({ file: FileName }).strict();
-export const RecordSource = z.union([DbSource, FileSource]);
+const RestPath = z.string().regex(REST_PATH, 'A path starts with / and stays below the address (no ?, #, // or ..)');
+const RestQuery = z.record(z.string().regex(PARAM), z.string().max(200)).refine((q) => Object.keys(q).length <= 20, 'At most 20 parameters');
+const FieldName = z.string().min(1).max(200).refine((v) => !/[\u0000-\u001f]/.test(v), 'a field name as the answer spells it');
+/**
+ * Where a kind of record is read from on an internal API (AG5c): a path below the address, where the list is in the answer, fixed parameters, how
+ * it pages, the field that identifies each record and, to read only what changed, the field that shows it with the parameter that asks for it.
+ */
+const RestSource = z
+  .object({
+    path: RestPath,
+    recordsPath: z.string().regex(JSON_PATH).optional(),
+    query: RestQuery.optional(),
+    paging: RestPaging.optional(),
+    keyColumn: FieldName,
+    changedColumn: FieldName.optional(),
+    changedParam: z.string().regex(PARAM).optional(),
+  })
+  .strict()
+  .refine((s) => (s.changedColumn === undefined) === (s.changedParam === undefined), {
+    message: 'To read only what changed, give both the field that shows when a record changed and the parameter that asks for it',
+    path: ['changedParam'],
+  });
+export const RecordSource = z.union([DbSource, FileSource, RestSource]);
 export type RecordSource = z.infer<typeof RecordSource>;
 export type DbRecordSource = z.infer<typeof DbSource>;
+export type RestRecordSource = z.infer<typeof RestSource>;
 
 /** The organisation's allow-list of host names its connections may call (empty: any public host). */
 export const AllowedHostsBody = z.object({ hosts: z.array(z.string().trim().max(253)).max(50) }).strict();
@@ -185,6 +209,11 @@ export const ConnectionJobBody = z
         object: z.string().min(1).max(128).optional(),
         /** A folder (AG5b): the file to preview, by name or pattern. */
         file: FileName.optional(),
+        /** An internal API (AG5c): the address to try, where its records are, fixed parameters and how it pages. */
+        path: RestPath.optional(),
+        recordsPath: z.string().regex(JSON_PATH).optional(),
+        query: RestQuery.optional(),
+        paging: RestPaging.optional(),
         limit: z.number().int().min(1).max(50).optional(),
       })
       .strict()

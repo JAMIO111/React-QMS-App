@@ -82,7 +82,9 @@ const RunDialog = ({ connection, runs, onClose }) => {
         {isApi && choices.length === 0 && <Callout tone="warning">Say in the connection's settings where the API gives each kind of record.</Callout>}
         {isDb && choices.length === 0 && (
           <Callout tone="warning">
-            {connection.config?.engine === "folder"
+            {connection.config?.engine === "rest"
+              ? "Choose the address each kind of record is read from: try one on this page and use it."
+              : connection.config?.engine === "folder"
               ? "Choose the file each kind of record is read from: list the folder's files on this page and use one."
               : "Choose the table each kind of record is read from: browse the database on this page and use a table."}
           </Callout>
@@ -112,12 +114,12 @@ const RunDialog = ({ connection, runs, onClose }) => {
         )}
         {(isApi || isDb) && entityType && !templates.isLoading && apiNeedsTemplate && (
           <Callout tone="info" action={<Link to={apiMappingPath(connection.id, entityType)} className="text-sm font-medium text-link-color hover:underline">Map fields</Link>}>
-            There is no import template for {ENTITY_LABELS[entityType]?.toLowerCase() ?? "these records"} yet: a preview shows what the {isDb ? (connection.config?.engine === "folder" ? "file holds" : "table holds") : "API sends"}, and importing needs a template that maps its fields.
+            There is no import template for {ENTITY_LABELS[entityType]?.toLowerCase() ?? "these records"} yet: a preview shows what the {isDb && connection.config?.engine !== "rest" ? (connection.config?.engine === "folder" ? "file holds" : "table holds") : "API sends"}, and importing needs a template that maps its fields.
           </Callout>
         )}
         {isDb && entityType && (
           <p className="text-xs text-secondary-text">
-            The connector agent reads the {connection.config?.engine === "folder" ? "newest matching file" : "table"} first{runKind === "preview" ? " (the first 1,000 rows)" : ""}; the import carries on as soon as it has sent the rows.
+            The connector agent reads the {{ folder: "newest matching file", rest: "API" }[connection.config?.engine] ?? "table"} first{runKind === "preview" ? ` (the first 1,000 ${connection.config?.engine === "rest" ? "records" : "rows"})` : ""}; the import carries on as soon as it has sent the {connection.config?.engine === "rest" ? "records" : "rows"}.
           </p>
         )}
         {isFile && chosenFile && !templates.isLoading && !mapped && (

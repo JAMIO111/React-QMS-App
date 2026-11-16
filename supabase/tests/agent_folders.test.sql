@@ -60,7 +60,7 @@ BEGIN
   PERFORM pg_temp.assert_true(app.integration_agent_config_problem('{"engine": "folder", "folder": "C:\\Exports", "authType": "sql"}') LIKE '%takes no sign-in%', 'a folder takes no sign-in');
   PERFORM pg_temp.assert_true(app.integration_agent_config_problem('{"engine": "folder", "folder": "C:\\Exports", "server": "x"}') LIKE 'Unknown setting%', 'database settings are not folder settings');
   PERFORM pg_temp.assert_true(app.integration_agent_config_problem('{"engine": "folder", "folder": "C:\\Exports", "delimiter": "x"}') LIKE 'The separator%', 'a separator from the list');
-  PERFORM pg_temp.assert_true(app.integration_agent_config_problem('{"engine": "oracle", "server": "x", "database": "y", "authType": "password"}') LIKE '%or a folder of files', 'the engines are named');
+  PERFORM pg_temp.assert_true(app.integration_agent_config_problem('{"engine": "oracle", "server": "x", "database": "y", "authType": "password"}') LIKE '%a folder of files or an internal API', 'the engines are named');
 
   PERFORM pg_temp.login(own);
   folder := app.create_agent_connection(org, agent, 'ERP exports', 'erp-files', cfg);
@@ -71,7 +71,7 @@ BEGIN
   t := pg_temp.fails(format('SELECT app.set_integration_record_source(%L, ''machine'', %L)', folder, '{"schema": "erp", "object": "machines", "keyColumn": "id"}'));
   PERFORM pg_temp.assert_true(t LIKE 'QM022%folder connection reads files%', 'a folder does not read tables: ' || t);
   t := pg_temp.fails(format('SELECT app.set_integration_record_source(%L, ''machine'', %L)', db, '{"file": "machines.csv"}'));
-  PERFORM pg_temp.assert_true(t LIKE 'QM022%reads tables, not files%', 'a database does not read files: ' || t);
+  PERFORM pg_temp.assert_true(t LIKE 'QM022%Only a folder connection reads files%', 'a database does not read files: ' || t);
   t := pg_temp.fails(format('SELECT app.set_integration_record_source(%L, ''machine'', %L)', folder, '{"file": "../machines.csv"}'));
   PERFORM pg_temp.assert_true(t LIKE 'QM022%directly in the folder%', 'a file is directly in the folder: ' || t);
   t := pg_temp.fails(format('SELECT app.set_integration_record_source(%L, ''machine'', %L)', folder, '{"file": "m.csv", "keyColumn": "id"}'));
@@ -85,7 +85,7 @@ BEGIN
   t := pg_temp.fails(format('SELECT app.request_connection_job(%L, ''preview'', %L)', folder, '{"schema": "erp", "object": "x"}'));
   PERFORM pg_temp.assert_true(t LIKE 'QM022%not schemas or tables%', 'a folder has no tables: ' || t);
   t := pg_temp.fails(format('SELECT app.request_connection_job(%L, ''preview'', %L)', db, '{"file": "x.csv"}'));
-  PERFORM pg_temp.assert_true(t LIKE 'QM022%not files%', 'a database has no files: ' || t);
+  PERFORM pg_temp.assert_true(t LIKE 'QM022%Only a folder holds files%', 'a database has no files: ' || t);
   job := app.request_connection_job(folder, 'discover', '{}');
   PERFORM pg_temp.assert_eq((SELECT spec -> 'request' FROM public.integration_agent_jobs WHERE id = job), '{"level": "files"}'::jsonb, 'browsing a folder lists its files');
   job := app.request_connection_job(folder, 'preview', '{"file": "machines-*.csv", "limit": 10}');

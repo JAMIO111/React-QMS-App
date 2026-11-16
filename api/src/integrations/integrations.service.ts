@@ -256,10 +256,17 @@ export class IntegrationsService {
   private agentSample(ctx: RequestContext, id: string, entityType: string): Promise<{ columns: string[]; rows: Array<{ r: number; v: Record<string, string> }> }> {
     return this.database.asUser(ctx, async (db) => {
       const src = (await db.execute<Row>(sql`select s.source, s.updated_at from public.integration_record_sources s where s.connection_id = ${id}::uuid and s.entity_type = ${entityType}`)).rows[0];
-      if (!src) throw new ApiError(409, 'integration_rule', `Choose the table ${entityType.replace(/_/g, ' ')} records are read from first`);
+      if (!src) throw new ApiError(409, 'integration_rule', `Choose where ${entityType.replace(/_/g, ' ')} records are read from first`);
       const source = src.source as RecordSource;
-      // A folder (AG5b): the latest preview of the same file name or pattern; a database: of the same table.
-      const job = 'file' in source
+      // A folder (AG5b): the latest preview of the same file name or pattern; an API (AG5c): of the same address and list; a database: of the same table.
+      const job = 'path' in source
+        ? (await db.execute<Row>(sql`select j.result from public.integration_agent_jobs j
+             where j.connection_id = ${id}::uuid and j.kind = 'preview' and j.status = 'completed'
+               and j.spec -> 'request' ->> 'path' = ${source.path}
+               and coalesce(j.spec -> 'request' ->> 'recordsPath', '') = ${source.recordsPath ?? ''}
+               and j.created_at >= ${src.updated_at}::timestamptz
+             order by j.created_at desc limit 1`)).rows[0]
+        : 'file' in source
         ? (await db.execute<Row>(sql`select j.result from public.integration_agent_jobs j
              where j.connection_id = ${id}::uuid and j.kind = 'preview' and j.status = 'completed'
                and j.spec -> 'request' ->> 'file' = ${source.file} and j.created_at >= ${src.updated_at}::timestamptz
@@ -269,7 +276,7 @@ export class IntegrationsService {
                and j.spec -> 'request' ->> 'schema' = ${source.schema} and j.spec -> 'request' ->> 'object' = ${source.object}
                and j.created_at >= ${src.updated_at}::timestamptz
              order by j.created_at desc limit 1`)).rows[0];
-      const what = 'file' in source ? source.file : `${source.schema}.${source.object}`;
+      const what = 'path' in source ? source.path : 'file' in source ? source.file : `${source.schema}.${source.object}`;
       if (!job) throw new ApiError(409, 'agent_sample_needed', `Ask the connector agent for a sample of ${what} first`);
       const result = (job.result ?? {}) as { columns?: Array<{ name: string }>; rows?: Array<Record<string, unknown>> };
       const all = (result.columns ?? []).map((c) => c.name);

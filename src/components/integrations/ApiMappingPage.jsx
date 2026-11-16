@@ -61,7 +61,9 @@ const ApiMappingPage = () => {
   const conn = connection.data ?? null;
   const isDb = conn?.provider?.key === "sql_agent";
   const isFolder = conn?.config?.engine === "folder";
-  const W = WORDS[isFolder ? "folder" : isDb ? "database" : "api"];
+  // An internal API read through the agent (AG5c): mapped as an API's fields, from a sample the agent sends.
+  const isAgentApi = conn?.config?.engine === "rest";
+  const W = WORDS[isFolder ? "folder" : isAgentApi ? "api" : isDb ? "database" : "api"];
   const kinds = isDb ? (conn?.recordSources ?? []).map((x) => x.entityType) : Object.keys(conn?.config?.entities ?? {});
   const recordSource = isDb ? (conn?.recordSources ?? []).find((x) => x.entityType === (kinds.includes(params.get("entity")) ? params.get("entity") : kinds[0]))?.source : null;
   const entityParam = params.get("entity");
@@ -76,10 +78,16 @@ const ApiMappingPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askedStatus]);
   const needsSample = isDb && sample.error?.code === "agent_sample_needed";
-  // A folder (AG5b): a preview of the newest file matching the source's name; a database: of its table.
-  const askForSample = () =>
-    recordSource &&
-    askSample.ask("preview", recordSource.file ? { file: recordSource.file, limit: 20 } : { schema: recordSource.schema, object: recordSource.object, limit: 20 });
+  // A folder (AG5b): a preview of the newest file matching the source's name; an internal API (AG5c): its first page; a database: of its table.
+  const sampleRequest = (src) => {
+    if (src.file) return { file: src.file, limit: 20 };
+    if (src.path) {
+      const { path, recordsPath, query, paging } = src;
+      return Object.fromEntries(Object.entries({ path, recordsPath, query, paging, limit: 20 }).filter(([, v]) => v !== undefined));
+    }
+    return { schema: src.schema, object: src.object, limit: 20 };
+  };
+  const askForSample = () => recordSource && askSample.ask("preview", sampleRequest(recordSource));
   const readAgain = () => (isDb ? askForSample() : sample.refetch());
   const allTemplates = useImportTemplates(undefined);
   const templates = (allTemplates.data ?? []).filter((t) => t.entityType === entityType);
@@ -234,7 +242,9 @@ const ApiMappingPage = () => {
             {needsSample && (
               <Callout tone="info" title="Ask the connector agent for a sample"
                 action={<CTAButton type="main" size="md" onClick={askForSample} loading={askSample.busy} loadingText="Asking the agent…">Ask for a sample</CTAButton>}>
-                {isFolder
+                {isAgentApi
+                  ? `Fortress does not call the API itself: the agent asks it for the first page of ${recordSource?.path ?? "the address chosen"}, and the fields are mapped from its records.`
+                  : isFolder
                   ? `Fortress does not read the folder itself: the agent sends the newest file matching ${recordSource?.file ?? "the name chosen"}, and the columns are mapped from its first rows.`
                   : `Fortress does not read the database itself: the agent sends the first rows of ${recordSource ? `${recordSource.schema}.${recordSource.object}` : "the table"}, and the columns are mapped from them.`}
               </Callout>
@@ -248,7 +258,9 @@ const ApiMappingPage = () => {
             )}
             {sample.data && headers.length === 0 && (
               <Callout tone="warning" title={W.none} action={<CTAButton type="neutral" size="md" onClick={readAgain} loading={sample.isFetching || askSample.busy}>Read again</CTAButton>}>
-                {isFolder
+                {isAgentApi
+                  ? "Fields can only be mapped from records the API sends. Check the path and where the list is in the answer on the connection's page."
+                  : isFolder
                   ? "Columns can only be mapped from rows the file holds. Check the file name chosen on the connection's page."
                   : isDb
                   ? "Columns can only be mapped from rows the table holds. Check the table chosen and its filters on the connection's page."
@@ -261,7 +273,7 @@ const ApiMappingPage = () => {
                 <TemplateSettingsCard entityType={entityType} settings={form.settings} onChange={(s) => setForm({ ...form, settings: s })} readOnly={!canRun} />
                 <MenuCard
                   title={`Map fields to ${catalogue.label.toLowerCase()}`}
-                  subtitle={isDb
+                  subtitle={isDb && !isAgentApi
                     ? `${headers.length} columns in the first ${sampleRows.length} rows the agent sent. The examples are worked out by Fortress exactly as the import will.`
                     : `${headers.length} fields in the first ${sampleRows.length} records. Nested fields have dots, e.g. dimensions.width. The examples are worked out by Fortress exactly as the import will.`}
                   action={<CTAButton type="neutral" size="md" onClick={readAgain} loading={sample.isFetching || askSample.busy}>Read again</CTAButton>}>
@@ -278,7 +290,7 @@ const ApiMappingPage = () => {
                     readOnly={!canRun}
                     advanced={advanced}
                     problems={problems}
-                    source={isFolder ? "file" : isDb ? "database" : "api"}
+                    source={isFolder ? "file" : isAgentApi ? "api" : isDb ? "database" : "api"}
                     updates={!ADD_ONLY_KINDS.includes(entityType) && !ADD_UPDATE_KINDS.includes(entityType) && (form.settings?.writeMode ?? "add_only") !== "add_only"}
                   />
                 </MenuCard>

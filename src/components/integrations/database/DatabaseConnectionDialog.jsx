@@ -40,6 +40,30 @@ const FolderFields = ({ f, set }) => (
   </>
 );
 
+/** An internal API's settings (AG5c): its address as the agent's machine reaches it, how it signs in and a path to test. */
+const RestFields = ({ f, set }) => (
+  <>
+    <Field
+      label="Address"
+      value={f.baseUrl}
+      onChange={(e) => set({ baseUrl: e.target.value })}
+      required
+      maxLength={300}
+      placeholder="http://erp.factory.local:8080/api"
+      hint={'As the agent\'s machine reaches it: http or https, a name or address on your network and the port. Add its host to "hosts" in the agent\'s allowlist.json too.'}
+    />
+    <ComboField label="How the agent signs in" value={f.authType} onChange={(v) => v && set({ authType: v })} options={DB_AUTH.rest} required
+      hint="The key, token or password is typed on the next page, sealed for the agent and never kept by Fortress" />
+    {f.authType === "api_key" && (
+      <Field label="Header the API key is sent in" value={f.apiKeyHeader} onChange={(e) => set({ apiKeyHeader: e.target.value })} required maxLength={60} placeholder="X-Api-Key" />
+    )}
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <Field label="Path to test" value={f.testPath} onChange={(e) => set({ testPath: e.target.value })} maxLength={300} placeholder="/health" hint="Optional: the address itself is asked when empty" />
+      <Field label="Timeout (seconds)" type="number" value={f.timeoutSeconds} onChange={(e) => set({ timeoutSeconds: e.target.value })} placeholder="30" hint="1 to 120" />
+    </div>
+  </>
+);
+
 const DatabaseConnectionDialog = ({ engine, existing = null, onClose, onCreated }) => {
   const agents = useAgents();
   const mutation = useIntegrationMutation();
@@ -56,8 +80,10 @@ const DatabaseConnectionDialog = ({ engine, existing = null, onClose, onCreated 
   const chosen = live.find((a) => a.id === agentId);
   const code = systemTouched ? system : systemCodeFrom(name);
   const folder = f.engine === "folder";
+  const rest = f.engine === "rest";
+  const what = folder ? "folder" : rest ? "API" : "database";
   const problem =
-    (!existing && !agentId && `Choose the connector agent that reads this ${folder ? "folder" : "database"}`) ||
+    (!existing && !agentId && `Choose the connector agent that reads this ${what}`) ||
     (name.trim().length < 2 && "Give the connection a name") ||
     (!/^[a-z][a-z0-9_-]{1,39}$/.test(code) && "The system code is 2 to 40 lower-case letters, digits, hyphens or underscores, starting with a letter") ||
     databaseFormProblem(f);
@@ -79,9 +105,15 @@ const DatabaseConnectionDialog = ({ engine, existing = null, onClose, onCreated 
   };
 
   return (
-    <Dialog title={existing ? `Edit ${existing.name}` : folder ? "Connect a folder of files" : `Connect ${DB_ENGINES[f.engine]}`} onClose={onClose} width="max-w-2xl">
+    <Dialog title={existing ? `Edit ${existing.name}` : folder ? "Connect a folder of files" : rest ? "Connect an internal API" : `Connect ${DB_ENGINES[f.engine]}`} onClose={onClose} width="max-w-2xl">
       <form noValidate onSubmit={save} className="flex flex-col gap-4">
-        {!existing && !folder && (
+        {!existing && rest && (
+          <p className="text-sm text-secondary-text">
+            A connector agent inside your network calls the API and sends Fortress only the records you ask for. Nothing connects in, and the key stays on the
+            agent. The agent calls only hosts on its own allow-list and never follows a redirect.
+          </p>
+        )}
+        {!existing && !folder && !rest && (
           <p className="text-sm text-secondary-text">
             A connector agent inside your network reads the database and sends Fortress only what you ask for. Nothing connects in, and the password stays on
             the agent. You type the password on the next page.
@@ -96,7 +128,7 @@ const DatabaseConnectionDialog = ({ engine, existing = null, onClose, onCreated 
         {!existing &&
           (live.length === 0 && !agents.isLoading ? (
             <Callout tone="warning" title="No connector agent yet">
-              Install one first, on a Windows machine that can reach the {folder ? "folder" : "database"}.{" "}
+              Install one first, on a Windows machine that can reach the {what}.{" "}
               <Link to={agentsPath()} className="text-link-color hover:underline">
                 Add a connector agent
               </Link>
@@ -105,7 +137,7 @@ const DatabaseConnectionDialog = ({ engine, existing = null, onClose, onCreated 
             <ComboField label="Connector agent" value={agentId} onChange={setAgentId} options={agentOptions} required hint={chosen && !chosen.online ? "This agent is offline: you can set the connection up, but it will not answer until it is back." : "Fixed once the connection is made"} />
           ))}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} placeholder={folder ? "ERP exports" : "ERP database"} />
+          <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} placeholder={folder ? "ERP exports" : rest ? "ERP API" : "ERP database"} />
           <Field
             label="System code"
             value={code}
@@ -120,6 +152,8 @@ const DatabaseConnectionDialog = ({ engine, existing = null, onClose, onCreated 
         </div>
         {folder ? (
           <FolderFields f={f} set={set} />
+        ) : rest ? (
+          <RestFields f={f} set={set} />
         ) : (
         <>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

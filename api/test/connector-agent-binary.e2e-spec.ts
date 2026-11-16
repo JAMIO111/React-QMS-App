@@ -12,6 +12,7 @@ import { INestApplication } from '@nestjs/common';
 import { ChildProcess, execFile, spawn } from 'node:child_process';
 import { createCipheriv, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomBytes } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { createServer, Server } from 'node:http';
 import { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -131,6 +132,7 @@ maybe('the real connector agent', () => {
     expect(output).not.toContain('bin-reader-pass');
     await extraction(connectionId, finished);
     await folderConnection(agentId, finished);
+    await restConnection(agentId, finished);
     if (myPort) await mysqlConnection(agentId, finished, connectionId);
   }
 
@@ -252,6 +254,87 @@ maybe('the real connector agent', () => {
     expect((await admin.query(`select name from public.machines where organisation_id = $1 and code = 'FLD-7'`, [ids.orgA])).rows[0].name).toBe('Renamed 7');
   }
 
+  /**
+   * AG5c: the same agent reads an internal REST API (a small one on 127.0.0.1 that needs a bearer token). Refused until its host is on the agent's
+   * allow-list; then tested, an address tried (records flattened as the cloud connector does), 250 records imported in pages, and an incremental
+   * read that asks the API only for what changed since the mark.
+   */
+  async function restConnection(agentId: string, finished: (id: string, what: string) => Promise<any>) {
+    const records = Array.from({ length: 250 }, (_, i) => ({ code: `API-${i + 1}`, name: `API machine ${i + 1}`, site: { code: 'MAIN' }, updatedAt: '2026-11-16T00:00:00Z' }));
+    const asked: string[] = [];
+    const server: Server = createServer((req, res) => {
+      const url = new URL(req.url!, 'http://127.0.0.1');
+      asked.push(url.pathname + url.search);
+      if (req.headers.authorization !== 'Bearer rest-erp-token') return void res.writeHead(401).end('{}');
+      res.setHeader('Content-Type', 'application/json');
+      if (url.pathname === '/erp/health') return void res.end('{"ok":true}');
+      if (url.pathname !== '/erp/v1/machines') return void res.writeHead(404).end('{}');
+      const page = Number(url.searchParams.get('page') ?? 1);
+      const size = Number(url.searchParams.get('per_page') ?? 100);
+      const since = url.searchParams.get('since');
+      const all = records.filter((r) => !since || r.updatedAt >= since);
+      res.end(JSON.stringify({ data: all.slice((page - 1) * size, page * size), total: all.length }));
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const created = await api().post('/api/v1/integrations/connections').set(await as()).send({
+        providerKey: 'sql_agent', name: 'ERP API', externalSystem: 'erp-api', agentId,
+        config: { engine: 'rest', baseUrl: `http://127.0.0.1:${port}/erp`, authType: 'bearer', testPath: '/health' },
+      }).expect(201);
+      const id = created.body.id as string;
+      const conn = `/api/v1/integrations/connections/${id}`;
+      const sealed = seal(created.body.agent.sealingKey, id, JSON.stringify({ username: '', password: 'rest-erp-token' }));
+      const withToken = await api().put(`${conn}/agent-credential`).set(await as()).send({ keyId: created.body.agent.keyId, sealed }).expect(200);
+      await finished(withToken.body.agentJobs[0].id, 'the agent to store the token');
+      // Not on the agent's allow-list yet: refused on the agent's machine, and the API is never called.
+      const refused = await finished((await api().post(`${conn}/test`).set(await as()).expect(200)).body.agentJobs[0].id, 'the refused API test');
+      expect(refused).toMatchObject({ status: 'failed', errorKind: 'refused' });
+      expect(refused.errorMessage).toMatch(/is not on this agent's allow-list/);
+      expect(asked).toEqual([]);
+      writeFileSync(join(dataDir, 'allowlist.json'), JSON.stringify({ folders: [join(dataDir, 'exports')], hosts: [`127.0.0.1:${port}`] }));
+      const tested = await finished((await api().post(`${conn}/test`).set(await as()).expect(200)).body.agentJobs[0].id, 'the API test');
+      expect(tested).toMatchObject({ status: 'completed', result: { message: 'The API answered 200 at /erp/health' } });
+      await api().post(`${conn}/ready`).set(await as()).send({}).expect(200);
+      expect((await api().post(`${conn}/activate`).set(await as()).send({}).expect(200)).body.status).toBe('active');
+      const source = { path: '/v1/machines', recordsPath: 'data', paging: { style: 'page', pageSize: 100 }, keyColumn: 'code', changedColumn: 'updatedAt', changedParam: 'since' };
+      await api().put(`${conn}/record-source`).set(await as()).send({ entityType: 'machine', source }).expect(200);
+      const preview = await finished((await api().post(`${conn}/agent-jobs`).set(await as())
+        .send({ kind: 'preview', request: { path: source.path, recordsPath: 'data', paging: source.paging, limit: 5 } }).expect(201)).body.id, 'the API preview');
+      expect(preview.status).toBe('completed');
+      expect(preview.result.rows[0]).toEqual({ code: 'API-1', name: 'API machine 1', 'site.code': 'MAIN', updatedAt: '2026-11-16T00:00:00Z' });
+      const sample = (await api().post(`${conn}/sample`).set(await as()).send({ entityType: 'machine' }).expect(200)).body;
+      expect(sample.columns).toEqual(['code', 'name', 'site.code', 'updatedAt']);
+      const templateId = (await api().post('/api/v1/integrations/templates').set(await as()).send({
+        entityType: 'machine', name: 'ERP API machines', keyField: 'code',
+        fields: [{ target: 'code', source: 'code' }, { target: 'name', source: 'name' }, { target: 'site', source: 'site.code' }],
+        expectedColumns: sample.columns, settings: { writeMode: 'add_update', matchExisting: false },
+      }).expect(201)).body.id;
+      const importAs = async (kind: 'full' | 'incremental') => {
+        const started = (await api().post(`${conn}/runs`).set(await as()).send({ entityType: 'machine', kind, templateId }).expect(201)).body;
+        return until(`the ${kind} API import`, async () => {
+          const r = (await api().post(`/api/v1/integrations/runs/${started.id}/continue`).set(await as()).send({})).body;
+          return ['succeeded', 'partial', 'failed'].includes(r.status) && r;
+        }, 120_000);
+      };
+      asked.length = 0;
+      expect(await importAs('full')).toMatchObject({ status: 'succeeded', counts: { total: 250, created: 250 } });
+      expect(asked.filter((a) => a.startsWith('/erp/v1/machines'))).toHaveLength(3);
+      expect((await admin.query(`select count(*)::int as n from public.machines where organisation_id = $1 and code like 'API-%'`, [ids.orgA])).rows[0].n).toBe(250);
+      records[6] = { ...records[6], name: 'Renamed API machine', updatedAt: '2026-11-16T09:00:00Z' };
+      asked.length = 0;
+      expect(await importAs('incremental')).toMatchObject({ kind: 'incremental', status: 'succeeded', counts: { total: 250, updated: 1 } });
+      expect(asked[0]).toContain('since=2026-11-16T00%3A00%3A00Z');
+      expect((await admin.query(`select name from public.machines where organisation_id = $1 and code = 'API-7'`, [ids.orgA])).rows[0].name).toBe('Renamed API machine');
+      asked.length = 0;
+      expect(await importAs('incremental')).toMatchObject({ status: 'succeeded', counts: { total: 1, unchanged: 1 } });
+      expect(asked[0]).toContain('since=2026-11-16T09%3A00%3A00Z');
+      expect(output).not.toContain('rest-erp-token');
+    } finally {
+      server.close();
+    }
+  }
+
   async function mysqlConnection(agentId: string, finished: (id: string, what: string) => Promise<any>, pgConnectionId: string) {
     const mysql = (sql: string) => run('mariadb', ['--no-defaults', '-h127.0.0.1', `-P${myPort}`, '-uroot', '-pcheck-root', '-e', sql]);
     await mysql(`
@@ -333,7 +416,7 @@ maybe('the real connector agent', () => {
     });
     expect(online.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(online.capabilities.jobs).toEqual(['discover', 'extract', 'ping', 'preview', 'store_credential', 'test_connection']);
-    expect(online.capabilities.adapters).toEqual(['folder', 'mysql', 'postgres', 'sqlserver']);
+    expect(online.capabilities.adapters).toEqual(['folder', 'mysql', 'postgres', 'rest', 'sqlserver']);
 
     // Opening the agent's page wakes it to poll quickly, so the ping is answered within seconds.
     await api().post(`/api/v1/integrations/agents/${agentId}/wake`).set(await as()).expect(200);

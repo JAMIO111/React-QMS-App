@@ -256,6 +256,6 @@ public sealed class DatabaseJobTests : IDisposable
     {
         var caps = Handlers().Capabilities();
         Assert.Equal(["discover", "extract", "ping", "preview", "store_credential", "test_connection"], caps["jobs"]!.AsArray().Select(x => x!.GetValue<string>()));
-        Assert.Equal(["folder", "postgres", "sqlserver"], caps["adapters"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.Equal(["folder", "postgres", "rest", "sqlserver"], caps["adapters"]!.AsArray().Select(x => x!.GetValue<string>()));
     }
 }

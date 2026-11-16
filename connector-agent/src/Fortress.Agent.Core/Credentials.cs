@@ -108,7 +108,8 @@ public sealed class CredentialStore(string folder, IKeyProtector protector)
             var node = JsonNode.Parse(plain);
             var user = node?["username"]?.GetValue<string>();
             var password = node?["password"]?.GetValue<string>();
-            return string.IsNullOrEmpty(user) || password is null || user.Length > 256 || password.Length > 1024 ? null : new DbCredential(user, password);
+            // An API key or token (AG5c) has no user name: it is sealed as an empty one.
+            return user is null || password is null || user.Length > 256 || password.Length > 4096 || (user.Length == 0 && password.Length == 0) ? null : new DbCredential(user, password);
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException)
         {

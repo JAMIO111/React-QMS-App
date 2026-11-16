@@ -382,3 +382,94 @@ of the record-source and agent-job routes; nothing existing breaks.
   - UI: `AgentImports.test.jsx`, `DatabaseConnections.test.jsx`, `Integrations.test.jsx`.
 - **Not built.** Reading every new file of a series (only the newest one is read), moving or archiving files after import, sub-folders,
   SharePoint / OneDrive, `.xls`.
+
+### AG5c — internal REST APIs (2026-11-16)
+
+Migration `20260311100000_agent_rest.sql` (**not yet applied live**). Pushing the API before it only refuses internal API connections; nothing
+existing breaks.
+
+**Decisions taken in building it.**
+- **An internal API is an engine (`rest`) of the agent connection**, like a folder. Connections, sealed secrets, jobs, record sources, runs that
+  wait for the agent, schedules, incremental marks and health are reused unchanged.
+- **The agent calls only hosts its own allow-list names.** `allowlist.json` gains `"hosts"`: `erp.factory.local`, `10.0.4.12`,
+  `erp.factory.local:8080` or `*.factory.local`. As for folders, **no list means no API at all**.
+  - A private address is allowed: that is the point of reading through the agent.
+  - The agent never follows a redirect.
+  - It refuses link-local addresses (cloud metadata lives there), "any", multicast and broadcast, checking every address a name resolves to.
+  - It connects only to an address it has checked.
+  - Next-page links must stay on the connection's own scheme, host and port.
+- **The secret is sealed in the browser to the agent's key**, like a database password. A key or token is sealed with an empty user name; basic
+  sign-in seals both. Fortress keeps only whether the agent holds it.
+- **The agent flattens records exactly as the cloud REST connector does**, so a template made for one works for the other.
+  - Records become dotted text columns, lists of plain values joined with ", ", deeper values as JSON.
+  - The agent copies JavaScript's own rules: integer-like keys first, a repeated key keeps its first place and last value, numbers printed as
+    JavaScript prints them, `JSON.stringify` escaping including lone surrogates.
+  - `connector-agent/contract/rest-flatten.json` is generated from the cloud's `flattenRecord`. Both the API (`rest-flatten.spec.ts`) and the
+    agent (`RestTests`) check every case in it.
+- **An endpoint is the record source**: path, where the list is in the answer, fixed parameters, paging (page / offset / cursor / next link, as the
+  cloud connector) and the field that identifies each record. To read only what changed, it also names the field that shows a change and the
+  parameter that asks the API for records changed since a value. The mark is the highest value read, compared as the cloud connector compares
+  (as numbers when both are numbers, else as text), and is sent back as that parameter.
+- **The agent sends rows, not pages**, as the extraction's batches: the AG3/AG4 pipeline from there on. A batch's `lastKey` is the page to ask for
+  next plus how many of its records were already sent, so a job taken again carries on where Fortress's batches end.
+
+**As built.**
+- **Database** (functions only; latest definitions copied, then changed).
+  - `app.integration_agent_rest_config_problem`, used through `app.integration_agent_config_problem` for `engine = 'rest'`:
+    - `baseUrl`: http or https, a host name, an IPv4 address or a bracketed IPv6 address, an optional port and path. No user name, query,
+      fragment, `//`, `..` or `%2e`; not link-local, "any" or a trailing dot.
+    - `authType`: none, api_key (with an `apiKeyHeader` that is not Authorization or a forbidden header), bearer or basic.
+    - `testPath` below the address; `timeoutSeconds` from 1 to 120.
+  - `app.integration_rest_source_problem`, used through `app.integration_record_source_problem` when `path` is given:
+    - The cloud connector's path, list and paging rules.
+    - `keyColumn` is required.
+    - `changedColumn` and `changedParam` are both or neither, and the parameter must not clash with a paging or fixed parameter (default paging
+      names included).
+  - `set_integration_record_source`: an API connection takes only endpoints, and only API connections take them.
+  - `request_connection_job`: an API is never browsed; a preview takes an endpoint without the identifying field, plus `limit`.
+  - `integration_agent_needs_password` now covers api_key / bearer / basic. `integration_agent_problems` and `set_agent_credential` name the
+    secret: "Type the API's token", "A new API key was sealed for the agent".
+  - The provider is now "Database, folder or API through a connector agent".
+- **Agent** (`Rest.cs`).
+  - `RestSettings` and `RestEndpoint` check every setting again.
+  - `JsNode` reads JSON the JavaScript way (its own `Utf8JsonReader` unescaping, so a lone surrogate is kept, not refused); `RestFlatten`
+    flattens and compares marks.
+  - `RestHttp` is the allow-listed client: the address is checked in `ConnectCallback`, no redirects, cookies or proxy, 10 MB per answer.
+  - `RestJobs` tests, previews (first page, ≤ 50 records) and extracts. It retries 429 / 408 / 5xx / timeouts three times, honouring
+    Retry-After up to a minute, and fails in words on anything else.
+  - Batches keep text up to 10,000 characters (the cloud's cell limit); `ExtractHandler.Split` takes the limit.
+  - `LocalAllowList.Hosts` / `AllowsHost`. `CredentialStore` accepts an empty user name (key or token) and secrets up to 4,096 characters.
+- **API.**
+  - `RecordSource` is a database, file or endpoint shape (`RestSource` reuses the cloud connector's `REST_PATH` / `JSON_PATH` / `PARAM` /
+    `RestPaging`).
+  - Agent-job requests take `path`, `recordsPath`, `query` and `paging`.
+  - An API connection's sample is its latest preview of the same path and list.
+- **Screens.**
+  - An **Internal API** card (server icon) and the API version of the connection dialog: address, how it signs in, the key's header, a test
+    path and the timeout.
+  - The connection page: the credential card asks for "the token" or "the API key" in one field (or a user name and password for basic).
+  - **Try an address** (`RestSources.jsx`: `EndpointFields`, `RestTryCard`) shows the first page as the import will read it.
+  - **Use this address** opens `RestSourceDialog`: the kind of record, the field that identifies each record and, optionally, the changed field
+    and its parameter.
+  - API wording on the sources card, the mapping page (the agent is asked for the first page), the Run dialog and the schedule card.
+- **Tests.**
+  - SQL: `agent_rest.test.sql`, plus updated wording in the AG5a and AG5b tests.
+  - Agent: `RestTests.cs`, covering:
+    - the contract, number printing and mark comparison;
+    - the allow-list by host and port, and refused addresses;
+    - redirects, and next links to other hosts;
+    - page, cursor and next-link paging;
+    - incremental reads, resume, bearer and key sign-in, retries and failures in words.
+  - API: `rest-flatten.spec.ts`, and `agent-rest.e2e-spec.ts` with a fake agent (token sealed, test, preview as sample, template, import of 700,
+    re-import with nothing written, incremental by the mark, failure in the agent's words).
+  - Real agent: `connector-agent-binary.e2e-spec.ts` reads a real HTTP API on 127.0.0.1 that needs a bearer token:
+    - refused before it is on the allow-list, and the API is never called;
+    - tested, then an address tried (nested fields flattened);
+    - 250 records imported in three pages;
+    - an incremental read asks `since=` the mark and updates one record; the next sends the new mark.
+  - UI: `DatabaseConnections.test.jsx`, `AgentImports.test.jsx`, `Integrations.test.jsx`.
+- **Not built.**
+  - OAuth client credentials through the agent.
+  - POST queries, custom headers, non-JSON answers.
+  - Mutual TLS, or a custom CA beyond the machine's own trust store.
+  - Writing back to the API.

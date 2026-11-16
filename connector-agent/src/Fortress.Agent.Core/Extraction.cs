@@ -24,6 +24,7 @@ public sealed class ExtractHandler(DatabaseJobContext databases) : IJobHandler
     public async Task<JsonNode?> RunAsync(AgentJob job, JobContext context, CancellationToken ct)
     {
         if (FolderJobs.IsFolder(job)) return await FolderJobs.ExtractAsync(job, databases.AllowListPath, context, ct);
+        if (RestSettings.IsRest(job)) return await RestJobs.ExtractAsync(job, databases, context, ct);
         var request = DatabaseJobContext.Request(job);
         string Name(string key, string what) => request[key] is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 0 ? s : throw new JobFailedException("invalid", $"The job does not say {what}");
         var schema = Name("schema", "which schema");
@@ -113,14 +114,14 @@ public sealed class ExtractHandler(DatabaseJobContext databases) : IJobHandler
     }
 
     /// <summary>A page as one batch, or halves of it while a batch would be too big to send.</summary>
-    internal static IEnumerable<BatchPart> Split(IReadOnlyList<ExtractedRow> rows, IReadOnlyList<DbColumn> columns)
+    internal static IEnumerable<BatchPart> Split(IReadOnlyList<ExtractedRow> rows, IReadOnlyList<DbColumn> columns, int maxText = DbValues.MaxExtractText)
     {
-        var part = new BatchPart(rows, columns);
+        var part = new BatchPart(rows, columns, maxText);
         if (rows.Count > 1 && part.TooBig)
         {
             var half = rows.Count / 2;
-            foreach (var p in Split(rows.Take(half).ToList(), columns)) yield return p;
-            foreach (var p in Split(rows.Skip(half).ToList(), columns)) yield return p;
+            foreach (var p in Split(rows.Take(half).ToList(), columns, maxText)) yield return p;
+            foreach (var p in Split(rows.Skip(half).ToList(), columns, maxText)) yield return p;
             yield break;
         }
         if (part.TooBig) throw new JobFailedException("refused", "One row is too large to send to Fortress (over 900 kB compressed). Read fewer or shorter columns.");
@@ -130,11 +131,13 @@ public sealed class ExtractHandler(DatabaseJobContext databases) : IJobHandler
     internal sealed class BatchPart
     {
         private readonly IReadOnlyList<DbColumn> columns;
+        private readonly int maxText;
 
-        public BatchPart(IReadOnlyList<ExtractedRow> rows, IReadOnlyList<DbColumn> columns)
+        public BatchPart(IReadOnlyList<ExtractedRow> rows, IReadOnlyList<DbColumn> columns, int maxText = DbValues.MaxExtractText)
         {
             Rows = rows;
             this.columns = columns;
+            this.maxText = maxText;
         }
 
         public IReadOnlyList<ExtractedRow> Rows { get; }
@@ -161,7 +164,7 @@ public sealed class ExtractHandler(DatabaseJobContext databases) : IJobHandler
             foreach (var row in Rows)
             {
                 var o = new JsonObject();
-                foreach (var c in columns) o[c.Name] = DbValues.ToJson(row.Values.TryGetValue(c.Name, out var v) ? v : null, DbValues.MaxExtractText);
+                foreach (var c in columns) o[c.Name] = DbValues.ToJson(row.Values.TryGetValue(c.Name, out var v) ? v : null, maxText);
                 array.Add(o);
             }
             var body = new JsonObject { ["seq"] = seq, ["lastKey"] = Rows.Count > 0 ? Rows[^1].KeyText : null, ["rows"] = array };

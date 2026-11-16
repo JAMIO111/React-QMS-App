@@ -34,7 +34,7 @@ BEGIN
   PERFORM pg_temp.assert_true(app.integration_agent_config_problem(cfg) IS NULL, 'MySQL settings are accepted');
   PERFORM pg_temp.assert_eq(app.integration_agent_config_problem(cfg || '{"authType": "windows"}'), 'MySQL signs in with a user name and password', 'MySQL has no Windows sign-in');
   PERFORM pg_temp.assert_eq(app.integration_agent_config_problem(cfg - 'port' || '{"instance": "ERP"}'), 'Only SQL Server has named instances', 'MySQL has no named instances');
-  PERFORM pg_temp.assert_eq(app.integration_agent_config_problem(cfg || '{"engine": "oracle"}'), 'Choose the database: SQL Server, PostgreSQL or MySQL, or a folder of files', 'an engine the agent cannot read is refused');
+  PERFORM pg_temp.assert_eq(app.integration_agent_config_problem(cfg || '{"engine": "oracle"}'), 'Choose the database: SQL Server, PostgreSQL or MySQL, a folder of files or an internal API', 'an engine the agent cannot read is refused');
   PERFORM pg_temp.assert_eq(app.integration_agent_config_problem(cfg || '{"database": "erp;x=1"}'), 'Give the database name (up to 128 characters, no ; = quotes or brackets)', 'a database name cannot change the connection string');
   -- The other engines are as before.
   PERFORM pg_temp.assert_true(app.integration_agent_config_problem(cfg || '{"engine": "postgres", "port": 5432}') IS NULL, 'PostgreSQL still accepted');

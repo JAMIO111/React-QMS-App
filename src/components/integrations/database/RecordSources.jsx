@@ -3,7 +3,7 @@ import { useToast } from "../../../contexts/ToastProvider";
 import { useIntegrationEntities, useIntegrationMutation } from "../../../hooks/useIntegrations";
 import { usePermissions } from "../../../hooks/useQmsApi";
 import { describeApiError } from "../../../lib/api-client";
-import { ENTITY_LABELS, FILTER_OPS, apiMappingPath, describeRecordSource, fileNameProblem, isFolderConfig, recordSourceBody, recordSourceForm, recordSourceProblem } from "../../../lib/integrations";
+import { ENTITY_LABELS, FILTER_OPS, apiMappingPath, describeRecordSource, fileNameProblem, isFolderConfig, isRestConfig, recordSourceBody, recordSourceForm, recordSourceProblem } from "../../../lib/integrations";
 import { formatDateTime } from "../../../lib/processControl";
 import { PlusIcon, Trash2Icon } from "@/components/icons";
 import Callout from "../../ui/Callout";
@@ -15,6 +15,7 @@ import SlidingToggle from "../../ui/SlidingToggle";
 import RowActionsMenu from "../../ui/RowActionsMenu";
 import { FormError } from "../../master-data/shared";
 import { Failed, useAsk, Waiting } from "./agentAsk";
+import { RestSourceDialog } from "./RestSources";
 import CTAButton from "@/components/CTAButton";
 
 /**
@@ -210,6 +211,7 @@ export const RecordSourcesCard = ({ connection: c }) => {
   const canManage = can("integrations.manage");
   const sources = c.recordSources ?? [];
   const folder = isFolderConfig(c.config);
+  const api = isRestConfig(c.config);
   const remove = (s) =>
     mutation.mutate(
       { action: "setRecordSource", id: c.id, body: { entityType: s.entityType, source: null } },
@@ -217,10 +219,12 @@ export const RecordSourcesCard = ({ connection: c }) => {
     );
   return (
     <MenuCard
-      title={folder ? "Records read from the folder" : "Records read from the database"}
-      subtitle={folder ? "For each kind of Fortress record, the file the agent picks up for it." : "For each kind of Fortress record, the table or view the agent reads it from."}>
+      title={api ? "Records read from the API" : folder ? "Records read from the folder" : "Records read from the database"}
+      subtitle={api ? "For each kind of Fortress record, the address the agent reads it from." : folder ? "For each kind of Fortress record, the file the agent picks up for it." : "For each kind of Fortress record, the table or view the agent reads it from."}>
       {sources.length === 0 ? (
-        folder ? (
+        api ? (
+          <Callout tone="info">Try an address below, then <strong>Use this address</strong> for the records it gives.</Callout>
+        ) : folder ? (
           <Callout tone="info">List the files below, then <strong>Use this file</strong> for the records it holds.</Callout>
         ) : (
           <Callout tone="info">Browse the database below, choose a table or view, then <strong>Use this table</strong> for the records it holds.</Callout>
@@ -249,7 +253,8 @@ export const RecordSourcesCard = ({ connection: c }) => {
         </ul>
       )}
       {editing && editing.source.file && <FileSourceDialog connection={c} existing={editing} onClose={() => setEditing(null)} />}
-      {editing && !editing.source.file && <RecordSourceDialog connection={c} schema={editing.source.schema} object={editing.source.object} existing={editing} onClose={() => setEditing(null)} />}
+      {editing && editing.source.path && <RestSourceDialog connection={c} existing={editing} onClose={() => setEditing(null)} />}
+      {editing && !editing.source.file && !editing.source.path && <RecordSourceDialog connection={c} schema={editing.source.schema} object={editing.source.object} existing={editing} onClose={() => setEditing(null)} />}
     </MenuCard>
   );
 };

@@ -257,3 +257,65 @@ describe("files in a folder (AG5b)", () => {
     expect(screen.getByText("Newest CSV or Excel file matching machines-*.csv")).toBeInTheDocument();
   });
 });
+
+describe("an internal API (AG5c)", () => {
+  const apiConnection = (over = {}) =>
+    connection({ name: "ERP API", config: { engine: "rest", baseUrl: "http://erp.factory.local:8080/api", authType: "bearer" }, ...over });
+
+  it("checks an endpoint as the database does and describes it", async () => {
+    const { restSourceProblem, restSourceForm, restSourceBody, restTryRequest } = await import("../../../lib/integrations");
+    const f = { ...restSourceForm({}), path: "/v1/machines", recordsPath: "data", pagingStyle: "page", pageSize: "100" };
+    expect(restSourceProblem(f)).toBeNull();
+    expect(restSourceProblem({ ...f, path: "/v1/../admin" })).toMatch(/stays below the address/);
+    expect(restSourceProblem({ ...f, pagingStyle: "cursor" })).toMatch(/next cursor/);
+    expect(restSourceProblem(f, true)).toMatch(/identifies each record/);
+    expect(restSourceProblem({ ...f, keyColumn: "code", changedColumn: "updatedAt" }, true)).toMatch(/give both/);
+    expect(restTryRequest(f)).toEqual({ path: "/v1/machines", recordsPath: "data", paging: { style: "page", pageSize: 100 } });
+    expect(restSourceBody({ ...f, keyColumn: "code", changedColumn: "updatedAt", changedParam: "since" })).toEqual({
+      path: "/v1/machines", recordsPath: "data", paging: { style: "page", pageSize: 100 }, keyColumn: "code", changedColumn: "updatedAt", changedParam: "since",
+    });
+    expect(describeRecordSource({ path: "/v1/machines", recordsPath: "data", keyColumn: "code", paging: { style: "page" }, changedColumn: "updatedAt", changedParam: "since" }))
+      .toBe("/v1/machines · list at data · key code · paged by page number · changes shown by updatedAt (asks since=…)");
+  });
+
+  it("tries an address through the agent and uses it for a kind of record", async () => {
+    routeApi({
+      "POST /integrations/connections/c1/agent-jobs": { id: "j1", kind: "preview", status: "pending" },
+      "GET /integrations/agent-jobs/j1": {
+        id: "j1", kind: "preview", status: "completed",
+        result: { path: "/v1/machines", columns: [{ name: "code" }, { name: "name" }, { name: "site.code" }, { name: "updatedAt" }],
+          rows: [{ code: "M1", name: "Press", "site.code": "NCL", updatedAt: "2026-11-16T08:00:00Z" }], truncated: false, pageRecords: 100, morePages: true },
+      },
+      "GET /integrations/entities": ENTITIES,
+      "PUT /integrations/connections/c1/record-source": apiConnection(),
+    });
+    wrap(<BrowseCard connection={apiConnection()} />);
+    await userEvent.type(screen.getByRole("textbox", { name: /^Path/ }), "/v1/machines");
+    await userEvent.type(screen.getByRole("textbox", { name: /Where the list is/ }), "data");
+    await userEvent.click(screen.getByRole("button", { name: "Try this address" }));
+    const table = await screen.findByRole("table", { name: "First records of /v1/machines" });
+    expect(within(table).getByText("NCL")).toBeInTheDocument();
+    expect(screen.getByText(/100 records on the first page; there are more pages/)).toBeInTheDocument();
+    expect(calls.find((c) => c.k === "POST /integrations/connections/c1/agent-jobs").body).toEqual({ kind: "preview", request: { path: "/v1/machines", recordsPath: "data", limit: 20 } });
+    await userEvent.click(screen.getByRole("button", { name: "Use this address" }));
+    const dialog = await screen.findByRole("dialog", { name: "Read records from the API" });
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Fortress records at this address/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Machines" }));
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Field that shows when a record changed/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "updatedAt" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(/give both/);
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /Parameter that asks for records changed since/ }), "since");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "PUT /integrations/connections/c1/record-source")?.body).toEqual({
+      entityType: "machine", source: { path: "/v1/machines", recordsPath: "data", keyColumn: "code", changedColumn: "updatedAt", changedParam: "since" },
+    }));
+  });
+
+  it("names the API's addresses on the sources card", async () => {
+    routeApi({});
+    wrap(<RecordSourcesCard connection={apiConnection({ recordSources: [{ entityType: "machine", source: { path: "/v1/machines", keyColumn: "code" }, updatedAt: "2026-11-16T10:00:00Z" }] })} />);
+    expect(screen.getByText("Records read from the API")).toBeInTheDocument();
+    expect(screen.getByText("/v1/machines · key code")).toBeInTheDocument();
+  });
+});

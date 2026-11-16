@@ -5,12 +5,13 @@ import { useAgentMutation } from "../../../hooks/useAgents";
 import { useIntegrationMutation } from "../../../hooks/useIntegrations";
 import { agentPath, ago } from "../../../lib/agents";
 import { describeApiError } from "../../../lib/api-client";
-import { AGENT_CREDENTIAL_WORDS, DB_ENGINES, agentJobRunning, databaseWhere, dbNeedsPassword, filePatternFrom, isFolderConfig } from "../../../lib/integrations";
+import { AGENT_CREDENTIAL_WORDS, DB_ENGINES, agentJobRunning, databaseWhere, dbNeedsPassword, filePatternFrom, isFolderConfig, isRestConfig, secretWord } from "../../../lib/integrations";
 import { formatDateTime } from "../../../lib/processControl";
 import { sealCredential } from "../../../lib/sealCredential";
 import { ServerIcon } from "@/components/icons";
 import { Failed, JOB_STATUS, useAsk, Waiting } from "./agentAsk";
 import { FileSourceDialog, RecordSourceDialog } from "./RecordSources";
+import { RestTryCard } from "./RestSources";
 import Callout from "../../ui/Callout";
 import Dialog from "../../ui/Dialog";
 import Field from "../../ui/Field";
@@ -18,11 +19,12 @@ import MenuCard from "../../ui/MenuCard";
 import { FormError } from "../../master-data/shared";
 import CTAButton from "@/components/CTAButton";
 
-const JOB_WORDS = { store_credential: "Password", test_connection: "Connection test", discover: "Browse", preview: "Preview", extract: "Read for an import" };
+const JOB_WORDS = { store_credential: "Password or key", test_connection: "Connection test", discover: "Browse", preview: "Preview", extract: "Read for an import" };
 
 /**
- * Type the database password. It is sealed here, in the browser, to the agent's own key (WebCrypto), so Fortress carries it without being able
- * to read it; the agent opens it and keeps it on its machine. It is never shown again.
+ * Type the database password (or an internal API's key or token, AG5c). It is sealed here, in the browser, to the agent's own key (WebCrypto), so
+ * Fortress carries it without being able to read it; the agent opens it and keeps it on its machine. It is never shown again. A key or token has no
+ * user name: it is sealed with an empty one.
  */
 const PasswordDialog = ({ connection, onClose }) => {
   const mutation = useIntegrationMutation();
@@ -31,7 +33,10 @@ const PasswordDialog = ({ connection, onClose }) => {
   const [password, setPassword] = useState("");
   const [sealing, setSealing] = useState(false);
   const [error, setError] = useState(null);
-  const ok = username.trim() && password;
+  const api = isRestConfig(connection.config);
+  const word = secretWord(connection.config);
+  const keyOnly = api && ["api_key", "bearer"].includes(connection.config?.authType);
+  const ok = (keyOnly || username.trim()) && password;
   const save = async (e) => {
     e.preventDefault();
     if (!ok) return;
@@ -39,7 +44,7 @@ const PasswordDialog = ({ connection, onClose }) => {
     setSealing(true);
     let sealed;
     try {
-      sealed = await sealCredential(connection.agent.sealingKey, connection.id, { username: username.trim(), password });
+      sealed = await sealCredential(connection.agent.sealingKey, connection.id, { username: keyOnly ? "" : username.trim(), password });
     } catch (err) {
       setSealing(false);
       setError(err);
@@ -53,14 +58,14 @@ const PasswordDialog = ({ connection, onClose }) => {
     );
   };
   return (
-    <Dialog title={connection.agentCredential ? "Change the database password" : "Type the database password"} onClose={onClose}>
+    <Dialog title={`${connection.agentCredential ? "Change" : "Type"} the ${api ? `API's ${word}` : "database password"}`} onClose={onClose}>
       <form noValidate onSubmit={save} autoComplete="off" className="flex flex-col gap-3">
         <Callout tone="info">
           Sealed in your browser so that only the agent <strong>{connection.agent.name}</strong> can open it. Fortress passes it on without being able to read it,
-          and it is never shown again. Use a login that can only read.
+          and it is never shown again. {api ? "Use a key that can only read." : "Use a login that can only read."}
         </Callout>
-        <Field label="User name" value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="off" />
-        <Field label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" />
+        {!keyOnly && <Field label="User name" value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="off" />}
+        <Field label={keyOnly ? (word === "token" ? "Token" : "API key") : "Password"} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" />
         {error && <p className="text-sm text-error-color" role="alert">{error.message}</p>}
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
@@ -88,6 +93,8 @@ export const AgentCard = ({ connection: c, canManage }) => {
   }, [agent?.id, live, wake]);
   if (!agent) return null;
   const needsPassword = dbNeedsPassword(c.config);
+  const word = secretWord(c.config);
+  const Word = word[0].toUpperCase() + word.slice(1);
   const cred = c.agentCredential;
   const passwordJob = c.agentJobs?.find((j) => j.kind === "store_credential");
   return (
@@ -105,24 +112,29 @@ export const AgentCard = ({ connection: c, canManage }) => {
         {needsPassword ? (
           <div className="flex flex-wrap items-center gap-3">
             <span className="flex-1 text-sm text-primary-text">
-              Password: {cred ? AGENT_CREDENTIAL_WORDS[cred.status] : "Not typed yet"}
+              {Word}: {cred ? AGENT_CREDENTIAL_WORDS[cred.status] : "Not typed yet"}
               {cred?.status === "stored" && cred.storedAt ? ` · ${formatDateTime(cred.storedAt)}` : ""}
               {cred?.status === "waiting" && passwordJob && agentJobRunning(passwordJob.status) ? ` · ${JOB_STATUS[passwordJob.status]}` : ""}
             </span>
             {canManage && live && (
               <CTAButton type={cred?.status === "stored" ? "neutral" : "main"} size="md" onClick={() => setTyping(true)} disabled={!agent.sealingKey}>
-                {cred && cred.status !== "cleared" ? "Change the password" : "Type the password"}
+                {cred && cred.status !== "cleared" ? `Change the ${word}` : `Type the ${word}`}
               </CTAButton>
             )}
           </div>
         ) : (
           <p className="text-sm text-secondary-text">
-            {isFolderConfig(c.config)
+            {isRestConfig(c.config)
+              ? 'The API takes no sign-in. The agent calls it only once its host is listed under "hosts" in the agent\'s allowlist.json.'
+              : isFolderConfig(c.config)
               ? 'The agent reads the folder as its own Windows service account, so there is no password to type. Give that account read access to the folder, and add the folder to "folders" in the agent\'s allowlist.json.'
               : "Windows authentication: the agent signs in as its own service account, so there is no password to type."}
           </p>
         )}
         {(cred?.status === "failed" || cred?.status === "cleared") && cred.message && <Callout tone="warning">{cred.message}</Callout>}
+        {needsPassword && isRestConfig(c.config) && (
+          <p className="text-xs text-secondary-text">The agent calls the API only once its host is listed under &quot;hosts&quot; in the agent&apos;s allowlist.json.</p>
+        )}
         {live && !agent.online && <Callout tone="info">The agent is offline. Tests, browsing and passwords wait until it checks in again.</Callout>}
       </div>
       {typing && <PasswordDialog connection={c} onClose={() => setTyping(false)} />}
@@ -137,7 +149,8 @@ const cell = (v) => (v === null || v === undefined ? <span className="text-secon
  * Browse the database as the agent sees it (after its login's rights and its local allow-list): schemas, then tables and views, then columns with
  * keys and the first rows. Every step is a job: the agent builds its own read-only query, Fortress sends no SQL.
  */
-export const BrowseCard = ({ connection: c }) => (isFolderConfig(c.config) ? <FolderBrowseCard connection={c} /> : <DatabaseBrowseCard connection={c} />);
+export const BrowseCard = ({ connection: c }) =>
+  isRestConfig(c.config) ? <RestTryCard connection={c} /> : isFolderConfig(c.config) ? <FolderBrowseCard connection={c} /> : <DatabaseBrowseCard connection={c} />;
 
 const size = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} kB` : `${n} bytes`);
 

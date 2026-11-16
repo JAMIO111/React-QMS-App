@@ -450,6 +450,7 @@ export const INTEGRATION_CATALOGUE = [
   { key: "mysql", providerKey: "sql_agent", engine: "mysql", name: "MySQL", description: "Read tables or views from a MySQL or MariaDB database through a connector agent on your network. Nothing connects in.", mark: "mysql", available: true },
   { key: "postgresql", providerKey: "sql_agent", engine: "postgres", name: "PostgreSQL", description: "Read tables or views from a PostgreSQL database through a connector agent on your network. Nothing connects in.", mark: "postgresql", available: true },
   { key: "folder", providerKey: "sql_agent", engine: "folder", name: "Files in a folder", description: "Pick up CSV or Excel exports from a folder or share on your network as they arrive, through a connector agent. Nothing connects in.", mark: "folder", available: true },
+  { key: "agent_rest", providerKey: "sql_agent", engine: "rest", name: "Internal API", description: "Read records from a REST API inside your network that Fortress cannot reach, through a connector agent. Nothing connects in; the key stays on the agent.", mark: "network", available: true },
   { key: "sql_server", providerKey: "sql_agent", engine: "sqlserver", name: "Microsoft SQL Server", description: "Read tables or views from SQL Server through a connector agent on your network. Nothing connects in.", mark: "database", available: true },
   { key: "odoo", name: "Odoo", description: "Products, partners and manufacturing orders from Odoo.", mark: "odoo", available: false },
   { key: "google_sheets", name: "Google Sheets", description: "Keep a shared sheet and Fortress in step.", mark: "googlesheets", available: false },
@@ -549,10 +550,13 @@ export const apiMappingPath = (connectionId, entityType, templateId) => {
 // Database connections through a connector agent (docs/connector-agent-plan.md AG2)
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 
-export const DB_ENGINES = { postgres: "PostgreSQL", sqlserver: "Microsoft SQL Server", mysql: "MySQL", folder: "Files in a folder" };
+export const DB_ENGINES = { postgres: "PostgreSQL", sqlserver: "Microsoft SQL Server", mysql: "MySQL", folder: "Files in a folder", rest: "Internal API" };
 
 /** A folder of files read through the agent (AG5b), rather than a database. */
 export const isFolderConfig = (config) => config?.engine === "folder";
+
+/** An internal REST API read through the agent (AG5c). */
+export const isRestConfig = (config) => config?.engine === "rest";
 
 /** How each engine may sign in. SQL Server's Windows authentication uses the agent's service account: no password at all. */
 export const DB_AUTH = {
@@ -562,14 +566,27 @@ export const DB_AUTH = {
   ],
   postgres: [{ value: "password", label: "User name and password" }],
   mysql: [{ value: "password", label: "User name and password" }],
+  rest: [
+    { value: "none", label: "No sign-in" },
+    { value: "api_key", label: "An API key in a header" },
+    { value: "bearer", label: "A bearer token" },
+    { value: "basic", label: "User name and password (basic)" },
+  ],
 };
 
-export const dbNeedsPassword = (config) => ["sql", "password"].includes(config?.authType);
+export const dbNeedsPassword = (config) => ["sql", "password", "api_key", "bearer", "basic"].includes(config?.authType);
+
+/** What the connection's secret is called: an API key, a token or a password. */
+export const secretWord = (config) => ({ api_key: "API key", bearer: "token" }[config?.authType] ?? "password");
 
 /** The dialog's fields from a connection's settings (or a new one for an engine). */
 export const databaseForm = (engine, c = {}) => ({
   engine: c.engine ?? engine ?? "sqlserver",
   folder: c.folder ?? "",
+  baseUrl: c.baseUrl ?? "",
+  apiKeyHeader: c.apiKeyHeader ?? "X-Api-Key",
+  testPath: c.testPath ?? "",
+  timeoutSeconds: c.timeoutSeconds != null ? String(c.timeoutSeconds) : "",
   fileEncoding: c.encoding ?? "auto",
   fileDelimiter: c.delimiter ?? "auto",
   hasHeader: c.hasHeader !== false,
@@ -577,7 +594,7 @@ export const databaseForm = (engine, c = {}) => ({
   port: c.port != null ? String(c.port) : "",
   instance: c.instance ?? "",
   database: c.database ?? "",
-  authType: c.authType ?? ({ sqlserver: "windows", folder: "none" }[c.engine ?? engine ?? "sqlserver"] ?? "password"),
+  authType: c.authType ?? ({ sqlserver: "windows", folder: "none", rest: "none" }[c.engine ?? engine ?? "sqlserver"] ?? "password"),
   encrypt: c.encrypt !== false,
   trustServerCertificate: c.trustServerCertificate === true,
 });
@@ -588,6 +605,7 @@ const DATABASE_BAD = /[;='"[\]]|\p{Cc}/u;
 /** What is wrong with the dialog's fields, in the database's own words (the database checks again). */
 export const databaseFormProblem = (f) => {
   if (f.engine === "folder") return folderPathProblem(f.folder);
+  if (f.engine === "rest") return restFormProblem(f);
   if (!SERVER.test(f.server.trim())) return "Give the database server's name or address (letters, digits, dots and hyphens)";
   if (f.port && !(/^\d+$/.test(f.port) && +f.port >= 1 && +f.port <= 65535)) return "The port is a whole number from 1 to 65535";
   if (f.engine === "sqlserver" && f.instance && !/^[A-Za-z0-9_$#-]{1,32}$/.test(f.instance.trim())) return "The instance name is up to 32 letters, digits, _ $ # or -";
@@ -606,6 +624,13 @@ export const databaseConfig = (f) => {
     if (!f.hasHeader) c.hasHeader = false;
     return c;
   }
+  if (f.engine === "rest") {
+    const c = { engine: "rest", baseUrl: f.baseUrl.trim(), authType: f.authType };
+    if (f.authType === "api_key") c.apiKeyHeader = f.apiKeyHeader.trim();
+    if (f.testPath.trim()) c.testPath = f.testPath.trim();
+    if (f.timeoutSeconds) c.timeoutSeconds = Number(f.timeoutSeconds);
+    return c;
+  }
   const c = { engine: f.engine, server: f.server.trim(), database: f.database.trim(), authType: f.authType, encrypt: !!f.encrypt };
   if (f.port) c.port = Number(f.port);
   if (f.engine === "sqlserver" && f.instance.trim()) c.instance = f.instance.trim();
@@ -615,9 +640,41 @@ export const databaseConfig = (f) => {
 
 /** Where the database is, in one line: "SQL01\\SQLEXPRESS / ERP" or "erp-db:5432 / erp". */
 export const databaseWhere = (c) =>
-  isFolderConfig(c) ? c.folder ?? "?" : `${c?.server ?? "?"}${c?.instance ? `\\${c.instance}` : c?.port ? `:${c.port}` : ""} / ${c?.database ?? "?"}`;
+  isFolderConfig(c) ? c.folder ?? "?" : isRestConfig(c) ? c.baseUrl ?? "?" : `${c?.server ?? "?"}${c?.instance ? `\\${c.instance}` : c?.port ? `:${c.port}` : ""} / ${c?.database ?? "?"}`;
 
 const hasControl = (v) => [...v].some((ch) => ch.charCodeAt(0) < 32);
+
+const REST_URL = /^https?:\/\/([A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?|\[[0-9A-Fa-f:.]{2,45}\])(:[0-9]{1,5})?(\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*)?$/;
+/** A path below the address: starts with /, no ?, #, // or .. (as app.integration_rest_path_ok). */
+export const restPathProblem = (p, what = "The path") => {
+  const v = p ?? "";
+  if (!/^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/.test(v) || v.length > 300 || v.includes("//") || /%2e/i.test(v) || /\/\.{1,2}(\/|$)/.test(v)) {
+    return `${what} starts with / and stays below the address (no ?, #, // or ..)`;
+  }
+  return null;
+};
+const FORBIDDEN_HEADERS = new Set(["host", "connection", "content-length", "transfer-encoding", "te", "upgrade", "keep-alive", "expect", "cookie", "proxy-authorization", "proxy-connection", "forwarded", "x-forwarded-for", "x-forwarded-host", "x-real-ip", "authorization"]);
+
+/** An internal API's settings as the database checks them (AG5c). A private address is fine: the agent is inside the network. */
+export const restFormProblem = (f) => {
+  const url = f.baseUrl.trim();
+  if (!url) return "Give the API's address as the agent's machine reaches it, such as http://erp.factory.local:8080/api";
+  if (url.length > 300 || !REST_URL.test(url) || /^https?:\/\/[^/]*@/.test(url)) return "The address is http:// or https://, a host name or address, an optional :port and an optional path (no user name, ? or #)";
+  if (/:\/\/[^/]+\/.*\/\//.test(url) || /\/\.{1,2}(\/|$)/.test(url) || /%2e/i.test(url)) return "The address cannot hold //, . or .. in its path";
+  const host = (/^https?:\/\/(\[[^\]]+\]|[^:/]+)/.exec(url)?.[1] ?? "").toLowerCase();
+  if (/^169\.254\./.test(host) || /^\[fe[89ab][0-9a-f]:/.test(host) || ["0.0.0.0", "[::]"].includes(host)) return "That address cannot be an API (link-local and \"any\" addresses are refused)";
+  if (f.authType === "api_key") {
+    const h = f.apiKeyHeader.trim();
+    if (!/^[A-Za-z0-9-]{1,60}$/.test(h)) return "Name the header the API key is sent in (letters, digits and hyphens)";
+    if (FORBIDDEN_HEADERS.has(h.toLowerCase())) return `The API key cannot be sent in the ${h} header`;
+  }
+  if (f.testPath.trim()) {
+    const p = restPathProblem(f.testPath.trim(), "The test path");
+    if (p) return p;
+  }
+  if (f.timeoutSeconds && !(/^\d+$/.test(f.timeoutSeconds) && +f.timeoutSeconds >= 1 && +f.timeoutSeconds <= 120)) return "The timeout is a whole number of seconds from 1 to 120";
+  return null;
+};
 
 /** The folder as the database checks it: a drive path, a share or an absolute path; nothing relative, no "..". */
 export const folderPathProblem = (folder) => {
@@ -705,8 +762,90 @@ export const recordSourceBody = (schema, object, f) => {
   return source;
 };
 
+/** An endpoint of an internal API (AG5c), as the source dialog edits it. */
+export const restSourceForm = (source = {}) => ({
+  path: source.path ?? "",
+  recordsPath: source.recordsPath ?? "",
+  query: Object.entries(source.query ?? {}).map(([name, value]) => ({ name, value })),
+  pagingStyle: source.paging?.style ?? "none",
+  pageSize: source.paging?.pageSize != null ? String(source.paging.pageSize) : "",
+  pageParam: source.paging?.pageParam ?? source.paging?.offsetParam ?? source.paging?.cursorParam ?? "",
+  sizeParam: source.paging?.sizeParam ?? source.paging?.limitParam ?? "",
+  nextPath: source.paging?.nextCursorPath ?? source.paging?.nextLinkPath ?? "",
+  keyColumn: source.keyColumn ?? null,
+  changedColumn: source.changedColumn ?? null,
+  changedParam: source.changedParam ?? "",
+});
+
+const JSON_PATH = /^[A-Za-z0-9_$@-]{1,60}(\.[A-Za-z0-9_$@-]{1,60}){0,9}$/;
+const PARAM = /^[\][A-Za-z0-9_.-]{1,60}$/;
+
+/** Paging in the API's shape (the same as a cloud REST connection's). */
+export const restPagingBody = (f) => {
+  const s = f.pagingStyle;
+  if (s === "none") return undefined;
+  const p = { style: s };
+  if (f.pageSize) p.pageSize = Number(f.pageSize);
+  const param = f.pageParam.trim();
+  const size = f.sizeParam.trim();
+  if (s === "page") { if (param) p.pageParam = param; if (size) p.sizeParam = size; }
+  if (s === "offset") { if (param) p.offsetParam = param; if (size) p.limitParam = size; }
+  if (s === "cursor") { if (param) p.cursorParam = param; if (size) p.sizeParam = size; p.nextCursorPath = f.nextPath.trim(); }
+  if (s === "next_link") { if (size) p.sizeParam = size; p.nextLinkPath = f.nextPath.trim() || "header"; }
+  return p;
+};
+
+/** The address to try, before a field identifies the records: path, list, parameters and paging. */
+export const restTryRequest = (f) => {
+  const r = { path: f.path.trim() };
+  if (f.recordsPath.trim()) r.recordsPath = f.recordsPath.trim();
+  const q = f.query.filter((x) => x.name.trim());
+  if (q.length) r.query = Object.fromEntries(q.map((x) => [x.name.trim(), x.value]));
+  const paging = restPagingBody(f);
+  if (paging) r.paging = paging;
+  return r;
+};
+
+/** What stops the address being tried (or, with `full`, the endpoint being saved), in words. */
+export const restSourceProblem = (f, full = false) => {
+  const path = restPathProblem(f.path.trim());
+  if (path) return path;
+  if (f.recordsPath.trim() && !JSON_PATH.test(f.recordsPath.trim())) return "Where the list is in the answer is keys joined by dots, such as data or value";
+  if (f.query.length > 20) return "At most 20 query parameters";
+  for (const x of f.query) {
+    if (!x.name.trim()) continue;
+    if (!PARAM.test(x.name.trim())) return `The parameter name ${x.name} is letters, digits, _ . - [ ]`;
+    if ((x.value ?? "").length > 200) return "A parameter's value is at most 200 characters";
+  }
+  if (f.pageSize && !(/^\d+$/.test(f.pageSize) && +f.pageSize >= 1 && +f.pageSize <= 1000)) return "The page size is a whole number from 1 to 1,000";
+  for (const p of [f.pageParam, f.sizeParam]) if (p.trim() && !PARAM.test(p.trim())) return "A paging parameter name is letters, digits, _ . - [ ]";
+  if (f.pagingStyle === "cursor" && !JSON_PATH.test(f.nextPath.trim())) return "Say where the answer gives the next cursor, such as meta.next";
+  if (f.pagingStyle === "next_link" && f.nextPath.trim() && f.nextPath.trim() !== "header" && !JSON_PATH.test(f.nextPath.trim())) return "Say where the answer gives the next page's link, or leave it empty for the Link header";
+  if (!full) return null;
+  if (!f.keyColumn) return "Choose the field that identifies each record";
+  if (!!f.changedColumn !== !!f.changedParam.trim()) return "To read only what changed, give both the field that shows when a record changed and the parameter that asks for it";
+  if (f.changedParam.trim() && !PARAM.test(f.changedParam.trim())) return "The parameter that asks for changed records is letters, digits, _ . - [ ]";
+  return null;
+};
+
+/** The endpoint the API takes. */
+export const restSourceBody = (f) => {
+  const s = { ...restTryRequest(f), keyColumn: f.keyColumn };
+  if (f.changedColumn) { s.changedColumn = f.changedColumn; s.changedParam = f.changedParam.trim(); }
+  return s;
+};
+
+const PAGING_WORDS = { page: "by page number", offset: "by offset", cursor: "by cursor", next_link: "by next link" };
+
 /** A source in one line: "erp.machines · key id · 4 columns · active equals true". */
 export const describeRecordSource = (s) =>
+  s?.path ? [
+    s.path,
+    ...(s.recordsPath ? [`list at ${s.recordsPath}`] : []),
+    `key ${s.keyColumn}`,
+    ...(s.paging?.style && s.paging.style !== "none" ? [`paged ${PAGING_WORDS[s.paging.style] ?? s.paging.style}`] : []),
+    ...(s.changedColumn ? [`changes shown by ${s.changedColumn} (asks ${s.changedParam}=…)`] : []),
+  ].join(" · ") :
   s?.file ? `Newest CSV or Excel file matching ${s.file}` : [
     `${s.schema}.${s.object}`,
     `key ${s.keyColumn}`,

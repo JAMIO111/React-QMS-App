@@ -145,10 +145,11 @@
                  Value="&quot;[System64Folder]icacls.exe&quot; &quot;[AGENTDATA]*&quot; /reset /T /C /Q" />
     <CustomAction Id="ResetDataAcl" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec" Execute="deferred" Impersonate="no" Return="ignore" />
 
-    <!-- The folders RemoveFolderEx clears, from the fixed Program Files location (directory properties are not resolved that early). -->
-    <SetProperty Id="AGENT_INSTALL_DIR" Value="[ProgramFiles64Folder]Fortress\ConnectorAgent" Before="WixRemoveFoldersEx" Sequence="execute" />
-    <SetProperty Id="AGENT_STAGING_DIR" Value="[ProgramFiles64Folder]Fortress\ConnectorAgent.staging" Before="WixRemoveFoldersEx" Sequence="execute" />
-    <SetProperty Id="AGENT_PREVIOUS_DIR" Value="[ProgramFiles64Folder]Fortress\ConnectorAgent.previous" Before="WixRemoveFoldersEx" Sequence="execute" />
+    <!-- The folders RemoveFolderEx clears, from the fixed Program Files location (directory properties are not resolved that early). Set right after
+         AppSearch, well before the util extension's step (Wix4RemoveFoldersEx_X64 in WiX 5, just before CostInitialize). -->
+    <SetProperty Id="AGENT_INSTALL_DIR" Value="[ProgramFiles64Folder]Fortress\ConnectorAgent" After="AppSearch" Sequence="execute" />
+    <SetProperty Id="AGENT_STAGING_DIR" Value="[ProgramFiles64Folder]Fortress\ConnectorAgent.staging" After="AppSearch" Sequence="execute" />
+    <SetProperty Id="AGENT_PREVIOUS_DIR" Value="[ProgramFiles64Folder]Fortress\ConnectorAgent.previous" After="AppSearch" Sequence="execute" />
 
     <InstallExecuteSequence>
       <Custom Action="ResetDataAcl" Before="InstallFiles" Condition="NOT REMOVE" />

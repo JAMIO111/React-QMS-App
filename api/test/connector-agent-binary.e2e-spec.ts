@@ -11,9 +11,9 @@
 import { INestApplication } from '@nestjs/common';
 import { ChildProcess, execFile, spawn } from 'node:child_process';
 import { createCipheriv, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomBytes } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { createServer, Server } from 'node:http';
-import { AddressInfo } from 'node:net';
+import { AddressInfo, createServer as createTcpServer, Server as TcpServer, Socket, connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -24,6 +24,8 @@ import { giveControllerSeats, makeIds, requireDb, seed, startApp, token } from '
 const binary = process.env.AGENT_BINARY;
 const pgPort = process.env.AGENT_TEST_PG_PORT ? Number(process.env.AGENT_TEST_PG_PORT) : null;
 const myPort = process.env.AGENT_TEST_MYSQL_PORT ? Number(process.env.AGENT_TEST_MYSQL_PORT) : null;
+/** AG6a load test (AG-D4), opt-in: AGENT_LOAD_ROWS=1000000 imports that many rows of a 20-column table twice; AGENT_LOAD_REPORT=<file> keeps the figures. */
+const loadRows = process.env.AGENT_LOAD_ROWS ? Number(process.env.AGENT_LOAD_ROWS) : 0;
 
 /** Seal as the browser does (src/lib/sealCredential.js): ECDH P-256 → HKDF-SHA256 → AES-256-GCM, the connection id as associated data. */
 function seal(sealingSpki: string, connectionId: string, plaintext: string) {
@@ -46,7 +48,26 @@ maybe('the real connector agent', () => {
   let base: string;
   let dataDir: string;
   let agentProcess: ChildProcess | undefined;
+  let exited: Promise<number | null> = Promise.resolve(null);
   let output = '';
+  // The agent reaches the API through this proxy, so a test can make the API unreachable for a while (AG6a recovery).
+  let proxy: TcpServer;
+  let proxyBase: string;
+  let apiDown = false;
+  let refusedWhileDown = 0;
+  const proxied = new Set<Socket>();
+  const setApiDown = (down: boolean) => {
+    apiDown = down;
+    refusedWhileDown = 0;
+    if (down) for (const s of proxied) s.destroy();
+  };
+  const startAgent = () => {
+    agentProcess = spawn('dotnet', [binary!, 'run', '--data-dir', dataDir], { stdio: ['ignore', 'pipe', 'pipe'] });
+    agentProcess.stdout!.on('data', (d) => (output += d));
+    agentProcess.stderr!.on('data', (d) => (output += d));
+    const p = agentProcess;
+    exited = new Promise<number | null>((resolve) => p.on('exit', (code) => resolve(code)));
+  };
   const as = async () => ({ Authorization: `Bearer ${await token(ids.ownerA)}`, 'X-Organisation-Id': ids.orgA });
   const api = () => request(app.getHttpServer());
   const agent = (...args: string[]) => run('dotnet', [binary!, ...args, '--data-dir', dataDir], { timeout: 60_000 });
@@ -66,11 +87,35 @@ maybe('the real connector agent', () => {
     await giveControllerSeats(admin, ids.orgA, [ids.ownerA]);
     app = await startApp({ RATE_LIMIT_PER_MINUTE: '10000' });
     await app.listen(0, '127.0.0.1');
-    base = `http://127.0.0.1:${(app.getHttpServer().address() as AddressInfo).port}/api/v1`;
+    const apiPort = (app.getHttpServer().address() as AddressInfo).port;
+    base = `http://127.0.0.1:${apiPort}/api/v1`;
+    proxy = createTcpServer((client) => {
+      if (apiDown) {
+        refusedWhileDown++;
+        return void client.destroy();
+      }
+      const upstream = connect(apiPort, '127.0.0.1');
+      proxied.add(client);
+      proxied.add(upstream);
+      const end = () => {
+        client.destroy();
+        upstream.destroy();
+        proxied.delete(client);
+        proxied.delete(upstream);
+      };
+      client.on('error', end).on('close', end);
+      upstream.on('error', end).on('close', end);
+      client.pipe(upstream);
+      upstream.pipe(client);
+    });
+    await new Promise<void>((r) => proxy.listen(0, '127.0.0.1', () => r()));
+    proxyBase = `http://127.0.0.1:${(proxy.address() as AddressInfo).port}/api/v1`;
     dataDir = mkdtempSync(join(tmpdir(), 'fortress-agent-e2e-'));
   }, 60_000);
   afterAll(async () => {
     agentProcess?.kill();
+    for (const sock of proxied) sock.destroy();
+    proxy?.close();
     await app?.close();
     await admin?.end();
     if (dataDir) rmSync(dataDir, { recursive: true, force: true });
@@ -134,6 +179,8 @@ maybe('the real connector agent', () => {
     await folderConnection(agentId, finished);
     await restConnection(agentId, finished);
     if (myPort) await mysqlConnection(agentId, finished, connectionId);
+    await recovery(connectionId);
+    if (loadRows) await load(connectionId);
   }
 
   /** AG3 with the real agent and a real PostgreSQL: a table chosen for machines, a sample, a template, then an import of 1,100 rows in two batches. */
@@ -387,35 +434,167 @@ maybe('the real connector agent', () => {
     expect(await importFrom(pgConnectionId, pgTemplate)).toMatchObject({ status: 'succeeded', counts: { created: 0 } });
   }
 
+  /**
+   * AG6a recovery (AG6-D5), with the real agent and a real PostgreSQL. Each case reads 6,000 rows through a view that sleeps 2 ms a row, so a read
+   * takes about 12 seconds and something can go wrong part-way: the agent killed and started again, the API unreachable for a while, the database
+   * dropping the agent's connection. In every case the import ends with each row exactly once.
+   */
+  async function recovery(connectionId: string) {
+    const conn = `/api/v1/integrations/connections/${connectionId}`;
+    const templateId = (await admin.query(`select id from public.integration_templates where organisation_id = $1 and name = 'Factory machines'`, [ids.orgA])).rows[0].id;
+    await admin.query(`
+      create or replace function bin_erp.slowly(integer) returns boolean language sql as 'select pg_sleep(0.002) is not null';
+      grant execute on function bin_erp.slowly(integer) to bin_reader;`);
+    const ROWS = 6000;
+    const prepare = async (name: string, from: number) => {
+      await admin.query(`
+        create table bin_erp.${name}_t (id int primary key, code text not null, name text not null, plant text not null);
+        insert into bin_erp.${name}_t select g, 'REC-${name.toUpperCase()}-' || g, 'Recovery ' || g, 'MAIN' from generate_series(${from + 1}, ${from + ROWS}) g;
+        create view bin_erp.${name} as select id, code, name, plant from bin_erp.${name}_t where bin_erp.slowly(id);
+        grant select on bin_erp.${name} to bin_reader;`);
+      await api().put(`${conn}/record-source`).set(await as()).send({ entityType: 'machine', source: { schema: 'bin_erp', object: name, keyColumn: 'id', columns: ['id', 'code', 'name', 'plant'] } }).expect(200);
+    };
+    const start = async () => (await api().post(`${conn}/runs`).set(await as()).send({ entityType: 'machine', kind: 'full', templateId }).expect(201)).body.id as string;
+    const jobOf = async (runId: string) => (await admin.query(`select id, status, attempts from public.integration_agent_jobs where run_id = $1`, [runId])).rows[0];
+    const batchesOf = async (jobId: string) => (await admin.query(`select count(*)::int as n from public.integration_agent_batches where job_id = $1`, [jobId])).rows[0].n as number;
+    /** Wait until the agent has sent at least two batches and is still reading: the moment to break something. */
+    const partWay = async (runId: string) => {
+      const job = await until('the agent to be part-way through', async () => {
+        const j = await jobOf(runId);
+        return j && (await batchesOf(j.id)) >= 2 && j;
+      }, 60_000);
+      expect({ status: job.status, batches: await batchesOf(job.id) }).toMatchObject({ status: 'running' });
+      expect(await batchesOf(job.id)).toBeLessThan(ROWS / 1000);
+      return job;
+    };
+    const finish = (runId: string) => until('the import to finish', async () => {
+      const r = (await api().post(`/api/v1/integrations/runs/${runId}/continue`).set(await as()).send({})).body;
+      return ['succeeded', 'partial', 'failed'].includes(r.status) && r;
+    }, 300_000);
+    const imported = async (name: string) =>
+      (await admin.query(`select count(*)::int as n, count(distinct code)::int as d from public.machines where organisation_id = $1 and code like $2`, [ids.orgA, `REC-${name.toUpperCase()}-%`])).rows[0];
+
+    // 1. The agent is killed part-way and started again: it resumes from the first batch Fortress does not have (the lease is ended by hand to save five minutes).
+    await prepare('rec_kill', 100000);
+    const killRun = await start();
+    const killJob = await partWay(killRun);
+    agentProcess!.kill('SIGKILL');
+    await exited;
+    await admin.query(`update public.integration_agent_jobs set leased_until = now() - interval '1 second' where id = $1`, [killJob.id]);
+    startAgent();
+    const afterKill = await finish(killRun);
+    expect(afterKill).toMatchObject({ status: 'succeeded', counts: { total: ROWS, created: ROWS } });
+    expect(await jobOf(killRun)).toMatchObject({ status: 'completed', attempts: 2 });
+    expect(await batchesOf(killJob.id)).toBe(ROWS / 1000);
+    expect(await imported('rec_kill')).toEqual({ n: ROWS, d: ROWS });
+
+    // 2. The API cannot be reached part-way (until the agent has been turned away at least twice, then three seconds more): the agent waits and
+    //    sends the batch again inside the same attempt.
+    await prepare('rec_net', 200000);
+    const netRun = await start();
+    await partWay(netRun);
+    setApiDown(true);
+    await until('the agent to be turned away twice', async () => refusedWhileDown >= 2, 60_000);
+    await new Promise((r) => setTimeout(r, 3000));
+    setApiDown(false);
+    const afterNet = await finish(netRun);
+    expect(afterNet).toMatchObject({ status: 'succeeded', counts: { total: ROWS, created: ROWS } });
+    expect(await jobOf(netRun)).toMatchObject({ status: 'completed', attempts: 1 });
+    expect(output).toMatch(/Could not send (batch \d+|progress|the result) to Fortress/);
+    expect(await imported('rec_net')).toEqual({ n: ROWS, d: ROWS });
+
+    // 3. The database drops the agent's connection part-way (as a restart would): the attempt fails as a passing problem and the next one resumes.
+    await prepare('rec_db', 300000);
+    const dbRun = await start();
+    await partWay(dbRun);
+    await admin.query(`select pg_terminate_backend(pid) from pg_stat_activity where usename = 'bin_reader'`);
+    const afterDb = await finish(dbRun);
+    expect(afterDb).toMatchObject({ status: 'succeeded', counts: { total: ROWS, created: ROWS } });
+    expect((await jobOf(dbRun)).attempts).toBeGreaterThanOrEqual(2);
+    expect(await imported('rec_db')).toEqual({ n: ROWS, d: ROWS });
+    expect(output).not.toContain('bin-reader-pass');
+  }
+
+  /** The agent's peak resident memory so far, in MB (Linux: VmHWM of the agent process). */
+  const peakMemoryMb = () => {
+    try {
+      const status = readFileSync(`/proc/${agentProcess!.pid}/status`, 'utf8');
+      return Math.round(Number(/VmHWM:\s+(\d+) kB/.exec(status)![1]) / 1024);
+    } catch {
+      return null;
+    }
+  };
+
+  /**
+   * AG6a load test (AG-D4): a 20-column table of AGENT_LOAD_ROWS rows imported from PostgreSQL through the real agent, then again with nothing
+   * written. Passes when every row arrives exactly once both times; time, batches and the agent's peak memory are printed and kept in AGENT_LOAD_REPORT.
+   */
+  async function load(connectionId: string) {
+    const conn = `/api/v1/integrations/connections/${connectionId}`;
+    const templateId = (await admin.query(`select id from public.integration_templates where organisation_id = $1 and name = 'Factory machines'`, [ids.orgA])).rows[0].id;
+    const extra = Array.from({ length: 16 }, (_, i) => `c${i + 1}`);
+    await admin.query(`
+      create table bin_erp.load_t (id int primary key, code text not null, name text not null, plant text not null, ${extra.map((c, i) => `${c} ${i % 4 === 0 ? 'numeric(12,3)' : i % 4 === 1 ? 'date' : i % 4 === 2 ? 'boolean' : 'text'}`).join(', ')});
+      insert into bin_erp.load_t select g, 'LOAD-' || g, 'Load machine ' || g, 'MAIN', ${extra.map((_, i) => (i % 4 === 0 ? 'g * 1.25' : i % 4 === 1 ? "date '2026-01-01' + (g % 365)" : i % 4 === 2 ? 'g % 2 = 0' : "md5(g::text)")).join(', ')}
+        from generate_series(1000001, ${1000000 + loadRows}) g;
+      grant select on bin_erp.load_t to bin_reader;`);
+    await api().put(`${conn}/record-source`).set(await as()).send({ entityType: 'machine', source: { schema: 'bin_erp', object: 'load_t', keyColumn: 'id', columns: ['id', 'code', 'name', 'plant', ...extra] } }).expect(200);
+    const once = async () => {
+      const t0 = Date.now();
+      const runId = (await api().post(`${conn}/runs`).set(await as()).send({ entityType: 'machine', kind: 'full', templateId }).expect(201)).body.id;
+      let extracted: number | null = null;
+      const run = await until('the load import', async () => {
+        const r = (await api().post(`/api/v1/integrations/runs/${runId}/continue`).set(await as()).send({})).body;
+        if (extracted === null && r.agent?.status === 'completed') extracted = Date.now() - t0;
+        return ['succeeded', 'partial', 'failed'].includes(r.status) && r;
+      }, 6 * 3600_000);
+      const job = (await admin.query(`select result from public.integration_agent_jobs where run_id = $1`, [runId])).rows[0];
+      return { run, seconds: Math.round((Date.now() - t0) / 1000), extractSeconds: extracted === null ? null : Math.round(extracted / 1000), batches: job.result.batches, rows: job.result.rows };
+    };
+    const first = await once();
+    expect(first.run).toMatchObject({ status: 'succeeded', counts: { total: loadRows, created: loadRows } });
+    expect((await admin.query(`select count(*)::int as n, count(distinct code)::int as d from public.machines where organisation_id = $1 and code like 'LOAD-%'`, [ids.orgA])).rows[0]).toEqual({ n: loadRows, d: loadRows });
+    const second = await once();
+    expect(second.run).toMatchObject({ status: 'succeeded', counts: { total: loadRows, created: 0, updated: 0, unchanged: loadRows } });
+    const report = {
+      rows: loadRows, columns: 20,
+      first: { seconds: first.seconds, extractSeconds: first.extractSeconds, batches: first.batches, rows: first.rows },
+      second: { seconds: second.seconds, extractSeconds: second.extractSeconds, batches: second.batches, rows: second.rows },
+      agentPeakMemoryMb: peakMemoryMb(),
+    };
+    // eslint-disable-next-line no-console
+    console.log(`AG6a load test: ${JSON.stringify(report)}`);
+    if (process.env.AGENT_LOAD_REPORT) writeFileSync(process.env.AGENT_LOAD_REPORT, JSON.stringify(report, null, 2));
+    expect(first.rows).toBe(loadRows);
+    expect(first.batches).toBe(Math.ceil(loadRows / 1000));
+  }
+
   it('registers, comes online, answers a ping and stops when revoked', async () => {
     const reg = await api().post('/api/v1/integrations/agent-registrations').set(await as()).send({ name: 'Real agent', location: 'Test bench' }).expect(201);
 
     // A wrong address or token never gets as far as Fortress.
     await expect(agent('register', '--api', 'http://fortress.example.com/api/v1', '--token', reg.body.token)).rejects.toMatchObject({ code: 2 });
 
-    const registered = await agent('register', '--api', base, '--token', reg.body.token);
+    const registered = await agent('register', '--api', proxyBase, '--token', reg.body.token);
     expect(registered.stdout).toContain('Registered as "Real agent"');
     const agentId = /Agent id: ([0-9a-f-]{36})/.exec(registered.stdout)![1];
     const fingerprint = /Key fingerprint: ([0-9a-f ]{19})/.exec(registered.stdout)![1];
 
     // The token works once.
-    await expect(agent('register', '--api', base, '--token', reg.body.token, '--replace')).rejects.toMatchObject({ code: 1 });
+    await expect(agent('register', '--api', proxyBase, '--token', reg.body.token, '--replace')).rejects.toMatchObject({ code: 1 });
     expect((await agent('status')).stdout).toContain(agentId);
 
     const page = await api().get(`/api/v1/integrations/agents/${agentId}`).set(await as()).expect(200);
     expect(page.body.keys[0].fingerprint).toBe(fingerprint);
 
-    agentProcess = spawn('dotnet', [binary!, 'run', '--data-dir', dataDir], { stdio: ['ignore', 'pipe', 'pipe'] });
-    agentProcess.stdout!.on('data', (d) => (output += d));
-    agentProcess.stderr!.on('data', (d) => (output += d));
-    const exited = new Promise<number | null>((resolve) => agentProcess!.on('exit', (code) => resolve(code)));
+    startAgent();
 
     const online = await until('the agent to come online', async () => {
       const r = await api().get(`/api/v1/integrations/agents/${agentId}`).set(await as());
       return r.body.online && r.body;
     });
     expect(online.version).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(online.capabilities.jobs).toEqual(['discover', 'extract', 'ping', 'preview', 'store_credential', 'test_connection']);
+    expect(online.capabilities.jobs).toEqual(['diagnostics', 'discover', 'extract', 'ping', 'preview', 'rotate_keys', 'store_credential', 'test_connection']);
     expect(online.capabilities.adapters).toEqual(['folder', 'mysql', 'postgres', 'rest', 'sqlserver']);
 
     // Opening the agent's page wakes it to poll quickly, so the ping is answered within seconds.
@@ -428,6 +607,29 @@ maybe('the real connector agent', () => {
     expect(done.result).toMatchObject({ pong: true, version: online.version });
     expect(Math.abs(Date.parse(done.result.agentTime) - Date.now())).toBeLessThan(120_000);
 
+    // AG6a: rotate the keys now. The agent tells Fortress of new keys and answers the job signed with them; the page shows the new fingerprint.
+    const rot = await api().post(`/api/v1/integrations/agents/${agentId}/rotate-keys`).set(await as()).send({}).expect(201);
+    const rotated = await until('the keys to be rotated', async () => {
+      const r = await api().get(`/api/v1/integrations/agent-jobs/${rot.body.id}`).set(await as());
+      if (r.body.status === 'failed') throw new Error(`rotation failed: ${r.body.errorMessage}\n${output}`);
+      return r.body.status === 'completed' && r.body;
+    }, 60_000);
+    expect(rotated.result.fingerprint).not.toBe(fingerprint);
+    const afterRotation = await api().get(`/api/v1/integrations/agents/${agentId}`).set(await as()).expect(200);
+    expect(afterRotation.body.keys.find((k: { status: string }) => k.status === 'active').fingerprint).toBe(rotated.result.fingerprint);
+    expect((await agent('status')).stdout).toContain(rotated.result.fingerprint);
+
+    // A diagnostics bundle: bounded, with the new fingerprint, and nothing secret in it.
+    const diag = await api().post(`/api/v1/integrations/agents/${agentId}/diagnostics`).set(await as()).send({}).expect(201);
+    const bundle = await until('the diagnostics bundle', async () => {
+      const r = await api().get(`/api/v1/integrations/agent-jobs/${diag.body.id}`).set(await as());
+      return r.body.status === 'completed' && r.body.result;
+    }, 60_000);
+    expect(bundle).toMatchObject({ version: online.version, keyFingerprint: rotated.result.fingerprint, keyAgeDays: 0, rotationPending: false });
+    expect(Buffer.byteLength(JSON.stringify(bundle))).toBeLessThanOrEqual(64 * 1024);
+    expect(JSON.stringify(bundle)).not.toContain(reg.body.token);
+
+    // The database connection below seals its password to the new key, so it also proves the rotated sealing key works.
     if (pgPort) await databaseConnection(agentId);
 
     await api().post(`/api/v1/integrations/agents/${agentId}/revoke`).set(await as()).send({ reason: 'End of test' }).expect(200);
@@ -437,5 +639,5 @@ maybe('the real connector agent', () => {
 
     // Nothing secret in what the agent printed or logged.
     expect(output).not.toContain(reg.body.token);
-  }, 420_000);
+  }, loadRows ? 8 * 3600_000 : 600_000);
 });

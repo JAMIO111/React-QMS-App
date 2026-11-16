@@ -72,9 +72,17 @@ public static class Http
 
 public static class AgentJobs
 {
-    /// <summary>The jobs this agent does, with its database adapters, its password store and the local allow-list.</summary>
-    public static JobHandlers Create(AgentPaths paths, IKeyProtector protector, Func<System.Security.Cryptography.ECDiffieHellman> sealingKey) =>
-        JobHandlers.ForDatabases(new Fortress.Agent.Adapters.DatabaseAdapters(), new CredentialStore(paths.CredentialsFolder, protector), paths.AllowListFile, sealingKey);
+    /// <summary>
+    /// The jobs this agent does, with its database adapters, its password store and the local allow-list, plus key rotation and diagnostics (AG6a).
+    /// </summary>
+    public static JobHandlers Create(AgentPaths paths, IKeyProtector protector, AgentIdentity? identity)
+    {
+        JobHandlers? handlers = null;
+        var diagnostics = new DiagnosticsHandler(paths.LogFolder, paths.AllowListFile, () => identity, () => handlers!.Capabilities());
+        handlers = JobHandlers.ForDatabasesWithKeys(new Fortress.Agent.Adapters.DatabaseAdapters(), new CredentialStore(paths.CredentialsFolder, protector), paths.AllowListFile,
+            () => identity?.SealingKeys(DateTimeOffset.UtcNow) ?? throw new InvalidOperationException("Not registered"), new RotateKeysHandler(), diagnostics);
+        return handlers;
+    }
 }
 
 public static class AgentHost
@@ -95,10 +103,10 @@ public static class AgentHost
         builder.Services.AddSingleton(identity);
         builder.Services.AddSingleton(_ => Http.Client());
         builder.Services.AddSingleton(sp => new AgentApiClient(sp.GetRequiredService<HttpClient>()));
-        builder.Services.AddSingleton(_ => AgentJobs.Create(paths, KeyProtectors.ForThisMachine(), () => identity.SealingKey));
+        builder.Services.AddSingleton(_ => AgentJobs.Create(paths, KeyProtectors.ForThisMachine(), identity));
         builder.Services.AddSingleton(sp => new AgentRunner(
             sp.GetRequiredService<AgentIdentity>(), sp.GetRequiredService<AgentApiClient>(), sp.GetRequiredService<JobHandlers>(),
-            sp.GetRequiredService<ILogger<AgentRunner>>()));
+            sp.GetRequiredService<ILogger<AgentRunner>>(), rotation: new KeyRotation(store, sp.GetRequiredService<ILogger<AgentRunner>>())));
         builder.Services.AddHostedService<AgentWorker>();
         builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(30));
         using var host = builder.Build();

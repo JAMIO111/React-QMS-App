@@ -93,12 +93,18 @@ public sealed class JobHandlers
     }
 
     /// <summary>Every job this agent does: ping, and for database connections the password, test, browse, preview (AG2) and extract (AG3).</summary>
-    public static JobHandlers ForDatabases(IDatabaseAdapterFactory adapters, CredentialStore credentials, string allowListPath, Func<System.Security.Cryptography.ECDiffieHellman> sealingKey)
+    public static JobHandlers ForDatabases(IDatabaseAdapterFactory adapters, CredentialStore credentials, string allowListPath, Func<System.Security.Cryptography.ECDiffieHellman> sealingKey,
+        params IJobHandler[] more) =>
+        ForDatabasesWithKeys(adapters, credentials, allowListPath, () => [sealingKey()], more);
+
+    /// <summary>With every sealing key that may open a password (the current one, then the previous one after a rotation, AG6a) and extra handlers.</summary>
+    public static JobHandlers ForDatabasesWithKeys(IDatabaseAdapterFactory adapters, CredentialStore credentials, string allowListPath,
+        Func<IReadOnlyList<System.Security.Cryptography.ECDiffieHellman>> sealingKeys, params IJobHandler[] more)
     {
         var databases = new DatabaseJobContext(adapters, credentials, allowListPath);
         return new JobHandlers(
-            [new PingHandler(), new StoreCredentialHandler(sealingKey, credentials), new TestConnectionHandler(databases), new DiscoverHandler(databases), new PreviewHandler(databases),
-             new ExtractHandler(databases)],
+            [new PingHandler(), new StoreCredentialHandler(sealingKeys, credentials), new TestConnectionHandler(databases), new DiscoverHandler(databases), new PreviewHandler(databases),
+             new ExtractHandler(databases), .. more],
             [.. adapters.Engines, "folder", "rest"]);
     }
 

@@ -512,3 +512,37 @@ container. AG6b needs a release-signing key that only you hold, and AG6c needs y
   - the agent killed mid-extraction and started again (it resumes from Fortress's last batch);
   - the API unreachable for a while, then back (the agent retries and carries on);
   - the database restarted mid-read (the job retries within its attempts, or fails in words when it cannot).
+
+### AG6a as built (2026-11-16)
+
+Migration `20260312100000_agent_resilience.sql` (not applied live yet): agent job kinds `rotate_keys` and `diagnostics` (no connection, like
+`ping`); `app.request_agent_job` takes them (one waiting rotation at a time, a second request returns it); `app.system_purge_agent_diagnostics()`
+(API login only) replaces a bundle older than 30 days with `{cleared, clearedAt}`, called by the worker's `housekeeping` step
+(`agentDiagnosticsCleared`). Test `supabase/tests/agent_resilience.test.sql`.
+
+- **Key rotation** (`connector-agent/src/Fortress.Agent.Core/Maintenance.cs` `KeyRotation`): the runner rotates when the keys are 90 days old
+  (or a rotation was left unfinished), and handles a `rotate_keys` job itself, answering it signed with the new key. New keys are written to disk
+  as *pending* before Fortress is told; if Fortress already has them and refuses the old key (`agent_unauthenticated`), the agent moves to the
+  pending ones (`TryRecover`); a refusal that is not about the key forgets them. The previous sealing key is kept 30 days and the
+  `store_credential` handler tries each sealing key in turn.
+- **Diagnostics** (`DiagnosticsHandler`): version, OS, runtime, architecture, agent clock, uptime, memory, capabilities, key fingerprint and age,
+  whether the previous sealing key is kept, the allow-list file, and the last 200 log lines; redacted (bearer/basic values, named secrets,
+  registration tokens, long opaque strings) and cut to 64 kB by dropping the oldest lines.
+- **API:** `POST /integrations/agents/{id}/rotate-keys` and `…/diagnostics` (`integrations.manage`), answered with the job; follow with
+  `GET agent-jobs/{id}`.
+- **UI:** a **Keys and diagnostics** card on the agent page: Rotate keys now, Collect diagnostics, the bundle in words (facts, allow-list, log
+  lines) and **Download as a file**.
+- **Resilience fixes found while writing the recovery tests:**
+  - a call a running job makes to Fortress (progress, a batch, a file part, the result) is tried again while Fortress cannot be reached or
+    answers a passing error: 1, 2, 4, 8, 16 then 30-second waits, about three minutes, inside the job's lease (`AgentRunner.PatientlyAsync`;
+    resending a batch is safe, Fortress keeps it once). Before, the job was dropped until its five-minute lease ran out;
+  - a database that drops the agent's connection (PostgreSQL 08xxx, 57P01–57P03, 53300, 40001, 40P01, socket and stream errors; MySQL 1040, 1053,
+    2006, 2013 and the like; SQL Server 233, 10053/10054, 6005, 1205, 40613…) is now a *passing* failure, so an extraction is tried again within
+    its attempts and resumes from the last batch; connection tests, browsing and previews still try once.
+- **Recovery tests** (`api/test/connector-agent-binary.e2e-spec.ts` `recovery`, the real agent and a real PostgreSQL; the agent reaches the API
+  through a proxy the test can switch off). 6,000 rows are read through a view that sleeps 2 ms a row (about 12 seconds). In each case every row
+  arrives exactly once:
+  - killed part-way, then started again (the lease is ended by hand to save five minutes): attempt 2 resumes;
+  - the API unreachable for 8 seconds: the same attempt carries on;
+  - the database ending the agent's connection: a later attempt resumes.
+- **Load test** (AG-D4): opt-in with `AGENT_LOAD_ROWS=1000000` (and `AGENT_LOAD_REPORT=<file>`); figures are recorded in the exit report (AG6d).

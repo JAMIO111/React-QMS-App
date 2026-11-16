@@ -116,9 +116,14 @@ export class AgentsService {
   }
 
   ping(ctx: RequestContext, id: string, idempotencyKey: string | null) {
+    return this.agentJob(ctx, id, 'ping', idempotencyKey);
+  }
+
+  /** A job for the agent itself (AG1 ping, AG6a rotate_keys / diagnostics): no connection, no request body; the database checks the caller's rights. */
+  agentJob(ctx: RequestContext, id: string, kind: 'ping' | 'rotate_keys' | 'diagnostics', idempotencyKey: string | null) {
     return this.database.asUser(ctx, async (db) => {
       await this.own(db, orgOf(ctx), id);
-      const r = (await db.execute(sql`select app.request_agent_job(${id}::uuid, 'ping', '{}'::jsonb, ${idempotencyKey}) as id`)).rows[0] as Row;
+      const r = (await db.execute(sql`select app.request_agent_job(${id}::uuid, ${kind}, '{}'::jsonb, ${idempotencyKey}) as id`)).rows[0] as Row;
       return this.jobById(db, orgOf(ctx), r.id as string);
     });
   }

@@ -5,13 +5,13 @@ import Callout from "../../ui/Callout";
 import LoadingScreen from "../../ui/LoadingScreen";
 import RowActionsMenu from "../../ui/RowActionsMenu";
 import CTAButton from "@/components/CTAButton";
-import { ActivityIcon } from "@/components/icons";
+import { ActivityIcon, KeyRoundIcon, StethoscopeIcon } from "@/components/icons";
 import { usePermissions } from "../../../hooks/useQmsApi";
 import { useAgent, useAgentJob, useAgentMutation } from "../../../hooks/useAgents";
 import { useToast } from "../../../contexts/ToastProvider";
 import { describeApiError } from "../../../lib/api-client";
 import { useBreadcrumbNames } from "../../../lib/breadcrumbs";
-import { agentState, agentsPath, ago, eventWords, jobKind, jobRunning, jobStatus, pingWords } from "../../../lib/agents";
+import { agentState, agentsPath, ago, diagnosticsFacts, eventWords, jobKind, jobRunning, jobStatus, pingWords } from "../../../lib/agents";
 import { AddAgentDialog, RenameAgentDialog, RevokeAgentDialog } from "./AgentDialogs";
 import { Pill } from "./AgentsPage";
 
@@ -58,6 +58,112 @@ const PingCard = ({ agent, canManage }) => {
           {job.data ? jobStatus(job.data.status).label : "Sending…"}
         </p>
       )}
+    </MenuCard>
+  );
+};
+
+/** Ask the agent for a job of its own (rotate its keys, send diagnostics) and follow it until it answers. */
+const useAgentAsk = (agent, action, failTitle) => {
+  const mutate = useAgentMutation();
+  const { showToast } = useToast();
+  const [jobId, setJobId] = useState(null);
+  const job = useAgentJob(jobId);
+  const running = !!jobId && (!job.data || jobRunning(job.data.status));
+  const ask = () =>
+    mutate.mutate(
+      { action, id: agent.id, body: {} },
+      { onSuccess: (j) => setJobId(j.id), onError: (err) => showToast({ type: "error", title: failTitle, message: describeApiError(err) }) },
+    );
+  return { ask, job: jobId ? job.data : null, busy: mutate.isPending || running };
+};
+
+const JobOutcome = ({ job, done }) =>
+  !job ? null : job.status === "completed" ? (
+    done
+  ) : ["failed", "cancelled"].includes(job.status) ? (
+    <Callout tone="error" title={jobStatus(job.status).label}>
+      {job.errorMessage}
+    </Callout>
+  ) : (
+    <p role="status" className="text-sm text-secondary-text">
+      {jobStatus(job.status).label}
+    </p>
+  );
+
+/** AG6a: rotate the agent's keys now (it also does so every 90 days on its own) and collect a diagnostics bundle for support. */
+const MaintenanceCard = ({ agent, canManage }) => {
+  const rotate = useAgentAsk(agent, "rotateKeys", "The key rotation could not be asked for");
+  const diag = useAgentAsk(agent, "diagnostics", "Diagnostics could not be asked for");
+  const active = canManage && agent.status === "active";
+  const bundle = diag.job?.status === "completed" ? diag.job.result : null;
+  const facts = diagnosticsFacts(bundle);
+  return (
+    <MenuCard
+      title="Keys and diagnostics"
+      subtitle="The agent replaces its keys every 90 days on its own; the key before is kept for 30 days so a password sealed just before still opens. Diagnostics never hold passwords, keys or records.">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {active && (
+            <CTAButton type="secondary" size="default" icon={KeyRoundIcon} onClick={rotate.ask} loading={rotate.busy} loadingText="Rotating keys">
+              Rotate keys now
+            </CTAButton>
+          )}
+          {active && (
+            <CTAButton type="secondary" size="default" icon={StethoscopeIcon} onClick={diag.ask} loading={diag.busy} loadingText="Collecting">
+              Collect diagnostics
+            </CTAButton>
+          )}
+          {!active && <p className="text-sm text-secondary-text">Only someone who manages integrations can rotate keys or collect diagnostics.</p>}
+        </div>
+        <JobOutcome
+          job={rotate.job}
+          done={<Callout tone="success">Keys rotated{rotate.job?.result?.fingerprint ? `: the new fingerprint is ${rotate.job.result.fingerprint}` : ""}.</Callout>}
+        />
+        <JobOutcome
+          job={diag.job}
+          done={
+            bundle?.cleared ? (
+              <Callout tone="info">This bundle was cleared after 30 days.</Callout>
+            ) : (
+              <section aria-label="Diagnostics" className="flex flex-col gap-3">
+                <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {facts.map(([label, value]) => (
+                    <Fact key={label} label={label}>
+                      {value}
+                    </Fact>
+                  ))}
+                </dl>
+                {bundle?.allowList && (
+                  <details>
+                    <summary className="cursor-pointer text-sm text-primary-text">Allow-list on the agent</summary>
+                    <pre className="mt-2 max-h-64 overflow-auto rounded-lg bg-secondary-bg p-3 text-xs">{bundle.allowList}</pre>
+                  </details>
+                )}
+                {!!bundle?.log?.length && (
+                  <details>
+                    <summary className="cursor-pointer text-sm text-primary-text">Last {bundle.log.length} log lines</summary>
+                    <pre className="mt-2 max-h-80 overflow-auto rounded-lg bg-secondary-bg p-3 text-xs">{bundle.log.join("\n")}</pre>
+                  </details>
+                )}
+                <CTAButton
+                  type="neutral"
+                  size="default"
+                  className="self-start"
+                  onClick={() => {
+                    const url = URL.createObjectURL(new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" }));
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${agent.name}-diagnostics.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}>
+                  Download as a file
+                </CTAButton>
+              </section>
+            )
+          }
+        />
+      </div>
     </MenuCard>
   );
 };
@@ -135,6 +241,8 @@ const AgentPage = () => {
       </MenuCard>
 
       <PingCard agent={a} canManage={canManage} />
+
+      <MaintenanceCard agent={a} canManage={canManage} />
 
       <MenuCard title="Recent jobs" subtitle="What Fortress has asked this agent to do.">
         {!a.jobs.length ? (

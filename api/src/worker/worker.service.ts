@@ -75,6 +75,7 @@ export class WorkerService {
       async (c) => ({
         accessDenialsCleared: Number((await c.query('select app.system_purge_access_denials() as n')).rows[0].n),
         agentNoncesCleared: Number((await c.query('select app.system_purge_agent_nonces() as n')).rows[0].n),
+        agentDiagnosticsCleared: Number((await c.query('select app.system_purge_agent_diagnostics() as n')).rows[0].n),
       }),
       correlationId,
       'worker',

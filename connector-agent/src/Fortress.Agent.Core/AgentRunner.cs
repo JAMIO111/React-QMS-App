@@ -22,7 +22,8 @@ public sealed class AgentRunner(
     JobHandlers handlers,
     ILogger<AgentRunner> logger,
     TimeProvider? clock = null,
-    Func<TimeSpan, CancellationToken, Task>? delay = null)
+    Func<TimeSpan, CancellationToken, Task>? delay = null,
+    KeyRotation? rotation = null)
 {
     private readonly TimeProvider clock = clock ?? TimeProvider.System;
     private readonly Func<TimeSpan, CancellationToken, Task> delay = delay ?? ((t, ct) => Task.Delay(t, ct));
@@ -50,6 +51,8 @@ public sealed class AgentRunner(
                 WarnAboutClock(beat.ServerTime);
                 if (beat.JobsWaiting || beat.FastPollUntil is not null) await DrainJobsAsync(ct);
                 else await DrainJobsAsync(ct, max: 1);
+                // Keys older than 90 days (or a rotation that did not finish) are replaced between jobs (AG6a).
+                if (rotation is not null && rotation.Due(identity)) await RotateQuietlyAsync(ct);
                 wait = TimeSpan.FromSeconds(Math.Clamp(beat.PollSeconds, 5, 300));
                 // Someone has the agent's or a connection's page open: look for their next job every few seconds until the next heartbeat,
                 // so a test, a browse or a preview answers in seconds rather than on the next poll.
@@ -62,6 +65,11 @@ public sealed class AgentRunner(
             catch (AgentApiException e) when (e.Revoked)
             {
                 return Revoked(e.Message);
+            }
+            catch (AgentApiException e) when (e.Code == "agent_unauthenticated" && rotation is not null && rotation.TryRecover(identity))
+            {
+                // Fortress already holds the keys of a rotation this agent wrote down and did not finish: carry on with them at once.
+                wait = TimeSpan.FromSeconds(1);
             }
             catch (AgentApiException e)
             {
@@ -100,6 +108,18 @@ public sealed class AgentRunner(
             await DrainJobsAsync(ct);
         }
         return left;
+    }
+
+    private async Task RotateQuietlyAsync(CancellationToken ct)
+    {
+        try
+        {
+            await rotation!.RotateAsync(identity, api, ct);
+        }
+        catch (Exception e) when (e is AgentApiException { Revoked: false } or AgentNetworkException)
+        {
+            logger.LogWarning("The keys could not be rotated now ({Message}); trying again later", e.Message);
+        }
     }
 
     private RunOutcome Revoked(string why)
@@ -148,6 +168,20 @@ public sealed class AgentRunner(
             logger.LogInformation("Job {JobId} was cancelled in Fortress before it started", job.Id);
             return;
         }
+        // Rotating the keys changes what this agent signs with, so the runner does it itself (AG6a).
+        if (job.Kind == "rotate_keys" && rotation is not null)
+        {
+            try
+            {
+                var fingerprint = await rotation.RotateAsync(identity, api, ct);
+                await api.CompleteAsync(identity, job.Id, new System.Text.Json.Nodes.JsonObject { ["rotated"] = true, ["fingerprint"] = fingerprint }, ct);
+            }
+            catch (AgentApiException e) when (!e.Revoked)
+            {
+                await api.FailAsync(identity, job.Id, new JobFailure("refused", Bounded($"Fortress refused the new keys: {e.Message}"), false), ct);
+            }
+            return;
+        }
         if (handler is null)
         {
             await api.FailAsync(identity, job.Id,
@@ -158,17 +192,18 @@ public sealed class AgentRunner(
         using var jobCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var context = new JobContext(async (progress, token) =>
         {
-            var r = await api.ProgressAsync(identity, job.Id, progress, token);
+            var r = await PatientlyAsync(() => api.ProgressAsync(identity, job.Id, progress, token), "progress", token);
             if (r.Cancelled) await jobCts.CancelAsync();
             return !r.Cancelled;
         }, clock, async (batch, token) =>
         {
-            var r = await api.SendBatchAsync(identity, job.Id, batch, token);
+            // Sending the same batch again is safe: Fortress keeps a batch once and accepts the same rows again (AG3).
+            var r = await PatientlyAsync(() => api.SendBatchAsync(identity, job.Id, batch, token), $"batch {batch.Seq}", token);
             if (r.Cancelled) await jobCts.CancelAsync();
             return r;
         }, async (part, token) =>
         {
-            var r = await api.SendFilePartAsync(identity, job.Id, part, token);
+            var r = await PatientlyAsync(() => api.SendFilePartAsync(identity, job.Id, part, token), "file part", token);
             if (r.Cancelled) await jobCts.CancelAsync();
             return r;
         });
@@ -176,7 +211,7 @@ public sealed class AgentRunner(
         try
         {
             var result = await handler.RunAsync(job, context, jobCts.Token);
-            var done = await api.CompleteAsync(identity, job.Id, result, ct);
+            var done = await PatientlyAsync(() => api.CompleteAsync(identity, job.Id, result, ct), "the result", ct);
             logger.LogInformation("Job {JobId} done in {Ms} ms ({Status})", job.Id, started.ElapsedMilliseconds, done.Status);
         }
         catch (OperationCanceledException) when (jobCts.IsCancellationRequested && !ct.IsCancellationRequested)
@@ -193,6 +228,33 @@ public sealed class AgentRunner(
             // Never send an exception's details: they can carry connection strings. The type is enough to start looking; the log has the rest.
             await api.FailAsync(identity, job.Id, new JobFailure("internal", $"The agent hit an unexpected error ({e.GetType().Name}). See the agent's log.", true), ct);
             logger.LogError(e, "Job {JobId} hit an unexpected error", job.Id);
+        }
+    }
+
+    /// <summary>Waits between attempts while a job's call to Fortress fails for a passing reason: about three minutes in all, inside the job's lease.</summary>
+    internal static readonly TimeSpan[] JobRetryWaits =
+        [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(8), TimeSpan.FromSeconds(16),
+         TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30)];
+
+    /// <summary>
+    /// A call a running job makes to Fortress (progress, a batch, a file part, the result), tried again while Fortress cannot be reached or answers
+    /// with a passing error (AG6a, AG6-D5), so a short outage does not throw away work already read. Each attempt is signed afresh. After the last
+    /// wait the error goes up and the job is taken again once its lease runs out (it resumes from the last batch Fortress kept).
+    /// </summary>
+    internal async Task<T> PatientlyAsync<T>(Func<Task<T>> call, string what, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await call();
+            }
+            catch (Exception e) when (attempt < JobRetryWaits.Length && e is AgentNetworkException or AgentApiException { Revoked: false, Transient: true })
+            {
+                var wait = e is AgentApiException { RetryAfter: { } ra } && ra > TimeSpan.Zero && ra < MaxBackoff ? ra : JobRetryWaits[attempt];
+                logger.LogWarning("Could not send {What} to Fortress ({Message}); trying again in {Wait}s", what, e.Message, (int)wait.TotalSeconds);
+                await delay(wait, ct);
+            }
         }
     }
 

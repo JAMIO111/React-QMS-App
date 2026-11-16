@@ -231,4 +231,39 @@ public sealed class RunnerTests : IDisposable
         await Runner().RunAsync(stop.Token);
         Assert.Equal(AgentRunner.JobsPerCycle, Paths().Count(p => p.EndsWith("/complete")));
     }
+
+    [Fact]
+    public async Task A_job_keeps_its_work_when_fortress_cannot_be_reached_for_a_moment()
+    {
+        // The result cannot be sent twice (a 503, then the connection refused), then gets through: the ping is not done again, and the
+        // agent waited 1 s and 2 s inside the job rather than dropping it until its lease ran out.
+        Beat(jobsWaiting: true, poll: 15);
+        Jobs(new AgentJob { Id = "j1", Kind = "ping", Attempt = 1 });
+        Reports();
+        var tries = 0;
+        fake.Routes["/complete"] = _ => ++tries switch
+        {
+            1 => FakeFortress.Error(HttpStatusCode.ServiceUnavailable, "unavailable", "Down for a moment"),
+            2 => throw new HttpRequestException("Connection refused"),
+            _ => FakeFortress.Json(new { status = "completed", cancelled = false }),
+        };
+        var outcome = await Runner(cycles: 3).RunAsync(stop.Token);
+
+        Assert.Equal(RunOutcome.Stopped, outcome);
+        Assert.Equal(3, tries);
+        Assert.Equal(["heartbeat", "jobs/next", "jobs/j1/ack", "jobs/j1/complete", "jobs/j1/complete", "jobs/j1/complete", "jobs/next"], Paths());
+        Assert.Equal([TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(15)], waits);
+    }
+
+    [Fact]
+    public async Task A_refusal_that_will_not_pass_is_not_tried_again_inside_the_job()
+    {
+        Beat(jobsWaiting: true, poll: 15);
+        Jobs(new AgentJob { Id = "j1", Kind = "ping", Attempt = 1 });
+        Reports();
+        var tries = 0;
+        fake.Routes["/complete"] = _ => { tries++; return FakeFortress.Error(HttpStatusCode.Conflict, "integration_rule", "This job has ended"); };
+        await Runner(cycles: 1).RunAsync(stop.Token);
+        Assert.Equal(1, tries);
+    }
 }

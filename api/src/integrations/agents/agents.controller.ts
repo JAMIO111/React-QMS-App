@@ -142,6 +142,30 @@ export class AgentsController {
     return this.service.ping(ctx, parse(Uuid, id), parse(PingBody, body ?? {}).idempotencyKey ?? null);
   }
 
+  @Post('agents/:id/rotate-keys')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(PingBody) })
+  @ApiCreatedResponse({
+    description:
+      'Ask the agent to replace its signing and sealing keys now (AG6a; it also does so every 90 days on its own). The previous sealing key is kept on the agent for 30 days. One waiting rotation at a time.',
+  })
+  rotateKeys(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.agentJob(ctx, parse(Uuid, id), 'rotate_keys', parse(PingBody, body ?? {}).idempotencyKey ?? null);
+  }
+
+  @Post('agents/:id/diagnostics')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(PingBody) })
+  @ApiCreatedResponse({
+    description:
+      'Ask the agent for a diagnostics bundle (AG6a): version, runtime, memory, adapters, allow-list, key fingerprint and age, the last log lines; at most 64 kB, redacted, never passwords, keys or rows. Kept 30 days. Follow it with GET agent-jobs/{id}.',
+  })
+  diagnostics(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.agentJob(ctx, parse(Uuid, id), 'diagnostics', parse(PingBody, body ?? {}).idempotencyKey ?? null);
+  }
+
   @Post('connections/:id/agent-jobs')
   @HttpCode(201)
   @OrganisationScoped(MANAGE)

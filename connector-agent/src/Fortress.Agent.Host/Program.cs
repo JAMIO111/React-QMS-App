@@ -29,7 +29,7 @@ try
     using var http = Http.Client();
     var api = new AgentApiClient(http);
     // At registration there is no sealing key yet; the handlers are only asked what this agent can do.
-    var handlers = AgentJobs.Create(paths, KeyProtectors.ForThisMachine(), () => throw new InvalidOperationException("Not registered"));
+    var handlers = AgentJobs.Create(paths, KeyProtectors.ForThisMachine(), null);
     using var stop = new CancellationTokenSource();
     Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Cancel(); };
 

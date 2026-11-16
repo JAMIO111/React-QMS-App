@@ -43,7 +43,7 @@ public sealed class DatabaseJobContext(IDatabaseAdapterFactory adapters, Credent
 }
 
 /// <summary>Receive the password sealed in the browser, open it with this agent's sealing key and keep it (protected) for the connection.</summary>
-public sealed class StoreCredentialHandler(Func<ECDiffieHellman> sealingKey, CredentialStore credentials) : IJobHandler
+public sealed class StoreCredentialHandler(Func<IReadOnlyList<ECDiffieHellman>> sealingKeys, CredentialStore credentials) : IJobHandler
 {
     public string Kind => "store_credential";
 
@@ -52,15 +52,21 @@ public sealed class StoreCredentialHandler(Func<ECDiffieHellman> sealingKey, Cre
         var id = DatabaseJobContext.ConnectionId(job);
         if (job.Spec?["sealed"] is not JsonObject s) throw new JobFailedException("invalid", "The job carries no password. Type it again in Fortress.");
         string Part(string k) => s[k]?.GetValue<string>() ?? throw new JobFailedException("invalid", "The sealed password is incomplete. Type it again in Fortress.");
-        byte[] plain;
-        try
+        byte[]? plain = null;
+        // The current key first, then the one before the last rotation while it is kept (AG6a): a password sealed just before a rotation still opens.
+        foreach (var key in sealingKeys())
         {
-            plain = SealedBox.Open(sealingKey(), id, Part("epk"), Part("iv"), Part("ct"));
+            try
+            {
+                plain = SealedBox.Open(key, id, Part("epk"), Part("iv"), Part("ct"));
+                break;
+            }
+            catch (Exception e) when (e is CryptographicException or FormatException)
+            {
+            }
         }
-        catch (Exception e) when (e is CryptographicException or FormatException)
-        {
+        if (plain is null)
             throw new JobFailedException("invalid", "The password could not be opened: it was sealed for another key or connection. Reload the page in Fortress and type it again.");
-        }
         try
         {
             var credential = CredentialStore.Parse(plain) ?? throw new JobFailedException("invalid", "The sealed content is not a user name and password. Type them again in Fortress.");

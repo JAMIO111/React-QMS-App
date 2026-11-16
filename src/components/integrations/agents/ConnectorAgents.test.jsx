@@ -125,6 +125,40 @@ describe("one agent", () => {
     expect(await screen.findByText(/The agent answered \(version 0.1.0\)/, {}, { timeout: 4000 })).toBeInTheDocument();
   });
 
+  it("rotates the keys and collects diagnostics, showing the bundle in words", async () => {
+    const rot = { id: "r1", kind: "rotate_keys", status: "completed", result: { fingerprint: "ffff 0000" }, errorMessage: null, createdAt: recent, finishedAt: recent };
+    const diag = {
+      id: "d1", kind: "diagnostics", status: "completed", errorMessage: null, createdAt: recent, finishedAt: recent,
+      result: { version: "0.6.0", os: "Windows Server 2022", memoryMb: 52.5, uptimeSeconds: 7200, keyAgeDays: 12, keyFingerprint: "ab12", allowList: '{"hosts":["erp.local"]}', log: ["one", "two"] },
+    };
+    routeApi({
+      "GET /integrations/agents/ag1": detail(),
+      "POST /integrations/agents/ag1/wake": { woken: true },
+      "POST /integrations/agents/ag1/rotate-keys": rot,
+      "GET /integrations/agent-jobs/r1": rot,
+      "POST /integrations/agents/ag1/diagnostics": diag,
+      "GET /integrations/agent-jobs/d1": diag,
+    });
+    renderAt("/Settings/Integrations/Agents/ag1");
+    await userEvent.click(await screen.findByRole("button", { name: "Rotate keys now" }));
+    expect(await screen.findByText(/Keys rotated: the new fingerprint is ffff 0000/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Collect diagnostics" }));
+    const section = await screen.findByRole("region", { name: "Diagnostics" });
+    expect(within(section).getByText("0.6.0")).toBeInTheDocument();
+    expect(within(section).getByText("52.5 MB")).toBeInTheDocument();
+    expect(within(section).getByText("2 hours")).toBeInTheDocument();
+    expect(within(section).getByText("12 days")).toBeInTheDocument();
+    expect(within(section).getByText("Last 2 log lines")).toBeInTheDocument();
+  });
+
+  it("someone who may only read cannot rotate keys or collect diagnostics", async () => {
+    permissions = ["integrations.read"];
+    routeApi({ "GET /integrations/agents/ag1": detail(), "POST /integrations/agents/ag1/wake": { woken: true } });
+    renderAt("/Settings/Integrations/Agents/ag1");
+    expect(await screen.findByText(/Only someone who manages integrations/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rotate keys now" })).not.toBeInTheDocument();
+  });
+
   it("revokes with a reason", async () => {
     routeApi({
       "GET /integrations/agents/ag1": detail(),

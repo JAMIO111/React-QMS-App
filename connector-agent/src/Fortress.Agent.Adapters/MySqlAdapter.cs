@@ -257,13 +257,16 @@ public sealed class MySqlAdapter : IDatabaseAdapter
                 new JobFailedException("refused", $"The database refused: {m.Message}"),
             MySqlException m when m.ErrorCode == MySqlErrorCode.CommandTimeoutExpired => new JobFailedException("timeout", "The database took too long to answer"),
             MySqlException m when m.ErrorCode == MySqlErrorCode.UnableToConnectToHost && m.InnerException is SocketException se =>
-                new JobFailedException("network", $"Could not reach {where}: {se.SocketErrorCode}"),
-            MySqlException m when m.ErrorCode == MySqlErrorCode.UnableToConnectToHost => new JobFailedException("network", $"Could not reach {where}: {m.Message}"),
+                new JobFailedException("network", $"Could not reach {where}: {se.SocketErrorCode}", transient: true),
+            MySqlException m when m.ErrorCode == MySqlErrorCode.UnableToConnectToHost => new JobFailedException("network", $"Could not reach {where}: {m.Message}", transient: true),
+            // The server went away or shut down, the connection broke, too many connections, a deadlock: worth another attempt (AG6a, AG6-D5).
+            MySqlException m when m.Number is 1040 or 1053 or 1077 or 1152 or 1153 or 1158 or 1159 or 1160 or 1161 or 1205 or 1213 or 2006 or 2013 =>
+                new JobFailedException("network", $"The database connection was lost: {m.Message} ({m.Number})", transient: true),
             MySqlException { InnerException: System.Security.Authentication.AuthenticationException } =>
                 new JobFailedException("network", $"The encrypted connection to {where} could not be set up: check the server's certificate, or allow an untrusted certificate in the connection's settings"),
             MySqlException m when m.Number > 0 => new JobFailedException("refused", $"MySQL said: {m.Message} ({m.Number})"),
-            MySqlException m => new JobFailedException("network", $"Could not use {where}: {m.Message}"),
-            TimeoutException => new JobFailedException("timeout", $"{where} did not answer in time"),
+            MySqlException m => new JobFailedException("network", $"Could not use {where}: {m.Message}", transient: true),
+            TimeoutException => new JobFailedException("timeout", $"{where} did not answer in time", transient: true),
             _ => new JobFailedException("internal", $"The agent could not read the database ({e.GetType().Name})"),
         };
     }

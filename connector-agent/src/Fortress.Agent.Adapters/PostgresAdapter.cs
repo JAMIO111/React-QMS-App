@@ -252,12 +252,15 @@ public sealed class PostgresAdapter : IDatabaseAdapter
             PostgresException p when p.SqlState == "3D000" => new JobFailedException("not_found", p.MessageText),
             PostgresException p when p.SqlState == "42501" => new JobFailedException("refused", $"The database refused: {p.MessageText}"),
             PostgresException p when p.SqlState == "57014" => new JobFailedException("timeout", "The database took too long to answer"),
+            // The server went away or is restarting, the connection broke, or it is full or in a deadlock: worth another attempt (AG6a, AG6-D5).
+            PostgresException p when p.SqlState.StartsWith("08", StringComparison.Ordinal) || p.SqlState is "57P01" or "57P02" or "57P03" or "53300" or "40001" or "40P01" =>
+                new JobFailedException("network", $"The database connection was lost: {p.MessageText} ({p.SqlState})", transient: true),
             PostgresException p => new JobFailedException("refused", $"PostgreSQL said: {p.MessageText} ({p.SqlState})"),
-            NpgsqlException { InnerException: TimeoutException } or TimeoutException => new JobFailedException("timeout", $"{where} did not answer in time"),
-            NpgsqlException { InnerException: SocketException se } => new JobFailedException("network", $"Could not reach {where}: {se.SocketErrorCode}"),
+            NpgsqlException { InnerException: TimeoutException } or TimeoutException => new JobFailedException("timeout", $"{where} did not answer in time", transient: true),
+            NpgsqlException { InnerException: SocketException se } => new JobFailedException("network", $"Could not reach {where}: {se.SocketErrorCode}", transient: true),
             NpgsqlException { InnerException: System.Security.Authentication.AuthenticationException } =>
                 new JobFailedException("network", $"The encrypted connection to {where} could not be set up: check the server's certificate, or allow an untrusted certificate in the connection's settings"),
-            NpgsqlException n => new JobFailedException("network", $"Could not use {where}: {n.Message}"),
+            NpgsqlException n => new JobFailedException("network", $"Could not use {where}: {n.Message}", transient: true),
             _ => new JobFailedException("internal", $"The agent could not read the database ({e.GetType().Name})"),
         };
     }

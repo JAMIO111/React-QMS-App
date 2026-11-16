@@ -254,9 +254,13 @@ public sealed class SqlServerAdapter : IDatabaseAdapter
             SqlException q when q.Number == 4060 => new JobFailedException("not_found", $"SQL Server cannot open that database for this sign-in: {q.Message}"),
             SqlException q when q.Number is 229 or 230 => new JobFailedException("refused", $"SQL Server refused: {q.Message}"),
             SqlException q when q.Number == -2 => new JobFailedException("timeout", "SQL Server took too long to answer"),
-            SqlException q when q.Number is 53 or 2 or -1 or 40 or 26 or 10060 or 10061 => new JobFailedException("network", $"Could not reach {where}: {q.Message}"),
+            SqlException q when q.Number is 53 or 2 or -1 or 40 or 26 or 10060 or 10061 or 10053 or 10054 or 233 or 64 =>
+                new JobFailedException("network", $"Could not reach {where}: {q.Message}", transient: true),
+            // Shutting down, a deadlock victim, the database recovering or unavailable: worth another attempt (AG6a, AG6-D5).
+            SqlException q when q.Number is 6005 or 1205 or 40613 or 40197 or 40501 or 49918 or 49919 or 49920 =>
+                new JobFailedException("network", $"SQL Server is not available right now: {q.Message} ({q.Number})", transient: true),
             SqlException q => new JobFailedException("refused", $"SQL Server said: {q.Message} ({q.Number})"),
-            TimeoutException => new JobFailedException("timeout", $"{where} did not answer in time"),
+            TimeoutException => new JobFailedException("timeout", $"{where} did not answer in time", transient: true),
             _ => new JobFailedException("internal", $"The agent could not read the database ({e.GetType().Name})"),
         };
     }

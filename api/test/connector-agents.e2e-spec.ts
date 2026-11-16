@@ -183,6 +183,34 @@ describe('a ping, end to end', () => {
   });
 });
 
+describe('key rotation and diagnostics asked for by a person (AG6a)', () => {
+  it('only a manager asks; one waiting rotation at a time; the agent takes both jobs and the bundle is shown', async () => {
+    await api().post(`/api/v1/integrations/agents/${agent.id}/rotate-keys`).set(await as(ids.inspectorA)).send({}).expect(403);
+    await api().post(`/api/v1/integrations/agents/${agent.id}/diagnostics`).set(await as(ids.inspectorA)).send({}).expect(403);
+    const rot = await api().post(`/api/v1/integrations/agents/${agent.id}/rotate-keys`).set(await as(ids.ownerA)).send({}).expect(201);
+    expect(rot.body).toMatchObject({ kind: 'rotate_keys', status: 'pending' });
+    const again = await api().post(`/api/v1/integrations/agents/${agent.id}/rotate-keys`).set(await as(ids.ownerA)).send({}).expect(201);
+    expect(again.body.id).toBe(rot.body.id);
+    const diag = await api().post(`/api/v1/integrations/agents/${agent.id}/diagnostics`).set(await as(ids.ownerA)).send({}).expect(201);
+    expect(diag.body).toMatchObject({ kind: 'diagnostics', status: 'pending' });
+
+    const first = await signed(agent, 'post', '/api/v1/integrations/agent/jobs/next').expect(200);
+    expect(first.body).toMatchObject({ id: rot.body.id, kind: 'rotate_keys' });
+    await signed(agent, 'post', `/api/v1/integrations/agent/jobs/${rot.body.id}/complete`, { result: { fingerprint: 'abc' } }).expect(200);
+    const second = await signed(agent, 'post', '/api/v1/integrations/agent/jobs/next').expect(200);
+    expect(second.body).toMatchObject({ id: diag.body.id, kind: 'diagnostics' });
+    await signed(agent, 'post', `/api/v1/integrations/agent/jobs/${diag.body.id}/complete`, { result: { version: '0.6.0', log: ['started'] } }).expect(200);
+    const job = await api().get(`/api/v1/integrations/agent-jobs/${diag.body.id}`).set(await as(ids.ownerA)).expect(200);
+    expect(job.body).toMatchObject({ status: 'completed', result: { version: '0.6.0', log: ['started'] } });
+  });
+
+  it('another organisation cannot ask either', async () => {
+    const b = await as(ids.ownerB);
+    await api().post(`/api/v1/integrations/agents/${agent.id}/rotate-keys`).set(b).send({}).expect(404);
+    await api().post(`/api/v1/integrations/agents/${agent.id}/diagnostics`).set(b).send({}).expect(404);
+  });
+});
+
 describe('another organisation', () => {
   it('cannot see, ping, rename or revoke A\'s agent, nor read its jobs', async () => {
     const b = await as(ids.ownerB, ids.orgB);

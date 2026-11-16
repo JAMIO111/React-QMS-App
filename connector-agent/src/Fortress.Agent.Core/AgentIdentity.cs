@@ -17,8 +17,31 @@ public sealed class AgentIdentity : IDisposable
     public required string OrganisationName { get; init; }
     public required string Name { get; init; }
     public required DateTimeOffset RegisteredAt { get; init; }
-    public required ECDsa SigningKey { get; init; }
-    public required ECDiffieHellman SealingKey { get; init; }
+    public required ECDsa SigningKey { get; set; }
+    public required ECDiffieHellman SealingKey { get; set; }
+
+    /// <summary>When the current keys were made (the registration, or the last rotation, AG6a). The agent rotates them every 90 days.</summary>
+    public DateTimeOffset? KeysCreatedAt { get; set; }
+
+    /// <summary>
+    /// The sealing key before the last rotation, kept for 30 days so a password sealed in the browser just before the rotation still opens. Fortress
+    /// never sees it; it signs nothing.
+    /// </summary>
+    public ECDiffieHellman? PreviousSealingKey { get; set; }
+    public DateTimeOffset? PreviousSealingUntil { get; set; }
+
+    /// <summary>
+    /// New keys written down before Fortress is told of them. If the agent stops between the two, its next start finds Fortress no longer accepts the
+    /// old key and moves to these (<see cref="KeyRotation"/>), so a rotation can never lock the agent out.
+    /// </summary>
+    public ECDsa? PendingSigningKey { get; set; }
+    public ECDiffieHellman? PendingSealingKey { get; set; }
+
+    public DateTimeOffset KeysMadeAt => KeysCreatedAt ?? RegisteredAt;
+
+    /// <summary>The keys that may open a sealed password now: the current one, then the previous one while it is kept.</summary>
+    public IReadOnlyList<ECDiffieHellman> SealingKeys(DateTimeOffset now) =>
+        PreviousSealingKey is not null && PreviousSealingUntil is { } until && until > now ? [SealingKey, PreviousSealingKey] : [SealingKey];
 
     public string SigningPublicKey => Convert.ToBase64String(SigningKey.ExportSubjectPublicKeyInfo());
     public string SealingPublicKey => Convert.ToBase64String(SealingKey.ExportSubjectPublicKeyInfo());
@@ -31,6 +54,9 @@ public sealed class AgentIdentity : IDisposable
     {
         SigningKey.Dispose();
         SealingKey.Dispose();
+        PreviousSealingKey?.Dispose();
+        PendingSigningKey?.Dispose();
+        PendingSealingKey?.Dispose();
     }
 }
 
@@ -55,10 +81,26 @@ public sealed class IdentityStore(string path, IKeyProtector protector)
         signing.ImportPkcs8PrivateKey(protector.Unprotect(Convert.FromBase64String(file.SigningKey)), out _);
         var sealing = ECDiffieHellman.Create();
         sealing.ImportPkcs8PrivateKey(protector.Unprotect(Convert.FromBase64String(file.SealingKey)), out _);
+        ECDiffieHellman? Dh(string? b64)
+        {
+            if (string.IsNullOrEmpty(b64)) return null;
+            var k = ECDiffieHellman.Create();
+            k.ImportPkcs8PrivateKey(protector.Unprotect(Convert.FromBase64String(b64)), out _);
+            return k;
+        }
+        ECDsa? Dsa(string? b64)
+        {
+            if (string.IsNullOrEmpty(b64)) return null;
+            var k = ECDsa.Create();
+            k.ImportPkcs8PrivateKey(protector.Unprotect(Convert.FromBase64String(b64)), out _);
+            return k;
+        }
         return new AgentIdentity
         {
             ApiUrl = file.ApiUrl, AgentId = file.AgentId, OrganisationId = file.OrganisationId, OrganisationName = file.OrganisationName,
             Name = file.Name, RegisteredAt = file.RegisteredAt, SigningKey = signing, SealingKey = sealing,
+            KeysCreatedAt = file.KeysCreatedAt, PreviousSealingKey = Dh(file.PreviousSealingKey), PreviousSealingUntil = file.PreviousSealingUntil,
+            PendingSigningKey = Dsa(file.PendingSigningKey), PendingSealingKey = Dh(file.PendingSealingKey),
         };
     }
 
@@ -76,6 +118,11 @@ public sealed class IdentityStore(string path, IKeyProtector protector)
             Protection = protector.Name,
             SigningKey = Convert.ToBase64String(protector.Protect(identity.SigningKey.ExportPkcs8PrivateKey())),
             SealingKey = Convert.ToBase64String(protector.Protect(identity.SealingKey.ExportPkcs8PrivateKey())),
+            KeysCreatedAt = identity.KeysCreatedAt,
+            PreviousSealingKey = identity.PreviousSealingKey is { } p ? Convert.ToBase64String(protector.Protect(p.ExportPkcs8PrivateKey())) : null,
+            PreviousSealingUntil = identity.PreviousSealingKey is null ? null : identity.PreviousSealingUntil,
+            PendingSigningKey = identity.PendingSigningKey is { } ps ? Convert.ToBase64String(protector.Protect(ps.ExportPkcs8PrivateKey())) : null,
+            PendingSealingKey = identity.PendingSealingKey is { } pe ? Convert.ToBase64String(protector.Protect(pe.ExportPkcs8PrivateKey())) : null,
         };
         var dir = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(Path))!;
         Directory.CreateDirectory(dir);
@@ -104,6 +151,11 @@ internal sealed class IdentityFile
     public string Protection { get; set; } = "";
     public string SigningKey { get; set; } = "";
     public string SealingKey { get; set; } = "";
+    public DateTimeOffset? KeysCreatedAt { get; set; }
+    public string? PreviousSealingKey { get; set; }
+    public DateTimeOffset? PreviousSealingUntil { get; set; }
+    public string? PendingSigningKey { get; set; }
+    public string? PendingSealingKey { get; set; }
 }
 
 /// <summary>Protects the private keys at rest.</summary>

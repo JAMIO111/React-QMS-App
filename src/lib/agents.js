@@ -29,7 +29,7 @@ const JOB_STATUS = {
 export const jobStatus = (status) => JOB_STATUS[status] ?? { label: status, tone: "neutral" };
 export const jobRunning = (status) => status === "pending" || status === "received" || status === "running";
 
-const JOB_KINDS = { ping: "Check the agent", test_connection: "Test a connection", discover: "Browse a database", preview: "Preview a table", extract: "Read records" };
+const JOB_KINDS = { ping: "Check the agent", rotate_keys: "Rotate keys", diagnostics: "Collect diagnostics", test_connection: "Test a connection", discover: "Browse a database", preview: "Preview a table", extract: "Read records" };
 export const jobKind = (kind) => JOB_KINDS[kind] ?? kind;
 
 /** "2 minutes ago", "just now", "3 days ago" (no clock needed beyond Date.now()). */
@@ -83,4 +83,32 @@ export const pingWords = (job) => {
     if (Math.abs(skew) > 60) parts.push(`— its clock is ${Math.abs(skew)} seconds ${skew > 0 ? "ahead" : "behind"}`);
   }
   return parts.join(" ");
+};
+
+/** The facts of a diagnostics bundle (AG6a) in words, in the order a reader wants them; values the agent did not send are left out. */
+export const diagnosticsFacts = (b) => {
+  if (!b) return [];
+  const facts = [
+    ["Agent version", b.version],
+    ["Operating system", b.os],
+    ["Machine", b.machine],
+    ["Runtime", b.runtime && b.architecture ? `${b.runtime} (${b.architecture})` : b.runtime],
+    ["Agent clock", b.agentTime ? new Date(b.agentTime).toLocaleString("en-GB") : null],
+    ["Running for", b.uptimeSeconds == null ? null : uptimeWords(b.uptimeSeconds)],
+    ["Memory in use", b.memoryMb == null ? null : `${b.memoryMb} MB`],
+    ["Key fingerprint", b.keyFingerprint],
+    ["Key age", b.keyAgeDays == null ? null : b.keyAgeDays === 1 ? "1 day" : `${b.keyAgeDays} days`],
+    ["Previous sealing key kept until", b.previousSealingKeyKeptUntil ? new Date(b.previousSealingKeyKeptUntil).toLocaleDateString("en-GB") : null],
+    ["Key rotation waiting", b.rotationPending ? "Yes" : null],
+  ];
+  return facts.filter(([, v]) => v != null && v !== "");
+};
+
+export const uptimeWords = (seconds) => {
+  const m = Math.floor(seconds / 60);
+  if (m < 60) return m === 1 ? "1 minute" : `${m} minutes`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return h === 1 ? "1 hour" : `${h} hours`;
+  const d = Math.floor(h / 24);
+  return `${d} days`;
 };

@@ -58,6 +58,10 @@ const request = ({ action, id, body }) => {
       return { path: `/integrations/agents/${id}/revoke`, method: "POST", body };
     case "ping":
       return { path: `/integrations/agents/${id}/ping`, method: "POST", body: body ?? {} };
+    case "rotateKeys":
+      return { path: `/integrations/agents/${id}/rotate-keys`, method: "POST", body: body ?? {} };
+    case "diagnostics":
+      return { path: `/integrations/agents/${id}/diagnostics`, method: "POST", body: body ?? {} };
     case "wake":
       return { path: `/integrations/agents/${id}/wake`, method: "POST" };
     case "register":

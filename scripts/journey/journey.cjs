@@ -2034,7 +2034,7 @@ async function connectorAgent({ page, stack, APP, orgName, see, shot, step, log 
     step('the agent is revoked and stops');
     await page.goto(`${APP}/Settings/Integrations/Agents`);
     await page.getByRole('list', { name: 'Connector agents' }).getByRole('link', { name: 'Journey site' }).click();
-    await page.getByRole('button', { name: 'Actions for Journey site' }).click();
+    await page.getByRole('button', { name: 'Actions', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Revoke' }).click();
     const revoke = page.getByRole('dialog', { name: 'Revoke Journey site?' });
     await revoke.getByLabel(/^Why\?/).fill('The journey is over');

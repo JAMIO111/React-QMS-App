@@ -79,7 +79,7 @@ function fakeAgent(apiUrl, log = () => {}) {
     while (!state.stopped && !state.revoked) {
       try {
         const hb = await post('integrations/agent/heartbeat', { ...about, uptimeSeconds: 1 });
-        if (hb.status === 401 && hb.body?.code === 'agent_revoked') state.revoked = true;
+        if (hb.status === 401 && (hb.body?.error?.code ?? hb.body?.code) === 'agent_revoked') state.revoked = true;
         else if (hb.body?.revoked) state.revoked = true;
         if (state.revoked) break;
         const next = await post('integrations/agent/jobs/next');

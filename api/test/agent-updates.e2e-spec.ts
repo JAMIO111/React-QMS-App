@@ -41,6 +41,8 @@ beforeAll(async () => {
   await giveControllerSeats(admin, ids.orgA, [ids.ownerA]);
   await giveControllerSeats(admin, ids.orgB, [ids.ownerB]);
   await admin.query(`insert into public.platform_admins (user_id, note) values ($1, 'e2e operator') on conflict do nothing`, [ids.outsider]);
+  // Releases are global: withdraw any another suite published (the tenancy sweep seeds one), so "the newest release" here is this suite's.
+  await admin.query(`update public.integration_agent_releases set status = 'withdrawn', withdrawn_at = now(), withdrawn_reason = 'Withdrawn by the agent-updates e2e' where status = 'published'`);
   app = await startApp({ RATE_LIMIT_PER_MINUTE: '10000', AGENT_RELEASE_KEYS: releaseKey.spki });
   agent = await agents.register(await as(ids.ownerA), 'Update agent');
   // The agent says which platform it runs on (AG6b) in its heartbeat.

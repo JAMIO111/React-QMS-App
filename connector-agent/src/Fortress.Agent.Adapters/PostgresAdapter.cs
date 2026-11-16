@@ -35,6 +35,8 @@ public sealed class PostgresAdapter : IDatabaseAdapter
             SslMode = !s.Encrypt ? SslMode.Disable : s.TrustServerCertificate ? SslMode.Require : SslMode.VerifyFull,
             Pooling = false,
             IncludeErrorDetail = false,
+            // Never answer a server that asks for the password in clear (AG6d): only a hashed exchange, or no password at all.
+            RequireAuth = "ScramSHA256,MD5,None",
         };
         return b.ConnectionString;
     }

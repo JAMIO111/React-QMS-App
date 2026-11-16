@@ -404,6 +404,12 @@ maybe('the real connector agent', () => {
       expect(refused.errorMessage).toMatch(/is not on this agent's allow-list/);
       expect(asked).toEqual([]);
       writeFileSync(join(dataDir, 'allowlist.json'), JSON.stringify({ folders: [join(dataDir, 'exports')], hosts: [`127.0.0.1:${port}`] }));
+      // Listed, but plain http: the token would cross the network readable, so the agent will not send it unless the allow-list says so (AG6d).
+      const plain = await finished((await api().post(`${conn}/test`).set(await as()).expect(200)).body.agentJobs[0].id, 'the plain-http API test');
+      expect(plain).toMatchObject({ status: 'failed', errorKind: 'refused' });
+      expect(plain.errorMessage).toMatch(/plainHttpSignIn/);
+      expect(asked).toEqual([]);
+      writeFileSync(join(dataDir, 'allowlist.json'), JSON.stringify({ folders: [join(dataDir, 'exports')], hosts: [`127.0.0.1:${port}`], plainHttpSignIn: true }));
       const tested = await finished((await api().post(`${conn}/test`).set(await as()).expect(200)).body.agentJobs[0].id, 'the API test');
       expect(tested).toMatchObject({ status: 'completed', result: { message: 'The API answered 200 at /erp/health' } });
       await api().post(`${conn}/ready`).set(await as()).send({}).expect(200);

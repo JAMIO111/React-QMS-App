@@ -1,0 +1,20 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+  <!--
+    The Windows installer (docs/connector-agent-plan.md AG6c). Windows only: WiX needs Windows to make an MSI, so this project is not in
+    FortressAgent.sln and is built by .github/workflows/connector-agent.yml (or by hand on a Windows machine):
+
+      dotnet publish ..\src\Fortress.Agent.Host -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o ..\bin\msi-app
+      dotnet build FortressAgent.Installer.wixproj -c Release -p:AppDir=..\bin\msi-app -p:AgentVersion=0.1.0
+  -->
+  <PropertyGroup>
+    <OutputName>FortressConnectorAgent</OutputName>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <AppDir Condition="'$(AppDir)' == ''">..\bin\msi-app</AppDir>
+    <AgentVersion Condition="'$(AgentVersion)' == ''">0.1.0</AgentVersion>
+    <DefineConstants>AppDir=$(AppDir);AgentVersion=$(AgentVersion);InstallSources=..\install</DefineConstants>
+    <SuppressValidation>false</SuppressValidation>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Util.wixext" Version="5.0.2" />
+  </ItemGroup>
+</Project>

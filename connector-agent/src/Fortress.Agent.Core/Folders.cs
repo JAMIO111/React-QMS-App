@@ -40,6 +40,9 @@ public static partial class FolderJobs
         try
         {
             if (!dir.Exists) throw new JobFailedException("not_found", $"There is no folder {folder} that this agent's service account can see");
+            // A link (junction, symbolic link) at or below the allowed folder could lead anywhere, the agent's own keys included (AG6d review).
+            if (allow.LinkBelowAllowed(folder))
+                throw new JobFailedException("refused", $"The folder {folder} is reached through a link (junction or symbolic link) below the folder on the allow-list; list the real folder instead");
         }
         catch (UnauthorizedAccessException)
         {
@@ -106,6 +109,8 @@ public static partial class FolderJobs
         byte[] bytes;
         try
         {
+            // Listed files are never links; check again in case it was swapped for one since.
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new JobFailedException("refused", $"{entry.Name} is a link, not a file");
             await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 81920, FileOptions.Asynchronous);
             if (stream.Length > MaxFileBytes) throw new JobFailedException("refused", $"{entry.Name} is larger than 25 MB");
             using var memory = new MemoryStream((int)stream.Length);

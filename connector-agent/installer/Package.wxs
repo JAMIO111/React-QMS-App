@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fortress Connector Agent installer (AG6c). What it does, the same as install/install.ps1:
+    1. Installs FortressAgent.exe to Program Files\Fortress\ConnectorAgent.
+    2. Creates the service FortressConnectorAgent, running as its own virtual account NT SERVICE\FortressConnectorAgent, delayed automatic start,
+       restarted twice a minute apart after a crash.
+    3. Installs a second copy to Program Files\Fortress\ConnectorAgentUpdater with the service FortressConnectorAgentUpdater (LocalSystem, demand
+       start). It swaps in an update approved in Fortress after checking the release's signature again; the agent's account may only start it.
+    4. Makes %ProgramData%\Fortress\ConnectorAgent (keys, passwords, logs) owned by Administrators and limited to SYSTEM, Administrators and the
+       service account (anything already inside is reset to that), and adds an allowlist.json the service may read but not change. The folder is
+       kept when the agent is removed, so an upgrade or a reinstall keeps the agent's identity.
+    5. When API_URL and TOKEN are given, registers the agent (keys made here, protected by Windows DPAPI) and starts the service. Without them it
+       installs only: register later with FortressAgent.exe register, then start the service.
+    6. Removing the product (not upgrading it) tells Fortress to revoke the agent, then forgets the identity here.
+
+  Silent install with registration:
+    msiexec /i FortressConnectorAgent.msi /qn API_URL="https://<Fortress>/api/v1" TOKEN="FAGT-…"
+  TOKEN is hidden from the installer log. Add REPLACE=1 to register afresh over an identity already on the machine (a Reinstall token).
+
+  Upgrades: a higher version replaces the lower (MajorUpgrade); a lower one is refused. An update applied by the agent itself (AG6b) changes the
+  files outside Windows Installer, so a later "Repair" would put the MSI's own version back; upgrade with a newer MSI instead.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Package Name="Fortress Connector Agent" Manufacturer="Fortress QMS" Version="$(var.AgentVersion)"
+           UpgradeCode="4B1819E1-A157-4EE8-B286-4AF2082977A8" Scope="perMachine" Compressed="yes" InstallerVersion="500">
+    <SummaryInformation Description="Fortress Connector Agent: connects out to Fortress QMS and reads only the data you approve there." />
+    <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="A newer version of the Fortress Connector Agent is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="ARPCONTACT" Value="Fortress QMS" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="API_URL" Secure="yes" />
+    <Property Id="TOKEN" Secure="yes" Hidden="yes" />
+    <Property Id="REPLACE" Secure="yes" />
+    <!-- An identity already on this machine (an upgrade or a reinstall): the service is started without registering again. -->
+    <Property Id="AGENT_REGISTERED" Secure="yes">
+      <DirectorySearch Id="AgentDataSearch" Path="[CommonAppDataFolder]Fortress\ConnectorAgent" Depth="0">
+        <FileSearch Name="agent.json" />
+      </DirectorySearch>
+    </Property>
+
+    <Launch Condition="Privileged" Message="Install the Fortress Connector Agent as an administrator." />
+    <Launch Condition="NOT TOKEN OR API_URL" Message="A registration TOKEN needs the API_URL shown with it in Fortress." />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="FortressProgram" Name="Fortress">
+        <Directory Id="INSTALLFOLDER" Name="ConnectorAgent" />
+        <Directory Id="UPDATERFOLDER" Name="ConnectorAgentUpdater" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="FortressData" Name="Fortress">
+        <Directory Id="AGENTDATA" Name="ConnectorAgent" />
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="Agent" Title="Fortress Connector Agent" Level="1">
+      <Component Id="AgentExe" Directory="INSTALLFOLDER" Guid="6E2E59D7-7C1F-4D4B-9B54-0A4C2B71C3E1">
+        <File Id="FortressAgentExe" Source="$(var.AppDir)\FortressAgent.exe" KeyPath="yes" />
+        <ServiceInstall Id="AgentService" Name="FortressConnectorAgent" DisplayName="Fortress Connector Agent"
+                        Description="Connects out to Fortress QMS and reads only the data you approve there. Settings &gt; Integrations &gt; Connector agents."
+                        Type="ownProcess" Start="auto" ErrorControl="normal" Account="NT SERVICE\FortressConnectorAgent" Arguments="run" Vital="yes">
+          <ServiceConfig DelayedAutoStart="yes" OnInstall="yes" OnReinstall="yes" />
+          <util:ServiceConfig FirstFailureActionType="restart" SecondFailureActionType="restart" ThirdFailureActionType="none"
+                              RestartServiceDelayInSeconds="60" ResetPeriodInDays="1" />
+        </ServiceInstall>
+        <ServiceControl Id="AgentServiceStop" Name="FortressConnectorAgent" Stop="both" Remove="uninstall" Wait="yes" />
+      </Component>
+
+      <!-- The updater: its own copy of the program (an update never replaces it), LocalSystem, started only on demand. The service's own security
+           lets the agent's account start it and read its state, nothing else. Paths end in "." so a trailing backslash cannot escape the quote. -->
+      <Component Id="UpdaterExe" Directory="UPDATERFOLDER" Guid="3F6C2A81-0B7D-4E19-A5C4-9D2E7B6F1A30">
+        <File Id="FortressAgentUpdaterExe" Source="$(var.AppDir)\FortressAgent.exe" KeyPath="yes" />
+        <ServiceInstall Id="UpdaterService" Name="FortressConnectorAgentUpdater" DisplayName="Fortress Connector Agent Updater"
+                        Description="Swaps in a Fortress Connector Agent update approved in Fortress, after checking its signature. Started by the agent; stops when done."
+                        Type="ownProcess" Start="demand" ErrorControl="normal" Account="LocalSystem" Vital="yes"
+                        Arguments="apply-update --install &quot;[INSTALLFOLDER].&quot; --service FortressConnectorAgent --data-dir &quot;[AGENTDATA].&quot;">
+          <PermissionEx Sddl="D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)(A;;RPLCLOCRRC;;;S-1-5-80-3434563925-585952842-2424198147-1152564101-3769421330)" />
+        </ServiceInstall>
+        <ServiceControl Id="UpdaterServiceStop" Name="FortressConnectorAgentUpdater" Stop="both" Remove="uninstall" Wait="yes" />
+      </Component>
+      <Files Directory="UPDATERFOLDER" Include="$(var.AppDir)\**">
+        <Exclude Files="$(var.AppDir)\FortressAgent.exe" />
+        <Exclude Files="$(var.AppDir)\**\*.pdb" />
+      </Files>
+
+      <!-- On removal, what self-updates leave in Program Files goes too: the install folder as a whole (an update may have added files Windows
+           Installer does not know), the release the updater unpacked and the version it replaced. An upgrade removes the old product first, so
+           these go then too and the new version is installed afresh; the data folder (identity, passwords, allow-list) is never touched. -->
+      <Component Id="UpdateLeftovers" Directory="INSTALLFOLDER" Guid="7C2E5A19-4D8B-4F06-B3A1-0E6D9C4F2B85">
+        <RegistryValue Root="HKLM" Key="Software\Fortress\ConnectorAgent" Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+        <util:RemoveFolderEx Id="RemoveInstallFolder" On="uninstall" Property="AGENT_INSTALL_DIR" />
+        <util:RemoveFolderEx Id="RemoveStaging" On="uninstall" Property="AGENT_STAGING_DIR" />
+        <util:RemoveFolderEx Id="RemovePrevious" On="uninstall" Property="AGENT_PREVIOUS_DIR" />
+      </Component>
+
+      <!-- Everything else the publish step produced (a single-file build has little or nothing here). -->
+      <Files Directory="INSTALLFOLDER" Include="$(var.AppDir)\**">
+        <Exclude Files="$(var.AppDir)\FortressAgent.exe" />
+        <Exclude Files="$(var.AppDir)\**\*.pdb" />
+      </Files>
+
+      <!-- The folder above the data folder: owned by Administrators, so nobody else can rename or replace the agent's folder. -->
+      <Component Id="FortressDataFolder" Directory="FortressData" Guid="D8A41F6E-27C3-4B95-9E0A-5C1B7F3E8D62" Permanent="yes">
+        <CreateFolder>
+          <PermissionEx Sddl="O:BAG:SYD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;BU)" />
+        </CreateFolder>
+        <RegistryValue Root="HKLM" Key="Software\Fortress" Name="DataRoot" Type="string" Value="[FortressData]" KeyPath="yes" />
+      </Component>
+
+      <!-- The data folder: owned by Administrators; SYSTEM and Administrators full control, the service account modify, nobody else. Kept on removal. -->
+      <Component Id="AgentData" Directory="AGENTDATA" Guid="1C0D9E2B-5B0E-4E6A-8E3F-6A1F0C8B2D47" Permanent="yes">
+        <CreateFolder>
+          <PermissionEx Sddl="O:BAG:SYD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1301bf;;;S-1-5-80-3434563925-585952842-2424198147-1152564101-3769421330)" />
+        </CreateFolder>
+        <RegistryValue Root="HKLM" Key="Software\Fortress\ConnectorAgent" Name="DataFolder" Type="string" Value="[AGENTDATA]" KeyPath="yes" />
+      </Component>
+
+      <!-- The customer's own limit on the agent: empty to start with, the service may read it, only an administrator may change it. Never overwritten. -->
+      <Component Id="AllowList" Directory="AGENTDATA" Guid="5B9E0C27-6A1D-4F38-8B72-E4C9D1A0F653" Permanent="yes" NeverOverwrite="yes">
+        <File Id="AllowListJson" Source="$(var.InstallSources)\allowlist.json" KeyPath="yes">
+          <PermissionEx Sddl="O:BAG:SYD:PAI(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR;;;S-1-5-80-3434563925-585952842-2424198147-1152564101-3769421330)" />
+        </File>
+      </Component>
+
+      <!-- Start the service only when it has an identity: registered now, or already registered before. -->
+      <Component Id="AgentStart" Directory="INSTALLFOLDER" Guid="9A4B3C2D-1E0F-4A5B-8C7D-6E5F4A3B2C1D" Condition="TOKEN OR AGENT_REGISTERED">
+        <RegistryValue Root="HKLM" Key="Software\Fortress\ConnectorAgent" Name="StartsOnInstall" Type="integer" Value="1" KeyPath="yes" />
+        <ServiceControl Id="AgentServiceStart" Name="FortressConnectorAgent" Start="install" Wait="no" />
+      </Component>
+    </Feature>
+
+    <!-- Register: deferred, as SYSTEM (DPAPI machine keys; the identity file inherits the folder's permissions). The token never reaches the log. -->
+    <SetProperty Id="RegisterAgent" Sequence="execute" Before="RegisterAgent" Condition="TOKEN AND NOT REMOVE AND NOT REPLACE"
+                 Value="&quot;[#FortressAgentExe]&quot; register --api &quot;[API_URL]&quot; --token &quot;[TOKEN]&quot; --data-dir &quot;[AGENTDATA].&quot;" />
+    <SetProperty Id="RegisterAgent" Sequence="execute" Before="RegisterAgent" Condition="TOKEN AND NOT REMOVE AND REPLACE"
+                 Value="&quot;[#FortressAgentExe]&quot; register --api &quot;[API_URL]&quot; --token &quot;[TOKEN]&quot; --data-dir &quot;[AGENTDATA].&quot; --replace" />
+    <CustomAction Id="RegisterAgent" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec" Execute="deferred" Impersonate="no" Return="check" HideTarget="yes" />
+
+    <!-- Removing (not upgrading): tell Fortress to revoke this agent and forget the identity; never stops the removal. -->
+    <SetProperty Id="DeregisterAgent" Sequence="execute" Before="DeregisterAgent" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE"
+                 Value="&quot;[#FortressAgentExe]&quot; deregister --force --data-dir &quot;[AGENTDATA].&quot;" />
+    <CustomAction Id="DeregisterAgent" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec" Execute="deferred" Impersonate="no" Return="ignore" />
+
+    <!-- Anything already in the data folder (a reinstall, or files someone put there first) takes the folder's rules and nothing else. -->
+    <SetProperty Id="ResetDataAcl" Sequence="execute" Before="ResetDataAcl" Condition="NOT REMOVE"
+                 Value="&quot;[System64Folder]icacls.exe&quot; &quot;[AGENTDATA]*&quot; /reset /T /C /Q" />
+    <CustomAction Id="ResetDataAcl" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec" Execute="deferred" Impersonate="no" Return="ignore" />
+
+    <!-- The folders RemoveFolderEx clears, from the fixed Program Files location (directory properties are not resolved that early). -->
+    <SetProperty Id="AGENT_INSTALL_DIR" Value="[ProgramFiles64Folder]Fortress\ConnectorAgent" Before="WixRemoveFoldersEx" Sequence="execute" />
+    <SetProperty Id="AGENT_STAGING_DIR" Value="[ProgramFiles64Folder]Fortress\ConnectorAgent.staging" Before="WixRemoveFoldersEx" Sequence="execute" />
+    <SetProperty Id="AGENT_PREVIOUS_DIR" Value="[ProgramFiles64Folder]Fortress\ConnectorAgent.previous" Before="WixRemoveFoldersEx" Sequence="execute" />
+
+    <InstallExecuteSequence>
+      <Custom Action="ResetDataAcl" Before="InstallFiles" Condition="NOT REMOVE" />
+      <Custom Action="RegisterAgent" After="InstallServices" Condition="TOKEN AND NOT REMOVE" />
+      <Custom Action="DeregisterAgent" After="StopServices" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
+  </Package>
+</Wix>

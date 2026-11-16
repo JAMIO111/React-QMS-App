@@ -602,3 +602,51 @@ Migration `20260313100000_agent_updates.sql` (applied live 2026-11-16, live guar
   Authenticode signing of the package are AG6c / the Windows check. No release key is built into the agent yet: make one, add its public half to
   `ReleaseKeys.Built` and `AGENT_RELEASE_KEYS`.
 
+
+### AG6d security review (2026-11-16)
+
+A review of the whole agent path (`connector-agent/`, `api/src/integrations/agents/`, the agent migrations, the install scripts) by a reviewer
+who did not write it, each finding checked against the code before it was accepted. What was found and what was done:
+
+| # | Finding | Severity | Done |
+|---|---------|----------|------|
+| 1 | Changing a connection's server, port, database or address (or switching it to Windows sign-in) sent the password the agent already held to the new place; Windows sign-in could be pointed at any host (credential relay); an engine switch could turn a database password into an API Basic header | High | **Fixed.** A stored password is bound to where it was typed for (`ConnectionTarget`: engine, server, port, instance, database, sign-in kind, API address and key header); the agent refuses it anywhere else ("type it again"). The database clears the stored password when any of those change and refuses an engine change (migration `20260314100000_agent_hardening.sql`). Allow-list **`"servers"`**: Windows sign-in only to listed servers (none listed = none); once listed, every sign-in is limited to them. PostgreSQL sign-in refuses a cleartext password request (`RequireAuth`) |
+| 2 | A non-administrator could create `%ProgramData%\Fortress\ConnectorAgent` before installation and keep control of it; the service could rewrite its own allow-list | Medium | **Fixed.** The installers make that folder and the one above it owned by Administrators, reset anything already inside, and `install.ps1` refuses a folder someone else owns. `allowlist.json` is written by the installer and is read-only for the service |
+| 3 | An `.xlsx` (zip) could unpack to gigabytes in the API (`file-parsers.ts`) | Medium | **Fixed.** Limits checked before unpacking: 150 MB in total, 120 MB for one part, 5,000 entries |
+| 4 | Agent routes skipped the rate limit (registration included), and every bad request cost a database query | Low | **Fixed.** Registration is rate-limited again; `AgentGuard` refuses an address after 30 failed signatures in a minute (`429 agent_too_many_failures`) before any database work |
+| 5 | The Windows swap ran as the agent's low-privilege account, which can neither stop its own service nor write Program Files, and trusted files in a folder that account can write | Low (it could not work) | **Fixed.** A second service, **FortressConnectorAgentUpdater** (LocalSystem, started on demand, its own copy of the program), does the swap. The agent's account may only start it. It checks the release's signature, platform and version again with its own built-in keys, copies the package somewhere only it can write, checks size and SHA-256 there, and unpacks that copy |
+| 6 | Smaller points: plain http to internal APIs with a key; a link (junction) below an allowed folder; the sealing key comes from Fortress | Low | **Fixed:** a key or password goes over plain http only with `"plainHttpSignIn": true` in the allow-list; a folder reached through a link below the allowed folder is refused and files that are links are never listed or read. **Accepted:** a compromised Fortress could hand the browser another sealing key. The agent's key fingerprint is on its page and from `FortressAgent status`; comparing them is on the acceptance list |
+
+### AG6c as built (2026-11-16): written here, run on Windows by CI
+
+- **MSI** (`connector-agent/installer/`, WiX 5, `FortressAgent.Installer.wixproj` + `Package.wxs`): the agent service (`NT SERVICE\FortressConnectorAgent`,
+  delayed automatic, restarted twice after a crash); the updater service (LocalSystem, on demand, its own copy in `Program Files\Fortress\ConnectorAgentUpdater`,
+  service security `(A;;RPLCLOCRRC;;;<agent SID>)` = start and read only); the data folder and its parent owned by Administrators (`O:BA`) with only SYSTEM,
+  Administrators and the service, kept on removal; `allowlist.json` (template `install/allowlist.json`, never overwritten, read-only for the service);
+  `API_URL` + `TOKEN` (hidden from the log) register and start; removing tells Fortress (`deregister --force`) and clears what updates left in Program
+  Files (`RemoveFolderEx`). Paths passed to the program end in `.` so a trailing backslash cannot escape a quote.
+- **`install.ps1` / `uninstall.ps1`** do the same for the zip package (refusing a data folder owned by someone other than SYSTEM, TrustedInstaller,
+  Administrators or the person installing).
+- **Signing:** `connector-agent/release/sign-windows.ps1` (signtool, SHA-256, RFC 3161 timestamp, verified after signing): a certificate by thumbprint
+  (`FORTRESS_SIGN_THUMBPRINT`, e.g. a hardware token on a self-hosted runner) or a `.pfx` from the secrets `FORTRESS_SIGN_PFX_BASE64` /
+  `FORTRESS_SIGN_PFX_PASSWORD`; unsigned with a warning when none is set, refused with `-Required`.
+- **CI:** `.github/workflows/connector-agent.yml`:
+  - `databases` (Linux): the agent tests against real **SQL Server 2022**, **MySQL 8** and PostgreSQL 16 service containers
+    (`SqlServerAdapterTests.cs` is new: grants, paging, filters, incremental, bracket quoting with a hostile name, permission denied, no password in errors);
+  - `windows`: builds the release MSI (optionally signed) and a test MSI, runs `connector-agent/ci/windows-checks.ps1` against
+    `ci/fake-fortress.mjs` (a stand-in for Fortress's agent routes that keeps a throwaway release key): install with a token (not in the log), both
+    services' accounts, start types, restart actions and security, the folders' owners and rules, `allowlist.json` read-only, registration and
+    heartbeats, removal; then on the test MSI an update to 0.99.0 swapped in by the updater and checked in, and an update to 0.99.1 whose heartbeats
+    are refused rolled back after five minutes and reported by 0.99.0; then the agent's unit tests on Windows (DPAPI). The MSI is kept as a build artifact.
+- **Not run yet:** the workflow has not run (nothing is pushed); its first run is the check. The fake Fortress was tried here against the Linux
+  agent (registration, heartbeats, a signed update staged).
+
+### AG6d as built (2026-11-16)
+
+- Migration `20260314100000_agent_hardening.sql` (not applied live yet; pushing the API first is harmless: agents ask for passwords again only after
+  a connection's target changes). SQL test `agent_hardening.test.sql`; `agent_database_connections.test.sql` re-seals after a database change.
+- **Browser journey** step `connectorAgent()` (`scripts/journey/journey.cjs`, agent `scripts/journey/fake-agent.cjs`: the real protocol and signatures
+  against the real API): add an agent and read its one-time token, the agent registers and shows Online, **Check now** is answered, a PostgreSQL
+  connection through it, the password sealed in the browser and opened by the agent exactly as typed (the job keeps no sealed bytes), revoke and the
+  agent stops.
+- Exit report `docs/connector-agent-exit-report.md`.

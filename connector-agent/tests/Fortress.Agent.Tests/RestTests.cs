@@ -36,8 +36,14 @@ public sealed class RestTests : IDisposable
         if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
     }
 
-    private void AllowHosts(params string[] hosts) =>
-        File.WriteAllText(allowList, new JsonObject { ["hosts"] = new JsonArray(hosts.Select(h => (JsonNode)JsonValue.Create(h)!).ToArray()) }.ToJsonString());
+    private void AllowHosts(params string[] hosts) => AllowHosts(false, hosts);
+
+    private void AllowHosts(bool plainHttpSignIn, params string[] hosts) =>
+        File.WriteAllText(allowList, new JsonObject
+        {
+            ["hosts"] = new JsonArray(hosts.Select(h => (JsonNode)JsonValue.Create(h)!).ToArray()),
+            ["plainHttpSignIn"] = plainHttpSignIn,
+        }.ToJsonString());
 
     private JobHandlers Handlers => JobHandlers.ForDatabases(new FakeDatabase(), credentials, allowList, () => throw new InvalidOperationException());
 
@@ -281,19 +287,39 @@ public sealed class RestTests : IDisposable
     public async Task Signs_in_with_the_token_held_by_the_agent()
     {
         var connection = new JsonObject { ["engine"] = "rest", ["baseUrl"] = $"http://127.0.0.1:{api.Port}/api", ["authType"] = "bearer", ["testPath"] = "/secure" };
+        credentials.Save(ConnectionId, new DbCredential("", "s3cret-token"), ConnectionTarget.Of(connection));
+        // A key or password goes over plain http only when the allow-list says so (AG6d): the token was never sent.
         var e = await Assert.ThrowsAsync<JobFailedException>(() => Run("test_connection", connection: connection));
+        Assert.Equal("refused", e.Kind);
+        Assert.Contains("plainHttpSignIn", e.Message);
+        Assert.Equal(0, api.Hits("/api/secure"));
+        AllowHosts(true, $"127.0.0.1:{api.Port}");
+        credentials.Forget(ConnectionId);
+
+        e = await Assert.ThrowsAsync<JobFailedException>(() => Run("test_connection", connection: connection));
         Assert.Equal("auth", e.Kind);
         Assert.Contains("no key or password", e.Message);
 
-        credentials.Save(ConnectionId, new DbCredential("", "wrong"));
+        credentials.Save(ConnectionId, new DbCredential("", "wrong"), ConnectionTarget.Of(connection));
         e = await Assert.ThrowsAsync<JobFailedException>(() => Run("test_connection", connection: connection));
         Assert.Equal("The API refused the sign-in (401)", e.Message);
 
-        credentials.Save(ConnectionId, new DbCredential("", "s3cret-token"));
+        credentials.Save(ConnectionId, new DbCredential("", "s3cret-token"), ConnectionTarget.Of(connection));
         Assert.True((await Run("test_connection", connection: connection))["ok"]!.GetValue<bool>());
 
         var keyed = new JsonObject { ["engine"] = "rest", ["baseUrl"] = $"http://127.0.0.1:{api.Port}/api", ["authType"] = "api_key", ["apiKeyHeader"] = "X-Api-Key", ["testPath"] = "/keyed" };
+        // The token was typed for a bearer sign-in: a connection changed to send it in a header must have it typed again (AG6d).
+        e = await Assert.ThrowsAsync<JobFailedException>(() => Run("test_connection", connection: keyed));
+        Assert.Equal(CredentialStore.TargetChanged, e.Message);
+        Assert.Equal(1, api.Hits("/api/secure") > 0 ? 1 : 0);
+        credentials.Save(ConnectionId, new DbCredential("", "s3cret-token"), ConnectionTarget.Of(keyed));
         Assert.True((await Run("test_connection", connection: keyed))["ok"]!.GetValue<bool>());
+
+        // Moved to another address, the agent will not send the token there at all.
+        var moved = (JsonObject)keyed.DeepClone();
+        moved["baseUrl"] = $"http://127.0.0.1:{api.Port}/elsewhere";
+        e = await Assert.ThrowsAsync<JobFailedException>(() => Run("test_connection", connection: moved));
+        Assert.Equal("auth", e.Kind);
     }
 
     [Fact]

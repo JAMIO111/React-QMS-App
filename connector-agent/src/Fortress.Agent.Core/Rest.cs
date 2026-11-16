@@ -592,12 +592,14 @@ public static class RestJobs
         if (!allow.AllowsHost(settings.BaseUri))
             throw new JobFailedException("refused", $"{settings.BaseUri.Authority} is not on this agent's allow-list: add it under \"hosts\" in {Path.GetFileName(context.AllowListPath)} on the agent's machine");
         var headers = new Dictionary<string, string> { ["Accept"] = "application/json", ["User-Agent"] = $"Fortress-Connector-Agent/{AgentInfo.Version}" };
+        if (settings.NeedsSecret && settings.BaseUri.Scheme == Uri.UriSchemeHttp && !allow.PlainHttpSignIn)
+            throw new JobFailedException("refused", $"{settings.BaseUri.Authority} is plain http, so its key or password would cross the network readable. Use https, or set \"plainHttpSignIn\": true in {Path.GetFileName(context.AllowListPath)} on the agent's machine");
         if (settings.NeedsSecret)
         {
             DbCredential? credential;
             try
             {
-                credential = context.Credentials.Load(DatabaseJobContext.ConnectionId(job));
+                credential = context.Credentials.Load(DatabaseJobContext.ConnectionId(job), ConnectionTarget.Of(job.Spec?["connection"] as JsonObject));
             }
             catch (Exception e) when (e is System.Security.Cryptography.CryptographicException or InvalidDataException or IOException)
             {

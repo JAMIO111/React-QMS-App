@@ -208,6 +208,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague });
   await cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner });
   await networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
+  await connectorAgent({ page, stack, APP, orgName, see, shot, step, log });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -1969,4 +1970,81 @@ async function networkRestrictions({ browser, page, stack, APP, orgName, see, sh
   if (told.n < 4) throw new Error(`owners were not told of every change: ${JSON.stringify(told)}`);
   await ctx.close();
   await page.context().unroute(apiUrls);
+}
+
+/**
+ * Connector agent (docs/connector-agent-plan.md AG6d): the owner adds an agent and is shown its one-time token; an agent (scripts/journey/fake-agent.cjs,
+ * the real protocol and signatures, keys made in this process) registers with it and comes online; "Check now" is answered; a PostgreSQL connection
+ * through it is made, the password is typed in the browser and sealed there, and the agent opens exactly what was typed (Fortress only passed it on:
+ * the job keeps no sealed bytes once done); finally the agent is revoked and stops.
+ */
+async function connectorAgent({ page, stack, APP, orgName, see, shot, step, log }) {
+  const { fakeAgent } = require('./fake-agent.cjs');
+  step('the owner adds a connector agent, an agent registers with the token and answers a check');
+  await page.goto(`${APP}/Settings/Integrations/Agents`);
+  await page.getByRole('button', { name: 'Add a connector agent' }).click();
+  const add = page.getByRole('dialog', { name: 'Add a connector agent' });
+  await add.getByLabel(/^Name\b/).fill('Journey site');
+  await add.getByRole('button', { name: 'Make a token' }).click();
+  const install = page.getByRole('dialog', { name: 'Install the agent' });
+  await see(install.getByTestId('agent-token'));
+  const token = (await install.getByTestId('agent-token').textContent()).trim();
+  if (!/^FAGT-[A-Za-z0-9_-]{43}$/.test(token)) throw new Error(`the token does not look like one: ${token}`);
+  await shot(page, '150-agent-token');
+  await install.getByRole('button', { name: 'Done' }).click();
+
+  const agent = fakeAgent(`http://127.0.0.1:${stack.ports.api}/api/v1`, log);
+  await agent.register(token);
+  const running = agent.start();
+  try {
+    await page.reload();
+    const list = page.getByRole('list', { name: 'Connector agents' });
+    await see(list.getByText('Online'));
+    await list.getByRole('link', { name: 'Journey site' }).click();
+    await page.getByRole('button', { name: 'Check now' }).click();
+    await see(page.getByText(/The agent answered \(version 0\.1\.0\)/));
+    await shot(page, '151-agent-online-and-answered');
+
+    step('a PostgreSQL connection through the agent: the password is sealed in the browser and only the agent can open it');
+    await page.goto(`${APP}/Settings/Integrations`);
+    await page.getByRole('listitem', { name: 'PostgreSQL' }).getByRole('button', { name: /Connect a database/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Connect PostgreSQL' });
+    await dialog.getByRole('combobox', { name: /Connector agent/ }).click();
+    await page.getByRole('option', { name: /Journey site/ }).click();
+    await dialog.getByLabel(/^Name\b/).fill('ERP database');
+    await dialog.getByLabel(/^Server\b/).fill('erp-db.factory.local');
+    await dialog.getByLabel(/^Database\b/).fill('erp');
+    await dialog.getByRole('button', { name: 'Create connection' }).click();
+    await page.waitForURL(/\/Settings\/Integrations\/[0-9a-f-]{36}$/);
+    const connectionId = page.url().split('/').pop();
+    await page.getByRole('button', { name: 'Type the password' }).click();
+    const typed = page.getByRole('dialog', { name: 'Type the database password' });
+    await typed.getByLabel(/^User name\b/).fill('reader');
+    await typed.getByLabel(/^Password\b/).fill('correct horse battery staple');
+    await shot(page, '152-agent-password-sealed-in-browser');
+    await typed.getByRole('button', { name: 'Seal and send to the agent' }).click();
+    await see(page.getByText(/Stored on the agent/));
+    await shot(page, '153-agent-password-stored');
+    const opened = agent.state.credentials.get(connectionId);
+    log(`the agent opened: ${JSON.stringify({ username: opened?.username, password: opened ? '(hidden)' : null })}`);
+    if (!opened || opened.username !== 'reader' || opened.password !== 'correct horse battery staple') throw new Error('the agent did not open what was typed');
+    const kept = (await stack.admin.query(`select count(*)::int n from public.integration_agent_jobs where connection_id = $1 and kind = 'store_credential' and spec ? 'sealed'`, [connectionId])).rows[0];
+    if (kept.n !== 0) throw new Error('the sealed password was kept after the job ended');
+
+    step('the agent is revoked and stops');
+    await page.goto(`${APP}/Settings/Integrations/Agents`);
+    await page.getByRole('list', { name: 'Connector agents' }).getByRole('link', { name: 'Journey site' }).click();
+    await page.getByRole('button', { name: 'Actions for Journey site' }).click();
+    await page.getByRole('menuitem', { name: 'Revoke' }).click();
+    const revoke = page.getByRole('dialog', { name: 'Revoke Journey site?' });
+    await revoke.getByLabel(/^Why\?/).fill('The journey is over');
+    await revoke.getByRole('button', { name: /Revoke/ }).click();
+    await see(page.getByText('Revoked', { exact: true }).first());
+    for (let i = 0; i < 40 && !agent.state.revoked; i += 1) await new Promise((r) => setTimeout(r, 250));
+    if (!agent.state.revoked) throw new Error('the agent was not told it is revoked');
+    await shot(page, '154-agent-revoked');
+  } finally {
+    await agent.stop();
+    await running;
+  }
 }

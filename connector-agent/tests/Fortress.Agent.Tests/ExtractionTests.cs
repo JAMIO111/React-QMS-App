@@ -13,13 +13,14 @@ public sealed class ExtractionTests : IDisposable
     private readonly FakeDatabase db = new();
     private readonly CredentialStore credentials;
     private const string ConnectionId = "5f0c2b8e-3a51-4d6c-9e2f-7b8a1c4d0e93";
+    private static JsonObject Connection() => new() { ["engine"] = "postgres", ["server"] = "erp-db.factory.local", ["database"] = "erp", ["authType"] = "password" };
     private readonly List<RowBatch> sent = [];
     private Func<RowBatch, BatchReceipt> answer = b => new BatchReceipt { Stored = true, Status = "running" };
 
     public ExtractionTests()
     {
         credentials = new CredentialStore(Path.Combine(dir, "credentials"), new FilePermissionKeyProtector());
-        credentials.Save(ConnectionId, new DbCredential("reader", "hunter2"));
+        credentials.Save(ConnectionId, new DbCredential("reader", "hunter2"), ConnectionTarget.Of(Connection()));
     }
 
     public void Dispose()
@@ -37,7 +38,7 @@ public sealed class ExtractionTests : IDisposable
         Spec = new JsonObject
         {
             ["connectionId"] = ConnectionId,
-            ["connection"] = new JsonObject { ["engine"] = "postgres", ["server"] = "erp-db.factory.local", ["database"] = "erp", ["authType"] = "password" },
+            ["connection"] = Connection(),
             ["request"] = request,
         },
         Resume = resume,

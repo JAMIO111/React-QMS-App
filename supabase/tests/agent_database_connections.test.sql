@@ -154,6 +154,11 @@ BEGIN
   PERFORM pg_temp.agent_does(agent, 'complete', '{"result": {"ok": true, "message": "Signed in to PostgreSQL 16.4 as reader"}}');
   PERFORM pg_temp.login(own);
   PERFORM pg_temp.assert_true(EXISTS (SELECT 1 FROM unnest(app.integration_activation_problems(conn)) p WHERE p LIKE '%changed after the last test%'), 'a test of older settings does not count');
+  -- Another database is another target: the password is asked for again (AG6d) before it can be tested.
+  PERFORM pg_temp.assert_true(EXISTS (SELECT 1 FROM unnest(app.integration_activation_problems(conn)) p WHERE p LIKE 'Type the database password%'), 'a new database asks for the password again');
+  PERFORM app.set_agent_credential(conn, sealed, kid); PERFORM pg_temp.logout();
+  PERFORM pg_temp.agent_does(agent, 'complete', '{"result": {"stored": true, "username": "reader"}}');
+  PERFORM pg_temp.login(own);
   job := app.request_connection_job(conn, 'test_connection'); PERFORM pg_temp.logout();
   PERFORM pg_temp.agent_does(agent, 'complete', '{"result": {"ok": true, "message": "Signed in to PostgreSQL 16.4 as reader"}}');
   PERFORM pg_temp.login(own);

@@ -23,6 +23,10 @@ public sealed class DatabaseJobContext(IDatabaseAdapterFactory adapters, Credent
         var settings = ConnectionSettings.Parse(job.Spec?["connection"] as JsonObject);
         if (!Adapters.Engines.Contains(settings.Engine)) throw new JobFailedException("invalid", $"This agent cannot read {settings.Engine} databases. Update the agent.");
         var allow = LocalAllowList.Load(AllowListPath);
+        if (!allow.AllowsServer(settings.Server, settings.AuthType))
+            throw new JobFailedException("refused", settings.AuthType == "windows"
+                ? $"Windows authentication signs in as this agent's service account, so it is used only for servers listed under \"servers\" in {Path.GetFileName(AllowListPath)} on the agent's machine; {settings.Server} is not listed"
+                : $"The server {settings.Server} is not on this agent's allow-list (\"servers\" in {Path.GetFileName(AllowListPath)} on the agent's machine)");
         if (!allow.AllowsDatabase(settings.Database))
             throw new JobFailedException("refused", $"The database {settings.Database} is not on this agent's allow-list ({Path.GetFileName(AllowListPath)} on the agent's machine)");
         DbCredential? credential = null;
@@ -30,7 +34,7 @@ public sealed class DatabaseJobContext(IDatabaseAdapterFactory adapters, Credent
         {
             try
             {
-                credential = Credentials.Load(id);
+                credential = Credentials.Load(id, ConnectionTarget.Of(job.Spec?["connection"] as JsonObject));
             }
             catch (Exception e) when (e is CryptographicException or InvalidDataException or IOException)
             {
@@ -70,7 +74,7 @@ public sealed class StoreCredentialHandler(Func<IReadOnlyList<ECDiffieHellman>> 
         try
         {
             var credential = CredentialStore.Parse(plain) ?? throw new JobFailedException("invalid", "The sealed content is not a user name and password. Type them again in Fortress.");
-            credentials.Save(id, credential);
+            credentials.Save(id, credential, ConnectionTarget.Of(job.Spec?["connection"] as JsonObject));
             return Task.FromResult<JsonNode?>(new JsonObject { ["stored"] = true, ["username"] = credential.Username });
         }
         finally

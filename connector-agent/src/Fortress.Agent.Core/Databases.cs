@@ -209,8 +209,31 @@ public sealed class LocalAllowList
     /// allows that host only (a "*." entry its sub-domains); with a port, only that port. None means no API at all.
     /// </summary>
     public IReadOnlyList<string> Hosts { get; init; } = [];
+    /// <summary>
+    /// Database servers this agent may sign in to (AG6d): host names or addresses, "*." for sub-domains. When listed, only those servers; when not,
+    /// any server for a password sign-in, but none for Windows authentication, which signs in as this agent's own service account.
+    /// </summary>
+    public IReadOnlyList<string> Servers { get; init; } = [];
+
+    /// <summary>
+    /// An internal API's key, token or password may be sent over plain http (AG6d review). Off unless <c>"plainHttpSignIn": true</c>: without it a
+    /// connection that signs in must use https, so the secret does not cross the network readable.
+    /// </summary>
+    public bool PlainHttpSignIn { get; init; }
 
     public static LocalAllowList Everything { get; } = new();
+
+    public bool AllowsServer(string server, string authType)
+    {
+        if (Servers.Count == 0) return authType != "windows";
+        var host = server.Trim().TrimEnd('.').ToLowerInvariant();
+        return Servers.Any(raw =>
+        {
+            var entry = raw.Trim().TrimEnd('.').ToLowerInvariant();
+            if (entry.StartsWith("*.")) return host.EndsWith(entry[1..], StringComparison.Ordinal) && host.Length > entry.Length - 1;
+            return entry == host;
+        });
+    }
 
     public bool Limited => Databases.Count > 0 || Schemas.Count > 0 || Objects.Count > 0;
 
@@ -229,7 +252,8 @@ public sealed class LocalAllowList
         IReadOnlyList<string> List(string key) => node?[key] is JsonArray a
             ? a.Select(x => x?.GetValue<string>()?.Trim()).Where(x => !string.IsNullOrEmpty(x)).Select(x => x!).ToArray()
             : [];
-        return new LocalAllowList { Databases = List("databases"), Schemas = List("schemas"), Objects = List("objects"), Folders = List("folders"), Hosts = List("hosts") };
+        return new LocalAllowList { Databases = List("databases"), Schemas = List("schemas"), Objects = List("objects"), Folders = List("folders"), Hosts = List("hosts"), Servers = List("servers"),
+            PlainHttpSignIn = node?["plainHttpSignIn"] is JsonValue p && p.TryGetValue<bool>(out var plain) && plain };
     }
 
     /// <summary>The folder or one above it is listed. Paths are compared whole, after resolving them, ignoring case on Windows.</summary>
@@ -247,6 +271,24 @@ public sealed class LocalAllowList
             if (string.Equals(target, root, comparison)) return true;
             if (target.StartsWith(root + Path.DirectorySeparatorChar, comparison) || target.StartsWith(root + Path.AltDirectorySeparatorChar, comparison)) return true;
         }
+        return false;
+    }
+
+    /// <summary>
+    /// The folder, or a folder between it and the allowed folder that contains it, is a link (junction or symbolic link). The allowed folder itself
+    /// may be one: an administrator listed it knowingly.
+    /// </summary>
+    public bool LinkBelowAllowed(string folder)
+    {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        static string Full(string p) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(p));
+        var target = Full(folder);
+        var root = Folders.Select(f => { try { return Full(f); } catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException) { return null; } })
+            .Where(r => r is not null && (string.Equals(target, r, comparison) || target.StartsWith(r + Path.DirectorySeparatorChar, comparison)))
+            .OrderBy(r => r!.Length).FirstOrDefault();
+        if (root is null) return true;
+        for (var dir = new DirectoryInfo(target); dir is not null && !string.Equals(Full(dir.FullName), root, comparison); dir = dir.Parent)
+            if (dir.Exists && (dir.Attributes & FileAttributes.ReparsePoint) != 0) return true;
         return false;
     }
 

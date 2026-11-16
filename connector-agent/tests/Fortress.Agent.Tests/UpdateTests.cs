@@ -116,7 +116,11 @@ public sealed class UpdateTests : IDisposable
         Assert.Equal(("u1", "0.7.0"), (pending.UpdateId, pending.Version));
         Assert.Equal("new agent", File.ReadAllText(Path.Combine(pending.Staged, "FortressAgent.dll")));
         Assert.Equal("helper", File.ReadAllText(Path.Combine(pending.Staged, "lib", "helper.dll")));
-        Assert.False(File.Exists(Path.Combine(dir, "updates", "0.7.0", "package.zip")));
+        // The package and the signed release are kept for the updater, which checks them again itself.
+        Assert.Equal(Path.Combine(dir, "updates", "0.7.0", "package.zip"), pending.Package);
+        Assert.Equal(pkg, File.ReadAllBytes(pending.Package!));
+        Assert.Equal(m, pending.Manifest);
+        Assert.NotNull(pending.Signature);
     }
 
     [Fact]
@@ -167,11 +171,18 @@ public sealed class UpdateTests : IDisposable
         Assert.Null(old.Report());
     }
 
-    private sealed class FakeService(Action? onStart = null) : IServiceControl
+    private sealed class FakeService(Action? onStart = null, int failStart = 0) : IServiceControl
     {
         public readonly List<string> Calls = [];
+        private int starts;
         public Task StopAsync(CancellationToken ct) { Calls.Add("stop"); return Task.CompletedTask; }
-        public Task StartAsync(CancellationToken ct) { Calls.Add("start"); onStart?.Invoke(); return Task.CompletedTask; }
+        public Task StartAsync(CancellationToken ct)
+        {
+            Calls.Add("start");
+            if (++starts == failStart) throw new InvalidOperationException("The service did not reach Running");
+            onStart?.Invoke();
+            return Task.CompletedTask;
+        }
     }
 
     private (string Install, UpdateFiles Files) Installed()
@@ -217,5 +228,89 @@ public sealed class UpdateTests : IDisposable
         var rb = files.ReadRolledBack()!;
         Assert.Equal("u1", rb.UpdateId);
         Assert.Contains("did not check in within 5 minutes", rb.Message);
+    }
+
+    [Fact]
+    public async Task The_updater_puts_the_old_version_back_when_the_new_one_will_not_start()
+    {
+        var (install, files) = Installed();
+        var service = new FakeService(failStart: 1); // the start after the swap fails
+        var outcome = await new UpdateSwapper(dir, install, service, NullLogger.Instance, (_, _) => Task.CompletedTask).ApplyAsync(CancellationToken.None);
+        Assert.Equal("rolled_back", outcome);
+        Assert.Equal(["stop", "start", "stop", "start"], service.Calls);
+        Assert.Equal("old", File.ReadAllText(Path.Combine(install, "FortressAgent.exe")));
+        Assert.Contains("did not start (The service did not reach Running)", files.ReadRolledBack()!.Message);
+    }
+
+    /// <summary>A pending update as the agent leaves it: the package, the signed manifest and its signature.</summary>
+    private PendingUpdate Staged(byte[] package, string version = "0.7.0", ECDsa? signer = null, byte[]? onDisk = null)
+    {
+        var folder = Path.Combine(dir, "updates", version);
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, "package.zip");
+        File.WriteAllBytes(path, onDisk ?? package);
+        var m = Manifest(version, package);
+        return new PendingUpdate("u1", version, Path.Combine(folder, "staged"), new string('a', 64), DateTimeOffset.UtcNow) { Manifest = m, Signature = Sign(m, signer), Package = path };
+    }
+
+    [Fact]
+    public void The_updater_trusts_only_the_signed_release_not_what_the_agent_staged()
+    {
+        var pkg = Zip(("FortressAgent.dll", "new agent"));
+        var staging = Path.Combine(dir, "Program Files", "Fortress", "ConnectorAgent.staging");
+        var app = UpdatePreparer.Prepare(Staged(pkg), staging, [Spki], "linux-x64", "0.6.0");
+        Assert.Equal("new agent", File.ReadAllText(Path.Combine(app, "FortressAgent.dll")));
+        Assert.False(File.Exists(Path.Combine(staging, "package.zip"))); // only the unpacked copy is left
+
+        string Refused(Action a) => Assert.Throws<JobFailedException>(a).Message;
+        // The package changed after the agent checked it (the agent's account can write its data folder).
+        Assert.Contains("SHA-256", Refused(() => UpdatePreparer.Prepare(Staged(pkg, onDisk: Flip(pkg)), staging, [Spki], "linux-x64", "0.6.0")));
+        Assert.Contains("larger than the signed release", Refused(() => UpdatePreparer.Prepare(Staged(pkg, onDisk: [.. pkg, 0]), staging, [Spki], "linux-x64", "0.6.0")));
+        Assert.Contains("not the size", Refused(() => UpdatePreparer.Prepare(Staged(pkg, onDisk: pkg[..^1]), staging, [Spki], "linux-x64", "0.6.0")));
+        // A release signed by someone else, for another platform, or not newer than what is installed.
+        using var stranger = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        Assert.Contains("not signed by a key", Refused(() => UpdatePreparer.Prepare(Staged(pkg, signer: stranger), staging, [Spki], "linux-x64", "0.6.0")));
+        Assert.Contains("runs on win-x64", Refused(() => UpdatePreparer.Prepare(Staged(pkg), staging, [Spki], "win-x64", "0.6.0")));
+        Assert.Contains("not newer", Refused(() => UpdatePreparer.Prepare(Staged(pkg), staging, [Spki], "linux-x64", "0.7.0")));
+        // A pending file without its signed release (written by an older agent, or by hand).
+        var bare = Staged(pkg) with { Manifest = null };
+        Assert.Contains("approve it again", Refused(() => UpdatePreparer.Prepare(bare, staging, [Spki], "linux-x64", "0.6.0")));
+        // The staged version must be the signed one.
+        Assert.Contains("version", Refused(() => UpdatePreparer.Prepare(Staged(pkg) with { Version = "0.9.0" }, staging, [Spki], "linux-x64", "0.6.0")));
+    }
+
+    private static byte[] Flip(byte[] b)
+    {
+        var c = (byte[])b.Clone();
+        c[c.Length / 2] ^= 0xff;
+        return c;
+    }
+
+    [Fact]
+    public async Task A_refused_update_touches_nothing_and_is_reported()
+    {
+        var (install, files) = Installed();
+        var service = new FakeService();
+        var outcome = await new UpdateSwapper(dir, install, service, NullLogger.Instance, (_, _) => Task.CompletedTask,
+            prepare: _ => throw new JobFailedException("refused", "The staged package's SHA-256 is not the signed release's")).ApplyAsync(CancellationToken.None);
+        Assert.Equal("refused", outcome);
+        Assert.Empty(service.Calls); // the service was never stopped
+        Assert.Equal("old", File.ReadAllText(Path.Combine(install, "FortressAgent.exe")));
+        Assert.Contains("refused the staged update: The staged package's SHA-256", files.ReadRolledBack()!.Message);
+        var report = new UpdateState(dir, NullLogger.Instance, () => "0.6.0").Report()!;
+        Assert.Equal("rolled_back", report.Outcome);
+    }
+
+    [Fact]
+    public async Task The_updater_swaps_in_the_folder_it_prepared_itself()
+    {
+        var (install, files) = Installed();
+        var prepared = Path.Combine(dir, "Program Files", "Fortress.staging", "app");
+        Directory.CreateDirectory(prepared);
+        File.WriteAllText(Path.Combine(prepared, "FortressAgent.exe"), "verified");
+        var service = new FakeService(() => files.Write(files.Applied, new { updateId = "u1" }));
+        var outcome = await new UpdateSwapper(dir, install, service, NullLogger.Instance, (_, _) => Task.CompletedTask, prepare: _ => prepared).ApplyAsync(CancellationToken.None);
+        Assert.Equal("applied", outcome);
+        Assert.Equal("verified", File.ReadAllText(Path.Combine(install, "FortressAgent.exe"))); // not the agent's staged copy ("new")
     }
 }

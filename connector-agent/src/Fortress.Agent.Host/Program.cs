@@ -6,6 +6,7 @@
 //   FortressAgent apply-update --install <folder> [--service <name>]     Windows: swap in a staged update, rolling back if it does not come up (AG6b)
 // Common: --data-dir <folder> (default %ProgramData%\Fortress\ConnectorAgent on Windows, else $FORTRESS_AGENT_HOME or ~/.fortress-agent).
 using Fortress.Agent.Core;
+using Microsoft.Extensions.DependencyInjection;
 using Fortress.Agent.Host;
 using Serilog;
 
@@ -94,10 +95,22 @@ try
                 Console.Error.WriteLine("apply-update swaps a Windows service; on this platform install the staged update by hand.");
                 return 2;
             }
-            var swapper = new UpdateSwapper(paths.Root, cli.InstallDir!, new WindowsServiceControl(cli.Service ?? AgentPaths.ServiceName),
-                new Serilog.Extensions.Logging.SerilogLoggerFactory(Log.Logger).CreateLogger("Updater"));
-            var outcome = await swapper.ApplyAsync(stop.Token);
-            return outcome == "applied" ? 0 : 4;
+            var updaterLog = new Serilog.Extensions.Logging.SerilogLoggerFactory(Log.Logger).CreateLogger("Updater");
+            var swapper = UpdaterRun.Create(paths, cli.InstallDir!, cli.Service ?? AgentPaths.ServiceName, updaterLog);
+            if (Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService())
+            {
+                // Started by the service manager as the updater service (the normal way): run once as a service, then stop.
+                var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
+                builder.Services.AddWindowsService(o => o.ServiceName = AgentPaths.UpdaterServiceName);
+                builder.Services.AddSerilog();
+                builder.Services.AddSingleton(swapper);
+                builder.Services.AddHostedService<UpdaterWorker>();
+                using var host = builder.Build();
+                await host.RunAsync();
+                return Environment.ExitCode;
+            }
+            // Run by an administrator from a command prompt (a manual swap, or the Windows checks in CI).
+            return UpdaterRun.ExitCode(await swapper.ApplyAsync(stop.Token));
         }
         default:
             return await AgentHost.RunAsync(paths, store, args);

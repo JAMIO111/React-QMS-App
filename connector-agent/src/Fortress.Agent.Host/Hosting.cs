@@ -19,6 +19,11 @@ public sealed record AgentPaths(string Root)
     public string AllowListFile => Path.Combine(Root, "allowlist.json");
     /// <summary>The service's name in the Windows service manager.</summary>
     public const string ServiceName = "FortressConnectorAgent";
+    /// <summary>
+    /// The updater (AG6b, AG6d review): a second service running as SYSTEM from its own copy of the program (Program Files\Fortress\ConnectorAgentUpdater),
+    /// started on demand. The agent's account may start it and nothing else; it checks the staged release again itself before it swaps.
+    /// </summary>
+    public const string UpdaterServiceName = "FortressConnectorAgentUpdater";
 
     public static AgentPaths From(string? dataDir)
     {
@@ -164,8 +169,9 @@ public sealed class AgentWorker(AgentRunner runner, IHostApplicationLifetime lif
 }
 
 /// <summary>
-/// Starting the swap once an update is staged (AG6b). On Windows the updater runs from a copy of the installed folder in the temporary folder
-/// (it cannot replace the folder it runs from), stops this service and swaps the folders; it outlives the service it stops. Elsewhere the update
+/// Starting the swap once an update is staged (AG6b). On Windows the agent asks the service manager to start the updater service, which runs as
+/// SYSTEM from its own copy of the program: the agent's own account can neither stop its service nor write Program Files, and must not be able to
+/// (AG6d review). The updater trusts nothing the agent staged: it checks the signed release again (<see cref="UpdatePreparer"/>). Elsewhere the update
 /// stays staged and the log says where it is; it is installed by hand.
 /// </summary>
 public static class Updater
@@ -179,27 +185,64 @@ public static class Updater
             logger.LogWarning("Update to {Version} is staged in {Folder}; this platform does not swap it in by itself: install it by hand", pending.Version, pending.Staged);
             return Task.CompletedTask;
         }
-        var install = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
-        var copy = Path.Combine(Path.GetTempPath(), "fortress-agent-updater-" + Guid.NewGuid().ToString("N")[..8]);
-        CopyFolder(install, copy);
-        var exe = Path.Combine(copy, "FortressAgent.exe");
-        var start = new System.Diagnostics.ProcessStartInfo(exe)
+        try
         {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = copy,
-        };
-        foreach (var a in new[] { "apply-update", "--install", install, "--service", AgentPaths.ServiceName, "--data-dir", paths.Root }) start.ArgumentList.Add(a);
-        System.Diagnostics.Process.Start(start);
-        logger.LogInformation("Update to {Version} staged; the updater has started and will restart the service", pending.Version);
+            using var updater = new System.ServiceProcess.ServiceController(AgentPaths.UpdaterServiceName);
+            updater.Start();
+            logger.LogInformation("Update to {Version} staged; the updater service has started and will restart this service", pending.Version);
+        }
+        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            logger.LogWarning("Update to {Version} is staged, but the updater service could not be started ({Message}). Reinstall the agent with the current installer, which adds it.",
+                pending.Version, e.Message);
+        }
         return Task.CompletedTask;
     }
+}
 
-    private static void CopyFolder(string from, string to)
+/// <summary>The updater as a Windows service: it swaps once, then stops (the exit code says applied 0, rolled back 4, refused 5).</summary>
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
+public sealed class UpdaterWorker(UpdateSwapper swapper, IHostApplicationLifetime lifetime, ILogger<UpdaterWorker> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        foreach (var dir in Directory.GetDirectories(from, "*", SearchOption.AllDirectories)) Directory.CreateDirectory(dir.Replace(from, to));
-        Directory.CreateDirectory(to);
-        foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories)) File.Copy(file, file.Replace(from, to), overwrite: true);
+        try
+        {
+            Environment.ExitCode = UpdaterRun.ExitCode(await swapper.ApplyAsync(stoppingToken));
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger.LogError(e, "The update could not be applied");
+            Environment.ExitCode = 1;
+        }
+        finally
+        {
+            lifetime.StopApplication();
+        }
+    }
+}
+
+public static class UpdaterRun
+{
+    public static int ExitCode(string outcome) => outcome switch { "applied" => 0, "rolled_back" => 4, "refused" => 5, _ => 1 };
+
+    /// <summary>The swapper the updater uses: the signed release checked again with this program's own built-in keys, unpacked beside the install folder.</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public static UpdateSwapper Create(AgentPaths paths, string installDir, string service, Microsoft.Extensions.Logging.ILogger logger)
+    {
+        var install = Path.GetFullPath(installDir).TrimEnd(Path.DirectorySeparatorChar);
+        var installed = InstalledVersion(install) ?? AgentInfo.Version;
+        return new UpdateSwapper(paths.Root, install, new WindowsServiceControl(service), logger,
+            prepare: pending => UpdatePreparer.Prepare(pending, install + ".staging", ReleaseKeys.Trusted(), AgentInfo.Platform, installed));
+    }
+
+    /// <summary>The version of the agent in the install folder (the updater is a separate copy and may be older or newer).</summary>
+    public static string? InstalledVersion(string install)
+    {
+        var exe = Path.Combine(install, "FortressAgent.exe");
+        if (!File.Exists(exe)) return null;
+        var v = System.Diagnostics.FileVersionInfo.GetVersionInfo(exe);
+        return v.FileMajorPart + v.FileMinorPart + v.FileBuildPart == 0 && v.FileVersion is null ? null : $"{v.FileMajorPart}.{v.FileMinorPart}.{v.FileBuildPart}";
     }
 }
 

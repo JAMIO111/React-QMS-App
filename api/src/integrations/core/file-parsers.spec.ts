@@ -1,5 +1,5 @@
 import { strToU8, zipSync } from 'fflate';
-import { columnIndex, decodeText, detectDelimiter, detectEncoding, excelSerialToIso, FileParseError, normaliseHeaders, parseCsv, parseCsvText, parseFile, parseXlsx } from './file-parsers';
+import { columnIndex, decodeText, detectDelimiter, detectEncoding, excelSerialToIso, FileParseError, normaliseHeaders, parseCsv, parseCsvText, parseFile, parseXlsx, XLSX_LIMITS } from './file-parsers';
 
 const u8 = (s: string) => new TextEncoder().encode(s);
 
@@ -103,6 +103,16 @@ describe('XLSX', () => {
     expect(() => parseXlsx(u8('not a zip'))).toThrow('not a valid Excel workbook');
     expect(() => parseFile('old.xls', u8('x'))).toThrow('.xls');
     expect(parseFile('a.CSV', u8('A\n1')).rows).toHaveLength(1);
+  });
+
+  it('refuses a workbook that would unpack to too much, or has too many parts (a zip bomb)', () => {
+    // A worksheet of zeros a little over the limit squeezes into a small file.
+    const bomb = zipSync({ 'xl/workbook.xml': strToU8('<workbook/>'), 'xl/worksheets/sheet1.xml': new Uint8Array(XLSX_LIMITS.partBytes + 1) }, { level: 1 });
+    expect(bomb.length).toBeLessThan(1024 * 1024);
+    expect(() => parseXlsx(bomb)).toThrow('unpacks to more than 150 MB');
+    const many: Record<string, Uint8Array> = {};
+    for (let i = 0; i <= XLSX_LIMITS.entries; i++) many[`docProps/p${i}.xml`] = strToU8('x');
+    expect(() => parseXlsx(zipSync(many, { level: 0 }))).toThrow('too many parts');
   });
 
   it('helpers', () => {

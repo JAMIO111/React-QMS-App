@@ -257,6 +257,8 @@ export class AgentApiController {
   constructor(private readonly service: AgentsService) {}
 
   @Post('register')
+  // Registration is not signed by a known agent yet, so it keeps the per-address rate limit (AG6d review).
+  @SkipThrottle({ default: false })
   @HttpCode(201)
   @ApiBody({ schema: openApiSchema(RegisterBody) })
   @ApiCreatedResponse({ description: 'The agent\'s id and organisation. Signed with the key being registered; the token is single use.' })

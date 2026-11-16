@@ -104,6 +104,32 @@ public sealed class FolderTests : IDisposable
     }
 
     [Fact]
+    public async Task Never_follows_a_link_below_an_allowed_folder()
+    {
+        // Someone who can write in the shared folder puts a link to the agent's own folder there (AG6d review).
+        var secrets = Path.Combine(root, "agent-data");
+        Directory.CreateDirectory(secrets);
+        File.WriteAllText(Path.Combine(secrets, "agent.json"), "{}");
+        Allow(exports);
+        var link = Path.Combine(exports, "via-link");
+        Directory.CreateSymbolicLink(link, secrets);
+        var e = await Assert.ThrowsAsync<JobFailedException>(() => Run("discover", folder: link));
+        Assert.Equal("refused", e.Kind);
+        Assert.Contains("link", e.Message);
+
+        // A file that is a link is not listed and never read.
+        File.CreateSymbolicLink(Path.Combine(exports, "agent.csv"), Path.Combine(secrets, "agent.json"));
+        Write("machines.csv", "code\nM1\n");
+        var names = (await Run("discover"))["files"]!.AsArray().Select(f => f!["name"]!.GetValue<string>()).ToArray();
+        Assert.Equal(["machines.csv"], names);
+        Assert.Equal("not_found", (await Assert.ThrowsAsync<JobFailedException>(() => Run("preview", new JsonObject { ["file"] = "agent.csv" }))).Kind);
+
+        // The allowed folder itself may be a link: an administrator listed it knowingly.
+        Allow(link);
+        Assert.Equal("files", (await Run("discover", folder: link))["level"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Sends_the_newest_matching_file_in_parts_with_checksums()
     {
         Write("machines-2026-11-01.csv", "code\nOLD\n", new DateTime(2026, 11, 1, 6, 0, 0, DateTimeKind.Utc));

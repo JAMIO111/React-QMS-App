@@ -136,10 +136,10 @@ public sealed class MaintenanceTests : IDisposable
         var (epk, iv, ct) = SealedBox.Seal(sealedFor, connection, Encoding.UTF8.GetBytes("""{"username":"reader","password":"hunter2"}"""));
         var credentials = new CredentialStore(Path.Combine(dir, "credentials"), new FilePermissionKeyProtector());
         var handler = new StoreCredentialHandler(() => id.SealingKeys(clock.Now), credentials);
-        var job = new AgentJob { Id = Guid.NewGuid().ToString(), Kind = "store_credential", Spec = new JsonObject { ["connectionId"] = connection, ["sealed"] = new JsonObject { ["epk"] = epk, ["iv"] = iv, ["ct"] = ct } } };
+        var job = new AgentJob { Id = Guid.NewGuid().ToString(), Kind = "store_credential", Spec = new JsonObject { ["connectionId"] = connection, ["connection"] = new JsonObject { ["engine"] = "postgres", ["server"] = "db", ["database"] = "erp", ["authType"] = "password" }, ["sealed"] = new JsonObject { ["epk"] = epk, ["iv"] = iv, ["ct"] = ct } } };
         var ctx = new JobContext((_, _) => Task.FromResult(true), clock);
         await handler.RunAsync(job, ctx, default);
-        Assert.Equal("hunter2", credentials.Load(connection)!.Password);
+        Assert.Equal("hunter2", credentials.Load(connection, ConnectionTarget.Of((JsonObject)job.Spec!["connection"]!))!.Password);
 
         // After 30 days the previous key is no longer tried.
         var late = new StoreCredentialHandler(() => id.SealingKeys(clock.Now.AddDays(31)), credentials);

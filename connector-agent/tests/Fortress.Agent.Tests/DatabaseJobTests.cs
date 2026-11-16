@@ -79,6 +79,9 @@ public sealed class DatabaseJobTests : IDisposable
     private string AllowList => Path.Combine(dir, "allowlist.json");
     private JobHandlers Handlers(ECDiffieHellman? sealing = null) => JobHandlers.ForDatabases(db, credentials, AllowList, () => sealing ?? throw new InvalidOperationException());
 
+    private static JsonObject DefaultConnection() => new() { ["engine"] = "postgres", ["server"] = "erp-db.factory.local", ["port"] = 5432, ["database"] = "erp", ["authType"] = "password", ["encrypt"] = false };
+    private static readonly string Target = ConnectionTarget.Of(DefaultConnection());
+
     private static AgentJob Job(string kind, object? request = null, JsonObject? connection = null) => new()
     {
         Id = Guid.NewGuid().ToString(),
@@ -86,7 +89,7 @@ public sealed class DatabaseJobTests : IDisposable
         Spec = new JsonObject
         {
             ["connectionId"] = ConnectionId,
-            ["connection"] = connection ?? new JsonObject { ["engine"] = "postgres", ["server"] = "erp-db.factory.local", ["port"] = 5432, ["database"] = "erp", ["authType"] = "password", ["encrypt"] = false },
+            ["connection"] = connection ?? DefaultConnection(),
             ["request"] = request is null ? new JsonObject() : JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(request)),
         },
     };
@@ -116,7 +119,7 @@ public sealed class DatabaseJobTests : IDisposable
         job.Spec!["sealed"] = new JsonObject { ["epk"] = epk, ["iv"] = iv, ["ct"] = ct };
         var result = await Handlers(sealing).For("store_credential")!.RunAsync(job, Ctx, default);
         Assert.DoesNotContain("hunter2", result!.ToJsonString());
-        Assert.Equal(new DbCredential("reader", "hunter2"), credentials.Load(ConnectionId));
+        Assert.Equal(new DbCredential("reader", "hunter2"), credentials.Load(ConnectionId, Target));
         Assert.DoesNotContain("hunter2", new DbCredential("reader", "hunter2").ToString());
         if (!OperatingSystem.IsWindows())
             Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(dir, "credentials", ConnectionId + ".bin")));
@@ -127,19 +130,63 @@ public sealed class DatabaseJobTests : IDisposable
     }
 
     [Fact]
+    public async Task A_password_is_never_sent_to_a_server_it_was_not_typed_for()
+    {
+        credentials.Save(ConnectionId, new DbCredential("reader", "hunter2"), Target);
+        Assert.True((await Handlers().For("test_connection")!.RunAsync(Job("test_connection"), Ctx, default))!["ok"]!.GetValue<bool>());
+        foreach (var (key, value) in new (string, JsonNode)[] { ("server", "evil.example.com"), ("port", 6543), ("database", "other"), ("engine", "sqlserver") })
+        {
+            var moved = DefaultConnection();
+            moved[key] = value;
+            if (key == "engine") moved["authType"] = "sql";
+            db.Calls.Clear();
+            var e = await Assert.ThrowsAsync<JobFailedException>(() => Handlers().For("test_connection")!.RunAsync(Job("test_connection", connection: moved), Ctx, default));
+            Assert.Equal(CredentialStore.TargetChanged, e.Message);
+            Assert.Empty(db.Calls); // nothing was opened
+        }
+        // A server name differing only in case is the same server.
+        var upper = DefaultConnection();
+        upper["server"] = "ERP-DB.factory.local";
+        Assert.True((await Handlers().For("test_connection")!.RunAsync(Job("test_connection", connection: upper), Ctx, default))!["ok"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task Windows_authentication_needs_the_server_on_the_allow_list()
+    {
+        var windows = new JsonObject { ["engine"] = "sqlserver", ["server"] = "erp-sql", ["database"] = "erp", ["authType"] = "windows", ["encrypt"] = true };
+        var e = await Assert.ThrowsAsync<JobFailedException>(() => Handlers().For("test_connection")!.RunAsync(Job("test_connection", connection: (JsonObject)windows.DeepClone()), Ctx, default));
+        Assert.Equal("refused", e.Kind);
+        Assert.Contains("\"servers\"", e.Message);
+        Assert.Empty(db.Calls);
+
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(AllowList, """{"servers": ["*.factory.local"]}""");
+        windows["server"] = "erp-sql.factory.local";
+        Assert.True((await Handlers().For("test_connection")!.RunAsync(Job("test_connection", connection: (JsonObject)windows.DeepClone()), Ctx, default))!["ok"]!.GetValue<bool>());
+        // Once servers are listed they hold for password sign-ins too.
+        credentials.Save(ConnectionId, new DbCredential("reader", "hunter2"), Target);
+        var outside = DefaultConnection();
+        outside["server"] = "erp-db.elsewhere.example";
+        e = await Assert.ThrowsAsync<JobFailedException>(() => Handlers().For("test_connection")!.RunAsync(Job("test_connection", connection: outside), Ctx, default));
+        Assert.Equal("refused", e.Kind);
+    }
+
+    [Fact]
     public async Task Tests_the_connection_with_the_stored_password()
     {
         var e = await Assert.ThrowsAsync<JobFailedException>(() => Handlers().For("test_connection")!.RunAsync(Job("test_connection"), Ctx, default));
         Assert.Equal("auth", e.Kind);
         Assert.Contains("no password", e.Message);
 
-        credentials.Save(ConnectionId, new DbCredential("reader", "hunter2"));
+        credentials.Save(ConnectionId, new DbCredential("reader", "hunter2"), Target);
         var r = await Handlers().For("test_connection")!.RunAsync(Job("test_connection"), Ctx, default);
         Assert.True(r!["ok"]!.GetValue<bool>());
         Assert.Equal("Signed in to PostgreSQL 16.4 as reader (database erp); 3 schemas can be read", r["message"]!.GetValue<string>());
         Assert.Equal(new DbCredential("reader", "hunter2"), db.OpenedWith);
 
-        // Windows authentication needs no password
+        // Windows authentication needs no password (only the server on the agent's allow-list)
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(AllowList, """{"servers": ["sql01"]}""");
         var win = new JsonObject { ["engine"] = "sqlserver", ["server"] = "SQL01", ["instance"] = "SQLEXPRESS", ["database"] = "ERP", ["authType"] = "windows" };
         await Handlers().For("test_connection")!.RunAsync(Job("test_connection", connection: win), Ctx, default);
         Assert.Null(db.OpenedWith);
@@ -152,7 +199,7 @@ public sealed class DatabaseJobTests : IDisposable
     [InlineData("authType", "windows", "PostgreSQL signs in")]
     public async Task Refuses_settings_that_could_change_the_connection_string(string key, string value, string words)
     {
-        credentials.Save(ConnectionId, new DbCredential("reader", "hunter2"));
+        credentials.Save(ConnectionId, new DbCredential("reader", "hunter2"), Target);
         var c = Job("test_connection").Spec!["connection"]!.AsObject();
         c[key] = value;
         var e = await Assert.ThrowsAsync<JobFailedException>(() => Handlers().For("test_connection")!.RunAsync(Job("test_connection", connection: c.DeepClone().AsObject()), Ctx, default));
@@ -163,7 +210,7 @@ public sealed class DatabaseJobTests : IDisposable
     [Fact]
     public async Task Browses_schemas_tables_and_columns()
     {
-        credentials.Save(ConnectionId, new DbCredential("reader", "hunter2"));
+        credentials.Save(ConnectionId, new DbCredential("reader", "hunter2"), Target);
         var schemas = await Handlers().For("discover")!.RunAsync(Job("discover", new { level = "schemas" }), Ctx, default);
         Assert.Equal(["erp", "hr", "public"], schemas!["schemas"]!.AsArray().Select(x => x!["name"]!.GetValue<string>()));
         var objects = await Handlers().For("discover")!.RunAsync(Job("discover", new { level = "objects", schema = "erp" }), Ctx, default);
@@ -179,7 +226,7 @@ public sealed class DatabaseJobTests : IDisposable
     [Fact]
     public async Task Previews_with_typed_values_and_at_most_fifty_rows()
     {
-        credentials.Save(ConnectionId, new DbCredential("reader", "hunter2"));
+        credentials.Save(ConnectionId, new DbCredential("reader", "hunter2"), Target);
         var r = await Handlers().For("preview")!.RunAsync(Job("preview", new { schema = "erp", @object = "orders", limit = 500 }), Ctx, default);
         Assert.Contains("preview erp.orders 50", db.Calls);
         var row = r!["rows"]![0]!;
@@ -192,7 +239,7 @@ public sealed class DatabaseJobTests : IDisposable
     [Fact]
     public async Task The_local_allow_list_limits_what_can_be_read()
     {
-        credentials.Save(ConnectionId, new DbCredential("reader", "hunter2"));
+        credentials.Save(ConnectionId, new DbCredential("reader", "hunter2"), Target);
         Directory.CreateDirectory(dir);
         File.WriteAllText(AllowList, """{ "objects": ["erp.orders", "erp.v_*"] }""");
         var schemas = await Handlers().For("discover")!.RunAsync(Job("discover", new { level = "schemas" }), Ctx, default);

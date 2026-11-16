@@ -230,11 +230,30 @@ export function parseXlsx(buf: Uint8Array, opts: ParseOptions = {}): ParsedFile 
 }
 
 /** The first worksheet as a grid of text cells (row index = row number − 1), for readers that need the lines above a table too. */
+/**
+ * The most a workbook's parts may unpack to (AG6d security review): a small .xlsx can hold parts that inflate to gigabytes. fflate writes each part
+ * into a buffer of the size the zip declares and never past it, so limiting the declared sizes limits what is held in memory.
+ */
+export const XLSX_LIMITS = { totalBytes: 150 * 1024 * 1024, partBytes: 120 * 1024 * 1024, entries: 5_000 } as const;
+
 export function readXlsxTable(buf: Uint8Array): { table: string[][]; sheet: string } {
   let files: Record<string, Uint8Array>;
+  let total = 0;
+  let entries = 0;
   try {
-    files = unzipSync(buf, { filter: (f) => f.name.startsWith('xl/') && (f.name.endsWith('.xml') || f.name.endsWith('.rels')) });
-  } catch {
+    files = unzipSync(buf, {
+      filter: (f) => {
+        if (++entries > XLSX_LIMITS.entries) throw new FileParseError('The workbook has too many parts to be read');
+        const wanted = f.name.startsWith('xl/') && (f.name.endsWith('.xml') || f.name.endsWith('.rels'));
+        if (!wanted) return false;
+        total += f.originalSize;
+        if (f.originalSize > XLSX_LIMITS.partBytes || total > XLSX_LIMITS.totalBytes)
+          throw new FileParseError('The workbook unpacks to more than 150 MB; save the sheet as CSV, or split it');
+        return true;
+      },
+    });
+  } catch (e) {
+    if (e instanceof FileParseError) throw e;
     throw new FileParseError('The file is not a valid Excel workbook (.xlsx)');
   }
   const read = (name: string) => (files[name] ? strFromU8(files[name]) : null);

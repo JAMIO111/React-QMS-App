@@ -30,10 +30,26 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  */
 @Injectable()
 export class AgentGuard implements CanActivate {
+  private readonly failures = new FailureLimiter();
+
   constructor(private readonly database: DatabaseService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<AgentRequest>();
+    const from = clientAddress(req.ip) ?? 'unknown';
+    // Agents skip the per-person rate limit (they poll), so failed sign-ins are limited here instead, before any database work (AG6d review).
+    if (this.failures.blocked(from)) {
+      throw new ApiError(429, 'agent_too_many_failures', 'Too many unsigned or wrongly signed requests from this address; wait a minute');
+    }
+    try {
+      return await this.check(req);
+    } catch (e) {
+      if (e instanceof ApiError && e.getStatus() === 401) this.failures.record(from);
+      throw e;
+    }
+  }
+
+  private async check(req: AgentRequest): Promise<boolean> {
     const correlationId = resolveCorrelationId(req);
     const agentId = header(req, AGENT_HEADERS.id);
     const timestamp = header(req, AGENT_HEADERS.timestamp);
@@ -82,3 +98,36 @@ export const Agent = createParamDecorator((_: unknown, ctx: ExecutionContext): A
   if (!agent) throw new ApiError(401, 'agent_unauthenticated', 'This request is not signed by a connector agent');
   return agent;
 });
+
+/**
+ * Failed agent sign-ins per address in a sliding minute, kept in this process. Past the limit, requests from that address are refused before the
+ * database is asked anything. A real agent never fails like this (a revoked or reinstalled one stops by itself), so the limit is low.
+ */
+export class FailureLimiter {
+  private readonly seen = new Map<string, number[]>();
+
+  constructor(
+    readonly limit = 30,
+    readonly windowMs = 60_000,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  private recent(address: string): number[] {
+    const since = this.now() - this.windowMs;
+    const list = (this.seen.get(address) ?? []).filter((t) => t > since);
+    if (list.length) this.seen.set(address, list);
+    else this.seen.delete(address);
+    return list;
+  }
+
+  blocked(address: string): boolean {
+    return this.recent(address).length >= this.limit;
+  }
+
+  record(address: string): void {
+    const list = this.recent(address);
+    list.push(this.now());
+    this.seen.set(address, list);
+    if (this.seen.size > 10_000) this.seen.delete(this.seen.keys().next().value!);
+  }
+}

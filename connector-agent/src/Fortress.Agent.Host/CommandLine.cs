@@ -16,8 +16,9 @@ public sealed record CommandLine(string Command, string? Api, string? Token, str
           FortressAgent deregister [--force]
               Tell Fortress to revoke this agent and forget it here (used when uninstalling). --force forgets it even if Fortress cannot be told.
           FortressAgent apply-update --install <folder> [--service <name>]
-              Windows: swap in the staged update (the agent starts this itself from a copy of itself once an approved update is staged).
-              Stops the service, keeps the old folder, starts the new one and puts the old one back if it does not check in within 5 minutes.
+              Windows: swap in the staged update. Normally run by the updater service (SYSTEM, its own copy of the program), which the agent
+              starts once an approved update is staged. Checks the signed release again, stops the service, keeps the old folder, starts the
+              new one and puts the old one back if it does not start or check in within 5 minutes. Exit 0 applied, 4 rolled back, 5 refused.
 
           --data-dir <folder>        Where the identity and logs are kept.
         """;

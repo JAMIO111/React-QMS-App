@@ -47,11 +47,38 @@ public static class SealedBox
 }
 
 /// <summary>
+/// Where a connection's password may be sent (AG6d security review): the settings that say which server and which sign-in it is for. A password is
+/// kept with the target of the connection it was typed for, and is only used while the connection still names that target, so changing a
+/// connection's server, port, database or address in Fortress can never send the stored password somewhere else.
+/// </summary>
+public static class ConnectionTarget
+{
+    private static readonly string[] Keys = ["engine", "server", "port", "instance", "database", "authType", "baseUrl", "apiKeyHeader"];
+
+    public static string Of(JsonObject? config)
+    {
+        if (config is null) throw new JobFailedException("invalid", "The job did not say which connection the password is for. Update Fortress.");
+        var sb = new StringBuilder("fortress-agent-target-v1");
+        foreach (var k in Keys)
+        {
+            var text = config[k] is JsonValue v ? v.ToJsonString() : "null";
+            // Host names and instance names do not care about case; the rest are kept as Fortress sends them.
+            if (k is "server" or "instance" or "baseUrl") text = text.ToLowerInvariant();
+            sb.Append('\n').Append(k).Append('=').Append(text);
+        }
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));
+    }
+}
+
+/// <summary>
 /// The database passwords this agent holds, one file per connection under credentials/, protected like the agent's keys (<see cref="IKeyProtector"/>:
-/// DPAPI for the machine on Windows) in the folder the install script limits to SYSTEM, administrators and the service.
+/// DPAPI for the machine on Windows) in the folder the install script limits to SYSTEM, administrators and the service. Each is kept with the
+/// <see cref="ConnectionTarget"/> it was typed for and refused for any other.
 /// </summary>
 public sealed class CredentialStore(string folder, IKeyProtector protector)
 {
+    public const string TargetChanged = "The connection's server, database or address has changed since its password was typed, so this agent will not send it there. Type it again in Fortress.";
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public string Folder { get; } = folder;
@@ -59,12 +86,12 @@ public sealed class CredentialStore(string folder, IKeyProtector protector)
     private string PathFor(string connectionId) =>
         Guid.TryParse(connectionId, out var g) ? Path.Combine(Folder, g.ToString("D") + ".bin") : throw new ArgumentException("Not a connection id", nameof(connectionId));
 
-    public void Save(string connectionId, DbCredential credential)
+    public void Save(string connectionId, DbCredential credential, string target)
     {
         Directory.CreateDirectory(Folder);
         var path = PathFor(connectionId);
         var temp = path + ".tmp";
-        var plain = JsonSerializer.SerializeToUtf8Bytes(new { username = credential.Username, password = credential.Password }, Json);
+        var plain = JsonSerializer.SerializeToUtf8Bytes(new { username = credential.Username, password = credential.Password, target }, Json);
         try
         {
             File.WriteAllBytes(temp, protector.Protect(plain));
@@ -77,14 +104,20 @@ public sealed class CredentialStore(string folder, IKeyProtector protector)
         File.Move(temp, path, overwrite: true);
     }
 
-    public DbCredential? Load(string connectionId)
+    /// <summary>The password for the connection when it was typed for this very target; a password kept for another target is refused.</summary>
+    public DbCredential? Load(string connectionId, string target)
     {
         var path = PathFor(connectionId);
         if (!File.Exists(path)) return null;
         var plain = protector.Unprotect(File.ReadAllBytes(path));
         try
         {
-            return Parse(plain) ?? throw new InvalidDataException("The stored password could not be read");
+            var credential = Parse(plain) ?? throw new InvalidDataException("The stored password could not be read");
+            var kept = JsonNode.Parse(plain)?["target"] is JsonValue t && t.TryGetValue<string>(out var x) ? x : null;
+            // A password kept before targets were recorded has none: it is refused too, so it is typed again once.
+            if (kept is null || !CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(kept), Encoding.ASCII.GetBytes(target)))
+                throw new JobFailedException("auth", TargetChanged);
+            return credential;
         }
         finally
         {

@@ -1,0 +1,148 @@
+# Fortress Connector Agent checks that need machines this project's own environment does not have (docs/connector-agent-plan.md AG6c):
+#  - databases: the agent's tests against real SQL Server 2022, MySQL 8 and PostgreSQL 16 (the SQL Server and MySQL 8 adapters are otherwise untested);
+#  - windows: build the MSI (WiX needs Windows), optionally code-sign it, then install it on the runner and check the two services, the folder
+#    permissions, registration against a fake Fortress, and an update being swapped in and one being rolled back (connector-agent/ci/).
+# Signing uses the repository secrets FORTRESS_SIGN_PFX_BASE64 and FORTRESS_SIGN_PFX_PASSWORD (or FORTRESS_SIGN_THUMBPRINT on a self-hosted runner
+# whose certificate is in its store). Without them the build is unsigned; "Run workflow" with require_signature refuses an unsigned build.
+name: Connector agent
+
+on:
+  push:
+    paths: ['connector-agent/**', '.github/workflows/connector-agent.yml']
+  pull_request:
+    paths: ['connector-agent/**', '.github/workflows/connector-agent.yml']
+  workflow_dispatch:
+    inputs:
+      require_signature:
+        description: Refuse an unsigned build (a release)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: connector-agent-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+
+jobs:
+  databases:
+    name: Agent tests against real databases
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: Ci-Check-Passw0rd
+        ports: ['1433:1433']
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: check-root
+        ports: ['3306:3306']
+        options: --health-cmd "mysqladmin ping -pcheck-root" --health-interval 5s --health-timeout 5s --health-retries 30
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: check-pg
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Wait for SQL Server
+        run: |
+          for i in $(seq 1 60); do
+            (exec 3<>/dev/tcp/127.0.0.1/1433) 2>/dev/null && exit 0
+            sleep 2
+          done
+          echo "SQL Server did not start" && exit 1
+      - name: Agent tests
+        working-directory: connector-agent
+        env:
+          AGENT_TEST_SQLSERVER: Server=127.0.0.1,1433;User ID=sa;Password=Ci-Check-Passw0rd;TrustServerCertificate=True;Encrypt=False
+          AGENT_TEST_MYSQL: Server=127.0.0.1;Port=3306;User ID=root;Password=check-root;SslMode=None;AllowPublicKeyRetrieval=True
+          AGENT_TEST_PG: Host=127.0.0.1;Port=5432;Username=postgres;Password=check-pg;Database=postgres
+        run: dotnet test tests/Fortress.Agent.Tests --logger "console;verbosity=normal"
+
+  windows:
+    name: MSI, services and updates on Windows
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      FORTRESS_SIGN_PFX_BASE64: ${{ secrets.FORTRESS_SIGN_PFX_BASE64 }}
+      FORTRESS_SIGN_PFX_PASSWORD: ${{ secrets.FORTRESS_SIGN_PFX_PASSWORD }}
+      FORTRESS_SIGN_THUMBPRINT: ${{ secrets.FORTRESS_SIGN_THUMBPRINT }}
+      REQUIRE_SIGNATURE: ${{ inputs.require_signature && '1' || '' }}
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: connector-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the release MSI
+        run: |
+          $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version
+          "AGENT_VERSION=$version" >> $env:GITHUB_ENV
+          $app = "$PWD\bin\msi-app"
+          # Never FortressTestHooks here: this is the build customers get.
+          dotnet publish src/Fortress.Agent.Host -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o $app
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & ./release/sign-windows.ps1 -Files "$app\FortressAgent.exe" -Required:([bool]$env:REQUIRE_SIGNATURE)
+          dotnet build installer/FortressAgent.Installer.wixproj -c Release -p:AppDir=$app -p:AgentVersion=$version -o "$PWD\bin\msi-release"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $msi = Get-ChildItem -Recurse bin\msi-release -Filter *.msi | Select-Object -First 1
+          & ./release/sign-windows.ps1 -Files $msi.FullName -Required:([bool]$env:REQUIRE_SIGNATURE)
+          "RELEASE_MSI=$($msi.FullName)" >> $env:GITHUB_ENV
+      - name: Build the test MSI and two test releases
+        run: |
+          # A build that also trusts the throwaway release key the checks give it in its environment (FortressTestHooks); never shipped.
+          $app = "$PWD\bin\msi-test-app"
+          dotnet publish src/Fortress.Agent.Host -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:FortressTestHooks=true -o $app
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet build installer/FortressAgent.Installer.wixproj -c Release -p:AppDir=$app -p:AgentVersion=$env:AGENT_VERSION -o "$PWD\bin\msi-test"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "TEST_MSI=$((Get-ChildItem -Recurse bin\msi-test -Filter *.msi | Select-Object -First 1).FullName)" >> $env:GITHUB_ENV
+          foreach ($v in '0.99.0', '0.99.1') {
+            $out = "$PWD\bin\release-$v"
+            dotnet publish src/Fortress.Agent.Host -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true `
+              -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:FortressTestHooks=true -p:Version=$v -o $out
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            Compress-Archive -Path "$out\*" -DestinationPath "$PWD\bin\release-$v.zip" -Force
+          }
+      - name: Windows checks
+        run: >
+          ./ci/windows-checks.ps1 -ReleaseMsi $env:RELEASE_MSI -TestMsi $env:TEST_MSI
+          -NewZip bin/release-0.99.0.zip -RollbackZip bin/release-0.99.1.zip
+      - name: Agent tests on Windows (DPAPI, paths)
+        if: always()
+        run: dotnet test tests/Fortress.Agent.Tests
+      - name: Keep the MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: FortressConnectorAgent-msi
+          path: connector-agent/bin/msi-release/**/*.msi
+          if-no-files-found: error
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-check-logs
+          path: ${{ runner.temp }}/agent-checks
+          if-no-files-found: ignore

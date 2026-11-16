@@ -10,7 +10,7 @@ rm -rf "$out" && mkdir -p "$out/app"
 # Never pass -p:FortressTestHooks=true here: that build would trust a test release key from the environment (AG6b).
 dotnet publish "$here/src/Fortress.Agent.Host" -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o "$out/app" >/dev/null
-cp "$here/install/install.ps1" "$here/install/uninstall.ps1" "$here/install/README.txt" "$out/"
+cp "$here/install/install.ps1" "$here/install/uninstall.ps1" "$here/install/README.txt" "$here/install/allowlist.json" "$out/"
 zip="$here/bin/FortressConnectorAgent-$version-win-x64.zip"
 rm -f "$zip"
 (cd "$out" && zip -qr "$zip" .)

@@ -21,10 +21,18 @@ $ErrorActionPreference = 'Stop'
 $ServiceName = 'FortressConnectorAgent'
 $DataDir = Join-Path $env:ProgramData 'Fortress\ConnectorAgent'
 $Exe = Join-Path $InstallDir 'FortressAgent.exe'
+$UpdaterName = 'FortressConnectorAgentUpdater'
+$UpdaterDir = Join-Path (Split-Path $InstallDir -Parent) 'ConnectorAgentUpdater'
 
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw 'Run PowerShell as an administrator, then run this script again.'
+}
+
+$updater = Get-Service -Name $UpdaterName -ErrorAction SilentlyContinue
+if ($updater -and $updater.Status -ne 'Stopped') {
+    Write-Host '-> Waiting for an update in progress to finish'
+    $updater.WaitForStatus('Stopped', [TimeSpan]::FromMinutes(10))
 }
 
 $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
@@ -47,9 +55,17 @@ if ($service) {
     & sc.exe delete $ServiceName | Out-Null
 }
 
-if (Test-Path $InstallDir) {
-    Write-Host "-> Removing $InstallDir"
-    Remove-Item -Recurse -Force $InstallDir
+if ($updater) {
+    Write-Host '-> Deleting the updater service'
+    & sc.exe delete $UpdaterName | Out-Null
+}
+
+# The program, the updater's copy, and what an update leaves beside the program (the release it unpacked, the version it replaced).
+foreach ($folder in @($InstallDir, $UpdaterDir, "$InstallDir.staging", "$InstallDir.previous") + @(Get-ChildItem -Directory -Path (Split-Path $InstallDir -Parent) -Filter "$(Split-Path $InstallDir -Leaf).failed-*" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })) {
+    if (Test-Path $folder) {
+        Write-Host "-> Removing $folder"
+        Remove-Item -Recurse -Force $folder
+    }
 }
 if ($RemoveData -and (Test-Path $DataDir)) {
     Write-Host "-> Removing $DataDir"

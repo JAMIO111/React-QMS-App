@@ -142,7 +142,13 @@ public sealed class UpdateFiles(string dataDir)
     }
 }
 
-public sealed record PendingUpdate(string UpdateId, string Version, string Staged, string Sha256, DateTimeOffset StagedAt);
+public sealed record PendingUpdate(string UpdateId, string Version, string Staged, string Sha256, DateTimeOffset StagedAt)
+{
+    /// <summary>The signed manifest, its signature and the downloaded package as the agent received them: the updater checks them all again itself.</summary>
+    public string? Manifest { get; init; }
+    public string? Signature { get; init; }
+    public string? Package { get; init; }
+}
 public sealed record RolledBackUpdate(string UpdateId, string Version, string Message, DateTimeOffset At);
 
 /// <summary>
@@ -179,9 +185,15 @@ public sealed class UpdateHandler(string dataDir, Func<HttpClient> downloader, I
         Unpack(package, staged);
         if (!File.Exists(Path.Combine(staged, "FortressAgent.exe")) && !File.Exists(Path.Combine(staged, "FortressAgent.dll")))
             throw new JobFailedException("refused", "The release does not contain the agent (FortressAgent.exe)");
-        File.Delete(package);
 
-        files.Write(files.Pending, new PendingUpdate(updateId, manifest.Version, staged, manifest.Sha256, context.Clock.GetUtcNow()));
+        // The package is kept: the updater (SYSTEM on Windows) does not trust this folder, which the agent's own account can write, and checks the
+        // signature and the package's SHA-256 again before it unpacks the package somewhere only it can write (AG6d review).
+        files.Write(files.Pending, new PendingUpdate(updateId, manifest.Version, staged, manifest.Sha256, context.Clock.GetUtcNow())
+        {
+            Manifest = Field("manifest"),
+            Signature = Field("signature"),
+            Package = package,
+        });
         logger.LogInformation("Update to {Version} checked and staged in {Folder}", manifest.Version, staged);
         return new JsonObject { ["staged"] = true, ["version"] = manifest.Version, ["sha256"] = manifest.Sha256 };
     }
@@ -286,6 +298,49 @@ public sealed class UpdateState(string dataDir, ILogger logger, Func<string>? cu
 
 public sealed record UpdateReport(string UpdateId, string Outcome, string? Message);
 
+/// <summary>
+/// What the updater does before it touches anything (AG6d review): it trusts nothing in the agent's data folder, which the agent's own account can
+/// write. It checks the release's signature again against the keys built into itself, that the release is for this platform and newer than what is
+/// installed, then copies the package into its own staging folder (somewhere the agent's account cannot write), checks the copy's size and SHA-256
+/// against the signed manifest, and unpacks that copy. The folder it returns is the one swapped in.
+/// </summary>
+public static class UpdatePreparer
+{
+    public static string Prepare(PendingUpdate pending, string stagingRoot, IReadOnlyList<string> trustedKeys, string? platform, string installedVersion)
+    {
+        if (pending.Manifest is null || pending.Signature is null || pending.Package is null)
+            throw new JobFailedException("refused", "The staged update does not carry its signed release; approve it again in Fortress");
+        var manifest = ReleaseManifest.Verify(pending.Manifest, pending.Signature, trustedKeys, platform, installedVersion);
+        if (manifest.Version != pending.Version) throw new JobFailedException("refused", "The staged update is not the signed release's version");
+        if (Directory.Exists(stagingRoot)) Directory.Delete(stagingRoot, recursive: true);
+        Directory.CreateDirectory(stagingRoot);
+        var copy = Path.Combine(stagingRoot, "package.zip");
+        using (var input = File.OpenRead(pending.Package))
+        using (var output = File.Create(copy))
+        using (var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+        {
+            var buffer = new byte[81920];
+            long total = 0;
+            int read;
+            while ((read = input.Read(buffer)) > 0)
+            {
+                total += read;
+                if (total > manifest.Size) throw new JobFailedException("refused", "The staged package is larger than the signed release says");
+                sha.AppendData(buffer, 0, read);
+                output.Write(buffer, 0, read);
+            }
+            if (total != manifest.Size) throw new JobFailedException("refused", "The staged package is not the size the signed release says");
+            if (Convert.ToHexStringLower(sha.GetHashAndReset()) != manifest.Sha256) throw new JobFailedException("refused", "The staged package's SHA-256 is not the signed release's");
+        }
+        var app = Path.Combine(stagingRoot, "app");
+        UpdateHandler.Unpack(copy, app);
+        File.Delete(copy);
+        if (!File.Exists(Path.Combine(app, "FortressAgent.exe")) && !File.Exists(Path.Combine(app, "FortressAgent.dll")))
+            throw new JobFailedException("refused", "The release does not contain the agent (FortressAgent.exe)");
+        return app;
+    }
+}
+
 /// <summary>Stopping and starting the agent's service, for the updater (Windows: the service manager; tests: a fake).</summary>
 public interface IServiceControl
 {
@@ -299,7 +354,7 @@ public interface IServiceControl
 /// back, start that, and write <c>updates/rolled-back.json</c> for the old agent to report.
 /// </summary>
 public sealed class UpdateSwapper(string dataDir, string installDir, IServiceControl service, ILogger logger,
-    Func<TimeSpan, CancellationToken, Task>? delay = null, TimeSpan? waitFor = null)
+    Func<TimeSpan, CancellationToken, Task>? delay = null, TimeSpan? waitFor = null, Func<PendingUpdate, string>? prepare = null)
 {
     public static readonly TimeSpan DefaultWait = TimeSpan.FromMinutes(5);
     private readonly Func<TimeSpan, CancellationToken, Task> delay = delay ?? ((t, ct) => Task.Delay(t, ct));
@@ -308,7 +363,26 @@ public sealed class UpdateSwapper(string dataDir, string installDir, IServiceCon
     {
         var files = new UpdateFiles(dataDir);
         var pending = files.ReadPending() ?? throw new InvalidOperationException("No update is staged");
-        if (!Directory.Exists(pending.Staged)) throw new InvalidOperationException($"The staged update is missing ({pending.Staged})");
+        string incoming;
+        if (prepare is null)
+        {
+            if (!Directory.Exists(pending.Staged)) throw new InvalidOperationException($"The staged update is missing ({pending.Staged})");
+            incoming = pending.Staged;
+        }
+        else
+        {
+            try
+            {
+                incoming = prepare(pending);
+            }
+            catch (Exception e) when (e is JobFailedException or IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+            {
+                // Nothing was touched: the installed version keeps running, and the agent reports why the update did not happen.
+                logger.LogWarning("The staged update to {Version} was refused: {Message}", pending.Version, e.Message);
+                files.Write(files.RolledBack, new RolledBackUpdate(pending.UpdateId, pending.Version, $"The updater refused the staged update: {e.Message}", DateTimeOffset.UtcNow));
+                return "refused";
+            }
+        }
         var install = Path.GetFullPath(installDir).TrimEnd(Path.DirectorySeparatorChar);
         var previous = install + ".previous";
         if (File.Exists(files.Applied)) File.Delete(files.Applied);
@@ -319,7 +393,7 @@ public sealed class UpdateSwapper(string dataDir, string installDir, IServiceCon
         Directory.Move(install, previous);
         try
         {
-            Directory.Move(pending.Staged, install);
+            Directory.Move(incoming, install);
         }
         catch
         {
@@ -327,30 +401,39 @@ public sealed class UpdateSwapper(string dataDir, string installDir, IServiceCon
             await service.StartAsync(ct);
             throw;
         }
-        await service.StartAsync(ct);
-
-        var waited = TimeSpan.Zero;
-        var step = TimeSpan.FromSeconds(5);
         var limit = waitFor ?? DefaultWait;
-        while (waited < limit)
+        string reason;
+        try
         {
-            if (File.Exists(files.Applied))
+            await service.StartAsync(ct);
+            reason = $"Version {pending.Version} did not check in within {(int)limit.TotalMinutes} minutes";
+            var waited = TimeSpan.Zero;
+            var step = TimeSpan.FromSeconds(5);
+            while (waited < limit)
             {
-                logger.LogInformation("Version {Version} is running; the previous one is kept in {Previous}", pending.Version, previous);
-                return "applied";
+                if (File.Exists(files.Applied))
+                {
+                    logger.LogInformation("Version {Version} is running; the previous one is kept in {Previous}", pending.Version, previous);
+                    return "applied";
+                }
+                await delay(step, ct);
+                waited += step;
             }
-            await delay(step, ct);
-            waited += step;
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // A version that cannot even start is put back the same way as one that never checks in.
+            reason = $"Version {pending.Version} did not start ({e.Message})";
         }
 
-        logger.LogWarning("Version {Version} did not check in within {Minutes} minutes: putting the previous version back", pending.Version, (int)limit.TotalMinutes);
-        await service.StopAsync(ct);
+        logger.LogWarning("{Reason}: putting the previous version back", reason);
+        try { await service.StopAsync(ct); }
+        catch (Exception e) when (e is not OperationCanceledException) { logger.LogWarning("Stopping version {Version} failed ({Message}); going on", pending.Version, e.Message); }
         var failed = install + ".failed-" + pending.Version;
         if (Directory.Exists(failed)) Directory.Delete(failed, recursive: true);
         Directory.Move(install, failed);
         Directory.Move(previous, install);
-        files.Write(files.RolledBack, new RolledBackUpdate(pending.UpdateId, pending.Version,
-            $"Version {pending.Version} did not check in within {(int)limit.TotalMinutes} minutes; the previous version was put back", DateTimeOffset.UtcNow));
+        files.Write(files.RolledBack, new RolledBackUpdate(pending.UpdateId, pending.Version, $"{reason}; the previous version was put back", DateTimeOffset.UtcNow));
         await service.StartAsync(ct);
         return "rolled_back";
     }

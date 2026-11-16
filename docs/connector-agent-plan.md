@@ -385,7 +385,7 @@ of the record-source and agent-job routes; nothing existing breaks.
 
 ### AG5c — internal REST APIs (2026-11-16)
 
-Migration `20260311100000_agent_rest.sql` (**not yet applied live**). Pushing the API before it only refuses internal API connections; nothing
+Migration `20260311100000_agent_rest.sql`, applied live 2026-11-16 (2 functions, provider renamed, live guardrails 0 violations). Pushing the API before it only refuses internal API connections; nothing
 existing breaks.
 
 **Decisions taken in building it.**

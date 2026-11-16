@@ -23,6 +23,7 @@ const MANAGE = 'integrations.manage';
 const RenameBody = z.object({ name: z.string().trim().min(1).max(80), location: z.string().trim().max(200).nullable().optional() }).strict();
 const ReasonBody = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
 const PingBody = z.object({ idempotencyKey: z.string().min(8).max(120).optional() }).strict();
+const ApproveUpdateBody = z.object({ releaseId: Uuid }).strict();
 const RegistrationBody = z
   .object({
     name: z.string().trim().max(80).optional(),
@@ -53,6 +54,12 @@ const HeartbeatBody = z
     machine: z.string().trim().max(120).nullable().optional(),
     capabilities: Capabilities.nullable().optional(),
     uptimeSeconds: z.number().int().min(0).optional(),
+    /** AG6b: what happened to a staged update, said once after the agent started again. */
+    updateReport: z
+      .object({ updateId: Uuid, outcome: z.enum(['applied', 'rolled_back']), message: z.string().trim().max(1000).nullable().optional() })
+      .strict()
+      .nullable()
+      .optional(),
   })
   .strict();
 const ProgressBody = z.object({ progress: z.record(z.string(), z.unknown()) }).strict();
@@ -70,6 +77,7 @@ const RotateBody = z.object({ signingKey: Key, sealingKey: Key }).strict();
 export const AGENT_MESSAGES = {
   register: RegisterBody,
   heartbeat: HeartbeatBody,
+  'heartbeat-update': HeartbeatBody,
   progress: ProgressBody,
   'complete-ping': CompleteBody,
   fail: FailBody,
@@ -164,6 +172,33 @@ export class AgentsController {
   })
   diagnostics(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.agentJob(ctx, parse(Uuid, id), 'diagnostics', parse(PingBody, body ?? {}).idempotencyKey ?? null);
+  }
+
+  @Get('agent-releases')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'Connector agent releases published by Fortress (AG6b), newest first: version, platform, notes, size' })
+  releases(@Ctx() ctx: RequestContext) {
+    return this.service.releases(ctx);
+  }
+
+  @Post('agents/:id/updates')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ApproveUpdateBody) })
+  @ApiCreatedResponse({
+    description:
+      'Approve updating the agent to a published release (AG6b): it must be for the agent\'s platform and newer than its version; one update at a time. The agent checks the release\'s signature with the keys built into it, downloads it, checks its SHA-256 and stages it; on Windows it then swaps and rolls back if the new version does not come up. 409 integration_rule otherwise.',
+  })
+  approveUpdate(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.approveUpdate(ctx, parse(Uuid, id), parse(ApproveUpdateBody, body).releaseId);
+  }
+
+  @Post('agent-updates/:id/cancel')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'Cancel an update the agent has not downloaded yet (409 integration_rule once it is staged)' })
+  cancelUpdate(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.cancelUpdate(ctx, parse(Uuid, id));
   }
 
   @Post('connections/:id/agent-jobs')

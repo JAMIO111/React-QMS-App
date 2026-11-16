@@ -58,10 +58,10 @@ beforeEach(() => {
 });
 
 describe("the platform tabs", () => {
-  it("offers eight tabs, opens the overview, and keeps the chosen tab in the address", async () => {
+  it("offers nine tabs, opens the overview, and keeps the chosen tab in the address", async () => {
     renderAt("/platform");
     const tabs = await screen.findByRole("tablist", { name: "Platform" });
-    expect(within(tabs).getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Revenue", "Organisations", "Payments", "Webhooks", "Email", "Worker", "Activity"]);
+    expect(within(tabs).getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Revenue", "Organisations", "Payments", "Webhooks", "Email", "Worker", "Agent releases", "Activity"]);
     expect(within(tabs).getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
     await userEvent.click(within(tabs).getByRole("tab", { name: "Revenue" }));
     expect(within(tabs).getByRole("tab", { name: "Revenue" })).toHaveAttribute("aria-selected", "true");
@@ -305,5 +305,44 @@ describe("email", () => {
     expect(screen.getByText("No mail provider")).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Email problems" })).toHaveTextContent("Invalid `to` field");
     expect(screen.getByRole("list", { name: "Emails by event" })).toHaveTextContent("parts.created8");
+  });
+});
+
+describe("agent releases", () => {
+  const release = (over = {}) => ({ id: "r1", version: "0.9.0", platform: "win-x64", url: "https://x/a.zip", sha256: "a".repeat(64), sizeBytes: 2048, notes: "Faster", keyId: "322e25d8350ce6dd", status: "published", publishedAt: "2026-11-16T09:00:00Z", publishedBy: "Op Erator", withdrawnAt: null, withdrawnReason: null, agentsOn: 3, ...over });
+
+  it("says when no release key is configured and offers no publishing", async () => {
+    responses["/platform/agent-releases"] = { data: [], keysConfigured: false, keyIds: [] };
+    renderAt("/platform?tab=agent-releases");
+    expect(await screen.findByText("No release key is configured")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Publish" })).toBeNull();
+    expect(screen.getByText("Nothing has been published yet.")).toBeInTheDocument();
+  });
+
+  it("publishes a pasted manifest and signature, lists releases and withdraws one with a reason", async () => {
+    responses["/platform/agent-releases"] = { data: [release(), release({ id: "r0", version: "0.8.0", status: "withdrawn", withdrawnReason: "Breaks SQL Server 2014", agentsOn: 0 })], keysConfigured: true, keyIds: ["322e25d8350ce6dd"] };
+    const posts = [];
+    const base = apiFetch.getMockImplementation();
+    apiFetch.mockImplementation(async (path, opts = {}) => {
+      if (opts.method === "POST") {
+        posts.push({ path, body: opts.body });
+        return path.endsWith("/withdraw") ? { ok: true } : { id: "r2", keyId: "322e25d8350ce6dd" };
+      }
+      return base(path, opts);
+    });
+    renderAt("/platform?tab=agent-releases");
+    const table = await screen.findByRole("table", { name: "Releases" });
+    expect(table).toHaveTextContent("Windows (64-bit)");
+    expect(table).toHaveTextContent("Breaks SQL Server 2014");
+    await userEvent.type(screen.getByLabelText("Manifest"), "{{\"format\":\"x\"}");
+    await userEvent.type(screen.getByLabelText("Signature"), "c2ln");
+    await userEvent.click(screen.getByRole("button", { name: "Publish" }));
+    expect(await screen.findByText(/Published, signed with key 322e25d8350ce6dd/)).toBeInTheDocument();
+    expect(posts[0]).toEqual({ path: "/platform/agent-releases", body: { manifest: '{"format":"x"}', signature: "c2ln" } });
+    await userEvent.click(within(table).getByRole("button", { name: "Withdraw" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("Why?"), "Bad build");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Withdraw" }));
+    await waitFor(() => expect(posts[1]).toEqual({ path: "/platform/agent-releases/r1/withdraw", body: { reason: "Bad build" } }));
   });
 });

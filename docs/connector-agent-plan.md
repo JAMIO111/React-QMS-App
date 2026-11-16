@@ -546,3 +546,59 @@ Migration `20260312100000_agent_resilience.sql` (applied live 2026-11-16, live g
   - the API unreachable for 8 seconds: the same attempt carries on;
   - the database ending the agent's connection: a later attempt resumes.
 - **Load test** (AG-D4): opt-in with `AGENT_LOAD_ROWS=1000000` (and `AGENT_LOAD_REPORT=<file>`); figures are recorded in the exit report (AG6d).
+
+### AG6b design (2026-11-16)
+
+- **Release manifest:** a JSON text signed as it is (the signature covers its UTF-8 bytes, ECDSA P-256 / SHA-256, 64-byte r‖s in base64):
+  `{"format":"fortress-agent-release-v1","version":"0.7.0","platform":"win-x64","url":"https://…/FortressAgent-0.7.0-win-x64.zip",
+  "sha256":"<hex>","size":<bytes>,"notes":"…","createdAt":"<ISO>"}`. The key id is the first 16 hex characters of the SHA-256 of the public key
+  (SPKI). Platforms: `win-x64`, `linux-x64` (the second only for tests and pilots).
+- **Keys:** `connector-agent/release/make-release-key.mjs` makes the key pair on your own computer and prints the public key; the private key never
+  enters the repository or this container. `connector-agent/release/sign-release.mjs` builds and signs a manifest from a zip. The agent trusts the
+  public keys listed in `ReleaseKeys.Trusted` (in source; empty until you add yours, so updates are refused). Test builds (Debug, or built with
+  `-p:FortressTestHooks=true` as `run-e2e.sh` does) also trust a key named by the `FORTRESS_AGENT_TEST_RELEASE_KEY` setting; a shipped build ignores it. The API checks a published manifest against
+  `AGENT_RELEASE_KEYS` too (comma-separated public keys) — defence in depth; the agent's own check is the one that matters.
+- **Database:** `integration_agent_releases` (global, published and withdrawn by a platform operator with MFA, never deleted, readable by every
+  signed-in person while published) and `integration_agent_updates` (per organisation: waiting → staged → applied, or failed / rolled_back /
+  cancelled; one open per agent; audited). An `integrations.manage` holder approves an update to a published release newer than the agent's
+  version for the agent's platform; that makes an `update_agent` job carrying the manifest and signature. The job's completion marks the update
+  staged; the agent's next heartbeat at the new version marks it applied; the agent reports a roll-back itself.
+- **Agent:** `update_agent` handler — checks the signature against a trusted key, the format, the platform, that the version is newer and equals
+  the job's, the address is https; downloads (https redirects only, at most the manifest's size, 300 MB cap), checks the SHA-256, unpacks into
+  `updates/<version>/staged` refusing any entry outside it, and writes `updates/pending.json`. On Windows the runner then starts
+  `FortressAgent.exe apply-update` from a temporary copy, which stops the service, keeps the old folder as `<install>.previous`, moves the staged
+  one in, starts the service and waits up to five minutes for the new agent to write `updates/applied.json` after its first good heartbeat; if it
+  does not, it puts the old folder back, starts it, and writes `updates/rolled-back.json`, which the old agent reports. On Linux the update stays
+  staged (the swap is a Windows service matter) and the agent says so in its log.
+
+### AG6b as built (2026-11-16)
+
+Migration `20260313100000_agent_updates.sql` (**not applied live yet**; pushing the API before it breaks the agent page, which selects from
+`integration_agent_updates` and `integration_agent_releases`).
+
+- **Database:** as designed above. `app.platform_publish_agent_release(manifest, signature, key_id)` (operator with MFA; reads and checks the
+  manifest), `platform_withdraw_agent_release(id, reason)` (cancels waiting updates and their jobs), `platform_agent_versions()`;
+  `app.approve_agent_update(agent, release)` (`integrations.manage`; the agent must say its platform, the release must be published, for that
+  platform and newer; one open update per agent; makes the `update_agent` job, 3 attempts), `cancel_agent_update(update)` (waiting only);
+  trigger `integration_agent_jobs_update_follow` (job completed → staged, failed/cancelled → failed with the job's error);
+  `system_agent_heartbeat` marks a staged update applied when the agent reports its version; `system_agent_update_report` (API login only) records
+  applied or rolled back. Events `update_approved|staged|applied|failed|rolled_back|cancelled`. SQL test `agent_updates.test.sql`.
+- **API:** `agent-release.ts` (`verifyRelease`, `manifestProblem`, `parseReleaseKeys`, key id); env `AGENT_RELEASE_KEYS`; operator routes
+  `GET|POST /platform/agent-releases` (`503 release_keys_unavailable` without keys, `400 invalid_release` for a bad signature or manifest),
+  `POST /platform/agent-releases/{id}/withdraw`; people `GET /integrations/agent-releases`, `POST /integrations/agents/{id}/updates {releaseId}`,
+  `POST /integrations/agent-updates/{id}/cancel`; agent detail carries `platform`, `updates` (latest 10) and `availableUpdate`; the heartbeat takes
+  `updateReport {updateId, outcome, message}`. e2e `agent-updates.e2e-spec.ts`, unit `agent-release.spec.ts`.
+- **Agent:** `Updates.cs` (`ReleaseKeys`, `ReleaseManifest.Verify`, `UpdateHandler`, `UpdateState`, `UpdateSwapper`, `UpdateFiles`), capabilities carry
+  `platform`, the runner sends the update report with the heartbeat and calls the swap after an `update_agent` job completes; `FortressAgent.exe
+  apply-update --install <folder> [--service <name>]` (Windows). Unit tests `UpdateTests.cs` (signature, platform, version, download size and
+  SHA-256, zip-slip, applied/rolled-back reports, the swap with a fake service and its roll-back). The binary e2e has an update step: a package whose
+  bytes are not the signed ones fails with the SHA-256 reason; the signed one is staged (`pending.json`, unpacked files) and shown staged.
+- **Release tooling:** `connector-agent/release/make-release-key.mjs` and `sign-release.mjs`.
+- **UI:** **Updates** card on the agent page (`AgentUpdates.jsx`: version and platform, available release, Update to X with what will happen,
+  waiting / staged notice with Cancel, history), operator **Agent releases** tab on `/platform` (`AgentReleasesPanel.jsx`: keys configured, publish
+  by pasting manifest and signature, releases with agents on each, withdraw with a reason). Tests in `ConnectorAgents.test.jsx` and
+  `PlatformPanels.test.jsx`.
+- **Not done here:** the swap has run only against a fake service; the Windows service swap, the 5-minute roll-back on a real machine and
+  Authenticode signing of the package are AG6c / the Windows check. No release key is built into the agent yet: make one, add its public half to
+  `ReleaseKeys.Built` and `AGENT_RELEASE_KEYS`.
+

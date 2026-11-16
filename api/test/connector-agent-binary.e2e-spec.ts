@@ -10,13 +10,14 @@
  */
 import { INestApplication } from '@nestjs/common';
 import { ChildProcess, execFile, spawn } from 'node:child_process';
-import { createCipheriv, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomBytes } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { createCipheriv, createHash, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomBytes, sign } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { createServer, Server } from 'node:http';
 import { AddressInfo, createServer as createTcpServer, Server as TcpServer, Socket, connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { zipSync } from 'fflate';
 import { Pool } from 'pg';
 import request from 'supertest';
 import { giveControllerSeats, makeIds, requireDb, seed, startApp, token } from './helpers';
@@ -61,8 +62,17 @@ maybe('the real connector agent', () => {
     refusedWhileDown = 0;
     if (down) for (const s of proxied) s.destroy();
   };
+  // AG6b: a release key of the test's own, trusted by the API and (through the test-hooks build) by the agent, and a local server for the package.
+  const releaseKey = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const releaseSpki = releaseKey.publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+  let releaseServer: Server;
+  let releaseBytes = Buffer.alloc(0);
+  let releaseUrl = '';
   const startAgent = () => {
-    agentProcess = spawn('dotnet', [binary!, 'run', '--data-dir', dataDir], { stdio: ['ignore', 'pipe', 'pipe'] });
+    agentProcess = spawn('dotnet', [binary!, 'run', '--data-dir', dataDir], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, FORTRESS_AGENT_TEST_RELEASE_KEY: releaseSpki, FORTRESS_AGENT_TEST_DOWNLOAD: releaseUrl },
+    });
     agentProcess.stdout!.on('data', (d) => (output += d));
     agentProcess.stderr!.on('data', (d) => (output += d));
     const p = agentProcess;
@@ -85,8 +95,12 @@ maybe('the real connector agent', () => {
     admin = new Pool({ connectionString: requireDb().adminUrl });
     await seed(admin, ids, '-ag1bin');
     await giveControllerSeats(admin, ids.orgA, [ids.ownerA]);
-    app = await startApp({ RATE_LIMIT_PER_MINUTE: '10000' });
+    await admin.query(`insert into public.platform_admins (user_id, note) values ($1, 'e2e operator') on conflict do nothing`, [ids.outsider]);
+    app = await startApp({ RATE_LIMIT_PER_MINUTE: '10000', AGENT_RELEASE_KEYS: releaseSpki });
     await app.listen(0, '127.0.0.1');
+    releaseServer = createServer((_req, res) => res.writeHead(200, { 'Content-Type': 'application/zip' }).end(releaseBytes));
+    await new Promise<void>((r) => releaseServer.listen(0, '127.0.0.1', () => r()));
+    releaseUrl = `http://127.0.0.1:${(releaseServer.address() as AddressInfo).port}/agent.zip`;
     const apiPort = (app.getHttpServer().address() as AddressInfo).port;
     base = `http://127.0.0.1:${apiPort}/api/v1`;
     proxy = createTcpServer((client) => {
@@ -116,10 +130,60 @@ maybe('the real connector agent', () => {
     agentProcess?.kill();
     for (const sock of proxied) sock.destroy();
     proxy?.close();
+    releaseServer?.close();
     await app?.close();
     await admin?.end();
     if (dataDir) rmSync(dataDir, { recursive: true, force: true });
   });
+
+  /**
+   * AG6b with the real agent: an operator publishes a release signed with the test's key; the owner approves it; the agent checks the signature with
+   * its own trusted keys, downloads the package and refuses it when the bytes are not the signed ones, then stages a good one (pending.json and the
+   * unpacked files in its data folder) and Fortress shows it staged. On Linux the agent does not swap itself (that is the Windows updater's job).
+   */
+  async function updates(agentId: string, current: string) {
+    const operator = { Authorization: `Bearer ${await token(ids.outsider, { aal: 'aal2' })}` };
+    const [maj, min, build] = current.split('.').map(Number);
+    const pkg = Buffer.from(zipSync({ 'FortressAgent.dll': new TextEncoder().encode('the next agent'), 'lib/helper.dll': new TextEncoder().encode('helper') }));
+    const publish = async (version: string) => {
+      const manifest = JSON.stringify({
+        format: 'fortress-agent-release-v1', version, platform: 'linux-x64', url: 'https://releases.example.com/agent.zip',
+        sha256: createHash('sha256').update(pkg).digest('hex'), size: pkg.length, notes: `Version ${version}`, createdAt: new Date().toISOString(),
+      });
+      const signature = sign('sha256', Buffer.from(manifest), { key: releaseKey.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64');
+      return (await api().post('/api/v1/platform/agent-releases').set(operator).send({ manifest, signature }).expect(201)).body.id as string;
+    };
+    const approve = async (releaseId: string) =>
+      (await api().post(`/api/v1/integrations/agents/${agentId}/updates`).set(await as()).send({ releaseId }).expect(201)).body as { id: string };
+    const settled = (updateId: string, want: string[]) =>
+      until(`the update to be ${want.join(' or ')}`, async () => {
+        const r = await api().get(`/api/v1/integrations/agents/${agentId}`).set(await as());
+        const u = r.body.updates.find((x: { id: string }) => x.id === updateId);
+        return u && want.includes(u.status) && u;
+      }, 60_000);
+
+    // Served bytes that are not the signed ones: the agent refuses them and Fortress records the update as failed.
+    releaseBytes = Buffer.from(pkg);
+    releaseBytes[Math.floor(releaseBytes.length / 2)] ^= 0xff;
+    const bad = await approve(await publish(`${maj}.${min}.${build + 1}`));
+    const failed = await settled(bad.id, ['failed', 'staged']);
+    expect(failed).toMatchObject({ status: 'failed', message: expect.stringContaining('SHA-256') });
+    expect(existsSync(join(dataDir, 'updates', 'pending.json'))).toBe(false);
+
+    // The signed bytes: staged.
+    releaseBytes = pkg;
+    const good = await approve(await publish(`${maj}.${min}.${build + 2}`));
+    const staged = await settled(good.id, ['staged', 'failed']);
+    expect(staged).toMatchObject({ status: 'staged', toVersion: `${maj}.${min}.${build + 2}` });
+    const pending = JSON.parse(readFileSync(join(dataDir, 'updates', 'pending.json'), 'utf8'));
+    expect(pending).toMatchObject({ updateId: good.id, version: `${maj}.${min}.${build + 2}`, sha256: createHash('sha256').update(pkg).digest('hex') });
+    expect(readFileSync(join(pending.staged, 'FortressAgent.dll'), 'utf8')).toBe('the next agent');
+    expect(readFileSync(join(pending.staged, 'lib', 'helper.dll'), 'utf8')).toBe('helper');
+    expect(output).toContain('does not swap it in by itself');
+    // The staged update is the one open update; a second approval waits until it is settled.
+    const again = await publish(`${maj}.${min}.${build + 3}`);
+    await api().post(`/api/v1/integrations/agents/${agentId}/updates`).set(await as()).send({ releaseId: again }).expect(409);
+  }
 
   /** AG2 with the real agent and a real PostgreSQL: password, test, browse, preview. */
   async function databaseConnection(agentId: string) {
@@ -594,7 +658,8 @@ maybe('the real connector agent', () => {
       return r.body.online && r.body;
     });
     expect(online.version).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(online.capabilities.jobs).toEqual(['diagnostics', 'discover', 'extract', 'ping', 'preview', 'rotate_keys', 'store_credential', 'test_connection']);
+    expect(online.capabilities.jobs).toEqual(['diagnostics', 'discover', 'extract', 'ping', 'preview', 'rotate_keys', 'store_credential', 'test_connection', 'update_agent']);
+    expect(online.capabilities.platform).toBe('linux-x64');
     expect(online.capabilities.adapters).toEqual(['folder', 'mysql', 'postgres', 'rest', 'sqlserver']);
 
     // Opening the agent's page wakes it to poll quickly, so the ping is answered within seconds.
@@ -628,6 +693,8 @@ maybe('the real connector agent', () => {
     expect(bundle).toMatchObject({ version: online.version, keyFingerprint: rotated.result.fingerprint, keyAgeDays: 0, rotationPending: false });
     expect(Buffer.byteLength(JSON.stringify(bundle))).toBeLessThanOrEqual(64 * 1024);
     expect(JSON.stringify(bundle)).not.toContain(reg.body.token);
+
+    await updates(agentId, online.version);
 
     // The database connection below seals its password to the new key, so it also proves the rotated sealing key works.
     if (pgPort) await databaseConnection(agentId);

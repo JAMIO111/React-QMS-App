@@ -120,5 +120,6 @@ public sealed class JobHandlers
         ["jobs"] = new JsonArray(handlers.Keys.Order(StringComparer.Ordinal).Select(k => (JsonNode)JsonValue.Create(k)!).ToArray()),
         ["adapters"] = new JsonArray(engines.Order(StringComparer.Ordinal).Select(k => (JsonNode)JsonValue.Create(k)!).ToArray()),
         ["maxBatchRows"] = 1000,
+        ["platform"] = AgentInfo.Platform,
     };
 }

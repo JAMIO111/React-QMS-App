@@ -90,3 +90,24 @@ export type PlatformActivity = z.infer<typeof PlatformActivity>;
 
 /** An operator puts an enforced network policy back to monitor (docs/security-plan.md SE5). */
 export const RecoverNetworkBody = z.object({ reason: z.string().trim().min(10).max(1000), verification: z.string().trim().min(10).max(1000) }).strict();
+
+/** A connector agent release (docs/connector-agent-plan.md AG6b): the signed manifest text exactly as signed and its signature. */
+export const PublishReleaseBody = z.object({ manifest: z.string().min(2).max(8192), signature: z.string().min(1).max(200) }).strict();
+export const WithdrawReleaseBody = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
+export const AgentRelease = z.object({
+  id: z.string().uuid(),
+  version: z.string(),
+  platform: z.enum(['win-x64', 'linux-x64']),
+  url: z.string(),
+  sha256: z.string(),
+  sizeBytes: z.number().int(),
+  notes: z.string().nullable(),
+  keyId: z.string(),
+  status: z.enum(['published', 'withdrawn']),
+  publishedAt: Iso,
+  publishedBy: z.string().nullable(),
+  withdrawnAt: Iso.nullable(),
+  withdrawnReason: z.string().nullable(),
+  agentsOn: z.number().int(),
+});
+export const AgentReleases = z.object({ data: z.array(AgentRelease), keysConfigured: z.boolean(), keyIds: z.array(z.string()) });

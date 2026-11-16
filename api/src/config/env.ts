@@ -26,6 +26,8 @@ const EnvSchema = z
     AGENT_API_URL: z.string().url().optional(),
     /** Where the connector agent installer can be downloaded (shown with a new registration token). Unset: no download link is shown. */
     AGENT_DOWNLOAD_URL: z.string().url().optional(),
+    /** Public keys that sign connector agent releases (AG6b): base64 SPKI of P-256 keys, comma separated. Unset: no release can be published. */
+    AGENT_RELEASE_KEYS: z.string().max(4000).optional(),
     /** Protects the scheduled jobs (/internal/cron/*): sent by Vercel Cron as `Authorization: Bearer <CRON_SECRET>`. Unset: the jobs answer 503. Server-side only. */
     CRON_SECRET: z.string().min(20, 'must be at least 20 characters').optional(),
     /** Email notifications (docs/email-oauth-plan.md, E1): unset / none = outbox only (built and queued, marked not sent); resend = Resend's HTTPS API. */

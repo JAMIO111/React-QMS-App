@@ -2,6 +2,6 @@
   "version": "0.1.0",
   "os": "Microsoft Windows 10.0.20348",
   "machine": "ERP01",
-  "capabilities": { "jobs": ["ping"], "adapters": [], "maxBatchRows": 1000 },
+  "capabilities": { "jobs": ["ping"], "adapters": [], "maxBatchRows": 1000, "platform": "win-x64" },
   "uptimeSeconds": 42
 }

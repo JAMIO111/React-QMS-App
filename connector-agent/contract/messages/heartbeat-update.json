@@ -1,0 +1,8 @@
+{
+  "version": "0.6.0",
+  "os": "Microsoft Windows 10.0.20348",
+  "machine": "ERP01",
+  "capabilities": { "jobs": ["ping", "update_agent"], "adapters": [], "maxBatchRows": 1000, "platform": "win-x64" },
+  "uptimeSeconds": 5,
+  "updateReport": { "updateId": "3f6c0d2a-4b1e-4f7a-9c2d-8e5b6a7c9d01", "outcome": "rolled_back", "message": "Version 0.7.0 did not check in within 5 minutes; the previous version was put back" }
+}

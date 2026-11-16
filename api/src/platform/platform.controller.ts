@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/com
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
-import { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformMe, PlatformOrganisations, PlatformPayments, PlatformEmail, PlatformWorker, PlatformRevenue, PlatformWebhooks, RecoverNetworkBody } from './platform.schemas';
+import { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformMe, PlatformOrganisations, PlatformPayments, PlatformEmail, PlatformWorker, PlatformRevenue, PlatformWebhooks, RecoverNetworkBody, AgentReleases, PublishReleaseBody, WithdrawReleaseBody } from './platform.schemas';
 import { PlatformService } from './platform.service';
 
 /**
@@ -40,6 +40,28 @@ export class PlatformController {
   @ApiOkResponse({ description: 'Put an organisation that enforces network restrictions back to monitor when everyone is locked out (reason and how ownership was verified; never off). Owners and admins are told. 404 for non-operators, 403 mfa_required without MFA, 409 security_rule when it is not enforcing.' })
   recoverNetworkPolicy(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.recoverNetworkPolicy(ctx, parse(Uuid, id), parse(RecoverNetworkBody, body));
+  }
+
+  @Get('agent-releases')
+  @ApiOkResponse({ description: 'Connector agent releases, withdrawn ones too, with how many agents run each, and which release keys are configured (AGENT_RELEASE_KEYS). 404 for non-operators, 403 mfa_required without MFA.', schema: openApiSchema(AgentReleases) })
+  agentReleases(@Ctx() ctx: RequestContext) {
+    return this.service.agentReleases(ctx);
+  }
+
+  @Post('agent-releases')
+  @HttpCode(201)
+  @ApiBody({ schema: openApiSchema(PublishReleaseBody) })
+  @ApiOkResponse({ description: 'Publish a signed connector agent release (the manifest text exactly as signed and its signature). 400 when the manifest reads wrong or no configured key signed it, 503 release_keys_unavailable without keys, 409 integration_rule when the version is published already.' })
+  publishAgentRelease(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.publishAgentRelease(ctx, parse(PublishReleaseBody, body));
+  }
+
+  @Post('agent-releases/:id/withdraw')
+  @HttpCode(200)
+  @ApiBody({ schema: openApiSchema(WithdrawReleaseBody) })
+  @ApiOkResponse({ description: 'Withdraw a release (a reason): no new updates to it; updates waiting for it are cancelled. Never deleted.' })
+  withdrawAgentRelease(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.withdrawAgentRelease(ctx, parse(Uuid, id), parse(WithdrawReleaseBody, body).reason);
   }
 
   @Get('revenue')

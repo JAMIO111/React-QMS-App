@@ -11,6 +11,7 @@ import RevenuePanel from "./RevenuePanel";
 import WebhooksPanel from "./WebhooksPanel";
 import EmailPanel from "./EmailPanel";
 import WorkerPanel from "./WorkerPanel";
+import AgentReleasesPanel from "./AgentReleasesPanel";
 import SlidingToggle from "../ui/SlidingToggle";
 
 const PERIODS = [
@@ -116,6 +117,7 @@ const TABS = [
   { key: "webhooks", label: "Webhooks", Panel: WebhooksPanel },
   { key: "email", label: "Email", Panel: EmailPanel },
   { key: "worker", label: "Worker", Panel: WorkerPanel },
+  { key: "agent-releases", label: "Agent releases", Panel: AgentReleasesPanel },
   { key: "activity", label: "Activity", Panel: ActivityPanel },
 ];
 

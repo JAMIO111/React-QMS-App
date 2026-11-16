@@ -466,6 +466,12 @@ BEGIN
   INSERT INTO public.integration_agent_jobs (organisation_id, agent_id, kind)
     SELECT a, id, 'ping' FROM public.integration_agents WHERE organisation_id = a;
   INSERT INTO sweep VALUES ('agent', (SELECT id FROM public.integration_agents WHERE organisation_id = a));
+  INSERT INTO public.integration_agent_releases (version, platform, url, sha256, size_bytes, manifest, signature, key_id)
+    SELECT '9.9.' || (SELECT count(*) FROM public.integration_agent_releases), 'win-x64', 'https://releases.example.com/agent.zip', repeat('a', 64), 1,
+           '{}', repeat('A', 86) || '==', repeat('b', 16);
+  INSERT INTO public.integration_agent_updates (organisation_id, agent_id, release_id, to_version)
+    SELECT a, ag.id, (SELECT id FROM public.integration_agent_releases ORDER BY published_at DESC, version DESC LIMIT 1), '9.9.9'
+      FROM public.integration_agents ag WHERE ag.organisation_id = a;
   INSERT INTO public.integration_connections (organisation_id, provider_id, name, external_system, config, agent_id)
     SELECT a, (SELECT id FROM public.integration_providers WHERE key = 'sql_agent'), 'Sweep database', 'sweep-db',
            '{"engine": "postgres", "server": "db", "database": "erp", "authType": "password"}', id FROM public.integration_agents WHERE organisation_id = a;

@@ -23,7 +23,9 @@ public sealed class AgentRunner(
     ILogger<AgentRunner> logger,
     TimeProvider? clock = null,
     Func<TimeSpan, CancellationToken, Task>? delay = null,
-    KeyRotation? rotation = null)
+    KeyRotation? rotation = null,
+    UpdateState? updates = null,
+    Func<AgentJob, CancellationToken, Task>? afterComplete = null)
 {
     private readonly TimeProvider clock = clock ?? TimeProvider.System;
     private readonly Func<TimeSpan, CancellationToken, Task> delay = delay ?? ((t, ct) => Task.Delay(t, ct));
@@ -44,8 +46,11 @@ public sealed class AgentRunner(
             TimeSpan wait;
             try
             {
-                var beat = await api.HeartbeatAsync(identity, Heartbeat(), ct);
+                var report = updates?.Report();
+                var beat = await api.HeartbeatAsync(identity, Heartbeat() with { UpdateReport = report }, ct);
                 if (beat.Revoked) return Revoked("Fortress says this agent has been revoked");
+                // AG6b: Fortress has heard what happened to the update; for an applied one this tells a waiting updater the swap worked.
+                if (report is not null) updates!.Reported(report);
                 if (failures > 0) logger.LogInformation("Fortress can be reached again");
                 failures = 0;
                 WarnAboutClock(beat.ServerTime);
@@ -213,6 +218,8 @@ public sealed class AgentRunner(
             var result = await handler.RunAsync(job, context, jobCts.Token);
             var done = await PatientlyAsync(() => api.CompleteAsync(identity, job.Id, result, ct), "the result", ct);
             logger.LogInformation("Job {JobId} done in {Ms} ms ({Status})", job.Id, started.ElapsedMilliseconds, done.Status);
+            // AG6b: once Fortress knows an update is staged, the host may start the swap (Windows) or say how to finish it.
+            if (afterComplete is not null && done.Status == "completed") await afterComplete(job, ct);
         }
         catch (OperationCanceledException) when (jobCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {

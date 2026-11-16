@@ -5,6 +5,7 @@ import { ENV, Env } from '../config/env';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { WorkerJobRegistry } from '../worker/job-registry';
+import { manifestProblem, parseReleaseKeys, verifyRelease } from '../integrations/agents/agent-release';
 import type { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformOrganisations } from './platform.schemas';
 
 type Status = 'none' | 'needs_mfa' | 'ok';
@@ -82,6 +83,59 @@ export class PlatformService {
         sql`select app.platform_recover_network_policy(${organisationId}::uuid, ${body.reason}, ${body.verification}) as id`,
       );
       return { organisationId, networkPolicy: 'monitor' as const, changeId: r.rows[0].id };
+    });
+  }
+
+  /**
+   * Connector agent releases (docs/connector-agent-plan.md AG6b), every one including withdrawn, with how many agents run each version. The keys
+   * Fortress checks signatures with come from AGENT_RELEASE_KEYS; without any, nothing can be published.
+   */
+  agentReleases(ctx: RequestContext) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.requireOperator(db);
+      const res = await db.execute<Record<string, unknown>>(sql`
+        select r.id, r.version, r.platform, r.url, r.sha256, r.size_bytes, r.notes, r.key_id, r.status, r.published_at, r.withdrawn_at, r.withdrawn_reason,
+               nullif(btrim(concat_ws(' ', p.first_name, p.surname)), '') as published_by,
+               (select count(*) from app.platform_agent_versions() v where v.version = r.version and v.platform = r.platform)::int as agents_on
+          from public.integration_agent_releases r
+          left join public.profiles p on p.id = r.published_by
+         order by r.published_at desc`);
+      const keys = parseReleaseKeys(this.env.AGENT_RELEASE_KEYS);
+      return {
+        data: res.rows.map((r) => ({
+          id: r.id as string, version: r.version as string, platform: r.platform as 'win-x64' | 'linux-x64', url: r.url as string,
+          sha256: r.sha256 as string, sizeBytes: Number(r.size_bytes), notes: (r.notes as string | null) ?? null, keyId: r.key_id as string,
+          status: r.status as 'published' | 'withdrawn', publishedAt: new Date(r.published_at as string).toISOString(),
+          publishedBy: (r.published_by as string | null) ?? null,
+          withdrawnAt: r.withdrawn_at ? new Date(r.withdrawn_at as string).toISOString() : null,
+          withdrawnReason: (r.withdrawn_reason as string | null) ?? null, agentsOn: Number(r.agents_on),
+        })),
+        keysConfigured: keys.length > 0,
+        keyIds: keys.map((k) => k.keyId),
+      };
+    });
+  }
+
+  /** Publish a signed release: the manifest must read right and be signed by one of the keys in AGENT_RELEASE_KEYS. */
+  publishAgentRelease(ctx: RequestContext, body: { manifest: string; signature: string }) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.requireOperator(db);
+      const keys = parseReleaseKeys(this.env.AGENT_RELEASE_KEYS);
+      if (!keys.length) throw new ApiError(503, 'release_keys_unavailable', 'No release signing key is configured (AGENT_RELEASE_KEYS), so no release can be published');
+      const problem = manifestProblem(body.manifest);
+      if (problem) throw ApiError.badRequest('invalid_release', problem);
+      const keyId = verifyRelease(body.manifest, body.signature, keys);
+      if (!keyId) throw ApiError.badRequest('invalid_release', 'The signature does not match the manifest with any configured release key');
+      const r = await db.execute<{ id: string }>(sql`select app.platform_publish_agent_release(${body.manifest}, ${body.signature}, ${keyId}) as id`);
+      return { id: r.rows[0].id, keyId };
+    });
+  }
+
+  withdrawAgentRelease(ctx: RequestContext, id: string, reason: string) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.requireOperator(db);
+      await db.execute(sql`select app.platform_withdraw_agent_release(${id}::uuid, ${reason})`);
+      return { id, status: 'withdrawn' as const };
     });
   }
 

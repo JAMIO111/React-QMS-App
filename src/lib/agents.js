@@ -29,7 +29,7 @@ const JOB_STATUS = {
 export const jobStatus = (status) => JOB_STATUS[status] ?? { label: status, tone: "neutral" };
 export const jobRunning = (status) => status === "pending" || status === "received" || status === "running";
 
-const JOB_KINDS = { ping: "Check the agent", rotate_keys: "Rotate keys", diagnostics: "Collect diagnostics", test_connection: "Test a connection", discover: "Browse a database", preview: "Preview a table", extract: "Read records" };
+const JOB_KINDS = { ping: "Check the agent", rotate_keys: "Rotate keys", diagnostics: "Collect diagnostics", update_agent: "Update the agent", test_connection: "Test a connection", discover: "Browse a database", preview: "Preview a table", extract: "Read records" };
 export const jobKind = (kind) => JOB_KINDS[kind] ?? kind;
 
 /** "2 minutes ago", "just now", "3 days ago" (no clock needed beyond Date.now()). */
@@ -67,6 +67,18 @@ export const eventWords = (e) => {
       return "Uninstalled on its machine";
     case "job_failed":
       return `A job failed (${d.error ?? "error"})`;
+    case "update_approved":
+      return `Update to version ${d.to ?? "?"} approved`;
+    case "update_staged":
+      return `Downloaded and checked version ${d.to ?? "?"}; installing it`;
+    case "update_applied":
+      return `Now running version ${d.to ?? "?"}`;
+    case "update_failed":
+      return `The update to version ${d.to ?? "?"} failed${d.message ? `: ${d.message}` : ""}`;
+    case "update_rolled_back":
+      return `Version ${d.to ?? "?"} did not start properly; the previous version was put back${d.message ? ` (${d.message})` : ""}`;
+    case "update_cancelled":
+      return `The update to version ${d.to ?? "?"} was cancelled`;
     default:
       return e.kind;
   }
@@ -111,4 +123,26 @@ export const uptimeWords = (seconds) => {
   if (h < 48) return h === 1 ? "1 hour" : `${h} hours`;
   const d = Math.floor(h / 24);
   return `${d} days`;
+};
+
+/** An approved agent update (AG6b) in words and a colour tone. */
+const UPDATE_STATUS = {
+  waiting: { label: "Waiting for the agent", tone: "neutral" },
+  staged: { label: "Downloaded and checked; installing", tone: "warning" },
+  applied: { label: "Installed", tone: "success" },
+  failed: { label: "Failed", tone: "error" },
+  rolled_back: { label: "Put back to the previous version", tone: "error" },
+  cancelled: { label: "Cancelled", tone: "neutral" },
+};
+export const updateStatus = (status) => UPDATE_STATUS[status] ?? { label: status, tone: "neutral" };
+export const updateOpen = (status) => status === "waiting" || status === "staged";
+
+const PLATFORMS = { "win-x64": "Windows (64-bit)", "linux-x64": "Linux (64-bit)" };
+export const platformLabel = (p) => (p ? PLATFORMS[p] ?? p : "Not reported");
+
+/** "2.4 MB" from bytes. */
+export const sizeWords = (bytes) => {
+  if (bytes == null) return "—";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} kB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };

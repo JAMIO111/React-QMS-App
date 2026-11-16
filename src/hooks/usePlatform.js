@@ -52,3 +52,18 @@ export const useRecoverNetworkPolicy = () => {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "platform", "organisations"] }),
   });
 };
+
+/** Connector agent releases (AG6b): every one including withdrawn, how many agents run each, and whether the API has release keys to check them. */
+export const usePlatformAgentReleases = () => useMonitor(["agent-releases"], "/platform/agent-releases", { refetch: false });
+
+/** Publish a signed release (the manifest text and its signature, from connector-agent/release/sign-release.mjs) or withdraw one with a reason. */
+export const useAgentReleaseMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, id, body }) =>
+      action === "withdraw"
+        ? apiFetch(`/platform/agent-releases/${id}/withdraw`, { method: "POST", body })
+        : apiFetch("/platform/agent-releases", { method: "POST", body }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "platform", "agent-releases"] }),
+  });
+};

@@ -4,6 +4,11 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
   </ItemGroup>
+  <!-- AG6b: the release test key and download override are honoured only by a Debug build or one built with -p:FortressTestHooks=true (the
+       binary e2e does). package.sh and the installer never pass it, so a shipped agent trusts only the release keys built into it. -->
+  <PropertyGroup Condition="'$(FortressTestHooks)' == 'true'">
+    <DefineConstants>$(DefineConstants);FORTRESS_TEST_HOOKS</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Fortress.Agent.Tests" />
   </ItemGroup>

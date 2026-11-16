@@ -3,6 +3,7 @@
 //   FortressAgent run                                                    the agent itself (what the Windows service runs; the default)
 //   FortressAgent status                                                 what this machine is registered as
 //   FortressAgent deregister                                             tell Fortress to revoke this agent, then forget the identity (uninstall)
+//   FortressAgent apply-update --install <folder> [--service <name>]     Windows: swap in a staged update, rolling back if it does not come up (AG6b)
 // Common: --data-dir <folder> (default %ProgramData%\Fortress\ConnectorAgent on Windows, else $FORTRESS_AGENT_HOME or ~/.fortress-agent).
 using Fortress.Agent.Core;
 using Fortress.Agent.Host;
@@ -22,7 +23,7 @@ if (cli.Command == "help")
 }
 
 var paths = AgentPaths.From(cli.DataDir);
-Log.Logger = Logging.Create(paths, interactive: cli.Command != "run" || Environment.UserInteractive);
+Log.Logger = Logging.Create(paths, interactive: cli.Command != "run" || Environment.UserInteractive, cli.Command == "apply-update" ? "updater-.log" : "agent-.log");
 try
 {
     var store = new IdentityStore(paths.IdentityFile, KeyProtectors.ForThisMachine());
@@ -85,6 +86,18 @@ try
             if (Directory.Exists(paths.CredentialsFolder)) Directory.Delete(paths.CredentialsFolder, recursive: true);
             Console.WriteLine($"Identity and database passwords removed from {paths.Root}.");
             return 0;
+        }
+        case "apply-update":
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                Console.Error.WriteLine("apply-update swaps a Windows service; on this platform install the staged update by hand.");
+                return 2;
+            }
+            var swapper = new UpdateSwapper(paths.Root, cli.InstallDir!, new WindowsServiceControl(cli.Service ?? AgentPaths.ServiceName),
+                new Serilog.Extensions.Logging.SerilogLoggerFactory(Log.Logger).CreateLogger("Updater"));
+            var outcome = await swapper.ApplyAsync(stop.Token);
+            return outcome == "applied" ? 0 : 4;
         }
         default:
             return await AgentHost.RunAsync(paths, store, args);

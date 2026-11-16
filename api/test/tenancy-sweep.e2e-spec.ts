@@ -35,6 +35,9 @@ const UNSCOPED = new Set([
   'GET /api/v1/platform/payments',
   'GET /api/v1/platform/webhooks',
   'GET /api/v1/platform/activity',
+  'GET /api/v1/platform/agent-releases', // connector agent releases (AG6b): global, admin-only in the database (allow-list + MFA)
+  'POST /api/v1/platform/agent-releases',
+  'POST /api/v1/platform/agent-releases/{id}/withdraw',
   'POST /api/v1/platform/organisations/{id}/recover-network-policy', // operator recovery (security plan SE5): admin-only in the database (allow-list + MFA); spans organisations by design
   // /internal/cron/* (scheduled jobs: CRON_SECRET, only database functions made for them) is left out of the OpenAPI document, so it is not seen here; platform-monitor.e2e-spec covers it.
   'POST /api/v1/stripe/webhook', // authenticated by Stripe's signature over the raw body; applies state only through app.stripe_* functions
@@ -511,6 +514,8 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/integrations/agents/{id}/ping': {},
     'POST /api/v1/integrations/agents/{id}/rotate-keys': {},
     'POST /api/v1/integrations/agents/{id}/diagnostics': {},
+    'POST /api/v1/integrations/agents/{id}/updates': { releaseId: '00000000-0000-4000-8000-000000000001' },
+    'POST /api/v1/integrations/agent-updates/{id}/cancel': undefined,
     'GET /api/v1/integrations/agent-jobs/{id}': undefined,
     'POST /api/v1/integrations/agent-registrations/{id}/cancel': undefined,
     'POST /api/v1/inspections/{id}/samples': { readings: [{ requirementId: a.requirement, valueNumeric: '1' }] },
@@ -987,6 +992,8 @@ const hasSample = (op: Op) =>
     'POST /api/v1/integrations/agents/{id}/ping',
     'POST /api/v1/integrations/agents/{id}/rotate-keys',
     'POST /api/v1/integrations/agents/{id}/diagnostics',
+    'POST /api/v1/integrations/agents/{id}/updates',
+    'POST /api/v1/integrations/agent-updates/{id}/cancel',
     'GET /api/v1/integrations/agent-jobs/{id}',
     'POST /api/v1/integrations/agent-registrations/{id}/cancel',
     'POST /api/v1/inspections/{id}/samples',
@@ -1024,6 +1031,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/security/networks/')) return a.network;
   if (path.startsWith('/api/v1/integrations/agents/')) return a.agent;
   if (path.startsWith('/api/v1/integrations/agent-jobs/')) return a.agentJob;
+  if (path.startsWith('/api/v1/integrations/agent-updates/')) return a.agentUpdate;
   if (path.startsWith('/api/v1/integrations/agent-registrations/')) return a.agentRegistration;
   if (path.startsWith('/api/v1/sites/')) return a.site;
   if (path.startsWith('/api/v1/departments/')) return a.department;
@@ -1247,6 +1255,11 @@ beforeAll(async () => {
     // Connector agents (AG1): an agent of A's with a job, and an unused registration (seeded directly: agents register through the API login).
     a.agent = (await admin.query(`insert into public.integration_agents (organisation_id, name) values ($1, 'Sweep agent') returning id`, [ids.orgA])).rows[0].id;
     a.agentJob = (await admin.query(`insert into public.integration_agent_jobs (organisation_id, agent_id, kind) values ($1, $2, 'ping') returning id`, [ids.orgA, a.agent])).rows[0].id;
+    // AG6b: a release (global) and a waiting update of A's agent to it.
+    const sweepRelease = (await admin.query(`insert into public.integration_agent_releases (version, platform, url, sha256, size_bytes, manifest, signature, key_id)
+      values ('9.8.7', 'win-x64', 'https://releases.example.com/sweep.zip', repeat('a', 64), 1, '{}', repeat('A', 86) || '==', repeat('b', 16)) returning id`)).rows[0].id;
+    a.agentUpdate = (await admin.query(`insert into public.integration_agent_updates (organisation_id, agent_id, release_id, to_version) values ($1, $2, $3, '9.8.7') returning id`,
+      [ids.orgA, a.agent, sweepRelease])).rows[0].id;
     a.agentRegistration = (await admin.query(`insert into public.integration_agent_registrations (organisation_id, token_hash, name, expires_at)
       values ($1, encode(sha256(convert_to('sweep-token', 'UTF8')), 'hex'), 'Sweep registration', now() + interval '1 day') returning id`, [ids.orgA])).rows[0].id;
     await client.query(`select app.raise_spc_alerts($1, $2, '[{"characteristicKey":"OD","characteristicName":"OD","operationCode":"OP-1","variant":"imr","rule":"we1","side":"above","pointAt":"2026-11-05T08:00:00Z","summary":"Rule 1","inspectionId":null,"inspectionReference":null}]'::jsonb)`, [ids.orgA, ipart]);

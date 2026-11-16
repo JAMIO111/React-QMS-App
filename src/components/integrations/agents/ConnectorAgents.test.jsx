@@ -176,7 +176,73 @@ describe("one agent", () => {
   });
 });
 
+describe("updates", () => {
+  const rel = { id: "rel9", version: "0.9.0", platform: "win-x64", notes: "Faster reads", sizeBytes: 31457280, publishedAt: "2026-11-16T09:00:00Z" };
+  const upd = (over = {}) => ({ id: "u1", agentId: "ag1", releaseId: "rel9", fromVersion: "0.6.0", toVersion: "0.9.0", status: "waiting", message: null, jobId: "j9", approvedBy: "Ada Owner", approvedAt: recent, stagedAt: null, finishedAt: null, ...over });
+
+  it("offers the newest release and approves it after saying what will happen", async () => {
+    let state = detail({ version: "0.6.0", platform: "win-x64", updates: [], availableUpdate: rel });
+    routeApi({
+      "GET /integrations/agents/ag1": () => state,
+      "POST /integrations/agents/ag1/wake": { woken: true },
+      "POST /integrations/agents/ag1/updates": () => {
+        state = { ...state, updates: [upd()] };
+        return upd();
+      },
+    });
+    renderAt("/Settings/Integrations/Agents/ag1");
+    expect(await screen.findByText("Running version 0.6.0 on Windows (64-bit).")).toBeInTheDocument();
+    expect(screen.getByText("Version 0.9.0 is available")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Update to 0.9.0" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("30.0 MB");
+    expect(dialog).toHaveTextContent("puts the previous version back");
+    expect(dialog).toHaveTextContent("Faster reads");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Update to 0.9.0" }));
+    expect(calls.find((c) => c.k === "POST /integrations/agents/ag1/updates").body).toEqual({ releaseId: "rel9" });
+    expect(await screen.findByText("Updating to version 0.9.0")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Update to 0.9.0" })).not.toBeInTheDocument();
+  });
+
+  it("cancels an update the agent has not taken, and lists how earlier ones went", async () => {
+    routeApi({
+      "GET /integrations/agents/ag1": detail({
+        version: "0.6.0", platform: "win-x64", availableUpdate: rel,
+        updates: [upd(), upd({ id: "u0", fromVersion: "0.5.0", toVersion: "0.6.0", status: "rolled_back", message: "Version 0.6.0 did not check in within 5 minutes" })],
+      }),
+      "POST /integrations/agents/ag1/wake": { woken: true },
+      "POST /integrations/agent-updates/u1/cancel": upd({ status: "cancelled" }),
+    });
+    renderAt("/Settings/Integrations/Agents/ag1");
+    const list = await screen.findByRole("list", { name: "Updates" });
+    expect(list).toHaveTextContent("0.5.0 → 0.6.0");
+    expect(list).toHaveTextContent("Put back to the previous version");
+    expect(list).toHaveTextContent("did not check in within 5 minutes");
+    await userEvent.click(screen.getByRole("button", { name: "Cancel the update" }));
+    await waitFor(() => expect(calls.some((c) => c.k === "POST /integrations/agent-updates/u1/cancel")).toBe(true));
+  });
+
+  it("someone who may only read sees the release but cannot approve it; an older agent is told to update by hand", async () => {
+    permissions = ["integrations.read"];
+    routeApi({ "GET /integrations/agents/ag1": detail({ version: "0.6.0", platform: "win-x64", updates: [], availableUpdate: rel }), "POST /integrations/agents/ag1/wake": { woken: true } });
+    const { unmount } = renderAt("/Settings/Integrations/Agents/ag1");
+    expect(await screen.findByText(/Someone who manages integrations can approve it/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Update to 0.9.0" })).not.toBeInTheDocument();
+    unmount();
+    permissions = ["integrations.read", "integrations.manage"];
+    routeApi({ "GET /integrations/agents/ag1": detail({ version: "0.1.0", platform: null, updates: [], availableUpdate: null }), "POST /integrations/agents/ag1/wake": { woken: true } });
+    renderAt("/Settings/Integrations/Agents/ag1");
+    expect(await screen.findByText(/Install the new version on its machine by hand/)).toBeInTheDocument();
+  });
+});
+
 describe("words", () => {
+  it("says what happened to an update", () => {
+    expect(eventWords({ kind: "update_rolled_back", detail: { to: "0.9.0" } })).toBe("Version 0.9.0 did not start properly; the previous version was put back");
+    expect(eventWords({ kind: "update_applied", detail: { to: "0.9.0" } })).toBe("Now running version 0.9.0");
+    expect(eventWords({ kind: "update_failed", detail: { to: "0.9.0", message: "The download's SHA-256 is not the signed release's" } })).toContain("SHA-256");
+  });
+
   it("says how long ago, what happened and what a ping answered", () => {
     expect(ago(new Date(Date.now() - 10_000).toISOString())).toBe("just now");
     expect(ago(new Date(Date.now() - 5 * 60_000).toISOString())).toBe("5 minutes ago");

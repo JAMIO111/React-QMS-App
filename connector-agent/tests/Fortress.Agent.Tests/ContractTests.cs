@@ -56,6 +56,10 @@ public class ContractTests
             Fields(Serialised(new RegisterRequest("FAGT-x", "k", "s", "0.1.0", "os", "m", caps))));
         Assert.Equal(Fields(Fixture("messages/register.json")["capabilities"]!), Fields(caps));
         Assert.Equal(Fields(Fixture("messages/heartbeat.json")), Fields(Serialised(new HeartbeatRequest("0.1.0", "os", "m", caps, 42))));
+        // AG6b: after an update the heartbeat also says how it went, once.
+        var report = Serialised(new HeartbeatRequest("0.7.0", "os", "m", caps, 5) { UpdateReport = new UpdateReport("u", "rolled_back", "did not check in") });
+        Assert.Equal(Fields(Fixture("messages/heartbeat-update.json")), Fields(report));
+        Assert.Equal(Fields(Fixture("messages/heartbeat-update.json")["updateReport"]!), Fields(report["updateReport"]!));
         Assert.Equal(Fields(Fixture("messages/fail.json")), Fields(Serialised(new JobFailure("invalid", "x", false))));
         Assert.Equal(Fields(Fixture("messages/progress.json")), Fields(Serialised(new { progress = new JsonObject { ["rows"] = 1 } })));
     }

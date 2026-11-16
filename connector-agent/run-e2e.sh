@@ -6,7 +6,8 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 export PATH="$HOME/.dotnet:$PATH" DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
-dotnet build "$here/src/Fortress.Agent.Host" -c Release -o "$here/bin/agent" >/dev/null
+# FortressTestHooks: the release test key and download override (AG6b) work in this build only; package.sh never sets it.
+dotnet build "$here/src/Fortress.Agent.Host" -c Release -p:FortressTestHooks=true -o "$here/bin/agent" >/dev/null
 dotnet build "$here/tests/Fortress.Agent.Tests" >/dev/null
 export AGENT_BINARY="$here/bin/agent/FortressAgent.dll"
 export PGLISTEN_CHECK=127.0.0.1

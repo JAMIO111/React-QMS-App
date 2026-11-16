@@ -7,6 +7,7 @@ export PATH="$HOME/.dotnet:$PATH" DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
 version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$here/Directory.Build.props")"
 out="$here/bin/package"
 rm -rf "$out" && mkdir -p "$out/app"
+# Never pass -p:FortressTestHooks=true here: that build would trust a test release key from the environment (AG6b).
 dotnet publish "$here/src/Fortress.Agent.Host" -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o "$out/app" >/dev/null
 cp "$here/install/install.ps1" "$here/install/uninstall.ps1" "$here/install/README.txt" "$out/"

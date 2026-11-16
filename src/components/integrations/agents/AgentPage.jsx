@@ -14,6 +14,7 @@ import { useBreadcrumbNames } from "../../../lib/breadcrumbs";
 import { agentState, agentsPath, ago, diagnosticsFacts, eventWords, jobKind, jobRunning, jobStatus, pingWords } from "../../../lib/agents";
 import { AddAgentDialog, RenameAgentDialog, RevokeAgentDialog } from "./AgentDialogs";
 import { Pill } from "./AgentsPage";
+import AgentUpdates from "./AgentUpdates";
 
 const Fact = ({ label, children }) => (
   <div className="flex flex-col">
@@ -241,6 +242,8 @@ const AgentPage = () => {
       </MenuCard>
 
       <PingCard agent={a} canManage={canManage} />
+
+      <AgentUpdates agent={a} canManage={canManage} />
 
       <MaintenanceCard agent={a} canManage={canManage} />
 

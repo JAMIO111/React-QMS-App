@@ -192,7 +192,11 @@ public sealed record RegisterResponse
     public string Fingerprint { get; init; } = "";
 }
 
-public sealed record HeartbeatRequest(string Version, string Os, string Machine, JsonObject Capabilities, long UptimeSeconds);
+public sealed record HeartbeatRequest(string Version, string Os, string Machine, JsonObject Capabilities, long UptimeSeconds)
+{
+    /// <summary>AG6b: what happened to a staged update, said once after the agent started again (left out when there is nothing to say).</summary>
+    public UpdateReport? UpdateReport { get; init; }
+}
 
 public sealed record HeartbeatResponse
 {
@@ -201,6 +205,8 @@ public sealed record HeartbeatResponse
     public DateTimeOffset? FastPollUntil { get; init; }
     public int PollSeconds { get; init; } = 60;
     public DateTimeOffset? ServerTime { get; init; }
+    /// <summary>What Fortress made of an update report (applied, rolled_back, or the update's status when it was settled already).</summary>
+    public string? UpdateReport { get; init; }
 }
 
 public sealed record AgentJob
@@ -239,6 +245,11 @@ public static class AgentInfo
 
     public static string OperatingSystem => System.Runtime.InteropServices.RuntimeInformation.OSDescription.Trim() is { Length: > 0 } os
         ? os[..Math.Min(os.Length, 120)] : "unknown";
+
+    /// <summary>The platform releases are built for (AG6b): win-x64 or linux-x64; null elsewhere (no update is offered).</summary>
+    public static string? Platform => System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.X64
+        ? (System.OperatingSystem.IsWindows() ? "win-x64" : System.OperatingSystem.IsLinux() ? "linux-x64" : null)
+        : null;
 
     public static string Machine => Environment.MachineName is { Length: > 0 } m ? m[..Math.Min(m.Length, 120)] : "unknown";
 }

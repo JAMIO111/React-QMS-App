@@ -17,6 +17,8 @@ public sealed record AgentPaths(string Root)
     public string CredentialsFolder => Path.Combine(Root, "credentials");
     /// <summary>The customer's own limit on what this agent may read (optional).</summary>
     public string AllowListFile => Path.Combine(Root, "allowlist.json");
+    /// <summary>The service's name in the Windows service manager.</summary>
+    public const string ServiceName = "FortressConnectorAgent";
 
     public static AgentPaths From(string? dataDir)
     {
@@ -34,7 +36,7 @@ public static class Logging
     /// A daily log file kept 14 days (and the console when someone is watching). The log never holds tokens, keys, passwords or row contents:
     /// the agent only ever logs ids, kinds, counts and Fortress's own messages.
     /// </summary>
-    public static Serilog.ILogger Create(AgentPaths paths, bool interactive)
+    public static Serilog.ILogger Create(AgentPaths paths, bool interactive, string file = "agent-.log")
     {
         Directory.CreateDirectory(paths.LogFolder);
         var config = new LoggerConfiguration()
@@ -42,7 +44,7 @@ public static class Logging
             .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
             .MinimumLevel.Override("System.Net.Http", LogEventLevel.Warning)
             .Enrich.FromLogContext()
-            .WriteTo.File(Path.Combine(paths.LogFolder, "agent-.log"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14,
+            .WriteTo.File(Path.Combine(paths.LogFolder, file), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14,
                 fileSizeLimitBytes: 20 * 1024 * 1024, rollOnFileSizeLimit: true,
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}");
         if (interactive) config = config.WriteTo.Console(outputTemplate: "{Timestamp:HH:mm:ss} [{Level:u3}] {Message:lj}{NewLine}{Exception}");
@@ -68,6 +70,24 @@ public static class Http
     {
         Timeout = TimeSpan.FromSeconds(60),
     };
+
+    private static HttpClient? downloads;
+
+    /// <summary>
+    /// For release downloads only (AG6b): follows redirects (releases are often served through a storage service's redirect), at most five, and
+    /// the update handler refuses a download that ended anywhere but https. Integrity comes from the signed manifest's SHA-256, not the address.
+    /// </summary>
+    public static HttpClient Downloads() => downloads ??= new HttpClient(new SocketsHttpHandler
+    {
+        AllowAutoRedirect = true,
+        MaxAutomaticRedirections = 5,
+        ConnectTimeout = TimeSpan.FromSeconds(20),
+        UseProxy = true,
+        Proxy = HttpClient.DefaultProxy,
+    })
+    {
+        Timeout = TimeSpan.FromMinutes(20),
+    };
 }
 
 public static class AgentJobs
@@ -79,8 +99,9 @@ public static class AgentJobs
     {
         JobHandlers? handlers = null;
         var diagnostics = new DiagnosticsHandler(paths.LogFolder, paths.AllowListFile, () => identity, () => handlers!.Capabilities());
+        var update = new UpdateHandler(paths.Root, () => Http.Downloads(), new Serilog.Extensions.Logging.SerilogLoggerFactory(Log.Logger).CreateLogger("Updates"));
         handlers = JobHandlers.ForDatabasesWithKeys(new Fortress.Agent.Adapters.DatabaseAdapters(), new CredentialStore(paths.CredentialsFolder, protector), paths.AllowListFile,
-            () => identity?.SealingKeys(DateTimeOffset.UtcNow) ?? throw new InvalidOperationException("Not registered"), new RotateKeysHandler(), diagnostics);
+            () => identity?.SealingKeys(DateTimeOffset.UtcNow) ?? throw new InvalidOperationException("Not registered"), new RotateKeysHandler(), diagnostics, update);
         return handlers;
     }
 }
@@ -106,7 +127,9 @@ public static class AgentHost
         builder.Services.AddSingleton(_ => AgentJobs.Create(paths, KeyProtectors.ForThisMachine(), identity));
         builder.Services.AddSingleton(sp => new AgentRunner(
             sp.GetRequiredService<AgentIdentity>(), sp.GetRequiredService<AgentApiClient>(), sp.GetRequiredService<JobHandlers>(),
-            sp.GetRequiredService<ILogger<AgentRunner>>(), rotation: new KeyRotation(store, sp.GetRequiredService<ILogger<AgentRunner>>())));
+            sp.GetRequiredService<ILogger<AgentRunner>>(), rotation: new KeyRotation(store, sp.GetRequiredService<ILogger<AgentRunner>>()),
+            updates: new UpdateState(paths.Root, sp.GetRequiredService<ILogger<AgentRunner>>()),
+            afterComplete: (job, ct) => job.Kind == "update_agent" ? Updater.StartSwap(paths, sp.GetRequiredService<ILogger<AgentRunner>>()) : Task.CompletedTask));
         builder.Services.AddHostedService<AgentWorker>();
         builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(30));
         using var host = builder.Build();
@@ -136,6 +159,71 @@ public sealed class AgentWorker(AgentRunner runner, IHostApplicationLifetime lif
             logger.LogCritical(e, "The agent stopped on an unexpected error");
             Environment.ExitCode = 1;
             lifetime.StopApplication();
+        }
+    }
+}
+
+/// <summary>
+/// Starting the swap once an update is staged (AG6b). On Windows the updater runs from a copy of the installed folder in the temporary folder
+/// (it cannot replace the folder it runs from), stops this service and swaps the folders; it outlives the service it stops. Elsewhere the update
+/// stays staged and the log says where it is; it is installed by hand.
+/// </summary>
+public static class Updater
+{
+    public static Task StartSwap(AgentPaths paths, Microsoft.Extensions.Logging.ILogger logger)
+    {
+        var pending = new UpdateFiles(paths.Root).ReadPending();
+        if (pending is null) return Task.CompletedTask;
+        if (!OperatingSystem.IsWindows())
+        {
+            logger.LogWarning("Update to {Version} is staged in {Folder}; this platform does not swap it in by itself: install it by hand", pending.Version, pending.Staged);
+            return Task.CompletedTask;
+        }
+        var install = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+        var copy = Path.Combine(Path.GetTempPath(), "fortress-agent-updater-" + Guid.NewGuid().ToString("N")[..8]);
+        CopyFolder(install, copy);
+        var exe = Path.Combine(copy, "FortressAgent.exe");
+        var start = new System.Diagnostics.ProcessStartInfo(exe)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = copy,
+        };
+        foreach (var a in new[] { "apply-update", "--install", install, "--service", AgentPaths.ServiceName, "--data-dir", paths.Root }) start.ArgumentList.Add(a);
+        System.Diagnostics.Process.Start(start);
+        logger.LogInformation("Update to {Version} staged; the updater has started and will restart the service", pending.Version);
+        return Task.CompletedTask;
+    }
+
+    private static void CopyFolder(string from, string to)
+    {
+        foreach (var dir in Directory.GetDirectories(from, "*", SearchOption.AllDirectories)) Directory.CreateDirectory(dir.Replace(from, to));
+        Directory.CreateDirectory(to);
+        foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories)) File.Copy(file, file.Replace(from, to), overwrite: true);
+    }
+}
+
+/// <summary>The Windows service manager, for the updater.</summary>
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
+public sealed class WindowsServiceControl(string name) : IServiceControl
+{
+    public async Task StopAsync(CancellationToken ct)
+    {
+        using var sc = new System.ServiceProcess.ServiceController(name);
+        if (sc.Status != System.ServiceProcess.ServiceControllerStatus.Stopped)
+        {
+            if (sc.Status != System.ServiceProcess.ServiceControllerStatus.StopPending) sc.Stop();
+            await Task.Run(() => sc.WaitForStatus(System.ServiceProcess.ServiceControllerStatus.Stopped, TimeSpan.FromMinutes(2)), ct);
+        }
+    }
+
+    public async Task StartAsync(CancellationToken ct)
+    {
+        using var sc = new System.ServiceProcess.ServiceController(name);
+        if (sc.Status != System.ServiceProcess.ServiceControllerStatus.Running)
+        {
+            sc.Start();
+            await Task.Run(() => sc.WaitForStatus(System.ServiceProcess.ServiceControllerStatus.Running, TimeSpan.FromMinutes(2)), ct);
         }
     }
 }

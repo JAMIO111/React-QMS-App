@@ -42,6 +42,30 @@ const job = (r: Row) => ({
   finishedAt: iso(r.finished_at),
 });
 
+const release = (r: Row) => ({
+  id: r.id as string,
+  version: r.version as string,
+  platform: r.platform as string,
+  notes: (r.notes as string | null) ?? null,
+  sizeBytes: Number(r.size_bytes),
+  publishedAt: iso(r.published_at)!,
+});
+
+const update = (r: Row) => ({
+  id: r.id as string,
+  agentId: r.agent_id as string,
+  releaseId: r.release_id as string,
+  fromVersion: (r.from_version as string | null) ?? null,
+  toVersion: r.to_version as string,
+  status: r.status as 'waiting' | 'staged' | 'applied' | 'failed' | 'rolled_back' | 'cancelled',
+  message: (r.message as string | null) ?? null,
+  jobId: (r.job_id as string | null) ?? null,
+  approvedBy: (r.approved_by_name as string | null) ?? null,
+  approvedAt: iso(r.approved_at)!,
+  stagedAt: iso(r.staged_at),
+  finishedAt: iso(r.finished_at),
+});
+
 const agentRow = (r: Row) => {
   const last = r.last_heartbeat_at ? new Date(r.last_heartbeat_at as string) : null;
   return {
@@ -125,6 +149,33 @@ export class AgentsService {
       await this.own(db, orgOf(ctx), id);
       const r = (await db.execute(sql`select app.request_agent_job(${id}::uuid, ${kind}, '{}'::jsonb, ${idempotencyKey}) as id`)).rows[0] as Row;
       return this.jobById(db, orgOf(ctx), r.id as string);
+    });
+  }
+
+  /** Published agent releases (AG6b), newest first; the agent page offers those newer than the agent for its platform. */
+  releases(ctx: RequestContext) {
+    return this.database.asUser(ctx, async (db) => {
+      const rows = (await db.execute(sql`
+        select id, version, platform, notes, size_bytes, published_at from public.integration_agent_releases
+         where status = 'published' order by published_at desc limit 100`)).rows as Row[];
+      return { data: rows.map(release) };
+    });
+  }
+
+  /** Approve an update of one agent to a release: the database checks the platform, that it is newer, one at a time, and the caller's rights. */
+  approveUpdate(ctx: RequestContext, agentId: string, releaseId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.own(db, orgOf(ctx), agentId);
+      const r = (await db.execute(sql`select app.approve_agent_update(${agentId}::uuid, ${releaseId}::uuid) as id`)).rows[0] as Row;
+      return this.updateById(db, orgOf(ctx), r.id as string);
+    });
+  }
+
+  cancelUpdate(ctx: RequestContext, updateId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.updateById(db, orgOf(ctx), updateId);
+      await db.execute(sql`select app.cancel_agent_update(${updateId}::uuid)`);
+      return this.updateById(db, orgOf(ctx), updateId);
     });
   }
 
@@ -220,11 +271,24 @@ export class AgentsService {
     }, correlationId, 'agent');
   }
 
-  heartbeat(agent: AgentCaller, body: { version?: string | null; os?: string | null; machine?: string | null; capabilities?: Record<string, unknown> | null }) {
+  heartbeat(
+    agent: AgentCaller,
+    body: {
+      version?: string | null; os?: string | null; machine?: string | null; capabilities?: Record<string, unknown> | null;
+      updateReport?: { updateId: string; outcome: 'applied' | 'rolled_back'; message?: string | null } | null;
+    },
+  ) {
     return this.database.asApi(async (c) => {
       const r = (await c.query('select app.system_agent_heartbeat($1::uuid, $2, $3, $4, $5::jsonb, $6) as r', [
         agent.agentId, body.version ?? null, body.os ?? null, body.machine ?? null, body.capabilities ? JSON.stringify(body.capabilities) : null, agent.address,
       ])).rows[0].r as { revoked: boolean; jobsWaiting?: boolean; fastPollUntil?: string | null };
+      // AG6b: what happened to a staged update (the agent says so once, after it started again: applied, or rolled back by the updater).
+      let updateReport: string | null = null;
+      if (!r.revoked && body.updateReport) {
+        updateReport = (await c.query('select app.system_agent_update_report($1::uuid, $2::uuid, $3, $4) as r', [
+          agent.agentId, body.updateReport.updateId, body.updateReport.outcome, body.updateReport.message ?? null,
+        ])).rows[0].r as string;
+      }
       const fast = !!r.fastPollUntil || !!r.jobsWaiting;
       return {
         revoked: r.revoked,
@@ -232,6 +296,7 @@ export class AgentsService {
         fastPollUntil: r.fastPollUntil ?? null,
         pollSeconds: fast ? FAST_POLL_SECONDS : POLL_SECONDS,
         serverTime: new Date().toISOString(),
+        ...(updateReport ? { updateReport } : {}),
       };
     }, agent.correlationId, 'agent');
   }
@@ -368,12 +433,36 @@ export class AgentsService {
     const events = (await db.execute(sql`
       select e.kind, e.detail, e.created_at, ${NAME('e.actor_user_id')} as actor_name from public.integration_agent_events e
        where e.agent_id = ${id}::uuid order by e.created_at desc limit 50`)).rows as Row[];
+    const updates = (await db.execute(sql`
+      select u.*, ${NAME('u.approved_by')} as approved_by_name from public.integration_agent_updates u
+       where u.agent_id = ${id}::uuid order by u.approved_at desc limit 10`)).rows as Row[];
+    const a = agentRow(rows[0]);
+    const platform = typeof a.capabilities.platform === 'string' ? a.capabilities.platform : null;
+    // The newest published release for the agent's platform that is newer than the version it runs.
+    const newer = platform && a.version
+      ? ((await db.execute(sql`
+          select id, version, platform, notes, size_bytes, published_at from public.integration_agent_releases
+           where status = 'published' and platform = ${platform}
+             and app.agent_version_parts(version) > app.agent_version_parts(${a.version})
+           order by app.agent_version_parts(version) desc limit 1`)).rows[0] as Row | undefined)
+      : undefined;
     return {
-      ...agentRow(rows[0]),
+      ...a,
+      platform,
+      updates: updates.map(update),
+      availableUpdate: newer ? release(newer) : null,
       keys: keys.map((k) => ({ fingerprint: keyFingerprint(k.signing_key as string), status: k.status as string, createdAt: iso(k.created_at)!, retiredAt: iso(k.retired_at) })),
       jobs: jobs.map(job),
       events: events.map((e) => ({ kind: e.kind as string, detail: e.detail as Record<string, unknown>, at: iso(e.created_at)!, by: (e.actor_name as string | null) ?? null })),
     };
+  }
+
+  private async updateById(db: Db, org: string, updateId: string) {
+    const r = (await db.execute(sql`
+      select u.*, ${NAME('u.approved_by')} as approved_by_name from public.integration_agent_updates u
+       where u.id = ${updateId}::uuid and u.organisation_id = ${org}::uuid`)).rows[0] as Row | undefined;
+    if (!r) throw ApiError.notFound('not_found', 'Update not found');
+    return update(r);
   }
 
   private async jobById(db: Db, org: string, jobId: string) {

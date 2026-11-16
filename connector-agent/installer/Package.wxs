@@ -60,7 +60,6 @@
         <ServiceInstall Id="AgentService" Name="FortressConnectorAgent" DisplayName="Fortress Connector Agent"
                         Description="Connects out to Fortress QMS and reads only the data you approve there. Settings &gt; Integrations &gt; Connector agents."
                         Type="ownProcess" Start="auto" ErrorControl="normal" Account="NT SERVICE\FortressConnectorAgent" Arguments="run" Vital="yes">
-          <ServiceConfig DelayedAutoStart="yes" OnInstall="yes" OnReinstall="yes" />
           <util:ServiceConfig FirstFailureActionType="restart" SecondFailureActionType="restart" ThirdFailureActionType="none"
                               RestartServiceDelayInSeconds="60" ResetPeriodInDays="1" />
         </ServiceInstall>
@@ -137,6 +136,12 @@
                  Value="&quot;[#FortressAgentExe]&quot; register --api &quot;[API_URL]&quot; --token &quot;[TOKEN]&quot; --data-dir &quot;[AGENTDATA].&quot; --replace" />
     <CustomAction Id="RegisterAgent" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec" Execute="deferred" Impersonate="no" Return="check" HideTarget="yes" />
 
+    <!-- Delayed automatic start (the network is up by then). WiX 5 refuses the MSI ServiceConfig table ("does not work as expected") and the util
+         extension's ServiceConfig has no delayed start, so sc.exe sets it once the service exists. -->
+    <SetProperty Id="DelayAgentStart" Sequence="execute" Before="DelayAgentStart" Condition="NOT REMOVE"
+                 Value="&quot;[System64Folder]sc.exe&quot; config FortressConnectorAgent start= delayed-auto" />
+    <CustomAction Id="DelayAgentStart" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec" Execute="deferred" Impersonate="no" Return="ignore" />
+
     <!-- Removing (not upgrading): tell Fortress to revoke this agent and forget the identity; never stops the removal. -->
     <SetProperty Id="DeregisterAgent" Sequence="execute" Before="DeregisterAgent" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE"
                  Value="&quot;[#FortressAgentExe]&quot; deregister --force --data-dir &quot;[AGENTDATA].&quot;" />
@@ -154,7 +159,8 @@
 
     <InstallExecuteSequence>
       <Custom Action="ResetDataAcl" Before="InstallFiles" Condition="NOT REMOVE" />
-      <Custom Action="RegisterAgent" After="InstallServices" Condition="TOKEN AND NOT REMOVE" />
+      <Custom Action="DelayAgentStart" After="InstallServices" Condition="NOT REMOVE" />
+      <Custom Action="RegisterAgent" After="DelayAgentStart" Condition="TOKEN AND NOT REMOVE" />
       <Custom Action="DeregisterAgent" After="StopServices" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
     </InstallExecuteSequence>
   </Package>

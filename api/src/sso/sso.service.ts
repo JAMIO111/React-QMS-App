@@ -1,9 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
+import { ENV, Env } from '../config/env';
 import { DatabaseService, Db } from '../database/database.service';
 import { checkVerificationRecord, DnsTxtResolver, verificationValue } from './dns-txt';
+import { SamlMetadata, serviceProviderValues, SsoAdminRefused, SsoAdminUnavailable, SupabaseSsoAdmin } from './supabase-sso-admin';
 
 type Row = Record<string, unknown>;
 const orgOf = (ctx: RequestContext) => {
@@ -26,6 +29,8 @@ export class SsoService {
   constructor(
     private readonly database: DatabaseService,
     private readonly dns: DnsTxtResolver,
+    private readonly admin: SupabaseSsoAdmin,
+    @Inject(ENV) private readonly env: Env,
   ) {}
 
   overview(ctx: RequestContext) {
@@ -39,12 +44,106 @@ export class SsoService {
     });
   }
 
-  removeDomain(ctx: RequestContext, id: string, reason: string) {
-    return this.database.asUser(ctx, async (db) => {
+  async removeDomain(ctx: RequestContext, id: string, reason: string) {
+    await this.database.asUser(ctx, async (db) => {
       await this.ownDomain(db, ctx, id);
       await db.execute(sql`select app.remove_sso_domain(${id}::uuid, ${reason})`);
-      return this.load(db, ctx);
     });
+    await this.syncProviderDomains(orgOf(ctx), ctx.correlationId);
+    return this.overview(ctx);
+  }
+
+  /**
+   * Connects the company's identity provider (SS2): registers it with Supabase for the organisation's verified domains, or replaces the active
+   * one's metadata. Supabase reads and checks the metadata; its refusal comes back as 409 sso_rule in its own words.
+   */
+  async saveProvider(ctx: RequestContext, metadata: SamlMetadata) {
+    this.requireAdmin();
+    const org = orgOf(ctx);
+    const state = await this.state(org, ctx.correlationId);
+    if (!state.verified.length) throw new ApiError(409, 'sso_rule', 'Verify at least one email domain first: single sign-on is offered to people at your verified domains.');
+    const kept = 'metadataUrl' in metadata ? { url: metadata.metadataUrl, sha: null } : { url: null, sha: createHash('sha256').update(metadata.metadataXml).digest('hex') };
+    const record = await this.callAdmin(() =>
+      state.supabaseId ? this.admin.update(state.supabaseId, { metadata, domains: state.verified }) : this.admin.create(metadata, state.verified),
+    );
+    try {
+      await this.database.asApi(
+        (c) =>
+          c.query(`select app.system_sso_save_provider($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7::text[])`, [
+            org, ctx.user.id, record.id, record.entityId, kept.url, kept.sha, state.verified,
+          ]),
+        ctx.correlationId,
+        'sso',
+      );
+    } catch (e) {
+      // Recorded nowhere: take a newly made provider back out of Supabase so the two never disagree.
+      if (!state.supabaseId) await this.admin.remove(record.id).catch(() => undefined);
+      throw e;
+    }
+    return this.overview(ctx);
+  }
+
+  /** Switches single sign-on off: the provider leaves Supabase (its domains are free again) and is kept here as disabled, with the reason. */
+  async disableProvider(ctx: RequestContext, reason: string) {
+    this.requireAdmin();
+    const state = await this.state(orgOf(ctx), ctx.correlationId);
+    if (!state.providerId || !state.supabaseId) throw new ApiError(409, 'sso_rule', 'Single sign-on is not connected');
+    await this.callAdmin(() => this.admin.remove(state.supabaseId!));
+    await this.database.asApi(
+      (c) => c.query(`select app.system_sso_disable_provider($1::uuid, $2::uuid, $3)`, [state.providerId, ctx.user.id, reason]),
+      ctx.correlationId,
+      'sso',
+    );
+    return this.overview(ctx);
+  }
+
+  /** Sends the verified domains to Supabase when they differ from what it holds. A failure is recorded on the provider, never thrown. */
+  async syncProviderDomains(organisationId: string, correlationId: string) {
+    const state = await this.state(organisationId, correlationId);
+    if (!state.providerId || !state.supabaseId || !this.admin.enabled) return;
+    const same = state.domains.length === state.verified.length && state.domains.every((d, i) => d === state.verified[i]);
+    if (same && !state.lastError) return;
+    let error: string | null = null;
+    try {
+      await this.admin.update(state.supabaseId, { domains: state.verified });
+    } catch (e) {
+      error = (e as Error).message;
+      this.log.warn(`SSO domains for ${organisationId} not sent to Supabase: ${error}`);
+    }
+    await this.database.asApi(
+      (c) => c.query(`select app.system_sso_provider_synced($1::uuid, $2::text[], $3)`, [state.providerId, state.verified, error]),
+      correlationId,
+      'sso',
+    );
+  }
+
+  private requireAdmin() {
+    if (!this.admin.enabled) throw new ApiError(503, 'sso_unavailable', 'Single sign-on cannot be set up yet: Fortress has not been given access to manage sign-in providers.');
+  }
+
+  private async callAdmin<T>(work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (e) {
+      if (e instanceof SsoAdminRefused) throw new ApiError(409, 'sso_rule', `Supabase did not accept it: ${e.message}`);
+      if (e instanceof SsoAdminUnavailable) throw new ApiError(503, 'sso_unavailable', 'The sign-in service could not be reached. Try again in a few minutes.');
+      throw e;
+    }
+  }
+
+  private async state(organisationId: string, correlationId: string) {
+    const row = await this.database.asApi(
+      async (c) => (await c.query(`select provider_id, supabase_provider_id, domains, verified, last_error from app.system_sso_provider_state($1::uuid)`, [organisationId])).rows[0] as Row,
+      correlationId,
+      'sso',
+    );
+    return {
+      providerId: (row?.provider_id as string) ?? null,
+      supabaseId: (row?.supabase_provider_id as string) ?? null,
+      domains: ((row?.domains as string[]) ?? []).slice().sort(),
+      verified: ((row?.verified as string[]) ?? []).slice().sort(),
+      lastError: (row?.last_error as string) ?? null,
+    };
   }
 
   /** Look the record up now and record the outcome. Answers with the overview plus what this check found. */
@@ -59,6 +158,7 @@ export class SsoService {
       ctx.correlationId,
       'sso',
     );
+    if (state === 'verified') await this.syncProviderDomains(orgOf(ctx), ctx.correlationId);
     const overview = await this.overview(ctx);
     return { ...overview, check: { domainId: id, outcome: state as 'verified' | 'unverified' | 'failed' | 'refused' } };
   }
@@ -140,7 +240,45 @@ export class SsoService {
         removedReason: (d.removed_reason as string) ?? null,
       };
     });
+    const providers = await db.execute<Row>(sql`
+      select p.id, p.supabase_provider_id, p.entity_id, p.metadata_url, p.metadata_sha256, p.status, p.domains, p.last_synced_at, p.last_error,
+             p.created_at, p.disabled_at, p.disabled_reason,
+             nullif(btrim(concat_ws(' ', cp.first_name, cp.surname)), '') as created_by,
+             nullif(btrim(concat_ws(' ', up.first_name, up.surname)), '') as updated_by,
+             nullif(btrim(concat_ws(' ', dp.first_name, dp.surname)), '') as disabled_by
+        from public.organisation_sso_providers p
+        left join public.profiles cp on cp.id = p.created_by
+        left join public.profiles up on up.id = p.updated_by
+        left join public.profiles dp on dp.id = p.disabled_by
+       where p.organisation_id = ${org}::uuid
+       order by p.status = 'active' desc, p.created_at desc
+       limit 6`);
+    const providerOf = (p: Row) => ({
+      id: p.id as string,
+      /** The id Supabase knows it by: "Test sign-in" starts a sign-in with it. */
+      supabaseProviderId: p.supabase_provider_id as string,
+      status: p.status as 'active' | 'disabled',
+      entityId: (p.entity_id as string) ?? null,
+      metadataUrl: (p.metadata_url as string) ?? null,
+      metadataKind: (p.metadata_url ? 'url' : 'xml') as 'url' | 'xml',
+      domains: (p.domains as string[]) ?? [],
+      lastSyncedAt: iso(p.last_synced_at),
+      lastError: (p.last_error as string) ?? null,
+      createdAt: iso(p.created_at)!,
+      createdBy: (p.created_by as string) ?? null,
+      updatedBy: (p.updated_by as string) ?? null,
+      disabledAt: iso(p.disabled_at),
+      disabledBy: (p.disabled_by as string) ?? null,
+      disabledReason: (p.disabled_reason as string) ?? null,
+    });
+    const active = providers.rows.find((p) => p.status === 'active');
     return {
+      /** Whether this server can register providers with Supabase (SUPABASE_MANAGEMENT_TOKEN set). */
+      available: this.admin.enabled,
+      /** What the company's IT enters for Fortress. */
+      serviceProvider: serviceProviderValues(this.env.SUPABASE_URL),
+      provider: active ? providerOf(active) : null,
+      previousProviders: providers.rows.filter((p) => p.status !== 'active').map(providerOf),
       mode: ((s.sso_mode as string) ?? 'off') as 'off' | 'optional' | 'required',
       join: ((s.sso_join as string) ?? 'invited') as 'invited' | 'domain',
       trustIdpMfa: s.sso_trust_idp_mfa !== false,

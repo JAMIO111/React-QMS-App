@@ -27,6 +27,14 @@ export class MeService {
     });
   }
 
+  /** Records that the person accepted this version of the terms (SS2: a first company sign-in never saw our sign-up form). */
+  acceptTerms(ctx: RequestContext, version: string): Promise<MeResponse> {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.accept_terms(${version})`);
+      return this.load(db, ctx);
+    });
+  }
+
   private async load(db: Db, ctx: RequestContext): Promise<MeResponse> {
     const [profile] = await db.select().from(profiles).where(eq(profiles.id, ctx.user.id));
     const memberships = await db.execute<{
@@ -65,6 +73,8 @@ export class MeService {
         surname: profile?.surname ?? null,
         jobTitle: profile?.jobTitle ?? null,
         avatarPath: profile?.avatarPath ?? null,
+        termsAcceptedAt: profile?.termsAcceptedAt ? new Date(profile.termsAcceptedAt).toISOString() : null,
+        termsVersion: profile?.termsVersion ?? null,
       },
       mfa: {
         level: ctx.user.claims.aal === 'aal2' ? 'aal2' : 'aal1',

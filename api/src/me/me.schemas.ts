@@ -19,6 +19,9 @@ export const Profile = z.object({
   surname: z.string().nullable(),
   jobTitle: z.string().nullable(),
   avatarPath: z.string().nullable(),
+  /** When and which version of Fortress's terms the person accepted (null: not yet, e.g. after a first company sign-in). */
+  termsAcceptedAt: z.string().nullable(),
+  termsVersion: z.string().nullable(),
 });
 
 export const Membership = z.object({
@@ -41,3 +44,5 @@ export const MfaStatus = z.object({
 });
 export const MeResponse = z.object({ profile: Profile, memberships: z.array(Membership), mfa: MfaStatus });
 export type MeResponse = z.infer<typeof MeResponse>;
+
+export const AcceptTermsBody = z.object({ version: z.string().trim().regex(/^[A-Za-z0-9._-]{1,20}$/) }).strict();

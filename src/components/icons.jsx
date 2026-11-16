@@ -71,6 +71,7 @@ import {
   QrCode as LucideQrCode,
   RectangleEllipsis as LucideRectangleEllipsis,
   RefreshCw as LucideRefreshCw,
+  ExternalLink as LucideExternalLink,
   RotateCcw as LucideRotateCcw,
   Archive as LucideArchive,
   Save as LucideSave,
@@ -235,6 +236,7 @@ export const PoundSterlingIcon = withDefaults(LucidePoundSterling);
 export const QrCodeIcon = withDefaults(LucideQrCode);
 export const RectangleEllipsisIcon = withDefaults(LucideRectangleEllipsis);
 export const RefreshCwIcon = withDefaults(LucideRefreshCw);
+export const ExternalLinkIcon = withDefaults(LucideExternalLink);
 export const RotateCcwIcon = withDefaults(LucideRotateCcw);
 export const ArchiveIcon = withDefaults(LucideArchive);
 export const SaveIcon = withDefaults(LucideSave);

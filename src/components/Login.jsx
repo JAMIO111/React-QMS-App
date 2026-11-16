@@ -149,6 +149,16 @@ const Login = () => {
             <VerifyEmail email={unverifiedEmail} startCooldown={false} />
           </div>
         )}
+        <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-secondary-text">
+          <span className="h-px flex-1 bg-border-color" />or<span className="h-px flex-1 bg-border-color" />
+        </div>
+        <Link
+          to="/sso"
+          className={`w-full rounded-lg border border-border-color bg-secondary-bg p-2.5 text-center text-base font-semibold text-primary-text hover:border-border-dark-color ${
+            loading ? "pointer-events-none opacity-50" : ""
+          }`}>
+          Sign in with your company account
+        </Link>
         <div className="flex flex-row gap-2 text-sm">
           <p className="text-secondary-text">New to Fortress QMS?</p>
           <Link

@@ -125,6 +125,10 @@ const ssoRequest = ({ action, id, body }) => {
       return { path: `/security/sso/domains/${id}/verify`, method: "POST" };
     case "removeDomain":
       return { path: `/security/sso/domains/${id}/remove`, method: "POST", body };
+    case "saveProvider":
+      return { path: "/security/sso/provider", method: "PUT", body };
+    case "disableProvider":
+      return { path: "/security/sso/provider/disable", method: "POST", body };
     default:
       throw new Error(`Unknown single sign-on action ${action}`);
   }

@@ -1,6 +1,6 @@
 # Single sign-on (SAML) — plan
 
-**Status:** agreed 2026-11-16 (SS1–SS12 as recommended) · **SS0 done as far as it can be without a paid plan** (§12; the live sign-in check waits for Pro) · **SS1 built** (migration `20260316100000_sso_domains.sql`, §13; not yet applied live) · **Brief:** `docs/design-brief.md` §12 Phase 7 ("SSO and enterprise identity"), §5 (security), §14 (definition of done), §15 (non-goals) · **Builds on:** `docs/security-plan.md` (network policy, allowed email domains, maximum session age, operator recovery)
+**Status:** agreed 2026-11-16 (SS1–SS12 as recommended) · **SS0 done as far as it can be without a paid plan** (§12; the live sign-in check waits for Pro) · **SS1 done** (migration `20260316100000_sso_domains.sql`, §13; applied live 2026-11-16) · **SS2 built** (migration `20260317100000_sso_providers.sql`, §14; not yet applied live) · **Brief:** `docs/design-brief.md` §12 Phase 7 ("SSO and enterprise identity"), §5 (security), §14 (definition of done), §15 (non-goals) · **Builds on:** `docs/security-plan.md` (network policy, allowed email domains, maximum session age, operator recovery)
 
 ## 1. Why
 
@@ -124,7 +124,7 @@ This plan adds:
 |---|---|
 | **SS0 spike** | Upgrade check, done by you: the Supabase project must be on Pro or above, with SAML switched on. Then: (1) does a fine-grained token limited to SSO configuration on one project exist (SS2)? (2) register a test identity provider, a free SAML test IdP or a Microsoft Entra test tenant, and look at a real token: `amr`, `aal`, `user_metadata`, what `signInWithSSO` returns for an unknown domain; (3) can one domain be linked to two providers? Results written into this plan before SS1. |
 | **SS1** | Migration: settings, domains (with DNS verification in the API), errors; Settings → Security card with domain steps. (The providers table moved to SS2, the sign-in rows and `app.sso_satisfied` to SS3, where they are first used.) |
-| **SS2** | `SupabaseSsoAdmin` (Management API: create / update / disable), provider form, IT values, attribute mapping; sign-in button, `/sso`, `/auth/callback`, first sign-in page (names, terms), accepting invitations. |
+| **SS2** | `SupabaseSsoAdmin` (Management API: create / update / disable), provider form, IT values, attribute mapping; sign-in button, `/sso`, `/auth/callback`, first sign-in page (names, terms). (Invitations reach SSO people through the existing invitation list on Start your organisation; the invitation email that sends people to `/sso` belongs with the modes in SS3.) |
 | **SS3** | Enforcement: modes, `app.sso_satisfied` in the membership helpers, SS7 two-factor trust, break-glass, `403 sso_required` + blocked screen, session-age default, notices to owners, operator recovery. |
 | **SS4** | Joining on first sign-in (SS4 b), moving password members across (SS5) with the user-column drift test, "SSO" badges and matches on Settings → Users. |
 | **SSX** | Exit check: live guardrails and advisors, a **journey step** (the journey's fake Supabase gains `signInWithSSO` and a fake identity provider: set up, verify domain, test sign-in, require, password refused, break-glass in, move a member across), real sign-in against the SS0 test IdP on the Dev deployment, `docs/sso-exit-report.md`. |
@@ -234,3 +234,40 @@ Found from the documentation and from **the Supabase Auth server's source** (`gi
   - `api/src/sso/dns-txt.spec.ts`;
   - `api/test/sso.e2e-spec.ts` (fake DNS), plus the API sweep and the worker test's step list;
   - `SingleSignOn.test.jsx`.
+
+## 14. SS2 as built (migration `20260317100000_sso_providers.sql`)
+
+- **`organisation_sso_providers`.**
+  - Columns:
+    - `supabase_provider_id` (the provider's id in Supabase Auth, unique), `entity_id`;
+    - `metadata_url` (https) **or** `metadata_sha256` (when a file was uploaded; the XML itself stays with Supabase);
+    - `status` active | disabled, `domains` (as last sent to Supabase), `last_synced_at`, `last_error`;
+    - `disabled_at` / `_by` / `_reason`.
+  - At most one active per organisation; disabled ones are kept, never changed, never deleted.
+  - Audited, RLS `security.read`, and **no writes but the API login's**:
+    - `app.system_sso_save_provider` (new, or new metadata for the active one);
+    - `app.system_sso_provider_synced` (a failed sync keeps the last good domains and the error);
+    - `app.system_sso_disable_provider` (needs a reason);
+    - `app.system_sso_provider_state` (the provider, the domains last sent, the domains verified now and the last error);
+    - `app.sso_verified_domains`.
+- **`app.handle_new_user`** now also reads `given_name` / `family_name` / `name` from a company sign-in. A full name is split at the first space, and our sign-up form's `first_name` / `surname` still win.
+- **`app.accept_terms(version)`** writes only the signed-in person's own profile.
+- **API:**
+  - `SupabaseSsoAdmin` (`api/src/sso/supabase-sso-admin.ts`; `ManagementApiSsoAdmin` calls `POST/PUT/DELETE https://api.supabase.com/v1/projects/{ref}/config/auth/sso/providers[/{id}]` with **`SUPABASE_MANAGEMENT_TOKEN`**). The project ref comes from `SUPABASE_URL` or `SUPABASE_PROJECT_REF`. `ATTRIBUTE_MAPPING` asks for given name, surname and display name under the usual SAML names, never Entra's `…/claims/name`, which is the sign-in address.
+  - `PUT /security/sso/provider {metadataUrl | metadataXml}` needs a verified domain. A refusal from Supabase answers `409 sso_rule` "Supabase did not accept it: …". If the database cannot record the provider, the new one is taken back out of Supabase.
+  - `POST /security/sso/provider/disable {reason}` removes it from Supabase, so its domains are free again.
+  - `503 sso_unavailable` without the token.
+  - Verifying or removing a domain sends the verified list to Supabase when it changed, or when the last sync failed.
+  - `GET /security/sso` adds `available`, `serviceProvider` (entity ID, ACS, metadata addresses), `provider` and `previousProviders`.
+  - `/me` profile carries `termsAcceptedAt` / `termsVersion`, and there is `POST /me/terms {version}`.
+- **UI:**
+  - The Single sign-on card's second half (`Settings/SsoProvider.jsx`): the values for IT with Copy buttons and Fortress's metadata download; **Connect your sign-in** (an address or a file; a file that is not SAML metadata is refused in the browser); the connected sign-in with **Test sign-in** (`/sso?provider=<id>` in a new tab), **Replace metadata** and **Disconnect** (reason); earlier connections; a sync problem shown.
+  - **Sign in with your company account** on the sign-in page leads to `/sso` (`auth/SsoSignIn.jsx`: work email → its domain; `?domain=` and `?provider=` start at once; "has not set up single sign-on" in words).
+  - `/auth/callback` (`auth/AuthCallback.jsx`) waits for the session the client reads from the address, then goes on.
+  - **First company sign-in** (`auth/FirstSignIn.jsx`, from `ProtectedRoute` when the account's identity is `sso:…` and no terms are recorded) asks for the terms, and for a name when the company sent none.
+  - Helpers `lib/sso.js`; `ui/CopyButton.jsx`; `ExternalLinkIcon`.
+- **Tests:**
+  - `supabase/tests/sso_providers.test.sql`, plus a tenancy sweep seed and the guardrails list;
+  - `api/test/sso.e2e-spec.ts` (fake Management API; provider, domain sync, disable, terms), `supabase-sso-admin.spec.ts`, and the API sweep allowlist for `POST /me/terms`;
+  - `SingleSignOn.test.jsx`, `SingleSignOnPages.test.jsx`, `lib/sso.test.js`.
+- **Not checked live:** the real Management API and a real sign-in both wait for the Pro plan. The fake follows Supabase's documented request and response shapes.

@@ -452,6 +452,8 @@ BEGIN
   -- Single sign-on (SS1): a domain claimed (seeded directly; people add domains through app.add_sso_domain).
   INSERT INTO public.organisation_sso_domains (organisation_id, domain) VALUES (a, 'sweep-sso.test');
   INSERT INTO sweep VALUES ('sso_domain', (SELECT id FROM public.organisation_sso_domains WHERE organisation_id = a));
+  -- SS2: a provider (written by the API login).
+  PERFORM app.system_sso_save_provider(a, '50000000-0000-0000-0000-0000000000a1', gen_random_uuid(), 'https://idp.sweep.test/entity', 'https://idp.sweep.test/metadata', NULL, '{}');
   -- SE5: a change of the policy is written down by the trigger (monitor and back, so nobody is blocked in the sweep).
   UPDATE public.organisation_settings SET network_policy = 'monitor' WHERE organisation_id = a;
   UPDATE public.organisation_settings SET network_policy = 'off' WHERE organisation_id = a;

@@ -10,6 +10,8 @@ export const profiles = pgTable('profiles', {
   surname: text('surname'),
   jobTitle: text('job_title'),
   avatarPath: text('avatar_path'),
+  termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
+  termsVersion: text('terms_version'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
 });

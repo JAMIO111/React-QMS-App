@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 
 let sso;
 let pending;
@@ -21,16 +22,29 @@ const verified = { id: "d2", domain: "uk.acme.com", state: "verified", record: r
 const failing = { id: "d3", domain: "old.acme.com", state: "failing", record: record("old.acme.com"), verifiedAt: "2026-11-01T09:00:00Z", checkError: "The verification record was not found" };
 const removed = { id: "d4", domain: "acme.net", state: "removed", record: null, removedAt: "2026-11-14T09:00:00Z", removedBy: "Ada Owner", removedReason: "Wrong domain" };
 
+const SP = {
+  entityId: "https://ref.supabase.co/auth/v1/sso/saml/metadata",
+  acsUrl: "https://ref.supabase.co/auth/v1/sso/saml/acs",
+  metadataUrl: "https://ref.supabase.co/auth/v1/sso/saml/metadata",
+  metadataDownloadUrl: "https://ref.supabase.co/auth/v1/sso/saml/metadata?download=true",
+};
+const connected = {
+  id: "p1", supabaseProviderId: "aaaaaaaa-0000-4000-8000-000000000001", status: "active", entityId: "https://sts.windows.net/tenant/",
+  metadataUrl: "https://login.example.com/metadata.xml", metadataKind: "url", domains: ["uk.acme.com"], lastSyncedAt: "2026-11-16T09:00:00Z",
+  lastError: null, createdAt: "2026-11-16T09:00:00Z", createdBy: "Ada Owner",
+};
+const renderIt = (canManage = true) => render(<MemoryRouter><SingleSignOn canManage={canManage} /></MemoryRouter>);
+
 beforeEach(() => {
   mutate.mockReset();
   showToast.mockReset();
   pending = null;
-  sso = { mode: "off", join: "invited", trustIdpMfa: true, canManage: true, allowedEmailDomains: [], domains: [waiting, verified, failing, removed] };
+  sso = { available: true, serviceProvider: SP, provider: null, previousProviders: [], mode: "off", join: "invited", trustIdpMfa: true, canManage: true, allowedEmailDomains: [], domains: [waiting, verified, failing, removed] };
 });
 
 describe("Settings → Security → Single sign-on", () => {
   it("lists the domains with their state, the record to add while not verified, and folds removed ones away", async () => {
-    render(<SingleSignOn canManage />);
+    renderIt();
     const list = screen.getByRole("list", { name: "Single sign-on domains" });
     const acme = within(list).getByRole("listitem", { name: "acme.com" });
     expect(within(acme).getByText("Waiting for the record")).toBeInTheDocument();
@@ -53,7 +67,7 @@ describe("Settings → Security → Single sign-on", () => {
   });
 
   it("adds a domain as typed, refusing what is not one", async () => {
-    render(<SingleSignOn canManage />);
+    renderIt();
     await userEvent.type(screen.getByLabelText("Add a domain"), "not a domain");
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Type a domain such as acme.com.");
@@ -65,7 +79,7 @@ describe("Settings → Security → Single sign-on", () => {
   });
 
   it("checks now and says what was found", async () => {
-    render(<SingleSignOn canManage />);
+    renderIt();
     const acme = screen.getByRole("listitem", { name: "acme.com" });
     await userEvent.click(within(acme).getByRole("button", { name: "Check now" }));
     expect(mutate).toHaveBeenCalledWith({ action: "verifyDomain", id: "d1" }, expect.anything());
@@ -74,7 +88,7 @@ describe("Settings → Security → Single sign-on", () => {
   });
 
   it("removes with a reason", async () => {
-    render(<SingleSignOn canManage />);
+    renderIt();
     await userEvent.click(within(screen.getByRole("listitem", { name: "uk.acme.com" })).getByRole("button", { name: "Actions" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Remove…" }));
     const dialog = screen.getByRole("dialog");
@@ -87,9 +101,73 @@ describe("Settings → Security → Single sign-on", () => {
   });
 
   it("shows no controls to someone who may only read", () => {
-    render(<SingleSignOn canManage={false} />);
+    renderIt(false);
     expect(screen.queryByRole("button", { name: "Check now" })).toBeNull();
     expect(screen.queryByLabelText("Add a domain")).toBeNull();
     expect(screen.queryByRole("button", { name: "Actions" })).toBeNull();
+  });
+
+  it("gives IT the values to enter and connects the company's sign-in from its metadata address", async () => {
+    renderIt();
+    const section = screen.getByRole("region", { name: "Your company's sign-in" });
+    expect(within(section).getByText(SP.acsUrl)).toBeInTheDocument();
+    expect(within(section).getByRole("button", { name: "Copy the reply url (acs)" })).toBeInTheDocument();
+    await userEvent.click(within(section).getByRole("button", { name: "Connect your sign-in" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText(/Metadata address/), "http://not-secure.example.com/m.xml");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("starts with https://");
+    expect(mutate).not.toHaveBeenCalled();
+    await userEvent.clear(within(dialog).getByLabelText(/Metadata address/));
+    await userEvent.type(within(dialog).getByLabelText(/Metadata address/), "https://login.example.com/metadata.xml");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "saveProvider", body: { metadataUrl: "https://login.example.com/metadata.xml" } }, expect.anything());
+  });
+
+  it("reads a metadata file, refusing one that is not SAML metadata", async () => {
+    renderIt();
+    await userEvent.click(screen.getByRole("button", { name: "Connect your sign-in" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "A file" }));
+    const input = within(dialog).getByLabelText(/Metadata file/);
+    await userEvent.upload(input, new File(["<html>not it</html>"], "page.html", { type: "text/xml" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("not SAML metadata");
+    const xml = '<EntityDescriptor entityID="https://idp"></EntityDescriptor>';
+    await userEvent.upload(input, new File([xml], "federation.xml", { type: "text/xml" }));
+    await within(dialog).findByText("federation.xml");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "saveProvider", body: { metadataXml: xml } }, expect.anything());
+  });
+
+  it("shows the connected sign-in with Test sign-in, and disconnects with a reason", async () => {
+    sso = { ...sso, provider: connected, previousProviders: [{ ...connected, id: "p0", status: "disabled", disabledAt: "2026-11-01T09:00:00Z", disabledBy: "Ada Owner", disabledReason: "Old tenant" }] };
+    renderIt();
+    const box = screen.getByRole("region", { name: "Connected sign-in" });
+    expect(within(box).getByText("Connected")).toBeInTheDocument();
+    expect(within(box).getByText(/For uk.acme.com/)).toBeInTheDocument();
+    expect(within(box).getByRole("link", { name: /Test sign-in/ })).toHaveAttribute("href", `/sso?provider=${connected.supabaseProviderId}`);
+    expect(screen.getByText(/Earlier connections \(1\)/)).toBeInTheDocument();
+    await userEvent.click(within(box).getByRole("button", { name: "Disconnect" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText(/Why\?/), "Moving tenant");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "disableProvider", body: { reason: "Moving tenant" } }, expect.anything());
+  });
+
+  it("says when the server cannot connect a sign-in yet, and when no domain is verified", () => {
+    sso = { ...sso, available: false };
+    const { unmount } = renderIt();
+    expect(screen.getByText("Not available yet")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect your sign-in" })).toBeNull();
+    unmount();
+    sso = { ...sso, available: true, domains: [waiting] };
+    renderIt();
+    expect(screen.getByText("Verify a domain above first.")).toBeInTheDocument();
+  });
+
+  it("a sync problem is shown on the connected sign-in", () => {
+    sso = { ...sso, provider: { ...connected, lastError: "Supabase answered 500" } };
+    renderIt();
+    expect(screen.getByText(/The domains could not be sent/)).toBeInTheDocument();
   });
 });

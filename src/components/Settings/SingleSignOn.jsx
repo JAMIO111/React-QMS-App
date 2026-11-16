@@ -5,6 +5,7 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import CopyButton from "../ui/CopyButton";
 import RowActionsMenu from "../ui/RowActionsMenu";
+import SsoProvider from "./SsoProvider";
 import CTAButton from "@/components/CTAButton";
 import { TextAreaField } from "../master-data/shared";
 import { PlusIcon, RefreshCwIcon } from "@/components/icons";
@@ -26,7 +27,7 @@ const Pill = ({ tone, children }) => {
 /**
  * Settings → Security → Single sign-on (docs/sso-plan.md SS1): the email domains the organisation proves it owns with a DNS TXT record. Proving a
  * domain is the first step: a domain linked to single sign-on sends everyone at it to the company's own sign-in, so another company must never
- * be able to claim it. The sign-in provider and the Off / Optional / Required choice come in the next slices.
+ * be able to claim it. Below the domains, `SsoProvider` connects the company's sign-in (SS2); the Off / Optional / Required choice comes in SS3.
  */
 export default function SingleSignOn({ canManage }) {
   const sso = useSso();
@@ -66,7 +67,7 @@ export default function SingleSignOn({ canManage }) {
       bodyClassName="flex flex-col gap-4">
       <p className="text-sm text-secondary-text">
         For each domain, add the TXT record shown at the company that runs the domain&apos;s DNS, then choose <strong>Check now</strong>. Once a domain is
-        verified it is yours in Fortress: no other organisation can use it. Connecting your sign-in provider comes next.
+        verified it is yours in Fortress: no other organisation can use it. Then connect your company's sign-in below.
       </p>
 
       {live.length === 0 ? (
@@ -108,6 +109,7 @@ export default function SingleSignOn({ canManage }) {
           )}
         </div>
       )}
+      <SsoProvider sso={s} canManage={canManage} />
       {removing && <RemoveDomainDialog domain={removing} onClose={() => setRemoving(null)} />}
     </MenuCard>
   );

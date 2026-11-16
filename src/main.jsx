@@ -156,6 +156,8 @@ const Login = lazy(() => import("./components/Login.jsx"));
 const SignUp = lazy(() => import("./components/SignUp.jsx"));
 const ForgotPassword = lazy(() => import("./components/auth/ForgotPassword.jsx"));
 const SetPassword = lazy(() => import("./components/auth/SetPassword.jsx"));
+const SsoSignIn = lazy(() => import("./components/auth/SsoSignIn.jsx"));
+const AuthCallback = lazy(() => import("./components/auth/AuthCallback.jsx"));
 const MfaPage = lazy(() => import("./components/mfa/MfaPage.jsx"));
 const HomeRedirect = lazy(() => import("./components/HomeRedirect.jsx"));
 const ProtectedRoute = lazy(() => import("./components/ProtectedRoute.jsx"));
@@ -191,6 +193,9 @@ const router = createBrowserRouter([
       { path: "forgot-password", element: <ForgotPassword /> },
       { path: "set-password", element: <SetPassword /> },
       { path: "mfa", element: <MfaPage /> },
+      // Single sign-on (docs/sso-plan.md SS2): the company sign-in, and where it comes back to.
+      { path: "sso", element: <SsoSignIn /> },
+      { path: "auth/callback", element: <AuthCallback /> },
     ],
   },
   {

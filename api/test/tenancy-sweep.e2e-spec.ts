@@ -22,6 +22,7 @@ const UNSCOPED = new Set([
   'GET /api/v1/health',
   'GET /api/v1/me',
   'PATCH /api/v1/me',
+  'POST /api/v1/me/terms', // the signed-in person's own profile only
   'POST /api/v1/organisations',
   'GET /api/v1/invitations',
   'POST /api/v1/invitations/{id}/accept',

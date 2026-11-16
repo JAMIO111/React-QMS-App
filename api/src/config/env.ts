@@ -15,6 +15,11 @@ const EnvSchema = z
     JWT_ISSUER: z.string().optional(),
     /** Optional: lets the API send invitation emails through Supabase Auth. Server-side only. */
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
+    /** Single sign-on (docs/sso-plan.md SS2): a Supabase personal access token scoped to this project and Auth Config: Read-write, so owners can
+     *  register their SAML provider themselves. Server-side only. Unset: Settings → Security says single sign-on cannot be set up yet (503 sso_unavailable). */
+    SUPABASE_MANAGEMENT_TOKEN: z.string().min(20).optional(),
+    /** The Supabase project reference. Unset: taken from SUPABASE_URL (<ref>.supabase.co). */
+    SUPABASE_PROJECT_REF: z.string().regex(/^[a-z0-9]{10,40}$/).optional(),
     /** Where invitation emails send people (the frontend's sign-in page). */
     INVITE_REDIRECT_URL: z.string().url().optional(),
     /** Stripe (billing). Optional: without them billing routes answer 503 billing_unavailable and nothing else changes. Server-side only. */

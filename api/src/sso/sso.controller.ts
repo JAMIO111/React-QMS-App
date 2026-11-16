@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
@@ -8,6 +8,13 @@ import { SsoService } from './sso.service';
 
 const DomainBody = z.object({ domain: z.string().trim().min(1).max(253) }).strict();
 const RemoveBody = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
+const ProviderBody = z.union([
+  z.object({ metadataUrl: z.string().trim().url().max(2000).refine((u) => u.startsWith('https://'), 'The metadata address must start with https://') }).strict(),
+  z
+    .object({ metadataXml: z.string().trim().min(50).max(262_144) })
+    .strict()
+    .refine((b) => /EntityDescriptor/.test(b.metadataXml), 'That is not SAML metadata: it has no EntityDescriptor'),
+]);
 
 /** Settings → Security → Single sign-on (docs/sso-plan.md SS1). Owners and admins (security.read / security.manage). */
 @ApiTags('security')
@@ -36,6 +43,22 @@ export class SsoController {
   @ApiOkResponse({ description: 'Look the TXT record up now. Answers with the overview and check.outcome (verified, unverified, failed, refused)' })
   verifyDomain(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.verifyDomain(ctx, parse(Uuid, id));
+  }
+
+  @Put('provider')
+  @OrganisationScoped('security.manage')
+  @ApiBody({ schema: openApiSchema(ProviderBody) })
+  @ApiOkResponse({ description: 'Connect the company’s SAML identity provider (its metadata address, or the metadata file), or replace the connected one’s metadata. Needs a verified domain. 503 sso_unavailable when this server cannot manage providers' })
+  saveProvider(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.saveProvider(ctx, parse(ProviderBody, body));
+  }
+
+  @Post('provider/disable')
+  @OrganisationScoped('security.manage')
+  @ApiBody({ schema: openApiSchema(RemoveBody) })
+  @ApiOkResponse({ description: 'Disconnect the identity provider (kept in the history with the reason); its domains are free again' })
+  disableProvider(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.disableProvider(ctx, parse(RemoveBody, body).reason);
   }
 
   @Post('domains/:id/remove')

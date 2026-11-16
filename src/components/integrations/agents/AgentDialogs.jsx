@@ -5,33 +5,11 @@ import ComboField from "../../ui/ComboField";
 import Callout from "../../ui/Callout";
 import CTAButton from "@/components/CTAButton";
 import { TextAreaField } from "../../master-data/shared";
-import { CopyIcon, CheckIcon } from "@/components/icons";
+import CopyButton from "../../ui/CopyButton";
 import { useAgentMutation } from "../../../hooks/useAgents";
 import { useToast } from "../../../contexts/ToastProvider";
 import { describeApiError } from "../../../lib/api-client";
 import { TOKEN_LIFETIMES } from "../../../lib/agents";
-
-const CopyButton = ({ text, label }) => {
-  const [done, setDone] = useState(false);
-  return (
-    <CTAButton
-      type="neutral"
-      size="md"
-      icon={done ? CheckIcon : CopyIcon}
-      aria-label={label}
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          setDone(true);
-          setTimeout(() => setDone(false), 2000);
-        } catch {
-          setDone(false);
-        }
-      }}>
-      {done ? "Copied" : "Copy"}
-    </CTAButton>
-  );
-};
 
 /** The token, once: copy it into the installer. Then the steps to install. */
 const TokenResult = ({ result, onClose }) => (

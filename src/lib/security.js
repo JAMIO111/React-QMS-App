@@ -64,3 +64,24 @@ export const normaliseDomain = (text) => {
   const v = String(text ?? "").trim().toLowerCase().replace(/^@/, "");
   return /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(v) ? v : null;
 };
+
+// ---------------------------------------------------------------------------
+// Single sign-on (docs/sso-plan.md SS1)
+// ---------------------------------------------------------------------------
+
+/** How a domain stands, in words and a pill tone. */
+export const SSO_DOMAIN_STATES = {
+  verified: { label: "Verified", tone: "success" },
+  unverified: { label: "Waiting for the record", tone: "warning" },
+  failing: { label: "Record missing", tone: "error" },
+  removed: { label: "Removed", tone: "neutral" },
+};
+
+/** What a check found, for the toast after "Check now". */
+export const ssoCheckWords = (outcome, domain) =>
+  ({
+    verified: { type: "success", title: "Verified", message: `${domain} is proved to be yours.` },
+    unverified: { type: "info", title: "Not found yet", message: `The record is not at ${domain} yet. DNS changes can take up to an hour.` },
+    failed: { type: "error", title: "Record missing", message: `${domain} stays verified for now, but its record could not be found.` },
+    refused: { type: "error", title: "Cannot be verified", message: `${domain} cannot be used here; the reason is shown under it.` },
+  })[outcome] ?? { type: "info", title: "Checked", message: domain };

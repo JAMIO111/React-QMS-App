@@ -18,6 +18,7 @@ vi.mock("../../hooks/useSecurity", () => ({
   useAccessDenials: ({ mode } = {}) => ({ data: { data: mode ? denials.filter((d) => d.mode === mode) : denials }, isLoading: false, error: null }),
   useSecurityMutation: () => ({ mutate, isPending: false, variables: null }),
 }));
+vi.mock("./SingleSignOn", () => ({ default: () => <div>single sign-on card</div> }));
 vi.mock("./RequireMfaSetting", () => ({ default: ({ canManage }) => <div>two-factor switch {String(canManage)}</div> }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast }) }));
 

@@ -507,6 +507,8 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/security/networks/{id}': { name: 'Hijacked' },
     'POST /api/v1/security/networks/{id}/remove': { reason: 'Hijacked' },
     'POST /api/v1/security/networks/{id}/restore': undefined,
+    'POST /api/v1/security/sso/domains/{id}/verify': undefined,
+    'POST /api/v1/security/sso/domains/{id}/remove': { reason: 'Hijacked' },
     'GET /api/v1/integrations/agents/{id}': undefined,
     'PATCH /api/v1/integrations/agents/{id}': { name: 'Hijacked' },
     'POST /api/v1/integrations/agents/{id}/revoke': { reason: 'Hijacked' },
@@ -985,6 +987,8 @@ const hasSample = (op: Op) =>
     'PATCH /api/v1/security/networks/{id}',
     'POST /api/v1/security/networks/{id}/remove',
     'POST /api/v1/security/networks/{id}/restore',
+    'POST /api/v1/security/sso/domains/{id}/verify',
+    'POST /api/v1/security/sso/domains/{id}/remove',
     'GET /api/v1/integrations/agents/{id}',
     'PATCH /api/v1/integrations/agents/{id}',
     'POST /api/v1/integrations/agents/{id}/revoke',
@@ -1029,6 +1033,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/inspection-imports/')) return a.inspectionImport;
   if (path.startsWith('/api/v1/inspection-import-rows/')) return a.importRow;
   if (path.startsWith('/api/v1/security/networks/')) return a.network;
+  if (path.startsWith('/api/v1/security/sso/domains/')) return a.ssoDomain;
   if (path.startsWith('/api/v1/integrations/agents/')) return a.agent;
   if (path.startsWith('/api/v1/integrations/agent-jobs/')) return a.agentJob;
   if (path.startsWith('/api/v1/integrations/agent-updates/')) return a.agentUpdate;
@@ -1252,6 +1257,8 @@ beforeAll(async () => {
     a.importRow = (await q1(`select id from public.inspection_import_rows where import_id = $1`, [a.inspectionImport])).id;
     // Security (SE1/SE2): an approved network of A's.
     a.network = (await q1(`select app.save_organisation_network($1, '{"name":"Sweep HQ","network":"203.0.113.0/28"}'::jsonb, null) as id`, [ids.orgA])).id;
+    // Single sign-on (SS1): a domain A claimed.
+    a.ssoDomain = (await q1(`select app.add_sso_domain($1, 'sweep-sso.test') as id`, [ids.orgA])).id;
     // Connector agents (AG1): an agent of A's with a job, and an unused registration (seeded directly: agents register through the API login).
     a.agent = (await admin.query(`insert into public.integration_agents (organisation_id, name) values ($1, 'Sweep agent') returning id`, [ids.orgA])).rows[0].id;
     a.agentJob = (await admin.query(`insert into public.integration_agent_jobs (organisation_id, agent_id, kind) values ($1, $2, 'ping') returning id`, [ids.orgA, a.agent])).rows[0].id;

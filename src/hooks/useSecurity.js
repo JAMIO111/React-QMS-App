@@ -101,3 +101,65 @@ export const useBlockedOrganisations = () => {
   const me = useMe();
   return new Set((me.data?.memberships ?? []).filter((m) => m.network?.state === "denied").map((m) => m.organisation.id));
 };
+
+// ---------------------------------------------------------------------------
+// Single sign-on (docs/sso-plan.md SS1): the settings and the email domains proved by a DNS record.
+// ---------------------------------------------------------------------------
+
+/** Single sign-on: mode, joining, two-factor trust and the domains with the record to publish and their state. */
+export const useSso = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "sso"),
+    queryFn: () => apiFetch("/security/sso", { organisationId }),
+    enabled: !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+const ssoRequest = ({ action, id, body }) => {
+  switch (action) {
+    case "addDomain":
+      return { path: "/security/sso/domains", method: "POST", body };
+    case "verifyDomain":
+      return { path: `/security/sso/domains/${id}/verify`, method: "POST" };
+    case "removeDomain":
+      return { path: `/security/sso/domains/${id}/remove`, method: "POST", body };
+    default:
+      throw new Error(`Unknown single sign-on action ${action}`);
+  }
+};
+
+/**
+ * Every change answers with the whole single sign-on view, which replaces the cache. Removing a domain shows at once (optimistic) and is put
+ * back if the server refuses; adding and checking wait for the server (the record to publish and the DNS answer come from it).
+ */
+export const useSsoMutation = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  const ssoKey = key(organisationId, "sso");
+  return useMutation({
+    mutationFn: (vars) => {
+      const { path, method, body } = ssoRequest(vars);
+      return apiFetch(path, { method, body, organisationId });
+    },
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: ssoKey });
+      const previous = queryClient.getQueryData(ssoKey);
+      if (previous && vars.action === "removeDomain") {
+        queryClient.setQueryData(ssoKey, {
+          ...previous,
+          domains: previous.domains.map((d) => (d.id === vars.id ? { ...d, state: "removed", record: null, removedReason: vars.body.reason } : d)),
+        });
+      }
+      return { previous };
+    },
+    onError: (_e, _v, context) => {
+      if (context?.previous) queryClient.setQueryData(ssoKey, context.previous);
+    },
+    onSuccess: (data) => {
+      if (data && data.domains) queryClient.setQueryData(ssoKey, data);
+    },
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};

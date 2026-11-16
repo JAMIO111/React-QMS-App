@@ -1,6 +1,6 @@
 # Single sign-on (SAML) — plan
 
-**Status:** agreed 2026-11-16 (SS1–SS12 as recommended) · **SS0 done as far as it can be without a paid plan** (§12; the live sign-in check waits for Pro) · **Brief:** `docs/design-brief.md` §12 Phase 7 ("SSO and enterprise identity"), §5 (security), §14 (definition of done), §15 (non-goals) · **Builds on:** `docs/security-plan.md` (network policy, allowed email domains, maximum session age, operator recovery)
+**Status:** agreed 2026-11-16 (SS1–SS12 as recommended) · **SS0 done as far as it can be without a paid plan** (§12; the live sign-in check waits for Pro) · **SS1 built** (migration `20260316100000_sso_domains.sql`, §13; not yet applied live) · **Brief:** `docs/design-brief.md` §12 Phase 7 ("SSO and enterprise identity"), §5 (security), §14 (definition of done), §15 (non-goals) · **Builds on:** `docs/security-plan.md` (network policy, allowed email domains, maximum session age, operator recovery)
 
 ## 1. Why
 
@@ -123,7 +123,7 @@ This plan adds:
 | Slice | Content |
 |---|---|
 | **SS0 spike** | Upgrade check, done by you: the Supabase project must be on Pro or above, with SAML switched on. Then: (1) does a fine-grained token limited to SSO configuration on one project exist (SS2)? (2) register a test identity provider, a free SAML test IdP or a Microsoft Entra test tenant, and look at a real token: `amr`, `aal`, `user_metadata`, what `signInWithSSO` returns for an unknown domain; (3) can one domain be linked to two providers? Results written into this plan before SS1. |
-| **SS1** | Migration: settings, domains (with DNS verification in the API), providers table, sign-in rows, `app.sso_satisfied` (not yet used), errors; Settings → Security card with domain steps. |
+| **SS1** | Migration: settings, domains (with DNS verification in the API), errors; Settings → Security card with domain steps. (The providers table moved to SS2, the sign-in rows and `app.sso_satisfied` to SS3, where they are first used.) |
 | **SS2** | `SupabaseSsoAdmin` (Management API: create / update / disable), provider form, IT values, attribute mapping; sign-in button, `/sso`, `/auth/callback`, first sign-in page (names, terms), accepting invitations. |
 | **SS3** | Enforcement: modes, `app.sso_satisfied` in the membership helpers, SS7 two-factor trust, break-glass, `403 sso_required` + blocked screen, session-age default, notices to owners, operator recovery. |
 | **SS4** | Joining on first sign-in (SS4 b), moving password members across (SS5) with the user-column drift test, "SSO" badges and matches on Settings → Users. |
@@ -190,3 +190,47 @@ Found from the documentation and from **the Supabase Auth server's source** (`gi
 - **Testing without the paid plan:** the Auth server is open source, builds with the Go already in this container, and runs against the local test Postgres with SAML switched on. The SS2 and SS3 tests can drive a **real Supabase Auth server and a local test identity provider**, instead of a fake, to get real tokens. The live check on the Dev deployment still needs Pro.
 
 **Still to do once the project is on Pro:** switch on SAML, register a test identity provider (a free Microsoft Entra test tenant), sign in, and confirm the token matches the table above. That is the first step of SSX if it has not happened earlier.
+
+## 13. SS1 as built (migration `20260316100000_sso_domains.sql`)
+
+- **Settings.** `organisation_settings` gains the SSO settings:
+  - `sso_mode` (off, the default);
+  - `sso_join` (invited);
+  - `sso_default_role_id`, `sso_default_department_id` (composite foreign key to the organisation's departments);
+  - `sso_trust_idp_mfa` (true);
+  - `sso_mode_changed_at` / `_by`.
+  
+  Nothing changes them yet, and they are not in the column UPDATE grant. SS3 adds the functions.
+- **`organisation_sso_domains`:**
+  - one row per claim;
+  - `verification_token` is 32 hex characters made by the database. It is never chosen by the caller, so another organisation's public record can never prove a claim;
+  - `verified_at` / `_by`, `last_checked_at`, `check_failed_at`, `check_error`;
+  - removed with a reason, never deleted;
+  - the domain and its token never change (trigger);
+  - audited, RLS `security.read`, no table writes;
+  - unique indexes: one live claim per organisation and domain, and **one verified claim of a domain across Fortress**.
+- **Functions:**
+  - `app.add_sso_domain(org, domain)` and `app.remove_sso_domain(id, reason)` need `security.manage`. A domain must pass `app.normalise_email_domain`, at most 20 per organisation, and must not be held by another organisation. While allowed email domains are set, it must be one of them or a sub-domain of one. Removing also takes away the verification.
+  - API login only:
+    - `app.system_sso_domain_check(id, found, error, checked_by)` returns verified / unverified / failed (verified before, now missing: flagged, still verified) / refused. It locks every claim of the domain, so two organisations cannot both verify.
+    - `app.system_sso_domains_due(limit)` lists verified domains not checked for 7 days.
+  - Errors: **`QM030` → `409 sso_rule`**.
+- **API** (`api/src/sso/`):
+  - `GET /security/sso` (`security.read`) returns the mode, join, two-factor trust, allowed email domains, and the domains with state verified / unverified / failing / removed and the record to publish `{type: TXT, name, value: fortress-verification=<token>}`.
+  - `POST /security/sso/domains {domain}`, `POST …/domains/{id}/verify` (returns `check.outcome`) and `POST …/domains/{id}/remove {reason}` need `security.manage`.
+  - The TXT lookup is `DnsTxtResolver` (`SystemDnsTxtResolver`: system resolver, 4 s, 2 tries; tests swap in a fake). `checkVerificationRecord` matches the whole value ignoring case and surrounding spaces, and never throws.
+  - Worker step **`sso-domains`** re-checks up to 10 due domains each tick.
+- **UI:** `Settings/SingleSignOn.jsx`, the **Single sign-on** card on Settings → Security:
+  - domains with a state pill;
+  - the record to add, with Copy buttons (the shared `ui/CopyButton.jsx`, moved from the agent dialogs);
+  - **Check now**, with a toast saying what was found;
+  - a "…" menu → Remove with a reason (optimistic);
+  - removed domains folded away;
+  - read-only without `security.manage`.
+  
+  Hooks `useSso` / `useSsoMutation` (`useSecurity.js`); words `SSO_DOMAIN_STATES`, `ssoCheckWords` (`lib/security.js`).
+- **Tests:**
+  - `supabase/tests/sso_domains.test.sql`, plus a tenancy sweep seed and the guardrails list;
+  - `api/src/sso/dns-txt.spec.ts`;
+  - `api/test/sso.e2e-spec.ts` (fake DNS), plus the API sweep and the worker test's step list;
+  - `SingleSignOn.test.jsx`.

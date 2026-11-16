@@ -175,6 +175,9 @@ import { FileLinkSigner, SupabaseFileLinkSigner } from './files/file-links';
 import { FilesController } from './files/files.controller';
 import { FilesService } from './files/files.service';
 import { SecurityController } from './security/security.controller';
+import { SsoController } from './sso/sso.controller';
+import { SsoService } from './sso/sso.service';
+import { DnsTxtResolver, SystemDnsTxtResolver } from './sso/dns-txt';
 import { SecurityService } from './security/security.service';
 import { RemindersService } from './reminders/reminders.service';
 import { WorkflowsController } from './workflows/workflows.controller';
@@ -216,6 +219,7 @@ export class AppModule implements NestModule {
         WorkerController,
         RemindersController,
         SecurityController,
+        SsoController,
         FilesController,
         WorkflowsController,
         OnboardingController,
@@ -335,6 +339,8 @@ export class AppModule implements NestModule {
         WorkerJobRegistry,
         RemindersService,
         SecurityService,
+        SsoService,
+        { provide: DnsTxtResolver, useClass: SystemDnsTxtResolver },
         FilesService,
         WorkflowsService,
         WorkflowEngine,

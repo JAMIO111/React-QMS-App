@@ -9,6 +9,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import { TextAreaField } from "../master-data/shared";
 import RequireMfaSetting from "./RequireMfaSetting";
+import SingleSignOn from "./SingleSignOn";
 import { PlusIcon, ShieldCheckIcon } from "@/components/icons";
 import { useOrganisationDetails, usePermissions } from "../../hooks/useQmsApi";
 import { useAccessDenials, useAccessPolicy, useSecurityMutation } from "../../hooks/useSecurity";
@@ -43,6 +44,7 @@ const SettingsSecurity = () => {
       <AccessRestrictions canManage={canManage} />
       <WhoCanBeInvited canManage={canManage} />
       <SessionAge canManage={canManage} />
+      <SingleSignOn canManage={canManage} />
       <BlockedAttempts canManage={canManage} />
     </div>
   );

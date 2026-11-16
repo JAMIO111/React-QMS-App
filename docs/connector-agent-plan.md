@@ -323,7 +323,7 @@ applied.
 
 ### AG5b — files in a folder (2026-11-16)
 
-Migration `20260310100000_agent_folders.sql` (**not yet applied live**). Pushing the API before it breaks the file-part route and the folder parts
+Migration `20260310100000_agent_folders.sql`, applied live 2026-11-16 (6 functions, file parts table with RLS and no access for signed-in users, live guardrails 0 violations). Pushing the API before it breaks the file-part route and the folder parts
 of the record-source and agent-job routes; nothing existing breaks.
 
 **Decisions taken in building it.**

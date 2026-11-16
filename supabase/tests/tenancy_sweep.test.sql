@@ -457,6 +457,11 @@ BEGIN
   -- SS3: a break-glass member, a sign-in and a change (seeded directly / by the API login; people write through functions).
   INSERT INTO public.sso_break_glass_members (organisation_id, user_id) VALUES (a, '50000000-0000-0000-0000-0000000000a1');
   PERFORM app.system_record_sso_sign_in(a, '50000000-0000-0000-0000-0000000000a1', 'break_glass');
+  -- SS4: a move and a dismissed match (seeded directly; people write through functions).
+  INSERT INTO public.sso_account_moves (organisation_id, membership_id, from_user_id, to_user_id, email, by_self)
+    VALUES (a, gen_random_uuid(), '50000000-0000-0000-0000-0000000000a1', '50000000-0000-0000-0000-0000000000a1', 'owner.a@sweep.test', false);
+  INSERT INTO public.sso_match_dismissals (organisation_id, password_user_id, sso_user_id)
+    VALUES (a, '50000000-0000-0000-0000-0000000000a1', '50000000-0000-0000-0000-0000000000a1');
   -- SE5: a change of the policy is written down by the trigger (monitor and back, so nobody is blocked in the sweep).
   UPDATE public.organisation_settings SET network_policy = 'monitor' WHERE organisation_id = a;
   UPDATE public.organisation_settings SET network_policy = 'off' WHERE organisation_id = a;

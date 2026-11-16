@@ -23,6 +23,8 @@ const UNSCOPED = new Set([
   'GET /api/v1/me',
   'PATCH /api/v1/me',
   'POST /api/v1/me/terms', // the signed-in person's own profile only
+  'POST /api/v1/me/sso-join', // joins only an organisation whose own company sign-in this session came through (sso plan SS4); checked in the database
+  'POST /api/v1/me/move-to-sso', // the person's own accounts only, after the old password is checked (sso plan SS5)
   'POST /api/v1/organisations',
   'GET /api/v1/invitations',
   'POST /api/v1/invitations/{id}/accept',
@@ -78,6 +80,7 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/members/{id}/role-assignments': { roleId: b.viewerRole },
     'POST /api/v1/members/{id}/departments': { departmentId: a.department },
     'POST /api/v1/members/{id}/invitation/resend': undefined,
+    'POST /api/v1/members/{id}/move-to-sso': { userId: '50000000-0000-0000-0000-0000000000b1' },
     'POST /api/v1/members/{id}/invitation/revoke': undefined,
     'PATCH /api/v1/department-memberships/{id}': { primary: true },
     'DELETE /api/v1/department-memberships/{id}': undefined,
@@ -660,6 +663,7 @@ const hasSample = (op: Op) =>
     'POST /api/v1/competence/competence-attachments/{id}/restore',
     'POST /api/v1/members/{id}/invitation/resend',
     'POST /api/v1/members/{id}/invitation/revoke',
+    'POST /api/v1/members/{id}/move-to-sso',
     'PATCH /api/v1/department-memberships/{id}',
     'DELETE /api/v1/department-memberships/{id}',
     'DELETE /api/v1/role-assignments/{id}',

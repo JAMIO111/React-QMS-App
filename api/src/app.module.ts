@@ -179,6 +179,7 @@ import { SsoController } from './sso/sso.controller';
 import { SsoService } from './sso/sso.service';
 import { DnsTxtResolver, SystemDnsTxtResolver } from './sso/dns-txt';
 import { ManagementApiSsoAdmin, SupabaseSsoAdmin } from './sso/supabase-sso-admin';
+import { PasswordVerifier, SupabasePasswordVerifier } from './sso/password-verifier';
 import { SecurityService } from './security/security.service';
 import { RemindersService } from './reminders/reminders.service';
 import { WorkflowsController } from './workflows/workflows.controller';
@@ -343,6 +344,7 @@ export class AppModule implements NestModule {
         SsoService,
         { provide: DnsTxtResolver, useClass: SystemDnsTxtResolver },
         { provide: SupabaseSsoAdmin, useClass: ManagementApiSsoAdmin },
+        { provide: PasswordVerifier, useClass: SupabasePasswordVerifier },
         FilesService,
         WorkflowsService,
         WorkflowEngine,

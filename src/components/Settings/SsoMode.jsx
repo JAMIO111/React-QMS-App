@@ -8,6 +8,7 @@ import ComboField from "../ui/ComboField";
 import CTAButton from "@/components/CTAButton";
 import { XIcon } from "@/components/icons";
 import { useSsoMutation } from "../../hooks/useSecurity";
+import { useAllDepartments } from "../../hooks/useQmsApi";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
 import { SSO_MODES, whenWords } from "../../lib/security";
@@ -72,12 +73,85 @@ export default function SsoMode({ sso, canManage }) {
           : "People who sign in with their company account also need Fortress two-factor while the organisation requires it."}
       </p>
 
+      <Joining sso={sso} canManage={canManage} mutate={mutate} fail={fail} />
       <BreakGlass sso={sso} canManage={canManage} mutate={mutate} fail={fail} />
       <SignIns sso={sso} />
+      <Moves sso={sso} />
       <Changes sso={sso} />
 
       {confirming && <RequireDialog sso={sso} onClose={() => setConfirming(false)} mutate={mutate} showToast={showToast} />}
     </section>
+  );
+}
+
+function Joining({ sso, canManage, mutate, fail }) {
+  const departments = useAllDepartments();
+  const joining = sso.joining ?? { roleId: null, departmentId: null, roleOptions: [] };
+  const viewer = joining.roleOptions.find((r) => r.key === "viewer") ?? joining.roleOptions[0];
+  const save = (body) => mutate.mutate({ action: "setJoining", body }, { onError: fail("Not changed") });
+  const deptOptions = (departments.data?.data ?? []).filter((d) => d.active !== false);
+  return (
+    <div className="flex flex-col gap-2">
+      <h4 className="text-sm font-semibold text-primary-text">Who can join</h4>
+      <SlidingToggle
+        ariaLabel="Who can join"
+        mode="radio"
+        options={[
+          { value: "invited", label: "Invited people only", disabled: !canManage },
+          { value: "domain", label: "Anyone at your domains", disabled: !canManage || !viewer },
+        ]}
+        value={sso.join}
+        onChange={(join) => save(join === "domain" ? { join, roleId: joining.roleId ?? viewer?.id, departmentId: joining.departmentId } : { join })}
+      />
+      <p className="text-xs text-secondary-text">
+        {sso.join === "domain"
+          ? "Anyone who signs in with their company account at your verified domains joins straight away, with no seat. Owners and admins are told of each one."
+          : "People sign in with their company account once they have been invited."}
+      </p>
+      {sso.join === "domain" && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ComboField
+            label="They start as"
+            required
+            value={joining.roleId}
+            disabled={!canManage}
+            options={joining.roleOptions.map((r) => ({ value: r.id, label: r.name }))}
+            onChange={(roleId) => roleId && save({ join: "domain", roleId, departmentId: joining.departmentId })}
+          />
+          <ComboField
+            label="In the department"
+            value={joining.departmentId}
+            disabled={!canManage}
+            placeholder="No department"
+            options={deptOptions.map((d) => ({ value: d.id, label: d.name, hint: d.siteCode ?? d.site?.code ?? undefined }))}
+            onChange={(departmentId) => save({ join: "domain", roleId: joining.roleId, departmentId })}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Moves({ sso }) {
+  const moves = sso.moves ?? [];
+  if (!moves.length) return null;
+  return (
+    <details className="text-sm">
+      <summary className="cursor-pointer text-secondary-text">Accounts moved to company sign-in ({moves.length})</summary>
+      <ul className="mt-2 flex flex-col gap-1" aria-label="Accounts moved">
+        {moves.map((m) => {
+          const count = Object.values(m.moved ?? {}).reduce((a, b) => a + Number(b), 0);
+          const skipped = Object.keys(m.skipped ?? {}).length;
+          return (
+            <li key={m.id} className="text-secondary-text">
+              {whenWords(m.at)}: <span className="text-primary-text">{m.name ?? m.email}</span>
+              {m.bySelf ? " (confirmed with their old password)" : ""} — {count} open {count === 1 ? "item" : "items"} moved
+              {skipped ? `, ${skipped} ${skipped === 1 ? "kind" : "kinds"} left where their own rules refused it` : ""}
+            </li>
+          );
+        })}
+      </ul>
+    </details>
   );
 }
 

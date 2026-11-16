@@ -12,6 +12,7 @@ vi.mock("../../hooks/useSecurity", () => ({
   useSso: () => ({ data: sso, isLoading: false, isError: false }),
   useSsoMutation: () => ({ mutate, isPending: !!pending, variables: pending }),
 }));
+vi.mock("../../hooks/useQmsApi", () => ({ useAllDepartments: () => ({ data: { data: [{ id: "dep-qa", name: "Quality", active: true }] } }) }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast }) }));
 
 import SingleSignOn from "./SingleSignOn";

@@ -12,6 +12,7 @@ import { configureApp } from '../src/app.factory';
 import { AppModule } from '../src/app.module';
 import { DnsTxtResolver } from '../src/sso/dns-txt';
 import { SsoService } from '../src/sso/sso.service';
+import { PasswordVerifier } from '../src/sso/password-verifier';
 import { SamlMetadata, SsoAdminRefused, SsoProviderRecord, SupabaseSsoAdmin } from '../src/sso/supabase-sso-admin';
 import { makeIds, requireDb, seed, testEnv, token } from './helpers';
 
@@ -61,7 +62,19 @@ class FakeAdmin extends SupabaseSsoAdmin {
   }
 }
 
+class FakePasswords extends PasswordVerifier {
+  accounts = new Map<string, { password: string; userId: string }>();
+  get enabled() {
+    return true;
+  }
+  async verify(email: string, password: string) {
+    const a = this.accounts.get(email.toLowerCase());
+    return a && a.password === password ? a.userId : null;
+  }
+}
+
 const ids = makeIds('55a1');
+const passwords = new FakePasswords();
 const dns = new FakeDns();
 const sso = new FakeAdmin();
 let app: INestApplication;
@@ -73,7 +86,7 @@ beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });
   await seed(admin, ids, '-ss1');
   const env = testEnv({ RATE_LIMIT_PER_MINUTE: '10000' });
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(env)] }).overrideProvider(DnsTxtResolver).useValue(dns).overrideProvider(SupabaseSsoAdmin).useValue(sso).compile();
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(env)] }).overrideProvider(DnsTxtResolver).useValue(dns).overrideProvider(SupabaseSsoAdmin).useValue(sso).overrideProvider(PasswordVerifier).useValue(passwords).compile();
   const nest = moduleRef.createNestApplication<NestExpressApplication>({ bufferLogs: true, rawBody: true });
   app = configureApp(nest, env);
   await app.init();
@@ -329,5 +342,95 @@ describe('requiring the company sign-in', () => {
     expect(list.body.data.find((o: { organisationId: string }) => o.organisationId === ids.orgA).sso).toEqual({ mode: 'optional', connected: true });
     await api().get('/api/v1/ncrs').set(await with_(ids.inspectorA, password())).expect(200);
     await api().put('/api/v1/security/sso/mode').set(await as(ids.ownerA)).send({ mode: 'off' }).expect(200);
+  });
+});
+
+/**
+ * SS4: joining on the first company sign-in, and moving a password member onto their company account (docs/sso-plan.md SS4, SS5). The rules
+ * and the classification of every column that names a user are tested in supabase/tests/sso_joining_moves.test.sql.
+ */
+describe('joining with a company account and moving accounts across', () => {
+  const NEWBIE = '55a10000-0000-4000-8000-0000000000c1';
+  const IVY = '55a10000-0000-4000-8000-0000000000c2';
+  const IVY_SSO = '55a10000-0000-4000-8000-0000000000c3';
+  const SAM = '55a10000-0000-4000-8000-0000000000c4';
+  const SAM_SSO = '55a10000-0000-4000-8000-0000000000c5';
+  let providerId: string;
+  const saml = (email: string) => ({ email, aal: 'aal1', amr: [{ method: 'sso/saml', provider: providerId, timestamp: Math.floor(Date.now() / 1000) }] });
+  const meAs = async (user: string, email: string) => ({ Authorization: `Bearer ${await token(user, saml(email))}` });
+  const inOrg = async (user: string, email: string) => ({ ...(await meAs(user, email)), 'X-Organisation-Id': ids.orgA });
+
+  beforeAll(async () => {
+    await admin.query(`insert into auth.users (id, email, is_sso_user) values
+      ($1, 'newbie@beta-ss2.test', true), ($2, 'ivy@beta-ss2.test', false), ($3, 'Ivy@beta-ss2.test', true),
+      ($4, 'sam@beta-ss2.test', false), ($5, 'sam@beta-ss2.test', true) on conflict do nothing`, [NEWBIE, IVY, IVY_SSO, SAM, SAM_SSO]);
+    for (const user of [IVY, SAM]) {
+      const m = await admin.query(`insert into public.organisation_users (organisation_id, user_id, status, joined_at) values ($1, $2, 'active', now()) returning id`, [ids.orgA, user]);
+      await admin.query(`insert into public.user_role_assignments (organisation_id, membership_id, role_id)
+        select $1, $2, id from public.roles where organisation_id = $1 and key = 'inspector'`, [ids.orgA, m.rows[0].id]);
+    }
+    passwords.accounts.set('sam@beta-ss2.test', { password: 'old-secret-1', userId: SAM });
+    const res = await api().get('/api/v1/security/sso').set(await as(ids.ownerA)).expect(200);
+    providerId = res.body.provider.supabaseProviderId;
+    await api().put('/api/v1/security/sso/mode').set(await as(ids.ownerA)).send({ mode: 'optional' }).expect(200);
+  });
+
+  it('joining is for invited people until switched on, and then only as a viewer or inspector', async () => {
+    const before = await api().get('/api/v1/me').set(await meAs(NEWBIE, 'newbie@beta-ss2.test')).expect(200);
+    expect(before.body.sso.joinable).toEqual([]);
+    const overview = await api().get('/api/v1/security/sso').set(await as(ids.ownerA)).expect(200);
+    const viewer = overview.body.joining.roleOptions.find((r: { key: string }) => r.key === 'viewer');
+    expect(overview.body.joining.roleOptions.map((r: { key: string }) => r.key).sort()).toEqual(['inspector', 'viewer']);
+    const owner = (await admin.query(`select id from public.roles where organisation_id = $1 and key = 'owner'`, [ids.orgA])).rows[0].id;
+    await api().put('/api/v1/security/sso/joining').set(await as(ids.inspectorA)).send({ join: 'domain', roleId: viewer.id }).expect(403);
+    const refused = await api().put('/api/v1/security/sso/joining').set(await as(ids.ownerA)).send({ join: 'domain', roleId: owner }).expect(409);
+    expect(refused.body.error.message).toMatch(/viewer or an inspector/);
+    const res = await api().put('/api/v1/security/sso/joining').set(await as(ids.ownerA)).send({ join: 'domain', roleId: viewer.id }).expect(200);
+    expect(res.body).toMatchObject({ join: 'domain', joining: { roleId: viewer.id, departmentId: null } });
+  });
+
+  it('someone new at the domain joins with their company sign-in', async () => {
+    const me = await api().get('/api/v1/me').set(await meAs(NEWBIE, 'newbie@beta-ss2.test')).expect(200);
+    expect(me.body.sso.joinable).toEqual([expect.objectContaining({ id: ids.orgA, roleName: 'Viewer' })]);
+    const joined = await api().post('/api/v1/me/sso-join').set(await meAs(NEWBIE, 'newbie@beta-ss2.test')).send({ organisationId: ids.orgA }).expect(201);
+    expect(joined.body.memberships.map((m: { organisation: { id: string } }) => m.organisation.id)).toContain(ids.orgA);
+    expect(joined.body.sso.joinable).toEqual([]);
+    await api().post('/api/v1/me/sso-join').set(await meAs(NEWBIE, 'newbie@beta-ss2.test')).send({ organisationId: ids.orgA }).expect(409);
+    const members = await api().get('/api/v1/members').set(await as(ids.ownerA)).expect(200);
+    expect(members.body.data.find((m: { userId: string }) => m.userId === NEWBIE)).toMatchObject({ companyAccount: true, status: 'active' });
+  });
+
+  it('a member manager sees matches and moves a member onto their company account', async () => {
+    await api().get('/api/v1/members/sso-matches').set(await as(ids.inspectorA)).expect(403);
+    const matches = await api().get('/api/v1/members/sso-matches').set(await as(ids.ownerA)).expect(200);
+    const ivy = matches.body.data.find((m: { passwordUserId: string }) => m.passwordUserId === IVY);
+    expect(ivy).toMatchObject({ ssoUserId: IVY_SSO, email: 'ivy@beta-ss2.test', ssoMember: false });
+    const res = await api().post(`/api/v1/members/${ivy.membershipId}/move-to-sso`).set(await as(ids.ownerA)).send({ userId: IVY_SSO }).expect(200);
+    expect(res.body.member).toMatchObject({ userId: IVY_SSO, companyAccount: true, status: 'active' });
+    expect(res.body.skipped).toEqual({});
+    await api().get('/api/v1/ncrs').set(await inOrg(IVY_SSO, 'Ivy@beta-ss2.test')).expect(200);
+    const overview = await api().get('/api/v1/security/sso').set(await as(ids.ownerA)).expect(200);
+    expect(overview.body.moves[0]).toMatchObject({ email: 'ivy@beta-ss2.test', bySelf: false });
+  });
+
+  it('“not the same person” is not offered again', async () => {
+    const res = await api().post('/api/v1/members/sso-matches/dismiss').set(await as(ids.ownerA)).send({ passwordUserId: SAM, ssoUserId: SAM_SSO }).expect(200);
+    expect(res.body.data.find((m: { passwordUserId: string }) => m.passwordUserId === SAM)).toBeUndefined();
+  });
+
+  it('the person moves themselves by proving their old password', async () => {
+    const me = await api().get('/api/v1/me').set(await meAs(SAM_SSO, 'sam@beta-ss2.test')).expect(200);
+    expect(me.body.sso.moveCandidates).toEqual([expect.objectContaining({ id: ids.orgA })]);
+    const wrong = await api().post('/api/v1/me/move-to-sso').set(await meAs(SAM_SSO, 'sam@beta-ss2.test')).send({ organisationId: ids.orgA, password: 'guess' }).expect(409);
+    expect(wrong.body.error.message).toMatch(/not the password of your old account/);
+    const moved = await api().post('/api/v1/me/move-to-sso').set(await meAs(SAM_SSO, 'sam@beta-ss2.test')).send({ organisationId: ids.orgA, password: 'old-secret-1' }).expect(201);
+    expect(moved.body.memberships.map((m: { organisation: { id: string } }) => m.organisation.id)).toContain(ids.orgA);
+    expect(moved.body.sso.moveCandidates).toEqual([]);
+    const row = await admin.query(`select by_self from public.sso_account_moves where organisation_id = $1 and to_user_id = $2`, [ids.orgA, SAM_SSO]);
+    expect(row.rows).toEqual([{ by_self: true }]);
+  });
+
+  afterAll(async () => {
+    await api().put('/api/v1/security/sso/mode').set(await as(ids.ownerA)).send({ mode: 'off' });
   });
 });

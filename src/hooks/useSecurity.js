@@ -135,6 +135,8 @@ const ssoRequest = ({ action, id, body }) => {
       return { path: "/security/sso/two-factor", method: "PUT", body };
     case "setBreakGlass":
       return { path: "/security/sso/break-glass", method: "PUT", body };
+    case "setJoining":
+      return { path: "/security/sso/joining", method: "PUT", body };
     default:
       throw new Error(`Unknown single sign-on action ${action}`);
   }
@@ -157,6 +159,13 @@ export const useSsoMutation = () => {
       await queryClient.cancelQueries({ queryKey: ssoKey });
       const previous = queryClient.getQueryData(ssoKey);
       // Switches and lists show at once; the server's answer replaces them, a refusal puts them back.
+      if (previous && vars.action === "setJoining") {
+        queryClient.setQueryData(ssoKey, {
+          ...previous,
+          join: vars.body.join,
+          joining: { ...previous.joining, roleId: vars.body.roleId ?? null, departmentId: vars.body.departmentId ?? null },
+        });
+      }
       if (previous && vars.action === "setTrust") queryClient.setQueryData(ssoKey, { ...previous, trustIdpMfa: vars.body.trust });
       if (previous && vars.action === "setBreakGlass") {
         const byId = new Map((previous.passwordMembers ?? []).map((m) => [m.userId, m]));
@@ -180,5 +189,44 @@ export const useSsoMutation = () => {
       if (data && data.domains) queryClient.setQueryData(ssoKey, data);
     },
     onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** Password members whose address is also a company account (docs/sso-plan.md SS5); only for people who manage members. */
+export const useSsoMatches = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "sso-matches"),
+    queryFn: () => apiFetch("/members/sso-matches", { organisationId }),
+    enabled: !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+/** Move a member onto their company account, or say the pair is not the same person (the pair leaves the list at once). */
+export const useSsoMatchMutation = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  const matchesKey = key(organisationId, "sso-matches");
+  return useMutation({
+    mutationFn: ({ action, match }) =>
+      action === "move"
+        ? apiFetch(`/members/${match.membershipId}/move-to-sso`, { method: "POST", body: { userId: match.ssoUserId }, organisationId })
+        : apiFetch("/members/sso-matches/dismiss", { method: "POST", body: { passwordUserId: match.passwordUserId, ssoUserId: match.ssoUserId }, organisationId }),
+    onMutate: async ({ match }) => {
+      await queryClient.cancelQueries({ queryKey: matchesKey });
+      const previous = queryClient.getQueryData(matchesKey);
+      if (previous) {
+        queryClient.setQueryData(matchesKey, {
+          ...previous,
+          data: previous.data.filter((m) => !(m.passwordUserId === match.passwordUserId && m.ssoUserId === match.ssoUserId)),
+        });
+      }
+      return { previous };
+    },
+    onError: (_e, _v, context) => {
+      if (context?.previous) queryClient.setQueryData(matchesKey, context.previous);
+    },
+    onSettled: () => refreshOrganisation(queryClient, organisationId, { me: true }),
   });
 };

@@ -351,7 +351,48 @@ export class MembersService {
 
   private async directory(db: Db, organisationId: string): Promise<Member[]> {
     const res = await db.execute<MemberRow & Record<string, unknown>>(sql`select * from app.list_members(${organisationId}::uuid)`);
-    return res.rows.map(toMember);
+    const company = await db.execute<{ id: string }>(sql`select id from app.member_company_accounts(${organisationId}::uuid) as id`);
+    const ids = new Set(company.rows.map((r) => r.id));
+    return res.rows.map(toMember).map((m) => ({ ...m, companyAccount: m.userId ? ids.has(m.userId) : false }));
+  }
+
+  /** Password members whose address is also a company account at a verified domain (docs/sso-plan.md SS5). */
+  async ssoMatches(ctx: RequestContext) {
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<Record<string, unknown>>(sql`select * from app.sso_member_matches(${ctx.organisationId}::uuid)`);
+      return {
+        data: r.rows.map((m) => ({
+          membershipId: m.membership_id as string,
+          passwordUserId: m.password_user_id as string,
+          name: (m.name as string) ?? null,
+          email: (m.email as string) ?? null,
+          memberStatus: m.member_status as string,
+          ssoUserId: m.sso_user_id as string,
+          ssoCreatedAt: m.sso_created_at ? new Date(m.sso_created_at as string).toISOString() : null,
+          ssoLastSignInAt: m.sso_last_sign_in_at ? new Date(m.sso_last_sign_in_at as string).toISOString() : null,
+          ssoMember: Boolean(m.sso_member),
+        })),
+      };
+    });
+  }
+
+  /** Moves a member's password account onto their company account: the membership and open work move, history stays. */
+  async moveToSso(ctx: RequestContext, membershipId: string, ssoUserId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      const member = await this.one(db, ctx.organisationId!, membershipId);
+      if (!member.userId) throw new ApiError(409, 'sso_rule', 'An invitation has no account to move');
+      const r = await db.execute<{ id: string }>(sql`select app.move_member_to_sso_account(${ctx.organisationId}::uuid, ${member.userId}::uuid, ${ssoUserId}::uuid) as id`);
+      const move = await db.execute<{ moved: Record<string, number>; skipped: Record<string, string> }>(
+        sql`select moved, skipped from public.sso_account_moves where id = ${r.rows[0].id}::uuid`,
+      );
+      return { member: await this.one(db, ctx.organisationId!, membershipId), moved: move.rows[0]?.moved ?? {}, skipped: move.rows[0]?.skipped ?? {} };
+    });
+  }
+
+  /** "Not the same person": the pair is not offered again. */
+  async dismissSsoMatch(ctx: RequestContext, passwordUserId: string, ssoUserId: string) {
+    await this.database.asUser(ctx, (db) => db.execute(sql`select app.dismiss_sso_match(${ctx.organisationId}::uuid, ${passwordUserId}::uuid, ${ssoUserId}::uuid)`));
+    return this.ssoMatches(ctx);
   }
 
   private async one(db: Db, organisationId: string, membershipId: string): Promise<Member> {

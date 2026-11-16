@@ -53,6 +53,8 @@ export const Member = z.object({
   departments: z.array(DepartmentMembership),
   /** Only for a pending invitation. */
   invite: InviteDetail.nullable(),
+  /** Signs in with a company account (single sign-on). */
+  companyAccount: z.boolean().optional(),
 });
 export type Member = z.infer<typeof Member>;
 
@@ -144,3 +146,6 @@ export const Invitation = z.object({
   packageSlug: z.string().nullable(),
   packageName: z.string().nullable(),
 });
+
+export const MoveToSsoBody = z.object({ userId: z.string().uuid() }).strict();
+export const DismissSsoMatchBody = z.object({ passwordUserId: z.string().uuid(), ssoUserId: z.string().uuid() }).strict();

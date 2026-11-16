@@ -13,6 +13,9 @@ const ModeBody = z
   .strict()
   .refine((b) => b.mode !== 'required' || b.confirm === true, { message: 'Requiring single sign-on must be confirmed (confirm: true)', path: ['confirm'] });
 const TrustBody = z.object({ trust: z.boolean() }).strict();
+const JoiningBody = z
+  .object({ join: z.enum(['invited', 'domain']), roleId: z.string().uuid().nullable().optional(), departmentId: z.string().uuid().nullable().optional() })
+  .strict();
 const BreakGlassBody = z.object({ userIds: z.array(z.string().uuid()).max(3) }).strict();
 const ProviderBody = z.union([
   z.object({ metadataUrl: z.string().trim().url().max(2000).refine((u) => u.startsWith('https://'), 'The metadata address must start with https://') }).strict(),
@@ -84,6 +87,14 @@ export class SsoController {
   @ApiOkResponse({ description: 'Whether a company sign-in meets the organisation’s two-factor rule (default on). Answers with the overview' })
   setTrust(@Ctx() ctx: RequestContext, @Body() body: unknown) {
     return this.service.setTrustIdpMfa(ctx, parse(TrustBody, body).trust);
+  }
+
+  @Put('joining')
+  @OrganisationScoped('security.manage')
+  @ApiBody({ schema: openApiSchema(JoiningBody) })
+  @ApiOkResponse({ description: 'Who may join on their first company sign-in: invited only, or anyone at the verified domains with a default role (viewer or inspector) and optional department. Answers with the overview' })
+  setJoining(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.setJoining(ctx, parse(JoiningBody, body));
   }
 
   @Put('break-glass')

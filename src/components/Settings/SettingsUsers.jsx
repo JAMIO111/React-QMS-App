@@ -25,6 +25,7 @@ import { ORGANISATION_WIDE_ROLE_KEYS, isUnassigned } from "../../lib/departments
 import { expiresIn } from "../../lib/onboarding";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
+import SsoMatches from "./SsoMatches";
 
 const STATUS_STYLES = {
   active: "bg-green-500/15 text-green-700 dark:text-green-300",
@@ -276,6 +277,11 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
         </div>
         <div className="flex flex-col items-end gap-1">
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLES[member.status]}`}>{member.status}</span>
+          {member.companyAccount && (
+            <span className="rounded-full bg-secondary-bg px-2 py-0.5 text-xs font-medium text-secondary-text" title="Signs in with their company account">
+              Company sign-in
+            </span>
+          )}
           {member.status === "invited" && member.invite && (
             <span className="text-xs text-secondary-text" aria-label={`Invitation to ${member.email}`}>
               {member.invite.expired ? "Expired" : member.invite.expiresAt ? `Expires in ${expiresIn(member.invite.expiresAt)}` : ""}
@@ -453,6 +459,8 @@ const SettingsUsers = () => {
           department will not reach them until they are added to one.
         </Callout>
       )}
+
+      {canManage && <SsoMatches />}
 
       <MenuCard
         aria-label="Members"

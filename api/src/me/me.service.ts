@@ -1,13 +1,56 @@
 import { Injectable } from '@nestjs/common';
 import { eq, sql } from 'drizzle-orm';
+import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
+import { PasswordCheckUnavailable, PasswordVerifier } from '../sso/password-verifier';
 import { DatabaseService, Db } from '../database/database.service';
 import { profiles } from '../database/schema';
 import type { MeResponse, UpdateMeBody } from './me.schemas';
 
 @Injectable()
 export class MeService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly passwords: PasswordVerifier,
+  ) {}
+
+  /** Joins an organisation that lets people at its domains join with their company account (docs/sso-plan.md SS4). */
+  joinWithCompanyAccount(ctx: RequestContext, organisationId: string): Promise<MeResponse> {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.join_by_company_sign_in(${organisationId}::uuid)`);
+      return this.load(db, ctx);
+    });
+  }
+
+  /**
+   * Moves the person's old password account onto the company account they are signed in with (SS5): they prove the old account with its password,
+   * checked against Supabase Auth; the database then moves the membership and the open work.
+   */
+  async moveOwnAccount(ctx: RequestContext, organisationId: string, password: string): Promise<MeResponse> {
+    const email = ctx.user.email;
+    if (!email) throw new ApiError(409, 'sso_rule', 'Your company account has no email address');
+    const candidate = await this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<{ password_user_id: string }>(
+        sql`select password_user_id from app.my_sso_move_candidates() where organisation_id = ${organisationId}::uuid`,
+      );
+      return r.rows[0]?.password_user_id ?? null;
+    });
+    if (!candidate) throw new ApiError(409, 'sso_rule', 'There is no password account of yours to move in that organisation');
+    let checked: string | null;
+    try {
+      checked = await this.passwords.verify(email, password);
+    } catch (e) {
+      if (e instanceof PasswordCheckUnavailable) throw new ApiError(503, 'password_check_unavailable', 'Your old password cannot be checked on this server. Ask an administrator to move your account.');
+      throw e;
+    }
+    if (!checked || checked !== candidate) throw new ApiError(409, 'sso_rule', 'That is not the password of your old account');
+    await this.database.asApi(
+      (c) => c.query('select app.system_move_own_account($1::uuid, $2::uuid, $3::uuid)', [organisationId, candidate, ctx.user.id]),
+      ctx.correlationId,
+      'sso',
+    );
+    return this.get(ctx);
+  }
 
   get(ctx: RequestContext): Promise<MeResponse> {
     return this.database.asUser(ctx, (db) => this.load(db, ctx));
@@ -69,6 +112,11 @@ export class MeService {
       sql`select organisation_id, name, provider_id, break_glass from app.sso_blocked_organisations()`,
     );
     const blockedIds = new Set([...blocked.rows, ...ssoBlocked.rows].map((b) => b.organisation_id));
+    // Organisations this company sign-in may join by itself, and password accounts of the same person waiting to be moved across (SS4, SS5).
+    const joinable = await db.execute<{ organisation_id: string; name: string; role_name: string }>(
+      sql`select organisation_id, name, role_name from app.sso_joinable_organisations()`,
+    );
+    const moves = await db.execute<{ organisation_id: string; name: string }>(sql`select organisation_id, name from app.my_sso_move_candidates()`);
 
     return {
       profile: {
@@ -87,6 +135,8 @@ export class MeService {
       },
       sso: {
         requiredBy: ssoBlocked.rows.map((b) => ({ id: b.organisation_id, name: b.name, providerId: b.provider_id ?? null, breakGlass: Boolean(b.break_glass) })),
+        joinable: joinable.rows.map((j) => ({ id: j.organisation_id, name: j.name, roleName: j.role_name })),
+        moveCandidates: moves.rows.map((m) => ({ id: m.organisation_id, name: m.name })),
       },
       memberships: memberships.rows.filter((m) => !blockedIds.has(m.organisation_id)).map((m) => ({
         membershipId: m.membership_id,

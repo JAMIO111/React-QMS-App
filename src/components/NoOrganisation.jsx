@@ -5,6 +5,7 @@ import { useUser } from "../contexts/UserProvider";
 import { signOut } from "../authService";
 import CreateOrganisationForm from "./CreateOrganisationForm";
 import PendingInvitations from "./PendingInvitations";
+import CompanyAccountCards from "./CompanyAccountCards";
 
 const STEPS = [
   { key: "account", title: "Create your account", done: true },
@@ -49,6 +50,7 @@ const NoOrganisation = ({ error }) => {
                 </li>
               ))}
             </ol>
+            <CompanyAccountCards />
             <PendingInvitations />
             <section aria-labelledby="start-org-heading" className="flex flex-col gap-2">
               <h2 id="start-org-heading" className="text-lg font-semibold">

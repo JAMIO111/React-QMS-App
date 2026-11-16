@@ -12,7 +12,7 @@ const departments = [
 ];
 const members = [
   { membershipId: "m-me", userId: "u-me", email: "me@example.test", firstName: "Mia", surname: "Owner", status: "active", roles: [{ assignmentId: "a1", roleId: "r-owner", roleKey: "owner", roleName: "Owner", siteId: null }], departments: [] },
-  { membershipId: "m-bob", userId: "u-bob", email: "bob@example.test", firstName: "Bob", surname: "Builder", status: "active", roles: [{ assignmentId: "a2", roleId: "r-viewer", roleKey: "viewer", roleName: "Viewer", siteId: null }], departments: [{ id: "dm1", departmentId: "d-gi", code: "GI", name: "Goods-in", siteId: "s1", siteName: "Plant A", isPrimary: true, joinedAt: "2026-11-01T00:00:00Z" }, { id: "dm2", departmentId: "d-fi", code: "FI", name: "Final inspection", siteId: "s1", siteName: "Plant A", isPrimary: false, joinedAt: "2026-11-02T00:00:00Z" }] },
+  { membershipId: "m-bob", userId: "u-bob", email: "bob@example.test", firstName: "Bob", surname: "Builder", status: "active", companyAccount: true, roles: [{ assignmentId: "a2", roleId: "r-viewer", roleKey: "viewer", roleName: "Viewer", siteId: null }], departments: [{ id: "dm1", departmentId: "d-gi", code: "GI", name: "Goods-in", siteId: "s1", siteName: "Plant A", isPrimary: true, joinedAt: "2026-11-01T00:00:00Z" }, { id: "dm2", departmentId: "d-fi", code: "FI", name: "Final inspection", siteId: "s1", siteName: "Plant A", isPrimary: false, joinedAt: "2026-11-02T00:00:00Z" }] },
   { membershipId: "m-inv", userId: null, email: "new@example.test", firstName: null, surname: null, status: "invited", roles: [], departments: [] },
   { membershipId: "m-old", userId: "u-old", email: "old@example.test", firstName: "Old", surname: "Timer", status: "removed", roles: [], departments: [] },
 ];
@@ -37,6 +37,12 @@ vi.mock("../../hooks/useSubscription", () => ({
   useSubscriptionOverview: () => ({ data: seatOverview }),
   useSeatAssignments: () => ({ data: seatAssignments }),
   useSubscriptionMutation: () => ({ mutate: seatMutate, isPending: false }),
+}));
+let ssoMatches = [];
+const matchMutate = vi.fn();
+vi.mock("../../hooks/useSecurity", () => ({
+  useSsoMatches: () => ({ data: { data: ssoMatches } }),
+  useSsoMatchMutation: () => ({ mutate: matchMutate, isPending: false }),
 }));
 vi.mock("../../contexts/AuthProvider", () => ({ useAuth: () => ({ user: { id: "u-me" } }) }));
 vi.mock("../../contexts/ConfirmationModalProvider", () => ({ useConfirm: () => confirm }));
@@ -244,5 +250,19 @@ describe("SettingsUsers", () => {
     };
     render(<SettingsUsers />);
     expect(screen.getByLabelText("Invitation to new@example.test")).toHaveTextContent("Expired");
+  });
+
+  it("marks people who sign in with their company account, and offers to move matching password accounts", async () => {
+    ssoMatches = [{ membershipId: "m-ivy", passwordUserId: "u-ivy", ssoUserId: "u-ivy-sso", name: "Ivy Inspector", email: "ivy@acme.test", ssoCreatedAt: "2026-11-16T09:00:00Z", ssoMember: false }];
+    confirm.mockResolvedValue(true);
+    render(<SettingsUsers />);
+    const card = await screen.findByRole("list", { name: "Accounts to move" });
+    expect(within(card).getByText("Ivy Inspector")).toBeInTheDocument();
+    await userEvent.click(within(card).getByRole("button", { name: "Move" }));
+    expect(matchMutate).toHaveBeenCalledWith({ action: "move", match: ssoMatches[0] }, expect.anything());
+    await userEvent.click(within(card).getByRole("button", { name: "Not the same person" }));
+    expect(matchMutate).toHaveBeenCalledWith({ action: "dismiss", match: ssoMatches[0] }, expect.anything());
+    expect(screen.getAllByText("Company sign-in").length).toBe(1);
+    ssoMatches = [];
   });
 });

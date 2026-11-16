@@ -7,6 +7,7 @@ let pending;
 const mutate = vi.fn();
 const showToast = vi.fn();
 vi.mock("../../hooks/useSecurity", () => ({ useSsoMutation: () => ({ mutate, isPending: !!pending, variables: pending }) }));
+vi.mock("../../hooks/useQmsApi", () => ({ useAllDepartments: () => ({ data: { data: [{ id: "dep-qa", name: "Quality", active: true }] } }) }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast }) }));
 
 import SsoMode from "./SsoMode";
@@ -25,6 +26,9 @@ const base = (over = {}) => ({
   breakGlass: [],
   passwordMembers: [ada, ivy],
   signIns: [{ userId: "u-sam", name: "Sam Smith", method: "sso", requests: 4, firstAt: "2026-11-16T08:00:00Z", lastAt: "2026-11-16T09:00:00Z" }],
+  join: "invited",
+  joining: { roleId: null, departmentId: null, roleOptions: [{ id: "r-viewer", key: "viewer", name: "Viewer" }, { id: "r-insp", key: "inspector", name: "Inspector" }] },
+  moves: [{ id: "mv1", email: "ivy@acme.com", name: "Ivy Inspector", bySelf: true, moved: { "saved_filters.user_id": 2, "risks.owner_user_id": 1 }, skipped: {}, at: "2026-11-16T10:00:00Z" }],
   changes: [{ id: "c1", kind: "mode", summary: "Single sign-on is now optional (passwords still work) — changed by Ada Owner", at: "2026-11-16T09:00:00Z" }],
   ...over,
 });
@@ -108,5 +112,22 @@ describe("Settings → Security → Single sign-on: using it", () => {
     expect(screen.getByRole("list", { name: "Recent sign-ins" })).toHaveTextContent("Sam Smith — company sign-in");
     await userEvent.click(screen.getByText(/History of changes \(1\)/));
     expect(screen.getByRole("list", { name: "Single sign-on changes" })).toHaveTextContent("now optional");
+  });
+
+  it("lets anyone at the domains join as a viewer, then chooses their role and department", async () => {
+    const { rerender } = renderIt(base());
+    await userEvent.click(screen.getByRole("radio", { name: "Anyone at your domains" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "setJoining", body: { join: "domain", roleId: "r-viewer", departmentId: null } }, expect.anything());
+    mutate.mockReset();
+    rerender(<MemoryRouter><SsoMode sso={base({ join: "domain", joining: { ...base().joining, roleId: "r-viewer" } })} canManage /></MemoryRouter>);
+    await userEvent.click(screen.getByLabelText(/They start as/));
+    await userEvent.click(screen.getByRole("option", { name: /Inspector/ }));
+    expect(mutate).toHaveBeenCalledWith({ action: "setJoining", body: { join: "domain", roleId: "r-insp", departmentId: null } }, expect.anything());
+  });
+
+  it("lists accounts moved to company sign-in", async () => {
+    renderIt(base());
+    await userEvent.click(screen.getByText(/Accounts moved to company sign-in \(1\)/));
+    expect(screen.getByRole("list", { name: "Accounts moved" })).toHaveTextContent("Ivy Inspector (confirmed with their old password) — 3 open items moved");
   });
 });

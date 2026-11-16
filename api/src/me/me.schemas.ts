@@ -45,8 +45,15 @@ export const MfaStatus = z.object({
 /** Organisations that require their company sign-in, which this session did not use (docs/sso-plan.md SS6). */
 export const SsoStatus = z.object({
   requiredBy: z.array(z.object({ id: z.string().uuid(), name: z.string(), providerId: z.string().uuid().nullable(), breakGlass: z.boolean() })),
+  /** Organisations this company sign-in may join by itself (SS4). */
+  joinable: z.array(z.object({ id: z.string().uuid(), name: z.string(), roleName: z.string() })),
+  /** Organisations where the person's old password account can be moved onto this company account (SS5). */
+  moveCandidates: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
 });
 export const MeResponse = z.object({ profile: Profile, memberships: z.array(Membership), mfa: MfaStatus, sso: SsoStatus });
 export type MeResponse = z.infer<typeof MeResponse>;
 
 export const AcceptTermsBody = z.object({ version: z.string().trim().regex(/^[A-Za-z0-9._-]{1,20}$/) }).strict();
+
+export const SsoJoinBody = z.object({ organisationId: z.string().uuid() }).strict();
+export const MoveOwnAccountBody = z.object({ organisationId: z.string().uuid(), password: z.string().min(1).max(200) }).strict();

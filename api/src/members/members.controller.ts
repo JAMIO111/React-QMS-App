@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { AddDepartmentBody, AssignRoleBody, BulkInviteBody, BulkInviteResponse, Invitation, InviteBody, InviteResponse, Member, Permission, Role, UpdateDepartmentMembershipBody, UpdateMemberBody } from './members.schemas';
+import { AddDepartmentBody, AssignRoleBody, BulkInviteBody, BulkInviteResponse, Invitation, InviteBody, InviteResponse, Member, Permission, Role, UpdateDepartmentMembershipBody, UpdateMemberBody, MoveToSsoBody, DismissSsoMatchBody } from './members.schemas';
 import { MembersService } from './members.service';
 
 @ApiTags('members')
@@ -58,6 +58,32 @@ export class MembersController {
   @ApiOkResponse({ description: 'Withdraws a pending invitation and frees the seat reserved for it.', schema: openApiSchema(Member) })
   revoke(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.members.revokeInvitation(ctx, parse(Uuid, id));
+  }
+
+  @Get('members/sso-matches')
+  @OrganisationScoped('members.manage')
+  @ApiOkResponse({ description: 'Password members whose address is also a company account at a verified single sign-on domain: candidates to move across' })
+  ssoMatches(@Ctx() ctx: RequestContext) {
+    return this.members.ssoMatches(ctx);
+  }
+
+  @Post('members/sso-matches/dismiss')
+  @HttpCode(200)
+  @OrganisationScoped('members.manage')
+  @ApiBody({ schema: openApiSchema(DismissSsoMatchBody) })
+  @ApiOkResponse({ description: 'Not the same person: the pair is not offered again. Answers with the matches' })
+  dismissSsoMatch(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    const b = parse(DismissSsoMatchBody, body);
+    return this.members.dismissSsoMatch(ctx, b.passwordUserId, b.ssoUserId);
+  }
+
+  @Post('members/:id/move-to-sso')
+  @HttpCode(200)
+  @OrganisationScoped('members.manage')
+  @ApiBody({ schema: openApiSchema(MoveToSsoBody) })
+  @ApiOkResponse({ description: 'Move this member onto their company account (same address): membership, roles, seat and open work move; finished records stay. Answers with the member and what moved' })
+  moveToSso(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.members.moveToSso(ctx, parse(Uuid, id), parse(MoveToSsoBody, body).userId);
   }
 
   @Patch('members/:id')

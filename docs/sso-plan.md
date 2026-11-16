@@ -1,6 +1,6 @@
 # Single sign-on (SAML) — plan
 
-**Status:** agreed 2026-11-16 (SS1–SS12 as recommended) · **SS0 done as far as it can be without a paid plan** (§12; the live sign-in check waits for Pro) · **SS1 done** (migration `20260316100000_sso_domains.sql`, §13; applied live 2026-11-16) · **SS2 done** (migration `20260317100000_sso_providers.sql`, §14; applied live 2026-11-16) · **SS3 built** (migration `20260318100000_sso_enforcement.sql`, §15; not yet applied live) · **Brief:** `docs/design-brief.md` §12 Phase 7 ("SSO and enterprise identity"), §5 (security), §14 (definition of done), §15 (non-goals) · **Builds on:** `docs/security-plan.md` (network policy, allowed email domains, maximum session age, operator recovery)
+**Status:** agreed 2026-11-16 (SS1–SS12 as recommended) · **SS0 done as far as it can be without a paid plan** (§12; the live sign-in check waits for Pro) · **SS1 done** (migration `20260316100000_sso_domains.sql`, §13; applied live 2026-11-16) · **SS2 done** (migration `20260317100000_sso_providers.sql`, §14; applied live 2026-11-16) · **SS3 done** (migration `20260318100000_sso_enforcement.sql`, §15; applied live 2026-11-16) · **SS4 built** (migration `20260319100000_sso_joining_and_moves.sql`, §16; not yet applied live) · **Brief:** `docs/design-brief.md` §12 Phase 7 ("SSO and enterprise identity"), §5 (security), §14 (definition of done), §15 (non-goals) · **Builds on:** `docs/security-plan.md` (network policy, allowed email domains, maximum session age, operator recovery)
 
 ## 1. Why
 
@@ -333,4 +333,46 @@ Found from the documentation and from **the Supabase Auth server's source** (`gi
   `PlatformPanels.test.jsx`.
 - **Not checked live:** a real company sign-in (the Pro plan). **Pushing the API before this migration breaks every organisation route** (the guard
   calls `app.sso_blocked_organisations` and `app.sso_session_method`) and `/me`.
+
+## 16. SS4 as built (migration `20260319100000_sso_joining_and_moves.sql`)
+
+- **Joining on the first company sign-in (SS4 b).** `app.set_sso_joining(org, invited|domain, role, department)` (`security.manage`): the role must
+  be the organisation's **viewer or inspector**; the department is optional. `app.sso_joinable_organisations()` = organisations where this session
+  came through their own provider, the address is at a verified domain, joining is on, single sign-on is not off, and there is no membership or
+  waiting invitation (an invitation is accepted the usual way). `app.join_by_company_sign_in(org)` makes an active membership with the role (and
+  the department as primary), **no seat**, and writes `sso_changes` kind `member_joined`, so owners and admins are told.
+- **Every column that names a user is classified** in `app.user_reference_columns()`: `membership` (organisation_users: roles, departments, seat
+  and 8D team places hang off the membership), `moved` (open work and standing responsibilities), `history` and `personal`. A column whose name ends
+  in `_by` records who did something and is history unless listed as moved (`integration_import_settings.schedule_set_by`,
+  `supplier_scorecard_schedules.set_by` are: they carry standing authority). **`supabase/tests/sso_joining_moves.test.sql` fails when a migration adds
+  a column that refers to a user (a foreign key to `auth.users` / `profiles`, or a uuid named like one) and is not classified**, and when the list
+  names a column that is gone (checked with a mutant: removing `gauges.custodian_id` fails it).
+- **Moving a password member onto their company account (SS5).** `app.sso_do_account_move` checks one address (any case), the new account is a
+  company account at a verified domain, the old one a password member here (active or suspended). It marks the company account's own membership (if
+  it joined or accepted an invitation) removed, **re-points the old membership to the company account**, then moves the open work, each kind in its
+  own sub-transaction so a record whose own rules refuse the change is left and reported (`skipped`), never half-done: employee link, expected
+  auditor of audits in use, control plan owner, documents still to read / to review / to approve / to sign, document owner, gauge custodian, open
+  review actions, attendees and chair of reviews not held, open NC owner, notification and reminder choices, quality alerts to acknowledge, objective
+  owner, open risk actions, risk owner, saved filters, running SCAR owner, open tasks, schedule authorities. Finished records keep the old id.
+  `sso_account_moves` keeps what moved (frozen, audited; `members.read` or either account); `sso_changes` kind `account_moved` tells owners and admins.
+  - `app.move_member_to_sso_account(org, old, new)`: `members.manage` and `app.can_manage_membership`; never your own account.
+  - `app.system_move_own_account(org, old, new)`: the API login only, after the API checked the old password (`PasswordVerifier`:
+    `SupabasePasswordVerifier` asks Supabase Auth's password grant with the service key and closes the session the check opened; tests use a fake;
+    `503 password_check_unavailable` without `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`).
+  - `app.sso_member_matches(org)` (`members.manage`) = password members whose address is also a company account at a verified domain;
+    `app.dismiss_sso_match` keeps "not the same person" in `sso_match_dismissals`; `app.my_sso_move_candidates()` for the person;
+    `app.member_company_accounts(org)` for the "Company sign-in" mark.
+- **API:** `PUT /security/sso/joining {join, roleId?, departmentId?}`; `GET /security/sso` adds `joining {roleId, departmentId, roleOptions}` and
+  `moves`; `/me` `sso.joinable` and `sso.moveCandidates`; `POST /me/sso-join {organisationId}`, `POST /me/move-to-sso {organisationId, password}`
+  (not organisation-scoped: the person is not yet a member; on the sweep allowlist); `GET /members/sso-matches`, `POST /members/sso-matches/dismiss
+  {passwordUserId, ssoUserId}`, `POST /members/{id}/move-to-sso {userId}` (answers the member, `moved`, `skipped`); members carry `companyAccount`.
+- **UI:** "Who can join" (Invited people only / Anyone at your domains, then They start as / In the department; optimistic) and "Accounts moved"
+  in `Settings/SsoMode.jsx`; `CompanyAccountCards.jsx` on the Start your organisation page (**Join Acme**, and **Bring my account across** with the old
+  password); `Settings/SsoMatches.jsx` on Settings → Users (**Move** with a confirmation, **Not the same person**; optimistic) and a **Company sign-in**
+  mark on member cards.
+- **Tests:** `supabase/tests/sso_joining_moves.test.sql` (+ sweep seeds, guardrails list), `api/test/sso.e2e-spec.ts` (SS4 block),
+  `password-verifier.spec.ts`, the API sweep, `SsoMode.test.jsx`, `CompanyAccountCards.test.jsx`, `SettingsUsers.test.jsx`.
+- **Not built:** a moved account's old name shown as "now signs in with SSO" on old records; moving 8D actions owned through a team member who is not
+  the membership (external contacts); members whose sign-in has not been used for 90 days listed for review (SS9). **Pushing the API before this
+  migration breaks `/me` and the member list** (they call the new functions).
 

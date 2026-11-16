@@ -110,6 +110,14 @@ export class SsoService {
     });
   }
 
+  /** Who may join on their first company sign-in (SS4): invited only, or anyone at the verified domains with a default role (viewer or inspector). */
+  setJoining(ctx: RequestContext, body: { join: 'invited' | 'domain'; roleId?: string | null; departmentId?: string | null }) {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.set_sso_joining(${orgOf(ctx)}::uuid, ${body.join}, ${body.roleId ?? null}::uuid, ${body.departmentId ?? null}::uuid)`);
+      return this.load(db, ctx);
+    });
+  }
+
   /** Switches single sign-on off: the provider leaves Supabase (its domains are free again) and is kept here as disabled, with the reason. */
   async disableProvider(ctx: RequestContext, reason: string) {
     this.requireAdmin();
@@ -239,7 +247,7 @@ export class SsoService {
     const org = orgOf(ctx);
     const s = (
       await db.execute<Row>(sql`
-        select s.sso_mode, s.sso_join, s.sso_trust_idp_mfa, s.allowed_email_domains, s.require_mfa, s.max_session_hours, s.sso_mode_changed_at,
+        select s.sso_mode, s.sso_join, s.sso_trust_idp_mfa, s.sso_default_role_id, s.sso_default_department_id, s.allowed_email_domains, s.require_mfa, s.max_session_hours, s.sso_mode_changed_at,
                nullif(btrim(concat_ws(' ', mp.first_name, mp.surname)), '') as sso_mode_changed_by,
                app.has_permission(${org}::uuid, 'security.manage') as can_manage,
                app.sso_session_for(${org}::uuid) as via_sso, app.session_aal() as aal
@@ -327,6 +335,13 @@ export class SsoService {
     const changes = await db.execute<Row>(sql`
       select c.id, c.kind, c.from_value, c.to_value, c.user_name, c.reason, c.summary, c.created_at
         from public.sso_changes c where c.organisation_id = ${org}::uuid order by c.created_at desc limit 20`);
+    const joinRoles = await db.execute<Row>(sql`
+      select r.id, r.key, r.name from public.roles r where r.organisation_id = ${org}::uuid and r.key in ('viewer', 'inspector') order by r.key desc`);
+    const moves = await db.execute<Row>(sql`
+      select m.id, m.email, m.by_self, m.moved, m.skipped, m.created_at,
+             nullif(btrim(concat_ws(' ', p.first_name, p.surname)), '') as name
+        from public.sso_account_moves m left join public.profiles p on p.id = m.to_user_id
+       where m.organisation_id = ${org}::uuid order by m.created_at desc limit 20`);
     const mode = ((s.sso_mode as string) ?? 'off') as 'off' | 'optional' | 'required';
     const storedHours = s.max_session_hours == null ? null : Number(s.max_session_hours);
     return {
@@ -377,6 +392,22 @@ export class SsoService {
         at: iso(c.created_at)!,
       })),
       join: ((s.sso_join as string) ?? 'invited') as 'invited' | 'domain',
+      /** SS4: the role and department people join with when anyone at the domains may join, and the roles that may be chosen. */
+      joining: {
+        roleId: (s.sso_default_role_id as string) ?? null,
+        departmentId: (s.sso_default_department_id as string) ?? null,
+        roleOptions: joinRoles.rows.map((r) => ({ id: r.id as string, key: r.key as string, name: r.name as string })),
+      },
+      /** SS5: password accounts moved onto company accounts. */
+      moves: moves.rows.map((m) => ({
+        id: m.id as string,
+        email: m.email as string,
+        name: (m.name as string) ?? null,
+        bySelf: Boolean(m.by_self),
+        moved: (m.moved as Record<string, number>) ?? {},
+        skipped: (m.skipped as Record<string, string>) ?? {},
+        at: iso(m.created_at)!,
+      })),
       trustIdpMfa: s.sso_trust_idp_mfa !== false,
       canManage: Boolean(s.can_manage),
       /** Invitations only to these (SE6); an SSO domain must be one of them, or a sub-domain of one, while the list is set. */

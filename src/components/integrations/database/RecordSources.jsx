@@ -3,7 +3,7 @@ import { useToast } from "../../../contexts/ToastProvider";
 import { useIntegrationEntities, useIntegrationMutation } from "../../../hooks/useIntegrations";
 import { usePermissions } from "../../../hooks/useQmsApi";
 import { describeApiError } from "../../../lib/api-client";
-import { ENTITY_LABELS, FILTER_OPS, apiMappingPath, describeRecordSource, recordSourceBody, recordSourceForm, recordSourceProblem } from "../../../lib/integrations";
+import { ENTITY_LABELS, FILTER_OPS, apiMappingPath, describeRecordSource, fileNameProblem, isFolderConfig, recordSourceBody, recordSourceForm, recordSourceProblem } from "../../../lib/integrations";
 import { formatDateTime } from "../../../lib/processControl";
 import { PlusIcon, Trash2Icon } from "@/components/icons";
 import Callout from "../../ui/Callout";
@@ -138,6 +138,69 @@ export const RecordSourceDialog = ({ connection, schema, object, shape: given = 
   );
 };
 
+/**
+ * Say which file in a folder a kind of record is read from (AG5b): a name, or a pattern with * that picks the newest of a series of dated exports.
+ * The agent sends the newest matching CSV or Excel file and Fortress reads it as it reads uploaded files.
+ */
+export const FileSourceDialog = ({ connection, initialName = "", existing = null, onClose }) => {
+  const mutation = useIntegrationMutation();
+  const entities = useIntegrationEntities();
+  const { showToast } = useToast();
+  const used = new Set((connection.recordSources ?? []).map((s) => s.entityType));
+  const [entityType, setEntityType] = useState(existing?.entityType ?? null);
+  const [name, setName] = useState(existing?.source?.file ?? initialName);
+  const [tried, setTried] = useState(false);
+  const kinds = (entities.data ?? []).filter((e) => !used.has(e.entityType) || e.entityType === existing?.entityType);
+  const problem = (!entityType && "Choose which Fortress records this file holds") || fileNameProblem(name);
+  const save = (e) => {
+    e.preventDefault();
+    setTried(true);
+    if (problem) return;
+    mutation.mutate(
+      { action: "setRecordSource", id: connection.id, body: { entityType, source: { file: name } } },
+      {
+        onSuccess: () => {
+          showToast({ type: "success", title: "Saved", message: `${ENTITY_LABELS[entityType] ?? entityType} are read from the newest file matching ${name}.` });
+          onClose();
+        },
+        onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }),
+      },
+    );
+  };
+  return (
+    <Dialog title="Read records from a file" onClose={onClose} width="max-w-xl">
+      <form noValidate onSubmit={save} className="flex flex-col gap-4">
+        <p className="text-sm text-secondary-text">
+          Each import reads the newest CSV or Excel file in the folder whose name matches. An incremental import reads it only when it has changed since the last one.
+        </p>
+        <ComboField
+          label="Fortress records in this file"
+          value={entityType}
+          onChange={setEntityType}
+          options={kinds.map((k) => ({ value: k.entityType, label: k.label ?? ENTITY_LABELS[k.entityType] ?? k.entityType }))}
+          required
+          disabled={!!existing}
+          hint={existing ? "To read another kind of record, choose a file again for it" : "Each kind of record is read from one file name or pattern"}
+        />
+        <Field
+          label="File name or pattern"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+          maxLength={200}
+          hint="Use * for the part that changes, e.g. machines-*.csv for machines-2026-11-15.csv, machines-2026-11-16.csv …"
+        />
+        {tried && problem && <p className="text-sm text-error-color" role="alert">{problem}</p>}
+        <FormError error={mutation.error} />
+        <div className="flex justify-end gap-2">
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="md" loading={mutation.isPending}>Save</CTAButton>
+        </div>
+      </form>
+    </Dialog>
+  );
+};
+
 /** Which table each kind of record is read from, with a way to map its fields, change it or stop reading it. */
 export const RecordSourcesCard = ({ connection: c }) => {
   const { can } = usePermissions();
@@ -146,15 +209,22 @@ export const RecordSourcesCard = ({ connection: c }) => {
   const [editing, setEditing] = useState(null);
   const canManage = can("integrations.manage");
   const sources = c.recordSources ?? [];
+  const folder = isFolderConfig(c.config);
   const remove = (s) =>
     mutation.mutate(
       { action: "setRecordSource", id: c.id, body: { entityType: s.entityType, source: null } },
       { onError: (err) => showToast({ type: "error", title: "Not removed", message: describeApiError(err) }) },
     );
   return (
-    <MenuCard title="Records read from the database" subtitle="For each kind of Fortress record, the table or view the agent reads it from.">
+    <MenuCard
+      title={folder ? "Records read from the folder" : "Records read from the database"}
+      subtitle={folder ? "For each kind of Fortress record, the file the agent picks up for it." : "For each kind of Fortress record, the table or view the agent reads it from."}>
       {sources.length === 0 ? (
-        <Callout tone="info">Browse the database below, choose a table or view, then <strong>Use this table</strong> for the records it holds.</Callout>
+        folder ? (
+          <Callout tone="info">List the files below, then <strong>Use this file</strong> for the records it holds.</Callout>
+        ) : (
+          <Callout tone="info">Browse the database below, choose a table or view, then <strong>Use this table</strong> for the records it holds.</Callout>
+        )
       ) : (
         <ul aria-label="Record sources" className="flex flex-col divide-y divide-border-color">
           {sources.map((s) => (
@@ -178,7 +248,8 @@ export const RecordSourcesCard = ({ connection: c }) => {
           ))}
         </ul>
       )}
-      {editing && <RecordSourceDialog connection={c} schema={editing.source.schema} object={editing.source.object} existing={editing} onClose={() => setEditing(null)} />}
+      {editing && editing.source.file && <FileSourceDialog connection={c} existing={editing} onClose={() => setEditing(null)} />}
+      {editing && !editing.source.file && <RecordSourceDialog connection={c} schema={editing.source.schema} object={editing.source.object} existing={editing} onClose={() => setEditing(null)} />}
     </MenuCard>
   );
 };

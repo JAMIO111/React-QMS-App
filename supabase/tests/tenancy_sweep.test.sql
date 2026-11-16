@@ -482,6 +482,8 @@ BEGIN
      WHERE c.organisation_id = a AND c.external_system = 'sweep-db';
   INSERT INTO public.integration_agent_batches (organisation_id, job_id, seq, row_count, checksum, rows)
     SELECT a, j.id, 0, 1, repeat('a', 64), '[{"code": "M1"}]' FROM public.integration_agent_jobs j WHERE j.organisation_id = a AND j.kind = 'extract';
+  INSERT INTO public.integration_agent_file_parts (organisation_id, job_id, seq, checksum, size_bytes, data)
+    SELECT a, j.id, 0, encode(sha256('code'::bytea), 'hex'), 4, 'code'::bytea FROM public.integration_agent_jobs j WHERE j.organisation_id = a AND j.kind = 'extract';
   INSERT INTO sweep VALUES ('a', a), ('b', b), ('owner_role', owner_role), ('invite', invite),
     ('owner_membership', (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'));
 END $$;

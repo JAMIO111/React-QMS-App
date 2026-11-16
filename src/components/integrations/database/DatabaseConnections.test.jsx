@@ -108,6 +108,31 @@ describe("database connection settings", () => {
     expect(calls.find((c) => c.k === "POST /integrations/connections").body.config).toEqual({ engine: "mysql", server: "erp-mysql.factory.local", database: "erp", authType: "password", encrypt: true });
   });
 
+  it("connects a folder of files through an agent with no password (AG5b)", async () => {
+    routeApi({
+      "GET /integrations/agents": { data: [{ id: "ag1", name: "Newcastle", status: "active", online: true }], onlineCount: 1, activeCount: 1 },
+      "POST /integrations/connections": (_p, o) => ({ id: "c9", ...o.body }),
+    });
+    const onCreated = vi.fn();
+    wrap(<DatabaseConnectionDialog engine="folder" onClose={() => {}} onCreated={onCreated} />);
+    const dialog = await screen.findByRole("dialog", { name: "Connect a folder of files" });
+    expect(within(dialog).queryByRole("textbox", { name: /^Server/ })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("combobox", { name: /How the agent signs in/ })).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Connector agent/ }));
+    await userEvent.click(screen.getByRole("option", { name: /Newcastle/ }));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Name/ }), "ERP exports");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Folder/ }), "exports");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create connection" }));
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(/whole folder path/);
+    await userEvent.clear(within(dialog).getByRole("textbox", { name: /^Folder/ }));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Folder/ }), "C:\\Exports\\ERP");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create connection" }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(calls.find((c) => c.k === "POST /integrations/connections").body).toEqual({
+      providerKey: "sql_agent", name: "ERP exports", externalSystem: "erp-exports", agentId: "ag1", config: { engine: "folder", folder: "C:\\Exports\\ERP", authType: "none" },
+    });
+  });
+
   it("says when there is no agent to read through", async () => {
     routeApi({ "GET /integrations/agents": { data: [], onlineCount: 0, activeCount: 0 } });
     wrap(<DatabaseConnectionDialog engine="sqlserver" onClose={() => {}} />);

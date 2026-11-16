@@ -62,6 +62,15 @@ public sealed class AgentApiClient(HttpClient http, TimeProvider? clock = null)
         return await ReadAsync<BatchReceipt>(res, ct) ?? new BatchReceipt();
     }
 
+    /// <summary>Send one part of a file (folders, AG5b): the raw bytes are what is signed and sent, with their SHA-256 and their place in the file.</summary>
+    public async Task<FilePartReceipt> SendFilePartAsync(AgentIdentity id, string jobId, FilePart part, CancellationToken ct)
+    {
+        using var res = await SendAsync(id.ApiUrl, $"integrations/agent/jobs/{Uri.EscapeDataString(jobId)}/file-parts", part.Bytes, "application/octet-stream",
+            new Dictionary<string, string> { ["X-Part-Checksum"] = part.Checksum, ["X-Part-Seq"] = part.Seq.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+            id.SigningKey, id.AgentId, ct);
+        return await ReadAsync<FilePartReceipt>(res, ct) ?? new FilePartReceipt();
+    }
+
     /// <summary>Replace the agent's keys. Signed with the current key; every later request must be signed with the new one.</summary>
     public async Task RotateKeysAsync(AgentIdentity id, string signingKey, string sealingKey, CancellationToken ct)
     {

@@ -449,6 +449,7 @@ export const INTEGRATION_CATALOGUE = [
   { key: "sage", name: "Sage", description: "Suppliers, customers and stock items from Sage 200 or Sage X3.", mark: "sage", available: false },
   { key: "mysql", providerKey: "sql_agent", engine: "mysql", name: "MySQL", description: "Read tables or views from a MySQL or MariaDB database through a connector agent on your network. Nothing connects in.", mark: "mysql", available: true },
   { key: "postgresql", providerKey: "sql_agent", engine: "postgres", name: "PostgreSQL", description: "Read tables or views from a PostgreSQL database through a connector agent on your network. Nothing connects in.", mark: "postgresql", available: true },
+  { key: "folder", providerKey: "sql_agent", engine: "folder", name: "Files in a folder", description: "Pick up CSV or Excel exports from a folder or share on your network as they arrive, through a connector agent. Nothing connects in.", mark: "folder", available: true },
   { key: "sql_server", providerKey: "sql_agent", engine: "sqlserver", name: "Microsoft SQL Server", description: "Read tables or views from SQL Server through a connector agent on your network. Nothing connects in.", mark: "database", available: true },
   { key: "odoo", name: "Odoo", description: "Products, partners and manufacturing orders from Odoo.", mark: "odoo", available: false },
   { key: "google_sheets", name: "Google Sheets", description: "Keep a shared sheet and Fortress in step.", mark: "googlesheets", available: false },
@@ -548,7 +549,10 @@ export const apiMappingPath = (connectionId, entityType, templateId) => {
 // Database connections through a connector agent (docs/connector-agent-plan.md AG2)
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 
-export const DB_ENGINES = { postgres: "PostgreSQL", sqlserver: "Microsoft SQL Server", mysql: "MySQL" };
+export const DB_ENGINES = { postgres: "PostgreSQL", sqlserver: "Microsoft SQL Server", mysql: "MySQL", folder: "Files in a folder" };
+
+/** A folder of files read through the agent (AG5b), rather than a database. */
+export const isFolderConfig = (config) => config?.engine === "folder";
 
 /** How each engine may sign in. SQL Server's Windows authentication uses the agent's service account: no password at all. */
 export const DB_AUTH = {
@@ -565,11 +569,15 @@ export const dbNeedsPassword = (config) => ["sql", "password"].includes(config?.
 /** The dialog's fields from a connection's settings (or a new one for an engine). */
 export const databaseForm = (engine, c = {}) => ({
   engine: c.engine ?? engine ?? "sqlserver",
+  folder: c.folder ?? "",
+  fileEncoding: c.encoding ?? "auto",
+  fileDelimiter: c.delimiter ?? "auto",
+  hasHeader: c.hasHeader !== false,
   server: c.server ?? "",
   port: c.port != null ? String(c.port) : "",
   instance: c.instance ?? "",
   database: c.database ?? "",
-  authType: c.authType ?? ((c.engine ?? engine ?? "sqlserver") === "sqlserver" ? "windows" : "password"),
+  authType: c.authType ?? ({ sqlserver: "windows", folder: "none" }[c.engine ?? engine ?? "sqlserver"] ?? "password"),
   encrypt: c.encrypt !== false,
   trustServerCertificate: c.trustServerCertificate === true,
 });
@@ -579,6 +587,7 @@ const DATABASE_BAD = /[;='"[\]]|\p{Cc}/u;
 
 /** What is wrong with the dialog's fields, in the database's own words (the database checks again). */
 export const databaseFormProblem = (f) => {
+  if (f.engine === "folder") return folderPathProblem(f.folder);
   if (!SERVER.test(f.server.trim())) return "Give the database server's name or address (letters, digits, dots and hyphens)";
   if (f.port && !(/^\d+$/.test(f.port) && +f.port >= 1 && +f.port <= 65535)) return "The port is a whole number from 1 to 65535";
   if (f.engine === "sqlserver" && f.instance && !/^[A-Za-z0-9_$#-]{1,32}$/.test(f.instance.trim())) return "The instance name is up to 32 letters, digits, _ $ # or -";
@@ -590,6 +599,13 @@ export const databaseFormProblem = (f) => {
 
 /** The settings the API takes (only what was set). */
 export const databaseConfig = (f) => {
+  if (f.engine === "folder") {
+    const c = { engine: "folder", folder: f.folder.trim(), authType: "none" };
+    if (f.fileEncoding && f.fileEncoding !== "auto") c.encoding = f.fileEncoding;
+    if (f.fileDelimiter && f.fileDelimiter !== "auto") c.delimiter = f.fileDelimiter;
+    if (!f.hasHeader) c.hasHeader = false;
+    return c;
+  }
   const c = { engine: f.engine, server: f.server.trim(), database: f.database.trim(), authType: f.authType, encrypt: !!f.encrypt };
   if (f.port) c.port = Number(f.port);
   if (f.engine === "sqlserver" && f.instance.trim()) c.instance = f.instance.trim();
@@ -599,7 +615,33 @@ export const databaseConfig = (f) => {
 
 /** Where the database is, in one line: "SQL01\\SQLEXPRESS / ERP" or "erp-db:5432 / erp". */
 export const databaseWhere = (c) =>
-  `${c?.server ?? "?"}${c?.instance ? `\\${c.instance}` : c?.port ? `:${c.port}` : ""} / ${c?.database ?? "?"}`;
+  isFolderConfig(c) ? c.folder ?? "?" : `${c?.server ?? "?"}${c?.instance ? `\\${c.instance}` : c?.port ? `:${c.port}` : ""} / ${c?.database ?? "?"}`;
+
+const hasControl = (v) => [...v].some((ch) => ch.charCodeAt(0) < 32);
+
+/** The folder as the database checks it: a drive path, a share or an absolute path; nothing relative, no "..". */
+export const folderPathProblem = (folder) => {
+  const v = (folder ?? "").trim();
+  if (v.length < 3 || v.length > 260) return "Give the folder as the agent's machine knows it (up to 260 characters)";
+  if (!/^([A-Za-z]:\\|\\\\[A-Za-z0-9._$-]+\\[^\\]+|\/)/.test(v)) return "Give the whole folder path: a drive (C:\\Exports), a share (\\\\server\\share\\Exports) or a path starting with /";
+  if (/(^|[\\/])\.\.([\\/]|$)/.test(v) || /["<>|*?]/.test(v) || hasControl(v)) return 'The folder path cannot contain "..", quotes, < > | * ? or control characters';
+  return null;
+};
+
+/** A file name or pattern directly in the folder (* any run of characters, ? one). */
+export const fileNameProblem = (name) => {
+  const v = name ?? "";
+  if (!v || v.length > 200) return "Give the file's name, or a pattern such as machines-*.csv";
+  if (/[\\/:"<>|]/.test(v) || hasControl(v) || v === "." || v === "..") return "Name a file directly in the folder (no \\ / : or control characters)";
+  if (v.trim() !== v) return "A file name does not start or end with a space";
+  return null;
+};
+
+/** A dated file name made into a pattern, so the newest export is read: "machines-2026-11-15.csv" → "machines-*.csv". */
+export const filePatternFrom = (name) => {
+  const m = /^(.*?)([-_ ]?)(\d{4}[-_]?\d{2}[-_]?\d{2}([T_ -]?\d{2}[-_:]?\d{2}([-_:]?\d{2})?)?)(\.[^.]+)$/.exec(name ?? "");
+  return m && m[1] ? `${m[1]}${m[2]}*${m[6]}` : name;
+};
 
 export const AGENT_CREDENTIAL_WORDS = {
   waiting: "On its way to the agent",
@@ -665,7 +707,7 @@ export const recordSourceBody = (schema, object, f) => {
 
 /** A source in one line: "erp.machines · key id · 4 columns · active equals true". */
 export const describeRecordSource = (s) =>
-  [
+  s?.file ? `Newest CSV or Excel file matching ${s.file}` : [
     `${s.schema}.${s.object}`,
     `key ${s.keyColumn}`,
     s.columns ? `${s.columns.length} column${s.columns.length === 1 ? "" : "s"}` : "all columns",

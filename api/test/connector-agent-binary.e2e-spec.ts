@@ -11,7 +11,7 @@
 import { INestApplication } from '@nestjs/common';
 import { ChildProcess, execFile, spawn } from 'node:child_process';
 import { createCipheriv, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomBytes } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -130,6 +130,7 @@ maybe('the real connector agent', () => {
     expect(refused).toMatchObject({ status: 'failed', errorKind: 'not_found' });
     expect(output).not.toContain('bin-reader-pass');
     await extraction(connectionId, finished);
+    await folderConnection(agentId, finished);
     if (myPort) await mysqlConnection(agentId, finished, connectionId);
   }
 
@@ -195,6 +196,62 @@ maybe('the real connector agent', () => {
    * in use — one agent, two kinds of database. Password sealed for the agent, test, a table chosen, a sample, a template, an import; then the
    * PostgreSQL connection imports again unchanged.
    */
+  /**
+   * AG5b: the same agent reads a real folder. Only once the folder is on its allow-list; a preview of the newest matching file becomes the sample;
+   * an import reads 600 rows; an incremental read of the same file sends nothing; a changed file updates only what changed.
+   */
+  async function folderConnection(agentId: string, finished: (id: string, what: string) => Promise<any>) {
+    const folder = join(dataDir, 'exports');
+    mkdirSync(folder, { recursive: true });
+    const write = (name: string, rows: string[], modified: Date) => {
+      writeFileSync(join(folder, name), ['Code,Name,Plant', ...rows].join('\r\n') + '\r\n');
+      utimesSync(join(folder, name), modified, modified);
+    };
+    const machines = (n: number, renamed?: number) => Array.from({ length: n }, (_, i) => `FLD-${i + 1},${i + 1 === renamed ? 'Renamed' : 'Folder machine'} ${i + 1},MAIN`);
+    write('machines-2026-11-14.csv', machines(3), new Date('2026-11-14T06:00:00Z'));
+    write('machines-2026-11-15.csv', machines(600), new Date('2026-11-15T06:00:00Z'));
+    writeFileSync(join(folder, 'notes.txt.bak'), 'not a table');
+    const created = await api().post('/api/v1/integrations/connections').set(await as()).send({
+      providerKey: 'sql_agent', name: 'Exports folder', externalSystem: 'exports-folder', agentId, config: { engine: 'folder', folder, authType: 'none' },
+    }).expect(201);
+    const conn = `/api/v1/integrations/connections/${created.body.id}`;
+    // Not on the agent's allow-list yet: refused on the agent's machine.
+    const refused = await finished((await api().post(`${conn}/test`).set(await as()).expect(200)).body.agentJobs[0].id, 'the refused folder test');
+    expect(refused).toMatchObject({ status: 'failed', errorKind: 'refused' });
+    writeFileSync(join(dataDir, 'allowlist.json'), JSON.stringify({ folders: [folder] }));
+    const tested = await finished((await api().post(`${conn}/test`).set(await as()).expect(200)).body.agentJobs[0].id, 'the folder test');
+    expect(tested.status).toBe('completed');
+    expect(tested.result.message).toMatch(/can be read: 3 files, 2 of them CSV or Excel/);
+    const files = await finished((await api().post(`${conn}/agent-jobs`).set(await as()).send({ kind: 'discover', request: { level: 'files' } }).expect(201)).body.id, 'the file list');
+    expect(files.result.files.map((f: { name: string }) => f.name)).toEqual(['machines-2026-11-14.csv', 'machines-2026-11-15.csv', 'notes.txt.bak']);
+    await api().post(`${conn}/ready`).set(await as()).send({}).expect(200);
+    expect((await api().post(`${conn}/activate`).set(await as()).send({}).expect(200)).body.status).toBe('active');
+    await api().put(`${conn}/record-source`).set(await as()).send({ entityType: 'machine', source: { file: 'machines-*.csv' } }).expect(200);
+    const preview = await finished((await api().post(`${conn}/agent-jobs`).set(await as()).send({ kind: 'preview', request: { file: 'machines-*.csv', limit: 5 } }).expect(201)).body.id, 'the file preview');
+    expect(preview.status).toBe('completed');
+    expect(preview.result.file.name).toBe('machines-2026-11-15.csv');
+    expect(preview.result.rows[0]).toEqual({ Code: 'FLD-1', Name: 'Folder machine 1', Plant: 'MAIN' });
+    const sample = (await api().post(`${conn}/sample`).set(await as()).send({ entityType: 'machine' }).expect(200)).body;
+    const templateId = (await api().post('/api/v1/integrations/templates').set(await as()).send({
+      entityType: 'machine', name: 'Folder machines', keyField: 'Code',
+      fields: [{ target: 'code', source: 'Code' }, { target: 'name', source: 'Name' }, { target: 'site', source: 'Plant' }],
+      expectedColumns: sample.columns, settings: { writeMode: 'add_update', matchExisting: false },
+    }).expect(201)).body.id;
+    const importAs = async (kind: 'full' | 'incremental') => {
+      const started = (await api().post(`${conn}/runs`).set(await as()).send({ entityType: 'machine', kind, templateId }).expect(201)).body;
+      return until(`the ${kind} folder import`, async () => {
+        const r = (await api().post(`/api/v1/integrations/runs/${started.id}/continue`).set(await as()).send({})).body;
+        return ['succeeded', 'partial', 'failed'].includes(r.status) && r;
+      }, 120_000);
+    };
+    expect(await importAs('full')).toMatchObject({ status: 'succeeded', counts: { total: 600, created: 600 } });
+    expect((await admin.query(`select count(*)::int as n from public.machines where organisation_id = $1 and code like 'FLD-%'`, [ids.orgA])).rows[0].n).toBe(600);
+    expect(await importAs('incremental')).toMatchObject({ kind: 'incremental', status: 'succeeded', counts: { total: 0 } });
+    write('machines-2026-11-16.csv', machines(600, 7), new Date('2026-11-16T06:00:00Z'));
+    expect(await importAs('incremental')).toMatchObject({ status: 'succeeded', counts: { total: 600, updated: 1, unchanged: 599 } });
+    expect((await admin.query(`select name from public.machines where organisation_id = $1 and code = 'FLD-7'`, [ids.orgA])).rows[0].name).toBe('Renamed 7');
+  }
+
   async function mysqlConnection(agentId: string, finished: (id: string, what: string) => Promise<any>, pgConnectionId: string) {
     const mysql = (sql: string) => run('mariadb', ['--no-defaults', '-h127.0.0.1', `-P${myPort}`, '-uroot', '-pcheck-root', '-e', sql]);
     await mysql(`
@@ -276,7 +333,7 @@ maybe('the real connector agent', () => {
     });
     expect(online.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(online.capabilities.jobs).toEqual(['discover', 'extract', 'ping', 'preview', 'store_credential', 'test_connection']);
-    expect(online.capabilities.adapters).toEqual(['mysql', 'postgres', 'sqlserver']);
+    expect(online.capabilities.adapters).toEqual(['folder', 'mysql', 'postgres', 'sqlserver']);
 
     // Opening the agent's page wakes it to poll quickly, so the ping is answered within seconds.
     await api().post(`/api/v1/integrations/agents/${agentId}/wake`).set(await as()).expect(200);

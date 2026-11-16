@@ -48,6 +48,7 @@ const UNSCOPED = new Set([
   'POST /api/v1/integrations/agent/jobs/{id}/progress',
   'POST /api/v1/integrations/agent/jobs/{id}/complete',
   'POST /api/v1/integrations/agent/jobs/{id}/fail',
+  'POST /api/v1/integrations/agent/jobs/{id}/file-parts',
   'POST /api/v1/integrations/agent/jobs/{id}/batches',
   'POST /api/v1/integrations/agent/keys/rotate',
   'POST /api/v1/integrations/agent/deregister',

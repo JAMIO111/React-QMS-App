@@ -76,7 +76,7 @@ BEGIN
   PERFORM pg_temp.assert_eq(left(t, 5), '42501', 'an inspector cannot choose where records are read from');
   PERFORM pg_temp.login(own);
   t := pg_temp.fails(format('SELECT app.set_integration_record_source(%L, ''machine'', %L)', filecon, src));
-  PERFORM pg_temp.assert_true(t LIKE 'QM022%Only a database connection%', 'only a database connection has record sources');
+  PERFORM pg_temp.assert_true(t LIKE 'QM022%Only a connection through a connector agent%', 'only a database connection has record sources');
   t := pg_temp.fails(format('SELECT app.set_integration_record_source(%L, ''machine'', %L)', conn, src || '{"sql": "select 1"}'));
   PERFORM pg_temp.assert_true(t LIKE 'QM022%Unknown record source setting "sql"%', 'no SQL can be given: ' || t);
   t := pg_temp.fails(format('SELECT app.set_integration_record_source(%L, ''machine'', %L)', conn, src || '{"columns": ["name", "site"]}'));

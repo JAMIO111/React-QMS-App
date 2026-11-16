@@ -196,3 +196,64 @@ describe("reading only what changed, on a schedule (AG4)", () => {
     expect(within(row).getByText("Needs a look")).toBeInTheDocument();
   });
 });
+
+describe("files in a folder (AG5b)", () => {
+  const folderConnection = (over = {}) =>
+    connection({ name: "ERP exports", config: { engine: "folder", folder: "\\\\files01\\exports\\erp", authType: "none" }, ...over });
+
+  it("checks a folder and a file name as the database does, and makes a dated name a pattern", async () => {
+    const { folderPathProblem, fileNameProblem, filePatternFrom, databaseConfig, databaseForm, databaseWhere } = await import("../../../lib/integrations");
+    expect(folderPathProblem("\\\\files01\\exports")).toBeNull();
+    expect(folderPathProblem("C:\\Exports")).toBeNull();
+    expect(folderPathProblem("/srv/exports")).toBeNull();
+    expect(folderPathProblem("exports")).toMatch(/whole folder path/);
+    expect(folderPathProblem("C:\\Exports\\..\\Windows")).toMatch(/cannot contain/);
+    expect(fileNameProblem("machines-*.csv")).toBeNull();
+    expect(fileNameProblem("../secret.csv")).toMatch(/directly in the folder/);
+    expect(fileNameProblem("old/m.csv")).toMatch(/directly in the folder/);
+    expect(filePatternFrom("machines-2026-11-15.csv")).toBe("machines-*.csv");
+    expect(filePatternFrom("parts_20261115_0600.xlsx")).toBe("parts_*.xlsx");
+    expect(filePatternFrom("machines.csv")).toBe("machines.csv");
+    const f = { ...databaseForm("folder"), folder: " C:\\Exports ", fileDelimiter: ";", hasHeader: false };
+    expect(f.authType).toBe("none");
+    expect(databaseConfig(f)).toEqual({ engine: "folder", folder: "C:\\Exports", authType: "none", delimiter: ";", hasHeader: false });
+    expect(databaseWhere({ engine: "folder", folder: "C:\\Exports" })).toBe("C:\\Exports");
+    expect(describeRecordSource({ file: "machines-*.csv" })).toBe("Newest CSV or Excel file matching machines-*.csv");
+  });
+
+  it("lists the folder's files and uses a dated export as a pattern for a kind of record", async () => {
+    routeApi({
+      "POST /integrations/connections/c1/agent-jobs": { id: "j1", kind: "discover", status: "pending" },
+      "GET /integrations/agent-jobs/j1": {
+        id: "j1", kind: "discover", status: "completed",
+        result: { level: "files", files: [
+          { name: "machines-2026-11-15.csv", size: 2048, modifiedAt: "2026-11-15T06:00:00Z", supported: true },
+          { name: "readme.docx", size: 100, modifiedAt: "2026-11-01T06:00:00Z", supported: false },
+        ] },
+      },
+      "GET /integrations/entities": ENTITIES,
+      "PUT /integrations/connections/c1/record-source": folderConnection(),
+    });
+    wrap(<BrowseCard connection={folderConnection()} />);
+    await userEvent.click(screen.getByRole("button", { name: "List the files" }));
+    const list = await screen.findByRole("list", { name: "Files" });
+    expect(within(list).getByText("readme.docx")).toBeInTheDocument();
+    expect(within(list).getByText(/not a CSV or Excel file/)).toBeInTheDocument();
+    expect(within(list).queryByRole("button", { name: "Use readme.docx" })).not.toBeInTheDocument();
+    expect(calls.find((c) => c.k === "POST /integrations/connections/c1/agent-jobs").body).toEqual({ kind: "discover", request: { level: "files" } });
+    await userEvent.click(within(list).getByRole("button", { name: "Use machines-2026-11-15.csv" }));
+    const dialog = await screen.findByRole("dialog", { name: "Read records from a file" });
+    expect(within(dialog).getByRole("textbox", { name: /File name or pattern/ })).toHaveValue("machines-*.csv");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Fortress records in this file/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Machines" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "PUT /integrations/connections/c1/record-source")?.body).toEqual({ entityType: "machine", source: { file: "machines-*.csv" } }));
+  });
+
+  it("names the folder's files on the sources card and allows incremental reads of them", async () => {
+    routeApi({});
+    wrap(<RecordSourcesCard connection={folderConnection({ recordSources: [{ entityType: "machine", source: { file: "machines-*.csv" }, updatedAt: "2026-11-15T10:00:00Z" }] })} />);
+    expect(screen.getByText("Records read from the folder")).toBeInTheDocument();
+    expect(screen.getByText("Newest CSV or Excel file matching machines-*.csv")).toBeInTheDocument();
+  });
+});

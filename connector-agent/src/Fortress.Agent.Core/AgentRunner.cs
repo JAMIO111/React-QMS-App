@@ -166,6 +166,11 @@ public sealed class AgentRunner(
             var r = await api.SendBatchAsync(identity, job.Id, batch, token);
             if (r.Cancelled) await jobCts.CancelAsync();
             return r;
+        }, async (part, token) =>
+        {
+            var r = await api.SendFilePartAsync(identity, job.Id, part, token);
+            if (r.Cancelled) await jobCts.CancelAsync();
+            return r;
         });
         var started = Stopwatch.StartNew();
         try

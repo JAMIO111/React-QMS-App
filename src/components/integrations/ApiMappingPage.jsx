@@ -32,6 +32,7 @@ import CTAButton from "@/components/CTAButton";
 /** What the page calls the source: an API's fields, or a database table's columns (AG3). */
 const WORDS = {
   api: { what: "field the API sends", fields: "fields", reading: "Reading the first page from the API…", unread: "The API could not be read", none: "The API sent no records", start: "Read what the API sends to start mapping", missing: "Fields the mapping needs are not in what the API sends", choose: "Choose which field the API sends becomes each Fortress field." },
+  folder: { what: "column of the file", fields: "columns", reading: "Reading the sample…", unread: "The sample could not be read", none: "The file has no rows", start: "Ask the connector agent for the file to start mapping", missing: "Columns the mapping needs are not in the file", choose: "Choose which column of the file becomes each Fortress field." },
   database: { what: "column of the table", fields: "columns", reading: "Reading the sample…", unread: "The sample could not be read", none: "The table sent no rows", start: "Ask the connector agent for a sample to start mapping", missing: "Columns the mapping needs are not in the table", choose: "Choose which column of the table becomes each Fortress field." },
 };
 
@@ -59,7 +60,8 @@ const ApiMappingPage = () => {
   const advanced = !!org.data?.settings?.advancedImports;
   const conn = connection.data ?? null;
   const isDb = conn?.provider?.key === "sql_agent";
-  const W = WORDS[isDb ? "database" : "api"];
+  const isFolder = conn?.config?.engine === "folder";
+  const W = WORDS[isFolder ? "folder" : isDb ? "database" : "api"];
   const kinds = isDb ? (conn?.recordSources ?? []).map((x) => x.entityType) : Object.keys(conn?.config?.entities ?? {});
   const recordSource = isDb ? (conn?.recordSources ?? []).find((x) => x.entityType === (kinds.includes(params.get("entity")) ? params.get("entity") : kinds[0]))?.source : null;
   const entityParam = params.get("entity");
@@ -74,7 +76,10 @@ const ApiMappingPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askedStatus]);
   const needsSample = isDb && sample.error?.code === "agent_sample_needed";
-  const askForSample = () => recordSource && askSample.ask("preview", { schema: recordSource.schema, object: recordSource.object, limit: 20 });
+  // A folder (AG5b): a preview of the newest file matching the source's name; a database: of its table.
+  const askForSample = () =>
+    recordSource &&
+    askSample.ask("preview", recordSource.file ? { file: recordSource.file, limit: 20 } : { schema: recordSource.schema, object: recordSource.object, limit: 20 });
   const readAgain = () => (isDb ? askForSample() : sample.refetch());
   const allTemplates = useImportTemplates(undefined);
   const templates = (allTemplates.data ?? []).filter((t) => t.entityType === entityType);
@@ -229,7 +234,9 @@ const ApiMappingPage = () => {
             {needsSample && (
               <Callout tone="info" title="Ask the connector agent for a sample"
                 action={<CTAButton type="main" size="md" onClick={askForSample} loading={askSample.busy} loadingText="Asking the agent…">Ask for a sample</CTAButton>}>
-                Fortress does not read the database itself: the agent sends the first rows of {recordSource ? `${recordSource.schema}.${recordSource.object}` : "the table"}, and the columns are mapped from them.
+                {isFolder
+                  ? `Fortress does not read the folder itself: the agent sends the newest file matching ${recordSource?.file ?? "the name chosen"}, and the columns are mapped from its first rows.`
+                  : `Fortress does not read the database itself: the agent sends the first rows of ${recordSource ? `${recordSource.schema}.${recordSource.object}` : "the table"}, and the columns are mapped from them.`}
               </Callout>
             )}
             {isDb && askSample.busy && <Waiting job={askSample.job} />}
@@ -241,7 +248,9 @@ const ApiMappingPage = () => {
             )}
             {sample.data && headers.length === 0 && (
               <Callout tone="warning" title={W.none} action={<CTAButton type="neutral" size="md" onClick={readAgain} loading={sample.isFetching || askSample.busy}>Read again</CTAButton>}>
-                {isDb
+                {isFolder
+                  ? "Columns can only be mapped from rows the file holds. Check the file name chosen on the connection's page."
+                  : isDb
                   ? "Columns can only be mapped from rows the table holds. Check the table chosen and its filters on the connection's page."
                   : "Fields can only be mapped from records the API sends. Check the path and where the list is in the answer in the connection's settings."}
               </Callout>
@@ -269,7 +278,7 @@ const ApiMappingPage = () => {
                     readOnly={!canRun}
                     advanced={advanced}
                     problems={problems}
-                    source={isDb ? "database" : "api"}
+                    source={isFolder ? "file" : isDb ? "database" : "api"}
                     updates={!ADD_ONLY_KINDS.includes(entityType) && !ADD_UPDATE_KINDS.includes(entityType) && (form.settings?.writeMode ?? "add_only") !== "add_only"}
                   />
                 </MenuCard>

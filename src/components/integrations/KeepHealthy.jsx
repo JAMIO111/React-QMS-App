@@ -26,7 +26,7 @@ import CTAButton from "@/components/CTAButton";
 const label = (t) => ENTITY_LABELS[t] ?? t;
 
 /** One kind of record's schedule: by hand, or on a schedule with a template, and what happens to records that disappear. Saved as chosen. */
-const ScheduleRow = ({ connection, setting, canManage, isDatabase, changeTracked }) => {
+const ScheduleRow = ({ connection, setting, canManage, isDatabase, folder, changeTracked }) => {
   const save = useSaveImportSettings(connection.id);
   const templates = useImportTemplates(setting.entityType);
   const { showToast } = useToast();
@@ -86,7 +86,9 @@ const ScheduleRow = ({ connection, setting, canManage, isDatabase, changeTracked
           {setting.scheduledBy?.name ?? "the person who switched it on"}
           {setting.lastScheduledAt ? ` · last asked for ${formatDateTime(setting.lastScheduledAt)}` : ""}.{" "}
           {isDatabase
-            ? changeTracked
+            ? folder
+              ? "Reads the newest matching file only when it has changed since the last import."
+              : changeTracked
               ? "Reads only the rows changed since the last import (in full the first time)."
               : "Reads the whole table each time: say which column shows when a row changed to read only the changes."
             : "Incremental when the connection says how, otherwise in full."}
@@ -104,7 +106,8 @@ export const ScheduleCard = ({ connection }) => {
   const isDatabase = connection.provider?.key === "sql_agent";
   const sources = connection.recordSources ?? [];
   const kinds = isDatabase ? sources.map((s) => s.entityType) : Object.keys(connection.config?.entities ?? {});
-  const tracked = new Set(sources.filter((s) => s.source?.changedColumn).map((s) => s.entityType));
+  const tracked = new Set(sources.filter((s) => s.source?.changedColumn || s.source?.file).map((s) => s.entityType));
+  const folder = connection.config?.engine === "folder";
   const rows = (settings.data ?? []).filter((s) => kinds.includes(s.entityType));
   if (kinds.length === 0) return null;
   return (
@@ -118,7 +121,7 @@ export const ScheduleCard = ({ connection }) => {
     >
       <ul aria-label="Schedules" className="flex flex-col divide-y divide-border-color">
         {rows.map((s) => (
-          <ScheduleRow key={s.entityType} connection={connection} setting={s} isDatabase={isDatabase} changeTracked={tracked.has(s.entityType)}
+          <ScheduleRow key={s.entityType} connection={connection} setting={s} isDatabase={isDatabase} folder={folder} changeTracked={tracked.has(s.entityType)}
             canManage={can("integrations.manage") && connection.status !== "retired"} />
         ))}
       </ul>

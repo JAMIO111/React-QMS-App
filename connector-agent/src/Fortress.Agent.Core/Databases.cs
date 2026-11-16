@@ -202,6 +202,8 @@ public sealed class LocalAllowList
     public IReadOnlyList<string> Databases { get; init; } = [];
     public IReadOnlyList<string> Schemas { get; init; } = [];
     public IReadOnlyList<string> Objects { get; init; } = [];
+    /// <summary>Folders this agent may read (AG5b), each with everything below it. Unlike the other lists, none means no folder at all.</summary>
+    public IReadOnlyList<string> Folders { get; init; } = [];
 
     public static LocalAllowList Everything { get; } = new();
 
@@ -222,7 +224,25 @@ public sealed class LocalAllowList
         IReadOnlyList<string> List(string key) => node?[key] is JsonArray a
             ? a.Select(x => x?.GetValue<string>()?.Trim()).Where(x => !string.IsNullOrEmpty(x)).Select(x => x!).ToArray()
             : [];
-        return new LocalAllowList { Databases = List("databases"), Schemas = List("schemas"), Objects = List("objects") };
+        return new LocalAllowList { Databases = List("databases"), Schemas = List("schemas"), Objects = List("objects"), Folders = List("folders") };
+    }
+
+    /// <summary>The folder or one above it is listed. Paths are compared whole, after resolving them, ignoring case on Windows.</summary>
+    public bool AllowsFolder(string folder)
+    {
+        if (Folders.Count == 0) return false;
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        static string Full(string p) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(p));
+        string target;
+        try { target = Full(folder); } catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException) { return false; }
+        foreach (var allowed in Folders)
+        {
+            string root;
+            try { root = Full(allowed); } catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException) { continue; }
+            if (string.Equals(target, root, comparison)) return true;
+            if (target.StartsWith(root + Path.DirectorySeparatorChar, comparison) || target.StartsWith(root + Path.AltDirectorySeparatorChar, comparison)) return true;
+        }
+        return false;
     }
 
     public bool AllowsDatabase(string database) => Databases.Count == 0 || Databases.Any(d => Matches(d, database));

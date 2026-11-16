@@ -15,6 +15,7 @@ import { AGENT_HEADERS, TOKEN_PATTERN } from './agent-signature';
 import { ConnectionJobBody } from '../integrations.schemas';
 import { AgentsService } from './agents.service';
 import { readAgentBatch } from './agent-batch';
+import { readFilePart } from './agent-file';
 
 const READ = 'integrations.read';
 const MANAGE = 'integrations.manage';
@@ -261,7 +262,19 @@ export class AgentApiController {
   @ApiBody({ schema: openApiSchema(CompleteBody) })
   @ApiOkResponse({ description: 'The job is done, with its result. Repeating it changes nothing.' })
   complete(@Agent() agent: AgentCaller, @Param('id') id: string, @Body() body: unknown) {
-    return this.service.report(agent, parse(Uuid, id), 'complete', parse(CompleteBody, body ?? {}));
+    return this.service.complete(agent, parse(Uuid, id), parse(CompleteBody, body ?? {}));
+  }
+
+  @Post('jobs/:id/file-parts')
+  @HttpCode(200)
+  @UseGuards(AgentGuard)
+  @ApiOkResponse({
+    description:
+      'One part of a file from a folder (AG5b): its raw bytes (Content-Type: application/octet-stream, at most 1 MB) with X-Part-Seq (0, 1, …) and X-Part-Checksum = SHA-256 (hex) of the bytes. Stored once and in order, up to 25 MB; Fortress reads the file when the agent completes the job. The answer says when the job has been cancelled.',
+  })
+  filePart(@Agent() agent: AgentCaller, @Param('id') id: string, @Req() req: RawBodyRequest<Request>) {
+    const body = Buffer.isBuffer(req.body) ? req.body : req.rawBody;
+    return this.service.storeFilePart(agent, parse(Uuid, id), readFilePart(body, header(req, 'x-part-seq'), header(req, 'x-part-checksum')));
   }
 
   @Post('jobs/:id/batches')

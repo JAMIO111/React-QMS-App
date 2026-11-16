@@ -320,3 +320,65 @@ applied.
     then PostgreSQL imports again with nothing written. This is AG5's "one agent, several kinds of connection".
   - `DatabaseConnections.test.jsx`.
 - **Still to check.** MySQL 8 itself (only MariaDB runs here). SQL Server, as before, on the Windows machine.
+
+### AG5b — files in a folder (2026-11-16)
+
+Migration `20260310100000_agent_folders.sql` (**not yet applied live**). Pushing the API before it breaks the file-part route and the folder parts
+of the record-source and agent-job routes; nothing existing breaks.
+
+**Decisions taken in building it.**
+- **A folder is an engine (`folder`) of the existing agent connection** (`sql_agent`, renamed "Database or folder through a connector agent").
+  Connections, jobs, record sources, runs that wait for the agent, schedules and health are reused unchanged.
+- **The agent reads only folders its own allow-list names.** `allowlist.json` gains `"folders"`; a folder or one above it must be listed. Unlike
+  databases, **no list means no folder at all**, because a folder is reached with the service account's own rights.
+- **The agent never parses files.** It sends the bytes in signed parts and the API reads them with the same reader as uploaded files (encoding
+  and separator worked out or set, headings, `.xlsx`), so a folder file and an uploaded file are read exactly alike.
+- **A record source is a file name or pattern** (`*` and `?`, directly in the folder, no paths). The **newest** matching CSV / Excel file is read.
+- **The mark of a folder source is the file's SHA-256.** An incremental run sends it, and the agent uploads nothing when the newest file is that
+  same file. A full run always reads the file. Unchanged rows of a re-read file write nothing anyway, through the pipeline's content hashes.
+
+**As built.**
+- **Database** (functions only; latest definitions copied, then changed).
+  - `app.integration_agent_config_problem` sends `folder` to `app.integration_folder_config_problem`: `folder` is a drive path, a share or an
+    absolute path (≤ 260, no `..`, quotes, `<>|*?`, control characters), there is no sign-in (`authType` none), and `encoding`, `delimiter` and
+    `hasHeader` are as for uploaded files.
+  - `app.integration_record_source_problem` accepts `{file}` (`app.integration_file_source_problem`, `app.integration_file_name_problem`).
+    `set_integration_record_source` refuses a table source on a folder and a file source on a database.
+  - `request_connection_job`: a folder is browsed at level `files` and previewed by `file`.
+  - `integration_queue_extract`: a folder's extract job asks for `{file, changedColumn: '@file', changedSince?}`, so the AG4 cursor handling
+    works unchanged.
+  - `request_integration_run` and `system_schedule_integration_runs` allow incremental reads of a folder.
+  - New table `integration_agent_file_parts`: ≤ 64 parts of ≤ 1 MB, ≤ 25 MB in all, checksum checked by the database too, never readable by
+    people, cleared by trigger when the job ends. Written by `app.system_agent_store_file_part` and read by `app.system_agent_file_job` /
+    `app.system_agent_file_parts` (API login only).
+- **Agent.**
+  - `FolderJobs` (`Folders.cs`) handles folder jobs, dispatched from the four handlers. Folders are compared whole after resolving them,
+    ignoring case on Windows. Only top-level files are seen: no hidden, system or linked files. CSV, TXT, TSV and XLSX are supported.
+  - Files are read with `FileShare.ReadWrite` (an export can still be open) and hashed over exactly the bytes sent. Parts are ≤ 768 kB, each
+    with its SHA-256. The agent stops when Fortress cancels.
+  - `AgentApiClient.SendFilePartAsync`; the capabilities list `folder`.
+- **API.**
+  - `POST /integrations/agent/jobs/{id}/file-parts` (`application/octet-stream`, `X-Part-Seq`, `X-Part-Checksum`; raw body parser 1 MB;
+    `agent-file.ts`).
+  - `complete` (`AgentsService.complete`): when a folder job sent a file, the API puts it together (every part, the size and the SHA-256 the
+    agent reported, else `409 agent_file_incomplete`) and reads it. A preview's result becomes the columns, the first rows, the row count and the
+    file. An extraction stores the rows as batches of 1,000 with the hash as `changedUpTo`. A file that cannot be read fails the job with the
+    reader's words.
+  - `RecordSource` is a database shape or `{file}`; agent-job requests take `level: files` and `file`. A folder's sample is its latest preview
+    of the same name.
+- **Screens.**
+  - A **Files in a folder** card and a folder version of the connection dialog: folder path, character set, separator, headings.
+  - The connection page lists the folder's files (preview, **Use this file**). `FileSourceDialog` suggests a pattern from a dated name
+    (`filePatternFrom`: `machines-2026-11-15.csv` → `machines-*.csv`).
+  - Folder wording on the sources card, the mapping page (columns of the file), the Run dialog and the schedule card ("reads the newest
+    matching file only when it has changed"). Incremental is offered for every file source.
+- **Tests.**
+  - SQL: `agent_folders.test.sql`, plus tenancy-sweep seeds and updated wording in the AG2, AG3 and AG5a tests.
+  - Agent: `FolderTests.cs` (allow-list, top-level only, newest match, parts, unchanged, names that leave the folder, 25 MB, cancel).
+  - API: `agent-file.spec.ts`, and `agent-folders.e2e-spec.ts` with a fake agent (preview, sample, import of 1,200 rows, re-import with nothing
+    written, unchanged file, changed file, unreadable workbook, incomplete file, schedule).
+  - Real agent: `connector-agent-binary.e2e-spec.ts` reads a real folder — refused until it is on the allow-list, then a preview, an import of
+    600 rows, an incremental read that sends nothing, and a changed file that updates one row.
+  - UI: `AgentImports.test.jsx`, `DatabaseConnections.test.jsx`, `Integrations.test.jsx`.
+- **Not built.** Reading every new file of a series (only the newest one is read), moving or archiving files after import, sub-folders,
+  SharePoint / OneDrive, `.xls`.

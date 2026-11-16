@@ -164,7 +164,7 @@ const RunPage = () => {
         )}
         {preview && <Callout tone="info" className="mt-3">A preview writes nothing. It shows what a real import would do now.</Callout>}
         {agentReading && (
-          <Callout tone="info" className="mt-3" title="The connector agent is reading the table" role="status">
+          <Callout tone="info" className="mt-3" title="The connector agent is reading the records" role="status">
             {run.agent.status === "pending"
               ? "It takes the job the next time it checks in (within seconds while this page is open)."
               : `${run.agent.rows.toLocaleString("en-GB")} rows read so far, in ${run.agent.batches} batch${run.agent.batches === 1 ? "" : "es"}.`}{" "}

@@ -81,6 +81,7 @@ public sealed class TestConnectionHandler(DatabaseJobContext databases) : IJobHa
 
     public async Task<JsonNode?> RunAsync(AgentJob job, JobContext context, CancellationToken ct)
     {
+        if (FolderJobs.IsFolder(job)) return FolderJobs.Test(job, databases.AllowListPath);
         var (db, settings, allow) = await databases.OpenAsync(job, ct);
         await using (db)
         {
@@ -108,6 +109,7 @@ public sealed class DiscoverHandler(DatabaseJobContext databases) : IJobHandler
 
     public async Task<JsonNode?> RunAsync(AgentJob job, JobContext context, CancellationToken ct)
     {
+        if (FolderJobs.IsFolder(job)) return FolderJobs.Discover(job, databases.AllowListPath);
         var request = DatabaseJobContext.Request(job);
         var level = request["level"]?.GetValue<string>() ?? "schemas";
         var schema = request["schema"]?.GetValue<string>();
@@ -182,6 +184,7 @@ public sealed class PreviewHandler(DatabaseJobContext databases) : IJobHandler
 
     public async Task<JsonNode?> RunAsync(AgentJob job, JobContext context, CancellationToken ct)
     {
+        if (FolderJobs.IsFolder(job)) return await FolderJobs.PreviewAsync(job, databases.AllowListPath, context, ct);
         var request = DatabaseJobContext.Request(job);
         var schema = request["schema"]?.GetValue<string>() ?? throw new JobFailedException("invalid", "Choose the table or view to preview");
         var name = request["object"]?.GetValue<string>() ?? throw new JobFailedException("invalid", "Choose the table or view to preview");

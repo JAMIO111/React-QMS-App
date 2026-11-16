@@ -5,12 +5,12 @@ import { useAgentMutation } from "../../../hooks/useAgents";
 import { useIntegrationMutation } from "../../../hooks/useIntegrations";
 import { agentPath, ago } from "../../../lib/agents";
 import { describeApiError } from "../../../lib/api-client";
-import { AGENT_CREDENTIAL_WORDS, DB_ENGINES, agentJobRunning, databaseWhere, dbNeedsPassword } from "../../../lib/integrations";
+import { AGENT_CREDENTIAL_WORDS, DB_ENGINES, agentJobRunning, databaseWhere, dbNeedsPassword, filePatternFrom, isFolderConfig } from "../../../lib/integrations";
 import { formatDateTime } from "../../../lib/processControl";
 import { sealCredential } from "../../../lib/sealCredential";
 import { ServerIcon } from "@/components/icons";
 import { Failed, JOB_STATUS, useAsk, Waiting } from "./agentAsk";
-import { RecordSourceDialog } from "./RecordSources";
+import { FileSourceDialog, RecordSourceDialog } from "./RecordSources";
 import Callout from "../../ui/Callout";
 import Dialog from "../../ui/Dialog";
 import Field from "../../ui/Field";
@@ -116,7 +116,11 @@ export const AgentCard = ({ connection: c, canManage }) => {
             )}
           </div>
         ) : (
-          <p className="text-sm text-secondary-text">Windows authentication: the agent signs in as its own service account, so there is no password to type.</p>
+          <p className="text-sm text-secondary-text">
+            {isFolderConfig(c.config)
+              ? 'The agent reads the folder as its own Windows service account, so there is no password to type. Give that account read access to the folder, and add the folder to "folders" in the agent\'s allowlist.json.'
+              : "Windows authentication: the agent signs in as its own service account, so there is no password to type."}
+          </p>
         )}
         {(cred?.status === "failed" || cred?.status === "cleared") && cred.message && <Callout tone="warning">{cred.message}</Callout>}
         {live && !agent.online && <Callout tone="info">The agent is offline. Tests, browsing and passwords wait until it checks in again.</Callout>}
@@ -133,7 +137,99 @@ const cell = (v) => (v === null || v === undefined ? <span className="text-secon
  * Browse the database as the agent sees it (after its login's rights and its local allow-list): schemas, then tables and views, then columns with
  * keys and the first rows. Every step is a job: the agent builds its own read-only query, Fortress sends no SQL.
  */
-export const BrowseCard = ({ connection: c }) => {
+export const BrowseCard = ({ connection: c }) => (isFolderConfig(c.config) ? <FolderBrowseCard connection={c} /> : <DatabaseBrowseCard connection={c} />);
+
+const size = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} kB` : `${n} bytes`);
+
+/**
+ * The files in a folder as the agent sees them (AG5b): only files directly in it, and only once the folder is on the agent's allow-list. A CSV or
+ * Excel file can be previewed (the agent sends it and Fortress reads it) and used for a kind of record — by its name, or a pattern that picks the
+ * newest of a series of dated exports.
+ */
+const FolderBrowseCard = ({ connection: c }) => {
+  const files = useAsk(c.id);
+  const preview = useAsk(c.id);
+  const [previewing, setPreviewing] = useState(null);
+  const [using, setUsing] = useState(null);
+  if (c.agent?.status !== "active") return null;
+  const done = (q) => q.job?.status === "completed";
+  const list = done(files) ? files.job.result.files : [];
+  return (
+    <MenuCard
+      title="Files in the folder"
+      subtitle="What the agent can see in the folder. Fortress reads CSV and Excel files; nothing in the folder is changed."
+      action={
+        <CTAButton type="main" size="md" onClick={() => files.ask("discover", { level: "files" })} loading={files.busy} loadingText="Asking the agent…">
+          {files.job ? "Look again" : "List the files"}
+        </CTAButton>
+      }>
+      <div className="flex flex-col gap-4">
+        {!files.job && !files.busy && <p className="text-sm text-secondary-text">List the files to choose the ones that hold your records.</p>}
+        {files.busy && <Waiting job={files.job} />}
+        {files.job?.status === "failed" && <Failed job={files.job} />}
+        {done(files) && list.length === 0 && <p className="text-sm text-secondary-text">The folder is empty.</p>}
+        {done(files) && list.length > 0 && (
+          <ul aria-label="Files" className="flex flex-col divide-y divide-border-color">
+            {list.map((f) => (
+              <li key={f.name} className="flex flex-wrap items-center gap-3 py-2">
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm font-medium text-primary-text">{f.name}</span>
+                  <span className="text-xs text-secondary-text">
+                    {size(f.size)}
+                    {f.modifiedAt ? ` · changed ${formatDateTime(f.modifiedAt)}` : ""}
+                    {f.supported ? "" : " · not a CSV or Excel file"}
+                  </span>
+                </div>
+                {f.supported && (
+                  <>
+                    <CTAButton
+                      type="secondary"
+                      size="md"
+                      aria-label={`Preview ${f.name}`}
+                      loading={preview.busy && previewing === f.name}
+                      onClick={() => {
+                        setPreviewing(f.name);
+                        preview.ask("preview", { file: f.name, limit: 20 });
+                      }}>
+                      Preview
+                    </CTAButton>
+                    <CTAButton type="main" size="md" aria-label={`Use ${f.name}`} onClick={() => setUsing(f.name)}>
+                      Use this file
+                    </CTAButton>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {files.job?.result?.truncated && <p className="text-xs text-secondary-text">Only the first 500 files are listed.</p>}
+        {preview.busy && <Waiting job={preview.job} />}
+        {preview.job?.status === "failed" && <Failed job={preview.job} />}
+        {done(preview) && (
+          <div className="overflow-x-auto rounded-xl border border-border-color">
+            <table aria-label={`First rows of ${preview.job.result.file?.name ?? "the file"}`} className="min-w-full text-sm">
+              <thead className="bg-secondary-bg text-left text-xs text-secondary-text">
+                <tr>{preview.job.result.columns.map((col) => <th key={col.name} className="whitespace-nowrap px-2 py-1 font-medium">{col.name}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-border-color">
+                {preview.job.result.rows.map((row, i) => (
+                  <tr key={i}>{preview.job.result.columns.map((col) => <td key={col.name} className="whitespace-nowrap px-2 py-1 text-primary-text">{cell(row[col.name])}</td>)}</tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="p-2 text-xs text-secondary-text">
+              {preview.job.result.file?.name}: {(preview.job.result.rowCount ?? preview.job.result.rows.length).toLocaleString("en-GB")} rows
+              {preview.job.result.sheet ? ` on the sheet ${preview.job.result.sheet}` : ""}
+            </p>
+          </div>
+        )}
+      </div>
+      {using && <FileSourceDialog connection={c} initialName={filePatternFrom(using)} onClose={() => setUsing(null)} />}
+    </MenuCard>
+  );
+};
+
+const DatabaseBrowseCard = ({ connection: c }) => {
   const schemas = useAsk(c.id);
   const objects = useAsk(c.id);
   const columns = useAsk(c.id);

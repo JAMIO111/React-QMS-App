@@ -64,6 +64,17 @@ The Windows service, DPAPI protection, `install.ps1` / `uninstall.ps1` and the f
   connection (password, test, browse, preview, and an import read in batches). With MariaDB or MySQL installed, `mysql-check.sh` starts a
   throwaway server too: the MySQL adapter tests run, and the same running agent also imports from MySQL while its PostgreSQL connection stays in use.
 
+## Folders of files (AG5b)
+
+- A connection with engine `folder` names a folder as this machine knows it (`C:\Exports`, `\\server\share\Exports`). The agent reads it as its
+  service account, **only when `"folders"` in `allowlist.json` names it or a folder above it** (no list means no folder at all):
+  ```json
+  { "folders": ["\\\\files01\\exports"] }
+  ```
+- Only files directly in the folder are seen (no sub-folders, hidden, system or linked files); CSV, TXT, TSV and XLSX can be read. A preview or an
+  import sends the **newest** file matching the name or pattern; the agent never parses it — it sends the bytes in signed parts (≤ 768 kB each, ≤ 25
+  MB in all) and Fortress reads them as it reads uploaded files. An incremental import sends nothing when the newest file is the one Fortress has.
+
 ## Extraction for imports (AG3)
 
 - An `extract` job names a table or view, the column that identifies each row, which columns (or all) and simple filters

@@ -6,6 +6,8 @@ import type { RequestContext } from '../../common/request-context';
 import { DatabaseService, Db } from '../../database/database.service';
 import type { AgentCaller } from './agent.guard';
 import type { AgentBatch } from './agent-batch';
+import { assembleFile, fileBatches, folderParseOptions, previewResult, sentFile } from './agent-file';
+import { FileParseError, ParsedFile, parseFile } from '../core/file-parsers';
 import { freshTimestamp, p256Key, REGISTRATION_SUBJECT, sha256Hex, tokenHash, validNonce, verifySignature } from './agent-signature';
 
 type Row = Record<string, unknown>;
@@ -246,6 +248,59 @@ export class AgentsService {
       agent.correlationId,
       'agent',
     );
+  }
+
+  /** One part of a file from a folder (AG5b), already checked against its checksum; the database keeps it once, in order. */
+  storeFilePart(agent: AgentCaller, jobId: string, part: { seq: number; checksum: string; data: Buffer }) {
+    return this.database.asApi(
+      async (c) =>
+        (await c.query('select app.system_agent_store_file_part($1::uuid, $2::uuid, $3::int, $4, $5::bytea) as r', [agent.agentId, jobId, part.seq, part.checksum, part.data]))
+          .rows[0].r as { status: string; cancelled: boolean; stored: boolean; duplicate?: boolean; parts?: number; bytes?: number },
+      agent.correlationId,
+      'agent',
+    );
+  }
+
+  /**
+   * The agent says a job is done. For a preview or an import from a folder that sent a file, Fortress first reads the file (as an uploaded one):
+   * a preview keeps its first rows as the result, an import stores its rows as the extraction's batches with the file's SHA-256 as the mark. A
+   * file that cannot be read fails the job with the reader's words; the parts go when the job ends.
+   */
+  async complete(agent: AgentCaller, jobId: string, payload: { result?: unknown }) {
+    const job = await this.database.asApi(
+      async (c) => (await c.query('select app.system_agent_file_job($1::uuid, $2::uuid) as r', [agent.agentId, jobId])).rows[0].r as
+        | { kind: string; status: string; folder: boolean; spec: { connection?: Record<string, unknown>; request?: Record<string, unknown> } }
+        | null,
+      agent.correlationId,
+      'agent',
+    );
+    const sent = job?.folder && ['preview', 'extract'].includes(job.kind) && job.status === 'running' ? sentFile(payload.result) : null;
+    if (!job || !sent) return this.report(agent, jobId, 'complete', payload);
+    const parts = await this.database.asApi(
+      async (c) => (await c.query('select seq, data from app.system_agent_file_parts($1::uuid, $2::uuid)', [agent.agentId, jobId])).rows as Array<{ seq: number; data: Buffer }>,
+      agent.correlationId,
+      'agent',
+    );
+    const bytes = assembleFile(parts, sent);
+    let parsed: ParsedFile;
+    try {
+      parsed = parseFile(sent.file.name, bytes, folderParseOptions(job.spec.connection));
+    } catch (e) {
+      const message = e instanceof FileParseError ? `${sent.file.name} could not be read: ${e.message}` : `${sent.file.name} could not be read`;
+      return this.report(agent, jobId, 'fail', { kind: 'invalid', message: message.slice(0, 1000) });
+    }
+    if (job.kind === 'preview') {
+      const limit = typeof job.spec.request?.limit === 'number' ? job.spec.request.limit : 20;
+      return this.report(agent, jobId, 'complete', { result: previewResult(parsed, sent.file, limit) });
+    }
+    const maxRows = typeof job.spec.request?.maxRows === 'number' ? job.spec.request.maxRows : undefined;
+    const { batches, rows, truncated } = fileBatches(parsed, maxRows);
+    for (const b of batches) {
+      await this.storeBatch(agent, jobId, { seq: b.seq, lastKey: b.lastKey, rows: b.rows, checksum: b.checksum, changedUpTo: sent.file.sha256 });
+    }
+    return this.report(agent, jobId, 'complete', {
+      result: { batches: batches.length, rows, truncated, columns: parsed.headers.map((name) => ({ name })), changedUpTo: sent.file.sha256, file: sent.file },
+    });
   }
 
   /** One batch of extracted rows (AG3), already inflated and checked; the database keeps it once, in order. */

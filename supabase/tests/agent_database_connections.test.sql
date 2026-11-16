@@ -163,7 +163,7 @@ BEGIN
 
   -- ---- an import needs to know which table holds the records (AG3) ----
   t := pg_temp.fails(format('SELECT app.request_integration_run(%L, ''machine'', ''preview'')', conn));
-  PERFORM pg_temp.assert_true(t LIKE 'QM022%which table holds machine records%', 'an import needs its table: ' || t);
+  PERFORM pg_temp.assert_true(t LIKE 'QM022%which table or file holds machine records%', 'an import needs its table: ' || t);
 
   -- ---- isolation ----
   PERFORM pg_temp.login(other);

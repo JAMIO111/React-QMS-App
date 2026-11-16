@@ -5,7 +5,7 @@ import { useAgents } from "../../../hooks/useAgents";
 import { useIntegrationMutation } from "../../../hooks/useIntegrations";
 import { agentsPath } from "../../../lib/agents";
 import { describeApiError } from "../../../lib/api-client";
-import { DB_AUTH, DB_ENGINES, databaseConfig, databaseForm, databaseFormProblem, systemCodeFrom } from "../../../lib/integrations";
+import { DB_AUTH, DB_ENGINES, FILE_DELIMITERS, FILE_ENCODINGS, databaseConfig, databaseForm, databaseFormProblem, systemCodeFrom } from "../../../lib/integrations";
 import Callout from "../../ui/Callout";
 import ComboField from "../../ui/ComboField";
 import Dialog from "../../ui/Dialog";
@@ -18,6 +18,28 @@ import CTAButton from "@/components/CTAButton";
  * A database read through a connector agent (docs/connector-agent-plan.md AG2): which agent reads it, and where the database is. Only settings —
  * the password is typed afterwards on the connection's page and sealed in the browser for the agent. The agent cannot be changed once chosen.
  */
+/** A folder's settings (AG5b): where it is on the agent's machine, and how to read its files (as for an uploaded file). */
+const FolderFields = ({ f, set }) => (
+  <>
+    <Field
+      label="Folder"
+      value={f.folder}
+      onChange={(e) => set({ folder: e.target.value })}
+      required
+      maxLength={260}
+      placeholder={"\\\\files01\\exports\\erp"}
+      hint={"As the agent's machine knows it: a drive path (C:\\Exports) or a share (\\\\server\\share\\Exports). Add it to \"folders\" in the agent's allowlist.json too."}
+    />
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <ComboField label="Character set" value={f.fileEncoding} onChange={(v) => set({ fileEncoding: v ?? "auto" })} options={FILE_ENCODINGS} />
+      <ComboField label="Separator" value={f.fileDelimiter} onChange={(v) => set({ fileDelimiter: v ?? "auto" })} options={FILE_DELIMITERS} hint="For CSV and text files; Excel files are read as workbooks" />
+    </div>
+    <Switch checked={f.hasHeader} onChange={(e) => set({ hasHeader: e.target.checked })}>
+      The first line holds the column headings
+    </Switch>
+  </>
+);
+
 const DatabaseConnectionDialog = ({ engine, existing = null, onClose, onCreated }) => {
   const agents = useAgents();
   const mutation = useIntegrationMutation();
@@ -33,8 +55,9 @@ const DatabaseConnectionDialog = ({ engine, existing = null, onClose, onCreated 
   const agentOptions = live.map((a) => ({ value: a.id, label: a.name, hint: a.online ? "Online" : `Offline${a.machineName ? ` · ${a.machineName}` : ""}` }));
   const chosen = live.find((a) => a.id === agentId);
   const code = systemTouched ? system : systemCodeFrom(name);
+  const folder = f.engine === "folder";
   const problem =
-    (!existing && !agentId && "Choose the connector agent that reads this database") ||
+    (!existing && !agentId && `Choose the connector agent that reads this ${folder ? "folder" : "database"}`) ||
     (name.trim().length < 2 && "Give the connection a name") ||
     (!/^[a-z][a-z0-9_-]{1,39}$/.test(code) && "The system code is 2 to 40 lower-case letters, digits, hyphens or underscores, starting with a letter") ||
     databaseFormProblem(f);
@@ -56,18 +79,24 @@ const DatabaseConnectionDialog = ({ engine, existing = null, onClose, onCreated 
   };
 
   return (
-    <Dialog title={existing ? `Edit ${existing.name}` : `Connect ${DB_ENGINES[f.engine]}`} onClose={onClose} width="max-w-2xl">
+    <Dialog title={existing ? `Edit ${existing.name}` : folder ? "Connect a folder of files" : `Connect ${DB_ENGINES[f.engine]}`} onClose={onClose} width="max-w-2xl">
       <form noValidate onSubmit={save} className="flex flex-col gap-4">
-        {!existing && (
+        {!existing && !folder && (
           <p className="text-sm text-secondary-text">
             A connector agent inside your network reads the database and sends Fortress only what you ask for. Nothing connects in, and the password stays on
             the agent. You type the password on the next page.
           </p>
         )}
+        {!existing && folder && (
+          <p className="text-sm text-secondary-text">
+            A connector agent inside your network picks up CSV or Excel files from a folder or share and sends them to Fortress, which reads them as it reads
+            uploaded files. Nothing connects in. The agent reads the folder as its own Windows service account, and only once the folder is on its allow-list.
+          </p>
+        )}
         {!existing &&
           (live.length === 0 && !agents.isLoading ? (
             <Callout tone="warning" title="No connector agent yet">
-              Install one first, on a Windows machine that can reach the database.{" "}
+              Install one first, on a Windows machine that can reach the {folder ? "folder" : "database"}.{" "}
               <Link to={agentsPath()} className="text-link-color hover:underline">
                 Add a connector agent
               </Link>
@@ -76,7 +105,7 @@ const DatabaseConnectionDialog = ({ engine, existing = null, onClose, onCreated 
             <ComboField label="Connector agent" value={agentId} onChange={setAgentId} options={agentOptions} required hint={chosen && !chosen.online ? "This agent is offline: you can set the connection up, but it will not answer until it is back." : "Fixed once the connection is made"} />
           ))}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} placeholder="ERP database" />
+          <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} placeholder={folder ? "ERP exports" : "ERP database"} />
           <Field
             label="System code"
             value={code}
@@ -89,6 +118,10 @@ const DatabaseConnectionDialog = ({ engine, existing = null, onClose, onCreated 
             hint="Names where imported records came from (e.g. erp). Fixed once made."
           />
         </div>
+        {folder ? (
+          <FolderFields f={f} set={set} />
+        ) : (
+        <>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="sm:col-span-2">
             <Field label="Server" value={f.server} onChange={(e) => set({ server: e.target.value })} required placeholder={f.engine === "sqlserver" ? "SQL01" : "erp-db.factory.local"} hint="As the agent's machine knows it: a name or an address" />
@@ -122,6 +155,8 @@ const DatabaseConnectionDialog = ({ engine, existing = null, onClose, onCreated 
             <Callout tone="warning">Only for a server with a self-signed certificate on your own network: anyone between the agent and the database could read the traffic.</Callout>
           )}
         </div>
+        </>
+        )}
         {tried && problem && <p className="text-sm text-error-color" role="alert">{problem}</p>}
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">

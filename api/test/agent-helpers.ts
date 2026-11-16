@@ -34,6 +34,28 @@ export function agentClient(app: () => INestApplication) {
       ...headers(agent.id, agent.signing.privateKey, path, gz),
     }).send(gz);
   };
+  /** One part of a file as the agent sends it (AG5b): the raw bytes, signed, with their place and SHA-256 in headers. */
+  const filePart = (agent: TestAgent, jobId: string, seq: number, bytes: Buffer, opts: { checksum?: string } = {}) => {
+    const path = `/api/v1/integrations/agent/jobs/${jobId}/file-parts`;
+    return api().post(path).set({
+      'Content-Type': 'application/octet-stream', 'X-Agent-Id': agent.id, 'X-Part-Seq': String(seq),
+      'X-Part-Checksum': opts.checksum ?? createHash('sha256').update(bytes).digest('hex'),
+      ...headers(agent.id, agent.signing.privateKey, path, bytes),
+    }).send(bytes);
+  };
+  /** The agent sends a whole file in parts and completes the job saying what it sent (a folder's preview or import). */
+  const sendsFile = async (agent: TestAgent, jobId: string, name: string, bytes: Buffer, partSize = 64 * 1024, extra: Record<string, unknown> = {}) => {
+    let parts = 0;
+    for (let at = 0; at < bytes.length; at += partSize) {
+      const res = await filePart(agent, jobId, parts, bytes.subarray(at, at + partSize));
+      if (res.status !== 200) throw new Error(`file part ${parts}: ${res.status} ${JSON.stringify(res.body)}`);
+      parts += 1;
+    }
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    return signed(agent, `/api/v1/integrations/agent/jobs/${jobId}/complete`, {
+      result: { file: { name, size: bytes.length, sha256, modifiedAt: '2026-11-15T06:00:00Z' }, parts, changedUpTo: sha256, ...extra },
+    });
+  };
   const register = async (auth: Record<string, string>, name: string): Promise<TestAgent> => {
     const reg = await api().post('/api/v1/integrations/agent-registrations').set(auth).send({ name }).expect(201);
     const keys = { signing: pair(), sealing: pair() };
@@ -54,7 +76,7 @@ export function agentClient(app: () => INestApplication) {
     await signed(agent, `/api/v1/integrations/agent/jobs/${job.id}/${report}`, payload).expect(200);
     return job;
   };
-  return { signed, batch, register, take, does };
+  return { signed, batch, filePart, sendsFile, register, take, does };
 }
 
 /** Seal as the browser does: ephemeral ECDH P-256 → HKDF-SHA256 (fortress-agent-credential-v1) → AES-256-GCM, the connection id as AAD. */

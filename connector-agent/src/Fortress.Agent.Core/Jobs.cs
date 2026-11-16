@@ -14,7 +14,8 @@ public interface IJobHandler
 /// (extraction jobs, AG3) and the clock.
 /// </summary>
 public sealed class JobContext(
-    Func<JsonObject, CancellationToken, Task<bool>> reportProgress, TimeProvider clock, Func<RowBatch, CancellationToken, Task<BatchReceipt>>? sendBatch = null)
+    Func<JsonObject, CancellationToken, Task<bool>> reportProgress, TimeProvider clock, Func<RowBatch, CancellationToken, Task<BatchReceipt>>? sendBatch = null,
+    Func<FilePart, CancellationToken, Task<FilePartReceipt>>? sendFilePart = null)
 {
     public TimeProvider Clock { get; } = clock;
 
@@ -24,6 +25,23 @@ public sealed class JobContext(
     /// <summary>Send one batch of rows. The receipt says whether Fortress stored it (or already had it) or has cancelled the job.</summary>
     public Task<BatchReceipt> SendBatchAsync(RowBatch batch, CancellationToken ct) =>
         sendBatch is null ? throw new InvalidOperationException("This job cannot send rows") : sendBatch(batch, ct);
+
+    /// <summary>Send one part of a file (folders, AG5b). The receipt says whether Fortress stored it (or already had it) or has cancelled the job.</summary>
+    public Task<FilePartReceipt> SendFilePartAsync(FilePart part, CancellationToken ct) =>
+        sendFilePart is null ? throw new InvalidOperationException("This job cannot send files") : sendFilePart(part, ct);
+}
+
+/// <summary>One part of a file as it goes to Fortress: the raw bytes (at most 768 kB) and their SHA-256 (hex).</summary>
+public sealed record FilePart(int Seq, byte[] Bytes, string Checksum);
+
+public sealed record FilePartReceipt
+{
+    public bool Stored { get; init; }
+    public bool Duplicate { get; init; }
+    public bool Cancelled { get; init; }
+    public string Status { get; init; } = "";
+    public int Parts { get; init; }
+    public long Bytes { get; init; }
 }
 
 /// <summary>
@@ -81,7 +99,7 @@ public sealed class JobHandlers
         return new JobHandlers(
             [new PingHandler(), new StoreCredentialHandler(sealingKey, credentials), new TestConnectionHandler(databases), new DiscoverHandler(databases), new PreviewHandler(databases),
              new ExtractHandler(databases)],
-            adapters.Engines);
+            [.. adapters.Engines, "folder"]);
     }
 
     public static JobHandlers Default() => new([new PingHandler()]);

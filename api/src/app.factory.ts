@@ -27,7 +27,8 @@ export function configureApp(app: NestExpressApplication, env: Env): INestApplic
   app.use(helmet({ contentSecurityPolicy: docsEnabled(env) ? false : undefined, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.useBodyParser('json', { limit: '1mb' });
   // A connector agent's batch of rows arrives as gzip (AG3); the route inflates it itself with a cap, and the signature covers these raw bytes.
-  app.useBodyParser('raw', { type: 'application/gzip', limit: '1mb' });
+  // A file from a folder arrives in parts of raw bytes (AG5b), checked against their SHA-256 by the route.
+  app.useBodyParser('raw', { type: ['application/gzip', 'application/octet-stream'], limit: '1mb' });
   app.setGlobalPrefix(API_PREFIX);
   app.enableCors({
     origin: corsOrigins(env),

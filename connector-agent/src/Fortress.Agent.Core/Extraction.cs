@@ -23,6 +23,7 @@ public sealed class ExtractHandler(DatabaseJobContext databases) : IJobHandler
 
     public async Task<JsonNode?> RunAsync(AgentJob job, JobContext context, CancellationToken ct)
     {
+        if (FolderJobs.IsFolder(job)) return await FolderJobs.ExtractAsync(job, databases.AllowListPath, context, ct);
         var request = DatabaseJobContext.Request(job);
         string Name(string key, string what) => request[key] is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 0 ? s : throw new JobFailedException("invalid", $"The job does not say {what}");
         var schema = Name("schema", "which schema");

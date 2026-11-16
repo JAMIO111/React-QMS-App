@@ -33,7 +33,7 @@ const RunDialog = ({ connection, runs, onClose }) => {
   const isDb = connection.provider?.key === "sql_agent";
   const sources = new Set((connection.recordSources ?? []).map((s) => s.entityType));
   // An incremental read of a table needs the column that shows when a row changed (AG4).
-  const changeTracked = new Set((connection.recordSources ?? []).filter((s) => s.source?.changedColumn).map((s) => s.entityType));
+  const changeTracked = new Set((connection.recordSources ?? []).filter((s) => s.source?.changedColumn || s.source?.file).map((s) => s.entityType));
   const choices = isApi ? connection.runnable.filter((t) => t in configured) : isDb ? connection.runnable.filter((t) => sources.has(t)) : connection.runnable;
   const [entityType, setEntityType] = useState(choices[0] ?? null);
   const [kind, setKind] = useState("preview");
@@ -80,7 +80,13 @@ const RunDialog = ({ connection, runs, onClose }) => {
       <form noValidate onSubmit={go} className="flex flex-col gap-3">
         <ComboField label="Records" value={entityType} onChange={setEntityType} options={choices.map((t) => ({ value: t, label: ENTITY_LABELS[t] ?? t }))} required />
         {isApi && choices.length === 0 && <Callout tone="warning">Say in the connection's settings where the API gives each kind of record.</Callout>}
-        {isDb && choices.length === 0 && <Callout tone="warning">Choose the table each kind of record is read from: browse the database on this page and use a table.</Callout>}
+        {isDb && choices.length === 0 && (
+          <Callout tone="warning">
+            {connection.config?.engine === "folder"
+              ? "Choose the file each kind of record is read from: list the folder's files on this page and use one."
+              : "Choose the table each kind of record is read from: browse the database on this page and use a table."}
+          </Callout>
+        )}
         <div className="flex flex-col gap-1">
           <span className="text-sm font-medium text-primary-text">What to do</span>
           <SlidingToggle ariaLabel="What to do" options={kinds} value={runKind} onChange={setKind} />
@@ -106,12 +112,12 @@ const RunDialog = ({ connection, runs, onClose }) => {
         )}
         {(isApi || isDb) && entityType && !templates.isLoading && apiNeedsTemplate && (
           <Callout tone="info" action={<Link to={apiMappingPath(connection.id, entityType)} className="text-sm font-medium text-link-color hover:underline">Map fields</Link>}>
-            There is no import template for {ENTITY_LABELS[entityType]?.toLowerCase() ?? "these records"} yet: a preview shows what the {isDb ? "table holds" : "API sends"}, and importing needs a template that maps its fields.
+            There is no import template for {ENTITY_LABELS[entityType]?.toLowerCase() ?? "these records"} yet: a preview shows what the {isDb ? (connection.config?.engine === "folder" ? "file holds" : "table holds") : "API sends"}, and importing needs a template that maps its fields.
           </Callout>
         )}
         {isDb && entityType && (
           <p className="text-xs text-secondary-text">
-            The connector agent reads the table first{runKind === "preview" ? " (the first 1,000 rows)" : ""}; the import carries on as soon as it has sent the rows.
+            The connector agent reads the {connection.config?.engine === "folder" ? "newest matching file" : "table"} first{runKind === "preview" ? " (the first 1,000 rows)" : ""}; the import carries on as soon as it has sent the rows.
           </p>
         )}
         {isFile && chosenFile && !templates.isLoading && !mapped && (

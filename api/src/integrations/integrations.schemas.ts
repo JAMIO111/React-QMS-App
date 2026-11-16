@@ -46,7 +46,7 @@ const DbName = z.string().min(1).max(128).refine((v) => v.trim() !== '' && !/[\u
  * Where a kind of record is read from in a database connection (AG3): a table or view, the column that identifies each row, which columns (all
  * when left out) and simple filters. A structured request: the agent checks every name against the database and builds its own read-only SELECT.
  */
-export const RecordSource = z
+const DbSource = z
   .object({
     schema: DbName,
     object: DbName,
@@ -68,7 +68,17 @@ export const RecordSource = z
       .optional(),
   })
   .strict();
+/** A file name, or a pattern of one (* any run of characters, ? one), directly in a folder: never a path. */
+const FileName = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((v) => v.trim() === v && !/[\\/:\u0000-\u001f"<>|]/.test(v) && v !== '.' && v !== '..', 'a file name directly in the folder');
+/** Where a kind of record is read from in a folder (AG5b): the newest CSV or Excel file matching the name or pattern. */
+const FileSource = z.object({ file: FileName }).strict();
+export const RecordSource = z.union([DbSource, FileSource]);
 export type RecordSource = z.infer<typeof RecordSource>;
+export type DbRecordSource = z.infer<typeof DbSource>;
 
 /** The organisation's allow-list of host names its connections may call (empty: any public host). */
 export const AllowedHostsBody = z.object({ hosts: z.array(z.string().trim().max(253)).max(50) }).strict();
@@ -170,9 +180,11 @@ export const ConnectionJobBody = z
     kind: z.enum(['test_connection', 'discover', 'preview']),
     request: z
       .object({
-        level: z.enum(['schemas', 'objects', 'columns']).optional(),
+        level: z.enum(['schemas', 'objects', 'columns', 'files']).optional(),
         schema: z.string().min(1).max(128).optional(),
         object: z.string().min(1).max(128).optional(),
+        /** A folder (AG5b): the file to preview, by name or pattern. */
+        file: FileName.optional(),
         limit: z.number().int().min(1).max(50).optional(),
       })
       .strict()

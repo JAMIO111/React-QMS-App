@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -55,6 +56,7 @@ export class ManagementReviewsController {
     return this.service.plan(ctx, parse(PlanReviewBody, body));
   }
 
+  @Versioned('management_reviews')
   @Get('management-reviews/:id')
   @OrganisationScoped(READ)
   @ApiOkResponse({ description: 'The review with its inputs (snapshots, commentary), attendees, minutes, decisions, actions and what is still needed to complete it' })
@@ -62,6 +64,7 @@ export class ManagementReviewsController {
     return this.service.get(ctx, parse(Uuid, id));
   }
 
+  @Versioned('management_reviews')
   @Patch('management-reviews/:id')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateReviewBody) })
@@ -104,6 +107,7 @@ export class ManagementReviewsController {
     return this.service.setAttendees(ctx, parse(Uuid, id), parse(AttendeesBody, body));
   }
 
+  @Versioned('management_reviews')
   @Put('management-reviews/:id/minutes')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(MinutesBody) })

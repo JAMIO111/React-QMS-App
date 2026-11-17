@@ -15,6 +15,8 @@ export type ApiRequest = Request & {
   correlationId?: string;
   user?: AuthenticatedUser;
   organisationId?: string;
+  /** Versions a save says it was based on ({ "<table>:<id>": version }), set by VersionInterceptor (docs/edit-conflicts-plan.md). */
+  expectedVersions?: Record<string, string>;
 };
 
 export interface RequestContext {
@@ -27,6 +29,8 @@ export interface RequestContext {
   timeZone?: string;
   /** The caller's address as the API sees it (req.ip behind the trusted proxy hops; docs/security-plan.md S2), or null when it cannot be read. */
   address?: string | null;
+  /** Versions this request's save was based on; DatabaseService.asUser hands them to the database (app.expected_versions). */
+  expectedVersions?: Record<string, string>;
 }
 
 export const CORRELATION_HEADER = 'x-correlation-id';
@@ -68,6 +72,7 @@ export function contextFrom(req: ApiRequest): RequestContext {
     organisationId: req.organisationId,
     timeZone: validTimeZone(req.headers['x-time-zone']),
     address: clientAddress(req.ip),
+    expectedVersions: req.expectedVersions,
   };
 }
 

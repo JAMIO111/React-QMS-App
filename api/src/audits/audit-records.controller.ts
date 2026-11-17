@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { z } from 'zod';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -69,6 +70,7 @@ export class AuditRecordsController {
     return this.service.start(ctx, parse(StartAuditBody, body));
   }
 
+  @Versioned('audit_records')
   @Get(':id')
   @OrganisationScoped(READ)
   @ApiOkResponse({ schema: openApiSchema(AuditRecord) })
@@ -77,6 +79,7 @@ export class AuditRecordsController {
   }
 
   /** The audit's notes and the date it was carried out (while in progress). */
+  @Versioned('audit_records')
   @Patch(':id')
   @OrganisationScoped(PERFORM)
   @ApiBody({ schema: openApiSchema(UpdateRecordBody) })

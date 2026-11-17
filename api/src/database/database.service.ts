@@ -41,8 +41,16 @@ export class DatabaseService implements OnModuleDestroy {
                 set_config('app.source', 'api', true),
                 set_config('app.correlation_id', $2, true),
                 set_config('app.reason', $3, true),
-                set_config('TimeZone', $4, true)`,
-        [JSON.stringify({ ...ctx.user.claims, role: 'authenticated' }), ctx.correlationId, ctx.reason ?? '', ctx.timeZone || 'UTC'],
+                set_config('TimeZone', $4, true),
+                set_config('app.expected_versions', $5, true)`,
+        [
+          JSON.stringify({ ...ctx.user.claims, role: 'authenticated' }),
+          ctx.correlationId,
+          ctx.reason ?? '',
+          ctx.timeZone || 'UTC',
+          // the versions a save was based on (edit conflicts); the database checks them in the update and uses each up once
+          ctx.expectedVersions && Object.keys(ctx.expectedVersions).length ? JSON.stringify(ctx.expectedVersions) : '',
+        ],
       );
       const result = await work(drizzle(client, { schema }), client);
       await client.query('COMMIT');

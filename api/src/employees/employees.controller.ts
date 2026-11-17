@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -58,6 +59,7 @@ export class EmployeesController {
     return this.service.create(ctx, parse(CreateEmployeeBody, body));
   }
 
+  @Versioned('Employees')
   @Get(':id')
   @OrganisationScoped(READ)
   @ApiOkResponse({ schema: openApiSchema(Employee) })
@@ -66,6 +68,7 @@ export class EmployeesController {
   }
 
   /** Change details, or deactivate / reactivate with `active`. Nobody is deleted. */
+  @Versioned('Employees')
   @Patch(':id')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateEmployeeBody) })

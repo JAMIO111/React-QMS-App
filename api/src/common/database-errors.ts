@@ -141,6 +141,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'security_rule', pg.message ?? 'That security change is not allowed');
     case 'QM030': // single sign-on rules: domains, providers, modes (messages are written for users)
       return new ApiError(409, 'sso_rule', pg.message ?? 'That single sign-on change is not allowed');
+    case 'QM031': // edit conflicts: the record changed since the version the save was based on (VersionInterceptor adds the details)
+      return new ApiError(409, 'edit_conflict', 'Someone else changed this since you opened it');
     case 'QM010': // notification type the caller cannot choose
       return new ApiError(404, 'notification_type_not_found', 'That notification type does not exist');
     case 'P0002': // no_data_found raised by app functions

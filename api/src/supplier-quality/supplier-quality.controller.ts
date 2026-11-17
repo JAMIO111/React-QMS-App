@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -70,6 +71,7 @@ export class SupplierQualityController {
     return this.service.updateClassification(ctx, parse(Uuid, id), parse(UpdateClassificationBody, body));
   }
 
+  @Versioned('suppliers')
   @Get('suppliers/:id')
   @OrganisationScoped(READ)
   @ApiOkResponse({ description: 'The supplier profile: details, classifications, contacts, products and counts', schema: openApiSchema(SupplierDetail) })
@@ -77,6 +79,7 @@ export class SupplierQualityController {
     return this.service.get(ctx, parse(Uuid, id));
   }
 
+  @Versioned('suppliers')
   @Patch('suppliers/:id')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateSupplierBody) })

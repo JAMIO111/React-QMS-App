@@ -1,6 +1,6 @@
 # Edit conflicts — plan
 
-**Status:** decisions EC-D1–EC-D6 agreed 2026-11-17 (as proposed) · slices EC1–EC4 · **EC1 built** (migration `20260324100000_edit_conflicts.sql`, SQL test `supabase/tests/edit_conflicts.test.sql`)
+**Status:** decisions EC-D1–EC-D6 agreed 2026-11-17 (as proposed) · slices EC1–EC4 · **EC1 built and applied live** (migration `20260324100000_edit_conflicts.sql`, SQL test `supabase/tests/edit_conflicts.test.sql`) · **EC2 built** (API, no migration)
 
 ## 1. The problem (inspected)
 
@@ -27,8 +27,8 @@ One trap: the API turns `updated_at` into a JavaScript `Date`, which **drops the
 
 ## 3. How it works
 
-1. **Version on every editable record.** Responses carry `version` = `updated_at` as whole microseconds since 1970, as text (`app.row_version(updated_at)`). Nothing new is stored.
-2. **A save says what it was based on.** A PATCH body may carry `version` (or the request an `If-Match` header). The API sets it for the transaction (`app.expected_versions`, `{ "<table>:<id>": "<version>" }`).
+1. **Version on every editable record.** Responses carry `rowVersion` (not `version`: audits, workflow rules and part revisions already use that name) = `updated_at` as whole microseconds since 1970, as text (`app.row_version(updated_at)`). Nothing new is stored.
+2. **A save says what it was based on.** A PATCH body may carry `rowVersion` (or the request an `If-Match` header). The API sets it for the transaction (`app.expected_versions`, `{ "<table>:<id>": "<version>" }`).
 3. **The database checks it, in the update.** `app.touch_updated()` (replaced) looks for its row in `app.expected_versions`; when the row's current version differs it raises `QM031` naming the row; when it matches it removes the entry, so further updates of the same row in the same request (stage recomputes, triggers) are not mistaken for conflicts. Because the check runs inside the update, which holds the row lock, two saves can never both pass. It works the same for updates under RLS and inside SECURITY DEFINER functions.
 4. **The API answers `409 edit_conflict`** with what changed since your version: `{ version, changedBy, changedAt, fields: [...] }`, taken from `audit.events` by `app.edit_conflict_details(table, id, since_version)` (only for a row the caller has just read under its own RLS in the same request; field names, who and when — values come from the record the caller may read).
 5. **The screen decides what to do** (EC-D3):
@@ -53,7 +53,7 @@ One trap: the API turns `updated_at` into a JavaScript `Date`, which **drops the
 | Slice | Content |
 |---|---|
 | **EC1 — database** | Migration: `app.row_version(timestamptz)`, `app.touch_updated()` replaced with the check (`QM031`, consumed after the first match), the same check for `integration_connections` and `workflow_rules`, `app.edit_conflict_details`. SQL test: matching version saves; stale version refused for an RLS update and for a SECURITY DEFINER function update; a second update of the same row in one request is not a conflict; no setting = as today; details list the right fields, who and when, and nothing for a row in another organisation. Guardrails unchanged (no new table). |
-| **EC2 — API** | `version` on the in-scope responses; PATCH bodies (and `If-Match`) take it; `DatabaseService.asUser` sets `app.expected_versions`; `QM031` → `409 edit_conflict` with the details; field names mapped back to the API's names (snake → camel, with a small table for the exceptions). e2e: two people on one record per route in scope (different fields → both kept; same field → 409 with the right details; no version → last write wins). Tenancy sweep unchanged (the body field is optional). |
+| **EC2 — API** (built) | `@Versioned('<table>')` on a record's GET and PATCH (`api/src/common/versioned.ts`, global `VersionInterceptor`): `rowVersion` + `ETag` on the answer; PATCH bodies take `rowVersion` (removed before the strict body check) or `If-Match`; `DatabaseService.asUser` sets `app.expected_versions`; `QM031` → `409 edit_conflict` with the details; field names mapped back to the API's names (snake → camel, with a small table for the exceptions). e2e: two people on one record per route in scope (different fields → both kept; same field → 409 with the right details; no version → last write wins). Tenancy sweep unchanged (the body field is optional). |
 | **EC3 — screens** | `apiFetch` / a shared `useVersionedSave` that sends `version`, retries a non-clashing conflict once on the new version, and raises the clash dialog (`ui/EditConflictDialog.jsx`) otherwise; the rich-text choice for document drafts and review minutes; optimistic quick edits (custom fields card, review inputs, job details) roll back and show the clash instead of a generic error. Tests per screen in scope. |
 | **EC4 — exit** | Journey step: the owner and Colin open the same NC; Colin changes the title and saves; the owner changes the severity and saves (both kept, note shown); both change the description (the owner's dialog, keep mine). Live guardrails and advisors, exit report, `CLAUDE.md`. |
 

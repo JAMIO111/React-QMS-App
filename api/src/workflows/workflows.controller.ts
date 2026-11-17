@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
@@ -48,6 +49,7 @@ export class WorkflowsController {
     return this.service.create(ctx, parse(CreateRuleBody, body));
   }
 
+  @Versioned('workflow_rules')
   @Get('workflow-rules/:id')
   @OrganisationScoped('workflows.read')
   @ApiOkResponse({ description: 'A rule: what it does now, every version with its reason, and its latest runs' })
@@ -55,6 +57,7 @@ export class WorkflowsController {
     return this.service.get(ctx, id);
   }
 
+  @Versioned('workflow_rules')
   @Patch('workflow-rules/:id')
   @OrganisationScoped('workflows.manage')
   @ApiOkResponse({ description: 'Rename or describe a rule; a change to its trigger, conditions or actions is a new version and needs a reason' })

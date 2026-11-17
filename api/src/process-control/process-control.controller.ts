@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -84,6 +85,7 @@ export class MachinesController {
     return this.service.createMachine(ctx, parse(CreateMachineBody, body));
   }
 
+  @Versioned('machines')
   @Patch(':id')
   @OrganisationScoped(MD_MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateMachineBody) })
@@ -116,6 +118,7 @@ export class PartFamiliesController {
     return this.service.createFamily(ctx, parse(CreatePartFamilyBody, body));
   }
 
+  @Versioned('part_families')
   @Get(':id')
   @OrganisationScoped(MD_READ)
   @ApiOkResponse({ schema: openApiSchema(PartFamilyDetail) })
@@ -133,6 +136,7 @@ export class PartFamiliesController {
     return this.service.changeFamilyMembers(ctx, parse(Uuid, id), parse(FamilyMembershipBody, body));
   }
 
+  @Versioned('part_families')
   @Patch(':id')
   @OrganisationScoped(MD_MANAGE)
   @ApiBody({ schema: openApiSchema(UpdatePartFamilyBody) })
@@ -209,6 +213,7 @@ export class ControlPlansController {
     return this.service.createPlan(ctx, parse(CreateControlPlanBody, body));
   }
 
+  @Versioned('control_plans')
   @Get(':id')
   @OrganisationScoped(PC_READ)
   @ApiOkResponse({ schema: openApiSchema(ControlPlanDetail) })
@@ -216,6 +221,7 @@ export class ControlPlansController {
     return this.service.getPlan(ctx, parse(Uuid, id));
   }
 
+  @Versioned('control_plans')
   @Patch(':id')
   @OrganisationScoped(PC_MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateControlPlanBody) })
@@ -265,6 +271,7 @@ export class ControlPlanRevisionsController {
   }
 
   /** Edit a draft revision (others are locked). */
+  @Versioned('control_plan_revisions')
   @Patch('control-plan-revisions/:id')
   @OrganisationScoped(PC_MANAGE)
   @ApiBody({ schema: openApiSchema(UpdatePlanRevisionBody) })
@@ -295,6 +302,7 @@ export class ControlPlanRevisionsController {
 export class ControlPlanContentController {
   constructor(private readonly service: ControlPlanContentService) {}
 
+  @Versioned('control_plan_revisions')
   @Get('control-plan-revisions/:id')
   @OrganisationScoped(PC_READ)
   @ApiOkResponse({ schema: openApiSchema(RevisionDetail) })

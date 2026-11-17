@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -111,6 +112,7 @@ export class RiskController {
     return this.service.create(ctx, parse(CreateRiskBody, body));
   }
 
+  @Versioned('risks')
   @Get('risks/:id')
   @OrganisationScoped(READ)
   @ApiOkResponse({ description: 'A risk with every assessment, newest first' })
@@ -118,6 +120,7 @@ export class RiskController {
     return this.service.get(ctx, parse(Uuid, id));
   }
 
+  @Versioned('risks')
   @Patch('risks/:id')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateRiskBody) })

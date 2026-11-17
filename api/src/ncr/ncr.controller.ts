@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -97,6 +98,7 @@ export class NcrController {
     return this.service.create(ctx, parse(CreateNcrBody, body));
   }
 
+  @Versioned('nonconformances')
   @Get(':id')
   @OrganisationScoped('ncr.read', SITE_SCOPED)
   @ApiOkResponse({ schema: openApiSchema(NcrDetail) })
@@ -104,6 +106,7 @@ export class NcrController {
     return this.service.get(ctx, parse(Uuid, id));
   }
 
+  @Versioned('nonconformances')
   @Patch(':id')
   @OrganisationScoped('ncr.update', SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(UpdateNcrBody) })

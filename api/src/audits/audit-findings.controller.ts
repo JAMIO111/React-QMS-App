@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { z } from 'zod';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -122,6 +123,7 @@ export class AuditFindingsController {
     return this.service.list(ctx, parse(FindingListQuery, query));
   }
 
+  @Versioned('audit_findings')
   @Get(':id')
   @OrganisationScoped(READ)
   @ApiOkResponse({ schema: openApiSchema(Finding) })
@@ -130,6 +132,7 @@ export class AuditFindingsController {
   }
 
   /** Edit an open finding (audits.perform). */
+  @Versioned('audit_findings')
   @Patch(':id')
   @OrganisationScoped(PERFORM)
   @ApiBody({ schema: openApiSchema(UpdateFindingBody) })

@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -111,6 +112,7 @@ export class ProductionController {
     return this.service.backfill(ctx, parse(BackfillBody, body ?? {}), ctx.correlationId ?? '');
   }
 
+  @Versioned('production_orders')
   @Get('production-orders/:id')
   @OrganisationScoped(READ)
   @ApiOkResponse({ schema: openApiSchema(ProductionOrderDetail) })
@@ -119,6 +121,7 @@ export class ProductionController {
   }
 
   /** Change details or move the order on with `status` (the database decides which moves are allowed; cancelling needs `statusReason`). */
+  @Versioned('production_orders')
   @Patch('production-orders/:id')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateOrderBody) })
@@ -183,6 +186,7 @@ export class ProductionController {
     return this.service.createLot(ctx, parse(CreateLotBody, body));
   }
 
+  @Versioned('lots')
   @Get('lots/:id')
   @OrganisationScoped(READ)
   @ApiOkResponse({ schema: openApiSchema(Lot) })
@@ -191,6 +195,7 @@ export class ProductionController {
   }
 
   /** Change details or move the lot on with `status` (a hold needs `statusReason`; a closed lot is frozen). */
+  @Versioned('lots')
   @Patch('lots/:id')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateLotBody) })

@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { CustomValuesOnlyBody } from '../custom-fields/custom-fields.schemas';
 import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
@@ -81,6 +82,7 @@ export class GaugesController {
     return this.service.create(ctx, parse(CreateGaugeBody, body));
   }
 
+  @Versioned('gauges')
   @Get(':id')
   @OrganisationScoped('calibration.read', SITE_SCOPED)
   @ApiOkResponse({ schema: openApiSchema(GaugeDetail) })
@@ -88,6 +90,7 @@ export class GaugesController {
     return this.service.get(ctx, parse(Uuid, id));
   }
 
+  @Versioned('gauges')
   @Patch(':id')
   @OrganisationScoped('calibration.manage', SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(UpdateGaugeBody) })
@@ -196,6 +199,7 @@ export class GaugeTypesController {
     return this.service.createType(ctx, parse(CreateGaugeTypeBody, body));
   }
 
+  @Versioned('gauge_types')
   @Patch(':id')
   @OrganisationScoped('calibration.manage')
   @ApiBody({ schema: openApiSchema(UpdateGaugeTypeBody) })
@@ -253,6 +257,7 @@ export class GaugeTypeCharacteristicsController {
 export class CalibrationsController {
   constructor(private readonly records: CalibrationRecordsService) {}
 
+  @Versioned('calibrations')
   @Get(':id')
   @OrganisationScoped('calibration.read', SITE_SCOPED)
   @ApiOkResponse({ schema: openApiSchema(CalibrationDetail) })
@@ -261,6 +266,7 @@ export class CalibrationsController {
   }
 
   /** Edit the record; readings are added or corrected per characteristic. */
+  @Versioned('calibrations')
   @Patch(':id')
   @OrganisationScoped('calibration.record', SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(UpdateCalibrationBody) })

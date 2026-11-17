@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -44,6 +45,7 @@ export class QualityObjectivesController {
     return this.service.create(ctx, parse(CreateObjectiveBody, body));
   }
 
+  @Versioned('quality_objectives')
   @Get('quality-objectives/:id')
   @OrganisationScoped()
   @ApiQuery({ name: 'periods', required: false, schema: { type: 'integer', minimum: 1, maximum: 60 } })
@@ -52,6 +54,7 @@ export class QualityObjectivesController {
     return this.service.get(ctx, parse(Uuid, id), parse(ObjectiveQuery, query).periods);
   }
 
+  @Versioned('quality_objectives')
   @Patch('quality-objectives/:id')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateObjectiveBody) })

@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -79,6 +80,7 @@ const partyController = (kind: PartyKind, path: string) => {
       return this.service.createParty(ctx, kind, parse(CreatePartyBody, body));
     }
 
+    @Versioned(kind === 'customer' ? 'customers' : 'suppliers')
     @Patch(':id')
     @OrganisationScoped(MANAGE)
     @ApiBody({ schema: openApiSchema(UpdatePartyBody) })
@@ -117,6 +119,7 @@ export class PartsController {
     return this.service.createPart(ctx, parse(CreatePartBody, body));
   }
 
+  @Versioned('parts')
   @Get(':id')
   @OrganisationScoped(READ)
   @ApiOkResponse({ schema: openApiSchema(PartDetail) })
@@ -124,6 +127,7 @@ export class PartsController {
     return this.service.getPart(ctx, parse(Uuid, id));
   }
 
+  @Versioned('parts')
   @Patch(':id')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdatePartBody) })

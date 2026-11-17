@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -67,6 +68,7 @@ export class QualityAlertsController {
     return this.service.create(ctx, parse(CreateAlertBody, body));
   }
 
+  @Versioned('quality_alerts')
   @Get(':id')
   @OrganisationScoped(READ)
   @ApiOkResponse({ schema: openApiSchema(AlertDetail) })
@@ -74,6 +76,7 @@ export class QualityAlertsController {
     return this.service.get(ctx, parse(Uuid, id));
   }
 
+  @Versioned('quality_alerts')
   @Patch(':id')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateAlertBody) })

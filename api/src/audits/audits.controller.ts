@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
@@ -58,6 +59,7 @@ export class AuditsController {
     return this.service.create(ctx, parse(CreateAuditBody, body));
   }
 
+  @Versioned('audit_definitions')
   @Get(':id')
   @OrganisationScoped(READ)
   @ApiOkResponse({ schema: openApiSchema(Audit) })
@@ -86,6 +88,7 @@ export class AuditsController {
    * pass mark, checklist, what it is relevant to) is saved as a new version and needs `changeReason`; a change to the schedule or the expected auditor does not. Records already made keep the
    * questions they were done against, and the version.
    */
+  @Versioned('audit_definitions')
   @Patch(':id')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateAuditBody) })

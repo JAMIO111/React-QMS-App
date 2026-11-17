@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
@@ -46,6 +47,7 @@ export class SupplierScarController {
     return this.service.create(ctx, parse(CreateScarBody, body));
   }
 
+  @Versioned('supplier_scars')
   @Get('scars/:id')
   @OrganisationScoped(READ)
   @ApiOkResponse({ description: 'The SCAR with its linked non-conformances, responses (each with our review), implementation, verification, due-date extensions and status history', schema: openApiSchema(ScarDetail) })
@@ -53,6 +55,7 @@ export class SupplierScarController {
     return this.service.get(ctx, parse(Uuid, id));
   }
 
+  @Versioned('supplier_scars')
   @Patch('scars/:id')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateScarBody) })

@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { Body, Controller, Get, Header, HttpCode, Param, Patch, Post, Put, Query, StreamableFile } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -73,6 +74,7 @@ export class DocumentsController {
     return this.service.create(ctx, parse(CreateDocumentBody, body));
   }
 
+  @Versioned('documents')
   @Get('documents/:id')
   @OrganisationScoped()
   @ApiOkResponse({ description: 'A document with its revisions' })
@@ -80,6 +82,7 @@ export class DocumentsController {
     return this.service.get(ctx, parse(Uuid, id));
   }
 
+  @Versioned('documents')
   @Patch('documents/:id')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateDocumentBody) })
@@ -90,6 +93,7 @@ export class DocumentsController {
 
   // ---- revisions -----------------------------------------------------------------------------------
 
+  @Versioned('document_revisions')
   @Get('document-revisions/:id')
   @OrganisationScoped()
   @ApiOkResponse({ description: 'A revision with its text body or files' })
@@ -97,6 +101,7 @@ export class DocumentsController {
     return this.service.getRevision(ctx, parse(Uuid, id));
   }
 
+  @Versioned('document_revisions')
   @Patch('document-revisions/:id')
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateRevisionBody) })

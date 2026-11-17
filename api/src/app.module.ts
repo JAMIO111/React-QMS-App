@@ -139,6 +139,7 @@ import { EntityImporterRegistry } from './integrations/core/entity-importer';
 import { CatalogueService } from './integrations/core/catalogue.service';
 import { SyncEngine } from './integrations/core/sync.engine';
 import { EmailKickInterceptor, EmailService } from './email/email.service';
+import { VersionInterceptor } from './common/versioned';
 import { MailTransport, mailTransportFor } from './email/mail-transport';
 import { defaultConnectorRegistry, defaultImporterRegistry } from './integrations/core/defaults';
 import { RequirementsService } from './receiving/requirements.service';
@@ -412,6 +413,7 @@ export class AppModule implements NestModule {
         EmailService,
         { provide: MailTransport, useFactory: (e: Env) => mailTransportFor(e), inject: [ENV] },
         { provide: APP_INTERCEPTOR, useClass: EmailKickInterceptor },
+        { provide: APP_INTERCEPTOR, useClass: VersionInterceptor },
         { provide: ConnectorRegistry, useFactory: defaultConnectorRegistry },
         { provide: EntityImporterRegistry, useFactory: defaultImporterRegistry },
         MaterialCertificatesService,

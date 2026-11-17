@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import DashboardSkeleton from "@/components/dashboard/DashboardSkeleton";
 import { format } from "date-fns";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowRightIcon, CircleCheckIcon, ClipboardListIcon, ClockIcon, FileTextIcon, HourglassIcon, ShieldAlertIcon, TriangleAlertIcon, TruckIcon, UsersIcon } from "@/components/icons";
@@ -116,381 +117,387 @@ const SupplierDashboard = () => {
         </Callout>
       )}
 
-      {/* The supplier base beside how deliveries went. */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12" aria-busy={isLoading || undefined}>
-        <HeroCard
-          label="Suppliers"
-          icon={UsersIcon}
-          value={k ? k.suppliers : "—"}
-          note={k ? `${k.approved} approved · ${k.pendingApproval} pending approval` : "In use, as of today"}
-          action={
-            <Link to="/Suppliers" className={cardLink}>
-              Supplier register <ArrowRightIcon aria-hidden="true" />
-            </Link>
-          }
-          className="xl:col-span-5">
-          <h2 className="text-sm font-semibold text-primary-text">Approval status</h2>
-          {statusParts.some((s) => s.count) ? <SplitBar parts={statusParts} label="Approval status" tall /> : <Empty>No suppliers yet.</Empty>}
-        </HeroCard>
-
-        {rec && !rec.available ? (
-          <div className="xl:col-span-7">
-            <Callout tone="info" title="Deliveries and performance are not shown">
-              On-time delivery, PPM, rejections and the performance bands come from goods receiving, which you may not read.
-            </Callout>
-          </div>
-        ) : (
-          <Card title="Delivery performance" subtitle={`Every supplier's own figures added up, ${formatDate(from)} – ${formatDate(to)}`} className="rounded-3xl xl:col-span-7">
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <ArcGauge
-                label="On-time delivery"
-                value={perf?.otdPercent ?? null}
-                display={perf ? percent(perf.otdPercent) : "—"}
-                note={perf ? `${perf.onTimeLines} of ${plural(perf.matchedLines, "delivered line")} against an order` : ""}
-              />
-              <ArcGauge label="In full" value={perf?.inFullPercent ?? null} display={perf ? percent(perf.inFullPercent) : "—"} note="Order lines due in the period, within tolerance" />
-              <Tile label="PPM (rejected)" className="justify-between bg-primary-bg/50">
-                <span className="text-sm text-secondary-text">PPM (rejected)</span>
-                <p className={`text-3xl font-semibold ${perf?.ppm > 0 ? "text-error-color" : "text-primary-text"}`}>{perf ? number(perf.ppm) : "—"}</p>
-                <Meter part={perf?.rejectedUnits ?? 0} whole={perf?.receivedUnits ?? 0} color="var(--chart-critical)" label="Units rejected, of units received" />
-                <p className="min-h-4 text-xs text-secondary-text">{perf ? `${number(perf.rejectedUnits)} of ${number(perf.receivedUnits)} units received` : ""}</p>
-              </Tile>
-              <Tile label="Lines rejected" className="justify-between bg-primary-bg/50">
-                <span className="text-sm text-secondary-text">Lines rejected</span>
-                <p className={`text-3xl font-semibold ${rec?.rejectedLines > 0 ? "text-error-color" : "text-primary-text"}`}>{rec ? percent(rec.lotRejectionPercent) : "—"}</p>
-                <Meter part={rec?.rejectedLines ?? 0} whole={rec?.lines ?? 0} color="var(--chart-critical)" label="Lines rejected, of lines delivered" />
-                <p className="min-h-4 text-xs text-secondary-text">{rec ? `${rec.rejectedLines} of ${plural(rec.lines, "delivered line")} (not PPM)` : ""}</p>
-              </Tile>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Tile label="Waiting for a decision" to="/Supplier-Quality/Goods-Receipts" className="flex-row items-center gap-3 bg-primary-bg/50 py-3">
-                <HourglassIcon className="h-5 w-5 shrink-0 text-secondary-text" aria-hidden="true" />
-                <span className="text-2xl font-semibold text-primary-text">{rec ? rec.awaitingDecision : "—"}</span>
-                <span className="flex min-w-0 flex-col">
-                  <span className="text-sm text-primary-text">Waiting for a decision</span>
-                  <span className="text-xs text-secondary-text">{rec ? `Received lines to inspect or decide · ${plural(rec.certificatesToReview, "certificate")} to review` : ""}</span>
-                </span>
-              </Tile>
-              <Tile label="Late order lines" to="/Supplier-Quality/Purchase-Orders?filter=late" className="flex-row items-center gap-3 bg-primary-bg/50 py-3">
-                <ClockIcon className={`h-5 w-5 shrink-0 ${rec?.lateOrderLines > 0 ? "text-error-color" : "text-secondary-text"}`} aria-hidden="true" />
-                <span className={`text-2xl font-semibold ${rec?.lateOrderLines > 0 ? "text-error-color" : "text-primary-text"}`}>{rec ? rec.lateOrderLines : "—"}</span>
-                <span className="flex min-w-0 flex-col">
-                  <span className="text-sm text-primary-text">Late order lines</span>
-                  <span className="text-xs text-secondary-text">Open lines past their date, as of today</span>
-                </span>
-              </Tile>
-            </div>
-          </Card>
-        )}
-      </div>
-
-      {/* What needs somebody, as of today. */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5" aria-busy={isLoading || undefined}>
-        <StatTile icon={CircleCheckIcon} label="Approvals waiting" value={k ? k.approvalsWaiting : "—"} note="Proposed, waiting for a second person to decide" alert={k?.approvalsWaiting > 0} />
-        <StatTile
-          icon={ShieldAlertIcon}
-          label="High or critical risk"
-          value={k ? k.highRisk : "—"}
-          note={k ? `${k.riskNotAssessed} not assessed · ${plural(k.riskReviewsOverdue, "review")} overdue` : ""}
-          to="/Suppliers?risk=high,critical"
-          alert={k?.highRisk > 0}
-        />
-        <StatTile
-          icon={FileTextIcon}
-          label="Expired records"
-          value={k ? k.expired : "—"}
-          note={k ? `Certifications and documents · ${k.expiring} expiring within 60 days` : ""}
-          to="/Supplier-Quality/Expiry"
-          alert={k?.expired > 0}
-        />
-        <StatTile
-          icon={ClipboardListIcon}
-          label="Open corrective actions"
-          value={k ? k.openScars : "—"}
-          note={k ? `${k.overdueScars} with a response overdue` : ""}
-          to={k?.overdueScars ? `${SCAR_REGISTER}?filter=overdue` : SCAR_REGISTER}
-          alert={k?.overdueScars > 0}>
-          {k?.openScars > 0 && <Meter part={k.overdueScars} whole={k.openScars} color="var(--chart-critical)" label="Requests with a response overdue, of those running" />}
-        </StatTile>
-        <StatTile
-          icon={TriangleAlertIcon}
-          label="Open supplier NCs"
-          value={ncs?.available ? ncs.open : "—"}
-          note={!ncs ? "" : ncs.available ? `${ncs.raised} raised in the period` : "You may not read non-conformances"}
-        />
-      </div>
-
-      {(rec?.available || ncs?.available) && (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {rec?.available && (
-            <Card title="Deliveries" subtitle={`Delivered lines per ${per}, by the latest decision on each`} className={ncs?.available ? "" : "xl:col-span-2"}>
-              {rec.trend.length ? (
-                <>
-                  <SplitBar parts={totals(rec.trend, DELIVERY_SERIES)} label="Delivered lines in the period" unit="line" showZero />
-                  <StackedBars data={rec.trend} series={DELIVERY_SERIES} label="Delivered lines per period" bucketLabel={bucketLabel} />
-                </>
-              ) : (
-                <Empty>Nothing was delivered in this period.</Empty>
-              )}
-            </Card>
-          )}
-          {ncs?.available && (
-            <Card title="Supplier non-conformances" subtitle={`Raised per ${per} against a supplier, by severity`} className={rec?.available ? "" : "xl:col-span-2"}>
-              {ncs.trend.length ? (
-                <>
-                  <SplitBar parts={totals(ncs.trend, NC_SERIES)} label="Non-conformances raised in the period" unit="non-conformance" showZero />
-                  <StackedBars data={ncs.trend} series={NC_SERIES} label="Supplier non-conformances per period" bucketLabel={bucketLabel} />
-                </>
-              ) : (
-                <Empty>No non-conformance named a supplier in this period.</Empty>
-              )}
-            </Card>
-          )}
-        </div>
-      )}
-
-      {(perf?.available || ncs?.available) && (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-          {perf?.available && (
-            <Card
-              title="Suppliers needing attention"
-              subtitle="Scored poor or watch over the period, or carrying a warning; worst first"
+      {isLoading ? (
+        <DashboardSkeleton label="Loading the supplier quality dashboard" tiles={5} />
+      ) : (
+        <>
+          {/* The supplier base beside how deliveries went. */}
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-12" aria-busy={isLoading || undefined}>
+            <HeroCard
+              label="Suppliers"
+              icon={UsersIcon}
+              value={k ? k.suppliers : "—"}
+              note={k ? `${k.approved} approved · ${k.pendingApproval} pending approval` : "In use, as of today"}
               action={
-                <Link to="/Supplier-Quality/Watchlist" className={cardLink}>
-                  Watchlist <ArrowRightIcon aria-hidden="true" />
+                <Link to="/Suppliers" className={cardLink}>
+                  Supplier register <ArrowRightIcon aria-hidden="true" />
                 </Link>
               }
-              className={ncs?.available ? "xl:col-span-7" : "xl:col-span-12"}>
-              {perf.truncated && <Callout tone="info">Only the first {perf.scored} suppliers by code are scored here.</Callout>}
-              {perf.attention.length ? (
-                <table className="w-full text-sm" aria-label="Suppliers needing attention">
-                  <thead className="text-secondary-text">
-                    <tr>
-                      <th className={th}>Score</th>
-                      <th className={th}>Supplier</th>
-                      <th className={th}>Band</th>
-                      <th className={th}>Why</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {perf.attention.map((s) => (
-                      <tr key={s.id} className="border-t border-border-color">
-                        <td className={`${td} w-14`}>
-                          <span className="sr-only">{formatScore(s.score)}</span>
-                          <span aria-hidden="true">
-                            <ScoreRing score={s.score} color={BAND_COLOUR[s.band]} />
-                          </span>
-                        </td>
-                        <td className={td}>
-                          <Link to={supplierPath(s.id, "performance")} className={nameLink}>
-                            {s.name}
-                          </Link>
-                          <span className="block text-xs text-secondary-text">{s.code}</span>
-                        </td>
-                        <td className={td}>
-                          <BandPill band={s.band} />
-                        </td>
-                        <td className={`${td} text-secondary-text`}>
-                          {s.reason ?? "—"}
-                          {s.warnings > 1 ? ` · and ${s.warnings - 1} more` : ""}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <Empty>No supplier is scored poor or watch, and none carries a warning.</Empty>
-              )}
-            </Card>
-          )}
-          {ncs?.available && (
-            <Card title="Non-conformances by supplier" subtitle="Most raised in the period (top 8); the red part is critical" className={perf?.available ? "xl:col-span-5" : "xl:col-span-12"}>
-              {ncs.bySupplier.length ? (
-                <table className="w-full text-sm" aria-label="Non-conformances by supplier">
-                  <thead className="text-secondary-text">
-                    <tr>
-                      <th className={th}>Supplier</th>
-                      <th className={th}>
-                        <span className="sr-only">Share of the most raised</span>
-                      </th>
-                      <th className={th}>Raised</th>
-                      <th className={th}>Critical</th>
-                      <th className={th} />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ncs.bySupplier.map((s) => (
-                      <tr key={s.id} className="border-t border-border-color">
-                        <td className={td}>
-                          <Link to={supplierPath(s.id, "nonconformities")} className={nameLink}>
-                            {s.name}
-                          </Link>
-                        </td>
-                        <td className={`${td} w-1/3`} aria-hidden="true">
-                          <span className="flex h-2.5 gap-0.5" style={{ width: `${(s.count / mostNcs) * 100}%`, minWidth: 6 }}>
-                            {s.critical > 0 && <span className="h-full rounded-full" style={{ flexGrow: s.critical, flexBasis: 0, background: "var(--chart-critical)" }} />}
-                            {s.count - s.critical > 0 && <span className="h-full rounded-full" style={{ flexGrow: s.count - s.critical, flexBasis: 0, background: "var(--chart-neutral)" }} />}
-                          </span>
-                        </td>
-                        <td className={`${td} tabular-nums`}>{s.count}</td>
-                        <td className={`${td} tabular-nums ${s.critical ? "text-error-color" : "text-secondary-text"}`}>{s.critical}</td>
-                        <td className={`${td} text-right`}>
-                          <Link to={`${NCR_REGISTER}?supplier=${s.id}&supplierLabel=${encodeURIComponent(s.name)}`} className="whitespace-nowrap text-link-color hover:underline">
-                            In the register
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <Empty>No non-conformance named a supplier in this period.</Empty>
-              )}
-            </Card>
-          )}
-        </div>
-      )}
+              className="xl:col-span-5">
+              <h2 className="text-sm font-semibold text-primary-text">Approval status</h2>
+              {statusParts.some((s) => s.count) ? <SplitBar parts={statusParts} label="Approval status" tall /> : <Empty>No suppliers yet.</Empty>}
+            </HeroCard>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        {perf?.available && (
-          <Card title="Performance bands" subtitle={`${plural(perf.scored, "supplier")} scored over the period with the current scoring model`}>
-            {perf.scored ? <SplitBar parts={bandParts} label="Performance bands" tall showZero /> : <Empty>No suppliers to score.</Empty>}
-          </Card>
-        )}
-        <Card title="Risk" subtitle="The latest risk rating of each supplier in use" className={perf?.available ? "" : "xl:col-span-2"}>
-          {riskParts.some((r) => r.count) ? <SplitBar parts={riskParts} label="Risk" tall showZero /> : <Empty>No suppliers yet.</Empty>}
-        </Card>
-      </div>
-
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <Card
-          title="Corrective action requests"
-          subtitle="Running requests, by where each one stands"
-          action={
-            <Link to={SCAR_REGISTER} className={cardLink}>
-              All requests <ArrowRightIcon aria-hidden="true" />
-            </Link>
-          }
-          className="xl:col-span-7">
-          {scarSteps.some((s) => s.count) ? <Pipeline steps={scarSteps} label="Corrective action requests by status" /> : <Empty>No corrective action request is running.</Empty>}
-        </Card>
-        <Card title="Responses overdue" subtitle="Corrective action requests past the date the supplier was to answer by" className="xl:col-span-5">
-          {data?.overdueScarList.length ? (
-            <ul aria-label="Corrective action requests overdue" className="flex flex-col divide-y divide-border-color text-sm">
-              {data.overdueScarList.map((s) => (
-                <li key={s.id} className={`${row} flex-wrap justify-between`}>
-                  <span className="flex min-w-0 items-center gap-2">
-                    <Initial name={s.supplier.name} />
+            {rec && !rec.available ? (
+              <div className="xl:col-span-7">
+                <Callout tone="info" title="Deliveries and performance are not shown">
+                  On-time delivery, PPM, rejections and the performance bands come from goods receiving, which you may not read.
+                </Callout>
+              </div>
+            ) : (
+              <Card title="Delivery performance" subtitle={`Every supplier's own figures added up, ${formatDate(from)} – ${formatDate(to)}`} className="rounded-3xl xl:col-span-7">
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <ArcGauge
+                    label="On-time delivery"
+                    value={perf?.otdPercent ?? null}
+                    display={perf ? percent(perf.otdPercent) : "—"}
+                    note={perf ? `${perf.onTimeLines} of ${plural(perf.matchedLines, "delivered line")} against an order` : ""}
+                  />
+                  <ArcGauge label="In full" value={perf?.inFullPercent ?? null} display={perf ? percent(perf.inFullPercent) : "—"} note="Order lines due in the period, within tolerance" />
+                  <Tile label="PPM (rejected)" className="justify-between bg-primary-bg/50">
+                    <span className="text-sm text-secondary-text">PPM (rejected)</span>
+                    <p className={`text-3xl font-semibold ${perf?.ppm > 0 ? "text-error-color" : "text-primary-text"}`}>{perf ? number(perf.ppm) : "—"}</p>
+                    <Meter part={perf?.rejectedUnits ?? 0} whole={perf?.receivedUnits ?? 0} color="var(--chart-critical)" label="Units rejected, of units received" />
+                    <p className="min-h-4 text-xs text-secondary-text">{perf ? `${number(perf.rejectedUnits)} of ${number(perf.receivedUnits)} units received` : ""}</p>
+                  </Tile>
+                  <Tile label="Lines rejected" className="justify-between bg-primary-bg/50">
+                    <span className="text-sm text-secondary-text">Lines rejected</span>
+                    <p className={`text-3xl font-semibold ${rec?.rejectedLines > 0 ? "text-error-color" : "text-primary-text"}`}>{rec ? percent(rec.lotRejectionPercent) : "—"}</p>
+                    <Meter part={rec?.rejectedLines ?? 0} whole={rec?.lines ?? 0} color="var(--chart-critical)" label="Lines rejected, of lines delivered" />
+                    <p className="min-h-4 text-xs text-secondary-text">{rec ? `${rec.rejectedLines} of ${plural(rec.lines, "delivered line")} (not PPM)` : ""}</p>
+                  </Tile>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Tile label="Waiting for a decision" to="/Supplier-Quality/Goods-Receipts" className="flex-row items-center gap-3 bg-primary-bg/50 py-3">
+                    <HourglassIcon className="h-5 w-5 shrink-0 text-secondary-text" aria-hidden="true" />
+                    <span className="text-2xl font-semibold text-primary-text">{rec ? rec.awaitingDecision : "—"}</span>
                     <span className="flex min-w-0 flex-col">
-                      <Link to={scarPath(s.id)} className={nameLink}>
-                        {s.reference} · {s.title}
-                      </Link>
-                      <span className="text-xs text-secondary-text">{s.supplier.name}</span>
+                      <span className="text-sm text-primary-text">Waiting for a decision</span>
+                      <span className="text-xs text-secondary-text">{rec ? `Received lines to inspect or decide · ${plural(rec.certificatesToReview, "certificate")} to review` : ""}</span>
                     </span>
-                  </span>
-                  <Chip tone="error">
-                    Due {formatDate(s.dueOn)} ({plural(s.daysOverdue, "day")} overdue)
-                  </Chip>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Empty>No response is overdue.</Empty>
-          )}
-        </Card>
-      </div>
+                  </Tile>
+                  <Tile label="Late order lines" to="/Supplier-Quality/Purchase-Orders?filter=late" className="flex-row items-center gap-3 bg-primary-bg/50 py-3">
+                    <ClockIcon className={`h-5 w-5 shrink-0 ${rec?.lateOrderLines > 0 ? "text-error-color" : "text-secondary-text"}`} aria-hidden="true" />
+                    <span className={`text-2xl font-semibold ${rec?.lateOrderLines > 0 ? "text-error-color" : "text-primary-text"}`}>{rec ? rec.lateOrderLines : "—"}</span>
+                    <span className="flex min-w-0 flex-col">
+                      <span className="text-sm text-primary-text">Late order lines</span>
+                      <span className="text-xs text-secondary-text">Open lines past their date, as of today</span>
+                    </span>
+                  </Tile>
+                </div>
+              </Card>
+            )}
+          </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-12">
-        <Card
-          title="Certifications and documents"
-          subtitle="Expired, or expiring within 60 days, soonest first"
-          action={
-            <Link to="/Supplier-Quality/Expiry" className={cardLink}>
-              Expiry watchlist <ArrowRightIcon aria-hidden="true" />
-            </Link>
-          }
-          className="md:col-span-2 xl:col-span-6">
-          {data?.expiryList.length ? (
-            <table className="w-full text-sm" aria-label="Records expiring">
-              <thead className="text-secondary-text">
-                <tr>
-                  <th className={th}>Supplier</th>
-                  <th className={th}>Record</th>
-                  <th className={th}>Expires</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.expiryList.map((e) => (
-                  <tr key={`${e.kind}-${e.id}`} className="border-t border-border-color">
-                    <td className={td}>
-                      <Link to={supplierPath(e.supplier.id, e.kind === "document" ? "documents" : "qualification")} className={nameLink}>
-                        {e.supplier.name}
-                      </Link>
-                    </td>
-                    <td className={td}>
-                      {e.title}
-                      <span className="block text-xs text-secondary-text">{e.kind === "document" ? "Document" : "Certification"}</span>
-                    </td>
-                    <td className={td}>
-                      <span className="flex flex-wrap items-center gap-2">
-                        {formatDate(e.expiresOn)}
-                        <Chip tone={e.days < 0 ? "error" : "warning"}>{daysWords(e.days)}</Chip>
+          {/* What needs somebody, as of today. */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5" aria-busy={isLoading || undefined}>
+            <StatTile icon={CircleCheckIcon} label="Approvals waiting" value={k ? k.approvalsWaiting : "—"} note="Proposed, waiting for a second person to decide" alert={k?.approvalsWaiting > 0} />
+            <StatTile
+              icon={ShieldAlertIcon}
+              label="High or critical risk"
+              value={k ? k.highRisk : "—"}
+              note={k ? `${k.riskNotAssessed} not assessed · ${plural(k.riskReviewsOverdue, "review")} overdue` : ""}
+              to="/Suppliers?risk=high,critical"
+              alert={k?.highRisk > 0}
+            />
+            <StatTile
+              icon={FileTextIcon}
+              label="Expired records"
+              value={k ? k.expired : "—"}
+              note={k ? `Certifications and documents · ${k.expiring} expiring within 60 days` : ""}
+              to="/Supplier-Quality/Expiry"
+              alert={k?.expired > 0}
+            />
+            <StatTile
+              icon={ClipboardListIcon}
+              label="Open corrective actions"
+              value={k ? k.openScars : "—"}
+              note={k ? `${k.overdueScars} with a response overdue` : ""}
+              to={k?.overdueScars ? `${SCAR_REGISTER}?filter=overdue` : SCAR_REGISTER}
+              alert={k?.overdueScars > 0}>
+              {k?.openScars > 0 && <Meter part={k.overdueScars} whole={k.openScars} color="var(--chart-critical)" label="Requests with a response overdue, of those running" />}
+            </StatTile>
+            <StatTile
+              icon={TriangleAlertIcon}
+              label="Open supplier NCs"
+              value={ncs?.available ? ncs.open : "—"}
+              note={!ncs ? "" : ncs.available ? `${ncs.raised} raised in the period` : "You may not read non-conformances"}
+            />
+          </div>
+
+          {(rec?.available || ncs?.available) && (
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              {rec?.available && (
+                <Card title="Deliveries" subtitle={`Delivered lines per ${per}, by the latest decision on each`} className={ncs?.available ? "" : "xl:col-span-2"}>
+                  {rec.trend.length ? (
+                    <>
+                      <SplitBar parts={totals(rec.trend, DELIVERY_SERIES)} label="Delivered lines in the period" unit="line" showZero />
+                      <StackedBars data={rec.trend} series={DELIVERY_SERIES} label="Delivered lines per period" bucketLabel={bucketLabel} />
+                    </>
+                  ) : (
+                    <Empty>Nothing was delivered in this period.</Empty>
+                  )}
+                </Card>
+              )}
+              {ncs?.available && (
+                <Card title="Supplier non-conformances" subtitle={`Raised per ${per} against a supplier, by severity`} className={rec?.available ? "" : "xl:col-span-2"}>
+                  {ncs.trend.length ? (
+                    <>
+                      <SplitBar parts={totals(ncs.trend, NC_SERIES)} label="Non-conformances raised in the period" unit="non-conformance" showZero />
+                      <StackedBars data={ncs.trend} series={NC_SERIES} label="Supplier non-conformances per period" bucketLabel={bucketLabel} />
+                    </>
+                  ) : (
+                    <Empty>No non-conformance named a supplier in this period.</Empty>
+                  )}
+                </Card>
+              )}
+            </div>
+          )}
+
+          {(perf?.available || ncs?.available) && (
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+              {perf?.available && (
+                <Card
+                  title="Suppliers needing attention"
+                  subtitle="Scored poor or watch over the period, or carrying a warning; worst first"
+                  action={
+                    <Link to="/Supplier-Quality/Watchlist" className={cardLink}>
+                      Watchlist <ArrowRightIcon aria-hidden="true" />
+                    </Link>
+                  }
+                  className={ncs?.available ? "xl:col-span-7" : "xl:col-span-12"}>
+                  {perf.truncated && <Callout tone="info">Only the first {perf.scored} suppliers by code are scored here.</Callout>}
+                  {perf.attention.length ? (
+                    <table className="w-full text-sm" aria-label="Suppliers needing attention">
+                      <thead className="text-secondary-text">
+                        <tr>
+                          <th className={th}>Score</th>
+                          <th className={th}>Supplier</th>
+                          <th className={th}>Band</th>
+                          <th className={th}>Why</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {perf.attention.map((s) => (
+                          <tr key={s.id} className="border-t border-border-color">
+                            <td className={`${td} w-14`}>
+                              <span className="sr-only">{formatScore(s.score)}</span>
+                              <span aria-hidden="true">
+                                <ScoreRing score={s.score} color={BAND_COLOUR[s.band]} />
+                              </span>
+                            </td>
+                            <td className={td}>
+                              <Link to={supplierPath(s.id, "performance")} className={nameLink}>
+                                {s.name}
+                              </Link>
+                              <span className="block text-xs text-secondary-text">{s.code}</span>
+                            </td>
+                            <td className={td}>
+                              <BandPill band={s.band} />
+                            </td>
+                            <td className={`${td} text-secondary-text`}>
+                              {s.reason ?? "—"}
+                              {s.warnings > 1 ? ` · and ${s.warnings - 1} more` : ""}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <Empty>No supplier is scored poor or watch, and none carries a warning.</Empty>
+                  )}
+                </Card>
+              )}
+              {ncs?.available && (
+                <Card title="Non-conformances by supplier" subtitle="Most raised in the period (top 8); the red part is critical" className={perf?.available ? "xl:col-span-5" : "xl:col-span-12"}>
+                  {ncs.bySupplier.length ? (
+                    <table className="w-full text-sm" aria-label="Non-conformances by supplier">
+                      <thead className="text-secondary-text">
+                        <tr>
+                          <th className={th}>Supplier</th>
+                          <th className={th}>
+                            <span className="sr-only">Share of the most raised</span>
+                          </th>
+                          <th className={th}>Raised</th>
+                          <th className={th}>Critical</th>
+                          <th className={th} />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ncs.bySupplier.map((s) => (
+                          <tr key={s.id} className="border-t border-border-color">
+                            <td className={td}>
+                              <Link to={supplierPath(s.id, "nonconformities")} className={nameLink}>
+                                {s.name}
+                              </Link>
+                            </td>
+                            <td className={`${td} w-1/3`} aria-hidden="true">
+                              <span className="flex h-2.5 gap-0.5" style={{ width: `${(s.count / mostNcs) * 100}%`, minWidth: 6 }}>
+                                {s.critical > 0 && <span className="h-full rounded-full" style={{ flexGrow: s.critical, flexBasis: 0, background: "var(--chart-critical)" }} />}
+                                {s.count - s.critical > 0 && <span className="h-full rounded-full" style={{ flexGrow: s.count - s.critical, flexBasis: 0, background: "var(--chart-neutral)" }} />}
+                              </span>
+                            </td>
+                            <td className={`${td} tabular-nums`}>{s.count}</td>
+                            <td className={`${td} tabular-nums ${s.critical ? "text-error-color" : "text-secondary-text"}`}>{s.critical}</td>
+                            <td className={`${td} text-right`}>
+                              <Link to={`${NCR_REGISTER}?supplier=${s.id}&supplierLabel=${encodeURIComponent(s.name)}`} className="whitespace-nowrap text-link-color hover:underline">
+                                In the register
+                              </Link>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <Empty>No non-conformance named a supplier in this period.</Empty>
+                  )}
+                </Card>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {perf?.available && (
+              <Card title="Performance bands" subtitle={`${plural(perf.scored, "supplier")} scored over the period with the current scoring model`}>
+                {perf.scored ? <SplitBar parts={bandParts} label="Performance bands" tall showZero /> : <Empty>No suppliers to score.</Empty>}
+              </Card>
+            )}
+            <Card title="Risk" subtitle="The latest risk rating of each supplier in use" className={perf?.available ? "" : "xl:col-span-2"}>
+              {riskParts.some((r) => r.count) ? <SplitBar parts={riskParts} label="Risk" tall showZero /> : <Empty>No suppliers yet.</Empty>}
+            </Card>
+          </div>
+
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+            <Card
+              title="Corrective action requests"
+              subtitle="Running requests, by where each one stands"
+              action={
+                <Link to={SCAR_REGISTER} className={cardLink}>
+                  All requests <ArrowRightIcon aria-hidden="true" />
+                </Link>
+              }
+              className="xl:col-span-7">
+              {scarSteps.some((s) => s.count) ? <Pipeline steps={scarSteps} label="Corrective action requests by status" /> : <Empty>No corrective action request is running.</Empty>}
+            </Card>
+            <Card title="Responses overdue" subtitle="Corrective action requests past the date the supplier was to answer by" className="xl:col-span-5">
+              {data?.overdueScarList.length ? (
+                <ul aria-label="Corrective action requests overdue" className="flex flex-col divide-y divide-border-color text-sm">
+                  {data.overdueScarList.map((s) => (
+                    <li key={s.id} className={`${row} flex-wrap justify-between`}>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Initial name={s.supplier.name} />
+                        <span className="flex min-w-0 flex-col">
+                          <Link to={scarPath(s.id)} className={nameLink}>
+                            {s.reference} · {s.title}
+                          </Link>
+                          <span className="text-xs text-secondary-text">{s.supplier.name}</span>
+                        </span>
                       </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <Empty>Nothing has expired or expires within 60 days.</Empty>
-          )}
-        </Card>
-        <Card title="Approvals waiting" subtitle="Proposed approvals that someone other than the proposer must decide" className="xl:col-span-3">
-          {data?.approvalList.length ? (
-            <ul aria-label="Approvals waiting" className="flex flex-col divide-y divide-border-color text-sm">
-              {data.approvalList.map((a) => (
-                <li key={a.id} className={row}>
-                  <Initial name={a.supplier.name} />
-                  <span className="flex min-w-0 flex-col">
-                    <Link to={supplierPath(a.supplier.id, "qualification")} className={nameLink}>
-                      {a.supplier.name}
-                    </Link>
-                    <span className="text-xs text-secondary-text">
-                      {a.target === "conditional" ? "Conditional approval" : "Approval"} proposed {formatDate(a.proposedAt.slice(0, 10))}
-                      {a.proposedBy ? ` by ${a.proposedBy}` : ""}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Empty>No approval is waiting for a decision.</Empty>
-          )}
-        </Card>
-        <Card title="Risk reviews overdue" subtitle="Suppliers whose risk assessment was due to be looked at again" className="xl:col-span-3">
-          {data?.riskReviewList.length ? (
-            <ul aria-label="Risk reviews overdue" className="flex flex-col divide-y divide-border-color text-sm">
-              {data.riskReviewList.map((r) => (
-                <li key={r.supplier.id} className={`${row} flex-wrap justify-between`}>
-                  <span className="flex flex-wrap items-center gap-2">
-                    <Initial name={r.supplier.name} />
-                    <Link to={supplierPath(r.supplier.id, "qualification")} className={nameLink}>
-                      {r.supplier.name}
-                    </Link>
-                    <RiskBadge risk={r.rating} />
-                  </span>
-                  <Chip tone="error">
-                    Review was due {formatDate(r.reviewOn)} ({plural(r.daysOverdue, "day")} ago)
-                  </Chip>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Empty>No risk review is overdue.</Empty>
-          )}
-        </Card>
-      </div>
+                      <Chip tone="error">
+                        Due {formatDate(s.dueOn)} ({plural(s.daysOverdue, "day")} overdue)
+                      </Chip>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <Empty>No response is overdue.</Empty>
+              )}
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-12">
+            <Card
+              title="Certifications and documents"
+              subtitle="Expired, or expiring within 60 days, soonest first"
+              action={
+                <Link to="/Supplier-Quality/Expiry" className={cardLink}>
+                  Expiry watchlist <ArrowRightIcon aria-hidden="true" />
+                </Link>
+              }
+              className="md:col-span-2 xl:col-span-6">
+              {data?.expiryList.length ? (
+                <table className="w-full text-sm" aria-label="Records expiring">
+                  <thead className="text-secondary-text">
+                    <tr>
+                      <th className={th}>Supplier</th>
+                      <th className={th}>Record</th>
+                      <th className={th}>Expires</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.expiryList.map((e) => (
+                      <tr key={`${e.kind}-${e.id}`} className="border-t border-border-color">
+                        <td className={td}>
+                          <Link to={supplierPath(e.supplier.id, e.kind === "document" ? "documents" : "qualification")} className={nameLink}>
+                            {e.supplier.name}
+                          </Link>
+                        </td>
+                        <td className={td}>
+                          {e.title}
+                          <span className="block text-xs text-secondary-text">{e.kind === "document" ? "Document" : "Certification"}</span>
+                        </td>
+                        <td className={td}>
+                          <span className="flex flex-wrap items-center gap-2">
+                            {formatDate(e.expiresOn)}
+                            <Chip tone={e.days < 0 ? "error" : "warning"}>{daysWords(e.days)}</Chip>
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <Empty>Nothing has expired or expires within 60 days.</Empty>
+              )}
+            </Card>
+            <Card title="Approvals waiting" subtitle="Proposed approvals that someone other than the proposer must decide" className="xl:col-span-3">
+              {data?.approvalList.length ? (
+                <ul aria-label="Approvals waiting" className="flex flex-col divide-y divide-border-color text-sm">
+                  {data.approvalList.map((a) => (
+                    <li key={a.id} className={row}>
+                      <Initial name={a.supplier.name} />
+                      <span className="flex min-w-0 flex-col">
+                        <Link to={supplierPath(a.supplier.id, "qualification")} className={nameLink}>
+                          {a.supplier.name}
+                        </Link>
+                        <span className="text-xs text-secondary-text">
+                          {a.target === "conditional" ? "Conditional approval" : "Approval"} proposed {formatDate(a.proposedAt.slice(0, 10))}
+                          {a.proposedBy ? ` by ${a.proposedBy}` : ""}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <Empty>No approval is waiting for a decision.</Empty>
+              )}
+            </Card>
+            <Card title="Risk reviews overdue" subtitle="Suppliers whose risk assessment was due to be looked at again" className="xl:col-span-3">
+              {data?.riskReviewList.length ? (
+                <ul aria-label="Risk reviews overdue" className="flex flex-col divide-y divide-border-color text-sm">
+                  {data.riskReviewList.map((r) => (
+                    <li key={r.supplier.id} className={`${row} flex-wrap justify-between`}>
+                      <span className="flex flex-wrap items-center gap-2">
+                        <Initial name={r.supplier.name} />
+                        <Link to={supplierPath(r.supplier.id, "qualification")} className={nameLink}>
+                          {r.supplier.name}
+                        </Link>
+                        <RiskBadge risk={r.rating} />
+                      </span>
+                      <Chip tone="error">
+                        Review was due {formatDate(r.reviewOn)} ({plural(r.daysOverdue, "day")} ago)
+                      </Chip>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <Empty>No risk review is overdue.</Empty>
+              )}
+            </Card>
+          </div>
+        </>
+      )}
     </div>
   );
 };

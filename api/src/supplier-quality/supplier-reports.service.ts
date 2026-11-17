@@ -62,14 +62,16 @@ export class SupplierReportsService {
   performance(ctx: RequestContext, q: ReportQuery): Promise<Report> {
     const { from, to } = this.period(ctx, q);
     return this.database.asUser(ctx, async (db) => {
+      // Every supplier scored in one statement: one trip to the database, not one per supplier.
       const suppliers = await db.execute<Row>(sql`
-        select id, code, name, approval_status, risk_rating from public.suppliers
-        where organisation_id = ${orgOf(ctx)}::uuid and active order by code limit 500`);
+        select l.*, app.supplier_performance(l.id, ${from}::date, ${to}::date) as r
+          from (select id, code, name, approval_status, risk_rating from public.suppliers
+                 where organisation_id = ${orgOf(ctx)}::uuid and active order by code limit 500) l
+         order by l.code`);
       const rows: Report['rows'] = [];
       let model: { version: number; config: Record<string, unknown> } | null = null;
       for (const s of suppliers.rows) {
-        const res = await db.execute<{ r: Record<string, unknown> }>(sql`select app.supplier_performance(${s.id as string}::uuid, ${from}::date, ${to}::date) as r`);
-        const r = res.rows[0].r as { model: { version: number; config: Record<string, unknown> }; metrics: Record<string, Record<string, unknown>>; score: unknown; band: string; warnings: Array<{ level: string; message: string }> };
+        const r = s.r as { model: { version: number; config: Record<string, unknown> }; metrics: Record<string, Record<string, unknown>>; score: unknown; band: string; warnings: Array<{ level: string; message: string }> };
         model = r.model;
         const m = r.metrics;
         const warn = r.warnings.filter((w) => w.level !== 'info');

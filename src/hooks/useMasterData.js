@@ -1,4 +1,5 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
 import { apiFetch } from "../lib/api-client";
 import { optimisticHandlers, settle } from "../lib/optimistic";
 import { useOrganisation } from "../contexts/OrganisationProvider";
@@ -96,6 +97,7 @@ export const useMasterDataDashboard = ({ enabled = true } = {}) => {
   return useQuery({
     queryKey: key(organisationId, "dashboard"),
     queryFn: () => apiFetch("/master-data-dashboard", { organisationId }),
+    staleTime: DASHBOARD_STALE_MS,
     enabled: !!organisationId && enabled,
     retry: false,
   });

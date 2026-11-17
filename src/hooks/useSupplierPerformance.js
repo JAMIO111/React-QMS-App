@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
 import { apiFetch, describeApiError } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
@@ -25,6 +26,7 @@ export const useSupplierDashboard = ({ from, to }) => {
   return useQuery({
     queryKey: key(organisationId, "dashboard", from, to),
     queryFn: () => apiFetch(`${BASE}/dashboard?from=${from}&to=${to}`, { organisationId }),
+    staleTime: DASHBOARD_STALE_MS,
     enabled: !!organisationId && !!from && !!to,
     retry: false,
     placeholderData: (previous) => previous,

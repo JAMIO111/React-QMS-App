@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
@@ -52,6 +53,7 @@ export const useRiskDashboard = (period) => {
   return useQuery({
     queryKey: key(organisationId, "dashboard", period?.fromIso, period?.toIso),
     queryFn: () => apiFetch(`/risks-dashboard?${qs({ from: period.fromIso, to: period.toIso })}`, { organisationId }),
+    staleTime: DASHBOARD_STALE_MS,
     enabled: !!organisationId && !!period?.fromIso,
     placeholderData: keepPreviousData,
     retry: false,

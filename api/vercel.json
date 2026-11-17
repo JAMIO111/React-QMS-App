@@ -1,6 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nestjs",
+  "regions": [
+    "lhr1"
+  ],
   "crons": [
     {
       "path": "/api/v1/internal/cron/reconcile",

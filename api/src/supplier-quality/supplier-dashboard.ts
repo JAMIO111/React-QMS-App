@@ -221,12 +221,18 @@ export class SupplierDashboardService {
       const scored: Array<Scored & { ref: ReturnType<typeof supplierRef> }> = [];
       let truncated = false;
       if (can.receiving) {
+        // Every supplier scored in one statement (one trip to the database, not one per supplier); the extra row only says the list was cut short.
         const list = await many(sql`
-          select s.id as supplier_id, s.code as supplier_code, s.name as supplier_name from public.suppliers s
-           where s.organisation_id = ${org}::uuid and ${sql.raw(LIVE)} order by s.code limit ${PERFORMANCE_SUPPLIER_LIMIT + 1}`);
+          select l.supplier_id, l.supplier_code, l.supplier_name,
+                 case when l.n <= ${PERFORMANCE_SUPPLIER_LIMIT} then app.supplier_performance(l.supplier_id, ${q.from}::date, ${q.to}::date) end as r
+            from (select s.id as supplier_id, s.code as supplier_code, s.name as supplier_name, row_number() over (order by s.code) as n
+                    from public.suppliers s
+                   where s.organisation_id = ${org}::uuid and ${sql.raw(LIVE)}
+                   order by s.code limit ${PERFORMANCE_SUPPLIER_LIMIT + 1}) l
+           order by l.n`);
         truncated = list.length > PERFORMANCE_SUPPLIER_LIMIT;
         for (const s of list.slice(0, PERFORMANCE_SUPPLIER_LIMIT)) {
-          const r = (await db.execute<{ r: Scored }>(sql`select app.supplier_performance(${s.supplier_id as string}::uuid, ${q.from}::date, ${q.to}::date) as r`)).rows[0].r;
+          const r = s.r as Scored;
           scored.push({ ...r, score: r.score === null || r.score === undefined ? null : Number(r.score), ref: supplierRef(s) });
         }
       }

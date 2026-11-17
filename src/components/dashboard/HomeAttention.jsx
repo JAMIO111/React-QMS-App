@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { SkeletonCard } from "./DashboardSkeleton";
 import { ArrowRightIcon, BellIcon, CircleCheckIcon, EyeIcon, FileTextIcon, ListChecksIcon, ListTodoIcon, PresentationIcon, ShieldAlertIcon, TriangleAlertIcon } from "@/components/icons";
 import { useHomeDashboard } from "../../hooks/useHomeDashboard";
 import { describeApiError } from "../../lib/api-client";
@@ -90,9 +91,17 @@ const HomeAttention = () => {
   return (
     <>
       {isLoading && (
-        <div role="status" aria-label="Checking what needs attention" className="grid animate-pulse grid-cols-1 gap-4 motion-reduce:animate-none xl:grid-cols-5">
-          <span className="h-52 rounded-3xl bg-secondary-bg xl:col-span-2" />
-          <span className="h-52 rounded-2xl bg-secondary-bg xl:col-span-3" />
+        <div role="status" aria-label="Checking what needs attention" className="flex flex-col gap-4">
+          <span className="sr-only">Checking what needs attention…</span>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
+            <SkeletonCard kind="steps" className="rounded-3xl xl:col-span-2" />
+            <SkeletonCard kind="list" rows={3} className="xl:col-span-3" />
+          </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            <SkeletonCard kind="list" rows={3} />
+            <SkeletonCard kind="list" rows={3} />
+            <SkeletonCard kind="list" rows={3} />
+          </div>
         </div>
       )}
       {error && (

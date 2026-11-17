@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { apiFetch } from "../lib/api-client";
 import { homeModules, summarise } from "../lib/homeDashboard";
@@ -16,6 +17,7 @@ export const useHomeAttention = () => {
   return useQuery({
     queryKey: ["api", "org", organisationId, "home-dashboard"],
     queryFn: () => apiFetch("/home-dashboard", { organisationId }),
+    staleTime: DASHBOARD_STALE_MS,
     enabled: !!organisationId,
     retry: false,
   });

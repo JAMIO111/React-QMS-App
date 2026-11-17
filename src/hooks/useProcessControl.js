@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
 import { apiFetch } from "../lib/api-client";
 import { optimisticHandlers, settle } from "../lib/optimistic";
 import { useOrganisation } from "../contexts/OrganisationProvider";
@@ -76,6 +77,7 @@ export const useProcessControlDashboard = ({ from, to }) => {
   return useQuery({
     queryKey: ["api", "org", organisationId, "process-control-dashboard", from, to],
     queryFn: () => apiFetch(`/process-control-dashboard?from=${from}&to=${to}`, { organisationId }),
+    staleTime: DASHBOARD_STALE_MS,
     enabled: !!organisationId && !!from && !!to,
     retry: false,
     placeholderData: keepPreviousData,

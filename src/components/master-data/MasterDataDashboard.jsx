@@ -5,7 +5,7 @@ import Breadcrumb from "../Breadcrumb";
 import { ACCENT, Chip, Empty, HeroCard, Meter, RankList, SplitBar, StatTile, cardLink } from "../dashboard/DashboardGraphics";
 import { Card, grid, tick } from "../dashboard/DashboardParts";
 import Callout from "../ui/Callout";
-import LoadingScreen from "../ui/LoadingScreen";
+import DashboardSkeleton from "@/components/dashboard/DashboardSkeleton";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useMasterDataDashboard } from "../../hooks/useMasterData";
 import { useIntegrationHealth } from "../../hooks/useIntegrations";
@@ -119,7 +119,7 @@ const MasterDataDashboard = () => {
           {describeApiError(error)}
         </Callout>
       )}
-      {isLoading && <LoadingScreen />}
+      {isLoading && <DashboardSkeleton label="Loading the master data overview" tiles={6} lists={2} />}
 
       {data && (
         <>

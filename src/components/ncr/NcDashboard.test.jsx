@@ -58,6 +58,18 @@ beforeEach(() => {
 });
 
 describe("NC dashboard", () => {
+  it("shows shimmering placeholders, not empty figures, until the first figures arrive", async () => {
+    let answer;
+    apiFetch.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    renderAt("/Non-Conformance");
+    expect(await screen.findByRole("status", { name: "Loading the non-conformance dashboard" })).toBeInTheDocument();
+    expect(screen.queryByText("No NCs in this period.")).toBeNull();
+    expect(screen.queryByRole("link", { name: /NCs raised/ })).toBeNull();
+    answer(dashboard);
+    expect(await screen.findByRole("link", { name: /NCs raised/ })).toHaveTextContent("24");
+    expect(screen.queryByRole("status", { name: "Loading the non-conformance dashboard" })).toBeNull();
+  });
+
   it("shows the KPI tiles for the last 12 months of every source", async () => {
     renderAt("/Non-Conformance");
     expect(await screen.findByRole("heading", { name: "Non-conformance dashboard" })).toBeInTheDocument();

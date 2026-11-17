@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
 import { apiFetch } from "../lib/api-client";
 import { optimisticHandlers, settle } from "../lib/optimistic";
 import { refreshOrganisation } from "../lib/refresh";
@@ -93,6 +94,7 @@ export const useNcDashboard = ({ source, from, to }) => {
   return useQuery({
     queryKey: key(organisationId, "dashboard", source ?? "all", from, to),
     queryFn: () => apiFetch(`/ncr-dashboard?${toQuery({ source, from, to })}`, { organisationId }),
+    staleTime: DASHBOARD_STALE_MS,
     enabled: !!organisationId && !!from && !!to,
     placeholderData: keepPreviousData,
     retry: false,

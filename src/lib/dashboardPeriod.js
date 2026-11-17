@@ -55,3 +55,7 @@ export const periodParams = ({ from, to }, defaultId, today = new Date()) => {
   if (match) return match.id === defaultId ? {} : { period: match.id };
   return { from: format(f, ISO), to: format(e, ISO) };
 };
+
+/** How long a dashboard's figures count as fresh: going back to a dashboard within it shows them at once, without asking the server again.
+ * Any action marks every cached figure stale (refreshOrganisation), so this only saves reloads of figures nothing has changed. */
+export const DASHBOARD_STALE_MS = 60_000;

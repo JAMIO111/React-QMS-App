@@ -33,9 +33,11 @@ export class DatabaseService implements OnModuleDestroy {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query('SET LOCAL ROLE authenticated');
+      // One round trip for the role and the request settings: set_config('role', …, true) is SET LOCAL ROLE (same membership check), and every
+      // statement here is a trip to the database, so the fewer the better.
       await client.query(
-        `select set_config('request.jwt.claims', $1, true),
+        `select set_config('role', 'authenticated', true),
+                set_config('request.jwt.claims', $1, true),
                 set_config('app.source', 'api', true),
                 set_config('app.correlation_id', $2, true),
                 set_config('app.reason', $3, true),

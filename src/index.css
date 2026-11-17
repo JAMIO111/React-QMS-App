@@ -456,6 +456,14 @@
   }
 }
 
+/* People who ask for less motion get the placeholders without the sweep. */
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    animation: none;
+    background-position: 0 0;
+  }
+}
+
 .hexagon-circle {
   position: relative;
   margin: 1em auto;

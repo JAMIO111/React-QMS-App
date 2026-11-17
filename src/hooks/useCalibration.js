@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
 import { apiFetch } from "../lib/api-client";
 import { optimisticHandlers, settle } from "../lib/optimistic";
 import { useOrganisation } from "../contexts/OrganisationProvider";
@@ -50,7 +51,7 @@ export const useGaugeTypeCharacteristics = (id, { includeInactive = false } = {}
 
 /** Calibration dashboard figures for a period ({ from, to } — YYYY-MM-DD). */
 export const useCalibrationDashboard = ({ from, to }) =>
-  useOrgQuery(["dashboard", from, to], `/calibration-dashboard?${toQuery({ from, to })}`, { enabled: !!from && !!to, keepPrevious: true });
+  useOrgQuery(["dashboard", from, to], `/calibration-dashboard?${toQuery({ from, to })}`, { enabled: !!from && !!to, keepPrevious: true, staleTime: DASHBOARD_STALE_MS });
 
 /**
  * Any calibration change: { path, method, body }. Refreshes every calibration query of the

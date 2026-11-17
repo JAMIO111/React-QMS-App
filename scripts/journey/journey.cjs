@@ -202,6 +202,24 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await importWithTemplate({ page, stack, APP, orgName, see, shot, step, log });
   await importFromApi({ page, stack, APP, orgName, see, shot, step, log });
   await competence({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
+  const giveColinController = async () => {
+    // Colin later approves documents and decides risk acceptances, which need a Controller seat now that every feature is tied to a package
+    // (docs/seats-and-member-onboarding-plan.md SM1). Buying and moving seats is covered by the billing tests; here the seat is moved directly.
+    const ctlItem = (await stack.admin.query(
+      `update public.organisation_subscription_items i set quantity = quantity + 1
+         from public.subscription_plans p, public.organisations o
+        where p.id = i.subscription_plan_id and p.slug = 'controller' and o.id = i.organisation_id and o.name = $1
+          and i.id = (select i2.id from public.organisation_subscription_items i2 where i2.organisation_id = o.id and i2.subscription_plan_id = p.id order by i2.quantity desc limit 1)
+        returning i.id, i.subscription_plan_id`, [`Journey Works ${RUN}`])).rows[0];
+    await stack.admin.query(
+      `update public.user_subscription_assignments a set subscription_plan_id = $1, subscription_item_id = $2
+         from public.organisation_users m join public.organisations o on o.id = m.organisation_id
+        where a.organisation_membership_id = m.id and a.status = 'active' and o.name = $3 and lower(m.invited_email) = lower($4)`,
+      [ctlItem.subscription_plan_id, ctlItem.id, `Journey Works ${RUN}`, colleague.email]);
+    const colinSeat = await seats();
+    if (colinSeat.controller !== 2) throw new Error(`Colin was not given a Controller seat: ${JSON.stringify(colinSeat)}`);
+  };
+  await giveColinController();
   await documentControl({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
   await riskAndReview({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
   await workflowsAndReminders({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });

@@ -106,7 +106,7 @@ DECLARE org uuid := (SELECT v FROM ids WHERE k = 'org');
 BEGIN
   UPDATE public.organisation_settings SET entitlements_enforced = true WHERE organisation_id = org;
   PERFORM pg_temp.login('36000000-0000-0000-0000-000000000102');
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.visible_notifications(org) WHERE entity_type = 'parts'), 1::bigint, 'master data is not package-gated');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.visible_notifications(org) WHERE entity_type = 'parts'), 0::bigint, 'master data is tied to a package too (SM1): no seat, no notice');
   PERFORM pg_temp.logout();
 END $$;
 

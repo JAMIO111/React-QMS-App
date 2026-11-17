@@ -51,7 +51,7 @@ The application's sign-up and first-sign-in pages link to the terms and privacy 
 `VITE_PRIVACY_URL` (`src/lib/terms.js`). `TERMS_VERSION` there is what is stored when someone accepts, so **bump it when the terms
 change materially**.
 
-## Putting it live (two steps, in this order)
+## Putting it live (done 2026-11-17; kept as the record and for a rebuild)
 
 **Step 1: deploy the site without touching the app.**
 
@@ -86,3 +86,10 @@ SSO's callback (it is on the app's own address).
 `cd site && npm install && npm run dev` (port 4321) · `npm run build` · see `site/README.md`.
 The root `npm run lint` skips `site/`, and Tailwind in the app scans only `src/`, so the two projects do not affect each other.
 Known: `npm audit` reports a path-matching advisory in build-time tooling (`picomatch` via Astro and Vite). Nothing from it is shipped.
+
+## State after the move (2026-11-17)
+
+- `fortress-qms.com` and `www` (308 to the bare domain) → `qms-site`; `app.fortress-qms.com` → `qms-web`; `api.fortress-qms.com` → `qms-api`. All three DNS records are DNS only (grey cloud) in Cloudflare.
+- `qms-site` was created through the Vercel connector and first deployed from `Dev`; its production branch is `main`, so the next release merge (`Dev` into `main`) is what keeps it current.
+- API production variables: `CORS_ORIGINS=https://app.fortress-qms.com`, `APP_BASE_URL=https://app.fortress-qms.com`, `INVITE_REDIRECT_URL=https://app.fortress-qms.com/set-password?mode=invite`. `qms-web` production: `VITE_TERMS_URL`, `VITE_PRIVACY_URL` pointing at the website.
+- Still to do by the owner: the Supabase redirect entry for the old bare domain can be removed after about a week; the contact mailbox (`hello@`), the `PUBLIC_COMPANY_*` values and the legal review (`PUBLIC_LEGAL_REVIEWED`) are set on the `qms-site` project when known.

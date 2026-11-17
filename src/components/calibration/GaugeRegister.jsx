@@ -3,12 +3,12 @@ import { customCsvValues, useCustomColumns, useCustomFilterChips } from "../cust
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ClipboardCheckIcon, FolderOpenIcon, PlusIcon, RotateCcwIcon, ShareIcon, SlidersHorizontalIcon, Trash2Icon, XIcon } from "@/components/icons";
 import { useGlobalSearch } from "../../contexts/SearchProvider";
-import { useToast } from "../../contexts/ToastProvider";
 import { useCalibrationMutation, useGauges, useGaugeTypes } from "../../hooks/useCalibration";
+import { useQuickSave } from "../../hooks/useQuickSave";
+import { softDelete } from "../../lib/guessRequest";
 import { usePermissions, useSites } from "../../hooks/useQmsApi";
 import { useTablePreferences } from "../../hooks/useTablePreferences";
 import { GAUGE_FILTER_KEYS, useGaugeFilters } from "../../hooks/useUrlFilters";
-import { describeApiError } from "../../lib/api-client";
 import { DUE_FILTERS, OUTCOMES, describeDue, formatInterval, outcomeOf, statusOf } from "../../lib/calibration";
 import { exportCSV } from "../../lib/csvHelper";
 import { formatDate } from "../../lib/ncr";
@@ -52,8 +52,7 @@ const toCsvRow = (g) => ({
 const GaugeRegister = () => {
   const navigate = useNavigate();
   const { can } = usePermissions();
-  const { showToast } = useToast();
-  const restoreMutation = useCalibrationMutation();
+  const quickSave = useQuickSave(useCalibrationMutation());
   const [searchParams, setSearchParams] = useSearchParams();
   const page = parseInt(searchParams.get("page") || "1", 10);
   const pageSize = parseInt(searchParams.get("pageSize") || "25", 10);
@@ -67,7 +66,6 @@ const GaugeRegister = () => {
   const [selectedRows, setSelectedRows] = useState([]);
   const [activeModalType, setActiveModalType] = useState(null);
   const [deleting, setDeleting] = useState(null);
-  const deleteMutation = useCalibrationMutation();
   const headerRef = useRef(null);
   const prefs = useTablePreferences("gauge-register");
   const custom = useCustomColumns("gauge");
@@ -126,17 +124,12 @@ const GaugeRegister = () => {
   const toggleModal = (t) => setActiveModalType((prev) => (prev === t ? null : t));
 
   const restore = (item) =>
-    restoreMutation.mutate(
-      { path: `/gauges/${item.id}/restore` },
-      {
-        onSuccess: () => showToast({ type: "success", title: "Restored", message: `${item.assetNumber} is back in the register.` }),
-        onError: (error) => showToast({ type: "error", title: "Not restored", message: describeApiError(error) }),
-      }
-    );
+    // Shown at once; put back with a toast if the server refuses.
+    quickSave({ path: `/gauges/${item.id}/restore`, guess: softDelete(item.id, null) }, "Not restored");
   const rowActions = (item) => [
     { label: "Open", icon: FolderOpenIcon, onSelect: () => navigate(`/Calibration/Gauges/${item.id}`) },
     can("calibration.record") && !item.deletedAt && { label: "Record calibration", icon: ClipboardCheckIcon, onSelect: () => navigate(`/Calibration/Gauges/${item.id}/calibrations/new`) },
-    can("calibration.manage") && !item.deletedAt && { label: "Delete", icon: Trash2Icon, tone: "danger", onSelect: () => { deleteMutation.reset(); setDeleting(item); } },
+    can("calibration.manage") && !item.deletedAt && { label: "Delete", icon: Trash2Icon, tone: "danger", onSelect: () => setDeleting(item) },
     can("calibration.manage") && item.deletedAt && { label: "Restore", icon: RotateCcwIcon, onSelect: () => restore(item) },
   ];
 
@@ -244,20 +237,12 @@ const GaugeRegister = () => {
           title={`Delete ${deleting.assetNumber}?`}
           label="Reason for deleting (the gauge and its records are kept and can be restored)"
           confirmText="Delete"
-          pending={deleteMutation.isPending}
-          error={deleteMutation.error}
           onClose={() => setDeleting(null)}
-          onConfirm={(reason) =>
-            deleteMutation.mutate(
-              { path: `/gauges/${deleting.id}/delete`, body: { reason } },
-              {
-                onSuccess: () => {
-                  showToast({ type: "success", title: "Deleted", message: `${deleting.assetNumber} was deleted. It can be restored from the deleted records filter.` });
-                  setDeleting(null);
-                },
-              }
-            )
-          }
+          onConfirm={(reason) => {
+            // Gone from the register at once; back with a toast if the server refuses.
+            quickSave({ path: `/gauges/${deleting.id}/delete`, body: { reason }, guess: softDelete(deleting.id, new Date().toISOString()) }, "Not deleted");
+            setDeleting(null);
+          }}
         />
       )}
     </div>

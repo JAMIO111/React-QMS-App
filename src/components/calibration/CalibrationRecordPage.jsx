@@ -21,9 +21,11 @@ import {
 } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
 import { useCalibration, useCalibrationAttachments, useCalibrationMutation, useGauge, useGaugeCharacteristics, useGaugeTypes } from "../../hooks/useCalibration";
+import { useQuickSave } from "../../hooks/useQuickSave";
+import { softDelete } from "../../lib/guessRequest";
 import { useMe, usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
-import { OUTCOMES, shouldPromptForStatus, statusAfterCalibration, statusOf, formatInterval, formatNumber, inTolerance, outcomeFromReadings, outcomeOf } from "../../lib/calibration";
+import { OUTCOMES, shouldPromptForStatus, statusAfterCalibration, formatInterval, formatNumber, inTolerance, outcomeFromReadings, outcomeOf } from "../../lib/calibration";
 import { formatDate, ncrPath } from "../../lib/ncr";
 import { documentPath } from "../../lib/documents";
 import GaugeUsage from "../inspection/GaugeUsage";
@@ -195,6 +197,7 @@ const CalibrationRecordPage = () => {
   const characteristics = useGaugeCharacteristics(gaugeId);
   const attachments = useCalibrationAttachments(isNew ? null : calibrationId);
   const mutation = useCalibrationMutation();
+  const quickSave = useQuickSave(useCalibrationMutation());
   const [dialog, setDialog] = useState(null); // "delete"
   const [statusPrompt, setStatusPrompt] = useState(null); // the calibration just recorded
   const [pendingFiles, setPendingFiles] = useState([]); // certificates chosen before a new external calibration is saved
@@ -306,13 +309,7 @@ const CalibrationRecordPage = () => {
     setStatusPrompt(null);
     // The gauge shows the new status at once and goes back if the save fails.
     if (status !== statusAfterCalibration(g.status, created.outcome)) {
-      mutation.mutate(
-        { path: `/gauges/${gaugeId}`, method: "PATCH", body: { status, statusReason } },
-        {
-          onSuccess: () => showToast({ type: "success", title: "Gauge status updated", message: `${g.assetNumber} is now ${statusOf(status).label.toLowerCase()}.` }),
-          onError: (err) => showToast({ type: "error", title: "Gauge status not updated", message: describeApiError(err) }),
-        }
-      );
+      quickSave({ path: `/gauges/${gaugeId}`, method: "PATCH", body: { status, statusReason } }, "Gauge status not updated");
     }
     goToRecord(created);
   };
@@ -338,9 +335,13 @@ const CalibrationRecordPage = () => {
           },
         }
       );
+    } else if (!changedReadings.length) {
+      // Only the record's own fields: shown at once, put back with a toast if the server refuses.
+      quickSave({ path: `/calibrations/${c.id}`, method: "PATCH", body: withVersion(c, changedFields) });
     } else {
+      // Changed readings wait for the server, which works out each result and the outcome.
       mutation.mutate(
-        { path: `/calibrations/${c.id}`, method: "PATCH", body: withVersion(c, { ...changedFields, ...(changedReadings.length ? { readings: changedReadings } : {}) }) },
+        { path: `/calibrations/${c.id}`, method: "PATCH", body: withVersion(c, { ...changedFields, readings: changedReadings }) },
         { onSuccess: () => showToast({ type: "success", title: "Saved", message: "Changes saved." }) }
       );
     }
@@ -355,7 +356,7 @@ const CalibrationRecordPage = () => {
         },
       }
     );
-  const restore = () => mutation.mutate({ path: `/calibrations/${c.id}/restore` }, { onSuccess: () => showToast({ type: "success", title: "Restored", message: `${c.reference} was restored.` }) });
+  const restore = () => quickSave({ path: `/calibrations/${c.id}/restore`, guess: softDelete(c.id, null) }, "Not restored");
 
   if (gauge.isLoading || (!isNew && record.isLoading)) return <LoadingScreen />;
   const loadError = gauge.error ?? record.error;
@@ -425,7 +426,7 @@ const CalibrationRecordPage = () => {
           <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
             Deleted {formatDate(c.deletedAt)} by {c.deletedBy?.name ?? "—"}: “{c.deleteReason}”. It no longer counts towards the gauge's dates.
             {can("calibration.record") && !g.deletedAt && (
-              <CTAButton buttonType="button" onClick={restore} disabled={mutation.isPending} loading={mutation.isPending} type="neutral" size="default" className="px-3">
+              <CTAButton buttonType="button" onClick={restore} type="neutral" size="default" className="px-3">
                 <RotateCcwIcon className="h-4 w-4" /> Restore
               </CTAButton>
             )}
@@ -597,20 +598,12 @@ const CalibrationRecordPage = () => {
           title={`Delete ${c.reference}?`}
           label="Reason for deleting (kept for the record; can be restored)"
           confirmText="Delete"
-          pending={mutation.isPending}
-          error={mutation.error}
           onClose={() => setDialog(null)}
-          onConfirm={(reason) =>
-            mutation.mutate(
-              { path: `/calibrations/${c.id}/delete`, body: { reason } },
-              {
-                onSuccess: () => {
-                  setDialog(null);
-                  showToast({ type: "success", title: "Deleted", message: `${c.reference} was deleted. The gauge's dates follow its previous calibration.` });
-                },
-              }
-            )
-          }
+          onConfirm={(reason) => {
+            // Marked deleted at once; the gauge's dates follow from the server. Put back with a toast if refused.
+            quickSave({ path: `/calibrations/${c.id}/delete`, body: { reason }, guess: softDelete(c.id, new Date().toISOString()) }, "Not deleted");
+            setDialog(null);
+          }}
         />
       )}
     </div>

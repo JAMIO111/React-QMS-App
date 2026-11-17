@@ -104,3 +104,6 @@ export const copyStamp = (revision, documentNumber, printedAt = new Date()) => {
       return { usable: false, head: `NOT ISSUED - NOT FOR USE - ${who}`, detail: `${printed}. This revision has not been approved.` };
   }
 };
+
+/** The commands shown before the server answers (see guessDocuments). Their refusals are told here in a toast, as the dialog has closed. */
+export const DOCUMENT_GUESSED = new Set(["updateType", "updateDocument", "updateRevision", "setReaders", "setSkills", "setLinks", "withdrawChangeRequest", "declineChangeRequest", "acknowledge", "addRecipient"]);

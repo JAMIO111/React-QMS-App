@@ -122,6 +122,25 @@ describe("Connection page", () => {
     expect(screen.getByText("No credential stored")).toBeInTheDocument();
   });
 
+  it("pausing shows at once, closes the dialog, and goes back when the server refuses", async () => {
+    let refuse;
+    routeApi({
+      "GET /integrations/connections/c1": detail({ status: "active", problems: [] }),
+      "GET /integrations/providers": { data: providers },
+      "GET /integrations/runs": noRuns,
+      "POST /integrations/connections/c1/pause": () => new Promise((_r, reject) => { refuse = reject; }),
+    });
+    renderAt("/Settings/Integrations/c1");
+    await userEvent.click(await screen.findByRole("button", { name: "Pause" }));
+    await userEvent.type(await screen.findByLabelText(/Reason/), "Month end");
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Pause" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Resume" })).toBeEnabled();
+    expect(calls.find((c) => c.k === "POST /integrations/connections/c1/pause").body).toEqual({ reason: "Month end" });
+    refuse(new Error("Not allowed"));
+    expect(await screen.findByRole("button", { name: "Pause" })).toBeInTheDocument();
+  });
+
   it("sends a credential once and never shows it", async () => {
     routeApi({
       "GET /integrations/connections/c1": detail(),

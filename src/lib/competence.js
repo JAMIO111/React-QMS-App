@@ -175,3 +175,22 @@ export const matrixReport = (result, { statusFilter = "all", today } = {}) => {
     rows,
   };
 };
+
+/**
+ * Commands shown before the server answers (see guessCompetence). The screen changes at once, the dialog closes, and a refusal is put back
+ * with an error toast from the hook (`failed` titles it).
+ */
+export const COMPETENCE_GUESSED = new Set([
+  "updateCategory",
+  "updateSkill",
+  "updatePosition",
+  "reactivateSkill",
+  "reactivatePosition",
+  "setPositionSkills",
+  "endPosition",
+  "updateSession",
+  "addAttendee",
+  "recordAttendees",
+  "removeAttendee",
+  "voidAttendee",
+]);

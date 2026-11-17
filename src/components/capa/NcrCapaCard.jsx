@@ -4,7 +4,8 @@ import Dialog from "../ui/Dialog";
 import RHFComboBox from "../ui/RHFComboBox";
 import ReasonDialog from "../ncr/ReasonDialog";
 import { usePermissions } from "../../hooks/useQmsApi";
-import { useCapaMutation, useCapas, useNcrCapas } from "../../hooks/useCapa";
+import { CAPA_GUESSED, useCapaMutation, useCapas, useNcrCapas } from "../../hooks/useCapa";
+import { sendCommand } from "../../lib/guessCommands";
 import { capaHref, stepOf } from "../../lib/capa";
 import { FormError } from "../master-data/shared";
 import { StagePill, StepProgress } from "./shared";
@@ -87,17 +88,15 @@ const NcrCapaCard = ({ ncr }) => {
           {manage && buttons}
         </>
       )}
-      <FormError error={linking || unlinking ? null : mutation.error} />
+      <FormError error={linking || unlinking || CAPA_GUESSED.has(mutation.variables?.action) ? null : mutation.error} />
       {linking && <LinkExistingDialog ncr={ncr} linkedIds={new Set(list.map((c) => c.capaId))} onClose={() => setLinking(false)} />}
       {unlinking && (
         <ReasonDialog
           title={`Unlink ${unlinking.reference}?`}
           label={`Why is ${ncr.reference} no longer part of this 8D?`}
           confirmText="Unlink"
-          pending={mutation.isPending}
-          error={mutation.error}
           onClose={() => setUnlinking(null)}
-          onConfirm={(reason) => mutation.mutate({ action: "unlinkNcr", id: unlinking.linkId, body: { reason } }, { onSuccess: () => setUnlinking(null) })}
+          onConfirm={(reason) => sendCommand(mutation, CAPA_GUESSED, { action: "unlinkNcr", id: unlinking.linkId, body: { reason } }, () => setUnlinking(null))}
         />
       )}
     </section>

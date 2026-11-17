@@ -32,10 +32,13 @@ const TypeDialog = ({ existing, onClose }) => {
     if (!ready) return;
     const body = { name: name.trim(), reviewMonths: months, contentHint, description: description.trim() || null };
     if (!prefixFixed) body.prefix = prefix;
-    mutation.mutate(existing ? { action: "updateType", id: existing.id, body } : { action: "createType", body }, {
-      onSuccess: onClose,
-      onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }),
-    });
+    if (existing) {
+      // A change shows at once and the dialog closes; a refusal puts it back with a toast (from the hook).
+      mutation.mutate({ action: "updateType", id: existing.id, body });
+      onClose();
+      return;
+    }
+    mutation.mutate({ action: "createType", body }, { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) });
   };
   return (
     <Dialog title={existing ? `Edit ${existing.name}` : "New document type"} onClose={onClose}>

@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
+import { useToast } from "../contexts/ToastProvider";
+import { pendingId, updateById } from "../lib/optimistic";
+import { commandGuessHandlers, nowIso, setFields } from "../lib/guessCommands";
 
 /** CAPA / 8D (docs/capa-8d-plan.md): the register, one 8D with its steps, team and NC links, and the commands. */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "capa", ...rest];
@@ -102,6 +105,7 @@ export const useNcrCapas = (ncrId, { enabled = true } = {}) => {
 export const useCapaMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
     mutationFn: ({ action, id, body }) => {
       const post = (path, method = "POST") => apiFetch(path, { method, body, organisationId });
@@ -156,9 +160,93 @@ export const useCapaMutation = () => {
           throw new Error(`Unknown action ${action}`);
       }
     },
+    // The guessed commands (CAPA_GUESSED) show at once; a refusal puts the 8D back and says why in a toast.
+    ...commandGuessHandlers({ queryClient, prefix: key(organisationId), guess: guessCapa, guessed: CAPA_GUESSED, showToast: toast?.showToast }),
     onSuccess: (data) => {
       if (data?.id && data?.steps) queryClient.setQueryData(key(organisationId, "detail", data.id), data);
-      refreshOrganisation(queryClient, organisationId);
     },
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
+};
+
+/** The commands shown before the server answers (see guessCapa). The rest wait: their outcome is worked out by the database (steps, stage, closing, verification). */
+export const CAPA_GUESSED = new Set([
+  "update", "updateTeam", "addTeam", "unlinkNcr", "updateAnalysis", "removeAnalysis", "updateRootCause", "removeRootCause",
+  "addAction", "updateAction", "completeAction", "cancelAction", "reopenAction",
+]);
+
+/** The 8D header fields of the 5W2H, sent as d2What … and shown under `problem`. */
+const problemKey = (k) => (/^d2[A-Z]/.test(k) ? k[2].toLowerCase() + k.slice(3) : null);
+
+/**
+ * Cached 8D data as it will be after a command (`useCapaMutation` vars, plus `show` for names the server only gets ids of: `ownerName`, `name`).
+ * Unknown commands leave it alone; the server's answer replaces the guess.
+ */
+export const guessCapa = (data, { action, id, body = {}, show = {} }) => {
+  const now = nowIso();
+  switch (action) {
+    case "update":
+      return updateById(data, id, (capa) => {
+        let next = setFields(capa, body);
+        const problem = Object.fromEntries(Object.entries(body).map(([k, v]) => [problemKey(k), v]).filter(([k]) => k));
+        if (next.problem && Object.keys(problem).length) next = { ...next, problem: { ...next.problem, ...problem } };
+        if ("ownerMembershipId" in body && capa.owner && typeof capa.owner === "object") {
+          next = { ...next, owner: body.ownerMembershipId ? { ...capa.owner, membershipId: body.ownerMembershipId, name: show.ownerName ?? capa.owner.name } : null };
+        }
+        return next;
+      });
+    case "updateTeam":
+      return updateById(data, id, (t) => (body.ended ? { ...t, endedAt: now } : setFields(t, body)));
+    case "addTeam":
+      return updateById(data, id, (capa) => {
+        if (!Array.isArray(capa.team)) return capa;
+        const external = !body.membershipId;
+        const member = {
+          id: pendingId(), membershipId: body.membershipId ?? null, userId: null, name: show.name ?? body.externalName ?? "…", company: body.externalCompany ?? null,
+          email: body.externalEmail ?? null, role: body.role ?? "member", external, endedAt: null,
+        };
+        return { ...capa, team: [...capa.team, member] };
+      });
+    case "unlinkNcr": {
+      // On the 8D the link is ended (kept in the history); on the NC page's list the 8D goes.
+      const ended = updateById(data, id, (link) => ("endedAt" in link ? { ...link, endedAt: now, endReason: body.reason ?? null } : link));
+      return Array.isArray(ended) ? ended.filter((row) => row?.linkId !== id) : ended?.data && Array.isArray(ended.data) ? { ...ended, data: ended.data.filter((row) => row?.linkId !== id) } : ended;
+    }
+    case "updateAnalysis":
+      return updateById(data, id, (a) => setFields(a, body));
+    case "removeAnalysis":
+    case "removeRootCause":
+      return updateById(data, id, (x) => x, { remove: true });
+    case "updateRootCause":
+      return updateById(data, id, (c) => {
+        const next = setFields(c, body);
+        if (body.verified === true && !c.verified) return { ...next, verifiedAt: now };
+        if (body.verified === false) return { ...next, verifiedAt: null, verifiedBy: null };
+        return next;
+      });
+    case "addAction":
+      return updateById(data, id, (capa) => {
+        if (!Array.isArray(capa.actions)) return capa;
+        const action = {
+          id: pendingId(), phase: body.phase, description: body.description ?? "", status: "open", rootCauseId: body.rootCauseId ?? null, dueDate: body.dueDate ?? null,
+          owner: body.ownerTeamMemberId ? { teamMemberId: body.ownerTeamMemberId, name: show.ownerName ?? "…" } : null,
+          evidenceNote: null, cancelReason: null, doneAt: null, doneBy: null, isAssignee: false, overdue: false,
+        };
+        return { ...capa, actions: [...capa.actions, action] };
+      });
+    case "updateAction":
+      return updateById(data, id, (a) => {
+        const next = setFields(a, body);
+        if (!("ownerTeamMemberId" in body)) return next;
+        return { ...next, owner: body.ownerTeamMemberId ? { ...(a.owner ?? {}), teamMemberId: body.ownerTeamMemberId, name: show.ownerName ?? a.owner?.name ?? "…" } : null };
+      });
+    case "completeAction":
+      return updateById(data, id, (a) => ({ ...a, status: "done", evidenceNote: body.evidenceNote ?? a.evidenceNote ?? null, doneAt: now, overdue: false }));
+    case "cancelAction":
+      return updateById(data, id, (a) => ({ ...a, status: "cancelled", cancelReason: body.reason ?? null, overdue: false }));
+    case "reopenAction":
+      return updateById(data, id, (a) => ({ ...a, status: "open", doneAt: null, doneBy: null, cancelReason: null }));
+    default:
+      return data;
+  }
 };

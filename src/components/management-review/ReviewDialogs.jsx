@@ -5,7 +5,8 @@ import { describeApiError } from "../../lib/api-client";
 import { useToast } from "../../contexts/ToastProvider";
 import { useAuth } from "../../contexts/AuthProvider";
 import { useCustomFieldPeople } from "../../hooks/useCustomFields";
-import { useReviewMutation } from "../../hooks/useManagementReview";
+import { REVIEW_GUESSED, useReviewMutation } from "../../hooks/useManagementReview";
+import { pendingId } from "../../lib/optimistic";
 import { ATTENDANCE, DECISION_CATEGORIES } from "../../lib/qualityObjectives";
 import { FormError, TextAreaField } from "../master-data/shared";
 import ComboField from "../ui/ComboField";
@@ -25,11 +26,19 @@ const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   </div>
 );
 
-/** Runs one review command: closes on success, says why on failure. */
+/**
+ * Runs one review command. A command shown before the server answers (REVIEW_GUESSED) closes at once and a refusal is told by the hook; the others
+ * close on success and say why on failure.
+ */
 const useReviewCommand = (onClose, failed = "Not saved", onSaved) => {
   const mutation = useReviewMutation();
   const { showToast } = useToast();
-  const run = (command) =>
+  const run = (command) => {
+    if (REVIEW_GUESSED.has(command.action)) {
+      mutation.mutate(command);
+      onClose?.();
+      return;
+    }
     mutation.mutate(command, {
       onSuccess: (saved) => {
         onSaved?.(saved);
@@ -37,6 +46,7 @@ const useReviewCommand = (onClose, failed = "Not saved", onSaved) => {
       },
       onError: (err) => showToast({ type: "error", title: failed, message: describeApiError(err) }),
     });
+  };
   return { mutation, run };
 };
 
@@ -62,7 +72,7 @@ export const PlanReviewDialog = ({ existing, onClose, onSaved }) => {
     const body = { title: title.trim(), plannedOn: plannedOn ?? null, chairId };
     if (!started) Object.assign(body, { periodFrom: from, periodTo: to });
     if (started && heldOn) body.heldOn = heldOn;
-    run(existing ? { action: "update", id: existing.id, body: changesSince(opened, body) } : { action: "plan", body });
+    run(existing ? { action: "update", id: existing.id, body: changesSince(opened, body), show: { chairName: people.find((p) => p.value === chairId)?.label } } : { action: "plan", body });
   };
   return (
     <Dialog title={existing ? `Edit ${existing.reference}` : "Plan a management review"} onClose={onClose} width="max-w-xl">
@@ -106,6 +116,10 @@ export const AttendeesDialog = ({ review, onClose }) => {
             action: "setAttendees",
             id: review.id,
             body: { attendees: rows.map((r) => ({ ...(r.userId ? { userId: r.userId } : { name: r.name.trim() }), role: r.role.trim() || null, attendance: started ? r.attendance : "invited" })) },
+            // the list as it will show, with names (the server gets only ids for members)
+            show: {
+              attendees: rows.map((r) => ({ id: pendingId(), userId: r.userId ?? null, name: r.userId ? nameOf(r) : r.name.trim(), role: r.role.trim() || null, outsider: !r.userId, attendance: started ? r.attendance : "invited" })),
+            },
           });
         }}
       >
@@ -209,7 +223,8 @@ export const ActionDialog = ({ review, existing, onClose }) => {
           const body = { ownerId, dueDate: dueDate ?? null };
           if (!wordsFixed) body.description = description.trim();
           if (!existing && decisionId) body.decisionId = decisionId;
-          run(existing ? { action: "updateAction", id: existing.id, body: changesSince(openedAction, body) } : { action: "addAction", id: review.id, body });
+          const show = { ownerName: people.find((p) => p.value === ownerId)?.label };
+          run(existing ? { action: "updateAction", id: existing.id, body: changesSince(openedAction, body), show } : { action: "addAction", id: review.id, body, show });
         }}
       >
         <TextAreaField label="What is to be done" required value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} rows={3} disabled={wordsFixed} hint={wordsFixed ? "Fixed once the review is completed" : undefined} />

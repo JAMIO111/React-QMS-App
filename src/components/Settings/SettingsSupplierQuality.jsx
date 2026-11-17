@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { PencilIcon, PlusIcon, Trash2Icon } from "@/components/icons";
-import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useRiskModel, useRiskMutation, useSupplierClassifications, useSupplierMutation } from "../../hooks/useSupplierQuality";
 import { formatDateTime } from "../../lib/processControl";
@@ -8,7 +7,7 @@ import AssessmentTemplatesCard from "../supplier-quality/AssessmentTemplates";
 import ScorecardModelCard from "../supplier-quality/ScorecardModel";
 import ScorecardScheduleCard from "../supplier-quality/ScorecardSchedule";
 import { factorKey } from "../../lib/supplierRisk";
-import { describeApiError } from "../../lib/api-client";
+import { isPending } from "../../lib/optimistic";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import LoadingScreen from "../ui/LoadingScreen";
@@ -20,17 +19,15 @@ import CTAButton from "@/components/CTAButton";
 /** Add a classification or rename / describe one. The key is made from the name once and never changes. */
 const ClassificationDialog = ({ existing, onClose }) => {
   const mutation = useSupplierMutation();
-  const { showToast } = useToast();
   const [label, setLabel] = useState(existing?.label ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
   const save = (e) => {
     e.preventDefault();
     if (!label.trim()) return;
     const body = { label: label.trim(), description: description.trim() || null };
-    mutation.mutate(existing ? { action: "updateClassification", id: existing.id, body } : { action: "createClassification", body }, {
-      onSuccess: () => onClose(),
-      onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }),
-    });
+    // The list shows it at once (a new one as a row that offers nothing until saved); a refusal is put back with a toast.
+    mutation.mutate(existing ? { action: "updateClassification", id: existing.id, body } : { action: "createClassification", body });
+    onClose();
   };
   return (
     <Dialog title={existing ? `Edit ${existing.label}` : "Add a classification"} onClose={onClose}>
@@ -42,8 +39,8 @@ const ClassificationDialog = ({ existing, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !label.trim()} loading={mutation.isPending}>
-            {mutation.isPending ? "Saving…" : "Save"}
+          <CTAButton buttonType="submit" type="main" size="md" disabled={!label.trim()}>
+            Save
           </CTAButton>
         </div>
       </form>
@@ -81,7 +78,9 @@ const RiskModelDialog = ({ model, onClose }) => {
       reviewIntervalMonths: Number(months),
       reason: reason.trim(),
     };
-    mutation.mutate({ action: "saveModel", body }, { onSuccess: onClose });
+    // The card shows the new version at once; a refusal puts the old one back with a toast.
+    mutation.mutate({ action: "saveModel", body });
+    onClose();
   };
 
   return (
@@ -120,7 +119,7 @@ const RiskModelDialog = ({ model, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save new version"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="md">Save new version</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -179,12 +178,11 @@ const SettingsSupplierQuality = () => {
   const canConfigure = can("supplier_quality.configure");
   const list = useSupplierClassifications({ all: true });
   const mutation = useSupplierMutation();
-  const { showToast } = useToast();
   const [dialog, setDialog] = useState(null);
   if (list.isLoading) return <LoadingScreen />;
   if (list.error) return <ErrorNotice error={list.error} />;
-  const toggle = (c, active) =>
-    mutation.mutate({ action: "updateClassification", id: c.id, body: { active } }, { onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) });
+  // Switches move at once; a refusal is put back with a toast (useSupplierMutation).
+  const toggle = (c, active) => mutation.mutate({ action: "updateClassification", id: c.id, body: { active } });
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -208,8 +206,8 @@ const SettingsSupplierQuality = () => {
               <span className="w-28 text-right text-xs tabular-nums text-secondary-text">
                 {c.suppliers} {c.suppliers === 1 ? "supplier" : "suppliers"}
               </span>
-              <Switch checked={c.active} disabled={!canConfigure} onChange={(e) => toggle(c, e.target.checked)} aria-label={`${c.label} is in use`} />
-              {canConfigure && (
+              <Switch checked={c.active} disabled={!canConfigure || isPending(c.id)} onChange={(e) => toggle(c, e.target.checked)} aria-label={`${c.label} is in use`} />
+              {canConfigure && !isPending(c.id) && (
                 <button type="button" aria-label={`Edit ${c.label}`} className="rounded-lg p-1.5 text-primary-text hover:bg-border-color/50 cursor-pointer" onClick={() => setDialog(c)}>
                   <PencilIcon />
                 </button>

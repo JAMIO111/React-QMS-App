@@ -322,7 +322,11 @@ const CertificationDialog = ({ supplierId, certification, renew, documents, onCl
       expiresOn: form.expiresOn || null, documentId: form.documentId || null, notes: nul(form.notes),
     };
     if (renew) return mutation.mutate({ action: "renewCertification", id: certification.id, body }, { onSuccess: onClose });
-    if (editing) return mutation.mutate({ action: "updateCertification", id: certification.id, body: { certType: form.certType, ...body } }, { onSuccess: onClose });
+    if (editing) {
+      // The list shows the edit at once; a refusal puts it back with a toast (useQualificationMutation).
+      mutation.mutate({ action: "updateCertification", id: certification.id, body: { certType: form.certType, ...body } });
+      return onClose();
+    }
     mutation.mutate({ action: "addCertification", id: supplierId, body: { certType: form.certType, ...body } }, { onSuccess: onClose });
   };
 

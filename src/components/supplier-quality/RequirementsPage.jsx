@@ -25,7 +25,11 @@ const NoteDialog = ({ requirement, kind, onClose }) => {
   const need = approve ? (requirement.reducesControls ? 10 : 0) : 3;
   return (
     <Dialog title={approve ? `Approve "${requirement.name}"` : `Retire "${requirement.name}"`} onClose={onClose} width="max-w-lg">
-      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (text.trim().length >= need && !mutation.isPending) mutation.mutate(approve ? { action: "approveRequirement", id: requirement.id, body: text.trim() ? { note: text.trim() } : {} } : { action: "retireRequirement", id: requirement.id, body: { reason: text.trim() } }, { onSuccess: onClose }); }}>
+      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (text.trim().length < need || mutation.isPending) return;
+        // Approving waits for the server (someone else must approve); retiring shows at once and a refusal is put back with a toast.
+        if (approve) return mutation.mutate({ action: "approveRequirement", id: requirement.id, body: text.trim() ? { note: text.trim() } : {} }, { onSuccess: onClose });
+        mutation.mutate({ action: "retireRequirement", id: requirement.id, body: { reason: text.trim() } });
+        onClose(); }}>
         <p className="text-sm text-secondary-text">
           {approve ? "Once approved it applies to deliveries and can no longer be edited: a change is a new requirement that replaces it. You cannot approve what you wrote or last edited." : "A retired requirement no longer applies. It is kept, with the reason."}
         </p>

@@ -45,10 +45,14 @@ const useTemplateCommands = (template, { onDuplicated } = {}) => {
   const mutation = useTemplateMutation();
   const { showToast } = useToast();
   const [ask, setAsk] = useState(null);
+  // Renaming, archiving and bringing back show at once (optimistic, see `guessTemplateChange`), so their dialog closes straight away; a duplicate
+  // waits for its new id. The promise still settles when an archived row has already left the list, so a refusal is always reported.
   const run = async (action, body, done) => {
+    const quick = action !== "duplicate";
+    if (quick) setAsk(null);
     try {
       const out = await mutation.mutateAsync({ action, id: template.id, body });
-      setAsk(null);
+      if (!quick) setAsk(null);
       done?.(out);
     } catch (e) {
       showToast({ type: "error", title: "Not done", message: describeApiError(e) });
@@ -63,11 +67,11 @@ const useTemplateCommands = (template, { onDuplicated } = {}) => {
     : [];
   const dialog =
     ask === "rename" ? (
-      <TextDialog title="Rename the template" label="Name" initial={template.name} action="Rename" busy={mutation.isPending} onCancel={() => setAsk(null)} onSave={(name) => run("update", { name })} />
+      <TextDialog title="Rename the template" label="Name" initial={template.name} action="Rename" onCancel={() => setAsk(null)} onSave={(name) => run("update", { name })} />
     ) : ask === "duplicate" ? (
       <TextDialog title="Duplicate the template" label="Name of the copy" initial={`Copy of ${template.name}`.slice(0, 120)} note="The copy starts at version 1 with the current version's content." action="Duplicate" busy={mutation.isPending} onCancel={() => setAsk(null)} onSave={(name) => run("duplicate", { name }, (out) => onDuplicated?.(out))} />
     ) : ask === "archive" ? (
-      <TextDialog title="Archive the template" label="Why?" min={3} multiline note="It is hidden from the import screens and kept for the imports that used it. You can bring it back." action="Archive" busy={mutation.isPending} onCancel={() => setAsk(null)} onSave={(reason) => run("archive", { reason })} />
+      <TextDialog title="Archive the template" label="Why?" min={3} multiline note="It is hidden from the import screens and kept for the imports that used it. You can bring it back." action="Archive" onCancel={() => setAsk(null)} onSave={(reason) => run("archive", { reason })} />
     ) : null;
   return [items, dialog];
 };

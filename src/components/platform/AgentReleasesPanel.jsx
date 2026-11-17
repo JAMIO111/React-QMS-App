@@ -7,6 +7,7 @@ import Dialog from "../ui/Dialog";
 import CTAButton from "@/components/CTAButton";
 import { TextAreaField } from "../master-data/shared";
 import { describeApiError } from "../../lib/api-client";
+import { useToast } from "../../contexts/ToastProvider";
 import { platformLabel, sizeWords } from "../../lib/agents";
 
 /** Paste the manifest and signature that connector-agent/release/sign-release.mjs printed; the API checks the signature before anything is stored. */
@@ -48,10 +49,16 @@ const PublishForm = () => {
 
 const WithdrawDialog = ({ release, onClose }) => {
   const mutate = useAgentReleaseMutation();
+  const toast = useToast();
   const [reason, setReason] = useState("");
   const submit = (e) => {
     e.preventDefault();
-    mutate.mutate({ action: "withdraw", id: release.id, body: { reason: reason.trim() } }, { onSuccess: onClose });
+    // Optimistic: the release shows as withdrawn at once and the pop-up closes; a refusal puts it back and says why.
+    mutate.mutate(
+      { action: "withdraw", id: release.id, body: { reason: reason.trim() } },
+      { onError: (error) => toast?.showToast({ type: "error", title: `Version ${release.version} not withdrawn`, message: describeApiError(error) }) },
+    );
+    onClose();
   };
   return (
     <Dialog title={`Withdraw version ${release.version} (${platformLabel(release.platform)})?`} onClose={onClose}>
@@ -60,12 +67,11 @@ const WithdrawDialog = ({ release, onClose }) => {
           No organisation can approve it any more, and updates waiting for it are cancelled. Agents already on it keep running it. This cannot be undone.
         </p>
         <TextAreaField label="Why?" required value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
-        {mutate.error && <Callout tone="error">{describeApiError(mutate.error)}</Callout>}
         <div className="flex justify-end gap-2">
           <CTAButton type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton type="danger" size="md" buttonType="submit" loading={mutate.isPending} disabled={reason.trim().length < 3}>
+          <CTAButton type="danger" size="md" buttonType="submit" disabled={reason.trim().length < 3}>
             Withdraw
           </CTAButton>
         </div>

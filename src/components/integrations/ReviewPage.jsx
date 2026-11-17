@@ -114,7 +114,6 @@ const ReviewPage = () => {
     decide.mutate(
       { id: c.id, accept, note },
       {
-        onSuccess: () => showToast({ type: "success", title: accept ? "Accepted" : "Fortress kept its value", message: `${c.record.label ?? "The record"} · ${c.field.label}` }),
         onError: (e) => showToast({ type: "error", title: "Not done", message: describeApiError(e) }),
       },
     );

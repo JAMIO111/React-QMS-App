@@ -32,7 +32,6 @@ const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, {
 const EditDialog = ({ doc, onClose }) => {
   const mutation = useDocumentMutation();
   const people = useCustomFieldPeople();
-  const { showToast } = useToast();
   const [opened] = useState(doc);
   const [title, setTitle] = useState(doc.title);
   const [description, setDescription] = useState(doc.description ?? "");
@@ -47,10 +46,10 @@ const EditDialog = ({ doc, onClose }) => {
     if (!ready) return;
     const body = { title: title.trim(), description: description.trim() || null, ownerId };
     if (external) Object.assign(body, { issuer: issuer.trim(), externalReference: reference.trim() || null });
-    mutation.mutate(
-      { action: "updateDocument", id: doc.id, body: changesSince(opened, body) },
-      { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) },
-    );
+    const owner = options.find((o) => o.value === ownerId);
+    // Shown at once; the dialog closes and a refusal comes back as a toast (edit conflicts are asked by lib/editConflicts.js).
+    mutation.mutate({ action: "updateDocument", id: doc.id, body: changesSince(opened, body), show: owner && owner.value !== doc.owner?.id ? { owner: { ...(doc.owner ?? {}), id: owner.value, name: owner.label } } : {} });
+    onClose();
   };
   return (
     <Dialog title={`Edit ${doc.number}`} onClose={onClose} width="max-w-xl">
@@ -70,7 +69,7 @@ const EditDialog = ({ doc, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={!ready || mutation.isPending} loading={mutation.isPending}>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={!ready}>
             Save
           </CTAButton>
         </div>

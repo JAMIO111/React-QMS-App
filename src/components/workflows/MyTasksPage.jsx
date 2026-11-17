@@ -9,7 +9,6 @@ import SlidingToggle from "../ui/SlidingToggle";
 import { Card } from "../dashboard/DashboardParts";
 import { Chip, Empty } from "../dashboard/DashboardGraphics";
 import { FormError, TextAreaField } from "../master-data/shared";
-import { useToast } from "../../contexts/ToastProvider";
 import { useMyTasks, useTaskMutation } from "../../hooks/useWorkflows";
 import { describeApiError } from "../../lib/api-client";
 import { dueWords } from "../../lib/workflows";
@@ -23,7 +22,6 @@ const STATUS = [
 /** Close a task, with an optional note of what was done. The task leaves the list at once and comes back if the server refuses. */
 const CompleteDialog = ({ task, onClose }) => {
   const mutation = useTaskMutation();
-  const { showToast } = useToast();
   const [note, setNote] = useState("");
   return (
     <Dialog title="Mark the task done" onClose={onClose}>
@@ -33,10 +31,8 @@ const CompleteDialog = ({ task, onClose }) => {
         onSubmit={(e) => {
           e.preventDefault();
           onClose();
-          mutation.mutate(
-            { action: "complete", id: task.id, body: note.trim() ? { note: note.trim() } : {} },
-            { onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) },
-          );
+          // A refusal is told by the hook (this dialog has closed).
+          mutation.mutate({ action: "complete", id: task.id, body: note.trim() ? { note: note.trim() } : {} });
         }}
       >
         <p className="text-sm text-secondary-text">{task.title}</p>
@@ -64,7 +60,6 @@ const MyTasksPage = () => {
   const [completing, setCompleting] = useState(null);
   const { data, isLoading, error } = useMyTasks(status);
   const reopen = useTaskMutation();
-  const { showToast } = useToast();
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-primary-bg p-4">
@@ -124,7 +119,7 @@ const MyTasksPage = () => {
                     <CTAButton
                       type="neutral"
                       aria-label={`Reopen: ${t.title}`}
-                      onClick={() => reopen.mutate({ action: "reopen", id: t.id }, { onError: (err) => showToast({ type: "error", title: "Not reopened", message: describeApiError(err) }) })}
+                      onClick={() => reopen.mutate({ action: "reopen", id: t.id })}
                     >
                       Reopen
                     </CTAButton>

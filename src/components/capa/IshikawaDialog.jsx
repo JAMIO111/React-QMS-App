@@ -1,7 +1,8 @@
 import { useState } from "react";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
-import { useCapaMutation } from "../../hooks/useCapa";
+import { CAPA_GUESSED, useCapaMutation } from "../../hooks/useCapa";
+import { sendCommand } from "../../lib/guessCommands";
 import { ISHIKAWA_CATEGORIES } from "../../lib/capa";
 import { FormError } from "../master-data/shared";
 import IshikawaDiagram from "./IshikawaDiagram";
@@ -58,7 +59,7 @@ const IshikawaDialog = ({ capa, analysis, onClose }) => {
   const [causes, setCauses] = useState(() => initial(analysis));
   const recorded = new Set(capa.rootCauses.filter((r) => analysis && r.sourceAnalysisId === analysis.id).map((r) => r.description));
   const data = { effect: effect.trim(), categories: ISHIKAWA_CATEGORIES.map((c) => ({ key: c.key, causes: causes[c.key] })) };
-  const save = () => mutation.mutate(analysis ? { action: "updateAnalysis", id: analysis.id, body: { title: title.trim(), data } } : { action: "addAnalysis", id: capa.id, body: { kind: "ishikawa", title: title.trim(), data } }, { onSuccess: onClose });
+  const save = () => sendCommand(mutation, CAPA_GUESSED, analysis ? { action: "updateAnalysis", id: analysis.id, body: { title: title.trim(), data } } : { action: "addAnalysis", id: capa.id, body: { kind: "ishikawa", title: title.trim(), data } }, onClose);
   const record = (cause) => mutation.mutate({ action: "addRootCause", id: capa.id, body: { kind: "occurrence", description: cause.text, sourceAnalysisId: analysis.id } });
 
   return (

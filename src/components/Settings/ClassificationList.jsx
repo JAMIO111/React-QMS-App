@@ -21,17 +21,11 @@ const Row = ({ item, canManage, meta, children }) => {
   const [name, setName] = useState(item.name);
   const [code, setCode] = useState(item.code ?? "");
 
-  const patch = (body, message, done) =>
-    mutation.mutate(
-      { path: `/ncr-classifications/${item.id}`, method: "PATCH", body },
-      {
-        onSuccess: () => {
-          done?.();
-          showToast({ type: "success", title: "Saved", message });
-        },
-        onError: (error) => showToast({ type: "error", title: "Not saved", message: describeApiError(error) }),
-      },
-    );
+  // A flat PATCH: the list shows it at once (useNcrMutation) and puts it back, with a toast, if it is refused.
+  const patch = (body, _message, done) => {
+    mutation.mutate({ path: `/ncr-classifications/${item.id}`, method: "PATCH", body }, { onError: (error) => showToast({ type: "error", title: "Not saved", message: describeApiError(error) }) });
+    done?.();
+  };
 
   return (
     <li className="flex flex-col">

@@ -3,7 +3,8 @@ import Dialog from "../../ui/Dialog";
 import Field from "../../ui/Field";
 import MenuCard from "../../ui/MenuCard";
 import RHFComboBox from "../../ui/RHFComboBox";
-import { useCapaMutation } from "../../../hooks/useCapa";
+import { CAPA_GUESSED, useCapaMutation } from "../../../hooks/useCapa";
+import { sendCommand } from "../../../lib/guessCommands";
 import { ROOT_CAUSE_KINDS, ROOT_CAUSE_OPTIONS } from "../../../lib/capa";
 import { formatDay } from "../../../lib/qualityAlerts";
 import { FormError, TextAreaField } from "../../master-data/shared";
@@ -22,7 +23,7 @@ const CauseDialog = ({ capa, cause, onClose }) => {
         onSubmit={(e) => {
           e.preventDefault();
           const body = { kind: form.kind, description: form.description.trim() };
-          mutation.mutate(cause ? { action: "updateRootCause", id: cause.id, body } : { action: "addRootCause", id: capa.id, body }, { onSuccess: onClose });
+          sendCommand(mutation, CAPA_GUESSED, cause ? { action: "updateRootCause", id: cause.id, body } : { action: "addRootCause", id: capa.id, body }, onClose);
         }}>
         <RHFComboBox label="Kind" required value={form.kind} onChange={(v) => setForm((f) => ({ ...f, kind: v ?? "occurrence" }))} options={ROOT_CAUSE_OPTIONS} sort={false} clearable={false} hint={ROOT_CAUSE_KINDS[form.kind].help} />
         <TextAreaField label="The root cause" required value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} maxLength={2000} hint="A cause you can verify and fix, not a symptom" />
@@ -48,7 +49,7 @@ const VerifyDialog = ({ cause, onClose }) => {
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
-          mutation.mutate({ action: "updateRootCause", id: cause.id, body: { verified: true, verificationMethod: method.trim(), verificationNote: note.trim() || null } }, { onSuccess: onClose });
+          sendCommand(mutation, CAPA_GUESSED, { action: "updateRootCause", id: cause.id, body: { verified: true, verificationMethod: method.trim(), verificationNote: note.trim() || null } }, onClose);
         }}>
         <p className="text-sm text-primary-text">{cause.description}</p>
         <p className="text-sm text-secondary-text">A cause is verified when you have shown it produces the problem and that removing it stops the problem: a trial, a test, a measurement, or reproducing it.</p>
@@ -57,7 +58,7 @@ const VerifyDialog = ({ cause, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !method.trim()} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : cause.verified ? "Save verification" : "Mark as verified"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!method.trim()}>{cause.verified ? "Save verification" : "Mark as verified"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -125,7 +126,7 @@ const D4RootCause = ({ capa, editable }) => {
                   <div className="flex flex-wrap gap-2">
                     <CTAButton type={c.verified ? "neutral" : "main"} size={c.verified ? "md" : "lg"} aria-label={`${c.verified ? "Edit verification of" : "Verify"}: ${c.description}`} onClick={() => { mutation.reset(); setDialog({ type: "verify", cause: c }); }}>{c.verified ? "Edit verification" : "Verify"}</CTAButton>
                     <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Edit: ${c.description}`} onClick={() => { mutation.reset(); setDialog({ type: "cause", cause: c }); }}>Edit</CTAButton>
-                    {c.verified && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Withdraw verification of: ${c.description}`} disabled={mutation.isPending} loading={mutation.isPending} onClick={() => mutation.mutate({ action: "updateRootCause", id: c.id, body: { verified: false } })}>Withdraw verification</CTAButton>}
+                    {c.verified && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Withdraw verification of: ${c.description}`} onClick={() => mutation.mutate({ action: "updateRootCause", id: c.id, body: { verified: false } })}>Withdraw verification</CTAButton>}
                     <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Remove: ${c.description}`} onClick={() => { mutation.reset(); setDialog({ type: "remove-cause", cause: c }); }}>Remove</CTAButton>
                   </div>
                 )}
@@ -134,7 +135,6 @@ const D4RootCause = ({ capa, editable }) => {
           </ul>
         )}
         {capa.rootCauses.length > 0 && !hasEscape && <p className="mt-3 text-xs text-secondary-text">Also record why it escaped detection (an escape cause). It is advised, not required.</p>}
-        <FormError error={dialog ? null : mutation.error} />
       </MenuCard>
 
       <MenuCard title="Analysis tools" subtitle="Find the causes, then record and verify them above"
@@ -169,12 +169,12 @@ const D4RootCause = ({ capa, editable }) => {
       {dialog?.type === "fishbone" && <IshikawaDialog capa={capa} analysis={dialog.analysis} onClose={close} />}
       {dialog?.type === "whys" && <FiveWhysDialog capa={capa} analysis={dialog.analysis} onClose={close} />}
       {dialog?.type === "remove-cause" && (
-        <ConfirmRemove title="Remove this root cause?" text={dialog.cause.description} pending={mutation.isPending} error={mutation.error} onClose={close}
-          onConfirm={() => mutation.mutate({ action: "removeRootCause", id: dialog.cause.id }, { onSuccess: close })} />
+        <ConfirmRemove title="Remove this root cause?" text={dialog.cause.description} onClose={close}
+          onConfirm={() => sendCommand(mutation, CAPA_GUESSED, { action: "removeRootCause", id: dialog.cause.id }, close)} />
       )}
       {dialog?.type === "remove-analysis" && (
-        <ConfirmRemove title={`Remove ${dialog.analysis.title}?`} text="The analysis is removed from this 8D. Root causes recorded from it stay." pending={mutation.isPending} error={mutation.error} onClose={close}
-          onConfirm={() => mutation.mutate({ action: "removeAnalysis", id: dialog.analysis.id }, { onSuccess: close })} />
+        <ConfirmRemove title={`Remove ${dialog.analysis.title}?`} text="The analysis is removed from this 8D. Root causes recorded from it stay." onClose={close}
+          onConfirm={() => sendCommand(mutation, CAPA_GUESSED, { action: "removeAnalysis", id: dialog.analysis.id }, close)} />
       )}
     </div>
   );

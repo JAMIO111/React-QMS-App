@@ -2,7 +2,8 @@ import { useId, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Dialog from "../ui/Dialog";
 import MenuCard from "../ui/MenuCard";
-import { useInspectionMutation, useNcrDraft } from "../../hooks/useInspection";
+import { guessAcknowledged, useInspectionMutation, useMyName, useNcrDraft } from "../../hooks/useInspection";
+import { useQuickSave } from "../../hooks/useQuickSave";
 import { formatDateTime } from "../../lib/processControl";
 import { describeLimits } from "../../lib/inspection";
 import { ncrPath } from "../../lib/ncr";
@@ -52,6 +53,8 @@ export const currentFailures = (inspection) =>
 
 const AcknowledgeDialog = ({ reading, requirement, onClose }) => {
   const mutation = useInspectionMutation();
+  const quickSave = useQuickSave(mutation);
+  const name = useMyName();
   const [note, setNote] = useState("");
   return (
     <Dialog
@@ -62,13 +65,16 @@ const AcknowledgeDialog = ({ reading, requirement, onClose }) => {
         className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
-          mutation.mutate(
+          // Shown as acknowledged at once; put back with a toast if the server refuses.
+          quickSave(
             {
               path: `/inspection-measurements/${reading.id}/acknowledge`,
               body: { note },
+              guess: guessAcknowledged(reading.id, note.trim(), name()),
             },
-            { onSuccess: onClose },
+            "Not acknowledged",
           );
+          onClose();
         }}
       >
         <p className="text-sm text-primary-text">
@@ -96,7 +102,7 @@ const AcknowledgeDialog = ({ reading, requirement, onClose }) => {
           <CTAButton
             buttonType="submit"
             type="main" size="lg"
-            disabled={!note.trim() || mutation.isPending} loading={mutation.isPending}
+            disabled={!note.trim()}
           >
             Acknowledge
           </CTAButton>

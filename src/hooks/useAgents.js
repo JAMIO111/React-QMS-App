@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
+import { guessCache, rollbackGuess, updateById } from "../lib/optimistic";
 import { jobRunning } from "../lib/agents";
 
 // Connector agents (docs/connector-agent-plan.md AG1): the organisation's agents, registrations, and jobs given to an agent.
@@ -78,8 +79,24 @@ const request = ({ action, id, body }) => {
 };
 
 /**
- * Every change to agents and registrations. Renaming shows at once (optimistic) and is put back if refused; the rest answer with the new state and
- * refresh the organisation's data. Waking the agent (its page was opened) refreshes nothing.
+ * What an agent command changes on screen before the server answers, as `(data) => newData` over the agents cache: a rename shows the new name
+ * and place everywhere; cancelling an unused token or a waiting update shows it cancelled. Null for the rest (their result comes from the server
+ * or the agent).
+ */
+export const guessAgentChange = ({ action, id, body } = {}) => {
+  if (!id) return null;
+  if (action === "rename" && typeof body?.name === "string") {
+    const change = { name: body.name, location: body.location ?? null };
+    return (data) => updateById(data, id, (o) => ("name" in o ? { ...o, ...change } : o));
+  }
+  if (action === "cancelRegistration") return (data) => updateById(data, id, (o) => ("state" in o ? { ...o, state: "cancelled" } : o));
+  if (action === "cancelUpdate") return (data) => updateById(data, id, (o) => ("status" in o ? { ...o, status: "cancelled" } : o));
+  return null;
+};
+
+/**
+ * Every change to agents and registrations. Renaming and cancelling a token or a waiting update show at once (optimistic) and are put back if
+ * refused; the rest answer with the new state and refresh the organisation's data. Waking the agent (its page was opened) refreshes nothing.
  */
 export const useAgentMutation = () => {
   const { organisationId } = useOrganisation();
@@ -89,17 +106,11 @@ export const useAgentMutation = () => {
       const { path, method, body } = request(vars);
       return apiFetch(path, { method, body, organisationId });
     },
-    onMutate: async (vars) => {
-      if (vars.action !== "rename") return {};
-      const detailKey = key(organisationId, "detail", vars.id);
-      await queryClient.cancelQueries({ queryKey: detailKey });
-      const previous = queryClient.getQueryData(detailKey);
-      if (previous) queryClient.setQueryData(detailKey, { ...previous, name: vars.body.name, location: vars.body.location ?? null });
-      return { previous, detailKey };
+    onMutate: (vars) => {
+      const guess = guessAgentChange(vars);
+      return guess ? guessCache(queryClient, key(organisationId), guess) : { optimistic: false };
     },
-    onError: (_e, _v, context) => {
-      if (context?.previous) queryClient.setQueryData(context.detailKey, context.previous);
-    },
+    onError: (_e, _v, context) => rollbackGuess(queryClient, context),
     onSuccess: (data, vars) => {
       if (data && data.id && (vars.action === "rename" || vars.action === "revoke")) queryClient.setQueryData(key(organisationId, "detail", vars.id), data);
     },

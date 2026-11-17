@@ -4,7 +4,7 @@ import CTAButton from "@/components/CTAButton";
 import { describeApiError } from "../../lib/api-client";
 import { useToast } from "../../contexts/ToastProvider";
 import { useCompetenceMutation, useCompetencePositions, useCompetenceSkills } from "../../hooks/useCompetence";
-import { ATTENDEE_STATUS, attendeeStatusLabel, kindLabel, LEVELS, levelLabel, pillClass, refreshLabel, statusClass, statusLabel } from "../../lib/competence";
+import { COMPETENCE_GUESSED, ATTENDEE_STATUS, attendeeStatusLabel, kindLabel, LEVELS, levelLabel, pillClass, refreshLabel, statusClass, statusLabel } from "../../lib/competence";
 import { todayIso } from "../../lib/localDate";
 import { FormError } from "../master-data/shared";
 import ComboField from "../ui/ComboField";
@@ -20,11 +20,18 @@ const Pill = ({ status, children }) => <span className={`inline-flex rounded-ful
 const useSave = (onClose) => {
   const mutation = useCompetenceMutation();
   const { showToast } = useToast();
-  const run = (payload) =>
+  const run = (payload) => {
+    if (COMPETENCE_GUESSED.has(payload.action)) {
+      // Shown at once and the dialog closes; a refusal is put back with a toast from the hook.
+      mutation.mutate(payload);
+      onClose();
+      return;
+    }
     mutation.mutate(payload, {
       onSuccess: () => onClose(),
       onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }),
     });
+  };
   return { mutation, run };
 };
 

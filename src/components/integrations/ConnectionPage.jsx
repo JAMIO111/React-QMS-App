@@ -57,14 +57,23 @@ const CredentialDialog = ({ connection, kind, onClose }) => {
   );
 };
 
+/** Connection steps shown at once (optimistic, see `guessConnectionChange`): no spinner, no "done" message. */
+const QUICK_ACTIONS = new Set(["pause", "resume", "retire"]);
+
 /** A step that needs a written reason (pause, retire, revoke). */
-const ReasonDialog = ({ title, action, connection, confirm, tone = "danger", onClose }) => {
+const ReasonDialog = ({ title, action, connection, confirm, tone = "danger", onQuick, onClose }) => {
   const mutation = useIntegrationMutation();
   const { showToast } = useToast();
   const [reason, setReason] = useState("");
   const go = (e) => {
     e.preventDefault();
     if (reason.trim().length < 3) return;
+    // Pausing and retiring show at once (optimistic): the page sends them, so a refusal still reaches it after this dialog has closed.
+    if (onQuick) {
+      onClose();
+      onQuick(reason.trim());
+      return;
+    }
     mutation.mutate({ action, id: connection.id, body: { reason: reason.trim() } }, { onSuccess: () => onClose(), onError: (err) => showToast({ type: "error", title: "Not done", message: describeApiError(err) }) });
   };
   return (
@@ -107,9 +116,12 @@ const ConnectionPage = () => {
   const approve = can("integrations.approve");
   const credKind = credentialKindFor(c.provider.key, c.config);
   const retired = c.status === "retired";
-  const run = (action, message) => mutation.mutate({ action, id: c.id }, { onSuccess: () => message && showToast({ type: "success", title: message }), onError: (err) => showToast({ type: "error", title: "Not done", message: describeApiError(err) }) });
+  const run = (action, body, message) =>
+    mutation.mutate({ action, id: c.id, ...(body ? { body } : {}) }, { onSuccess: () => message && showToast({ type: "success", title: message }), onError: (err) => showToast({ type: "error", title: "Not done", message: describeApiError(err) }) });
+  // Only a command whose answer is awaited (test, ready, activate) holds the buttons; pause, resume and retire show at once.
+  const waiting = mutation.isPending && !QUICK_ACTIONS.has(mutation.variables?.action);
   const button = (label, onClick, type = "neutral", disabled = false) => (
-    <CTAButton key={label} buttonType="button" type={type} size="md" onClick={onClick} disabled={disabled || mutation.isPending} loading={mutation.isPending}>{label}</CTAButton>
+    <CTAButton key={label} buttonType="button" type={type} size="md" onClick={onClick} disabled={disabled || waiting} loading={waiting}>{label}</CTAButton>
   );
   const isFile = !!c.fileConnection;
   const isDatabase = c.provider.key === "sql_agent";
@@ -121,19 +133,19 @@ const ConnectionPage = () => {
     actions.push(button("Edit settings", () => setDialog("edit")));
     actions.push(
       isDatabase ? (
-        <CTAButton key="test" buttonType="button" type="neutral" size="md" onClick={() => run("test")} loading={testRunning || mutation.isPending} loadingText="Testing on the agent…">
+        <CTAButton key="test" buttonType="button" type="neutral" size="md" onClick={() => run("test")} loading={testRunning || waiting} loadingText="Testing on the agent…">
           Test connection
         </CTAButton>
       ) : (
-        button("Test connection", () => run("test", "Test finished"))
+        button("Test connection", () => run("test", null, "Test finished"))
       ),
     );
-    if (c.status === "draft") actions.push(button("Mark ready", () => run("ready", "Marked ready"), "main", c.problems.length > 0));
+    if (c.status === "draft") actions.push(button("Mark ready", () => run("ready", null, "Marked ready"), "main", c.problems.length > 0));
     if (c.status === "active") actions.push(button("Pause", () => setDialog("pause")));
-    if (c.status === "paused") actions.push(button("Resume", () => run("resume", "Resumed"), "main"));
+    if (c.status === "paused") actions.push(button("Resume", () => run("resume"), "main"));
     actions.push(button("Retire", () => setDialog("retire"), "danger"));
   }
-  if (!isFile && c.canActivate) actions.push(button("Activate", () => run("activate", "Activated"), "main"));
+  if (!isFile && c.canActivate) actions.push(button("Activate", () => run("activate", null, "Activated"), "main"));
   const fileMenu = isFile && manage && !retired && (
     <RowActionsMenu
       label={`Actions for ${c.name}`}
@@ -222,8 +234,8 @@ const ConnectionPage = () => {
       {dialog === "edit" && (isDatabase ? <DatabaseConnectionDialog existing={c} onClose={() => setDialog(null)} /> : <ConnectionForm existing={c} providers={providers.data ?? []} onClose={() => setDialog(null)} />)}
       {dialog === "credential" && <CredentialDialog connection={c} kind={credKind} onClose={() => setDialog(null)} />}
       {dialog === "revoke" && <ReasonDialog title="Revoke the credential" action="revokeCredential" connection={c} confirm="Revoke" onClose={() => setDialog(null)} />}
-      {dialog === "pause" && <ReasonDialog title="Pause this connection" action="pause" connection={c} confirm="Pause" tone="main" onClose={() => setDialog(null)} />}
-      {dialog === "retire" && <ReasonDialog title="Retire this connection" action="retire" connection={c} confirm="Retire" onClose={() => setDialog(null)} />}
+      {dialog === "pause" && <ReasonDialog title="Pause this connection" action="pause" connection={c} confirm="Pause" tone="main" onQuick={(reason) => run("pause", { reason })} onClose={() => setDialog(null)} />}
+      {dialog === "retire" && <ReasonDialog title="Retire this connection" action="retire" connection={c} confirm="Retire" onQuick={(reason) => run("retire", { reason })} onClose={() => setDialog(null)} />}
     </div>
   );
 };

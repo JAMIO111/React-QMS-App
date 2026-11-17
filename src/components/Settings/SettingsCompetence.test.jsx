@@ -68,17 +68,20 @@ describe("Settings → Competence", () => {
 
   it("retires a skill only with a reason, and brings a retired one back", async () => {
     render(<SettingsCompetence />);
-    await userEvent.click(screen.getAllByRole("button", { name: "Retire" })[0]);
+    // CMM operation is required by a position, so it cannot be retired and says why.
+    expect(screen.getAllByRole("button", { name: "Retire" })[0]).toBeDisabled();
+    expect(screen.getByText("Required by a position")).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: "Retire" })[1]);
     const dialog = within(screen.getByRole("dialog"));
     const save = dialog.getByRole("button", { name: "Retire" });
     expect(save).toBeDisabled();
     await userEvent.type(dialog.getByLabelText("Why is it retired?"), "Not used");
     await userEvent.click(save);
-    expect(mutate).toHaveBeenCalledWith({ action: "retireSkill", id: "s1", body: { reason: "Not used" } }, expect.any(Object));
+    expect(mutate).toHaveBeenCalledWith({ action: "retireSkill", id: "s2", body: { reason: "Not used" } }, expect.any(Object));
     mutate.mockReset();
     await userEvent.click(screen.getByText("Retired skills (1)"));
     await userEvent.click(screen.getAllByRole("button", { name: "Bring back" })[0]);
-    expect(mutate).toHaveBeenCalledWith({ action: "reactivateSkill", id: "s3" }, expect.any(Object));
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "reactivateSkill", id: "s3" }));
   });
 
   it("sets what a position requires as a whole list", async () => {
@@ -91,8 +94,7 @@ describe("Settings → Competence", () => {
     expect(within(screen.getByRole("list", { name: "Required skills" })).getByText("Visual inspection")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(mutate).toHaveBeenCalledWith(
-      { action: "setPositionSkills", id: "p1", body: { skills: [{ skillId: "s1", requiredLevel: 3 }, { skillId: "s2", requiredLevel: 3 }] } },
-      expect.any(Object),
+      expect.objectContaining({ action: "setPositionSkills", id: "p1", body: { skills: [{ skillId: "s1", requiredLevel: 3 }, { skillId: "s2", requiredLevel: 3 }] } }),
     );
   });
 

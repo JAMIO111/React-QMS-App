@@ -51,22 +51,17 @@ const OrganisationLogo = ({ logoPath, canManage }) => {
     }
   };
 
-  const remove = async () => {
+  // Optimistic: the logo goes from the screen at once (the organisation's details change straight away) and comes back if the server refuses.
+  // The old file is deleted only once the setting is saved.
+  const remove = () => {
     setProblem(null);
-    setBusy(true);
-    try {
-      await update.mutateAsync({ body: { settings: { logoPath: null } } });
-      await removeOrganisationLogoFile(logoPath);
-      showToast({
-        type: "success",
-        title: "Logo removed",
-        message: "The Fortress QMS mark is shown instead.",
-      });
-    } catch (err) {
-      setProblem(describeApiError(err));
-    } finally {
-      setBusy(false);
-    }
+    update.mutate(
+      { body: { settings: { logoPath: null } } },
+      {
+        onSuccess: () => removeOrganisationLogoFile(logoPath).catch(() => {}),
+        onError: (err) => setProblem(describeApiError(err)),
+      },
+    );
   };
 
   return (
@@ -105,7 +100,7 @@ const OrganisationLogo = ({ logoPath, canManage }) => {
               {logoPath && (
                 <CTAButton
                   buttonType="button"
-                  disabled={busy} loading={busy}
+                  disabled={busy}
                   onClick={remove}
                   type="neutral" size="md" className="flex items-center gap-2">
                   <Trash2Icon className="h-4 w-4" /> Remove

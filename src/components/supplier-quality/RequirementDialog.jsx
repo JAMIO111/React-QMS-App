@@ -64,7 +64,10 @@ const RequirementDialog = ({ requirement = null, approved = [], onClose }) => {
       acceptNumber: fields.includes("acceptNumber") ? (int(acceptNumber) ?? 0) : 0,
       plan: fields.includes("plan") ? plan.map((b) => ({ fromQuantity: int(b.fromQuantity), toQuantity: int(b.toQuantity), sampleSize: int(b.sampleSize), acceptNumber: int(b.acceptNumber) ?? 0 })) : null,
     };
-    mutation.mutate(requirement ? { action: "updateRequirement", id: requirement.id, body } : { action: "createRequirement", body }, { onSuccess: onClose });
+    if (!requirement) return mutation.mutate({ action: "createRequirement", body }, { onSuccess: onClose });
+    // An edit of a draft shows at once; a refusal is put back with a toast (useIncomingMutation).
+    mutation.mutate({ action: "updateRequirement", id: requirement.id, body });
+    onClose();
   };
   const patchBand = (id, changes) => setPlan((p) => p.map((b) => (b.id === id ? { ...b, ...changes } : b)));
 

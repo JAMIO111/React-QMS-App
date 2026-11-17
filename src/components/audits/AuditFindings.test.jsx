@@ -143,6 +143,14 @@ describe("a finding", () => {
     expect(await screen.findByText("Overdue")).toBeInTheDocument();
   });
 
+  it("keeps Close finding switched off, saying why, while its non-conformance is still open", async () => {
+    routeApi({ "GET /audit-findings/f1": finding({ ncr: { id: "n1", reference: "INC-26-0007", stage: "investigating" } }) });
+    renderAt("/Audits/Findings/f1");
+    const close = await screen.findByRole("button", { name: "Close finding" });
+    expect(close).toBeDisabled();
+    expect(close).toHaveAccessibleDescription("Close INC-26-0007 first");
+  });
+
   it("offers the actions each person may take, and only while they apply", async () => {
     routeApi({ "GET /audit-findings/f1": finding() });
     const view = renderAt("/Audits/Findings/f1");

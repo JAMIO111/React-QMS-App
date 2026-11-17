@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
-import { refreshOrganisation } from "../lib/refresh";
+import { useToast } from "../contexts/ToastProvider";
+import { CERTIFICATE_OPTIMISTIC, guessCertificate, guessed } from "../lib/supplierQualityGuesses";
 
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "material-certificates", ...rest];
 const qs = (params) => {
@@ -26,7 +27,10 @@ export const useMaterialCertificates = (filters = {}, { enabled = true } = {}) =
 export const useCertificateMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
+    // Edits, reviews and withdrawals show at once (`CERTIFICATE_OPTIMISTIC`; a refusal is put back with a toast). Recording a new one waits for the server.
+    ...guessed(queryClient, organisationId, toast, CERTIFICATE_OPTIMISTIC, guessCertificate),
     mutationFn: ({ action, id, body }) => {
       const send = (path, method = "POST") => apiFetch(path, { method, body: body ?? {}, organisationId });
       switch (action) {
@@ -42,6 +46,5 @@ export const useCertificateMutation = () => {
           throw new Error(`Unknown action ${action}`);
       }
     },
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
   });
 };

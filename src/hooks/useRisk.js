@@ -3,6 +3,9 @@ import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
+import { useToast } from "../contexts/ToastProvider";
+import { pendingId, updateById } from "../lib/optimistic";
+import { commandGuessHandlers, nowIso, setFields } from "../lib/guessCommands";
 
 /** Risk register (docs/risk-management-plan.md): the matrix, categories, risks and their assessments. */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "risk", ...rest];
@@ -133,6 +136,7 @@ export const useRiskDraft = (kind, id, { enabled = true } = {}) => {
 export const useRiskMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
     mutationFn: ({ action, id, body }) => {
       const send = (path, method = "POST") => apiFetch(path, { method, body, organisationId });
@@ -183,8 +187,56 @@ export const useRiskMutation = () => {
           throw new Error(`Unknown action ${action}`);
       }
     },
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+    // The guessed commands (RISK_GUESSED) show at once; a refusal puts the risk back and says why in a toast.
+    ...commandGuessHandlers({ queryClient, prefix: key(organisationId), guess: guessRisk, guessed: RISK_GUESSED, showToast: toast?.showToast }),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
+};
+
+/**
+ * The risk commands shown before the server answers. The others wait: the database scores assessments, works out the status, decides acceptances
+ * (another person's approval), reviews and closing.
+ */
+export const RISK_GUESSED = new Set([
+  "update", "updateCategory", "retire", "reactivate", "setTreatment", "setLinks", "addAction", "updateAction", "completeAction", "cancelAction", "reopenAction", "withdrawAcceptance",
+]);
+
+/** Cached risk data as it will be after a command (`useRiskMutation` vars; `show`: `ownerName`, `links` with their labels, `me` = my name). */
+export const guessRisk = (data, { action, id, body = {}, show = {} }) => {
+  const now = nowIso();
+  const withOwner = (x) => ("ownerId" in body ? { ...x, owner: body.ownerId ? { ...(x.owner ?? {}), id: body.ownerId, name: show.ownerName ?? x.owner?.name ?? "…" } : null } : x);
+  switch (action) {
+    case "update":
+      return updateById(data, id, (risk) => withOwner(setFields(risk, body)));
+    case "updateCategory":
+      return updateById(data, id, (c) => setFields(c, body));
+    case "retire":
+      return updateById(data, id, (risk) => ("status" in risk ? { ...risk, status: "retired", retiredReason: body.reason ?? null, retiredAt: now } : risk));
+    case "reactivate":
+      return updateById(data, id, (risk) => (risk.status === "retired" ? { ...risk, status: risk.inherent ? (risk.strategy ? "treating" : "open") : "draft" } : risk));
+    case "setTreatment":
+      return updateById(data, id, (risk) => ({ ...risk, strategy: body.strategy ?? risk.strategy, treatmentPlan: body.plan ?? null }));
+    case "setLinks":
+      return show.links ? updateById(data, id, (risk) => ("links" in risk ? { ...risk, links: show.links } : risk)) : data;
+    case "addAction":
+      return updateById(data, id, (risk) => {
+        if (!Array.isArray(risk.actions)) return risk;
+        const action = withOwner({ id: pendingId(), description: body.description ?? "", dueDate: body.dueDate ?? null, status: "open", mine: false, owner: null });
+        return { ...risk, actions: [...risk.actions, action], ...(typeof risk.openActions === "number" ? { openActions: risk.openActions + 1 } : {}) };
+      });
+    case "updateAction":
+      return updateById(data, id, (a) => withOwner(setFields(a, body)));
+    case "completeAction":
+      return updateById(data, id, (a) => ({ ...a, status: "done", doneNote: body.note ?? null, doneAt: now, doneBy: show.me ?? a.doneBy ?? null }));
+    case "cancelAction":
+      return updateById(data, id, (a) => ({ ...a, status: "cancelled", cancelReason: body.reason ?? null, cancelledAt: now, cancelledBy: show.me ?? a.cancelledBy ?? null }));
+    case "reopenAction":
+      return updateById(data, id, (a) => ({ ...a, status: "open", doneNote: null, doneAt: null, doneBy: null, cancelReason: null, cancelledAt: null, cancelledBy: null }));
+    case "withdrawAcceptance":
+      return updateById(data, id, (x) => ({ ...x, status: "withdrawn", canDecide: false, canWithdraw: false }));
+    default:
+      return data;
+  }
 };
 
 /** Switching a category on or off shows at once and is put back if the server refuses. */

@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
-import { refreshOrganisation } from "../lib/refresh";
+import { useToast } from "../contexts/ToastProvider";
+import { RECEIVING_OPTIMISTIC, guessReceiving, guessed } from "../lib/supplierQualityGuesses";
 
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "receiving", ...rest];
 
@@ -66,11 +67,16 @@ export const useReceipt = (id) => {
   });
 };
 
-/** Commands on orders and receipts; each answers with the record it changed. Everything is marked stale: lots, traceability and supplier counts show receipts too. */
+/**
+ * Commands on orders and receipts; each answers with the record it changed. Everything is marked stale: lots, traceability and supplier counts show receipts too.
+ * Closing or cancelling an order, an agreed date and cancelling a receipt show at once (`RECEIVING_OPTIMISTIC`; a refusal is put back with a toast).
+ */
 export const useReceivingMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
+    ...guessed(queryClient, organisationId, toast, RECEIVING_OPTIMISTIC, guessReceiving),
     mutationFn: ({ action, id, body }) => {
       const send = (path, method = "POST") => apiFetch(path, { method, body: body ?? {}, organisationId });
       switch (action) {
@@ -90,6 +96,5 @@ export const useReceivingMutation = () => {
           throw new Error(`Unknown action ${action}`);
       }
     },
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
   });
 };

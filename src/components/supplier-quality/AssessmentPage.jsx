@@ -87,7 +87,7 @@ const CompleteDialog = ({ assessment, onClose }) => {
   const p = assessment.progress;
   return (
     <Dialog title={`Complete ${assessment.reference}`} onClose={onClose}>
-      <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); mutation.mutate({ action: "completeAssessment", id: assessment.id, body: summary.trim() ? { summary: summary.trim() } : {} }, { onSuccess: onClose }); }}>
+      <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); mutation.mutate({ action: "completeAssessment", id: assessment.id, body: summary.trim() ? { summary: summary.trim() } : {}, show: { score: p.score, result: p.result } }); onClose(); }}>
         <Callout tone={p.result === "pass" ? "success" : "warning"} title={`This will score ${p.score} (${p.result === "pass" ? "pass" : "fail"})`}>
           Pass mark {p.passMark}{p.criticalFailures ? `. ${p.criticalFailures} critical question${p.criticalFailures === 1 ? "" : "s"} failed, which fails the assessment whatever the score` : ""}. Once completed it cannot be changed.
         </Callout>
@@ -95,7 +95,7 @@ const CompleteDialog = ({ assessment, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Complete assessment"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg">Complete assessment</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -107,13 +107,13 @@ const AbandonDialog = ({ assessment, onClose, onDone }) => {
   const [reason, setReason] = useState("");
   return (
     <Dialog title={`Abandon ${assessment.reference}`} onClose={onClose}>
-      <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); mutation.mutate({ action: "abandonAssessment", id: assessment.id, body: { reason: reason.trim() } }, { onSuccess: () => (onClose(), onDone()) }); }}>
+      <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (reason.trim().length < 3) return; mutation.mutate({ action: "abandonAssessment", id: assessment.id, body: { reason: reason.trim() } }); onClose(); onDone(); }}>
         <p className="text-sm text-primary-text">The assessment is kept but can no longer be used. You can start a new one.</p>
         <TextAreaField label="Why is it being abandoned?" required value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} rows={3} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="danger" size="lg" disabled={reason.trim().length < 3 || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Abandon"}</CTAButton>
+          <CTAButton buttonType="submit" type="danger" size="lg" disabled={reason.trim().length < 3}>Abandon</CTAButton>
         </div>
       </form>
     </Dialog>

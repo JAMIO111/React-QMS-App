@@ -9,6 +9,7 @@ import { useMasterDataMutation, useParties } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
 import { ActiveBadge, DataList, SearchBox } from "./shared";
 import CTAButton from "@/components/CTAButton";
+import { useQuickSave } from "../../hooks/useQuickSave";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
@@ -25,6 +26,7 @@ const emptyForm = { code: "", name: "", displayName: "", companyNumber: "", vatN
 
 const PartyForm = ({ kind, party, onDone }) => {
   const mutation = useMasterDataMutation();
+  const quickSave = useQuickSave(useMasterDataMutation());
   const { showToast } = useToast();
   const [form, setForm] = useState(party ? { ...emptyForm, ...Object.fromEntries(Object.entries(party).map(([k, v]) => [k, v ?? ""])) } : emptyForm);
   const [customValues, setCustomValues] = useState({});
@@ -43,11 +45,17 @@ const PartyForm = ({ kind, party, onDone }) => {
       notes: form.notes.trim(),
       ...(party ? { active: form.active } : withCustomValues(customValues)),
     };
+    if (party) {
+      // Shown at once (the hook's guess); put back with a toast if the server refuses.
+      quickSave({ path: `/${kind}/${party.id}`, method: "PATCH", body: changesSince(opened, body) });
+      onDone();
+      return;
+    }
     mutation.mutate(
-      { path: party ? `/${kind}/${party.id}` : `/${kind}`, method: party ? "PATCH" : "POST", body: party ? changesSince(opened, body) : body },
+      { path: `/${kind}`, method: "POST", body },
       {
         onSuccess: () => {
-          showToast({ type: "success", title: "Saved", message: `The ${label} was ${party ? "updated" : "added"}.` });
+          showToast({ type: "success", title: "Saved", message: `The ${label} was added.` });
           onDone();
         },
       }

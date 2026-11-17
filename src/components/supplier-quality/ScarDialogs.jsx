@@ -18,6 +18,7 @@ import SlidingToggle from "../ui/SlidingToggle";
 import { FormError, TextAreaField } from "../master-data/shared";
 import { todayIso } from "@/lib/localDate";
 import { changesSince } from "../../lib/editConflicts";
+import { SCAR_OPTIMISTIC, partFromOption } from "../../lib/supplierQualityGuesses";
 
 const today = () => todayIso();
 const tomorrow = () => todayIso(1);
@@ -48,9 +49,17 @@ const CommandDialog = ({ title, intro, mutation, ok, submitLabel, pendingLabel, 
   </Dialog>
 );
 
+/**
+ * Send one SCAR command. Those the page can show at once (`SCAR_OPTIMISTIC`) close the dialog straight away; a refusal is put back with a toast by
+ * useScarMutation. The others (verify, decide an extension) wait for the server and show its answer in the dialog.
+ */
 const useCommand = (onClose) => {
   const mutation = useScarMutation();
-  const run = (args) => mutation.mutate(args, { onSuccess: onClose });
+  const run = (args) => {
+    if (!SCAR_OPTIMISTIC.has(args.action)) return mutation.mutate(args, { onSuccess: onClose });
+    mutation.mutate(args);
+    onClose();
+  };
   return [mutation, run];
 };
 
@@ -181,7 +190,12 @@ export const EditScarDialog = ({ scar, onClose }) => {
   const ok = title.trim().length >= 3 && !!ownerId;
   return (
     <CommandDialog title="Edit the SCAR" width="max-w-2xl" mutation={mutation} ok={ok} submitLabel="Save" onClose={onClose}
-      onSubmit={() => run({ action: "update", id: scar.id, body: changesSince(opened, { title: title.trim(), problemDescription: description.trim(), requirementBreached: requirement.trim(), objectiveEvidence: evidence.trim(), containmentRequirements: containment.trim(), severity, responseDueOn: dueOn || null, contactId, ownerId }) })}>
+      onSubmit={() => {
+        const owner = (people.data ?? []).find((p) => p.userId === ownerId);
+        const contact = (detail.data?.contacts ?? []).find((c) => c.id === contactId);
+        const show = { ...(ownerId !== (scar.owner?.id ?? null) ? { owner: owner ? { id: owner.userId, name: owner.name } : null } : {}), ...(contactId !== (scar.contact?.id ?? null) ? { contact: contact ? { id: contact.id, name: contact.name } : null } : {}) };
+        run({ action: "update", id: scar.id, body: changesSince(opened, { title: title.trim(), problemDescription: description.trim(), requirementBreached: requirement.trim(), objectiveEvidence: evidence.trim(), containmentRequirements: containment.trim(), severity, responseDueOn: dueOn || null, contactId, ownerId }), show });
+      }}>
       <Field label="Title" required value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
       <TextAreaField label="The problem" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={4000} rows={3} />
       <TextAreaField label="Requirement breached" value={requirement} onChange={(e) => setRequirement(e.target.value)} maxLength={2000} rows={2} />
@@ -342,7 +356,9 @@ export const ItemDialog = ({ scar, onClose }) => {
   const [mutation, run] = useCommand(onClose);
   const { can } = usePermissions();
   const [part, setPart] = useState(null);
+  const [partItem, setPartItem] = useState(null);
   const [lot, setLot] = useState(null);
+  const [lotItem, setLotItem] = useState(null);
   const [material, setMaterial] = useState("");
   const [receipt, setReceipt] = useState("");
   const [quantity, setQuantity] = useState("");
@@ -351,10 +367,10 @@ export const ItemDialog = ({ scar, onClose }) => {
   const ok = !!(part || lot || material.trim() || receipt.trim()) && (qty === null || (Number.isFinite(qty) && qty >= 0));
   return (
     <CommandDialog title="Add an affected item" mutation={mutation} ok={ok} submitLabel="Add" onClose={onClose}
-      onSubmit={() => run({ action: "addItem", id: scar.id, body: { ...(part ? { partId: part } : {}), ...(lot ? { lotId: lot } : {}), ...(material.trim() ? { material: material.trim() } : {}), ...(receipt.trim() ? { receiptReference: receipt.trim() } : {}), ...(qty !== null ? { quantity: qty } : {}), ...(notes.trim() ? { notes: notes.trim() } : {}) } })}
+      onSubmit={() => run({ action: "addItem", id: scar.id, body: { ...(part ? { partId: part } : {}), ...(lot ? { lotId: lot } : {}), ...(material.trim() ? { material: material.trim() } : {}), ...(receipt.trim() ? { receiptReference: receipt.trim() } : {}), ...(qty !== null ? { quantity: qty } : {}), ...(notes.trim() ? { notes: notes.trim() } : {}) }, show: { part: partFromOption(part, partItem), lot: lot ? { id: lot, lotNumber: lotItem?.name ?? "…" } : null } })}
       intro="Name at least one of a part, a material, a lot or a receipt. A lot brings its part with it.">
-      {can("master_data.read") && <PartPicker label="Part" value={part} onChange={(id) => setPart(id)} clearable />}
-      {can("production.read") && <LotPicker label="Lot" partId={part ?? undefined} value={lot} onChange={(id) => setLot(id)} clearable />}
+      {can("master_data.read") && <PartPicker label="Part" value={part} onChange={(id, item) => { setPart(id); setPartItem(item); }} clearable />}
+      {can("production.read") && <LotPicker label="Lot" partId={part ?? undefined} value={lot} onChange={(id, item) => { setLot(id); setLotItem(item); }} clearable />}
       <Field label="Material" value={material} onChange={(e) => setMaterial(e.target.value)} maxLength={200} placeholder="For example: steel bar 20 mm" />
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Receipt or delivery reference" value={receipt} onChange={(e) => setReceipt(e.target.value)} maxLength={100} placeholder="Delivery note or PO" />
@@ -384,7 +400,10 @@ export const LinkNcrDialog = ({ scar, onClose }) => {
   const options = (ncrs.data?.data ?? []).filter((n) => !linked.has(n.id)).map((n) => ({ value: n.id, label: `${n.reference} · ${n.title}`, hint: sourceLabel(n.source) }));
   const [ncrId, setNcrId] = useState(null);
   return (
-    <CommandDialog title="Link a non-conformance" mutation={mutation} ok={!!ncrId} submitLabel="Link" pendingLabel="Linking…" onClose={onClose} onSubmit={() => run({ action: "linkNcr", id: scar.id, body: { ncrId } })}
+    <CommandDialog title="Link a non-conformance" mutation={mutation} ok={!!ncrId} submitLabel="Link" pendingLabel="Linking…" onClose={onClose} onSubmit={() => {
+        const n = (ncrs.data?.data ?? []).find((x) => x.id === ncrId);
+        run({ action: "linkNcr", id: scar.id, body: { ncrId }, show: { ncr: n ? { id: n.id, reference: n.reference, title: n.title, stage: n.stage } : undefined } });
+      }}
       intro="Only open non-conformances that name this supplier can be linked.">
       <ComboField label="Non-conformance" required value={ncrId} onChange={setNcrId} placeholder="Choose one…" options={options} emptyMessage={ncrs.isLoading ? "Loading…" : "No other open non-conformance names this supplier"} />
     </CommandDialog>

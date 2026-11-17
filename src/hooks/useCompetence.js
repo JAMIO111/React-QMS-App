@@ -1,8 +1,12 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
-import { apiFetch } from "../lib/api-client";
+import { apiFetch, describeApiError } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
-import { refreshOrganisation } from "../lib/refresh";
+import { useToast } from "../contexts/ToastProvider";
+import { guessCache, pendingId, rollbackGuess, settle, updateById } from "../lib/optimistic";
+import { COMPETENCE_GUESSED } from "../lib/competence";
+
+export { COMPETENCE_GUESSED };
 
 /** Competence (docs/competence-plan.md): categories, skills and positions. */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "competence", ...rest];
@@ -93,10 +97,13 @@ export const useMatrixExport = () => {
   };
 };
 
-/** One command at a time: { action, id, body }. Every one refreshes the organisation's cached data. */
+const FILE_ACTIONS = new Set(["removeFile", "restoreFile"]);
+
+/** One command at a time: { action, id, body, show?, failed? }. Every one refreshes the organisation's cached data. */
 export const useCompetenceMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
     mutationFn: ({ action, id, body }) => {
       const send = (path, method = "POST") => apiFetch(path, { method, body, organisationId });
@@ -155,6 +162,70 @@ export const useCompetenceMutation = () => {
           throw new Error(`Unknown action ${action}`);
       }
     },
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+    onMutate: (vars) =>
+      COMPETENCE_GUESSED.has(vars?.action) || FILE_ACTIONS.has(vars?.action) ? guessCache(queryClient, ["api", "org", organisationId], (data) => guessCompetence(data, vars)) : { optimistic: false },
+    onError: (error, vars, context) => {
+      rollbackGuess(queryClient, context);
+      if (COMPETENCE_GUESSED.has(vars?.action) && !error?.cancelled) toast?.showToast({ type: "error", title: vars.failed ?? "Not saved", message: describeApiError(error) });
+    },
+    // Commands that were not guessed wait for the refetch, so the screen has moved on when the caller's onSuccess runs.
+    onSettled: (_data, _error, _vars, context) => settle(queryClient, organisationId, context),
   });
+};
+
+/** The body's plain values written onto the object, for the keys it already has. */
+const mergeFlat = (obj, body = {}) => {
+  let changed = false;
+  const out = { ...obj };
+  for (const [k, v] of Object.entries(body ?? {})) {
+    if (k === "rowVersion" || !(k in obj) || v === undefined || obj[k] === v || (v !== null && typeof v === "object")) continue;
+    out[k] = v;
+    changed = true;
+  }
+  return changed ? out : obj;
+};
+
+/** Any cached competence data as it will be after a guessed command of useCompetenceMutation. Others are left alone. */
+export const guessCompetence = (data, { action, id, body = {}, show = {} } = {}) => {
+  if (!id) return data;
+  const now = new Date().toISOString();
+  switch (action) {
+    case "updateCategory":
+    case "updateSkill":
+    case "updatePosition":
+    case "updateSession":
+      return updateById(data, id, (o) => mergeFlat(o, body));
+    case "reactivateSkill":
+    case "reactivatePosition":
+      return updateById(data, id, (o) => ("active" in o ? { ...o, active: true, ...("retiredReason" in o ? { retiredReason: null } : {}) } : o));
+    case "setPositionSkills":
+      return show.skills ? updateById(data, id, (o) => ("skills" in o ? { ...o, skills: show.skills } : o)) : data;
+    case "endPosition":
+      return updateById(data, id, (o) => ("endedOn" in o ? { ...o, endedOn: body.endedOn ?? o.endedOn } : o));
+    case "addAttendee":
+      return updateById(data, id, (o) =>
+        Array.isArray(o.attendees)
+          ? { ...o, attendees: [...o.attendees, { id: pendingId(), status: "enrolled", employee: { id: body.employeeId, name: show.name ?? "…" }, completedOn: null, note: null, reason: null, recordedBy: null, files: [] }] }
+          : o,
+      );
+    case "recordAttendees": {
+      const ids = new Set(body.attendeeIds ?? []);
+      return updateById(data, id, (o) => {
+        if (!Array.isArray(o.attendees)) return o;
+        const attendees = o.attendees.map((a) => (ids.has(a.id) ? { ...a, status: body.outcome, completedOn: body.outcome === "absent" ? null : (body.completedOn ?? null), note: body.note ?? null } : a));
+        const added = body.outcome === "completed" ? o.attendees.filter((a) => ids.has(a.id) && a.status !== "completed").length : 0;
+        return { ...o, attendees, ...(typeof o.completedCount === "number" ? { completedCount: o.completedCount + added } : {}) };
+      });
+    }
+    case "removeAttendee":
+      return updateById(data, id, (a) => ("status" in a ? { ...a, status: "removed", reason: body.reason ?? null } : a));
+    case "voidAttendee":
+      return updateById(data, id, (a) => ("status" in a ? { ...a, status: "voided", reason: body.reason ?? null } : a));
+    case "removeFile":
+      return updateById(data, id, (f) => ({ ...f, deletedAt: now, deleteReason: body.reason ?? null }));
+    case "restoreFile":
+      return updateById(data, id, (f) => ({ ...f, deletedAt: null, deleteReason: null }));
+    default:
+      return data;
+  }
 };

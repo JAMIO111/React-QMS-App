@@ -18,10 +18,12 @@ import LoadingScreen from "../ui/LoadingScreen";
 import { currentRevisionLabel } from "../../lib/partRevisions";
 import CTAButton from "@/components/CTAButton";
 import CustomFieldsCard from "../custom-fields/CustomFieldsCard";
+import { useQuickSave } from "../../hooks/useQuickSave";
+import { changeRecord } from "../../lib/guessRequest";
 
 /** Choose parts to add to the family; parts in another family are moved (shown with their family). */
 const AddPartsForm = ({ family, onDone }) => {
-  const mutation = useProcessControlMutation();
+  const quickSave = useQuickSave(useProcessControlMutation(), "Not added");
   const [q, setQ] = useState("");
   const onSearch = useCallback((v) => setQ(v), []);
   const parts = useParts({ q });
@@ -31,7 +33,10 @@ const AddPartsForm = ({ family, onDone }) => {
 
   const submit = (e) => {
     e.preventDefault();
-    mutation.mutate({ path: `/part-families/${family.id}/parts`, body: { add: chosen } }, { onSuccess: onDone });
+    // The parts show in the family at once; put back with a toast if the server refuses.
+    const added = candidates.filter((p) => chosen.includes(p.id)).map((p) => ({ ...p, partFamily: { id: family.id, code: family.code, name: family.name } }));
+    quickSave({ path: `/part-families/${family.id}/parts`, body: { add: chosen }, guess: changeRecord(family.id, (f) => (Array.isArray(f.parts) ? { ...f, parts: [...f.parts, ...added] } : f)) });
+    onDone();
   };
 
   return (
@@ -64,13 +69,12 @@ const AddPartsForm = ({ family, onDone }) => {
           will no longer apply to {moving.length === 1 ? "it" : "them"}.
         </p>
       )}
-      <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || chosen.length === 0} loading={mutation.isPending}>
-          {mutation.isPending ? "Adding…" : chosen.length ? `Add ${chosen.length} part${chosen.length === 1 ? "" : "s"}` : "Add parts"}
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={chosen.length === 0}>
+          {chosen.length ? `Add ${chosen.length} part${chosen.length === 1 ? "" : "s"}` : "Add parts"}
         </CTAButton>
       </div>
     </form>
@@ -101,8 +105,9 @@ const PartFamilyPage = () => {
       type: "warning",
     });
     if (ok)
+      // Out of the family at once; put back with a toast if the server refuses.
       membership.mutate(
-        { path: `/part-families/${family.id}/parts`, body: { remove: [p.id] } },
+        { path: `/part-families/${family.id}/parts`, body: { remove: [p.id] }, guess: changeRecord(family.id, (f) => (Array.isArray(f.parts) ? { ...f, parts: f.parts.filter((x) => x.id !== p.id) } : f)) },
         { onError: (err) => showToast({ type: "error", title: "Not removed", message: describeApiError(err) }) }
       );
   };
@@ -172,7 +177,7 @@ const PartFamilyPage = () => {
                       {canManage && (
                         <td className={td}>
                           <div className="flex justify-end">
-                            <CTAButton buttonType="button" type="danger" size="md" disabled={membership.isPending} loading={membership.isPending} onClick={() => removePart(p)} aria-label={`Remove ${p.partNumber} from the family`}>
+                            <CTAButton buttonType="button" type="danger" size="md" onClick={() => removePart(p)} aria-label={`Remove ${p.partNumber} from the family`}>
                               <Trash2Icon className="h-4 w-4" />
                             </CTAButton>
                           </div>

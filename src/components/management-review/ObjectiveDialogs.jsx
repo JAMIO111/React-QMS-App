@@ -4,7 +4,7 @@ import { describeApiError } from "../../lib/api-client";
 import { useToast } from "../../contexts/ToastProvider";
 import { useAuth } from "../../contexts/AuthProvider";
 import { useCustomFieldPeople } from "../../hooks/useCustomFields";
-import { useObjectiveMeasures, useObjectiveMutation } from "../../hooks/useManagementReview";
+import { OBJECTIVE_GUESSED, useObjectiveMeasures, useObjectiveMutation } from "../../hooks/useManagementReview";
 import { DIRECTIONS, FREQUENCIES, formatValue } from "../../lib/qualityObjectives";
 import { FormError, TextAreaField } from "../master-data/shared";
 import Callout from "../ui/Callout";
@@ -29,7 +29,13 @@ const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
 const useRun = (onClose, failed, onSaved) => {
   const mutation = useObjectiveMutation();
   const { showToast } = useToast();
-  const run = (command) =>
+  const run = (command) => {
+    // shown at once; a refusal is told by the hook
+    if (OBJECTIVE_GUESSED.has(command.action)) {
+      mutation.mutate(command);
+      onClose();
+      return;
+    }
     mutation.mutate(command, {
       onSuccess: (saved) => {
         onSaved?.(saved);
@@ -37,6 +43,7 @@ const useRun = (onClose, failed, onSaved) => {
       },
       onError: (err) => showToast({ type: "error", title: failed, message: describeApiError(err) }),
     });
+  };
   return { mutation, run };
 };
 
@@ -81,7 +88,7 @@ export const ObjectiveDialog = ({ existing, onClose, onSaved }) => {
     const body = { title: title.trim(), description: description.trim() || null, ownerId, target: targetNumber };
     if (manual) Object.assign(body, { unit: unit.trim() || null, direction });
     if (!existing) Object.assign(body, { measure, frequency, ...(startsOn ? { startsOn } : {}) });
-    run(existing ? { action: "update", id: existing.id, body: changesSince(opened, body) } : { action: "create", body });
+    run(existing ? { action: "update", id: existing.id, body: changesSince(opened, body), show: { ownerName: personOptions.find((p) => p.value === ownerId)?.label } } : { action: "create", body });
   };
 
   return (

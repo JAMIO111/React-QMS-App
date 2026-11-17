@@ -15,12 +15,15 @@ import CharacteristicForm from "./CharacteristicForm";
 import { RevisionStatusPill } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
+import { useQuickSave } from "../../hooks/useQuickSave";
+import { addToList, changeRecord } from "../../lib/guessRequest";
+import { isPending, pendingId } from "../../lib/optimistic";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
 
 const OperationForm = ({ revision, operation, onDone }) => {
-  const mutation = useProcessControlMutation();
+  const quickSave = useQuickSave(useProcessControlMutation());
   const machines = useMachines();
   const nextSequence = (Math.max(0, ...revision.operations.map((o) => o.sequence)) || 0) + 10;
   const [form, setForm] = useState({
@@ -41,10 +44,17 @@ const OperationForm = ({ revision, operation, onDone }) => {
       machineId: form.machineId,
       workCentre: form.workCentre.trim(),
     };
-    mutation.mutate(
-      operation ? { path: `/control-plan-operations/${operation.id}`, method: "PATCH", body } : { path: `/control-plan-revisions/${revision.id}/operations`, body },
-      { onSuccess: onDone }
+    // Shown at once (a new one without actions until the server has made it); put back with a toast if the server refuses.
+    const m = (machines.data?.items ?? []).find((x) => x.id === body.machineId);
+    const machine = m ? { id: m.id, code: m.code, name: m.name } : null;
+    const shown = { ...body, workCentre: body.workCentre || null, machine };
+    quickSave(
+      operation
+        ? { path: `/control-plan-operations/${operation.id}`, method: "PATCH", body, guess: changeRecord(operation.id, (o) => ({ ...o, ...shown })) }
+        : { path: `/control-plan-revisions/${revision.id}/operations`, body, guess: addToList(revision.id, "operations", { id: pendingId(), ...shown, characteristics: [] }) },
+      operation ? "Not saved" : "Not added",
     );
+    onDone();
   };
 
   return (
@@ -64,13 +74,12 @@ const OperationForm = ({ revision, operation, onDone }) => {
         />
         <Field label="Work centre" value={form.workCentre} onChange={set("workCentre")} maxLength={100} />
       </div>
-      <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>
-          {mutation.isPending ? "Saving…" : operation ? "Save operation" : "Add operation"}
+        <CTAButton buttonType="submit" type="main" size="lg">
+          {operation ? "Save operation" : "Add operation"}
         </CTAButton>
       </div>
     </form>
@@ -78,16 +87,21 @@ const OperationForm = ({ revision, operation, onDone }) => {
 };
 
 const RevisionReactionsForm = ({ revision, onDone }) => {
-  const mutation = useProcessControlMutation();
+  const quickSave = useQuickSave(useProcessControlMutation());
   const [rows, setRows] = useState(revision.reactions.map(({ triggerType, action, instruction }) => ({ triggerType, action, instruction })));
   const update = (i, patch) => setRows((r) => r.map((row, j) => (j === i ? { ...row, ...patch } : row)));
 
   const submit = (e) => {
     e.preventDefault();
-    mutation.mutate(
-      { path: `/control-plan-revisions/${revision.id}/reactions`, method: "PUT", body: { reactions: rows.filter((r) => r.instruction.trim()) } },
-      { onSuccess: onDone }
-    );
+    const reactions = rows.filter((r) => r.instruction.trim());
+    // The list shows at once; put back with a toast if the server refuses.
+    quickSave({
+      path: `/control-plan-revisions/${revision.id}/reactions`,
+      method: "PUT",
+      body: { reactions },
+      guess: changeRecord(revision.id, (r) => ({ ...r, reactions: reactions.map((x, i) => ({ id: pendingId(), ...x, sequence: i + 1 })) })),
+    });
+    onDone();
   };
 
   return (
@@ -120,13 +134,12 @@ const RevisionReactionsForm = ({ revision, onDone }) => {
         onClick={() => setRows((rs) => [...rs, { triggerType: "gauge_invalid", action: "stop", instruction: "" }])}>
         <PlusIcon className="h-4 w-4" /> Add reaction
       </CTAButton>
-      <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>
-          {mutation.isPending ? "Saving…" : "Save reactions"}
+        <CTAButton buttonType="submit" type="main" size="lg">
+          Save reactions
         </CTAButton>
       </div>
     </form>
@@ -167,7 +180,7 @@ const Operation = ({ operation, editable, onEdit, onAddCharacteristic, onEditCha
             <CTAButton buttonType="button" type="neutral" size="md" onClick={() => onEdit(operation)} aria-label={`Edit ${operation.operationCode}`}>
               <PencilIcon className="h-4 w-4" />
             </CTAButton>
-            <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={removeOperation} aria-label={`Remove ${operation.operationCode}`}>
+            <CTAButton buttonType="button" type="danger" size="md" onClick={removeOperation} aria-label={`Remove ${operation.operationCode}`}>
               <Trash2Icon className="h-4 w-4" />
             </CTAButton>
           </div>
@@ -219,7 +232,7 @@ const Operation = ({ operation, editable, onEdit, onAddCharacteristic, onEditCha
                       <CTAButton buttonType="button" type="neutral" size="md" onClick={() => onEditCharacteristic(ch)} aria-label={`Edit ${ch.characteristicKey}`}>
                         <PencilIcon className="h-4 w-4" />
                       </CTAButton>
-                      <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => removeCharacteristic(ch)} aria-label={`Remove ${ch.characteristicKey}`}>
+                      <CTAButton buttonType="button" type="danger" size="md" onClick={() => removeCharacteristic(ch)} aria-label={`Remove ${ch.characteristicKey}`}>
                         <Trash2Icon className="h-4 w-4" />
                       </CTAButton>
                     </div>
@@ -339,7 +352,7 @@ const RevisionPage = () => {
             <Operation
               key={o.id}
               operation={o}
-              editable={editable}
+              editable={editable && !isPending(o.id)}
               onEdit={setEditingOperation}
               onAddCharacteristic={(op) => setEditingCharacteristic({ operationId: op.id })}
               onEditCharacteristic={(ch) => setEditingCharacteristic({ characteristic: ch })}

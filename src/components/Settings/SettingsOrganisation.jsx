@@ -50,9 +50,13 @@ const SettingsOrganisation = () => {
   const canManage = can("organisation.manage");
 
   // Reset the form only when the fields it edits change, so saving the theme colour does not
-  // discard unsaved edits here.
+  // discard unsaved edits here. The save is optimistic: while it is on its way, and after a refusal (the details go back), what was
+  // typed stays in the form so it can be corrected and saved again.
   const formSource = JSON.stringify(toForm(org));
-  useEffect(() => setForm(JSON.parse(formSource)), [formSource]);
+  const keepTyped = update.isPending || update.isError;
+  useEffect(() => {
+    if (!keepTyped) setForm(JSON.parse(formSource));
+  }, [formSource, keepTyped]);
 
   if (isLoading)
     return <LoadingScreen />;
@@ -78,15 +82,9 @@ const SettingsOrganisation = () => {
         },
         reason: form.reason.trim() || undefined,
       },
-      {
-        onSuccess: () =>
-          showToast({
-            type: "success",
-            title: "Saved",
-            message: "Organisation settings updated.",
-          }),
-      },
+      { onError: (e) => showToast({ type: "error", title: "Not saved", message: describeApiError(e) }) },
     );
+    setForm((f) => ({ ...f, reason: "" }));
   };
 
   return (
@@ -201,9 +199,8 @@ const SettingsOrganisation = () => {
         {canManage && (
           <CTAButton
             buttonType="submit"
-            disabled={update.isPending} loading={update.isPending}
             type="main" size="lg" className="self-start">
-            {update.isPending ? "Saving…" : "Save changes"}
+            Save changes
           </CTAButton>
         )}
       </MenuCard>

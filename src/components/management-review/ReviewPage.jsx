@@ -7,7 +7,8 @@ import Callout from "../ui/Callout";
 import LoadingScreen from "../ui/LoadingScreen";
 import { Card } from "../dashboard/DashboardParts";
 import DocumentEditor from "../documents/DocumentEditor";
-import { useManagementReview, useReviewMutation } from "../../hooks/useManagementReview";
+import { REVIEW_GUESSED, useManagementReview, useReviewMutation } from "../../hooks/useManagementReview";
+import { isPending } from "../../lib/optimistic";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import { todayIso } from "../../lib/localDate";
 import { describeApiError } from "../../lib/api-client";
@@ -51,8 +52,11 @@ const ReviewPage = () => {
       </div>
     );
 
+  // a guessed command already shows its result and a refusal is told by the hook
   const run = (command, failed = "Not saved", onSettled) =>
-    mutation.mutate(command, { onSettled, onError: (err) => showToast({ type: "error", title: failed, message: describeApiError(err) }) });
+    REVIEW_GUESSED.has(command.action)
+      ? mutation.mutate(command, { onSettled })
+      : mutation.mutate(command, { onSettled, onError: (err) => showToast({ type: "error", title: failed, message: describeApiError(err) }) });
   const gather = (section) => {
     setGathering(section ?? "all");
     run({ action: "gather", id: r.id, body: section ? { sections: [section] } : {} }, "Not gathered", () => setGathering(null));
@@ -209,7 +213,8 @@ const ReviewPage = () => {
                     <span className="block whitespace-pre-line text-primary-text">{d.description}</span>
                     <span className="text-xs text-secondary-text">{decisionCategoryLabel(d.category)}</span>
                   </span>
-                  {r.canHold && (
+                  {isPending(d.id) && <span className="text-xs text-secondary-text">Saving…</span>}
+                  {r.canHold && !isPending(d.id) && (
                     <span className="flex gap-2">
                       <CTAButton type="neutral" onClick={() => setDialog({ kind: "decision", decision: d })}>
                         Edit
@@ -256,7 +261,8 @@ const ReviewPage = () => {
                       {a.doneNote && <span className="block text-xs text-secondary-text">Done: {a.doneNote}</span>}
                       {a.cancelReason && <span className="block text-xs text-secondary-text">Cancelled: {a.cancelReason}</span>}
                     </span>
-                    {r.status !== "cancelled" && (
+                    {isPending(a.id) && <span className="text-xs text-secondary-text">Saving…</span>}
+                    {r.status !== "cancelled" && !isPending(a.id) && (
                       <span className="flex flex-wrap gap-2">
                         {a.status === "open" && (r.canManage || a.mine) && (
                           <CTAButton type="secondary" onClick={() => setDialog({ kind: "doneAction", action: a })}>

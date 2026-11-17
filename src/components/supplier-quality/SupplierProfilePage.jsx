@@ -8,6 +8,7 @@ import { formatDate } from "../../lib/ncr";
 import { formatDateTime } from "../../lib/processControl";
 import { countryName } from "../../lib/onboarding";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
+import { isPending } from "../../lib/optimistic";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import LoadingScreen from "../ui/LoadingScreen";
@@ -145,7 +146,7 @@ const Overview = ({ supplier, canManage, canEditCustom, onEditContact, onAddCont
                   <p className="text-xs text-secondary-text">{[c.jobTitle, contactRoleLabel(c.role)].filter(Boolean).join(" · ")}</p>
                   <p className="text-xs text-secondary-text">{[c.email, c.phone].filter(Boolean).join(" · ")}</p>
                 </div>
-                {canManage && (
+                {canManage && !isPending(c.id) && (
                   <button type="button" aria-label={`Edit ${c.name}`} onClick={() => onEditContact(c)} className="rounded-lg p-1.5 text-primary-text hover:bg-border-color/50 cursor-pointer">
                     <PencilIcon />
                   </button>
@@ -189,7 +190,7 @@ const Products = ({ supplier, canManage, onAdd }) => {
                 {p.notes && <p className="text-xs text-secondary-text">{p.notes}</p>}
               </div>
               {canManage && (
-                <Switch checked={p.active} onChange={(e) => mutation.mutate({ action: "updateProduct", id: p.id, body: { active: e.target.checked } })} aria-label={`${p.part?.partNumber ?? p.description} is current`} />
+                <Switch checked={p.active} disabled={isPending(p.id)} onChange={(e) => mutation.mutate({ action: "updateProduct", id: p.id, body: { active: e.target.checked } })} aria-label={`${p.part?.partNumber ?? p.description} is current`} />
               )}
             </li>
           ))}

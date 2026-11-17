@@ -3,9 +3,8 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { LinkIcon, PencilIcon, PlusIcon, XIcon } from "@/components/icons";
 import CTAButton from "@/components/CTAButton";
-import { apiFetch, describeApiError } from "../../lib/api-client";
+import { apiFetch } from "../../lib/api-client";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
-import { useToast } from "../../contexts/ToastProvider";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { usePartFamilies } from "../../hooks/useProcessControl";
 import { useRiskMutation } from "../../hooks/useRisk";
@@ -89,17 +88,16 @@ const TargetPicker = ({ kind, onPick }) => {
 /** Change everything a risk is linked to. The record it was raised from cannot be removed. */
 export const LinksDialog = ({ risk, onClose }) => {
   const mutation = useRiskMutation();
-  const { showToast } = useToast();
   const [links, setLinks] = useState(risk.links);
   const [kind, setKind] = useState("part");
   const [code, setCode] = useState("");
   const isOrigin = (l) => risk.origin && l.kind === risk.origin.kind && l.id === risk.origin.id;
   const add = (link) => setLinks((current) => (current.some((l) => sameLink(l, link)) ? current : [...current, link]));
-  const save = () =>
-    mutation.mutate(
-      { action: "setLinks", id: risk.id, body: { links: linksBody(links) } },
-      { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Links not saved", message: describeApiError(err) }) },
-    );
+  const save = () => {
+    // The links show at once; a refusal puts the old ones back and is told in a toast (useRiskMutation).
+    mutation.mutate({ action: "setLinks", id: risk.id, body: { links: linksBody(links) }, show: { links } });
+    onClose();
+  };
   return (
     <Dialog title={`What ${risk.reference} is linked to`} onClose={onClose} width="max-w-2xl">
       <div className="flex flex-col gap-4">

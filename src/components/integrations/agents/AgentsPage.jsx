@@ -44,7 +44,6 @@ const Registrations = ({ canManage }) => {
               <CTAButton
                 type="neutral"
                 size="default"
-                loading={mutate.isPending && mutate.variables?.id === g.id}
                 onClick={() => mutate.mutate({ action: "cancelRegistration", id: g.id }, { onError: (err) => showToast({ type: "error", title: "Not cancelled", message: describeApiError(err) }) })}>
                 Cancel token
               </CTAButton>

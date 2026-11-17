@@ -15,7 +15,9 @@ export const AcknowledgeDialog = ({ alert, onClose }) => {
         className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
-          mutation.mutate({ action: "acknowledge", id: alert.id, body: note.trim() ? { note: note.trim() } : {} }, { onSuccess: onClose });
+          // Shown as acknowledged at once; a refusal puts it back with a toast (from the hook).
+          mutation.mutate({ action: "acknowledge", id: alert.id, body: note.trim() ? { note: note.trim() } : {}, failed: "Not acknowledged" });
+          onClose();
         }}>
         <p className="text-sm text-primary-text">
           <span className="font-medium">{alert.title}</span>
@@ -27,8 +29,8 @@ export const AcknowledgeDialog = ({ alert, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>
-            {mutation.isPending ? "Saving…" : "I have read and understood"}
+          <CTAButton buttonType="submit" type="main" size="lg">
+            I have read and understood
           </CTAButton>
         </div>
       </form>

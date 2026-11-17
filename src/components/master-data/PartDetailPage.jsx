@@ -24,6 +24,9 @@ import FeatureMapsCard from "../measurement-imports/FeatureMapsCard";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import { changesSince } from "../../lib/editConflicts";
+import { useQuickSave } from "../../hooks/useQuickSave";
+import { addToList, changeRecord } from "../../lib/guessRequest";
+import { isPending, pendingId } from "../../lib/optimistic";
 
 const STATUS_STYLE = {
   draft: "bg-warning-color/15 text-primary-text",
@@ -39,8 +42,7 @@ const StatusPill = ({ status }) => (
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—");
 
 const PartDetails = ({ part, canManage }) => {
-  const mutation = useMasterDataMutation();
-  const { showToast } = useToast();
+  const quickSave = useQuickSave(useMasterDataMutation());
   const families = usePartFamilies();
   const toForm = (p) => ({
     partNumber: p.partNumber,
@@ -55,20 +57,27 @@ const PartDetails = ({ part, canManage }) => {
 
   const submit = (e) => {
     e.preventDefault();
-    mutation.mutate(
-      {
-        path: `/parts/${part.id}`,
-        method: "PATCH",
-        body: changesSince(part, {
-          partNumber: form.partNumber.trim(),
-          name: form.name.trim(),
-          description: form.description.trim(),
-          partFamilyId: form.partFamilyId,
-          active: form.active,
-        }),
-      },
-      { onSuccess: () => showToast({ type: "success", title: "Saved", message: "Part updated." }) }
-    );
+    const family = (families.data?.items ?? []).find((f) => f.id === form.partFamilyId) ?? (part.partFamily?.id === form.partFamilyId ? part.partFamily : null);
+    // Shown at once; put back with a toast if the server refuses.
+    quickSave({
+      path: `/parts/${part.id}`,
+      method: "PATCH",
+      body: changesSince(part, {
+        partNumber: form.partNumber.trim(),
+        name: form.name.trim(),
+        description: form.description.trim(),
+        partFamilyId: form.partFamilyId,
+        active: form.active,
+      }),
+      guess: changeRecord(part.id, (p) => ({
+        ...p,
+        partNumber: form.partNumber.trim(),
+        name: form.name.trim(),
+        description: form.description.trim() || null,
+        active: form.active,
+        ...("partFamily" in p ? { partFamily: family ? { ...(p.partFamily ?? {}), id: family.id, code: family.code, name: family.name } : null } : {}),
+      })),
+    });
   };
 
   return (
@@ -99,14 +108,9 @@ const PartDetails = ({ part, canManage }) => {
           </Switch>
         )}
       </div>
-      {mutation.error && (
-        <p role="alert" className="text-sm text-error-color">
-          {describeApiError(mutation.error)}
-        </p>
-      )}
       {canManage && (
-        <CTAButton buttonType="submit" type="main" size="lg" className="self-start" disabled={mutation.isPending} loading={mutation.isPending}>
-          {mutation.isPending ? "Saving…" : "Save changes"}
+        <CTAButton buttonType="submit" type="main" size="lg" className="self-start">
+          Save changes
         </CTAButton>
       )}
     </form>
@@ -114,23 +118,26 @@ const PartDetails = ({ part, canManage }) => {
 };
 
 const RevisionForm = ({ part, revision, onDone }) => {
-  const mutation = useMasterDataMutation();
-  const { showToast } = useToast();
+  const quickSave = useQuickSave(useMasterDataMutation());
   const [form, setForm] = useState({ revision: revision?.revision ?? "", drawingRef: revision?.drawingRef ?? "", changeSummary: revision?.changeSummary ?? "" });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = (e) => {
     e.preventDefault();
     const body = { revision: form.revision.trim(), drawingRef: form.drawingRef.trim(), changeSummary: form.changeSummary.trim() };
-    mutation.mutate(
-      revision ? { path: `/part-revisions/${revision.id}`, method: "PATCH", body } : { path: `/parts/${part.id}/revisions`, body },
-      {
-        onSuccess: () => {
-          showToast({ type: "success", title: "Saved", message: revision ? "Draft revision updated." : `Draft revision ${body.revision} added.` });
-          onDone();
-        },
-      }
+    const shown = { revision: body.revision, drawingRef: body.drawingRef || null, changeSummary: body.changeSummary || null };
+    // Shown at once (a new draft without actions until the server has made it); put back with a toast if the server refuses.
+    quickSave(
+      revision
+        ? { path: `/part-revisions/${revision.id}`, method: "PATCH", body, guess: changeRecord(revision.id, (r) => ({ ...r, ...shown })) }
+        : {
+            path: `/parts/${part.id}/revisions`,
+            body,
+            guess: addToList(part.id, "revisions", { id: pendingId(), ...shown, status: "draft", version: 1, correctsId: null, releasedAt: null }, { first: true }),
+          },
+      revision ? "Not saved" : "Not added",
     );
+    onDone();
   };
 
   return (
@@ -140,17 +147,12 @@ const RevisionForm = ({ part, revision, onDone }) => {
         <Field label="Drawing reference" value={form.drawingRef} onChange={set("drawingRef")} maxLength={100} />
       </div>
       <Field label="What changed" value={form.changeSummary} onChange={set("changeSummary")} maxLength={2000} />
-      {mutation.error && (
-        <p role="alert" className="text-sm text-error-color">
-          {describeApiError(mutation.error)}
-        </p>
-      )}
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>
-          {mutation.isPending ? "Saving…" : revision ? "Save draft" : "Add draft revision"}
+        <CTAButton buttonType="submit" type="main" size="lg">
+          {revision ? "Save draft" : "Add draft revision"}
         </CTAButton>
       </div>
     </form>
@@ -231,7 +233,8 @@ const Revisions = ({ part, canManage }) => {
                     {r.status === "corrected" && <span className="mt-0.5 block text-xs text-secondary-text">Replaced {formatDate(r.correctedAt)} by a correction</span>}
                   </td>
                   <td className="border-b border-border-color px-2 py-2">{formatDate(r.releasedAt)}</td>
-                  {canManage && (
+                  {canManage && isPending(r.id) && <td className="border-b border-border-color px-2 py-2 text-right text-xs text-secondary-text">Saving…</td>}
+                  {canManage && !isPending(r.id) && (
                     <td className="border-b border-border-color px-2 py-2">
                       <div className="flex justify-end gap-2">
                         {r.status === "draft" && (

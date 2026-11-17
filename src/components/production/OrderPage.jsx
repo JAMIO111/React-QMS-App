@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeftIcon, PencilIcon } from "@/components/icons";
-import { useToast } from "../../contexts/ToastProvider";
 import { useMasterDataMutation } from "../../hooks/useMasterData";
 import { useProductionOrder } from "../../hooks/useProduction";
 import { useMachines } from "../../hooks/useProcessControl";
@@ -15,6 +14,9 @@ import OrderDialog from "./OrderDialog";
 import { StatusBadge, StatusMoves } from "./shared";
 import { tracePath } from "../../lib/production";
 import CTAButton from "@/components/CTAButton";
+import { useQuickSave } from "../../hooks/useQuickSave";
+import { changeRecord } from "../../lib/guessRequest";
+import { isPending, pendingId } from "../../lib/optimistic";
 import CustomFieldsCard from "../custom-fields/CustomFieldsCard";
 
 const Fact = ({ label, children }) => (
@@ -27,19 +29,23 @@ const Fact = ({ label, children }) => (
 const AddOperation = ({ orderId }) => {
   const [form, setForm] = useState({ operationCode: "", description: "", machineId: null });
   const machines = useMachines({});
-  const mutation = useMasterDataMutation();
-  const { showToast } = useToast();
+  const quickSave = useQuickSave(useMasterDataMutation(), "Operation not added");
   const submit = (e) => {
     e.preventDefault();
-    mutation.mutate(
-      { path: `/production-orders/${orderId}/operations`, method: "POST", body: { operationCode: form.operationCode.trim(), description: form.description.trim() || null, machineId: form.machineId } },
-      {
-        onSuccess: () => {
-          showToast({ type: "success", title: "Operation added", message: `${form.operationCode.trim()} added to the order.` });
-          setForm({ operationCode: "", description: "", machineId: null });
-        },
-      }
-    );
+    const body = { operationCode: form.operationCode.trim(), description: form.description.trim() || null, machineId: form.machineId };
+    const m = (machines.data?.items ?? []).find((x) => x.id === form.machineId);
+    // Shown at once at the end of the route (no status moves until the server has made it); taken away with a toast if refused.
+    quickSave({
+      path: `/production-orders/${orderId}/operations`,
+      method: "POST",
+      body,
+      guess: changeRecord(orderId, (o) =>
+        Array.isArray(o.operations)
+          ? { ...o, operations: [...o.operations, { id: pendingId(), ...body, sequence: Math.max(0, ...o.operations.map((x) => x.sequence ?? 0)) + 10, status: "pending", machine: m ? { id: m.id, code: m.code, name: m.name } : null }] }
+          : o,
+      ),
+    });
+    setForm({ operationCode: "", description: "", machineId: null });
   };
   return (
     <form onSubmit={submit} noValidate aria-label="Add an operation" className="mt-4 flex flex-col gap-2 border-t border-border-color pt-4">
@@ -48,10 +54,9 @@ const AddOperation = ({ orderId }) => {
         <Field label="Description" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} maxLength={200} className="sm:col-span-2" />
         <SelectField label="Machine" value={form.machineId} onChange={(v) => setForm((f) => ({ ...f, machineId: v }))} options={(machines.data?.items ?? []).map((m) => ({ value: m.id, label: `${m.code} · ${m.name}` }))} placeholder="Any machine" />
       </div>
-      <FormError error={mutation.error} />
       <div>
-        <CTAButton buttonType="submit" type="secondary" size="md" disabled={mutation.isPending || !form.operationCode.trim()} loading={mutation.isPending}>
-          {mutation.isPending ? "Adding…" : "Add operation"}
+        <CTAButton buttonType="submit" type="secondary" size="md" disabled={!form.operationCode.trim()}>
+          Add operation
         </CTAButton>
       </div>
     </form>
@@ -139,7 +144,7 @@ const OrderPage = () => {
                   <td className="py-2 pr-3">
                     <StatusBadge map={OPERATION_STATUS} status={op.status} />
                   </td>
-                  <td className="py-2 text-right">{canManage && orderOperationsEditable(o) && <StatusMoves moves={OPERATION_MOVES[op.status]} path={`/production-operations/${op.id}`} noun={`Operation ${op.operationCode}`} />}</td>
+                  <td className="py-2 text-right">{canManage && orderOperationsEditable(o) && !isPending(op.id) && <StatusMoves moves={OPERATION_MOVES[op.status]} path={`/production-operations/${op.id}`} noun={`Operation ${op.operationCode}`} />}</td>
                 </tr>
               ))}
             </tbody>

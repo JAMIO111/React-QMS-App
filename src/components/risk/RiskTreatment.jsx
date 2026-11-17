@@ -5,7 +5,8 @@ import { describeApiError } from "../../lib/api-client";
 import { todayIso } from "../../lib/localDate";
 import { useToast } from "../../contexts/ToastProvider";
 import { useCustomFieldPeople } from "../../hooks/useCustomFields";
-import { useRiskMutation } from "../../hooks/useRisk";
+import { RISK_GUESSED, useRiskMutation } from "../../hooks/useRisk";
+import { isPending } from "../../lib/optimistic";
 import { ACCEPTANCE_STATUS, ACTION_STATUS, actionOverdue, BAND_LABEL, BAND_PILL, formatDay, outcomeOptions, strategyLabel, strategyOptions } from "../../lib/risk";
 import { FormError, TextAreaField } from "../master-data/shared";
 import Callout from "../ui/Callout";
@@ -26,11 +27,21 @@ const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   </div>
 );
 
-/** One command with a dialog: runs it, closes on success, says why in a toast when it is refused. */
+/**
+ * One command with a dialog. A command shown before the server answers (RISK_GUESSED) closes at once and a refusal is told by the hook; the others
+ * close on success and say why in a toast when they are refused.
+ */
 const useCommand = (onClose, failed) => {
   const mutation = useRiskMutation();
   const { showToast } = useToast();
-  const run = (command) => mutation.mutate(command, { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: failed, message: describeApiError(err) }) });
+  const run = (command) => {
+    if (RISK_GUESSED.has(command.action)) {
+      mutation.mutate(command);
+      onClose?.();
+      return;
+    }
+    mutation.mutate(command, { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: failed, message: describeApiError(err) }) });
+  };
   return { mutation, run };
 };
 
@@ -108,7 +119,8 @@ export const ActionDialog = ({ risk, action, onClose }) => {
           e.preventDefault();
           if (!ready) return;
           const body = { description: description.trim(), ownerId, dueDate: dueDate ?? null };
-          run(action ? { action: "updateAction", id: action.id, body: changesSince(opened, body) } : { action: "addAction", id: risk.id, body });
+          const show = { ownerName: options.find((o) => o.value === ownerId)?.label };
+          run(action ? { action: "updateAction", id: action.id, body: changesSince(opened, body), show } : { action: "addAction", id: risk.id, body, show });
         }}
       >
         <TextAreaField label="What is to be done" value={description} onChange={(e) => setDescription(e.target.value)} required maxLength={2000} rows={3} />
@@ -213,7 +225,7 @@ const pill = (tone) => `inline-flex rounded-full px-2 py-0.5 text-xs font-medium
 /** What will be done about the risk: the approach, the plan in words and the actions, each given to a person. */
 export const TreatmentCard = ({ risk }) => {
   const [dialog, setDialog] = useState(null);
-  const { mutation, run } = useCommand(() => {}, "Not reopened");
+  const { run } = useCommand(() => {}, "Not reopened");
   const today = todayIso();
   const edit = risk.canEdit && risk.status !== "draft";
   return (
@@ -261,12 +273,13 @@ export const TreatmentCard = ({ risk }) => {
                     {x.mine ? " (you)" : ""} · {x.dueDate ? `due ${formatDay(x.dueDate)}` : "no due date"}
                   </span>
                   <span className="ml-auto flex flex-wrap gap-2">
-                    {x.status === "open" && (risk.canManage || x.mine) && !["closed", "retired"].includes(risk.status) && (
+                    {isPending(x.id) && <span className="text-xs text-secondary-text">Saving…</span>}
+                    {!isPending(x.id) && x.status === "open" && (risk.canManage || x.mine) && !["closed", "retired"].includes(risk.status) && (
                       <CTAButton type="main" size="md" icon={CheckIcon} aria-label={`Mark done: ${x.description}`} onClick={() => setDialog({ kind: "done", action: x })}>
                         Done…
                       </CTAButton>
                     )}
-                    {x.status === "open" && risk.canEdit && (
+                    {!isPending(x.id) && x.status === "open" && risk.canEdit && (
                       <>
                         <CTAButton type="neutral" size="md" aria-label={`Edit action: ${x.description}`} onClick={() => setDialog({ kind: "action", action: x })}>
                           Edit
@@ -277,7 +290,7 @@ export const TreatmentCard = ({ risk }) => {
                       </>
                     )}
                     {x.status !== "open" && risk.canEdit && (
-                      <CTAButton type="neutral" size="md" icon={RotateCcwIcon} loading={mutation.isPending} aria-label={`Reopen action: ${x.description}`} onClick={() => run({ action: "reopenAction", id: x.id })}>
+                      <CTAButton type="neutral" size="md" icon={RotateCcwIcon} aria-label={`Reopen action: ${x.description}`} onClick={() => run({ action: "reopenAction", id: x.id })}>
                         Reopen
                       </CTAButton>
                     )}

@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const mutateAsync = vi.fn();
+const mutate = vi.fn();
 const upload = vi.fn();
 const removeFile = vi.fn();
 let logo = { data: null, isLoading: false };
@@ -10,7 +11,7 @@ vi.mock("../../hooks/useQmsApi", () => ({
   LOGO_TYPES: { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/svg+xml": "svg" },
   LOGO_MAX_BYTES: 1024 * 1024,
   useOrganisationLogo: () => logo,
-  useUpdateOrganisation: () => ({ mutateAsync }),
+  useUpdateOrganisation: () => ({ mutateAsync, mutate }),
   uploadOrganisationLogo: (...a) => upload(...a),
   removeOrganisationLogoFile: (...a) => removeFile(...a),
 }));
@@ -22,6 +23,7 @@ import OrganisationLogo from "./OrganisationLogo";
 
 beforeEach(() => {
   mutateAsync.mockReset().mockResolvedValue({});
+  mutate.mockReset().mockImplementation((_vars, callbacks) => callbacks?.onSuccess?.({}));
   upload.mockReset().mockResolvedValue("org-1/logo/new.png");
   removeFile.mockReset().mockResolvedValue();
   showToast.mockReset();
@@ -63,8 +65,17 @@ describe("OrganisationLogo", () => {
     render(<OrganisationLogo logoPath="org-1/logo/old.png" canManage />);
     expect(screen.getByRole("img", { name: "Organisation logo" })).toHaveAttribute("src", "https://signed/logo.png");
     await userEvent.click(screen.getByRole("button", { name: "Remove" }));
-    await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ body: { settings: { logoPath: null } } }));
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith({ body: { settings: { logoPath: null } } }, expect.any(Object)));
     expect(removeFile).toHaveBeenCalledWith("org-1/logo/old.png");
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it("keeps the old file and says why when removing is refused", async () => {
+    mutate.mockImplementation((_vars, callbacks) => callbacks?.onError?.({ code: "forbidden", message: "Not allowed" }));
+    render(<OrganisationLogo logoPath="org-1/logo/old.png" canManage />);
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(removeFile).not.toHaveBeenCalled();
   });
 
   it("is read-only without organisation.manage", () => {

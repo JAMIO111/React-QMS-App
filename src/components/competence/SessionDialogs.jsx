@@ -5,7 +5,7 @@ import { describeApiError } from "../../lib/api-client";
 import { useToast } from "../../contexts/ToastProvider";
 import { useCompetenceMutation, useCompetenceSkills } from "../../hooks/useCompetence";
 import { useEmployees } from "../../hooks/useNcr";
-import { SESSION_KINDS } from "../../lib/competence";
+import { COMPETENCE_GUESSED, SESSION_KINDS } from "../../lib/competence";
 import { todayIso } from "../../lib/localDate";
 import { FormError } from "../master-data/shared";
 import ComboField from "../ui/ComboField";
@@ -27,11 +27,18 @@ const Buttons = ({ onClose, pending, disabled, saveLabel }) => (
 export const useSave = (onDone) => {
   const mutation = useCompetenceMutation();
   const { showToast } = useToast();
-  const run = (payload) =>
+  const run = (payload) => {
+    if (COMPETENCE_GUESSED.has(payload.action)) {
+      // Shown at once and the dialog closes; a refusal is put back with a toast from the hook.
+      mutation.mutate(payload);
+      onDone?.();
+      return;
+    }
     mutation.mutate(payload, {
       onSuccess: (result) => onDone?.(result),
       onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }),
     });
+  };
   return { mutation, run };
 };
 
@@ -209,7 +216,7 @@ export const AddAttendeeDialog = ({ session, onClose }) => {
   const options = (employees.data ?? []).filter((e) => e.active && !live.has(e.id)).map((e) => ({ value: e.id, label: e.name, hint: e.jobTitle ?? undefined }));
   const save = (e) => {
     e.preventDefault();
-    if (employeeId) run({ action: "addAttendee", id: session.id, body: { employeeId } });
+    if (employeeId) run({ action: "addAttendee", id: session.id, body: { employeeId }, show: { name: options.find((o) => o.value === employeeId)?.label }, failed: "Not added" });
   };
   return (
     <Dialog title="Add a person" onClose={onClose}>

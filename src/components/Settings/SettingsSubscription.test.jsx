@@ -92,7 +92,7 @@ describe("SettingsSubscription", () => {
     };
     await pick("Observer");
     expect(confirm).toHaveBeenCalled();
-    expect(mutate).toHaveBeenCalledWith({ action: "assign", membershipId: "m1", planSlug: "observer" }, expect.any(Object));
+    expect(mutate).toHaveBeenCalledWith({ action: "assign", membershipId: "m1", planSlug: "observer", planName: "Observer" }, expect.any(Object));
 
     mutate.mockReset();
     confirm.mockClear();

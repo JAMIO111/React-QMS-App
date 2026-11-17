@@ -67,7 +67,8 @@ let heatmap = { phase: "effective", placed: 2, notPlaced: 1, cells: [{ likelihoo
 let dashboard = null;
 let work = null;
 let draft = null;
-vi.mock("../../hooks/useRisk", () => ({
+vi.mock("../../hooks/useRisk", async (importOriginal) => ({
+  RISK_GUESSED: (await importOriginal()).RISK_GUESSED,
   useLinkedRisks: () => ({ data: linked, isLoading: false }),
   useRiskHeatmap: (params) => (heatParams.push(params), { data: heatmap, isLoading: false }),
   useRiskDashboard: () => ({ data: dashboard, isLoading: false, isFetching: false }),
@@ -191,13 +192,13 @@ describe("risk page", () => {
     const dialog = screen.getByRole("dialog");
     await userEvent.type(within(dialog).getByLabelText("Why?"), "Second foundry approved");
     await userEvent.click(within(dialog).getByRole("button", { name: "Retire" }));
-    expect(mutate).toHaveBeenCalledWith({ action: "retire", id: "r1", body: { reason: "Second foundry approved" } }, expect.anything());
+    expect(mutate).toHaveBeenCalledWith({ action: "retire", id: "r1", body: { reason: "Second foundry approved" } });
     unmount();
     risk = { ...risk, status: "retired", retiredReason: "Second foundry approved", retiredAt: "2026-11-11T08:00:00Z", canEdit: false };
     const second = at("/Risk/Register/r1", "/Risk/Register/:id", <RiskPage />);
     expect(screen.queryByRole("button", { name: /Assess/ })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Bring back" }));
-    expect(mutate).toHaveBeenLastCalledWith({ action: "reactivate", id: "r1" }, expect.anything());
+    expect(mutate).toHaveBeenLastCalledWith({ action: "reactivate", id: "r1" });
     second.unmount();
     risk = { ...row, ...detail, canManage: false, canApprove: false, canEdit: false };
     at("/Risk/Register/r1", "/Risk/Register/:id", <RiskPage />);
@@ -223,7 +224,7 @@ describe("treatment, acceptance and reviews (RK2)", () => {
     await userEvent.click(screen.getByRole("option", { name: /Mitigate/ }));
     await userEvent.type(within(dialog).getByLabelText("The plan"), "Qualify a second foundry");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    expect(mutate).toHaveBeenLastCalledWith({ action: "setTreatment", id: "r1", body: { strategy: "mitigate", plan: "Qualify a second foundry" } }, expect.anything());
+    expect(mutate).toHaveBeenLastCalledWith({ action: "setTreatment", id: "r1", body: { strategy: "mitigate", plan: "Qualify a second foundry" } });
     await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await userEvent.click(screen.getByRole("button", { name: "Add an action" }));
     dialog = screen.getByRole("dialog");
@@ -231,11 +232,14 @@ describe("treatment, acceptance and reviews (RK2)", () => {
     expect(add).toBeDisabled();
     await userEvent.type(within(dialog).getByLabelText("What is to be done"), "Audit the foundry");
     await userEvent.click(add);
-    expect(mutate).toHaveBeenLastCalledWith({ action: "addAction", id: "r1", body: { description: "Audit the foundry", ownerId: "u1", dueDate: null } }, expect.anything());
+    expect(mutate).toHaveBeenLastCalledWith(expect.objectContaining({ action: "addAction", id: "r1", body: { description: "Audit the foundry", ownerId: "u1", dueDate: null } }));
   });
 
   it("lists actions with who has them, flags a late one, and closes one with what was done", async () => {
     openRisk({ strategy: "mitigate", status: "treating", openActions: 1, actions: [action, { ...action, id: "x2", description: "Hold stock", status: "done", doneNote: "Eight weeks held", doneAt: "2026-11-11T08:00:00Z", doneBy: "Ann Owner", dueDate: null }] });
+    // A risk with an open action cannot be retired, and the button says why.
+    expect(screen.getByRole("button", { name: "Retire" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Retire" })).toHaveAccessibleDescription("Close or cancel its open action first");
     const list = screen.getByRole("list", { name: "Actions" });
     const first = within(list).getByText("Trial the second foundry").closest("li");
     expect(first).toHaveTextContent("Open");
@@ -246,10 +250,10 @@ describe("treatment, acceptance and reviews (RK2)", () => {
     const dialog = screen.getByRole("dialog");
     await userEvent.type(within(dialog).getByLabelText("What was done"), "Trial passed");
     await userEvent.click(within(dialog).getByRole("button", { name: "Mark done" }));
-    expect(mutate).toHaveBeenLastCalledWith({ action: "completeAction", id: "x1", body: { note: "Trial passed" } }, expect.anything());
+    expect(mutate).toHaveBeenLastCalledWith({ action: "completeAction", id: "x1", body: { note: "Trial passed" } });
     await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await userEvent.click(screen.getByRole("button", { name: "Reopen action: Hold stock" }));
-    expect(mutate).toHaveBeenLastCalledWith({ action: "reopenAction", id: "x2" }, expect.anything());
+    expect(mutate).toHaveBeenLastCalledWith({ action: "reopenAction", id: "x2" });
   });
 
   it("lets the person an action was given to close it, and nothing else, without managing risks", () => {
@@ -367,7 +371,7 @@ describe("links and raising from a record (RK3)", () => {
     await userEvent.type(within(dialog).getByLabelText("Operation code"), " OP30 ");
     await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
     await userEvent.click(within(dialog).getByRole("button", { name: "Save links" }));
-    expect(mutate).toHaveBeenLastCalledWith({ action: "setLinks", id: "r1", body: { links: [{ kind: "ncr", id: "n1" }, { kind: "operation_code", code: "OP30" }] } }, expect.anything());
+    expect(mutate).toHaveBeenLastCalledWith(expect.objectContaining({ action: "setLinks", id: "r1", body: { links: [{ kind: "ncr", id: "n1" }, { kind: "operation_code", code: "OP30" }] } }));
   });
 
   it("lists the risks linked to a record and raises one from it, prefilled, with the suggested links unless taken off", async () => {
@@ -534,7 +538,7 @@ describe("heat map, dashboard and my work (RK4)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Mark done: Audit the second foundry" }));
     await userEvent.type(screen.getByLabelText("What was done"), "Audited and approved");
     await userEvent.click(screen.getByRole("button", { name: "Mark done" }));
-    expect(mutate).toHaveBeenCalledWith({ action: "completeAction", id: "x1", body: { note: "Audited and approved" } }, expect.anything());
+    expect(mutate).toHaveBeenCalledWith({ action: "completeAction", id: "x1", body: { note: "Audited and approved" } });
   });
 
   it("says when nothing needs me", () => {

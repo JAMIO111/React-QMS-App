@@ -2,8 +2,6 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArchiveIcon, LockIcon, PencilIcon, RotateCcwIcon } from "@/components/icons";
 import CTAButton from "@/components/CTAButton";
-import { describeApiError } from "../../lib/api-client";
-import { useToast } from "../../contexts/ToastProvider";
 import { useRisk, useRiskModel, useRiskMutation } from "../../hooks/useRisk";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import { BAND_LABEL, BAND_PILL, formatDay, isAcceptable, kindLabel, linkKindLabel, linkPath, linkWords, outcomeLabel, reviewWords, statusLabel, statusPill } from "../../lib/risk";
@@ -56,7 +54,6 @@ const RiskPage = () => {
   const query = useRisk(id);
   const model = useRiskModel();
   const mutation = useRiskMutation();
-  const { showToast } = useToast();
   const [dialog, setDialog] = useState(null);
   const risk = query.data;
   useBreadcrumbNames([
@@ -71,8 +68,8 @@ const RiskPage = () => {
   const detailOf = (phase) => risk.assessments.find((x) => x.current && x.phase === phase);
   const config = model.data?.config;
   const opportunity = risk.kind === "opportunity";
-  const bringBack = () =>
-    mutation.mutate({ action: "reactivate", id: risk.id }, { onError: (err) => showToast({ type: "error", title: "Not brought back", message: describeApiError(err) }) });
+  // Shown at once; a refusal is told by useRiskMutation.
+  const bringBack = () => mutation.mutate({ action: "reactivate", id: risk.id });
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-primary-bg p-4">
@@ -119,9 +116,22 @@ const RiskPage = () => {
             </CTAButton>
           )}
           {risk.canManage && risk.status !== "retired" && (
-            <CTAButton type="danger" icon={ArchiveIcon} onClick={() => setDialog("retire")}>
-              Retire
-            </CTAButton>
+            // The database refuses to retire a risk with open actions, so the button says why instead of failing.
+            <span className="flex items-center gap-2">
+              <CTAButton
+                type="danger"
+                icon={ArchiveIcon}
+                onClick={() => setDialog("retire")}
+                disabled={risk.openActions > 0}
+                aria-describedby={risk.openActions > 0 ? "retire-blocked" : undefined}>
+                Retire
+              </CTAButton>
+              {risk.openActions > 0 && (
+                <span id="retire-blocked" className="text-xs text-secondary-text">
+                  Close or cancel its {risk.openActions === 1 ? "open action" : `${risk.openActions} open actions`} first
+                </span>
+              )}
+            </span>
           )}
           {risk.canManage && risk.status === "retired" && (
             <CTAButton type="secondary" icon={RotateCcwIcon} loading={mutation.isPending} onClick={bringBack}>

@@ -150,9 +150,23 @@ const AuditFindingPage = () => {
             </CTAButton>
           )}
           {open && canManage && (
-            <CTAButton buttonType="button" type="main" size="lg" onClick={() => setDialog("close")}>
-              Close finding
-            </CTAButton>
+            // A finding closes only once its non-conformance is closed (the database refuses otherwise), so the button says why.
+            <span className="flex items-center gap-2">
+              <CTAButton
+                buttonType="button"
+                type="main"
+                size="lg"
+                onClick={() => setDialog("close")}
+                disabled={!!f.ncr && f.ncr.stage !== "closed"}
+                aria-describedby={f.ncr && f.ncr.stage !== "closed" ? "close-blocked" : undefined}>
+                Close finding
+              </CTAButton>
+              {f.ncr && f.ncr.stage !== "closed" && (
+                <span id="close-blocked" className="text-xs text-secondary-text">
+                  Close {f.ncr.reference} first
+                </span>
+              )}
+            </span>
           )}
           {open && canPerform && !f.ncr && (
             <CTAButton buttonType="button" type="danger" size="md" onClick={() => setDialog("withdraw")}>
@@ -249,10 +263,12 @@ const AuditFindingPage = () => {
           title={`Withdraw ${f.reference}?`}
           label="Why was it raised in error?"
           confirmText="Withdraw finding"
-          pending={mutation.isPending}
-          error={mutation.error}
           onClose={() => setDialog(null)}
-          onConfirm={(reason) => mutation.mutate({ path: `/audit-findings/${f.id}/withdraw`, body: { reason } }, { onSuccess: done("Finding withdrawn") })}
+          onConfirm={(reason) => {
+            // Shown as withdrawn at once; a refusal puts it back with a toast (from the hook).
+            mutation.mutate({ path: `/audit-findings/${f.id}/withdraw`, body: { reason }, failed: "Not withdrawn" });
+            setDialog(null);
+          }}
         />
       )}
       {dialog === "reopen" && (
@@ -260,10 +276,11 @@ const AuditFindingPage = () => {
           title={`Reopen ${f.reference}?`}
           label="Why is it being reopened?"
           confirmText="Reopen finding"
-          pending={mutation.isPending}
-          error={mutation.error}
           onClose={() => setDialog(null)}
-          onConfirm={(reason) => mutation.mutate({ path: `/audit-findings/${f.id}/reopen`, body: { reason } }, { onSuccess: done("Finding reopened") })}
+          onConfirm={(reason) => {
+            mutation.mutate({ path: `/audit-findings/${f.id}/reopen`, body: { reason }, failed: "Not reopened" });
+            setDialog(null);
+          }}
         />
       )}
     </div>

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useAuth } from "../contexts/AuthProvider";
+import { guessCache, rollbackGuess, updateById } from "../lib/optimistic";
 
 /** The operator area: does this signed-in person have access? ({ status: "none" | "needs_mfa" | "ok" }) */
 export const usePlatformMe = () => {
@@ -69,10 +70,20 @@ export const useRecoverSso = () => {
 /** Connector agent releases (AG6b): every one including withdrawn, how many agents run each, and whether the API has release keys to check them. */
 export const usePlatformAgentReleases = () => useMonitor(["agent-releases"], "/platform/agent-releases", { refetch: false });
 
-/** Publish a signed release (the manifest text and its signature, from connector-agent/release/sign-release.mjs) or withdraw one with a reason. */
+/**
+ * Publish a signed release (the manifest text and its signature, from connector-agent/release/sign-release.mjs) or withdraw one with a reason.
+ * Withdrawing shows at once (and goes back if refused); publishing waits for the server, which checks the signature.
+ */
 export const useAgentReleaseMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
+    onMutate: ({ action, id, body }) =>
+      action === "withdraw"
+        ? guessCache(queryClient, ["api", "platform", "agent-releases"], (data) =>
+            updateById(data, id, (r) => ({ ...r, status: "withdrawn", withdrawnReason: body?.reason ?? null, withdrawnAt: new Date().toISOString() })),
+          )
+        : { optimistic: false, snapshot: [] },
+    onError: (_error, _vars, context) => rollbackGuess(queryClient, context),
     mutationFn: ({ action, id, body }) =>
       action === "withdraw"
         ? apiFetch(`/platform/agent-releases/${id}/withdraw`, { method: "POST", body })

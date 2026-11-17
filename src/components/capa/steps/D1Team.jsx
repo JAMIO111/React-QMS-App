@@ -3,9 +3,10 @@ import Dialog from "../../ui/Dialog";
 import Field from "../../ui/Field";
 import MenuCard from "../../ui/MenuCard";
 import RHFComboBox from "../../ui/RHFComboBox";
-import { useCapaMutation, useCapaPeople } from "../../../hooks/useCapa";
+import { CAPA_GUESSED, useCapaMutation, useCapaPeople } from "../../../hooks/useCapa";
+import { sendCommand } from "../../../lib/guessCommands";
+import { isPending } from "../../../lib/optimistic";
 import { TEAM_ROLES, roleLabel } from "../../../lib/capa";
-import { FormError } from "../../master-data/shared";
 import CTAButton from "@/components/CTAButton";
 
 const roleOptions = (keys) => keys.map((k) => ({ id: k, name: TEAM_ROLES[k].label, hint: TEAM_ROLES[k].hint }));
@@ -24,9 +25,11 @@ const ExternalDialog = ({ capa, onClose }) => {
         onSubmit={(e) => {
           e.preventDefault();
           const { externalName, externalCompany, externalEmail, role } = form;
-          mutation.mutate(
+          sendCommand(
+            mutation,
+            CAPA_GUESSED,
             { action: "addTeam", id: capa.id, body: { externalName: externalName.trim(), role, ...(externalCompany.trim() ? { externalCompany: externalCompany.trim() } : {}), ...(externalEmail.trim() ? { externalEmail: externalEmail.trim() } : {}) } },
-            { onSuccess: onClose },
+            onClose,
           );
         }}>
         <p className="text-sm text-secondary-text">For someone with no login, such as a supplier or customer representative. They are listed on the 8D and can own actions, but cannot sign in.</p>
@@ -36,10 +39,9 @@ const ExternalDialog = ({ capa, onClose }) => {
           <Field label="Email" value={form.externalEmail} onChange={set("externalEmail")} maxLength={200} />
         </div>
         <RHFComboBox label="Role" value={form.role} onChange={(v) => setForm((f) => ({ ...f, role: v ?? "member" }))} options={ALL_ROLES} sort={false} clearable={false} />
-        <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !form.externalName.trim()} loading={mutation.isPending}>{mutation.isPending ? "Adding…" : "Add contact"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!form.externalName.trim()}>Add contact</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -77,31 +79,36 @@ const D1Team = ({ capa, editable }) => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {editable ? (
+              {isPending(t.id) ? (
+                <span className="text-xs text-secondary-text">Saving…</span>
+              ) : editable ? (
                 <RHFComboBox label={`Role of ${t.name}`} value={t.role} onChange={(v) => v && v !== t.role && mutation.mutate({ action: "updateTeam", id: t.id, body: { role: v } })}
                   options={t.external ? ALL_ROLES : MEMBER_ROLES} sort={false} clearable={false} className="w-48" />
               ) : (
                 <span className="rounded-full bg-secondary-bg px-2 py-0.5 text-xs text-primary-text">{roleLabel(t.role)}</span>
               )}
-              {editable && (
+              {editable && !isPending(t.id) && (
                 <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Remove ${t.name} from the team`} onClick={() => mutation.mutate({ action: "updateTeam", id: t.id, body: { ended: true } })}>Remove</CTAButton>
               )}
             </div>
           </li>
         ))}
       </ul>
-      <FormError error={mutation.error} />
       {editable && (
         <form
           className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[1fr_12rem_auto]"
           aria-label="Add a team member"
           onSubmit={(e) => {
             e.preventDefault();
-            if (adding.membershipId) mutation.mutate({ action: "addTeam", id: capa.id, body: { membershipId: adding.membershipId, role: adding.role } }, { onSuccess: () => setAdding({ membershipId: null, role: "member" }) });
+            if (!adding.membershipId) return;
+            // The person shows on the team at once; a refusal takes them off again and says why.
+            const name = choices.find((c) => c.id === adding.membershipId)?.name;
+            mutation.mutate({ action: "addTeam", id: capa.id, body: { membershipId: adding.membershipId, role: adding.role }, show: { name } });
+            setAdding({ membershipId: null, role: "member" });
           }}>
           <RHFComboBox label="Add a member of the organisation" required value={adding.membershipId} onChange={(v) => setAdding((a) => ({ ...a, membershipId: v }))} options={choices} placeholder="Choose a person" />
           <RHFComboBox label="Role" value={adding.role} onChange={(v) => setAdding((a) => ({ ...a, role: v ?? "member" }))} options={MEMBER_ROLES} sort={false} clearable={false} />
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!adding.membershipId || mutation.isPending} loading={mutation.isPending}>Add</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!adding.membershipId}>Add</CTAButton>
         </form>
       )}
       {left.length > 0 && (

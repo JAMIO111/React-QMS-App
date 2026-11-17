@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
+import { guessCache, rollbackGuess } from "../lib/optimistic";
+import { myName } from "../lib/guessRequest";
 
 /** SPC control charts (PC6): read live from the inspection measurements; baselines are saved limits. */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "spc", ...rest];
@@ -78,11 +80,29 @@ export const useSpcAlerts = (status = "open", partId, { enabled = true } = {}) =
   });
 };
 
+/**
+ * The alert lists as they will be once `id` is acknowledged: the alert leaves "open" lists and shows as acknowledged elsewhere, and the open count
+ * drops by one. `queryKey[5]` is the list's status (see useSpcAlerts).
+ */
+export const guessAlertAcknowledged = ({ id, note, by, at = new Date().toISOString() }) => (data, queryKey) => {
+  const rows = data?.data;
+  if (!Array.isArray(rows) || queryKey?.[4] !== "alerts") return data;
+  const alert = rows.find((a) => a.id === id);
+  if (!alert || alert.status !== "open") return data;
+  const openCount = typeof data.openCount === "number" ? Math.max(0, data.openCount - 1) : data.openCount;
+  if (queryKey[5] === "open") return { ...data, openCount, data: rows.filter((a) => a.id !== id) };
+  const done = { ...alert, status: "acknowledged", note, acknowledgedAt: at, acknowledgedBy: { name: by } };
+  return { ...data, openCount, data: rows.map((a) => (a.id === id ? done : a)) };
+};
+
+/** Acknowledge an alert ({ id, note }): shown at once, put back if the server refuses. */
 export const useAcknowledgeAlert = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, note }) => apiFetch(`/spc/alerts/${id}/acknowledge`, { method: "POST", body: { note }, organisationId }),
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+    onMutate: ({ id, note }) => guessCache(queryClient, key(organisationId, "alerts"), guessAlertAcknowledged({ id, note, by: myName(queryClient) })),
+    onError: (_error, _vars, context) => rollbackGuess(queryClient, context),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };

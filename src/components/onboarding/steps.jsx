@@ -29,7 +29,11 @@ export const OrganisationStep = () => {
   const sites = useSites();
   const update = useUpdateOrganisation();
   const [name, setName] = useState(org?.name ?? "");
-  useEffect(() => setName(org?.name ?? ""), [org?.name]);
+  // Saved optimistically: while saving, and after a refusal (the name goes back), what was typed stays in the box.
+  const keepTyped = update.isPending || update.isError;
+  useEffect(() => {
+    if (!keepTyped) setName(org?.name ?? "");
+  }, [org?.name, keepTyped]);
   const first = sites.data?.data?.[0] ?? sites.data?.items?.[0];
   const dirty = org && name.trim() !== org.name;
   return (
@@ -39,7 +43,7 @@ export const OrganisationStep = () => {
         <Field label="Organisation name" required minLength={2} maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
         <FormError error={update.error} />
         <div className="flex justify-end">
-          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty || update.isPending} loading={update.isPending}>{update.isPending ? "Saving…" : "Save name"}</CTAButton>
+          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty}>Save name</CTAButton>
         </div>
       </MenuCard>
       {first && (
@@ -191,7 +195,13 @@ export const DetailsStep = () => {
   // Follow the saved values, but not the moment they first load as "nothing": that would wipe what the person has already started typing.
   const savedLegalName = org?.legalName ?? "";
   const savedCountry = org?.country ?? null;
-  useEffect(() => { setLegalName(savedLegalName); setCountry(savedCountry); }, [savedLegalName, savedCountry]);
+  // Saved optimistically: while saving, and after a refusal (the details go back), what was typed stays.
+  const keepTyped = update.isPending || update.isError;
+  useEffect(() => {
+    if (keepTyped) return;
+    setLegalName(savedLegalName);
+    setCountry(savedCountry);
+  }, [savedLegalName, savedCountry, keepTyped]);
   const dirty = org && (legalName.trim() !== (org.legalName ?? "") || (country ?? null) !== (org.country ?? null));
   return (
     <div className="flex flex-col gap-4">
@@ -201,7 +211,7 @@ export const DetailsStep = () => {
         <RHFComboBox label="Country" value={country} onChange={(v) => setCountry(v ?? null)} options={countryOptions()} placeholder="Choose a country" clearable />
         <FormError error={update.error} />
         <div className="flex justify-end">
-          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty || update.isPending} loading={update.isPending}>{update.isPending ? "Saving…" : "Save details"}</CTAButton>
+          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty}>Save details</CTAButton>
         </div>
       </MenuCard>
       <OrganisationLogo logoPath={org?.settings.logoPath ?? null} canManage />

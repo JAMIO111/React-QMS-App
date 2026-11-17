@@ -34,7 +34,11 @@ export const RecordCertificateDialog = ({ line = null, supplier = null, certific
 
   const submit = () => {
     const body = { certificateNumber: number.trim(), kind, heatNumber: heat.trim() || null, specification: spec.trim() || null, issuedOn, documentId, notes: notes.trim() || null };
-    if (certificate) return mutation.mutate({ action: "update", id: certificate.id, body: { ...body, material: certificate.part ? undefined : material.trim() || null } }, { onSuccess: onClose });
+    if (certificate) {
+      // An edit shows at once; a refusal is put back with a toast (useCertificateMutation). Recording a new one waits for the server's checks.
+      mutation.mutate({ action: "update", id: certificate.id, body: { ...body, material: certificate.part ? undefined : material.trim() || null } });
+      return onClose();
+    }
     mutation.mutate({ action: "record", body: { ...body, supplierId, receiptLineId: line?.id ?? null, material: line ? undefined : material.trim() || null } }, { onSuccess: onClose });
   };
 
@@ -61,7 +65,7 @@ export const RecordCertificateDialog = ({ line = null, supplier = null, certific
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!ok || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : certificate ? "Save changes" : "Record certificate"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!ok || (!certificate && mutation.isPending)} loading={!certificate && mutation.isPending}>{!certificate && mutation.isPending ? "Saving…" : certificate ? "Save changes" : "Record certificate"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -76,11 +80,14 @@ export const CertificateDecisionDialog = ({ certificate, mode, onClose }) => {
   const withdraw = mode === "withdraw";
   const need = withdraw || !accept ? 3 : 0;
   const title = withdraw ? "Withdraw the certificate" : "Review the certificate";
-  const submit = () =>
-    mutation.mutate(withdraw ? { action: "withdraw", id: certificate.id, body: { reason: text.trim() } } : { action: "review", id: certificate.id, body: { accept, note: text.trim() || null } }, { onSuccess: onClose });
+  // The register shows the decision at once; a refusal is put back with a toast (useCertificateMutation).
+  const submit = () => {
+    mutation.mutate(withdraw ? { action: "withdraw", id: certificate.id, body: { reason: text.trim() } } : { action: "review", id: certificate.id, body: { accept, note: text.trim() || null } });
+    onClose();
+  };
   return (
     <Dialog title={`${title}: ${certificate.certificateNumber}`} onClose={onClose} width="max-w-lg">
-      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (text.trim().length >= need && !mutation.isPending) submit(); }}>
+      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (text.trim().length >= need) submit(); }}>
         <p className="text-sm text-secondary-text">
           {withdraw ? "A withdrawn certificate is kept, with the reason, and no longer counts. Record the right one afterwards." : "Check the heat, grade and values against the order. A reviewed certificate cannot be edited; withdraw it if it is wrong."}
         </p>
@@ -94,7 +101,7 @@ export const CertificateDecisionDialog = ({ certificate, mode, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type={withdraw || !accept ? "danger" : "main"} size="lg" disabled={text.trim().length < need || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : withdraw ? "Withdraw" : accept ? "Accept" : "Reject"}</CTAButton>
+          <CTAButton buttonType="submit" type={withdraw || !accept ? "danger" : "main"} size="lg" disabled={text.trim().length < need}>{withdraw ? "Withdraw" : accept ? "Accept" : "Reject"}</CTAButton>
         </div>
       </form>
     </Dialog>

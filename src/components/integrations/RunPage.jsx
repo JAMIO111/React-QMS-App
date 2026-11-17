@@ -15,28 +15,27 @@ import SlidingToggle from "../ui/SlidingToggle";
 import StatTile from "../ui/StatTile";
 import { MissingCard } from "./KeepHealthy";
 
-import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
+import { ErrorNotice, TextAreaField } from "../master-data/shared";
 import { RunStatusPill } from "./ImportsCard";
 import CTAButton from "@/components/CTAButton";
 
-const CancelDialog = ({ run, onClose }) => {
-  const mutation = useIntegrationMutation();
-  const { showToast } = useToast();
+/** Asks why the import is cancelled; the page sends it (shown cancelled at once, back with a message if refused). */
+const CancelDialog = ({ onConfirm, onClose }) => {
   const [reason, setReason] = useState("");
   const go = (e) => {
     e.preventDefault();
     if (reason.trim().length < 3) return;
-    mutation.mutate({ action: "cancelRun", id: run.id, body: { reason: reason.trim() } }, { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Not cancelled", message: describeApiError(err) }) });
+    onClose();
+    onConfirm(reason.trim());
   };
   return (
     <Dialog title="Cancel this import" onClose={onClose}>
       <form noValidate onSubmit={go} className="flex flex-col gap-3">
         <p className="text-sm text-secondary-text">Records already applied stay. Rows not yet applied are left as they are.</p>
         <TextAreaField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} required rows={3} maxLength={1000} />
-        <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Keep it</CTAButton>
-          <CTAButton buttonType="submit" type="danger" size="md" disabled={mutation.isPending || reason.trim().length < 3} loading={mutation.isPending}>Cancel import</CTAButton>
+          <CTAButton buttonType="submit" type="danger" size="md" disabled={reason.trim().length < 3}>Cancel import</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -97,6 +96,7 @@ const RunPage = () => {
   const query = useIntegrationRun(runId);
   const connection = useIntegrationConnection(id);
   const mutation = useIntegrationMutation();
+  const cancelMutation = useIntegrationMutation();
   const { can } = usePermissions();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -221,7 +221,14 @@ const RunPage = () => {
 
       {run.missing?.held > 0 || run.missing?.listed > 0 ? <MissingCard runId={run.id} /> : null}
       <RowsCard run={run} />
-      {cancelling && <CancelDialog run={run} onClose={() => setCancelling(false)} />}
+      {cancelling && (
+        <CancelDialog
+          onClose={() => setCancelling(false)}
+          onConfirm={(reason) =>
+            cancelMutation.mutate({ action: "cancelRun", id: run.id, body: { reason } }, { onError: (err) => showToast({ type: "error", title: "Not cancelled", message: describeApiError(err) }) })
+          }
+        />
+      )}
     </div>
   );
 };

@@ -4,6 +4,7 @@ import { generateSignedUrl, removeOrganisationFile, uploadToPath } from "../api/
 import { useAuth } from "../contexts/AuthProvider";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
+import { guessCache, pendingId, rollbackGuess } from "../lib/optimistic";
 
 /** GET /me — profile, memberships and effective permissions (requires the API). */
 export const useMe = (options = {}) => {
@@ -94,19 +95,73 @@ export const removeOrganisationLogoFile = async (path) => {
   if (path) await removeOrganisationFile("org-logos", path);
 };
 
+/**
+ * PATCH /organisations/current. Optimistic: the organisation's details (and its name in /me, for the switcher) change at once and go back if
+ * the server refuses (pass `guess: false` to wait instead). The server's answer replaces the details only when no later change is still waiting, so quick toggles never flicker back.
+ */
 export const useUpdateOrganisation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const mutationKey = ["organisation-update", organisationId];
   return useMutation({
+    mutationKey,
     // Updates to one organisation run one after another, so responses cannot arrive out of order.
     scope: { id: `organisation-update-${organisationId}` },
     mutationFn: ({ body, reason }) =>
       apiFetch("/organisations/current", { method: "PATCH", body, organisationId, reason }),
-    onSuccess: (data) => {
-      queryClient.setQueryData(orgKey(organisationId, "details"), data);
-      refreshOrganisation(queryClient, organisationId, { me: true });
+    // `guess: false` waits for the server (security settings such as requiring two-factor).
+    onMutate: async ({ body, guess = true }) => {
+      if (!guess) return { optimistic: false, snapshot: [] };
+      const details = await guessCache(queryClient, orgKey(organisationId, "details"), (data) => guessOrganisation(data, body));
+      const me = body?.name ? await guessCache(queryClient, ["api", "me"], (data) => guessMyOrganisationName(data, organisationId, body.name)) : { snapshot: [] };
+      return { optimistic: details.optimistic || me.optimistic, snapshot: [...details.snapshot, ...me.snapshot] };
     },
+    onError: (_error, _vars, context) => rollbackGuess(queryClient, context),
+    onSuccess: (data) => {
+      // This mutation is still counted; more than one means a later change is waiting and its guess should stay on screen.
+      if (queryClient.isMutating({ mutationKey }) <= 1) queryClient.setQueryData(orgKey(organisationId, "details"), data);
+    },
+    onSettled: () => refreshOrganisation(queryClient, organisationId, { me: true }),
   });
+};
+
+/** The organisation's details as they will be after `body` is saved: top-level fields and `settings` keys are taken as sent. */
+export const guessOrganisation = (data, body = {}) => {
+  if (!data || typeof data !== "object" || !body || typeof body !== "object") return data;
+  const { settings, ...top } = body;
+  const next = { ...data };
+  let changed = false;
+  for (const [k, v] of Object.entries(top)) {
+    if (v !== undefined && next[k] !== v) {
+      next[k] = v;
+      changed = true;
+    }
+  }
+  if (settings && typeof settings === "object") {
+    const merged = { ...(data.settings ?? {}) };
+    for (let [k, v] of Object.entries(settings)) {
+      // The server stores these in capitals.
+      if ((k === "baseCurrency" || k === "ncrReferencePrefix") && typeof v === "string") v = v.trim().toUpperCase();
+      if (v !== undefined && merged[k] !== v) {
+        merged[k] = v;
+        changed = true;
+      }
+    }
+    next.settings = merged;
+  }
+  return changed ? next : data;
+};
+
+/** /me with the organisation's new name in its membership (the organisation switcher and tab title read it). */
+export const guessMyOrganisationName = (data, organisationId, name) => {
+  if (!Array.isArray(data?.memberships)) return data;
+  let changed = false;
+  const memberships = data.memberships.map((m) => {
+    if (m.organisation?.id !== organisationId || m.organisation.name === name) return m;
+    changed = true;
+    return { ...m, organisation: { ...m.organisation, name } };
+  });
+  return changed ? { ...data, memberships } : data;
 };
 
 export const useSites = ({ includeInactive = false } = {}) => {
@@ -144,7 +199,11 @@ export const useAllDepartments = ({ includeInactive = false } = {}) => {
   });
 };
 
-/** Create/update for sites and departments; refreshes the organisation's structure lists. */
+/**
+ * Create/update for sites and departments. Optimistic: an edit (rename, time zone, currency, switch on or off) shows at once in every site and
+ * department list, and a new department appears in its site's lists as a placeholder row (no actions until the server has made it); a refusal
+ * puts the lists back. A new site waits for the server (its departments need its id).
+ */
 export const useStructureMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
@@ -155,9 +214,47 @@ export const useStructureMutation = () => {
         body,
         organisationId,
       }),
+    onMutate: async (vars) => {
+      if (!vars.id && vars.resource !== "departments") return { optimistic: false, snapshot: [] };
+      const guesses = [];
+      for (const list of ["sites", "departments"]) {
+        guesses.push(await guessCache(queryClient, orgKey(organisationId, list), (data, queryKey) => guessStructure(data, vars, queryKey)));
+      }
+      return { optimistic: guesses.some((g) => g.optimistic), snapshot: guesses.flatMap((g) => g.snapshot) };
+    },
+    onError: (_error, _vars, context) => rollbackGuess(queryClient, context),
     // Sites and departments appear in members, alerts, machines and more, so refresh the whole organisation.
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
+};
+
+/**
+ * A cached site or department list (`{ data: [...] }`, key `[…, "sites" | "departments", …]`) as it will be after a structure change: an edit
+ * merges the body into the row with that id; a new department is added to the lists of its site (and the organisation-wide ones), not to a list
+ * of active ones only when it would not show there. Anything else is left alone.
+ */
+export const guessStructure = (data, { resource, id, body = {} }, queryKey = []) => {
+  const rows = data?.data;
+  if (!Array.isArray(rows)) return data;
+  const kind = queryKey[3];
+  if (id) {
+    if (kind !== resource) return data;
+    let changed = false;
+    const next = rows.map((r) => {
+      if (r.id !== id) return r;
+      changed = true;
+      return { ...r, ...body };
+    });
+    // A list of active ones only loses a row switched off.
+    const options = queryKey.find((k) => k && typeof k === "object" && "includeInactive" in k);
+    const kept = options && !options.includeInactive && body.active === false ? next.filter((r) => r.id !== id) : next;
+    return changed ? { ...data, data: kept } : data;
+  }
+  if (resource !== "departments" || kind !== "departments") return data;
+  const forSite = queryKey[4];
+  if (forSite !== "all" && forSite !== body.siteId) return data;
+  const row = { id: pendingId(), code: body.code ?? "", name: body.name ?? "", siteId: body.siteId ?? null, active: true };
+  return { ...data, data: [...rows, row] };
 };
 
 export const useCreateOrganisation = () => {
@@ -233,22 +330,91 @@ export const useMemberMutation = () => {
           throw new Error(`Unknown member action ${action}`);
       }
     },
-    onSuccess: () => {
+    // The person's card changes at once; `show` carries the names for a chip that is added (the server only gets ids).
+    onMutate: (vars) => guessCache(queryClient, orgKey(organisationId, "members"), (data) => guessMembers(data, vars)),
+    onError: (_error, _vars, context) => rollbackGuess(queryClient, context),
+    onSettled: () => {
       // Departments and roles decide who an alert reaches and what people may do.
       refreshOrganisation(queryClient, organisationId, { me: true });
     },
   });
 };
 
-/** PATCH /me: the signed-in person's own name and job title. */
+/** The members list as it will be after a member action (see useMemberMutation). Unknown actions leave it alone. */
+export const guessMembers = (data, { action, membershipId, assignmentId, departmentMembershipId, body = {}, show = {} }) => {
+  const rows = data?.data;
+  if (!Array.isArray(rows)) return data;
+  const mapMember = (match, change) => {
+    let changed = false;
+    const next = rows.map((m) => {
+      if (!match(m)) return m;
+      const n = change(m);
+      if (n !== m) changed = true;
+      return n;
+    });
+    return changed ? { ...data, data: next } : data;
+  };
+  switch (action) {
+    case "status":
+      return body.status ? mapMember((m) => m.membershipId === membershipId, (m) => ({ ...m, status: body.status })) : data;
+    case "revoke":
+      return mapMember((m) => m.membershipId === membershipId, (m) => ({ ...m, status: "removed" }));
+    case "assign":
+      return mapMember(
+        (m) => m.membershipId === membershipId,
+        (m) => ({ ...m, roles: [...(m.roles ?? []), { assignmentId: pendingId(), roleId: body.roleId, roleKey: show.roleKey ?? null, roleName: show.roleName ?? "…", siteId: body.siteId ?? null }] }),
+      );
+    case "unassign":
+      return mapMember((m) => (m.roles ?? []).some((r) => r.assignmentId === assignmentId), (m) => ({ ...m, roles: m.roles.filter((r) => r.assignmentId !== assignmentId) }));
+    case "addDepartment":
+      return mapMember(
+        (m) => m.membershipId === membershipId,
+        (m) => {
+          const list = m.departments ?? [];
+          const added = { id: pendingId(), departmentId: body.departmentId, code: show.code ?? null, name: show.name ?? "…", siteId: show.siteId ?? null, siteName: show.siteName ?? null, isPrimary: list.length === 0 };
+          return { ...m, departments: [...list, added] };
+        },
+      );
+    case "setPrimaryDepartment":
+      return mapMember(
+        (m) => (m.departments ?? []).some((d) => d.id === departmentMembershipId),
+        (m) => ({ ...m, departments: m.departments.map((d) => ({ ...d, isPrimary: d.id === departmentMembershipId })) }),
+      );
+    case "endDepartment":
+      return mapMember(
+        (m) => (m.departments ?? []).some((d) => d.id === departmentMembershipId),
+        (m) => ({ ...m, departments: m.departments.filter((d) => d.id !== departmentMembershipId) }),
+      );
+    default:
+      return data;
+  }
+};
+
+/** PATCH /me: the signed-in person's own name and job title. Optimistic: /me shows the new name at once and goes back if the save fails. */
 export const useUpdateProfile = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body) => apiFetch("/me", { method: "PATCH", body }),
+    onMutate: (body) => guessCache(queryClient, ["api", "me"], (data) => guessProfile(data, body)),
+    onError: (_error, _body, context) => rollbackGuess(queryClient, context),
     // Names show on every screen of the organisation.
     onSettled: () => refreshOrganisation(queryClient, organisationId, { me: true }),
   });
+};
+
+/** /me with the profile fields in `body` (firstName, surname, jobTitle) as sent. */
+export const guessProfile = (data, body = {}) => {
+  if (!data?.profile || !body || typeof body !== "object") return data;
+  const profile = { ...data.profile };
+  let changed = false;
+  for (const k of ["firstName", "surname", "jobTitle"]) {
+    if (body[k] !== undefined && profile[k] !== body[k]) {
+      profile[k] = body[k];
+      changed = true;
+    }
+  }
+  return changed ? { ...data, profile } : data;
 };
 
 export const useMyInvitations = () => {

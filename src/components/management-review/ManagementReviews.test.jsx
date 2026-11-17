@@ -38,7 +38,9 @@ vi.mock("../documents/DocumentEditor", () => ({ default: ({ label }) => <div>{la
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock("../../contexts/AuthProvider", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 vi.mock("../../hooks/useCustomFields", () => ({ useCustomFieldPeople: () => ({ data: [{ id: "u1", name: "Ann Owner" }, { id: "u2", name: "Bob" }] }) }));
-vi.mock("../../hooks/useManagementReview", () => ({
+vi.mock("../../hooks/useManagementReview", async (importOriginal) => ({
+  REVIEW_GUESSED: (await importOriginal()).REVIEW_GUESSED,
+  OBJECTIVE_GUESSED: (await importOriginal()).OBJECTIVE_GUESSED,
   useManagementReviews: () => ({ data: list, isLoading: false }),
   useManagementReview: () => ({ data: review, isLoading: false }),
   useReviewMutation: () => ({ mutate, isPending: false, error: null }),
@@ -132,7 +134,7 @@ describe("management reviews", () => {
     await userEvent.click(screen.getByRole("button", { name: "Mark done" }));
     await userEvent.type(screen.getByLabelText("What was done"), "Quotes in");
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Mark done" }));
-    expect(mutate).toHaveBeenCalledWith({ action: "completeAction", id: "x1", body: { note: "Quotes in" } }, expect.anything());
+    expect(mutate).toHaveBeenCalledWith({ action: "completeAction", id: "x1", body: { note: "Quotes in" } });
   });
 
   it("prints the whole review as one report", () => {
@@ -160,7 +162,7 @@ describe("management reviews", () => {
     await userEvent.click(within(item).getByRole("button", { name: "Mark done: Get three quotes" }));
     await userEvent.type(screen.getByLabelText("What was done"), "Quotes in");
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Mark done" }));
-    expect(mutate).toHaveBeenCalledWith({ action: "completeAction", id: "x1", body: { note: "Quotes in" } }, expect.anything());
+    expect(mutate).toHaveBeenCalledWith({ action: "completeAction", id: "x1", body: { note: "Quotes in" } });
   });
 
   it("sums management review up on the home page, and warns when none was completed in the last year", () => {

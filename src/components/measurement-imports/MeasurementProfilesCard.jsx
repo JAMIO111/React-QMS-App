@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import CTAButton from "@/components/CTAButton";
+import { useQuickSave } from "../../hooks/useQuickSave";
 import { PlusIcon, UploadIcon } from "@/components/icons";
 import { useGauges } from "../../hooks/useCalibration";
 import { useMeasurementProfiles, useProfileMutation, useProfileTemplates, useTryProfile } from "../../hooks/useMeasurementImports";
@@ -98,6 +99,7 @@ const ProfileDialog = ({ profile, onClose }) => {
   const templates = useProfileTemplates();
   const gauges = useGauges({ pageSize: 200, sort: "assetNumber" });
   const mutation = useProfileMutation();
+  const quickSave = useQuickSave(useProfileMutation());
   const [name, setName] = useState(profile?.name ?? "");
   const [description, setDescription] = useState(profile?.description ?? "");
   const [gaugeId, setGaugeId] = useState(profile?.defaultGauge?.id ?? null);
@@ -121,10 +123,13 @@ const ProfileDialog = ({ profile, onClose }) => {
   const ready = name.trim() && problems.length === 0 && (!settingsChanged || reason.trim().length >= 3);
   const save = () => {
     const body = { name: name.trim(), description: description.trim() || null, defaultGaugeId: gaugeId ?? null, settings };
-    mutation.mutate(
-      profile ? { action: "update", id: profile.id, body: { ...body, settings: settingsChanged ? settings : undefined, reason: settingsChanged ? reason.trim() : undefined } } : { action: "create", body },
-      { onSuccess: onClose },
-    );
+    if (profile) {
+      // A change shows at once; put back with a toast if the server refuses.
+      quickSave({ action: "update", id: profile.id, body: { ...body, settings: settingsChanged ? settings : undefined, reason: settingsChanged ? reason.trim() : undefined } });
+      onClose();
+      return;
+    }
+    mutation.mutate({ action: "create", body }, { onSuccess: onClose });
   };
 
   return (
@@ -218,17 +223,16 @@ const ProfileDialog = ({ profile, onClose }) => {
 };
 
 const RetireDialog = ({ profile, onClose }) => {
-  const mutation = useProfileMutation();
+  const quickSave = useQuickSave(useProfileMutation(), "Not retired");
   const [reason, setReason] = useState("");
   return (
     <Dialog title={`Retire ${profile.name}?`} onClose={onClose}>
       <div className="flex flex-col gap-3">
         <p className="text-sm text-primary-text">It reads no more files. Imports already made keep the version they used. It can be brought back.</p>
         <TextAreaField label="Why" required value={reason} onChange={(e) => setReason(e.target.value)} rows={2} />
-        {mutation.error && <Callout tone="error" role="alert">{describeApiError(mutation.error)}</Callout>}
         <div className="flex justify-end gap-2">
           <CTAButton type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton type="danger" size="md" disabled={reason.trim().length < 3} loading={mutation.isPending} onClick={() => mutation.mutate({ action: "retire", id: profile.id, reason: reason.trim() }, { onSuccess: onClose })}>
+          <CTAButton type="danger" size="md" disabled={reason.trim().length < 3} onClick={() => { quickSave({ action: "retire", id: profile.id, reason: reason.trim() }); onClose(); }}>
             Retire
           </CTAButton>
         </div>
@@ -240,7 +244,7 @@ const RetireDialog = ({ profile, onClose }) => {
 /** Settings → Data Management → Process control: how measurement files from CMMs and other gauge software are read (CM4). */
 const MeasurementProfilesCard = () => {
   const profiles = useMeasurementProfiles({ all: true });
-  const mutation = useProfileMutation();
+  const quickSave = useQuickSave(useProfileMutation(), "Not brought back");
   const [editing, setEditing] = useState(null); // profile | "new"
   const [retiring, setRetiring] = useState(null);
   const canManage = profiles.data?.canManage;
@@ -270,7 +274,7 @@ const MeasurementProfilesCard = () => {
                   items={[
                     p.active && { label: "Change", onSelect: () => setEditing(p) },
                     p.active && { label: "Retire", tone: "danger", onSelect: () => setRetiring(p) },
-                    !p.active && { label: "Bring back", onSelect: () => mutation.mutate({ action: "reactivate", id: p.id }) },
+                    !p.active && { label: "Bring back", onSelect: () => quickSave({ action: "reactivate", id: p.id }) },
                   ]}
                 />
               )}

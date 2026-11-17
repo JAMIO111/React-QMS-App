@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useCapaMutation, useMyCapaActions } from "../../hooks/useCapa";
 import { formatDay } from "../../lib/qualityAlerts";
 import { ACTION_STATUS } from "../../lib/capa";
-import { ErrorNotice, FormError } from "../master-data/shared";
+import { ErrorNotice } from "../master-data/shared";
 import { FindingsDialog } from "./ActionList";
 import CTAButton from "@/components/CTAButton";
 import SlidingToggle from "../ui/SlidingToggle";
@@ -34,7 +34,6 @@ const MyActionsPage = () => {
         <SlidingToggle ariaLabel="Show" options={FILTERS.map((f) => ({ value: f.id, label: f.label }))} value={status} onChange={setStatus} />
       </header>
       {query.error && <ErrorNotice error={query.error} />}
-      <FormError error={dialog ? null : mutation.error} />
       {query.isLoading ? (
         <p className="text-sm text-secondary-text">Loading…</p>
       ) : rows.length === 0 ? (
@@ -60,7 +59,7 @@ const MyActionsPage = () => {
                 <div className="flex flex-wrap gap-2">
                   {a.status === "open" && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Update findings: ${a.description}`} onClick={() => { mutation.reset(); setDialog({ action: a, closing: false }); }}>Update findings</CTAButton>}
                   {a.status === "open" && <CTAButton buttonType="button" type="main" size="lg" aria-label={`Close action: ${a.description}`} onClick={() => { mutation.reset(); setDialog({ action: a, closing: true }); }}>Close action</CTAButton>}
-                  {a.status === "done" && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} loading={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
+                  {a.status === "done" && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
                 </div>
               )}
             </li>

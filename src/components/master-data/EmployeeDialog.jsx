@@ -9,6 +9,9 @@ import Field from "../ui/Field";
 import RHFComboBox from "../ui/RHFComboBox";
 import { FormError } from "./shared";
 import CTAButton from "@/components/CTAButton";
+import { useQuickSave } from "../../hooks/useQuickSave";
+import { describeApiError } from "../../lib/api-client";
+import { changeRecord, patchFields } from "../../lib/guessRequest";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
@@ -30,17 +33,23 @@ const SignInLink = ({ employee, readOnly }) => {
     hint: c.employeeId && c.employeeId !== employee.id ? "Already linked to another employee" : undefined,
     disabled: !!c.employeeId && c.employeeId !== employee.id,
   }));
-  const change = (nextUserId) =>
+  /** Linked or unlinked at once; put back with a toast if the server refuses. */
+  const change = (nextUserId) => {
+    const before = login;
+    const person = (candidates.data?.data ?? []).find((c) => c.userId === nextUserId);
+    setLogin(nextUserId ? { userId: nextUserId, name: person?.name ?? "…", email: person?.email ?? null } : null);
+    setUserId(null);
     mutation.mutate(
-      { path: `/employees/${employee.id}/login`, method: "PUT", body: { userId: nextUserId } },
+      { path: `/employees/${employee.id}/login`, method: "PUT", body: { userId: nextUserId }, guess: changeRecord(employee.id, (x) => ("hasLogin" in x ? { ...x, hasLogin: !!nextUserId } : x)) },
       {
-        onSuccess: (data) => {
-          setLogin(data.login);
-          setUserId(null);
-          showToast({ type: "success", title: nextUserId ? "Linked" : "Unlinked", message: nextUserId ? `${employee.name} is linked to ${data.login?.name}.` : `${employee.name} is no longer linked to a sign-in.` });
+        onSuccess: (data) => setLogin(data.login),
+        onError: (error) => {
+          setLogin(before);
+          showToast({ type: "error", title: nextUserId ? "Not linked" : "Not unlinked", message: describeApiError(error) });
         },
       }
     );
+  };
   return (
     <section aria-label="Sign-in account" className="flex flex-col gap-2 rounded-xl border border-border-color p-3">
       <h4 className="flex items-center gap-2 text-sm font-semibold text-primary-text">
@@ -49,7 +58,7 @@ const SignInLink = ({ employee, readOnly }) => {
       <p className="text-sm text-primary-text">{login ? `Linked to ${login.name}.` : "Not linked to a sign-in account."}</p>
       {canLink && login && (
         <div>
-          <CTAButton buttonType="button" type="neutral" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => change(null)}>
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={() => change(null)}>
             Unlink sign-in
           </CTAButton>
         </div>
@@ -59,13 +68,12 @@ const SignInLink = ({ employee, readOnly }) => {
           <div className="min-w-56 flex-1">
             <RHFComboBox label="Member" icon={KeyRoundIcon} placeholder="Choose a member" options={people} value={userId} onChange={setUserId} />
           </div>
-          <CTAButton buttonType="button" type="secondary" size="md" disabled={!userId || mutation.isPending} loading={mutation.isPending} onClick={() => change(userId)}>
+          <CTAButton buttonType="button" type="secondary" size="md" disabled={!userId} onClick={() => change(userId)}>
             Link sign-in
           </CTAButton>
         </div>
       )}
       {!canLink && !readOnly && candidates.data && <p className="text-xs text-secondary-text">Only people with a Controller seat can link or unlink a sign-in account.</p>}
-      <FormError error={mutation.error} />
     </section>
   );
 };
@@ -77,6 +85,7 @@ const SignInLink = ({ employee, readOnly }) => {
 const EmployeeDialog = ({ employee, onClose, readOnly = false }) => {
   const creating = !employee;
   const mutation = useMasterDataMutation();
+  const quickSave = useQuickSave(useMasterDataMutation());
   const { showToast } = useToast();
   const { data: sites } = useSites({ includeInactive: true });
   const { data: departments } = useAllDepartments({ includeInactive: true });
@@ -115,11 +124,18 @@ const EmployeeDialog = ({ employee, onClose, readOnly = false }) => {
       departmentId: form.departmentId,
       ...(creating ? withCustomValues(customValues) : { active: form.active }),
     };
+    if (!creating) {
+      // Shown at once (the name follows the first name and surname); put back with a toast if the server refuses.
+      const shown = { ...body, name: `${body.firstName} ${body.surname}` };
+      quickSave({ path: `/employees/${employee.id}`, method: "PATCH", body: changesSince(opened, body), guess: changeRecord(employee.id, (x) => patchFields(x, shown)) });
+      onClose();
+      return;
+    }
     mutation.mutate(
-      { path: creating ? "/employees" : `/employees/${employee.id}`, method: creating ? "POST" : "PATCH", body: creating ? body : changesSince(opened, body) },
+      { path: "/employees", method: "POST", body },
       {
         onSuccess: () => {
-          showToast({ type: "success", title: "Saved", message: `${body.firstName} ${body.surname} ${creating ? "added" : "updated"}.` });
+          showToast({ type: "success", title: "Saved", message: `${body.firstName} ${body.surname} added.` });
           onClose();
         },
       }

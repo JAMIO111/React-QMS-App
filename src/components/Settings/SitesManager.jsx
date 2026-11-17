@@ -12,6 +12,8 @@ import {
   useSites,
   useStructureMutation,
 } from "../../hooks/useQmsApi";
+import { isPending } from "../../lib/optimistic";
+import { useToast } from "../../contexts/ToastProvider";
 import { CURRENCY_OPTIONS } from "../../lib/costs";
 import { browserTimeZone } from "../../lib/timeZones";
 import LoadingScreen from "../ui/LoadingScreen";
@@ -28,7 +30,7 @@ const smallButton =
   "min-h-9.5 rounded-lg border border-border-color px-2 py-1 text-sm text-primary-text hover:border-border-dark-color disabled:opacity-50 cursor-pointer";
 
 /** Inline "add" form shared by sites and departments. */
-const AddForm = ({ label, onSubmit, pending, error, extra }) => {
+const AddForm = ({ label, onSubmit, error, extra }) => {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   return (
@@ -37,10 +39,19 @@ const AddForm = ({ label, onSubmit, pending, error, extra }) => {
       className="flex flex-col gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit({ code: code.trim(), name: name.trim() }, () => {
-          setCode("");
-          setName("");
-        });
+        const fields = { code: code.trim(), name: name.trim() };
+        onSubmit(
+          fields,
+          () => {
+            setCode("");
+            setName("");
+          },
+          // Put what was typed back (an optimistic add the server refused).
+          () => {
+            setCode(fields.code);
+            setName(fields.name);
+          },
+        );
       }}>
       <div className="flex flex-wrap items-end gap-2">
         <Field
@@ -59,11 +70,8 @@ const AddForm = ({ label, onSubmit, pending, error, extra }) => {
           maxLength={100}
         />
         {extra}
-        <button
-          type="submit"
-          disabled={pending}
-          className={`${smallButton} h-10`}>
-          {pending ? "Adding…" : label}
+        <button type="submit" className={`${smallButton} h-10`}>
+          {label}
         </button>
       </div>
       {error && (
@@ -99,11 +107,10 @@ const Departments = ({ site, canManage }) => {
             <span>
               <span className="font-mono">{d.code}</span> — {d.name}
             </span>
-            {canManage && (
+            {canManage && !isPending(d.id) && (
               <button
                 type="button"
                 className={smallButton}
-                disabled={mutation.isPending}
                 onClick={() =>
                   mutation.mutate({
                     resource: "departments",
@@ -120,14 +127,12 @@ const Departments = ({ site, canManage }) => {
       {canManage && (
         <AddForm
           label="Add department"
-          pending={mutation.isPending}
           error={mutation.error}
-          onSubmit={(fields, reset) =>
-            mutation.mutate(
-              { resource: "departments", body: { ...fields, siteId: site.id } },
-              { onSuccess: reset },
-            )
-          }
+          onSubmit={(fields, reset, restore) => {
+            // Optimistic: the department shows in the list at once; a refusal takes it away and puts the typed values back.
+            reset();
+            mutation.mutate({ resource: "departments", body: { ...fields, siteId: site.id } }, { onError: restore });
+          }}
         />
       )}
     </div>
@@ -177,6 +182,7 @@ const SiteDialog = ({ site, onClose }) => {
   const [staged, setStaged] = useState([]);
   const [failure, setFailure] = useState(null);
   const mutation = useStructureMutation();
+  const { showToast } = useToast();
   const formId = `site-form-${site?.id ?? "new"}`;
 
   const save = async (e) => {
@@ -187,7 +193,13 @@ const SiteDialog = ({ site, onClose }) => {
         const created = await mutation.mutateAsync({ resource: "sites", body: { code: code.trim(), name: name.trim(), timezone, currency } });
         for (const d of staged) await mutation.mutateAsync({ resource: "departments", body: { ...d, siteId: created.id } });
       } else {
-        await mutation.mutateAsync({ resource: "sites", id: site.id, body: { name: name.trim(), timezone, currency } });
+        // Optimistic: the site's row changes at once and the pop-up closes; a refusal puts it back and says why.
+        mutation.mutate(
+          { resource: "sites", id: site.id, body: { name: name.trim(), timezone, currency } },
+          { onError: (error) => showToast({ type: "error", title: `Site ${site.code} not saved`, message: describeApiError(error) }) },
+        );
+        onClose();
+        return;
       }
       onClose();
     } catch (error) {
@@ -231,9 +243,9 @@ const SiteDialog = ({ site, onClose }) => {
           <CTAButton
             buttonType="submit"
             form={formId}
-            disabled={mutation.isPending || !timezone || !currency || name.trim().length === 0 || (creating && code.trim().length === 0)} loading={mutation.isPending}
+            disabled={(creating && mutation.isPending) || !timezone || !currency || name.trim().length === 0 || (creating && code.trim().length === 0)} loading={creating && mutation.isPending}
             type="main" size="md">
-            {mutation.isPending ? "Saving…" : creating ? "Add site" : "Save changes"}
+            {creating && mutation.isPending ? "Saving…" : creating ? "Add site" : "Save changes"}
           </CTAButton>
         </div>
       </div>
@@ -269,7 +281,6 @@ const SiteRow = ({ site, canManage }) => {
             <button
               type="button"
               className={smallButton}
-              disabled={mutation.isPending}
               onClick={() =>
                 mutation.mutate({
                   resource: "sites",

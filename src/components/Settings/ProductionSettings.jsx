@@ -116,7 +116,7 @@ const ProductionSettings = ({ settings, canManage }) => {
               </p>
               <p className="text-sm text-secondary-text">{s.text}</p>
             </div>
-            <Switch id={`prod-${s.key}`} checked={!!settings[s.key]} disabled={!canManage || update.isPending} onClick={() => toggle(s.key, s.title)} />
+            <Switch id={`prod-${s.key}`} checked={!!settings[s.key]} disabled={!canManage} onClick={() => toggle(s.key, s.title)} />
           </li>
         ))}
       </ul>

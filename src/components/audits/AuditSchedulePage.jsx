@@ -78,8 +78,11 @@ const SlotActions = ({ item, canPerform, canManage, onSkip, onChanged }) => {
         <CTAButton
           buttonType="button"
           type="neutral" size="md"
-          disabled={mutation.isPending} loading={mutation.isPending}
-          onClick={() => mutation.mutate({ path: `/audit-occurrences/${item.id}/unskip` }, { onSuccess: onChanged })}
+          onClick={() => {
+            // Back on the schedule at once; a refusal puts it back with a toast (from the hook).
+            mutation.mutate({ path: `/audit-occurrences/${item.id}/unskip`, failed: "Not put back" });
+            onChanged?.();
+          }}
           aria-label={`Put back ${item.audit.reference} due ${item.dueOn}`}>
           Put back
         </CTAButton>
@@ -322,10 +325,12 @@ const AuditSchedulePage = () => {
           title={`Skip ${skipping.audit.reference} due ${formatDate(skipping.dueOn)}?`}
           label="Why is it being skipped?"
           confirmText="Skip audit"
-          pending={skipMutation.isPending}
-          error={skipMutation.error}
           onClose={() => setSkipping(null)}
-          onConfirm={(reason) => skipMutation.mutate({ path: `/audit-occurrences/${skipping.id}/skip`, body: { reason } }, { onSuccess: () => setSkipping(null) })}
+          onConfirm={(reason) => {
+            // Shown as skipped at once; a refusal puts it back with a toast (from the hook).
+            skipMutation.mutate({ path: `/audit-occurrences/${skipping.id}/skip`, body: { reason }, failed: "Not skipped" });
+            setSkipping(null);
+          }}
         />
       )}
       {starting && <StartAuditDialog onClose={() => setStarting(false)} />}

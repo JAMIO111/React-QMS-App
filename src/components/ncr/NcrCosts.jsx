@@ -6,6 +6,7 @@ import Dialog from "../ui/Dialog";
 import CostForm from "./CostForm";
 import ReasonDialog from "./ReasonDialog";
 import { useNcrCosts, useNcrMutation } from "../../hooks/useNcr";
+import { costDelete, costRestore } from "../../lib/ncrGuesses";
 import { useOrganisationDetails, useSites } from "../../hooks/useQmsApi";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
@@ -122,8 +123,8 @@ const NcrCosts = ({ ncrId, siteId, canEdit }) => {
                     <td className="px-2 py-2">
                       <div className="flex justify-end gap-1">
                         {c.deletedAt ? (
-                          <button type="button" aria-label={`Restore ${costTypeName(c.costType)} cost`} title="Restore" disabled={mutation.isPending}
-                            onClick={() => mutation.mutate({ path: `/ncr-costs/${c.id}/restore` }, { onError: (e) => showToast({ type: "error", title: "Not restored", message: describeApiError(e) }) })}
+                          <button type="button" aria-label={`Restore ${costTypeName(c.costType)} cost`} title="Restore"
+                            onClick={() => mutation.mutate({ path: `/ncr-costs/${c.id}/restore`, guess: costRestore(c.id), failed: "Not restored" })}
                             className="rounded-lg p-1.5 text-primary-text hover:bg-border-color/50 cursor-pointer">
                             <RotateCcwIcon className="h-4 w-4" />
                           </button>
@@ -186,20 +187,12 @@ const NcrCosts = ({ ncrId, siteId, canEdit }) => {
           title={`Delete ${costTypeName(deleting.costType).toLowerCase()} cost?`}
           label="Reason for deleting"
           confirmText="Delete"
-          pending={mutation.isPending}
-          error={mutation.error}
           onClose={() => setDeleting(null)}
-          onConfirm={(reason) =>
-            mutation.mutate(
-              { path: `/ncr-costs/${deleting.id}/delete`, body: { reason } },
-              {
-                onSuccess: () => {
-                  showToast({ type: "success", title: "Deleted", message: "Cost removed from the totals." });
-                  setDeleting(null);
-                },
-              }
-            )
-          }
+          onConfirm={(reason) => {
+            // Gone from the list at once (the totals follow with the refetch); a refusal puts it back and is told in a toast.
+            mutation.mutate({ path: `/ncr-costs/${deleting.id}/delete`, body: { reason }, guess: costDelete(deleting.id, reason), failed: "Not deleted" });
+            setDeleting(null);
+          }}
         />
       )}
     </div>

@@ -1,10 +1,15 @@
 import { useRef, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
-import { apiFetch } from "../lib/api-client";
+import { apiFetch, describeApiError } from "../lib/api-client";
+import { useToast } from "../contexts/ToastProvider";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
 import { tookTheirs, withVersion } from "../lib/editConflicts";
+import { guessCache, pendingId, rollbackGuess, settle, updateById } from "../lib/optimistic";
+import { DOCUMENT_GUESSED } from "../lib/documents";
+
+export { DOCUMENT_GUESSED };
 
 /** Document control (docs/document-control-plan.md): types, documents and their revisions. */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "documents", ...rest];
@@ -58,10 +63,17 @@ export const useDocumentRevision = (id) => {
   });
 };
 
-/** One command at a time: { action, id, body }. Every one refreshes the organisation's cached data. */
+
+const FILE_ACTIONS = new Set(["removeFile", "restoreFile"]);
+
+/**
+ * One command at a time: { action, id, body, show?, failed? }. Every one refreshes the organisation's cached data. A guessed command
+ * (DOCUMENT_GUESSED) changes the screen at once and, if refused, is put back with an error toast titled `failed` (default "Not saved").
+ */
 export const useDocumentMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
     mutationFn: ({ action, id, body }) => {
       const send = (path, method = "POST") => apiFetch(path, { method, body, organisationId });
@@ -122,8 +134,79 @@ export const useDocumentMutation = () => {
           throw new Error(`Unknown action ${action}`);
       }
     },
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+    // Quick edits show at once (see guessDocuments); `show` carries what the screen needs that the server only takes ids for.
+    // Files are guessed too, but AttachmentDrop tells its own errors.
+    onMutate: (vars) => (DOCUMENT_GUESSED.has(vars?.action) || FILE_ACTIONS.has(vars?.action) ? guessCache(queryClient, ["api", "org", organisationId], (data, queryKey) => guessDocuments(data, vars, queryKey)) : { optimistic: false }),
+    onError: (error, vars, context) => {
+      rollbackGuess(queryClient, context);
+      if (DOCUMENT_GUESSED.has(vars?.action) && !error?.cancelled) toast?.showToast({ type: "error", title: vars.failed ?? "Not saved", message: describeApiError(error) });
+    },
+    // Commands that were not guessed wait for the refetch, so the screen has moved on when the caller's onSuccess runs.
+    onSettled: (_data, _error, _vars, context) => settle(queryClient, organisationId, context),
   });
+};
+
+const now = () => new Date().toISOString();
+
+/** The body's plain values written onto the object, for the keys it already has (the version is the server's to move). */
+const mergeFlat = (obj, body = {}) => {
+  let changed = false;
+  const out = { ...obj };
+  for (const [k, v] of Object.entries(body)) {
+    if (k === "rowVersion" || !(k in obj) || v === undefined || obj[k] === v) continue;
+    if (v !== null && typeof v === "object") continue;
+    out[k] = v;
+    changed = true;
+  }
+  return changed ? out : obj;
+};
+
+/**
+ * Any cached documents data as it will be after a command of useDocumentMutation (one cached query at a time; `queryKey` says which).
+ * Commands whose outcome the database decides (submit, review, approve, issue, withdraw, accept, start a revision, create) are left alone.
+ */
+export const guessDocuments = (data, { action, id, body = {}, show = {} } = {}, queryKey = []) => {
+  if (!id) return data;
+  switch (action) {
+    case "updateType":
+    case "updateDocument":
+    case "updateRevision":
+      // `show` gives joined values the body only names by id (e.g. owner).
+      return updateById(data, id, (o) => mergeFlat(Object.keys(show).some((k) => k in o) ? { ...o, ...Object.fromEntries(Object.entries(show).filter(([k]) => k in o)) } : o, body));
+    case "removeFile":
+      return updateById(data, id, (o) => ({ ...o, deletedAt: now(), deleteReason: body.reason ?? null }));
+    case "restoreFile":
+      return updateById(data, id, (o) => ({ ...o, deletedAt: null, deleteReason: null }));
+    case "setReaders":
+      return show.targets ? updateById(data, id, (o) => ("targets" in o ? { ...o, targets: show.targets } : o)) : data;
+    case "setSkills":
+      return show.skills ? updateById(data, id, (o) => ("skills" in o ? { ...o, skills: show.skills } : o)) : data;
+    case "setLinks":
+      return show.links ? updateById(data, id, (o) => ("links" in o ? { ...o, links: show.links.map((l) => (l.id ? l : { ...l, id: pendingId() })) } : o)) : data;
+    case "withdrawChangeRequest":
+      return updateById(data, id, (o) => ({ ...o, status: "withdrawn" }));
+    case "declineChangeRequest":
+      return updateById(data, id, (o) => ({ ...o, status: "declined", decisionReason: body.reason ?? null }));
+    case "acknowledge": {
+      const at = now();
+      const note = body.note ?? null;
+      let next = updateById(data, id, (o) => (o.myReading ? { ...o, myReading: { ...o.myReading, acknowledgedAt: at, note } } : o));
+      // My documents: it leaves "to read" and heads "read lately"; the badge counts one fewer.
+      if (Array.isArray(next?.toRead)) {
+        const item = next.toRead.find((x) => x.revision?.id === id);
+        if (item) next = { ...next, toRead: next.toRead.filter((x) => x !== item), acknowledged: [{ ...item, acknowledgedAt: at, note }, ...(next.acknowledged ?? [])] };
+      }
+      if (queryKey[3] === "documents" && queryKey.includes("mine-count") && typeof next?.toRead === "number" && next.toRead > 0) next = { ...next, toRead: next.toRead - 1, total: Math.max(0, (next.total ?? 1) - 1) };
+      return next;
+    }
+    case "addRecipient": {
+      if (!(queryKey.includes("recipients") && queryKey.at(-1) === id && Array.isArray(data))) return data;
+      if (data.some((x) => x.person?.id === body.userId)) return data;
+      return [...data, { id: pendingId(), person: { id: body.userId, name: show.name ?? "…" }, reachedVia: ["Added"], dueOn: null, overdue: false, viewedAt: null, acknowledgedAt: null, note: null }];
+    }
+    default:
+      return data;
+  }
 };
 
 /**

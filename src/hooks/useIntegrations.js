@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
+import { guessCache, rollbackGuess, updateById } from "../lib/optimistic";
 
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "integrations", ...rest];
 const BASE = "/integrations";
@@ -203,8 +204,37 @@ export const useIntegrationMutation = () => {
           throw new Error(`Unknown action ${action}`);
       }
     },
+    onMutate: (vars) => {
+      const guess = guessConnectionChange(vars);
+      return guess ? guessCache(queryClient, key(organisationId), guess) : { optimistic: false };
+    },
+    onError: (_e, _v, context) => rollbackGuess(queryClient, context),
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
+};
+
+/** Statuses a connection or run moves to at once (the server's answer and the refetch confirm them). */
+const STATUS_GUESS = { pause: "paused", resume: "active", retire: "retired", cancelRun: "cancelled" };
+
+/**
+ * What a connection command changes on screen before the server answers, as `(data) => newData` over the integrations cache, or null when the
+ * result is only known from the server (tests, runs, credentials, files, mappings, a new record source).
+ */
+export const guessConnectionChange = ({ action, id, body } = {}) => {
+  if (!id) return null;
+  if (STATUS_GUESS[action]) {
+    const status = STATUS_GUESS[action];
+    return (data) => updateById(data, id, (o) => ("status" in o && o.status !== status ? { ...o, status } : o));
+  }
+  if (action === "setRecordSource" && body?.source === null && body.entityType) {
+    return (data) =>
+      updateById(data, id, (o) =>
+        Array.isArray(o.recordSources) && o.recordSources.some((s) => s.entityType === body.entityType)
+          ? { ...o, recordSources: o.recordSources.filter((s) => s.entityType !== body.entityType) }
+          : o,
+      );
+  }
+  return null;
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -266,8 +296,35 @@ export const useTemplateMutation = () => {
         default: throw new Error(`Unknown action ${action}`);
       }
     },
+    onMutate: (vars) => {
+      const guess = guessTemplateChange(vars);
+      return guess ? guessCache(queryClient, key(organisationId), guess) : { optimistic: false };
+    },
+    onError: (_e, _v, context) => rollbackGuess(queryClient, context),
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
+};
+
+/**
+ * What a template command changes on screen at once: a rename shows the new name; archiving takes it out of the lists of templates in use (and
+ * marks it archived wherever else it shows); bringing it back takes it out of the archived lists. Null for the rest (new versions, copies).
+ */
+export const guessTemplateChange = ({ action, id, body } = {}) => {
+  if (!id) return null;
+  if (action === "update" && typeof body?.name === "string" && body.name.trim()) {
+    const name = body.name.trim();
+    return (data) => updateById(data, id, (o) => (typeof o.name === "string" && o.name !== name ? { ...o, name } : o));
+  }
+  if (action === "archive" || action === "restore") {
+    const archived = action === "archive";
+    const leaves = archived ? "exclude" : "only";
+    return (data, queryKey) => {
+      const isList = queryKey?.[4] === "templates" && Array.isArray(data);
+      if (isList && queryKey[6] === leaves) return updateById(data, id, (o) => o, { remove: true });
+      return updateById(data, id, (o) => ("archived" in o && o.archived !== archived ? { ...o, archived } : o));
+    };
+  }
+  return null;
 };
 
 /**

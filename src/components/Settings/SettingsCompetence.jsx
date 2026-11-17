@@ -5,7 +5,7 @@ import { describeApiError } from "../../lib/api-client";
 import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useCompetenceCategories, useCompetenceMutation, useCompetencePositions, useCompetenceSkills } from "../../hooks/useCompetence";
-import { groupByCategory, refreshLabel, REQUIRED_LEVELS, requirementSummary } from "../../lib/competence";
+import { COMPETENCE_GUESSED, groupByCategory, refreshLabel, REQUIRED_LEVELS, requirementSummary } from "../../lib/competence";
 import { ErrorNotice, FormError } from "../master-data/shared";
 import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
@@ -28,11 +28,18 @@ const Buttons = ({ onClose, pending, disabled, saveLabel = "Save" }) => (
 const useSave = (onClose) => {
   const mutation = useCompetenceMutation();
   const { showToast } = useToast();
-  const run = (payload) =>
+  const run = (payload) => {
+    if (COMPETENCE_GUESSED.has(payload.action)) {
+      // Shown at once and the dialog closes; a refusal is put back with a toast from the hook.
+      mutation.mutate(payload);
+      onClose();
+      return;
+    }
     mutation.mutate(payload, {
       onSuccess: () => onClose(),
       onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }),
     });
+  };
   return { mutation, run };
 };
 
@@ -143,7 +150,8 @@ const PositionSkillsDialog = ({ position, skills, onClose }) => {
   };
   const save = (e) => {
     e.preventDefault();
-    run({ action: "setPositionSkills", id: position.id, body: { skills: rows.map((r) => ({ skillId: r.skillId, requiredLevel: Number(r.requiredLevel) })) } });
+    const skills = rows.map((r) => ({ skillId: r.skillId, requiredLevel: Number(r.requiredLevel) }));
+    run({ action: "setPositionSkills", id: position.id, body: { skills }, show: { skills: rows.map((r) => ({ ...r, requiredLevel: Number(r.requiredLevel) })) } });
   };
   return (
     <Dialog title={`Skills required by ${position.name}`} onClose={onClose} width="max-w-2xl">
@@ -227,7 +235,6 @@ const SettingsCompetence = () => {
   const skills = useCompetenceSkills({ all: true });
   const positions = useCompetencePositions({ all: true });
   const mutation = useCompetenceMutation();
-  const { showToast } = useToast();
   const [dialog, setDialog] = useState(null);
   const active = useMemo(() => (skills.data?.data ?? []).filter((s) => s.active), [skills.data]);
   const retired = useMemo(() => (skills.data?.data ?? []).filter((s) => !s.active), [skills.data]);
@@ -236,9 +243,9 @@ const SettingsCompetence = () => {
   const error = categories.error || skills.error || positions.error;
   if (error) return <ErrorNotice error={error} />;
 
-  const fail = (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) });
-  const toggleCategory = (c, on) => mutation.mutate({ action: "updateCategory", id: c.id, body: { active: on } }, { onError: fail });
-  const reactivate = (kind, item) => mutation.mutate({ action: kind === "skill" ? "reactivateSkill" : "reactivatePosition", id: item.id }, { onError: fail });
+  // Both show at once; a refusal is put back with a toast from the hook.
+  const toggleCategory = (c, on) => mutation.mutate({ action: "updateCategory", id: c.id, body: { active: on } });
+  const reactivate = (kind, item) => mutation.mutate({ action: kind === "skill" ? "reactivateSkill" : "reactivatePosition", id: item.id });
 
   const SkillRow = ({ s }) => (
     <li className="flex flex-wrap items-center gap-3 py-2">
@@ -259,9 +266,20 @@ const SettingsCompetence = () => {
             <IconButton label={`Edit ${s.name}`} onClick={() => setDialog({ type: "skill", item: s })}>
               <PencilIcon />
             </IconButton>
-            <CTAButton buttonType="button" type="neutral" onClick={() => setDialog({ type: "retire-skill", item: s })}>
+            <CTAButton
+              buttonType="button"
+              type="neutral"
+              onClick={() => setDialog({ type: "retire-skill", item: s })}
+              disabled={s.positions > 0}
+              aria-describedby={s.positions > 0 ? `retire-${s.id}` : undefined}>
               Retire
             </CTAButton>
+            {/* The database refuses to retire a skill an active position requires, so the button says why. */}
+            {s.positions > 0 && (
+              <span id={`retire-${s.id}`} className="text-xs text-secondary-text">
+                Required by {s.positions === 1 ? "a position" : `${s.positions} positions`}
+              </span>
+            )}
           </>
         ) : (
           <CTAButton buttonType="button" type="neutral" onClick={() => reactivate("skill", s)}>

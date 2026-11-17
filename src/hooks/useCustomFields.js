@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { orgRoot, refreshOrganisation } from "../lib/refresh";
+import { guessCache, updateById } from "../lib/optimistic";
 import { CUSTOM_FIELD_LIMIT } from "../lib/customFields";
 
 const fieldsKey = (organisationId, entityType, includeRetired) => ["api", "org", organisationId, "custom-fields", entityType ?? "all", includeRetired ? "all" : "active"];
@@ -33,7 +34,8 @@ export const useActiveCustomFields = (entityType, options) => {
 /**
  * Change the organisation's custom fields (custom_fields.manage):
  * `{ action: "create", body }`, `{ action: "update", id, body }`, `{ action: "retire", id, reason }`, `{ action: "reactivate", id }`,
- * `{ action: "reorder", entityType, ids }`. A reorder moves the list on screen at once and is put back if it fails.
+ * `{ action: "reorder", entityType, ids }`. A reorder, an edit, retiring and bringing back show on screen at once and are put back if they fail
+ * (a new field waits for the server, which makes its key).
  */
 export const useCustomFieldMutation = () => {
   const { organisationId } = useOrganisation();
@@ -46,7 +48,11 @@ export const useCustomFieldMutation = () => {
       if (action === "reactivate") return apiFetch(`/custom-fields/${id}/reactivate`, { method: "POST", body: {}, organisationId });
       return apiFetch("/custom-fields/order", { method: "PUT", body: { entityType, ids }, organisationId });
     },
-    onMutate: async ({ action, entityType, ids }) => {
+    onMutate: async ({ action, id, body, reason, entityType, ids }) => {
+      if (action === "update" || action === "retire" || action === "reactivate") {
+        const context = await guessCache(queryClient, ["api", "org", organisationId, "custom-fields"], (data, queryKey) => guessCustomField(data, { action, id, body, reason }, queryKey));
+        return { previous: context.snapshot };
+      }
       if (action !== "reorder") return {};
       const prefix = ["api", "org", organisationId, "custom-fields", entityType];
       await queryClient.cancelQueries({ queryKey: prefix });
@@ -60,6 +66,30 @@ export const useCustomFieldMutation = () => {
     onError: (_e, _v, context) => context?.previous?.forEach(([k, v]) => queryClient.setQueryData(k, v)),
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
+};
+
+/**
+ * A cached custom-field list (`{ data, entities }`) as it will be after an edit (`body` merged), retiring (`active: false`, the reason) or
+ * bringing a field back. A list of active fields only loses a retired one; the in-use count of its kind of record follows.
+ */
+export const guessCustomField = (data, { action, id, body = {}, reason }, queryKey = []) => {
+  if (!Array.isArray(data?.data)) return data;
+  const field = data.data.find((f) => f.id === id);
+  if (!field) return data;
+  if (action === "update") {
+    const merged = { ...body };
+    if (Array.isArray(body.options)) merged.options = body.options.map((o) => ({ ...(field.options?.find((x) => x.key && x.key === o.key) ?? {}), ...o }));
+    return updateById(data, id, (f) => ({ ...f, ...merged }));
+  }
+  const active = action === "reactivate";
+  if (field.active === active) return data;
+  const next = updateById(data, id, (f) => ({ ...f, active, retireReason: active ? null : (reason ?? null) }));
+  const entities = Array.isArray(data.entities)
+    ? data.entities.map((e) => (e.entityType === field.entityType ? { ...e, activeCount: Math.max(0, (e.activeCount ?? 0) + (active ? 1 : -1)) } : e))
+    : data.entities;
+  // A list of active fields only (key ending "active") drops a retired field.
+  const rows = !active && queryKey.at(-1) === "active" ? next.data.filter((f) => f.id !== id) : next.data;
+  return { ...next, data: rows, entities };
 };
 
 /** Puts `values` into the `customValues` of every cached object with this id (lists, pages, details). */

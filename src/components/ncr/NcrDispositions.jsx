@@ -11,6 +11,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { apiFetch } from "../../lib/api-client";
 import { useOptimisticSubmit } from "../../lib/optimisticSubmit";
+import { dispositionCancel } from "../../lib/ncrGuesses";
 import { useNcrAffectedLots, useNcrDispositions, useNcrMutation } from "../../hooks/useNcr";
 import { DISPOSITION_DECISIONS, RMA_DECISION, decisionLabel } from "../../lib/ncrWorkflow";
 import { formatDate } from "../../lib/ncr";
@@ -335,7 +336,7 @@ const NcrDispositions = ({ ncrId, canEdit, source }) => {
         </div>
       )}
       {!d.canApprove && live.some((x) => x.status === "proposed") && <p className="text-sm text-secondary-text">Proposed dispositions are approved by someone with approval rights.</p>}
-      {mutation.error && !editing && !approving && !cancelling && !rma && <FormError error={mutation.error} />}
+      {mutation.error && !mutation.variables?.guess && !editing && !approving && !cancelling && !rma && <FormError error={mutation.error} />}
 
       {editing && <DispositionDialog ncrId={ncrId} disposition={editing === "new" ? null : editing} remaining={d.remaining} lots={lots} onClose={() => setEditing(null)} />}
       {rma && <RmaDialog ncrId={ncrId} remaining={d.remaining} lots={lots} onClose={() => setRma(false)} />}
@@ -345,10 +346,12 @@ const NcrDispositions = ({ ncrId, canEdit, source }) => {
           title={`Cancel this ${cancelling.status === "approved" ? "approved " : ""}disposition?`}
           label="Why is it being cancelled?"
           confirmText="Cancel disposition"
-          pending={mutation.isPending}
-          error={mutation.error}
           onClose={() => setCancelling(null)}
-          onConfirm={(r) => mutation.mutate({ path: `/ncr-dispositions/${cancelling.id}/cancel`, body: { reason: r } }, { onSuccess: () => setCancelling(null) })}
+          onConfirm={(r) => {
+            // Shown as cancelled at once; a refusal puts it back and is told in a toast (useNcrMutation).
+            mutation.mutate({ path: `/ncr-dispositions/${cancelling.id}/cancel`, body: { reason: r }, guess: dispositionCancel(cancelling.id, r), failed: "Not cancelled" });
+            setCancelling(null);
+          }}
         />
       )}
     </div>

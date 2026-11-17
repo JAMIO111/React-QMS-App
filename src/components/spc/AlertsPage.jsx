@@ -7,7 +7,8 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useAcknowledgeAlert, useSpcAlerts } from "../../hooks/useSpc";
 import { formatDateTime } from "../../lib/processControl";
 import { CHART_NAME } from "../../lib/spc";
-import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
+import { ErrorNotice, TextAreaField } from "../master-data/shared";
+import { useQuickSave } from "../../hooks/useQuickSave";
 import CTAButton from "@/components/CTAButton";
 import SlidingToggle from "../ui/SlidingToggle";
 
@@ -21,6 +22,7 @@ const TABS = [
 
 const AcknowledgeDialog = ({ alert, onClose }) => {
   const mutation = useAcknowledgeAlert();
+  const quickSave = useQuickSave(mutation, "Not acknowledged");
   const [note, setNote] = useState("");
   return (
     <Dialog title={`Acknowledge — ${alert.characteristicName}`} onClose={onClose}>
@@ -28,19 +30,20 @@ const AcknowledgeDialog = ({ alert, onClose }) => {
         className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
-          mutation.mutate({ id: alert.id, note }, { onSuccess: onClose });
+          // Shown as acknowledged at once; put back with a toast if the server refuses.
+          quickSave({ id: alert.id, note: note.trim() });
+          onClose();
         }}>
         <p className="text-sm text-primary-text">
           {alert.part.partNumber} · {alert.summary}. Say what was looked at or done about it; it is recorded with your name and the time, and an alert is acknowledged once.
         </p>
         <TextAreaField label="What was done" value={note} onChange={(e) => setNote(e.target.value)} required maxLength={2000} rows={3} />
-        <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!note.trim() || mutation.isPending} loading={mutation.isPending}>
-            {mutation.isPending ? "Saving…" : "Acknowledge"}
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!note.trim()}>
+            Acknowledge
           </CTAButton>
         </div>
       </form>

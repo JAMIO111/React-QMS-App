@@ -110,10 +110,8 @@ const EmployeesPage = () => {
   const toggleActive = (item) =>
     activeMutation.mutate(
       { path: `/employees/${item.id}`, method: "PATCH", body: withVersion(item, { active: !item.active }) },
-      {
-        onSuccess: () => showToast({ type: "success", title: item.active ? "Deactivated" : "Reactivated", message: `${item.name} is now ${item.active ? "inactive" : "active"}.` }),
-        onError: (error) => showToast({ type: "error", title: "Not changed", message: describeApiError(error) }),
-      }
+      // Switched at once (the hook's guess); put back with a toast if the server refuses.
+      { onError: (error) => showToast({ type: "error", title: "Not changed", message: describeApiError(error) }) }
     );
   const rowActions = (item) =>
     canManage

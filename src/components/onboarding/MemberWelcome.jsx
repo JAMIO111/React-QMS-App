@@ -74,20 +74,28 @@ export default function MemberWelcome({ welcome, wait }) {
     }
   };
 
+  // Optimistic: the next step shows at once while the save goes on behind it; a refusal brings the person back to the step and says why.
+  const inBackground = (back, fn) => {
+    setProblem(null);
+    fn().catch((error) => {
+      setStep(back);
+      setProblem(describeApiError(error));
+    });
+  };
+
   const saveAbout = (e) => {
     e.preventDefault();
     if (!first.trim() || !surname.trim()) return setProblem("Type your first name and surname.");
-    run(async () => {
+    setStep("notifications");
+    inBackground("about", async () => {
       await apiFetch("/me", { method: "PATCH", body: { firstName: first.trim(), surname: surname.trim(), jobTitle: jobTitle.trim() || null } });
       await mark("about");
-      setStep("notifications");
     });
   };
-  const saveNotifications = () =>
-    run(async () => {
-      await mark("notifications");
-      setStep("done");
-    });
+  const saveNotifications = () => {
+    setStep("done");
+    inBackground("notifications", () => mark("notifications"));
+  };
   const finish = () =>
     run(async () => {
       await mark("done");
@@ -112,7 +120,7 @@ export default function MemberWelcome({ welcome, wait }) {
           </div>
           <Field label="Job title" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Quality inspector" autoComplete="organization-title" />
           <p className="text-xs text-secondary-text">Your colleagues see your name on everything you record. You can add a profile picture later in Settings → Account.</p>
-          <CTAButton type="main" size="lg" buttonType="submit" className="self-start" loading={busy} loadingText="Saving">
+          <CTAButton type="main" size="lg" buttonType="submit" className="self-start">
             Continue
           </CTAButton>
         </form>
@@ -131,7 +139,7 @@ export default function MemberWelcome({ welcome, wait }) {
             </li>
           </ul>
           <p className="text-xs text-secondary-text">You can switch any of these on or off in Settings → Notifications.</p>
-          <CTAButton type="main" size="lg" className="self-start" onClick={saveNotifications} loading={busy} loadingText="Saving">
+          <CTAButton type="main" size="lg" className="self-start" onClick={saveNotifications}>
             Continue
           </CTAButton>
         </section>

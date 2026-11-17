@@ -9,6 +9,7 @@ import { FormError } from "../master-data/shared";
 import { LotPicker, OrderPicker } from "./pickers";
 import { StatusBadge, StatusMoves } from "./shared";
 import CTAButton from "@/components/CTAButton";
+import { useQuickSave } from "../../hooks/useQuickSave";
 import SlidingToggle from "../ui/SlidingToggle";
 
 const MODES = [
@@ -24,6 +25,7 @@ const MODES = [
 const SerialDialog = ({ serial, onClose, readOnly = false }) => {
   const creating = !serial;
   const mutation = useMasterDataMutation();
+  const quickSave = useQuickSave(useMasterDataMutation());
   const { showToast } = useToast();
   const [current, setCurrent] = useState(serial);
   const [mode, setMode] = useState("single");
@@ -56,12 +58,18 @@ const SerialDialog = ({ serial, onClose, readOnly = false }) => {
     const body = creating
       ? { partId: form.partId, ...shared, ...(mode === "single" ? { serialNumber: numbers[0] } : { serials: numbers }) }
       : shared;
+    if (!creating) {
+      // Shown at once (the hook's guess); put back with a toast if the server refuses.
+      quickSave({ path: `/serial-numbers/${serial.id}`, method: "PATCH", body });
+      onClose();
+      return;
+    }
     mutation.mutate(
-      { path: creating ? "/serial-numbers" : `/serial-numbers/${serial.id}`, method: creating ? "POST" : "PATCH", body },
+      { path: "/serial-numbers", method: "POST", body },
       {
         onSuccess: (data) => {
-          const count = creating ? data.data.length : 1;
-          showToast({ type: "success", title: "Saved", message: creating ? `${count} serial number${count === 1 ? "" : "s"} added.` : `Serial number ${data.serialNumber} updated.` });
+          const count = data.data.length;
+          showToast({ type: "success", title: "Saved", message: `${count} serial number${count === 1 ? "" : "s"} added.` });
           onClose();
         },
       }
@@ -77,7 +85,7 @@ const SerialDialog = ({ serial, onClose, readOnly = false }) => {
               <StatusBadge map={SERIAL_STATUS} status={current.status} />
               {current.statusReason && <span className="text-secondary-text">{current.statusReason}</span>}
             </div>
-            {!readOnly && <StatusMoves moves={SERIAL_MOVES[current.status]} path={`/serial-numbers/${serial.id}`} noun="Serial number" onDone={setCurrent} />}
+            {!readOnly && <StatusMoves moves={SERIAL_MOVES[current.status]} path={`/serial-numbers/${serial.id}`} noun="Serial number" record={current} onDone={setCurrent} />}
           </div>
         )}
         {frozen && <p className="rounded-lg border border-border-color bg-secondary-bg p-2 text-sm text-secondary-text">This serial number is scrapped, so it can no longer be changed.</p>}

@@ -24,6 +24,8 @@ import {
 } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
 import { useCalibrationMutation, useGauge, useGaugeCalibrations, useGaugeCharacteristics, useGaugeTypes } from "../../hooks/useCalibration";
+import { useQuickSave } from "../../hooks/useQuickSave";
+import { softDelete } from "../../lib/guessRequest";
 import { useUnits } from "../../hooks/useMasterData";
 import { useDepartments, usePermissions, useSites } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
@@ -164,6 +166,8 @@ const GaugePage = () => {
   const { data: sites } = useSites();
   const units = useUnits();
   const mutation = useCalibrationMutation();
+  const quickSave = useQuickSave(useCalibrationMutation());
+  const adding = isNew && mutation.isPending;
   const { control, reset, watch, setValue } = useForm({ defaultValues: EMPTY });
   const form = watch();
   const departments = useDepartments(form.siteId);
@@ -200,11 +204,11 @@ const GaugePage = () => {
         }
       );
     } else {
-      mutation.mutate({ path: `/gauges/${gauge.id}`, method: "PATCH", body: withVersion(gauge, changes) }, { onSuccess: () => showToast({ type: "success", title: "Saved", message: "Changes saved." }) });
+      // Shown at once (the hook's guess); put back with a toast if the server refuses.
+      quickSave({ path: `/gauges/${gauge.id}`, method: "PATCH", body: withVersion(gauge, changes) });
     }
   };
-  const restore = () =>
-    mutation.mutate({ path: `/gauges/${gauge.id}/restore` }, { onSuccess: () => showToast({ type: "success", title: "Restored", message: `${gauge.assetNumber} is back in the register.` }) });
+  const restore = () => quickSave({ path: `/gauges/${gauge.id}/restore`, guess: softDelete(gauge.id, null) }, "Not restored");
 
   if (!isNew && isLoading) return <LoadingScreen />;
   if (!isNew && error) {
@@ -274,8 +278,8 @@ const GaugePage = () => {
             </CTAButton>
           )}
           {canEdit && (
-            <CTAButton buttonType="submit" form="gauge-form" disabled={mutation.isPending || !valid || (!isNew && !dirty)} loading={mutation.isPending} type="success" size="default" className="px-3">
-              <SaveIcon className="h-4 w-4" /> {mutation.isPending ? "Saving…" : isNew ? "Add gauge" : "Save changes"}
+            <CTAButton buttonType="submit" form="gauge-form" disabled={adding || !valid || (!isNew && !dirty)} loading={adding} type="success" size="default" className="px-3">
+              <SaveIcon className="h-4 w-4" /> {adding ? "Saving…" : isNew ? "Add gauge" : "Save changes"}
             </CTAButton>
           )}
           {!isNew && can("calibration.manage") && !deleted && (
@@ -315,7 +319,7 @@ const GaugePage = () => {
             <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
               Deleted {formatDate(gauge.deletedAt)} by {gauge.deletedBy?.name ?? "—"}: “{gauge.deleteReason}”. Deleted gauges are read-only.
               {can("calibration.manage") && (
-                <CTAButton buttonType="button" onClick={restore} disabled={mutation.isPending} loading={mutation.isPending} type="neutral" size="default" className="px-3">
+                <CTAButton buttonType="button" onClick={restore} type="neutral" size="default" className="px-3">
                   <RotateCcwIcon className="h-4 w-4" /> Restore
                 </CTAButton>
               )}
@@ -466,19 +470,14 @@ const GaugePage = () => {
           title={`Delete ${gauge.assetNumber}?`}
           label="Reason for deleting (the gauge and its records are kept and can be restored)"
           confirmText="Delete"
-          pending={mutation.isPending}
-          error={mutation.error}
           onClose={() => setDialog(null)}
           onConfirm={(reason) =>
-            mutation.mutate(
-              { path: `/gauges/${gauge.id}/delete`, body: { reason } },
-              {
-                onSuccess: () => {
-                  showToast({ type: "success", title: "Deleted", message: `${gauge.assetNumber} was deleted. It can be restored from the deleted records filter.` });
-                  navigate("/Calibration/Gauges");
-                },
-              }
-            )
+            {
+              // Gone from the register at once; back with a toast if the server refuses.
+              quickSave({ path: `/gauges/${gauge.id}/delete`, body: { reason }, guess: softDelete(gauge.id, new Date().toISOString()) }, "Not deleted");
+              setDialog(null);
+              navigate("/Calibration/Gauges");
+            }
           }
         />
       )}

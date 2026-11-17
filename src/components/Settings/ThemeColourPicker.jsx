@@ -3,7 +3,6 @@ import { THEME_COLOURS, applyThemeColour, setPendingThemeColour } from "../../li
 import { describeApiError } from "../../lib/api-client";
 import { useUpdateOrganisation } from "../../hooks/useQmsApi";
 import MenuCard from "../ui/MenuCard";
-import { useToast } from "../../contexts/ToastProvider";
 
 /** How long to wait after the last click before saving, so rapid changes become one request. */
 export const SAVE_DELAY_MS = 400;
@@ -15,7 +14,6 @@ export const SAVE_DELAY_MS = 400;
  */
 const ThemeColourPicker = ({ value, canManage }) => {
   const update = useUpdateOrganisation();
-  const { showToast } = useToast();
   const [selected, setSelected] = useState(value);
   const [error, setError] = useState(null);
   const timer = useRef(null);
@@ -51,11 +49,6 @@ const ThemeColourPicker = ({ value, canManage }) => {
     update.mutate(
       { body: { settings: { themeColour: colour } }, reason: "Theme colour changed" },
       {
-        onSuccess: () => {
-          if (colour === latest.current && !timer.current) {
-            showToast({ type: "success", title: "Theme updated", message: "The new colour applies to everyone in this organisation." });
-          }
-        },
         onError: (err) => {
           // Only the newest choice decides what the user sees.
           if (colour === latest.current && !timer.current) {

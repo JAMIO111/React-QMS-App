@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDownIcon, PencilIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
+import { useQuickSave } from "../../hooks/useQuickSave";
 import {
   useCalibrationMutation,
   useGaugeTypeCharacteristics,
@@ -141,28 +142,18 @@ const TypeCard = ({ type, canManage }) => {
       },
     );
   const missing = type.active && type.characteristicCount > 0 ? (type.gaugesMissingChecks ?? 0) : 0;
-  const patch = (body, message) =>
-    mutation.mutate(
-      { path: `/gauge-types/${type.id}`, method: "PATCH", body },
-      {
-        onSuccess: () => {
-          setEditing(false);
-          showToast({ type: "success", title: "Saved", message });
-        },
-        onError: (err) =>
-          showToast({
-            type: "error",
-            title: "Not saved",
-            message: describeApiError(err),
-          }),
-      },
-    );
+  // Edits and the on/off switch show at once (the hook's guess) and go back with a toast if the server refuses.
+  const quickSave = useQuickSave(mutation);
+  const patch = (body) => {
+    setEditing(false);
+    quickSave({ path: `/gauge-types/${type.id}`, method: "PATCH", body });
+  };
 
   return (
     <li
       className={`flex flex-col gap-3 rounded-xl border border-border-color bg-primary-bg p-4 ${type.active ? "" : "opacity-70"}`}>
       {editing && (
-        <TypeDialog type={type} canManage={canManage} pending={mutation.isPending} onClose={() => setEditing(false)} onSubmit={(body) => patch(changesSince(editing, body), `${body.name} saved.`)} />
+        <TypeDialog type={type} canManage={canManage} onClose={() => setEditing(false)} onSubmit={(body) => patch(changesSince(editing, body))} />
       )}
       <div className="flex flex-wrap items-center justify-between gap-5">
           <div className="min-w-0 flex-1">
@@ -225,12 +216,7 @@ const TypeCard = ({ type, canManage }) => {
                       ? "Active: tap to make inactive"
                       : "Inactive: tap to make active"
                   }
-                  onChange={(e) =>
-                    patch(
-                      { active: e.target.checked },
-                      `${type.name} ${e.target.checked ? "made active" : "made inactive"}.`,
-                    )
-                  }
+                  onChange={(e) => patch({ active: e.target.checked })}
                 />
               </>
             )}

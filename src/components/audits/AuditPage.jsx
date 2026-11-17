@@ -90,10 +90,7 @@ const AuditPage = () => {
               <CTAButton
                 buttonType="button"
                 type="neutral" size="md"
-                disabled={mutation.isPending} loading={mutation.isPending}
-                onClick={() =>
-                  mutation.mutate({ path: `/audits/${a.id}/reactivate` }, { onSuccess: () => showToast({ type: "success", title: "Reactivated", message: `${a.reference} is active again.` }) })
-                }>
+                onClick={() => mutation.mutate({ path: `/audits/${a.id}/reactivate`, failed: "Not reactivated" })}>
                 Reactivate
               </CTAButton>
             )}
@@ -173,10 +170,12 @@ const AuditPage = () => {
           title={`Retire ${a.reference}?`}
           label="Why is it being retired?"
           confirmText="Retire audit"
-          pending={mutation.isPending}
-          error={mutation.error}
           onClose={() => setRetiring(false)}
-          onConfirm={(reason) => mutation.mutate({ path: `/audits/${a.id}/retire`, body: { reason } }, { onSuccess: () => { setRetiring(false); showToast({ type: "success", title: "Retired", message: `${a.reference} will no longer be scheduled.` }); } })}
+          onConfirm={(reason) => {
+            // Shown as retired at once; a refusal puts it back with a toast (from the hook).
+            mutation.mutate({ path: `/audits/${a.id}/retire`, body: { reason }, failed: "Not retired" });
+            setRetiring(false);
+          }}
         />
       )}
     </div>

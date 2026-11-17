@@ -106,18 +106,22 @@ export const AddAgentDialog = ({ replaces = null, onClose }) => {
   );
 };
 
-export const RenameAgentDialog = ({ agent, onClose }) => {
+/**
+ * Rename an agent. It closes at once and the new name shows straight away (optimistic); `onSave(body)` is the page's send, so a refusal still
+ * reaches a mounted component and shows its message. Without `onSave` the dialog sends it itself.
+ */
+export const RenameAgentDialog = ({ agent, onSave, onClose }) => {
   const mutate = useAgentMutation();
   const { showToast } = useToast();
   const [name, setName] = useState(agent.name);
   const [location, setLocation] = useState(agent.location ?? "");
   const submit = (e) => {
     e.preventDefault();
+    if (!name.trim()) return;
+    const body = { name: name.trim(), location: location.trim() || null };
     onClose();
-    mutate.mutate(
-      { action: "rename", id: agent.id, body: { name: name.trim(), location: location.trim() || null } },
-      { onError: (err) => showToast({ type: "error", title: "Not renamed", message: describeApiError(err) }) },
-    );
+    if (onSave) return onSave(body);
+    mutate.mutate({ action: "rename", id: agent.id, body }, { onError: (err) => showToast({ type: "error", title: "Not renamed", message: describeApiError(err) }) });
   };
   return (
     <Dialog title={`Rename ${agent.name}`} onClose={onClose}>

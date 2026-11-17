@@ -10,7 +10,6 @@ import LoadingScreen from "../ui/LoadingScreen";
 import { useObjectiveMutation, useQualityObjective } from "../../hooks/useManagementReview";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import { describeApiError } from "../../lib/api-client";
-import { useToast } from "../../contexts/ToastProvider";
 import { basisWords, formatValue, frequencyLabel, STANDING, standingLabel, targetWords } from "../../lib/qualityObjectives";
 import ObjectiveChart from "./ObjectiveChart";
 import { ObjectiveDialog, RetireDialog, ValueDialog } from "./ObjectiveDialogs";
@@ -34,7 +33,6 @@ const ObjectivePage = () => {
   const [dialog, setDialog] = useState(null);
   const { data: o, isLoading, error } = useQualityObjective(id, Number(range));
   const mutation = useObjectiveMutation();
-  const { showToast } = useToast();
   useBreadcrumbNames([
     { path: `/Management-Review/Objectives/${id}`, label: o ? o.reference : null },
     { path: "/Management-Review", label: "Management review", to: "/Management-Review/Reviews" },
@@ -52,7 +50,8 @@ const ObjectivePage = () => {
 
   const periods = o.periods;
   const newestFirst = [...periods].reverse();
-  const reactivate = () => mutation.mutate({ action: "reactivate", id: o.id }, { onError: (err) => showToast({ type: "error", title: "Not brought back", message: describeApiError(err) }) });
+  // shown at once; a refusal is told by useObjectiveMutation
+  const reactivate = () => mutation.mutate({ action: "reactivate", id: o.id });
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-primary-bg p-4">

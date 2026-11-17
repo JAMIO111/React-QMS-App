@@ -2,6 +2,9 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
+import { useToast } from "../contexts/ToastProvider";
+import { pendingId, updateById } from "../lib/optimistic";
+import { commandGuessHandlers, nowIso, setFields } from "../lib/guessCommands";
 
 /** Management review (docs/risk-management-plan.md): quality objectives (MR1). */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "management-review", ...rest];
@@ -44,6 +47,7 @@ export const useQualityObjective = (id, periods = 12) => {
 export const useObjectiveMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
     mutationFn: ({ action, id, body }) => {
       const send = (path, method = "POST") => apiFetch(path, { method, body, organisationId });
@@ -62,8 +66,30 @@ export const useObjectiveMutation = () => {
           throw new Error(`Unknown action ${action}`);
       }
     },
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+    // Changes and retiring show at once; a refusal puts the objective back and says why in a toast.
+    ...commandGuessHandlers({ queryClient, prefix: key(organisationId), guess: guessObjective, guessed: OBJECTIVE_GUESSED, showToast: toast?.showToast }),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
+};
+
+/** Objective commands shown before the server answers. Recording a value waits: the server works out the period's standing against the target. */
+export const OBJECTIVE_GUESSED = new Set(["update", "retire", "reactivate"]);
+
+/** Cached objectives as they will be after a command (`show.ownerName` names a new owner). */
+export const guessObjective = (data, { action, id, body = {}, show = {} }) => {
+  switch (action) {
+    case "update":
+      return updateById(data, id, (o) => {
+        const next = setFields(o, body);
+        return "ownerId" in body && o.owner && typeof o.owner === "object" ? { ...next, owner: { ...o.owner, id: body.ownerId, name: show.ownerName ?? o.owner.name } } : next;
+      });
+    case "retire":
+      return updateById(data, id, (o) => ("active" in o ? { ...o, active: false, retiredReason: body.reason ?? null, retiredAt: nowIso() } : o));
+    case "reactivate":
+      return updateById(data, id, (o) => ("active" in o ? { ...o, active: true, retiredReason: null, retiredAt: null, retiredBy: null } : o));
+    default:
+      return data;
+  }
 };
 
 /** Management reviews (MR2). */
@@ -111,6 +137,7 @@ const REVIEW_COMMANDS = {
 export const useReviewMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
     mutationFn: (command) => {
       const make = REVIEW_COMMANDS[command.action];
@@ -118,11 +145,58 @@ export const useReviewMutation = () => {
       const [path, method, body] = make(command);
       return apiFetch(path, { method, body, organisationId });
     },
+    // The guessed commands (REVIEW_GUESSED) show at once; a refusal puts the review back and says why in a toast.
+    ...commandGuessHandlers({ queryClient, prefix: key(organisationId), guess: guessReview, guessed: REVIEW_GUESSED, showToast: toast?.showToast }),
     onSuccess: (review) => {
       if (review?.inputs) queryClient.setQueryData(key(organisationId, "review", review.id), review);
-      return refreshOrganisation(queryClient, organisationId);
     },
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
+};
+
+/**
+ * Review commands shown before the server answers. The others wait: planning makes the reference, starting and gathering read every module,
+ * completing and cancelling freeze the record after the database's checks, and the minutes are saved from the editor, which already shows them.
+ */
+export const REVIEW_GUESSED = new Set([
+  "update", "setAttendees", "addDecision", "updateDecision", "removeDecision", "addAction", "updateAction", "completeAction", "cancelAction", "reopenAction",
+]);
+
+/**
+ * Cached review data as it will be after a command (`useReviewMutation` vars). `show`: `chairName`, `ownerName`, `attendees` (with `name`) for names
+ * the server only gets ids of.
+ */
+export const guessReview = (data, { action, id, body = {}, show = {} }) => {
+  const now = nowIso();
+  const withOwner = (x) => ("ownerId" in body ? { ...x, owner: { ...(x.owner ?? {}), id: body.ownerId, name: show.ownerName ?? x.owner?.name ?? "…" } } : x);
+  const addTo = (list, item) => updateById(data, id, (r) => (Array.isArray(r[list]) ? { ...r, [list]: [...r[list], item] } : r));
+  switch (action) {
+    case "update":
+      return updateById(data, id, (r) => {
+        const next = setFields(r, body);
+        return "chairId" in body && r.chair && typeof r.chair === "object" ? { ...next, chair: { ...r.chair, id: body.chairId, name: show.chairName ?? r.chair.name } } : next;
+      });
+    case "setAttendees":
+      return show.attendees ? updateById(data, id, (r) => ("attendees" in r ? { ...r, attendees: show.attendees } : r)) : data;
+    case "addDecision":
+      return addTo("decisions", { id: pendingId(), description: body.description ?? "", category: body.category ?? null });
+    case "updateDecision":
+      return updateById(data, id, (d) => setFields(d, body));
+    case "removeDecision":
+      return updateById(data, id, (d) => d, { remove: true });
+    case "addAction":
+      return addTo("actions", withOwner({ id: pendingId(), description: body.description ?? "", dueDate: body.dueDate ?? null, decisionId: body.decisionId ?? null, status: "open", mine: false, doneNote: null, cancelReason: null }));
+    case "updateAction":
+      return updateById(data, id, (a) => withOwner(setFields(a, body)));
+    case "completeAction":
+      return updateById(data, id, (a) => ({ ...a, status: "done", doneNote: body.note ?? null, doneAt: now }));
+    case "cancelAction":
+      return updateById(data, id, (a) => ({ ...a, status: "cancelled", cancelReason: body.reason ?? null }));
+    case "reopenAction":
+      return updateById(data, id, (a) => ({ ...a, status: "open", doneNote: null, doneAt: null, cancelReason: null }));
+    default:
+      return data;
+  }
 };
 
 /** Commentary and "reviewed" on one section show at once and are put back if the server refuses. */

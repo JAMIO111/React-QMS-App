@@ -4,7 +4,9 @@ import MenuCard from "../ui/MenuCard";
 import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import ReasonDialog from "../ncr/ReasonDialog";
-import { useCapaMutation } from "../../hooks/useCapa";
+import { CAPA_GUESSED, useCapaMutation } from "../../hooks/useCapa";
+import { sendCommand } from "../../lib/guessCommands";
+import { isPending } from "../../lib/optimistic";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { ACTION_STATUS, ROOT_CAUSE_KINDS, isRunning, roleLabel } from "../../lib/capa";
 import { formatDay } from "../../lib/qualityAlerts";
@@ -31,7 +33,9 @@ export const ActionDialog = ({ capa, phase, action, withCause, limited = false, 
     const body = limited
       ? { ownerTeamMemberId: form.ownerTeamMemberId, dueDate: form.dueDate }
       : { description: form.description.trim(), ownerTeamMemberId: form.ownerTeamMemberId, dueDate: form.dueDate, ...(withCause ? { rootCauseId: form.rootCauseId } : {}) };
-    mutation.mutate(action ? { action: "updateAction", id: action.id, body: changesSince(opened, body) } : { action: "addAction", id: capa.id, body: { phase, ...body } }, { onSuccess: onClose });
+    // Shown at once (the new action as a placeholder row); a refusal puts it back and says why.
+    const show = { ownerName: ownerOptions(capa).find((o) => o.id === form.ownerTeamMemberId)?.name };
+    sendCommand(mutation, CAPA_GUESSED, action ? { action: "updateAction", id: action.id, body: changesSince(opened, body), show } : { action: "addAction", id: capa.id, body: { phase, ...body }, show }, onClose);
   };
   return (
     <Dialog title={limited ? "Reassign the action" : action ? "Edit action" : "Add an action"} onClose={onClose} width="max-w-2xl">
@@ -52,7 +56,7 @@ export const ActionDialog = ({ capa, phase, action, withCause, limited = false, 
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || (!limited && !form.description.trim())} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : action ? "Save" : "Add action"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!limited && !form.description.trim()}>{action ? "Save" : "Add action"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -72,9 +76,11 @@ export const FindingsDialog = ({ action, closing = false, onClose }) => {
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
-          mutation.mutate(
+          sendCommand(
+            mutation,
+            CAPA_GUESSED,
             closing ? { action: "completeAction", id: action.id, body: { evidenceNote: text } } : { action: "updateAction", id: action.id, body: withVersion(opened, { evidenceNote: text || null }) },
-            { onSuccess: onClose },
+            onClose,
           );
         }}>
         <p className="text-sm text-primary-text">{action.description}</p>
@@ -83,7 +89,7 @@ export const FindingsDialog = ({ action, closing = false, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || (closing && !text)} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : closing ? "Close action" : "Save findings"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={closing && !text}>{closing ? "Close action" : "Save findings"}</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -109,6 +115,8 @@ export const useActionRights = (capa, planStep, doingStep) => {
 /** One action's buttons, shared by the 8D steps and the My actions page. `rights` is from useActionRights; `limitedReassign` offers who/when only. */
 export const ActionButtons = ({ action: a, rights, setDialog, mutation }) => {
   const canWork = rights.work && (rights.manage || a.isAssignee);
+  // a row still being saved has no id yet: nothing can be done with it
+  if (isPending(a.id)) return <p className="text-xs text-secondary-text">Saving…</p>;
   const open = (type) => () => { mutation.reset(); setDialog({ type, action: a }); };
   return (
     <div className="flex flex-wrap gap-2">
@@ -117,8 +125,8 @@ export const ActionButtons = ({ action: a, rights, setDialog, mutation }) => {
       {rights.plan && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Edit: ${a.description}`} onClick={open("edit")}>Edit</CTAButton>}
       {!rights.plan && rights.manage && rights.work && a.status === "open" && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reassign: ${a.description}`} onClick={open("reassign")}>Reassign</CTAButton>}
       {a.status === "open" && rights.manage && rights.work && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Cancel: ${a.description}`} onClick={open("cancel")}>Cancel action</CTAButton>}
-      {a.status === "done" && canWork && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} loading={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
-      {a.status === "cancelled" && rights.manage && rights.work && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} disabled={mutation.isPending} loading={mutation.isPending} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
+      {a.status === "done" && canWork && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
+      {a.status === "cancelled" && rights.manage && rights.work && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
     </div>
   );
 };
@@ -133,8 +141,8 @@ export const ActionDialogs = ({ capa, phase, withCause, dialog, setDialog, mutat
   if (dialog.type === "findings" || dialog.type === "close") return <FindingsDialog action={dialog.action} closing={dialog.type === "close"} onClose={close} />;
   if (dialog.type === "cancel") {
     return (
-      <ReasonDialog title="Cancel the action?" label="Why is it no longer needed?" confirmText="Cancel action" pending={mutation.isPending} error={mutation.error} onClose={close}
-        onConfirm={(reason) => mutation.mutate({ action: "cancelAction", id: dialog.action.id, body: { reason } }, { onSuccess: close })} />
+      <ReasonDialog title="Cancel the action?" label="Why is it no longer needed?" confirmText="Cancel action" onClose={close}
+        onConfirm={(reason) => sendCommand(mutation, CAPA_GUESSED, { action: "cancelAction", id: dialog.action.id, body: { reason } }, close)} />
     );
   }
   return null;
@@ -179,7 +187,6 @@ const ActionList = ({ capa, phase, planStep, doingStep, title, subtitle, addLabe
           ))}
         </ul>
       )}
-      <FormError error={dialog ? null : mutation.error} />
       <ActionDialogs capa={capa} phase={phase} withCause={withCause} dialog={dialog} setDialog={setDialog} mutation={mutation} />
     </MenuCard>
   );

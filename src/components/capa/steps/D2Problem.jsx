@@ -3,7 +3,8 @@ import Dialog from "../../ui/Dialog";
 import Field from "../../ui/Field";
 import MenuCard from "../../ui/MenuCard";
 import ReasonDialog from "../../ncr/ReasonDialog";
-import { useCapaMutation } from "../../../hooks/useCapa";
+import { CAPA_GUESSED, useCapaMutation } from "../../../hooks/useCapa";
+import { sendCommand } from "../../../lib/guessCommands";
 import { DIMENSIONS, FIVE_W2H, IS_IS_NOT_ROWS } from "../../../lib/capa";
 import { FormError, TextAreaField } from "../../master-data/shared";
 import CTAButton from "@/components/CTAButton";
@@ -19,7 +20,7 @@ const FiveW2HDialog = ({ capa, onClose }) => {
     const changes = {};
     for (const q of FIVE_W2H) if (form[q.key].trim() !== (capa.problem[q.key] ?? "")) changes[`d2${q.key[0].toUpperCase()}${q.key.slice(1)}`] = form[q.key].trim() || null;
     if (Object.keys(changes).length === 0) return onClose();
-    mutation.mutate({ action: "update", id: capa.id, body: withVersion(opened, changes) }, { onSuccess: onClose });
+    sendCommand(mutation, CAPA_GUESSED, { action: "update", id: capa.id, body: withVersion(opened, changes) }, onClose);
   };
   return (
     <Dialog title="5W2H: describe the problem" onClose={onClose} width="max-w-3xl">
@@ -33,7 +34,7 @@ const FiveW2HDialog = ({ capa, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save 5W2H"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg">Save 5W2H</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -51,7 +52,7 @@ const IsIsNotDialog = ({ capa, analysis, onClose }) => {
   const submit = (e) => {
     e.preventDefault();
     const data = { rows: rows.map((r) => ({ key: r.key, dimension: r.dimension, question: r.question, is: r.is.trim(), isNot: r.isNot.trim(), distinctive: r.distinctive.trim(), changes: r.changes.trim() })) };
-    mutation.mutate(analysis ? { action: "updateAnalysis", id: analysis.id, body: { title: title.trim(), data } } : { action: "addAnalysis", id: capa.id, body: { kind: "is_is_not", title: title.trim(), data } }, { onSuccess: onClose });
+    sendCommand(mutation, CAPA_GUESSED, analysis ? { action: "updateAnalysis", id: analysis.id, body: { title: title.trim(), data } } : { action: "addAnalysis", id: capa.id, body: { kind: "is_is_not", title: title.trim(), data } }, onClose);
   };
   let lastDimension = null;
   return (
@@ -155,8 +156,8 @@ const D2Problem = ({ capa, editable }) => {
       {dialog === "5w2h" && <FiveW2HDialog capa={capa} onClose={close} />}
       {(dialog === "new" || dialog?.analysis) && <IsIsNotDialog capa={capa} analysis={dialog?.analysis} onClose={close} />}
       {dialog?.remove && (
-        <ReasonDialog title={`Remove ${dialog.remove.title}?`} label="Why is it being removed?" confirmText="Remove" pending={mutation.isPending} error={mutation.error} onClose={close}
-          onConfirm={() => mutation.mutate({ action: "removeAnalysis", id: dialog.remove.id }, { onSuccess: close })} />
+        <ReasonDialog title={`Remove ${dialog.remove.title}?`} label="Why is it being removed?" confirmText="Remove" onClose={close}
+          onConfirm={() => sendCommand(mutation, CAPA_GUESSED, { action: "removeAnalysis", id: dialog.remove.id }, close)} />
       )}
     </div>
   );

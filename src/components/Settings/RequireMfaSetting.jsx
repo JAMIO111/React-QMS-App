@@ -31,7 +31,7 @@ const RequireMfaSetting = ({ value, canManage }) => {
       if (!ok) return;
     }
     update.mutate(
-      { body: { settings: { requireMfa: next } }, reason: next ? "Two-factor authentication required" : "Two-factor requirement removed" },
+      { body: { settings: { requireMfa: next } }, guess: false, reason: next ? "Two-factor authentication required" : "Two-factor requirement removed" },
       {
         onSuccess: () =>
           showToast({ type: "success", title: "Saved", message: next ? "Two-factor is now required." : "Two-factor is no longer required." }),

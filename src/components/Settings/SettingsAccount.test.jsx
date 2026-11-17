@@ -9,7 +9,7 @@ vi.mock("@/contexts/UserProvider", () => ({
   useUser: () => ({ profile: { first_name: "Ann", surname: "Lee", job_title: "", email: "ann.lee@example.com" }, refreshProfile: vi.fn() }),
 }));
 vi.mock("@/contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
-vi.mock("@/hooks/useQmsApi", () => ({ useUpdateProfile: () => ({ mutateAsync: profileAsync, isPending: false }) }));
+vi.mock("@/hooks/useQmsApi", () => ({ useUpdateProfile: () => ({ mutate: (body, callbacks) => Promise.resolve(profileAsync(body)).then(callbacks?.onSuccess, callbacks?.onError), isPending: false }) }));
 vi.mock("@/authService", async (orig) => ({ ...(await orig()), signIn: (...a) => signInMock(...a), updatePassword: (...a) => updatePasswordMock(...a) }));
 vi.mock("../ProfileImageSection", () => ({ default: () => null }));
 vi.mock("./TwoFactorCard", () => ({ default: () => null }));

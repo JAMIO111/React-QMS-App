@@ -131,7 +131,9 @@ describe("values to review", () => {
     await waitFor(() => expect(screen.queryByRole("listitem", { name: "WO-9001: Quantity planned" })).not.toBeInTheDocument());
     expect(calls.find((c) => c.k === "POST /integrations/conflicts/c1/accept").body).toEqual({});
     answer(conflict({ status: "accepted" }));
-    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.objectContaining({ type: "success", title: "Accepted" })));
+    // Shown at once, so no "done" message follows.
+    await waitFor(() => expect(calls.some((c) => c.k === "POST /integrations/conflicts/c1/accept")).toBe(true));
+    expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ type: "success" }));
   });
 
   it("puts the value back when accepting is refused", async () => {

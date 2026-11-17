@@ -91,6 +91,7 @@ const OptionsEditor = ({ options, onChange }) => {
 /** Add a field, or change one. The kind of record and the type are fixed once a field exists. */
 const FieldDialog = ({ entityType, stages, existing, onClose }) => {
   const mutation = useCustomFieldMutation();
+  const { showToast } = useToast();
   const [form, setForm] = useState(() => fieldToForm(existing, entityType));
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const problems = fieldProblems(form);
@@ -100,7 +101,14 @@ const FieldDialog = ({ entityType, stages, existing, onClose }) => {
     e.preventDefault();
     if (problems.length) return;
     const body = fieldBody(form, { creating });
-    mutation.mutate(creating ? { action: "create", body } : { action: "update", id: existing.id, body }, { onSuccess: () => onClose() });
+    if (creating) {
+      // A new field waits for the server, which makes its key.
+      mutation.mutate({ action: "create", body }, { onSuccess: () => onClose() });
+      return;
+    }
+    // Optimistic: the list shows the change at once and the pop-up closes; a refusal puts it back and says why.
+    mutation.mutate({ action: "update", id: existing.id, body }, { onError: (err) => showToast({ type: "error", title: `${existing.label} not saved`, message: describeApiError(err) }) });
+    onClose();
   };
 
   return (
@@ -142,7 +150,7 @@ const FieldDialog = ({ entityType, stages, existing, onClose }) => {
           <CTAButton onClick={onClose} type="neutral" size="md">
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={problems.length > 0 || mutation.isPending} loading={mutation.isPending}>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={problems.length > 0 || (creating && mutation.isPending)} loading={creating && mutation.isPending}>
             {creating ? "Add field" : "Save"}
           </CTAButton>
         </div>
@@ -154,6 +162,7 @@ const FieldDialog = ({ entityType, stages, existing, onClose }) => {
 /** Retire a field: it is no longer shown for new values, but every value stays readable. */
 const RetireDialog = ({ field, onClose }) => {
   const mutation = useCustomFieldMutation();
+  const { showToast } = useToast();
   const [reason, setReason] = useState("");
   const ok = reason.trim().length >= 3;
   return (
@@ -163,16 +172,18 @@ const RetireDialog = ({ field, onClose }) => {
         className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
-          if (ok) mutation.mutate({ action: "retire", id: field.id, reason: reason.trim() }, { onSuccess: () => onClose() });
+          if (!ok) return;
+          // Optimistic: the field moves to Retired at once and the pop-up closes; a refusal puts it back and says why.
+          mutation.mutate({ action: "retire", id: field.id, reason: reason.trim() }, { onError: (err) => showToast({ type: "error", title: `${field.label} not retired`, message: describeApiError(err) }) });
+          onClose();
         }}>
         <p className="text-sm text-secondary-text">Records keep the values they hold, and you can bring the field back later. A retired field stops counting towards the limit of 20.</p>
         <TextAreaField label="Why is it retired?" required rows={2} value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} />
-        <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton onClick={onClose} type="neutral" size="md">
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="danger" size="md" disabled={!ok || mutation.isPending} loading={mutation.isPending}>
+          <CTAButton buttonType="submit" type="danger" size="md" disabled={!ok}>
             Retire field
           </CTAButton>
         </div>
@@ -255,10 +266,10 @@ const CustomFieldsSettings = () => {
                   <li key={f.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
                     {canManage && (
                       <div className="flex flex-col">
-                        <button type="button" aria-label={`Move ${f.label} up`} disabled={i === 0 || mutation.isPending} className="cursor-pointer rounded p-0.5 text-secondary-text hover:text-primary-text disabled:cursor-default disabled:opacity-30" onClick={() => move(i, -1)}>
+                        <button type="button" aria-label={`Move ${f.label} up`} disabled={i === 0} className="cursor-pointer rounded p-0.5 text-secondary-text hover:text-primary-text disabled:cursor-default disabled:opacity-30" onClick={() => move(i, -1)}>
                           <ArrowUpIcon />
                         </button>
-                        <button type="button" aria-label={`Move ${f.label} down`} disabled={i === active.length - 1 || mutation.isPending} className="cursor-pointer rounded p-0.5 text-secondary-text hover:text-primary-text disabled:cursor-default disabled:opacity-30" onClick={() => move(i, 1)}>
+                        <button type="button" aria-label={`Move ${f.label} down`} disabled={i === active.length - 1} className="cursor-pointer rounded p-0.5 text-secondary-text hover:text-primary-text disabled:cursor-default disabled:opacity-30" onClick={() => move(i, 1)}>
                           <ArrowDownIcon />
                         </button>
                       </div>
@@ -305,8 +316,7 @@ const CustomFieldsSettings = () => {
                       <CTAButton
                         type="secondary"
                         size="md"
-                        disabled={full || mutation.isPending}
-                        loading={mutation.isPending && mutation.variables?.id === f.id}
+                        disabled={full}
                         onClick={() => mutation.mutate({ action: "reactivate", id: f.id }, { onError: fail })}>
                         Bring back
                       </CTAButton>

@@ -70,7 +70,11 @@ const SetupWizard = () => {
   const Page = PAGES[active];
   const markable = MARKABLE_STEPS.includes(active);
   const goNext = () => navigate(next ? `/setup/${next.key}` : "/Dashboard");
-  const mark = (status) => mutation.mutate({ action: "setStep", body: { step: active, status } }, { onSuccess: goNext });
+  // Optimistic: the step is marked at once and the wizard moves on; a refusal puts the mark back and the error shows on the page.
+  const mark = (status) => {
+    mutation.mutate({ action: "setStep", body: { step: active, status } });
+    goNext();
+  };
   const planBlocked = active === "plan" && gated ? "Your subscription must be active before you can continue. Open Subscription & billing to set it up." : null;
   const labelOf = (key) => SETUP_STEPS.find((s) => s.key === key)?.label ?? key;
 
@@ -101,12 +105,13 @@ const SetupWizard = () => {
               <WizardFooter
                 prev={prev}
                 continueLabel="Finish set-up"
-                blocked={state.canFinish ? null : "Some required steps are still open. Go back and complete them."}
+                // While a step marked a moment ago is still saving, the server has not yet said whether everything is in place: wait, don't block.
+                blocked={state.canFinish || mutation.isPending ? null : "Some required steps are still open. Go back and complete them."}
                 pending={mutation.isPending}
                 onContinue={() => mutation.mutate({ action: "complete" }, { onSuccess: () => { resumeSetup(); navigate("/Dashboard"); } })}
               />
             ) : markable ? (
-              <WizardFooter prev={prev} canSkip pending={mutation.isPending} continueLabel="Done, continue" onSkip={() => mark("skipped")} onContinue={() => mark("done")} />
+              <WizardFooter prev={prev} canSkip continueLabel="Done, continue" onSkip={() => mark("skipped")} onContinue={() => mark("done")} />
             ) : (
               <WizardFooter prev={prev} blocked={planBlocked} onContinue={goNext} />
             )}

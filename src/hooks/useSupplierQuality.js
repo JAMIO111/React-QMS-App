@@ -4,6 +4,7 @@ import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
 import { useOptimisticSubmit } from "../lib/optimisticSubmit";
 import { useToast } from "../contexts/ToastProvider";
+import { ASSESSMENT_OPTIMISTIC, SCAR_OPTIMISTIC, SUPPLIER_OPTIMISTIC, guessAssessment, guessScar, guessSupplier, guessed, mergeFlat } from "../lib/supplierQualityGuesses";
 
 /** Supplier quality (docs/supplier-quality-plan.md): the register, a supplier's profile and history, classifications, and the commands. */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "supplier-quality", ...rest];
@@ -56,10 +57,16 @@ export const useSupplierClassifications = ({ all = false } = {}) => {
   });
 };
 
+/**
+ * Commands on suppliers. Edits, status moves, classifications, contacts, products and classification changes show at once (`SUPPLIER_OPTIMISTIC`);
+ * `show` carries names for what the server only gets as ids (`show.classifications`, `show.part`). Errors of those are toasted here.
+ */
 export const useSupplierMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
+    ...guessed(queryClient, organisationId, toast, SUPPLIER_OPTIMISTIC, guessSupplier),
     mutationFn: ({ action, id, body }) => {
       const send = (path, method = "POST") => apiFetch(path, { method, body, organisationId });
       switch (action) {
@@ -90,7 +97,6 @@ export const useSupplierMutation = () => {
     onSuccess: (data) => {
       // Commands on a supplier answer with the whole profile.
       if (data?.id && data?.counts) queryClient.setQueryData(key(organisationId, "detail", data.id), data);
-      refreshOrganisation(queryClient, organisationId);
     },
   });
 };
@@ -135,6 +141,7 @@ const QUALIFICATION_GUESSES = {
   updateDocument: { list: "documents", apply: (row, b) => ({ ...row, ...b }) },
   verifyCertification: { list: "certifications", apply: (row, b) => ({ ...row, verification: stamp(b.note) }) },
   withdrawCertification: { list: "certifications", apply: (row, b) => ({ ...row, status: "withdrawn", withdrawal: { ...row.withdrawal, reason: b.reason } }) },
+  updateCertification: { list: "certifications", apply: (row, b) => mergeFlat(row, b) },
 };
 
 export const useQualificationMutation = () => {
@@ -213,17 +220,25 @@ export const usePreviewRisk = () => {
   return useMutation({ mutationFn: ({ id, scores }) => apiFetch(`/supplier-quality/suppliers/${id}/risk-assessments/preview`, { method: "POST", body: { scores }, organisationId }) });
 };
 
-/** Record an assessment (`record`) or save a new version of the model (`saveModel`). */
+/** The risk model as it will read after `saveModel`: the new factors, bands and interval as the next version (the versions list arrives with the refetch). */
+export const guessRiskModel = (model, body) =>
+  model && body ? { ...model, factors: body.factors ?? model.factors, thresholds: body.thresholds ?? model.thresholds, reviewIntervalMonths: body.reviewIntervalMonths ?? model.reviewIntervalMonths, version: (model.version ?? 0) + 1 } : model;
+
+/**
+ * Record an assessment (`record`: the database scores it, so it waits for the answer) or save a new version of the model (`saveModel`: shown at once,
+ * put back with a toast when refused).
+ */
 export const useRiskMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
     mutationFn: ({ action, id, body }) => {
       if (action === "record") return apiFetch(`/supplier-quality/suppliers/${id}/risk-assessments`, { method: "POST", body, organisationId });
       if (action === "saveModel") return apiFetch("/supplier-quality/risk-model", { method: "PUT", body, organisationId });
       throw new Error(`Unknown action ${action}`);
     },
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+    ...guessed(queryClient, organisationId, toast, new Set(["saveModel"]), (data, vars, queryKey) => (queryKey.includes("risk-model") ? guessRiskModel(data, vars.body) : data)),
   });
 };
 
@@ -273,7 +288,10 @@ export const useApprovalDecisions = (id, { enabled = true } = {}) => {
 export const useAssessmentMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
+    // Switching a template on or off, completing (with the score the database already worked out, `show`) and abandoning show at once.
+    ...guessed(queryClient, organisationId, toast, ASSESSMENT_OPTIMISTIC, guessAssessment),
     mutationFn: ({ action, id, body }) => {
       const send = (path, method = "POST") => apiFetch(path, { method, body, organisationId });
       switch (action) {
@@ -301,8 +319,6 @@ export const useAssessmentMutation = () => {
           throw new Error(`Unknown action ${action}`);
       }
     },
-    // A decision can change the supplier's status, which shows everywhere, so everything is marked stale.
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
   });
 };
 
@@ -372,7 +388,10 @@ export const useScar = (id) => {
 export const useScarMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
+    // Status moves, records and links show at once (`SCAR_OPTIMISTIC`); `show` carries names for ids (owner, contact, part, lot, NC).
+    ...guessed(queryClient, organisationId, toast, SCAR_OPTIMISTIC, guessScar),
     mutationFn: ({ action, id, body }) => {
       const send = (path, method = "POST") => apiFetch(`/supplier-quality${path}`, { method, body: body ?? {}, organisationId });
       switch (action) {
@@ -414,6 +433,5 @@ export const useScarMutation = () => {
           throw new Error(`Unknown action ${action}`);
       }
     },
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
   });
 };

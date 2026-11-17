@@ -156,6 +156,49 @@ describe("PartDetailPage", () => {
     expect(added).toEqual({ revision: "D", drawingRef: "", changeSummary: "New finish" });
   });
 
+  it("shows a new draft revision at once, with no actions until the server has made it", async () => {
+    routeApi({
+      "GET /parts/p1": { ...detail, revisions: detail.revisions.slice(1) },
+      "GET /customers": page([]),
+      "GET /part-families": page([]),
+      "GET /part-revisions/r2/characteristics": { data: [] },
+      "POST /parts/p1/revisions": () => new Promise(() => {}),
+    });
+    renderAt("/Parts/p1");
+    await userEvent.click(await screen.findByRole("button", { name: "Add revision" }));
+    const dialog = screen.getByRole("dialog", { name: "Add revision" });
+    await userEvent.type(within(dialog).getByLabelText(/^Revision/), "C");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add draft revision" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    const table = screen.getByRole("table", { name: "Revisions" });
+    const row = within(table).getByText("C").closest("tr");
+    expect(within(row).getByText("Saving…")).toBeInTheDocument();
+    expect(within(row).queryByRole("button")).toBeNull();
+  });
+
+  it("makes another customer primary at once, and puts it back when the server refuses", async () => {
+    const { ApiClientError } = await import("../../lib/api-client");
+    let refuse;
+    const two = {
+      ...detail,
+      customers: [...detail.customers, { id: "pc2", customer: { id: "c2", code: "BOREAL", name: "Boreal" }, customerPartNumber: null, isPrimary: false }],
+    };
+    routeApi({
+      "GET /parts/p1": two,
+      "GET /customers": page([]),
+      "GET /part-families": page([]),
+      "GET /part-revisions/r3/characteristics": { data: [] },
+      "PATCH /part-customers/pc2": () => new Promise((_resolve, reject) => (refuse = () => reject(new ApiClientError({ status: 409, code: "conflict", message: "No" })))),
+    });
+    renderAt("/Parts/p1");
+    await userEvent.click(await screen.findByRole("button", { name: "Make primary" }));
+    const table = screen.getByRole("table", { name: "Customers" });
+    expect(within(within(table).getByText("BOREAL").closest("tr")).getByText("Primary")).toBeInTheDocument();
+    expect(within(within(table).getByText("ACME").closest("tr")).queryByText("Primary")).toBeNull();
+    refuse();
+    expect(await within(within(table).getByText("ACME").closest("tr")).findByText("Primary")).toBeInTheDocument();
+  });
+
   it("is read-only without master_data.manage", async () => {
     permissions = ["master_data.read"];
     routeApi({ "GET /parts/p1": detail });

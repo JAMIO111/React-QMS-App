@@ -58,7 +58,10 @@ const ModelDialog = ({ model, onClose }) => {
 
   return (
     <Dialog title="Change the scorecard model" onClose={onClose} width="max-w-2xl">
-      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (ok && !mutation.isPending) mutation.mutate({ action: "saveModel", dialog: true, body: { config, reason: reason.trim() } }, { onSuccess: onClose }); }}>
+      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (!ok) return;
+        // The card shows the new version at once; a refusal puts the old one back with a toast (usePerformanceMutation).
+        mutation.mutate({ action: "saveModel", body: { config, reason: reason.trim() } });
+        onClose(); }}>
         <p className="text-sm text-secondary-text">This saves version {model.version + 1}. Scorecards already saved keep the version they used; the live figures use the new one straight away. A supplier can override the date policy, grace days and in-full tolerances on its own Performance tab.</p>
         <ComboField label="On-time delivery is judged against" required value={policy} onChange={setPolicy} options={OTD_POLICIES} clearable={false} />
         <div className="grid gap-3 sm:grid-cols-2">
@@ -94,7 +97,7 @@ const ModelDialog = ({ model, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!ok || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save new version"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!ok}>Save new version</CTAButton>
         </div>
       </form>
     </Dialog>

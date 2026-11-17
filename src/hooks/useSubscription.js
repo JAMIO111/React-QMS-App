@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
+import { guessCache, rollbackGuess } from "../lib/optimistic";
 
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "subscription", ...rest];
 
@@ -44,11 +45,23 @@ export const useModuleAccess = () => {
   };
 };
 
-/** Seat purchases and package assignment; every change refreshes the whole subscription view. */
+/**
+ * Seat purchases and package assignment; every change refreshes the whole subscription view. Giving or taking away a seat is optimistic: the
+ * person's seat and the seats left change at once and go back if the server refuses (no seat free, the Controller rule). Buying seats waits.
+ */
 export const useSubscriptionMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
   return useMutation({
+    onMutate: async (vars) => {
+      if (vars.action !== "assign" && vars.action !== "remove") return { optimistic: false, snapshot: [] };
+      const rows = queryClient.getQueryData(key(organisationId, "assignments"))?.data ?? [];
+      const previous = rows.find((r) => r.membershipId === vars.membershipId)?.plan?.slug ?? null;
+      const items = queryClient.getQueryData(key(organisationId, "overview"))?.items ?? [];
+      const planName = vars.planName ?? items.find((i) => i.planSlug === vars.planSlug)?.planName ?? vars.planSlug ?? null;
+      return guessCache(queryClient, key(organisationId), (data, queryKey) => guessSeat(data, queryKey.at(-1), { ...vars, previous, planName }));
+    },
+    onError: (_error, _vars, context) => rollbackGuess(queryClient, context),
     mutationFn: ({ action, membershipId, planSlug, quantity }) => {
       switch (action) {
         case "seats":
@@ -64,6 +77,36 @@ export const useSubscriptionMutation = () => {
     // Seats and packages decide what people may use, so permissions are refreshed too.
     onSettled: () => refreshOrganisation(queryClient, organisationId, { me: true }),
   });
+};
+
+/**
+ * The seat assignments (`{ data }`, `part` "assignments") or the overview (`items` with assigned / available, `part` "overview") as they will be
+ * once `membershipId` gets `planSlug` (`action: "assign"`) or loses its seat (`"remove"`). `previous` = the slug they held before.
+ */
+export const guessSeat = (data, part, { action, membershipId, planSlug = null, planName = null, previous = null }) => {
+  const next = action === "assign" ? planSlug : null;
+  if (!data || next === previous) return data;
+  if (part === "assignments" && Array.isArray(data.data)) {
+    let changed = false;
+    const rows = data.data.map((r) => {
+      if (r.membershipId !== membershipId) return r;
+      changed = true;
+      return { ...r, plan: next ? { ...(r.plan ?? {}), slug: next, name: planName ?? next } : null };
+    });
+    return changed ? { ...data, data: rows } : data;
+  }
+  if (part === "overview" && Array.isArray(data.items)) {
+    const delta = (slug) => (slug === next ? 1 : 0) - (slug === previous ? 1 : 0);
+    const items = data.items.map((i) => {
+      const d = delta(i.planSlug);
+      return d ? { ...i, assigned: i.assigned + d, available: Math.max(0, i.available - d) } : i;
+    });
+    const totals = data.totals
+      ? { ...data.totals, seatsAssigned: items.reduce((t, i) => t + i.assigned, 0), seatsAvailable: items.reduce((t, i) => t + i.available, 0) }
+      : data.totals;
+    return { ...data, items, totals };
+  }
+  return data;
 };
 
 /** Starts Stripe Checkout (14-day trial, card required). Resolves with { url, sessionId }: send the browser to url. */

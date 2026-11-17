@@ -188,7 +188,7 @@ describe("document page", () => {
     await userEvent.clear(within(dialog).getByLabelText("Title"));
     await userEvent.type(within(dialog).getByLabelText("Title"), "Nonconforming product");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    expect(mutate).toHaveBeenCalledWith({ action: "updateDocument", id: "d1", body: { title: "Nonconforming product", description: "All sites", ownerId: "u1" } }, expect.anything());
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "updateDocument", id: "d1", body: { title: "Nonconforming product", description: "All sites", ownerId: "u1" } }));
   });
 });
 
@@ -371,14 +371,14 @@ describe("readers and acknowledgement", () => {
       expect(within(screen.getByRole("list", { name: "Readers" })).getByText("Inspector")).toBeInTheDocument();
       await userEvent.click(screen.getByRole("combobox", { name: /Add a department/ }));
       await userEvent.click(screen.getByRole("option", { name: /Assembly/ }));
-      expect(mutate).toHaveBeenLastCalledWith({ action: "setReaders", id: "d1", body: { targets: [{ roleId: "role1" }, { departmentId: "dep1" }] } }, expect.anything());
+      expect(mutate).toHaveBeenLastCalledWith(expect.objectContaining({ action: "setReaders", id: "d1", body: { targets: [{ roleId: "role1" }, { departmentId: "dep1" }] } }));
       await userEvent.click(screen.getByRole("button", { name: "Remove Inspector" }));
-      expect(mutate).toHaveBeenLastCalledWith({ action: "setReaders", id: "d1", body: { targets: [] } }, expect.anything());
+      expect(mutate).toHaveBeenLastCalledWith(expect.objectContaining({ action: "setReaders", id: "d1", body: { targets: [] } }));
       await userEvent.click(screen.getByRole("switch", { name: "Restricted" }));
       expect(mutate).toHaveBeenLastCalledWith({ action: "restricted", body: true }, expect.anything());
       await userEvent.click(screen.getByRole("combobox", { name: /Add a skill/ }));
       await userEvent.click(screen.getByRole("option", { name: /Torque tightening/ }));
-      expect(mutate).toHaveBeenLastCalledWith({ action: "setSkills", id: "d1", body: { skillIds: ["k1"] } }, expect.anything());
+      expect(mutate).toHaveBeenLastCalledWith(expect.objectContaining({ action: "setSkills", id: "d1", body: { skillIds: ["k1"] } }));
     } finally {
       Object.assign(document, { targets: [], skills: [] });
     }
@@ -392,7 +392,7 @@ describe("readers and acknowledgement", () => {
     const dialog = screen.getByRole("dialog");
     await userEvent.type(within(dialog).getByLabelText("Note"), "Read at the briefing");
     await userEvent.click(within(dialog).getByRole("button", { name: "I have read it" }));
-    expect(mutate).toHaveBeenCalledWith({ action: "acknowledge", id: "r1", body: { note: "Read at the briefing" } }, expect.anything());
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "acknowledge", id: "r1", body: { note: "Read at the briefing" } }));
   });
 
   it("shows an overdue request in red, and a done one with its date", () => {
@@ -420,7 +420,7 @@ describe("readers and acknowledgement", () => {
     expect(screen.queryByRole("option", { name: /Dee Doe/ })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("option", { name: /Quinn Manager/ }));
     await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
-    expect(mutate).toHaveBeenCalledWith({ action: "addRecipient", id: "r1", body: { userId: "u3" } }, expect.anything());
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "addRecipient", id: "r1", body: { userId: "u3" } }));
   });
 
   it("saves how many days readers have when the field is left", async () => {
@@ -471,7 +471,7 @@ describe("periodic review, change requests and links", () => {
       at("/Documentation/Documents/d1", "/Documentation/Documents/:id", <DocumentPage />);
       await userEvent.type(screen.getByLabelText("Its own interval in months"), "6");
       await userEvent.tab();
-      expect(mutate).toHaveBeenCalledWith({ action: "updateDocument", id: "d1", body: { reviewMonths: 6 } }, expect.anything());
+      expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "updateDocument", id: "d1", body: { reviewMonths: 6 } }), expect.anything());
     } finally {
       reset();
     }
@@ -483,7 +483,7 @@ describe("periodic review, change requests and links", () => {
       at("/Documentation/Documents/d1", "/Documentation/Documents/:id", <DocumentPage />);
       expect(within(screen.getByRole("list", { name: "Where it applies" })).getByText("OP-20")).toBeInTheDocument();
       await userEvent.click(screen.getByRole("button", { name: "Add a machine" }));
-      expect(mutate).toHaveBeenLastCalledWith({ action: "setLinks", id: "d1", body: { links: [{ operationCode: "OP-20" }, { machineId: "m1" }] } }, expect.anything());
+      expect(mutate).toHaveBeenLastCalledWith(expect.objectContaining({ action: "setLinks", id: "d1", body: { links: [{ operationCode: "OP-20" }, { machineId: "m1" }] } }), expect.anything());
       await userEvent.type(screen.getByLabelText("Add an operation"), "op-20");
       await userEvent.click(screen.getByRole("button", { name: "Add the operation" }));
       expect(mutate).toHaveBeenCalledTimes(1);
@@ -512,7 +512,7 @@ describe("periodic review, change requests and links", () => {
       dialog = screen.getByRole("dialog");
       await userEvent.type(within(dialog).getByLabelText("Why?"), "Covered elsewhere");
       await userEvent.click(within(dialog).getByRole("button", { name: "Decline" }));
-      expect(mutate).toHaveBeenLastCalledWith({ action: "declineChangeRequest", id: "c1", body: { reason: "Covered elsewhere" } }, expect.anything());
+      expect(mutate).toHaveBeenLastCalledWith(expect.objectContaining({ action: "declineChangeRequest", id: "c1", body: { reason: "Covered elsewhere" } }), expect.anything());
       expect(within(list).queryByRole("button", { name: "Withdraw" })).not.toBeInTheDocument();
     } finally {
       reset();
@@ -528,7 +528,7 @@ describe("periodic review, change requests and links", () => {
     expect(within(list).getByRole("link", { name: /SOP-001 Control/ })).toHaveAttribute("href", "/Documentation/Documents/d1");
     expect(within(list).queryByRole("button", { name: "Accept into a revision" })).not.toBeInTheDocument();
     await userEvent.click(within(list).getByRole("button", { name: "Withdraw" }));
-    expect(mutate).toHaveBeenCalledWith({ action: "withdrawChangeRequest", id: "c2" }, expect.anything());
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "withdrawChangeRequest", id: "c2" }), expect.anything());
   });
 
   it("shows the documents in force where work happens, and nothing when there are none", () => {

@@ -1,8 +1,10 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
-import { apiFetch } from "../lib/api-client";
+import { apiFetch, describeApiError } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
+import { useToast } from "../contexts/ToastProvider";
 import { refreshOrganisation } from "../lib/refresh";
+import { guessCache, optimisticTarget, rollbackGuess, settle, updateById } from "../lib/optimistic";
 import { provisionalResult } from "../lib/audits";
 
 /** Audits (the Audits module): the register of audit definitions, one audit, and the changes made to them. */
@@ -70,13 +72,73 @@ export const useAuditVersion = (id, version) => {
   });
 };
 
-/** Create, change, retire or reactivate an audit: { path, method, body }. */
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+/** Commands the screen shows before the server answers: [path pattern, what changes]. */
+const AUDIT_COMMANDS = [
+  [new RegExp(`^/audit-occurrences/(${UUID})/skip$`, "i"), (o, body) => ({ ...o, state: "skipped", ...("skippedReason" in o ? { skippedReason: body?.reason ?? null } : {}) })],
+  [new RegExp(`^/audit-occurrences/(${UUID})/unskip$`, "i"), (o) => ({ ...o, state: (o.daysFromToday ?? 0) >= 0 ? "upcoming" : "overdue", ...("skippedReason" in o ? { skippedReason: null } : {}) })],
+  [new RegExp(`^/audits/(${UUID})/retire$`, "i"), (o, body) => ({ ...o, status: "retired", ...("retired" in o ? { retired: { at: new Date().toISOString(), by: null, reason: body?.reason ?? "" } } : {}) })],
+  [new RegExp(`^/audits/(${UUID})/reactivate$`, "i"), (o) => ({ ...o, status: "active", ...("retired" in o ? { retired: null } : {}) })],
+  [new RegExp(`^/audit-records/(${UUID})/abandon$`, "i"), (o, body) => ({ ...o, status: "abandoned", ...("abandonReason" in o ? { abandonReason: body?.reason ?? null } : {}) })],
+  [new RegExp(`^/audit-findings/(${UUID})/withdraw$`, "i"), (o) => ({ ...o, status: "withdrawn" })],
+  [new RegExp(`^/audit-findings/(${UUID})/reopen$`, "i"), (o) => ({ ...o, status: "open" })],
+  [new RegExp(`^/audit(?:-finding)?-attachments/(${UUID})/delete$`, "i"), (o, body) => ({ ...o, deletedAt: new Date().toISOString(), deleteReason: body?.reason ?? null })],
+  [new RegExp(`^/audit(?:-finding)?-attachments/(${UUID})/restore$`, "i"), (o) => ({ ...o, deletedAt: null, deleteReason: null })],
+];
+
+const isFileCommand = (path = "") => /^\/audit(?:-finding)?-attachments\//.test(path);
+
+/**
+ * Cached audits data as it will be after `{ path, method, body }` of useAuditMutation: a flat PATCH of one record (its plain fields), a DELETE,
+ * or one of AUDIT_COMMANDS. Anything else (creating, completing, raising a non-conformance, closing a finding) is left to the server: returns `data`.
+ */
+export const guessAudits = (data, { path, method = "POST", body } = {}) => {
+  const target = optimisticTarget({ path, method, body });
+  if (target?.remove) return updateById(data, target.id, (o) => o, { remove: true });
+  if (target) {
+    return updateById(data, target.id, (o) => {
+      let changed = false;
+      const out = { ...o };
+      for (const [k, v] of Object.entries(body)) {
+        if (k === "rowVersion" || !(k in o) || v === undefined || o[k] === v) continue;
+        out[k] = v;
+        changed = true;
+      }
+      return changed ? out : o;
+    });
+  }
+  if (method !== "POST") return data;
+  for (const [pattern, change] of AUDIT_COMMANDS) {
+    const m = String(path).match(pattern);
+    if (m) return updateById(data, m[1], (o) => change(o, body));
+  }
+  return data;
+};
+
+/** Whether `guessAudits` would show this request before the server answers. */
+export const auditGuessed = (request = {}) => {
+  const method = request.method ?? "POST";
+  if (optimisticTarget({ ...request, method })) return true;
+  return method === "POST" && AUDIT_COMMANDS.some(([pattern]) => pattern.test(String(request.path)));
+};
+
+/**
+ * Create, change, retire or reactivate an audit, a record, a finding, a slot or a file: { path, method, body, failed? }. Requests that auditGuessed
+ * says are guessable change the screen at once; a refusal puts it back with an error toast titled `failed` (files: AttachmentDrop tells its own).
+ */
 export const useAuditMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
     mutationFn: ({ path, method = "POST", body }) => apiFetch(path, { method, body, organisationId }),
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+    onMutate: (request) => (auditGuessed(request) ? guessCache(queryClient, ["api", "org", organisationId], (data) => guessAudits(data, request)) : { optimistic: false }),
+    onError: (error, request, context) => {
+      rollbackGuess(queryClient, context);
+      if (auditGuessed(request) && !isFileCommand(request?.path) && !error?.cancelled) toast?.showToast({ type: "error", title: request.failed ?? "Not saved", message: describeApiError(error) });
+    },
+    // Requests that were not guessed wait for the refetch, so the screen has moved on when the caller's onSuccess runs.
+    onSettled: (_data, _error, _request, context) => settle(queryClient, organisationId, context),
   });
 };
 
@@ -119,6 +181,7 @@ export const useAuditRecord = (id) => {
 const useRecordEdit = (recordId, request, patch) => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const detailKey = key(organisationId, "records", "detail", recordId);
   return useMutation({
     mutationFn: (arg) => apiFetch(request(arg).path, { method: request(arg).method, body: request(arg).body, organisationId }),
@@ -128,8 +191,9 @@ const useRecordEdit = (recordId, request, patch) => {
       if (previous) queryClient.setQueryData(detailKey, patch(previous, arg));
       return { previous };
     },
-    onError: (_e, _arg, context) => {
+    onError: (error, _arg, context) => {
       if (context?.previous) queryClient.setQueryData(detailKey, context.previous);
+      if (!error?.cancelled) toast?.showToast({ type: "error", title: "Not saved", message: describeApiError(error) });
     },
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
@@ -262,6 +326,7 @@ export const useNcrAuditSource = (ncrId, enabled = true) => {
 export const useUpdateClassification = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const prefix = key(organisationId, "findings", "classifications");
   return useMutation({
     mutationFn: ({ id, body }) => apiFetch(`/audit-finding-classifications/${id}`, { method: "PATCH", body, organisationId }),
@@ -271,7 +336,10 @@ export const useUpdateClassification = () => {
       queryClient.setQueriesData({ queryKey: prefix }, (old) => old && { ...old, data: old.data.map((c) => (c.id === id ? { ...c, ...body } : c)) });
       return { previous };
     },
-    onError: (_e, _vars, context) => context?.previous.forEach(([k, data]) => queryClient.setQueryData(k, data)),
+    onError: (error, _vars, context) => {
+      context?.previous.forEach(([k, data]) => queryClient.setQueryData(k, data));
+      toast?.showToast({ type: "error", title: "Not saved", message: describeApiError(error) });
+    },
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };

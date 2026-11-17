@@ -99,7 +99,7 @@ const AgentUpdates = ({ agent, canManage }) => {
             {updateStatus(open.status).label}
             {open.status === "waiting" && !agent.online ? ". The agent is offline; it will take the update when it is back." : "."}
             {open.status === "waiting" && canManage && (
-              <CTAButton type="neutral" size="default" className="mt-2" onClick={() => cancel(open)} loading={mutate.isPending} loadingText="Cancelling">
+              <CTAButton type="neutral" size="default" className="mt-2" onClick={() => cancel(open)}>
                 Cancel the update
               </CTAButton>
             )}

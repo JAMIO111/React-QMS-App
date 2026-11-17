@@ -8,7 +8,7 @@ import { useAuth } from "../../contexts/AuthProvider";
 import { useDocumentMutation } from "../../hooks/useDocuments";
 import { usePartFamilies } from "../../hooks/useProcessControl";
 import { usePermissions } from "../../hooks/useQmsApi";
-import { CHANGE_REQUEST_STATUS, formatDay, LINK_KIND, linkBody, revisionPath, statusPill } from "../../lib/documents";
+import { DOCUMENT_GUESSED, CHANGE_REQUEST_STATUS, formatDay, LINK_KIND, linkBody, revisionPath, statusPill } from "../../lib/documents";
 import { MachinePicker, PartPicker } from "../ncr/Pickers";
 import { FormError } from "../master-data/shared";
 import Callout from "../ui/Callout";
@@ -22,7 +22,8 @@ const useRun = () => {
   const mutation = useDocumentMutation();
   const { showToast } = useToast();
   const run = (payload, onDone) =>
-    mutation.mutate(payload, { onSuccess: (r) => onDone?.(r), onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) });
+    // Guessed commands tell their own refusals (the hook toasts, as the dialog may have closed).
+    mutation.mutate(payload, { onSuccess: (r) => onDone?.(r), onError: (err) => !DOCUMENT_GUESSED.has(payload.action) && showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) });
   return { mutation, run };
 };
 
@@ -175,14 +176,17 @@ const DeclineDialog = ({ request, onClose }) => {
   const ok = reason.trim().length >= 3;
   const save = (e) => {
     e.preventDefault();
-    if (ok) run({ action: "declineChangeRequest", id: request.id, body: { reason: reason.trim() } }, onClose);
+    if (!ok) return;
+    // Shown as declined at once; a refusal puts it back with a toast.
+    run({ action: "declineChangeRequest", id: request.id, body: { reason: reason.trim() } });
+    onClose();
   };
   return (
     <Dialog title={`Decline ${request.reference}`} onClose={onClose}>
       <form noValidate onSubmit={save} className="flex flex-col gap-3">
         <Field label="Why?" value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={1000} hint="The person who asked is told." />
         <FormError error={mutation.error} />
-        <Buttons onClose={onClose} pending={mutation.isPending} disabled={!ok} label="Decline" type="danger" />
+        <Buttons onClose={onClose} disabled={!ok} label="Decline" type="danger" />
       </form>
     </Dialog>
   );
@@ -226,7 +230,7 @@ export const ChangeRequestRow = ({ request, canManage, showDocument = false }) =
           {canManage && (
             <CTAButton
               type="success"
-              loading={mutation.isPending}
+              loading={mutation.isPending && mutation.variables?.action === "acceptChangeRequest"}
               onClick={() => run({ action: "acceptChangeRequest", id: request.id }, (r) => r?.revision && navigate(revisionPath(r.document.id, r.revision.id)))}>
               Accept into a revision
             </CTAButton>
@@ -237,7 +241,7 @@ export const ChangeRequestRow = ({ request, canManage, showDocument = false }) =
             </CTAButton>
           )}
           {request.requestedBy?.id === user?.id && (
-            <CTAButton type="neutral" loading={mutation.isPending} onClick={() => run({ action: "withdrawChangeRequest", id: request.id })}>
+            <CTAButton type="neutral" onClick={() => run({ action: "withdrawChangeRequest", id: request.id })}>
               Withdraw
             </CTAButton>
           )}
@@ -287,7 +291,8 @@ export const LinksCard = ({ doc }) => {
   const [op, setOp] = useState("");
   const editable = doc.canManage;
   if (!editable && doc.links.length === 0) return null;
-  const save = (links) => run({ action: "setLinks", id: doc.id, body: { links: links.map(linkBody) } });
+  // The chips change at once (labels in `show`); a refusal puts them back with a toast.
+  const save = (links) => run({ action: "setLinks", id: doc.id, body: { links: links.map(linkBody) }, show: { links } });
   const has = (kind, refId) => doc.links.some((l) => l.kind === kind && String(l.refId).toUpperCase() === String(refId).toUpperCase());
   const add = (kind, refId, label) => refId && !has(kind, refId) && save([...doc.links, { kind, refId, label }]);
   const familyOptions = (families.data?.items ?? []).filter((f) => !has("part_family", f.id)).map((f) => ({ value: f.id, label: f.name, hint: f.code }));

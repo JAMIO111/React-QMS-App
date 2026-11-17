@@ -22,6 +22,9 @@ import { RevisionStatusPill } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import { changesSince } from "../../lib/editConflicts";
+import { useQuickSave } from "../../hooks/useQuickSave";
+import { addToList } from "../../lib/guessRequest";
+import { isPending, pendingId } from "../../lib/optimistic";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
@@ -35,8 +38,7 @@ const isoToDay = (iso) => {
 };
 
 const PlanDetails = ({ plan, canManage }) => {
-  const mutation = useProcessControlMutation();
-  const { showToast } = useToast();
+  const quickSave = useQuickSave(useProcessControlMutation());
   const toForm = (p) => ({ planCode: p.planCode, title: p.title, description: p.description ?? "", ownerId: p.owner?.id ?? null, active: p.active });
   const [form, setForm] = useState(toForm(plan));
   useEffect(() => setForm(toForm(plan)), [plan]);
@@ -44,14 +46,12 @@ const PlanDetails = ({ plan, canManage }) => {
 
   const submit = (e) => {
     e.preventDefault();
-    mutation.mutate(
-      {
-        path: `/control-plans/${plan.id}`,
-        method: "PATCH",
-        body: { planCode: form.planCode.trim(), title: form.title.trim(), description: form.description.trim(), ownerId: form.ownerId, active: form.active },
-      },
-      { onSuccess: () => showToast({ type: "success", title: "Saved", message: "Plan details updated." }) }
-    );
+    // Shown at once (the hook's guess); put back with a toast if the server refuses.
+    quickSave({
+      path: `/control-plans/${plan.id}`,
+      method: "PATCH",
+      body: { planCode: form.planCode.trim(), title: form.title.trim(), description: form.description.trim(), ownerId: form.ownerId, active: form.active },
+    });
   };
 
   return (
@@ -67,10 +67,9 @@ const PlanDetails = ({ plan, canManage }) => {
           </Switch>
         )}
       </div>
-      <FormError error={mutation.error} />
       {canManage && (
-        <CTAButton buttonType="submit" type="main" size="lg" className="self-start" disabled={mutation.isPending} loading={mutation.isPending}>
-          {mutation.isPending ? "Saving…" : "Save changes"}
+        <CTAButton buttonType="submit" type="main" size="lg" className="self-start">
+          Save changes
         </CTAButton>
       )}
     </MenuCard>
@@ -78,7 +77,7 @@ const PlanDetails = ({ plan, canManage }) => {
 };
 
 const AddScopeForm = ({ plan, onDone }) => {
-  const mutation = useProcessControlMutation();
+  const quickSave = useQuickSave(useProcessControlMutation(), "Not added");
   const families = usePartFamilies();
   const sites = useSites();
   const firstFamily = plan.applicability.find((a) => a.partFamily)?.partFamily.id ?? null;
@@ -87,17 +86,26 @@ const AddScopeForm = ({ plan, onDone }) => {
 
   const submit = (e) => {
     e.preventDefault();
-    mutation.mutate(
-      {
-        path: `/control-plans/${plan.id}/applicability`,
-        body: {
-          ...(form.target === "family" ? { partFamilyId: form.partFamilyId } : { partId: form.partId }),
-          siteId: form.siteId,
-          operationCode: form.operationCode.trim() || null,
-        },
+    const family = (families.data?.items ?? []).find((f) => f.id === form.partFamilyId);
+    const site = (sites.data?.data ?? []).find((x) => x.id === form.siteId);
+    // The entry shows at once (without actions until the server has made it) and is taken away with a toast if refused.
+    const row = {
+      id: pendingId(),
+      partFamily: form.target === "family" && family ? { id: family.id, code: family.code, name: family.name } : null,
+      part: form.target === "part" && form.partId ? { id: form.partId, partNumber: form.part?.name?.split(" · ")[0] ?? "…" } : null,
+      site: site ? { id: site.id, name: site.name } : null,
+      operationCode: form.operationCode.trim() || null,
+    };
+    quickSave({
+      path: `/control-plans/${plan.id}/applicability`,
+      body: {
+        ...(form.target === "family" ? { partFamilyId: form.partFamilyId } : { partId: form.partId }),
+        siteId: form.siteId,
+        operationCode: form.operationCode.trim() || null,
       },
-      { onSuccess: onDone }
-    );
+      guess: addToList(plan.id, "applicability", row),
+    });
+    onDone();
   };
 
   return (
@@ -139,13 +147,12 @@ const AddScopeForm = ({ plan, onDone }) => {
         />
         <Field label="Operation" value={form.operationCode} onChange={(e) => setForm((f) => ({ ...f, operationCode: e.target.value }))} maxLength={30} hint="e.g. OP-020 (optional)" />
       </div>
-      <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !ready} loading={mutation.isPending}>
-          {mutation.isPending ? "Adding…" : "Add scope"}
+        <CTAButton buttonType="submit" type="main" size="lg" disabled={!ready}>
+          Add scope
         </CTAButton>
       </div>
     </form>
@@ -227,10 +234,11 @@ const Scope = ({ plan, canManage }) => {
                 </td>
                 <td className={td}>{a.site?.name ?? "All sites"}</td>
                 <td className={`${td} font-mono`}>{a.operationCode ?? <span className="font-sans">All</span>}</td>
-                {canManage && (
+                {canManage && isPending(a.id) && <td className={`${td} text-right text-xs text-secondary-text`}>Saving…</td>}
+                {canManage && !isPending(a.id) && (
                   <td className={td}>
                     <div className="flex justify-end">
-                      <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => remove(a)} aria-label="Remove scope entry">
+                      <CTAButton buttonType="button" type="danger" size="md" onClick={() => remove(a)} aria-label="Remove scope entry">
                         <Trash2Icon className="h-4 w-4" />
                       </CTAButton>
                     </div>
@@ -252,6 +260,7 @@ const Scope = ({ plan, canManage }) => {
 
 const RevisionForm = ({ plan, revision, onDone }) => {
   const mutation = useProcessControlMutation();
+  const quickSave = useQuickSave(useProcessControlMutation());
   const { showToast } = useToast();
   const latest = plan.revisions[0]?.revisionCode;
   const [opened] = useState(revision);
@@ -265,11 +274,18 @@ const RevisionForm = ({ plan, revision, onDone }) => {
   const submit = (e) => {
     e.preventDefault();
     const body = { revisionCode: form.revisionCode.trim(), changeReason: form.changeReason.trim(), effectiveFrom: dayToIso(form.effectiveFrom) };
+    if (revision) {
+      // A draft's details: shown at once, put back with a toast if the server refuses.
+      quickSave({ path: `/control-plan-revisions/${revision.id}`, method: "PATCH", body: changesSince(opened, body) });
+      onDone();
+      return;
+    }
+    // A new revision waits: the server copies the current revision's content into it.
     mutation.mutate(
-      revision ? { path: `/control-plan-revisions/${revision.id}`, method: "PATCH", body: changesSince(opened, body) } : { path: `/control-plans/${plan.id}/revisions`, body },
+      { path: `/control-plans/${plan.id}/revisions`, body },
       {
         onSuccess: (saved) => {
-          showToast({ type: "success", title: "Saved", message: revision ? `Draft ${saved.revisionCode} updated.` : `Draft revision ${saved.revisionCode} created.` });
+          showToast({ type: "success", title: "Saved", message: `Draft revision ${saved.revisionCode} created.` });
           onDone();
         },
       }

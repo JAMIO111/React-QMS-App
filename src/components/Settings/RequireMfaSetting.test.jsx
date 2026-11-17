@@ -33,7 +33,7 @@ describe("RequireMfaSetting", () => {
     renderIt({ value: false, canManage: true });
     await userEvent.click(screen.getByRole("switch"));
     expect(mutate).toHaveBeenCalledWith(
-      { body: { settings: { requireMfa: true } }, reason: "Two-factor authentication required" },
+      { body: { settings: { requireMfa: true } }, guess: false, reason: "Two-factor authentication required" },
       expect.any(Object)
     );
   });

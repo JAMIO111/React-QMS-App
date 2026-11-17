@@ -1,7 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
 import { apiFetch } from "../lib/api-client";
-import { optimisticHandlers, settle } from "../lib/optimistic";
+import { settle } from "../lib/optimistic";
+import { requestGuessHandlers } from "../lib/guessRequest";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { key, usePagedList } from "./useMasterData";
 
@@ -46,8 +47,9 @@ export const useProcessControlMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ path, method = "POST", body, reason }) => apiFetch(path, { method, body, organisationId, reason }),
-    ...optimisticHandlers(queryClient, key(organisationId)),
-    onSuccess: (_data, _request, context) => settle(queryClient, organisationId, context),
+    // The screen changes at once (the request's own `guess`, else a flat PATCH / DELETE of one record) and goes back if the server refuses.
+    ...requestGuessHandlers(queryClient, key(organisationId)),
+    onSettled: (_data, _error, _request, context) => settle(queryClient, organisationId, context),
   });
 };
 

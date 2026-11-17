@@ -9,6 +9,7 @@ import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
 import Field from "../ui/Field";
 import MenuCard from "../ui/MenuCard";
+import { isPending } from "../../lib/optimistic";
 
 const KEY = /^[A-Z][A-Z0-9_]{0,39}$/;
 
@@ -26,17 +27,21 @@ const FeatureMapsCard = ({ partId, canEdit }) => {
   const [profileId, setProfileId] = useState(null);
   const list = maps.data?.data ?? [];
   const keyOk = KEY.test(characteristicKey.trim().toUpperCase());
-  const add = () =>
+  /** Shown in the list at once (no remove button until the server has saved it); taken away with a toast if refused. */
+  const add = () => {
+    const profile = (profiles.data?.data ?? []).find((p) => p.id === profileId);
     mutation.mutate(
-      { action: "save", partId, body: { featureName: feature.trim(), characteristicKey: characteristicKey.trim().toUpperCase(), profileId: profileId ?? null } },
       {
-        onSuccess: () => {
-          setFeature("");
-          setCharacteristicKey("");
-        },
-        onError: (e) => showToast({ type: "error", title: "Not saved", message: describeApiError(e) }),
+        action: "save",
+        partId,
+        body: { featureName: feature.trim(), characteristicKey: characteristicKey.trim().toUpperCase(), profileId: profileId ?? null },
+        show: { profile: profile ? { id: profile.id, name: profile.name } : null },
       },
+      { onError: (e) => showToast({ type: "error", title: "Not saved", message: describeApiError(e) }) },
     );
+    setFeature("");
+    setCharacteristicKey("");
+  };
 
   if (!canEdit && list.length === 0) return null;
   return (
@@ -56,11 +61,10 @@ const FeatureMapsCard = ({ partId, canEdit }) => {
                   {m.profile ? m.profile.name : "Any profile"} · {formatDateTime(m.createdAt)}{m.createdBy ? ` · ${m.createdBy}` : ""}
                 </span>
               </div>
-              {canEdit && (
+              {canEdit && !isPending(m.id) && (
                 <button
                   type="button"
                   aria-label={`Remove the match for ${m.featureName}`}
-                  disabled={mutation.isPending}
                   onClick={() => mutation.mutate({ action: "end", id: m.id }, { onError: (e) => showToast({ type: "error", title: "Not removed", message: describeApiError(e) }) })}
                   className="rounded-lg p-1.5 text-error-color hover:bg-secondary-text/5 cursor-pointer">
                   <Trash2Icon className="h-4 w-4" />
@@ -81,7 +85,7 @@ const FeatureMapsCard = ({ partId, canEdit }) => {
             maxLength={40}
           />
           <ComboField label="Profile" value={profileId} onChange={setProfileId} placeholder="Any profile" options={(profiles.data?.data ?? []).map((p) => ({ value: p.id, label: p.name }))} />
-          <CTAButton type="secondary" size="md" icon={PlusIcon} disabled={!feature.trim() || !keyOk} loading={mutation.isPending} onClick={add}>
+          <CTAButton type="secondary" size="md" icon={PlusIcon} disabled={!feature.trim() || !keyOk} onClick={add}>
             Add
           </CTAButton>
         </div>

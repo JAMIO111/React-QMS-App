@@ -64,11 +64,43 @@ export const useJobMutation = () => {
  * Link a running job to its production order, lot and serial number: { id, productionOrderId?, lotId?, serialId? } (null clears one). The answer is the inspection, with the
  * typed work order, lot and serial filled in from what was picked.
  */
+/**
+ * The job's links as they will be after choosing ({ productionOrderId?, lotId?, serialId? }, null clears one). `show` carries what the picker knows of the
+ * chosen record ({ productionOrder?: { id, orderNumber }, lot?: { id, lotNumber }, serial?: { id, serialNumber } }); what the choice implies (an order from
+ * a lot) comes with the server's answer.
+ */
+export const guessJobLinks = (inspection, body, show = {}) => {
+  if (!inspection) return inspection;
+  const links = { productionOrder: null, lot: null, serial: null, ...(inspection.links ?? {}) };
+  const pick = (field, idKey, label) => {
+    if (!(idKey in body)) return;
+    const id = body[idKey];
+    links[field] = id ? { ...(links[field]?.id === id ? links[field] : {}), id, ...(show[field] ?? {}), [label]: show[field]?.[label] ?? (links[field]?.id === id ? links[field][label] : "…") } : null;
+  };
+  pick("productionOrder", "productionOrderId", "orderNumber");
+  pick("lot", "lotId", "lotNumber");
+  pick("serial", "serialId", "serialNumber");
+  return { ...inspection, links };
+};
+
 export const useJobLinks = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const detail = (id) => ["api", "org", organisationId, "inspection", id];
   return useMutation({
-    mutationFn: ({ id, ...body }) => apiFetch(`/jobs/${id}/production-links`, { method: "PUT", body, organisationId }),
+    // Only the links go to the server (undefined ones are left out of the JSON); `show` is for the guess.
+    mutationFn: ({ id, productionOrderId, lotId, serialId }) =>
+      apiFetch(`/jobs/${id}/production-links`, { method: "PUT", body: { productionOrderId, lotId, serialId }, organisationId }),
+    // The chosen record shows at once; put back if the server refuses (the picker's error shows under it).
+    onMutate: async ({ id, show, ...body }) => {
+      await queryClient.cancelQueries({ queryKey: detail(id) });
+      const previous = queryClient.getQueryData(detail(id));
+      if (previous) queryClient.setQueryData(detail(id), guessJobLinks(previous, body, show));
+      return { previous, id };
+    },
+    onError: (_error, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(detail(context.id), context.previous);
+    },
     onSuccess: (inspection) => {
       if (inspection?.id) queryClient.setQueryData(["api", "org", organisationId, "inspection", inspection.id], inspection);
     },

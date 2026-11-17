@@ -4,6 +4,7 @@ import { apiFetch, describeApiError } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
 import { useToast } from "../contexts/ToastProvider";
+import { guessSupplierSettings } from "../lib/supplierQualityGuesses";
 
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "supplier-performance", ...rest];
 const BASE = "/supplier-quality";
@@ -124,7 +125,7 @@ export const usePerformanceMutation = () => {
       }
     },
     // A new model version shows at once on the Settings card; a refusal puts the old one back and says why.
-    onMutate: async ({ action, body }) => {
+    onMutate: async ({ action, id, body }) => {
       // A switch on the schedule card moves at once; the server's answer (next periods, whose authority) replaces it.
       if (action === "saveSchedule") {
         const queryKey = key(organisationId, "schedule");
@@ -134,6 +135,14 @@ export const usePerformanceMutation = () => {
           const { classificationIds, ...rest } = body;
           queryClient.setQueryData(queryKey, { ...previous, ...rest, ...(classificationIds ? { classifications: previous.classifications.filter((c) => classificationIds.includes(c.id)) } : {}) });
         }
+        return { previous, queryKey };
+      }
+      // A supplier's own scoring settings show at once on its Performance tab.
+      if (action === "saveSupplierSettings") {
+        const queryKey = key(organisationId, "settings", id);
+        await queryClient.cancelQueries({ queryKey });
+        const previous = queryClient.getQueryData(queryKey);
+        if (previous) queryClient.setQueryData(queryKey, guessSupplierSettings(previous, body));
         return { previous, queryKey };
       }
       if (action !== "saveModel") return {};

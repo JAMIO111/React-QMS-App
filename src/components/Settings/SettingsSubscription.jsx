@@ -542,10 +542,9 @@ const Seats = ({ catalogue, overview, canAssign }) => {
   const freeOf = (slug) =>
     overview.items.find((i) => i.planSlug === slug)?.available ?? 0;
 
-  const run = (vars, message) =>
+  // The package changes at once (useSubscriptionMutation guesses); only a refusal is told.
+  const run = (vars) =>
     mutation.mutate(vars, {
-      onSuccess: () =>
-        showToast({ type: "success", title: "Updated", message }),
       onError: (e) =>
         showToast({
           type: "error",
@@ -565,10 +564,7 @@ const Seats = ({ catalogue, overview, canAssign }) => {
         type: "warning",
       });
       if (ok)
-        run(
-          { action: "remove", membershipId: member.membershipId },
-          `${displayName(member)} no longer has a package.`,
-        );
+        run({ action: "remove", membershipId: member.membershipId });
       return;
     }
     const plan = catalogue.plans.find((p) => p.slug === planSlug);
@@ -588,10 +584,7 @@ const Seats = ({ catalogue, overview, canAssign }) => {
       type: "info",
     });
     if (ok)
-      run(
-        { action: "assign", membershipId: member.membershipId, planSlug },
-        `${displayName(member)} now has ${plan.name}.`,
-      );
+      run({ action: "assign", membershipId: member.membershipId, planSlug, planName: plan.name });
   };
 
   return (
@@ -630,7 +623,7 @@ const Seats = ({ catalogue, overview, canAssign }) => {
                   <ComboField
                     label={`Package for ${displayName(m)}`}
                     value={m.plan?.slug ?? null}
-                    disabled={mutation.isPending || m.status === "removed"}
+                    disabled={m.status === "removed"}
                     onChange={(v) => (v ?? "") !== (m.plan?.slug ?? "") && change(m, v ?? "")}
                     placeholder="No package"
                     clearable

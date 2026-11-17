@@ -6,6 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 const apiFetch = vi.fn();
 let departments;
 vi.mock("../../lib/api-client", async (importOriginal) => ({ ...(await importOriginal()), apiFetch: (...a) => apiFetch(...a) }));
+const showToast = vi.fn();
+vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast }) }));
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "org-1" }) }));
 vi.mock("../../hooks/useQmsApi", async (importOriginal) => ({
   ...(await importOriginal()),

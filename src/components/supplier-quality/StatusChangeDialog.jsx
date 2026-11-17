@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useToast } from "../../contexts/ToastProvider";
 import { useSupplierMutation } from "../../hooks/useSupplierQuality";
-import { describeApiError } from "../../lib/api-client";
-import { MOVE_VERB, movesFrom, statusOf } from "../../lib/supplierQuality";
+import { MOVE_VERB, movesFrom } from "../../lib/supplierQuality";
 import Dialog from "../ui/Dialog";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { ApprovalPill } from "./SupplierBadges";
@@ -15,7 +13,6 @@ const field = "rounded-lg border border-border-color bg-text-input-color px-3 py
 /** Move a supplier's approval status: only the moves that are allowed from where it is, always with a reason, and the conditions for a conditional approval. */
 const StatusChangeDialog = ({ supplier, initial, onClose }) => {
   const mutation = useSupplierMutation();
-  const { showToast } = useToast();
   // Approving (or approving conditionally) is a decision someone else makes: it is proposed on the Qualification tab, not done here.
   const allMoves = movesFrom(supplier.approvalStatus);
   const moves = allMoves.filter((m) => m !== "approved" && m !== "conditional");
@@ -30,16 +27,9 @@ const StatusChangeDialog = ({ supplier, initial, onClose }) => {
   const submit = (e) => {
     e.preventDefault();
     if (!ok) return;
-    mutation.mutate(
-      { action: "status", id: supplier.id, body: { status, reason: reason.trim(), ...(conditional ? { conditions: conditions.trim() } : {}), ...(reviewOn ? { reviewOn } : {}) } },
-      {
-        onSuccess: () => {
-          showToast({ type: "success", title: "Status changed", message: `${supplier.code} is now ${statusOf(status).label.toLowerCase()}.` });
-          onClose();
-        },
-        onError: (err) => showToast({ type: "error", title: "Not changed", message: describeApiError(err) }),
-      }
-    );
+    // The new status shows at once; a refusal puts the old one back with a toast (useSupplierMutation).
+    mutation.mutate({ action: "status", id: supplier.id, body: { status, reason: reason.trim(), ...(conditional ? { conditions: conditions.trim() } : {}), ...(reviewOn ? { reviewOn } : {}) } });
+    onClose();
   };
 
   return (
@@ -84,8 +74,8 @@ const StatusChangeDialog = ({ supplier, initial, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type={status === "disqualified" || status === "suspended" ? "danger" : "main"} size="md" disabled={!ok || mutation.isPending} loading={mutation.isPending}>
-            {mutation.isPending ? "Saving…" : status ? MOVE_VERB[status] : "Change"}
+          <CTAButton buttonType="submit" type={status === "disqualified" || status === "suspended" ? "danger" : "main"} size="md" disabled={!ok}>
+            {status ? MOVE_VERB[status] : "Change"}
           </CTAButton>
         </div>
       </form>

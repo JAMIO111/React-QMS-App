@@ -52,6 +52,12 @@ const ReasonDialog = ({ title, intro, confirmText, action, alert, onClose, onDon
         className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
+          if (action === "withdraw") {
+            // Shown as withdrawn at once; a refusal puts it back with a toast (from the hook).
+            mutation.mutate({ action, id: alert.id, body: { reason }, failed: "Not withdrawn" });
+            onClose();
+            return;
+          }
           mutation.mutate({ action, id: alert.id, body: { reason } }, { onSuccess: (data) => (onClose(), onDone?.(data)) });
         }}>
         <p className="text-sm text-primary-text">{intro}</p>
@@ -80,7 +86,9 @@ const ReopenDialog = ({ alert, onClose }) => {
         className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
-          mutation.mutate({ action: "reopen", id: alert.id, body: { expiryDate: expiry, reason: reason.trim() } }, { onSuccess: onClose });
+          // Shown in force again at once; a refusal puts it back with a toast (from the hook).
+          mutation.mutate({ action: "reopen", id: alert.id, body: { expiryDate: expiry, reason: reason.trim() }, failed: "Not reopened" });
+          onClose();
         }}>
         <p className="text-sm text-primary-text">
           The alert expired on {formatDay(alert.expiryDate)}. Reopening puts it back in force with a new expiry date. The change is recorded in its history.
@@ -90,8 +98,8 @@ const ReopenDialog = ({ alert, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!expiry || !reason.trim() || mutation.isPending} loading={mutation.isPending}>
-            {mutation.isPending ? "Saving…" : "Reopen alert"}
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!expiry || !reason.trim()}>
+            Reopen alert
           </CTAButton>
         </div>
       </form>
@@ -207,13 +215,17 @@ const Tracking = ({ alert, canAdd }) => {
               aria-label="Add a person"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (person) mutation.mutate({ action: "addRecipient", id: alert.id, body: { membershipId: person } }, { onSuccess: () => setPerson("") });
+                if (!person) return;
+                const m = candidates.find((c) => c.membershipId === person);
+                // Listed at once (marked as saving by its placeholder id); a refusal takes them off again with a toast.
+                mutation.mutate({ action: "addRecipient", id: alert.id, body: { membershipId: person }, show: { name: m ? [m.firstName, m.surname].filter(Boolean).join(" ") || m.email : undefined }, failed: "Not added" });
+                setPerson("");
               }}>
               <select aria-label="Person to add" className="h-9.5 rounded-lg border border-border-color bg-text-input-color px-2 py-2 text-sm text-primary-text" value={person} onChange={(e) => setPerson(e.target.value)}>
                 <option value="">Add a person…</option>
                 {candidates.map((m) => <option key={m.membershipId} value={m.membershipId}>{[m.firstName, m.surname].filter(Boolean).join(" ") || m.email}</option>)}
               </select>
-              <CTAButton buttonType="submit" type="neutral" size="md" disabled={!person || mutation.isPending} loading={mutation.isPending}>Add</CTAButton>
+              <CTAButton buttonType="submit" type="neutral" size="md" disabled={!person}>Add</CTAButton>
             </form>
           )}
         </div>
@@ -288,7 +300,10 @@ const QualityAlertPage = () => {
   };
   const doDiscard = async () => {
     const ok = await confirm({ title: "Discard this draft?", message: "The draft is removed from the register.", confirmText: "Discard", cancelText: "Keep", type: "warning" });
-    if (ok) mutation.mutate({ action: "discard", id: a.id }, { onSuccess: () => navigate("/Documentation/Quality-Alerts") });
+    if (!ok) return;
+    // Gone from the register at once; a refusal brings it back with a toast (from the hook).
+    mutation.mutate({ action: "discard", id: a.id, failed: "Not discarded" });
+    navigate("/Documentation/Quality-Alerts");
   };
 
   return (

@@ -7,7 +7,8 @@ import RHFDatePickerPopout from "../../ui/RHFDatePickerPopout";
 import Dialog from "../../ui/Dialog";
 import ReasonDialog from "../../ncr/ReasonDialog";
 import { NcrPicker } from "../../ncr/Pickers";
-import { useCapaMutation, useCapaPeople } from "../../../hooks/useCapa";
+import { CAPA_GUESSED, useCapaMutation, useCapaPeople } from "../../../hooks/useCapa";
+import { sendCommand } from "../../../lib/guessCommands";
 import { SEVERITIES, SOURCES, isRunning, ncrHref } from "../../../lib/capa";
 import { usePermissions } from "../../../hooks/useQmsApi";
 import CustomFieldsCard from "../../custom-fields/CustomFieldsCard";
@@ -41,7 +42,7 @@ const HeaderForm = ({ capa, editable }) => {
 
   return (
     <MenuCard title="The problem" subtitle="What went wrong, how serious it is and who is responsible" as="form" aria-label="8D details" bodyClassName="flex flex-col gap-3" noValidate
-      onSubmit={(e) => { e.preventDefault(); if (dirty) mutation.mutate({ action: "update", id: capa.id, body: versioned(changes) }); }}>
+      onSubmit={(e) => { e.preventDefault(); if (dirty) mutation.mutate({ action: "update", id: capa.id, body: versioned(changes), show: { ownerName: owners.find((o) => o.id === form.ownerMembershipId)?.name } }); }}>
       <Field label="Title" value={form.title} onChange={set("title")} disabled={!editable} required maxLength={200} />
       <TextAreaField label="Problem statement" required value={form.problemStatement} onChange={set("problemStatement")} disabled={!editable} rows={4} maxLength={5000}
         hint="State the problem as a fact the customer would recognise, without naming a cause" />
@@ -54,10 +55,9 @@ const HeaderForm = ({ capa, editable }) => {
         <RHFComboBox label="Owner" value={form.ownerMembershipId} onChange={(v) => setForm((f) => ({ ...f, ownerMembershipId: v }))} options={owners} placeholder="No owner" disabled={!editable} />
         <RHFDatePickerPopout label="Due date" valueFormat="iso" clearable value={form.dueDate} onChange={(v) => setForm((f) => ({ ...f, dueDate: v ?? null }))} placeholder="No due date" disabled={!editable} />
       </div>
-      <FormError error={mutation.error} />
       {editable && (
         <div className="flex justify-end">
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!dirty || mutation.isPending || !form.title.trim()} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save changes"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!dirty || !form.title.trim()}>Save changes</CTAButton>
         </div>
       )}
     </MenuCard>
@@ -126,10 +126,8 @@ const NcrLinks = ({ capa, editable }) => {
           title={`End the link to ${ending.reference ?? "this non-conformance"}?`}
           label="Why is it no longer part of this 8D?"
           confirmText="End link"
-          pending={mutation.isPending}
-          error={mutation.error}
           onClose={() => setEnding(null)}
-          onConfirm={(reason) => mutation.mutate({ action: "unlinkNcr", id: ending.id, body: { reason } }, { onSuccess: () => setEnding(null) })}
+          onConfirm={(reason) => sendCommand(mutation, CAPA_GUESSED, { action: "unlinkNcr", id: ending.id, body: { reason } }, () => setEnding(null))}
         />
       )}
     </MenuCard>

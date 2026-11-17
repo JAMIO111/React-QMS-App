@@ -2,7 +2,8 @@ import "./lib/emailLinkRepair";
 import { StrictMode, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { mergeResponse } from "./lib/optimistic";
 import { ToastProvider } from "./contexts/ToastProvider.jsx";
 import { ConfirmProvider } from "./contexts/ConfirmationModalProvider.jsx";
 import EditConflictHost from "./components/ui/EditConflictDialog.jsx";
@@ -174,7 +175,11 @@ if (storedTheme === "dark" || (!storedTheme && darkQuery.matches)) {
   document.documentElement.classList.remove("dark");
 }
 
-const queryClient = new QueryClient();
+// Whatever a save answers is written into every cached copy of that record straight away (lib/optimistic.js mergeResponse), so screens
+// show the result without waiting for the refetch that follows every action.
+const queryClient = new QueryClient({
+  mutationCache: new MutationCache({ onSuccess: (data) => mergeResponse(queryClient, data) }),
+});
 
 const router = createBrowserRouter([
   {

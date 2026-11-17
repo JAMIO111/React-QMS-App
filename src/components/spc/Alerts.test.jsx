@@ -74,6 +74,8 @@ describe("SPC alerts", () => {
     await userEvent.type(within(dialog).getByLabelText("What was done"), "Tool changed");
     await userEvent.click(submit);
     expect(body).toEqual({ note: "Tool changed" });
+    // The dialog closes and the alert leaves the open list straight away.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("offers no acknowledge button without spc.manage, and shows who acknowledged and why", async () => {

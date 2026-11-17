@@ -11,6 +11,7 @@ import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { FormError } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
+import { useQuickSave } from "../../hooks/useQuickSave";
 import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
@@ -24,6 +25,7 @@ const OrderDialog = ({ order, onClose, readOnly = false, onSaved }) => {
   const creating = !order;
   const frozen = !creating && !orderEditable(order);
   const mutation = useMasterDataMutation();
+  const quickSave = useQuickSave(useMasterDataMutation());
   const { showToast } = useToast();
   const { data: sites } = useSites();
   const siteList = sites?.data ?? [];
@@ -48,11 +50,18 @@ const OrderDialog = ({ order, onClose, readOnly = false, onSaved }) => {
     e.preventDefault();
     const shared = { partRevisionId: form.partRevisionId, customerId: form.customerId, quantityPlanned: quantity, dueDate: form.dueDate || null, notes: form.notes.trim() || null };
     const body = creating ? { orderNumber: form.orderNumber.trim(), partId: form.partId, siteId: form.siteId, ...shared, ...withCustomValues(customValues) } : shared;
+    if (!creating) {
+      // Shown at once (the hook's guess); put back with a toast if the server refuses.
+      quickSave({ path: `/production-orders/${order.id}`, method: "PATCH", body: changesSince(opened, body) });
+      onSaved?.(order);
+      onClose();
+      return;
+    }
     mutation.mutate(
-      { path: creating ? "/production-orders" : `/production-orders/${order.id}`, method: creating ? "POST" : "PATCH", body: creating ? body : changesSince(opened, body) },
+      { path: "/production-orders", method: "POST", body },
       {
         onSuccess: (data) => {
-          showToast({ type: "success", title: "Saved", message: `Order ${data.orderNumber} ${creating ? "created" : "updated"}.` });
+          showToast({ type: "success", title: "Saved", message: `Order ${data.orderNumber} created.` });
           onSaved?.(data);
           onClose();
         },

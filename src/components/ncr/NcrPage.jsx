@@ -43,6 +43,7 @@ import { useAllDepartments, usePermissions, useSites } from "../../hooks/useQmsA
 import { useClassifications, useEmployees, useNcr, useNcrMutation, useNcrNewDefaults } from "../../hooks/useNcr";
 import { describeApiError } from "../../lib/api-client";
 import { NCR_REGISTER, NC_SOURCES, SEVERITIES, SOURCE_OPTIONS, detectionApplies, formatDate, ncrPath, sourceLabel, stageOf } from "../../lib/ncr";
+import { ncrRestore } from "../../lib/ncrGuesses";
 import { SeverityPill, StagePill } from "./Pills";
 import DeleteNcrDialog from "./DeleteNcrDialog";
 import { MachinePicker, PartPicker, PartyPicker, RevisionPicker } from "./Pickers";
@@ -207,11 +208,8 @@ const NcrPage = () => {
         onError: (err) => !reason && showToast({ type: "error", title: "Stage not changed", message: describeApiError(err) }),
       }
     );
-  const restore = () =>
-    mutation.mutate(
-      { path: `/ncrs/${ncr.id}/restore` },
-      { onSuccess: () => showToast({ type: "success", title: "Restored", message: `${ncr.reference} is back in the register.` }) }
-    );
+  // Shown as restored at once; a refusal puts it back and is told in a toast (useNcrMutation).
+  const restore = () => mutation.mutate({ path: `/ncrs/${ncr.id}/restore`, guess: ncrRestore(ncr.id), failed: "Not restored" });
 
   if (!isNew && isLoading) return <LoadingScreen />;
   if (!isNew && error) {
@@ -350,7 +348,7 @@ const NcrPage = () => {
             <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
               Deleted {formatDate(ncr.deletedAt)} by {ncr.deletedBy?.name ?? "—"}: “{ncr.deleteReason}”.
               {can("ncr.delete") && (
-                <CTAButton type="neutral" size="default" className="px-3" buttonType="button" onClick={restore} disabled={mutation.isPending} loading={mutation.isPending}>
+                <CTAButton type="neutral" size="default" className="px-3" buttonType="button" onClick={restore}>
                   <RotateCcwIcon className="h-4 w-4" /> Restore
                 </CTAButton>
               )}

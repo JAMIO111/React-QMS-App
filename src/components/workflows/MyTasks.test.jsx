@@ -54,7 +54,7 @@ describe("My tasks", () => {
     await user.click(screen.getByRole("button", { name: "Mark done: Check the containment" }));
     await user.type(screen.getByLabelText("What was done (optional)"), "Lot sorted");
     await user.click(screen.getByRole("button", { name: "Mark done" }));
-    expect(mutate).toHaveBeenCalledWith({ action: "complete", id: "t1", body: { note: "Lot sorted" } }, expect.any(Object));
+    expect(mutate).toHaveBeenCalledWith({ action: "complete", id: "t1", body: { note: "Lot sorted" } });
   });
 
   it("shows overdue, reopens a done task and switches between open, done and all", async () => {
@@ -65,7 +65,7 @@ describe("My tasks", () => {
     expect(screen.getByText("overdue")).toBeInTheDocument();
     expect(screen.getByText("Done: Emailed")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Reopen: Tell the customer" }));
-    expect(mutate).toHaveBeenCalledWith({ action: "reopen", id: "t2" }, expect.any(Object));
+    expect(mutate).toHaveBeenCalledWith({ action: "reopen", id: "t2" });
     await user.click(screen.getByRole("button", { name: "All" }));
     expect(asked).toContain("all");
   });

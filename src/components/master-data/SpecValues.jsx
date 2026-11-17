@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { revisionLabel } from "../../lib/partRevisions";
 import { PencilIcon, PlusIcon, Trash2Icon } from "@/components/icons";
 import Field from "../ui/Field";
@@ -12,6 +12,9 @@ import { describeApiError } from "../../lib/api-client";
 import { FormError, SelectField } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
+import { useQuickSave } from "../../hooks/useQuickSave";
+import { appendRow, changeRecord } from "../../lib/guessRequest";
+import { isPending, pendingId } from "../../lib/optimistic";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2";
@@ -19,9 +22,8 @@ const show = (v) => (v === null || v === undefined ? "—" : String(v));
 const toNumber = (v) => (String(v).trim() === "" ? null : Number(v));
 
 const SpecValueForm = ({ revision, value, onDone }) => {
-  const mutation = useProcessControlMutation();
+  const quickSave = useQuickSave(useProcessControlMutation());
   const units = useUnits();
-  const { showToast } = useToast();
   const [form, setForm] = useState({
     characteristicKey: value?.characteristicKey ?? "",
     description: value?.description ?? "",
@@ -41,17 +43,20 @@ const SpecValueForm = ({ revision, value, onDone }) => {
     if (Object.values(nums).every((n) => n === null)) return setProblem("Give a nominal or at least one limit.");
     setProblem(null);
     const body = { description: form.description.trim(), ...nums, unitCode: form.unitCode, notes: form.notes.trim() };
-    mutation.mutate(
+    const shown = { ...body, description: body.description || null, notes: body.notes || null };
+    const listPath = `/part-revisions/${revision.id}/characteristics`;
+    // Shown at once (a new value without actions until the server has made it); put back with a toast if the server refuses.
+    quickSave(
       value
-        ? { path: `/part-revision-characteristics/${value.id}`, method: "PATCH", body }
-        : { path: `/part-revisions/${revision.id}/characteristics`, body: { characteristicKey: form.characteristicKey.trim(), ...body } },
-      {
-        onSuccess: (saved) => {
-          showToast({ type: "success", title: "Saved", message: `${saved.characteristicKey} saved on revision ${revisionLabel(revision)}.` });
-          onDone();
-        },
-      }
+        ? { path: `/part-revision-characteristics/${value.id}`, method: "PATCH", body, guess: changeRecord(value.id, (v) => ({ ...v, ...shown })) }
+        : {
+            path: listPath,
+            body: { characteristicKey: form.characteristicKey.trim(), ...body },
+            guess: appendRow([listPath], { id: pendingId(), characteristicKey: form.characteristicKey.trim(), ...shown }),
+          },
+      value ? "Not saved" : "Not added",
     );
+    onDone();
   };
 
   return (
@@ -84,13 +89,12 @@ const SpecValueForm = ({ revision, value, onDone }) => {
           {problem}
         </p>
       )}
-      <FormError error={mutation.error} />
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onDone}>
           Cancel
         </CTAButton>
-        <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending} loading={mutation.isPending}>
-          {mutation.isPending ? "Saving…" : "Save value"}
+        <CTAButton buttonType="submit" type="main" size="lg">
+          Save value
         </CTAButton>
       </div>
     </form>
@@ -103,7 +107,8 @@ const SpecValueForm = ({ revision, value, onDone }) => {
  * a new draft starts with the released revision's values.
  */
 const SpecValues = ({ part, canManage }) => {
-  const revisions = part.revisions;
+  // A draft still being saved has no values to show yet.
+  const revisions = useMemo(() => part.revisions.filter((r) => !isPending(r.id)), [part.revisions]);
   const preferred = revisions.find((r) => r.status === "draft") ?? revisions.find((r) => r.status === "released") ?? revisions[0];
   const [revisionId, setRevisionId] = useState(preferred?.id ?? null);
   useEffect(() => {
@@ -194,13 +199,14 @@ const SpecValues = ({ part, canManage }) => {
                       <td className={`${td} text-right tabular-nums`}>{show(v.nominal)}</td>
                       <td className={`${td} text-right tabular-nums`}>{show(v.upperLimit)}</td>
                       <td className={td}>{v.unitCode}</td>
-                      {editable && (
+                      {editable && isPending(v.id) && <td className={`${td} text-right text-xs text-secondary-text`}>Saving…</td>}
+                      {editable && !isPending(v.id) && (
                         <td className={td}>
                           <div className="flex justify-end gap-2">
                             <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setEditing(v)} aria-label={`Edit ${v.characteristicKey}`}>
                               <PencilIcon className="h-4 w-4" />
                             </CTAButton>
-                            <CTAButton buttonType="button" type="danger" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={() => remove(v)} aria-label={`Remove ${v.characteristicKey}`}>
+                            <CTAButton buttonType="button" type="danger" size="md" onClick={() => remove(v)} aria-label={`Remove ${v.characteristicKey}`}>
                               <Trash2Icon className="h-4 w-4" />
                             </CTAButton>
                           </div>

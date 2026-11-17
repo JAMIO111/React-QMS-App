@@ -4,7 +4,11 @@ import Field from "../ui/Field";
 import Dialog from "../ui/Dialog";
 import MenuCard from "../ui/MenuCard";
 import RHFComboBox from "../ui/RHFComboBox";
-import { useInspectionMutation } from "../../hooks/useInspection";
+import { guessAbandoned, guessSample, useInspectionMutation } from "../../hooks/useInspection";
+import { isPending } from "../../lib/optimistic";
+import { describeApiError } from "../../lib/api-client";
+import { useToast } from "../../contexts/ToastProvider";
+import { useQuickSave } from "../../hooks/useQuickSave";
 import { describeLimits, eventTriggers, isDecimal, nextSample, previewResult, TRIGGER_LABEL } from "../../lib/inspection";
 import { formatDate, formatDateTime } from "../../lib/processControl";
 import { FormError, SelectField, TextAreaField } from "../master-data/shared";
@@ -154,13 +158,20 @@ export const SampleEntry = ({ inspection, gauges, canOverride }) => {
     }
     if (!readings.length) return setProblem("Enter at least one reading.");
     setProblem(null);
+    // Optimistic: the readings appear at once as "checking…" and the form is ready for the next sample; the database decides pass or fail.
+    // If the save is refused, what was typed comes back with the reason.
+    const typed = { rows, unitReference, newSubgroup };
+    const body = { unitReference, ...(isEvent ? { triggerType: mode } : {}), readings, ...(newSubgroup && subgroupSize ? { newSubgroup: true } : {}) };
+    setRows(blank());
+    setUnitReference("");
+    setNewSubgroup(false);
     mutation.mutate(
-      { path: `/inspections/${inspection.id}/samples`, body: { unitReference, ...(isEvent ? { triggerType: mode } : {}), readings, ...(newSubgroup && subgroupSize ? { newSubgroup: true } : {}) } },
+      { path: `/inspections/${inspection.id}/samples`, body, guess: guessSample(inspection.id, body) },
       {
-        onSuccess: () => {
-          setRows(blank());
-          setUnitReference("");
-          setNewSubgroup(false);
+        onError: () => {
+          setRows(typed.rows);
+          setUnitReference(typed.unitReference);
+          setNewSubgroup(typed.newSubgroup);
         },
       }
     );
@@ -255,8 +266,8 @@ export const SampleEntry = ({ inspection, gauges, canOverride }) => {
         </p>
       )}
       <FormError error={mutation.error} />
-      <CTAButton buttonType="submit" type="main" size="lg" className="min-h-11 self-start" disabled={mutation.isPending || nothingToDo} loading={mutation.isPending}>
-        {mutation.isPending ? "Saving…" : "Save sample"}
+      <CTAButton buttonType="submit" type="main" size="lg" className="min-h-11 self-start" disabled={nothingToDo}>
+        Save sample
       </CTAButton>
     </MenuCard>
   );
@@ -266,17 +277,29 @@ export const SampleEntry = ({ inspection, gauges, canOverride }) => {
 const readingValue = (requirement, value) =>
   requirement.dataType === "attribute" ? { valuePass: value } : requirement.dataType === "count" ? { valueCount: Number(String(value).trim()) } : { valueNumeric: String(value).trim() };
 
+// A reading just saved shows its value at once with "checking…" until the database has worked out pass or fail.
+const Checking = () => <span className="text-xs italic text-secondary-text">checking…</span>;
 const Reading = ({ m, requirement }) =>
-  requirement.dataType === "attribute" ? <ResultBadge result={m.result} /> : (
+  requirement.dataType === "attribute" ? (
+    isPending(m.id) ? (
+      <span className="inline-flex items-center gap-1">
+        <span>{m.valuePass ? "Pass" : "Fail"}</span>
+        <Checking />
+      </span>
+    ) : (
+      <ResultBadge result={m.result} />
+    )
+  ) : (
     <span className="inline-flex items-center gap-1">
       <span className="tabular-nums">{requirement.dataType === "count" ? m.valueCount : m.valueNumeric}</span>
-      <ResultBadge result={m.result} />
+      {isPending(m.id) ? <Checking /> : <ResultBadge result={m.result} />}
     </span>
   );
 
 /** A reading's history (corrections with reasons, retests, gauge) and the actions allowed on it. */
 export const ReadingDialog = ({ inspection, requirement, reading, gauges, canCorrect, canRecord, canOverride, onClose }) => {
   const mutation = useInspectionMutation();
+  const { showToast } = useToast() ?? {};
   const [mode, setMode] = useState(null); // null | "correct" | "retest"
   const [value, setValue] = useState(requirement.dataType === "attribute" ? null : "");
   const [reason, setReason] = useState("");
@@ -292,12 +315,15 @@ export const ReadingDialog = ({ inspection, requirement, reading, gauges, canCor
     e.preventDefault();
     const val = readingValue(requirement, value);
     const gauge = usesGauge(requirement) ? { gaugeId, ...(override.trim() ? { gaugeOverrideReason: override.trim() } : {}) } : {};
-    mutation.mutate(
-      mode === "correct"
-        ? { path: `/inspection-measurements/${reading.id}/correction`, body: { ...val, ...gauge, reason } }
-        : { path: `/inspections/${inspection.id}/samples`, body: { isRetest: true, triggerType: "manual", readings: [{ requirementId: requirement.id, ...val, ...gauge, retestOfId: reading.id }] } },
-      { onSuccess: onClose }
-    );
+    if (mode === "correct") {
+      // A correction replaces a recorded reading with a reason and needs the right to correct: it waits for the database.
+      mutation.mutate({ path: `/inspection-measurements/${reading.id}/correction`, body: { ...val, ...gauge, reason } }, { onSuccess: onClose });
+      return;
+    }
+    // A retest appears at once as "checking…" (the database decides pass or fail); a refusal is told by toast.
+    const body = { isRetest: true, triggerType: "manual", readings: [{ requirementId: requirement.id, ...val, ...gauge, retestOfId: reading.id }] };
+    mutation.mutate({ path: `/inspections/${inspection.id}/samples`, body, guess: guessSample(inspection.id, body) }, { onError: (error) => showToast?.({ type: "error", title: "Retest not saved", message: describeApiError(error) }) });
+    onClose();
   };
 
   return (
@@ -418,7 +444,7 @@ export const ReadingsGrid = ({ inspection, onOpen }) => {
                 return (
                   <td key={s.id} className={`${td} text-right`}>
                     {m ? (
-                      <button type="button" onClick={() => onOpen(q, m)} className="inline-flex flex-col items-end gap-0.5 rounded-md px-1 hover:bg-primary-text/5 cursor-pointer" aria-label={`${q.name}, sample ${s.sampleNumber}: details`}>
+                      <button type="button" onClick={() => onOpen(q, m)} disabled={isPending(m.id)} className="inline-flex flex-col items-end gap-0.5 rounded-md px-1 hover:bg-primary-text/5 cursor-pointer" aria-label={`${q.name}, sample ${s.sampleNumber}: details`}>
                         <Reading m={m} requirement={q} />
                         {(m.supersedesId || (m.gauge && !m.gauge.valid)) && (
                           <span className="flex items-center gap-1 text-xs text-secondary-text">
@@ -476,6 +502,8 @@ export const SamplePlan = ({ inspection }) => {
 /** Complete or abandon a running inspection (abandoning asks for a reason). Shown to people who can record. */
 export const RunControls = ({ inspection }) => {
   const mutation = useInspectionMutation();
+  // Abandoning shows at once (its own mutation, so Complete does not spin) and is put back with a toast if the server refuses.
+  const quickAbandon = useQuickSave(useInspectionMutation(), "Not abandoned");
   const [abandoning, setAbandoning] = useState(false);
   const [reason, setReason] = useState("");
   const plannedLeft = inspection.schedule.length - (nextSample(inspection)?.plannedTaken ?? inspection.schedule.length);
@@ -497,16 +525,16 @@ export const RunControls = ({ inspection }) => {
             className="flex flex-col gap-3"
             onSubmit={(e) => {
               e.preventDefault();
-              mutation.mutate({ path: `/inspections/${inspection.id}/abandon`, body: { reason } }, { onSuccess: () => setAbandoning(false) });
+              quickAbandon({ path: `/inspections/${inspection.id}/abandon`, body: { reason }, guess: guessAbandoned(inspection.id, reason.trim()) });
+              setAbandoning(false);
             }}>
             <p className="text-sm text-primary-text">Readings already taken are kept. No more can be added.</p>
             <TextAreaField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={2000} rows={2} />
-            <FormError error={mutation.error} />
             <div className="flex justify-end gap-2">
               <CTAButton buttonType="button" type="neutral" size="md" onClick={() => setAbandoning(false)}>
                 Cancel
               </CTAButton>
-              <CTAButton buttonType="submit" type="danger" size="md" disabled={!reason.trim() || mutation.isPending} loading={mutation.isPending}>
+              <CTAButton buttonType="submit" type="danger" size="md" disabled={!reason.trim()}>
                 Abandon inspection
               </CTAButton>
             </div>

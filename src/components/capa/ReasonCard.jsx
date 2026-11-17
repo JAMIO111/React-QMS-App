@@ -1,7 +1,7 @@
 import { useState } from "react";
 import MenuCard from "../ui/MenuCard";
 import { useCapaMutation } from "../../hooks/useCapa";
-import { FormError, TextAreaField } from "../master-data/shared";
+import { TextAreaField } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
 import { useEditBase } from "../../hooks/useEditBase";
 
@@ -15,10 +15,9 @@ const ReasonCard = ({ capa, editable, field, value, title, subtitle, label, hint
     <MenuCard title={title} subtitle={subtitle} as="form" aria-label={ariaLabel ?? title} noValidate bodyClassName="flex flex-col gap-3"
       onSubmit={(e) => { e.preventDefault(); if (dirty) mutation.mutate({ action: "update", id: capa.id, body: versioned({ [field]: text.trim() || null }) }); }}>
       <TextAreaField label={label} required={required} value={text} onChange={(e) => setText(e.target.value)} disabled={!editable} rows={rows} maxLength={4000} hint={hint} />
-      <FormError error={mutation.error} />
       {editable && (
         <div className="flex justify-end">
-          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : saveLabel}</CTAButton>
+          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty}>{saveLabel}</CTAButton>
         </div>
       )}
     </MenuCard>

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
+import { guessCache, rollbackGuess } from "../lib/optimistic";
 
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "notifications", ...rest];
 
@@ -19,14 +20,31 @@ export const useNotifications = () => {
   });
 };
 
-/** Mark some (`{ ids }`) or all (`{ all: true }`) notifications as read. */
+/** Mark some (`{ ids }`) or all (`{ all: true }`) notifications as read: the list and the unread count change at once, and go back if the save fails. */
 export const useMarkNotificationsRead = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body) => apiFetch("/notifications/read", { method: "POST", body, organisationId }),
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
+    onMutate: (body) => guessCache(queryClient, key(organisationId, "list"), (data) => guessNotificationsRead(data, body)),
+    onError: (_e, _body, context) => rollbackGuess(queryClient, context),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
+};
+
+/** The notifications list `{ data, unread }` as it will be once `{ ids }` or `{ all: true }` are marked read. */
+export const guessNotificationsRead = (data, { ids, all } = {}) => {
+  if (!Array.isArray(data?.data)) return data;
+  const wanted = all ? null : new Set(ids ?? []);
+  let marked = 0;
+  const rows = data.data.map((n) => {
+    if (n.read || (wanted && !wanted.has(n.id))) return n;
+    marked += 1;
+    return { ...n, read: true };
+  });
+  if (!marked) return data;
+  const unread = all ? 0 : Math.max(0, (data.unread ?? marked) - marked);
+  return { ...data, data: rows, unread };
 };
 
 /** Events the member can choose from, with the effective setting and the default for their access. */

@@ -28,7 +28,6 @@ const ReminderTimeSetting = ({ settings, canManage }) => {
     update.mutate(
       { body: { settings: { reminderTime: time, timeZone: zone } }, reason: `Daily reminders at ${time}${zone ? ` (${zone})` : ""}` },
       {
-        onSuccess: () => showToast({ type: "success", title: "Saved", message: "Daily reminder time updated." }),
         onError: (e) => showToast({ type: "error", title: "Not saved", message: describeApiError(e) }),
       },
     );
@@ -47,7 +46,7 @@ const ReminderTimeSetting = ({ settings, canManage }) => {
         />
       </div>
       {canManage && (
-        <CTAButton type="main" size="md" className="self-start" disabled={!changed || update.isPending} loading={update.isPending} onClick={save}>
+        <CTAButton type="main" size="md" className="self-start" disabled={!changed} onClick={save}>
           Save reminder time
         </CTAButton>
       )}

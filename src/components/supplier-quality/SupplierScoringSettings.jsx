@@ -27,7 +27,10 @@ const SettingsDialog = ({ supplier, settings, onClose }) => {
   const org = settings.modelVersion;
   return (
     <Dialog title={`Scoring settings for ${supplier.displayName || supplier.name}`} onClose={onClose} width="max-w-lg">
-      <form noValidate className="flex flex-col gap-3" onSubmit={(ev) => { ev.preventDefault(); if (!bad && !mutation.isPending) mutation.mutate({ action: "saveSupplierSettings", id: supplier.id, dialog: true, body }, { onSuccess: onClose }); }}>
+      <form noValidate className="flex flex-col gap-3" onSubmit={(ev) => { ev.preventDefault(); if (bad) return;
+        // Shown at once on the card; a refusal is put back with a toast (usePerformanceMutation).
+        mutation.mutate({ action: "saveSupplierSettings", id: supplier.id, body });
+        onClose(); }}>
         <p className="text-sm text-secondary-text">Leave a field empty to follow the organisation&apos;s model (version {org}). Saved scorecards keep the settings they were scored with. To allow no early-delivery limit when the organisation sets one, enter 60.</p>
         <ComboField label="On-time delivery is judged against" value={policy} onChange={setPolicy} options={OTD_POLICIES} clearable placeholder={`Follow the model (${OTD_POLICIES.find((p) => p.value === e.otdPolicy)?.label.toLowerCase()})`} />
         <div className="grid gap-3 sm:grid-cols-2">
@@ -40,7 +43,7 @@ const SettingsDialog = ({ supplier, settings, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={bad || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "Save settings"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={bad}>Save settings</CTAButton>
         </div>
       </form>
     </Dialog>

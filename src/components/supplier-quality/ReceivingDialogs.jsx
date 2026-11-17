@@ -184,20 +184,20 @@ export const AgreedDateDialog = ({ line, onClose }) => {
   const [date, setDate] = useState(line.agreedOn ?? "");
   return (
     <Shell title="Agreed date" width="max-w-md" mutation={mutation} ok submitLabel="Save" onClose={onClose}
-      onSubmit={() => mutation.mutate({ action: "agreedDate", id: line.id, body: { agreedOn: date || null } }, { onSuccess: onClose })}
+      onSubmit={() => { mutation.mutate({ action: "agreedDate", id: line.id, body: { agreedOn: date || null } }); onClose(); }}
       intro={`Requested for ${formatDate(line.requestedOn)} (that stays). Set the date the supplier has now agreed to, or clear it to go back to the requested date.`}>
       <RHFDatePickerPopout label="Agreed for" valueFormat="iso" clearable value={date} onChange={(v) => setDate(v ?? "")} placeholder="Same as requested" />
     </Shell>
   );
 };
 
-/** Asks for a reason, then sends one command (cancel or close). */
+/** Asks for a reason, then sends one command (cancel an order or a receipt). Both show at once; a refusal is put back with a toast (useReceivingMutation). */
 export const ReasonDialog = ({ title, intro, label, submitLabel, action, id, onClose }) => {
   const mutation = useReceivingMutation();
   const [reason, setReason] = useState("");
   return (
     <Shell title={title} intro={intro} width="max-w-lg" mutation={mutation} ok={reason.trim().length >= 3} submitLabel={submitLabel} onClose={onClose}
-      onSubmit={() => mutation.mutate({ action, id, body: { reason: reason.trim() } }, { onSuccess: onClose })}>
+      onSubmit={() => { mutation.mutate({ action, id, body: { reason: reason.trim() } }); onClose(); }}>
       <TextAreaField label={label} required value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} rows={3} />
     </Shell>
   );

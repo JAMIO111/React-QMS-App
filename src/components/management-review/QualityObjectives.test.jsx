@@ -42,7 +42,9 @@ vi.mock("../Breadcrumb", () => ({ default: () => null }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock("../../contexts/AuthProvider", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 vi.mock("../../hooks/useCustomFields", () => ({ useCustomFieldPeople: () => ({ data: [{ id: "u1", name: "Ann Owner" }, { id: "u2", name: "Bob Bloggs" }] }) }));
-vi.mock("../../hooks/useManagementReview", () => ({
+vi.mock("../../hooks/useManagementReview", async (importOriginal) => ({
+  REVIEW_GUESSED: (await importOriginal()).REVIEW_GUESSED,
+  OBJECTIVE_GUESSED: (await importOriginal()).OBJECTIVE_GUESSED,
   useQualityObjectives: () => ({ data: list, isLoading: false }),
   useQualityObjective: () => ({ data: detail, isLoading: false }),
   useObjectiveMeasures: () => ({

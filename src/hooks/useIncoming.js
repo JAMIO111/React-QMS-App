@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
-import { refreshOrganisation } from "../lib/refresh";
+import { useToast } from "../contexts/ToastProvider";
+import { INCOMING_OPTIMISTIC, guessIncoming, guessed } from "../lib/supplierQualityGuesses";
 
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "incoming", ...rest];
 const qs = (params) => {
@@ -59,7 +60,10 @@ export const useNcrReceiptSource = (ncrId, enabled = true) => {
 export const useIncomingMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
+    // Editing or retiring a requirement and linking / unlinking an NC to a received line show at once (`INCOMING_OPTIMISTIC`; `show.line` names the line).
+    ...guessed(queryClient, organisationId, toast, INCOMING_OPTIMISTIC, guessIncoming),
     mutationFn: ({ action, id, body }) => {
       const send = (path, method = "POST") => apiFetch(path, { method, body: body ?? {}, organisationId });
       switch (action) {
@@ -85,6 +89,5 @@ export const useIncomingMutation = () => {
           throw new Error(`Unknown action ${action}`);
       }
     },
-    onSuccess: () => refreshOrganisation(queryClient, organisationId),
   });
 };

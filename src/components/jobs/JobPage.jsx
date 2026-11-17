@@ -66,7 +66,7 @@ const JobInfo = ({ inspection, editable }) => {
   const linkMutation = useJobLinks();
   const links = inspection.links ?? { productionOrder: null, lot: null, serial: null };
   const canLink = can("production.read");
-  const link = (patch) => linkMutation.mutate({ id: inspection.id, ...patch });
+  const link = (patch, show) => linkMutation.mutate({ id: inspection.id, ...patch, show });
   const server = {
     workOrder: text(inspection.workOrder),
     lot: text(inspection.lot),
@@ -125,13 +125,13 @@ const JobInfo = ({ inspection, editable }) => {
               value={links.productionOrder?.id ?? null}
               current={links.productionOrder}
               disabled={!editable}
-              onChange={(id) => link({ productionOrderId: id ?? null })}
+              onChange={(id, item) => link({ productionOrderId: id ?? null }, id ? { productionOrder: { id, orderNumber: item?.name } } : {})}
             />
             {settings.useLotsAndSerials && (
-              <LotPicker partId={inspection.part.id} productionOrderId={links.productionOrder?.id} value={links.lot?.id ?? null} current={links.lot} disabled={!editable} onChange={(id) => link({ lotId: id ?? null })} />
+              <LotPicker partId={inspection.part.id} productionOrderId={links.productionOrder?.id} value={links.lot?.id ?? null} current={links.lot} disabled={!editable} onChange={(id, item) => link({ lotId: id ?? null }, id ? { lot: { id, lotNumber: item?.name } } : {})} />
             )}
             {settings.useLotsAndSerials && (
-              <SerialPicker partId={inspection.part.id} lotId={links.lot?.id} value={links.serial?.id ?? null} current={links.serial} disabled={!editable} onChange={(id) => link({ serialId: id ?? null })} />
+              <SerialPicker partId={inspection.part.id} lotId={links.lot?.id} value={links.serial?.id ?? null} current={links.serial} disabled={!editable} onChange={(id, item) => link({ serialId: id ?? null }, id ? { serial: { id, serialNumber: item?.name } } : {})} />
             )}
           </div>
           <LinkNotices links={links} />

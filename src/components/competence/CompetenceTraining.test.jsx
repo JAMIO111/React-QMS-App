@@ -122,7 +122,6 @@ describe("training session page", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Record" }));
     expect(mutate).toHaveBeenCalledWith(
       { action: "recordAttendees", id: "t1", body: expect.objectContaining({ attendeeIds: ["a2"], outcome: "completed", note: null }) },
-      expect.any(Object),
     );
   });
 
@@ -148,7 +147,7 @@ describe("training session page", () => {
     expect(within(dialog).getByRole("button", { name: "Void" })).toBeDisabled();
     await userEvent.type(within(dialog).getByLabelText("Why?"), "Wrong person ticked");
     await userEvent.click(within(dialog).getByRole("button", { name: "Void" }));
-    expect(mutate).toHaveBeenCalledWith({ action: "voidAttendee", id: "a1", body: { reason: "Wrong person ticked" } }, expect.any(Object));
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "voidAttendee", id: "a1", body: { reason: "Wrong person ticked" } }));
   });
 
   it("closes a session once nobody is enrolled", async () => {

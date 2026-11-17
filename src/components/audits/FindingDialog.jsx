@@ -50,13 +50,17 @@ const FindingDialog = ({ record, question, finding, onClose, onSaved }) => {
       ownerId: ownerId ?? null,
       dueOn: dueOn ?? null,
     };
+    if (editing) {
+      // The finding shows the change at once and the dialog closes; a refusal puts it back with a toast (from the hook).
+      mutation.mutate({ path: `/audit-findings/${finding.id}`, method: "PATCH", body: changesSince(opened, body), failed: "Finding not saved" }, { onSuccess: (saved) => onSaved?.(saved) });
+      onClose();
+      return;
+    }
     mutation.mutate(
-      editing
-        ? { path: `/audit-findings/${finding.id}`, method: "PATCH", body: changesSince(opened, body) }
-        : { path: `/audit-records/${record.id}/findings`, body: { ...body, ...(question?.response ? { responseId: question.response.id } : {}) } },
+      { path: `/audit-records/${record.id}/findings`, body: { ...body, ...(question?.response ? { responseId: question.response.id } : {}) } },
       {
         onSuccess: (saved) => {
-          showToast({ type: "success", title: editing ? "Finding saved" : "Finding raised", message: saved.reference });
+          showToast({ type: "success", title: "Finding raised", message: saved.reference });
           onSaved?.(saved);
           onClose();
         },

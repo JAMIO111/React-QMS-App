@@ -37,13 +37,11 @@ const SettingsProcessControl = () => {
   const { showToast } = useToast();
   const [editing, setEditing] = useState(null);
 
+  // Switched at once (the hook's guess); put back with a toast if the server refuses.
   const toggleActive = (t, active) =>
     mutation.mutate(
       { path: `/characteristic-templates/${t.id}`, method: "PATCH", body: { active } },
-      {
-        onSuccess: () => showToast({ type: "success", title: "Saved", message: `${t.name} ${active ? "made active" : "made inactive"}.` }),
-        onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }),
-      },
+      { onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) },
     );
 
   const counts = useMemo(() => {

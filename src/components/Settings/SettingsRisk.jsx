@@ -25,10 +25,13 @@ const CategoryDialog = ({ existing, onClose }) => {
     e.preventDefault();
     if (!label.trim()) return;
     const body = { label: label.trim(), description: description.trim() || null };
-    mutation.mutate(existing ? { action: "updateCategory", id: existing.id, body } : { action: "createCategory", body }, {
-      onSuccess: onClose,
-      onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }),
-    });
+    // A rename shows at once (a refusal is told by the hook); a new category waits for the server.
+    if (existing) {
+      mutation.mutate({ action: "updateCategory", id: existing.id, body });
+      onClose();
+      return;
+    }
+    mutation.mutate({ action: "createCategory", body }, { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) });
   };
   return (
     <Dialog title={existing ? `Edit ${existing.label}` : "Add a category"} onClose={onClose}>

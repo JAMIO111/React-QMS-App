@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "../lib/api-client";
+import { apiFetch, describeApiError } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
+import { useToast } from "../contexts/ToastProvider";
 import { refreshOrganisation } from "../lib/refresh";
+import { guessCache, rollbackGuess, updateById } from "../lib/optimistic";
 
 /** Workflow rules (WF1): the tasks rules gave the signed-in person. Any member may hold one, so these need no workflow permission. */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "workflows", ...rest];
@@ -31,6 +33,7 @@ const TASK_COMMANDS = {
 export const useTaskMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const listKey = key(organisationId, "my-tasks");
   return useMutation({
     mutationFn: (command) => {
@@ -54,8 +57,10 @@ export const useTaskMutation = () => {
       }
       return { previous };
     },
-    onError: (_err, _command, context) => {
+    // Told here, not by the caller: the dialog that sent it has usually closed.
+    onError: (err, command, context) => {
       for (const [k, data] of context?.previous ?? []) queryClient.setQueryData(k, data);
+      toast?.showToast({ type: "error", title: command?.failed ?? (command?.action === "reopen" ? "Not reopened" : "Not saved"), message: describeApiError(err) });
     },
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
@@ -102,10 +107,18 @@ const RULE_COMMANDS = {
   status: ({ id, body }) => [`/workflow-rules/${id}/status`, "POST", body],
 };
 
-/** Writes a rule (create, update, status). Every command answers with the whole rule, which replaces the cached one. */
+/** A rule paused, resumed, retired or brought back, as the screen shows it before the server answers. */
+export const guessRuleStatus = (data, { action, id, body } = {}) =>
+  action === "status" && id && body?.status ? updateById(data, id, (r) => ("status" in r && r.status !== body.status ? { ...r, status: body.status } : r)) : data;
+
+/**
+ * Writes a rule (create, update, status). Every command answers with the whole rule, which replaces the cached one. A status change shows at once
+ * and is put back with an error toast if refused; create and update wait for the server (it makes the number and the version).
+ */
 export const useWorkflowRuleMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
   return useMutation({
     mutationFn: (command) => {
       const make = RULE_COMMANDS[command.action];
@@ -113,9 +126,15 @@ export const useWorkflowRuleMutation = () => {
       const [path, method, body] = make(command);
       return apiFetch(path, { method, body, organisationId });
     },
-    onSuccess: (rule) => {
+    onMutate: (command) => (command?.action === "status" ? guessCache(queryClient, key(organisationId), (data) => guessRuleStatus(data, command)) : { optimistic: false }),
+    onError: (err, command, context) => {
+      rollbackGuess(queryClient, context);
+      if (command?.action === "status") toast?.showToast({ type: "error", title: "Not changed", message: describeApiError(err) });
+    },
+    onSuccess: (rule, command) => {
       if (rule?.id) queryClient.setQueryData(key(organisationId, "rule", rule.id), rule);
-      return refreshOrganisation(queryClient, organisationId);
+      const refetch = refreshOrganisation(queryClient, organisationId);
+      return command?.action === "status" ? undefined : refetch;
     },
   });
 };

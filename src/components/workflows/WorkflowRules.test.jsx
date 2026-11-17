@@ -208,7 +208,7 @@ describe("Settings → Workflows", () => {
     const dialog = screen.getByRole("dialog", { name: "Retire this rule" });
     await user.type(within(dialog).getByLabelText("Why is it being retired?"), "Not needed");
     await user.click(within(dialog).getByRole("button", { name: "Retire" }));
-    expect(mutate).toHaveBeenCalledWith({ action: "status", id: "r1", body: { status: "retired", reason: "Not needed" } }, expect.any(Object));
+    expect(mutate).toHaveBeenCalledWith({ action: "status", id: "r1", body: { status: "retired", reason: "Not needed" } });
   });
 
   it("is read-only for someone who only reads workflows", () => {

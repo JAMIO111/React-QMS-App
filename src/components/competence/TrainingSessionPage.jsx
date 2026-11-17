@@ -15,6 +15,7 @@ import { AttachmentDrop } from "../ui/FileDrop";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { AddAttendeeDialog, ReasonDialog, RecordDialog, SessionDialog } from "./SessionDialogs";
+import { isPending } from "../../lib/optimistic";
 
 const Pill = ({ table, status, children }) => <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${pillClass(table, status)}`}>{children}</span>;
 
@@ -169,7 +170,7 @@ const TrainingSessionPage = () => {
           <ul aria-label="Attendees" className="flex flex-col divide-y divide-border-color">
             {live.map((a) => (
               <li key={a.id} className="flex flex-wrap items-center gap-3 py-2">
-                {canAssess && open && a.status === "enrolled" ? (
+                {canAssess && open && a.status === "enrolled" && !isPending(a.id) ? (
                   <input type="checkbox" aria-label={`Select ${a.employee.name}`} checked={ticked.includes(a.id)} onChange={() => toggle(a)} className="h-4 w-4" />
                 ) : (
                   <span className="w-4" />
@@ -192,7 +193,7 @@ const TrainingSessionPage = () => {
                     Files{a.files.filter((f) => !f.deletedAt).length ? ` (${a.files.filter((f) => !f.deletedAt).length})` : ""}
                   </CTAButton>
                 )}
-                {canAssess && open && a.status === "enrolled" && (
+                {canAssess && open && a.status === "enrolled" && !isPending(a.id) && (
                   <CTAButton buttonType="button" type="neutral" aria-label={`Remove ${a.employee.name}`} onClick={() => setDialog({ type: "remove", attendee: a })}>
                     Remove
                   </CTAButton>

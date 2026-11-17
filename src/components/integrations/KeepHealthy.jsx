@@ -167,7 +167,6 @@ export const AttentionCard = ({ connection, kinds }) => {
     const rowIds = chosen;
     setChosen([]);
     change.mutate({ action, rowIds, reason }, {
-      onSuccess: (r) => showToast({ type: "success", title: action === "ignore" ? `${r.changed} ignored` : `${r.changed} brought back` }),
       onError: (e) => showToast({ type: "error", title: "Not done", message: describeApiError(e) }),
     });
   };
@@ -227,7 +226,6 @@ export const MissingCard = ({ connectionId, runId }) => {
     const ids = chosen;
     setChosen([]);
     decide.mutate({ ids, deactivate, ...(note ? { note } : {}) }, {
-      onSuccess: (r) => showToast({ type: "success", title: deactivate ? `${r.decided} made inactive` : `${r.decided} kept active` }),
       onError: (e) => showToast({ type: "error", title: "Not done", message: describeApiError(e) }),
     });
   };

@@ -108,9 +108,16 @@ describe("the set-up wizard", () => {
     expect(screen.getByLabelText("Legal name")).toBeInTheDocument();
     expect(screen.getByText("organisation logo")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Done, continue" }));
-    expect(mutate).toHaveBeenCalledWith({ action: "setStep", body: { step: "details", status: "done" } }, expect.objectContaining({ onSuccess: expect.any(Function) }));
+    expect(mutate).toHaveBeenCalledWith({ action: "setStep", body: { step: "details", status: "done" } });
+    // Optimistic: the wizard moves on without waiting for the server.
+    expect(await screen.findByText("sites manager")).toBeInTheDocument();
+  });
+
+  it("skips a step and moves on at once", async () => {
+    renderAt("/setup/details");
     await userEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-    expect(mutate).toHaveBeenLastCalledWith({ action: "setStep", body: { step: "details", status: "skipped" } }, expect.anything());
+    expect(mutate).toHaveBeenLastCalledWith({ action: "setStep", body: { step: "details", status: "skipped" } });
+    expect(await screen.findByText("sites manager")).toBeInTheDocument();
   });
 
   it("shows each step's own content", () => {

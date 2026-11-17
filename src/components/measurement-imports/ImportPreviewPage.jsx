@@ -5,6 +5,7 @@ import { ArrowLeftIcon, CircleCheckIcon, TriangleAlertIcon } from "@/components/
 import { useToast } from "../../contexts/ToastProvider";
 import { useGauges } from "../../hooks/useCalibration";
 import { useImportMutation, useInspectionImport, useMatchFeature } from "../../hooks/useMeasurementImports";
+import { useQuickSave } from "../../hooks/useQuickSave";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { EVENT_TRIGGERS, TRIGGER_LABEL } from "../../lib/inspection";
@@ -133,8 +134,11 @@ const ApplyCard = ({ detail, back }) => {
   const needsReason = mode === "correct";
   const ready = blockers.length === 0 && (!needsReason || reason.trim().length >= 3);
 
+  // The answer marks the import applied at once (it is written into the cache), which takes this card off the page; a callback passed to
+  // mutate() would then never run, so the promise carries the move back to the job.
   const apply = () =>
-    mutation.mutate(
+    mutation
+      .mutateAsync(
       {
         action: "apply",
         id: detail.id,
@@ -146,13 +150,12 @@ const ApplyCard = ({ detail, back }) => {
           triggerType: mode === "new" && trigger ? trigger : undefined,
         },
       },
-      {
-        onSuccess: (d) => {
-          showToast({ type: "success", title: "Readings recorded", message: `${d.counts.toRecord} reading${d.counts.toRecord === 1 ? "" : "s"} from ${d.fileName}` });
-          navigate(back || `/Inspections/${detail.inspection.id}`);
-        },
-      },
-    );
+      )
+      .then((d) => {
+        showToast({ type: "success", title: "Readings recorded", message: `${d.counts.toRecord} reading${d.counts.toRecord === 1 ? "" : "s"} from ${d.fileName}` });
+        navigate(back || `/Inspections/${detail.inspection.id}`);
+      })
+      .catch(() => {}); // the refusal shows on the card (mutation.error)
 
   return (
     <MenuCard title="Record these readings" subtitle="Everything is recorded together, or nothing is. Fortress's limits decide pass or fail.">
@@ -202,17 +205,16 @@ const ApplyCard = ({ detail, back }) => {
 };
 
 const DiscardDialog = ({ detail, onClose }) => {
-  const mutation = useImportMutation();
+  const quickSave = useQuickSave(useImportMutation(), "Not discarded");
   const [reason, setReason] = useState("");
   return (
     <Dialog title={`Discard ${detail.reference}?`} onClose={onClose}>
       <div className="flex flex-col gap-3">
         <p className="text-sm text-primary-text">Nothing from this file is recorded. The file and what was read from it are kept.</p>
         <TextAreaField label="Why (optional)" value={reason} onChange={(e) => setReason(e.target.value)} rows={2} />
-        {mutation.error && <Callout tone="error" role="alert">{describeApiError(mutation.error)}</Callout>}
         <div className="flex justify-end gap-2">
           <CTAButton type="neutral" size="md" onClick={onClose}>Keep it</CTAButton>
-          <CTAButton type="danger" size="md" loading={mutation.isPending} onClick={() => mutation.mutate({ action: "discard", id: detail.id, reason: reason.trim() }, { onSuccess: onClose })}>
+          <CTAButton type="danger" size="md" onClick={() => { quickSave({ action: "discard", id: detail.id, reason: reason.trim() }); onClose(); }}>
             Discard
           </CTAButton>
         </div>
@@ -228,7 +230,7 @@ const ImportPreviewPage = () => {
   const back = params.get("back");
   const { can } = usePermissions();
   const { data: detail, isLoading, error } = useInspectionImport(importId);
-  const confirm = useImportMutation();
+  const confirmQuick = useQuickSave(useImportMutation(), "Not confirmed");
   const [remember, setRemember] = useState(true);
   const editable = detail?.status === "previewed" && detail.canRecord && !detail.expired;
   const header = Object.entries(detail?.header ?? {}).filter(([k, v]) => HEADER_WORDS[k] && v);
@@ -294,7 +296,7 @@ const ImportPreviewPage = () => {
                 tone="warning"
                 title={`${detail.counts.mismatches} feature${detail.counts.mismatches === 1 ? "" : "s"} differ from the control plan`}
                 action={editable ? (
-                  <CTAButton type="secondary" size="md" loading={confirm.isPending} onClick={() => confirm.mutate({ action: "confirm", id: detail.id })}>I have checked them</CTAButton>
+                  <CTAButton type="secondary" size="md" onClick={() => confirmQuick({ action: "confirm", id: detail.id })}>I have checked them</CTAButton>
                 ) : null}>
                 The file&apos;s nominal or limits are not the plan&apos;s. That often means the wrong CMM program or an old drawing. Our limits decide pass or fail either way.
               </Callout>

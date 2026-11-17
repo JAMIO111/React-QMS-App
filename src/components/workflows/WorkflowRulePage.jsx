@@ -108,7 +108,13 @@ const WorkflowRulePage = () => {
   const versioned = useEditBase(rule.data, dirty && !isNew);
   const onLabel = (key, name) => setLabels((l) => (l[key] === name ? l : { ...l, [key]: name }));
 
-  const run = (command, done) =>
+  const run = (command, done) => {
+    if (command.action === "status") {
+      // Shown at once; a refusal puts it back with a toast (from the hook).
+      mutation.mutate(command);
+      setDialog(null);
+      return;
+    }
     mutation.mutate(command, {
       onSuccess: (saved) => {
         setDialog(null);
@@ -116,6 +122,7 @@ const WorkflowRulePage = () => {
       },
       onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }),
     });
+  };
 
   const save = (reason) => {
     const details = { name: draft.name.trim(), description: draft.description.trim() || (isNew ? undefined : null) };
@@ -166,12 +173,12 @@ const WorkflowRulePage = () => {
         {!isNew && canManage && (
           <div className="flex flex-wrap gap-2">
             {r.status === "active" && (
-              <CTAButton type="neutral" loading={mutation.isPending && mutation.variables?.action === "status"} onClick={() => run({ action: "status", id, body: { status: "paused" } })}>
+              <CTAButton type="neutral" onClick={() => run({ action: "status", id, body: { status: "paused" } })}>
                 Pause
               </CTAButton>
             )}
             {r.status === "paused" && (
-              <CTAButton type="secondary" loading={mutation.isPending && mutation.variables?.action === "status"} onClick={() => run({ action: "status", id, body: { status: "active" } })}>
+              <CTAButton type="secondary" onClick={() => run({ action: "status", id, body: { status: "active" } })}>
                 Resume
               </CTAButton>
             )}
@@ -180,7 +187,7 @@ const WorkflowRulePage = () => {
                 Retire
               </CTAButton>
             ) : (
-              <CTAButton type="secondary" loading={mutation.isPending && mutation.variables?.action === "status"} onClick={() => run({ action: "status", id, body: { status: "active" } })}>
+              <CTAButton type="secondary" onClick={() => run({ action: "status", id, body: { status: "active" } })}>
                 Bring back
               </CTAButton>
             )}

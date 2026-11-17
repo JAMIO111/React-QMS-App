@@ -110,7 +110,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await page.getByRole('button', { name: /done, continue/i }).click();
   await see(page.getByRole('heading', { name: /review and finish/i }));
   await shot(page, '12-review');
-  await page.getByRole('button', { name: /finish set-up|finish/i }).last().click();
+  await page.getByRole('button', { name: 'Finish set-up' }).click();
   await page.waitForURL(/\/Dashboard/);
   await see(page.getByRole('heading', { level: 1 }));
   await shot(page, '13-dashboard');

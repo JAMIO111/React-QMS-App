@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useIncomingMutation, useReceiptLineLookup } from "../../hooks/useIncoming";
 import { formatDate } from "../../lib/ncr";
+import { isPending } from "../../lib/optimistic";
 import CTAButton from "../CTAButton";
 import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
@@ -18,7 +19,10 @@ export const LinkReceiptDialog = ({ ncr, onClose }) => {
   const options = (lines.data ?? []).map((l) => ({ value: l.id, label: lineLabel(l), hint: `received ${formatDate(l.receivedOn)}${l.deliveryNote ? ` · delivery note ${l.deliveryNote}` : ""}${l.poNumber ? ` · order ${l.poNumber}` : ""}${l.lotNumber ? ` · lot ${l.lotNumber}` : ""}` }));
   return (
     <Dialog title="Link to a received line" onClose={onClose} width="max-w-lg">
-      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (lineId && !mutation.isPending) mutation.mutate({ action: "linkNcr", id: ncr.id, body: { receiptLineId: lineId } }, { onSuccess: onClose }); }}>
+      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (!lineId) return;
+        // The link shows at once; a refusal is put back with a toast (useIncomingMutation).
+        mutation.mutate({ action: "linkNcr", id: ncr.id, body: { receiptLineId: lineId }, show: { line: (lines.data ?? []).find((l) => l.id === lineId) } });
+        onClose(); }}>
         <p className="text-sm text-secondary-text">
           Choose the delivery from {ncr.supplier.name} this non-conformance is about{ncr.part ? ` (lines for ${ncr.part.partNumber} or with no part)` : ""}. Its pieces then count against that delivery in the supplier&apos;s non-conformance PPM, which is more exact than counting them with no delivery. A non-conformance sits on one line only.
         </p>
@@ -27,7 +31,7 @@ export const LinkReceiptDialog = ({ ncr, onClose }) => {
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={!lineId || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Linking…" : "Link"}</CTAButton>
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!lineId}>Link</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -40,13 +44,13 @@ const UnlinkDialog = ({ item, onClose }) => {
   const ok = reason.trim().length >= 3;
   return (
     <Dialog title="End this link" onClose={onClose} width="max-w-md">
-      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (ok && !mutation.isPending) mutation.mutate({ action: "unlinkNcr", id: item.linkId, body: { reason: reason.trim() } }, { onSuccess: onClose }); }}>
+      <form noValidate className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (!ok) return; mutation.mutate({ action: "unlinkNcr", id: item.linkId, body: { reason: reason.trim() } }); onClose(); }}>
         <p className="text-sm text-secondary-text">The pieces stop counting against {item.reference} line {item.lineNumber}. The link stays on record.</p>
         <TextAreaField label="Why is it ending?" required value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} rows={2} />
         <FormError error={mutation.error} />
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-          <CTAButton buttonType="submit" type="danger" size="lg" disabled={!ok || mutation.isPending} loading={mutation.isPending}>{mutation.isPending ? "Saving…" : "End the link"}</CTAButton>
+          <CTAButton buttonType="submit" type="danger" size="lg" disabled={!ok}>End the link</CTAButton>
         </div>
       </form>
     </Dialog>
@@ -66,7 +70,7 @@ const NcrReceiptSource = ({ source, ncr, canLink = false }) => {
             <Link to={`/Supplier-Quality/Goods-Receipts/${i.receiptId}`} className="font-medium text-link-color hover:underline">{i.reference}</Link> · line {i.lineNumber} · received {formatDate(i.receivedOn)}
             {i.deliveryNote ? ` · delivery note ${i.deliveryNote}` : ""}{i.lotNumber ? ` · lot ${i.lotNumber}` : ""} · {i.quantityReceived} received
           </span>
-          {canLink && i.linkId && <button type="button" className="text-link-color hover:underline" onClick={() => setDialog({ item: i })}>End link</button>}
+          {canLink && i.linkId && !isPending(i.linkId) && <button type="button" className="text-link-color hover:underline" onClick={() => setDialog({ item: i })}>End link</button>}
         </p>
       ))}
       {canLink && items.length === 0 && ncr?.supplier && (

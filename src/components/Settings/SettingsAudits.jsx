@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { PencilIcon, PlusIcon } from "@/components/icons";
-import { useToast } from "../../contexts/ToastProvider";
 import { useAuditMutation, useFindingClassifications, useUpdateClassification } from "../../hooks/useAudits";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
@@ -19,7 +18,6 @@ const inputClass = "w-full rounded-lg border border-border-color bg-text-input-c
 const ClassificationDialog = ({ existing, onClose }) => {
   const mutation = useAuditMutation();
   const update = useUpdateClassification();
-  const { showToast } = useToast();
   const [label, setLabel] = useState(existing?.label ?? "");
   const [key, setKey] = useState("");
   const [kind, setKind] = useState(existing?.kind ?? "nonconformity");
@@ -32,10 +30,9 @@ const ClassificationDialog = ({ existing, onClose }) => {
     e.preventDefault();
     if (!ok) return;
     if (existing) {
-      update.mutate(
-        { id: existing.id, body: { label: label.trim(), defaultSeverity: isNc ? severity : null } },
-        { onSuccess: () => onClose(), onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) }
-      );
+      // Shown at once and the dialog closes; a refusal puts it back with a toast (from the hook).
+      update.mutate({ id: existing.id, body: { label: label.trim(), defaultSeverity: isNc ? severity : null } });
+      onClose();
     } else {
       mutation.mutate(
         { path: "/audit-finding-classifications", body: { key: keyValue, label: label.trim(), kind, defaultSeverity: isNc ? (severity ?? null) : null } },
@@ -72,7 +69,7 @@ const ClassificationDialog = ({ existing, onClose }) => {
           <CTAButton buttonType="button" onClick={onClose} type="neutral" size="md">
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" disabled={!ok || mutation.isPending || update.isPending} loading={mutation.isPending || update.isPending} type="main" size="lg">
+          <CTAButton buttonType="submit" disabled={!ok || mutation.isPending} loading={mutation.isPending} type="main" size="lg">
             {existing ? "Save" : "Add classification"}
           </CTAButton>
         </div>
@@ -87,12 +84,11 @@ const SettingsAudits = () => {
   const canManage = can("audits.manage");
   const { data, isLoading, error } = useFindingClassifications({ all: true });
   const update = useUpdateClassification();
-  const { showToast } = useToast();
   const [dialog, setDialog] = useState(null);
 
   if (isLoading) return <LoadingScreen />;
   if (error) return <p className="p-6 text-error-color">{describeApiError(error)}</p>;
-  const toggle = (c, active) => update.mutate({ id: c.id, body: { active } }, { onError: (e) => showToast({ type: "error", title: "Not saved", message: describeApiError(e) }) });
+  const toggle = (c, active) => update.mutate({ id: c.id, body: { active } });
 
   return (
     <div className="flex w-full flex-col gap-4">

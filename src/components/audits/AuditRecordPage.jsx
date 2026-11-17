@@ -464,10 +464,12 @@ const AuditRecordPage = () => {
           title={`Abandon ${r.reference}?`}
           label="Why is it being abandoned?"
           confirmText="Abandon audit"
-          pending={mutation.isPending}
-          error={mutation.error}
           onClose={() => setAbandoning(false)}
-          onConfirm={(reason) => mutation.mutate({ path: `/audit-records/${r.id}/abandon`, body: { reason } }, { onSuccess: () => setAbandoning(false) })}
+          onConfirm={(reason) => {
+            // Shown as abandoned at once; a refusal puts it back with a toast (from the hook).
+            mutation.mutate({ path: `/audit-records/${r.id}/abandon`, body: { reason }, failed: "Not abandoned" });
+            setAbandoning(false);
+          }}
         />
       )}
       {finding && <FindingDialog record={r} question={finding.question} onClose={() => setFinding(null)} />}

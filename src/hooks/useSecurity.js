@@ -72,6 +72,13 @@ export const useSecurityMutation = () => {
       if (previous && vars.action === "setMode") queryClient.setQueryData(policyKey, { ...previous, mode: vars.body.mode });
       if (previous && vars.action === "setEmailDomains") queryClient.setQueryData(policyKey, { ...previous, allowedEmailDomains: vars.body.domains });
       if (previous && vars.action === "setSessionAge") queryClient.setQueryData(policyKey, { ...previous, maxSessionHours: vars.body.hours });
+      // A removed network comes back switched off (it cannot lock anyone out).
+      if (previous && vars.action === "restoreNetwork") {
+        queryClient.setQueryData(policyKey, {
+          ...previous,
+          networks: previous.networks.map((n) => (n.id === vars.id ? { ...n, active: false, removed: false, removedAt: null, removedBy: null, removedReason: null } : n)),
+        });
+      }
       if (previous && vars.action === "updateNetwork" && Object.keys(vars.body).join() === "active") {
         queryClient.setQueryData(policyKey, { ...previous, networks: previous.networks.map((n) => (n.id === vars.id ? { ...n, active: vars.body.active } : n)) });
       }

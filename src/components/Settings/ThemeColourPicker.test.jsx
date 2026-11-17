@@ -58,7 +58,7 @@ describe("ThemeColourPicker", () => {
 
     // The green save succeeds and the organisation data now says green.
     act(() => {
-      first.onSuccess();
+      first.onSuccess?.();
       first.onSettled();
     });
     rerender(<ThemeColourPicker value="green" canManage />);

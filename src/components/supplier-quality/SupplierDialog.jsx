@@ -58,26 +58,32 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
       vatNumber: nullIfEmpty(form.vatNumber),
       notes: nullIfEmpty(form.notes),
     };
-    const done = (saved) => {
-      showToast({ type: "success", title: "Saved", message: editing ? "The supplier was updated." : "The supplier was added. It is Pending Approval." });
-      onSaved?.(saved);
-      onClose();
-    };
     const fail = (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) });
     if (editing) {
+      // An edit shows at once and the dialog closes; useSupplierMutation puts it back with a toast when refused. Classifications follow the edit
+      // (never alongside it: both change the supplier, and the edit carries the version it was based on).
+      const changedClasses = supplier.classifications.map((c) => c.id).sort().join(",") !== [...classIds].sort().join(",");
+      const show = changedClasses ? { classifications: options.filter((c) => classIds.includes(c.id)).map((c) => ({ id: c.id, label: c.label })) } : {};
+      mutation
+        .mutateAsync({ action: "update", id: supplier.id, body: changesSince(opened, body), show })
+        .then((saved) => {
+          onSaved?.(saved);
+          if (changedClasses) mutation.mutate({ action: "classifications", id: supplier.id, body: { classificationIds: classIds }, show });
+        })
+        .catch(() => {}); // toasted by the hook
+      onClose();
+    } else {
       mutation.mutate(
-        { action: "update", id: supplier.id, body: changesSince(opened, body) },
+        { action: "create", body: { ...body, classificationIds: classIds, ...withCustomValues(customValues) } },
         {
           onSuccess: (saved) => {
-            const before = supplier.classifications.map((c) => c.id).sort().join(",");
-            if (before === [...classIds].sort().join(",")) return done(saved);
-            mutation.mutate({ action: "classifications", id: supplier.id, body: { classificationIds: classIds } }, { onSuccess: done, onError: fail });
+            showToast({ type: "success", title: "Saved", message: "The supplier was added. It is Pending Approval." });
+            onSaved?.(saved);
+            onClose();
           },
           onError: fail,
         }
       );
-    } else {
-      mutation.mutate({ action: "create", body: { ...body, classificationIds: classIds, ...withCustomValues(customValues) } }, { onSuccess: done, onError: fail });
     }
   };
 
@@ -134,8 +140,8 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={mutation.isPending || !form.name.trim() || (!editing && !form.code.trim())} loading={mutation.isPending}>
-            {mutation.isPending ? "Saving…" : editing ? "Save" : "Add supplier"}
+          <CTAButton buttonType="submit" type="main" size="md" disabled={(!editing && mutation.isPending) || !form.name.trim() || (!editing && !form.code.trim())} loading={!editing && mutation.isPending}>
+            {!editing && mutation.isPending ? "Saving…" : editing ? "Save" : "Add supplier"}
           </CTAButton>
         </div>
       </form>

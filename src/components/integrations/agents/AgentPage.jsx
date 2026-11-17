@@ -175,6 +175,7 @@ const AgentPage = () => {
   const { can } = usePermissions();
   const agent = useAgent(id);
   const mutate = useAgentMutation();
+  const { showToast } = useToast();
   const [dialog, setDialog] = useState(null);
   const canManage = can("integrations.manage");
   const a = agent.data;
@@ -281,7 +282,13 @@ const AgentPage = () => {
         </ul>
       </MenuCard>
 
-      {dialog === "rename" && <RenameAgentDialog agent={a} onClose={() => setDialog(null)} />}
+      {dialog === "rename" && (
+        <RenameAgentDialog
+          agent={a}
+          onClose={() => setDialog(null)}
+          onSave={(body) => mutate.mutate({ action: "rename", id: a.id, body }, { onError: (err) => showToast({ type: "error", title: "Not renamed", message: describeApiError(err) }) })}
+        />
+      )}
       {dialog === "revoke" && <RevokeAgentDialog agent={a} onClose={() => setDialog(null)} />}
       {dialog === "replace" && <AddAgentDialog replaces={a} onClose={() => setDialog(null)} />}
     </div>

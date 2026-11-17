@@ -1,8 +1,10 @@
 import { useState } from "react";
 import Switch from "@/components/ui/Switch";
 import { ChevronDownIcon, ChevronUpIcon, PencilIcon, PlusIcon } from "@/components/icons";
-import { useToast } from "../../contexts/ToastProvider";
 import { useCalibrationMutation } from "../../hooks/useCalibration";
+import { useQuickSave } from "../../hooks/useQuickSave";
+import { appendRow, changeRecord } from "../../lib/guessRequest";
+import { isPending, pendingId } from "../../lib/optimistic";
 import { useUnits } from "../../hooks/useMasterData";
 import { describeApiError } from "../../lib/api-client";
 import { CHARACTERISTIC_KINDS, formatNumber, formatTolerance } from "../../lib/calibration";
@@ -84,35 +86,46 @@ const Fields = ({ form, setForm, units, idPrefix }) => {
 const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, canEdit, emptyText, showInactive, onShowInactive }) => {
   const units = useUnits();
   const mutation = useCalibrationMutation();
-  const { showToast } = useToast();
   const [editing, setEditing] = useState(null); // characteristic id
   const [editForm, setEditForm] = useState(EMPTY);
   const [adding, setAdding] = useState(false);
   const [newForm, setNewForm] = useState(EMPTY);
   const ordered = [...items].sort((a, b) => a.sortOrder - b.sortOrder);
 
-  const fail = (title) => (err) => showToast({ type: "error", title, message: describeApiError(err) });
-  const patch = (id, body, onSuccess) => mutation.mutate({ path: `${itemBase}/${id}`, method: "PATCH", body }, { onSuccess, onError: fail("Not saved") });
-  /** Swap places with the neighbour: both get distinct sort orders. */
+  // Edits, switching on or off and moving show at once (the hook's guess) and go back with a toast if the server refuses.
+  const quickSave = useQuickSave(mutation);
+  const patch = (id, body) => quickSave({ path: `${itemBase}/${id}`, method: "PATCH", body });
+  /** Swap places with the neighbour: both get distinct sort orders, both shown at once. */
   const move = (index, delta) => {
     const a = ordered[index];
     const b = ordered[index + delta];
     if (!a || !b) return;
     const [ao, bo] = a.sortOrder === b.sortOrder ? [index + delta + 1, index + 1] : [b.sortOrder, a.sortOrder];
-    patch(a.id, { sortOrder: ao }, () => patch(b.id, { sortOrder: bo }));
+    patch(a.id, { sortOrder: ao });
+    patch(b.id, { sortOrder: bo });
   };
-  const create = () =>
-    mutation.mutate(
-      { path: `${base}/characteristics`, body: toBody(newForm) },
-      {
-        onSuccess: (c) => {
-          setNewForm({ ...EMPTY, unitCode: newForm.unitCode });
-          setAdding(false);
-          showToast({ type: "success", title: "Added", message: `${c.name} added.` });
-        },
-        onError: fail("Not added"),
-      }
-    );
+  const saveEdit = (c) => {
+    const body = toBody(editForm);
+    // The limits shown under the name follow the new nominal and tolerances.
+    const limits = body.kind === "variable" ? { lower: body.nominal - body.toleranceMinus, upper: body.nominal + body.tolerancePlus } : {};
+    quickSave({ path: `${itemBase}/${c.id}`, method: "PATCH", body, guess: changeRecord(c.id, (x) => ({ ...x, ...body, ...limits })) });
+    setEditing(null);
+  };
+  /** Added at once as a row without actions until the server has made it; taken away with a toast if refused. */
+  const create = () => {
+    const body = toBody(newForm);
+    const ownerId = base.split("/").pop();
+    const row = {
+      id: pendingId(),
+      ...body,
+      ...(body.kind === "variable" ? { lower: body.nominal - body.toleranceMinus, upper: body.nominal + body.tolerancePlus } : {}),
+      active: true,
+      sortOrder: Math.max(0, ...items.map((c) => c.sortOrder ?? 0)) + 1,
+    };
+    quickSave({ path: `${base}/characteristics`, body, guess: appendRow([ownerId, "characteristics"], row) }, "Not added");
+    setNewForm({ ...EMPTY, unitCode: newForm.unitCode });
+    setAdding(false);
+  };
 
   if (isLoading) return <LoadingScreen size="sm" />;
   if (error) return <Callout tone="error" role="alert">{describeApiError(error)}</Callout>;
@@ -148,7 +161,7 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
                     <Fields form={editForm} setForm={setEditForm} units={units.data} idPrefix={c.id} />
                     <td className="p-1">
                       <div className="flex gap-1">
-                        <CTAButton buttonType="button" disabled={!valid(editForm) || mutation.isPending} loading={mutation.isPending} onClick={() => patch(c.id, toBody(editForm), () => setEditing(null))}
+                        <CTAButton buttonType="button" disabled={!valid(editForm)} onClick={() => saveEdit(c)}
                           type="main" size="md" className="px-2 py-1">Save</CTAButton>
                         <button type="button" onClick={() => setEditing(null)} className="px-1 text-sm text-secondary-text hover:underline cursor-pointer">Cancel</button>
                       </div>
@@ -177,19 +190,20 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
                       </>
                     )}
                     <td className="px-1 py-1.5 text-secondary-text">{c.method ?? "—"}</td>
-                    {canEdit && (
+                    {canEdit && isPending(c.id) && <td className="px-1 py-1.5 text-right text-xs text-secondary-text">Saving…</td>}
+                    {canEdit && !isPending(c.id) && (
                       <td className="px-1 py-1.5">
                         <div className="flex items-center justify-end gap-1">
-                          <button type="button" aria-label={`Move ${c.name} up`} disabled={i === 0 || mutation.isPending} onClick={() => move(i, -1)} className="rounded p-1 hover:bg-border-color/50 disabled:opacity-30 cursor-pointer">
+                          <button type="button" aria-label={`Move ${c.name} up`} disabled={i === 0} onClick={() => move(i, -1)} className="rounded p-1 hover:bg-border-color/50 disabled:opacity-30 cursor-pointer">
                             <ChevronUpIcon />
                           </button>
-                          <button type="button" aria-label={`Move ${c.name} down`} disabled={i === ordered.length - 1 || mutation.isPending} onClick={() => move(i, 1)} className="rounded p-1 hover:bg-border-color/50 disabled:opacity-30 cursor-pointer">
+                          <button type="button" aria-label={`Move ${c.name} down`} disabled={i === ordered.length - 1} onClick={() => move(i, 1)} className="rounded p-1 hover:bg-border-color/50 disabled:opacity-30 cursor-pointer">
                             <ChevronDownIcon />
                           </button>
                           <button type="button" aria-label={`Edit ${c.name}`} onClick={() => { setEditing(c.id); setEditForm(toForm(c)); }} className="rounded p-1 hover:bg-border-color/50 cursor-pointer">
                             <PencilIcon />
                           </button>
-                          <button type="button" disabled={mutation.isPending} onClick={() => patch(c.id, { active: !c.active })} className="whitespace-nowrap rounded px-1 text-xs text-link-color hover:underline disabled:opacity-50 cursor-pointer" title={formatTolerance(c)}>
+                          <button type="button" onClick={() => patch(c.id, { active: !c.active })} className="whitespace-nowrap rounded px-1 text-xs text-link-color hover:underline disabled:opacity-50 cursor-pointer" title={formatTolerance(c)}>
                             {c.active ? "Switch off" : "Switch on"}
                           </button>
                         </div>
@@ -203,7 +217,7 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
                   <Fields form={newForm} setForm={setNewForm} units={units.data} idPrefix="new" />
                   <td className="p-1">
                     <div className="flex gap-1">
-                      <CTAButton buttonType="button" disabled={!valid(newForm) || mutation.isPending} loading={mutation.isPending} onClick={create}
+                      <CTAButton buttonType="button" disabled={!valid(newForm)} onClick={create}
                         type="main" size="md" className="px-2 py-1">Add</CTAButton>
                       <button type="button" onClick={() => setAdding(false)} className="px-1 text-sm text-secondary-text hover:underline cursor-pointer">Cancel</button>
                     </div>

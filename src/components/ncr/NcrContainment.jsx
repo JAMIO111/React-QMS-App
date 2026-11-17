@@ -8,10 +8,10 @@ import { ErrorNotice, FormError } from "../master-data/shared";
 import ComboField from "../ui/ComboField";
 import { TextAreaField } from "./Pickers";
 import ReasonDialog from "./ReasonDialog";
-import { useToast } from "../../contexts/ToastProvider";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { apiFetch } from "../../lib/api-client";
 import { useOptimisticSubmit } from "../../lib/optimisticSubmit";
+import { containmentCancel, containmentDone, containmentReason, containmentReopen } from "../../lib/ncrGuesses";
 import { useEmployees, useNcrAffectedLots, useNcrContainment, useNcrMutation } from "../../hooks/useNcr";
 import { CONTAINMENT_KINDS, containmentKindLabel } from "../../lib/ncrWorkflow";
 import { formatDate } from "../../lib/ncr";
@@ -109,21 +109,15 @@ const ActionDialog = ({ ncrId, action, lots, onClose }) => {
 /** Mark an action done: what was done and found is the evidence. */
 const DoneDialog = ({ action, onClose }) => {
   const mutation = useNcrMutation();
-  const { showToast } = useToast();
   const [note, setNote] = useState("");
   const [qty, setQty] = useState(action.quantityContained ?? "");
   const qtyValid = String(qty).trim() === "" || (Number.isFinite(Number(qty)) && Number(qty) >= 0);
   const submit = (e) => {
     e.preventDefault();
-    mutation.mutate(
-      { path: `/ncr-containment-actions/${action.id}/complete`, body: { note: note.trim(), ...(String(qty).trim() !== "" ? { quantityContained: Number(qty) } : {}) } },
-      {
-        onSuccess: () => {
-          showToast({ type: "success", title: "Saved", message: "Containment action done." });
-          onClose();
-        },
-      }
-    );
+    const body = { note: note.trim(), ...(String(qty).trim() !== "" ? { quantityContained: Number(qty) } : {}) };
+    // Shown as done at once; a refusal puts it back and is told in a toast (useNcrMutation).
+    mutation.mutate({ path: `/ncr-containment-actions/${action.id}/complete`, body, guess: containmentDone(action.id, body), failed: "Not marked done" });
+    onClose();
   };
   return (
     <Dialog title="Mark the action done" onClose={onClose} width="max-w-xl">
@@ -136,8 +130,8 @@ const DoneDialog = ({ action, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="lg" disabled={mutation.isPending || !note.trim() || !qtyValid} loading={mutation.isPending}>
-            {mutation.isPending ? "Saving…" : "Mark done"}
+          <CTAButton buttonType="submit" type="main" size="lg" disabled={!note.trim() || !qtyValid}>
+            Mark done
           </CTAButton>
         </div>
       </form>
@@ -154,7 +148,6 @@ const NcrContainment = ({ ncrId, canEdit }) => {
   const affectedLots = useNcrAffectedLots(ncrId);
   const lots = (affectedLots.data?.data ?? []).filter((a) => !a.removedAt);
   const mutation = useNcrMutation();
-  const { showToast } = useToast();
   const [editing, setEditing] = useState(null); // "new" | action
   const [completing, setCompleting] = useState(null);
   const [cancelling, setCancelling] = useState(null);
@@ -165,12 +158,13 @@ const NcrContainment = ({ ncrId, canEdit }) => {
   if (containment.error) return <ErrorNotice error={containment.error} />;
   if (!c) return null;
 
-  const run = (request, message) => mutation.mutate(request, { onSuccess: () => message && showToast({ type: "success", title: "Saved", message }) });
+  // Each of these shows at once; a refusal puts it back and is told in a toast (useNcrMutation).
+  const run = (request) => mutation.mutate(request);
   const submitReason = () => {
     saveReason(reason.trim());
     setReason("");
   };
-  const saveReason = (next) => run({ path: `/ncrs/${ncrId}/containment-reason`, method: "PUT", body: { reason: next } }, next ? "Reason saved." : "Reason cleared.");
+  const saveReason = (next) => run({ path: `/ncrs/${ncrId}/containment-reason`, method: "PUT", body: { reason: next }, guess: containmentReason(ncrId, next) });
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -216,7 +210,7 @@ const NcrContainment = ({ ncrId, canEdit }) => {
                     </>
                   )}
                   {canEdit && a.status !== "open" && (
-                    <CTAButton buttonType="button" type="neutral" size="md" onClick={() => run({ path: `/ncr-containment-actions/${a.id}/reopen` })} disabled={mutation.isPending} loading={mutation.isPending}>
+                    <CTAButton buttonType="button" type="neutral" size="md" onClick={() => run({ path: `/ncr-containment-actions/${a.id}/reopen`, guess: containmentReopen(a.id), failed: "Not reopened" })}>
                       <RotateCcwIcon className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
                       Reopen
                     </CTAButton>
@@ -261,7 +255,7 @@ const NcrContainment = ({ ncrId, canEdit }) => {
                 {c.notNeededReason}
               </p>
               {canEdit && (
-                <CTAButton buttonType="button" type="neutral" size="md" onClick={() => saveReason(null)} disabled={mutation.isPending} loading={mutation.isPending}>
+                <CTAButton buttonType="button" type="neutral" size="md" onClick={() => saveReason(null)}>
                   Clear
                 </CTAButton>
               )}
@@ -282,14 +276,13 @@ const NcrContainment = ({ ncrId, canEdit }) => {
                 maxLength={500}
                 className="min-w-64 flex-1"
               />
-              <CTAButton buttonType="button" type="neutral" size="md" onClick={submitReason} disabled={!reason.trim() || mutation.isPending} loading={mutation.isPending}>
+              <CTAButton buttonType="button" type="neutral" size="md" onClick={submitReason} disabled={!reason.trim()}>
                 Save reason
               </CTAButton>
             </div>
           )}
         </div>
       )}
-      {mutation.error && !editing && !completing && !cancelling && <FormError error={mutation.error} />}
 
       {editing && <ActionDialog ncrId={ncrId} action={editing === "new" ? null : editing} lots={lots} onClose={() => setEditing(null)} />}
       {completing && <DoneDialog action={completing} onClose={() => setCompleting(null)} />}
@@ -298,10 +291,11 @@ const NcrContainment = ({ ncrId, canEdit }) => {
           title="Cancel this containment action?"
           label="Why is it being cancelled?"
           confirmText="Cancel action"
-          pending={mutation.isPending}
-          error={mutation.error}
           onClose={() => setCancelling(null)}
-          onConfirm={(r) => mutation.mutate({ path: `/ncr-containment-actions/${cancelling.id}/cancel`, body: { reason: r } }, { onSuccess: () => setCancelling(null) })}
+          onConfirm={(r) => {
+            run({ path: `/ncr-containment-actions/${cancelling.id}/cancel`, body: { reason: r }, guess: containmentCancel(cancelling.id, r), failed: "Not cancelled" });
+            setCancelling(null);
+          }}
         />
       )}
     </div>

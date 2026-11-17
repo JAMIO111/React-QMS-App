@@ -142,7 +142,7 @@ describe("SettingsUsers", () => {
     await userEvent.click(screen.getByRole("button", { name: "Remove Bob Builder from Goods-in" }));
     expect(mutate).toHaveBeenLastCalledWith({ action: "endDepartment", departmentMembershipId: "dm1" }, expect.any(Object));
     await pick(card("Mia Owner"), "Add a department for Mia Owner", "PA · Goods-in");
-    expect(mutate).toHaveBeenLastCalledWith({ action: "addDepartment", membershipId: "m-me", body: { departmentId: "d-gi" } }, expect.any(Object));
+    expect(mutate).toHaveBeenLastCalledWith({ action: "addDepartment", membershipId: "m-me", body: { departmentId: "d-gi" }, show: { name: "Goods-in", code: "GI", siteId: "s1", siteName: "Plant A" } }, expect.any(Object));
   });
 
   it("points out people without a department whose roles are not organisation-wide", async () => {
@@ -173,7 +173,7 @@ describe("SettingsUsers", () => {
     permissions = ["members.read", "members.manage"];
     render(<SettingsUsers />);
     await pick(card("Bob Builder"), "Add a role for Bob Builder", "Owner");
-    expect(mutate).toHaveBeenCalledWith({ action: "assign", membershipId: "m-bob", body: { roleId: "r-owner" } }, expect.any(Object));
+    expect(mutate).toHaveBeenCalledWith({ action: "assign", membershipId: "m-bob", body: { roleId: "r-owner" }, show: { roleName: "Owner", roleKey: "owner" } }, expect.any(Object));
     await userEvent.click(screen.getByRole("button", { name: "Remove role Viewer from Bob Builder" }));
     expect(mutate).toHaveBeenLastCalledWith({ action: "unassign", assignmentId: "a2" }, expect.any(Object));
   });
@@ -185,7 +185,7 @@ describe("SettingsUsers", () => {
     expect(within(card("Mia Owner")).getByRole("combobox", { name: "Seat for Mia Owner" })).toHaveValue("Controller");
     await pick(card("Bob Builder"), "Seat for Bob Builder", "Contributor");
     expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Give Bob Builder a Contributor seat?" }));
-    expect(seatMutate).toHaveBeenCalledWith({ action: "assign", membershipId: "m-bob", planSlug: "contributor" }, expect.any(Object));
+    expect(seatMutate).toHaveBeenCalledWith({ action: "assign", membershipId: "m-bob", planSlug: "contributor", planName: "Contributor" }, expect.any(Object));
   });
 
   it("shows the seat read-only to someone who may see seats but not change them, and hides it from others", () => {

@@ -15,22 +15,29 @@ const PersonalInformation = ({ profile, refreshProfile }) => {
   const { showToast } = useToast();
   const updateProfile = useUpdateProfile();
   const [form, setForm] = useState({ firstName: "", surname: "", jobTitle: "" });
+  // What was last sent: the save is optimistic, so the button treats it as saved until the profile catches up (or the save fails).
+  const [sent, setSent] = useState(null);
   useEffect(() => {
     setForm({ firstName: profile?.first_name ?? "", surname: profile?.surname ?? "", jobTitle: profile?.job_title ?? "" });
+    setSent(null);
   }, [profile?.first_name, profile?.surname, profile?.job_title]);
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
-  const changed =
-    form.firstName !== (profile?.first_name ?? "") || form.surname !== (profile?.surname ?? "") || form.jobTitle !== (profile?.job_title ?? "");
+  const base = sent ?? { firstName: profile?.first_name ?? "", surname: profile?.surname ?? "", jobTitle: profile?.job_title ?? "" };
+  const changed = form.firstName !== base.firstName || form.surname !== base.surname || form.jobTitle !== base.jobTitle;
   const valid = form.firstName.trim() && form.surname.trim();
-  const save = async (e) => {
+  const save = (e) => {
     e.preventDefault();
-    try {
-      await updateProfile.mutateAsync({ firstName: form.firstName.trim(), surname: form.surname.trim(), jobTitle: form.jobTitle.trim() || null });
-      await refreshProfile?.();
-      showToast({ type: "success", title: "Your details were saved" });
-    } catch (err) {
-      showToast({ type: "error", title: "Could not save", message: err?.message });
-    }
+    setSent(form);
+    updateProfile.mutate(
+      { firstName: form.firstName.trim(), surname: form.surname.trim(), jobTitle: form.jobTitle.trim() || null },
+      {
+        onSuccess: () => refreshProfile?.(),
+        onError: (err) => {
+          setSent(null);
+          showToast({ type: "error", title: "Could not save", message: err?.message });
+        },
+      },
+    );
   };
   return (
     <MenuCard as="form" onSubmit={save} noValidate title="Personal Information" subtitle="Update your personal details">
@@ -40,7 +47,7 @@ const PersonalInformation = ({ profile, refreshProfile }) => {
         <TextInput label="Job Title" icon={RectangleEllipsisIcon} value={form.jobTitle} onChange={set("jobTitle")} placeholder="Job Title..." />
         <TextInput label="Email" icon={AtSignIcon} value={profile?.email ?? ""} readOnly disabled hint="Your sign-in address. Ask your administrator if it needs to change." />
         <div>
-          <CTAButton type="main" buttonType="submit" text="Save details" disabled={!changed || !valid} loading={updateProfile.isPending} />
+          <CTAButton type="main" buttonType="submit" text="Save details" disabled={!changed || !valid} />
         </div>
       </div>
     </MenuCard>

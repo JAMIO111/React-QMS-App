@@ -1,7 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
-import { apiFetch } from "../lib/api-client";
-import { optimisticHandlers, settle } from "../lib/optimistic";
+import { apiFetch, describeApiError } from "../lib/api-client";
+import { guessCache, optimisticHandlers, rollbackGuess, settle } from "../lib/optimistic";
+import { useToast } from "../contexts/ToastProvider";
 import { refreshOrganisation } from "../lib/refresh";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 
@@ -130,10 +131,18 @@ export const useNcrAttachments = (id) => {
 export const useNcrMutation = () => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  const toast = useToast();
+  const simple = optimisticHandlers(queryClient, key(organisationId));
   return useMutation({
     mutationFn: ({ path, method = "POST", body, reason }) => apiFetch(path, { method, body, organisationId, reason }),
-    ...optimisticHandlers(queryClient, key(organisationId)),
-    onSuccess: (_data, _request, context) => settle(queryClient, organisationId, context),
+    // `guess(data, queryKey)` (lib/ncrGuesses.js) changes the cached NC data at once; else a flat PATCH or a DELETE of one id is applied as it is.
+    onMutate: (request) => (request.guess ? guessCache(queryClient, key(organisationId), request.guess) : simple.onMutate(request)),
+    onError: (error, request, context) => {
+      rollbackGuess(queryClient, context);
+      // the dialog that sent a guessed action has closed: say why it did not happen
+      if (request.guess && !error?.cancelled) toast?.showToast?.({ type: "error", title: request.failed ?? "Not saved", message: describeApiError(error) });
+    },
+    onSettled: (_data, _error, _request, context) => settle(queryClient, organisationId, context),
   });
 };
 

@@ -9,6 +9,7 @@ import { TextAreaField } from "./Pickers";
 import ReasonDialog from "./ReasonDialog";
 import { useToast } from "../../contexts/ToastProvider";
 import { useNcrAffectedLots, useNcrMutation } from "../../hooks/useNcr";
+import { lotRemove, lotRestore } from "../../lib/ncrGuesses";
 import { useSerialLookup } from "../../hooks/useProduction";
 import { formatDate } from "../../lib/ncr";
 import CTAButton from "@/components/CTAButton";
@@ -172,7 +173,7 @@ const NcrAffectedLots = ({ ncrId, partId, canEdit }) => {
                   removed {formatDate(a.removedAt)} by {a.removedBy?.name ?? "—"}: {a.removedReason}
                 </span>
                 {canEdit && (
-                  <CTAButton buttonType="button" type="neutral" size="md" className="ml-auto" onClick={() => mutation.mutate({ path: `/ncr-affected-lots/${a.id}/restore` })} disabled={mutation.isPending} loading={mutation.isPending} aria-label={`Restore lot ${a.lot.lotNumber}`}>
+                  <CTAButton buttonType="button" type="neutral" size="md" className="ml-auto" onClick={() => mutation.mutate({ path: `/ncr-affected-lots/${a.id}/restore`, guess: lotRestore(a.id), failed: "Not restored" })} aria-label={`Restore lot ${a.lot.lotNumber}`}>
                     <RotateCcwIcon className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
                     Restore
                   </CTAButton>
@@ -191,7 +192,6 @@ const NcrAffectedLots = ({ ncrId, partId, canEdit }) => {
           {d.remaining <= 0 && <span className="text-xs text-secondary-text">Every affected item is already placed in a lot.</span>}
         </div>
       )}
-      {mutation.error && !editing && !removing && <FormError error={mutation.error} />}
 
       {editing && (
         <LotDialog ncrId={ncrId} partId={partId} row={editing.id ? editing : null} lot={editing.suggested ?? null} remaining={d.remaining} onClose={() => setEditing(null)} />
@@ -201,10 +201,12 @@ const NcrAffectedLots = ({ ncrId, partId, canEdit }) => {
           title={`Remove lot ${removing.lot.lotNumber}?`}
           label="Why is it being removed?"
           confirmText="Remove lot"
-          pending={mutation.isPending}
-          error={mutation.error}
           onClose={() => setRemoving(null)}
-          onConfirm={(r) => mutation.mutate({ path: `/ncr-affected-lots/${removing.id}/remove`, body: { reason: r } }, { onSuccess: () => setRemoving(null) })}
+          onConfirm={(r) => {
+            // Shown as removed at once; a refusal (a disposition still names it) puts it back and is told in a toast.
+            mutation.mutate({ path: `/ncr-affected-lots/${removing.id}/remove`, body: { reason: r }, guess: lotRemove(removing.id, r), failed: "Not removed" });
+            setRemoving(null);
+          }}
         />
       )}
     </div>

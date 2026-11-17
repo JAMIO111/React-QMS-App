@@ -11,12 +11,14 @@ import DocumentsInForce from "../documents/DocumentsInForce";
 import LinkedRisks from "../risk/LinkedRisks";
 import { ActiveBadge, DataList, FormError, SearchBox, SelectField } from "./shared";
 import CTAButton from "@/components/CTAButton";
+import { useQuickSave } from "../../hooks/useQuickSave";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
 
 const MachineForm = ({ machine, onDone }) => {
   const mutation = useProcessControlMutation();
+  const quickSave = useQuickSave(useProcessControlMutation());
   const { showToast } = useToast();
   const sites = useSites();
   const [form, setForm] = useState({
@@ -41,11 +43,17 @@ const MachineForm = ({ machine, onDone }) => {
       description: form.description.trim(),
       ...(machine ? { active: form.active } : withCustomValues(customValues)),
     };
+    if (machine) {
+      // Shown at once (the hook's guess); put back with a toast if the server refuses.
+      quickSave({ path: `/machines/${machine.id}`, method: "PATCH", body: changesSince(opened, body) });
+      onDone();
+      return;
+    }
     mutation.mutate(
-      { path: machine ? `/machines/${machine.id}` : "/machines", method: machine ? "PATCH" : "POST", body: machine ? changesSince(opened, body) : body },
+      { path: "/machines", method: "POST", body },
       {
         onSuccess: () => {
-          showToast({ type: "success", title: "Saved", message: `Machine ${body.code.toUpperCase()} ${machine ? "updated" : "added"}.` });
+          showToast({ type: "success", title: "Saved", message: `Machine ${body.code.toUpperCase()} added.` });
           onDone();
         },
       }

@@ -9,6 +9,7 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { usePartFamilies, useProcessControlMutation } from "../../hooks/useProcessControl";
 import { ActiveBadge, DataList, FormError, SearchBox } from "./shared";
 import CTAButton from "@/components/CTAButton";
+import { useQuickSave } from "../../hooks/useQuickSave";
 import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
@@ -16,6 +17,7 @@ import { changesSince } from "../../lib/editConflicts";
 /** Add or edit a part family (code, name, description, active). */
 export const PartFamilyForm = ({ family, onDone, onCreated }) => {
   const mutation = useProcessControlMutation();
+  const quickSave = useQuickSave(useProcessControlMutation());
   const { showToast } = useToast();
   const [form, setForm] = useState({ code: family?.code ?? "", name: family?.name ?? "", description: family?.description ?? "", active: family?.active ?? true });
   const [customValues, setCustomValues] = useState({});
@@ -25,13 +27,19 @@ export const PartFamilyForm = ({ family, onDone, onCreated }) => {
   const submit = (e) => {
     e.preventDefault();
     const body = { code: form.code.trim(), name: form.name.trim(), description: form.description.trim(), ...(family ? { active: form.active } : withCustomValues(customValues)) };
+    if (family) {
+      // Shown at once (the hook's guess); put back with a toast if the server refuses.
+      quickSave({ path: `/part-families/${family.id}`, method: "PATCH", body: changesSince(opened, body) });
+      onDone();
+      return;
+    }
     mutation.mutate(
-      { path: family ? `/part-families/${family.id}` : "/part-families", method: family ? "PATCH" : "POST", body: family ? changesSince(opened, body) : body },
+      { path: "/part-families", method: "POST", body },
       {
         onSuccess: (saved) => {
-          showToast({ type: "success", title: "Saved", message: `Part family ${saved.code} ${family ? "updated" : "added"}.` });
+          showToast({ type: "success", title: "Saved", message: `Part family ${saved.code} added.` });
           onDone();
-          if (!family) onCreated?.(saved);
+          onCreated?.(saved);
         },
       }
     );

@@ -185,8 +185,8 @@ function AccessRestrictions({ canManage }) {
                       {n.removedBy ? ` by ${n.removedBy}` : ""}: {n.removedReason}
                     </span>
                     {canManage && (
-                      <CTAButton type="neutral" size="default" loading={mutate.isPending && mutate.variables?.id === n.id}
-                        onClick={() => mutate.mutate({ action: "restoreNetwork", id: n.id }, { onSuccess: () => showToast({ type: "success", title: "Brought back", message: `${n.name} is back, switched off.` }), onError: fail("Not brought back") })}>
+                      <CTAButton type="neutral" size="default"
+                        onClick={() => mutate.mutate({ action: "restoreNetwork", id: n.id }, { onError: fail("Not brought back") })}>
                         Bring back
                       </CTAButton>
                     )}

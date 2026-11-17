@@ -35,6 +35,11 @@ async function waitFor(url, ms = 60000) {
 }
 
 function watch(page, who, extra = []) {
+  // Saves the app shows before the server answers (optimistic UI) are counted, so the journey's database checks wait for them (see below).
+  page.on('request', (r) => { if (isWrite(r)) { r.__sentAt = Date.now(); inFlight.add(r); } });
+  for (const done of ['requestfinished', 'requestfailed']) page.on(done, (r) => inFlight.delete(r));
+  // A closed window's unfinished requests never finish: forget them.
+  page.on('close', () => { for (const r of inFlight) if (r.frame?.()?.page?.() === page) inFlight.delete(r); });
   const allowed = [...ALLOWED, ...extra];
   page.on('console', (m) => {
     if (m.type() !== 'error') return;
@@ -52,6 +57,16 @@ function watch(page, who, extra = []) {
     }
   });
 }
+const inFlight = new Set();
+const isWrite = (r) => r.method() !== 'GET' && r.method() !== 'OPTIONS' && (r.url().includes(`:${PORTS.api}`) || r.url().includes(`:${PORTS.supabase}`));
+/** Resolves once no save is on its way to the API (at most 10 s): the screen changes first, the database a moment later. */
+async function writesSettled() {
+  const until = Date.now() + 10000;
+  // Only saves started in the last minute count: anything older is not what the next check is about.
+  const recent = () => [...inFlight].filter((r) => Date.now() - (r.__sentAt ?? 0) < 60000).length;
+  while (recent() && Date.now() < until) await new Promise((r) => setTimeout(r, 50));
+}
+
 // Answers the app is expected to get during the journey (each is the app's own, handled, behaviour).
 const ALLOWED = [
   (s, u) => u.includes('/storage/v1/'), // nothing is stored in the stand-in
@@ -73,10 +88,24 @@ async function shot(page, name) { await page.screenshot({ path: path.join(OUT, `
   web.stderr.on("data", (d) => { if (!stopping) process.stderr.write(d); });
   const stack = await startStack({ appUrl: APP, log });
   await waitFor(APP);
+  // The journey's own database checks wait for the saves the app already shows to reach the server. Only the journey's view of the stack
+  // is wrapped: the stand-in Supabase answers the app with the same connection and must never wait for the app's own requests.
+  const admin = Object.create(stack.admin);
+  admin.query = async (...args) => { await writesSettled(); return stack.admin.query(...args); };
+  const journeyStack = Object.create(stack);
+  journeyStack.admin = admin;
   const browser = await chromium.launch();
+  // Closing a window right after the screen changed would cut off the save still on its way: wait for it first.
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (...args) => {
+    const ctx = await newContext(...args);
+    const close = ctx.close.bind(ctx);
+    ctx.close = async (...a) => { await writesSettled(); return close(...a); };
+    return ctx;
+  };
   let failed = null;
   try {
-    await require('./journey.cjs')({ browser, stack, APP, watch, shot, step, log, problems });
+    await require('./journey.cjs')({ browser, stack: journeyStack, APP, watch, shot, step, log, problems });
   } catch (e) {
     failed = e;
     for (const c of browser.contexts()) for (const [i, p] of c.pages().entries()) await p.screenshot({ path: path.join(OUT, `FAILED-${i}.png`) }).catch(() => {});

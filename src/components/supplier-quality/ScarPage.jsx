@@ -7,13 +7,14 @@ import { formatDate, ncrPath } from "../../lib/ncr";
 import { formatDateTime } from "../../lib/processControl";
 import { EXTENSION_STATUS, SCAR_STAGES, rootCauseMethodLabel, scarIsRunning, scarStageIndex, scarStatusOf } from "../../lib/supplierScars";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
+import { isPending } from "../../lib/optimistic";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import Callout from "../ui/Callout";
 import Dialog from "../ui/Dialog";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
-import { ErrorNotice, FormError } from "../master-data/shared";
+import { ErrorNotice } from "../master-data/shared";
 import { StagePill } from "../ncr/Pills";
 import { AcknowledgeDialog, DecideExtensionDialog, EditScarDialog, ExtendDialog, ImplementationDialog, ItemDialog, LinkNcrDialog, ReasonCommandDialog, ResponseDialog, ReviewDialog, VerificationDialog } from "./ScarDialogs";
 import { OverdueFlag, ScarSeverityPill, ScarStatusPill } from "./ScarPills";
@@ -104,9 +105,10 @@ const ScarPage = () => {
   const endedNcrs = s.ncrs.filter((n) => n.endedAt);
   const draft = s.status === "draft";
 
+  // Both show at once: the dialog closes and a refusal is put back with a toast (useScarMutation).
   const run = (kind) => {
-    if (kind === "issue") mutation.mutate({ action: "issue", id: s.id }, { onSuccess: close });
-    if (kind === "startReview") mutation.mutate({ action: "startReview", id: s.id }, { onSuccess: close });
+    mutation.mutate({ action: kind, id: s.id });
+    close();
   };
 
   return (
@@ -146,7 +148,6 @@ const ScarPage = () => {
             </div>
           )}
           {s.status === "verifying" && !can("supplier_quality.approve") && actions.length > 0 && <p className="mt-2 text-sm text-secondary-text">Waiting for someone with approval rights to verify effectiveness.</p>}
-          {mutation.error && <div className="mt-2"><ErrorNotice error={mutation.error} /></div>}
         </MenuCard>
       )}
 
@@ -181,7 +182,7 @@ const ScarPage = () => {
                   {i.quantity !== null && <span className="text-secondary-text"> · quantity {i.quantity}</span>}
                   {i.notes && <span className="block text-xs text-secondary-text">{i.notes}</span>}
                 </span>
-                {manage && running && <button type="button" className="text-xs text-secondary-text hover:underline" onClick={() => open({ kind: "removeItem", itemId: i.id })}>Remove</button>}
+                {manage && running && !isPending(i.id) && <button type="button" className="text-xs text-secondary-text hover:underline" onClick={() => open({ kind: "removeItem", itemId: i.id })}>Remove</button>}
               </li>
             ))}
           </ul>
@@ -202,7 +203,7 @@ const ScarPage = () => {
               <li key={n.linkId} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <span className="text-sm text-primary-text"><Link to={ncrPath(n.ncr.id)} className="text-link-color hover:underline">{n.ncr.reference}</Link> · {n.ncr.title}</span>
                 <span className="flex items-center gap-3"><StagePill stage={n.ncr.stage} />
-                  {manage && running && <button type="button" className="text-xs text-secondary-text hover:underline" onClick={() => open({ kind: "unlink", linkId: n.linkId, label: n.ncr.reference })}>Unlink</button>}
+                  {manage && running && !isPending(n.linkId) && <button type="button" className="text-xs text-secondary-text hover:underline" onClick={() => open({ kind: "unlink", linkId: n.linkId, label: n.ncr.reference })}>Unlink</button>}
                 </span>
               </li>
             ))}
@@ -284,7 +285,7 @@ const ScarPage = () => {
                 <span className="flex items-center gap-2">
                   <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${EXTENSION_STATUS[e.status].tone}`}>{EXTENSION_STATUS[e.status].label}</span>
                   {e.canDecide && <CTAButton type="main" size="default" onClick={() => open({ kind: "decideExtension", extension: e })}>Decide</CTAButton>}
-                  {e.status === "pending" && manage && running && <button type="button" className="text-xs text-secondary-text hover:underline" onClick={() => open({ kind: "withdrawExtension", extensionId: e.id })}>Withdraw</button>}
+                  {e.status === "pending" && manage && running && !isPending(e.id) && <button type="button" className="text-xs text-secondary-text hover:underline" onClick={() => open({ kind: "withdrawExtension", extensionId: e.id })}>Withdraw</button>}
                 </span>
               </li>
             ))}
@@ -318,7 +319,7 @@ const ScarPage = () => {
       {dialog?.kind === "cancel" && <ReasonCommandDialog title="Cancel this SCAR" intro="A cancelled SCAR is kept, with the reason, but cannot be worked on." label="Why is it being cancelled?" submitLabel="Cancel SCAR" action="cancel" id={s.id} onClose={close} />}
       {dialog?.kind === "unlink" && <ReasonCommandDialog title={`Unlink ${dialog.label}`} intro="The link is ended and kept, with the reason." label="Why is it being unlinked?" submitLabel="Unlink" action="unlinkNcr" id={dialog.linkId} onClose={close} />}
       {(dialog?.kind === "issue" || dialog?.kind === "startReview") && (
-        <ConfirmCommand kind={dialog.kind} pending={mutation.isPending} error={mutation.error} onConfirm={() => run(dialog.kind)} onClose={close} />
+        <ConfirmCommand kind={dialog.kind} onConfirm={() => run(dialog.kind)} onClose={close} />
       )}
     </div>
   );
@@ -326,16 +327,15 @@ const ScarPage = () => {
 
 
 /** A plain "are you sure" for the two commands that need no input. */
-const ConfirmCommand = ({ kind, pending, error, onConfirm, onClose }) => (
+const ConfirmCommand = ({ kind, onConfirm, onClose }) => (
   <Dialog title={kind === "issue" ? "Issue this SCAR" : "Start the review"} onClose={onClose}>
     <div className="flex flex-col gap-3">
       <p className="text-sm text-secondary-text">
         {kind === "issue" ? "The SCAR becomes the supplier's request and its content is fixed: only the contact can change afterwards, and the due date can only move by a recorded extension." : "You are about to review the latest response. You will then accept it or ask for a revision."}
       </p>
-      <FormError error={error} />
       <div className="flex justify-end gap-2">
         <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>Cancel</CTAButton>
-        <CTAButton buttonType="button" type="main" size="lg" disabled={pending} loading={pending} onClick={onConfirm}>{pending ? "Saving…" : kind === "issue" ? "Issue" : "Start review"}</CTAButton>
+        <CTAButton buttonType="button" type="main" size="lg" onClick={onConfirm}>{kind === "issue" ? "Issue" : "Start review"}</CTAButton>
       </div>
     </div>
   </Dialog>

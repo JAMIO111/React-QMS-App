@@ -13,6 +13,7 @@ import { FormError, SelectField } from "../master-data/shared";
 import { OrderPicker } from "./pickers";
 import { StatusBadge, StatusMoves } from "./shared";
 import CTAButton from "@/components/CTAButton";
+import { useQuickSave } from "../../hooks/useQuickSave";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
@@ -25,6 +26,7 @@ import { changesSince } from "../../lib/editConflicts";
 const LotDialog = ({ lot, onClose, readOnly = false }) => {
   const creating = !lot;
   const mutation = useMasterDataMutation();
+  const quickSave = useQuickSave(useMasterDataMutation());
   const { showToast } = useToast();
   const { data: sites } = useSites();
   const siteList = sites?.data ?? [];
@@ -66,11 +68,17 @@ const LotDialog = ({ lot, onClose, readOnly = false }) => {
           ...withCustomValues(customValues),
         }
       : { quantity, notes: form.notes.trim() || null, ...(received ? { supplierId: form.supplierId, receivedOn: form.receivedOn || null } : {}) };
+    if (!creating) {
+      // Shown at once (the hook's guess); put back with a toast if the server refuses.
+      quickSave({ path: `/lots/${lot.id}`, method: "PATCH", body: changesSince(opened, body) });
+      onClose();
+      return;
+    }
     mutation.mutate(
-      { path: creating ? "/lots" : `/lots/${lot.id}`, method: creating ? "POST" : "PATCH", body: creating ? body : changesSince(opened, body) },
+      { path: "/lots", method: "POST", body },
       {
         onSuccess: (data) => {
-          showToast({ type: "success", title: "Saved", message: `Lot ${data.lotNumber} ${creating ? "created" : "updated"}.` });
+          showToast({ type: "success", title: "Saved", message: `Lot ${data.lotNumber} created.` });
           onClose();
         },
       }
@@ -86,7 +94,7 @@ const LotDialog = ({ lot, onClose, readOnly = false }) => {
               <StatusBadge map={LOT_STATUS} status={current.status} />
               {current.statusReason && <span className="text-secondary-text">{current.statusReason}</span>}
             </div>
-            {!readOnly && <StatusMoves moves={LOT_MOVES[current.status]} path={`/lots/${lot.id}`} noun="Lot" onDone={setCurrent} />}
+            {!readOnly && <StatusMoves moves={LOT_MOVES[current.status]} path={`/lots/${lot.id}`} noun="Lot" record={current} onDone={setCurrent} />}
           </div>
         )}
         {frozen && <p className="rounded-lg border border-border-color bg-secondary-bg p-2 text-sm text-secondary-text">This lot is closed, so it can no longer be changed.</p>}

@@ -50,7 +50,8 @@ export const ReadersCard = ({ doc }) => {
   const restrict = useSetRestricted(doc.id);
   const { showToast } = useToast();
   const fail = (title) => (err) => showToast({ type: "error", title, message: describeApiError(err) });
-  const save = (targets) => mutation.mutate({ action: "setReaders", id: doc.id, body: { targets: targets.map(asBody) } }, { onError: fail("Readers not saved") });
+  // The chips change at once (the labels travel in `show`); a refusal puts them back.
+  const save = (targets) => mutation.mutate({ action: "setReaders", id: doc.id, body: { targets: targets.map(asBody) }, show: { targets }, failed: "Readers not saved" });
   const chosen = new Set(doc.targets.map((t) => `${t.kind}:${t.refId}`));
   const opts = (kind, list) => list.filter((o) => !chosen.has(`${kind}:${o.value}`));
   const deptOptions = opts("department", (departments.data?.data ?? []).map((d) => ({ value: d.id, label: d.name, hint: d.code })));
@@ -102,11 +103,11 @@ export const SkillsCard = ({ doc }) => {
   const editable = doc.canManage;
   const skills = useCompetenceSkills({ enabled: editable && can("competence.read") });
   const mutation = useDocumentMutation();
-  const { showToast } = useToast();
   if (!editable && doc.skills.length === 0) return null;
   const ids = doc.skills.map((k) => k.id);
+  const known = new Map([...(skills.data?.data ?? []).map((k) => [k.id, k]), ...doc.skills.map((k) => [k.id, k])]);
   const save = (next) =>
-    mutation.mutate({ action: "setSkills", id: doc.id, body: { skillIds: next } }, { onError: (err) => showToast({ type: "error", title: "Skills not saved", message: describeApiError(err) }) });
+    mutation.mutate({ action: "setSkills", id: doc.id, body: { skillIds: next }, show: { skills: next.map((sid) => known.get(sid) ?? { id: sid, name: "…" }) }, failed: "Skills not saved" });
   const options = (skills.data?.data ?? []).filter((k) => !ids.includes(k.id)).map((k) => ({ value: k.id, label: k.name, hint: k.code }));
   return (
     <MenuCard title="Skills it trains" subtitle="Reading and acknowledging it counts as evidence on the person's competence record. It never assesses anyone.">
@@ -167,14 +168,12 @@ export const AcknowledgeDaysField = ({ revision }) => {
 
 const AcknowledgeDialog = ({ revision, onClose }) => {
   const mutation = useDocumentMutation();
-  const { showToast } = useToast();
   const [note, setNote] = useState("");
   const save = (e) => {
     e.preventDefault();
-    mutation.mutate(
-      { action: "acknowledge", id: revision.id, body: { note: note.trim() || undefined } },
-      { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Not acknowledged", message: describeApiError(err) }) },
-    );
+    // Shown as acknowledged at once; a refusal puts it back with a toast.
+    mutation.mutate({ action: "acknowledge", id: revision.id, body: { note: note.trim() || undefined }, failed: "Not acknowledged" });
+    onClose();
   };
   return (
     <Dialog title={`Acknowledge ${revision.document.number} rev ${revision.letter}`} onClose={onClose}>
@@ -186,7 +185,7 @@ const AcknowledgeDialog = ({ revision, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="success" size="md" icon={CheckIcon} disabled={mutation.isPending} loading={mutation.isPending}>
+          <CTAButton buttonType="submit" type="success" size="md" icon={CheckIcon}>
             I have read it
           </CTAButton>
         </div>
@@ -228,14 +227,15 @@ export const AcknowledgeCard = ({ revision }) => {
 const AddReaderDialog = ({ revision, recipients, onClose }) => {
   const people = useDocumentSigners();
   const mutation = useDocumentMutation();
-  const { showToast } = useToast();
   const [userId, setUserId] = useState(null);
   const already = new Set(recipients.map((x) => x.person.id));
   const options = (people.data ?? []).filter((p) => !already.has(p.id)).map((p) => ({ value: p.id, label: p.name }));
   const save = (e) => {
     e.preventDefault();
     if (!userId) return;
-    mutation.mutate({ action: "addRecipient", id: revision.id, body: { userId } }, { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Not added", message: describeApiError(err) }) });
+    // The person is listed at once (marked as saving); a refusal takes them off again with a toast.
+    mutation.mutate({ action: "addRecipient", id: revision.id, body: { userId }, show: { name: options.find((o) => o.value === userId)?.label }, failed: "Not added" });
+    onClose();
   };
   return (
     <Dialog title="Ask someone else to read it" onClose={onClose}>
@@ -247,7 +247,7 @@ const AddReaderDialog = ({ revision, recipients, onClose }) => {
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
             Cancel
           </CTAButton>
-          <CTAButton buttonType="submit" type="main" size="md" disabled={!userId || mutation.isPending} loading={mutation.isPending}>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={!userId}>
             Add
           </CTAButton>
         </div>

@@ -76,13 +76,22 @@ export const RiskDialog = ({ existing, draft, onClose, onSaved }) => {
       body.raisedFrom = { kind: source.kind, id: source.id };
       body.links = linksBody(extraLinks);
     }
-    mutation.mutate(existing ? { action: "update", id: existing.id, body: changesSince(opened, body) } : { action: "create", body }, {
-      onSuccess: (risk) => {
-        onSaved?.(risk);
-        onClose();
+    if (existing) {
+      // Changes show at once; a refusal puts the risk back and is told in a toast (useRiskMutation).
+      mutation.mutate({ action: "update", id: existing.id, body: changesSince(opened, body), show: { ownerName: personOptions.find((p) => p.value === ownerId)?.label } });
+      onClose();
+      return;
+    }
+    mutation.mutate(
+      { action: "create", body },
+      {
+        onSuccess: (risk) => {
+          onSaved?.(risk);
+          onClose();
+        },
+        onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }),
       },
-      onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }),
-    });
+    );
   };
 
   return (
@@ -203,13 +212,14 @@ export const AssessDialog = ({ risk, phase = "inherent", onClose }) => {
 
 export const RetireDialog = ({ risk, onClose }) => {
   const mutation = useRiskMutation();
-  const { showToast } = useToast();
   const [reason, setReason] = useState("");
   const ok = reason.trim().length >= 3;
   const save = (e) => {
     e.preventDefault();
     if (!ok) return;
-    mutation.mutate({ action: "retire", id: risk.id, body: { reason: reason.trim() } }, { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Not retired", message: describeApiError(err) }) });
+    // Shown as retired at once; a refusal (open actions) puts it back and is told in a toast.
+    mutation.mutate({ action: "retire", id: risk.id, body: { reason: reason.trim() } });
+    onClose();
   };
   return (
     <Dialog title={`Retire ${risk.reference}`} onClose={onClose}>

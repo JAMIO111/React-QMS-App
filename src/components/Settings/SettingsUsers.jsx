@@ -24,6 +24,7 @@ import { XIcon } from "@/components/icons";
 import { ORGANISATION_WIDE_ROLE_KEYS, isUnassigned } from "../../lib/departments";
 import { expiresIn } from "../../lib/onboarding";
 import CTAButton from "@/components/CTAButton";
+import { isPending } from "@/lib/optimistic";
 import Callout from "../ui/Callout";
 import SsoMatches from "./SsoMatches";
 
@@ -216,8 +217,10 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
     onError: (error) => showToast({ type: "error", title: "Not changed", message: describeApiError(error) }),
   });
   const run = (vars, success) => mutation.mutate(vars, handlers(success));
+  // Chips change at once (useMemberMutation guesses), so these say nothing on success; only a refusal is told.
+  const quick = (vars) => mutation.mutate(vars, handlers(null));
 
-  const setStatus = async (status, verb) => {
+  const setStatus = async (status) => {
     if (status === "removed") {
       const ok = await confirm({
         title: member.status === "invited" ? "Revoke this invitation?" : `Remove ${name}?`,
@@ -228,7 +231,8 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
       });
       if (!ok) return;
     }
-    run({ action: "status", membershipId: member.membershipId, body: { status } }, `${name} ${verb}.`);
+    // The status changes at once (useMemberMutation guesses); only a refusal is told.
+    quick({ action: "status", membershipId: member.membershipId, body: { status } });
   };
 
   const changeSeat = async (slug) => {
@@ -242,7 +246,8 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
         cancelText: "Cancel",
         type: "warning",
       });
-      if (ok) seatMutation.mutate({ action: "remove", membershipId: member.membershipId }, handlers(`${name} no longer has a seat.`));
+      // The seat changes at once (useSubscriptionMutation guesses); only a refusal is told.
+      if (ok) seatMutation.mutate({ action: "remove", membershipId: member.membershipId }, handlers(null));
       return;
     }
     const item = seatItems.find((i) => i.planSlug === slug);
@@ -253,23 +258,22 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
       cancelText: "Cancel",
       type: "info",
     });
-    if (ok) seatMutation.mutate({ action: "assign", membershipId: member.membershipId, planSlug: slug }, handlers(`${name} now has a ${item?.planName ?? slug} seat.`));
+    if (ok) seatMutation.mutate({ action: "assign", membershipId: member.membershipId, planSlug: slug, planName: item?.planName }, handlers(null));
   };
 
   const actions = manageable
     ? [
-        member.status === "active" && { label: "Suspend", onSelect: () => setStatus("suspended", "suspended") },
-        member.status === "suspended" && { label: "Reactivate", onSelect: () => setStatus("active", "reactivated") },
+        member.status === "active" && { label: "Suspend", onSelect: () => setStatus("suspended") },
+        member.status === "suspended" && { label: "Reactivate", onSelect: () => setStatus("active") },
         member.status === "invited" && { label: "Resend invitation", onSelect: () => run({ action: "resend", membershipId: member.membershipId }, "Invitation sent again.") },
         { separator: true },
-        { label: member.status === "invited" ? "Revoke invitation" : "Remove from organisation", tone: "danger", onSelect: () => setStatus("removed", member.status === "invited" ? "invitation revoked" : "removed") },
+        { label: member.status === "invited" ? "Revoke invitation" : "Remove from organisation", tone: "danger", onSelect: () => setStatus("removed") },
       ]
     : [];
 
   const roleOptions = roles.filter((r) => !member.roles.some((a) => a.roleId === r.id && !a.siteId)).map((r) => ({ value: r.id, label: r.name, hint: r.description }));
   const deptOptions = departments.filter((d) => !(member.departments ?? []).some((m) => m.departmentId === d.id)).map((d) => ({ value: d.id, label: departmentLabel(d, sites) }));
   const seatOptions = seatItems.map((i) => ({ value: i.planSlug, label: i.planName, hint: `${i.available} free`, disabled: i.available < 1 && i.planSlug !== seat?.slug }));
-  const busy = mutation.isPending || seatMutation.isPending;
 
   return (
     <li aria-label={name} className={`rounded-xl border border-border-color p-4 ${member.status === "removed" ? "opacity-60" : ""}`}>
@@ -314,8 +318,8 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
                     type="button"
                     aria-label={`Remove role ${r.roleName} from ${name}`}
                     className="ml-0.5 cursor-pointer text-secondary-text hover:text-error-color"
-                    disabled={busy}
-                    onClick={() => run({ action: "unassign", assignmentId: r.assignmentId }, `${r.roleName} removed.`)}>
+                    disabled={isPending(r.assignmentId)}
+                    onClick={() => quick({ action: "unassign", assignmentId: r.assignmentId })}>
                     <XIcon />
                   </button>
                 )}
@@ -327,9 +331,11 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
             <ComboField
               label={`Add a role for ${name}`}
               value={null}
-              onChange={(v) => v && run({ action: "assign", membershipId: member.membershipId, body: { roleId: v } }, "Role added.")}
+              onChange={(v) => {
+                const role = roles.find((x) => x.id === v);
+                if (v) quick({ action: "assign", membershipId: member.membershipId, body: { roleId: v }, show: { roleName: role?.name, roleKey: role?.key } });
+              }}
               placeholder="Add a role…"
-              disabled={busy}
               options={roleOptions}
               className="[&_label]:sr-only"
             />
@@ -353,8 +359,8 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
                       type="button"
                       aria-label={`Make ${d.name} the primary department of ${name}`}
                       className="cursor-pointer text-xs text-secondary-text hover:text-primary-text"
-                      disabled={busy}
-                      onClick={() => run({ action: "setPrimaryDepartment", departmentMembershipId: d.id }, `${d.name} is now the primary department.`)}>
+                      disabled={isPending(d.id)}
+                      onClick={() => quick({ action: "setPrimaryDepartment", departmentMembershipId: d.id })}>
                       make primary
                     </button>
                   )
@@ -364,8 +370,8 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
                     type="button"
                     aria-label={`Remove ${name} from ${d.name}`}
                     className="ml-0.5 cursor-pointer text-secondary-text hover:text-error-color"
-                    disabled={busy}
-                    onClick={() => run({ action: "endDepartment", departmentMembershipId: d.id }, `Removed from ${d.name}.`)}>
+                    disabled={isPending(d.id)}
+                    onClick={() => quick({ action: "endDepartment", departmentMembershipId: d.id })}>
                     <XIcon />
                   </button>
                 )}
@@ -381,9 +387,12 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
             <ComboField
               label={`Add a department for ${name}`}
               value={null}
-              onChange={(v) => v && run({ action: "addDepartment", membershipId: member.membershipId, body: { departmentId: v } }, "Department added.")}
+              onChange={(v) => {
+                const dept = departments.find((x) => x.id === v);
+                const site = sites.find((x) => x.id === dept?.siteId);
+                if (v) quick({ action: "addDepartment", membershipId: member.membershipId, body: { departmentId: v }, show: { name: dept?.name, code: dept?.code, siteId: dept?.siteId, siteName: site?.name } });
+              }}
               placeholder="Add a department…"
-              disabled={busy}
               options={deptOptions}
               className="[&_label]:sr-only"
             />
@@ -403,7 +412,6 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
                 onChange={changeSeat}
                 placeholder="No seat"
                 clearable
-                disabled={busy}
                 options={seatOptions}
                 className="[&_label]:sr-only"
               />

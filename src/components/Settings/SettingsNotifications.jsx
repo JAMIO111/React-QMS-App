@@ -73,7 +73,6 @@ const SettingsNotifications = () => {
         subtitle="Choose which changes appear in your notification bell, and which are also emailed to you. Defaults follow your role and your subscription package, and you only see events you have access to. Your own changes never notify you."
         action={
           <LoadingButton
-            loading={reset.isPending}
             disabled={!anyOverride}
             onClick={() => reset.mutate(undefined, { onError: fail })}>
             Reset to defaults

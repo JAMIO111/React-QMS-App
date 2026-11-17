@@ -69,11 +69,12 @@ export class OrganisationGuard implements CanActivate {
     }
 
     const ctx = contextFrom(req);
-    const { member, allowed, mfa_blocked, sso_provider, sso_blocked, sso_break_glass, sso_method, network, max_session_hours } = await this.db.asUser(ctx, async (db) => {
+    const { member, allowed, mfa_blocked, seat_blocked, sso_provider, sso_blocked, sso_break_glass, sso_method, network, max_session_hours } = await this.db.asUser(ctx, async (db) => {
       const result = await db.execute<{
         member: boolean;
         allowed: boolean;
         mfa_blocked: boolean;
+        seat_blocked: boolean;
         sso_blocked: boolean;
         sso_provider: string | null;
         sso_break_glass: boolean | null;
@@ -88,6 +89,8 @@ export class OrganisationGuard implements CanActivate {
                             else app.has_permission(${organisationId}::uuid, ${scope.permission ?? null}::text) end) as allowed,
                    exists (select 1 from app.mfa_blocked_organisations() b
                            where b.organisation_id = ${organisationId}::uuid) as mfa_blocked,
+                   exists (select 1 from app.seat_blocked_organisations() b
+                           where b.organisation_id = ${organisationId}::uuid) as seat_blocked,
                    sb.organisation_id is not null as sso_blocked, sb.provider_id as sso_provider, sb.break_glass as sso_break_glass,
                    app.sso_session_method(${organisationId}::uuid) as sso_method,
                    app.network_allowed(${organisationId}::uuid, ${ctx.address ?? null}::inet) as network,
@@ -113,6 +116,13 @@ export class OrganisationGuard implements CanActivate {
     // A member whose session has not passed MFA, in an organisation that requires it. Only the
     // caller's own memberships are reported, so this does not reveal other tenants.
     if (mfa_blocked) throw new ApiError(403, 'mfa_required', 'This organisation requires two-factor authentication');
+    // A member without a seat, in an organisation that enforces packages (docs/seats-and-member-onboarding-plan.md SM3): not a member until an
+    // owner or admin gives them one. The app shows the waiting screen. Only the caller's own memberships are reported.
+    if (seat_blocked) {
+      throw new ApiError(403, 'seat_required', 'You need a seat in this organisation. An owner or admin has been told and can give you one.', {
+        organisationId: organisationId.toLowerCase(),
+      });
+    }
     if (!member) throw ApiError.notFound('organisation_not_found', 'Organisation not found');
     // The organisation's network rule (docs/security-plan.md S1): checked on every request, in the same query, so a change applies at once.
     if (network === 'denied' || network === 'monitored') {

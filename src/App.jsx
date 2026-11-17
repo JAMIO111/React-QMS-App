@@ -19,6 +19,11 @@ import SsoRequired from "./components/SsoRequired";
 import { useNetworkAccess } from "./hooks/useSecurity";
 import { NETWORK_BLOCKED_EVENT, REAUTH_EVENT, REAUTH_NOTE_KEY, SSO_REQUIRED_EVENT } from "./lib/security";
 import useSignOut from "./hooks/useSignOut";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMe } from "./hooks/useQmsApi";
+import SeatWaiting from "./components/onboarding/SeatWaiting";
+import { WelcomeShell } from "./components/onboarding/MemberWelcome";
+import { SEAT_REQUIRED_EVENT, waitingFor } from "./lib/memberOnboarding";
 
 function App() {
   const { organisation, error } = useOrganisation();
@@ -55,6 +60,15 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A request refused with 403 seat_required (seats plan SM3): read /me again, which lists the organisation under seats.waitingIn.
+  const queryClient = useQueryClient();
+  const me = useMe();
+  useEffect(() => {
+    const onSeat = () => queryClient.invalidateQueries({ queryKey: ["api", "me"] });
+    window.addEventListener(SEAT_REQUIRED_EVENT, onSeat);
+    return () => window.removeEventListener(SEAT_REQUIRED_EVENT, onSeat);
+  }, [queryClient]);
+
   useEffect(() => {
     const onSso = (e) => setSsoRequired(e.detail ?? {});
     window.addEventListener(SSO_REQUIRED_EVENT, onSso);
@@ -75,6 +89,15 @@ function App() {
     );
   }
   if (organisation === null) return <NoOrganisation error={error} />;
+  // The person belongs here but has no seat yet (seats plan SM4): the waiting screen instead of the organisation.
+  const seatWait = waitingFor(me.data, organisation.id);
+  if (seatWait) {
+    return (
+      <WelcomeShell>
+        <SeatWaiting wait={seatWait} />
+      </WelcomeShell>
+    );
+  }
 
   // An owner who has not finished the set-up wizard is taken to it (once per session: "Finish later" lets them into the app).
   if (!accessLoading && onboarding === "in_progress" && can("organisation.manage") && !setupDeferred() && !pathname.startsWith("/setup")) {

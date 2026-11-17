@@ -134,6 +134,14 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await see(page2.getByText(`Journey Works ${RUN}`));
   await shot(page2, '14-colleague-sees-invitation');
   await page2.getByRole('button', { name: 'Accept' }).first().click();
+  // A member sets up their own profile, not the organisation (docs/seats-and-member-onboarding-plan.md SM6); he has the reserved seat.
+  await see(page2.getByRole('heading', { name: `Welcome to Journey Works ${RUN}` }));
+  await page2.getByLabel(/Job title/).fill('Quality engineer');
+  await shot(page2, '14b-colleague-welcome');
+  await page2.getByRole('button', { name: 'Continue' }).click();
+  await see(page2.getByRole('region', { name: 'How we reach you' }));
+  await page2.getByRole('button', { name: 'Continue' }).click();
+  await page2.getByRole('button', { name: 'Go to Fortress' }).click();
   await see(page2.getByRole('heading', { level: 1, name: /good (morning|afternoon|evening), Colin/i }));
   await shot(page2, '15-colleague-accepted');
   const joined = (await stack.admin.query(`select m.status from public.organisation_users m join public.organisations o on o.id = m.organisation_id where o.name = $1 and lower(m.invited_email) = lower($2)`, [`Journey Works ${RUN}`, colleague.email])).rows[0];
@@ -2201,6 +2209,30 @@ async function singleSignOn({ browser, page, stack, APP, orgName, see, shot, ste
   await see(sam.getByLabel(`Join ${orgName}`));
   await shot(sam, '167-sso-join');
   await sam.getByRole('button', { name: `Join ${orgName}` }).click();
+  // Joining gives no seat: Sam sets up his profile, then waits until an owner gives him one (seats plan SM4, SM6).
+  await see(sam.getByRole('heading', { name: `Welcome to ${orgName}` }));
+  await sam.getByRole('button', { name: 'Continue' }).click();
+  await sam.getByRole('region', { name: 'How we reach you' }).getByRole('button', { name: 'Continue' }).click();
+  await see(sam.getByRole('heading', { name: `You need a seat in ${orgName}` }));
+  await see(sam.getByText(/Olivia .* can give you one|can give you one/));
+  await shot(sam, '167b-sso-waiting-for-seat');
+  const seatTold = (await stack.admin.query(`select count(*)::int n from public.seat_requests where organisation_id = $1`, [org.id])).rows[0];
+  if (seatTold.n < 1) throw new Error('the people who give seats were not told that Sam joined');
+  // a free Contributor seat (buying seats is covered by the billing tests), then the owner gives it to Sam on Settings → Users
+  await stack.admin.query(
+    `update public.organisation_subscription_items i set quantity = quantity + 1 from public.subscription_plans p
+      where p.id = i.subscription_plan_id and p.slug = 'contributor' and i.organisation_id = $1
+        and i.id = (select i2.id from public.organisation_subscription_items i2 where i2.organisation_id = $1 and i2.subscription_plan_id = p.id order by i2.quantity desc limit 1)`, [org.id]);
+  await olivia.goto(`${APP}/Settings/Users`);
+  const samCard = olivia.getByRole('listitem', { name: 'Sam Newcomer' });
+  await samCard.getByLabel('Seat for Sam Newcomer').click();
+  await olivia.getByRole('option', { name: /Contributor/ }).click();
+  await olivia.getByRole('alertdialog').getByRole('button', { name: 'Assign' }).click();
+  await waitFor('Sam has a seat', async () => (await stack.admin.query(
+    `select count(*)::int n from public.user_subscription_assignments a join public.organisation_users m on m.id = a.organisation_membership_id
+       join auth.users u on u.id = m.user_id where u.email = $1 and a.status = 'active'`, [samEmail])).rows[0].n === 1);
+  await sam.reload();
+  await sam.getByRole('button', { name: 'Go to Fortress' }).click();
   await hello(sam, 'Sam');
   const joined = (await stack.admin.query(
     `select r.key from auth.users u join public.organisation_users m on m.user_id = u.id and m.organisation_id = $2 and m.status = 'active'

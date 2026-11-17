@@ -18,6 +18,9 @@ vi.mock("./components/ThemeColourSync", () => ({ default: () => null }));
 vi.mock("./components/NoOrganisation", () => ({ default: () => <p>no organisation</p> }));
 vi.mock("./components/onboarding/SubscriptionNeeded", () => ({ default: () => <p>subscription needed</p> }));
 vi.mock("./components/SubscriptionBanner", () => ({ default: () => <div data-testid="subscription-banner" /> }));
+const invalidateQueries = vi.fn();
+vi.mock("@tanstack/react-query", async (importOriginal) => ({ ...(await importOriginal()), useQueryClient: () => ({ invalidateQueries }) }));
+vi.mock("./components/onboarding/SeatWaiting", () => ({ default: ({ wait }) => <p>waiting for a seat in {wait.name}</p> }));
 vi.mock("./contexts/SearchProvider.jsx", () => ({ SearchProvider: ({ children }) => children }));
 vi.mock("./contexts/NotificationProvider", () => ({ NotificationProvider: ({ children }) => children }));
 vi.mock("./contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisation: org, error: null }) }));
@@ -53,6 +56,19 @@ beforeEach(() => {
 });
 
 describe("the app shell", () => {
+  it("shows the waiting screen instead of an organisation where the person has no seat (seats plan SM4)", () => {
+    me = { ...me, seats: { waitingIn: [{ id: "org-1", name: "Acme Ltd", managers: [], lastToldAt: null }] } };
+    renderAt("/Dashboard");
+    expect(screen.getByText("waiting for a seat in Acme Ltd")).toBeInTheDocument();
+    expect(screen.queryByText("dashboard page")).toBeNull();
+  });
+
+  it("reads /me again when a request is refused for want of a seat", () => {
+    renderAt("/Dashboard");
+    window.dispatchEvent(new CustomEvent("qms:seat-required", { detail: { organisationId: "org-1" } }));
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["api", "me"] });
+  });
+
   it("shows the app when the organisation is ready", () => {
     renderAt("/Dashboard");
     expect(screen.getByText("dashboard page")).toBeInTheDocument();

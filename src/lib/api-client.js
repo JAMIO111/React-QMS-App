@@ -1,6 +1,7 @@
 import supabase from "../supabase-client";
 import { browserTimeZone } from "./timeZones";
 import { NETWORK_BLOCKED_EVENT, REAUTH_EVENT, SSO_REQUIRED_EVENT } from "./security";
+import { SEAT_REQUIRED_EVENT } from "./memberOnboarding";
 
 /** Base URL of the QMS API (see api/README.md). */
 export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
@@ -77,6 +78,10 @@ export async function apiFetch(path, { method = "GET", body, organisationId, rea
       window.dispatchEvent(
         new CustomEvent(SSO_REQUIRED_EVENT, { detail: { organisationId, providerId: error.details?.providerId ?? null, breakGlass: !!error.details?.breakGlass, message: error.message ?? null } }),
       );
+    }
+    // A member without a seat in an organisation that enforces packages (seats plan SM3): the app shows the waiting screen.
+    if (response.status === 403 && error.code === "seat_required" && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(SEAT_REQUIRED_EVENT, { detail: { organisationId: error.details?.organisationId ?? organisationId } }));
     }
     // The organisation asks people to sign in again after a while (security plan SE6): the app signs out and says why.
     if (response.status === 401 && error.code === "reauthentication_required" && typeof window !== "undefined") {

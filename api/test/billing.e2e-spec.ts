@@ -122,9 +122,11 @@ describe('entitlement enforcement (RBAC AND subscription)', () => {
     const check = async (feature: string, module = 'inspections') =>
       (await api().get(`/api/v1/subscription/check?module=${module}&feature=${feature}`).set(inspectorH).expect(200)).body;
     try {
-      // No package: restricted modules are refused by the API; billing permissions are not subscription-restricted.
-      await api().get('/api/v1/inspections').set(inspectorH).expect(403);
-      expect(await check('view_inspections')).toMatchObject({ allowed: false, reason: 'no_seat_assigned' });
+      // No package: the inspector is not a member until given a seat (docs/seats-and-member-onboarding-plan.md SM3), so every organisation route
+      // answers seat_required; the owner's billing still works.
+      const noSeat = await api().get('/api/v1/inspections').set(inspectorH).expect(403);
+      expect(noSeat.body.error.code).toBe('seat_required');
+      expect((await api().get('/api/v1/subscription/check?module=inspections&feature=view_inspections').set(inspectorH).expect(403)).body.error.code).toBe('seat_required');
       await api().get('/api/v1/subscription').set(h).expect(200);
 
       // Observer: view only, even though the Inspector role may record.

@@ -462,6 +462,12 @@ BEGIN
     VALUES (a, gen_random_uuid(), '50000000-0000-0000-0000-0000000000a1', '50000000-0000-0000-0000-0000000000a1', 'owner.a@sweep.test', false);
   INSERT INTO public.sso_match_dismissals (organisation_id, password_user_id, sso_user_id)
     VALUES (a, '50000000-0000-0000-0000-0000000000a1', '50000000-0000-0000-0000-0000000000a1');
+  -- SM-C: a member's welcome (made when someone joins; the founder has none, so seeded directly).
+  INSERT INTO public.member_onboarding (membership_id, organisation_id)
+    VALUES ((SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'), a);
+  -- SM-B: a seat request (seeded directly; written at commit when someone joins without a seat, and by app.remind_seat_managers).
+  INSERT INTO public.seat_requests (organisation_id, membership_id, kind, person_name, summary)
+    VALUES (a, (SELECT id FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1'), 'joined', 'Owner A', 'Owner A joined and is waiting for a seat');
   -- SE5: a change of the policy is written down by the trigger (monitor and back, so nobody is blocked in the sweep).
   UPDATE public.organisation_settings SET network_policy = 'monitor' WHERE organisation_id = a;
   UPDATE public.organisation_settings SET network_policy = 'off' WHERE organisation_id = a;

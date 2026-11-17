@@ -70,7 +70,9 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.nonconformances), 0::bigint, 'locked: no quality records are readable');
   PERFORM pg_temp.logout();
   PERFORM pg_temp.login(u_view);
-  PERFORM pg_temp.assert_eq(app.organisation_access_state(org), 'needs_subscription', 'a member sees the same state');
+  -- A viewer has no seat (nothing is bought yet), so they wait for one instead of being a member (docs/seats-and-member-onboarding-plan.md SM3).
+  PERFORM pg_temp.assert_eq(app.organisation_access_state(org), NULL, 'a viewer without a seat is not a member');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.seat_blocked_organisations() WHERE organisation_id = org), 1::bigint, 'they wait for a seat');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.my_permissions(org)), 0::bigint, 'locked: a viewer has no permissions at all');
   PERFORM pg_temp.logout();
   PERFORM pg_temp.login(u_other);

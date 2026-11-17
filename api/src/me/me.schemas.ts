@@ -50,10 +50,33 @@ export const SsoStatus = z.object({
   /** Organisations where the person's old password account can be moved onto this company account (SS5). */
   moveCandidates: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
 });
-export const MeResponse = z.object({ profile: Profile, memberships: z.array(Membership), mfa: MfaStatus, sso: SsoStatus });
+/** Organisations that hold this person back until someone gives them a seat (docs/seats-and-member-onboarding-plan.md SM3, SM4). */
+export const SeatStatus = z.object({
+  waitingIn: z.array(z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    /** Names of the people who can give a seat (owners and admins with the right to give seats). */
+    managers: z.array(z.string()),
+    /** When those people were last told (on joining, or by a reminder); a reminder is allowed a day later. */
+    lastToldAt: z.string().nullable(),
+  })),
+});
+/** Organisations the person has joined and has not finished setting up their own profile in (docs/seats-and-member-onboarding-plan.md SM6). */
+export const WelcomeEntry = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  aboutDone: z.boolean(),
+  notificationsDone: z.boolean(),
+  waitingForSeat: z.boolean(),
+});
+export const MeResponse = z.object({
+  profile: Profile, memberships: z.array(Membership), mfa: MfaStatus, sso: SsoStatus, seats: SeatStatus, welcome: z.array(WelcomeEntry),
+});
 export type MeResponse = z.infer<typeof MeResponse>;
 
 export const AcceptTermsBody = z.object({ version: z.string().trim().regex(/^[A-Za-z0-9._-]{1,20}$/) }).strict();
 
 export const SsoJoinBody = z.object({ organisationId: z.string().uuid() }).strict();
+export const SeatReminderBody = z.object({ organisationId: z.string().uuid() }).strict();
+export const WelcomeStepBody = z.object({ organisationId: z.string().uuid(), step: z.enum(['about', 'notifications', 'done']) }).strict();
 export const MoveOwnAccountBody = z.object({ organisationId: z.string().uuid(), password: z.string().min(1).max(200) }).strict();

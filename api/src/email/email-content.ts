@@ -66,6 +66,7 @@ export function notificationPath(entityType: string, entityId: string, details: 
     case 'network_policy_changes':
       return '/Settings/Security';
     case 'organisation_users':
+    case 'seat_requests':
       return '/Settings/Users';
     case 'workflow_notices':
       return workflowRecordPath(d.record_kind, d.record_id);

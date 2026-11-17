@@ -2,7 +2,7 @@ import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse } from '../common/validation';
-import { AcceptTermsBody, MeResponse, MoveOwnAccountBody, SsoJoinBody, UpdateMeBody } from './me.schemas';
+import { AcceptTermsBody, MeResponse, MoveOwnAccountBody, SeatReminderBody, SsoJoinBody, UpdateMeBody, WelcomeStepBody } from './me.schemas';
 import { MeService } from './me.service';
 
 @ApiTags('me')
@@ -37,6 +37,21 @@ export class MeController {
   @ApiOkResponse({ description: 'Join an organisation that lets people at its verified domains join with their company account (only through its own sign-in; 409 sso_rule otherwise)', schema: openApiSchema(MeResponse) })
   ssoJoin(@Ctx() ctx: RequestContext, @Body() body: unknown) {
     return this.me.joinWithCompanyAccount(ctx, parse(SsoJoinBody, body).organisationId);
+  }
+
+  @Post('welcome')
+  @ApiBody({ schema: openApiSchema(WelcomeStepBody) })
+  @ApiOkResponse({ description: 'Your own set-up after joining an organisation: mark a step done (about, notifications, done); works while waiting for a seat', schema: openApiSchema(MeResponse) })
+  welcome(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    const b = parse(WelcomeStepBody, body);
+    return this.me.setWelcomeStep(ctx, b.organisationId, b.step);
+  }
+
+  @Post('seat-reminder')
+  @ApiBody({ schema: openApiSchema(SeatReminderBody) })
+  @ApiOkResponse({ description: 'Waiting for a seat: remind the people who give seats (once a day; 409 subscription_rule otherwise)', schema: openApiSchema(MeResponse) })
+  seatReminder(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.me.remindSeatManagers(ctx, parse(SeatReminderBody, body).organisationId);
   }
 
   @Post('move-to-sso')

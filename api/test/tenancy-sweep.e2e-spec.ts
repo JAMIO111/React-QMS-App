@@ -23,6 +23,8 @@ const UNSCOPED = new Set([
   'GET /api/v1/me',
   'PATCH /api/v1/me',
   'POST /api/v1/me/terms', // the signed-in person's own profile only
+  'POST /api/v1/me/welcome', // the caller's own set-up in an organisation they joined (seats plan SM6); checked in the database
+  'POST /api/v1/me/seat-reminder', // reminds the people who give seats in an organisation where the caller waits for one (seats plan SM4); checked in the database
   'POST /api/v1/me/sso-join', // joins only an organisation whose own company sign-in this session came through (sso plan SS4); checked in the database
   'POST /api/v1/me/move-to-sso', // the person's own accounts only, after the old password is checked (sso plan SS5)
   'POST /api/v1/organisations',

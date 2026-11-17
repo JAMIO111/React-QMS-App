@@ -5,6 +5,9 @@ import LoadingScreen from "./ui/LoadingScreen";
 import FirstSignIn from "./auth/FirstSignIn";
 import SsoRequired from "./SsoRequired";
 import { isCompanyAccount } from "../lib/sso";
+import MemberWelcome, { WelcomeShell } from "./onboarding/MemberWelcome";
+import SeatWaiting from "./onboarding/SeatWaiting";
+import { waitingFor } from "../lib/memberOnboarding";
 
 const Loading = () => (
   <LoadingScreen fullscreen />
@@ -34,6 +37,20 @@ const ProtectedRoute = () => {
   if (ssoRequiredBy.length && !me.data.memberships?.length && !location.pathname.startsWith("/mfa")) return <SsoRequired organisations={ssoRequiredBy} fullPage />;
   // Someone who first arrived through their company's sign-in has not accepted Fortress's terms yet (docs/sso-plan.md SS10).
   if (isCompanyAccount(user) && me.data && !me.data.profile?.termsAcceptedAt) return <FirstSignIn profile={me.data.profile} />;
+  // Someone who has just joined an organisation sets up their own profile first (seats plan SM6); without a seat it ends on the waiting screen.
+  const welcome = me.data?.welcome ?? [];
+  if (welcome.length && !location.pathname.startsWith("/mfa")) {
+    return <MemberWelcome key={welcome[0].id} welcome={welcome[0]} wait={waitingFor(me.data, welcome[0].id)} />;
+  }
+  // Waiting for a seat everywhere they belong (seats plan SM4): nothing else to show until someone gives them one.
+  const waitingIn = me.data?.seats?.waitingIn ?? [];
+  if (waitingIn.length && !me.data.memberships?.length && !location.pathname.startsWith("/mfa")) {
+    return (
+      <WelcomeShell>
+        <SeatWaiting wait={waitingIn[0]} />
+      </WelcomeShell>
+    );
+  }
 
   return <Outlet />;
 };

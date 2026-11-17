@@ -22,6 +22,22 @@ export class MeService {
     });
   }
 
+  /** A member's own set-up after joining (docs/seats-and-member-onboarding-plan.md SM6): about you, how we reach you, done. Allowed while waiting for a seat. */
+  setWelcomeStep(ctx: RequestContext, organisationId: string, step: 'about' | 'notifications' | 'done'): Promise<MeResponse> {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.set_member_onboarding_step(${organisationId}::uuid, ${step})`);
+      return this.load(db, ctx);
+    });
+  }
+
+  /** Waiting for a seat: tells the people who give seats again (docs/seats-and-member-onboarding-plan.md SM4); once a day, else 409 subscription_rule. */
+  remindSeatManagers(ctx: RequestContext, organisationId: string): Promise<MeResponse> {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.remind_seat_managers(${organisationId}::uuid)`);
+      return this.load(db, ctx);
+    });
+  }
+
   /**
    * Moves the person's old password account onto the company account they are signed in with (SS5): they prove the old account with its password,
    * checked against Supabase Auth; the database then moves the membership and the open work.
@@ -111,7 +127,15 @@ export class MeService {
     const ssoBlocked = await db.execute<{ organisation_id: string; name: string; provider_id: string | null; break_glass: boolean }>(
       sql`select organisation_id, name, provider_id, break_glass from app.sso_blocked_organisations()`,
     );
-    const blockedIds = new Set([...blocked.rows, ...ssoBlocked.rows].map((b) => b.organisation_id));
+    // Organisations that enforce packages, where this person is waiting for a seat (docs/seats-and-member-onboarding-plan.md SM3): left out
+    // of `memberships` too (they are not a member until given one), and listed with who can give a seat for the waiting screen.
+    const seatBlocked = await db.execute<{ organisation_id: string; name: string; wait: { managers?: string[]; lastToldAt?: string | null } | null }>(
+      sql`select b.organisation_id, b.name, app.my_seat_wait(b.organisation_id) as wait from app.seat_blocked_organisations() b`,
+    );
+    const welcome = await db.execute<{ organisation_id: string; name: string; about_done: boolean; notifications_done: boolean; waiting_for_seat: boolean }>(
+      sql`select organisation_id, name, about_done, notifications_done, waiting_for_seat from app.my_pending_welcomes()`,
+    );
+    const blockedIds = new Set([...blocked.rows, ...ssoBlocked.rows, ...seatBlocked.rows].map((b) => b.organisation_id));
     // Organisations this company sign-in may join by itself, and password accounts of the same person waiting to be moved across (SS4, SS5).
     const joinable = await db.execute<{ organisation_id: string; name: string; role_name: string }>(
       sql`select organisation_id, name, role_name from app.sso_joinable_organisations()`,
@@ -137,6 +161,21 @@ export class MeService {
         requiredBy: ssoBlocked.rows.map((b) => ({ id: b.organisation_id, name: b.name, providerId: b.provider_id ?? null, breakGlass: Boolean(b.break_glass) })),
         joinable: joinable.rows.map((j) => ({ id: j.organisation_id, name: j.name, roleName: j.role_name })),
         moveCandidates: moves.rows.map((m) => ({ id: m.organisation_id, name: m.name })),
+      },
+      welcome: welcome.rows.map((w) => ({
+        id: w.organisation_id,
+        name: w.name,
+        aboutDone: Boolean(w.about_done),
+        notificationsDone: Boolean(w.notifications_done),
+        waitingForSeat: Boolean(w.waiting_for_seat),
+      })),
+      seats: {
+        waitingIn: seatBlocked.rows.map((b) => ({
+          id: b.organisation_id,
+          name: b.name,
+          managers: b.wait?.managers ?? [],
+          lastToldAt: b.wait?.lastToldAt ? new Date(b.wait.lastToldAt).toISOString() : null,
+        })),
       },
       memberships: memberships.rows.filter((m) => !blockedIds.has(m.organisation_id)).map((m) => ({
         membershipId: m.membership_id,

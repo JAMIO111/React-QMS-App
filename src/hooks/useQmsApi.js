@@ -6,7 +6,7 @@ import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
 
 /** GET /me — profile, memberships and effective permissions (requires the API). */
-export const useMe = () => {
+export const useMe = (options = {}) => {
   const { user } = useAuth();
   return useQuery({
     queryKey: ["api", "me", user?.id],
@@ -14,6 +14,8 @@ export const useMe = () => {
     enabled: !!user,
     staleTime: 1000 * 60,
     retry: false,
+    // e.g. { refetchInterval } while someone waits for a seat (docs/seats-and-member-onboarding-plan.md SM4)
+    ...options,
   });
 };
 

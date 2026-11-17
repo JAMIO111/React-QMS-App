@@ -1,0 +1,42 @@
+---
+const cards = [
+  { k: 'S1', h: 'Walls between organisations', t: 'Every record carries its organisation, and the database itself refuses to show it to anyone else. That is enforced in the data layer, not just in the screens.' },
+  { k: 'S2', h: 'Sign in your way', t: 'Two-factor sign-in, or require your company’s single sign-on (SAML). Keep a break-glass administrator for the day the identity provider is down.' },
+  { k: 'S3', h: 'Know where they connect from', t: 'Limit access to your office and VPN addresses. Try it in monitor mode first and see who would have been blocked before you switch it on.' },
+  { k: 'S4', h: 'The right access, site by site', t: 'Roles, sites and departments decide who can see and change what. Seats decide which parts of the product each person can use.' },
+  { k: 'S5', h: 'Private files', t: 'Evidence, certificates and procedures sit in private storage and open through short-lived links, never public addresses.' },
+  { k: 'S6', h: 'Held in London', t: 'The database, the files and the API all run in London, so your quality records stay in the UK.' },
+];
+---
+<section class="sec on-night blueprint-bg" id="security">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <p class="eyebrow">Sheet 05 · Security</p>
+      <h2>Built like the part has to survive an audit.</h2>
+      <p class="lede">Quality records are evidence. The controls around them are not an add-on.</p>
+    </div>
+    <div class="cards">
+      {cards.map((c, i) => (
+        <article class="card reveal" style={`--d:${(i % 3) * 0.08}s`}>
+          <span class="k">{c.k}</span>
+          <h3>{c.h}</h3>
+          <p>{c.t}</p>
+        </article>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card { position: relative; padding: 26px 24px 28px; border: 1px solid rgba(124, 182, 255, 0.28); border-radius: 4px; background: rgba(5, 7, 12, 0.7); transition: border-color 0.2s, transform 0.2s, background 0.2s; }
+  .card::before, .card::after { content: ""; position: absolute; width: 10px; height: 10px; border: 2px solid var(--bp); }
+  .card::before { left: -2px; top: -2px; border-right: 0; border-bottom: 0; }
+  .card::after { right: -2px; bottom: -2px; border-left: 0; border-top: 0; }
+  .card:hover { border-color: var(--bp); background: rgba(37, 99, 235, 0.1); transform: translateY(-3px); }
+  .k { display: inline-block; font: 500 0.72rem var(--mono); letter-spacing: 0.18em; color: var(--bp); border: 1px solid rgba(124, 182, 255, 0.4); padding: 3px 8px; border-radius: 3px; margin-bottom: 18px; }
+  h3 { margin-bottom: 10px; }
+  .card p { color: rgba(255, 255, 255, 0.68); font-size: 0.94rem; line-height: 1.6; }
+  @media (max-width: 960px) { .cards { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 620px) { .cards { grid-template-columns: 1fr; } }
+</style>

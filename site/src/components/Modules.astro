@@ -1,0 +1,62 @@
+---
+const modules = [
+  { n: 1, name: 'Non-conformances', href: '/help/raise-a-non-conformance', text: 'Internal, customer and supplier NCs from raise to close: containment, disposition, cost, affected lots, RMA numbers.' },
+  { n: 2, name: '8D corrective action', href: '/help/run-an-8d', text: 'Nine steps, root-cause tools, verification that goes stale if the actions change, and a printable report.' },
+  { n: 3, name: 'In-process inspection', href: '/help/inspections-and-jobs', text: 'Control plans, shop-floor jobs and sampling. The database judges every reading against limits frozen when it was taken. CMM files import.' },
+  { n: 4, name: 'Process control (SPC)', text: 'I-MR, X-bar/R, P, NP, C and U charts, Western Electric rules, capability indices and alerts that never raise a non-conformance on their own.' },
+  { n: 5, name: 'Calibration', href: '/help/calibration', text: 'Gauges, recall schedules, as-found and as-left readings. A failed calibration quarantines the gauge and shows what it measured.' },
+  { n: 6, name: 'Audits', text: 'Audit templates with versions, schedules, records with ten answer types, and findings that become non-conformances.' },
+  { n: 7, name: 'Document control', text: 'Revisions, review and approval, read-and-acknowledge, periodic review and stamped controlled PDF copies.' },
+  { n: 8, name: 'Supplier quality', text: 'Approval, certifications, risk, SCARs, goods receiving, incoming inspection, material certificates and scorecards.' },
+  { n: 9, name: 'Production traceability', text: 'Orders, lots and serial numbers, traced from the supplier’s delivery to the non-conformance that named the lot.' },
+  { n: 10, name: 'Risk and management review', text: 'A 5 × 5 risk register with acceptance, quality objectives and management reviews built from live figures.' },
+  { n: 11, name: 'Competence', text: 'Who can do what: skills, positions, assessments, training sessions and a matrix that shows the gaps.' },
+  { n: 12, name: 'Integrations and workflows', href: '/help/import-your-data', text: 'CSV, REST and a connector agent for your databases. Rules that tell people or give them tasks when something happens.' },
+];
+---
+<section class="sec" id="modules">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <p class="eyebrow">Sheet 02 · Parts list</p>
+      <h2>Everything the quality department <span class="pen">actually</span> does, in one assembly.</h2>
+      <p class="lede">Twelve modules that share one set of people, parts, suppliers and records. Raise something in one and it is already linked in the others.</p>
+    </div>
+    <div class="bom reveal" role="table" aria-label="Parts list of Fortress QMS modules">
+      <div class="bom-row bom-head" role="row">
+        <span role="columnheader">Item</span><span role="columnheader">Module</span><span role="columnheader">What it does</span>
+      </div>
+      {modules.map((m, i) => (
+        <div class="bom-row" role="row" style={`--d:${(i % 6) * 0.04}s`}>
+          <span class="item" role="cell"><i>{m.n}</i></span>
+          <span class="name" role="cell">{m.href ? <a href={m.href}>{m.name}</a> : m.name}</span>
+          <span class="text" role="cell">{m.text}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .bom { border: 1.5px solid var(--line-strong); background: var(--paper-2); border-radius: 4px; box-shadow: 8px 8px 0 -1px rgba(37, 99, 235, 0.1); }
+  .bom-row { display: grid; grid-template-columns: 76px minmax(190px, 0.9fr) 2.4fr; align-items: center; border-top: 1px solid var(--line); transition: background 0.18s ease; }
+  .bom-row:first-child { border-top: 0; }
+  .bom-head { font: 500 0.7rem var(--mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); background: rgba(37, 99, 235, 0.07); border-bottom: 1.5px solid var(--line-strong); }
+  .bom-head span { padding: 13px 18px; }
+  .bom-row > span { padding: 18px; }
+  .bom-row:not(.bom-head):hover { background: rgba(37, 99, 235, 0.07); }
+  .item { display: grid; place-items: center; padding-inline: 0 !important; }
+  .item i { font: 500 0.9rem var(--mono); font-style: normal; width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--ink); display: grid; place-items: center; background: var(--paper-2); transition: all 0.18s ease; }
+  .bom-row:not(.bom-head):hover .item i { background: var(--blue); border-color: var(--blue); color: #fff; transform: scale(1.12); }
+  .name { font-weight: 600; font-size: 1.05rem; letter-spacing: -0.01em; }
+  .name a { color: var(--ink); text-decoration-color: var(--blue); text-decoration-thickness: 2px; text-underline-offset: 0.25em; }
+  .name a:hover { color: var(--blue); }
+  .text { color: var(--muted); font-size: 0.96rem; line-height: 1.55; }
+  @media (max-width: 760px) {
+    .bom-head { display: none; }
+    .bom-row { grid-template-columns: 56px 1fr; grid-template-areas: 'item name' '. text'; }
+    .bom-row > span { padding: 14px 14px 0; }
+    .bom-row .item { grid-area: item; align-self: start; padding-top: 14px !important; }
+    .bom-row .name { grid-area: name; }
+    .bom-row .text { grid-area: text; padding-bottom: 16px; padding-top: 4px; }
+  }
+</style>

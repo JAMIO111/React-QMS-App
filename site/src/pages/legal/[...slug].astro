@@ -1,0 +1,36 @@
+---
+import { getCollection, render } from 'astro:content';
+import Doc from '../../layouts/Doc.astro';
+import { COMPANY, CONTACT_EMAIL, LEGAL_REVIEWED, LEGAL_UPDATED } from '../../config';
+
+export async function getStaticPaths() {
+  const all = (await getCollection('legal')).sort((a, b) => a.data.order - b.data.order);
+  return all.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+const { entry } = Astro.props;
+const { Content, headings } = await render(entry);
+---
+<Doc title={entry.data.title} summary={entry.data.summary} eyebrow="Legal" sheet={`06 / LEGAL / ${entry.id.toUpperCase()}`} headings={headings} back={{ href: '/', label: 'Home' }} updated={LEGAL_UPDATED}>
+  {!LEGAL_REVIEWED && (
+    <p class="draft" role="note"><b>Draft.</b> This text is awaiting legal review and may change before it takes effect.</p>
+  )}
+  <aside class="provider" aria-label="Who provides the service">
+    <span class="k">Provider</span>
+    <dl>
+      <dt>Company</dt><dd>{COMPANY.legalName || <span class="todo">Company name to be added</span>}</dd>
+      <dt>Registered office</dt><dd>{COMPANY.registeredAddress || <span class="todo">Address to be added</span>}</dd>
+      <dt>Company number</dt><dd>{COMPANY.companyNumber || <span class="todo">Number to be added</span>}</dd>
+      <dt>Contact</dt><dd><a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a></dd>
+    </dl>
+  </aside>
+  <Content />
+</Doc>
+
+<style>
+  .draft { background: rgba(229, 80, 47, 0.1); border: 1px dashed var(--pen); border-radius: 8px; padding: 12px 16px; font-size: 0.92rem; }
+  .provider { border: 1.5px solid var(--line-strong); background: var(--paper-2); border-radius: 4px; padding: 18px 20px; margin-bottom: 8px; }
+  .k { display: block; font: 500 0.68rem var(--mono); letter-spacing: 0.2em; text-transform: uppercase; color: var(--blue); margin-bottom: 10px; }
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; font-size: 0.92rem; }
+  dt { color: var(--muted); }
+  dd { margin: 0; }
+</style>

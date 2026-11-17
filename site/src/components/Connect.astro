@@ -1,0 +1,51 @@
+---
+const stages = [
+  { n: 'A', h: 'Where it lives today', items: ['CSV or Excel files', 'A REST API', 'SQL Server, PostgreSQL, MySQL', 'Folders on your network'], t: 'A small connector agent sits inside your network and only ever dials out, so you open no inbound firewall ports.' },
+  { n: 'B', h: 'Map it and look first', items: ['Match columns to fields', 'Clean values with steps or formulas', 'See which rows would fail'], t: 'Preview the whole import before anything is written. Fix the source, run it again, and rows that have not changed write nothing.' },
+  { n: 'C', h: 'Fortress', items: ['Parts, suppliers, machines, gauges', 'Employees, production orders', 'Purchase orders and receipts'], t: 'Each record remembers where it came from. You choose, per field, whether the source or Fortress wins when they disagree.' },
+];
+---
+<section class="sec" id="connect">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <p class="eyebrow">Sheet 06 · Interfaces</p>
+      <h2>Bring your data with you.</h2>
+      <p class="lede">You do not start from a blank screen. Import what you already have, and keep it in step with the systems that stay.</p>
+    </div>
+    <div class="flow">
+      {stages.map((s, i) => (
+        <>
+          <article class="stage reveal" style={`--d:${i * 0.12}s`}>
+            <span class="n">{s.n}</span>
+            <h3>{s.h}</h3>
+            <ul>{s.items.map((it) => <li>{it}</li>)}</ul>
+            <p>{s.t}</p>
+          </article>
+          {i < stages.length - 1 && <div class="link" aria-hidden="true"><i></i></div>}
+        </>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .flow { display: grid; grid-template-columns: 1fr 56px 1fr 56px 1fr; align-items: stretch; }
+  .stage { position: relative; background: var(--paper-2); border: 1.5px solid var(--line-strong); border-radius: 4px; padding: 28px 24px 26px; display: grid; gap: 14px; align-content: start; }
+  .n { position: absolute; top: -17px; left: 20px; width: 34px; height: 34px; display: grid; place-items: center; background: var(--blue); color: #fff; font: 500 0.95rem var(--mono); border-radius: 50%; box-shadow: 0 0 0 5px var(--paper); }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+  li { font: 500 0.82rem var(--mono); padding: 7px 10px; border: 1px dashed var(--line-strong); border-radius: 4px; }
+  .stage p { color: var(--muted); font-size: 0.92rem; line-height: 1.58; }
+  .link { align-self: center; height: 2px; position: relative; background: repeating-linear-gradient(90deg, var(--blue) 0 7px, transparent 7px 13px); }
+  .link::after { content: ""; position: absolute; right: -2px; top: -5px; border: 6px solid transparent; border-left: 10px solid var(--blue); }
+  .link i { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); top: -3px; left: 0; animation: travel 2.4s linear infinite; }
+  @keyframes travel { to { left: calc(100% - 8px); } }
+  @media (prefers-reduced-motion: reduce) { .link i { animation: none; left: 45%; } }
+  @media (max-width: 960px) {
+    .flow { grid-template-columns: 1fr; gap: 0; }
+    .link { width: 2px; height: 44px; justify-self: center; background: repeating-linear-gradient(180deg, var(--blue) 0 7px, transparent 7px 13px); }
+    .link::after { right: auto; left: -5px; top: auto; bottom: -2px; border: 6px solid transparent; border-top: 10px solid var(--blue); border-left-color: transparent; }
+    .link i { display: none; }
+    .stage { margin-top: 18px; }
+    .link + .stage { margin-top: 18px; }
+  }
+</style>

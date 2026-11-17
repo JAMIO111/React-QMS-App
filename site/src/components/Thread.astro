@@ -1,0 +1,51 @@
+---
+const nodes = [
+  { ref: 'GR-26-0112', label: 'Goods receipt', text: 'Steel bar arrives against the order. The lot is made, and held until it is inspected when your rules say so.' },
+  { ref: 'HT-2219', label: 'Lot', text: 'Every later record can name this lot, so the question “where did it go?” has an answer.' },
+  { ref: 'WO-8841', label: 'Production order', text: 'Machined on a named machine, against a named control plan revision.' },
+  { ref: 'IPI-26-0387', label: 'Inspection', text: 'A reading fails. It must be acknowledged or raised. It cannot be left.' },
+  { ref: 'NC-26-0042', label: 'Non-conformance', text: 'Raised from the reading, naming the affected lot, with containment and a disposition.' },
+  { ref: 'CAPA-000019', label: '8D', text: 'Root cause verified, actions done, effectiveness checked, then closed.' },
+];
+---
+<section class="sec on-night blueprint-bg" id="traceability">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <p class="eyebrow">Sheet 03 · Traceability</p>
+      <h2>One thread from the supplier&rsquo;s lot to the closed 8D.</h2>
+      <p class="lede">Search an order, lot or serial number and see every receipt, inspection, non-conformance and 8D that touched it, on one page you can print.</p>
+    </div>
+    <ol class="thread">
+      {nodes.map((n, i) => (
+        <li class="reveal" style={`--d:${i * 0.12}s`}>
+          <span class="dot"><i>{i + 1}</i></span>
+          <code>{n.ref}</code>
+          <h3>{n.label}</h3>
+          <p>{n.text}</p>
+        </li>
+      ))}
+    </ol>
+    <p class="eg">Example references. Yours follow your own numbering.</p>
+  </div>
+</section>
+
+<style>
+  .thread { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, 1fr); gap: 0 22px; position: relative; }
+  .thread::before { content: ""; position: absolute; left: 20px; right: 20px; top: 20px; height: 2px; background: linear-gradient(90deg, var(--bp) 0 50%, transparent 50% 100%); background-size: 12px 2px; opacity: 0.55; }
+  .thread li { position: relative; display: grid; gap: 8px; align-content: start; }
+  .dot { width: 42px; height: 42px; border-radius: 50%; background: var(--night); border: 2px solid var(--bp); display: grid; place-items: center; position: relative; z-index: 1; box-shadow: 0 0 0 6px var(--night), 0 0 28px -4px rgba(124, 182, 255, 0.7); margin-bottom: 8px; }
+  .dot i { font: 500 0.85rem var(--mono); font-style: normal; color: var(--bp); }
+  li:last-child .dot { background: var(--blue); border-color: var(--blue); }
+  li:last-child .dot i { color: #fff; }
+  code { font: 500 0.78rem var(--mono); color: var(--bp); letter-spacing: 0.04em; }
+  h3 { font-size: 1.1rem; }
+  .thread p { color: rgba(255, 255, 255, 0.66); font-size: 0.9rem; line-height: 1.55; }
+  .eg { margin-top: 34px; font: 400 0.74rem var(--mono); letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.42); text-transform: uppercase; }
+  @media (max-width: 1000px) {
+    .thread { grid-template-columns: 1fr; gap: 0; }
+    .thread::before { left: 20px; right: auto; top: 20px; bottom: 40px; width: 2px; height: auto; background: repeating-linear-gradient(180deg, var(--bp) 0 6px, transparent 6px 12px); }
+    .thread li { padding: 0 0 28px 66px; }
+    .dot { position: absolute; left: 0; top: 0; margin: 0; }
+    .thread li code { padding-top: 2px; }
+  }
+</style>

@@ -1,0 +1,24 @@
+---
+import { LOGIN_URL, NAV } from '../config';
+const { path } = Astro.props;
+const current = (href: string) => {
+  const clean = href.split('#')[0] || '/';
+  if (href.includes('#')) return false;
+  return clean !== '/' && (path === clean || path.startsWith(clean + '/'));
+};
+---
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="/" aria-label="Fortress QMS home">
+      <img src="/fortress-qms-mark.png" alt="" width="32" height="30" />
+      <span>Fortress<b>QMS</b></span>
+    </a>
+    <nav id="nav-links" class="nav-links" aria-label="Main">
+      {NAV.map((l) => <a href={l.href} aria-current={current(l.href) ? 'page' : undefined}>{l.label}</a>)}
+    </nav>
+    <a class="btn btn-primary" href={LOGIN_URL}>Log in <span class="arrow" aria-hidden="true">→</span></a>
+    <button class="burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-links">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+    </button>
+  </div>
+</header>

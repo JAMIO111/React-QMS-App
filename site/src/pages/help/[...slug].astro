@@ -1,0 +1,26 @@
+---
+import { getCollection, render } from 'astro:content';
+import Doc from '../../layouts/Doc.astro';
+
+export async function getStaticPaths() {
+  const all = (await getCollection('docs')).sort((a, b) => a.data.order - b.data.order);
+  return all.map((entry, i) => ({
+    params: { slug: entry.id },
+    props: { entry, prev: all[i - 1], next: all[i + 1] },
+  }));
+}
+const { entry, prev, next } = Astro.props;
+const { Content, headings } = await render(entry);
+const link = (d?: typeof entry) => (d ? { href: `/help/${d.id}`, title: d.data.title } : undefined);
+---
+<Doc
+  title={entry.data.title}
+  summary={entry.data.summary}
+  eyebrow={`Help · ${entry.data.group}`}
+  sheet={`03 / HELP / ${String(entry.data.order).padStart(2, '0')}`}
+  headings={headings}
+  back={{ href: '/help', label: 'All guides' }}
+  prev={link(prev)}
+  next={link(next)}>
+  <Content />
+</Doc>

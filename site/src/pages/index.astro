@@ -1,0 +1,35 @@
+---
+import Base from '../layouts/Base.astro';
+import Hero from '../components/Hero.astro';
+import Modules from '../components/Modules.astro';
+import Thread from '../components/Thread.astro';
+import AuditLog from '../components/AuditLog.astro';
+import Security from '../components/Security.astro';
+import Connect from '../components/Connect.astro';
+import FinalCta from '../components/FinalCta.astro';
+import { SITE_NAME, SITE_URL } from '../config';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    { '@type': 'Organization', name: SITE_NAME, url: SITE_URL, logo: `${SITE_URL}/fortress-qms.png` },
+    {
+      '@type': 'SoftwareApplication',
+      name: SITE_NAME,
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web',
+      description: 'A quality management system for manufacturers.',
+      url: SITE_URL,
+    },
+  ],
+};
+---
+<Base sheet="01 / HOME" jsonLd={jsonLd}>
+  <Hero />
+  <Modules />
+  <Thread />
+  <AuditLog />
+  <Security />
+  <Connect />
+  <FinalCta />
+</Base>

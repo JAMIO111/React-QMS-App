@@ -1,0 +1,103 @@
+---
+import '@fontsource/poppins/latin-400.css';
+import '@fontsource/poppins/latin-500.css';
+import '@fontsource/poppins/latin-600.css';
+import '@fontsource/poppins/latin-700.css';
+import '@fontsource/ibm-plex-mono/latin-400.css';
+import '@fontsource/ibm-plex-mono/latin-500.css';
+import '../styles/global.css';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import { SITE_NAME, SITE_URL, TAGLINE } from '../config';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** Shown in the footer's title block, like a sheet number: "03 / FAQ". */
+  sheet?: string;
+  noindex?: boolean;
+  jsonLd?: object;
+}
+const {
+  title,
+  description = 'Fortress QMS keeps non-conformances, 8Ds, inspection, calibration, audits and documents in one secure, traceable record for manufacturers.',
+  sheet = '01 / HOME',
+  noindex = false,
+  jsonLd,
+} = Astro.props;
+
+const fullTitle = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} | ${TAGLINE}`;
+const canonical = new URL(Astro.url.pathname.replace(/\/$/, '') || '/', SITE_URL).toString();
+const og = `${SITE_URL}/og.png`;
+---
+<!doctype html>
+<html lang="en-GB" class="no-js">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script is:inline>document.documentElement.className = 'js';</script>
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex" />}
+    <meta name="theme-color" content="#05070c" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={og} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={og} />
+    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <div class="frame" aria-hidden="true">
+      <div class="row top">{[1, 2, 3, 4, 5, 6, 7, 8].map((n) => <span>{n}</span>)}</div>
+      <div class="row bottom">{[1, 2, 3, 4, 5, 6, 7, 8].map((n) => <span>{n}</span>)}</div>
+      <div class="col left">{['A', 'B', 'C', 'D', 'E', 'F'].map((n) => <span>{n}</span>)}</div>
+      <div class="col right">{['A', 'B', 'C', 'D', 'E', 'F'].map((n) => <span>{n}</span>)}</div>
+    </div>
+    <Nav path={Astro.url.pathname} />
+    <main id="main">
+      <slot />
+    </main>
+    <Footer sheet={sheet} />
+    <script>
+      // Scroll reveals and the red pen drawing itself.
+      const seen = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (!e.isIntersecting) continue;
+            e.target.classList.add('in', 'drawn');
+            seen.unobserve(e.target);
+          }
+        },
+        { threshold: 0.18, rootMargin: '0px 0px -6% 0px' },
+      );
+      document.querySelectorAll('.reveal, .pen').forEach((el) => seen.observe(el));
+
+      // The phone menu.
+      const burger = document.querySelector<HTMLButtonElement>('.burger');
+      const links = document.getElementById('nav-links');
+      burger?.addEventListener('click', () => {
+        const open = links?.classList.toggle('open') ?? false;
+        burger.setAttribute('aria-expanded', String(open));
+      });
+      links?.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('a')) {
+          links.classList.remove('open');
+          burger?.setAttribute('aria-expanded', 'false');
+        }
+      });
+    </script>
+  </body>
+</html>

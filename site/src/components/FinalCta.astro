@@ -1,0 +1,26 @@
+---
+import { SIGNUP_URL, TRIAL_DAYS } from '../config';
+---
+<section class="cta on-night blueprint-bg">
+  <div class="wrap in">
+    <p class="eyebrow">Sheet 07 · Release</p>
+    <h2 class="reveal">Bring your quality system out of the <span class="pen">filing cabinet<svg viewBox="0 0 400 80" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M16 42 C10 14 140 6 240 10 C350 14 396 30 380 52 C360 74 150 78 60 66 C18 60 4 46 12 30" /></svg></span>.</h2>
+    <p class="lede reveal">Start a {TRIAL_DAYS}-day trial, set up your sites and invite the team. If you would like to see it first, tell us what you make and we will show you.</p>
+    <div class="row reveal">
+      <a class="btn btn-primary" href={SIGNUP_URL}>Start your {TRIAL_DAYS}-day trial <span class="arrow" aria-hidden="true">→</span></a>
+      <a class="btn btn-ghost" href="/contact">Talk to us</a>
+    </div>
+    <p class="small reveal">A card is needed to start the trial. You can manage or cancel it from the billing page at any time.</p>
+  </div>
+</section>
+
+<style>
+  .cta { padding-block: clamp(72px, 10vw, 140px); text-align: center; position: relative; overflow: hidden; }
+  .cta::before { content: ""; position: absolute; left: 50%; top: 50%; width: 760px; height: 760px; transform: translate(-50%, -50%); border-radius: 50%; background: rgba(37, 99, 235, 0.22); filter: blur(140px); }
+  .in { position: relative; display: grid; justify-items: center; gap: 24px; }
+  .in .eyebrow { margin: 0; }
+  h2 { max-width: 16em; font-size: clamp(2.1rem, 5vw, 3.8rem); }
+  .lede { color: rgba(255, 255, 255, 0.72); }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 6px; }
+  .small { font-size: 0.82rem; color: rgba(255, 255, 255, 0.5); max-width: 36em; }
+</style>

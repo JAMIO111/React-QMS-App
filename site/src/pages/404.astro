@@ -1,0 +1,25 @@
+---
+import Base from '../layouts/Base.astro';
+import { LOGIN_URL } from '../config';
+---
+<Base title="Page not found" sheet="00 / NOT FOUND" noindex>
+  <section class="nf on-night blueprint-bg">
+    <div class="wrap">
+      <p class="eyebrow">Error 404 · Out of tolerance</p>
+      <h1>This page is not on the drawing.</h1>
+      <p class="lede">The address may have changed, or it never existed. Here is where to go from here.</p>
+      <div class="row">
+        <a class="btn btn-primary" href="/">Back to the start</a>
+        <a class="btn btn-ghost" href="/help">Help guides</a>
+        <a class="btn btn-ghost" href={LOGIN_URL}>Log in</a>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .nf { min-height: 70vh; display: grid; align-items: center; padding-block: 80px; }
+  h1 { max-width: 14em; margin-block: 8px 20px; }
+  .lede { color: rgba(255, 255, 255, 0.72); }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+</style>

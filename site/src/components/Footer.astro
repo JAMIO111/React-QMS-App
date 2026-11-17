@@ -1,0 +1,60 @@
+---
+import { CONTACT_EMAIL, LOGIN_URL, REVISION, SIGNUP_URL, TAGLINE } from '../config';
+const { sheet = '01 / HOME' } = Astro.props;
+const year = new Date().getFullYear();
+---
+<footer class="tb on-night blueprint-bg">
+  <div class="wrap">
+    <div class="tb-grid">
+      <div class="tb-cell tb-logo">
+        <a class="brand" href="/"><img src="/fortress-qms-mark.png" alt="" width="32" height="30" /><span>Fortress<b>QMS</b></span></a>
+        <p>{TAGLINE}. Records that hold up on the day somebody asks.</p>
+      </div>
+      <div class="tb-cell">
+        <span class="tb-k">Product</span>
+        <ul>
+          <li><a href="/#modules">Modules</a></li>
+          <li><a href="/#traceability">Traceability</a></li>
+          <li><a href="/#security">Security</a></li>
+          <li><a href="/#connect">Integrations</a></li>
+          <li><a href={SIGNUP_URL}>Start free trial</a></li>
+          <li><a href={LOGIN_URL}>Log in</a></li>
+        </ul>
+      </div>
+      <div class="tb-cell">
+        <span class="tb-k">Resources</span>
+        <ul>
+          <li><a href="/help">Help and guides</a></li>
+          <li><a href="/faq">FAQ</a></li>
+          <li><a href="/about">About</a></li>
+          <li><a href="/contact">Contact</a></li>
+          <li><a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a></li>
+        </ul>
+      </div>
+      <div class="tb-cell">
+        <span class="tb-k">Legal</span>
+        <ul>
+          <li><a href="/legal/terms">Terms of service</a></li>
+          <li><a href="/legal/privacy">Privacy policy</a></li>
+          <li><a href="/legal/cookies">Cookie policy</a></li>
+        </ul>
+      </div>
+      <div class="tb-cell tb-meta">
+        <span class="tb-k">Title block</span>
+        <dl>
+          <dt>Title</dt><dd>Fortress QMS</dd>
+          <dt>Sheet</dt><dd>{sheet}</dd>
+          <dt>Rev</dt><dd>{REVISION}</dd>
+          <dt>Scale</dt><dd>1:1</dd>
+        </dl>
+      </div>
+    </div>
+    <p class="tb-notes">
+      <span>Notes:</span><span>1. All records append-only.</span><span>2. Limits frozen at time of measurement.</span><span>3. Do not scale from this drawing.</span>
+    </p>
+    <div class="tb-base">
+      <span>© {year} Fortress QMS. All rights reserved.</span>
+      <span>Data held in London.</span>
+    </div>
+  </div>
+</footer>

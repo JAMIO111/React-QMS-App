@@ -1,0 +1,19 @@
+---
+const { eyebrow, title, lede } = Astro.props;
+---
+<header class="ph on-night blueprint-bg">
+  <div class="glow" aria-hidden="true"></div>
+  <div class="wrap">
+    <p class="eyebrow">{eyebrow}</p>
+    <h1><slot name="title">{title}</slot></h1>
+    {lede && <p class="lede">{lede}</p>}
+    <slot />
+  </div>
+</header>
+
+<style>
+  .ph { position: relative; overflow: hidden; padding-block: clamp(56px, 8vw, 104px) clamp(44px, 6vw, 80px); isolation: isolate; }
+  .glow { position: absolute; z-index: -1; right: -10%; top: -30%; width: 560px; height: 560px; border-radius: 50%; background: rgba(37, 99, 235, 0.24); filter: blur(130px); }
+  h1 { font-size: clamp(2.2rem, 5vw, 3.9rem); max-width: 15em; }
+  .lede { margin-top: 22px; color: rgba(255, 255, 255, 0.72); }
+</style>

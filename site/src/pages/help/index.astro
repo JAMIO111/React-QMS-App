@@ -1,0 +1,75 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import { CONTACT_EMAIL } from '../../config';
+
+const all = (await getCollection('docs')).sort((a, b) => a.data.order - b.data.order);
+const groups = [...new Set(all.map((d) => d.data.group))].map((g) => ({ name: g, docs: all.filter((d) => d.data.group === g) }));
+---
+<Base title="Help and guides" sheet="03 / HELP" description="Guides for setting up Fortress QMS, inviting your team and working with non-conformances, 8Ds, inspections, calibration, security and imports.">
+  <PageHead eyebrow="Sheet 03 · Help" title="Guides, in plain words." lede="Short, practical guides to the things people do first. Search, or browse by topic." />
+
+  <section class="sec">
+    <div class="wrap">
+      <div class="search reveal">
+        <label for="q" class="sr-only">Search the guides</label>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+        <input id="q" type="search" placeholder="Search guides: invite, 8D, calibration, import…" autocomplete="off" />
+      </div>
+      <p id="none" class="none" hidden>No guide matches that. Try another word, or <a href="/contact">ask us</a>.</p>
+      {groups.map((g) => (
+        <section class="group" data-group>
+          <h2>{g.name}</h2>
+          <div class="cards">
+            {g.docs.map((d, i) => (
+              <a class="card reveal" style={`--d:${i * 0.05}s`} href={`/help/${d.id}`} data-text={`${d.data.title} ${d.data.summary}`.toLowerCase()}>
+                <span class="n">{String(d.data.order).padStart(2, '0')}</span>
+                <h3>{d.data.title}</h3>
+                <p>{d.data.summary}</p>
+                <span class="go" aria-hidden="true">Read →</span>
+              </a>
+            ))}
+          </div>
+        </section>
+      ))}
+      <p class="foot">Cannot find it? Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</p>
+    </div>
+  </section>
+</Base>
+
+<script>
+  const q = document.getElementById('q') as HTMLInputElement;
+  const cards = Array.from(document.querySelectorAll<HTMLElement>('.card'));
+  const groups = Array.from(document.querySelectorAll<HTMLElement>('[data-group]'));
+  const none = document.getElementById('none')!;
+  q.addEventListener('input', () => {
+    const words = q.value.toLowerCase().split(/\s+/).filter(Boolean);
+    cards.forEach((c) => {
+      const hit = words.every((w) => c.dataset.text!.includes(w));
+      c.hidden = !hit;
+      if (hit) c.classList.add('in');
+    });
+    groups.forEach((g) => (g.hidden = !g.querySelector('.card:not([hidden])')));
+    none.hidden = cards.some((c) => !c.hidden);
+  });
+</script>
+
+<style>
+  .search { position: relative; max-width: 40rem; margin-bottom: 48px; }
+  .search svg { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--blue); }
+  .search input { width: 100%; font: 400 1.05rem var(--font); padding: 16px 18px 16px 52px; border-radius: 999px; border: 1.5px solid var(--line-strong); background: var(--paper-2); color: var(--ink); }
+  .search input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.18); }
+  .group { margin-bottom: 56px; }
+  .group h2 { font-size: 1.5rem; margin-bottom: 18px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+  .card { display: grid; gap: 8px; align-content: start; padding: 24px 22px 22px; background: var(--paper-2); border: 1.5px solid var(--line-strong); border-radius: 4px; text-decoration: none; color: var(--ink); position: relative; transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease; }
+  .card[hidden] { display: none; }
+  .card:hover { transform: translateY(-3px); border-color: var(--blue); box-shadow: 6px 6px 0 -1px rgba(37, 99, 235, 0.18); }
+  .n { font: 500 0.78rem var(--mono); color: var(--blue); letter-spacing: 0.16em; }
+  .card h3 { font-size: 1.15rem; }
+  .card p { color: var(--muted); font-size: 0.93rem; line-height: 1.55; }
+  .go { font-weight: 600; font-size: 0.88rem; color: var(--blue); margin-top: 6px; }
+  .none { color: var(--muted); margin-bottom: 32px; }
+  .foot { color: var(--muted); }
+</style>

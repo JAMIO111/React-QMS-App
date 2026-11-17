@@ -1,0 +1,70 @@
+---
+const entries = [
+  { t: '09:14:02', who: 'C. Boateng', ref: 'NC-26-0042', what: 'Severity', from: 'Minor', to: 'Major', why: 'Customer escalated the complaint', pen: true },
+  { t: '09:31:47', who: 'A. Patel', ref: 'CAPA-000019', what: 'Step D4 completed', why: 'Root cause verified by trial run' },
+  { t: '10:02:15', who: 'S. Ellis', ref: 'CAL-26-118', what: 'Gauge G-0447 quarantined', why: 'Out of tolerance as found' },
+  { t: '10:20:09', who: 'M. Rowe', ref: 'SOP-014', what: 'Revision C made effective', why: 'Approved for today' },
+  { t: '11:45:33', who: 'L. Novak', ref: 'AR-26-0031', what: 'Finding AF-26-0058 raised', why: 'Guard interlock not tested' },
+];
+---
+<section class="sec" id="trail">
+  <div class="wrap grid">
+    <div class="copy reveal">
+      <p class="eyebrow">Sheet 04 · Revision history</p>
+      <h2>Every change has a name, a time and a <span class="pen">reason<svg viewBox="0 0 200 70" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M14 38 C10 12 80 4 130 8 C184 12 198 30 184 48 C168 66 70 70 30 58 C8 50 6 36 20 26" /></svg></span>.</h2>
+      <p class="lede">The audit trail is append-only. Nobody in the app can edit or delete it, so the history you show an auditor is the history that happened.</p>
+      <ul class="points">
+        <li>Reasons are required for the changes that matter: reopening a step, changing a source, correcting a reading.</li>
+        <li>Completed steps lock. Reopening one is a recorded act with its own reason.</li>
+        <li>If two people edit one record, the second is told who changed what, and nothing is overwritten silently.</li>
+      </ul>
+    </div>
+    <div class="log reveal" style="--d:0.15s" role="figure" aria-label="Example audit trail entries">
+      <div class="bar"><i></i><i></i><i></i><span>audit.events &nbsp;·&nbsp; append only</span></div>
+      <ol>
+        {entries.map((e) => (
+          <li>
+            <time>{e.t}</time>
+            <div>
+              <p><b>{e.who}</b> <code>{e.ref}</code></p>
+              <p class="what">
+                {e.what}
+                {e.from && <> <s>{e.from}</s> <span class="arrow">→</span> <strong class:list={{ pen: e.pen }}>{e.to}{e.pen && <svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M8 22 C6 6 40 2 62 4 C90 6 98 16 90 28 C80 40 34 38 14 32 C2 28 4 18 12 12" /></svg>}</strong></>}
+              </p>
+              <p class="why">&ldquo;{e.why}&rdquo;</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <p class="cap">Example entries</p>
+    </div>
+  </div>
+</section>
+
+<style>
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(32px, 6vw, 80px); align-items: center; }
+  .copy { display: grid; gap: 22px; justify-items: start; }
+  .copy .eyebrow { margin: 0; }
+  .points { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 14px; }
+  .points li { position: relative; padding-left: 30px; color: var(--muted); font-size: 0.97rem; }
+  .points li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 16px; height: 2px; background: var(--blue); }
+  .log { background: var(--night); color: #fff; border-radius: var(--radius); border: 1px solid rgba(124, 182, 255, 0.3); box-shadow: 0 40px 80px -40px rgba(5, 7, 12, 0.7), 10px 10px 0 -2px rgba(37, 99, 235, 0.22); overflow: hidden; }
+  .bar { display: flex; align-items: center; gap: 7px; padding: 12px 16px; border-bottom: 1px solid rgba(124, 182, 255, 0.2); background: rgba(124, 182, 255, 0.06); }
+  .bar i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); }
+  .bar span { margin-left: 8px; font: 400 0.72rem var(--mono); color: var(--bp); }
+  .log ol { list-style: none; margin: 0; padding: 6px 0; }
+  .log li { display: grid; grid-template-columns: 84px 1fr; gap: 10px; padding: 14px 18px; border-top: 1px solid rgba(124, 182, 255, 0.1); }
+  .log li:first-child { border-top: 0; }
+  time { font: 400 0.76rem var(--mono); color: rgba(255, 255, 255, 0.45); padding-top: 3px; }
+  p { font-size: 0.92rem; line-height: 1.5; }
+  p b { font-weight: 600; }
+  .log code { font: 500 0.76rem var(--mono); color: var(--bp); margin-left: 8px; }
+  .what { color: rgba(255, 255, 255, 0.86); }
+  .what s { color: rgba(255, 255, 255, 0.45); }
+  .what strong { font-weight: 600; color: #fff; }
+  .arrow { color: var(--bp); }
+  .why { color: rgba(255, 255, 255, 0.55); font-style: italic; font-size: 0.86rem; }
+  .cap { padding: 10px 18px 14px; font: 400 0.7rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255, 255, 255, 0.35); border-top: 1px solid rgba(124, 182, 255, 0.1); }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 480px) { .log li { grid-template-columns: 1fr; gap: 2px; } }
+</style>

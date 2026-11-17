@@ -1,0 +1,307 @@
+---
+import { SIGNUP_URL, TRIAL_DAYS } from '../config';
+
+// Six bolt holes round the bolt circle.
+const cx = 250;
+const cy = 215;
+const holes = Array.from({ length: 6 }, (_, i) => {
+  const a = (Math.PI / 3) * i + Math.PI / 6;
+  return [+(cx + 112 * Math.cos(a)).toFixed(1), +(cy + 112 * Math.sin(a)).toFixed(1)];
+});
+---
+<section class="hero on-night blueprint-bg" id="top">
+  <div class="glow" aria-hidden="true"></div>
+  <div class="cross" aria-hidden="true"><i class="h"></i><i class="v"></i><b>X 000.0 &nbsp;Y 000.0</b></div>
+  <div class="wrap hero-in">
+    <div class="copy">
+      <p class="eyebrow">Quality management for manufacturing</p>
+      <h1>Quality, drawn to <span class="pen">tolerance<svg viewBox="0 0 300 80" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M18 44 C14 14 110 4 190 8 C262 12 296 30 280 52 C262 74 120 78 54 66 C20 60 6 46 12 30" /></svg></span>.</h1>
+      <p class="lede">
+        Fortress QMS is the quality system for manufacturers. Non-conformances, 8Ds, inspection, calibration and audits share one
+        traceable record, so the answer is already on file when someone asks.
+      </p>
+      <div class="cta">
+        <a class="btn btn-primary" href={SIGNUP_URL}>Start your {TRIAL_DAYS}-day trial <span class="arrow" aria-hidden="true">→</span></a>
+        <a class="btn btn-ghost" href="#modules">See what is in it</a>
+      </div>
+      <ul class="facts">
+        <li>Data held in London</li>
+        <li>Two-factor and SAML SSO</li>
+        <li>Append-only audit trail</li>
+      </ul>
+    </div>
+
+    <div class="stage">
+      <svg class="drawing" viewBox="0 0 580 460" fill="none" role="img" aria-label="Engineering drawing of a flange with a bore, six bolt holes and dimensions">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#7cb6ff" /></marker>
+        </defs>
+        <g class="draw" stroke="#7cb6ff" stroke-width="1.5">
+          <circle class="d" pathLength="1" cx={cx} cy={cy} r="170" style="--i:0s" />
+          <circle id="bore" class="d bore" pathLength="1" cx={cx} cy={cy} r="70" style="--i:0.3s" stroke-width="2" />
+          {holes.map(([x, y], i) => <circle class="d" pathLength="1" cx={x} cy={y} r="14" style={`--i:${0.6 + i * 0.12}s`} />)}
+          <circle class="cl" cx={cx} cy={cy} r="112" stroke-dasharray="14 5 3 5" stroke-opacity="0.55" />
+          <path class="cl" d={`M${cx - 200} ${cy}H${cx + 200}M${cx} ${cy - 200}V${cy + 200}`} stroke-dasharray="22 6 4 6" stroke-opacity="0.5" />
+          <!-- Overall diameter -->
+          <path class="d" pathLength="1" d="M80 428H420" marker-start="url(#arr)" marker-end="url(#arr)" style="--i:1.5s" stroke-width="1" />
+          <path class="d" pathLength="1" d="M80 392V438M420 392V438" style="--i:1.6s" stroke-opacity="0.55" stroke-width="1" />
+          <!-- Hole note -->
+          <path class="d" pathLength="1" d={`M${holes[5][0] + 8} ${holes[5][1] - 10}L${cx + 150} 62H${cx + 215}`} style="--i:1.7s" stroke-width="1" />
+          <!-- Datum A -->
+          <path class="d" pathLength="1" d="M34 215H80M34 201v28h-22v-28z" style="--i:1.8s" stroke-width="1" />
+          <!-- Feature control frame -->
+          <path class="d" pathLength="1" d="M12 64h158v32H12zM44 64v32M120 64v32" style="--i:1.9s" stroke-width="1" />
+          <circle class="d" pathLength="1" cx="28" cy="80" r="7" style="--i:2s" stroke-width="1" />
+          <path class="d" pathLength="1" d="M28 70v20M18 80h20" style="--i:2.05s" stroke-width="1" />
+          <!-- Live reading leader -->
+          <path id="leader" class="d" pathLength="1" d={`M${cx + 70} ${cy}H${cx + 215}`} style="--i:2.1s" stroke-width="1" />
+        </g>
+        <g class="text" fill="#9cc8ff" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="14" letter-spacing="1">
+          <text x="228" y="420">Ø340</text>
+          <text x={cx + 150} y="54">6× Ø28 EQ SP</text>
+          <text x="50" y="85" font-size="12">Ø0.05</text>
+          <text x="128" y="85" font-size="12">A</text>
+          <text x="17" y="219">A</text>
+          <text x="196" y="262" fill-opacity="0.55" font-size="11">PCD Ø224</text>
+        </g>
+        <g id="live" class="live" font-family="IBM Plex Mono, ui-monospace, monospace" data-state="ok">
+          <rect x={cx + 217} y={cy - 22} width="106" height="44" rx="6" stroke-width="2" />
+          <text id="live-v" x={cx + 270} y={cy + 1} text-anchor="middle" font-size="16" font-weight="500">124.018</text>
+          <text x={cx + 270} y={cy + 15} text-anchor="middle" font-size="10" letter-spacing="2" fill-opacity="0.75">BORE · H7</text>
+        </g>
+      </svg>
+
+      <section class="demo" aria-labelledby="demo-title">
+        <header class="demo-head">
+          <span class="tag">Try it</span>
+          <h2 id="demo-title">Measure the bore</h2>
+          <span class="note">Illustration, made-up numbers</span>
+        </header>
+        <p class="spec"><span>Ø124 H7</span> Limits <b>124.000</b> to <b>124.040</b> mm</p>
+        <div class="slider">
+          <div class="rail" aria-hidden="true"><i class="band"></i></div>
+          <input id="reading" type="range" min="123.94" max="124.1" step="0.001" value="124.018" aria-label="Measured bore diameter in millimetres" />
+          <div class="ticks" aria-hidden="true"><span>123.940</span><span>124.000</span><span>124.040</span><span>124.100</span></div>
+        </div>
+        <div class="result">
+          <output id="verdict" class="verdict ok" for="reading" aria-live="polite">
+            <svg class="ico ok-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="m8.5 12.5 2.5 2.5 5-5.5" /></svg>
+            <svg class="ico bad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="m15 9-6 6M9 9l6 6" /></svg>
+            <span class="num" id="verdict-num">124.018</span>
+            <span class="word" id="verdict-word">In tolerance</span>
+          </output>
+          <button id="raise" class="raise" type="button" hidden>Raise non-conformance <span aria-hidden="true">→</span></button>
+          <span id="hint" class="hint">Drag the slider past <b>124.040</b></span>
+        </div>
+        <div id="flow" class="flow" hidden>
+          <p id="flow-text" class="flow-text" role="status">Non-conformance drafted from the reading.</p>
+          <ol class="steps" aria-label="The eight disciplines of an 8D, plus the start">
+            {['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'].map((d) => <li>{d}</li>)}
+          </ol>
+          <button id="reset" class="reset" type="button">Start again</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero { position: relative; overflow: hidden; padding-block: clamp(48px, 7vw, 96px) clamp(56px, 7vw, 104px); isolation: isolate; }
+  .glow { position: absolute; z-index: -1; left: -12%; top: 8%; width: 640px; height: 640px; border-radius: 50%; background: rgba(37, 99, 235, 0.26); filter: blur(130px); }
+  .hero-in { display: grid; grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 72px); align-items: start; }
+  .hero-in { position: relative; z-index: 1; }
+  .copy { padding-top: clamp(8px, 3vw, 40px); display: grid; gap: 26px; align-content: start; }
+  .copy .eyebrow { margin: 0; }
+  .lede { color: rgba(255, 255, 255, 0.74); }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+  .facts { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; font: 500 0.68rem/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--bp); }
+  .facts li { display: inline-flex; align-items: center; gap: 9px; }
+  .facts li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--bp); box-shadow: 0 0 12px var(--bp); }
+
+  .stage { display: grid; gap: 18px; min-width: 0; }
+  .drawing { width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 0 30px rgba(37, 99, 235, 0.18)); }
+  .bore { transition: r 0.12s linear; }
+  .draw .d { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  :global(.js) .draw .d { animation: draw 1.7s cubic-bezier(0.6, 0, 0.2, 1) forwards; animation-delay: var(--i, 0s); }
+  :global(.no-js) .draw .d { stroke-dashoffset: 0; }
+  .draw .cl, .text { opacity: 0; }
+  :global(.js) .draw .cl, :global(.js) .text { animation: fade 1s ease 1.4s forwards; }
+  :global(.no-js) .draw .cl, :global(.no-js) .text { opacity: 1; }
+  .live { opacity: 0; }
+  :global(.js) .live { animation: fade 0.8s ease 2.6s forwards; }
+  :global(.no-js) .live { opacity: 1; }
+  .live rect { fill: rgba(5, 7, 12, 0.8); transition: stroke 0.2s, fill 0.2s; }
+  .live[data-state='ok'] rect { stroke: #4ade80; }
+  .live[data-state='ok'] text { fill: #86efac; }
+  .live[data-state='bad'] rect { stroke: #f87171; fill: rgba(248, 113, 113, 0.14); }
+  .live[data-state='bad'] text { fill: #fca5a5; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes fade { to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    :global(.js) .draw .d, :global(.js) .draw .cl, :global(.js) .text, :global(.js) .live { animation: none; stroke-dashoffset: 0; opacity: 1; }
+  }
+
+  /* The measuring card. */
+  .demo { background: rgba(8, 12, 20, 0.82); border: 1px solid rgba(124, 182, 255, 0.28); border-radius: var(--radius); padding: 20px 22px 22px; backdrop-filter: blur(8px); box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.8); display: grid; gap: 16px; position: relative; z-index: 1; }
+  .demo-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; }
+  .demo-head h2 { font-size: 1.15rem; letter-spacing: -0.01em; }
+  .tag { font: 500 0.66rem/1 var(--mono); letter-spacing: 0.18em; text-transform: uppercase; background: var(--blue); color: #fff; padding: 5px 8px; border-radius: 4px; align-self: center; }
+  .note { margin-left: auto; font: 400 0.7rem var(--mono); color: rgba(255, 255, 255, 0.45); }
+  .spec { font-size: 0.88rem; color: rgba(255, 255, 255, 0.7); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+  .spec span { font: 500 0.82rem var(--mono); color: var(--bp); border: 1px solid rgba(124, 182, 255, 0.4); padding: 2px 8px; border-radius: 4px; }
+  .spec b { font: 500 0.9rem var(--mono); color: #fff; }
+
+  .slider { position: relative; padding-top: 6px; }
+  .rail { position: absolute; left: 0; right: 0; top: 17px; height: 8px; border-radius: 6px; background: linear-gradient(90deg, rgba(248, 113, 113, 0.5), rgba(248, 113, 113, 0.28)); overflow: hidden; }
+  .band { position: absolute; top: 0; bottom: 0; left: 37.5%; width: 25%; background: rgba(74, 222, 128, 0.85); }
+  input[type='range'] { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; margin: 0; position: relative; cursor: grab; }
+  input[type='range']:active { cursor: grabbing; }
+  input[type='range']::-webkit-slider-runnable-track { height: 28px; background: transparent; }
+  input[type='range']::-moz-range-track { height: 28px; background: transparent; }
+  input[type='range']::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: 1px; border-radius: 50%; background: #fff; border: 5px solid var(--blue); box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.28), 0 6px 14px rgba(0, 0, 0, 0.5); }
+  input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 5px solid var(--blue); box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.28), 0 6px 14px rgba(0, 0, 0, 0.5); }
+  input[type='range']:focus-visible { outline: none; }
+  input[type='range']:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 5px rgba(124, 182, 255, 0.7); }
+  .ticks { display: flex; justify-content: space-between; font: 400 0.66rem var(--mono); color: rgba(255, 255, 255, 0.4); margin-top: 6px; }
+
+  .result { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; min-height: 52px; }
+  .verdict { display: inline-flex; align-items: center; gap: 10px; border: 2px solid; border-radius: 10px; padding: 8px 14px; font: 500 1rem var(--mono); transition: color 0.2s, border-color 0.2s, background 0.2s; }
+  .verdict .word { font: 600 0.82rem var(--font); letter-spacing: 0.01em; }
+  .ico { width: 22px; height: 22px; }
+  .verdict.ok { color: #4ade80; border-color: #4ade80; background: rgba(74, 222, 128, 0.08); }
+  .verdict.bad { color: #f87171; border-color: #f87171; background: rgba(248, 113, 113, 0.1); }
+  .verdict.ok .bad-ico, .verdict.bad .ok-ico { display: none; }
+  .raise { background: var(--pen); color: #fff; border: 0; font: 600 0.9rem var(--font); padding: 12px 18px; border-radius: 999px; cursor: pointer; animation: pop 0.35s cubic-bezier(0.3, 1.6, 0.5, 1); box-shadow: 0 10px 26px -10px var(--pen); }
+  .raise:hover { filter: brightness(1.1); }
+  .raise:active { transform: scale(0.97); }
+  .hint { font-size: 0.8rem; color: rgba(255, 255, 255, 0.5); }
+  .hint b { font-family: var(--mono); font-weight: 500; color: #fff; }
+  @keyframes pop { from { transform: scale(0.8); opacity: 0; } }
+
+  .flow[hidden] { display: none; }
+  .flow { display: grid; gap: 12px; border-top: 1px dashed rgba(124, 182, 255, 0.3); padding-top: 14px; }
+  .flow-text { font-size: 0.9rem; color: rgba(255, 255, 255, 0.82); min-height: 2.7em; }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(9, 1fr); gap: 5px; }
+  .steps li { text-align: center; font: 500 0.72rem/1 var(--mono); padding: 9px 0; border: 1px solid rgba(124, 182, 255, 0.28); border-radius: 6px; color: rgba(255, 255, 255, 0.45); transition: all 0.3s ease; }
+  .steps li.on { background: var(--blue); border-color: var(--blue); color: #fff; box-shadow: 0 0 18px -2px rgba(37, 99, 235, 0.8); }
+  .steps li.last.on { background: #16a34a; border-color: #16a34a; box-shadow: 0 0 18px -2px rgba(22, 163, 74, 0.8); }
+  .reset { justify-self: start; background: none; border: 0; color: var(--bp); font: 500 0.82rem var(--font); cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+
+  /* A drafting crosshair that follows the pointer over the hero (mouse only). */
+  .cross { position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0; transition: opacity 0.25s; display: none; }
+  .cross.on { opacity: 1; }
+  .cross i { position: absolute; background: rgba(124, 182, 255, 0.28); }
+  .cross .h { left: 0; right: 0; height: 1px; top: var(--y, 0); }
+  .cross .v { top: 0; bottom: 0; width: 1px; left: var(--x, 0); }
+  .cross b { position: absolute; left: calc(var(--x, 0px) + 12px); top: calc(var(--y, 0px) + 10px); font: 400 0.68rem var(--mono); color: var(--bp); letter-spacing: 0.08em; white-space: nowrap; }
+  @media (hover: hover) and (pointer: fine) and (min-width: 960px) { .cross { display: block; } }
+
+  @media (max-width: 980px) {
+    .hero-in { grid-template-columns: 1fr; }
+    .copy { padding-top: 0; }
+    .stage { max-width: 640px; }
+  }
+  @media (max-width: 520px) {
+    .steps { grid-template-columns: repeat(9, 1fr); gap: 3px; }
+    .steps li { font-size: 0.62rem; padding: 8px 0; }
+    .demo { padding: 16px; }
+    .note { margin-left: 0; width: 100%; }
+  }
+</style>
+
+<script>
+  const LO = 124.0;
+  const HI = 124.04;
+  const $ = <T extends Element>(s: string) => document.querySelector<T>(s)!;
+  const input = $<HTMLInputElement>('#reading');
+  const verdict = $<HTMLElement>('#verdict');
+  const num = $('#verdict-num');
+  const word = $('#verdict-word');
+  const live = $<SVGGElement>('#live');
+  const liveV = $('#live-v');
+  const bore = $<SVGCircleElement>('#bore');
+  const raise = $<HTMLButtonElement>('#raise');
+  const hint = $('#hint');
+  const flow = $<HTMLElement>('#flow');
+  const flowText = $('#flow-text');
+  const steps = Array.from(document.querySelectorAll<HTMLElement>('.steps li'));
+  steps[steps.length - 1]?.classList.add('last');
+  const band = $<HTMLElement>('.band');
+
+  // Where the tolerance band sits on the slider.
+  const min = parseFloat(input.min);
+  const max = parseFloat(input.max);
+  band.style.left = `${((LO - min) / (max - min)) * 100}%`;
+  band.style.width = `${((HI - LO) / (max - min)) * 100}%`;
+
+  const timers: number[] = [];
+  const clearFlow = () => {
+    timers.splice(0).forEach((t) => clearTimeout(t));
+    steps.forEach((s) => s.classList.remove('on'));
+    flow.hidden = true;
+  };
+
+  const story: [number, string][] = [
+    [0, 'A non-conformance is drafted from this reading: part, characteristic and measured value already filled in. You decide what happens next.'],
+    [3, 'Containment first: quarantine, sort or stop shipping. Each action has an owner and a result note.'],
+    [4, 'The 8D team finds the root cause. A cause counts only once it has been verified.'],
+    [6, 'Corrective actions are done and checked. Change them afterwards and the check is marked stale.'],
+    [8, 'Verified effective, closed, and every step is on the record.'],
+  ];
+
+  const update = () => {
+    const v = parseFloat(input.value);
+    const thou = Math.round(v * 1000);
+    const ok = thou >= Math.round(LO * 1000) && thou <= Math.round(HI * 1000);
+    const text = v.toFixed(3);
+    num.textContent = text;
+    liveV.textContent = text;
+    word.textContent = ok ? 'In tolerance' : thou > Math.round(HI * 1000) ? 'Out of tolerance (high)' : 'Out of tolerance (low)';
+    verdict.className = `verdict ${ok ? 'ok' : 'bad'}`;
+    live.dataset.state = ok ? 'ok' : 'bad';
+    // The bore on the drawing grows and shrinks, exaggerated so you can see it.
+    bore.setAttribute('r', String(70 + (v - 124.02) * 60));
+    raise.hidden = ok || !flow.hidden;
+    hint.hidden = !ok;
+    if (ok && !flow.hidden) clearFlow();
+  };
+  input.addEventListener('input', update);
+
+  raise.addEventListener('click', () => {
+    raise.hidden = true;
+    flow.hidden = false;
+    flowText.textContent = story[0][1];
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    steps.forEach((s, i) => {
+      timers.push(
+        window.setTimeout(() => {
+          s.classList.add('on');
+          const line = story.find(([at]) => at === i);
+          if (line) flowText.textContent = line[1];
+        }, reduce ? 0 : 380 + i * 380),
+      );
+    });
+  });
+  $('#reset').addEventListener('click', () => {
+    clearFlow();
+    input.value = '124.018';
+    update();
+  });
+  update();
+
+  // Drafting crosshair.
+  const hero = $<HTMLElement>('#top');
+  const cross = $<HTMLElement>('.cross');
+  const readout = cross.querySelector('b')!;
+  hero.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    const r = hero.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
+    cross.style.setProperty('--x', `${x}px`);
+    cross.style.setProperty('--y', `${y}px`);
+    readout.innerHTML = `X ${(x * 0.25).toFixed(1).padStart(5, '0')} &nbsp;Y ${(y * 0.25).toFixed(1).padStart(5, '0')}`;
+    cross.classList.add('on');
+  });
+  hero.addEventListener('pointerleave', () => cross.classList.remove('on'));
+</script>

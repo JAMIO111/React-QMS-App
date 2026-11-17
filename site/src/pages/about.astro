@@ -1,0 +1,89 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import FinalCta from '../components/FinalCta.astro';
+
+const notes = [
+  { h: 'Nothing happens silently', t: 'A failed reading asks to be acknowledged or raised. A step that cannot finish says exactly what is still needed. The system suggests; people decide.' },
+  { h: 'The database is the referee', t: 'Pass or fail, scores, stage rules and permissions are decided in the data layer, so every screen, import and integration gets the same answer.' },
+  { h: 'Frozen at the time', t: 'Limits, checklists and scoring models are copied into the record when it is used. Change the plan tomorrow and yesterday’s inspection still shows what applied that day.' },
+  { h: 'Append, never overwrite', t: 'History only grows. A correction is a new record with a reason beside the old one. Closed things stay closed until someone reopens them, on the record.' },
+  { h: 'Tell people what is missing', t: 'Instead of a red error after you press Save, each step shows a short “still needed” list up front.' },
+  { h: 'Your data stays yours', t: 'Each organisation is walled off from every other, and registers export to CSV, so you can take your records with you.' },
+];
+const roles = [
+  { r: 'Quality managers', t: 'See what needs attention across every area on the home page. Approve dispositions, documents and supplier decisions.' },
+  { r: 'Quality engineers', t: 'Run investigations, write control plans, tune sampling and read the charts that show a process drifting.' },
+  { r: 'Inspectors and operators', t: 'Start a job in a few taps, record readings against the right limits and raise a problem where it happens.' },
+  { r: 'Auditors and customers', t: 'Open one page and follow a record from the lot to the corrective action, with names, times and reasons.' },
+];
+---
+<Base title="About" sheet="02 / ABOUT" description="Why Fortress QMS exists, the principles it is built on and who it is for.">
+  <PageHead eyebrow="Sheet 02 · About" lede="Quality software usually records what happened after the fact. Fortress is built so the record is the work itself: exact, traceable and signed off as it goes.">
+    <Fragment slot="title">Records, not <span class="pen">paperwork<svg viewBox="0 0 300 80" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M18 44 C14 14 110 4 190 8 C262 12 296 30 280 52 C262 74 120 78 54 66 C20 60 6 46 12 30" /></svg></span>.</Fragment>
+  </PageHead>
+
+  <section class="sec">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="eyebrow">General notes</p>
+        <h2>Six rules we do not break.</h2>
+        <p class="lede">Every drawing has a block of notes that apply to the whole sheet. These are ours.</p>
+      </div>
+      <ol class="notes">
+        {notes.map((n, i) => (
+          <li class="reveal" style={`--d:${(i % 2) * 0.08}s`}>
+            <span class="num">{String(i + 1).padStart(2, '0')}</span>
+            <div><h3>{n.h}</h3><p>{n.t}</p></div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="sec who">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="eyebrow">Who it is for</p>
+        <h2>Built for the whole floor, not just the quality office.</h2>
+      </div>
+      <div class="roles">
+        {roles.map((r, i) => (
+          <article class="reveal" style={`--d:${i * 0.07}s`}><h3>{r.r}</h3><p>{r.t}</p></article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="sec built">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="eyebrow">How it is built</p>
+        <h2>Boring where it should be.</h2>
+      </div>
+      <div class="prose reveal">
+        <p>Fortress QMS is a web application and an API on top of a PostgreSQL database. Every table carries the organisation it belongs to, and the database enforces who can read or change each row. The application cannot forget to check, because the check is not in the application.</p>
+        <p>Modules share one canonical set of parts, suppliers, machines, people and records rather than each keeping its own copy. A background worker handles the things that happen on a schedule: reminders, expiry, imports and notifications.</p>
+        <p>Your data, your files and the API that serves them run in London. You can see how we handle personal data in the <a href="/legal/privacy">privacy policy</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <FinalCta />
+</Base>
+
+<style>
+  .notes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0 clamp(24px, 5vw, 64px); border-top: 1.5px solid var(--line-strong); }
+  .notes li { display: grid; grid-template-columns: 56px 1fr; gap: 12px; padding: 28px 0; border-bottom: 1px solid var(--line); }
+  .num { font: 500 0.95rem var(--mono); color: var(--blue); border: 1.5px solid currentColor; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; }
+  .notes h3 { margin-bottom: 6px; }
+  .notes p { color: var(--muted); font-size: 0.97rem; }
+  .who { background: rgba(37, 99, 235, 0.05); border-block: 1px solid var(--line); }
+  .roles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .roles article { background: var(--paper-2); border: 1.5px solid var(--line-strong); border-radius: 4px; padding: 24px 22px; border-top: 4px solid var(--blue); }
+  .roles h3 { margin-bottom: 8px; font-size: 1.1rem; }
+  .roles p { color: var(--muted); font-size: 0.93rem; }
+  .built .prose { font-size: 1.05rem; }
+  @media (max-width: 960px) { .roles { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 760px) { .notes { grid-template-columns: 1fr; } .roles { grid-template-columns: 1fr; } }
+</style>

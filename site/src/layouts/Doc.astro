@@ -1,0 +1,69 @@
+---
+import Base from './Base.astro';
+import { SITE_NAME } from '../config';
+
+interface Props {
+  title: string;
+  summary: string;
+  eyebrow: string;
+  sheet: string;
+  headings?: { depth: number; slug: string; text: string }[];
+  back: { href: string; label: string };
+  updated?: string;
+  prev?: { href: string; title: string };
+  next?: { href: string; title: string };
+}
+const { title, summary, eyebrow, sheet, headings = [], back, updated, prev, next } = Astro.props;
+const toc = headings.filter((h) => h.depth === 2);
+---
+<Base title={title} description={summary} sheet={sheet}>
+  <header class="dh on-night blueprint-bg">
+    <div class="wrap">
+      <a class="back" href={back.href}>← {back.label}</a>
+      <p class="eyebrow">{eyebrow}</p>
+      <h1>{title}</h1>
+      <p class="lede">{summary}</p>
+      {updated && <p class="upd">Last updated {updated}</p>}
+    </div>
+  </header>
+  <section class="sec body">
+    <div class="wrap layout">
+      <div class="prose"><slot /></div>
+      {toc.length > 1 && (
+        <nav class="toc" aria-label="On this page">
+          <span class="tb-k">On this page</span>
+          <ul>{toc.map((h) => <li><a href={`#${h.slug}`}>{h.text}</a></li>)}</ul>
+        </nav>
+      )}
+    </div>
+    {(prev || next) && (
+      <div class="wrap pn">
+        {prev ? <a class="p" href={prev.href}><span>← Previous</span>{prev.title}</a> : <span />}
+        {next ? <a class="n" href={next.href}><span>Next →</span>{next.title}</a> : <span />}
+      </div>
+    )}
+  </section>
+</Base>
+
+<style>
+  .dh { padding-block: clamp(40px, 6vw, 80px) clamp(36px, 5vw, 64px); }
+  .back { display: block; width: fit-content; margin-bottom: 28px; color: var(--bp); text-decoration: none; font: 500 0.82rem var(--mono); letter-spacing: 0.06em; }
+  .back:hover { text-decoration: underline; }
+  .dh h1 { font-size: clamp(2rem, 4.6vw, 3.4rem); max-width: 18em; }
+  .dh .lede { margin-top: 18px; color: rgba(255, 255, 255, 0.72); }
+  .upd { margin-top: 18px; font: 400 0.76rem var(--mono); color: rgba(255, 255, 255, 0.5); letter-spacing: 0.08em; text-transform: uppercase; }
+  .body { padding-block: clamp(40px, 6vw, 80px); }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: clamp(32px, 6vw, 88px); align-items: start; }
+  .toc { position: sticky; top: 96px; order: 2; }
+  .toc .tb-k { color: var(--blue); }
+  .toc ul { list-style: none; margin: 0; padding: 0; border-left: 1.5px solid var(--line-strong); display: grid; }
+  .toc a { display: block; padding: 7px 14px; margin-left: -1.5px; border-left: 3px solid transparent; color: var(--muted); text-decoration: none; font-size: 0.9rem; line-height: 1.4; }
+  .toc a:hover { color: var(--blue); border-left-color: var(--blue); }
+  .pn { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 64px; max-width: calc(46rem + 240px + 88px); }
+  .pn a { display: grid; gap: 4px; padding: 18px 20px; border: 1.5px solid var(--line-strong); border-radius: 4px; text-decoration: none; color: var(--ink); font-weight: 600; background: var(--paper-2); }
+  .pn a span { font: 500 0.72rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--blue); }
+  .pn a:hover { border-color: var(--blue); }
+  .pn .n { text-align: right; }
+  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .toc { position: static; order: -1; } }
+  @media (max-width: 560px) { .pn { grid-template-columns: 1fr; } }
+</style>

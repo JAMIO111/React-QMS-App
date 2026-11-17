@@ -1,0 +1,90 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import { CONTACT_EMAIL } from '../config';
+---
+<Base title="Contact" sheet="05 / CONTACT" description="Talk to the Fortress QMS team about a demo, support or security.">
+  <PageHead eyebrow="Sheet 05 · Contact" title="Tell us what you make." lede="We will show you how it would run in your plant. For help with your account, include your organisation name." />
+
+  <section class="sec">
+    <div class="wrap grid">
+      <form id="contact-form" class="form reveal" novalidate>
+        <div class="two">
+          <label>Your name<input name="name" autocomplete="name" required /></label>
+          <label>Work email<input name="email" type="email" autocomplete="email" required /></label>
+        </div>
+        <div class="two">
+          <label>Company<input name="company" autocomplete="organization" /></label>
+          <label>What is it about?
+            <select name="topic">
+              <option>A demo or a question</option>
+              <option>Help with my account</option>
+              <option>Billing</option>
+              <option>Security</option>
+              <option>Something else</option>
+            </select>
+          </label>
+        </div>
+        <label>Message<textarea name="message" rows="7" required placeholder="What do you make, and what would you like Fortress to do for you?"></textarea></label>
+        <p id="form-error" class="error" role="alert" hidden></p>
+        <div class="actions">
+          <button class="btn btn-primary" type="submit">Write the email <span class="arrow" aria-hidden="true">→</span></button>
+          <p class="note">This opens your email app with the message ready to send. Prefer to write it yourself? <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a></p>
+        </div>
+      </form>
+
+      <aside class="side reveal" style="--d:0.12s" aria-label="Other ways to reach us">
+        <article>
+          <span class="tb-k">Email</span>
+          <p><a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a></p>
+          <p class="sub">The one address for sales, support and billing. Say which in the subject.</p>
+        </article>
+        <article>
+          <span class="tb-k">Existing customers</span>
+          <p>Include your organisation name and, if you can, the page or reference number you were on.</p>
+        </article>
+        <article>
+          <span class="tb-k">Security</span>
+          <p>Think you have found a vulnerability? Email us with &ldquo;Security&rdquo; in the subject and what you found. Please do not publish details until we have had a chance to fix it.</p>
+        </article>
+      </aside>
+    </div>
+  </section>
+</Base>
+
+<script define:vars={{ to: CONTACT_EMAIL }}>
+  const form = document.getElementById('contact-form');
+  const err = document.getElementById('form-error');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const d = Object.fromEntries(new FormData(form));
+    const bad = !String(d.name).trim() ? 'Please add your name.' : !/^\S+@\S+\.\S+$/.test(String(d.email)) ? 'Please add a valid email address.' : !String(d.message).trim() ? 'Please write a message.' : '';
+    err.hidden = !bad;
+    err.textContent = bad;
+    if (bad) return;
+    const subject = `${d.topic}${d.company ? ' - ' + d.company : ''}`;
+    const body = `${d.message}\n\n--\n${d.name}${d.company ? '\n' + d.company : ''}\n${d.email}`;
+    window.location.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  });
+</script>
+
+<style>
+  .grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: clamp(28px, 5vw, 72px); align-items: start; }
+  .form { display: grid; gap: 20px; background: var(--paper-2); border: 1.5px solid var(--line-strong); border-radius: 4px; padding: clamp(22px, 3vw, 38px); box-shadow: 10px 10px 0 -2px rgba(37, 99, 235, 0.1); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  label { display: grid; gap: 8px; font: 500 0.72rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  input, select, textarea { font: 400 1rem var(--font); letter-spacing: 0; text-transform: none; color: var(--ink); background: var(--paper); border: 1.5px solid var(--line-strong); border-radius: 8px; padding: 12px 14px; min-height: 46px; width: 100%; }
+  textarea { resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.18); }
+  .error { color: var(--bad); font-weight: 500; }
+  .actions { display: grid; gap: 14px; justify-items: start; }
+  .note { font-size: 0.86rem; color: var(--muted); }
+  .side { display: grid; gap: 0; border-top: 1.5px solid var(--line-strong); }
+  .side article { padding: 22px 0; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+  .side .tb-k { color: var(--blue); margin: 0; }
+  .side p { color: var(--muted); font-size: 0.96rem; }
+  .side p a { font-weight: 600; font-size: 1.1rem; }
+  .side .sub { font-size: 0.88rem; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 560px) { .two { grid-template-columns: 1fr; } }
+</style>

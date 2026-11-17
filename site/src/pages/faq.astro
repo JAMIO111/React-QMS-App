@@ -1,0 +1,106 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import { CONTACT_EMAIL, TRIAL_DAYS } from '../config';
+
+const groups = [
+  {
+    name: 'The basics',
+    items: [
+      { q: 'What is Fortress QMS?', a: 'A quality management system for manufacturers. It covers non-conformances, 8D corrective actions, in-process inspection, SPC, calibration, audits, document control, supplier quality, traceability, risk, competence and management review, in one connected record.' },
+      { q: 'Who is it for?', a: 'Manufacturing companies of any size that need to control quality records: quality managers and engineers, inspectors and operators on the floor, and the people who answer to auditors and customers.' },
+      { q: 'Do I need to install anything?', a: 'No. It runs in your browser on desktop, tablet or phone. The only optional install is the connector agent, a small Windows service for reaching databases and folders inside your network.' },
+      { q: 'Does it make us ISO 9001 compliant?', a: 'No software can do that. Fortress helps you run your quality system and keep evidence of it. Certification is decided by your auditor and depends on how you operate.' },
+    ],
+  },
+  {
+    name: 'Trial, seats and billing',
+    items: [
+      { q: 'How does the trial work?', a: `You get a ${TRIAL_DAYS}-day trial when you start your subscription. A card is needed to begin, and you can manage or cancel from the billing page.` },
+      { q: 'How is it priced?', a: 'By seat, with three packages: Observer (view), Contributor (record work) and Controller (manage and configure). Prices are shown when you choose your seats, before you pay.' },
+      { q: 'What happens to someone with no seat?', a: 'They can sign in, but they cannot use the product until a seat is given. People with a seat-management role are told when someone is waiting, and the waiting person can send a reminder.' },
+      { q: 'Who handles payments?', a: 'Stripe. Card details go to Stripe directly and never touch our servers.' },
+    ],
+  },
+  {
+    name: 'Security and data',
+    items: [
+      { q: 'Where is our data held?', a: 'In London. The database, file storage and the API all run there.' },
+      { q: 'Can other customers see our records?', a: 'No. Every record belongs to one organisation and the database itself enforces that, row by row.' },
+      { q: 'Do you support single sign-on?', a: 'SAML single sign-on is built in: it can be offered or required for your organisation, with a break-glass administrator for emergencies. Tell us which identity provider you use and we will help you connect it. Two-factor sign-in and network restrictions are also available.' },
+      { q: 'Can we get our data out?', a: 'Registers export to CSV, and many records have a printable report. If you need something bigger, ask us.' },
+    ],
+  },
+  {
+    name: 'Getting set up',
+    items: [
+      { q: 'Can we import what we already have?', a: 'Yes. Upload a CSV or Excel file, match its columns to Fortress fields and preview the whole import before anything is written. Parts, suppliers, customers, machines, employees, gauges, production orders, purchase orders and more can be imported.' },
+      { q: 'Can it connect to our ERP or database?', a: 'It can read from a REST API, and from SQL Server, PostgreSQL and MySQL databases or network folders through the connector agent, which only ever makes outbound connections.' },
+      { q: 'Can we bring CMM results in?', a: 'Yes. Upload a CMM report on a running inspection, check the matches, and the readings go through the same rules as typed ones.' },
+      { q: 'Can we use it on the shop floor?', a: 'Yes. The home page has a Start job card for inspectors, and the job screen is built for recording readings quickly.' },
+    ],
+  },
+  {
+    name: 'Help',
+    items: [
+      { q: 'Where do I find guides?', a: 'In the help section. Start with getting started and inviting your team.' },
+      { q: 'How do I reach a person?', a: `Email ${CONTACT_EMAIL} or use the contact page. Include your organisation name so we can find you quickly.` },
+    ],
+  },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: groups.flatMap((g) => g.items).map((i) => ({ '@type': 'Question', name: i.q, acceptedAnswer: { '@type': 'Answer', text: i.a } })),
+};
+---
+<Base title="FAQ" sheet="04 / FAQ" description="Answers about Fortress QMS: the trial, seats and billing, security and data, importing, integrations and support." jsonLd={jsonLd}>
+  <PageHead eyebrow="Sheet 04 · Queries" title="Questions, answered." lede="Things people ask before they start. If yours is not here, ask us." />
+
+  <section class="sec">
+    <div class="wrap faq">
+      <nav class="toc" aria-label="Question groups">
+        <span class="tb-k">On this sheet</span>
+        <ul>{groups.map((g, i) => <li><a href={`#g${i}`}>{g.name}</a></li>)}</ul>
+      </nav>
+      <div class="groups">
+        {groups.map((g, gi) => (
+          <section id={`g${gi}`} class="group reveal">
+            <h2>{g.name}</h2>
+            {g.items.map((i) => (
+              <details>
+                <summary><span>{i.q}</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></summary>
+                <p>{i.a}</p>
+              </details>
+            ))}
+          </section>
+        ))}
+        <p class="more">Still stuck? <a href="/contact">Get in touch</a> or read the <a href="/help">help guides</a>.</p>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .faq { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: clamp(28px, 6vw, 80px); align-items: start; }
+  .toc { position: sticky; top: 96px; }
+  .toc .tb-k { color: var(--blue); }
+  .toc ul { list-style: none; margin: 0; padding: 0; display: grid; border-left: 1.5px solid var(--line-strong); }
+  .toc a { display: block; padding: 8px 16px; color: var(--muted); text-decoration: none; font-size: 0.95rem; margin-left: -1.5px; border-left: 3px solid transparent; }
+  .toc a:hover { color: var(--blue); border-left-color: var(--blue); }
+  .groups { max-width: 52rem; display: grid; gap: 56px; }
+  .group { scroll-margin-top: 96px; }
+  .group h2 { font-size: 1.6rem; margin-bottom: 14px; }
+  details { border-top: 1px solid var(--line-strong); }
+  details:last-of-type { border-bottom: 1px solid var(--line-strong); }
+  summary { display: flex; justify-content: space-between; align-items: center; gap: 20px; cursor: pointer; list-style: none; padding: 20px 4px; font-weight: 500; font-size: 1.05rem; }
+  summary::-webkit-details-marker { display: none; }
+  summary svg { flex: none; color: var(--blue); transition: transform 0.25s ease; }
+  details[open] summary svg { transform: rotate(45deg); }
+  details[open] summary { color: var(--blue); }
+  details p { padding: 0 4px 22px; color: var(--muted); max-width: 44rem; animation: open 0.3s ease; }
+  @keyframes open { from { opacity: 0; transform: translateY(-4px); } }
+  .more { color: var(--muted); }
+  @media (max-width: 860px) { .faq { grid-template-columns: 1fr; } .toc { display: none; } }
+</style>

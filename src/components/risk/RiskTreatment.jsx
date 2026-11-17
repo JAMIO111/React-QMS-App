@@ -13,6 +13,7 @@ import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import MenuCard from "../ui/MenuCard";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import { changesSince } from "../../lib/editConflicts";
 
 const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   <div className="flex justify-end gap-2">
@@ -90,6 +91,7 @@ export const TreatmentDialog = ({ risk, onClose }) => {
 export const ActionDialog = ({ risk, action, onClose }) => {
   const { mutation, run } = useCommand(onClose, "Not saved");
   const people = useCustomFieldPeople();
+  const [opened] = useState(action);
   const [description, setDescription] = useState(action?.description ?? "");
   const [ownerId, setOwnerId] = useState(action?.owner?.id ?? risk.owner?.id ?? null);
   const [dueDate, setDueDate] = useState(action?.dueDate ?? null);
@@ -106,7 +108,7 @@ export const ActionDialog = ({ risk, action, onClose }) => {
           e.preventDefault();
           if (!ready) return;
           const body = { description: description.trim(), ownerId, dueDate: dueDate ?? null };
-          run(action ? { action: "updateAction", id: action.id, body } : { action: "addAction", id: risk.id, body });
+          run(action ? { action: "updateAction", id: action.id, body: changesSince(opened, body) } : { action: "addAction", id: risk.id, body });
         }}
       >
         <TextAreaField label="What is to be done" value={description} onChange={(e) => setDescription(e.target.value)} required maxLength={2000} rows={3} />

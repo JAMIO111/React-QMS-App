@@ -135,8 +135,14 @@ export class CustomFieldsService {
     });
   }
 
-  values(ctx: RequestContext, entityType: CustomFieldEntity, recordId: string) {
+  values(ctx: RequestContext, given: CustomFieldEntity | undefined, recordId: string) {
     return this.database.asUser(ctx, async (db) => {
+      let entityType = given;
+      if (!entityType) {
+        const row = await db.execute<{ t: CustomFieldEntity }>(sql`select entity_type as t from public.custom_field_values where record_id = ${recordId}::uuid`);
+        entityType = row.rows[0]?.t;
+        if (!entityType) throw ApiError.notFound('not_found', 'No values recorded for this record');
+      }
       const res = await db.execute<{ v: CustomValues }>(sql`select app.get_custom_values(${entityType}, ${recordId}::uuid) as v`);
       return { entityType, recordId, values: res.rows[0]?.v ?? {} };
     });

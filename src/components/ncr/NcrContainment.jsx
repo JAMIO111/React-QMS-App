@@ -16,6 +16,7 @@ import { useEmployees, useNcrAffectedLots, useNcrContainment, useNcrMutation } f
 import { CONTAINMENT_KINDS, containmentKindLabel } from "../../lib/ncrWorkflow";
 import { formatDate } from "../../lib/ncr";
 import CTAButton from "@/components/CTAButton";
+import { changesSince } from "../../lib/editConflicts";
 
 const STATUS = {
   open: { label: "Open", tone: "bg-warning-color/15 text-primary-text" },
@@ -30,6 +31,8 @@ const ActionDialog = ({ ncrId, action, lots, onClose }) => {
   const employees = useEmployees();
   const { organisationId } = useOrganisation();
   const submitOptimistically = useOptimisticSubmit();
+  // the action as the dialog opened it: only what changed is sent, with its version (edit conflicts)
+  const [opened] = useState(action);
   const [form, setForm] = useState({
     kind: action?.kind ?? "quarantine",
     description: action?.description ?? "",
@@ -49,7 +52,7 @@ const ActionDialog = ({ ncrId, action, lots, onClose }) => {
     // The action appears in the list at once and the dialog closes; the server's version replaces it, or the list goes back and a message says why.
     onClose();
     submitOptimistically({
-      request: () => apiFetch(action ? `/ncr-containment-actions/${action.id}` : `/ncrs/${ncrId}/containment-actions`, { method: action ? "PATCH" : "POST", body, organisationId }),
+      request: () => apiFetch(action ? `/ncr-containment-actions/${action.id}` : `/ncrs/${ncrId}/containment-actions`, { method: action ? "PATCH" : "POST", body: action ? changesSince(opened, body) : body, organisationId }),
       patches: [{
         queryKey: ["api", "org", organisationId, "ncr", "containment", ncrId],
         update: (c) => ({

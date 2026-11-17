@@ -1,3 +1,4 @@
+import { Versioned } from '../common/versioned';
 import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
@@ -103,14 +104,16 @@ export class CustomValuesController {
     return this.fields.batch(ctx, q.entityType, q.ids);
   }
 
+  @Versioned('custom_field_values', 'record_id')
   @Get(':id')
   @OrganisationScoped()
-  @ApiQuery({ name: 'entityType', description: ENTITY_DOC })
+  @ApiQuery({ name: 'entityType', required: false, description: ENTITY_DOC })
   @ApiOkResponse({ description: 'One record\'s values; 404 when the caller cannot read the record', schema: openApiSchema(CustomValuesResponse) })
   get(@Ctx() ctx: RequestContext, @Param('id') id: string, @Query() query: unknown) {
     return this.fields.values(ctx, parse(CustomValuesQuery, query).entityType, parse(Uuid, id));
   }
 
+  @Versioned('custom_field_values', 'record_id')
   @Put(':id')
   @OrganisationScoped()
   @ApiBody({ schema: openApiSchema(SetCustomValuesBody) })

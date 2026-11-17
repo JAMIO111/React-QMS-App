@@ -123,7 +123,8 @@ export type CustomValuesInput = z.infer<typeof CustomValuesInput>;
 export const CustomValues = z.record(z.string(), z.unknown());
 export type CustomValues = Record<string, unknown>;
 
-export const CustomValuesQuery = z.object({ entityType: CustomFieldEntity });
+/** `entityType` may be left out: the record's saved values say what it is (an edit conflict reads the record again by its address). */
+export const CustomValuesQuery = z.object({ entityType: CustomFieldEntity.optional() });
 export const CustomValuesBatchQuery = z.object({
   entityType: CustomFieldEntity,
   ids: z.string().transform((s) => s.split(',').map((x) => x.trim()).filter(Boolean)).pipe(z.array(z.string().uuid()).max(500)),

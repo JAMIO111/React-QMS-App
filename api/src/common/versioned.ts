@@ -22,7 +22,8 @@ import { ApiRequest, contextFrom } from './request-context';
  * A save without a version behaves as before: the last save wins.
  */
 export const VERSIONED = 'qms:versioned';
-export const Versioned = (table: string) => SetMetadata(VERSIONED, table);
+/** `key` names the record's key column when it is not `id` (custom_field_values: `record_id`); the answer then names it `recordId` or `id`. */
+export const Versioned = (table: string, key = 'id') => SetMetadata(VERSIONED, { table, key });
 
 /**
  * On a GET that answers several records of one table (a register page, or a list inside a record such as a plan's revisions): every row gets its
@@ -70,7 +71,12 @@ const FIELD_NAMES: Record<string, string> = {
   detection_process_id: 'detectionProcessId',
   causal_process_id: 'causalProcessId',
 };
-export const apiFieldName = (column: string) => FIELD_NAMES[column] ?? column.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+const camel = (column: string) => FIELD_NAMES[column] ?? column.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+/** A custom field change comes as `values.<field key>`: the column is renamed, the field's own key is kept as it is. */
+export const apiFieldName = (column: string) => {
+  const dot = column.indexOf('.');
+  return dot < 0 ? camel(column) : `${camel(column.slice(0, dot))}${column.slice(dot)}`;
+};
 
 interface ConflictDetails {
   version: string;
@@ -95,15 +101,17 @@ export class VersionInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType() !== 'http') return next.handle();
-    const table = this.reflector.get<string | undefined>(VERSIONED, context.getHandler());
+    const versioned = this.reflector.get<{ table: string; key: string } | undefined>(VERSIONED, context.getHandler());
+    const table = versioned?.table;
+    const keyColumn = versioned?.key ?? 'id';
     const rows = this.reflector.get<{ table: string; key?: string } | undefined>(VERSIONED_ROWS, context.getHandler());
     if (!table && !rows) return next.handle();
     const req = context.switchToHttp().getRequest<ApiRequest & { params: Record<string, string> }>();
     if (!table) {
-      if (!rows || !req.user || req.method !== 'GET') return next.handle();
+      if (!rows || !req.user) return next.handle();
       return next.handle().pipe(mergeMap((body) => from(this.attachRowVersions(req, rows.table, rowsOf(body, rows.key)).then(() => body))));
     }
-    const listed = rows && req.method === 'GET' ? rows : null;
+    const listed = rows ?? null;
     const id = req.params?.id;
     if (!id || !req.user) return next.handle();
 
@@ -111,20 +119,21 @@ export class VersionInterceptor implements NestInterceptor {
     if (expected) req.expectedVersions = { [`${table}:${id}`]: expected };
 
     return next.handle().pipe(
-      mergeMap((body) => from(this.attachVersion(req, table, id, body))),
+      mergeMap((body) => from(this.attachVersion(req, table, keyColumn, id, body))),
       mergeMap((body) => (listed ? from(this.attachRowVersions(req, listed.table, rowsOf(body, listed.key)).then(() => body)) : from([body]))),
       catchError((error) => (expected && isConflict(error) ? from(this.conflict(req, table, id, expected)).pipe(mergeMap((e) => throwError(() => e))) : throwError(() => error))),
     );
   }
 
   /** Adds the record's current version to an answer that is the record itself. */
-  private async attachVersion(req: ApiRequest, table: string, id: string, body: unknown) {
+  private async attachVersion(req: ApiRequest, table: string, keyColumn: string, id: string, body: unknown) {
     const ctx = { ...contextFrom(req), expectedVersions: undefined };
     const version = await this.database
-      .asUser(ctx, async (db) => (await db.execute<{ v: string | null }>(sql`select app.row_version(updated_at) as v from ${sql.raw(quoteTable(table))} where id = ${id}::uuid`)).rows[0]?.v ?? null)
+      .asUser(ctx, async (db) => (await db.execute<{ v: string | null }>(sql`select app.row_version(updated_at) as v from ${sql.raw(quoteTable(table))} where ${sql.raw(quoteIdent(keyColumn))} = ${id}::uuid`)).rows[0]?.v ?? null)
       .catch(() => null);
     if (!version) return body;
-    if (body && typeof body === 'object' && !Array.isArray(body) && (body as { id?: unknown }).id === id) return { ...(body as object), rowVersion: version };
+    const b = body as { id?: unknown; recordId?: unknown } | null;
+    if (b && typeof b === 'object' && !Array.isArray(b) && (b.id === id || (keyColumn !== 'id' && b.recordId === id))) return { ...(b as object), rowVersion: version };
     return body;
   }
 
@@ -159,4 +168,5 @@ export class VersionInterceptor implements NestInterceptor {
   }
 }
 
-const quoteTable = (table: string) => `public."${table.replace(/"/g, '""')}"`;
+const quoteIdent = (name: string) => `"${name.replace(/"/g, '""')}"`;
+const quoteTable = (table: string) => `public.${quoteIdent(table)}`;

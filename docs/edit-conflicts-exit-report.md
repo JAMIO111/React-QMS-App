@@ -38,7 +38,7 @@ Screenshots: `ec-merged-note`, `ec-clash-dialog` (in `JOURNEY_OUT`, default `/tm
 
 ## 4. Limits and what is not built
 
-- **Not covered by a version check** (the last save wins, as before): the More details custom fields card, management review input sections, job details, and child lines (8D and risk actions, contacts, NC containment actions and dispositions, cost lines). Lifecycle steps (approve, complete, issue, close…) were already safe: the database refuses a second caller.
+- **Not covered by a version check** (the last save wins, as before): management review input sections, job details, and child lines other than actions (contacts, NC dispositions, cost lines). The More details card and action lines were added afterwards (plan §8). Lifecycle steps (approve, complete, issue, close…) were already safe: the database refuses a second caller.
 - **No presence** ("Colin is viewing", EC-D6) and nothing pushes another person's change to an open screen; a person learns of it when they save.
 - **Rich text is not merged**: the person chooses theirs or yours for the whole text, with their own text to copy.
 - A form that keeps its own state and is changed again after taking the other person's value asks again on the next save (safe, not silent).

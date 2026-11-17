@@ -10,6 +10,7 @@ import { ACTION_STATUS, ROOT_CAUSE_KINDS, isRunning, roleLabel } from "../../lib
 import { formatDay } from "../../lib/qualityAlerts";
 import { FormError, TextAreaField } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
+import { changesSince, withVersion } from "../../lib/editConflicts";
 
 /** The people an action can be assigned to: everyone still on the team. */
 const ownerOptions = (capa) => capa.team.filter((t) => !t.endedAt).map((t) => ({ id: t.id, name: t.name, hint: roleLabel(t.role) }));
@@ -22,13 +23,15 @@ const causeOptions = (capa) => capa.rootCauses.map((c) => ({ id: c.id, name: c.d
  */
 export const ActionDialog = ({ capa, phase, action, withCause, limited = false, onClose }) => {
   const mutation = useCapaMutation();
+  // the action as the dialog opened it: only what changed is sent, with its version (edit conflicts)
+  const [opened] = useState(action);
   const [form, setForm] = useState({ description: action?.description ?? "", ownerTeamMemberId: action?.owner?.teamMemberId ?? null, dueDate: action?.dueDate ?? null, rootCauseId: action?.rootCauseId ?? null });
   const submit = (e) => {
     e.preventDefault();
     const body = limited
       ? { ownerTeamMemberId: form.ownerTeamMemberId, dueDate: form.dueDate }
       : { description: form.description.trim(), ownerTeamMemberId: form.ownerTeamMemberId, dueDate: form.dueDate, ...(withCause ? { rootCauseId: form.rootCauseId } : {}) };
-    mutation.mutate(action ? { action: "updateAction", id: action.id, body } : { action: "addAction", id: capa.id, body: { phase, ...body } }, { onSuccess: onClose });
+    mutation.mutate(action ? { action: "updateAction", id: action.id, body: changesSince(opened, body) } : { action: "addAction", id: capa.id, body: { phase, ...body } }, { onSuccess: onClose });
   };
   return (
     <Dialog title={limited ? "Reassign the action" : action ? "Edit action" : "Add an action"} onClose={onClose} width="max-w-2xl">
@@ -59,6 +62,7 @@ export const ActionDialog = ({ capa, phase, action, withCause, limited = false, 
 /** The findings of an action: what was done and found. Saved as it is (the action stays open), or the action is closed with them. */
 export const FindingsDialog = ({ action, closing = false, onClose }) => {
   const mutation = useCapaMutation();
+  const [opened] = useState(action);
   const [findings, setFindings] = useState(action.evidenceNote ?? "");
   const text = findings.trim();
   return (
@@ -69,7 +73,7 @@ export const FindingsDialog = ({ action, closing = false, onClose }) => {
         onSubmit={(e) => {
           e.preventDefault();
           mutation.mutate(
-            closing ? { action: "completeAction", id: action.id, body: { evidenceNote: text } } : { action: "updateAction", id: action.id, body: { evidenceNote: text || null } },
+            closing ? { action: "completeAction", id: action.id, body: { evidenceNote: text } } : { action: "updateAction", id: action.id, body: withVersion(opened, { evidenceNote: text || null }) },
             { onSuccess: onClose },
           );
         }}>

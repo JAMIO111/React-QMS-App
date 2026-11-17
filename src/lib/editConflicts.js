@@ -35,6 +35,9 @@ export const recordPath = (path) => {
 /** "quantityAffected" → "Quantity affected", "ownerId" → "Owner". */
 export const fieldLabel = (field) => {
   const words = String(field)
+    .split(".")
+    .pop()
+    .replace(/_/g, " ")
     .replace(/Id$/, "")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .toLowerCase();
@@ -106,12 +109,16 @@ const same = (a, b) => {
 /** What the record now holds for a field the save sends (`ownerId` may come back as `owner: { id, name }`). */
 export const currentValue = (record, field) => {
   if (!record || typeof record !== "object") return undefined;
+  // a field inside a nested value, such as a custom field: "values.batch_ref"
+  const dot = field.indexOf(".");
+  if (dot > 0 && !(field in record)) return currentValue(record[field.slice(0, dot)], field.slice(dot + 1));
   if (field in record) return record[field];
   const base = field.replace(/Id$/, "");
   if (base !== field && base in record) return record[base];
   return undefined;
 };
 
+const isPlainObject = (v) => !!v && typeof v === "object" && !Array.isArray(v) && v.type !== "doc";
 const named = (field, theirs) => theirs.has(field) || theirs.has(field.replace(/Id$/, "")) || theirs.has(`${field}Id`);
 
 // ---- the save ------------------------------------------------------------------------------------------------------------------------------------
@@ -152,7 +159,10 @@ async function settleConflict({ send, path, options, fields, error, attempt, who
   const me = await whoAmI().catch(() => null);
   const others = (details.people ?? []).filter((p) => p?.id && p.id !== me);
   const theirFields = new Set(details.fields ?? []);
-  const sent = Object.keys(fields);
+  // a nested value (custom fields: { values: { batch_ref: … } }) is compared field by field, as "values.batch_ref"
+  const nested = (f) => isPlainObject(fields[f]) && [...theirFields].some((t) => t.startsWith(`${f}.`));
+  const sent = Object.keys(fields).flatMap((f) => (nested(f) ? Object.keys(fields[f]).map((k) => `${f}.${k}`) : [f]));
+  const mineOf = (f) => currentValue(fields, f);
   const theirsOnly = [...theirFields].filter((f) => !sent.some((s) => s === f || s.replace(/Id$/, "") === f || `${s}Id` === f));
   let candidates = sent.filter((f) => named(f, theirFields));
   let current = null;
@@ -161,7 +171,7 @@ async function settleConflict({ send, path, options, fields, error, attempt, who
     const where = recordPath(path);
     current = where ? await send(where, { method: "GET", organisationId: options.organisationId }).catch(() => null) : null;
     // the same value on both sides is not a clash; neither is a field only this person has changed (another tab of theirs)
-    if (current) candidates = candidates.filter((f) => !same(fields[f], currentValue(current, f)));
+    if (current) candidates = candidates.filter((f) => !same(mineOf(f), currentValue(current, f)));
     if (!others.length) candidates = [];
   }
 
@@ -175,7 +185,7 @@ async function settleConflict({ send, path, options, fields, error, attempt, who
   if (!candidates.length) return done(await attempt(details.version, fields), "both");
 
   if (!resolver) throw error;
-  const clashes = candidates.map((field) => ({ field, label: fieldLabel(field), mine: fields[field], theirs: currentValue(current, field) }));
+  const clashes = candidates.map((field) => ({ field, label: fieldLabel(field), mine: mineOf(field), theirs: currentValue(current, field) }));
   const choice = await resolver({ clashes, changedBy: details.changedBy ?? null, changedAt: details.changedAt ?? null, people: others, current, path });
   if (!choice) {
     error.message = `Not saved: ${error.message}`;
@@ -183,8 +193,18 @@ async function settleConflict({ send, path, options, fields, error, attempt, who
     throw error;
   }
   const keep = new Set(choice.keepMine ?? []);
-  const body = Object.fromEntries(Object.entries(fields).filter(([f]) => !candidates.includes(f) || keep.has(f)));
-  if (!Object.keys(body).length) {
+  const dropped = candidates.filter((f) => !keep.has(f));
+  const body = {};
+  for (const [f, v] of Object.entries(fields)) {
+    if (dropped.includes(f)) continue;
+    if (nested(f)) {
+      const inner = Object.fromEntries(Object.entries(v).filter(([k]) => !dropped.includes(`${f}.${k}`)));
+      if (Object.keys(inner).length) body[f] = inner;
+    } else body[f] = v;
+  }
+  // nothing of the person's own is left to write (what remains, such as the kind of record, is what the record already says)
+  const writes = Object.keys(body).filter((f) => nested(f) || !current || !same(body[f], currentValue(current, f)));
+  if (!writes.length) {
     const theirs = current ? { ...current } : null;
     if (theirs) theirsAnswers.add(theirs);
     return done(theirs, "theirs");

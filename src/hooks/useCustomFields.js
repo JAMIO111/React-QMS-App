@@ -105,8 +105,22 @@ export const mergeCustomValues = (current = {}, changes = {}) => {
 export const useSetCustomValues = (entityType, recordId) => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
+  // Edit conflicts: the version of the record's saved values (none until something is saved), sent with every save so a field someone else
+  // changed meanwhile is not overwritten unasked (lib/editConflicts.js; a different field is merged).
+  const versionKey = ["api", "org", organisationId, "custom-values-version", entityType, recordId];
+  useQuery({
+    queryKey: versionKey,
+    queryFn: () => apiFetch(`/custom-values/${recordId}?entityType=${encodeURIComponent(entityType)}`, { organisationId }).then((r) => ({ rowVersion: r?.rowVersion ?? null })),
+    enabled: !!organisationId && !!recordId && !!entityType,
+    retry: false,
+  });
   return useMutation({
-    mutationFn: ({ values }) => apiFetch(`/custom-values/${recordId}`, { method: "PUT", body: { entityType, values }, organisationId }),
+    mutationFn: async ({ values }) => {
+      const rowVersion = queryClient.getQueryData(versionKey)?.rowVersion;
+      const answer = await apiFetch(`/custom-values/${recordId}`, { method: "PUT", body: { entityType, values, ...(rowVersion ? { rowVersion } : {}) }, organisationId });
+      if (answer?.rowVersion) queryClient.setQueryData(versionKey, { rowVersion: answer.rowVersion });
+      return answer;
+    },
     onMutate: async ({ values, current }) => {
       const root = orgRoot(organisationId);
       await queryClient.cancelQueries({ queryKey: root });

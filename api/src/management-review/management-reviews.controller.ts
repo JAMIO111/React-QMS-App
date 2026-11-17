@@ -1,4 +1,4 @@
-import { Versioned } from '../common/versioned';
+import { Versioned, VersionedRows } from '../common/versioned';
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -57,6 +57,7 @@ export class ManagementReviewsController {
   }
 
   @Versioned('management_reviews')
+  @VersionedRows('management_review_actions', 'actions')
   @Get('management-reviews/:id')
   @OrganisationScoped(READ)
   @ApiOkResponse({ description: 'The review with its inputs (snapshots, commentary), attendees, minutes, decisions, actions and what is still needed to complete it' })
@@ -155,6 +156,8 @@ export class ManagementReviewsController {
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(UpdateActionBody) })
   @ApiOkResponse({ description: 'Changes an open action: owner and due date at any time, its words while the review is held' })
+  @Versioned('management_review_actions')
+  @VersionedRows('management_review_actions', 'actions')
   updateAction(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.updateAction(ctx, parse(Uuid, id), parse(UpdateActionBody, body));
   }

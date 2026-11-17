@@ -114,3 +114,51 @@ describe('register rows carry their version too', () => {
     expect(stale.body.error.details.fields).toContain('name');
   });
 });
+
+describe('the More details card (custom fields)', () => {
+  it('two people filling in different fields are both kept; the same field is refused naming it', async () => {
+    const h = await as(ids.ownerA);
+    await api().post('/api/v1/custom-fields').set(h).send({ entityType: 'nonconformance', fieldType: 'text', label: 'Batch ref' }).expect(201);
+    await api().post('/api/v1/custom-fields').set(h).send({ entityType: 'nonconformance', fieldType: 'text', label: 'Shift' }).expect(201);
+    const first = (await api().put(`/api/v1/custom-values/${ncr}`).set(h).send({ entityType: 'nonconformance', values: { batch_ref: 'B-1' } }).expect(200)).body;
+    expect(first.rowVersion).toMatch(/^[0-9]{10,20}$/);
+    const read = (await api().get(`/api/v1/custom-values/${ncr}`).set(h).expect(200)).body; // no entity type needed
+    expect(read).toMatchObject({ entityType: 'nonconformance', values: { batch_ref: 'B-1' }, rowVersion: first.rowVersion });
+
+    // someone sets the batch ref; a save based on the earlier version that names the shift is refused, naming the batch ref only
+    await api().put(`/api/v1/custom-values/${ncr}`).set(h).send({ entityType: 'nonconformance', values: { batch_ref: 'B-2' }, rowVersion: first.rowVersion }).expect(200);
+    const stale = await api().put(`/api/v1/custom-values/${ncr}`).set(h).send({ entityType: 'nonconformance', values: { shift: 'Nights' }, rowVersion: first.rowVersion }).expect(409);
+    expect(stale.body.error.code).toBe('edit_conflict');
+    expect(stale.body.error.details.fields).toEqual(['values.batch_ref']);
+    // saving again on the new version keeps both (values merge by field)
+    const both = await api().put(`/api/v1/custom-values/${ncr}`).set(h).send({ entityType: 'nonconformance', values: { shift: 'Nights' }, rowVersion: stale.body.error.details.version }).expect(200);
+    expect(both.body.values).toEqual({ batch_ref: 'B-2', shift: 'Nights' });
+  });
+});
+
+describe('action lines', () => {
+  it('an NC containment action carries its version and refuses a stale save', async () => {
+    const h = await as(ids.ownerA);
+    const a = (await api().post(`/api/v1/ncrs/${ncr}/containment-actions`).set(h).send({ kind: 'sort', description: 'Sort the stock' }).expect(201)).body;
+    const listed = (await api().get(`/api/v1/ncrs/${ncr}/containment`).set(h).expect(200)).body.actions.find((x: { id: string }) => x.id === a.id);
+    expect(listed.rowVersion).toMatch(/^[0-9]{10,20}$/);
+    const saved = await api().patch(`/api/v1/ncr-containment-actions/${a.id}`).set(h).send({ description: 'Sort all stock', rowVersion: listed.rowVersion }).expect(200);
+    expect(saved.body.rowVersion).not.toBe(listed.rowVersion);
+    const stale = await api().patch(`/api/v1/ncr-containment-actions/${a.id}`).set(h).send({ description: 'Sort the stock in bay 2', rowVersion: listed.rowVersion }).expect(409);
+    expect(stale.body.error.details.fields).toContain('description');
+  });
+
+  it('a risk action is versioned inside the risk it belongs to', async () => {
+    const h = await as(ids.ownerA);
+    const withAction = (await api().post(`/api/v1/risks/${risk}/actions`).set(h).send({ description: 'Second foundry quote' }).expect(201)).body;
+    const action = (await api().get(`/api/v1/risks/${risk}`).set(h).expect(200)).body.actions.find((x: { description: string }) => x.description === 'Second foundry quote');
+    expect(withAction).toBeTruthy();
+    expect(action.rowVersion).toMatch(/^[0-9]{10,20}$/);
+    const saved = (await api().patch(`/api/v1/risk-actions/${action.id}`).set(h).send({ description: 'Two foundry quotes', rowVersion: action.rowVersion }).expect(200)).body;
+    const after = saved.actions.find((x: { id: string }) => x.id === action.id);
+    expect(after.rowVersion).toMatch(/^[0-9]{10,20}$/);
+    expect(after.rowVersion).not.toBe(action.rowVersion);
+    const stale = await api().patch(`/api/v1/risk-actions/${action.id}`).set(h).send({ description: 'Three quotes', rowVersion: action.rowVersion }).expect(409);
+    expect(stale.body.error.code).toBe('edit_conflict');
+  });
+});

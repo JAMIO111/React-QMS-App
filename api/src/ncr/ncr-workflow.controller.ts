@@ -1,3 +1,4 @@
+import { Versioned, VersionedRows } from '../common/versioned';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
@@ -37,6 +38,7 @@ export class NcrWorkflowController {
   @Get(':id/containment')
   @OrganisationScoped('ncr.read', SITE_SCOPED)
   @ApiOkResponse({ schema: openApiSchema(Containment) })
+  @VersionedRows('ncr_containment_actions', 'actions')
   containment(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.containment(ctx, parse(Uuid, id));
   }
@@ -123,6 +125,7 @@ export class NcrContainmentActionsController {
   @OrganisationScoped('ncr.update', SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(UpdateContainmentBody) })
   @ApiOkResponse({ schema: openApiSchema(ContainmentAction) })
+  @Versioned('ncr_containment_actions')
   update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.updateAction(ctx, parse(Uuid, id), parse(UpdateContainmentBody, body));
   }

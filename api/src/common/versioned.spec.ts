@@ -30,6 +30,7 @@ describe('apiFieldName', () => {
     expect(apiFieldName('quantity_affected')).toBe('quantityAffected');
     expect(apiFieldName('d2_how_many')).toBe('d2HowMany');
     expect(apiFieldName('owner_user_id')).toBe('ownerId');
+    expect(apiFieldName('values.batch_ref')).toBe('values.batch_ref'); // a custom field keeps its own key
   });
 });
 

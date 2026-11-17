@@ -162,3 +162,40 @@ describe("what a form sends", () => {
     expect(changesSince({ id: ID }, { title: "Bore" })).toEqual({ title: "Bore" });
   });
 });
+
+describe("custom fields (a nested value)", () => {
+  const path = `/custom-values/${ID}`;
+  const current = { entityType: "nonconformance", recordId: ID, values: { batch_ref: "B-2", shift: "Days" }, rowVersion: "15" };
+
+  it("a different custom field changed is saved again without asking", async () => {
+    const resolver = vi.fn();
+    const undo = setConflictResolver(resolver);
+    const send = vi.fn(async (p, { method, body }) => {
+      if (method === "GET") return current;
+      if (body.rowVersion === "10") throw conflict({ version: "15", fields: ["values.batch_ref"], people: [colin] });
+      return { ...current, rowVersion: "16" };
+    });
+    await versionedSave(send, path, { method: "PUT", body: { entityType: "nonconformance", values: { shift: "Nights" }, rowVersion: "10" } }, me);
+    undo();
+    expect(resolver).not.toHaveBeenCalled();
+    expect(send.mock.calls.at(-1)[1].body).toEqual({ entityType: "nonconformance", values: { shift: "Nights" }, rowVersion: "15" });
+    expect(merged.at(-1)).toMatchObject({ kept: "both", fields: ["values.batch_ref"] });
+  });
+
+  it("the same custom field is asked about by itself, and taking theirs writes nothing", async () => {
+    let asked;
+    const undo = setConflictResolver(async (req) => {
+      asked = req.clashes;
+      return { keepMine: [] };
+    });
+    const send = vi.fn(async (p, { method }) => {
+      if (method === "GET") return current;
+      throw conflict({ version: "15", fields: ["values.batch_ref"], people: [colin] });
+    });
+    const answer = await versionedSave(send, path, { method: "PUT", body: { entityType: "nonconformance", values: { batch_ref: "B-9" }, rowVersion: "10" } }, me);
+    undo();
+    expect(asked).toEqual([{ field: "values.batch_ref", label: "Batch ref", mine: "B-9", theirs: "B-2" }]);
+    expect(answer).toEqual(current);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+});

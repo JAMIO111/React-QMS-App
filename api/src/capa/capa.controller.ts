@@ -1,4 +1,4 @@
-import { Versioned } from '../common/versioned';
+import { Versioned, VersionedRows } from '../common/versioned';
 import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -48,6 +48,7 @@ export class CapasController {
     return this.service.create(ctx, parse(CreateCapaBody, body));
   }
 
+  @VersionedRows('capa_actions', 'actions')
   @Versioned('capas')
   @Get(':id')
   @OrganisationScoped(READ)
@@ -270,6 +271,8 @@ export class CapaActionsController {
   @OrganisationScoped(READ)
   @ApiBody({ schema: openApiSchema(UpdateActionBody) })
   @ApiOkResponse({ schema: openApiSchema(CapaDetail) })
+  @Versioned('capa_actions')
+  @VersionedRows('capa_actions', 'actions')
   update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.updateAction(ctx, parse(Uuid, id), parse(UpdateActionBody, body));
   }

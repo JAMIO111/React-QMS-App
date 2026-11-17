@@ -195,6 +195,7 @@ export const ActionDialog = ({ review, existing, onClose }) => {
   const [ownerId, setOwnerId] = useState(existing?.owner?.id ?? user?.id ?? null);
   const [dueDate, setDueDate] = useState(existing?.dueDate ?? null);
   const [decisionId, setDecisionId] = useState(existing?.decisionId ?? null);
+  const [openedAction] = useState(existing);
   const wordsFixed = existing && review.status !== "in_progress";
   const ready = description.trim() && ownerId;
   return (
@@ -208,7 +209,7 @@ export const ActionDialog = ({ review, existing, onClose }) => {
           const body = { ownerId, dueDate: dueDate ?? null };
           if (!wordsFixed) body.description = description.trim();
           if (!existing && decisionId) body.decisionId = decisionId;
-          run(existing ? { action: "updateAction", id: existing.id, body } : { action: "addAction", id: review.id, body });
+          run(existing ? { action: "updateAction", id: existing.id, body: changesSince(openedAction, body) } : { action: "addAction", id: review.id, body });
         }}
       >
         <TextAreaField label="What is to be done" required value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} rows={3} disabled={wordsFixed} hint={wordsFixed ? "Fixed once the review is completed" : undefined} />

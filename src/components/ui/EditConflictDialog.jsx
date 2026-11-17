@@ -34,6 +34,19 @@ const nameFromCache = (queryClient, id) => {
   return found;
 };
 
+/** A custom field's own label ("values.batch_ref" → "Batch reference"), from the field definitions already loaded on screen; else the field in words. */
+const labelFromCache = (queryClient, field) => {
+  const key = String(field).split(".").pop();
+  if (!String(field).includes(".")) return fieldLabel(field);
+  for (const query of queryClient?.getQueryCache().getAll() ?? []) {
+    const list = Array.isArray(query.state.data) ? query.state.data : query.state.data?.data;
+    if (!Array.isArray(list)) continue;
+    const def = list.find((d) => d && typeof d === "object" && d.key === key && typeof d.label === "string");
+    if (def) return def.label;
+  }
+  return fieldLabel(field);
+};
+
 const when = (iso) => {
   if (!iso) return null;
   const d = new Date(iso);
@@ -59,8 +72,8 @@ export const EditConflictDialog = ({ request, onDone }) => {
           const mine = describeValue(c.mine, lookup);
           const theirs = describeValue(c.theirs, lookup);
           return (
-            <section key={c.field} className="flex flex-col gap-2 rounded-xl border border-border-color p-3" aria-label={c.label}>
-              <h3 className="text-sm font-semibold text-primary-text">{c.label}</h3>
+            <section key={c.field} className="flex flex-col gap-2 rounded-xl border border-border-color p-3" aria-label={labelFromCache(queryClient, c.field)}>
+              <h3 className="text-sm font-semibold text-primary-text">{labelFromCache(queryClient, c.field)}</h3>
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="flex min-w-0 flex-col gap-1">
                   <span className="text-xs font-semibold uppercase text-secondary-text">Theirs</span>
@@ -78,11 +91,11 @@ export const EditConflictDialog = ({ request, onDone }) => {
               {rich && (
                 <div className="flex flex-wrap items-center gap-2 text-sm text-secondary-text">
                   <span>Text cannot be merged. If you take theirs, copy yours first to paste back what you need.</span>
-                  <CopyButton text={mine} label={`Copy your ${c.label.toLowerCase()}`} />
+                  <CopyButton text={mine} label={`Copy your ${labelFromCache(queryClient, c.field).toLowerCase()}`} />
                 </div>
               )}
               <SlidingToggle
-                ariaLabel={`What to keep for ${c.label}`}
+                ariaLabel={`What to keep for ${labelFromCache(queryClient, c.field)}`}
                 mode="radio"
                 value={keep[c.field]}
                 onChange={(v) => setKeep((k) => ({ ...k, [c.field]: v }))}
@@ -110,6 +123,7 @@ export const EditConflictDialog = ({ request, onDone }) => {
 /** Once, inside QueryClientProvider and ToastProvider. */
 const EditConflictHost = () => {
   const { showToast } = useToast() ?? {};
+  const queryClient = useQueryClient();
   const [pending, setPending] = useState(null);
 
   useEffect(
@@ -127,7 +141,7 @@ const EditConflictHost = () => {
     const onMerged = (event) => {
       const { people = [], fields = [], kept } = event.detail ?? {};
       const names = listWords([...new Set(people.map((p) => p.name).filter(Boolean))]) || "Someone else";
-      const what = fields.length ? listWords(fields.map(fieldLabel)) : "this";
+      const what = fields.length ? listWords([...new Set(fields.map((f) => labelFromCache(queryClient, f)))]) : "this";
       const message =
         kept === "theirs"
           ? `${names} changed ${what}; their values were kept.`
@@ -138,7 +152,7 @@ const EditConflictHost = () => {
     };
     window.addEventListener(EDIT_MERGED_EVENT, onMerged);
     return () => window.removeEventListener(EDIT_MERGED_EVENT, onMerged);
-  }, [showToast]);
+  }, [showToast, queryClient]);
 
   if (!pending) return null;
   return (

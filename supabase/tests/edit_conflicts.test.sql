@@ -121,6 +121,29 @@ BEGIN
   PERFORM pg_temp.logout();
 END $$;
 
+-- ---- custom fields (20260325100000): keyed by record_id, and a change is named per field ----
+DO $$
+DECLARE org uuid := (SELECT v FROM ids WHERE k = 'org'); cust uuid := (SELECT v FROM ids WHERE k = 'cust'); d jsonb; v text;
+BEGIN
+  PERFORM pg_temp.login('ec100000-0000-0000-0000-000000000101');
+  PERFORM app.save_custom_field(org, 'customer', '{"label": "Batch ref", "fieldType": "text"}');
+  PERFORM app.save_custom_field(org, 'customer', '{"label": "Shift", "fieldType": "text"}');
+  PERFORM app.set_custom_values('customer', cust, '{"batch_ref": "B-1"}');
+  PERFORM app.set_custom_values('customer', cust, '{"shift": "Days"}');
+  PERFORM app.set_custom_values('customer', cust, '{"batch_ref": "B-2"}');
+  d := app.edit_conflict_details('custom_field_values', cust, '0');
+  PERFORM pg_temp.assert_eq(d -> 'fields', '["values.batch_ref", "values.shift"]'::jsonb, 'each custom field that changed, by its key');
+  v := (SELECT app.row_version(updated_at) FROM public.custom_field_values WHERE record_id = cust);
+  PERFORM pg_temp.assert_eq(d ->> 'version', v, 'the version of the record''s values');
+  PERFORM pg_temp.expect('custom_field_values', cust, '1');
+  PERFORM pg_temp.assert_eq(pg_temp.fails_with(format('SELECT app.set_custom_values(%L, %L, %L)', 'customer', cust, '{"shift": "Nights"}')), 'QM031',
+    'a save on an older version of the values is refused (rows keyed by record_id are checked)');
+  PERFORM pg_temp.expect('custom_field_values', cust, v);
+  PERFORM pg_temp.assert_eq(pg_temp.fails_with(format('SELECT app.set_custom_values(%L, %L, %L)', 'customer', cust, '{"shift": "Nights"}')), 'ok', 'the current version passes');
+  PERFORM set_config('app.expected_versions', '', true);
+  PERFORM pg_temp.logout();
+END $$;
+
 -- ---- the two tables that keep their own updated_at carry the check too ----
 DO $$
 BEGIN

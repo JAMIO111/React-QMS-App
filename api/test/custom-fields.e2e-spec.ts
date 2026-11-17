@@ -138,7 +138,7 @@ describe('custom values', () => {
   it('read and change one record\'s values, and many at once', async () => {
     const h = await as(ids.ownerA);
     const got = await api().get(`/api/v1/custom-values/${ctx.part}?entityType=part`).set(h).expect(200);
-    expect(got.body).toEqual({ entityType: 'part', recordId: ctx.part, values: { coating: 'paint', weight: 2.5 } });
+    expect(got.body).toEqual({ entityType: 'part', recordId: ctx.part, values: { coating: 'paint', weight: 2.5 }, rowVersion: expect.stringMatching(/^[0-9]{10,20}$/) });
     const set = await api().put(`/api/v1/custom-values/${ctx.part}`).set(h).send({ entityType: 'part', values: { surface_finish: ' Ra 0.8 ', weight: null } });
     expect(set.status).toBe(200);
     expect(set.body.values).toEqual({ coating: 'paint', surface_finish: 'Ra 0.8' });

@@ -34,9 +34,10 @@ vi.mock("../../hooks/useQmsApi", () => ({
 }));
 const seatMutate = vi.fn();
 let seatAssignments;
+let seatsError = null;
 vi.mock("../../hooks/useSubscription", () => ({
   useSubscriptionOverview: () => ({ data: seatOverview }),
-  useSeatAssignments: () => ({ data: seatAssignments }),
+  useSeatAssignments: () => ({ data: seatsError ? undefined : seatAssignments, error: seatsError }),
   useSubscriptionMutation: () => ({ mutate: seatMutate, isPending: false }),
 }));
 let ssoMatches = [];
@@ -186,6 +187,19 @@ describe("SettingsUsers", () => {
     await pick(card("Bob Builder"), "Seat for Bob Builder", "Contributor");
     expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Give Bob Builder a Contributor seat?" }));
     expect(seatMutate).toHaveBeenCalledWith({ action: "assign", membershipId: "m-bob", planSlug: "contributor", planName: "Contributor" }, expect.any(Object));
+  });
+
+  it("says when the seats could not be loaded instead of showing everyone without a seat", () => {
+    permissions = ["members.read", "members.manage", "subscription.read", "subscription.seats"];
+    seatsError = new Error("Something went wrong");
+    try {
+      render(<SettingsUsers />);
+      expect(screen.getByText("Seats could not be loaded")).toBeInTheDocument();
+      expect(within(card("Mia Owner")).queryByRole("combobox", { name: "Seat for Mia Owner" })).toBeNull();
+      expect(screen.queryByRole("region", { name: "Seat of Mia Owner" })).toBeNull();
+    } finally {
+      seatsError = null;
+    }
   });
 
   it("shows the seat read-only to someone who may see seats but not change them, and hides it from others", () => {

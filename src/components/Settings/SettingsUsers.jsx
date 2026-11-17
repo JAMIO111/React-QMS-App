@@ -434,8 +434,10 @@ const SettingsUsers = () => {
   const sites = useSites();
   const departments = useAllDepartments();
   const seatsVisible = can("subscription.read");
-  const canAssignSeats = can("subscription.seats");
   const seats = useSeatAssignments({ enabled: seatsVisible });
+  // When the seats cannot be read, say so (never show "No seat" for everyone) and do not offer to change them.
+  const seatsFailed = seatsVisible && !!seats.error;
+  const canAssignSeats = can("subscription.seats") && !seatsFailed;
   const seatOverview = useSubscriptionOverview({ enabled: seatsVisible });
   const [showRemoved, setShowRemoved] = useState(false);
   const [search, setSearch] = useState("");
@@ -480,6 +482,12 @@ const SettingsUsers = () => {
         </Callout>
       )}
 
+      {seatsFailed && (
+        <Callout tone="error" role="alert" title="Seats could not be loaded">
+          {describeApiError(seats.error)} Seats are shown as unknown and cannot be changed until this loads. Reload the page; if it keeps happening, tell support.
+        </Callout>
+      )}
+
       {canManage && <SsoMatches />}
 
       <MenuCard
@@ -508,7 +516,7 @@ const SettingsUsers = () => {
                 isSelf={m.userId === user?.id}
                 seat={seatOf.get(m.membershipId) ?? null}
                 seatItems={seatItems}
-                seatsVisible={seatsVisible}
+                seatsVisible={seatsVisible && !seatsFailed}
                 canAssignSeats={canAssignSeats}
               />
             ))}

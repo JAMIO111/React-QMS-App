@@ -17,8 +17,10 @@
 | `npm test` (1,653 Vitest tests incl. `MemberWelcome`, `App`), `npm run lint` (0 errors), `npm run build` | pass |
 | Browser journey (`npm run journey`) | passes. The invited colleague goes through the welcome after accepting (screenshot `14b-colleague-welcome`). A company sign-in newcomer joins without a seat, sets up their profile and lands on **You need a seat** (`167b-sso-waiting-for-seat`). A `seat_requests` row is written, and the owner gives a Contributor seat on Settings → Users. After a reload the newcomer chooses **Go to Fortress** and is on the dashboard |
 | Who live would be blocked (read-only, before applying SM-B) | **nobody**: neither live organisation enforces packages (both grandfathered), and every active member and pending invitation already holds a seat |
-| Live migrations | SM-A applied 2026-11-17. **`20260322100000_no_seat_no_access.sql` and `20260323100000_member_onboarding.sql`: to be applied** |
-| Live guardrails and advisors after SM-B / SM-C | **to do once applied** |
+| Live migrations | all applied 2026-11-17 (SM-A, then `20260322100000_no_seat_no_access.sql` and `20260323100000_member_onboarding.sql`). After the last: both new tables are present with RLS on, `app.seat_blocked_organisations()` and `app.my_pending_welcomes()` exist, and no rows were written (nobody was waiting) |
+| Live guardrails (`supabase/checks/guardrails.sql` against the live project) | **0 violations**; `seat_requests` is on the audited list |
+| Advisors (security) | nothing new: the two project-wide warnings remain (every RLS table is visible to GraphQL, which now lists the two new tables too, and leaked-password protection is off) |
+| Advisors (performance) | nothing new: INFO only for the new tables (the composite membership foreign keys have no covering index, and the indexes are not used yet). The one WARN is the older `capa_actions` UPDATE policy pair, unchanged |
 
 ## Rules held by the database
 

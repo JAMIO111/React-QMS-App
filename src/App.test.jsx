@@ -63,6 +63,35 @@ describe("the app shell", () => {
     expect(screen.queryByText("dashboard page")).toBeNull();
   });
 
+  it("tells a suspended person who suspended them and when, instead of offering to start an organisation", async () => {
+    org = null;
+    me = { memberships: [], suspended: [{ id: "org-1", name: "Acme Ltd", suspendedAt: "2026-11-17T14:05:00.000Z", suspendedBy: "Olga Owner" }] };
+    renderAt("/Dashboard");
+    expect(screen.getByRole("heading", { name: "You have been suspended from Acme Ltd" })).toBeInTheDocument();
+    expect(screen.getByText(/Suspended from Acme Ltd by Olga Owner on/)).toBeInTheDocument();
+    expect(screen.queryByText("no organisation")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(signOutNow).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Check again" }));
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["api", "me"] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["memberships"] });
+  });
+
+  it("lets a suspended person look for another organisation", async () => {
+    org = null;
+    me = { memberships: [], suspended: [{ id: "org-1", name: "Acme Ltd", suspendedAt: null, suspendedBy: null }] };
+    renderAt("/Dashboard");
+    await userEvent.click(screen.getByRole("button", { name: "Use a different organisation" }));
+    expect(screen.getByText("no organisation")).toBeInTheDocument();
+  });
+
+  it("still offers to start an organisation to someone who was never suspended", () => {
+    org = null;
+    me = { memberships: [], suspended: [] };
+    renderAt("/Dashboard");
+    expect(screen.getByText("no organisation")).toBeInTheDocument();
+  });
+
   it("reads /me again when a request is refused for want of a seat", () => {
     renderAt("/Dashboard");
     window.dispatchEvent(new CustomEvent("qms:seat-required", { detail: { organisationId: "org-1" } }));

@@ -22,8 +22,9 @@ import useSignOut from "./hooks/useSignOut";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMe } from "./hooks/useQmsApi";
 import SeatWaiting from "./components/onboarding/SeatWaiting";
+import Suspended from "./components/onboarding/Suspended";
 import { WelcomeShell } from "./components/onboarding/MemberWelcome";
-import { SEAT_REQUIRED_EVENT, waitingFor } from "./lib/memberOnboarding";
+import { SEAT_REQUIRED_EVENT, suspendedFrom, waitingFor } from "./lib/memberOnboarding";
 
 function App() {
   const { organisation, error } = useOrganisation();
@@ -63,6 +64,8 @@ function App() {
   // A request refused with 403 seat_required (seats plan SM3): read /me again, which lists the organisation under seats.waitingIn.
   const queryClient = useQueryClient();
   const me = useMe();
+  // A suspended person may still look for another organisation (an invitation waiting for them, or one of their own to start).
+  const [lookElsewhere, setLookElsewhere] = useState(false);
   useEffect(() => {
     const onSeat = () => queryClient.invalidateQueries({ queryKey: ["api", "me"] });
     window.addEventListener(SEAT_REQUIRED_EVENT, onSeat);
@@ -88,7 +91,13 @@ function App() {
       <div className="h-screen bg-primary-bg"><LoadingScreen fullscreen /></div>
     );
   }
-  if (organisation === null) return <NoOrganisation error={error} />;
+  if (organisation === null) {
+    // Suspended from an organisation and not in another: say so, instead of offering to start one (their /me must have answered first).
+    if (me.isLoading) return <div className="h-screen bg-primary-bg"><LoadingScreen fullscreen /></div>;
+    const suspended = suspendedFrom(me.data);
+    if (suspended.length && !lookElsewhere) return <Suspended entries={suspended} onElsewhere={() => setLookElsewhere(true)} />;
+    return <NoOrganisation error={error} />;
+  }
   // The person belongs here but has no seat yet (seats plan SM4): the waiting screen instead of the organisation.
   const seatWait = waitingFor(me.data, organisation.id);
   if (seatWait) {

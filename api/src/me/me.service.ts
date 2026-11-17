@@ -135,6 +135,10 @@ export class MeService {
     const welcome = await db.execute<{ organisation_id: string; name: string; about_done: boolean; notifications_done: boolean; waiting_for_seat: boolean }>(
       sql`select organisation_id, name, about_done, notifications_done, waiting_for_seat from app.my_pending_welcomes()`,
     );
+    // Organisations the person was suspended from (they are not members while suspended): who did it and when, for the "you have been suspended" screen.
+    const suspended = await db.execute<{ organisation_id: string; name: string; suspended_at: string | Date | null; suspended_by_name: string | null }>(
+      sql`select organisation_id, name, suspended_at, suspended_by_name from app.my_suspensions()`,
+    );
     const blockedIds = new Set([...blocked.rows, ...ssoBlocked.rows, ...seatBlocked.rows].map((b) => b.organisation_id));
     // Organisations this company sign-in may join by itself, and password accounts of the same person waiting to be moved across (SS4, SS5).
     const joinable = await db.execute<{ organisation_id: string; name: string; role_name: string }>(
@@ -162,6 +166,12 @@ export class MeService {
         joinable: joinable.rows.map((j) => ({ id: j.organisation_id, name: j.name, roleName: j.role_name })),
         moveCandidates: moves.rows.map((m) => ({ id: m.organisation_id, name: m.name })),
       },
+      suspended: suspended.rows.map((s) => ({
+        id: s.organisation_id,
+        name: s.name,
+        suspendedAt: s.suspended_at ? new Date(s.suspended_at).toISOString() : null,
+        suspendedBy: s.suspended_by_name ?? null,
+      })),
       welcome: welcome.rows.map((w) => ({
         id: w.organisation_id,
         name: w.name,

@@ -69,8 +69,17 @@ export const WelcomeEntry = z.object({
   notificationsDone: z.boolean(),
   waitingForSeat: z.boolean(),
 });
+/** Organisations the person was suspended from: they can no longer use them, and are told by whom and when instead of being sent to set one up. */
+export const SuspendedEntry = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  suspendedAt: z.string().nullable(),
+  /** Who suspended them (null when it was not recorded). */
+  suspendedBy: z.string().nullable(),
+});
 export const MeResponse = z.object({
   profile: Profile, memberships: z.array(Membership), mfa: MfaStatus, sso: SsoStatus, seats: SeatStatus, welcome: z.array(WelcomeEntry),
+  suspended: z.array(SuspendedEntry),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
 

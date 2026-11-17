@@ -29,4 +29,19 @@ export const nextReminderAt = (lastToldAt, now = Date.now()) => {
 /** The waiting entry for an organisation in /me, if the person is waiting for a seat there. */
 export const waitingFor = (me, organisationId) => me?.seats?.waitingIn?.find((w) => w.id === organisationId) ?? null;
 
+/**
+ * "Suspended from Acme by Olga Owner on 17 Nov 2026 at 14:05." from an entry of `suspended` in /me. The person and the time are left out
+ * when they were not recorded.
+ */
+export const suspensionWords = (entry) => {
+  const at = entry.suspendedAt ? new Date(entry.suspendedAt) : null;
+  const date = at && !Number.isNaN(at.getTime())
+    ? `${at.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })} at ${at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`
+    : null;
+  return `Suspended from ${entry.name}${entry.suspendedBy ? ` by ${entry.suspendedBy}` : ""}${date ? ` on ${date}` : ""}.`;
+};
+
+/** The organisations the person is suspended from in /me, when they have no active one to go to. */
+export const suspendedFrom = (me) => me?.suspended ?? [];
+
 export const SEAT_REQUIRED_EVENT = "qms:seat-required";

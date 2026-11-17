@@ -11,6 +11,7 @@ import { FormError } from "./shared";
 import CTAButton from "@/components/CTAButton";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
+import { changesSince } from "../../lib/editConflicts";
 
 /**
  * The employee's sign-in account: who they are linked to, and (for people with a Controller seat only) link or unlink. The database enforces
@@ -101,6 +102,7 @@ const EmployeeDialog = ({ employee, onClose, readOnly = false }) => {
   const chooseDepartment = (departmentId) =>
     setForm((f) => ({ ...f, departmentId, siteId: departmentId ? (allDepartments.find((d) => d.id === departmentId)?.siteId ?? f.siteId) : f.siteId }));
 
+  const [opened] = useState(employee);
   const submit = (e) => {
     e.preventDefault();
     const body = {
@@ -114,7 +116,7 @@ const EmployeeDialog = ({ employee, onClose, readOnly = false }) => {
       ...(creating ? withCustomValues(customValues) : { active: form.active }),
     };
     mutation.mutate(
-      { path: creating ? "/employees" : `/employees/${employee.id}`, method: creating ? "POST" : "PATCH", body },
+      { path: creating ? "/employees" : `/employees/${employee.id}`, method: creating ? "POST" : "PATCH", body: creating ? body : changesSince(opened, body) },
       {
         onSuccess: () => {
           showToast({ type: "success", title: "Saved", message: `${body.firstName} ${body.surname} ${creating ? "added" : "updated"}.` });

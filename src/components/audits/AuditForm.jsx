@@ -17,6 +17,7 @@ import { TextAreaField } from "../ncr/Pickers";
 import CTAButton from "@/components/CTAButton";
 import Dialog from "../ui/Dialog";
 import Switch from "../ui/Switch";
+import { withVersion } from "../../lib/editConflicts";
 
 const fromAudit = (a) => ({
   title: a?.title ?? "",
@@ -214,6 +215,8 @@ const AuditFormBody = ({ audit }) => {
   const members = useMembers();
   const roles = useRoles();
   const [f, setF] = useState(() => fromAudit(audit));
+  // the audit as the form opened it: a save says it was based on that version (edit conflicts)
+  const [opened] = useState(audit);
   const [triedSave, setTriedSave] = useState(false);
   // A content change asks "why" in a dialog when Save is pressed; the reason is kept if the dialog is closed and opened again.
   const [askReason, setAskReason] = useState(false);
@@ -262,7 +265,7 @@ const AuditFormBody = ({ audit }) => {
 
   const save = (changeReason) => {
     const body = { ...toBody(f), ...(changeReason ? { changeReason } : {}) };
-    mutation.mutate(audit ? { path: `/audits/${audit.id}`, method: "PATCH", body } : { path: "/audits", body }, {
+    mutation.mutate(audit ? { path: `/audits/${audit.id}`, method: "PATCH", body: withVersion(opened, body) } : { path: "/audits", body }, {
       onSuccess: (saved) => {
         setAskReason(false);
         showToast({ type: "success", title: "Saved", message: audit ? `${saved.reference} updated${saved.version !== audit.version ? `, now version ${saved.version}` : ""}.` : `${saved.reference} defined.` });

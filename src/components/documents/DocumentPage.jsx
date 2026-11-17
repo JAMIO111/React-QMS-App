@@ -17,6 +17,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { ReadersCard, SkillsCard } from "./ReadersPanels";
 import { ChangeRequestsCard, LinksCard, PeriodicReviewCard } from "./LifecyclePanels";
+import { changesSince } from "../../lib/editConflicts";
 
 const Fact = ({ label, children }) => (
   <div className="flex flex-col">
@@ -32,6 +33,7 @@ const EditDialog = ({ doc, onClose }) => {
   const mutation = useDocumentMutation();
   const people = useCustomFieldPeople();
   const { showToast } = useToast();
+  const [opened] = useState(doc);
   const [title, setTitle] = useState(doc.title);
   const [description, setDescription] = useState(doc.description ?? "");
   const [ownerId, setOwnerId] = useState(doc.owner?.id ?? null);
@@ -46,7 +48,7 @@ const EditDialog = ({ doc, onClose }) => {
     const body = { title: title.trim(), description: description.trim() || null, ownerId };
     if (external) Object.assign(body, { issuer: issuer.trim(), externalReference: reference.trim() || null });
     mutation.mutate(
-      { action: "updateDocument", id: doc.id, body },
+      { action: "updateDocument", id: doc.id, body: changesSince(opened, body) },
       { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) }) },
     );
   };

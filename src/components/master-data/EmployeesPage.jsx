@@ -19,6 +19,7 @@ import ColumnVisibilityMenu from "../ui/ColumnVisibilityMenu";
 import EmployeeDialog from "./EmployeeDialog";
 import EmployeeFilterPane from "./EmployeeFilterPane";
 import { DEFAULT_HIDDEN, employeeColumns } from "./employeeColumns";
+import { withVersion } from "../../lib/editConflicts";
 
 const rowLabel = (r) => r.name;
 
@@ -108,7 +109,7 @@ const EmployeesPage = () => {
 
   const toggleActive = (item) =>
     activeMutation.mutate(
-      { path: `/employees/${item.id}`, method: "PATCH", body: { active: !item.active } },
+      { path: `/employees/${item.id}`, method: "PATCH", body: withVersion(item, { active: !item.active }) },
       {
         onSuccess: () => showToast({ type: "success", title: item.active ? "Deactivated" : "Reactivated", message: `${item.name} is now ${item.active ? "inactive" : "active"}.` }),
         onError: (error) => showToast({ type: "error", title: "Not changed", message: describeApiError(error) }),

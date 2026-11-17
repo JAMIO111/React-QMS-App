@@ -13,6 +13,7 @@ import { ActiveBadge, DataList, FormError, SearchBox, SelectField } from "./shar
 import CTAButton from "@/components/CTAButton";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
+import { changesSince } from "../../lib/editConflicts";
 
 const MachineForm = ({ machine, onDone }) => {
   const mutation = useProcessControlMutation();
@@ -27,6 +28,7 @@ const MachineForm = ({ machine, onDone }) => {
     active: machine?.active ?? true,
   });
   const [customValues, setCustomValues] = useState({});
+  const [opened] = useState(machine);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
 
   const submit = (e) => {
@@ -40,7 +42,7 @@ const MachineForm = ({ machine, onDone }) => {
       ...(machine ? { active: form.active } : withCustomValues(customValues)),
     };
     mutation.mutate(
-      { path: machine ? `/machines/${machine.id}` : "/machines", method: machine ? "PATCH" : "POST", body },
+      { path: machine ? `/machines/${machine.id}` : "/machines", method: machine ? "PATCH" : "POST", body: machine ? changesSince(opened, body) : body },
       {
         onSuccess: () => {
           showToast({ type: "success", title: "Saved", message: `Machine ${body.code.toUpperCase()} ${machine ? "updated" : "added"}.` });

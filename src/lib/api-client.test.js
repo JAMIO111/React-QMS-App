@@ -84,4 +84,12 @@ describe("apiFetch", () => {
     expect(error).toMatchObject({ status: 0, code: "api_unreachable" });
     expect(error.message).toContain(API_URL);
   });
+
+  it("sends a save's version and drops an empty one", async () => {
+    fetch.mockImplementation(async () => jsonResponse(200, { id: "11111111-2222-3333-4444-555555555555", rowVersion: "2" }));
+    await apiFetch("/ncrs/11111111-2222-3333-4444-555555555555", { method: "PATCH", body: { title: "A", rowVersion: "1" } });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ title: "A", rowVersion: "1" });
+    await apiFetch("/ncrs/11111111-2222-3333-4444-555555555555", { method: "PATCH", body: { title: "B", rowVersion: undefined } });
+    expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ title: "B" });
+  });
 });

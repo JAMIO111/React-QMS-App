@@ -75,6 +75,7 @@ import Callout from "../ui/Callout";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { useCustomFields } from "../../hooks/useCustomFields";
 import { withCustomValues } from "../../lib/customFields";
+import { withVersion } from "../../lib/editConflicts";
 
 /** Section title with a rule, as in the original NC entry form. */
 const SectionHeading = ({ id, title, sectionRef }) => (
@@ -189,7 +190,7 @@ const NcrPage = () => {
       );
     } else {
       mutation.mutate(
-        { path: `/ncrs/${ncr.id}`, method: "PATCH", body: changes },
+        { path: `/ncrs/${ncr.id}`, method: "PATCH", body: withVersion(ncr, changes) },
         { onSuccess: () => showToast({ type: "success", title: "Saved", message: "Changes saved." }) }
       );
     }

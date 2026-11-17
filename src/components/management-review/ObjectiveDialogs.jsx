@@ -12,6 +12,7 @@ import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import { changesSince } from "../../lib/editConflicts";
 
 const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   <div className="flex justify-end gap-2">
@@ -54,6 +55,7 @@ export const ObjectiveDialog = ({ existing, onClose, onSaved }) => {
   const measures = useObjectiveMeasures();
   const people = useCustomFieldPeople();
   const { user } = useAuth();
+  const [opened] = useState(existing);
   const [title, setTitle] = useState(existing?.title ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
   const [ownerId, setOwnerId] = useState(existing?.owner?.id ?? user?.id ?? null);
@@ -79,7 +81,7 @@ export const ObjectiveDialog = ({ existing, onClose, onSaved }) => {
     const body = { title: title.trim(), description: description.trim() || null, ownerId, target: targetNumber };
     if (manual) Object.assign(body, { unit: unit.trim() || null, direction });
     if (!existing) Object.assign(body, { measure, frequency, ...(startsOn ? { startsOn } : {}) });
-    run(existing ? { action: "update", id: existing.id, body } : { action: "create", body });
+    run(existing ? { action: "update", id: existing.id, body: changesSince(opened, body) } : { action: "create", body });
   };
 
   return (

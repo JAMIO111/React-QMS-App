@@ -101,3 +101,16 @@ describe('someone outside the organisation', () => {
     expect(res.body.error.code).not.toBe('edit_conflict');
   });
 });
+
+describe('register rows carry their version too', () => {
+  it('so a dialog opened from a row can say what it was based on', async () => {
+    const h = await as(ids.ownerA);
+    const created = (await api().post('/api/v1/machines').set(h).send({ code: 'EC-M1', name: 'Lathe', siteId: ids.siteA }).expect(201)).body;
+    const list = await api().get('/api/v1/machines?q=EC-M1').set(h).expect(200);
+    const row = (list.body.items ?? list.body.data).find((m: { id: string }) => m.id === created.id);
+    expect(row.rowVersion).toMatch(/^[0-9]{10,20}$/);
+    await api().patch(`/api/v1/machines/${created.id}`).set(h).send({ name: 'Lathe 2', rowVersion: row.rowVersion }).expect(200);
+    const stale = await api().patch(`/api/v1/machines/${created.id}`).set(h).send({ description: 'Bay 4', rowVersion: row.rowVersion }).expect(409);
+    expect(stale.body.error.details.fields).toContain('name');
+  });
+});

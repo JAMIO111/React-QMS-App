@@ -14,6 +14,7 @@ import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RiskMatrix from "./RiskMatrix";
+import { changesSince } from "../../lib/editConflicts";
 
 const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   <div className="flex justify-end gap-2">
@@ -39,6 +40,8 @@ export const RiskDialog = ({ existing, draft, onClose, onSaved }) => {
   const departments = useAllDepartments();
   const { user } = useAuth();
   const { showToast } = useToast();
+  // the risk as the dialog opened it: only what the person changes from it is sent, with its version (edit conflicts)
+  const [opened] = useState(existing);
   const [kind, setKind] = useState(existing?.kind ?? draft?.kind ?? "risk");
   const [categoryId, setCategoryId] = useState(existing?.category.id ?? draft?.categoryId ?? null);
   const [title, setTitle] = useState(existing?.title ?? draft?.title ?? "");
@@ -73,7 +76,7 @@ export const RiskDialog = ({ existing, draft, onClose, onSaved }) => {
       body.raisedFrom = { kind: source.kind, id: source.id };
       body.links = linksBody(extraLinks);
     }
-    mutation.mutate(existing ? { action: "update", id: existing.id, body } : { action: "create", body }, {
+    mutation.mutate(existing ? { action: "update", id: existing.id, body: changesSince(opened, body) } : { action: "create", body }, {
       onSuccess: (risk) => {
         onSaved?.(risk);
         onClose();

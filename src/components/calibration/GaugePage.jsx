@@ -45,6 +45,7 @@ import { DuePill, GaugeStatusPill, OutcomePill } from "./Pills";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
+import { withVersion } from "../../lib/editConflicts";
 
 const EMPTY = {
   assetNumber: "", description: "", gaugeTypeId: null, manufacturer: "", model: "", serialNumber: "",
@@ -199,7 +200,7 @@ const GaugePage = () => {
         }
       );
     } else {
-      mutation.mutate({ path: `/gauges/${gauge.id}`, method: "PATCH", body: changes }, { onSuccess: () => showToast({ type: "success", title: "Saved", message: "Changes saved." }) });
+      mutation.mutate({ path: `/gauges/${gauge.id}`, method: "PATCH", body: withVersion(gauge, changes) }, { onSuccess: () => showToast({ type: "success", title: "Saved", message: "Changes saved." }) });
     }
   };
   const restore = () =>

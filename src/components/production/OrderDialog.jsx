@@ -13,6 +13,7 @@ import { FormError } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
 import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
+import { changesSince } from "../../lib/editConflicts";
 
 
 /**
@@ -37,6 +38,7 @@ const OrderDialog = ({ order, onClose, readOnly = false, onSaved }) => {
     notes: order?.notes ?? "",
   });
   const [customValues, setCustomValues] = useState({});
+  const [opened] = useState(order);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const disabled = readOnly || frozen;
   const quantity = Number(form.quantityPlanned);
@@ -47,7 +49,7 @@ const OrderDialog = ({ order, onClose, readOnly = false, onSaved }) => {
     const shared = { partRevisionId: form.partRevisionId, customerId: form.customerId, quantityPlanned: quantity, dueDate: form.dueDate || null, notes: form.notes.trim() || null };
     const body = creating ? { orderNumber: form.orderNumber.trim(), partId: form.partId, siteId: form.siteId, ...shared, ...withCustomValues(customValues) } : shared;
     mutation.mutate(
-      { path: creating ? "/production-orders" : `/production-orders/${order.id}`, method: creating ? "POST" : "PATCH", body },
+      { path: creating ? "/production-orders" : `/production-orders/${order.id}`, method: creating ? "POST" : "PATCH", body: creating ? body : changesSince(opened, body) },
       {
         onSuccess: (data) => {
           showToast({ type: "success", title: "Saved", message: `Order ${data.orderNumber} ${creating ? "created" : "updated"}.` });

@@ -17,6 +17,7 @@ import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import SlidingToggle from "../ui/SlidingToggle";
 import { FormError, TextAreaField } from "../master-data/shared";
 import { todayIso } from "@/lib/localDate";
+import { changesSince } from "../../lib/editConflicts";
 
 const today = () => todayIso();
 const tomorrow = () => todayIso(1);
@@ -175,11 +176,12 @@ export const EditScarDialog = ({ scar, onClose }) => {
   const [evidence, setEvidence] = useState(scar.objectiveEvidence ?? "");
   const [containment, setContainment] = useState(scar.containmentRequirements ?? "");
   const [ownerId, setOwnerId] = useState(scar.owner?.id ?? null);
+  const [opened] = useState(scar);
   const people = useScarPeople();
   const ok = title.trim().length >= 3 && !!ownerId;
   return (
     <CommandDialog title="Edit the SCAR" width="max-w-2xl" mutation={mutation} ok={ok} submitLabel="Save" onClose={onClose}
-      onSubmit={() => run({ action: "update", id: scar.id, body: { title: title.trim(), problemDescription: description.trim(), requirementBreached: requirement.trim(), objectiveEvidence: evidence.trim(), containmentRequirements: containment.trim(), severity, responseDueOn: dueOn || null, contactId, ownerId } })}>
+      onSubmit={() => run({ action: "update", id: scar.id, body: changesSince(opened, { title: title.trim(), problemDescription: description.trim(), requirementBreached: requirement.trim(), objectiveEvidence: evidence.trim(), containmentRequirements: containment.trim(), severity, responseDueOn: dueOn || null, contactId, ownerId }) })}>
       <Field label="Title" required value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
       <TextAreaField label="The problem" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={4000} rows={3} />
       <TextAreaField label="Requirement breached" value={requirement} onChange={(e) => setRequirement(e.target.value)} maxLength={2000} rows={2} />

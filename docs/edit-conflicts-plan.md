@@ -1,6 +1,6 @@
 # Edit conflicts — plan
 
-**Status:** decisions EC-D1–EC-D6 agreed 2026-11-17 (as proposed) · slices EC1–EC4 · **EC1 built and applied live** (migration `20260324100000_edit_conflicts.sql`, SQL test `supabase/tests/edit_conflicts.test.sql`) · **EC2 built** (API, no migration)
+**Status:** decisions EC-D1–EC-D6 agreed 2026-11-17 (as proposed) · slices EC1–EC4 · **EC1 built and applied live** (migration `20260324100000_edit_conflicts.sql`, SQL test `supabase/tests/edit_conflicts.test.sql`) · **EC2 built** (API, no migration, pushed) · **EC3 built** (screens; one API addition, no migration)
 
 ## 1. The problem (inspected)
 
@@ -55,6 +55,7 @@ One trap: the API turns `updated_at` into a JavaScript `Date`, which **drops the
 | **EC1 — database** | Migration: `app.row_version(timestamptz)`, `app.touch_updated()` replaced with the check (`QM031`, consumed after the first match), the same check for `integration_connections` and `workflow_rules`, `app.edit_conflict_details`. SQL test: matching version saves; stale version refused for an RLS update and for a SECURITY DEFINER function update; a second update of the same row in one request is not a conflict; no setting = as today; details list the right fields, who and when, and nothing for a row in another organisation. Guardrails unchanged (no new table). |
 | **EC2 — API** (built) | `@Versioned('<table>')` on a record's GET and PATCH (`api/src/common/versioned.ts`, global `VersionInterceptor`): `rowVersion` + `ETag` on the answer; PATCH bodies take `rowVersion` (removed before the strict body check) or `If-Match`; `DatabaseService.asUser` sets `app.expected_versions`; `QM031` → `409 edit_conflict` with the details; field names mapped back to the API's names (snake → camel, with a small table for the exceptions). e2e: two people on one record per route in scope (different fields → both kept; same field → 409 with the right details; no version → last write wins). Tenancy sweep unchanged (the body field is optional). |
 | **EC3 — screens** | `apiFetch` / a shared `useVersionedSave` that sends `version`, retries a non-clashing conflict once on the new version, and raises the clash dialog (`ui/EditConflictDialog.jsx`) otherwise; the rich-text choice for document drafts and review minutes; optimistic quick edits (custom fields card, review inputs, job details) roll back and show the clash instead of a generic error. Tests per screen in scope. |
+| **EC3 — screens** (built) | See §7. |
 | **EC4 — exit** | Journey step: the owner and Colin open the same NC; Colin changes the title and saves; the owner changes the severity and saves (both kept, note shown); both change the description (the owner's dialog, keep mine). Live guardrails and advisors, exit report, `CLAUDE.md`. |
 
 A migration is needed (EC1) and must be applied before the API (EC2) is pushed: until then a save that sends `version` would set a setting nothing reads, which is harmless, but the conflict details function would be missing.
@@ -62,3 +63,27 @@ A migration is needed (EC1) and must be applied before the API (EC2) is pushed: 
 ## 6. Not in this plan
 
 Live editing together, seeing others on the page (EC-D6), pushing other people's changes to an open screen, locking a record while someone edits it (check-out), merging rich text, conflicts on lifecycle actions (already refused by the database).
+
+## 7. EC3 as built
+
+**One shared layer, not per screen.** `apiFetch` hands any PATCH or PUT whose body carries `rowVersion` to `src/lib/editConflicts.js` (`versionedSave`):
+
+- **Saves of one record run one at a time**, and each of the person's own saves is remembered (version saved on → version produced). A later save that was based on a version the person has since moved on themselves (autosave, two quick edits before a refetch) is sent on the newer one, so nobody clashes with themselves.
+- **409 `edit_conflict`, no field in common** (fields named in the details against the keys of the body, `ownerId` ≈ `owner`) → saved again on the new version, then a note: "Colin Brown also changed Severity; both changes kept." (event `qms:edit-merged`, shown as an info toast by `EditConflictHost`).
+- **A field in common** → the record is read again (GET of the path up to its id); a field that now holds the same value is not a clash, nor is one only this person changed (another tab). What is left goes to the dialog **`ui/EditConflictDialog.jsx`** (registered once in `main.jsx` by `EditConflictHost`): theirs and yours per field in words (ids named from anything already loaded on screen; rich text as its words), **Keep yours / Take theirs** (rich text: **Overwrite with mine / Load theirs**, with Copy your text). Save writes what was kept on the new version; taking everything of theirs writes nothing and answers with the record as it is (`tookTheirs(answer)`); **Cancel leaves the typing unsaved** (error "Not saved: …", `cancelled`).
+- No version, or no dialog mounted → as before.
+
+**What the screens send** (helpers in `editConflicts.js` and `hooks/useEditBase.js`):
+
+| Helper | Use |
+|---|---|
+| `withVersion(record, body)` | a form that resets to the record when it refetches (NC page, gauge, part details, calibration record, audit record quick edits, employee active switch) |
+| `changesSince(opened, body)` | a dialog that sends every field: only fields that differ from the record **as the dialog opened it** (`const [opened] = useState(record)`), plus its version; nothing comparable changed → the whole body |
+| `useEditBase(record, dirty)` | a form with its own state that does not reset: the version follows the record until the person starts changing something, then stays (8D D0, reason cards, workflow rules) |
+| own base ref + `tookTheirs` | autosaved rich text: document drafts (`useSaveDraft` exposes `reloads`; the editor's key changes so it starts again from the saved text) and review minutes |
+
+Screens done: NC page; 8D D0, D2 5W2H, reason cards (D3, D7); risk dialog; document details, draft text and change summary; management review plan dialog and minutes; quality objective dialog; audit form; audit findings; audit record date and notes; quality alert drafts; control plan revision drafts; supplier (supplier quality) and SCAR edit; part details; part family, machine, employee, customer / supplier, gauge type, production order and lot dialogs; gauge page; calibration record; workflow rules.
+
+**API addition (no migration): `@VersionedRows(table, key?)`** on a GET answering several records puts `rowVersion` on every row in one query (`rowsOf`: `data`, `items`, an array, or `key`), so dialogs opened from a register row have a version: machines, part families, employees, customers / suppliers, production orders, lots, gauge types, and a control plan's `revisions`.
+
+**Not covered (no versioned route behind them):** the More details custom fields card (`custom_field_values`), management review inputs, job details, NC containment / disposition rows, actions, contacts and other child lines (EC-D5's "then the remaining edit dialogs"). Tests: `lib/editConflicts.test.js`, `hooks/useEditBase.test.js`, `ui/EditConflictDialog.test.jsx`, `lib/api-client.test.js`, `api/src/common/versioned.spec.ts`, `api/test/edit-conflicts.e2e-spec.ts` (rows).

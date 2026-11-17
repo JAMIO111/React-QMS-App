@@ -1,4 +1,4 @@
-import { Versioned } from '../common/versioned';
+import { Versioned, VersionedRows } from '../common/versioned';
 import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -30,6 +30,7 @@ export class EmployeesController {
   @ApiQuery({ name: 'page', required: false, schema: { type: 'integer', minimum: 1, default: 1 } })
   @ApiQuery({ name: 'pageSize', required: false, schema: { type: 'integer', minimum: 1, maximum: 200, default: 25 } })
   @ApiOkResponse({ schema: openApiSchema(EmployeePage) })
+  @VersionedRows('Employees')
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.list(ctx, parse(EmployeeListQuery, query), pickCustomFilters(query));
   }

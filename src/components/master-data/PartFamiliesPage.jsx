@@ -11,6 +11,7 @@ import { ActiveBadge, DataList, FormError, SearchBox } from "./shared";
 import CTAButton from "@/components/CTAButton";
 import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
+import { changesSince } from "../../lib/editConflicts";
 
 /** Add or edit a part family (code, name, description, active). */
 export const PartFamilyForm = ({ family, onDone, onCreated }) => {
@@ -18,13 +19,14 @@ export const PartFamilyForm = ({ family, onDone, onCreated }) => {
   const { showToast } = useToast();
   const [form, setForm] = useState({ code: family?.code ?? "", name: family?.name ?? "", description: family?.description ?? "", active: family?.active ?? true });
   const [customValues, setCustomValues] = useState({});
+  const [opened] = useState(family);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
 
   const submit = (e) => {
     e.preventDefault();
     const body = { code: form.code.trim(), name: form.name.trim(), description: form.description.trim(), ...(family ? { active: form.active } : withCustomValues(customValues)) };
     mutation.mutate(
-      { path: family ? `/part-families/${family.id}` : "/part-families", method: family ? "PATCH" : "POST", body },
+      { path: family ? `/part-families/${family.id}` : "/part-families", method: family ? "PATCH" : "POST", body: family ? changesSince(opened, body) : body },
       {
         onSuccess: (saved) => {
           showToast({ type: "success", title: "Saved", message: `Part family ${saved.code} ${family ? "updated" : "added"}.` });

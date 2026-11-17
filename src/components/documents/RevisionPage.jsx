@@ -269,7 +269,7 @@ const RevisionPage = () => {
       {doc.contentKind === "text" ? (
         <MenuCard title="Text" subtitle={canEdit ? "Saved as you type." : undefined}>
           <div>
-            <DocumentEditor key={rev.id} value={rev.body} editable={canEdit} onChange={saveText} flushRef={flushText} onPendingChange={setUnsaved} />
+            <DocumentEditor key={`${rev.id}-${saveBody.reloads ?? 0}`} value={rev.body} editable={canEdit} onChange={saveText} flushRef={flushText} onPendingChange={setUnsaved} />
           </div>
         </MenuCard>
       ) : (

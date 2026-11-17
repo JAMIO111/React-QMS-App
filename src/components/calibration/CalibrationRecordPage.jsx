@@ -45,6 +45,7 @@ import CTAButton from "@/components/CTAButton";
 import SlidingToggle from "../ui/SlidingToggle";
 import Callout from "../ui/Callout";
 import { todayIso } from "@/lib/localDate";
+import { withVersion } from "../../lib/editConflicts";
 
 const today = () => todayIso();
 const str = (v) => (v === null || v === undefined ? "" : String(v));
@@ -339,7 +340,7 @@ const CalibrationRecordPage = () => {
       );
     } else {
       mutation.mutate(
-        { path: `/calibrations/${c.id}`, method: "PATCH", body: { ...changedFields, ...(changedReadings.length ? { readings: changedReadings } : {}) } },
+        { path: `/calibrations/${c.id}`, method: "PATCH", body: withVersion(c, { ...changedFields, ...(changedReadings.length ? { readings: changedReadings } : {}) }) },
         { onSuccess: () => showToast({ type: "success", title: "Saved", message: "Changes saved." }) }
       );
     }

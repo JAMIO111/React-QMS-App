@@ -21,6 +21,7 @@ import { formatDate, formatDateTime } from "../../lib/processControl";
 import { RevisionStatusPill } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
+import { changesSince } from "../../lib/editConflicts";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
@@ -253,6 +254,7 @@ const RevisionForm = ({ plan, revision, onDone }) => {
   const mutation = useProcessControlMutation();
   const { showToast } = useToast();
   const latest = plan.revisions[0]?.revisionCode;
+  const [opened] = useState(revision);
   const [form, setForm] = useState({
     revisionCode: revision?.revisionCode ?? "",
     changeReason: revision?.changeReason ?? "",
@@ -264,7 +266,7 @@ const RevisionForm = ({ plan, revision, onDone }) => {
     e.preventDefault();
     const body = { revisionCode: form.revisionCode.trim(), changeReason: form.changeReason.trim(), effectiveFrom: dayToIso(form.effectiveFrom) };
     mutation.mutate(
-      revision ? { path: `/control-plan-revisions/${revision.id}`, method: "PATCH", body } : { path: `/control-plans/${plan.id}/revisions`, body },
+      revision ? { path: `/control-plan-revisions/${revision.id}`, method: "PATCH", body: changesSince(opened, body) } : { path: `/control-plans/${plan.id}/revisions`, body },
       {
         onSuccess: (saved) => {
           showToast({ type: "success", title: "Saved", message: revision ? `Draft ${saved.revisionCode} updated.` : `Draft revision ${saved.revisionCode} created.` });

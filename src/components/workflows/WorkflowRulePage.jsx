@@ -14,6 +14,7 @@ import { RUN_STATUS, when, contentChanged, describeAction, describeCondition, dr
 import RuleBuilder from "./RuleBuilder";
 import RuleTest from "./RuleTest";
 import { RuleStatusPill } from "./WorkflowsPage";
+import { useEditBase } from "../../hooks/useEditBase";
 
 /** Asks for one piece of text (a reason) before a command. */
 const ReasonDialog = ({ title, intro, label, confirm, pending, error, onConfirm, onClose }) => {
@@ -104,6 +105,7 @@ const WorkflowRulePage = () => {
   const changed = isNew || contentChanged(draft, rule.data);
   const detailsChanged = !isNew && rule.data && (draft.name.trim() !== rule.data.name || (draft.description.trim() || null) !== (rule.data.description ?? null));
   const dirty = isNew || changed || detailsChanged;
+  const versioned = useEditBase(rule.data, dirty && !isNew);
   const onLabel = (key, name) => setLabels((l) => (l[key] === name ? l : { ...l, [key]: name }));
 
   const run = (command, done) =>
@@ -125,7 +127,7 @@ const WorkflowRulePage = () => {
       return;
     }
     const body = changed ? { ...details, ...ruleContent(draft), reason } : details;
-    run({ action: "update", id, body }, (saved) => showToast({ type: "success", title: "Rule saved", message: changed ? `Version ${saved.version} runs from now.` : "Details saved." }));
+    run({ action: "update", id, body: versioned(body) }, (saved) => showToast({ type: "success", title: "Rule saved", message: changed ? `Version ${saved.version} runs from now.` : "Details saved." }));
   };
 
   if (!isNew && rule.error) {

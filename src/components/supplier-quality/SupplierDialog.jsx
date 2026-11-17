@@ -12,6 +12,7 @@ import { FormError } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
 import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
+import { changesSince } from "../../lib/editConflicts";
 
 const emptyForm = {
   code: "", name: "", displayName: "", supplierType: null, country: null, addressLine1: "", addressLine2: "", city: "", region: "", postcode: "",
@@ -29,6 +30,7 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
   const [form, setForm] = useState(editing ? { ...emptyForm, ...Object.fromEntries(Object.entries(supplier).filter(([k]) => k in emptyForm).map(([k, v]) => [k, v ?? emptyForm[k]])) } : emptyForm);
   const [classIds, setClassIds] = useState(editing ? supplier.classifications.map((c) => c.id) : []);
   const [customValues, setCustomValues] = useState({});
+  const [opened] = useState(supplier);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const pick = (k) => (v) => setForm((f) => ({ ...f, [k]: v ?? null }));
   const options = classifications.data?.data ?? [];
@@ -64,7 +66,7 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
     const fail = (err) => showToast({ type: "error", title: "Not saved", message: describeApiError(err) });
     if (editing) {
       mutation.mutate(
-        { action: "update", id: supplier.id, body },
+        { action: "update", id: supplier.id, body: changesSince(opened, body) },
         {
           onSuccess: (saved) => {
             const before = supplier.classifications.map((c) => c.id).sort().join(",");

@@ -17,6 +17,7 @@ import FindingDialog from "./FindingDialog";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
 import { todayIso } from "@/lib/localDate";
+import { withVersion } from "../../lib/editConflicts";
 
 const today = () => todayIso();
 
@@ -381,7 +382,7 @@ const AuditRecordPage = () => {
         </dl>
         {editable && (
           <div className="mt-4 max-w-xs">
-            <RHFDatePickerPopout label="Date carried out" valueFormat="iso" value={r.performedOn} maxDate={new Date()} onChange={(d) => d && d !== r.performedOn && d <= today() && mutation.mutate({ path: `/audit-records/${r.id}`, method: "PATCH", body: { performedOn: d } })} />
+            <RHFDatePickerPopout label="Date carried out" valueFormat="iso" value={r.performedOn} maxDate={new Date()} onChange={(d) => d && d !== r.performedOn && d <= today() && mutation.mutate({ path: `/audit-records/${r.id}`, method: "PATCH", body: withVersion(r, { performedOn: d }) })} />
           </div>
         )}
       </MenuCard>
@@ -423,7 +424,7 @@ const AuditRecordPage = () => {
       )}
 
       <MenuCard title="Notes" subtitle="Anything else about this audit">
-        <TextAreaField label="Audit notes" rows={3} value={noteText} readOnly={!editable} maxLength={5000} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== null && notes.trim() !== (r.notes ?? "") && mutation.mutate({ path: `/audit-records/${r.id}`, method: "PATCH", body: { notes: notes.trim() || null } })} />
+        <TextAreaField label="Audit notes" rows={3} value={noteText} readOnly={!editable} maxLength={5000} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== null && notes.trim() !== (r.notes ?? "") && mutation.mutate({ path: `/audit-records/${r.id}`, method: "PATCH", body: withVersion(r, { notes: notes.trim() || null }) })} />
       </MenuCard>
 
       {r.status === "in_progress" && (

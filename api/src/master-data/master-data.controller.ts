@@ -1,4 +1,4 @@
-import { Versioned } from '../common/versioned';
+import { Versioned, VersionedRows } from '../common/versioned';
 import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -67,6 +67,7 @@ const partyController = (kind: PartyKind, path: string) => {
     @OrganisationScoped(READ)
     @listQueries()
     @ApiOkResponse({ schema: openApiSchema(pageSchema(Party)) })
+    @VersionedRows(kind === 'customer' ? 'customers' : 'suppliers')
     list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
       return this.service.listParties(ctx, kind, parse(PartyListQuery, query), pickCustomFilters(query));
     }

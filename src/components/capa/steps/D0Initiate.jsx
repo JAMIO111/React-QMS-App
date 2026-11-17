@@ -15,6 +15,7 @@ import { formatDay } from "../../../lib/qualityAlerts";
 import { stageOf as ncrStageOf } from "../../../lib/ncr";
 import { FormError, TextAreaField } from "../../master-data/shared";
 import CTAButton from "@/components/CTAButton";
+import { useEditBase } from "../../../hooks/useEditBase";
 
 const HeaderForm = ({ capa, editable }) => {
   const mutation = useCapaMutation();
@@ -36,10 +37,11 @@ const HeaderForm = ({ capa, editable }) => {
   if (form.ownerMembershipId !== (capa.owner?.membershipId ?? null)) changes.ownerMembershipId = form.ownerMembershipId;
   if (form.dueDate !== capa.dueDate) changes.dueDate = form.dueDate;
   const dirty = Object.keys(changes).length > 0;
+  const versioned = useEditBase(capa, dirty);
 
   return (
     <MenuCard title="The problem" subtitle="What went wrong, how serious it is and who is responsible" as="form" aria-label="8D details" bodyClassName="flex flex-col gap-3" noValidate
-      onSubmit={(e) => { e.preventDefault(); if (dirty) mutation.mutate({ action: "update", id: capa.id, body: changes }); }}>
+      onSubmit={(e) => { e.preventDefault(); if (dirty) mutation.mutate({ action: "update", id: capa.id, body: versioned(changes) }); }}>
       <Field label="Title" value={form.title} onChange={set("title")} disabled={!editable} required maxLength={200} />
       <TextAreaField label="Problem statement" required value={form.problemStatement} onChange={set("problemStatement")} disabled={!editable} rows={4} maxLength={5000}
         hint="State the problem as a fact the customer would recognise, without naming a cause" />

@@ -1,4 +1,4 @@
-import { apiFieldName, takeExpectedVersion } from './versioned';
+import { apiFieldName, rowsOf, takeExpectedVersion } from './versioned';
 
 describe('takeExpectedVersion', () => {
   it('reads rowVersion from the body and removes it, so a strict body schema never sees it', () => {
@@ -30,5 +30,16 @@ describe('apiFieldName', () => {
     expect(apiFieldName('quantity_affected')).toBe('quantityAffected');
     expect(apiFieldName('d2_how_many')).toBe('d2HowMany');
     expect(apiFieldName('owner_user_id')).toBe('ownerId');
+  });
+});
+
+describe('rowsOf', () => {
+  const a = { id: '11111111-2222-3333-4444-555555555555' };
+  it('finds the rows of a register answer', () => {
+    expect(rowsOf({ data: [a, { id: 'x' }, null] })).toEqual([a]);
+    expect(rowsOf({ items: [a] })).toEqual([a]);
+    expect(rowsOf([a])).toEqual([a]);
+    expect(rowsOf({ revisions: [a], data: [] }, 'revisions')).toEqual([a]);
+    expect(rowsOf(null)).toEqual([]);
   });
 });

@@ -1,8 +1,10 @@
+import { useRef, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
+import { tookTheirs, withVersion } from "../lib/editConflicts";
 
 /** Document control (docs/document-control-plan.md): types, documents and their revisions. */
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "documents", ...rest];
@@ -132,8 +134,24 @@ export const useSaveDraft = (revisionId) => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
   const revKey = key(organisationId, "revision", revisionId);
-  return useMutation({
-    mutationFn: (body) => apiFetch(`/document-revisions/${revisionId}`, { method: "PATCH", body, organisationId }),
+  // Edit conflicts (EC3): every save says it is based on the draft as this page loaded it (lib/editConflicts.js follows this person's own saves
+  // from there), so text someone else saved meanwhile is never overwritten unasked. When the person loads theirs, `reloads` goes up so the
+  // editor can start again from the saved text.
+  const base = useRef(null);
+  const [reloads, setReloads] = useState(0);
+  const mutation = useMutation({
+    mutationFn: async (body) => {
+      if (!base.current || base.current.id !== revisionId) {
+        const cached = queryClient.getQueryData(revKey);
+        base.current = { id: revisionId, rowVersion: cached?.rowVersion ?? null };
+      }
+      const answer = await apiFetch(`/document-revisions/${revisionId}`, { method: "PATCH", body: withVersion(base.current, body), organisationId });
+      if (tookTheirs(answer) && answer?.rowVersion) {
+        base.current = { id: revisionId, rowVersion: answer.rowVersion };
+        setReloads((n) => n + 1);
+      }
+      return answer;
+    },
     onMutate: async (body) => {
       await queryClient.cancelQueries({ queryKey: revKey });
       const previous = queryClient.getQueryData(revKey);
@@ -146,6 +164,7 @@ export const useSaveDraft = (revisionId) => {
       return refreshOrganisation(queryClient, organisationId);
     },
   });
+  return { ...mutation, reloads };
 };
 
 /** The shape `AttachmentDrop` expects: `mutate({ path, body })` for `/document-files/<id>/delete|restore`. */

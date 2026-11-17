@@ -8,6 +8,7 @@ import Dialog from "../ui/Dialog";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { FormError, TextAreaField } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
+import { changesSince } from "../../lib/editConflicts";
 
 const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm font-normal text-primary-text placeholder:text-tertiary-text focus:outline-none focus:border-brand-primary";
 
@@ -28,6 +29,7 @@ const FindingDialog = ({ record, question, finding, onClose, onSaved }) => {
   const [requirement, setRequirement] = useState(finding?.requirement ?? "");
   const [ownerId, setOwnerId] = useState(finding?.owner?.id ?? null);
   const [dueOn, setDueOn] = useState(finding?.dueOn ?? null);
+  const [opened] = useState(finding);
 
   // A new finding starts with the classification that suits the answer, until the person chooses one.
   const suggested = !editing && classes.data ? suggestClassification(classes.data, question)?.id : null;
@@ -50,7 +52,7 @@ const FindingDialog = ({ record, question, finding, onClose, onSaved }) => {
     };
     mutation.mutate(
       editing
-        ? { path: `/audit-findings/${finding.id}`, method: "PATCH", body }
+        ? { path: `/audit-findings/${finding.id}`, method: "PATCH", body: changesSince(opened, body) }
         : { path: `/audit-records/${record.id}/findings`, body: { ...body, ...(question?.response ? { responseId: question.response.id } : {}) } },
       {
         onSuccess: (saved) => {

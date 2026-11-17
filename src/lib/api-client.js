@@ -2,6 +2,7 @@ import supabase from "../supabase-client";
 import { browserTimeZone } from "./timeZones";
 import { NETWORK_BLOCKED_EVENT, REAUTH_EVENT, SSO_REQUIRED_EVENT } from "./security";
 import { SEAT_REQUIRED_EVENT } from "./memberOnboarding";
+import { versionedSave } from "./editConflicts";
 
 /** Base URL of the QMS API (see api/README.md). */
 export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
@@ -33,8 +34,27 @@ const newId = () =>
  * @param {string} [options.reason] sent as X-Change-Reason (recorded in the audit trail)
  * @param {string} [options.idempotencyKey] sent as Idempotency-Key
  * @param {"json"|"blob"} [options.as] "blob" returns the answer as a Blob (a file such as a stamped PDF); errors are still the API's JSON
+ *
+ * A PATCH or PUT whose body carries `rowVersion` (the version of the record the screen was showing) is checked for edit conflicts: see
+ * lib/editConflicts.js (merged without asking when nobody else changed the same fields, otherwise the person chooses).
  */
-export async function apiFetch(path, { method = "GET", body, organisationId, reason, idempotencyKey, as = "json" } = {}) {
+export async function apiFetch(path, options = {}) {
+  const method = options.method ?? "GET";
+  const body = options.body;
+  if ((method === "PATCH" || method === "PUT") && body && typeof body === "object" && !Array.isArray(body) && "rowVersion" in body) {
+    if (typeof body.rowVersion !== "string" || !body.rowVersion) {
+      const rest = { ...body };
+      delete rest.rowVersion;
+      return send(path, { ...options, body: rest });
+    }
+    return versionedSave(send, path, options, signedInUserId);
+  }
+  return send(path, options);
+}
+
+const signedInUserId = async () => (await supabase.auth.getSession()).data?.session?.user?.id ?? null;
+
+async function send(path, { method = "GET", body, organisationId, reason, idempotencyKey, as = "json" } = {}) {
   const { data } = await supabase.auth.getSession();
   const accessToken = data?.session?.access_token;
   const correlationId = newId();

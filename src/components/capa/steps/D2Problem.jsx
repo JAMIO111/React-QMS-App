@@ -7,16 +7,19 @@ import { useCapaMutation } from "../../../hooks/useCapa";
 import { DIMENSIONS, FIVE_W2H, IS_IS_NOT_ROWS } from "../../../lib/capa";
 import { FormError, TextAreaField } from "../../master-data/shared";
 import CTAButton from "@/components/CTAButton";
+import { withVersion } from "../../../lib/editConflicts";
 
 const FiveW2HDialog = ({ capa, onClose }) => {
   const mutation = useCapaMutation();
   const [form, setForm] = useState(() => Object.fromEntries(FIVE_W2H.map((q) => [q.key, capa.problem[q.key] ?? ""])));
+  // the dialog edits the 8D as it was when it opened
+  const [opened] = useState(capa);
   const submit = (e) => {
     e.preventDefault();
     const changes = {};
     for (const q of FIVE_W2H) if (form[q.key].trim() !== (capa.problem[q.key] ?? "")) changes[`d2${q.key[0].toUpperCase()}${q.key.slice(1)}`] = form[q.key].trim() || null;
     if (Object.keys(changes).length === 0) return onClose();
-    mutation.mutate({ action: "update", id: capa.id, body: changes }, { onSuccess: onClose });
+    mutation.mutate({ action: "update", id: capa.id, body: withVersion(opened, changes) }, { onSuccess: onClose });
   };
   return (
     <Dialog title="5W2H: describe the problem" onClose={onClose} width="max-w-3xl">

@@ -15,6 +15,7 @@ import { ErrorNotice, FormError, SelectField, TextAreaField } from "../master-da
 import CTAButton from "@/components/CTAButton";
 import { ArrowUpIcon, ChevronDownIcon, PlusIcon, Trash2Icon } from "@/components/icons";
 import Callout from "../ui/Callout";
+import { withVersion } from "../../lib/editConflicts";
 
 const empty = {
   title: "", category: "product", severity: "medium", description: "", actions: [], effectiveDate: "", expiryDate: "", acknowledgeBy: "",
@@ -128,6 +129,8 @@ const QualityAlertForm = () => {
   const [problem, setProblem] = useState(null);
   const [operation, setOperation] = useState("");
   const [partAdded, setPartAdded] = useState(null);
+  // the draft as the form loaded it: a save says it was based on that version (edit conflicts)
+  const [opened, setOpened] = useState(null);
 
   const departments = useAllDepartments();
   const machines = useMachines();
@@ -138,6 +141,7 @@ const QualityAlertForm = () => {
   useEffect(() => {
     if (id && existing.data && !loaded) {
       setForm(fromAlert(existing.data));
+      setOpened(existing.data);
       setLoaded(true);
     }
   }, [id, existing.data, loaded]);
@@ -197,7 +201,7 @@ const QualityAlertForm = () => {
         ],
       },
     };
-    mutation.mutate(id ? { action: "update", id, body } : { action: "create", body }, { onSuccess: (a) => navigate(`/Documentation/Quality-Alerts/${a.id}`) });
+    mutation.mutate(id ? { action: "update", id, body: withVersion(opened, body) } : { action: "create", body }, { onSuccess: (a) => navigate(`/Documentation/Quality-Alerts/${a.id}`) });
   };
 
   return (

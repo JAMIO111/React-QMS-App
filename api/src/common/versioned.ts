@@ -22,6 +22,25 @@ import { ApiRequest, contextFrom } from './request-context';
 export const VERSIONED = 'qms:versioned';
 export const Versioned = (table: string) => SetMetadata(VERSIONED, table);
 
+/**
+ * On a GET that answers several records of one table (a register page, or a list inside a record such as a plan's revisions): every row gets its
+ * `rowVersion`, read in one query, so an edit dialog opened from a row can say which version it was based on. `key` names the list in the answer
+ * (default: `data`, then `items`, then the answer itself when it is an array).
+ */
+export const VERSIONED_ROWS = 'qms:versioned-rows';
+export const VersionedRows = (table: string, key?: string) => SetMetadata(VERSIONED_ROWS, { table, key });
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_ROWS = 1000;
+
+/** The objects of an answer that are rows of the table. */
+export function rowsOf(body: unknown, key?: string): Array<Record<string, unknown>> {
+  if (!body || typeof body !== 'object') return [];
+  const b = body as Record<string, unknown>;
+  const list = key ? b[key] : Array.isArray(body) ? body : (b.data ?? b.items);
+  if (!Array.isArray(list)) return [];
+  return list.filter((r): r is Record<string, unknown> => !!r && typeof r === 'object' && typeof (r as { id?: unknown }).id === 'string' && UUID.test((r as { id: string }).id)).slice(0, MAX_ROWS);
+}
+
 const VERSION_PATTERN = /^[0-9]{1,20}$/;
 const MUTATING = new Set(['PATCH', 'PUT', 'POST']);
 
@@ -73,9 +92,16 @@ export class VersionInterceptor implements NestInterceptor {
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    if (context.getType() !== 'http') return next.handle();
     const table = this.reflector.get<string | undefined>(VERSIONED, context.getHandler());
-    if (!table || context.getType() !== 'http') return next.handle();
+    const rows = this.reflector.get<{ table: string; key?: string } | undefined>(VERSIONED_ROWS, context.getHandler());
+    if (!table && !rows) return next.handle();
     const req = context.switchToHttp().getRequest<ApiRequest & { params: Record<string, string> }>();
+    if (!table) {
+      if (!rows || !req.user || req.method !== 'GET') return next.handle();
+      return next.handle().pipe(mergeMap((body) => from(this.attachRowVersions(req, rows.table, rowsOf(body, rows.key)).then(() => body))));
+    }
+    const listed = rows && req.method === 'GET' ? rows : null;
     const res = context.switchToHttp().getResponse<{ setHeader: (k: string, v: string) => void; headersSent?: boolean }>();
     const id = req.params?.id;
     if (!id || !req.user) return next.handle();
@@ -85,6 +111,7 @@ export class VersionInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       mergeMap((body) => from(this.attachVersion(req, res, table, id, body))),
+      mergeMap((body) => (listed ? from(this.attachRowVersions(req, listed.table, rowsOf(body, listed.key)).then(() => body)) : from([body]))),
       catchError((error) => (expected && isConflict(error) ? from(this.conflict(req, table, id, expected)).pipe(mergeMap((e) => throwError(() => e))) : throwError(() => error))),
     );
   }
@@ -99,6 +126,21 @@ export class VersionInterceptor implements NestInterceptor {
     if (!res.headersSent) res.setHeader('ETag', `"${version}"`);
     if (body && typeof body === 'object' && !Array.isArray(body) && (body as { id?: unknown }).id === id) return { ...(body as object), rowVersion: version };
     return body;
+  }
+
+  /** Puts each row's version on it, in place (rows the caller may not read under RLS, or tables without the column, are left as they are). */
+  private async attachRowVersions(req: ApiRequest, table: string, rows: Array<Record<string, unknown>>) {
+    if (!rows.length) return;
+    const ctx = { ...contextFrom(req), expectedVersions: undefined };
+    const ids = `{${rows.map((r) => r.id as string).join(',')}}`;
+    const found = await this.database
+      .asUser(ctx, async (db) => (await db.execute<{ id: string; v: string | null }>(sql`select id::text as id, app.row_version(updated_at) as v from ${sql.raw(quoteTable(table))} where id = any(${ids}::uuid[])`)).rows)
+      .catch(() => [] as Array<{ id: string; v: string | null }>);
+    const byId = new Map(found.map((f) => [f.id, f.v]));
+    for (const row of rows) {
+      const v = byId.get(String(row.id).toLowerCase());
+      if (v) row.rowVersion = v;
+    }
   }
 
   /** The 409 answer: what changed since the version the save was based on, and who changed it. */

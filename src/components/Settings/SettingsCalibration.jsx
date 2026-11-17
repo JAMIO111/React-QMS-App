@@ -24,6 +24,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
+import { changesSince } from "../../lib/editConflicts";
 
 const UNIT_OPTIONS = INTERVAL_UNITS.map((u) => ({ value: u.id, label: u.name }));
 
@@ -161,7 +162,7 @@ const TypeCard = ({ type, canManage }) => {
     <li
       className={`flex flex-col gap-3 rounded-xl border border-border-color bg-primary-bg p-4 ${type.active ? "" : "opacity-70"}`}>
       {editing && (
-        <TypeDialog type={type} canManage={canManage} pending={mutation.isPending} onClose={() => setEditing(false)} onSubmit={(body) => patch(body, `${body.name} saved.`)} />
+        <TypeDialog type={type} canManage={canManage} pending={mutation.isPending} onClose={() => setEditing(false)} onSubmit={(body) => patch(changesSince(editing, body), `${body.name} saved.`)} />
       )}
       <div className="flex flex-wrap items-center justify-between gap-5">
           <div className="min-w-0 flex-1">
@@ -210,7 +211,7 @@ const TypeCard = ({ type, canManage }) => {
               <>
                 <button
                   type="button"
-                  onClick={() => setEditing(true)}
+                  onClick={() => setEditing(type)}
                   aria-label={`Edit ${type.name}`}
                   title="Edit"
                   className="rounded-md p-1.5 text-secondary-text hover:bg-border-color/60 hover:text-primary-text cursor-pointer">

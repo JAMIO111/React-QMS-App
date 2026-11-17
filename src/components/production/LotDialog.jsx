@@ -15,6 +15,7 @@ import { StatusBadge, StatusMoves } from "./shared";
 import CTAButton from "@/components/CTAButton";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
+import { changesSince } from "../../lib/editConflicts";
 
 /**
  * Add or edit a lot. A lot is *produced* (optionally from a production order) or *received* from a supplier. Its number, part, origin and order are fixed once it exists;
@@ -47,6 +48,7 @@ const LotDialog = ({ lot, onClose, readOnly = false }) => {
   const received = form.origin === "received";
   const valid = form.lotNumber.trim() && form.partId && (!form.quantity || Number(form.quantity) > 0);
 
+  const [opened] = useState(lot);
   const submit = (e) => {
     e.preventDefault();
     const quantity = form.quantity === "" ? null : Number(form.quantity);
@@ -65,7 +67,7 @@ const LotDialog = ({ lot, onClose, readOnly = false }) => {
         }
       : { quantity, notes: form.notes.trim() || null, ...(received ? { supplierId: form.supplierId, receivedOn: form.receivedOn || null } : {}) };
     mutation.mutate(
-      { path: creating ? "/lots" : `/lots/${lot.id}`, method: creating ? "POST" : "PATCH", body },
+      { path: creating ? "/lots" : `/lots/${lot.id}`, method: creating ? "POST" : "PATCH", body: creating ? body : changesSince(opened, body) },
       {
         onSuccess: (data) => {
           showToast({ type: "success", title: "Saved", message: `Lot ${data.lotNumber} ${creating ? "created" : "updated"}.` });

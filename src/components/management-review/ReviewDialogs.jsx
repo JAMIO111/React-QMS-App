@@ -12,6 +12,7 @@ import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import { changesSince } from "../../lib/editConflicts";
 
 const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   <div className="flex justify-end gap-2">
@@ -47,6 +48,7 @@ export const PlanReviewDialog = ({ existing, onClose, onSaved }) => {
   const { user } = useAuth();
   const people = usePeople();
   const started = existing && existing.status !== "planned";
+  const [opened] = useState(existing);
   const [title, setTitle] = useState(existing?.title ?? "");
   const [from, setFrom] = useState(existing?.periodFrom ?? null);
   const [to, setTo] = useState(existing?.periodTo ?? null);
@@ -60,7 +62,7 @@ export const PlanReviewDialog = ({ existing, onClose, onSaved }) => {
     const body = { title: title.trim(), plannedOn: plannedOn ?? null, chairId };
     if (!started) Object.assign(body, { periodFrom: from, periodTo: to });
     if (started && heldOn) body.heldOn = heldOn;
-    run(existing ? { action: "update", id: existing.id, body } : { action: "plan", body });
+    run(existing ? { action: "update", id: existing.id, body: changesSince(opened, body) } : { action: "plan", body });
   };
   return (
     <Dialog title={existing ? `Edit ${existing.reference}` : "Plan a management review"} onClose={onClose} width="max-w-xl">

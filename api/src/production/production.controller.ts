@@ -1,4 +1,4 @@
-import { Versioned } from '../common/versioned';
+import { Versioned, VersionedRows } from '../common/versioned';
 import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -62,6 +62,7 @@ export class ProductionController {
   @ApiQuery({ name: 'page', required: false, schema: { type: 'integer', minimum: 1 } })
   @ApiQuery({ name: 'pageSize', required: false, schema: { type: 'integer', minimum: 1, maximum: 200 } })
   @ApiOkResponse({ schema: openApiSchema(OrderPage) })
+  @VersionedRows('production_orders')
   listOrders(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.listOrders(ctx, parse(OrderListQuery, query), pickCustomFilters(query));
   }
@@ -162,6 +163,7 @@ export class ProductionController {
   @ApiQuery({ name: 'page', required: false, schema: { type: 'integer', minimum: 1 } })
   @ApiQuery({ name: 'pageSize', required: false, schema: { type: 'integer', minimum: 1, maximum: 200 } })
   @ApiOkResponse({ schema: openApiSchema(LotPage) })
+  @VersionedRows('lots')
   listLots(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.listLots(ctx, parse(LotListQuery, query), pickCustomFilters(query));
   }

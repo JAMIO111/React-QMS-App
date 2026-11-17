@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { PresentationIcon, PrinterIcon } from "@/components/icons";
 import Breadcrumb from "../Breadcrumb";
@@ -15,6 +15,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { decisionCategoryLabel, formatDay, REVIEW_STATUS, reviewPath } from "../../lib/qualityObjectives";
 import { InputCard } from "./ReviewParts";
 import { ActionDialog, AttendeesDialog, DecisionDialog, PlanReviewDialog, TextDialog } from "./ReviewDialogs";
+import { tookTheirs, withVersion } from "../../lib/editConflicts";
 
 const ATTENDANCE_WORDS = { invited: "Invited", present: "Present", apologies: "Apologies" };
 const ACTION_STATUS = { open: "Open", done: "Done", cancelled: "Cancelled" };
@@ -31,6 +32,10 @@ const ReviewPage = () => {
   const { showToast } = useToast();
   const [dialog, setDialog] = useState(null);
   const [gathering, setGathering] = useState(null);
+  // Minutes are saved as typing pauses; every save says it is based on the review as this page loaded it (edit conflicts), and when the person
+  // loads someone else's minutes the editor starts again from them.
+  const minutesBase = useRef(null);
+  const [minutesReloads, setMinutesReloads] = useState(0);
   useBreadcrumbNames([
     { path: reviewPath(id), label: r ? r.reference : null },
     { path: "/Management-Review", label: "Management review", to: "/Management-Review/Reviews" },
@@ -52,7 +57,24 @@ const ReviewPage = () => {
     setGathering(section ?? "all");
     run({ action: "gather", id: r.id, body: section ? { sections: [section] } : {} }, "Not gathered", () => setGathering(null));
   };
-  const saveMinutes = (minutes) => new Promise((resolve, reject) => mutation.mutate({ action: "setMinutes", id: r.id, body: { minutes } }, { onSuccess: resolve, onError: reject }));
+  const saveMinutes = (minutes) => {
+    if (!minutesBase.current || minutesBase.current.id !== r.id) minutesBase.current = { id: r.id, rowVersion: r.rowVersion };
+    return new Promise((resolve, reject) =>
+      mutation.mutate(
+        { action: "setMinutes", id: r.id, body: withVersion(minutesBase.current, { minutes }) },
+        {
+          onSuccess: (answer) => {
+            if (tookTheirs(answer)) {
+              minutesBase.current = { id: r.id, rowVersion: answer.rowVersion };
+              setMinutesReloads((n) => n + 1);
+            }
+            resolve(answer);
+          },
+          onError: reject,
+        },
+      ),
+    );
+  };
   const reviewed = r.inputs.filter((i) => i.reviewed).length;
   const present = r.attendees.filter((a) => a.attendance === "present").length;
 
@@ -165,7 +187,7 @@ const ReviewPage = () => {
 
       {r.status !== "planned" && (
         <Card title="Minutes" subtitle={r.canHold ? "Saved as you type" : undefined}>
-          {r.canHold || r.minutes ? <DocumentEditor key={r.status} value={r.minutes} editable={r.canHold} onChange={saveMinutes} label="Minutes" /> : <p className="text-sm text-secondary-text">No minutes were written.</p>}
+          {r.canHold || r.minutes ? <DocumentEditor key={`${r.status}-${minutesReloads}`} value={r.minutes} editable={r.canHold} onChange={saveMinutes} label="Minutes" /> : <p className="text-sm text-secondary-text">No minutes were written.</p>}
         </Card>
       )}
 

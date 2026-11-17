@@ -1,4 +1,4 @@
-import { Versioned } from '../common/versioned';
+import { Versioned, VersionedRows } from '../common/versioned';
 import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -72,6 +72,7 @@ export class MachinesController {
   @OrganisationScoped(MD_READ)
   @listQueries([ApiQuery({ name: 'siteId', required: false, schema: { type: 'string', format: 'uuid' } })])
   @ApiOkResponse({ schema: openApiSchema(pageSchema(Machine)) })
+  @VersionedRows('machines')
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.listMachines(ctx, parse(MachineListQuery, query), pickCustomFilters(query));
   }
@@ -105,6 +106,7 @@ export class PartFamiliesController {
   @OrganisationScoped(MD_READ)
   @listQueries()
   @ApiOkResponse({ schema: openApiSchema(pageSchema(PartFamily)) })
+  @VersionedRows('part_families')
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.listFamilies(ctx, parse(PartFamilyListQuery, query), pickCustomFilters(query));
   }
@@ -217,6 +219,7 @@ export class ControlPlansController {
   @Get(':id')
   @OrganisationScoped(PC_READ)
   @ApiOkResponse({ schema: openApiSchema(ControlPlanDetail) })
+  @VersionedRows('control_plan_revisions', 'revisions')
   get(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.getPlan(ctx, parse(Uuid, id));
   }

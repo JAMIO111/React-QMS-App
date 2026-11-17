@@ -1,4 +1,4 @@
-import { Versioned } from '../common/versioned';
+import { Versioned, VersionedRows } from '../common/versioned';
 import { CustomValuesOnlyBody } from '../custom-fields/custom-fields.schemas';
 import { pickCustomFilters } from '../custom-fields/custom-values';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
@@ -186,6 +186,7 @@ export class GaugeTypesController {
   @OrganisationScoped()
   @includeInactive()
   @ApiOkResponse({ schema: openApiSchema(z.object({ data: z.array(GaugeType) })) })
+  @VersionedRows('gauge_types')
   async list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return { data: await this.service.listTypes(ctx, parse(GaugeTypeQuery, query), pickCustomFilters(query)) };
   }

@@ -11,6 +11,7 @@ import { ActiveBadge, DataList, SearchBox } from "./shared";
 import CTAButton from "@/components/CTAButton";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
+import { changesSince } from "../../lib/editConflicts";
 
 /** The custom-field kind of record for each register. */
 const ENTITY_TYPES = { customers: "customer", suppliers: "supplier" };
@@ -27,6 +28,7 @@ const PartyForm = ({ kind, party, onDone }) => {
   const { showToast } = useToast();
   const [form, setForm] = useState(party ? { ...emptyForm, ...Object.fromEntries(Object.entries(party).map(([k, v]) => [k, v ?? ""])) } : emptyForm);
   const [customValues, setCustomValues] = useState({});
+  const [opened] = useState(party);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const label = LABELS[kind].one;
 
@@ -42,7 +44,7 @@ const PartyForm = ({ kind, party, onDone }) => {
       ...(party ? { active: form.active } : withCustomValues(customValues)),
     };
     mutation.mutate(
-      { path: party ? `/${kind}/${party.id}` : `/${kind}`, method: party ? "PATCH" : "POST", body },
+      { path: party ? `/${kind}/${party.id}` : `/${kind}`, method: party ? "PATCH" : "POST", body: party ? changesSince(opened, body) : body },
       {
         onSuccess: () => {
           showToast({ type: "success", title: "Saved", message: `The ${label} was ${party ? "updated" : "added"}.` });

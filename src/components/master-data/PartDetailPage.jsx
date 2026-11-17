@@ -23,6 +23,7 @@ import RequirementPreview from "../process-control/RequirementPreview";
 import FeatureMapsCard from "../measurement-imports/FeatureMapsCard";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
+import { changesSince } from "../../lib/editConflicts";
 
 const STATUS_STYLE = {
   draft: "bg-warning-color/15 text-primary-text",
@@ -58,13 +59,13 @@ const PartDetails = ({ part, canManage }) => {
       {
         path: `/parts/${part.id}`,
         method: "PATCH",
-        body: {
+        body: changesSince(part, {
           partNumber: form.partNumber.trim(),
           name: form.name.trim(),
           description: form.description.trim(),
           partFamilyId: form.partFamilyId,
           active: form.active,
-        },
+        }),
       },
       { onSuccess: () => showToast({ type: "success", title: "Saved", message: "Part updated." }) }
     );

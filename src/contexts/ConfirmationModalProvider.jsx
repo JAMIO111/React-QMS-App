@@ -5,6 +5,7 @@ import {
   createContext,
   useRef,
   useEffect,
+  useId,
 } from "react";
 import { createPortal } from "react-dom";
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, XIcon } from "@/components/icons";
@@ -20,6 +21,8 @@ export const ConfirmProvider = ({ children }) => {
   const [options, setOptions] = useState(null);
   const [resolveFn, setResolveFn] = useState(() => {});
   const modalRef = useRef(null);
+  const titleId = useId();
+  const messageId = useId();
 
   const confirm = useCallback((opts) => {
     setOptions(opts);
@@ -102,6 +105,11 @@ export const ConfirmProvider = ({ children }) => {
           <div className="fixed bg-gradient-to-br from-primary-bg/40 to-border-color/40 inset-0 flex items-center justify-center z-50">
             <div
               ref={modalRef}
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby={options.title ? titleId : undefined}
+              aria-label={options.title ? undefined : "Confirm"}
+              aria-describedby={options.message ? messageId : undefined}
               className="bg-secondary-bg/5 backdrop-blur-sm rounded-2xl shadow-lg border border-primary-text/20 max-w-sm w-full p-6 relative"
               onClick={(e) => e.stopPropagation()}>
               <div className="absolute top-2 right-2">
@@ -116,11 +124,11 @@ export const ConfirmProvider = ({ children }) => {
                 {getIcon(options.type)}
               </div>
               {options.title && (
-                <h2 className="text-xl text-primary-text font-semibold mb-4 px-2 text-center">
+                <h2 id={titleId} className="text-xl text-primary-text font-semibold mb-4 px-2 text-center">
                   {options.title}
                 </h2>
               )}
-              <p className="mb-6 text-secondary-text text-center">
+              <p id={messageId} className="mb-6 text-secondary-text text-center">
                 {options.message}
               </p>
               <div className="flex flex-row w-full h-10 justify-center gap-6">

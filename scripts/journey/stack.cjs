@@ -1,7 +1,7 @@
 /**
  * The stack the browser journey runs against (docs/onboarding-plan.md §16): the REAL API (compiled, api/dist) on the REAL migrated database,
  * with two stand-ins for outside services:
- *   - a fake Supabase (auth: sign-up, password sign-in, refresh, user, sign-out; REST: the two reads the app makes; storage: uploads kept in memory, which the
+ *   - a fake Supabase (auth: sign-up, password sign-in, refresh, user, sign-out, single sign-on with a small company sign-in page; REST: the two reads the app makes; storage: uploads kept in memory, which the
  *     API's file store reads back for file imports), and
  *   - a fake Stripe gateway (Checkout page included) in place of api.stripe.com.
  * Nothing here is used in production. Needs DATABASE_URL and DATABASE_ADMIN_URL (scripts/db-check.sh sets them).
@@ -48,15 +48,20 @@ function multipartFile(buf, contentType) {
   return buf;
 }
 
-async function startFakeSupabase(admin, stripe, log, storage) {
+async function startFakeSupabase(admin, stripe, log, storage, sso) {
   const passwords = new Map(); // email -> password
-  const refresh = new Map(); // refresh token -> user id
-  const userJson = (u) => ({ id: u.id, aud: 'authenticated', role: 'authenticated', email: u.email, email_confirmed_at: u.email_confirmed_at, created_at: u.created_at, app_metadata: {}, user_metadata: u.raw_user_meta_data ?? {}, identities: [{ id: u.id }], factors: [] });
-  const session = async (u) => {
+  const refresh = new Map(); // refresh token -> { uid, claims } (a refreshed token keeps how and when the person signed in, as Supabase does)
+  const ssoUsers = new Map(); // user id -> SSO provider id, for the identity Supabase gives a company account ("sso:<provider id>")
+  const userJson = (u) => ({ id: u.id, aud: 'authenticated', role: 'authenticated', email: u.email, email_confirmed_at: u.email_confirmed_at, created_at: u.created_at, app_metadata: {}, user_metadata: u.raw_user_meta_data ?? {},
+    identities: [ssoUsers.has(u.id) ? { id: u.id, provider: `sso:${ssoUsers.get(u.id)}` } : { id: u.id, provider: 'email' }], factors: [] });
+  // amr lists how the person signed in, with the time, like Supabase's tokens (the API's single sign-on and session-age rules read it).
+  const session = async (u, claims = { amr: [{ method: 'password', timestamp: Math.floor(Date.now() / 1000) }] }) => {
     const rt = crypto.randomBytes(8).toString('hex');
-    refresh.set(rt, u.id);
-    return { access_token: await sign(u), token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, refresh_token: rt, user: userJson(u) };
+    refresh.set(rt, { uid: u.id, claims });
+    return { access_token: await sign(u, claims), token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, refresh_token: rt, user: userJson(u) };
   };
+  const html = (res, status, page) => { res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(page); };
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   const body = (req) => new Promise((resolve) => { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => { try { resolve(b ? JSON.parse(b) : {}); } catch { resolve({}); } }); });
   const send = (res, status, data, headers = {}) => { res.writeHead(status, { 'Content-Type': 'application/json', ...headers }); res.end(data === undefined ? '' : JSON.stringify(data)); };
   const authed = async (req) => {
@@ -100,15 +105,50 @@ async function startFakeSupabase(admin, stripe, log, storage) {
         return storage.has(key) ? (res.writeHead(200, cors), res.end(storage.get(key))) : reply(404, { message: 'Object not found' });
       }
       if (url.pathname === '/auth/v1/resend') return reply(200, {});
+      // Single sign-on (docs/sso-plan.md SSX): signInWithSSO asks for the company's sign-in page by domain or provider id; the stand-in sends the
+      // browser to its own small "identity provider" page, which signs the person in and comes back like Supabase's implicit flow does.
+      if (url.pathname === '/auth/v1/sso' && req.method === 'POST') {
+        const b = await body(req);
+        const provider = b.provider_id ? sso.providers.get(b.provider_id) : [...sso.providers.values()].find((p) => p.domains.includes(String(b.domain ?? '').toLowerCase()));
+        if (!provider) return reply(404, { code: 404, error_code: 'sso_provider_not_found', msg: 'No SSO provider assigned for this domain' });
+        return reply(200, { url: `http://127.0.0.1:${PORTS.supabase}/idp?provider=${provider.id}&redirect_to=${encodeURIComponent(b.redirect_to ?? '')}` });
+      }
+      if (url.pathname === '/idp' && req.method === 'GET') {
+        const p = url.searchParams;
+        return html(res, 200, `<!doctype html><title>Journey company sign-in</title><main><h1>Journey company sign-in</h1>
+          <form method="post" action="/idp"><input type="hidden" name="provider" value="${esc(p.get('provider'))}"><input type="hidden" name="redirect_to" value="${esc(p.get('redirect_to'))}">
+          <label>Company email <input name="email" type="email"></label> <label>Given name <input name="given"></label> <label>Family name <input name="family"></label>
+          <button type="submit">Sign in to your company</button></form></main>`);
+      }
+      if (url.pathname === '/idp' && req.method === 'POST') {
+        let raw = ''; for await (const c of req) raw += c;
+        const f = new URLSearchParams(raw);
+        const provider = sso.providers.get(f.get('provider'));
+        const email = String(f.get('email') ?? '').trim().toLowerCase();
+        if (!provider || !provider.domains.includes(email.split('@')[1])) return html(res, 400, '<p>This company does not know that address.</p>');
+        let u = (await admin.query('select * from auth.users where lower(email) = $1 and is_sso_user', [email])).rows[0];
+        if (!u) {
+          // Supabase never links a company account to a password account with the same address: it is a new user (SS0 §12).
+          const meta = { given_name: f.get('given') || undefined, family_name: f.get('family') || undefined };
+          u = (await admin.query('insert into auth.users (email, raw_user_meta_data, email_confirmed_at, is_sso_user) values ($1, $2, now(), true) returning *', [email, JSON.stringify(meta)])).rows[0];
+        }
+        await admin.query('update auth.users set last_sign_in_at = now() where id = $1', [u.id]);
+        ssoUsers.set(u.id, provider.id);
+        const s = await session(u, { amr: [{ method: 'sso/saml', timestamp: Math.floor(Date.now() / 1000), provider: provider.id }] });
+        const back = new URLSearchParams({ access_token: s.access_token, refresh_token: s.refresh_token, expires_in: '3600', expires_at: String(s.expires_at), token_type: 'bearer' });
+        res.writeHead(303, { Location: `${f.get('redirect_to')}#${back}` });
+        return res.end();
+      }
       if (url.pathname === '/auth/v1/token' && req.method === 'POST') {
         const b = await body(req);
         if (url.searchParams.get('grant_type') === 'refresh_token') {
-          const uid = refresh.get(b.refresh_token);
-          if (!uid) return reply(400, { error: 'invalid_grant', error_description: 'Invalid Refresh Token' });
-          const u = (await admin.query('select * from auth.users where id = $1', [uid])).rows[0];
-          return reply(200, await session(u));
+          const held = refresh.get(b.refresh_token);
+          if (!held) return reply(400, { error: 'invalid_grant', error_description: 'Invalid Refresh Token' });
+          const u = (await admin.query('select * from auth.users where id = $1', [held.uid])).rows[0];
+          return reply(200, await session(u, held.claims));
         }
-        const u = (await admin.query('select * from auth.users where lower(email) = lower($1)', [b.email])).rows[0];
+        // A password sign-in is never to a company (SSO) account, as in Supabase.
+        const u = (await admin.query('select * from auth.users where lower(email) = lower($1) and not is_sso_user', [b.email])).rows[0];
         if (!u || passwords.get(u.email.toLowerCase()) !== b.password) return reply(400, { error: 'invalid_grant', error_description: 'Invalid login credentials', error_code: 'invalid_credentials' });
         if (!u.email_confirmed_at) return reply(400, { error: 'invalid_grant', error_description: 'Email not confirmed', error_code: 'email_not_confirmed' });
         return reply(200, await session(u));
@@ -246,7 +286,27 @@ async function startStack({ appUrl, log = console.log }) {
   const { IntegrationFileStore } = require('../../api/dist/integrations/core/file-store');
   const { InspectionFileStore } = require('../../api/dist/measurement-imports/file-store');
   const { FileLinkSigner } = require('../../api/dist/files/file-links');
+  const { SupabaseSsoAdmin } = require('../../api/dist/sso/supabase-sso-admin');
+  const { DnsTxtResolver } = require('../../api/dist/sso/dns-txt');
+  const { PasswordVerifier } = require('../../api/dist/sso/password-verifier');
   const stripe = makeFakeStripe(StripeGateway, ApiError);
+  // Single sign-on stand-ins: Supabase's provider registry (Management API), DNS TXT records the journey "publishes", and the password check.
+  const sso = { providers: new Map(), dns: new Map() };
+  const ssoAdmin = {
+    get enabled() { return true; },
+    create: async (metadata, domains) => { const id = crypto.randomUUID(); sso.providers.set(id, { id, domains: [...domains] }); return { id, entityId: `https://idp.journey.test/${id}`, domains }; },
+    update: async (id, change) => { const p = sso.providers.get(id); if (change.domains) p.domains = [...change.domains]; return { id, entityId: `https://idp.journey.test/${id}`, domains: p.domains }; },
+    remove: async (id) => { sso.providers.delete(id); },
+  };
+  const dns = { txt: async (name) => { if (!sso.dns.has(name)) throw Object.assign(new Error('no record'), { code: 'ENOTFOUND' }); return sso.dns.get(name); } };
+  let fakeSupabase;
+  const passwordVerifier = {
+    get enabled() { return true; },
+    verify: async (email, password) => {
+      const u = (await admin.query('select id, email from auth.users where lower(email) = lower($1) and not is_sso_user', [email])).rows[0];
+      return u && fakeSupabase.passwords.get(u.email.toLowerCase()) === password ? u.id : null;
+    },
+  };
   // Uploaded import files: the browser stores them in the stand-in, and the API reads them back from the same place.
   const storage = new Map();
   const fromBucket = (bucket) => ({ get enabled() { return true; }, download: async (p) => (storage.has(`${bucket}/${p}`) ? new Uint8Array(storage.get(`${bucket}/${p}`)) : null) });
@@ -270,17 +330,21 @@ async function startStack({ appUrl, log = console.log }) {
     .overrideProvider(InspectionFileStore).useValue(fromBucket('inspection-files'))
     .overrideProvider(FileLinkSigner).useValue(signer)
     .overrideProvider(ConnectorRegistry).useValue(erpConnectors(erp))
+    .overrideProvider(SupabaseSsoAdmin).useValue(ssoAdmin)
+    .overrideProvider(DnsTxtResolver).useValue(dns)
+    .overrideProvider(PasswordVerifier).useValue(passwordVerifier)
     .compile();
   const nest = moduleRef.createNestApplication({ bufferLogs: true, rawBody: true });
   const api = configureApp(nest, env);
   await api.init();
   await api.listen(PORTS.api, '127.0.0.1');
-  const fake = await startFakeSupabase(admin, stripe, log, storage);
+  const fake = await startFakeSupabase(admin, stripe, log, storage, sso);
+  fakeSupabase = fake;
   const { WorkerService } = require('../../api/dist/worker/worker.service');
   // One worker tick, as pg_cron would call it every minute in production.
   const tick = (budgetMs = 30000) => nest.get(WorkerService).tick({ source: 'manual', budgetMs });
   return {
-    admin, api, stripe, erp, passwords: fake.passwords, ports: PORTS, sign, tick,
+    admin, api, stripe, erp, sso, passwords: fake.passwords, ports: PORTS, sign, tick,
     stop: async () => { await new Promise((r) => fake.server.close(r)); await new Promise((r) => erp.server.close(r)); await api.close(); await admin.end(); },
   };
 }

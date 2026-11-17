@@ -209,6 +209,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner });
   await networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await connectorAgent({ page, stack, APP, orgName, see, shot, step, log });
+  await singleSignOn({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -2047,4 +2048,157 @@ async function connectorAgent({ page, stack, APP, orgName, see, shot, step, log 
     await agent.stop();
     await running;
   }
+}
+
+/**
+ * Single sign-on (docs/sso-plan.md SSX). The stand-in Supabase plays the company's identity provider (scripts/journey/stack.cjs: its /idp page signs
+ * the person in and comes back with a token whose amr names the provider), DNS answers the records the step "publishes", and Supabase's provider
+ * registry is in memory. The owner proves the domain, connects the sign-in, lets people at the domain join and names Colin break-glass; then brings
+ * their own account across with their old password and requires single sign-on. Colin's password is refused (break-glass with a second factor is
+ * checked through the API: the stand-in has no second factor); Colin's company account is moved across by the owner; a newcomer joins by themselves.
+ * Runs last: it leaves the organisation on "optional".
+ */
+async function singleSignOn({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }) {
+  const DOMAIN = 'journey.test';
+  const org = (await stack.admin.query(`select id from public.organisations where name = $1`, [orgName])).rows[0];
+  const settings = async () => (await stack.admin.query(`select sso_mode, sso_join from public.organisation_settings where organisation_id = $1`, [org.id])).rows[0];
+  const waitFor = async (what, test) => {
+    for (let i = 0; i < 50; i += 1) { if (await test()) return; await new Promise((r) => setTimeout(r, 200)); }
+    throw new Error(`timed out waiting for ${what}`);
+  };
+  const contexts = [];
+  const newPage = async (who, extra) => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    contexts.push(ctx);
+    const p = await ctx.newPage();
+    p.setDefaultTimeout(15000);
+    watch(p, who, extra);
+    return p;
+  };
+  const companySignIn = async (p, email, given, family) => {
+    await p.goto(`${APP}/sso`);
+    await p.getByLabel('Work email').fill(email);
+    await p.getByRole('button', { name: 'Continue' }).click();
+    await see(p.getByRole('heading', { name: 'Journey company sign-in' }));
+    await p.getByLabel('Company email').fill(email);
+    await p.getByLabel('Given name').fill(given);
+    await p.getByLabel('Family name').fill(family);
+    await p.getByRole('button', { name: 'Sign in to your company' }).click();
+    // A first company sign-in asks for the terms (the names came from the company).
+    await see(p.getByRole('heading', { name: 'Welcome to Fortress QMS' }));
+    await p.getByRole('checkbox').check();
+    await p.getByRole('button', { name: 'Continue' }).click();
+  };
+  const hello = (p, name) => see(p.getByRole('heading', { level: 1, name: new RegExp(`good (morning|afternoon|evening), ${name}`, 'i') }));
+
+  step('the owner proves the email domain with a DNS record and connects the company sign-in');
+  await page.goto(`${APP}/Settings/Security`);
+  const card = (p) => p.getByRole('region', { name: 'Single sign-on', exact: true }); // the "Who can be invited" card has its own domain field
+  await card(page).getByLabel('Add a domain').fill(DOMAIN);
+  await card(page).getByRole('button', { name: 'Add', exact: true }).click();
+  const row = card(page).getByRole('listitem', { name: DOMAIN });
+  await see(row.getByText('Waiting for the record'));
+  const token = (await stack.admin.query(`select verification_token from public.organisation_sso_domains where organisation_id = $1 and domain = $2 and removed_at is null`, [org.id, DOMAIN])).rows[0].verification_token;
+  await see(row.getByText(`fortress-verification=${token}`));
+  stack.sso.dns.set(DOMAIN, [`fortress-verification=${token}`]);
+  await row.getByRole('button', { name: 'Check now' }).click();
+  await see(row.getByText('Verified'));
+  await card(page).getByRole('button', { name: 'Connect your sign-in' }).click();
+  const connect = page.getByRole('dialog', { name: "Connect your company's sign-in" });
+  await connect.getByLabel(/Metadata address/).fill('https://idp.journey.test/federationmetadata.xml');
+  await connect.getByRole('button', { name: 'Connect' }).click();
+  await see(card(page).getByRole('region', { name: 'Connected sign-in' }));
+  if (![...stack.sso.providers.values()].some((p) => p.domains.includes(DOMAIN))) throw new Error('the verified domain was not sent to the sign-in service');
+  await shot(page, '160-sso-domain-and-provider');
+
+  step('people at the domain may join as inspectors; Colin (an admin) is a break-glass member');
+  await card(page).getByRole('radiogroup', { name: 'Who can join' }).getByRole('radio', { name: 'Anyone at your domains' }).click();
+  await waitFor('joining by domain', async () => (await settings()).sso_join === 'domain');
+  await card(page).getByLabel(/They start as/).click();
+  await page.getByRole('option', { name: /Inspector/ }).click();
+  await waitFor('inspectors join', async () => (await stack.admin.query(`select r.key from public.organisation_settings s join public.roles r on r.id = s.sso_default_role_id where s.organisation_id = $1`, [org.id])).rows[0]?.key === 'inspector');
+  const colinPw = (await stack.admin.query(`select u.id, m.id membership from auth.users u join public.organisation_users m on m.user_id = u.id and m.organisation_id = $2 where lower(u.email) = lower($1) and not u.is_sso_user`, [colleague.email, org.id])).rows[0];
+  await stack.admin.query(`insert into public.user_role_assignments (organisation_id, membership_id, role_id) select $1, $2, id from public.roles where organisation_id = $1 and key = 'admin'`, [org.id, colinPw.membership]);
+  await page.reload();
+  await card(page).getByLabel('Add a break-glass member').click();
+  await page.getByRole('option', { name: /Colin/ }).click();
+  await see(card(page).getByRole('list', { name: 'Break-glass members' }).getByText(/Colin/));
+  await shot(page, '161-sso-joining-and-break-glass');
+
+  step('the owner signs in with their company account and brings their password account across');
+  await page.goto('about:blank'); // the password account is about to leave the organisation: stop its page asking the API
+  const olivia = await newPage('olivia-sso');
+  await companySignIn(olivia, owner.email, owner.first, owner.surname);
+  const bring = olivia.getByRole('form', { name: `Bring your account at ${orgName} across` });
+  await bring.getByLabel(/Your old Fortress password/).fill(PASSWORD);
+  await shot(olivia, '162-sso-bring-account-across');
+  await bring.getByRole('button', { name: 'Bring my account across' }).click();
+  await hello(olivia, 'Olivia');
+  const selfMove = (await stack.admin.query(`select count(*)::int n from public.sso_account_moves where organisation_id = $1 and by_self`, [org.id])).rows[0];
+  if (selfMove.n !== 1) throw new Error('the owner\'s move was not recorded');
+
+  step('the owner requires single sign-on (typed confirmation, from a company sign-in)');
+  await olivia.goto(`${APP}/Settings/Security`);
+  await card(olivia).getByRole('radiogroup', { name: 'Single sign-on' }).getByRole('radio', { name: 'Required' }).click();
+  const require = olivia.getByRole('dialog', { name: 'Require single sign-on?' });
+  await require.getByLabel(/Type "require" to confirm/).fill('require');
+  await shot(olivia, '163-sso-require-confirm');
+  await require.getByRole('button', { name: 'Require single sign-on' }).click();
+  await waitFor('required', async () => (await settings()).sso_mode === 'required');
+
+  step("Colin's password is refused; break-glass with a second factor still gets in");
+  const colinPwPage = await newPage('colin-password', [(status) => status === 403]);
+  await signIn(colinPwPage, APP, colleague.email);
+  await see(colinPwPage.getByRole('heading', { level: 1, name: `${orgName} requires your company sign-in` }));
+  await shot(colinPwPage, '164-sso-password-refused');
+  const asColin = async (claims) => fetch(`http://127.0.0.1:${stack.ports.api}/api/v1/organisations/current`, {
+    headers: { Authorization: `Bearer ${await stack.sign({ id: colinPw.id, email: colleague.email }, { amr: [{ method: 'password', timestamp: Math.floor(Date.now() / 1000) }], ...claims })}`, 'X-Organisation-Id': org.id },
+  });
+  const one = await asColin({});
+  const two = await asColin({ aal: 'aal2' });
+  if (one.status !== 403 || two.status !== 200) throw new Error(`break-glass: password ${one.status}, with a second factor ${two.status}`);
+  await colinPwPage.goto('about:blank');
+
+  step("Colin signs in with his company account; the owner moves his membership and work across");
+  const colin = await newPage('colin-sso');
+  await companySignIn(colin, colleague.email, colleague.first, colleague.surname);
+  await see(colin.getByRole('form', { name: `Bring your account at ${orgName} across` }));
+  // His password account is a member: he brings it across, and is not offered a second membership (fixed after the first run of this step).
+  if (await colin.getByRole('button', { name: `Join ${orgName}` }).count()) throw new Error('a member\'s company account was offered "join" as well');
+  await olivia.goto(`${APP}/Settings/Users`);
+  const toMove = olivia.getByRole('list', { name: 'Accounts to move' }).getByRole('listitem', { name: colleague.email });
+  await see(toMove);
+  await shot(olivia, '165-sso-accounts-to-move');
+  await toMove.getByRole('button', { name: 'Move', exact: true }).click();
+  await olivia.getByRole('alertdialog', { name: /Move .* to their company account/ }).getByRole('button', { name: 'Move', exact: true }).click();
+  await waitFor('Colin moved', async () => (await stack.admin.query(`select count(*)::int n from public.sso_account_moves where organisation_id = $1 and not by_self`, [org.id])).rows[0].n === 1);
+  await colin.reload();
+  await hello(colin, 'Colin');
+  await shot(colin, '166-sso-colin-moved');
+
+  step('a newcomer at the domain signs in with their company account and joins as an inspector');
+  const sam = await newPage('sam-sso');
+  const samEmail = `sam.${RUN}@${DOMAIN}`;
+  await companySignIn(sam, samEmail, 'Sam', 'Newcomer');
+  await see(sam.getByLabel(`Join ${orgName}`));
+  await shot(sam, '167-sso-join');
+  await sam.getByRole('button', { name: `Join ${orgName}` }).click();
+  await hello(sam, 'Sam');
+  const joined = (await stack.admin.query(
+    `select r.key from auth.users u join public.organisation_users m on m.user_id = u.id and m.organisation_id = $2 and m.status = 'active'
+       join public.user_role_assignments a on a.membership_id = m.id join public.roles r on r.id = a.role_id where u.email = $1`, [samEmail, org.id])).rows.map((r) => r.key);
+  if (joined.join() !== 'inspector') throw new Error(`the newcomer joined as ${joined.join() || 'nothing'}`);
+
+  step('the owner sees the moves and the history, and makes single sign-on optional again');
+  await olivia.goto(`${APP}/Settings/Security`);
+  await card(olivia).getByText(/Accounts moved to company sign-in \(2\)/).click();
+  await see(card(olivia).getByRole('list', { name: 'Accounts moved' }).getByText(/Colin/));
+  await card(olivia).getByRole('radiogroup', { name: 'Single sign-on' }).getByRole('radio', { name: 'Optional' }).click();
+  await waitFor('optional', async () => (await settings()).sso_mode === 'optional');
+  await card(olivia).getByText(/History of changes/).click();
+  await see(card(olivia).getByRole('list', { name: 'Single sign-on changes' }).getByText(/now required/).first());
+  await shot(olivia, '168-sso-history');
+  const told = (await stack.admin.query(`select count(*)::int n from public.notifications where organisation_id = $1 and entity_type = 'sso_changes'`, [org.id])).rows[0];
+  log(`single sign-on notices: ${told.n}`);
+  for (const c of contexts) await c.close();
 }

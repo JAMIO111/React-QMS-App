@@ -102,6 +102,10 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.sso_joinable_organisations()), 0::bigint, 'not without a company sign-in');
   PERFORM pg_temp.session(pat, 'aal1', pg_temp.saml(sp));
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.sso_joinable_organisations()), 0::bigint, 'someone invited accepts the invitation instead');
+  PERFORM pg_temp.session(ivy_sso, 'aal1', pg_temp.saml(sp));
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.sso_joinable_organisations()), 0::bigint, 'a member''s company account brings the password account across instead of joining');
+  r := pg_temp.fails(format($f$SELECT app.join_by_company_sign_in(%L)$f$, org));
+  PERFORM pg_temp.assert_true(r LIKE 'QM030%', 'and cannot join a second time');
   PERFORM pg_temp.session(newbie, 'aal1', pg_temp.saml(sp));
   PERFORM pg_temp.assert_true((SELECT role_name = 'Viewer' FROM app.sso_joinable_organisations() WHERE organisation_id = org), 'joinable, as a viewer');
   m := app.join_by_company_sign_in(org);
@@ -180,6 +184,8 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.sso_member_matches(org)), 0::bigint, 'until marked as someone else');
   r := pg_temp.fails(format($f$SELECT app.move_member_to_sso_account(%L, %L, %L)$f$, org, ann, '5f400000-0000-0000-0000-000000000a21'));
   PERFORM pg_temp.assert_true(r LIKE 'QM030%your company account%', 'nobody moves their own account from here');
+  PERFORM pg_temp.session('5f400000-0000-0000-0000-000000000a21', 'aal1', pg_temp.saml(sp));
+  PERFORM pg_temp.assert_true(EXISTS (SELECT 1 FROM app.sso_joinable_organisations() WHERE organisation_id = org), 'marked as someone else, that company account may join');
   PERFORM pg_temp.logout();
 END $$;
 

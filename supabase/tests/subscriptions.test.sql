@@ -74,10 +74,13 @@ DECLARE org uuid := (SELECT v FROM ids WHERE k = 'org'); m_owner uuid := (SELECT
 BEGIN
   PERFORM pg_temp.login('35000000-0000-0000-0000-000000000101');
   PERFORM pg_temp.assert_eq(app.has_permission(org, 'ncr.read'), false, 'owner without a seat: restricted module blocked');
+  PERFORM pg_temp.assert_eq('ncr.read' IN (SELECT app.my_visible_permissions(org)), false, 'and the screens do not offer it (/me)');
+  PERFORM pg_temp.assert_eq('subscription.seats' IN (SELECT app.my_visible_permissions(org)), true, 'billing still shows');
   PERFORM pg_temp.assert_eq(app.has_permission(org, 'subscription.seats'), true, 'billing permission is not subscription-restricted');
   PERFORM pg_temp.assert_eq((SELECT reason FROM app.check_entitlement(org, 'nonconformance', 'view_ncrs')), 'no_seat_assigned', 'reason: no seat');
   PERFORM app.assign_subscription_package(m_owner, 'controller');
   PERFORM pg_temp.assert_eq(app.has_permission(org, 'ncr.read'), true, 'controller package allows module');
+  PERFORM pg_temp.assert_eq('ncr.read' IN (SELECT app.my_visible_permissions(org)), true, 'and the screens offer it');
   PERFORM pg_temp.logout();
 END $$;
 
@@ -94,6 +97,8 @@ BEGIN
   PERFORM pg_temp.login('35000000-0000-0000-0000-000000000102');
   PERFORM pg_temp.assert_eq(app.has_permission(org, 'inspection.read'), true, 'observer can view');
   PERFORM pg_temp.assert_eq(app.has_permission(org, 'inspection.record'), false, 'observer cannot record despite the role');
+  PERFORM pg_temp.assert_eq('inspection.record' IN (SELECT app.my_visible_permissions(org)), false, 'nor do the screens offer recording');
+  PERFORM pg_temp.assert_eq('inspection.read' IN (SELECT app.my_visible_permissions(org)), true, 'reading still shows');
   PERFORM pg_temp.assert_eq((SELECT required_plan FROM app.check_entitlement(org, 'inspections', 'record_inspections')), 'Contributor', 'required package reported');
   PERFORM pg_temp.assert_eq((SELECT (app.my_subscription_access(org))->'modules'->>'inspections'), 'view', 'observer level for client');
   PERFORM pg_temp.logout();

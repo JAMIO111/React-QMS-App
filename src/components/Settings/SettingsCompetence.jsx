@@ -373,9 +373,20 @@ const SettingsCompetence = () => {
                     <IconButton label={`Edit ${p.name}`} onClick={() => setDialog({ type: "position", item: p })}>
                       <PencilIcon />
                     </IconButton>
-                    <CTAButton buttonType="button" type="neutral" onClick={() => setDialog({ type: "retire-position", item: p })}>
+                    <CTAButton
+                      buttonType="button"
+                      type="neutral"
+                      onClick={() => setDialog({ type: "retire-position", item: p })}
+                      disabled={p.holders > 0}
+                      aria-describedby={p.holders > 0 ? `retire-${p.id}` : undefined}>
                       Retire
                     </CTAButton>
+                    {/* The database refuses to retire a position someone still holds, so the button says why. */}
+                    {p.holders > 0 && (
+                      <span id={`retire-${p.id}`} className="text-xs text-secondary-text">
+                        Held by {p.holders === 1 ? "1 person" : `${p.holders} people`}
+                      </span>
+                    )}
                   </>
                 ) : (
                   <CTAButton buttonType="button" type="neutral" onClick={() => reactivate("position", p)}>

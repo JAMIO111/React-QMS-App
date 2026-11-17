@@ -15,7 +15,7 @@ const data = {
     { id: "s3", code: "OLD", name: "Old gauge", category: { id: "c1", label: "Inspection" }, description: null, refreshMonths: null, active: false, retiredReason: "Gauge scrapped", positions: 0 },
   ],
   positions: [
-    { id: "p1", code: "INSP", name: "CMM inspector", description: null, active: true, retiredReason: null, skills: [{ skillId: "s1", code: "CMM", name: "CMM operation", category: "Inspection", requiredLevel: 3, skillActive: true }] },
+    { id: "p1", code: "INSP", name: "CMM inspector", description: null, active: true, retiredReason: null, holders: 2, skills: [{ skillId: "s1", code: "CMM", name: "CMM operation", category: "Inspection", requiredLevel: 3, skillActive: true }] },
   ],
 };
 vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }) }));
@@ -64,6 +64,14 @@ describe("Settings → Competence", () => {
     await userEvent.type(screen.getByLabelText("Reassess every (months)"), "500");
     expect(screen.getByText(/whole number from 1 to 120/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("keeps Retire switched off for a position people hold, saying how many", () => {
+    render(<SettingsCompetence />);
+    const positions = screen.getByRole("list", { name: "Positions" });
+    const retire = within(positions).getByRole("button", { name: "Retire" });
+    expect(retire).toBeDisabled();
+    expect(retire).toHaveAccessibleDescription("Held by 2 people");
   });
 
   it("retires a skill only with a reason, and brings a retired one back", async () => {

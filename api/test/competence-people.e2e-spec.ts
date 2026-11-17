@@ -52,6 +52,9 @@ describe('competence people', () => {
     const again = await api().post(`/api/v1/competence/people/${ctx.xavier}/positions`).set(h).send({ positionId: ctx.pos, startedOn: day(-10) }).expect(409);
     expect(again.body.error.code).toBe('competence_rule');
     await api().post(`/api/v1/competence/people/${ctx.xavier}/positions`).set(h).send({ positionId: ctx.pos, startedOn: 'yesterday' }).expect(400);
+    // The position now says one person holds it (the settings screen keeps Retire off and says so).
+    const position = (await api().get(`/api/v1/competence/positions/${ctx.pos}`).set(h).expect(200)).body;
+    expect(position.holders).toBe(1);
   });
 
   it('assessing closes the gap, sets the expiry from the skill, and keeps history', async () => {

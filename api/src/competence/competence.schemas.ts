@@ -129,6 +129,8 @@ export const Position = z.object({
   retiredReason: z.string().nullable(),
   retiredAt: Iso.nullable(),
   skills: z.array(PositionSkill),
+  /** People holding the position now (as far as the caller may see). A position someone holds cannot be retired. */
+  holders: z.number().int(),
   createdAt: Iso,
 });
 export type Position = z.infer<typeof Position>;

@@ -151,7 +151,8 @@ export class CompetenceService {
                          from public.competence_position_skills ps
                          join public.competence_skills k on k.id = ps.skill_id
                          join public.competence_categories c on c.id = k.category_id
-                        where ps.position_id = p.id), '[]'::jsonb) as skills
+                        where ps.position_id = p.id), '[]'::jsonb) as skills,
+             (select count(*)::int from public.competence_employee_positions x where x.position_id = p.id and x.ended_on is null) as holders
         from public.competence_positions p
        where p.organisation_id = ${orgOf(ctx)}::uuid ${where}
        order by lower(p.name)`);
@@ -164,6 +165,7 @@ export class CompetenceService {
       retiredReason: (r.retired_reason as string) ?? null,
       retiredAt: r.retired_at ? (iso(r.retired_at) as string) : null,
       skills: z.array(PositionSkill).parse(r.skills),
+      holders: Number(r.holders ?? 0),
       createdAt: iso(r.created_at) as string,
     }));
   }

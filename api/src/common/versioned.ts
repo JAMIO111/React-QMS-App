@@ -10,6 +10,8 @@ import { ApiRequest, contextFrom } from './request-context';
  * Edit conflicts (docs/edit-conflicts-plan.md EC2). A record's GET and PATCH/PUT handlers carry @Versioned('<table>'):
  *
  *  - the answer gets `rowVersion` (the record's updated_at to the microsecond, app.row_version) when it is the record named by the route's :id
+ *    (in the body only, never as an ETag: an answer also holds child rows, which change without moving the record's version, and the browser
+ *    would then serve its cached copy for a 304);
  *    (not `version`: audits, workflow rules and part revisions already use that name for their own numbering);
  *  - a save may say which version it was based on, as `rowVersion` in the body (removed before the body is checked, so strict schemas
  *    are unchanged) or as an If-Match header; the API puts it in the request context and DatabaseService.asUser hands it to the database, whose touch_updated
@@ -102,7 +104,6 @@ export class VersionInterceptor implements NestInterceptor {
       return next.handle().pipe(mergeMap((body) => from(this.attachRowVersions(req, rows.table, rowsOf(body, rows.key)).then(() => body))));
     }
     const listed = rows && req.method === 'GET' ? rows : null;
-    const res = context.switchToHttp().getResponse<{ setHeader: (k: string, v: string) => void; headersSent?: boolean }>();
     const id = req.params?.id;
     if (!id || !req.user) return next.handle();
 
@@ -110,20 +111,19 @@ export class VersionInterceptor implements NestInterceptor {
     if (expected) req.expectedVersions = { [`${table}:${id}`]: expected };
 
     return next.handle().pipe(
-      mergeMap((body) => from(this.attachVersion(req, res, table, id, body))),
+      mergeMap((body) => from(this.attachVersion(req, table, id, body))),
       mergeMap((body) => (listed ? from(this.attachRowVersions(req, listed.table, rowsOf(body, listed.key)).then(() => body)) : from([body]))),
       catchError((error) => (expected && isConflict(error) ? from(this.conflict(req, table, id, expected)).pipe(mergeMap((e) => throwError(() => e))) : throwError(() => error))),
     );
   }
 
-  /** Adds the record's current version to an answer that is the record itself (and as an ETag either way). */
-  private async attachVersion(req: ApiRequest, res: { setHeader: (k: string, v: string) => void; headersSent?: boolean }, table: string, id: string, body: unknown) {
+  /** Adds the record's current version to an answer that is the record itself. */
+  private async attachVersion(req: ApiRequest, table: string, id: string, body: unknown) {
     const ctx = { ...contextFrom(req), expectedVersions: undefined };
     const version = await this.database
       .asUser(ctx, async (db) => (await db.execute<{ v: string | null }>(sql`select app.row_version(updated_at) as v from ${sql.raw(quoteTable(table))} where id = ${id}::uuid`)).rows[0]?.v ?? null)
       .catch(() => null);
     if (!version) return body;
-    if (!res.headersSent) res.setHeader('ETag', `"${version}"`);
     if (body && typeof body === 'object' && !Array.isArray(body) && (body as { id?: unknown }).id === id) return { ...(body as object), rowVersion: version };
     return body;
   }

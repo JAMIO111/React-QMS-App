@@ -33,10 +33,10 @@ afterAll(async () => {
 });
 
 describe('a record carries its version', () => {
-  it('in the answer and as an ETag', async () => {
+  it('in the answer, never as the ETag (the answer holds child rows that change without moving the version; the browser would serve a stale copy)', async () => {
     const res = await api().get(`/api/v1/ncrs/${ncr}`).set(await as(ids.ownerA)).expect(200);
     expect(res.body.rowVersion).toMatch(/^[0-9]{10,20}$/);
-    expect(res.headers.etag).toBe(`"${res.body.rowVersion}"`);
+    expect(res.headers.etag).not.toBe(`"${res.body.rowVersion}"`);
   });
 });
 

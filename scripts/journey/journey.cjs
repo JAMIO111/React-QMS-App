@@ -233,6 +233,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await workflowsAndReminders({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague });
   await cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner });
+  await editConflicts({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await connectorAgent({ page, stack, APP, orgName, see, shot, step, log });
   await singleSignOn({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
@@ -1914,6 +1915,73 @@ async function cmmImports({ page, stack, APP, orgName, see, shot, step, log, own
  * recovers access (back to monitor) and the owner switches restrictions off again. The API trusts one proxy hop, as on Vercel, so the address is
  * the X-Forwarded-For the browser's requests carry here.
  */
+/**
+ * Edit conflicts (docs/edit-conflicts-plan.md EC4): the owner and Colin open the same non-conformance. Colin changes the title and saves; the owner,
+ * still looking at the version they opened, changes the severity and saves: both are kept and the owner is told. Then both change the description:
+ * the owner is asked, keeps theirs, and Colin's title is still there.
+ */
+async function editConflicts({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }) {
+  step('owner and Colin open the same non-conformance');
+  const { rows: [org] } = await stack.admin.query(`select o.id, (select id from public.sites where organisation_id = o.id limit 1) as site from public.organisations o where o.name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  const product = (await api('GET', '/ncr-classifications?kind=category')).data.find((c) => c.code === 'PRODUCT');
+  const ncr = await api('POST', '/ncrs', { source: 'internal', title: 'Chamfer missing', siteId: org.site, categoryId: product.id });
+  await api('PATCH', `/ncrs/${ncr.id}`, { severity: 'minor', description: 'Found at final check' });
+
+  await page.goto(`${APP}/Non-Conformance/Register/${ncr.id}`);
+  await see(page.getByRole('heading', { level: 1, name: ncr.reference }));
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const colin = await ctx.newPage();
+  colin.setDefaultTimeout(15000);
+  watch(colin, 'colin');
+  await signIn(colin, APP, colleague.email);
+  await see(colin.getByRole('heading', { level: 1, name: /good (morning|afternoon|evening), Colin/i }));
+  await colin.goto(`${APP}/Non-Conformance/Register/${ncr.id}`);
+  await see(colin.getByRole('heading', { level: 1, name: ncr.reference }));
+
+  step('Colin changes the title and saves');
+  await colin.getByLabel(/^Title/).fill('Chamfer missing on op 20');
+  await colin.getByRole('button', { name: 'Save changes' }).click();
+  await see(colin.getByText('Changes saved.'));
+
+  step('the owner, on the version they opened, changes the severity: both changes are kept and the owner is told');
+  await page.getByRole('combobox', { name: /^Severity/ }).click();
+  await page.getByRole('option', { name: 'Major' }).click();
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await see(page.getByText(/also changed Title.*; both changes kept\./));
+  await shot(page, 'ec-merged-note');
+  let row = (await stack.admin.query(`select title, severity, description from public.nonconformances where id = $1`, [ncr.id])).rows[0];
+  if (row.title !== 'Chamfer missing on op 20' || row.severity !== 'major') throw new Error(`both changes were not kept: ${JSON.stringify(row)}`);
+  // the owner's page refreshes after the save and shows Colin's title too
+  for (let i = 0; (await page.getByLabel(/^Title/).inputValue()) !== 'Chamfer missing on op 20'; i += 1) {
+    if (i > 50) throw new Error("the owner's page did not show Colin's title after saving");
+    await page.waitForTimeout(200);
+  }
+
+  step('both change the description; Colin saves first, the owner is asked and keeps theirs');
+  await colin.reload();
+  await see(colin.getByRole('heading', { level: 1, name: ncr.reference }));
+  await page.reload();
+  await see(page.getByRole('heading', { level: 1, name: ncr.reference }));
+  await colin.getByLabel(/^Description/).fill('Chamfer left off by the program');
+  await colin.getByRole('button', { name: 'Save changes' }).click();
+  await see(colin.getByText('Changes saved.'));
+  await page.getByLabel(/^Description/).fill('Operator skipped the chamfer tool');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Changed while you were editing' });
+  await see(dialog.getByText(/saved this/));
+  await see(dialog.getByTestId('theirs-description').getByText('Chamfer left off by the program'));
+  await see(dialog.getByTestId('mine-description').getByText('Operator skipped the chamfer tool'));
+  await shot(page, 'ec-clash-dialog');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await see(page.getByText(/your choices were saved/));
+  row = (await stack.admin.query(`select title, severity, description from public.nonconformances where id = $1`, [ncr.id])).rows[0];
+  if (row.description !== 'Operator skipped the chamfer tool' || row.title !== 'Chamfer missing on op 20' || row.severity !== 'major') throw new Error(`the owner's choice was not saved: ${JSON.stringify(row)}`);
+  log(`edit conflicts: ${ncr.reference} kept both changes, then the owner's description`);
+  await ctx.close();
+}
+
 async function networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }) {
   const OFFICE = '203.0.113.10';
   const HOME = '198.51.100.200';

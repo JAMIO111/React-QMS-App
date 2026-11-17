@@ -62,7 +62,7 @@ Work mailboxes (desktop Outlook on Windows, Microsoft 365 security) are the hard
 - draws the button with its table cell (Outlook ignores padding on a link);
 - uses **no conditional comments** (`<!--[if mso]>`): Supabase renders its templates with Go's `html/template`, which removes HTML comments;
 - is a fixed 600px column, made full width on phones by a small-screen rule;
-- asks clients to keep it in light colours (`color-scheme: light only`). Outlook's own dark mode may still recolour it.
+- has a white header with dark words (Outlook's dark mode turned the old dark header pale) and asks clients for light colours (`color-scheme: light only`); Outlook's dark mode may still recolour it, and its sun button shows the email in light colours.
 
 A banner such as "[EXTERNAL]" or long `safelinks.protection.outlook.com` addresses come from your organisation's mail policy, not the email.
 Sending from your own domain (custom SMTP or `MAIL_PROVIDER=resend`) is what most improves trust and keeps the email out of junk.

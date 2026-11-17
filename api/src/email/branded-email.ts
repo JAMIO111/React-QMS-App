@@ -51,11 +51,13 @@ export function renderBrandedEmail(input: BrandedEmailInput): { html: string; te
   // (html/template); the column is a fixed 600px table that a small-screen rule makes full width on phones.
   const FONT = "font-family:Arial,'Segoe UI',Helvetica,sans-serif";
 
-  const header = `<tr><td bgcolor="${INK}" style="background-color:${INK};padding:20px 32px;border-radius:12px 12px 0 0">
+  // A light header: Outlook's dark mode turns a dark band pale (and its white words dark), so a white header with dark words changes with the
+  // rest of the email instead of against it.
+  const header = `<tr><td bgcolor="#ffffff" style="background-color:#ffffff;padding:20px 32px;border:1px solid ${LINE};border-bottom:3px solid ${BRAND};border-radius:12px 12px 0 0">
 <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
 <td width="36" height="36" bgcolor="${BRAND}" align="center" valign="middle" style="width:36px;height:36px;background-color:${BRAND};border-radius:8px;${FONT};font-size:20px;line-height:36px;font-weight:bold;color:#ffffff;mso-line-height-rule:exactly">F</td>
 <td width="12" style="width:12px;font-size:0;line-height:0">&nbsp;</td>
-<td valign="middle" style="${FONT};font-size:18px;line-height:24px;font-weight:bold;color:#ffffff">Fortress QMS</td>
+<td valign="middle" style="${FONT};font-size:18px;line-height:24px;font-weight:bold;color:${INK}">Fortress QMS</td>
 </tr></table></td></tr>`;
 
   const paragraphs = input.paragraphs

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#05060a" />
+    <title>Fortress QMS | Offline</title>
+    <style>
+      body{margin:0;min-height:100dvh;display:grid;place-items:center;background:#05060a;color:#e8eaf0;font:16px/1.5 system-ui,sans-serif;text-align:center;padding:24px}
+      img{width:72px;height:72px;border-radius:16px}
+      h1{font-size:1.25rem;margin:16px 0 8px}
+      p{margin:0 0 20px;color:#9aa1b2;max-width:32ch}
+      button{font:inherit;padding:10px 18px;border:0;border-radius:8px;background:#1d4ed8;color:#fff;cursor:pointer}
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/pwa-192.png" alt="" />
+      <h1>You are offline</h1>
+      <p>Fortress needs a connection to show your quality records. Check your network and try again.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+  </body>
+</html>

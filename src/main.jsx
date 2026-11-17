@@ -426,3 +426,10 @@ createRoot(document.getElementById("root")).render(
     </QueryClientProvider>
   </StrictMode>
 );
+
+// Installable app: the worker only makes the app installable and shows an offline page; it never stores records.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}

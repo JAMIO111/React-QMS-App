@@ -122,12 +122,14 @@ describe('InvitationMailer', () => {
       const link = 'https://web.example/auth/confirm?token_hash=abc123&type=invite&next=%2Fset-password%3Fmode%3Dinvite';
       expect(mail.text).toContain(`Accept invitation: ${link}`);
       expect(mail.html).toContain(link.replace(/&/g, '&amp;'));
-      // who, the message (escaped), the role and the expiry, and the logo from the app
+      // who, the message (escaped), the role and the expiry; no pictures (work mail blocks them) and no comments (Supabase strips them)
       expect(mail.html).toContain('Olivia Owner');
       expect(mail.html).toContain('Welcome to the quality team &lt;3');
       expect(mail.html).toContain('Quality engineer');
       expect(mail.html).toContain('1 December 2026');
-      expect(mail.html).toContain('https://web.example/fortress-qms.png');
+      expect(mail.html).not.toMatch(/<img\b/);
+      expect(mail.html).not.toContain('<!--[if !mso]');
+      expect(mail.html).toMatch(/<td align="center" bgcolor="#2563eb"[^>]*padding:13px 28px/);
       expect(mail.html).not.toContain('<3');
     });
 

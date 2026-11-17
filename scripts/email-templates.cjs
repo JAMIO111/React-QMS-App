@@ -94,9 +94,8 @@ fs.mkdirSync(dir, { recursive: true });
 const subjects = [];
 for (const [name, t] of Object.entries(templates)) {
   const { html } = renderBrandedEmail({ ...t, appBaseUrl: LOGO_BASE });
-  // The logo comes from the app (Supabase's Site URL), the links are kept as template variables (escaping & is correct inside an href).
-  const out = html.split(`${LOGO_BASE}/fortress-qms.png`).join('{{ .SiteURL }}/fortress-qms.png');
-  fs.writeFileSync(path.join(dir, `${name}.html`), out);
+  // The links are kept as template variables (escaping & is correct inside an href).
+  fs.writeFileSync(path.join(dir, `${name}.html`), html);
   subjects.push(`${name}: ${t.subject}`);
 }
 fs.writeFileSync(path.join(dir, 'subjects.txt'), subjects.join('\n') + '\n');

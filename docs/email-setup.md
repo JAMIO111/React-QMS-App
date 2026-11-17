@@ -53,6 +53,20 @@ domain verified in Resend). Invitations are then made with Supabase's admin `gen
 invited them, their message, the role and the expiry date, from your own address. Notification emails use the same provider.
 Password resets and sign-up confirmations are still sent by Supabase (2a), so install those templates too (and custom SMTP for the sender).
 
+## How the emails are built to survive work mail
+
+Work mailboxes (desktop Outlook on Windows, Microsoft 365 security) are the hardest place for an email to look right, so the layout:
+
+- uses **no pictures** — Outlook blocks outside pictures by default; the header mark is drawn in HTML;
+- puts sizes and colours on the table cells as attributes (`width`, `bgcolor`) as well as in CSS, because Outlook draws with Word's engine;
+- draws the button with its table cell (Outlook ignores padding on a link);
+- uses **no conditional comments** (`<!--[if mso]>`): Supabase renders its templates with Go's `html/template`, which removes HTML comments;
+- is a fixed 600px column, made full width on phones by a small-screen rule;
+- asks clients to keep it in light colours (`color-scheme: light only`). Outlook's own dark mode may still recolour it.
+
+A banner such as "[EXTERNAL]" or long `safelinks.protection.outlook.com` addresses come from your organisation's mail policy, not the email.
+Sending from your own domain (custom SMTP or `MAIL_PROVIDER=resend`) is what most improves trust and keeps the email out of junk.
+
 ## Code
 
 - `src/components/auth/ConfirmEmailLink.jsx` (`/auth/confirm`; `safeNext` keeps `next` inside the app), `src/authService.js` (`emailLinkUrl`,

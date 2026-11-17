@@ -1,6 +1,18 @@
 import supabase from "./supabase-client";
 
 /**
+ * Where a link in an email lands: the confirm page, which uses the one-time token only when the person presses Continue (company email security
+ * that opens links first can't use it up), then goes to `next`. The email templates add `token_hash` and `type` to this address.
+ */
+export const emailLinkUrl = (next) => `${window.location.origin}/auth/confirm?next=${encodeURIComponent(next)}`;
+
+/** Uses the one-time token from an email link (on the confirm page, when the person presses Continue). Signs the person in. */
+export const verifyEmailLink = async (tokenHash, type) => {
+  const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+  if (error) throw error;
+};
+
+/**
  * Creates an account. The name and the accepted terms travel as sign-up metadata (the database keeps them on the profile).
  * Resolves `{ confirmationSent, user }`. An address that already has an account looks the same as a new one (Supabase answers with a user that has
  * no identities), so the screen never reveals whether an email is registered.
@@ -10,7 +22,7 @@ export const signUp = async (email, password, { firstName, surname, termsVersion
     email,
     password,
     options: {
-      emailRedirectTo: `${window.location.origin}/login`,
+      emailRedirectTo: emailLinkUrl("/"),
       data: { first_name: firstName, surname, terms_version: termsVersion },
     },
   });
@@ -40,7 +52,7 @@ export const resendVerification = async (email) => {
   const { error } = await supabase.auth.resend({
     type: "signup",
     email,
-    options: { emailRedirectTo: `${window.location.origin}/login` },
+    options: { emailRedirectTo: emailLinkUrl("/") },
   });
   if (error) throw error;
   return true;
@@ -65,7 +77,7 @@ export const passwordProblems = (password, email) => {
  */
 export const requestPasswordReset = async (email) => {
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/set-password?mode=reset`,
+    redirectTo: emailLinkUrl("/set-password?mode=reset"),
   });
   if (error) throw error;
 };

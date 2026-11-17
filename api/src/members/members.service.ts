@@ -5,7 +5,7 @@ import { ApiError } from '../common/api-error';
 import { apiErrorFromDatabase } from '../common/database-errors';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
-import { InvitationMailer } from './invitation-mailer.service';
+import { InvitationMailer, InviteEmailDetails } from './invitation-mailer.service';
 import {
   AddDepartmentBody,
   AssignRoleBody,
@@ -114,7 +114,7 @@ export class MembersService {
       return { member: await this.one(db, ctx.organisationId!, membershipId), organisationName: org.rows[0].name };
     });
     // Email after the invitation is committed; a failed email never loses the invitation.
-    const email = await this.sendInvitation(ctx, body.email, organisationName);
+    const email = await this.sendInvitation(ctx, body.email, organisationName, member);
     return { member, email };
   }
 
@@ -155,9 +155,18 @@ export class MembersService {
    * The invitation email. Someone at the organisation's single sign-on domains, while it is in use, is sent to the company sign-in instead of
    * being given a password account (docs/sso-plan.md SS6).
    */
-  private async sendInvitation(ctx: RequestContext, email: string, organisationName: string) {
+  private async sendInvitation(ctx: RequestContext, email: string, organisationName: string, member?: Member) {
     const domain = await this.companySignInDomain(ctx, email);
-    return domain ? this.mailer.sendCompanySignIn(email, organisationName, domain) : this.mailer.send(email, organisationName);
+    const details = await this.inviteDetails(ctx, member);
+    return domain ? this.mailer.sendCompanySignIn(email, organisationName, domain, details) : this.mailer.send(email, organisationName, fetch, details);
+  }
+
+  /** What the email says besides the organisation: who sent it (the caller), their message, the role and when it expires. */
+  private async inviteDetails(ctx: RequestContext, member?: Member): Promise<InviteEmailDetails> {
+    const inviterName = await this.database
+      .asUser(ctx, async (db) => (await db.execute<{ n: string | null }>(sql`select nullif(btrim(concat_ws(' ', first_name, surname)), '') as n from public.profiles where id = auth.uid()`)).rows[0]?.n ?? null)
+      .catch(() => null);
+    return { inviterName, message: member?.invite?.message ?? null, roleName: member?.roles?.[0]?.roleName ?? null, expiresAt: member?.invite?.expiresAt ?? null };
   }
 
   private async companySignInDomain(ctx: RequestContext, email: string): Promise<string | null> {
@@ -180,7 +189,7 @@ export class MembersService {
       const org = await db.execute<{ name: string }>(sql`select name from public.organisations where id = ${ctx.organisationId}::uuid`);
       return { member: await this.one(db, ctx.organisationId!, membershipId), organisationName: org.rows[0].name };
     });
-    const email = member.email ? await this.sendInvitation(ctx, member.email, organisationName) : ({ sent: false, reason: 'send_failed' } as const);
+    const email = member.email ? await this.sendInvitation(ctx, member.email, organisationName, member) : ({ sent: false, reason: 'send_failed' } as const);
     return { member, email };
   }
 

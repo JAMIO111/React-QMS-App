@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Confirm your email address</title></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">Confirm your email address to start using Fortress QMS.</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f1f5f9"><tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px">
+<tr><td style="background:#0f172a;padding:20px 32px;border-radius:12px 12px 0 0">
+<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
+<td style="padding-right:12px;vertical-align:middle"><img src="{{ .SiteURL }}/fortress-qms.png" width="36" height="36" alt="" style="display:block;border:0;border-radius:8px"></td>
+<td style="vertical-align:middle;font-size:18px;font-weight:700;color:#ffffff;letter-spacing:0.2px">Fortress QMS</td>
+</tr></table></td></tr>
+<tr><td style="background:#ffffff;padding:32px 32px 24px;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 12px 12px">
+<h1 style="margin:0 0 20px;font-size:22px;line-height:30px;font-weight:700;color:#0f172a">Confirm your email address</h1>
+<p style="margin:0 0 16px;font-size:15px;line-height:24px;color:#334155">Thanks for signing up to Fortress QMS. Confirm your email address to finish setting up your account.</p>
+
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px;border:1px solid #e2e8f0;border-radius:8px">
+<tr><td style="padding:10px 16px;font-size:13px;color:#64748b;width:38%;">Your email</td><td style="padding:10px 16px;font-size:14px;color:#0f172a;font-weight:600;">{{ .Email }}</td></tr>
+</table>
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:8px 0 24px"><tr>
+<td style="border-radius:8px;background:#2563eb"><a href="{{ .RedirectTo }}&amp;token_hash={{ .TokenHash }}&amp;type=email" target="_blank" style="display:inline-block;padding:13px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px">Confirm my email</a></td>
+</tr></table>
+<p style="margin:0 0 6px;font-size:13px;line-height:20px;color:#64748b">If the button does not work, copy this address into your browser:</p>
+<p style="margin:0 0 24px;font-size:13px;line-height:20px;word-break:break-all"><a href="{{ .RedirectTo }}&amp;token_hash={{ .TokenHash }}&amp;type=email" style="color:#2563eb;text-decoration:underline">{{ .RedirectTo }}&amp;token_hash={{ .TokenHash }}&amp;type=email</a></p>
+<div style="border-top:1px solid #e2e8f0;padding-top:16px"><p style="margin:0 0 10px;font-size:13px;line-height:20px;color:#64748b">If you didn&#39;t create a Fortress QMS account, you can ignore this email.</p></div>
+</td></tr>
+<tr><td style="padding:20px 32px;text-align:center;font-size:12px;line-height:18px;color:#64748b">
+You received this email because {{ .Email }} was used to sign up to Fortress QMS.<br>Fortress QMS · Quality management for manufacturers · © 2026
+</td></tr>
+</table></td></tr></table>
+</body></html>

@@ -159,6 +159,7 @@ const ForgotPassword = lazy(() => import("./components/auth/ForgotPassword.jsx")
 const SetPassword = lazy(() => import("./components/auth/SetPassword.jsx"));
 const SsoSignIn = lazy(() => import("./components/auth/SsoSignIn.jsx"));
 const AuthCallback = lazy(() => import("./components/auth/AuthCallback.jsx"));
+const ConfirmEmailLink = lazy(() => import("./components/auth/ConfirmEmailLink.jsx"));
 const MfaPage = lazy(() => import("./components/mfa/MfaPage.jsx"));
 const HomeRedirect = lazy(() => import("./components/HomeRedirect.jsx"));
 const ProtectedRoute = lazy(() => import("./components/ProtectedRoute.jsx"));
@@ -197,6 +198,8 @@ const router = createBrowserRouter([
       // Single sign-on (docs/sso-plan.md SS2): the company sign-in, and where it comes back to.
       { path: "sso", element: <SsoSignIn /> },
       { path: "auth/callback", element: <AuthCallback /> },
+      // Every link in an email lands here and is used only when the person presses Continue (link scanners cannot use it up).
+      { path: "auth/confirm", element: <ConfirmEmailLink /> },
     ],
   },
   {

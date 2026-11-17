@@ -74,6 +74,12 @@ const InviteForm = ({ roles, sites, departments }) => {
   const needsDepartment = !!roleId && !ORGANISATION_WIDE_ROLE_KEYS.includes(roleKey);
   const primary = deptIds.includes(primaryId) ? primaryId : deptIds[0];
   const toggle = (id) => setDeptIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+  // A person limited to a site works in that site's departments: only those are offered, and ones ticked at another site are let go.
+  const siteDepartments = siteId ? departments.filter((d) => d.siteId === siteId) : departments;
+  const chooseSite = (id) => {
+    setSiteId(id);
+    if (id) setDeptIds((ids) => ids.filter((x) => departments.find((d) => d.id === x)?.siteId === id));
+  };
 
   const submit = (e) => {
     e.preventDefault();
@@ -126,7 +132,7 @@ const InviteForm = ({ roles, sites, departments }) => {
         <ComboField
           label="Limited to site"
           value={siteId}
-          onChange={setSiteId}
+          onChange={chooseSite}
           placeholder="Whole organisation"
           options={sites.map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }))}
         />
@@ -154,9 +160,11 @@ const InviteForm = ({ roles, sites, departments }) => {
         </p>
         {departments.length === 0 ? (
           <p className="text-sm text-secondary-text">No departments yet. Add them under Settings → Organisation.</p>
+        ) : siteDepartments.length === 0 ? (
+          <p className="text-sm text-secondary-text">This site has no departments yet. Add them under Settings → Organisation.</p>
         ) : (
           <ul className="flex flex-wrap gap-2">
-            {departments.map((d) => {
+            {siteDepartments.map((d) => {
               const on = deptIds.includes(d.id);
               return (
                 <li key={d.id} className={`${chip} ${on ? "border-brand-primary" : ""}`}>

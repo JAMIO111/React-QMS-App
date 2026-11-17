@@ -9,6 +9,7 @@ const roles = [
 const departments = [
   { id: "d-gi", siteId: "s1", code: "GI", name: "Goods-in", active: true },
   { id: "d-fi", siteId: "s1", code: "FI", name: "Final inspection", active: true },
+  { id: "d-mx", siteId: "s2", code: "MX", name: "Machining", active: true },
 ];
 const members = [
   { membershipId: "m-me", userId: "u-me", email: "me@example.test", firstName: "Mia", surname: "Owner", status: "active", roles: [{ assignmentId: "a1", roleId: "r-owner", roleKey: "owner", roleName: "Owner", siteId: null }], departments: [] },
@@ -26,7 +27,7 @@ const confirm = vi.fn();
 vi.mock("../../hooks/useQmsApi", () => ({
   useMembers: () => membersState,
   useRoles: () => ({ data: { data: roles }, isLoading: false }),
-  useSites: () => ({ data: { data: [{ id: "s1", code: "PA", name: "Plant A" }] } }),
+  useSites: () => ({ data: { data: [{ id: "s1", code: "PA", name: "Plant A" }, { id: "s2", code: "PB", name: "Plant B" }] } }),
   useAllDepartments: () => ({ data: { data: departments } }),
   usePermissions: () => ({ can: (p) => permissions.includes(p) }),
   useMemberMutation: () => ({ mutate, isPending: false, error: null }),
@@ -69,6 +70,25 @@ describe("SettingsUsers", () => {
     membersState = { data: { data: members }, isLoading: false, error: null };
     seatOverview = { items: [{ planSlug: "controller", planName: "Controller", available: 1 }, { planSlug: "contributor", planName: "Contributor", available: 1 }, { planSlug: "observer", planName: "Observer", available: 0 }] };
     seatAssignments = [{ membershipId: "m-me", plan: { slug: "controller", name: "Controller" } }, { membershipId: "m-bob", plan: null }];
+  });
+
+  it("offers only the chosen site's departments, and lets go of ones ticked at another site", async () => {
+    permissions = ["members.read", "members.manage"];
+    render(<SettingsUsers />);
+    const form = screen.getByRole("form", { name: "Invite member" });
+    expect(within(form).getByRole("checkbox", { name: /Machining/ })).toBeInTheDocument();
+    await userEvent.click(within(form).getByRole("checkbox", { name: /Machining/ }));
+    await userEvent.click(within(form).getByRole("checkbox", { name: /Goods-in/ }));
+    await pick(form, "Limited to site", "PA");
+    expect(within(form).queryByRole("checkbox", { name: /Machining/ })).not.toBeInTheDocument();
+    expect(within(form).getByRole("checkbox", { name: /Goods-in/ })).toBeChecked();
+    await userEvent.type(within(form).getByLabelText("Email address"), "pa@example.test");
+    await pick(form, "Role", "Viewer");
+    await userEvent.click(within(form).getByRole("button", { name: "Send invitation" }));
+    expect(mutate).toHaveBeenCalledWith(
+      { action: "invite", body: { email: "pa@example.test", roleId: "r-viewer", siteId: "s1", departmentIds: ["d-gi"], primaryDepartmentId: "d-gi" } },
+      expect.any(Object),
+    );
   });
 
   it("lets a manager invite with a role and departments, one of them primary", async () => {

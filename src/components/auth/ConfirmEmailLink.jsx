@@ -41,8 +41,14 @@ const COPY = {
     button: "Confirm my email",
     expired: "Sign in and we will offer to send a new confirmation email.",
   },
+  email_change: {
+    title: "Confirm your new email address",
+    subtitle: "Continue to confirm the change to your Fortress QMS sign-in address.",
+    button: "Confirm the change",
+    expired: "Ask your administrator to make the change again.",
+  },
 };
-const TYPES = { invite: "invite", magiclink: "magiclink", recovery: "recovery", email: "email", signup: "email" };
+const TYPES = { invite: "invite", magiclink: "magiclink", recovery: "recovery", email: "email", signup: "email", email_change: "email_change" };
 
 /** Only an address inside the app: "/…" but not "//host" or a full URL. */
 export const safeNext = (next, fallback = "/") => (typeof next === "string" && /^\/(?!\/)/.test(next) && !next.includes("\\") ? next : fallback);

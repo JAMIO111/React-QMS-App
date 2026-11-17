@@ -48,6 +48,16 @@ describe("ConfirmEmailLink (where email links land)", () => {
     expect(await screen.findByText("accept invite page")).toBeInTheDocument();
   });
 
+  it("an email change is confirmed only when the person presses the button", async () => {
+    verifyFn.mockResolvedValue();
+    renderAt("/auth/confirm?token_hash=chg&type=email_change&next=%2F");
+    expect(screen.getByRole("heading", { name: "Confirm your new email address" })).toBeInTheDocument();
+    expect(verifyFn).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Confirm the change" }));
+    expect(verifyFn).toHaveBeenCalledWith("chg", "email_change");
+    expect(await screen.findByText("home")).toBeInTheDocument();
+  });
+
   it("an expired or used link says so and what to do", async () => {
     verifyFn.mockRejectedValue(Object.assign(new Error("Email link is invalid or has expired"), { code: "otp_expired" }));
     renderAt("/auth/confirm?token_hash=old&type=recovery&next=%2Fset-password%3Fmode%3Dreset");

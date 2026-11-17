@@ -68,6 +68,25 @@ const templates = {
     notes: ["If you didn't create a Fortress QMS account, you can ignore this email."],
     footer: 'You received this email because {{ .Email }} was used to sign up to Fortress QMS.',
   },
+  // Fortress has no "change my email" screen (Settings → Account shows it read-only); this covers a change made in Supabase's dashboard or by
+  // its admin API. Supabase sets no redirect for those, so the link is built from the Site URL rather than {{ .RedirectTo }}. With "Secure
+  // email change" on, both the old and the new address get this email, each with its own token, and both must confirm.
+  'email-change': {
+    subject: 'Confirm the change to your Fortress QMS email address',
+    preheader: 'Confirm the new sign-in address for your Fortress QMS account.',
+    heading: 'Confirm your new email address',
+    paragraphs: [
+      'A change was requested to the email address you use to sign in to Fortress QMS.',
+      'Confirm it with the button below. Until it is confirmed you keep signing in with your current address.',
+    ],
+    facts: [['Current address', '{{ .Email }}'], ['New address', '{{ .NewEmail }}']],
+    button: { label: 'Confirm the change', url: '{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email_change&next=/Settings/Account' },
+    notes: [
+      "If you didn't ask for this, don't press the button and tell your administrator straight away: someone may be trying to take over your account.",
+      'For your security the link works once and expires soon.',
+    ],
+    footer: 'You received this email because a change of sign-in address was requested for a Fortress QMS account.',
+  },
 };
 
 const dir = path.join(__dirname, '..', 'supabase', 'templates');

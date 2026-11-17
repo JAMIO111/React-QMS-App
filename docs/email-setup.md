@@ -32,8 +32,14 @@ Supabase → **Authentication → Email Templates**. For each template below, pa
 | Magic Link | `supabase/templates/magic-link.html` |
 | Reset Password | `supabase/templates/recovery.html` |
 | Confirm signup | `supabase/templates/confirmation.html` |
+| Change Email Address | `supabase/templates/email-change.html` |
 
-Each button goes to `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=…`: `RedirectTo` is the confirm page with `?next=…`, set by the API
+Fortress has no "change my email" screen (Settings → Account shows the address read-only), so the change-email template is only used when an
+address is changed in Supabase's dashboard or admin API. Its button is built from the **Site URL** (`{{ .SiteURL }}/auth/confirm?…&type=email_change`),
+because those changes carry no redirect. With **Secure email change** on (Authentication → Providers → Email), both the old and the new address
+get it and both must confirm.
+
+The other buttons go to `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=…`: `RedirectTo` is the confirm page with `?next=…`, set by the API
 (invitations) and the app (sign-up, password reset), so the link always has a `?` to add to.
 
 Limits of Supabase's built-in mailer: it sends from `noreply@mail.app.supabase.io` and only a few emails an hour. To send from your own

@@ -2,3 +2,4 @@ invite: You're invited to join {{ .Data.invited_to }} on Fortress QMS
 magic-link: Your Fortress QMS sign-in link
 recovery: Reset your Fortress QMS password
 confirmation: Confirm your email for Fortress QMS
+email-change: Confirm the change to your Fortress QMS email address

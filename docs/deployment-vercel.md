@@ -81,3 +81,41 @@ The worker is woken by **pg_cron in Supabase**, not by Vercel: every minute it c
 through pg_net, with `Authorization: Bearer <CRON_SECRET>`. Set `CRON_SECRET` on `qms-api`, then apply `supabase/runbooks/worker-schedule.sql` in the
 SQL editor (it installs pg_cron and pg_net, keeps the address and the secret in Vault and schedules the call). Keep deployment protection off for
 `qms-api`. The operator panel's **Worker** tab (`/platform?tab=worker`) shows whether ticks arrive. The daily crons in `api/vercel.json` stay as a safety net.
+
+## Production (fortress-qms.com, from 2026-11-17)
+
+Production deploys from **`main`** to the same two Vercel projects (both projects' Ignored Build Step builds `Dev` and `main`, nothing
+else). It uses the **same Supabase project** as Dev for now (decision 2026-11-17), so Dev and production share data, the worker and
+the auth settings. A release = merging `Dev` into `main`.
+
+| Address | Project | Notes |
+|---|---|---|
+| `https://fortress-qms.com` | `qms-web` (production domain) | `www.fortress-qms.com` redirects to it (308). |
+| `https://api.fortress-qms.com` | `qms-api` (production domain) | |
+
+**DNS (Cloudflare, "DNS only" — grey cloud, not proxied):** `A @ 76.76.21.21`, `CNAME www cname.vercel-dns.com`,
+`CNAME api cname.vercel-dns.com`. Proxying through Cloudflare would put a second proxy in front of Vercel, so the API would see Cloudflare's
+address instead of the caller's (network restrictions and rate limits depend on it; see `docs/security-exit-report.md` — it would need
+`TRUST_PROXY_HOPS=2` and a locked origin), and Vercel issues the certificates itself.
+
+**Production environment variables** (Vercel → project → Settings → Environment Variables → Production):
+
+| `qms-api` | Value |
+|---|---|
+| `SUPABASE_URL`, `DATABASE_POOL_MAX`, `NODE_ENV` | as Dev |
+| `CORS_ORIGINS` | `https://fortress-qms.com,https://www.fortress-qms.com` |
+| `APP_BASE_URL` | `https://fortress-qms.com` |
+| `INVITE_REDIRECT_URL` | `https://fortress-qms.com/set-password?mode=invite` |
+| `AGENT_API_URL` | `https://api.fortress-qms.com` |
+| `DATABASE_URL`, `SUPABASE_JWT_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `AGENT_RELEASE_KEYS`, `MAIL_PROVIDER` / `RESEND_API_KEY` / `MAIL_FROM`, `SUPABASE_MANAGEMENT_TOKEN` | secrets, entered in the dashboard (the same database values as Dev while the database is shared) |
+
+| `qms-web` | Value |
+|---|---|
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_KEY` | as Dev |
+| `VITE_API_URL` | `https://api.fortress-qms.com` |
+
+**Elsewhere:** Supabase → Authentication → URL Configuration: Site URL `https://fortress-qms.com`, Redirect URLs keep the Dev address and add
+`https://fortress-qms.com/**`. Stripe webhook endpoint `https://api.fortress-qms.com/api/v1/stripe/webhook` (its signing secret is the
+production `STRIPE_WEBHOOK_SECRET`). The worker (pg_cron, one per database) should call `https://api.fortress-qms.com/api/v1/internal/worker/tick`
+once production is live: re-run `supabase/runbooks/worker-schedule.sql` with that address and the production `CRON_SECRET`. Vercel runs the
+daily crons in `api/vercel.json` on production deployments only, so they start with the first production build.

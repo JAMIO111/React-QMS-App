@@ -115,6 +115,8 @@ describe("SettingsUsers", () => {
     const list = screen.getByRole("list", { name: "Department list of Bob Builder" });
     expect(within(list).getByText("Goods-in")).toBeInTheDocument();
     expect(within(list).getByText("primary")).toBeInTheDocument();
+    expect(within(list).getAllByText("@PA")).toHaveLength(2);
+    expect(within(list).queryByText("@Plant A")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Make Final inspection the primary department of Bob Builder" }));
     expect(mutate).toHaveBeenLastCalledWith({ action: "setPrimaryDepartment", departmentMembershipId: "dm2" }, expect.any(Object));
     await userEvent.click(screen.getByRole("button", { name: "Remove Bob Builder from Goods-in" }));

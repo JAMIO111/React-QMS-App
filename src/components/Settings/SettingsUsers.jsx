@@ -120,7 +120,7 @@ const InviteForm = ({ roles, sites, departments }) => {
       title="Invite someone"
       subtitle="They get an email with a link to join"
       bodyClassName="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className={`grid grid-cols-1 items-start gap-3 md:grid-cols-2 ${canGivePackages ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
         <Field label="Email address" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <ComboField label="Role" value={roleId} onChange={setRoleId} required placeholder="Choose a role" options={roles.map((r) => ({ value: r.id, label: r.name, hint: r.description }))} />
         <ComboField
@@ -128,10 +128,22 @@ const InviteForm = ({ roles, sites, departments }) => {
           value={siteId}
           onChange={setSiteId}
           placeholder="Whole organisation"
-          hint="Leave empty for the whole organisation"
           options={sites.map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }))}
         />
+        {canGivePackages && (
+          <ComboField
+            label="Seat"
+            value={packageSlug}
+            onChange={setPackageSlug}
+            placeholder="No seat yet"
+            options={seatItems.map((i) => ({ value: i.planSlug, label: i.planName, hint: `${i.available} left`, disabled: i.available < 1 }))}
+          />
+        )}
       </div>
+      <p className="-mt-2 text-xs text-secondary-text">
+        Leave the site empty to give access to the whole organisation.
+        {canGivePackages ? " A seat is reserved now and taken up when they join." : ""}
+      </p>
       <fieldset className="flex flex-col gap-1" aria-label="Departments">
         <legend className="text-sm font-medium text-secondary-text" data-required={needsDepartment || undefined}>
           Departments
@@ -164,19 +176,7 @@ const InviteForm = ({ roles, sites, departments }) => {
           </ul>
         )}
       </fieldset>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        {canGivePackages && (
-          <ComboField
-            label="Seat"
-            value={packageSlug}
-            onChange={setPackageSlug}
-            placeholder="No seat yet"
-            hint="Reserved now, taken up when they join"
-            options={seatItems.map((i) => ({ value: i.planSlug, label: i.planName, hint: `${i.available} left`, disabled: i.available < 1 }))}
-          />
-        )}
-        <TextAreaField label="Message (optional)" className={canGivePackages ? "md:col-span-2" : "md:col-span-3"} rows={2} maxLength={500} value={message} onChange={(e) => setMessage(e.target.value)} />
-      </div>
+      <TextAreaField label="Message (optional)" rows={2} maxLength={500} value={message} onChange={(e) => setMessage(e.target.value)} />
       {mutation.error && (
         <p role="alert" className="text-sm text-error-color">
           {describeApiError(mutation.error)}
@@ -199,7 +199,7 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
   const confirm = useConfirm();
   const { showToast } = useToast();
   const name = displayName(member);
-  const siteName = (id) => sites.find((s) => s.id === id)?.code ?? "site";
+  const siteName = (id) => sites.find((s) => s.id === id)?.code;
   const editable = canManage && member.status !== "removed";
   const manageable = canManage && !isSelf && member.status !== "removed";
 
@@ -300,7 +300,7 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
             {member.roles.map((r) => (
               <li key={r.assignmentId} className={chip}>
                 {r.roleName}
-                {r.siteId && <span className="text-secondary-text">@{siteName(r.siteId)}</span>}
+                {r.siteId && <span className="text-secondary-text">@{siteName(r.siteId) ?? "site"}</span>}
                 {editable && (
                   <button
                     type="button"
@@ -334,7 +334,9 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
             {(member.departments ?? []).map((d) => (
               <li key={d.id} className={chip}>
                 {d.name}
-                <span className="text-secondary-text">@{d.siteName}</span>
+                <span className="text-secondary-text" title={d.siteName}>
+                  @{siteName(d.siteId) ?? d.siteName}
+                </span>
                 {d.isPrimary ? (
                   <span className="rounded-full bg-brand-primary/15 px-1.5 text-xs text-primary-text">primary</span>
                 ) : (

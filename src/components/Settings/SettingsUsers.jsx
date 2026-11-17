@@ -296,7 +296,7 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
       <div className={`mt-4 grid grid-cols-1 gap-4 ${seatsVisible ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
         <section aria-label={`Roles of ${name}`} className="flex flex-col gap-2">
           <h4 className="text-xs font-medium uppercase tracking-wide text-tertiary-text">Roles</h4>
-          <ul className="flex flex-wrap gap-1.5" aria-label={`Role list of ${name}`}>
+          <ul className="flex min-h-7 flex-1 flex-wrap content-start gap-1.5" aria-label={`Role list of ${name}`}>
             {member.roles.map((r) => (
               <li key={r.assignmentId} className={chip}>
                 {r.roleName}
@@ -313,7 +313,7 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
                 )}
               </li>
             ))}
-            {member.roles.length === 0 && <li className="text-sm text-secondary-text">No roles</li>}
+            {member.roles.length === 0 && <li className="flex h-7 items-center text-sm text-secondary-text">No roles</li>}
           </ul>
           {editable && roleOptions.length > 0 && (
             <ComboField
@@ -330,7 +330,7 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
 
         <section aria-label={`Departments of ${name}`} className="flex flex-col gap-2">
           <h4 className="text-xs font-medium uppercase tracking-wide text-tertiary-text">Departments</h4>
-          <ul className="flex flex-wrap gap-1.5" aria-label={`Department list of ${name}`}>
+          <ul className="flex min-h-7 flex-1 flex-wrap content-start gap-1.5" aria-label={`Department list of ${name}`}>
             {(member.departments ?? []).map((d) => (
               <li key={d.id} className={chip}>
                 {d.name}
@@ -364,7 +364,7 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
               </li>
             ))}
             {(member.departments ?? []).length === 0 && (
-              <li className={`text-sm ${isUnassigned(member) ? "text-error-color" : "text-secondary-text"}`}>
+              <li className={`flex min-h-7 items-center text-sm ${isUnassigned(member) ? "text-error-color" : "text-secondary-text"}`}>
                 {isUnassigned(member) ? "No department — alerts to departments will not reach them" : "None"}
               </li>
             )}
@@ -385,6 +385,9 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
         {seatsVisible && (
           <section aria-label={`Seat of ${name}`} className="flex flex-col gap-2">
             <h4 className="text-xs font-medium uppercase tracking-wide text-tertiary-text">Seat</h4>
+            <p className="flex min-h-7 flex-1 items-start text-xs text-secondary-text">
+              The seat decides what the product offers them; roles decide what they may do.
+            </p>
             {canAssignSeats && member.status !== "removed" ? (
               <ComboField
                 label={`Seat for ${name}`}
@@ -397,9 +400,8 @@ const MemberCard = ({ member, roles, sites, departments, canManage, isSelf, seat
                 className="[&_label]:sr-only"
               />
             ) : (
-              <span className="text-sm text-primary-text">{seat?.name ?? <span className="text-secondary-text">No seat</span>}</span>
+              <span className="flex min-h-9.5 items-center text-sm text-primary-text">{seat?.name ?? <span className="text-secondary-text">No seat</span>}</span>
             )}
-            <p className="text-xs text-secondary-text">The seat decides what the product offers them; roles decide what they may do.</p>
           </section>
         )}
       </div>

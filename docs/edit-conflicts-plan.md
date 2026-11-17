@@ -1,6 +1,6 @@
 # Edit conflicts — plan
 
-**Status:** proposed 2026-11-17 · decisions EC-D1–EC-D6 to agree · slices EC1–EC4
+**Status:** decisions EC-D1–EC-D6 agreed 2026-11-17 (as proposed) · slices EC1–EC4 · **EC1 built** (migration `20260324100000_edit_conflicts.sql`, SQL test `supabase/tests/edit_conflicts.test.sql`)
 
 ## 1. The problem (inspected)
 
@@ -37,7 +37,7 @@ One trap: the API turns `updated_at` into a JavaScript `Date`, which **drops the
    - **Rich text** (document drafts, review minutes) cannot be merged field by field: "Colin saved this draft at 10:42. **Load theirs** (your text is kept in a copy you can paste from) / **Overwrite with mine**."
 6. A save **without** `version` behaves as today (last write wins): imports, scripts, the worker, older clients.
 
-## 4. Decisions to agree
+## 4. Decisions (agreed 2026-11-17 as proposed)
 
 | | Question | Proposed |
 |---|---|---|

@@ -11,6 +11,7 @@ const NavItem = ({
   isSubMenuOpen,
   closeMenu,
   badge = 0,
+  end = false,
 }) => {
   const match = useMatch(path);
 
@@ -31,6 +32,7 @@ const NavItem = ({
   }`
         }
         onClick={closeMenu}
+        end={end}
         to={path}>
         {Icon && (
           <span className="relative">

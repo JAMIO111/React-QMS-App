@@ -131,8 +131,9 @@ function ComplaintDialog({ access, onClose }) {
 }
 
 /** A customer's own quality figures (PT5d): non-conformances raised against what we supply them and the 8Ds that answer them. Counts only. */
-export function PortalFigures({ access }) {
-  const [days, setDays] = useState("90");
+export function PortalFigures({ access, days: given }) {
+  const [own, setOwn] = useState("90");
+  const days = given ?? own;
   const figures = usePortalFigures(access.organisationId, Number(days));
   if (figures.isLoading || figures.error || figures.data?.available === false) return null;
   const { ncs, capas, period } = figures.data;
@@ -144,9 +145,9 @@ export function PortalFigures({ access }) {
           <h2 id="portal-figures" className="text-lg font-semibold">Quality of what we supply you</h2>
           <p className="text-sm text-secondary-text">{shortDate(period.from)} to {shortDate(period.to)}. Counts only; the details are in your complaints and the records we share.</p>
         </div>
-        <SlidingToggle ariaLabel="Period" options={PERIODS} value={days} onChange={setDays} />
+        {given === undefined && <SlidingToggle ariaLabel="Period" options={PERIODS} value={own} onChange={setOwn} />}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <Tile label="Non-conformances">
           <span className="text-sm text-secondary-text">Non-conformances raised</span>
           <p className="text-3xl font-semibold">{ncs.raised}</p>

@@ -81,6 +81,25 @@ describe("the supplier and customer portal", () => {
     expect(names).toEqual(["Dashboard", "Non-conformances", "8D reports", "Complaints", "Documents and alerts", "Certificates and reports"]);
   });
 
+  it("highlights only the page the person is on, so Dashboard is not lit on every page", () => {
+    renderIt("/portal/team");
+    const menu = within(screen.getByRole("navigation", { name: "Portal menu" }));
+    expect(menu.getByTitle("Dashboard")).not.toHaveAttribute("aria-current");
+    expect(menu.getByTitle("Team")).toHaveAttribute("aria-current", "page");
+  });
+
+  it("lays the dashboard out as figures across the top, then the company's numbers beside what needs attention", () => {
+    const fresh = { id: "s2", kind: "ncr", reference: "NC-2", title: "Burrs", status: "open", sharedAt: "2026-11-18T09:00:00Z", comments: 0, newComments: 0, viewed: false };
+    home = { data: { access: acme, attention: [fresh], shared: 1, scarsAwaiting: [], scars: 0, toAcknowledge: 2, toConfirm: 0 }, isLoading: false, error: null };
+    renderIt();
+    const tile = (label) => document.querySelector(`[data-tile="${label}"]`);
+    expect(tile("Needing attention")).toHaveTextContent("1");
+    expect(tile("Open non-conformances")).toBeInTheDocument();
+    expect(tile("Corrective actions waiting")).toBeInTheDocument();
+    expect(tile("To acknowledge or confirm")).toHaveTextContent("2");
+    expect(screen.getByRole("complementary", { name: "Your attention and open records" })).toBeInTheDocument();
+  });
+
   it("shows on a menu item how many things are waiting there", () => {
     const fresh = { id: "s2", kind: "ncr", reference: "NC-2", title: "Burrs", status: "open", sharedAt: "2026-11-18T09:00:00Z", comments: 0, newComments: 0, viewed: false };
     const doc = { ...fresh, id: "s3", kind: "document", reference: "SOP-1", needsAcknowledgement: true };

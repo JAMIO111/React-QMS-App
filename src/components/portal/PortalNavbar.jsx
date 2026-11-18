@@ -62,7 +62,7 @@ export default function PortalNavbar({ access, badges = {}, mobile = false }) {
       <ul className="no-scrollbar flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pt-3">
         {items.map((item) => (
           <li key={item.key}>
-            <NavItem title={item.name} label={item.name} icon={ICONS[item.icon]} path={item.path} isExpanded={expanded} closeMenu={() => setExpanded(false)} hasSubMenu={false} badge={badges[item.badge] ?? 0} />
+            <NavItem title={item.name} label={item.name} icon={ICONS[item.icon]} path={item.path} end={!!item.end} isExpanded={expanded} closeMenu={() => setExpanded(false)} hasSubMenu={false} badge={badges[item.badge] ?? 0} />
           </li>
         ))}
       </ul>

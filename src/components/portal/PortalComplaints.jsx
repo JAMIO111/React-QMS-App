@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import CTAButton from "../CTAButton";
 import Callout from "../ui/Callout";
@@ -7,7 +7,7 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { FormError, TextAreaField } from "../master-data/shared";
-import { usePortalComplaintMutation, usePortalComplaintParts, usePortalComplaints, usePortalFigures } from "../../hooks/usePortal";
+import { openPortalComplaintFile, usePortalComplaintFileMutation, usePortalComplaintMutation, usePortalComplaintParts, usePortalComplaints, usePortalFigures } from "../../hooks/usePortal";
 import SlidingToggle from "../ui/SlidingToggle";
 import { Chip, Tile } from "../dashboard/DashboardGraphics";
 import { PERIODS } from "../../lib/supplierPerformance";
@@ -60,6 +60,7 @@ export default function PortalComplaints({ access }) {
                 ) : (
                   <div className="flex flex-wrap items-center gap-3 px-4 py-3">{body}</div>
                 )}
+                {(c.files?.length > 0 || c.status === "received") && <ComplaintFiles complaint={c} organisationId={access.organisationId} />}
               </li>
             );
           })}
@@ -163,5 +164,49 @@ export function PortalFigures({ access }) {
         </Tile>
       </div>
     </section>
+  );
+}
+
+const sizeWords = (n) => (n >= 1_048_576 ? `${(n / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} kB`);
+
+/** Photos and documents on a complaint (PT5e): add while we have not started work on it (up to ten), open any, take back your own. */
+function ComplaintFiles({ complaint, organisationId }) {
+  const mutate = usePortalComplaintFileMutation(organisationId);
+  const input = useRef(null);
+  const files = complaint.files ?? [];
+  const adding = mutate.isPending && mutate.variables?.action === "add" && mutate.variables?.id === complaint.id;
+  const open = complaint.status === "received" && files.length < 10;
+  return (
+    <div className="flex flex-col gap-2 border-t border-border-color px-4 py-3">
+      {files.length > 0 && (
+        <ul aria-label={`Files on ${complaint.reference}`} className="flex flex-col gap-1 text-sm">
+          {files.map((f) => (
+            <li key={f.id} className="flex items-center gap-2">
+              <button type="button" className="min-w-0 truncate text-link-color hover:underline" onClick={() => openPortalComplaintFile(organisationId, f.id)}>{f.name}</button>
+              <span className="text-xs text-secondary-text">{sizeWords(f.sizeBytes)}</span>
+              {f.canRemove && <button type="button" aria-label={`Take back ${f.name}`} className="text-xs text-secondary-text hover:underline" onClick={() => mutate.mutate({ action: "remove", id: f.id })}>Take back</button>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && (
+        <div>
+          <input
+            ref={input}
+            type="file"
+            aria-label={`Choose a file for ${complaint.reference}`}
+            className="sr-only"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) mutate.mutate({ action: "add", id: complaint.id, file });
+            }}
+          />
+          <CTAButton type="neutral" size="default" aria-label={`Add a file to ${complaint.reference}`} loading={adding} loadingText="Uploading…" onClick={() => input.current?.click()}>Add a file</CTAButton>
+          <span className="ml-2 text-xs text-secondary-text">Up to ten files of 25 MB, until we start work on it.</span>
+        </div>
+      )}
+      {mutate.error && <Callout tone="error" role="alert">{describeApiError(mutate.error)}</Callout>}
+    </div>
   );
 }

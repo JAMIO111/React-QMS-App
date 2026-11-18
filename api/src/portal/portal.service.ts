@@ -135,8 +135,12 @@ export class PortalService {
     const party = this.customerParty(ctx);
     return this.database.asUser(ctx, async (db) => {
       const r = await db.execute<Row>(sql`select * from app.portal_list_complaints(${ctx.organisationId}::uuid, ${party}::uuid)`);
+      const files = await db.execute<Row>(sql`select * from app.portal_complaint_files(${ctx.organisationId}::uuid, ${party}::uuid)`);
       return {
         data: r.rows.map((c) => ({
+          files: files.rows
+            .filter((f) => f.complaint_id === c.complaint_id)
+            .map((f) => ({ id: f.file_id as string, name: f.file_name as string, sizeBytes: Number(f.size_bytes), addedAt: iso(f.added_at), mine: Boolean(f.mine), canRemove: Boolean(f.can_remove) })),
           id: c.complaint_id as string,
           reference: c.reference as string,
           title: c.title as string,
@@ -165,6 +169,47 @@ export class PortalService {
       );
       return r.rows[0].r;
     });
+  }
+
+  /** The path is chosen here, never by the browser; the database says whether the complaint is theirs and still open to files. */
+  async complaintUploadLink(ctx: RequestContext, complaintId: string, fileName: string) {
+    if (!this.signer.enabled) throw new ApiError(503, 'file_storage_unavailable', 'File links are not set up on this server yet');
+    // The complaint table is not readable by the person; the folder comes from the one function that may say (404 unless the complaint is theirs).
+    const folder = await this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<{ ncr: string | null }>(sql`select app.portal_complaint_folder(${complaintId}::uuid) as ncr`);
+      return r.rows[0]?.ncr ?? null;
+    });
+    if (!folder) throw ApiError.notFound('complaint_not_found', 'Complaint not found');
+    const path = `${ctx.organisationId}/ncr/${folder}/${randomUUID()}-${this.safeName(fileName)}`;
+    await this.database.asUser(ctx, async (db) => {
+      const ok = await db.execute<{ ok: boolean }>(sql`select app.portal_complaint_upload_allowed(${complaintId}::uuid, ${path}) as ok`);
+      if (!ok.rows[0].ok) throw new ApiError(403, 'file_not_allowed', 'Files can be added only until we start work on the complaint, and at most ten');
+    });
+    const signed = await this.signer.signUpload('nc-files', path);
+    return { bucket: 'nc-files', path, token: signed.token, signedUrl: signed.signedUrl };
+  }
+
+  addComplaintFile(ctx: RequestContext, complaintId: string, b: { path: string; fileName: string; contentType?: string; sizeBytes: number }) {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.portal_add_complaint_file(${complaintId}::uuid, ${b.path}, ${b.fileName}, ${b.contentType ?? null}, ${b.sizeBytes}::bigint)`);
+      return { ok: true };
+    });
+  }
+
+  removeComplaintFile(ctx: RequestContext, fileId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.portal_remove_complaint_file(${fileId}::uuid)`);
+      return { ok: true };
+    });
+  }
+
+  async complaintFileLink(ctx: RequestContext, fileId: string) {
+    if (!this.signer.enabled) throw new ApiError(503, 'file_storage_unavailable', 'File links are not set up on this server yet');
+    const f = await this.database.asUser(ctx, async (db) => (await db.execute<{ storage_path: string; file_name: string }>(sql`select * from app.portal_complaint_file_path(${fileId}::uuid)`)).rows[0]);
+    const seconds = 600;
+    const url = await this.signer.signDownload('nc-files', f.storage_path, seconds, f.file_name);
+    if (!url) throw ApiError.notFound('file_not_found', 'File not found');
+    return { url, expiresIn: seconds, expiresAt: new Date(Date.now() + seconds * 1000).toISOString() };
   }
 
   complaintParts(ctx: RequestContext) {

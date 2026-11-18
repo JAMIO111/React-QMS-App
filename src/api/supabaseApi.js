@@ -56,6 +56,19 @@ export const removeOrganisationFile = async (bucket, path) => {
  * A supplier's evidence file for a SCAR (external portal, docs/external-portal-plan.md PT3b): the API picks the path and checks that a response is
  * awaited, then the file goes up on the signed link and is recorded as waiting to be sent with the response. Answers with the SCAR.
  */
+/** A customer adds a file to a complaint they raised: the API chooses the path and signs the upload, then the file is recorded (PT5e). */
+export const uploadPortalComplaintFile = async (file, organisationId, complaintId) => {
+  const actual = file.file ?? file;
+  const link = await apiFetch(`/portal/complaints/${complaintId}/files/upload-url`, { method: "POST", organisationId, body: { fileName: actual.name || "file" } });
+  const { error } = await supabase.storage.from(link.bucket).uploadToSignedUrl(link.path, link.token, actual, actual.type ? { contentType: actual.type } : undefined);
+  if (error) throw new Error(`Upload failed: ${error.message}`);
+  return apiFetch(`/portal/complaints/${complaintId}/files`, {
+    method: "POST",
+    organisationId,
+    body: { path: link.path, fileName: actual.name || "file", ...(actual.type ? { contentType: actual.type } : {}), sizeBytes: actual.size },
+  });
+};
+
 export const uploadPortalScarFile = async (file, organisationId, scarId) => {
   const actual = file.file ?? file;
   const link = await apiFetch(`/portal/scars/${scarId}/files/upload-url`, { method: "POST", organisationId, body: { fileName: actual.name || "file" } });

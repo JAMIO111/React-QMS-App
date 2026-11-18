@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
-import { uploadPortalScarFile } from "../api/supabaseApi";
+import { uploadPortalComplaintFile, uploadPortalScarFile } from "../api/supabaseApi";
 import { useAuth } from "../contexts/AuthProvider";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
@@ -347,6 +347,22 @@ export const usePortalComplaintParts = (organisationId) => {
     retry: false,
     staleTime: 5 * 60_000,
   });
+};
+
+/** Files on a complaint: add (uploads, then records) or take back one's own; the list is refreshed afterwards (PT5e). */
+export const usePortalComplaintFileMutation = (organisationId) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, id, file }) =>
+      action === "add" ? uploadPortalComplaintFile(file, organisationId, id) : apiFetch(`/portal/complaint-files/${id}/remove`, { method: "POST", organisationId }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "portal", user?.id, organisationId] }),
+  });
+};
+
+export const openPortalComplaintFile = async (organisationId, fileId) => {
+  const { url } = await apiFetch(`/portal/complaint-files/${fileId}/download-url`, { method: "POST", organisationId });
+  window.open(url, "_blank", "noopener");
 };
 
 /** Raising a complaint waits for the server (it makes the draft and its reference); the list is refreshed afterwards. */

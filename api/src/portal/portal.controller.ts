@@ -247,4 +247,36 @@ export class PortalController {
   scarFileUrl(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.scarFileLink(ctx, Uuid.parse(id));
   }
+
+  @Post('complaints/:id/files/upload-url')
+  @HttpCode(200)
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(ScarUploadBody) })
+  @ApiOkResponse({ description: 'A token to upload one file to a complaint’s folder (only while it is still a draft, at most ten); 403 file_not_allowed otherwise' })
+  complaintUploadUrl(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.complaintUploadLink(ctx, Uuid.parse(id), parse(ScarUploadBody, body).fileName);
+  }
+
+  @Post('complaints/:id/files')
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(ScarFileBody) })
+  @ApiOkResponse({ description: 'Record an uploaded file on the complaint (staff see it on the non-conformance); answers with the customer’s complaints' })
+  addComplaintFile(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addComplaintFile(ctx, Uuid.parse(id), parse(ScarFileBody, body));
+  }
+
+  @Post('complaint-files/:id/remove')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'Take back a file you added, while the complaint is still a draft; answers with the customer’s complaints' })
+  removeComplaintFile(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.removeComplaintFile(ctx, Uuid.parse(id));
+  }
+
+  @Post('complaint-files/:id/download-url')
+  @HttpCode(200)
+  @PortalScoped()
+  @ApiOkResponse({ description: 'A short-lived link (ten minutes) to a file added by someone at the person’s company' })
+  complaintFileUrl(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.complaintFileLink(ctx, Uuid.parse(id));
+  }
 }

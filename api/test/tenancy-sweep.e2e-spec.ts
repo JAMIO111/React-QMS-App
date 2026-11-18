@@ -545,6 +545,10 @@ const sampleBody = (op: Op): object | undefined =>
     'GET /api/v1/external-access/shares/{id}/acknowledgements': undefined,
     'GET /api/v1/external-access/shares/{id}/closures': undefined,
     'PATCH /api/v1/customer-contacts/{id}': { name: 'Hijacked' },
+    'POST /api/v1/portal/complaints/{id}/files/upload-url': { fileName: 'x.jpg' },
+    'POST /api/v1/portal/complaints/{id}/files': { path: 'x/y/z', fileName: 'x.jpg', sizeBytes: 1 },
+    'POST /api/v1/portal/complaint-files/{id}/remove': undefined,
+    'POST /api/v1/portal/complaint-files/{id}/download-url': undefined,
     'GET /api/v1/customers/{id}/contacts': undefined,
     'POST /api/v1/customers/{id}/contacts': { name: 'Hijacked' },
     'POST /api/v1/external-access/shares/{id}/closures': { note: 'Hijacked' },
@@ -1063,6 +1067,10 @@ const hasSample = (op: Op) =>
     'GET /api/v1/external-access/shares/{id}/acknowledgements',
     'GET /api/v1/external-access/shares/{id}/closures',
     'PATCH /api/v1/customer-contacts/{id}',
+    'POST /api/v1/portal/complaints/{id}/files/upload-url',
+    'POST /api/v1/portal/complaints/{id}/files',
+    'POST /api/v1/portal/complaint-files/{id}/remove',
+    'POST /api/v1/portal/complaint-files/{id}/download-url',
     'GET /api/v1/customers/{id}/contacts',
     'POST /api/v1/customers/{id}/contacts',
     'POST /api/v1/external-access/shares/{id}/closures',
@@ -1133,6 +1141,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/role-assignments/')) return a.ownerAssignment;
   if (path.startsWith('/api/v1/department-memberships/')) return a.departmentMember;
   if (path.startsWith('/api/v1/customer-contacts/')) return a.customerContact;
+  if (path.startsWith('/api/v1/portal/complaints/')) return a.portalComplaint;
+  if (path.startsWith('/api/v1/portal/complaint-files/')) return a.attachment;
   if (path.startsWith('/api/v1/customers/')) return a.customer;
   if (path.startsWith('/api/v1/suppliers/')) return a.supplier;
   if (path.startsWith('/api/v1/supplier-quality/suppliers/')) return a.supplier;
@@ -1362,6 +1372,10 @@ beforeAll(async () => {
     a.portalComment = (await admin.query(
       `insert into public.portal_comments (organisation_id, share_id, author_side, author_user_id, body) values ($1, $2, 'staff', $3, 'Sweep comment') returning id`,
       [ids.orgA, a.portalShare, ids.ownerA],
+    )).rows[0].id;
+    a.portalComplaint = (await admin.query(
+      `insert into public.portal_complaints (organisation_id, party_id, nonconformance_id, raised_by) select $1, party_id, $2, $3 from public.external_access where id = $4 returning id`,
+      [ids.orgA, a.ncr, ids.ownerA, a.externalAccess],
     )).rows[0].id;
     a.customerContact = (await admin.query(`insert into public.customer_contacts (organisation_id, customer_id, name) values ($1, $2, 'Sweep contact') returning id`, [ids.orgA, a.customer])).rows[0].id;
     a.portalClosure = (await admin.query(

@@ -91,9 +91,11 @@ Status: **draft for agreement, nothing built.** Follows `docs/design-brief.md` a
 Out of scope (later): cross-tenant linking (X13), customer delivery performance (X10), self-registration,
 company SSO for external users, a general inbox.
 
-## 7. Open points to settle before PT1
+## 7. Open points — settled (2026-11-18)
 
-1. Exact external field list for an NC, 8D and SCAR (PT0).
-2. Whether a supplier admin can see other contacts' activity, or only manage them.
-3. Customers: does `customers` need a contacts table like `supplier_contacts`?
-4. Retention: how long a removed external user's comments and responses stay attributed (proposal: forever, name kept).
+| # | Point | Decision |
+|---|---|---|
+| X15 | External fields | **Facts plus containment and disposition.** A shared NC shows: reference, title, description, part and revision, quantity affected, lot, detected date, severity, status, requirement and actual result, shared files, comments, **containment actions** (kind, description, status, result) and the **approved disposition** (decision, quantity, instructions, reference/RMA). Never: costs, internal notes, owner and employee names, other parties, root-cause and investigation work, proposed (unapproved) dispositions. SCAR and 8D projections follow the same rule: what was asked of the party and what they answered, never internal reviews' working notes. Exact lists are fixed in PT0 per record type, as functions returning named columns. |
+| X16 | Party admin view | The party's admin manages access **and sees an activity list of their own people** (responses, comments, uploads, acknowledgements, sign-ins). Staff see the same list per party. |
+| X17 | Customer contacts | **Add `customer_contacts`** in the shape of `supplier_contacts` (several per customer, one primary, deactivated never deleted). Done in PT5 so suppliers are not delayed; portal access rows for customers link to a contact. |
+| X18 | Retention | Everything an external user wrote **stays, under their name, marked "former contact"** once removed. The audit trail keeps the account id. |
